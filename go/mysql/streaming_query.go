@@ -17,23 +17,16 @@ limitations under the License.
 package mysql
 
 import (
-	"golang.org/x/net/context"
-
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
-// This file contains the methods needed to implement the sqldb.Conn
-// interface.  These methods don't necessarely make sense, but it's
-// easier to implement them as is, and then later on refactor
-// everything, once the C version of mysql connection is gone.
-//
-// ExecuteFetch is in query.go.
-// Close() is in conn.go.
+// This file contains the methods needed to execute streaming queries.
 
-// ExecuteStreamFetch is part of the sqldb.Conn interface.
+// ExecuteStreamFetch starts a streaming query.  Fields(), FetchNext() and
+// CloseResult() can be called once this is successful.
 // Returns a sqldb.SQLError.
 func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 	defer func() {
@@ -105,7 +98,7 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 	return nil
 }
 
-// Fields is part of the sqldb.Conn interface.
+// Fields returns the fields for an ongoing streaming query.
 func (c *Conn) Fields() ([]*querypb.Field, error) {
 	if c.fields == nil {
 		return nil, sqldb.NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "no streaming query in progress")
@@ -117,7 +110,8 @@ func (c *Conn) Fields() ([]*querypb.Field, error) {
 	return c.fields, nil
 }
 
-// FetchNext is part of the sqldb.Conn interface.
+// FetchNext returns the next result for an ongoing streaming query.
+// It returns (nil, nil) if there is nothing more to read.
 func (c *Conn) FetchNext() ([]sqltypes.Value, error) {
 	if c.fields == nil {
 		// We are already done, and the result was closed.
@@ -154,8 +148,8 @@ func (c *Conn) FetchNext() ([]sqltypes.Value, error) {
 	return c.parseRow(data, c.fields)
 }
 
-// CloseResult is part of the sqldb.Conn interface.
-// Just drain the remaining values.
+// CloseResult can be used to terminate a streaming query
+// early. It just drains the remaining values.
 func (c *Conn) CloseResult() {
 	for c.fields != nil {
 		rows, err := c.FetchNext()
@@ -164,25 +158,4 @@ func (c *Conn) CloseResult() {
 			c.fields = nil
 		}
 	}
-}
-
-// IsClosed is part of the sqldb.Conn interface.
-func (c *Conn) IsClosed() bool {
-	return c.Closed
-}
-
-// ID is part of the sqldb.Conn interface.
-func (c *Conn) ID() int64 {
-	return int64(c.ConnectionID)
-}
-
-func init() {
-	sqldb.Register("mysqlconn", func(params sqldb.ConnParams) (sqldb.Conn, error) {
-		ctx := context.Background()
-		return Connect(ctx, &params)
-	})
-	sqldb.RegisterDefault(func(params sqldb.ConnParams) (sqldb.Conn, error) {
-		ctx := context.Background()
-		return Connect(ctx, &params)
-	})
 }

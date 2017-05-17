@@ -131,11 +131,11 @@ type Conn struct {
 	writer   *bufio.Writer
 	sequence uint8
 
-	// Internal variables for sqldb.Conn API for stream queries.
-	// This is set only if a streaming query is in progress, it is
-	// nil if no streaming query is in progress.  If the streaming
-	// query returned no fields, this is set to an empty array
-	// (but not nil).
+	// fields contains the fields definitions for an on-going
+	// streaming query. It is set by ExecuteStreamFetch, and
+	// cleared by the last FetchNext().  It is nil if no streaming
+	// query is in progress.  If the streaming query returned no
+	// fields, this is set to an empty array (but not nil).
 	fields []*querypb.Field
 
 	// Internal buffer for zero-allocation reads and writes.  This
@@ -535,11 +535,23 @@ func (c *Conn) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
+// ID returns the MySQL connection ID for this connection.
+func (c *Conn) ID() int64 {
+	return int64(c.ConnectionID)
+}
+
 // Close closes the connection. It can be called from a different go
 // routine to interrupt the current connection.
 func (c *Conn) Close() {
 	c.Closed = true
 	c.conn.Close()
+}
+
+// IsClosed returns true if this connection was ever closed by the
+// Close() method.  Note if the other side closes the connection, but
+// Close() wasn't called, this will return false.
+func (c *Conn) IsClosed() bool {
+	return c.Closed
 }
 
 //

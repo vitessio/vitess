@@ -17,6 +17,7 @@ limitations under the License.
 package endtoend
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -25,7 +26,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver"
@@ -780,7 +781,9 @@ func TestManualTwopcz(t *testing.T) {
 	t.Skip()
 	client := framework.NewClient()
 	defer client.Execute("delete from vitess_test where intval=4", nil)
-	conn, err := sqldb.Connect(connParams)
+
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &connParams)
 	if err != nil {
 		t.Error(err)
 		return

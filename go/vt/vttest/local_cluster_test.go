@@ -25,12 +25,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
-
-	// FIXME(alainjobart) remove this when it's the only option.
-	// Registers our implementation.
-	_ "github.com/youtube/vitess/go/mysql"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
@@ -146,7 +142,8 @@ func TestMySQL(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	conn, err := sqldb.Connect(params)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &params)
 	if err != nil {
 		t.Fatal(err)
 	}

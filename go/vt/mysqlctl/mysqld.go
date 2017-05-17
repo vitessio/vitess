@@ -41,6 +41,7 @@ import (
 	"bytes"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -313,7 +314,7 @@ func (mysqld *Mysqld) wait(ctx context.Context, params sqldb.ConnParams) error {
 		_, statErr := os.Stat(mysqld.config.SocketFile)
 		if statErr == nil {
 			// Make sure the socket file isn't stale.
-			conn, connErr := sqldb.Connect(params)
+			conn, connErr := mysql.Connect(ctx, &params)
 			if connErr == nil {
 				conn.Close()
 				return nil

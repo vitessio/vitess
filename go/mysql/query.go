@@ -250,7 +250,7 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field) ([]sqltypes.Value,
 	return result, nil
 }
 
-// ExecuteFetch is the same as sqldb.Conn.ExecuteFetch.
+// ExecuteFetch executes a query and returns the result.
 // Returns a sqldb.SQLError. Depending on the transport used, the error
 // returned might be different for the same condition:
 //

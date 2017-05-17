@@ -17,20 +17,22 @@ limitations under the License.
 package dbconnpool
 
 import (
+	"context"
 	"fmt"
 	"time"
 
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 )
 
-// DBConnection re-exposes sqldb.Conn with some wrapping to implement
+// DBConnection re-exposes mysql.Conn with some wrapping to implement
 // most of PoolConnection interface, except Recycle. That way it can be used
 // by itself. (Recycle needs to know about the Pool).
 type DBConnection struct {
-	sqldb.Conn
+	*mysql.Conn
 	mysqlStats *stats.Timings
 }
 
@@ -123,6 +125,7 @@ func NewDBConnection(info *sqldb.ConnParams, mysqlStats *stats.Timings) (*DBConn
 	if err != nil {
 		return nil, err
 	}
-	c, err := sqldb.Connect(params)
+	ctx := context.Background()
+	c, err := mysql.Connect(ctx, &params)
 	return &DBConnection{c, mysqlStats}, err
 }
