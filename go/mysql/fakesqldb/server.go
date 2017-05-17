@@ -28,13 +28,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/mysqlconn"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
 // DB is a fake database and all its methods are thread safe.  It
-// creates a mysqlconn.Listener and implements the mysqlconn.Handler
+// creates a mysql.Listener and implements the mysql.Handler
 // interface.  We use a Unix socket to connect to the database, as
 // this is the most common way for clients to connect to MySQL. This
 // impacts the error codes we're getting back: when the server side is
@@ -46,8 +46,8 @@ type DB struct {
 	// t is our testing.T instance
 	t *testing.T
 
-	// listener is our mysqlconn.Listener.
-	listener *mysqlconn.Listener
+	// listener is our mysql.Listener.
+	listener *mysql.Listener
 
 	// socketFile is the path to the unix socket file.
 	socketFile string
@@ -79,7 +79,7 @@ type DB struct {
 	queryCalled map[string]int
 	// connections tracks all open connections.
 	// The key for the map is the value of mysql.Conn.ConnectionID.
-	connections map[uint32]*mysqlconn.Conn
+	connections map[uint32]*mysql.Conn
 }
 
 // ExpectedResult holds the data for a matched query.
@@ -111,13 +111,13 @@ func New(t *testing.T) *DB {
 		data:         make(map[string]*ExpectedResult),
 		rejectedData: make(map[string]error),
 		queryCalled:  make(map[string]int),
-		connections:  make(map[uint32]*mysqlconn.Conn),
+		connections:  make(map[uint32]*mysql.Conn),
 	}
 
-	authServer := &mysqlconn.AuthServerNone{}
+	authServer := &mysql.AuthServerNone{}
 
 	// Start listening.
-	db.listener, err = mysqlconn.NewListener("unix", socketFile, authServer, db)
+	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -208,11 +208,11 @@ func (db *DB) ConnParams() *sqldb.ConnParams {
 }
 
 //
-// mysqlconn.Handler interface
+// mysql.Handler interface
 //
 
-// NewConnection is part of the mysqlconn.Handler interface.
-func (db *DB) NewConnection(c *mysqlconn.Conn) {
+// NewConnection is part of the mysql.Handler interface.
+func (db *DB) NewConnection(c *mysql.Conn) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -228,8 +228,8 @@ func (db *DB) NewConnection(c *mysqlconn.Conn) {
 	db.connections[c.ConnectionID] = c
 }
 
-// ConnectionClosed is part of the mysqlconn.Handler interface.
-func (db *DB) ConnectionClosed(c *mysqlconn.Conn) {
+// ConnectionClosed is part of the mysql.Handler interface.
+func (db *DB) ConnectionClosed(c *mysql.Conn) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -241,8 +241,8 @@ func (db *DB) ConnectionClosed(c *mysqlconn.Conn) {
 	delete(db.connections, c.ConnectionID)
 }
 
-// ComQuery is part of the mysqlconn.Handler interface.
-func (db *DB) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Result, error) {
+// ComQuery is part of the mysql.Handler interface.
+func (db *DB) ComQuery(c *mysql.Conn, query string) (*sqltypes.Result, error) {
 	db.t.Logf("ComQuery(%v): client %v: %v", db.name, c.ConnectionID, query)
 
 	key := strings.ToLower(query)

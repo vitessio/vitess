@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mysqlconn
+package mysql
 
 import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"

@@ -20,7 +20,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/mysqlconn/replication"
+	"github.com/youtube/vitess/go/mysql/replication"
 	"github.com/youtube/vitess/go/sqldb"
 )
 

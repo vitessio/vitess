@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package mysqlconn is a library to support MySQL binary protocol,
 // both client and server sides.
-package mysqlconn
+package mysql
 
 /*
 

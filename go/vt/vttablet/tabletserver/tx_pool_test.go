@@ -25,8 +25,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysqlconn"
-	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
+	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -247,7 +247,7 @@ func TestTxPoolBeginWithPoolConnectionError_Errno2006_Permanent(t *testing.T) {
 	if !ok {
 		t.Fatalf("Unexpected error type: %T, want %T", err, &sqldb.SQLError{})
 	}
-	if got, want := sqlErr.Number(), mysqlconn.CRServerLost; got != want {
+	if got, want := sqlErr.Number(), mysql.CRServerLost; got != want {
 		t.Errorf("Unexpected error code: %d, want %d", got, want)
 	}
 }
@@ -394,8 +394,8 @@ func TestTxPoolExecFailDueToConnFail_Errno2006(t *testing.T) {
 	if !ok {
 		t.Fatalf("Unexpected error type: %T, want %T", err, &sqldb.SQLError{})
 	}
-	if num := sqlErr.Number(); num != mysqlconn.CRServerGone {
-		t.Errorf("Unexpected error code: %d, want %d", num, mysqlconn.CRServerGone)
+	if num := sqlErr.Number(); num != mysql.CRServerGone {
+		t.Errorf("Unexpected error code: %d, want %d", num, mysql.CRServerGone)
 	}
 }
 

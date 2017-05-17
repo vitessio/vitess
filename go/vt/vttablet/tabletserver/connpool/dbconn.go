@@ -23,7 +23,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysqlconn"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
@@ -85,7 +85,7 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 		switch {
 		case err == nil:
 			return r, nil
-		case !mysqlconn.IsConnErr(err):
+		case !mysql.IsConnErr(err):
 			// MySQL error that isn't due to a connection issue
 			return nil, err
 		case attempt == 2:
@@ -153,7 +153,7 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 		switch {
 		case err == nil:
 			return nil
-		case !mysqlconn.IsConnErr(err) || resultSent || attempt == 2:
+		case !mysql.IsConnErr(err) || resultSent || attempt == 2:
 			// MySQL error that isn't due to a connection issue
 			return err
 		}

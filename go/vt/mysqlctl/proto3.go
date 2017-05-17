@@ -19,7 +19,7 @@ package mysqlctl
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/mysqlconn/replication"
+	"github.com/youtube/vitess/go/mysql/replication"
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
 )
 

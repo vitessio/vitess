@@ -23,8 +23,8 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysqlconn"
-	"github.com/youtube/vitess/go/mysqlconn/replication"
+	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/mysql/replication"
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -41,7 +41,7 @@ var (
 // mysqld with a server ID that is unique both among other SlaveConnections and
 // among actual slaves in the topology.
 type SlaveConnection struct {
-	*mysqlconn.Conn
+	*mysql.Conn
 	mysqld  *Mysqld
 	slaveID uint32
 	cancel  context.CancelFunc
@@ -71,14 +71,14 @@ func (mysqld *Mysqld) NewSlaveConnection() (*SlaveConnection, error) {
 }
 
 // connectForReplication create a MySQL connection ready to use for replication.
-func (mysqld *Mysqld) connectForReplication() (*mysqlconn.Conn, error) {
+func (mysqld *Mysqld) connectForReplication() (*mysql.Conn, error) {
 	params, err := dbconfigs.WithCredentials(&mysqld.dbcfgs.Dba)
 	if err != nil {
 		return nil, err
 	}
 
 	ctx := context.Background()
-	conn, err := mysqlconn.Connect(ctx, &params)
+	conn, err := mysql.Connect(ctx, &params)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +169,7 @@ func (sc *SlaveConnection) StartBinlogDumpFromPosition(ctx context.Context, star
 
 			buf, err = sc.Conn.ReadPacket()
 			if err != nil {
-				if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == mysqlconn.CRServerLost {
+				if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == mysql.CRServerLost {
 					// CRServerLost = Lost connection to MySQL server during query
 					// This is not necessarily an error. It could just be that we closed
 					// the connection from outside.
@@ -314,7 +314,7 @@ func (sc *SlaveConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context.
 
 			buf, err := sc.Conn.ReadPacket()
 			if err != nil {
-				if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == mysqlconn.CRServerLost {
+				if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == mysql.CRServerLost {
 					// CRServerLost = Lost connection to MySQL server during query
 					// This is not necessarily an error. It could just be that we closed
 					// the connection from outside.

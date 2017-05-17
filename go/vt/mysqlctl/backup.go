@@ -34,7 +34,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/cgzip"
-	"github.com/youtube/vitess/go/mysqlconn/replication"
+	"github.com/youtube/vitess/go/mysql/replication"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/hook"

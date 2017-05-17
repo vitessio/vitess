@@ -29,7 +29,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/acl"
-	"github.com/youtube/vitess/go/mysqlconn"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
@@ -115,7 +115,7 @@ func (se *Engine) Open(dbaParams *sqldb.ConnParams) error {
 		return err
 	}
 
-	tableData, err := conn.Exec(ctx, mysqlconn.BaseShowTables, maxTableCount, false)
+	tableData, err := conn.Exec(ctx, mysql.BaseShowTables, maxTableCount, false)
 	if err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get table list: %v", err)
 	}
@@ -212,7 +212,7 @@ func (se *Engine) Reload(ctx context.Context) error {
 		if err != nil {
 			return 0, nil, err
 		}
-		tableData, err := conn.Exec(ctx, mysqlconn.BaseShowTables, maxTableCount, false)
+		tableData, err := conn.Exec(ctx, mysql.BaseShowTables, maxTableCount, false)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -296,7 +296,7 @@ func (se *Engine) TableWasCreatedOrAltered(ctx context.Context, tableName string
 		return err
 	}
 	defer conn.Recycle()
-	tableData, err := conn.Exec(ctx, mysqlconn.BaseShowTablesForTable(tableName), 1, false)
+	tableData, err := conn.Exec(ctx, mysql.BaseShowTablesForTable(tableName), 1, false)
 	if err != nil {
 		tabletenv.InternalErrors.Add("Schema", 1)
 		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "TableWasCreatedOrAltered: information_schema query failed for table %s: %v", tableName, err)

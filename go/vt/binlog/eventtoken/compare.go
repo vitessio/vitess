@@ -19,7 +19,7 @@ limitations under the License.
 package eventtoken
 
 import (
-	"github.com/youtube/vitess/go/mysqlconn/replication"
+	"github.com/youtube/vitess/go/mysql/replication"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )

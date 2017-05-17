@@ -26,7 +26,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysqlconn"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -332,7 +332,7 @@ func newTxConnection(conn *connpool.DBConn, transactionID int64, pool *TxPool, i
 func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	r, err := txc.DBConn.ExecOnce(ctx, query, maxrows, wantfields)
 	if err != nil {
-		if mysqlconn.IsConnErr(err) {
+		if mysql.IsConnErr(err) {
 			txc.pool.checker.CheckMySQL()
 		}
 		return nil, err

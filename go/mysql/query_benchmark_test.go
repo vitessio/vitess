@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mysqlconn
+package mysql
 
 import (
 	"fmt"
@@ -28,7 +28,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vttest"
 )
 
-// This file contains various long-running tests for mysqlconn.
+// This file contains various long-running tests for mysql.
 
 // BenchmarkWithRealDatabase runs a real MySQL database, and runs all kinds
 // of benchmarks on it. To minimize overhead, we only run one database, and
