@@ -198,6 +198,12 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	// Record how long we took to execute the handshake
 	l.connectTimings.Record(HandshakeTiming, startHandshake)
+
+	connectMsecs := time.Since(startHandshake) / 1000000
+	if connectMsecs > 100 {
+		log.Infof("slow connection handshake %d ms from %s", connectMsecs, c.Ident())
+	}
+
 	startAuth := time.Now()
 
 	// See what auth method the AuthServer wants to use for that user.
