@@ -17,11 +17,12 @@ limitations under the License.
 package buffer
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"strings"
 	"testing"
+
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/stats"
 )

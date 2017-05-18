@@ -19,9 +19,10 @@ limitations under the License.
 package txserializer
 
 import (
-	"context"
 	"sync"
 	"time"
+
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"

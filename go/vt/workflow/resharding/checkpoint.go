@@ -17,8 +17,9 @@ limitations under the License.
 package resharding
 
 import (
-	"context"
 	"sync"
+
+	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/topo"

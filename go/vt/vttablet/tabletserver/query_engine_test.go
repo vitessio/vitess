@@ -17,13 +17,14 @@ limitations under the License.
 package tabletserver
 
 import (
-	"context"
 	"expvar"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"

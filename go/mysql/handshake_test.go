@@ -17,7 +17,6 @@ limitations under the License.
 package mysql
 
 import (
-	"context"
 	"io/ioutil"
 	"net"
 	"os"
@@ -25,6 +24,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
 	"github.com/youtube/vitess/go/vt/tlstest"

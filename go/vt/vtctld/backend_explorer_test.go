@@ -17,10 +17,11 @@ limitations under the License.
 package vtctld
 
 import (
-	"context"
 	"path"
 	"reflect"
 	"testing"
+
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"

@@ -21,12 +21,13 @@ limitations under the License.
 package vitessdriver
 
 import (
-	"context"
 	"database/sql"
 	"database/sql/driver"
 	"reflect"
 	"testing"
 	"time"
+
+	"golang.org/x/net/context"
 )
 
 func TestBeginIsolation(t *testing.T) {

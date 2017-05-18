@@ -18,11 +18,12 @@ package vtgate
 
 import (
 	"bytes"
-	"context"
 	"html/template"
 	"reflect"
 	"strings"
 	"testing"
+
+	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/sqltypes"

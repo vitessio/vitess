@@ -17,13 +17,13 @@ limitations under the License.
 package heartbeat
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"sync"
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/hack"
 	"github.com/youtube/vitess/go/mysql"

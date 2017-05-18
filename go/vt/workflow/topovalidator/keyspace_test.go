@@ -17,10 +17,11 @@ limitations under the License.
 package topovalidator
 
 import (
-	"context"
 	"path"
 	"strings"
 	"testing"
+
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"

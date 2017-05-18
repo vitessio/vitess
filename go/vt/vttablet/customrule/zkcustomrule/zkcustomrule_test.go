@@ -17,12 +17,12 @@ limitations under the License.
 package zkcustomrule
 
 import (
-	"context"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/samuel/go-zookeeper/zk"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/topo/zk2topo"

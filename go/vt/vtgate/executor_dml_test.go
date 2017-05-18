@@ -17,10 +17,11 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"reflect"
 	"strings"
 	"testing"
+
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"

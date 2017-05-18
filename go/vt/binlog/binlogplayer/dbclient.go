@@ -17,10 +17,10 @@ limitations under the License.
 package binlogplayer
 
 import (
-	"context"
 	"fmt"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"

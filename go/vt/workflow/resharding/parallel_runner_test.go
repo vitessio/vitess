@@ -17,13 +17,14 @@ limitations under the License.
 package resharding
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path"
 	"reflect"
 	"sync"
 	"testing"
+
+	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/topo"

@@ -17,11 +17,12 @@ limitations under the License.
 package resharding
 
 import (
-	"context"
 	"flag"
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/worker/fakevtworkerclient"

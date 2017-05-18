@@ -17,9 +17,10 @@ limitations under the License.
 package dbconnpool
 
 import (
-	"context"
 	"fmt"
 	"time"
+
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
