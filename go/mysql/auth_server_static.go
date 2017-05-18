@@ -24,7 +24,6 @@ import (
 
 	log "github.com/golang/glog"
 
-	"github.com/youtube/vitess/go/sqldb"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
@@ -116,13 +115,13 @@ func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse [
 	// Find the entry.
 	entry, ok := a.Entries[user]
 	if !ok {
-		return &StaticUserData{""}, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+		return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
 	// Validate the password.
 	computedAuthResponse := scramblePassword(salt, []byte(entry.Password))
 	if bytes.Compare(authResponse, computedAuthResponse) != 0 {
-		return &StaticUserData{""}, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+		return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
 	return &StaticUserData{entry.UserData}, nil
@@ -141,12 +140,12 @@ func (a *AuthServerStatic) Negotiate(c *Conn, user string) (Getter, error) {
 	// Find the entry.
 	entry, ok := a.Entries[user]
 	if !ok {
-		return &StaticUserData{""}, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+		return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
 	// Validate the password.
 	if entry.Password != password {
-		return &StaticUserData{""}, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+		return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
 	return &StaticUserData{entry.UserData}, nil

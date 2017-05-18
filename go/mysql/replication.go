@@ -16,13 +16,11 @@ limitations under the License.
 
 package mysql
 
-import "github.com/youtube/vitess/go/sqldb"
-
 // This file contains the methods related to replication.
 
 // WriteComBinlogDump writes a ComBinlogDump command.
 // See http://dev.mysql.com/doc/internals/en/com-binlog-dump.html for syntax.
-// Returns a sqldb.SQLError.
+// Returns a SQLError.
 func (c *Conn) WriteComBinlogDump(serverID uint32, binlogFilename string, binlogPos uint32, flags uint16) error {
 	c.sequence = 0
 	length := 1 + // ComBinlogDump
@@ -37,7 +35,7 @@ func (c *Conn) WriteComBinlogDump(serverID uint32, binlogFilename string, binlog
 	pos = writeUint32(data, pos, serverID)
 	pos = writeEOFString(data, pos, binlogFilename)
 	if err := c.writeEphemeralPacket(true); err != nil {
-		return sqldb.NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
+		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
 	}
 	return nil
 }
@@ -65,7 +63,7 @@ func (c *Conn) WriteComBinlogDumpGTID(serverID uint32, binlogFilename string, bi
 	pos = writeUint32(data, pos, uint32(len(gtidSet)))
 	pos += copy(data[pos:], gtidSet)
 	if err := c.writeEphemeralPacket(true); err != nil {
-		return sqldb.NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
+		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
 	}
 	return nil
 }

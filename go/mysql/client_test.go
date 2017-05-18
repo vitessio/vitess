@@ -26,8 +26,6 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-
-	"github.com/youtube/vitess/go/sqldb"
 )
 
 // assertSQLError makes sure we get the right error.
@@ -35,7 +33,7 @@ func assertSQLError(t *testing.T, err error, code int, sqlState string, subtext 
 	if err == nil {
 		t.Fatalf("was expecting SQLError %v / %v / %v but got no error.", code, sqlState, subtext)
 	}
-	serr, ok := err.(*sqldb.SQLError)
+	serr, ok := err.(*SQLError)
 	if !ok {
 		t.Fatalf("was expecting SQLError %v / %v / %v but got: %v", code, sqlState, subtext, err)
 	}

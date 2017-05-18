@@ -27,7 +27,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	vtenv "github.com/youtube/vitess/go/vt/env"
 	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
@@ -73,7 +72,7 @@ func (th *testHandler) ConnectionClosed(c *Conn) {
 
 func (th *testHandler) ComQuery(c *Conn, query string) (*sqltypes.Result, error) {
 	if query == "error" {
-		return nil, sqldb.NewSQLError(ERUnknownComError, SSUnknownComError, "forced query handling error for: %v", query)
+		return nil, NewSQLError(ERUnknownComError, SSUnknownComError, "forced query handling error for: %v", query)
 	}
 
 	if query == "panic" {

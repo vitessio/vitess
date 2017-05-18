@@ -65,7 +65,7 @@ type AuthServer interface {
 	// than MysqlNativePassword. It is handed the connection after the
 	// AuthSwitchRequest packet is sent.
 	// - If the negotiation fails, it should just return an error
-	// (should be a sqldb.SQLError if possible).
+	// (should be a SQLError if possible).
 	// The framework is responsible for writing the Error packet
 	// and closing the connection in that case.
 	// - If the negotiation works, it should return the Getter,

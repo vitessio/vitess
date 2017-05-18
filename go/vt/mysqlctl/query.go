@@ -24,7 +24,7 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 )
@@ -39,7 +39,7 @@ func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (dbc
 	// Run a test query to see if this connection is still good.
 	if _, err := conn.ExecuteFetch("SELECT 1", 1, false); err != nil {
 		// If we get "MySQL server has gone away (errno 2006)", try to reconnect.
-		if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == 2006 {
+		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == 2006 {
 			if err := conn.Reconnect(); err != nil {
 				conn.Recycle()
 				return conn, err

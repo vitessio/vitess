@@ -26,7 +26,6 @@ import (
 
 	"github.com/youtube/vitess/go/hack"
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/callerid"
@@ -530,7 +529,7 @@ func (qre *QueryExecutor) execUpsertPK(conn *TxConnection) (*sqltypes.Result, er
 	if err == nil {
 		return result, nil
 	}
-	sqlErr, ok := err.(*sqldb.SQLError)
+	sqlErr, ok := err.(*mysql.SQLError)
 	if !ok {
 		return result, err
 	}

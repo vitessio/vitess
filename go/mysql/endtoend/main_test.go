@@ -27,7 +27,6 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/sqldb"
 	vtenv "github.com/youtube/vitess/go/vt/env"
 	"github.com/youtube/vitess/go/vt/tlstest"
 	"github.com/youtube/vitess/go/vt/vttest"
@@ -42,7 +41,7 @@ func assertSQLError(t *testing.T, err error, code int, sqlState string, subtext 
 	if err == nil {
 		t.Fatalf("was expecting SQLError %v / %v / %v but got no error.", code, sqlState, subtext)
 	}
-	serr, ok := err.(*sqldb.SQLError)
+	serr, ok := err.(*mysql.SQLError)
 	if !ok {
 		t.Fatalf("was expecting SQLError %v / %v / %v but got: %v", code, sqlState, subtext, err)
 	}

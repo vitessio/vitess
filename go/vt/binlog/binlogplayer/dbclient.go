@@ -21,8 +21,8 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 )
@@ -42,7 +42,7 @@ func NewDbClient(params *mysql.ConnParams) *DBClient {
 
 func (dc *DBClient) handleError(err error) {
 	// log.Errorf("in DBClient handleError %v", err.(error))
-	if sqlErr, ok := err.(*sqldb.SQLError); ok {
+	if sqlErr, ok := err.(*mysql.SQLError); ok {
 		if sqlErr.Number() >= 2000 && sqlErr.Number() <= 2018 { // mysql connection errors
 			dc.Close()
 		}

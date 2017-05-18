@@ -16,8 +16,6 @@ limitations under the License.
 
 package mysql
 
-import "github.com/youtube/vitess/go/sqldb"
-
 const (
 	// MaxPacketSize is the maximum payload length of a packet
 	// the server supports.
@@ -381,7 +379,7 @@ func IsNum(typ uint8) bool {
 
 // IsConnErr returns true if the error is a connection error.
 func IsConnErr(err error) bool {
-	if sqlErr, ok := err.(*sqldb.SQLError); ok {
+	if sqlErr, ok := err.(*SQLError); ok {
 		num := sqlErr.Number()
 		// ServerLost means that the query has already been
 		// received by MySQL and may have already been executed.

@@ -31,7 +31,6 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/replication"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
@@ -280,7 +279,7 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 		if _, err = blp.exec(string(stmt.Sql)); err == nil {
 			continue
 		}
-		if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == 1213 {
+		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == 1213 {
 			// Deadlock: ask for retry
 			log.Infof("Deadlock: %v", err)
 			if err = blp.dbClient.Rollback(); err != nil {

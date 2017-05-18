@@ -29,7 +29,6 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/replication"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -162,12 +161,12 @@ func TestReplicationConnectionClosing(t *testing.T) {
 		for {
 			data, err := conn.ReadPacket()
 			if err != nil {
-				serr, ok := err.(*sqldb.SQLError)
+				serr, ok := err.(*mysql.SQLError)
 				if !ok {
-					t.Fatalf("Got a non sqldb.SQLError error: %v", err)
+					t.Fatalf("Got a non mysql.SQLError error: %v", err)
 				}
 				if serr.Num != mysql.CRServerLost {
-					t.Fatalf("Got an unexpected sqldb.SQLError error: %v", serr)
+					t.Fatalf("Got an unexpected mysql.SQLError error: %v", serr)
 				}
 				// we got the right error, all good.
 				return

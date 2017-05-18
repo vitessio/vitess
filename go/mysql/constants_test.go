@@ -19,8 +19,6 @@ package mysql
 import (
 	"errors"
 	"testing"
-
-	"github.com/youtube/vitess/go/sqldb"
 )
 
 func TestIsConnErr(t *testing.T) {
@@ -31,16 +29,16 @@ func TestIsConnErr(t *testing.T) {
 		in:   errors.New("t"),
 		want: false,
 	}, {
-		in:   sqldb.NewSQLError(5, "", ""),
+		in:   NewSQLError(5, "", ""),
 		want: false,
 	}, {
-		in:   sqldb.NewSQLError(CRServerGone, "", ""),
+		in:   NewSQLError(CRServerGone, "", ""),
 		want: true,
 	}, {
-		in:   sqldb.NewSQLError(CRServerLost, "", ""),
+		in:   NewSQLError(CRServerLost, "", ""),
 		want: false,
 	}, {
-		in:   sqldb.NewSQLError(CRCantReadCharset, "", ""),
+		in:   NewSQLError(CRCantReadCharset, "", ""),
 		want: false,
 	}}
 	for _, tcase := range testcases {

@@ -25,7 +25,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -102,7 +101,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string) (*sqltypes.Result
 	}
 	session, result, err := vh.vtg.Execute(ctx, session, query, make(map[string]interface{}))
 	c.ClientData = session
-	return result, sqldb.NewSQLErrorFromError(err)
+	return result, mysql.NewSQLErrorFromError(err)
 }
 
 func init() {

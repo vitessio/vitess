@@ -17,7 +17,6 @@ limitations under the License.
 package mysql
 
 import (
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -27,11 +26,11 @@ import (
 
 // ExecuteStreamFetch starts a streaming query.  Fields(), FetchNext() and
 // CloseResult() can be called once this is successful.
-// Returns a sqldb.SQLError.
+// Returns a SQLError.
 func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 	defer func() {
 		if err != nil {
-			if sqlerr, ok := err.(*sqldb.SQLError); ok {
+			if sqlerr, ok := err.(*SQLError); ok {
 				sqlerr.Query = query
 			}
 		}
@@ -39,7 +38,7 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 
 	// Sanity check.
 	if c.fields != nil {
-		return sqldb.NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "streaming query already in progress")
+		return NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "streaming query already in progress")
 	}
 
 	// This is a new command, need to reset the sequence.
@@ -79,7 +78,7 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 		// EOF is only present here if it's not deprecated.
 		data, err := c.readEphemeralPacket()
 		if err != nil {
-			return sqldb.NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+			return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
 		switch data[0] {
 		case EOFPacket:
@@ -90,7 +89,7 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 			// Error packet.
 			return ParseErrorPacket(data)
 		default:
-			return sqldb.NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "unexpected packet after fields: %v", data)
+			return NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "unexpected packet after fields: %v", data)
 		}
 	}
 
@@ -101,7 +100,7 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 // Fields returns the fields for an ongoing streaming query.
 func (c *Conn) Fields() ([]*querypb.Field, error) {
 	if c.fields == nil {
-		return nil, sqldb.NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "no streaming query in progress")
+		return nil, NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "no streaming query in progress")
 	}
 	if len(c.fields) == 0 {
 		// The query returned an empty field list.
@@ -115,7 +114,7 @@ func (c *Conn) Fields() ([]*querypb.Field, error) {
 func (c *Conn) FetchNext() ([]sqltypes.Value, error) {
 	if c.fields == nil {
 		// We are already done, and the result was closed.
-		return nil, sqldb.NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "no streaming query in progress")
+		return nil, NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "no streaming query in progress")
 	}
 
 	if len(c.fields) == 0 {

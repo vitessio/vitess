@@ -27,7 +27,6 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -243,9 +242,9 @@ func TestTxPoolBeginWithPoolConnectionError_Errno2006_Permanent(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "(errno 2013)") {
 		t.Fatalf("Begin did not return the reconnect error: %v", err)
 	}
-	sqlErr, ok := err.(*sqldb.SQLError)
+	sqlErr, ok := err.(*mysql.SQLError)
 	if !ok {
-		t.Fatalf("Unexpected error type: %T, want %T", err, &sqldb.SQLError{})
+		t.Fatalf("Unexpected error type: %T, want %T", err, &mysql.SQLError{})
 	}
 	if got, want := sqlErr.Number(), mysql.CRServerLost; got != want {
 		t.Errorf("Unexpected error code: %d, want %d", got, want)
@@ -390,9 +389,9 @@ func TestTxPoolExecFailDueToConnFail_Errno2006(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "(errno 2006)") {
 		t.Fatalf("Exec must return connection error with MySQL errno 2006: %v", err)
 	}
-	sqlErr, ok := err.(*sqldb.SQLError)
+	sqlErr, ok := err.(*mysql.SQLError)
 	if !ok {
-		t.Fatalf("Unexpected error type: %T, want %T", err, &sqldb.SQLError{})
+		t.Fatalf("Unexpected error type: %T, want %T", err, &mysql.SQLError{})
 	}
 	if num := sqlErr.Number(); num != mysql.CRServerGone {
 		t.Errorf("Unexpected error code: %d, want %d", num, mysql.CRServerGone)

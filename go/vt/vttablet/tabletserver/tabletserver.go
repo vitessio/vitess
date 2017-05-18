@@ -33,7 +33,6 @@ import (
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/replication"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
@@ -1303,7 +1302,7 @@ func (tsv *TabletServer) convertAndLogError(sql string, bindVariables map[string
 }
 
 func (tsv *TabletServer) convertError(sql string, bindVariables map[string]interface{}, err error) error {
-	sqlErr, ok := err.(*sqldb.SQLError)
+	sqlErr, ok := err.(*mysql.SQLError)
 	if !ok {
 		return err
 	}

@@ -22,8 +22,6 @@ import (
 	"io"
 	"net"
 
-	"github.com/youtube/vitess/go/sqldb"
-
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
@@ -317,7 +315,7 @@ func (c *Conn) readOnePacket() ([]byte, error) {
 
 // readPacket reads a packet from the underlying connection.
 // It re-assembles packets that span more than one message.
-// This method returns a generic error, not a sqldb.SQLError.
+// This method returns a generic error, not a SQLError.
 func (c *Conn) readPacket() ([]byte, error) {
 	// Optimize for a single packet case.
 	data, err := c.readOnePacket()
@@ -352,13 +350,13 @@ func (c *Conn) readPacket() ([]byte, error) {
 }
 
 // ReadPacket reads a packet from the underlying connection.
-// it is the public API version, that returns a sqldb.SQLError.
+// it is the public API version, that returns a SQLError.
 // The memory for the packet is always allocated, and it is owned by the caller
 // after this function returns.
 func (c *Conn) ReadPacket() ([]byte, error) {
 	result, err := c.readPacket()
 	if err != nil {
-		return nil, sqldb.NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+		return nil, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
 	return result, err
 }
@@ -368,7 +366,7 @@ func (c *Conn) ReadPacket() ([]byte, error) {
 // has to build the []byte and that makes a memory copy.
 // Try to use startEphemeralPacket/writeEphemeralPacket instead.
 //
-// This method returns a generic error, not a sqldb.SQLError.
+// This method returns a generic error, not a SQLError.
 func (c *Conn) writePacket(data []byte) error {
 	index := 0
 	length := len(data)
@@ -506,7 +504,7 @@ func (c *Conn) writeEphemeralPacket(direct bool) error {
 }
 
 // flush flushes the written data to the socket.
-// This method returns a generic error, not a sqldb.SQLError.
+// This method returns a generic error, not a SQLError.
 func (c *Conn) flush() error {
 	if err := c.writer.Flush(); err != nil {
 		return fmt.Errorf("Flush() failed: %v", err)
@@ -517,7 +515,7 @@ func (c *Conn) flush() error {
 // writeComQuit writes a Quit message for the server, to indicate we
 // want to close the connection.
 // Client -> Server.
-// Returns sqldb.SQLError(CRServerGone) if it can't.
+// Returns SQLError(CRServerGone) if it can't.
 func (c *Conn) writeComQuit() error {
 	// This is a new command, need to reset the sequence.
 	c.sequence = 0
@@ -525,7 +523,7 @@ func (c *Conn) writeComQuit() error {
 	data := c.startEphemeralPacket(1)
 	data[0] = ComQuit
 	if err := c.writeEphemeralPacket(true); err != nil {
-		return sqldb.NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
+		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
 	return nil
 }
@@ -561,7 +559,7 @@ func (c *Conn) IsClosed() bool {
 // writeOKPacket writes an OK packet, directly. Do not use this if
 // there is already a packet in the buffer.
 // Server -> Client.
-// This method returns a generic error, not a sqldb.SQLError.
+// This method returns a generic error, not a SQLError.
 func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, warnings uint16) error {
 	length := 1 + // OKPacket
 		lenEncIntSize(affectedRows) +
@@ -583,7 +581,7 @@ func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, wa
 // This is used at the end of a result set if
 // CapabilityClientDeprecateEOF is set.
 // Server -> Client.
-// This method returns a generic error, not a sqldb.SQLError.
+// This method returns a generic error, not a SQLError.
 func (c *Conn) writeOKPacketWithEOFHeader(affectedRows, lastInsertID uint64, flags uint16, warnings uint16) error {
 	length := 1 + // EOFPacket
 		lenEncIntSize(affectedRows) +
@@ -611,7 +609,7 @@ func (c *Conn) writeOKPacketWithEOFHeader(affectedRows, lastInsertID uint64, fla
 // It writes directly to the socket, so this cannot be called after other
 // packets have already been written.
 // Server -> Client.
-// This method returns a generic error, not a sqldb.SQLError.
+// This method returns a generic error, not a SQLError.
 func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string, args ...interface{}) error {
 	errorMessage := fmt.Sprintf(format, args...)
 	length := 1 + 2 + 1 + 5 + len(errorMessage)
@@ -638,7 +636,7 @@ func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string
 // writeErrorPacketFromError writes an error packet, from a regular error.
 // See writeErrorPacket for other info.
 func (c *Conn) writeErrorPacketFromError(err error) error {
-	if se, ok := err.(*sqldb.SQLError); ok {
+	if se, ok := err.(*SQLError); ok {
 		return c.writeErrorPacket(uint16(se.Num), se.State, "%v", se.Message)
 	}
 
@@ -693,7 +691,7 @@ func parseOKPacket(data []byte) (uint64, uint64, uint16, uint16, error) {
 	return affectedRows, lastInsertID, statusFlags, warnings, nil
 }
 
-// ParseErrorPacket parses the error packet and returns a sqldb.SQLError.
+// ParseErrorPacket parses the error packet and returns a SQLError.
 func ParseErrorPacket(data []byte) error {
 	// We already read the type.
 	pos := 1
@@ -701,7 +699,7 @@ func ParseErrorPacket(data []byte) error {
 	// Error code is 2 bytes.
 	code, pos, ok := readUint16(data, pos)
 	if !ok {
-		return sqldb.NewSQLError(CRUnknownError, SSUnknownSQLState, "invalid error packet code: %v", data)
+		return NewSQLError(CRUnknownError, SSUnknownSQLState, "invalid error packet code: %v", data)
 	}
 
 	// '#' marker of the SQL state is 1 byte. Ignored.
@@ -710,11 +708,11 @@ func ParseErrorPacket(data []byte) error {
 	// SQL state is 5 bytes
 	sqlState, pos, ok := readBytes(data, pos, 5)
 	if !ok {
-		return sqldb.NewSQLError(CRUnknownError, SSUnknownSQLState, "invalid error packet sqlState: %v", data)
+		return NewSQLError(CRUnknownError, SSUnknownSQLState, "invalid error packet sqlState: %v", data)
 	}
 
 	// Human readable error message is the rest.
 	msg := string(data[pos:])
 
-	return sqldb.NewSQLError(int(code), string(sqlState), "%v", msg)
+	return NewSQLError(int(code), string(sqlState), "%v", msg)
 }

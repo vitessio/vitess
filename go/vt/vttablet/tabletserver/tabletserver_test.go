@@ -34,7 +34,6 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/messager"
@@ -2193,7 +2192,7 @@ func TestTerseErrorsBindVars(t *testing.T) {
 	err := tsv.convertError(
 		"select * from test_table",
 		map[string]interface{}{"a": 1},
-		sqldb.NewSQLError(10, "HY000", "msg"),
+		mysql.NewSQLError(10, "HY000", "msg"),
 	)
 	want := "(errno 10) (sqlstate HY000) during query: select * from test_table"
 	if err == nil || err.Error() != want {
@@ -2221,7 +2220,7 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 
 	err := tsv.convertError("select * from test_table where id = :a",
 		map[string]interface{}{"a": 1},
-		sqldb.NewSQLError(1227, "42000", "failover in progress"),
+		mysql.NewSQLError(1227, "42000", "failover in progress"),
 	)
 	if got, want := err.Error(), "failover in progress (errno 1227) (sqlstate 42000)"; got != want {
 		t.Fatalf("'failover in progress' text must never be stripped: got = %v, want = %v", got, want)

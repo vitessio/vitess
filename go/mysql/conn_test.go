@@ -22,8 +22,6 @@ import (
 	"reflect"
 	"sync"
 	"testing"
-
-	"github.com/youtube/vitess/go/sqldb"
 )
 
 func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
@@ -230,12 +228,12 @@ func TestBasicPackets(t *testing.T) {
 		t.Fatalf("cConn.ReadPacket - ErrorPacket failed: %v %v", data, err)
 	}
 	err = ParseErrorPacket(data)
-	if !reflect.DeepEqual(err, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied: reason")) {
+	if !reflect.DeepEqual(err, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied: reason")) {
 		t.Errorf("ParseErrorPacket returned unexpected data: %v", err)
 	}
 
 	// Write error packet from error, read it, compare.
-	if err := sConn.writeErrorPacketFromError(sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied")); err != nil {
+	if err := sConn.writeErrorPacketFromError(NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied")); err != nil {
 		t.Fatalf("writeErrorPacketFromError failed: %v", err)
 	}
 	data, err = cConn.ReadPacket()
@@ -243,7 +241,7 @@ func TestBasicPackets(t *testing.T) {
 		t.Fatalf("cConn.ReadPacket - ErrorPacket failed: %v %v", data, err)
 	}
 	err = ParseErrorPacket(data)
-	if !reflect.DeepEqual(err, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied")) {
+	if !reflect.DeepEqual(err, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied")) {
 		t.Errorf("ParseErrorPacket returned unexpected data: %v", err)
 	}
 

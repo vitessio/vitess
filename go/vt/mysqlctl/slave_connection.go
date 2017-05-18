@@ -26,7 +26,6 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/replication"
 	"github.com/youtube/vitess/go/pools"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 )
 
@@ -169,7 +168,7 @@ func (sc *SlaveConnection) StartBinlogDumpFromPosition(ctx context.Context, star
 
 			buf, err = sc.Conn.ReadPacket()
 			if err != nil {
-				if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == mysql.CRServerLost {
+				if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.CRServerLost {
 					// CRServerLost = Lost connection to MySQL server during query
 					// This is not necessarily an error. It could just be that we closed
 					// the connection from outside.
@@ -314,7 +313,7 @@ func (sc *SlaveConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context.
 
 			buf, err := sc.Conn.ReadPacket()
 			if err != nil {
-				if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == mysql.CRServerLost {
+				if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.CRServerLost {
 					// CRServerLost = Lost connection to MySQL server during query
 					// This is not necessarily an error. It could just be that we closed
 					// the connection from outside.

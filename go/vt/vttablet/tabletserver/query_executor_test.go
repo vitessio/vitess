@@ -28,7 +28,6 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
@@ -423,7 +422,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 
 	db.AddRejectedQuery(
 		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
-		sqldb.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "err"),
+		mysql.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "err"),
 	)
 	db.AddQuery("update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
 	txid = newTransaction(tsv)
@@ -441,7 +440,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 
 	db.AddRejectedQuery(
 		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
-		sqldb.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
+		mysql.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
 	)
 	db.AddQuery(
 		"update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */",
@@ -524,7 +523,7 @@ func TestQueryExecutorPlanUpsertPkAutoCommit(t *testing.T) {
 
 	db.AddRejectedQuery(
 		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
-		sqldb.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "err"),
+		mysql.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "err"),
 	)
 	db.AddQuery("update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
 	_, err = qre.Execute()
@@ -535,7 +534,7 @@ func TestQueryExecutorPlanUpsertPkAutoCommit(t *testing.T) {
 
 	db.AddRejectedQuery(
 		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
-		sqldb.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
+		mysql.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
 	)
 	db.AddQuery(
 		"update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */",
