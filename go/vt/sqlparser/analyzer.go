@@ -48,24 +48,7 @@ const (
 // Preview analyzes the beginning of the query using a simpler and faster
 // textual comparison to identify the statement type.
 func Preview(sql string) int {
-	trimmed := strings.TrimFunc(sql, unicode.IsSpace)
-
-	// Strip comments if necessary
-	if len(trimmed) > 1 && trimmed[0] == '/' && trimmed[1] == '*' {
-		index := strings.Index(trimmed, "*/")
-		if index != -1 {
-			trimmed = trimmed[index+2:]
-			trimmed = strings.TrimFunc(trimmed, unicode.IsSpace)
-		}
-	}
-
-	if len(trimmed) > 1 && trimmed[0] == '-' && trimmed[1] == '-' {
-		index := strings.Index(trimmed, "\n")
-		if index != -1 {
-			trimmed = trimmed[index+1:]
-			trimmed = strings.TrimFunc(trimmed, unicode.IsSpace)
-		}
-	}
+	trimmed := StripLeadingComments(sql)
 
 	firstWord := trimmed
 	if end := strings.IndexFunc(trimmed, unicode.IsSpace); end != -1 {
