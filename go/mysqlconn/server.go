@@ -163,7 +163,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	// First build and send the server handshake packet.
 	salt, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, l.TLSConfig != nil)
 	if err != nil {
-		log.Errorf("Cannot send HandshakeV10 packet: %v", err)
+		log.Errorf("Cannot send HandshakeV10 packet to %s: %v", c.Ident(), err)
 		return
 	}
 
@@ -171,12 +171,12 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	// so we don't buffer the TLS negotiation packets.
 	response, err := c.readPacketDirect()
 	if err != nil {
-		log.Errorf("Cannot read client handshake response: %v", err)
+		log.Errorf("Cannot read client handshake response from %s: %v", c.Ident(), err)
 		return
 	}
 	user, authMethod, authResponse, err := l.parseClientHandshakePacket(c, true, response)
 	if err != nil {
-		log.Errorf("Cannot parse client handshake response: %v", err)
+		log.Errorf("Cannot parse client handshake response from %s: %v", c.Ident(), err)
 		return
 	}
 
@@ -184,13 +184,13 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		// SSL was enabled. We need to re-read the auth packet.
 		response, err = c.readEphemeralPacket()
 		if err != nil {
-			log.Errorf("Cannot read post-SSL client handshake response: %v", err)
+			log.Errorf("Cannot read post-SSL client handshake response from %s: %v", c.Ident(), err)
 			return
 		}
 
 		user, authMethod, authResponse, err = l.parseClientHandshakePacket(c, false, response)
 		if err != nil {
-			log.Errorf("Cannot parse post-SSL client handshake response: %v", err)
+			log.Errorf("Cannot parse post-SSL client handshake response from %s: %v", c.Ident(), err)
 			return
 		}
 	}
@@ -198,6 +198,12 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	// Record how long we took to execute the handshake
 	l.connectTimings.Record(HandshakeTiming, startHandshake)
+
+	connectMsecs := time.Since(startHandshake) / 1000000
+	if connectMsecs > 100 {
+		log.Infof("slow connection handshake %d ms from %s", connectMsecs, c.Ident())
+	}
+
 	startAuth := time.Now()
 
 	// See what auth method the AuthServer wants to use for that user.
@@ -244,7 +250,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			data = authServerDialogSwitchData()
 		}
 		if err := c.writeAuthSwitchRequest(authServerMethod, data); err != nil {
-			log.Errorf("Error write auth switch packet for client %v: %v", c.ConnectionID, err)
+			log.Errorf("Error write auth switch packet for client %s: %v", c.Ident(), err)
 			return
 		}
 
@@ -272,7 +278,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		c.sequence = 0
 		data, err := c.readEphemeralPacket()
 		if err != nil {
-			log.Errorf("Error reading packet from client %v: %v", c.ConnectionID, err)
+			log.Errorf("Error reading packet from client %s: %v", c.Ident(), err)
 			return
 		}
 
@@ -283,7 +289,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			db := c.parseComInitDB(data)
 			c.SchemaName = db
 			if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
-				log.Errorf("Error writing ComInitDB result to client %v: %v", c.ConnectionID, err)
+				log.Errorf("Error writing ComInitDB result to client %s: %v", c.Ident(), err)
 				return
 			}
 		case ComQuery:
@@ -293,26 +299,26 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			if err != nil {
 				if werr := c.writeErrorPacketFromError(err); werr != nil {
 					// If we can't even write the error, we're done.
-					log.Errorf("Error writing query error to client %v: %v", c.ConnectionID, werr)
+					log.Errorf("Error writing query error to client %s: %v", c.Ident(), werr)
 					return
 				}
 				continue
 			}
 			if err := c.writeResult(result); err != nil {
-				log.Errorf("Error writing result to client %v: %v", c.ConnectionID, err)
+				log.Errorf("Error writing result to client %s: %v", c.Ident(), err)
 				return
 			}
 			l.queryTimings.Record(QueryTiming, queryStart)
 		case ComPing:
 			// No payload to that one, just return OKPacket.
 			if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
-				log.Errorf("Error writing ComPing result to client %v: %v", c.ConnectionID, err)
+				log.Errorf("Error writing ComPing result to client %s: %v", c.Ident(), err)
 				return
 			}
 		default:
 			log.Errorf("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
 			if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "command handling not implemented yet: %v", data[0]); err != nil {
-				log.Errorf("Error writing error packet to client: %v", err)
+				log.Errorf("Error writing error packet to client %s: %s", c.Ident(), err)
 				return
 			}
 
