@@ -92,7 +92,7 @@ func TestDupEntry(t *testing.T) {
 // TestClientFoundRows tests if the CLIENT_FOUND_ROWS flag works.
 func TestClientFoundRows(t *testing.T) {
 	params := connParams
-	params.Flags |= mysql.CapabilityClientFoundRows
+	params.EnableClientFoundRows()
 
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &params)
@@ -126,7 +126,7 @@ func TestClientFoundRows(t *testing.T) {
 // TestTLS tests our client can connect via SSL.
 func TestTLS(t *testing.T) {
 	params := connParams
-	params.Flags |= mysql.CapabilityClientSSL
+	params.EnableSSL()
 
 	// First make sure the official 'mysql' client can connect.
 	output, ok := runMysql(t, &params, "status")

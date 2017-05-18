@@ -25,11 +25,6 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-const (
-	// SQLStateGeneral is the SQLSTATE value for "general error".
-	SQLStateGeneral = "HY000"
-)
-
 // SQLError is the error structure returned from calling a db library function
 type SQLError struct {
 	Num     int
@@ -42,7 +37,7 @@ type SQLError struct {
 // If sqlState is left empty, it will default to "HY000" (general error).
 func NewSQLError(number int, sqlState string, format string, args ...interface{}) *SQLError {
 	if sqlState == "" {
-		sqlState = SQLStateGeneral
+		sqlState = SSUnknownSQLState
 	}
 	return &SQLError{
 		Num:     number,
@@ -98,12 +93,9 @@ func NewSQLErrorFromError(err error) error {
 		// Not found, build a generic SQLError.
 		// TODO(alainjobart) maybe we can also check the canonical
 		// error code, and translate that into the right error.
-
-		// FIXME(alainjobart): 1105 is unknown error. Will
-		// merge with sqlconn later.
 		return &SQLError{
-			Num:     1105,
-			State:   SQLStateGeneral,
+			Num:     ERUnknownError,
+			State:   SSUnknownSQLState,
 			Message: msg,
 		}
 	}
@@ -111,8 +103,8 @@ func NewSQLErrorFromError(err error) error {
 	num, err := strconv.Atoi(match[1])
 	if err != nil {
 		return &SQLError{
-			Num:     1105,
-			State:   SQLStateGeneral,
+			Num:     ERUnknownError,
+			State:   SSUnknownSQLState,
 			Message: msg,
 		}
 	}
