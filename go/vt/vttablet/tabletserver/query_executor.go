@@ -25,8 +25,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/hack"
-	"github.com/youtube/vitess/go/mysqlconn"
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/callerid"
@@ -530,11 +529,11 @@ func (qre *QueryExecutor) execUpsertPK(conn *TxConnection) (*sqltypes.Result, er
 	if err == nil {
 		return result, nil
 	}
-	sqlErr, ok := err.(*sqldb.SQLError)
+	sqlErr, ok := err.(*mysql.SQLError)
 	if !ok {
 		return result, err
 	}
-	if sqlErr.Number() != mysqlconn.ERDupEntry {
+	if sqlErr.Number() != mysql.ERDupEntry {
 		return nil, err
 	}
 	// If the error didn't match pk, just return the error without updating.

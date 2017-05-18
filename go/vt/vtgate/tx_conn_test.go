@@ -17,11 +17,11 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"strings"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/vterrors"

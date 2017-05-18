@@ -17,13 +17,14 @@ limitations under the License.
 package txserializer
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
+
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/vterrors"
 

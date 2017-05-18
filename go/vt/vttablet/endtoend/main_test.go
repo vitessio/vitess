@@ -24,7 +24,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
@@ -33,7 +33,7 @@ import (
 )
 
 var (
-	connParams sqldb.ConnParams
+	connParams mysql.ConnParams
 )
 
 func TestMain(m *testing.M) {

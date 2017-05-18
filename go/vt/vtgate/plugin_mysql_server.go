@@ -24,8 +24,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysqlconn"
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -58,10 +57,10 @@ func newVtgateHandler(vtg *VTGate) *vtgateHandler {
 	}
 }
 
-func (vh *vtgateHandler) NewConnection(c *mysqlconn.Conn) {
+func (vh *vtgateHandler) NewConnection(c *mysql.Conn) {
 }
 
-func (vh *vtgateHandler) ConnectionClosed(c *mysqlconn.Conn) {
+func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	// Rollback if there is an ongoing transaction. Ignore error.
 	ctx := context.Background()
 	session, _ := c.ClientData.(*vtgatepb.Session)
@@ -70,7 +69,7 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysqlconn.Conn) {
 	}
 }
 
-func (vh *vtgateHandler) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Result, error) {
+func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string) (*sqltypes.Result, error) {
 	// FIXME(alainjobart): Add some kind of timeout to the context.
 	ctx := context.Background()
 
@@ -93,7 +92,7 @@ func (vh *vtgateHandler) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Re
 				IncludedFields: querypb.ExecuteOptions_ALL,
 			},
 		}
-		if c.Capabilities&mysqlconn.CapabilityClientFoundRows != 0 {
+		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
 			session.Options.ClientFoundRows = true
 		}
 	}
@@ -102,11 +101,11 @@ func (vh *vtgateHandler) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Re
 	}
 	session, result, err := vh.vtg.Execute(ctx, session, query, make(map[string]interface{}))
 	c.ClientData = session
-	return result, sqldb.NewSQLErrorFromError(err)
+	return result, mysql.NewSQLErrorFromError(err)
 }
 
 func init() {
-	var listener *mysqlconn.Listener
+	var listener *mysql.Listener
 
 	servenv.OnRun(func() {
 		// Flag is not set, just return.
@@ -123,14 +122,14 @@ func init() {
 		for _, initFn := range pluginInitializers {
 			initFn()
 		}
-		authServer := mysqlconn.GetAuthServer(*mysqlAuthServerImpl)
+		authServer := mysql.GetAuthServer(*mysqlAuthServerImpl)
 
 		// Create a Listener.
 		var err error
 		vh := newVtgateHandler(rpcVTGate)
-		listener, err = mysqlconn.NewListener("tcp", net.JoinHostPort("", fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh)
+		listener, err = mysql.NewListener("tcp", net.JoinHostPort("", fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh)
 		if err != nil {
-			log.Fatalf("mysqlconn.NewListener failed: %v", err)
+			log.Fatalf("mysql.NewListener failed: %v", err)
 		}
 		if *mysqlSslCert != "" && *mysqlSslKey != "" {
 			listener.TLSConfig, err = grpcutils.TLSServerConfig(*mysqlSslCert, *mysqlSslKey, *mysqlSslCa)

@@ -17,13 +17,14 @@ limitations under the License.
 package buffer
 
 import (
-	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"

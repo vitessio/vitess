@@ -31,9 +31,7 @@ import (
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/hack"
 	"github.com/youtube/vitess/go/history"
-	"github.com/youtube/vitess/go/mysqlconn"
-	"github.com/youtube/vitess/go/mysqlconn/replication"
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
@@ -1303,7 +1301,7 @@ func (tsv *TabletServer) convertAndLogError(sql string, bindVariables map[string
 }
 
 func (tsv *TabletServer) convertError(sql string, bindVariables map[string]interface{}, err error) error {
-	sqlErr, ok := err.(*sqldb.SQLError)
+	sqlErr, ok := err.(*mysql.SQLError)
 	if !ok {
 		return err
 	}
@@ -1313,7 +1311,7 @@ func (tsv *TabletServer) convertError(sql string, bindVariables map[string]inter
 	errnum := sqlErr.Number()
 	sqlState := sqlErr.SQLState()
 	switch errnum {
-	case mysqlconn.EROptionPreventsStatement:
+	case mysql.EROptionPreventsStatement:
 		// Special-case this error code. It's probably because
 		// there was a failover and there are old clients still connected.
 		if strings.Contains(errstr, "read-only") {
@@ -1323,19 +1321,19 @@ func (tsv *TabletServer) convertError(sql string, bindVariables map[string]inter
 		if strings.Contains(errstr, "failover in progress") {
 			errCode = vtrpcpb.Code_FAILED_PRECONDITION
 		}
-	case mysqlconn.ERDupEntry:
+	case mysql.ERDupEntry:
 		errCode = vtrpcpb.Code_ALREADY_EXISTS
-	case mysqlconn.ERDataTooLong, mysqlconn.ERDataOutOfRange, mysqlconn.ERBadNullError:
+	case mysql.ERDataTooLong, mysql.ERDataOutOfRange, mysql.ERBadNullError:
 		errCode = vtrpcpb.Code_INVALID_ARGUMENT
-	case mysqlconn.ERLockWaitTimeout:
+	case mysql.ERLockWaitTimeout:
 		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
-	case mysqlconn.ERLockDeadlock:
+	case mysql.ERLockDeadlock:
 		// A deadlock rolls back the transaction.
 		errCode = vtrpcpb.Code_ABORTED
-	case mysqlconn.CRServerLost:
+	case mysql.CRServerLost:
 		// Query was killed.
 		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
-	case mysqlconn.CRServerGone, mysqlconn.ERServerShutdown:
+	case mysql.CRServerGone, mysql.ERServerShutdown:
 		errCode = vtrpcpb.Code_UNAVAILABLE
 	}
 
@@ -1588,11 +1586,11 @@ func (tsv *TabletServer) HeartbeatLag() (time.Duration, error) {
 // UpdateStream streams binlog events.
 func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
 	// Parse the position if needed.
-	var p replication.Position
+	var p mysql.Position
 	var err error
 	if timestamp == 0 {
 		if position != "" {
-			p, err = replication.DecodePosition(position)
+			p, err = mysql.DecodePosition(position)
 			if err != nil {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot parse position: %v", err)
 			}

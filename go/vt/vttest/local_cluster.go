@@ -34,8 +34,8 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
-	"github.com/youtube/vitess/go/sqldb"
 
+	"github.com/youtube/vitess/go/mysql"
 	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
 )
 
@@ -335,8 +335,8 @@ func (hdl *Handle) TearDown() error {
 
 // MySQLConnParams builds the MySQL connection params.
 // It's valid only if you used MySQLOnly option.
-func (hdl *Handle) MySQLConnParams() (sqldb.ConnParams, error) {
-	params := sqldb.ConnParams{
+func (hdl *Handle) MySQLConnParams() (mysql.ConnParams, error) {
+	params := mysql.ConnParams{
 		Charset: "utf8",
 		DbName:  hdl.dbname,
 	}

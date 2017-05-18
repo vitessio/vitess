@@ -20,22 +20,24 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/youtube/vitess/go/sqldb"
+	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 )
 
-// DBConnection re-exposes sqldb.Conn with some wrapping to implement
+// DBConnection re-exposes mysql.Conn with some wrapping to implement
 // most of PoolConnection interface, except Recycle. That way it can be used
 // by itself. (Recycle needs to know about the Pool).
 type DBConnection struct {
-	sqldb.Conn
+	*mysql.Conn
 	mysqlStats *stats.Timings
 }
 
 func (dbc *DBConnection) handleError(err error) {
-	if sqlErr, ok := err.(*sqldb.SQLError); ok {
+	if sqlErr, ok := err.(*mysql.SQLError); ok {
 		if sqlErr.Number() >= 2000 && sqlErr.Number() <= 2018 { // mysql connection errors
 			dbc.Close()
 		}
@@ -118,11 +120,12 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 
 // NewDBConnection returns a new DBConnection based on the ConnParams
 // and will use the provided stats to collect timing.
-func NewDBConnection(info *sqldb.ConnParams, mysqlStats *stats.Timings) (*DBConnection, error) {
+func NewDBConnection(info *mysql.ConnParams, mysqlStats *stats.Timings) (*DBConnection, error) {
 	params, err := dbconfigs.WithCredentials(info)
 	if err != nil {
 		return nil, err
 	}
-	c, err := sqldb.Connect(params)
+	ctx := context.Background()
+	c, err := mysql.Connect(ctx, &params)
 	return &DBConnection{c, mysqlStats}, err
 }

@@ -19,7 +19,7 @@ limitations under the License.
 package schematest
 
 import (
-	"github.com/youtube/vitess/go/mysqlconn"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -69,13 +69,13 @@ func Queries() map[string]*sqltypes.Result {
 				sqltypes.MakeString([]byte("STATEMENT")),
 			}},
 		},
-		mysqlconn.BaseShowTables: {
-			Fields:       mysqlconn.BaseShowTablesFields,
+		mysql.BaseShowTables: {
+			Fields:       mysql.BaseShowTablesFields,
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.BaseShowTablesRow("test_table_01", false, ""),
-				mysqlconn.BaseShowTablesRow("test_table_02", false, ""),
-				mysqlconn.BaseShowTablesRow("test_table_03", false, ""),
+				mysql.BaseShowTablesRow("test_table_01", false, ""),
+				mysql.BaseShowTablesRow("test_table_02", false, ""),
+				mysql.BaseShowTablesRow("test_table_03", false, ""),
 			},
 		},
 		"select * from test_table_01 where 1 != 1": {
@@ -85,10 +85,10 @@ func Queries() map[string]*sqltypes.Result {
 			}},
 		},
 		"describe test_table_01": {
-			Fields:       mysqlconn.DescribeTableFields,
+			Fields:       mysql.DescribeTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
+				mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
 			},
 		},
 		"select * from test_table_02 where 1 != 1": {
@@ -98,10 +98,10 @@ func Queries() map[string]*sqltypes.Result {
 			}},
 		},
 		"describe test_table_02": {
-			Fields:       mysqlconn.DescribeTableFields,
+			Fields:       mysql.DescribeTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
+				mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
 			},
 		},
 		"select * from test_table_03 where 1 != 1": {
@@ -111,32 +111,32 @@ func Queries() map[string]*sqltypes.Result {
 			}},
 		},
 		"describe test_table_03": {
-			Fields:       mysqlconn.DescribeTableFields,
+			Fields:       mysql.DescribeTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
+				mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
 			},
 		},
 		// for SplitQuery because it needs a primary key column
 		"show index from test_table_01": {
-			Fields:       mysqlconn.ShowIndexFromTableFields,
+			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.ShowIndexFromTableRow("test_table_01", true, "PRIMARY", 1, "pk", false),
+				mysql.ShowIndexFromTableRow("test_table_01", true, "PRIMARY", 1, "pk", false),
 			},
 		},
 		"show index from test_table_02": {
-			Fields:       mysqlconn.ShowIndexFromTableFields,
+			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.ShowIndexFromTableRow("test_table_02", true, "PRIMARY", 1, "pk", false),
+				mysql.ShowIndexFromTableRow("test_table_02", true, "PRIMARY", 1, "pk", false),
 			},
 		},
 		"show index from test_table_03": {
-			Fields:       mysqlconn.ShowIndexFromTableFields,
+			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.ShowIndexFromTableRow("test_table_03", true, "PRIMARY", 1, "pk", false),
+				mysql.ShowIndexFromTableRow("test_table_03", true, "PRIMARY", 1, "pk", false),
 			},
 		},
 		"begin":  {},

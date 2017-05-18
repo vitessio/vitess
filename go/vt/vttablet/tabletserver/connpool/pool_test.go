@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
+	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"golang.org/x/net/context"
 )
 

@@ -17,12 +17,13 @@ limitations under the License.
 package tabletserver
 
 import (
-	"context"
 	"encoding/json"
 	"reflect"
 	"strconv"
 	"testing"
 	"time"
+
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
 

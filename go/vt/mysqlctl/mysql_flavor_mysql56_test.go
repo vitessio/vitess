@@ -20,8 +20,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/mysqlconn/replication"
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 )
 
 func TestMysql56VersionMatch(t *testing.T) {
@@ -73,7 +72,7 @@ func TestMysql56SetSlavePositionCommands(t *testing.T) {
 }
 
 func TestMysql56SetMasterCommands(t *testing.T) {
-	params := &sqldb.ConnParams{
+	params := &mysql.ConnParams{
 		Uname: "username",
 		Pass:  "password",
 	}
@@ -101,7 +100,7 @@ func TestMysql56SetMasterCommands(t *testing.T) {
 }
 
 func TestMysql56SetMasterCommandsSSL(t *testing.T) {
-	params := &sqldb.ConnParams{
+	params := &mysql.ConnParams{
 		Uname:     "username",
 		Pass:      "password",
 		SslCa:     "ssl-ca",
@@ -140,7 +139,7 @@ func TestMysql56SetMasterCommandsSSL(t *testing.T) {
 
 func TestMysql56MakeBinlogEvent(t *testing.T) {
 	input := []byte{1, 2, 3}
-	want := replication.NewMysql56BinlogEvent([]byte{1, 2, 3})
+	want := mysql.NewMysql56BinlogEvent([]byte{1, 2, 3})
 	if got := (&mysql56{}).MakeBinlogEvent(input); !reflect.DeepEqual(got, want) {
 		t.Errorf("(&mysql56{}).MakeBinlogEvent(%#v) = %#v, want %#v", input, got, want)
 	}

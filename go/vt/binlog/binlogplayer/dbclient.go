@@ -20,19 +20,21 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/sqldb"
+	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 )
 
-// DBClient is a real VtClient backed by a mysql connection
+// DBClient is a real VtClient backed by a mysql connection.
 type DBClient struct {
-	dbConfig *sqldb.ConnParams
-	dbConn   sqldb.Conn
+	dbConfig *mysql.ConnParams
+	dbConn   *mysql.Conn
 }
 
 // NewDbClient creates a DBClient instance
-func NewDbClient(params *sqldb.ConnParams) *DBClient {
+func NewDbClient(params *mysql.ConnParams) *DBClient {
 	return &DBClient{
 		dbConfig: params,
 	}
@@ -40,7 +42,7 @@ func NewDbClient(params *sqldb.ConnParams) *DBClient {
 
 func (dc *DBClient) handleError(err error) {
 	// log.Errorf("in DBClient handleError %v", err.(error))
-	if sqlErr, ok := err.(*sqldb.SQLError); ok {
+	if sqlErr, ok := err.(*mysql.SQLError); ok {
 		if sqlErr.Number() >= 2000 && sqlErr.Number() <= 2018 { // mysql connection errors
 			dc.Close()
 		}
@@ -56,7 +58,8 @@ func (dc *DBClient) Connect() error {
 	if err != nil {
 		return err
 	}
-	dc.dbConn, err = sqldb.Connect(params)
+	ctx := context.Background()
+	dc.dbConn, err = mysql.Connect(ctx, &params)
 	if err != nil {
 		return fmt.Errorf("error in connecting to mysql db, err %v", err)
 	}

@@ -17,13 +17,13 @@ limitations under the License.
 package buffer
 
 import (
-	"context"
 	"fmt"
 	"runtime/debug"
 	"sync"
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/logutil"

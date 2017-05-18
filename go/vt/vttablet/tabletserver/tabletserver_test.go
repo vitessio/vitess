@@ -32,9 +32,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysqlconn"
-	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/messager"
@@ -321,15 +320,15 @@ func TestTabletServerSingleSchemaFailure(t *testing.T) {
 	defer db.Close()
 
 	want := &sqltypes.Result{
-		Fields:       mysqlconn.BaseShowTablesFields,
+		Fields:       mysql.BaseShowTablesFields,
 		RowsAffected: 2,
 		Rows: [][]sqltypes.Value{
-			mysqlconn.BaseShowTablesRow("test_table", false, ""),
+			mysql.BaseShowTablesRow("test_table", false, ""),
 			// Return a table that tabletserver can't access (the mock will reject all queries to it).
-			mysqlconn.BaseShowTablesRow("rejected_table", false, ""),
+			mysql.BaseShowTablesRow("rejected_table", false, ""),
 		},
 	}
-	db.AddQuery(mysqlconn.BaseShowTables, want)
+	db.AddQuery(mysql.BaseShowTables, want)
 
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
@@ -354,14 +353,14 @@ func TestTabletServerAllSchemaFailure(t *testing.T) {
 	defer db.Close()
 	// Return only tables that tabletserver can't access (the mock will reject all queries to them).
 	want := &sqltypes.Result{
-		Fields:       mysqlconn.BaseShowTablesFields,
+		Fields:       mysql.BaseShowTablesFields,
 		RowsAffected: 2,
 		Rows: [][]sqltypes.Value{
-			mysqlconn.BaseShowTablesRow("rejected_table_1", false, ""),
-			mysqlconn.BaseShowTablesRow("rejected_table_2", false, ""),
+			mysql.BaseShowTablesRow("rejected_table_1", false, ""),
+			mysql.BaseShowTablesRow("rejected_table_2", false, ""),
 		},
 	}
-	db.AddQuery(mysqlconn.BaseShowTables, want)
+	db.AddQuery(mysql.BaseShowTables, want)
 
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
@@ -2193,7 +2192,7 @@ func TestTerseErrorsBindVars(t *testing.T) {
 	err := tsv.convertError(
 		"select * from test_table",
 		map[string]interface{}{"a": 1},
-		sqldb.NewSQLError(10, "HY000", "msg"),
+		mysql.NewSQLError(10, "HY000", "msg"),
 	)
 	want := "(errno 10) (sqlstate HY000) during query: select * from test_table"
 	if err == nil || err.Error() != want {
@@ -2221,7 +2220,7 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 
 	err := tsv.convertError("select * from test_table where id = :a",
 		map[string]interface{}{"a": 1},
-		sqldb.NewSQLError(1227, "42000", "failover in progress"),
+		mysql.NewSQLError(1227, "42000", "failover in progress"),
 	)
 	if got, want := err.Error(), "failover in progress (errno 1227) (sqlstate 42000)"; got != want {
 		t.Fatalf("'failover in progress' text must never be stripped: got = %v, want = %v", got, want)
@@ -2426,32 +2425,32 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				Type: sqltypes.VarChar,
 			}},
 		},
-		mysqlconn.BaseShowTables: {
-			Fields:       mysqlconn.BaseShowTablesFields,
+		mysql.BaseShowTables: {
+			Fields:       mysql.BaseShowTablesFields,
 			RowsAffected: 2,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.BaseShowTablesRow("test_table", false, ""),
-				mysqlconn.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+				mysql.BaseShowTablesRow("test_table", false, ""),
+				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 			},
 		},
 		"describe test_table": {
-			Fields:       mysqlconn.DescribeTableFields,
+			Fields:       mysql.DescribeTableFields,
 			RowsAffected: 4,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
-				mysqlconn.DescribeTableRow("name", "int(11)", false, "", "0"),
-				mysqlconn.DescribeTableRow("addr", "int(11)", false, "", "0"),
-				mysqlconn.DescribeTableRow("name_string", "varchar(10)", false, "", "foo"),
+				mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
+				mysql.DescribeTableRow("name", "int(11)", false, "", "0"),
+				mysql.DescribeTableRow("addr", "int(11)", false, "", "0"),
+				mysql.DescribeTableRow("name_string", "varchar(10)", false, "", "foo"),
 			},
 		},
 		// for SplitQuery because it needs a primary key column
 		"show index from test_table": {
-			Fields:       mysqlconn.ShowIndexFromTableFields,
+			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false),
-				mysqlconn.ShowIndexFromTableRow("test_table", false, "index", 1, "name", true),
-				mysqlconn.ShowIndexFromTableRow("test_table", false, "name_string_INDEX", 1, "name_string", true),
+				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false),
+				mysql.ShowIndexFromTableRow("test_table", false, "index", 1, "name", true),
+				mysql.ShowIndexFromTableRow("test_table", false, "name_string_INDEX", 1, "name_string", true),
 			},
 		},
 		"select * from msg where 1 != 1": {
@@ -2479,41 +2478,41 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			}},
 		},
 		"describe msg": {
-			Fields:       mysqlconn.DescribeTableFields,
+			Fields:       mysql.DescribeTableFields,
 			RowsAffected: 4,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.DescribeTableRow("time_scheduled", "int(11)", false, "", "0"),
-				mysqlconn.DescribeTableRow("id", "bigint(20)", false, "", "0"),
-				mysqlconn.DescribeTableRow("time_next", "bigint(20)", false, "", "0"),
-				mysqlconn.DescribeTableRow("epoch", "bigint(20)", false, "", "0"),
-				mysqlconn.DescribeTableRow("time_created", "bigint(20)", false, "", "0"),
-				mysqlconn.DescribeTableRow("time_acked", "bigint(20)", false, "", "0"),
-				mysqlconn.DescribeTableRow("message", "bigint(20)", false, "", "0"),
+				mysql.DescribeTableRow("time_scheduled", "int(11)", false, "", "0"),
+				mysql.DescribeTableRow("id", "bigint(20)", false, "", "0"),
+				mysql.DescribeTableRow("time_next", "bigint(20)", false, "", "0"),
+				mysql.DescribeTableRow("epoch", "bigint(20)", false, "", "0"),
+				mysql.DescribeTableRow("time_created", "bigint(20)", false, "", "0"),
+				mysql.DescribeTableRow("time_acked", "bigint(20)", false, "", "0"),
+				mysql.DescribeTableRow("message", "bigint(20)", false, "", "0"),
 			},
 		},
 		"show index from msg": {
-			Fields:       mysqlconn.ShowIndexFromTableFields,
+			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.ShowIndexFromTableRow("msg", true, "PRIMARY", 1, "time_scheduled", false),
-				mysqlconn.ShowIndexFromTableRow("msg", true, "PRIMARY", 2, "id", false),
+				mysql.ShowIndexFromTableRow("msg", true, "PRIMARY", 1, "time_scheduled", false),
+				mysql.ShowIndexFromTableRow("msg", true, "PRIMARY", 2, "id", false),
 			},
 		},
-		mysqlconn.BaseShowTablesForTable("msg"): {
-			Fields:       mysqlconn.BaseShowTablesFields,
+		mysql.BaseShowTablesForTable("msg"): {
+			Fields:       mysql.BaseShowTablesFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 			},
 		},
 		"begin":    {},
 		"commit":   {},
 		"rollback": {},
-		mysqlconn.BaseShowTablesForTable("test_table"): {
-			Fields:       mysqlconn.BaseShowTablesFields,
+		mysql.BaseShowTablesForTable("test_table"): {
+			Fields:       mysql.BaseShowTablesFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.BaseShowTablesRow("test_table", false, ""),
+				mysql.BaseShowTablesRow("test_table", false, ""),
 			},
 		},
 		fmt.Sprintf(sqlReadAllRedo, "`_vt`", "`_vt`"): {},

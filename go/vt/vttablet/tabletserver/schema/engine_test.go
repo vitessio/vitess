@@ -28,8 +28,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysqlconn"
-	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
+	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema/schematest"
@@ -105,7 +105,7 @@ func TestOpenFailedDueToExecErr(t *testing.T) {
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	db.AddRejectedQuery(mysqlconn.BaseShowTables, fmt.Errorf("injected error"))
+	db.AddRejectedQuery(mysql.BaseShowTables, fmt.Errorf("injected error"))
 	se := newEngine(10, 1*time.Second, 1*time.Second, false)
 	err := se.Open(db.ConnParams())
 	want := "could not get table list"
@@ -120,11 +120,11 @@ func TestOpenFailedDueToTableErr(t *testing.T) {
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	db.AddQuery(mysqlconn.BaseShowTables, &sqltypes.Result{
-		Fields:       mysqlconn.BaseShowTablesFields,
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields:       mysql.BaseShowTablesFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			mysqlconn.BaseShowTablesRow("test_table", false, ""),
+			mysql.BaseShowTablesRow("test_table", false, ""),
 		},
 	})
 	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
@@ -168,15 +168,15 @@ func TestReload(t *testing.T) {
 	if table != nil {
 		t.Fatalf("table: %s exists; expecting nil", newTable)
 	}
-	db.AddQuery(mysqlconn.BaseShowTables, &sqltypes.Result{
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
 		// make this query return nothing during reload
-		Fields: mysqlconn.BaseShowTablesFields,
+		Fields: mysql.BaseShowTablesFields,
 	})
-	db.AddQuery(mysqlconn.BaseShowTablesForTable(newTable.String()), &sqltypes.Result{
-		Fields:       mysqlconn.BaseShowTablesFields,
+	db.AddQuery(mysql.BaseShowTablesForTable(newTable.String()), &sqltypes.Result{
+		Fields:       mysql.BaseShowTablesFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			mysqlconn.BaseShowTablesRow(newTable.String(), false, ""),
+			mysql.BaseShowTablesRow(newTable.String(), false, ""),
 		},
 	})
 
@@ -187,17 +187,17 @@ func TestReload(t *testing.T) {
 		}},
 	})
 	db.AddQuery("describe test_table_04", &sqltypes.Result{
-		Fields:       mysqlconn.DescribeTableFields,
+		Fields:       mysql.DescribeTableFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			mysqlconn.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
+			mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
 		},
 	})
 	db.AddQuery("show index from test_table_04", &sqltypes.Result{
-		Fields:       mysqlconn.ShowIndexFromTableFields,
+		Fields:       mysql.ShowIndexFromTableFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			mysqlconn.ShowIndexFromTableRow("test_table_04", true, "PRIMARY", 1, "pk", false),
+			mysql.ShowIndexFromTableRow("test_table_04", true, "PRIMARY", 1, "pk", false),
 		},
 	})
 
@@ -208,11 +208,11 @@ func TestReload(t *testing.T) {
 	}
 
 	// test reload with new table: test_table_04
-	db.AddQuery(mysqlconn.BaseShowTables, &sqltypes.Result{
-		Fields:       mysqlconn.BaseShowTablesFields,
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields:       mysql.BaseShowTablesFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			mysqlconn.BaseShowTablesRow(newTable.String(), false, ""),
+			mysql.BaseShowTablesRow(newTable.String(), false, ""),
 		},
 	})
 	table = se.GetTable(newTable)
@@ -234,7 +234,7 @@ func TestCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	db.AddRejectedQuery(mysqlconn.BaseShowTablesForTable("test_table"), fmt.Errorf("forced fail"))
+	db.AddRejectedQuery(mysql.BaseShowTablesForTable("test_table"), fmt.Errorf("forced fail"))
 	se := newEngine(10, 1*time.Second, 1*time.Second, false)
 	se.Open(db.ConnParams())
 	defer se.Close()
@@ -259,11 +259,11 @@ func TestCreateOrUpdateTable(t *testing.T) {
 	se.Open(db.ConnParams())
 	defer se.Close()
 	existingTable := "test_table_01"
-	db.AddQuery(mysqlconn.BaseShowTablesForTable(existingTable), &sqltypes.Result{
-		Fields:       mysqlconn.BaseShowTablesFields,
+	db.AddQuery(mysql.BaseShowTablesForTable(existingTable), &sqltypes.Result{
+		Fields:       mysql.BaseShowTablesFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			mysqlconn.BaseShowTablesRow(existingTable, false, ""),
+			mysql.BaseShowTablesRow(existingTable, false, ""),
 		},
 	})
 	i := 0
@@ -319,19 +319,19 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	defer se.Close()
 	// Add new table
 	tableName := sqlparser.NewTableIdent("mysql_stats_test_table")
-	db.AddQuery(mysqlconn.BaseShowTables, &sqltypes.Result{
-		Fields:       mysqlconn.BaseShowTablesFields,
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields:       mysql.BaseShowTablesFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			mysqlconn.BaseShowTablesRow(tableName.String(), false, ""),
+			mysql.BaseShowTablesRow(tableName.String(), false, ""),
 		},
 	})
 	// Add queries necessary for TableWasCreatedOrAltered() and NewTable()
-	db.AddQuery(mysqlconn.BaseShowTablesForTable(tableName.String()), &sqltypes.Result{
-		Fields:       mysqlconn.BaseShowTablesFields,
+	db.AddQuery(mysql.BaseShowTablesForTable(tableName.String()), &sqltypes.Result{
+		Fields:       mysql.BaseShowTablesFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			mysqlconn.BaseShowTablesRow(tableName.String(), false, ""),
+			mysql.BaseShowTablesRow(tableName.String(), false, ""),
 		},
 	})
 	q := fmt.Sprintf("select * from %s where 1 != 1", tableName)
@@ -343,18 +343,18 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	})
 	q = fmt.Sprintf("describe %s", tableName)
 	db.AddQuery(q, &sqltypes.Result{
-		Fields:       mysqlconn.DescribeTableFields,
+		Fields:       mysql.DescribeTableFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			mysqlconn.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
+			mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
 		},
 	})
 	q = fmt.Sprintf("show index from %s", tableName)
 	db.AddQuery(q, &sqltypes.Result{
-		Fields:       mysqlconn.ShowIndexFromTableFields,
+		Fields:       mysql.ShowIndexFromTableFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			mysqlconn.ShowIndexFromTableRow(tableName.String(), true, "PRIMARY", 1, "pk", false),
+			mysql.ShowIndexFromTableRow(tableName.String(), true, "PRIMARY", 1, "pk", false),
 		},
 	})
 
@@ -371,15 +371,15 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	df1 := table.DataFree
 	mdl1 := table.MaxDataLength
 	// Update existing table with new stats.
-	row := mysqlconn.BaseShowTablesRow(tableName.String(), false, "")
+	row := mysql.BaseShowTablesRow(tableName.String(), false, "")
 	row[2] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0")) // smaller timestamp
 	row[4] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("2")) // table_rows
 	row[5] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("3")) // data_length
 	row[6] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("4")) // index_length
 	row[7] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("5")) // data_free
 	row[8] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("6")) // max_data_length
-	db.AddQuery(mysqlconn.BaseShowTables, &sqltypes.Result{
-		Fields:       mysqlconn.BaseShowTablesFields,
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields:       mysql.BaseShowTablesFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			row,

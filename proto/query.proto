@@ -203,6 +203,7 @@ enum Type {
   // used in binlog parsing. There is no way to reserve a value in enums,
   // so just using a comment here.
   // Properties: 245, None.
+  // SQL = 245;
 }
 
 // Value represents a typed value.

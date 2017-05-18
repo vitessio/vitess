@@ -19,10 +19,10 @@ limitations under the License.
 package tabletenv
 
 import (
-	"context"
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/tb"
