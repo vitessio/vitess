@@ -172,7 +172,7 @@ func TestClientFoundRows(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Setup the right parameters.
-	params := &sqldb.ConnParams{
+	params := &ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: "user1",
@@ -227,7 +227,7 @@ func TestServer(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Setup the right parameters.
-	params := &sqldb.ConnParams{
+	params := &ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: "user1",
@@ -366,7 +366,7 @@ func TestClearTextServer(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Setup the right parameters.
-	params := &sqldb.ConnParams{
+	params := &ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: "user1",
@@ -455,7 +455,7 @@ func TestDialogServer(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Setup the right parameters.
-	params := &sqldb.ConnParams{
+	params := &ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: "user1",
@@ -523,7 +523,7 @@ func TestTLSServer(t *testing.T) {
 	}()
 
 	// Setup the right parameters.
-	params := &sqldb.ConnParams{
+	params := &ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: "user1",
@@ -561,7 +561,7 @@ func TestTLSServer(t *testing.T) {
 const enableCleartextPluginPrefix = "enable-cleartext-plugin: "
 
 // runMysql forks a mysql command line process connecting to the provided server.
-func runMysql(t *testing.T, params *sqldb.ConnParams, command string) (string, bool) {
+func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
 	dir, err := vtenv.VtMysqlRoot()
 	if err != nil {
 		t.Fatalf("vtenv.VtMysqlRoot failed: %v", err)

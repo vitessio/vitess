@@ -17,14 +17,14 @@ limitations under the License.
 package dbconnpool
 
 import (
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/stats"
 )
 
 // PooledDBConnection re-exposes DBConnection as a PoolConnection
 type PooledDBConnection struct {
 	*DBConnection
-	info       *sqldb.ConnParams
+	info       *mysql.ConnParams
 	mysqlStats *stats.Timings
 	pool       *ConnectionPool
 }
@@ -60,7 +60,7 @@ func (pc *PooledDBConnection) Reconnect() error {
 // ...
 // conn, err := pool.Get()
 // ...
-func DBConnectionCreator(info *sqldb.ConnParams, mysqlStats *stats.Timings) CreateConnectionFunc {
+func DBConnectionCreator(info *mysql.ConnParams, mysqlStats *stats.Timings) CreateConnectionFunc {
 	return func(pool *ConnectionPool) (PoolConnection, error) {
 		c, err := NewDBConnection(info, mysqlStats)
 		if err != nil {

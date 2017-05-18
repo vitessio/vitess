@@ -337,7 +337,7 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result 
 			break
 		case ErrPacket:
 			// Error packet.
-			return nil, parseErrorPacket(data)
+			return nil, ParseErrorPacket(data)
 		default:
 			return nil, fmt.Errorf("unexpected packet after fields: %v", data)
 		}
@@ -366,7 +366,7 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result 
 			return result, nil
 		case ErrPacket:
 			// Error packet.
-			return nil, parseErrorPacket(data)
+			return nil, ParseErrorPacket(data)
 		}
 
 		// Check we're not over the limit before we add more.
@@ -407,7 +407,7 @@ func (c *Conn) drainResults() error {
 			return nil
 		case ErrPacket:
 			// Error packet.
-			return parseErrorPacket(data)
+			return ParseErrorPacket(data)
 		}
 	}
 }
@@ -427,7 +427,7 @@ func (c *Conn) readComQueryResponse() (uint64, uint64, int, error) {
 		return affectedRows, lastInsertID, 0, err
 	case ErrPacket:
 		// Error
-		return 0, 0, 0, parseErrorPacket(data)
+		return 0, 0, 0, ParseErrorPacket(data)
 	case 0xfb:
 		// Local infile
 		return 0, 0, 0, fmt.Errorf("not implemented")

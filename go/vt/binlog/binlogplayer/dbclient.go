@@ -29,12 +29,12 @@ import (
 
 // DBClient is a real VtClient backed by a mysql connection.
 type DBClient struct {
-	dbConfig *sqldb.ConnParams
+	dbConfig *mysql.ConnParams
 	dbConn   *mysql.Conn
 }
 
 // NewDbClient creates a DBClient instance
-func NewDbClient(params *sqldb.ConnParams) *DBClient {
+func NewDbClient(params *mysql.ConnParams) *DBClient {
 	return &DBClient{
 		dbConfig: params,
 	}

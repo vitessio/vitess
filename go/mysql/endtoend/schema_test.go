@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mysql
+package endtoend
 
 import (
 	"fmt"
@@ -24,15 +24,15 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
 // testDescribeTable makes sure the fields returned by 'describe <table>'
 // are what we expect.
-func testDescribeTable(t *testing.T, params *sqldb.ConnParams) {
+func testDescribeTable(t *testing.T) {
 	ctx := context.Background()
-	conn, err := Connect(ctx, params)
+	conn, err := mysql.Connect(ctx, &connParams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,30 +52,30 @@ func testDescribeTable(t *testing.T, params *sqldb.ConnParams) {
 		t.Fatal(err)
 	}
 
-	if !sqltypes.FieldsEqual(result.Fields, DescribeTableFields) {
+	if !sqltypes.FieldsEqual(result.Fields, mysql.DescribeTableFields) {
 		// MariaDB has '81' instead of '90' of Extra ColumnLength.
 		// Just try it and see if it's the only difference.
 		if result.Fields[5].ColumnLength == 81 {
 			result.Fields[5].ColumnLength = 90
 		}
 
-		if !sqltypes.FieldsEqual(result.Fields, DescribeTableFields) {
+		if !sqltypes.FieldsEqual(result.Fields, mysql.DescribeTableFields) {
 			for i, f := range result.Fields {
-				if !proto.Equal(f, DescribeTableFields[i]) {
+				if !proto.Equal(f, mysql.DescribeTableFields[i]) {
 					t.Logf("result.Fields[%v] = %v", i, f)
-					t.Logf("        expected = %v", DescribeTableFields[i])
+					t.Logf("        expected = %v", mysql.DescribeTableFields[i])
 				}
 			}
-			t.Errorf("Fields returned by 'describe' differ from expected fields: got:\n%v\nexpected:\n%v", result.Fields, DescribeTableFields)
+			t.Errorf("Fields returned by 'describe' differ from expected fields: got:\n%v\nexpected:\n%v", result.Fields, mysql.DescribeTableFields)
 		}
 	}
 
-	want := DescribeTableRow("id", "int(11)", false, "PRI", "0")
+	want := mysql.DescribeTableRow("id", "int(11)", false, "PRI", "0")
 	if !reflect.DeepEqual(result.Rows[0], want) {
 		t.Errorf("Row[0] returned by 'describe' differ from expected content: got:\n%v\nexpected:\n%v", RowString(result.Rows[0]), RowString(want))
 	}
 
-	want = DescribeTableRow("name", "varchar(128)", true, "", "")
+	want = mysql.DescribeTableRow("name", "varchar(128)", true, "", "")
 	if !reflect.DeepEqual(result.Rows[1], want) {
 		t.Errorf("Row[1] returned by 'describe' differ from expected content: got:\n%v\nexpected:\n%v", RowString(result.Rows[1]), RowString(want))
 	}
@@ -83,9 +83,9 @@ func testDescribeTable(t *testing.T, params *sqldb.ConnParams) {
 
 // testShowIndexFromTable makes sure the fields returned by 'show index from <table>'
 // are what we expect.
-func testShowIndexFromTable(t *testing.T, params *sqldb.ConnParams) {
+func testShowIndexFromTable(t *testing.T) {
 	ctx := context.Background()
-	conn, err := Connect(ctx, params)
+	conn, err := mysql.Connect(ctx, &connParams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,41 +100,41 @@ func testShowIndexFromTable(t *testing.T, params *sqldb.ConnParams) {
 		t.Fatal(err)
 	}
 
-	if !sqltypes.FieldsEqual(result.Fields, ShowIndexFromTableFields) {
+	if !sqltypes.FieldsEqual(result.Fields, mysql.ShowIndexFromTableFields) {
 		for i, f := range result.Fields {
-			if i < len(ShowIndexFromTableFields) && !proto.Equal(f, ShowIndexFromTableFields[i]) {
+			if i < len(mysql.ShowIndexFromTableFields) && !proto.Equal(f, mysql.ShowIndexFromTableFields[i]) {
 				t.Logf("result.Fields[%v] = %v", i, f)
-				t.Logf("        expected = %v", ShowIndexFromTableFields[i])
+				t.Logf("        expected = %v", mysql.ShowIndexFromTableFields[i])
 			}
 		}
-		t.Errorf("Fields returned by 'show index from' differ from expected fields: got:\n%v\nexpected:\n%v", result.Fields, ShowIndexFromTableFields)
+		t.Errorf("Fields returned by 'show index from' differ from expected fields: got:\n%v\nexpected:\n%v", result.Fields, mysql.ShowIndexFromTableFields)
 	}
 
 	if len(result.Rows) != 5 {
 		t.Errorf("Got %v rows, expected 5", len(result.Rows))
 	}
 
-	want := ShowIndexFromTableRow("for_show_index", true, "PRIMARY", 1, "id", false)
+	want := mysql.ShowIndexFromTableRow("for_show_index", true, "PRIMARY", 1, "id", false)
 	if !reflect.DeepEqual(result.Rows[0], want) {
 		t.Errorf("Row[0] returned by 'show index from' differ from expected content: got:\n%v\nexpected:\n%v", RowString(result.Rows[0]), RowString(want))
 	}
 
-	want = ShowIndexFromTableRow("for_show_index", true, "on_name", 1, "name", true)
+	want = mysql.ShowIndexFromTableRow("for_show_index", true, "on_name", 1, "name", true)
 	if !reflect.DeepEqual(result.Rows[1], want) {
 		t.Errorf("Row[1] returned by 'show index from' differ from expected content: got:\n%v\nexpected:\n%v", RowString(result.Rows[1]), RowString(want))
 	}
 
-	want = ShowIndexFromTableRow("for_show_index", false, "on_zipcode", 1, "zipcode", true)
+	want = mysql.ShowIndexFromTableRow("for_show_index", false, "on_zipcode", 1, "zipcode", true)
 	if !reflect.DeepEqual(result.Rows[2], want) {
 		t.Errorf("Row[2] returned by 'show index from' differ from expected content: got:\n%v\nexpected:\n%v", RowString(result.Rows[2]), RowString(want))
 	}
 
-	want = ShowIndexFromTableRow("for_show_index", false, "on_zipcode_name", 1, "zipcode", true)
+	want = mysql.ShowIndexFromTableRow("for_show_index", false, "on_zipcode_name", 1, "zipcode", true)
 	if !reflect.DeepEqual(result.Rows[3], want) {
 		t.Errorf("Row[3] returned by 'show index from' differ from expected content: got:\n%v\nexpected:\n%v", RowString(result.Rows[3]), RowString(want))
 	}
 
-	want = ShowIndexFromTableRow("for_show_index", false, "on_zipcode_name", 2, "name", true)
+	want = mysql.ShowIndexFromTableRow("for_show_index", false, "on_zipcode_name", 2, "name", true)
 	if !reflect.DeepEqual(result.Rows[4], want) {
 		t.Errorf("Row[4] returned by 'show index from' differ from expected content: got:\n%v\nexpected:\n%v", RowString(result.Rows[4]), RowString(want))
 	}
@@ -142,9 +142,9 @@ func testShowIndexFromTable(t *testing.T, params *sqldb.ConnParams) {
 
 // testBaseShowTables makes sure the fields returned by
 // BaseShowTablesForTable are what we expect.
-func testBaseShowTables(t *testing.T, params *sqldb.ConnParams) {
+func testBaseShowTables(t *testing.T) {
 	ctx := context.Background()
-	conn, err := Connect(ctx, params)
+	conn, err := mysql.Connect(ctx, &connParams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,30 +154,30 @@ func testBaseShowTables(t *testing.T, params *sqldb.ConnParams) {
 		t.Fatal(err)
 	}
 
-	result, err := conn.ExecuteFetch(BaseShowTablesForTable("for_base_show_tables"), 10, true)
+	result, err := conn.ExecuteFetch(mysql.BaseShowTablesForTable("for_base_show_tables"), 10, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !sqltypes.FieldsEqual(result.Fields, BaseShowTablesFields) {
+	if !sqltypes.FieldsEqual(result.Fields, mysql.BaseShowTablesFields) {
 		// MariaDB has length 17 for unix_timestamp(create_time), see if that's the only difference.
 		if result.Fields[2].ColumnLength == 17 {
 			result.Fields[2].ColumnLength = 11
 		}
 
 		// And try again.
-		if !sqltypes.FieldsEqual(result.Fields, BaseShowTablesFields) {
+		if !sqltypes.FieldsEqual(result.Fields, mysql.BaseShowTablesFields) {
 			for i, f := range result.Fields {
-				if i < len(BaseShowTablesFields) && !proto.Equal(f, BaseShowTablesFields[i]) {
+				if i < len(mysql.BaseShowTablesFields) && !proto.Equal(f, mysql.BaseShowTablesFields[i]) {
 					t.Logf("result.Fields[%v] = %v", i, f)
-					t.Logf("        expected = %v", BaseShowTablesFields[i])
+					t.Logf("        expected = %v", mysql.BaseShowTablesFields[i])
 				}
 			}
-			t.Errorf("Fields returned by BaseShowTables differ from expected fields: got:\n%v\nexpected:\n%v", result.Fields, BaseShowTablesFields)
+			t.Errorf("Fields returned by BaseShowTables differ from expected fields: got:\n%v\nexpected:\n%v", result.Fields, mysql.BaseShowTablesFields)
 		}
 	}
 
-	want := BaseShowTablesRow("for_base_show_tables", false, "fancy table")
+	want := mysql.BaseShowTablesRow("for_base_show_tables", false, "fancy table")
 	result.Rows[0][2] = sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325875")) // unix_timestamp(create_time)
 	result.Rows[0][4] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0"))         // table_rows
 	result.Rows[0][5] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0"))         // data_length
@@ -202,17 +202,17 @@ func RowString(row []sqltypes.Value) string {
 	return result
 }
 
-// testSchema runs all the schema tests.
-func testSchema(t *testing.T, params *sqldb.ConnParams) {
+// TestSchema runs all the schema tests.
+func TestSchema(t *testing.T) {
 	t.Run("DescribeTable", func(t *testing.T) {
-		testDescribeTable(t, params)
+		testDescribeTable(t)
 	})
 
 	t.Run("ShowIndexFromTable", func(t *testing.T) {
-		testShowIndexFromTable(t, params)
+		testShowIndexFromTable(t)
 	})
 
 	t.Run("BaseShowTables", func(t *testing.T) {
-		testBaseShowTables(t, params)
+		testBaseShowTables(t)
 	})
 }

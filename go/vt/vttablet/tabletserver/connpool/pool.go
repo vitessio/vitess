@@ -20,14 +20,16 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/pools"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"golang.org/x/net/context"
+
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // ErrConnPoolClosed is returned when the connection pool is closed.
@@ -95,7 +97,7 @@ func (cp *Pool) pool() (p *pools.ResourcePool) {
 }
 
 // Open must be called before starting to use the pool.
-func (cp *Pool) Open(appParams, dbaParams *sqldb.ConnParams) {
+func (cp *Pool) Open(appParams, dbaParams *mysql.ConnParams) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 

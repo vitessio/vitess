@@ -44,7 +44,7 @@ type connectResult struct {
 //
 // FIXME(alainjobart) once we have more of a server side, add test cases
 // to cover all failure scenarios.
-func Connect(ctx context.Context, params *sqldb.ConnParams) (*Conn, error) {
+func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 	netProto := "tcp"
 	addr := ""
 	if params.UnixSocket != "" {
@@ -194,7 +194,7 @@ func parseCharacterSet(cs string) (uint8, error) {
 // clientHandshake handles the client side of the handshake.
 // Note the connection can be closed while this is running.
 // Returns a sqldb.SQLError.
-func (c *Conn) clientHandshake(characterSet uint8, params *sqldb.ConnParams) error {
+func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 	// Wait for the server initial handshake packet, and parse it.
 	data, err := c.readPacket()
 	if err != nil {
@@ -297,12 +297,12 @@ func (c *Conn) clientHandshake(characterSet uint8, params *sqldb.ConnParams) err
 			// OK packet, we are authenticated. Save the user, keep going.
 			c.User = params.Uname
 		case ErrPacket:
-			return parseErrorPacket(response)
+			return ParseErrorPacket(response)
 		default:
 			return sqldb.NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "initial server response cannot be parsed: %v", response)
 		}
 	case ErrPacket:
-		return parseErrorPacket(response)
+		return ParseErrorPacket(response)
 	default:
 		return sqldb.NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "initial server response cannot be parsed: %v", response)
 	}
@@ -325,7 +325,7 @@ func (c *Conn) clientHandshake(characterSet uint8, params *sqldb.ConnParams) err
 			// OK packet, we are authenticated.
 			return nil
 		case ErrPacket:
-			return parseErrorPacket(response)
+			return ParseErrorPacket(response)
 		default:
 			// FIXME(alainjobart) handle extra auth cases and so on.
 			return sqldb.NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "initial server response is asking for more information, not implemented yet: %v", response)
@@ -463,7 +463,7 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 
 // writeSSLRequest writes the SSLRequest packet. It's just a truncated
 // HandshakeResponse41.
-func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *sqldb.ConnParams) error {
+func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *ConnParams) error {
 	// Build our flags, with CapabilityClientSSL.
 	var flags uint32 = CapabilityClientLongPassword |
 		CapabilityClientLongFlag |
@@ -514,7 +514,7 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 
 // writeHandshakeResponse41 writes the handshake response.
 // Returns a sqldb.SQLError.
-func (c *Conn) writeHandshakeResponse41(capabilities uint32, salt []byte, characterSet uint8, params *sqldb.ConnParams) error {
+func (c *Conn) writeHandshakeResponse41(capabilities uint32, salt []byte, characterSet uint8, params *ConnParams) error {
 	// Build our flags.
 	var flags uint32 = CapabilityClientLongPassword |
 		CapabilityClientLongFlag |
@@ -620,7 +620,7 @@ func parseAuthSwitchRequest(data []byte) (string, []byte, error) {
 
 // writeClearTextPassword writes the clear text password.
 // Returns a sqldb.SQLError.
-func (c *Conn) writeClearTextPassword(params *sqldb.ConnParams) error {
+func (c *Conn) writeClearTextPassword(params *ConnParams) error {
 	length := len(params.Pass) + 1
 	data := c.startEphemeralPacket(length)
 	pos := 0

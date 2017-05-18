@@ -30,7 +30,6 @@ import (
 
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
@@ -93,7 +92,7 @@ func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *En
 
 // Open initializes the Engine. Calling Open on an already
 // open engine is a no-op.
-func (se *Engine) Open(dbaParams *sqldb.ConnParams) error {
+func (se *Engine) Open(dbaParams *mysql.ConnParams) error {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	if se.isOpen {

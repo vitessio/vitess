@@ -20,8 +20,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/replication"
-	"github.com/youtube/vitess/go/sqldb"
 )
 
 func TestMysql56VersionMatch(t *testing.T) {
@@ -73,7 +73,7 @@ func TestMysql56SetSlavePositionCommands(t *testing.T) {
 }
 
 func TestMysql56SetMasterCommands(t *testing.T) {
-	params := &sqldb.ConnParams{
+	params := &mysql.ConnParams{
 		Uname: "username",
 		Pass:  "password",
 	}
@@ -101,7 +101,7 @@ func TestMysql56SetMasterCommands(t *testing.T) {
 }
 
 func TestMysql56SetMasterCommandsSSL(t *testing.T) {
-	params := &sqldb.ConnParams{
+	params := &mysql.ConnParams{
 		Uname:     "username",
 		Pass:      "password",
 		SslCa:     "ssl-ca",

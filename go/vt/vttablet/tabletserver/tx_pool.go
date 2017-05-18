@@ -28,7 +28,6 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/pools"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
@@ -106,7 +105,7 @@ func NewTxPool(
 
 // Open makes the TxPool operational. This also starts the transaction killer
 // that will kill long-running transactions.
-func (axp *TxPool) Open(appParams, dbaParams *sqldb.ConnParams) {
+func (axp *TxPool) Open(appParams, dbaParams *mysql.ConnParams) {
 	log.Infof("Starting transaction id: %d", axp.lastID)
 	axp.conns.Open(appParams, dbaParams)
 	foundRowsParam := *appParams

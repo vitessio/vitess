@@ -30,9 +30,9 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/replication"
 	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/hook"
 )
@@ -45,7 +45,7 @@ const (
 	SQLStopSlave = "STOP SLAVE"
 )
 
-func changeMasterArgs(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) []string {
+func changeMasterArgs(params *mysql.ConnParams, masterHost string, masterPort int, masterConnectRetry int) []string {
 	var args []string
 	args = append(args, fmt.Sprintf("MASTER_HOST = '%s'", masterHost))
 	args = append(args, fmt.Sprintf("MASTER_PORT = %d", masterPort))

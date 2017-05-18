@@ -24,7 +24,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/trace"
@@ -51,7 +50,7 @@ const (
 // It will also trigger a CheckMySQL whenever applicable.
 type DBConn struct {
 	conn    *dbconnpool.DBConnection
-	info    *sqldb.ConnParams
+	info    *mysql.ConnParams
 	pool    *Pool
 	current sync2.AtomicString
 }
@@ -60,7 +59,7 @@ type DBConn struct {
 func NewDBConn(
 	cp *Pool,
 	appParams,
-	dbaParams *sqldb.ConnParams) (*DBConn, error) {
+	dbaParams *mysql.ConnParams) (*DBConn, error) {
 	c, err := dbconnpool.NewDBConnection(appParams, tabletenv.MySQLStats)
 	if err != nil {
 		cp.checker.CheckMySQL()

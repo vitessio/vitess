@@ -693,8 +693,8 @@ func parseOKPacket(data []byte) (uint64, uint64, uint16, uint16, error) {
 	return affectedRows, lastInsertID, statusFlags, warnings, nil
 }
 
-// parseErrorPacket parses the error packet and returns a sqldb.SQLError.
-func parseErrorPacket(data []byte) error {
+// ParseErrorPacket parses the error packet and returns a sqldb.SQLError.
+func ParseErrorPacket(data []byte) error {
 	// We already read the type.
 	pos := 1
 

@@ -229,9 +229,9 @@ func TestBasicPackets(t *testing.T) {
 	if err != nil || len(data) == 0 || data[0] != ErrPacket {
 		t.Fatalf("cConn.ReadPacket - ErrorPacket failed: %v %v", data, err)
 	}
-	err = parseErrorPacket(data)
+	err = ParseErrorPacket(data)
 	if !reflect.DeepEqual(err, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied: reason")) {
-		t.Errorf("parseErrorPacket returned unexpected data: %v", err)
+		t.Errorf("ParseErrorPacket returned unexpected data: %v", err)
 	}
 
 	// Write error packet from error, read it, compare.
@@ -242,9 +242,9 @@ func TestBasicPackets(t *testing.T) {
 	if err != nil || len(data) == 0 || data[0] != ErrPacket {
 		t.Fatalf("cConn.ReadPacket - ErrorPacket failed: %v %v", data, err)
 	}
-	err = parseErrorPacket(data)
+	err = ParseErrorPacket(data)
 	if !reflect.DeepEqual(err, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied")) {
-		t.Errorf("parseErrorPacket returned unexpected data: %v", err)
+		t.Errorf("ParseErrorPacket returned unexpected data: %v", err)
 	}
 
 	// Write EOF packet, read it, compare first byte. Payload is always ignored.

@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
@@ -198,8 +197,8 @@ func (db *DB) WaitForClose(timeout time.Duration) error {
 }
 
 // ConnParams returns the ConnParams to connect to the DB.
-func (db *DB) ConnParams() *sqldb.ConnParams {
-	return &sqldb.ConnParams{
+func (db *DB) ConnParams() *mysql.ConnParams {
+	return &mysql.ConnParams{
 		UnixSocket: db.socketFile,
 		Uname:      "user1",
 		Pass:       "password1",

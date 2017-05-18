@@ -26,7 +26,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
 	"github.com/youtube/vitess/go/vt/tlstest"
 )
@@ -55,7 +54,7 @@ func TestClearTextClientAuth(t *testing.T) {
 	}()
 
 	// Setup the right parameters.
-	params := &sqldb.ConnParams{
+	params := &ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: "user1",
@@ -133,7 +132,7 @@ func TestSSLConnection(t *testing.T) {
 	}()
 
 	// Setup the right parameters.
-	params := &sqldb.ConnParams{
+	params := &ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: "user1",
@@ -156,7 +155,7 @@ func TestSSLConnection(t *testing.T) {
 	})
 }
 
-func testSSLConnectionClearText(t *testing.T, params *sqldb.ConnParams) {
+func testSSLConnectionClearText(t *testing.T, params *ConnParams) {
 	// Create a client connection, connect.
 	ctx := context.Background()
 	conn, err := Connect(ctx, params)
@@ -181,7 +180,7 @@ func testSSLConnectionClearText(t *testing.T, params *sqldb.ConnParams) {
 	conn.writeComQuit()
 }
 
-func testSSLConnectionBasics(t *testing.T, params *sqldb.ConnParams) {
+func testSSLConnectionBasics(t *testing.T, params *ConnParams) {
 	// Create a client connection, connect.
 	ctx := context.Background()
 	conn, err := Connect(ctx, params)

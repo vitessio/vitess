@@ -22,8 +22,8 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/replication"
-	"github.com/youtube/vitess/go/sqldb"
 )
 
 type fakeMysqlFlavor string
@@ -52,7 +52,7 @@ func (fakeMysqlFlavor) SlaveStatus(mysqld *Mysqld) (Status, error) {
 func (fakeMysqlFlavor) SetSlavePositionCommands(pos replication.Position) ([]string, error) {
 	return nil, nil
 }
-func (fakeMysqlFlavor) SetMasterCommands(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
+func (fakeMysqlFlavor) SetMasterCommands(params *mysql.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
 	return nil, nil
 }
 func (fakeMysqlFlavor) EnableBinlogPlayback(mysqld *Mysqld) error  { return nil }

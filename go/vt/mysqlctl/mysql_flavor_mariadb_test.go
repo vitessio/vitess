@@ -20,8 +20,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/replication"
-	"github.com/youtube/vitess/go/sqldb"
 )
 
 func TestMariadbMakeBinlogEvent(t *testing.T) {
@@ -51,7 +51,7 @@ func TestMariadbSetSlavePositionCommands(t *testing.T) {
 }
 
 func TestMariadbSetMasterCommands(t *testing.T) {
-	params := &sqldb.ConnParams{
+	params := &mysql.ConnParams{
 		Uname: "username",
 		Pass:  "password",
 	}
@@ -79,7 +79,7 @@ func TestMariadbSetMasterCommands(t *testing.T) {
 }
 
 func TestMariadbSetMasterCommandsSSL(t *testing.T) {
-	params := &sqldb.ConnParams{
+	params := &mysql.ConnParams{
 		Uname:     "username",
 		Pass:      "password",
 		SslCa:     "ssl-ca",

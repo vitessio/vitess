@@ -42,7 +42,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
@@ -301,7 +300,7 @@ func (mysqld *Mysqld) Wait(ctx context.Context) error {
 }
 
 // wait is the internal version of Wait, that takes credentials.
-func (mysqld *Mysqld) wait(ctx context.Context, params sqldb.ConnParams) error {
+func (mysqld *Mysqld) wait(ctx context.Context, params mysql.ConnParams) error {
 	log.Infof("Waiting for mysqld socket file (%v) to be ready...", mysqld.config.SocketFile)
 
 	for {
@@ -504,7 +503,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 
 	// Wait for mysqld to be ready, using root credentials, as no
 	// user is created yet.
-	params := sqldb.ConnParams{
+	params := mysql.ConnParams{
 		Uname:      "root",
 		Charset:    "utf8",
 		UnixSocket: mysqld.config.SocketFile,
@@ -787,7 +786,7 @@ func deleteTopDir(dir string) (removalErr error) {
 
 // executeMysqlScript executes a .sql script from an io.Reader with the mysql
 // command line tool. It uses the connParams as is, not adding credentials.
-func (mysqld *Mysqld) executeMysqlScript(connParams *sqldb.ConnParams, sql io.Reader) error {
+func (mysqld *Mysqld) executeMysqlScript(connParams *mysql.ConnParams, sql io.Reader) error {
 	dir, err := vtenv.VtMysqlRoot()
 	if err != nil {
 		return err
@@ -822,7 +821,7 @@ func (mysqld *Mysqld) executeMysqlScript(connParams *sqldb.ConnParams, sql io.Re
 // as permissions, so only the local user can read the file.  The
 // returned temporary file should be removed after use, typically in a
 // 'defer os.Remove()' statement.
-func (mysqld *Mysqld) defaultsExtraFile(connParams *sqldb.ConnParams) (string, error) {
+func (mysqld *Mysqld) defaultsExtraFile(connParams *mysql.ConnParams) (string, error) {
 	var contents string
 	if connParams.UnixSocket == "" {
 		contents = fmt.Sprintf(`

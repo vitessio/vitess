@@ -24,10 +24,8 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/sqldb"
 
-	// Include both current implementations.
-	_ "github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/mysql"
 )
 
 // We keep a global singleton for the db configs, and that's the one
@@ -56,7 +54,7 @@ const (
 const redactedPassword = "****"
 
 // The flags will change the global singleton
-func registerConnFlags(connParams *sqldb.ConnParams, name string) {
+func registerConnFlags(connParams *mysql.ConnParams, name string) {
 	flag.StringVar(&connParams.Engine, "db-config-"+name+"-engine", "mysqlconn", "db "+name+" engine to use (empty for default, libmysqlclient or mysqlconn)")
 	flag.StringVar(&connParams.Host, "db-config-"+name+"-host", "", "db "+name+" connection host")
 	flag.IntVar(&connParams.Port, "db-config-"+name+"-port", 0, "db "+name+" connection port")
@@ -105,7 +103,7 @@ func RegisterFlags(flags DBConfigFlag) DBConfigFlag {
 
 // initConnParams may overwrite the socket file,
 // and refresh the password to check that works.
-func initConnParams(cp *sqldb.ConnParams, socketFile string) error {
+func initConnParams(cp *mysql.ConnParams, socketFile string) error {
 	// Always try to connect with the socket if provided.
 	if socketFile != "" {
 		cp.UnixSocket = socketFile
@@ -126,11 +124,11 @@ func initConnParams(cp *sqldb.ConnParams, socketFile string) error {
 // - Replication access to change master
 // - SidecarDBName for storing operational metadata
 type DBConfigs struct {
-	App           sqldb.ConnParams
-	AllPrivs      sqldb.ConnParams
-	Dba           sqldb.ConnParams
-	Filtered      sqldb.ConnParams
-	Repl          sqldb.ConnParams
+	App           mysql.ConnParams
+	AllPrivs      mysql.ConnParams
+	Dba           mysql.ConnParams
+	Filtered      mysql.ConnParams
+	Repl          mysql.ConnParams
 	SidecarDBName string
 }
 

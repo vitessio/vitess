@@ -21,11 +21,11 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/replication"
-	"github.com/youtube/vitess/go/sqldb"
 )
 
 // mariaDB10 is the implementation of MysqlFlavor for MariaDB 10.0.10
@@ -149,7 +149,7 @@ func (*mariaDB10) SetSlavePositionCommands(pos replication.Position) ([]string, 
 }
 
 // SetMasterCommands implements MysqlFlavor.SetMasterCommands().
-func (*mariaDB10) SetMasterCommands(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
+func (*mariaDB10) SetMasterCommands(params *mysql.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
 	// Make CHANGE MASTER TO command.
 	args := changeMasterArgs(params, masterHost, masterPort, masterConnectRetry)
 	// MASTER_USE_GTID = current_pos means it will request binlogs starting at

@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"os"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/replication"
-	"github.com/youtube/vitess/go/sqldb"
 )
 
 /*
@@ -65,7 +65,7 @@ type MysqlFlavor interface {
 	// as the new master (without changing any GTID position).
 	// It is guaranteed to be called with replication stopped.
 	// It should not start or stop replication.
-	SetMasterCommands(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error)
+	SetMasterCommands(params *mysql.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error)
 
 	// ParseGTID parses a GTID in the canonical format of this
 	// MySQL flavor into a replication.GTID interface value.

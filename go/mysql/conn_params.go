@@ -14,10 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package sqldb defines an interface for low level db connection
-package sqldb
+package mysql
 
-// ConnParams contains all the parameters to use to connect to mysql
+// ConnParams contains all the parameters to use to connect to mysql.
 type ConnParams struct {
 	Engine     string `json:"engine"`
 	Host       string `json:"host"`
@@ -29,8 +28,8 @@ type ConnParams struct {
 	Charset    string `json:"charset"`
 	Flags      uint64 `json:"flags"`
 
-	// The following flags are only used for 'Change Master' command
-	// for now (along with flags |= 2048 for CLIENT_SSL)
+	// The following SSL flags are only used when flags |= 2048
+	// is set (capabilityClientSSL).
 	SslCa     string `json:"ssl_ca"`
 	SslCaPath string `json:"ssl_ca_path"`
 	SslCert   string `json:"ssl_cert"`

@@ -21,11 +21,11 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/replication"
-	"github.com/youtube/vitess/go/sqldb"
 )
 
 // mysql56 is the implementation of MysqlFlavor for MySQL 5.6+.
@@ -143,7 +143,7 @@ func (*mysql56) SetSlavePositionCommands(pos replication.Position) ([]string, er
 }
 
 // SetMasterCommands implements MysqlFlavor.SetMasterCommands().
-func (*mysql56) SetMasterCommands(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
+func (*mysql56) SetMasterCommands(params *mysql.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
 	// Make CHANGE MASTER TO command.
 	args := changeMasterArgs(params, masterHost, masterPort, masterConnectRetry)
 	args = append(args, "MASTER_AUTO_POSITION = 1")

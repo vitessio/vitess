@@ -29,7 +29,7 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 )
 
 var (
@@ -110,7 +110,7 @@ func (fcs *FileCredentialsServer) GetUserAndPassword(user string) (string, strin
 
 // WithCredentials returns a copy of the provided ConnParams that we can use
 // to connect, after going through the CredentialsServer.
-func WithCredentials(cp *sqldb.ConnParams) (sqldb.ConnParams, error) {
+func WithCredentials(cp *mysql.ConnParams) (mysql.ConnParams, error) {
 	result := *cp
 	user, passwd, err := GetCredentialsServer().GetUserAndPassword(cp.Uname)
 	switch err {

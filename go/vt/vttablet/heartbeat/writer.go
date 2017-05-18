@@ -19,26 +19,25 @@ package heartbeat
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/dbconnpool"
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
-	"strconv"
-
 	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/hack"
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/dbconnpool"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 const (
@@ -147,7 +146,7 @@ func (w *Writer) Close() {
 // or master. For that reason, we use values that are common between them, such as keyspace:shard,
 // and we also execute them with an isolated connection that turns off the binlog and
 // is closed at the end.
-func (w *Writer) initializeTables(cp *sqldb.ConnParams) error {
+func (w *Writer) initializeTables(cp *mysql.ConnParams) error {
 	conn, err := dbconnpool.NewDBConnection(cp, stats.NewTimings(""))
 	if err != nil {
 		return fmt.Errorf("Failed to create connection for heartbeat: %v", err)

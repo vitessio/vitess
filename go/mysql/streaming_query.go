@@ -88,7 +88,7 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 			break
 		case ErrPacket:
 			// Error packet.
-			return parseErrorPacket(data)
+			return ParseErrorPacket(data)
 		default:
 			return sqldb.NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "unexpected packet after fields: %v", data)
 		}
@@ -141,7 +141,7 @@ func (c *Conn) FetchNext() ([]sqltypes.Value, error) {
 		return nil, nil
 	case ErrPacket:
 		// Error packet.
-		return nil, parseErrorPacket(data)
+		return nil, ParseErrorPacket(data)
 	}
 
 	// Regular row.
