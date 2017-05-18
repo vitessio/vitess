@@ -34,7 +34,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/cgzip"
-	"github.com/youtube/vitess/go/mysql/replication"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/hook"
@@ -136,7 +136,7 @@ type BackupManifest struct {
 	FileEntries []FileEntry
 
 	// Position is the position at which the backup was taken
-	Position replication.Position
+	Position mysql.Position
 
 	// TransformHook that was used on the files, if any.
 	TransformHook string
@@ -263,7 +263,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 	slaveStartRequired := false
 	sourceIsMaster := false
 	readOnly := true
-	var replicationPosition replication.Position
+	var replicationPosition mysql.Position
 	semiSyncMaster, semiSyncSlave := mysqld.SemiSyncEnabled()
 
 	// See if we need to restart replication after backup.
@@ -359,7 +359,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 }
 
 // backupFiles finds the list of files to backup, and creates the backup.
-func backupFiles(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, replicationPosition replication.Position, backupConcurrency int, hookExtraEnv map[string]string) (err error) {
+func backupFiles(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, replicationPosition mysql.Position, backupConcurrency int, hookExtraEnv map[string]string) (err error) {
 	// Get the files to backup.
 	fes, err := findFilesToBackup(mysqld.Cnf())
 	if err != nil {
@@ -734,19 +734,19 @@ func Restore(
 	localMetadata map[string]string,
 	logger logutil.Logger,
 	deleteBeforeRestore bool,
-	dbName string) (replication.Position, error) {
+	dbName string) (mysql.Position, error) {
 
 	// find the right backup handle: most recent one, with a MANIFEST
 	logger.Infof("Restore: looking for a suitable backup to restore")
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
-		return replication.Position{}, err
+		return mysql.Position{}, err
 	}
 	defer bs.Close()
 
 	bhs, err := bs.ListBackups(ctx, dir)
 	if err != nil {
-		return replication.Position{}, fmt.Errorf("ListBackups failed: %v", err)
+		return mysql.Position{}, fmt.Errorf("ListBackups failed: %v", err)
 	}
 
 	if len(bhs) == 0 {
@@ -755,7 +755,7 @@ func Restore(
 		if err = populateMetadataTables(mysqld, localMetadata); err == nil {
 			err = ErrNoBackup
 		}
-		return replication.Position{}, err
+		return mysql.Position{}, err
 	}
 
 	var bh backupstorage.BackupHandle
@@ -783,21 +783,21 @@ func Restore(
 		// There is at least one attempted backup, but none could be read.
 		// This implies there is data we ought to have, so it's not safe to start
 		// up empty.
-		return replication.Position{}, errors.New("backup(s) found but none could be read, unsafe to start up empty, restart to retry restore")
+		return mysql.Position{}, errors.New("backup(s) found but none could be read, unsafe to start up empty, restart to retry restore")
 	}
 
 	if !deleteBeforeRestore {
 		logger.Infof("Restore: checking no existing data is present")
 		ok, err := checkNoDB(ctx, mysqld, dbName)
 		if err != nil {
-			return replication.Position{}, err
+			return mysql.Position{}, err
 		}
 		if !ok {
 			logger.Infof("Auto-restore is enabled, but mysqld already contains data. Assuming vttablet was just restarted.")
 			if err = populateMetadataTables(mysqld, localMetadata); err == nil {
 				err = ErrExistingDB
 			}
-			return replication.Position{}, err
+			return mysql.Position{}, err
 		}
 	}
 
@@ -807,23 +807,23 @@ func Restore(
 	logger.Infof("Restore: shutdown mysqld")
 	err = mysqld.Shutdown(context.Background(), true)
 	if err != nil {
-		return replication.Position{}, err
+		return mysql.Position{}, err
 	}
 
 	logger.Infof("Restore: deleting existing files")
 	if err := removeExistingFiles(mysqld.Cnf()); err != nil {
-		return replication.Position{}, err
+		return mysql.Position{}, err
 	}
 
 	logger.Infof("Restore: reinit config file")
 	err = mysqld.ReinitConfig(context.Background())
 	if err != nil {
-		return replication.Position{}, err
+		return mysql.Position{}, err
 	}
 
 	logger.Infof("Restore: copying all files")
 	if err := restoreFiles(context.Background(), mysqld.Cnf(), bh, bm.FileEntries, bm.TransformHook, !bm.SkipCompress, restoreConcurrency, hookExtraEnv); err != nil {
-		return replication.Position{}, err
+		return mysql.Position{}, err
 	}
 
 	// mysqld needs to be running in order for mysql_upgrade to work.
@@ -837,12 +837,12 @@ func Restore(
 	// Note Start will use dba user for waiting, this is fine, it will be allowed.
 	err = mysqld.Start(context.Background(), "--skip-grant-tables", "--skip-networking")
 	if err != nil {
-		return replication.Position{}, err
+		return mysql.Position{}, err
 	}
 
 	logger.Infof("Restore: running mysql_upgrade")
 	if err := mysqld.RunMysqlUpgrade(); err != nil {
-		return replication.Position{}, fmt.Errorf("mysql_upgrade failed: %v", err)
+		return mysql.Position{}, fmt.Errorf("mysql_upgrade failed: %v", err)
 	}
 
 	// Populate local_metadata before starting without --skip-networking,
@@ -850,7 +850,7 @@ func Restore(
 	logger.Infof("Restore: populating local_metadata")
 	err = populateMetadataTables(mysqld, localMetadata)
 	if err != nil {
-		return replication.Position{}, err
+		return mysql.Position{}, err
 	}
 
 	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
@@ -858,11 +858,11 @@ func Restore(
 	logger.Infof("Restore: restarting mysqld after mysql_upgrade")
 	err = mysqld.Shutdown(context.Background(), true)
 	if err != nil {
-		return replication.Position{}, err
+		return mysql.Position{}, err
 	}
 	err = mysqld.Start(context.Background())
 	if err != nil {
-		return replication.Position{}, err
+		return mysql.Position{}, err
 	}
 
 	return bm.Position, nil

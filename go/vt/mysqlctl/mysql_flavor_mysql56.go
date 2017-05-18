@@ -25,7 +25,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/mysql/replication"
 )
 
 // mysql56 is the implementation of MysqlFlavor for MySQL 5.6+.
@@ -40,7 +39,7 @@ func (*mysql56) VersionMatch(version string) bool {
 }
 
 // MasterPosition implements MysqlFlavor.MasterPosition().
-func (flavor *mysql56) MasterPosition(mysqld *Mysqld) (rp replication.Position, err error) {
+func (flavor *mysql56) MasterPosition(mysqld *Mysqld) (rp mysql.Position, err error) {
 	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SELECT @@GLOBAL.gtid_executed")
 	if err != nil {
 		return rp, err
@@ -72,7 +71,7 @@ func (flavor *mysql56) SlaveStatus(mysqld *Mysqld) (Status, error) {
 }
 
 // WaitMasterPos implements MysqlFlavor.WaitMasterPos().
-func (*mysql56) WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos replication.Position) error {
+func (*mysql56) WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos mysql.Position) error {
 	var query string
 
 	// A timeout of 0 means wait indefinitely.
@@ -135,7 +134,7 @@ func (*mysql56) PromoteSlaveCommands() []string {
 }
 
 // SetSlavePositionCommands implements MysqlFlavor.
-func (*mysql56) SetSlavePositionCommands(pos replication.Position) ([]string, error) {
+func (*mysql56) SetSlavePositionCommands(pos mysql.Position) ([]string, error) {
 	return []string{
 		"RESET MASTER", // We must clear gtid_executed before setting gtid_purged.
 		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", pos),
@@ -153,18 +152,18 @@ func (*mysql56) SetMasterCommands(params *mysql.ConnParams, masterHost string, m
 }
 
 // ParseGTID implements MysqlFlavor.ParseGTID().
-func (*mysql56) ParseGTID(s string) (replication.GTID, error) {
-	return replication.ParseGTID(mysql56FlavorID, s)
+func (*mysql56) ParseGTID(s string) (mysql.GTID, error) {
+	return mysql.ParseGTID(mysql56FlavorID, s)
 }
 
 // ParseReplicationPosition implements MysqlFlavor.ParseReplicationPosition().
-func (*mysql56) ParseReplicationPosition(s string) (replication.Position, error) {
-	return replication.ParsePosition(mysql56FlavorID, s)
+func (*mysql56) ParseReplicationPosition(s string) (mysql.Position, error) {
+	return mysql.ParsePosition(mysql56FlavorID, s)
 }
 
 // SendBinlogDumpCommand implements MysqlFlavor.SendBinlogDumpCommand().
-func (flavor *mysql56) SendBinlogDumpCommand(conn *SlaveConnection, startPos replication.Position) error {
-	gtidSet, ok := startPos.GTIDSet.(replication.Mysql56GTIDSet)
+func (flavor *mysql56) SendBinlogDumpCommand(conn *SlaveConnection, startPos mysql.Position) error {
+	gtidSet, ok := startPos.GTIDSet.(mysql.Mysql56GTIDSet)
 	if !ok {
 		return fmt.Errorf("startPos.GTIDSet is wrong type - expected Mysql56GTIDSet, got: %#v", startPos.GTIDSet)
 	}
@@ -175,8 +174,8 @@ func (flavor *mysql56) SendBinlogDumpCommand(conn *SlaveConnection, startPos rep
 }
 
 // MakeBinlogEvent implements MysqlFlavor.MakeBinlogEvent().
-func (*mysql56) MakeBinlogEvent(buf []byte) replication.BinlogEvent {
-	return replication.NewMysql56BinlogEvent(buf)
+func (*mysql56) MakeBinlogEvent(buf []byte) mysql.BinlogEvent {
+	return mysql.NewMysql56BinlogEvent(buf)
 }
 
 // EnableBinlogPlayback implements MysqlFlavor.EnableBinlogPlayback().

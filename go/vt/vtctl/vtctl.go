@@ -108,7 +108,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/flagutil"
-	"github.com/youtube/vitess/go/mysql/replication"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	hk "github.com/youtube/vitess/go/vt/hook"
@@ -2224,11 +2224,11 @@ func (rts rTablets) Less(i, j int) bool {
 		return false
 	}
 	// then compare replication positions
-	lpos, err := replication.DecodePosition(l.Position)
+	lpos, err := mysql.DecodePosition(l.Position)
 	if err != nil {
 		return true
 	}
-	rpos, err := replication.DecodePosition(r.Position)
+	rpos, err := mysql.DecodePosition(r.Position)
 	if err != nil {
 		return false
 	}

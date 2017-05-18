@@ -19,7 +19,7 @@ package binlogplayer
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/mysql/replication"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/vt/throttler"
 )
 
@@ -35,24 +35,24 @@ func TestPopulateBlpCheckpoint(t *testing.T) {
 }
 
 func TestUpdateBlpCheckpoint(t *testing.T) {
-	gtid := replication.MustParseGTID("MariaDB", "0-1-8283")
+	gtid := mysql.MustParseGTID("MariaDB", "0-1-8283")
 	want := "UPDATE _vt.blp_checkpoint " +
 		"SET pos='MariaDB/0-1-8283', time_updated=88822 " +
 		"WHERE source_shard_uid=78522"
 
-	got := updateBlpCheckpoint(78522, replication.Position{GTIDSet: gtid.GTIDSet()}, 88822, 0)
+	got := updateBlpCheckpoint(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 0)
 	if got != want {
 		t.Errorf("updateBlpCheckpoint() = %#v, want %#v", got, want)
 	}
 }
 
 func TestUpdateBlpCheckpointTimestamp(t *testing.T) {
-	gtid := replication.MustParseGTID("MariaDB", "0-2-582")
+	gtid := mysql.MustParseGTID("MariaDB", "0-2-582")
 	want := "UPDATE _vt.blp_checkpoint " +
 		"SET pos='MariaDB/0-2-582', time_updated=88822, transaction_timestamp=481828 " +
 		"WHERE source_shard_uid=78522"
 
-	got := updateBlpCheckpoint(78522, replication.Position{GTIDSet: gtid.GTIDSet()}, 88822, 481828)
+	got := updateBlpCheckpoint(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 481828)
 	if got != want {
 		t.Errorf("updateBlpCheckpoint() = %#v, want %#v", got, want)
 	}

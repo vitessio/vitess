@@ -26,7 +26,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/event"
-	"github.com/youtube/vitess/go/mysql/replication"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -480,7 +480,7 @@ type maxReplPosSearch struct {
 	waitSlaveTimeout time.Duration
 	waitGroup        sync.WaitGroup
 	maxPosLock       sync.Mutex
-	maxPos           replication.Position
+	maxPos           mysql.Position
 	maxPosTablet     *topodatapb.Tablet
 }
 
@@ -496,7 +496,7 @@ func (maxPosSearch *maxReplPosSearch) processTablet(tablet *topodatapb.Tablet) {
 		maxPosSearch.wrangler.logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", topoproto.TabletAliasString(tablet.Alias), err)
 		return
 	}
-	replPos, err := replication.DecodePosition(status.Position)
+	replPos, err := mysql.DecodePosition(status.Position)
 	if err != nil {
 		maxPosSearch.wrangler.logger.Warningf("cannot decode slave %v position %v: %v", topoproto.TabletAliasString(tablet.Alias), status.Position, err)
 		return
@@ -662,7 +662,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	if !ok {
 		return fmt.Errorf("couldn't get master elect %v replication position", topoproto.TabletAliasString(masterElectTabletAlias))
 	}
-	masterElectPos, err := replication.DecodePosition(masterElectStatus.Position)
+	masterElectPos, err := mysql.DecodePosition(masterElectStatus.Position)
 	if err != nil {
 		return fmt.Errorf("cannot decode master elect position %v: %v", masterElectStatus.Position, err)
 	}
@@ -670,7 +670,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		if alias == masterElectTabletAliasStr {
 			continue
 		}
-		pos, err := replication.DecodePosition(status.Position)
+		pos, err := mysql.DecodePosition(status.Position)
 		if err != nil {
 			return fmt.Errorf("cannot decode slave %v position %v: %v", alias, status.Position, err)
 		}

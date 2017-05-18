@@ -19,13 +19,13 @@ package mysqlctl
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/mysql/replication"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/netutil"
 )
 
 // Status holds replication information from SHOW SLAVE STATUS.
 type Status struct {
-	Position            replication.Position
+	Position            mysql.Position
 	SlaveIORunning      bool
 	SlaveSQLRunning     bool
 	SecondsBehindMaster uint

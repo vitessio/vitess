@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package replication
+package mysql
 
 // GTIDSet represents the set of transactions received or applied by a server.
 // In some flavors, a single GTID is enough to specify the set of all

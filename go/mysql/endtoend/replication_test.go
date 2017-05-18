@@ -28,7 +28,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/mysql/replication"
 	"github.com/youtube/vitess/go/sqltypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -36,7 +35,7 @@ import (
 
 // connectForReplication is a helper method to connect for replication
 // from the current binlog position.
-func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, bool, replication.BinlogFormat) {
+func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, bool, mysql.BinlogFormat) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &connParams)
 	if err != nil {
@@ -89,7 +88,7 @@ func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, bool, replicati
 	}
 
 	// Wait for the FORMAT_DESCRIPTION_EVENT
-	var f replication.BinlogFormat
+	var f mysql.BinlogFormat
 	for {
 		data, err := conn.ReadPacket()
 		if err != nil {
@@ -137,12 +136,12 @@ func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, bool, replicati
 }
 
 // newBinlogEvent uses the flavor to create the right packet.
-func newBinlogEvent(isMariaDB bool, data []byte) replication.BinlogEvent {
+func newBinlogEvent(isMariaDB bool, data []byte) mysql.BinlogEvent {
 	// Hardcoded test for MySQL server version.
 	if isMariaDB {
-		return replication.NewMariadbBinlogEvent(data[1:])
+		return mysql.NewMariadbBinlogEvent(data[1:])
 	}
-	return replication.NewMysql56BinlogEvent(data[1:])
+	return mysql.NewMysql56BinlogEvent(data[1:])
 }
 
 // TestReplicationConnectionClosing connects as a replication client,
@@ -371,7 +370,7 @@ func testRowReplicationWithRealDatabase(t *testing.T) {
 	gotDelete := false
 
 	var tableID uint64
-	var tableMap *replication.TableMap
+	var tableMap *mysql.TableMap
 
 	//	for i := 0; i < 6 && (gtidCount < 2 || !gotCreateTable || !gotTableMapEvent || !gotBegin || !gotInsert || !gotCommit); i++ {
 	for gtidCount < 4 || !gotCreateTable || !gotTableMapEvent || !gotInsert || !gotUpdate || !gotDelete || beginCount != 3 || commitCount != 3 {
@@ -1104,7 +1103,7 @@ func TestRowReplicationTypes(t *testing.T) {
 	// Get the new events from the binlogs.
 	// Only care about the Write event.
 	var tableID uint64
-	var tableMap *replication.TableMap
+	var tableMap *mysql.TableMap
 	var values []sqltypes.Value
 
 	for values == nil {
@@ -1180,7 +1179,7 @@ func TestRowReplicationTypes(t *testing.T) {
 		sql.WriteString(", ")
 		sql.WriteString(tcase.name)
 		sql.WriteString(" = ")
-		if values[i+1].Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(values[i+1].Raw(), replication.ZeroTimestamp) {
+		if values[i+1].Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(values[i+1].Raw(), mysql.ZeroTimestamp) {
 			// Values in the binary log are UTC. Let's convert them
 			// to whatever timezone the connection is using,
 			// so MySQL properly converts them back to UTC.
@@ -1230,7 +1229,7 @@ func TestRowReplicationTypes(t *testing.T) {
 // of all columns in a row in a Row. Only use it in tests, as the
 // returned values cannot be interpreted correctly without the schema.
 // We assume everything is unsigned in this method.
-func valuesForTests(t *testing.T, rs *replication.Rows, tm *replication.TableMap, rowIndex int) ([]sqltypes.Value, error) {
+func valuesForTests(t *testing.T, rs *mysql.Rows, tm *mysql.TableMap, rowIndex int) ([]sqltypes.Value, error) {
 	var result []sqltypes.Value
 
 	valueIndex := 0
@@ -1249,7 +1248,7 @@ func valuesForTests(t *testing.T, rs *replication.Rows, tm *replication.TableMap
 		}
 
 		// We have real data
-		value, l, err := replication.CellValue(data, pos, tm.Types[c], tm.Metadata[c], querypb.Type_UINT64)
+		value, l, err := mysql.CellValue(data, pos, tm.Types[c], tm.Metadata[c], querypb.Type_UINT64)
 		if err != nil {
 			return nil, err
 		}

@@ -24,8 +24,8 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
-	"github.com/youtube/vitess/go/mysql/replication"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -57,8 +57,8 @@ func TestInitMasterShard(t *testing.T) {
 
 	// Master: set a plausible ReplicationPosition to return,
 	// and expect to add entry in _vt.reparent_journal
-	master.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
-		GTIDSet: replication.MariadbGTID{
+	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+		GTIDSet: mysql.MariadbGTID{
 			Domain:   5,
 			Server:   456,
 			Sequence: 890,
@@ -195,8 +195,8 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 
 	// Master: set a plausible ReplicationPosition to return,
 	// and expect to add entry in _vt.reparent_journal
-	master.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
-		GTIDSet: replication.MariadbGTID{
+	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+		GTIDSet: mysql.MariadbGTID{
 			Domain:   5,
 			Server:   456,
 			Sequence: 890,

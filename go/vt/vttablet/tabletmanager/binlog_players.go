@@ -32,7 +32,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysql/replication"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
@@ -657,7 +657,7 @@ type BinlogPlayerControllerStatus struct {
 	StopPosition string
 
 	// stats and current values
-	LastPosition        replication.Position
+	LastPosition        mysql.Position
 	SecondsBehindMaster int64
 	Counts              map[string]int64
 	Rates               map[string][]float64

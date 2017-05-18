@@ -28,7 +28,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysql/replication"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -169,8 +169,8 @@ func (tc *legacySplitCloneTestCase) setUp(v3 bool) {
 		}
 		sourceRdonly.FakeMysqlDaemon.DbAppConnectionFactory = sourceRdonlyFactory(
 			tc.t, "vt_ks", "table1", legacySplitCloneTestMin, legacySplitCloneTestMax)
-		sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
-			GTIDSet: replication.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
+		sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+			GTIDSet: mysql.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
 		}
 		sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 			"STOP SLAVE",

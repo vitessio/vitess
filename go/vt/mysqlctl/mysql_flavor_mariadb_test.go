@@ -21,19 +21,18 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/mysql/replication"
 )
 
 func TestMariadbMakeBinlogEvent(t *testing.T) {
 	input := []byte{1, 2, 3}
-	want := replication.NewMariadbBinlogEvent([]byte{1, 2, 3})
+	want := mysql.NewMariadbBinlogEvent([]byte{1, 2, 3})
 	if got := (&mariaDB10{}).MakeBinlogEvent(input); !reflect.DeepEqual(got, want) {
 		t.Errorf("(&mariaDB10{}).MakeBinlogEvent(%#v) = %#v, want %#v", input, got, want)
 	}
 }
 
 func TestMariadbSetSlavePositionCommands(t *testing.T) {
-	pos := replication.Position{GTIDSet: replication.MariadbGTID{Domain: 1, Server: 41983, Sequence: 12345}}
+	pos := mysql.Position{GTIDSet: mysql.MariadbGTID{Domain: 1, Server: 41983, Sequence: 12345}}
 	want := []string{
 		"RESET MASTER",
 		"SET GLOBAL gtid_slave_pos = '1-41983-12345'",
@@ -118,7 +117,7 @@ func TestMariadbSetMasterCommandsSSL(t *testing.T) {
 
 func TestMariadbParseGTID(t *testing.T) {
 	input := "12-34-5678"
-	want := replication.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678}
+	want := mysql.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678}
 
 	got, err := (&mariaDB10{}).ParseGTID(input)
 	if err != nil {
@@ -131,7 +130,7 @@ func TestMariadbParseGTID(t *testing.T) {
 
 func TestMariadbParseReplicationPosition(t *testing.T) {
 	input := "12-34-5678"
-	want := replication.Position{GTIDSet: replication.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678}}
+	want := mysql.Position{GTIDSet: mysql.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678}}
 
 	got, err := (&mariaDB10{}).ParseReplicationPosition(input)
 	if err != nil {

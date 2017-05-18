@@ -25,7 +25,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/mysql/replication"
 )
 
 // mariaDB10 is the implementation of MysqlFlavor for MariaDB 10.0.10
@@ -40,7 +39,7 @@ func (*mariaDB10) VersionMatch(version string) bool {
 }
 
 // MasterPosition implements MysqlFlavor.MasterPosition().
-func (flavor *mariaDB10) MasterPosition(mysqld *Mysqld) (rp replication.Position, err error) {
+func (flavor *mariaDB10) MasterPosition(mysqld *Mysqld) (rp mysql.Position, err error) {
 	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SELECT @@GLOBAL.gtid_binlog_pos")
 	if err != nil {
 		return rp, err
@@ -75,7 +74,7 @@ func (flavor *mariaDB10) SlaveStatus(mysqld *Mysqld) (Status, error) {
 //
 // Note: Unlike MASTER_POS_WAIT(), MASTER_GTID_WAIT() will continue waiting even
 // if the slave thread stops. If that is a problem, we'll have to change this.
-func (*mariaDB10) WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos replication.Position) error {
+func (*mariaDB10) WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos mysql.Position) error {
 	var query string
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout := deadline.Sub(time.Now())
@@ -130,7 +129,7 @@ func (*mariaDB10) PromoteSlaveCommands() []string {
 }
 
 // SetSlavePositionCommands implements MysqlFlavor.
-func (*mariaDB10) SetSlavePositionCommands(pos replication.Position) ([]string, error) {
+func (*mariaDB10) SetSlavePositionCommands(pos mysql.Position) ([]string, error) {
 	return []string{
 		// RESET MASTER will clear out gtid_binlog_pos,
 		// which then guarantees that gtid_current_pos = gtid_slave_pos,
@@ -164,17 +163,17 @@ func (*mariaDB10) SetMasterCommands(params *mysql.ConnParams, masterHost string,
 }
 
 // ParseGTID implements MysqlFlavor.ParseGTID().
-func (*mariaDB10) ParseGTID(s string) (replication.GTID, error) {
-	return replication.ParseGTID(mariadbFlavorID, s)
+func (*mariaDB10) ParseGTID(s string) (mysql.GTID, error) {
+	return mysql.ParseGTID(mariadbFlavorID, s)
 }
 
 // ParseReplicationPosition implements MysqlFlavor.ParseReplicationposition().
-func (*mariaDB10) ParseReplicationPosition(s string) (replication.Position, error) {
-	return replication.ParsePosition(mariadbFlavorID, s)
+func (*mariaDB10) ParseReplicationPosition(s string) (mysql.Position, error) {
+	return mysql.ParsePosition(mariadbFlavorID, s)
 }
 
 // SendBinlogDumpCommand implements MysqlFlavor.SendBinlogDumpCommand().
-func (*mariaDB10) SendBinlogDumpCommand(conn *SlaveConnection, startPos replication.Position) error {
+func (*mariaDB10) SendBinlogDumpCommand(conn *SlaveConnection, startPos mysql.Position) error {
 	// Tell the server that we understand GTIDs by setting our slave capability
 	// to MARIA_SLAVE_CAPABILITY_GTID = 4 (MariaDB >= 10.0.1).
 	if _, err := conn.ExecuteFetch("SET @mariadb_slave_capability=4", 0, false); err != nil {
@@ -200,8 +199,8 @@ func (*mariaDB10) SendBinlogDumpCommand(conn *SlaveConnection, startPos replicat
 }
 
 // MakeBinlogEvent implements MysqlFlavor.MakeBinlogEvent().
-func (*mariaDB10) MakeBinlogEvent(buf []byte) replication.BinlogEvent {
-	return replication.NewMariadbBinlogEvent(buf)
+func (*mariaDB10) MakeBinlogEvent(buf []byte) mysql.BinlogEvent {
+	return mysql.NewMariadbBinlogEvent(buf)
 }
 
 // EnableBinlogPlayback implements MysqlFlavor.EnableBinlogPlayback().

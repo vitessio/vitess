@@ -32,7 +32,6 @@ import (
 	"github.com/youtube/vitess/go/hack"
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/mysql/replication"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
@@ -1587,11 +1586,11 @@ func (tsv *TabletServer) HeartbeatLag() (time.Duration, error) {
 // UpdateStream streams binlog events.
 func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
 	// Parse the position if needed.
-	var p replication.Position
+	var p mysql.Position
 	var err error
 	if timestamp == 0 {
 		if position != "" {
-			p, err = replication.DecodePosition(position)
+			p, err = mysql.DecodePosition(position)
 			if err != nil {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot parse position: %v", err)
 			}

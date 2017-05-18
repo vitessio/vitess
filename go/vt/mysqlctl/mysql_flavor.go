@@ -24,7 +24,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/mysql/replication"
 )
 
 /*
@@ -39,7 +38,7 @@ type MysqlFlavor interface {
 	VersionMatch(version string) bool
 
 	// MasterPosition returns the ReplicationPosition of a master.
-	MasterPosition(mysqld *Mysqld) (replication.Position, error)
+	MasterPosition(mysqld *Mysqld) (mysql.Position, error)
 
 	// SlaveStatus returns the ReplicationStatus of a slave.
 	SlaveStatus(mysqld *Mysqld) (Status, error)
@@ -59,7 +58,7 @@ type MysqlFlavor interface {
 	// SetSlavePositionCommands returns the commands to set the
 	// replication position at which the slave will resume
 	// when it is later reparented with SetMasterCommands.
-	SetSlavePositionCommands(pos replication.Position) ([]string, error)
+	SetSlavePositionCommands(pos mysql.Position) ([]string, error)
 
 	// SetMasterCommands returns the commands to use the provided master
 	// as the new master (without changing any GTID position).
@@ -69,26 +68,26 @@ type MysqlFlavor interface {
 
 	// ParseGTID parses a GTID in the canonical format of this
 	// MySQL flavor into a replication.GTID interface value.
-	ParseGTID(string) (replication.GTID, error)
+	ParseGTID(string) (mysql.GTID, error)
 
 	// ParseReplicationPosition parses a replication position in
 	// the canonical format of this MySQL flavor into a
-	// replication.Position struct.
-	ParseReplicationPosition(string) (replication.Position, error)
+	// mysql.Position struct.
+	ParseReplicationPosition(string) (mysql.Position, error)
 
 	// SendBinlogDumpCommand sends the flavor-specific version of
 	// the COM_BINLOG_DUMP command to start dumping raw binlog
 	// events over a slave connection, starting at a given GTID.
-	SendBinlogDumpCommand(conn *SlaveConnection, startPos replication.Position) error
+	SendBinlogDumpCommand(conn *SlaveConnection, startPos mysql.Position) error
 
 	// MakeBinlogEvent takes a raw packet from the MySQL binlog
 	// stream connection and returns a BinlogEvent through which
 	// the packet can be examined.
-	MakeBinlogEvent(buf []byte) replication.BinlogEvent
+	MakeBinlogEvent(buf []byte) mysql.BinlogEvent
 
 	// WaitMasterPos waits until slave replication reaches at
 	// least targetPos.
-	WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos replication.Position) error
+	WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos mysql.Position) error
 
 	// EnableBinlogPlayback prepares the server to play back
 	// events from a binlog stream.  Whatever it does for a given

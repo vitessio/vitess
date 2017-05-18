@@ -31,7 +31,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/mysql/replication"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/hook"
@@ -188,7 +187,7 @@ var (
 )
 
 // WaitMasterPos lets slaves wait to given replication position
-func (mysqld *Mysqld) WaitMasterPos(ctx context.Context, targetPos replication.Position) error {
+func (mysqld *Mysqld) WaitMasterPos(ctx context.Context, targetPos mysql.Position) error {
 	flavor, err := mysqld.flavor()
 	if err != nil {
 		return fmt.Errorf("WaitMasterPos needs flavor: %v", err)
@@ -206,7 +205,7 @@ func (mysqld *Mysqld) SlaveStatus() (Status, error) {
 }
 
 // MasterPosition returns master replication position
-func (mysqld *Mysqld) MasterPosition() (rp replication.Position, err error) {
+func (mysqld *Mysqld) MasterPosition() (rp mysql.Position, err error) {
 	flavor, err := mysqld.flavor()
 	if err != nil {
 		return rp, fmt.Errorf("MasterPosition needs flavor: %v", err)
@@ -217,7 +216,7 @@ func (mysqld *Mysqld) MasterPosition() (rp replication.Position, err error) {
 // SetSlavePositionCommands returns the commands to set the
 // replication position at which the slave will resume
 // when it is later reparented with SetMasterCommands.
-func (mysqld *Mysqld) SetSlavePositionCommands(pos replication.Position) ([]string, error) {
+func (mysqld *Mysqld) SetSlavePositionCommands(pos mysql.Position) ([]string, error) {
 	flavor, err := mysqld.flavor()
 	if err != nil {
 		return nil, fmt.Errorf("SetSlavePositionCommands needs flavor: %v", err)
@@ -311,7 +310,7 @@ func FindSlaves(mysqld MysqlDaemon) ([]string, error) {
 // WaitBlpPosition will wait for the filtered replication to reach at least
 // the provided position.
 func WaitBlpPosition(ctx context.Context, mysqld MysqlDaemon, sql string, replicationPosition string) error {
-	position, err := replication.DecodePosition(replicationPosition)
+	position, err := mysql.DecodePosition(replicationPosition)
 	if err != nil {
 		return err
 	}
@@ -329,9 +328,9 @@ func WaitBlpPosition(ctx context.Context, mysqld MysqlDaemon, sql string, replic
 		if len(qr.Rows) != 1 {
 			return fmt.Errorf("QueryBlpCheckpoint(%v) returned unexpected row count: %v", sql, len(qr.Rows))
 		}
-		var pos replication.Position
+		var pos mysql.Position
 		if !qr.Rows[0][0].IsNull() {
-			pos, err = replication.DecodePosition(qr.Rows[0][0].String())
+			pos, err = mysql.DecodePosition(qr.Rows[0][0].String())
 			if err != nil {
 				return err
 			}

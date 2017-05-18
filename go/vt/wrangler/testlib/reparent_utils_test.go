@@ -22,7 +22,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysql/replication"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
@@ -54,8 +54,8 @@ func TestShardReplicationStatuses(t *testing.T) {
 	}
 
 	// master action loop (to initialize host and port)
-	master.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
-		GTIDSet: replication.MariadbGTID{
+	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+		GTIDSet: mysql.MariadbGTID{
 			Domain:   5,
 			Server:   456,
 			Sequence: 892,
@@ -65,8 +65,8 @@ func TestShardReplicationStatuses(t *testing.T) {
 	defer master.StopActionLoop(t)
 
 	// slave loop
-	slave.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
-		GTIDSet: replication.MariadbGTID{
+	slave.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+		GTIDSet: mysql.MariadbGTID{
 			Domain:   5,
 			Server:   456,
 			Sequence: 890,

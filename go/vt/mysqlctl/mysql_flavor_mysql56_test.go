@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/mysql/replication"
 )
 
 func TestMysql56VersionMatch(t *testing.T) {
@@ -140,7 +139,7 @@ func TestMysql56SetMasterCommandsSSL(t *testing.T) {
 
 func TestMysql56MakeBinlogEvent(t *testing.T) {
 	input := []byte{1, 2, 3}
-	want := replication.NewMysql56BinlogEvent([]byte{1, 2, 3})
+	want := mysql.NewMysql56BinlogEvent([]byte{1, 2, 3})
 	if got := (&mysql56{}).MakeBinlogEvent(input); !reflect.DeepEqual(got, want) {
 		t.Errorf("(&mysql56{}).MakeBinlogEvent(%#v) = %#v, want %#v", input, got, want)
 	}

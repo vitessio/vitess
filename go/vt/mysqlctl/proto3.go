@@ -19,14 +19,14 @@ package mysqlctl
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/mysql/replication"
+	"github.com/youtube/vitess/go/mysql"
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
 )
 
 // StatusToProto translates a Status to proto3
 func StatusToProto(r Status) *replicationdatapb.Status {
 	return &replicationdatapb.Status{
-		Position:            replication.EncodePosition(r.Position),
+		Position:            mysql.EncodePosition(r.Position),
 		SlaveIoRunning:      r.SlaveIORunning,
 		SlaveSqlRunning:     r.SlaveSQLRunning,
 		SecondsBehindMaster: uint32(r.SecondsBehindMaster),
@@ -38,7 +38,7 @@ func StatusToProto(r Status) *replicationdatapb.Status {
 
 // ProtoToStatus translates a proto Status, or panics
 func ProtoToStatus(r *replicationdatapb.Status) Status {
-	pos, err := replication.DecodePosition(r.Position)
+	pos, err := mysql.DecodePosition(r.Position)
 	if err != nil {
 		panic(fmt.Errorf("cannot decode Position: %v", err))
 	}

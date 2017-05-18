@@ -22,7 +22,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysql/replication"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 
@@ -88,5 +88,5 @@ func (agent *ActionAgent) RunBlpUntil(ctx context.Context, bpl []*tabletmanagerd
 	if err != nil {
 		return "", err
 	}
-	return replication.EncodePosition(pos), nil
+	return mysql.EncodePosition(pos), nil
 }

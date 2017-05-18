@@ -23,33 +23,32 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/mysql/replication"
 )
 
 type fakeMysqlFlavor string
 
-func (f fakeMysqlFlavor) VersionMatch(version string) bool                 { return version == string(f) }
-func (fakeMysqlFlavor) PromoteSlaveCommands() []string                     { return nil }
-func (fakeMysqlFlavor) ResetReplicationCommands() []string                 { return nil }
-func (fakeMysqlFlavor) ResetSlaveCommands() []string                       { return nil }
-func (fakeMysqlFlavor) ParseGTID(string) (replication.GTID, error)         { return nil, nil }
-func (fakeMysqlFlavor) MakeBinlogEvent(buf []byte) replication.BinlogEvent { return nil }
-func (fakeMysqlFlavor) ParseReplicationPosition(string) (replication.Position, error) {
-	return replication.Position{}, nil
+func (f fakeMysqlFlavor) VersionMatch(version string) bool           { return version == string(f) }
+func (fakeMysqlFlavor) PromoteSlaveCommands() []string               { return nil }
+func (fakeMysqlFlavor) ResetReplicationCommands() []string           { return nil }
+func (fakeMysqlFlavor) ResetSlaveCommands() []string                 { return nil }
+func (fakeMysqlFlavor) ParseGTID(string) (mysql.GTID, error)         { return nil, nil }
+func (fakeMysqlFlavor) MakeBinlogEvent(buf []byte) mysql.BinlogEvent { return nil }
+func (fakeMysqlFlavor) ParseReplicationPosition(string) (mysql.Position, error) {
+	return mysql.Position{}, nil
 }
-func (fakeMysqlFlavor) SendBinlogDumpCommand(conn *SlaveConnection, startPos replication.Position) error {
+func (fakeMysqlFlavor) SendBinlogDumpCommand(conn *SlaveConnection, startPos mysql.Position) error {
 	return nil
 }
-func (fakeMysqlFlavor) WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos replication.Position) error {
+func (fakeMysqlFlavor) WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos mysql.Position) error {
 	return nil
 }
-func (fakeMysqlFlavor) MasterPosition(mysqld *Mysqld) (replication.Position, error) {
-	return replication.Position{}, nil
+func (fakeMysqlFlavor) MasterPosition(mysqld *Mysqld) (mysql.Position, error) {
+	return mysql.Position{}, nil
 }
 func (fakeMysqlFlavor) SlaveStatus(mysqld *Mysqld) (Status, error) {
 	return Status{}, nil
 }
-func (fakeMysqlFlavor) SetSlavePositionCommands(pos replication.Position) ([]string, error) {
+func (fakeMysqlFlavor) SetSlavePositionCommands(pos mysql.Position) ([]string, error) {
 	return nil, nil
 }
 func (fakeMysqlFlavor) SetMasterCommands(params *mysql.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {

@@ -26,7 +26,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql/replication"
+	"github.com/youtube/vitess/go/mysql"
 
 	"golang.org/x/net/context"
 )
@@ -47,16 +47,16 @@ func CreateReparentJournal() []string {
   master_alias VARBINARY(32) NOT NULL,
   replication_position VARBINARY(%v) DEFAULT NULL,
   PRIMARY KEY (time_created_ns))
-ENGINE=InnoDB`, replication.MaximumPositionSize)}
+ENGINE=InnoDB`, mysql.MaximumPositionSize)}
 }
 
 // PopulateReparentJournal returns the SQL command to use to populate
 // the _vt.reparent_journal table, as well as the time_created_ns
 // value used.
-func PopulateReparentJournal(timeCreatedNS int64, actionName, masterAlias string, pos replication.Position) string {
-	posStr := replication.EncodePosition(pos)
-	if len(posStr) > replication.MaximumPositionSize {
-		posStr = posStr[:replication.MaximumPositionSize]
+func PopulateReparentJournal(timeCreatedNS int64, actionName, masterAlias string, pos mysql.Position) string {
+	posStr := mysql.EncodePosition(pos)
+	if len(posStr) > mysql.MaximumPositionSize {
+		posStr = posStr[:mysql.MaximumPositionSize]
 	}
 	return fmt.Sprintf("INSERT INTO _vt.reparent_journal "+
 		"(time_created_ns, action_name, master_alias, replication_position) "+
@@ -93,7 +93,7 @@ func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS 
 // DemoteMaster will gracefully demote a master mysql instance to read only.
 // If the master is still alive, then we need to demote it gracefully
 // make it read-only, flush the writes and get the position
-func (mysqld *Mysqld) DemoteMaster() (rp replication.Position, err error) {
+func (mysqld *Mysqld) DemoteMaster() (rp mysql.Position, err error) {
 	cmds := []string{
 		"FLUSH TABLES WITH READ LOCK",
 		"UNLOCK TABLES",
@@ -105,7 +105,7 @@ func (mysqld *Mysqld) DemoteMaster() (rp replication.Position, err error) {
 }
 
 // PromoteSlave will promote a slave to be the new master.
-func (mysqld *Mysqld) PromoteSlave(hookExtraEnv map[string]string) (replication.Position, error) {
+func (mysqld *Mysqld) PromoteSlave(hookExtraEnv map[string]string) (mysql.Position, error) {
 	// we handle replication, just stop it
 	cmds := []string{SQLStopSlave}
 
@@ -113,16 +113,16 @@ func (mysqld *Mysqld) PromoteSlave(hookExtraEnv map[string]string) (replication.
 	flavor, err := mysqld.flavor()
 	if err != nil {
 		err = fmt.Errorf("PromoteSlave needs flavor: %v", err)
-		return replication.Position{}, err
+		return mysql.Position{}, err
 	}
 	cmds = append(cmds, flavor.PromoteSlaveCommands()...)
 	if err := mysqld.ExecuteSuperQueryList(context.TODO(), cmds); err != nil {
-		return replication.Position{}, err
+		return mysql.Position{}, err
 	}
 
 	rp, err := mysqld.MasterPosition()
 	if err != nil {
-		return replication.Position{}, err
+		return mysql.Position{}, err
 	}
 
 	return rp, nil

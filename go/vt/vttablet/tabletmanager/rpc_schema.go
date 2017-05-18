@@ -22,7 +22,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysql/replication"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
@@ -44,7 +44,7 @@ func (agent *ActionAgent) ReloadSchema(ctx context.Context, waitPosition string)
 	}
 
 	if waitPosition != "" {
-		pos, err := replication.DecodePosition(waitPosition)
+		pos, err := mysql.DecodePosition(waitPosition)
 		if err != nil {
 			return fmt.Errorf("ReloadSchema: can't parse wait position (%q): %v", waitPosition, err)
 		}

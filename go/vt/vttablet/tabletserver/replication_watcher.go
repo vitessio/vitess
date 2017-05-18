@@ -23,7 +23,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysql/replication"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/binlog/eventtoken"
@@ -107,7 +107,7 @@ func (rpw *ReplicationWatcher) Process(ctx context.Context, dbconfigs dbconfigs.
 	}()
 	for {
 		log.Infof("Starting a binlog Streamer from current replication position to monitor binlogs")
-		streamer := binlog.NewStreamer(dbconfigs.App.DbName, mysqld, rpw.se, nil /*clientCharset*/, replication.Position{}, 0 /*timestamp*/, func(eventToken *querypb.EventToken, statements []binlog.FullBinlogStatement) error {
+		streamer := binlog.NewStreamer(dbconfigs.App.DbName, mysqld, rpw.se, nil /*clientCharset*/, mysql.Position{}, 0 /*timestamp*/, func(eventToken *querypb.EventToken, statements []binlog.FullBinlogStatement) error {
 			// Save the event token.
 			rpw.mu.Lock()
 			rpw.eventToken = eventToken

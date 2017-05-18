@@ -22,7 +22,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysql/replication"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 
@@ -33,8 +33,8 @@ import (
 // This file tests the RBR events are parsed correctly.
 
 func TestStreamerParseRBRUpdateEvent(t *testing.T) {
-	f := replication.NewMySQL56BinlogFormat()
-	s := replication.NewFakeBinlogStream()
+	f := mysql.NewMySQL56BinlogFormat()
+	s := mysql.NewFakeBinlogStream()
 	s.ServerID = 62344
 
 	// Create a schema.Engine for this test, with just one table.
@@ -56,15 +56,15 @@ func TestStreamerParseRBRUpdateEvent(t *testing.T) {
 
 	// Create a tableMap event on the table.
 	tableID := uint64(0x102030405060)
-	tm := &replication.TableMap{
+	tm := &mysql.TableMap{
 		Flags:    0x8090,
 		Database: "vt_test_keyspace",
 		Name:     "vt_a",
 		Types: []byte{
-			replication.TypeLong,
-			replication.TypeVarchar,
+			mysql.TypeLong,
+			mysql.TypeVarchar,
 		},
-		CanBeNull: replication.NewServerBitmap(2),
+		CanBeNull: mysql.NewServerBitmap(2),
 		Metadata: []uint16{
 			0,
 			384, // A VARCHAR(128) in utf8 would result in 384.
@@ -73,12 +73,12 @@ func TestStreamerParseRBRUpdateEvent(t *testing.T) {
 	tm.CanBeNull.Set(1, true)
 
 	// Do an insert packet with all fields set.
-	insertRows := replication.Rows{
+	insertRows := mysql.Rows{
 		Flags:       0x1234,
-		DataColumns: replication.NewServerBitmap(2),
-		Rows: []replication.Row{
+		DataColumns: mysql.NewServerBitmap(2),
+		Rows: []mysql.Row{
 			{
-				NullColumns: replication.NewServerBitmap(2),
+				NullColumns: mysql.NewServerBitmap(2),
 				Data: []byte{
 					0x10, 0x20, 0x30, 0x40, // long
 					0x04, 0x00, // len('abcd')
@@ -91,14 +91,14 @@ func TestStreamerParseRBRUpdateEvent(t *testing.T) {
 	insertRows.DataColumns.Set(1, true)
 
 	// Do an update packet with all fields set.
-	updateRows := replication.Rows{
+	updateRows := mysql.Rows{
 		Flags:           0x1234,
-		IdentifyColumns: replication.NewServerBitmap(2),
-		DataColumns:     replication.NewServerBitmap(2),
-		Rows: []replication.Row{
+		IdentifyColumns: mysql.NewServerBitmap(2),
+		DataColumns:     mysql.NewServerBitmap(2),
+		Rows: []mysql.Row{
 			{
-				NullIdentifyColumns: replication.NewServerBitmap(2),
-				NullColumns:         replication.NewServerBitmap(2),
+				NullIdentifyColumns: mysql.NewServerBitmap(2),
+				NullColumns:         mysql.NewServerBitmap(2),
 				Identify: []byte{
 					0x10, 0x20, 0x30, 0x40, // long
 					0x03, 0x00, // len('abc')
@@ -118,12 +118,12 @@ func TestStreamerParseRBRUpdateEvent(t *testing.T) {
 	updateRows.DataColumns.Set(1, true)
 
 	// Do a delete packet with all fields set.
-	deleteRows := replication.Rows{
+	deleteRows := mysql.Rows{
 		Flags:           0x1234,
-		IdentifyColumns: replication.NewServerBitmap(2),
-		Rows: []replication.Row{
+		IdentifyColumns: mysql.NewServerBitmap(2),
+		Rows: []mysql.Row{
 			{
-				NullIdentifyColumns: replication.NewServerBitmap(2),
+				NullIdentifyColumns: mysql.NewServerBitmap(2),
 				Identify: []byte{
 					0x10, 0x20, 0x30, 0x40, // long
 					0x03, 0x00, // len('abc')
@@ -135,21 +135,21 @@ func TestStreamerParseRBRUpdateEvent(t *testing.T) {
 	deleteRows.IdentifyColumns.Set(0, true)
 	deleteRows.IdentifyColumns.Set(1, true)
 
-	input := []replication.BinlogEvent{
-		replication.NewRotateEvent(f, s, 0, ""),
-		replication.NewFormatDescriptionEvent(f, s),
-		replication.NewTableMapEvent(f, s, tableID, tm),
-		replication.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
-		replication.NewQueryEvent(f, s, replication.Query{
+	input := []mysql.BinlogEvent{
+		mysql.NewRotateEvent(f, s, 0, ""),
+		mysql.NewFormatDescriptionEvent(f, s),
+		mysql.NewTableMapEvent(f, s, tableID, tm),
+		mysql.NewMariaDBGTIDEvent(f, s, mysql.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}),
-		replication.NewWriteRowsEvent(f, s, tableID, insertRows),
-		replication.NewUpdateRowsEvent(f, s, tableID, updateRows),
-		replication.NewDeleteRowsEvent(f, s, tableID, deleteRows),
-		replication.NewXIDEvent(f, s),
+		mysql.NewWriteRowsEvent(f, s, tableID, insertRows),
+		mysql.NewUpdateRowsEvent(f, s, tableID, updateRows),
+		mysql.NewDeleteRowsEvent(f, s, tableID, deleteRows),
+		mysql.NewXIDEvent(f, s),
 	}
 
-	events := make(chan replication.BinlogEvent)
+	events := make(chan mysql.BinlogEvent)
 
 	want := []fullBinlogTransaction{
 		{
@@ -196,8 +196,8 @@ func TestStreamerParseRBRUpdateEvent(t *testing.T) {
 			},
 			eventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
-				Position: replication.EncodePosition(replication.Position{
-					GTIDSet: replication.MariadbGTID{
+				Position: mysql.EncodePosition(mysql.Position{
+					GTIDSet: mysql.MariadbGTID{
 						Domain:   0,
 						Server:   62344,
 						Sequence: 0x0d,
@@ -214,7 +214,7 @@ func TestStreamerParseRBRUpdateEvent(t *testing.T) {
 		})
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, se, nil, replication.Position{}, 0, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, se, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events)

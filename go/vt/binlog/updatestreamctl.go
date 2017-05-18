@@ -23,7 +23,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysql/replication"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
@@ -238,7 +238,7 @@ func (updateStream *UpdateStreamImpl) IsEnabled() bool {
 
 // StreamKeyRange is part of the UpdateStream interface
 func (updateStream *UpdateStreamImpl) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, callback func(trans *binlogdatapb.BinlogTransaction) error) (err error) {
-	pos, err := replication.DecodePosition(position)
+	pos, err := mysql.DecodePosition(position)
 	if err != nil {
 		return err
 	}
@@ -278,7 +278,7 @@ func (updateStream *UpdateStreamImpl) StreamKeyRange(ctx context.Context, positi
 
 // StreamTables is part of the UpdateStream interface
 func (updateStream *UpdateStreamImpl) StreamTables(ctx context.Context, position string, tables []string, charset *binlogdatapb.Charset, callback func(trans *binlogdatapb.BinlogTransaction) error) (err error) {
-	pos, err := replication.DecodePosition(position)
+	pos, err := mysql.DecodePosition(position)
 	if err != nil {
 		return err
 	}

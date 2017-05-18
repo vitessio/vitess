@@ -19,8 +19,7 @@ limitations under the License.
 package eventtoken
 
 import (
-	"github.com/youtube/vitess/go/mysql/replication"
-
+	"github.com/youtube/vitess/go/mysql"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
@@ -46,11 +45,11 @@ func Fresher(ev1, ev2 *querypb.EventToken) int {
 		}
 
 		// We can parse them.
-		pos1, err := replication.DecodePosition(ev1.Position)
+		pos1, err := mysql.DecodePosition(ev1.Position)
 		if err != nil {
 			return -1
 		}
-		pos2, err := replication.DecodePosition(ev2.Position)
+		pos2, err := mysql.DecodePosition(ev2.Position)
 		if err != nil {
 			return -1
 		}

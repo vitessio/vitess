@@ -24,7 +24,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/mysql/replication"
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 )
@@ -96,17 +95,17 @@ var slaveIDPool = pools.NewIDPool()
 
 // StartBinlogDumpFromCurrent requests a replication binlog dump from
 // the current position.
-func (sc *SlaveConnection) StartBinlogDumpFromCurrent(ctx context.Context) (replication.Position, <-chan replication.BinlogEvent, error) {
+func (sc *SlaveConnection) StartBinlogDumpFromCurrent(ctx context.Context) (mysql.Position, <-chan mysql.BinlogEvent, error) {
 	ctx, sc.cancel = context.WithCancel(ctx)
 
 	flavor, err := sc.mysqld.flavor()
 	if err != nil {
-		return replication.Position{}, nil, fmt.Errorf("StartBinlogDump needs flavor: %v", err)
+		return mysql.Position{}, nil, fmt.Errorf("StartBinlogDump needs flavor: %v", err)
 	}
 
 	masterPosition, err := flavor.MasterPosition(sc.mysqld)
 	if err != nil {
-		return replication.Position{}, nil, fmt.Errorf("failed to get master position: %v", err)
+		return mysql.Position{}, nil, fmt.Errorf("failed to get master position: %v", err)
 	}
 
 	c, err := sc.StartBinlogDumpFromPosition(ctx, masterPosition)
@@ -121,7 +120,7 @@ func (sc *SlaveConnection) StartBinlogDumpFromCurrent(ctx context.Context) (repl
 // by canceling the context.
 //
 // Note the context is valid and used until eventChan is closed.
-func (sc *SlaveConnection) StartBinlogDumpFromPosition(ctx context.Context, startPos replication.Position) (<-chan replication.BinlogEvent, error) {
+func (sc *SlaveConnection) StartBinlogDumpFromPosition(ctx context.Context, startPos mysql.Position) (<-chan mysql.BinlogEvent, error) {
 	ctx, sc.cancel = context.WithCancel(ctx)
 
 	flavor, err := sc.mysqld.flavor()
@@ -143,7 +142,7 @@ func (sc *SlaveConnection) StartBinlogDumpFromPosition(ctx context.Context, star
 	}
 
 	// FIXME(alainjobart) I think we can use a buffered channel for better performance.
-	eventChan := make(chan replication.BinlogEvent)
+	eventChan := make(chan mysql.BinlogEvent)
 
 	// Start reading events.
 	sc.wg.Add(1)
@@ -212,7 +211,7 @@ func (sc *SlaveConnection) StartBinlogDumpFromPosition(ctx context.Context, star
 // by canceling the context.
 //
 // Note the context is valid and used until eventChan is closed.
-func (sc *SlaveConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context.Context, timestamp int64) (<-chan replication.BinlogEvent, error) {
+func (sc *SlaveConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context.Context, timestamp int64) (<-chan mysql.BinlogEvent, error) {
 	ctx, sc.cancel = context.WithCancel(ctx)
 
 	flavor, err := sc.mysqld.flavor()
@@ -228,7 +227,7 @@ func (sc *SlaveConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context.
 
 	// Start with the most recent binlog file until we find the right event.
 	var binlogIndex int
-	var event replication.BinlogEvent
+	var event mysql.BinlogEvent
 	for binlogIndex = len(binlogs.Rows) - 1; binlogIndex >= 0; binlogIndex-- {
 		// Exit the loop early if context is canceled.
 		select {
@@ -294,7 +293,7 @@ func (sc *SlaveConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context.
 
 	// Now just loop sending and reading events.
 	// FIXME(alainjobart) I think we can use a buffered channel for better performance.
-	eventChan := make(chan replication.BinlogEvent)
+	eventChan := make(chan mysql.BinlogEvent)
 
 	// Start reading events.
 	sc.wg.Add(1)

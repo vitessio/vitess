@@ -25,7 +25,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysql/replication"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -52,7 +52,7 @@ type EventStreamer struct {
 }
 
 // NewEventStreamer returns a new EventStreamer on top of a Streamer
-func NewEventStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, se *schema.Engine, startPos replication.Position, timestamp int64, sendEvent sendEventFunc) *EventStreamer {
+func NewEventStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, se *schema.Engine, startPos mysql.Position, timestamp int64, sendEvent sendEventFunc) *EventStreamer {
 	evs := &EventStreamer{
 		sendEvent: sendEvent,
 	}
