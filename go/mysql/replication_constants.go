@@ -20,9 +20,6 @@ package mysql
 
 // This is the data type for a field.
 // Values taken from include/mysql/mysql_com.h
-// FIXME(alainjobart) this is the same info as constants describes in
-// the go/mysql package. We will remove that package, and merge this
-// package with go/mysqlconn as asoon as we can.
 const (
 	// TypeDecimal is MYSQL_TYPE_DECIMAL. It is deprecated.
 	TypeDecimal = 0

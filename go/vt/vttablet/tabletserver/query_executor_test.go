@@ -790,11 +790,6 @@ func TestQueryExecutorPlanOtherWithinATransaction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
 	}
-	// Clear the flags, they interfere with the diff.
-	// FIXME(alainjobart) the new mysqlconn client won't have this issue.
-	for _, field := range got.Fields {
-		field.Flags = 0
-	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
 	}
@@ -831,11 +826,6 @@ func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	// Clear the flags, they interfere with the diff.
-	// FIXME(alainjobart) the new mysqlconn client won't have this issue.
-	for _, field := range got.Fields {
-		field.Flags = 0
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
@@ -887,11 +877,6 @@ func TestQueryExecutorPlanPassSelect(t *testing.T) {
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	// Clear the flags, they interfere with the diff.
-	// FIXME(alainjobart) the new mysqlconn client won't have this issue.
-	for _, field := range got.Fields {
-		field.Flags = 0
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
@@ -954,11 +939,6 @@ func TestQueryExecutorPlanOther(t *testing.T) {
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("got: %v, want nil", err)
-	}
-	// Clear the flags, they interfere with the diff.
-	// FIXME(alainjobart) the new mysqlconn client won't have this issue.
-	for _, field := range got.Fields {
-		field.Flags = 0
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
@@ -1135,11 +1115,6 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 	if err != nil {
 		t.Fatalf("got: %v, want nil", err)
 	}
-	// Clear the flags, they interfere with the diff.
-	// FIXME(alainjobart) the new mysqlconn client won't have this issue.
-	for _, field := range got.Fields {
-		field.Flags = 0
-	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
 	}
@@ -1183,11 +1158,6 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("got: %v, want nil", err)
-	}
-	// Clear the flags, they interfere with the diff.
-	// FIXME(alainjobart) the new mysqlconn client won't have this issue.
-	for _, f := range got.Fields {
-		f.Flags = 0
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
