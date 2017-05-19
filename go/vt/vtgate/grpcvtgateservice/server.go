@@ -55,37 +55,38 @@ type VTGate struct {
 	server vtgateservice.VTGateService
 }
 
-// immediateCallerID tries to extract the common name of the certificate
-// that was used to connect to vtgate. If it fails for any reason,
-// it will return "". That immediate caller id is then inserted
-// into a Context, and will be used when talking to vttablet.
+// immediateCallerID tries to extract the common name as well as the (domain) subject
+// alternative names of the certificate that was used to connect to vtgate.
+// If it fails for any reason, it will return "".
+// That immediate caller id is then inserted into a Context,
+// and will be used when talking to vttablet.
 // vttablet in turn can use table ACLs to validate access is authorized.
-func immediateCallerID(ctx context.Context) string {
+func immediateCallerID(ctx context.Context) (string, []string) {
 	p, ok := peer.FromContext(ctx)
 	if !ok {
-		return ""
+		return "", nil
 	}
 	if p.AuthInfo == nil {
-		return ""
+		return "", nil
 	}
 	tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo)
 	if !ok {
-		return ""
+		return "", nil
 	}
 	if len(tlsInfo.State.VerifiedChains) < 1 {
-		return ""
+		return "", nil
 	}
 	if len(tlsInfo.State.VerifiedChains[0]) < 1 {
-		return ""
+		return "", nil
 	}
 	cert := tlsInfo.State.VerifiedChains[0][0]
-	return cert.Subject.CommonName
+	return cert.Subject.CommonName, cert.DNSNames
 }
 
 // withCallerIDContext creates a context that extracts what we need
 // from the incoming call and can be forwarded for use when talking to vttablet.
 func withCallerIDContext(ctx context.Context, effectiveCallerID *vtrpcpb.CallerID) context.Context {
-	immediate := immediateCallerID(ctx)
+	immediate, dnsNames := immediateCallerID(ctx)
 	if immediate == "" && *useEffective && effectiveCallerID != nil {
 		immediate = effectiveCallerID.Principal
 	}
@@ -94,7 +95,7 @@ func withCallerIDContext(ctx context.Context, effectiveCallerID *vtrpcpb.CallerI
 	}
 	return callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		effectiveCallerID,
-		callerid.NewImmediateCallerID(immediate))
+		&querypb.VTGateCallerID{Username: immediate, Groups: dnsNames})
 }
 
 // Execute is the RPC version of vtgateservice.VTGateService method
