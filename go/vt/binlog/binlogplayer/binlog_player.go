@@ -27,6 +27,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
@@ -262,7 +263,7 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 				// charset we specified in the request.
 				stmtCharset = blp.defaultCharset
 			}
-			if *blp.currentCharset != *stmtCharset {
+			if !proto.Equal(blp.currentCharset, stmtCharset) {
 				// In regular MySQL replication, the charset is silently adjusted as
 				// needed during event playback. Here we also adjust so that playback
 				// proceeds, but in Vitess-land this usually means a misconfigured

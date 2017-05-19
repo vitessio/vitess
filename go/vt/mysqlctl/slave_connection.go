@@ -152,14 +152,19 @@ func (sc *SlaveConnection) StartBinlogDumpFromPosition(ctx context.Context, star
 			sc.wg.Done()
 		}()
 		for {
-			if buf[0] == 254 {
-				// The master is telling us to stop.
+			// Handle EOF and error case.
+			switch buf[0] {
+			case mysql.EOFPacket:
 				log.Infof("received EOF packet in binlog dump: %#v", buf)
+				return
+			case mysql.ErrPacket:
+				err := mysql.ParseErrorPacket(buf)
+				log.Infof("received error packet in binlog dump: %v", err)
 				return
 			}
 
 			select {
-			// Skip the first byte because it's only used for signaling EOF.
+			// Skip the first byte because it's only used for signaling EOF / error.
 			case eventChan <- flavor.MakeBinlogEvent(buf[1:]):
 			case <-ctx.Done():
 				return
@@ -253,9 +258,13 @@ func (sc *SlaveConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context.
 				return nil, fmt.Errorf("couldn't start binlog dump of binlog %v: %v", binlog, err)
 			}
 
-			// Why would the master tell us to stop here?
-			if buf[0] == 254 {
+			// Handle EOF and error case.
+			switch buf[0] {
+			case mysql.EOFPacket:
 				return nil, fmt.Errorf("received EOF packet for first packet of binlog %v", binlog)
+			case mysql.ErrPacket:
+				err := mysql.ParseErrorPacket(buf)
+				return nil, fmt.Errorf("received error packet for first packet of binlog %v", err)
 			}
 
 			// Parse the full event.
@@ -323,14 +332,19 @@ func (sc *SlaveConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context.
 				return
 			}
 
-			if buf[0] == 254 {
+			// Handle EOF and error case.
+			switch buf[0] {
+			case mysql.EOFPacket:
 				// The master is telling us to stop.
 				log.Infof("received EOF packet in binlog dump: %#v", buf)
 				return
+			case mysql.ErrPacket:
+				err := mysql.ParseErrorPacket(buf)
+				log.Infof("received error packet in binlog dump: %v", err)
 			}
 
 			// Skip the first byte because it's only used
-			// for signaling EOF.
+			// for signaling EOF / error.
 			event = flavor.MakeBinlogEvent(buf[1:])
 		}
 	}()
