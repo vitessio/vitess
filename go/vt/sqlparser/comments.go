@@ -16,6 +16,11 @@ limitations under the License.
 
 package sqlparser
 
+import (
+	"strings"
+	"unicode"
+)
+
 type matchtracker struct {
 	query string
 	index int
@@ -102,4 +107,38 @@ func (tracker *matchtracker) skipBlanks() {
 		}
 		break
 	}
+}
+
+// StripLeadingComments trims the SQL string and removes any leading comments
+func StripLeadingComments(sql string) string {
+	sql = strings.TrimFunc(sql, unicode.IsSpace)
+
+	for hasCommentPrefix(sql) {
+		// Multi line comment
+		if sql[0] == '/' {
+			index := strings.Index(sql, "*/")
+			if index != -1 {
+				sql = sql[index+2:]
+			} else {
+				break
+			}
+		}
+
+		// Single line comment
+		if sql[0] == '-' {
+			index := strings.Index(sql, "\n")
+			if index != -1 {
+				sql = sql[index+1:]
+			} else {
+				break
+			}
+		}
+
+		sql = strings.TrimFunc(sql, unicode.IsSpace)
+	}
+	return sql
+}
+
+func hasCommentPrefix(sql string) bool {
+	return len(sql) > 1 && ((sql[0] == '/' && sql[1] == '*') || (sql[0] == '-' && sql[1] == '-'))
 }

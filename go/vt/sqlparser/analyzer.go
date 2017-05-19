@@ -48,11 +48,13 @@ const (
 // Preview analyzes the beginning of the query using a simpler and faster
 // textual comparison to identify the statement type.
 func Preview(sql string) int {
-	trimmed := strings.TrimFunc(sql, unicode.IsSpace)
+	trimmed := StripLeadingComments(sql)
+
 	firstWord := trimmed
 	if end := strings.IndexFunc(trimmed, unicode.IsSpace); end != -1 {
 		firstWord = trimmed[:end]
 	}
+
 	// Comparison is done in order of priority.
 	loweredFirstWord := strings.ToLower(firstWord)
 	switch loweredFirstWord {
