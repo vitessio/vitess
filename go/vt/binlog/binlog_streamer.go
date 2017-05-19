@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
@@ -196,7 +197,7 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 			return fmt.Errorf("can't get charset to check binlog stream: %v", err)
 		}
 		log.Infof("binlog stream client charset = %v, server charset = %v", *bls.clientCharset, cs)
-		if *cs != *bls.clientCharset {
+		if !proto.Equal(cs, bls.clientCharset) {
 			return fmt.Errorf("binlog stream client charset (%v) doesn't match server (%v)", bls.clientCharset, cs)
 		}
 	}
@@ -404,7 +405,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				// If the statement has a charset and it's different than our client's
 				// default charset, send it along with the statement.
 				// If our client hasn't told us its charset, always send it.
-				if bls.clientCharset == nil || (q.Charset != nil && *q.Charset != *bls.clientCharset) {
+				if bls.clientCharset == nil || (q.Charset != nil && !proto.Equal(q.Charset, bls.clientCharset)) {
 					setTimestamp.Charset = q.Charset
 					statement.Charset = q.Charset
 				}

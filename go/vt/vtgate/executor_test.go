@@ -716,7 +716,7 @@ func TestParseTarget(t *testing.T) {
 	}}
 
 	for _, tcase := range testcases {
-		if target := r.ParseTarget(tcase.targetString); target != tcase.target {
+		if target := r.ParseTarget(tcase.targetString); !proto.Equal(&target, &tcase.target) {
 			t.Errorf("ParseTarget(%s): %v, want %v", tcase.targetString, target, tcase.target)
 		}
 	}
@@ -736,7 +736,7 @@ func TestParseTargetSingleKeyspace(t *testing.T) {
 		Keyspace:   KsTestUnsharded,
 		TabletType: topodatapb.TabletType_MASTER,
 	}
-	if got != want {
+	if !proto.Equal(&got, &want) {
 		t.Errorf("ParseTarget(%s): %v, want %v", "@master", got, want)
 	}
 }
