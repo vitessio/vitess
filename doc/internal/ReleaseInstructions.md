@@ -210,6 +210,7 @@ Create the `settings.xml` in the `$HOME/.m2/` directory as described in their [i
     ```bash
     # The Java version must not have the leading "v".
     # Example: 2.1.0 and not v2.1.0.
+    # Use Bash substitution to remove the leading "v".
     JAVA_VERSION=${PATCH/v/}
     cd java
     mvn versions:set -DnewVersion=$JAVA_VERSION
@@ -275,6 +276,7 @@ git checkout master
 git pull --ff-only upstream master
 
 # Example:
+# (Note that there is no leading "v".)
 JAVA_VERSION=2.1.1-SNAPSHOT
 cd java
 mvn versions:set -DnewVersion=$JAVA_VERSION
