@@ -53,7 +53,7 @@ var (
 	healthCheckTopologyRefresh = flag.Duration("binlog_player_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology")
 	healthcheckRetryDelay      = flag.Duration("binlog_player_healthcheck_retry_delay", 5*time.Second, "delay before retrying a failed healthcheck")
 	healthCheckTimeout         = flag.Duration("binlog_player_healthcheck_timeout", time.Minute, "the health check timeout period")
-	sourceTabletTypeStr        = flag.String("binlog_player_tablet_type", "REPLICA", "which tablet type that is used as a source")
+	sourceTabletTypeStr        = flag.String("binlog_player_tablet_type", "REPLICA", "comma separated list of tablet types used as a source")
 )
 
 func init() {
