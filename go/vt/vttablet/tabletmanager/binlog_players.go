@@ -314,7 +314,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 
 	sourceTabletTypes, err := topoproto.ParseTabletTypes(*sourceTabletTypeStr)
 	if err != nil {
-		log.Fatalf("unknown tablet type: %v", *sourceTabletTypeStr)
+		return fmt.Errorf("failed to parse list of source tablet types: %v", *sourceTabletTypeStr)
 	}
 
 	// wait for the tablet set (useful for the first run at least, fast for next runs)
