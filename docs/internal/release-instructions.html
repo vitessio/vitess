@@ -512,6 +512,7 @@ Therefore, file a JIRA ticket with Sonatype to get added (<a href="https://issue
 <li><p>Change the version number in all <code class="prettyprint">pom.xml</code> files with the &quot;versions&quot; plugin:</p>
 <div class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="c"># The Java version must not have the leading &quot;v&quot;.</span>
 <span class="c"># Example: 2.1.0 and not v2.1.0.</span>
+<span class="c"># Use Bash substitution to remove the leading &quot;v&quot;.</span>
 <span class="nv">JAVA_VERSION</span><span class="o">=</span><span class="k">${</span><span class="nv">PATCH</span><span class="p">/v/</span><span class="k">}</span>
 <span class="nb">cd </span>java
 mvn versions:set -DnewVersion<span class="o">=</span><span class="nv">$JAVA_VERSION</span>
@@ -564,6 +565,7 @@ For example, if you just released <code class="prettyprint">2.1.0</code>, you co
 git pull --ff-only upstream master
 
 <span class="c"># Example:</span>
+<span class="c"># (Note that there is no leading &quot;v&quot;.)</span>
 <span class="nv">JAVA_VERSION</span><span class="o">=</span>2.1.1-SNAPSHOT
 <span class="nb">cd </span>java
 mvn versions:set -DnewVersion<span class="o">=</span><span class="nv">$JAVA_VERSION</span>
