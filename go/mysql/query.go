@@ -454,8 +454,8 @@ func (c *Conn) readComQueryResponse() (uint64, uint64, int, error) {
 // Server side methods.
 //
 
-func (c *Conn) parseComQuery(data []byte) string {
-	return string(data[1:])
+func (c *Conn) parseComQuery(data []byte) []byte {
+	return data[1:]
 }
 
 func (c *Conn) parseComInitDB(data []byte) string {

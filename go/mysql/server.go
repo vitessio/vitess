@@ -54,7 +54,9 @@ type Handler interface {
 	ConnectionClosed(c *Conn)
 
 	// ComQuery is called when a connection receives a query.
-	ComQuery(c *Conn, query string) (*sqltypes.Result, error)
+	// Note the contents of the query slice may change after this method
+	// returns, so the Handler should not hang on to the byte slice.
+	ComQuery(c *Conn, query []byte) (*sqltypes.Result, error)
 }
 
 // Listener is the MySQL server protocol listener.

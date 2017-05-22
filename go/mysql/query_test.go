@@ -404,7 +404,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		if comQuery[0] != ComQuery {
 			t.Fatalf("server got bad packet: %v", comQuery)
 		}
-		got := sConn.parseComQuery(comQuery)
+		got := string(sConn.parseComQuery(comQuery))
 		if got != query {
 			t.Errorf("server got query '%v' but expected '%v'", got, query)
 		}
