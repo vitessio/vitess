@@ -458,6 +458,9 @@ func (c *Conn) startEphemeralPacket(length int) []byte {
 	return c.currentEphemeralPacket
 }
 
+// writeEphemeralPacket writes the packet that was allocated by
+// startEphemeralPacket. If 'direct' is set, we write to the
+// underlying connection directly, by-passing the write buffer.
 func (c *Conn) writeEphemeralPacket(direct bool) error {
 	defer func() {
 		c.currentEphemeralPolicy = ephemeralUnused

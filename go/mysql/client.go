@@ -255,9 +255,12 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 		c.Capabilities |= CapabilityClientSSL
 	}
 
+	// Password encryption.
+	scrambledPassword := scramblePassword(salt, []byte(params.Pass))
+
 	// Build and send our handshake response 41.
 	// Note this one will never have SSL flag on.
-	if err := c.writeHandshakeResponse41(capabilities, salt, characterSet, params); err != nil {
+	if err := c.writeHandshakeResponse41(capabilities, scrambledPassword, characterSet, params); err != nil {
 		return err
 	}
 
@@ -489,31 +492,28 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 		flags |= CapabilityClientConnectWithDB
 	}
 
-	data := make([]byte, length)
+	data := c.startEphemeralPacket(length)
 	pos := 0
 
 	// Client capability flags.
 	pos = writeUint32(data, pos, flags)
 
 	// Max-packet size, always 0. See doc.go.
-	pos += 4
+	pos = writeZeroes(data, pos, 4)
 
 	// Character set.
 	pos = writeByte(data, pos, characterSet)
 
 	// And send it as is.
-	if err := c.writePacket(data); err != nil {
+	if err := c.writeEphemeralPacket(true /* direct */); err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "cannot send SSLRequest: %v", err)
-	}
-	if err := c.flush(); err != nil {
-		return NewSQLError(CRServerLost, SSUnknownSQLState, "cannot flush SSLRequest: %v", err)
 	}
 	return nil
 }
 
 // writeHandshakeResponse41 writes the handshake response.
 // Returns a SQLError.
-func (c *Conn) writeHandshakeResponse41(capabilities uint32, salt []byte, characterSet uint8, params *ConnParams) error {
+func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword []byte, characterSet uint8, params *ConnParams) error {
 	// Build our flags.
 	var flags uint32 = CapabilityClientLongPassword |
 		CapabilityClientLongFlag |
@@ -528,10 +528,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, salt []byte, charac
 		// Pass-through ClientFoundRows flag.
 		CapabilityClientFoundRows&uint32(params.Flags)
 
-	// FIXME(alainjobart) add multi statement, client found rows.
-
-	// Password encryption.
-	scrambledPassword := scramblePassword(salt, []byte(params.Pass))
+	// FIXME(alainjobart) add multi statement.
 
 	length :=
 		4 + // Client capability flags.
@@ -556,20 +553,20 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, salt []byte, charac
 		length++
 	}
 
-	data := make([]byte, length)
+	data := c.startEphemeralPacket(length)
 	pos := 0
 
 	// Client capability flags.
 	pos = writeUint32(data, pos, flags)
 
 	// Max-packet size, always 0. See doc.go.
-	pos += 4
+	pos = writeZeroes(data, pos, 4)
 
 	// Character set.
 	pos = writeByte(data, pos, characterSet)
 
 	// 23 reserved bytes, all 0.
-	pos += 23
+	pos = writeZeroes(data, pos, 23)
 
 	// Username
 	pos = writeNullString(data, pos, params.Uname)
@@ -598,11 +595,8 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, salt []byte, charac
 		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "writeHandshakeResponse41: only packed %v bytes, out of %v allocated", pos, len(data))
 	}
 
-	if err := c.writePacket(data); err != nil {
+	if err := c.writeEphemeralPacket(true /* direct */); err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "cannot send HandshakeResponse41: %v", err)
-	}
-	if err := c.flush(); err != nil {
-		return NewSQLError(CRServerLost, SSUnknownSQLState, "cannot flush HandshakeResponse41: %v", err)
 	}
 	return nil
 }

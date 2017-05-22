@@ -132,6 +132,13 @@ func writeLenEncString(data []byte, pos int, value string) int {
 	return writeEOFString(data, pos, value)
 }
 
+func writeZeroes(data []byte, pos int, len int) int {
+	for i := 0; i < len; i++ {
+		data[pos+i] = 0
+	}
+	return pos + len
+}
+
 //
 // Decoding methods.
 //
