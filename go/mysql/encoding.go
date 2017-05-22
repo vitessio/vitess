@@ -161,6 +161,17 @@ func readBytes(data []byte, pos int, size int) ([]byte, int, bool) {
 	return data[pos : pos+size], pos + size, true
 }
 
+// readBytesCopy returns a copy of the bytes in the packet.
+// Useful to remember contents of ephemeral packets.
+func readBytesCopy(data []byte, pos int, size int) ([]byte, int, bool) {
+	if pos+size-1 >= len(data) {
+		return nil, 0, false
+	}
+	result := make([]byte, size)
+	copy(result, data[pos:pos+size])
+	return result, pos + size, true
+}
+
 func readNullString(data []byte, pos int) (string, int, bool) {
 	end := bytes.IndexByte(data[pos:], 0)
 	if end == -1 {

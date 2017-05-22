@@ -177,11 +177,13 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 			return
 		}
 
+		// Returns copies of the data, so we can recycle the buffer.
 		user, authMethod, authResponse, err = l.parseClientHandshakePacket(c, false, response)
 		if err != nil {
 			log.Errorf("Cannot parse post-SSL client handshake response: %v", err)
 			return
 		}
+		c.recycleReadPacket()
 	}
 
 	// See what auth method the AuthServer wants to use for that user.
@@ -259,9 +261,11 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 
 		switch data[0] {
 		case ComQuit:
+			c.recycleReadPacket()
 			return
 		case ComInitDB:
 			db := c.parseComInitDB(data)
+			c.recycleReadPacket()
 			c.SchemaName = db
 			if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
 				log.Errorf("Error writing ComInitDB result to client %v: %v", c.ConnectionID, err)
@@ -270,6 +274,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 		case ComQuery:
 			query := c.parseComQuery(data)
 			result, err := l.handler.ComQuery(c, query)
+			c.recycleReadPacket()
 			if err != nil {
 				if werr := c.writeErrorPacketFromError(err); werr != nil {
 					// If we can't even write the error, we're done.
@@ -284,12 +289,14 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 			}
 		case ComPing:
 			// No payload to that one, just return OKPacket.
+			c.recycleReadPacket()
 			if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
 				log.Errorf("Error writing ComPing result to client %v: %v", c.ConnectionID, err)
 				return
 			}
 		default:
 			log.Errorf("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
+			c.recycleReadPacket()
 			if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "command handling not implemented yet: %v", data[0]); err != nil {
 				log.Errorf("Error writing error packet to client: %v", err)
 				return
@@ -399,6 +406,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 
 // parseClientHandshakePacket parses the handshake sent by the client.
 // Returns the username, auth method, auth data, error.
+// The original data is not pointed at, and can be freed.
 func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []byte) (string, string, []byte, error) {
 	pos := 0
 
@@ -460,7 +468,7 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 		if !ok {
 			return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read auth-response variable length")
 		}
-		authResponse, pos, ok = readBytes(data, pos, int(l))
+		authResponse, pos, ok = readBytesCopy(data, pos, int(l))
 		if !ok {
 			return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read auth-response")
 		}
@@ -472,7 +480,7 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 			return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read auth-response length")
 		}
 
-		authResponse, pos, ok = readBytes(data, pos, int(l))
+		authResponse, pos, ok = readBytesCopy(data, pos, int(l))
 		if !ok {
 			return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read auth-response")
 		}

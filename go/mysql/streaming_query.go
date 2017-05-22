@@ -80,6 +80,7 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 		if err != nil {
 			return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
+		defer c.recycleReadPacket()
 		switch data[0] {
 		case EOFPacket:
 			// This is what we expect.
