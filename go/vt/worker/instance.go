@@ -95,12 +95,15 @@ func (wi *Instance) setAndStartWorker(ctx context.Context, wrk Worker, wr *wrang
 		const gracePeriod = 1 * time.Minute
 		gracePeriodEnd := time.Now().Add(gracePeriod)
 		if wi.lastRunStopTime.Before(gracePeriodEnd) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "A worker job was recently stopped (%f seconds ago): %v", time.Now().Sub(wi.lastRunStopTime).Seconds(), wi.currentWorker)
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE,
+				"A worker job was recently stopped (%f seconds ago): If you run commands manually, run the 'Reset' command to clear the vtworker state. Job: %v",
+				time.Now().Sub(wi.lastRunStopTime).Seconds(),
+				wi.currentWorker)
 		}
 
-		// QUERY_NOT_SERVED = FailedPrecondition => manual resolution required.
+		// We return FAILED_PRECONDITION to signal that a manual resolution is required.
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-			"The worker job was stopped %.1f minutes ago, but not reset. You have to reset it manually. Job: %v",
+			"The worker job was stopped %.1f minutes ago, but not reset. Run the 'Reset' command to clear it manually. Job: %v",
 			time.Now().Sub(wi.lastRunStopTime).Minutes(),
 			wi.currentWorker)
 	}
