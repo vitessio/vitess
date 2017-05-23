@@ -63,6 +63,7 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 	if err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
+	defer c.recycleReadPacket()
 
 	// Catalog is ignored, always set to "def"
 	pos, ok := skipLenEncString(colDef, 0)
@@ -161,6 +162,7 @@ func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
 	if err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
+	defer c.recycleReadPacket()
 
 	// catalog, schema, table, orgTable, name and orgName are
 	// strings, all skipped.
@@ -333,11 +335,14 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result 
 		case EOFPacket:
 			// This is what we expect.
 			// Warnings and status flags are ignored.
+			c.recycleReadPacket()
 			break
 		case ErrPacket:
 			// Error packet.
+			defer c.recycleReadPacket()
 			return nil, ParseErrorPacket(data)
 		default:
+			defer c.recycleReadPacket()
 			return nil, fmt.Errorf("unexpected packet after fields: %v", data)
 		}
 	}
@@ -395,7 +400,6 @@ func (c *Conn) drainResults() error {
 		if err != nil {
 			return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
-
 		switch data[0] {
 		case EOFPacket:
 			// This packet may be one of two kinds:
@@ -403,11 +407,14 @@ func (c *Conn) drainResults() error {
 			// - an OK packet with an EOF header if
 			// CapabilityClientDeprecateEOF is set.
 			// We do not parse it anyway, so it doesn't matter.
+			c.recycleReadPacket()
 			return nil
 		case ErrPacket:
 			// Error packet.
+			defer c.recycleReadPacket()
 			return ParseErrorPacket(data)
 		}
+		c.recycleReadPacket()
 	}
 }
 
@@ -416,6 +423,7 @@ func (c *Conn) readComQueryResponse() (uint64, uint64, int, error) {
 	if err != nil {
 		return 0, 0, 0, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
+	defer c.recycleReadPacket()
 	if len(data) == 0 {
 		return 0, 0, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "invalid empty COM_QUERY response packet")
 	}
@@ -446,8 +454,8 @@ func (c *Conn) readComQueryResponse() (uint64, uint64, int, error) {
 // Server side methods.
 //
 
-func (c *Conn) parseComQuery(data []byte) string {
-	return string(data[1:])
+func (c *Conn) parseComQuery(data []byte) []byte {
+	return data[1:]
 }
 
 func (c *Conn) parseComInitDB(data []byte) string {

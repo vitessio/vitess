@@ -132,6 +132,13 @@ func writeLenEncString(data []byte, pos int, value string) int {
 	return writeEOFString(data, pos, value)
 }
 
+func writeZeroes(data []byte, pos int, len int) int {
+	for i := 0; i < len; i++ {
+		data[pos+i] = 0
+	}
+	return pos + len
+}
+
 //
 // Decoding methods.
 //
@@ -152,6 +159,17 @@ func readBytes(data []byte, pos int, size int) ([]byte, int, bool) {
 		return nil, 0, false
 	}
 	return data[pos : pos+size], pos + size, true
+}
+
+// readBytesCopy returns a copy of the bytes in the packet.
+// Useful to remember contents of ephemeral packets.
+func readBytesCopy(data []byte, pos int, size int) ([]byte, int, bool) {
+	if pos+size-1 >= len(data) {
+		return nil, 0, false
+	}
+	result := make([]byte, size)
+	copy(result, data[pos:pos+size])
+	return result, pos + size, true
 }
 
 func readNullString(data []byte, pos int) (string, int, bool) {

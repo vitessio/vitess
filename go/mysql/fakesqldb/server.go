@@ -241,7 +241,8 @@ func (db *DB) ConnectionClosed(c *mysql.Conn) {
 }
 
 // ComQuery is part of the mysql.Handler interface.
-func (db *DB) ComQuery(c *mysql.Conn, query string) (*sqltypes.Result, error) {
+func (db *DB) ComQuery(c *mysql.Conn, q []byte) (*sqltypes.Result, error) {
+	query := string(q)
 	db.t.Logf("ComQuery(%v): client %v: %v", db.name, c.ConnectionID, query)
 
 	key := strings.ToLower(query)

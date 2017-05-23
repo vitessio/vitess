@@ -69,7 +69,7 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	}
 }
 
-func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string) (*sqltypes.Result, error) {
+func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query []byte) (*sqltypes.Result, error) {
 	// FIXME(alainjobart): Add some kind of timeout to the context.
 	ctx := context.Background()
 
@@ -99,7 +99,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string) (*sqltypes.Result
 	if c.SchemaName != "" {
 		session.TargetString = c.SchemaName
 	}
-	session, result, err := vh.vtg.Execute(ctx, session, query, make(map[string]interface{}))
+	session, result, err := vh.vtg.Execute(ctx, session, string(query), make(map[string]interface{}))
 	c.ClientData = session
 	return result, mysql.NewSQLErrorFromError(err)
 }
