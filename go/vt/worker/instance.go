@@ -92,12 +92,19 @@ func (wi *Instance) setAndStartWorker(ctx context.Context, wrk Worker, wr *wrang
 
 	if wi.currentWorker != nil {
 		// During the grace period, we answer with a retryable error.
+		// This way any automation can retry to issue 'Reset' and then the original
+		// command. We can end up in this situation when the automation job was
+		// restarted and therefore the previously running vtworker command was
+		// canceled.
+		// TODO(mberlin): This can be simplified when we move to a model where
+		// vtworker runs commands independent of an RPC and the automation polls for
+		// the current status, based on an assigned unique id, instead.
 		const gracePeriod = 1 * time.Minute
-		gracePeriodEnd := time.Now().Add(gracePeriod)
-		if wi.lastRunStopTime.Before(gracePeriodEnd) {
+		sinceLastStop := time.Since(wi.lastRunStopTime)
+		if sinceLastStop <= gracePeriod {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE,
 				"A worker job was recently stopped (%f seconds ago): If you run commands manually, run the 'Reset' command to clear the vtworker state. Job: %v",
-				time.Now().Sub(wi.lastRunStopTime).Seconds(),
+				sinceLastStop.Seconds(),
 				wi.currentWorker)
 		}
 
