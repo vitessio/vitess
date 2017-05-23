@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 #
 # Copyright 2017 Google Inc.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -69,12 +69,13 @@ shard_3_master = tablet.Tablet()
 shard_3_replica = tablet.Tablet()
 shard_3_rdonly1 = tablet.Tablet()
 
-all_tablets = [shard_0_master, shard_0_replica, shard_0_ny_rdonly,
-               shard_1_master, shard_1_slave1, shard_1_slave2,
-               shard_1_ny_rdonly, shard_1_rdonly1,
-               shard_2_master, shard_2_replica1, shard_2_replica2,
-               shard_2_rdonly1,
-               shard_3_master, shard_3_replica, shard_3_rdonly1]
+shard_2_tablets = [shard_2_master, shard_2_replica1, shard_2_replica2,
+                   shard_2_rdonly1]
+shard_3_tablets = [shard_3_master, shard_3_replica, shard_3_rdonly1]
+all_tablets = ([shard_0_master, shard_0_replica, shard_0_ny_rdonly,
+                shard_1_master, shard_1_slave1, shard_1_slave2,
+                shard_1_ny_rdonly, shard_1_rdonly1] +
+               shard_2_tablets + shard_3_tablets)
 
 
 def setUpModule():
@@ -213,6 +214,15 @@ time_milli bigint(20) unsigned not null,
 custom_ksid_col ''' + t + ''' not null,
 primary key (id)
 ) Engine=InnoDB'''
+    # Make sure that clone and diff work with tables which have no primary key.
+    # RBR only because Vitess requires the primary key for query rewrites if
+    # it is running with statement based replication.
+    create_no_pk_table = '''create table no_pk(
+custom_ksid_col ''' + t + ''' not null,
+msg varchar(64),
+id bigint not null,
+parent_id bigint not null
+) Engine=InnoDB'''
     create_unrelated_table = '''create table unrelated(
 name varchar(64),
 primary key (name)
@@ -238,6 +248,9 @@ primary key (name)
                      '-sql=' + create_unrelated_table,
                      'test_keyspace'],
                     auto_log=True)
+    if base_sharding.use_rbr:
+      utils.run_vtctl(['ApplySchema', '-sql=' + create_no_pk_table,
+                       'test_keyspace'], auto_log=True)
 
   def _insert_startup_values(self):
     self._insert_value(shard_0_master, 'resharding1', 1, 'msg1',
@@ -246,39 +259,34 @@ primary key (name)
                        0x9000000000000000)
     self._insert_value(shard_1_master, 'resharding1', 3, 'msg3',
                        0xD000000000000000)
+    if base_sharding.use_rbr:
+      self._insert_value(shard_1_master, 'no_pk', 1, 'msg1',
+                         0xA000000000000000)
+      # TODO(github.com/youtube/vitess/issues/2880): Add more rows here such
+      # clone and diff would break when the insertion order on source and
+      # dest shards is different.
 
   def _check_startup_values(self):
     # check first value is in the right shard
-    self._check_value(shard_2_master, 'resharding1', 2, 'msg2',
-                      0x9000000000000000)
-    self._check_value(shard_2_replica1, 'resharding1', 2, 'msg2',
-                      0x9000000000000000)
-    self._check_value(shard_2_replica2, 'resharding1', 2, 'msg2',
-                      0x9000000000000000)
-    self._check_value(shard_2_rdonly1, 'resharding1', 2, 'msg2',
-                      0x9000000000000000)
-    self._check_value(shard_3_master, 'resharding1', 2, 'msg2',
-                      0x9000000000000000, should_be_here=False)
-    self._check_value(shard_3_replica, 'resharding1', 2, 'msg2',
-                      0x9000000000000000, should_be_here=False)
-    self._check_value(shard_3_rdonly1, 'resharding1', 2, 'msg2',
-                      0x9000000000000000, should_be_here=False)
+    for t in shard_2_tablets:
+      self._check_value(t, 'resharding1', 2, 'msg2', 0x9000000000000000)
+    for t in shard_3_tablets:
+      self._check_value(t, 'resharding1', 2, 'msg2', 0x9000000000000000,
+                        should_be_here=False)
 
     # check second value is in the right shard too
-    self._check_value(shard_2_master, 'resharding1', 3, 'msg3',
-                      0xD000000000000000, should_be_here=False)
-    self._check_value(shard_2_replica1, 'resharding1', 3, 'msg3',
-                      0xD000000000000000, should_be_here=False)
-    self._check_value(shard_2_replica2, 'resharding1', 3, 'msg3',
-                      0xD000000000000000, should_be_here=False)
-    self._check_value(shard_2_rdonly1, 'resharding1', 3, 'msg3',
-                      0xD000000000000000, should_be_here=False)
-    self._check_value(shard_3_master, 'resharding1', 3, 'msg3',
-                      0xD000000000000000)
-    self._check_value(shard_3_replica, 'resharding1', 3, 'msg3',
-                      0xD000000000000000)
-    self._check_value(shard_3_rdonly1, 'resharding1', 3, 'msg3',
-                      0xD000000000000000)
+    for t in shard_2_tablets:
+      self._check_value(t, 'resharding1', 3, 'msg3', 0xD000000000000000,
+                        should_be_here=False)
+    for t in shard_3_tablets:
+      self._check_value(t, 'resharding1', 3, 'msg3', 0xD000000000000000)
+
+    if base_sharding.use_rbr:
+      for t in shard_2_tablets:
+        self._check_value(t, 'no_pk', 1, 'msg1', 0xA000000000000000)
+      for t in shard_3_tablets:
+        self._check_value(t, 'no_pk', 1, 'msg1', 0xA000000000000000,
+                          should_be_here=False)
 
   def _insert_lots(self, count, base=0):
     for i in xrange(count):

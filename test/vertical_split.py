@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 #
 # Copyright 2017 Google Inc.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -217,6 +217,12 @@ primary key (id),
 index by_msg (msg)
 ) Engine=InnoDB'''
     create_view_template = 'create view %s(id, msg) as select id, msg from %s'
+    # RBR only because Vitess requires the primary key for query rewrites if
+    # it is running with statement based replication.
+    create_moving3_no_pk_table = '''create table moving3_no_pk (
+id bigint not null,
+msg varchar(64)
+) Engine=InnoDB'''
 
     for t in [source_master, source_replica, source_rdonly1, source_rdonly2]:
       t.create_db('vt_source_keyspace')
@@ -224,6 +230,8 @@ index by_msg (msg)
         t.mquery(source_master.dbname, create_table_template % (n))
       t.mquery(source_master.dbname,
                create_view_template % ('view1', 'moving1'))
+      if base_sharding.use_rbr:
+        t.mquery(source_master.dbname, create_moving3_no_pk_table)
 
     for t in [destination_master, destination_replica, destination_rdonly1,
               destination_rdonly2]:
@@ -245,6 +253,11 @@ index by_msg (msg)
                        staying2_first, 100)
     self._check_values(source_master, 'vt_source_keyspace', 'view1',
                        self.moving1_first, 100)
+
+    if base_sharding.use_rbr:
+      self.moving3_no_pk_first = self._insert_values('moving3_no_pk', 100)
+      self._check_values(source_master, 'vt_source_keyspace', 'moving3_no_pk',
+                         self.moving3_no_pk_first, 100)
 
     # Insert data directly because vtgate would redirect us.
     destination_master.mquery(
@@ -417,6 +430,9 @@ index by_msg (msg)
                        self.moving2_first, 100)
     self._check_values(destination_master, 'vt_destination_keyspace', 'view1',
                        self.moving1_first, 100)
+    if base_sharding.use_rbr:
+      self._check_values(destination_master, 'vt_destination_keyspace',
+                         'moving3_no_pk', self.moving3_no_pk_first, 100)
 
     # check the binlog player is running and exporting vars
     self.check_destination_master(destination_master, ['source_keyspace/0'])
