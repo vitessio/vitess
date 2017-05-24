@@ -139,9 +139,8 @@ available and consistent data store.
 
 Lock servers were built for this exact purpose, and Vitess needs one such
 cluster to be setup to run smoothly. Vitess can be customized to utilize any
-lock server, and by default it supports zookeeper and etcd. We call this
-component
-[Topology Service](/user-guide/topology-service.html).
+lock server, and by default it supports Zookeeper, etcd and Consul. We call this
+component [Topology Service](/user-guide/topology-service.html).
 
 As Vitess is meant to run in multiple data centers / regions (called cells
 below), it relies on two different lock servers:
