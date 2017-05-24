@@ -492,8 +492,7 @@
   "PKValues": [
     1,
     2
-  ],
-  "MessageReloaderQuery": "select time_next, epoch, id, message from msg where :#pk"
+  ]
 }
 
 # message insert with no time_schedule
@@ -506,8 +505,7 @@
   "PKValues": [
     ":#time_now",
     2
-  ],
-  "MessageReloaderQuery": "select time_next, epoch, id, message from msg where :#pk"
+  ]
 }
 
 # message multi-value insert
@@ -526,8 +524,7 @@
       2,
       4
     ]
-  ],
-  "MessageReloaderQuery": "select time_next, epoch, id, message from msg where :#pk"
+  ]
 }
 
 # message insert subquery
@@ -565,10 +562,6 @@
 # message insert id missing
 "insert into msg(message) values('aa')"
 "id must be specified for message insert"
-
-# message insert message missing
-"insert into msg(id) values(1)"
-"message must be specified for message insert"
 
 # multi-row
 "replace into b (eid, id) values (1, 2), (3, 4)"

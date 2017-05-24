@@ -80,13 +80,6 @@ func GenerateInsertOuterQuery(ins *sqlparser.Insert) *sqlparser.ParsedQuery {
 	return buf.ParsedQuery()
 }
 
-// GenerateLoadMessagesQuery generates the query to load messages after insert.
-func GenerateLoadMessagesQuery(ins *sqlparser.Insert) *sqlparser.ParsedQuery {
-	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("select time_next, epoch, id, message from %v where %a", ins.Table, ":#pk")
-	return buf.ParsedQuery()
-}
-
 // GenerateUpdateOuterQuery generates the outer query for updates.
 func GenerateUpdateOuterQuery(upd *sqlparser.Update) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)

@@ -186,6 +186,13 @@ var tableACLConfig = `{
       "admins": ["dev"]
     },
     {
+      "name": "vitess_message3",
+      "table_names_or_prefixes": ["vitess_message3"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
       "name": "vitess_acl_unmatched",
       "table_names_or_prefixes": ["vitess_acl_unmatched"],
       "readers": ["dev"],

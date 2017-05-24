@@ -470,12 +470,6 @@ func analyzeInsertMessage(ins *sqlparser.Insert, plan *Plan, table *schema.Table
 		return nil, fmt.Errorf("%s must be specified for message insert", col.String())
 	}
 
-	col = sqlparser.NewColIdent("message")
-	num = findCol(col, ins.Columns)
-	if num < 0 {
-		return nil, fmt.Errorf("%s must be specified for message insert", col.String())
-	}
-
 	pkColumnNumbers := getInsertPKColumns(ins.Columns, table)
 	pkValues, err := getInsertPKValues(pkColumnNumbers, rowList, table)
 	if err != nil {
@@ -490,7 +484,6 @@ func analyzeInsertMessage(ins *sqlparser.Insert, plan *Plan, table *schema.Table
 	plan.PKValues = pkValues
 	plan.PlanID = PlanInsertMessage
 	plan.OuterQuery = sqlparser.GenerateParsedQuery(ins)
-	plan.MessageReloaderQuery = GenerateLoadMessagesQuery(ins)
 	return plan, nil
 }
 

@@ -107,18 +107,15 @@ func fetchIndexes(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
 }
 
 func loadMessageInfo(ta *Table, comment string) error {
-	findCols := []string{
-		"time_scheduled",
-		"id",
-		"time_next",
-		"epoch",
-		"time_created",
-		"time_acked",
-		"message",
+	findCols := map[string]struct{}{
+		"time_scheduled": {},
+		"id":             {},
+		"time_next":      {},
+		"epoch":          {},
+		"time_created":   {},
+		"time_acked":     {},
 	}
-	ta.MessageInfo = &MessageInfo{
-		Fields: make([]*querypb.Field, 2),
-	}
+	ta.MessageInfo = &MessageInfo{}
 	// Extract keyvalues.
 	keyvals := make(map[string]string)
 	inputs := strings.Split(comment, ",")
@@ -145,31 +142,48 @@ func loadMessageInfo(ta *Table, comment string) error {
 	if ta.MessageInfo.PollInterval, err = getDuration(keyvals, "vt_poller_interval"); err != nil {
 		return err
 	}
-	for _, col := range findCols {
+	for col := range findCols {
 		num := ta.FindColumn(sqlparser.NewColIdent(col))
 		if num == -1 {
 			return fmt.Errorf("%s missing from message table: %s", col, ta.Name.String())
 		}
-		switch col {
-		case "id":
-			ta.MessageInfo.Fields[0] = &querypb.Field{
+
+		// "id" must always the first column for Messages.
+		if col == "id" {
+			ta.MessageInfo.Fields = append(ta.MessageInfo.Fields, &querypb.Field{
 				Name: ta.Columns[num].Name.String(),
 				Type: ta.Columns[num].Type,
-			}
-		case "message":
-			ta.MessageInfo.Fields[1] = &querypb.Field{
-				Name: ta.Columns[num].Name.String(),
-				Type: ta.Columns[num].Type,
-			}
+			})
 		}
 	}
+
+	// Store the position of the id column in the PK
+	// list. This is required to handle arbitrary updates.
+	// In such cases, we have to be able to identify the
+	// affected id and invalidate the message cache.
+	ta.MessageInfo.IDPKIndex = -1
 	for i, j := range ta.PKColumns {
 		if ta.Columns[j].Name.EqualString("id") {
 			ta.MessageInfo.IDPKIndex = i
-			return nil
+			break
 		}
 	}
-	return fmt.Errorf("id column is not part of the primary key for message table: %s", ta.Name.String())
+	if ta.MessageInfo.IDPKIndex == -1 {
+		return fmt.Errorf("id column is not part of the primary key for message table: %s", ta.Name.String())
+	}
+
+	// Load user-defined columns. Any "unrecognized" column is user-defined.
+	for _, c := range ta.Columns {
+		if _, ok := findCols[c.Name.Lowered()]; ok {
+			continue
+		}
+
+		ta.MessageInfo.Fields = append(ta.MessageInfo.Fields, &querypb.Field{
+			Name: c.Name.String(),
+			Type: c.Type,
+		})
+	}
+	return nil
 }
 
 func getDuration(in map[string]string, key string) (time.Duration, error) {

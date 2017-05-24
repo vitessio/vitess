@@ -26,6 +26,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
@@ -172,6 +173,18 @@ func (me *Engine) UpdateCaches(newMessages map[string][]*MessageRow, changedMess
 		}
 		mm.cache.Discard(ids)
 	}
+}
+
+// GenerateLoadMessagesQuery returns the ParsedQuery for loading messages by pk.
+// The results of the query can be used in a BuildMessageRow call.
+func (me *Engine) GenerateLoadMessagesQuery(name string) (*sqlparser.ParsedQuery, error) {
+	me.mu.Lock()
+	defer me.mu.Unlock()
+	mm := me.managers[name]
+	if mm == nil {
+		return nil, fmt.Errorf("message table %s not found in schema", name)
+	}
+	return mm.loadMessagesQuery, nil
 }
 
 // GenerateAckQuery returns the query and bind vars for acking a message.

@@ -164,9 +164,9 @@ func TestLoadTableMessage(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
-	wanterr = "time_scheduled missing from message table: test_table"
-	if err == nil || err.Error() != wanterr {
-		t.Errorf("newTestLoadTable: %v, want %s", err, wanterr)
+	wanterr = "missing from message table: test_table"
+	if err == nil || !strings.Contains(err.Error(), wanterr) {
+		t.Errorf("newTestLoadTable: %v, must contain %s", err, wanterr)
 	}
 }
 
@@ -222,13 +222,12 @@ func getTestLoadTableQueries() map[string]*sqltypes.Result {
 }
 
 func getMessageTableQueries() map[string]*sqltypes.Result {
+	// id is intentionally after the message column to ensure that the
+	// loader still makes it the first one.
 	return map[string]*sqltypes.Result{
 		"select * from test_table where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "time_scheduled",
-				Type: sqltypes.Int64,
-			}, {
-				Name: "id",
 				Type: sqltypes.Int64,
 			}, {
 				Name: "time_next",
@@ -245,6 +244,9 @@ func getMessageTableQueries() map[string]*sqltypes.Result {
 			}, {
 				Name: "message",
 				Type: sqltypes.VarBinary,
+			}, {
+				Name: "id",
+				Type: sqltypes.Int64,
 			}},
 		},
 		"describe test_table": {
@@ -252,12 +254,12 @@ func getMessageTableQueries() map[string]*sqltypes.Result {
 			RowsAffected: 7,
 			Rows: [][]sqltypes.Value{
 				mysql.DescribeTableRow("time_scheduled", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("id", "bigint(20)", false, "PRI", "0"),
 				mysql.DescribeTableRow("time_next", "bigint(20)", false, "", "0"),
 				mysql.DescribeTableRow("epoch", "bigint(20)", false, "", "0"),
 				mysql.DescribeTableRow("time_created", "bigint(20)", false, "", "0"),
 				mysql.DescribeTableRow("time_acked", "bigint(20)", false, "", "0"),
 				mysql.DescribeTableRow("message", "bigint(20)", false, "", "0"),
+				mysql.DescribeTableRow("id", "bigint(20)", false, "PRI", "0"),
 			},
 		},
 		"show index from test_table": {
