@@ -177,18 +177,21 @@ See the
 for more information on how to setup both of these features, and what command
 line parameters exist.
 
-## Lock server configuration
+## Topology Service configuration
 
-Vttablet, vtgate, vtctld need the right command line parameters to find the topo server. First the *topo\_implementation* flag needs to be set to one of *zookeeper* or *etcd*. Then each is configured as follows:
+Vttablet, vtgate, vtctld need the right command line parameters to find the
+Topology Server. First the *topo\_implementation* flag needs to be set to one of
+*zk2*, *etcd2*, or *consul*. Then they're all configured as follows:
 
-* zookeeper: it is configured using the *ZK\_CLIENT\_CONFIG* environment
-  variable, that points at a JSON file that contains the global and local cells
-  configurations. For instance, this can be the contents of the file:
-  ```{"cell1": "server1:port1,server2:port2", "cell2":
-  "server1:port1,server2:port2", "global": "server1:port1,server2:port2"}```
-* etcd: the *etcd\_global\_addrs* parameter needs to point at the global
-  instance. Then inside that global instance, the */vt/cells/<cell name>* path
-  needs to point at each cell instance.
+* The *topo_global_server_address* contains the server address / addresses of
+  the global topology server.
+* The *topo_global_root* contains the directory / path to use.
+
+Note that the local cell for the tablet must exist and be configured properly in
+the Topology Service for vttablet to start. Local cells are configured inside
+the topo server, by using the `vtctl AddCellInfo` command. See
+the [Topology Service](/user-guide/topology-service.html) documentation for more
+information.
 
 ## VTTablet
 
@@ -198,6 +201,41 @@ VTTablet has a large number of command line options. Some important ones will be
 
 * 2-4 cores (in proportion to MySQL cores)
 * 2-4 GB RAM
+
+### Directory Configuration
+
+vttablet supports a number of command line options and environment variables
+to facilitate its setup.
+
+The **VTDATAROOT** environment variable specifies the toplevel directory for all
+data files. If not set, it defaults to `/vt`.
+
+By default, a vttablet will use a subdirectory in **VTDATAROOT** named
+`vt_NNNNNNNNNN` where `NNNNNNNNNN` is the tablet id. The **tablet_dir**
+command-line parameter allows overriding this relative path. This is useful in
+containers where the filesystem only contains one vttablet, in order to have a
+fixed root directory.
+
+When starting up and using `mysqlctl` to manage MySQL, the MySQL files will be
+in subdirectories of the tablet root. For instance, `bin-logs` for the binary
+logs, `data` for the data files, and `relay-logs` for the relay logs.
+
+It is possible to host different parts of a MySQL server files on different
+partitions. For instance, the data file may reside in flash, while the bin logs
+and relay logs are on spindle. To achieve this, create a symlink from
+`$VTDATAROOT/<dir name>` to the proper location on disk. When MySQL is
+configured by mysqlctl, it will realize this directory exists, and use it for the
+files it would otherwise have put in the tablet directory. For instance, to host
+the binlogs in `/mnt/bin-logs`:
+
+* Create a symlink from `$VTDATAROOT/bin-logs` to `/mnt/bin-logs`.
+
+* When starting up a tablet:
+
+  * `/mnt/bin-logs/vt_NNNNNNNNNN` will be created.
+
+  * `$VTDATAROOT/vt_NNNNNNNNNN/bin-logs` will be a symlink to
+    `/mnt/bin-logs/vt_NNNNNNNNNN`
 
 ### Initialization
 
