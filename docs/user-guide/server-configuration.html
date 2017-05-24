@@ -495,20 +495,23 @@ ACLs.</p>
 for more information on how to setup both of these features, and what command
 line parameters exist.</p>
 
-<h2 id="lock-server-configuration">Lock server configuration</h2>
+<h2 id="topology-service-configuration">Topology Service configuration</h2>
 
-<p>Vttablet, vtgate, vtctld need the right command line parameters to find the topo server. First the <em>topo_implementation</em> flag needs to be set to one of <em>zookeeper</em> or <em>etcd</em>. Then each is configured as follows:</p>
+<p>Vttablet, vtgate, vtctld need the right command line parameters to find the
+Topology Server. First the <em>topo_implementation</em> flag needs to be set to one of
+<em>zk2</em>, <em>etcd2</em>, or <em>consul</em>. Then they&#39;re all configured as follows:</p>
 
 <ul>
-<li>zookeeper: it is configured using the <em>ZK_CLIENT_CONFIG</em> environment
-variable, that points at a JSON file that contains the global and local cells
-configurations. For instance, this can be the contents of the file:
-<code class="prettyprint">{&quot;cell1&quot;: &quot;server1:port1,server2:port2&quot;, &quot;cell2&quot;:
-&quot;server1:port1,server2:port2&quot;, &quot;global&quot;: &quot;server1:port1,server2:port2&quot;}</code></li>
-<li>etcd: the <em>etcd_global_addrs</em> parameter needs to point at the global
-instance. Then inside that global instance, the <em>/vt/cells/<cell name></em> path
-needs to point at each cell instance.</li>
+<li>The <em>topo_global_server_address</em> contains the server address / addresses of
+the global topology server.</li>
+<li>The <em>topo_global_root</em> contains the directory / path to use.</li>
 </ul>
+
+<p>Note that the local cell for the tablet must exist and be configured properly in
+the Topology Service for vttablet to start. Local cells are configured inside
+the topo server, by using the <code class="prettyprint">vtctl AddCellInfo</code> command. See
+the <a href="/user-guide/topology-service.html">Topology Service</a> documentation for more
+information.</p>
 
 <h2 id="vttablet">VTTablet</h2>
 
@@ -519,6 +522,43 @@ needs to point at each cell instance.</li>
 <ul>
 <li>2-4 cores (in proportion to MySQL cores)</li>
 <li>2-4 GB RAM</li>
+</ul>
+
+<h3 id="directory-configuration">Directory Configuration</h3>
+
+<p>vttablet supports a number of command line options and environment variables
+to facilitate its setup.</p>
+
+<p>The <strong>VTDATAROOT</strong> environment variable specifies the toplevel directory for all
+data files. If not set, it defaults to <code class="prettyprint">/vt</code>.</p>
+
+<p>By default, a vttablet will use a subdirectory in <strong>VTDATAROOT</strong> named
+<code class="prettyprint">vt_NNNNNNNNNN</code> where <code class="prettyprint">NNNNNNNNNN</code> is the tablet id. The <strong>tablet_dir</strong>
+command-line parameter allows overriding this relative path. This is useful in
+containers where the filesystem only contains one vttablet, in order to have a
+fixed root directory.</p>
+
+<p>When starting up and using <code class="prettyprint">mysqlctl</code> to manage MySQL, the MySQL files will be
+in subdirectories of the tablet root. For instance, <code class="prettyprint">bin-logs</code> for the binary
+logs, <code class="prettyprint">data</code> for the data files, and <code class="prettyprint">relay-logs</code> for the relay logs.</p>
+
+<p>It is possible to host different parts of a MySQL server files on different
+partitions. For instance, the data file may reside in flash, while the bin logs
+and relay logs are on spindle. To achieve this, create a symlink from
+<code class="prettyprint">$VTDATAROOT/&lt;dir name&gt;</code> to the proper location on disk. When MySQL is
+configured by mysqlctl, it will realize this directory exists, and use it for the
+files it would otherwise have put in the tablet directory. For instance, to host
+the binlogs in <code class="prettyprint">/mnt/bin-logs</code>:</p>
+
+<ul>
+<li><p>Create a symlink from <code class="prettyprint">$VTDATAROOT/bin-logs</code> to <code class="prettyprint">/mnt/bin-logs</code>.</p></li>
+<li><p>When starting up a tablet:</p>
+
+<ul>
+<li><code class="prettyprint">/mnt/bin-logs/vt_NNNNNNNNNN</code> will be created.</li>
+<li><code class="prettyprint">$VTDATAROOT/vt_NNNNNNNNNN/bin-logs</code> will be a symlink to
+<code class="prettyprint">/mnt/bin-logs/vt_NNNNNNNNNN</code></li>
+</ul></li>
 </ul>
 
 <h3 id="initialization">Initialization</h3>
