@@ -212,6 +212,10 @@ func (f *fakeVTGateService) MessageAck(ctx context.Context, keyspace string, nam
 	return 0, nil
 }
 
+func (f *fakeVTGateService) MessageAckKeyspaceIds(ctx context.Context, keyspace string, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error) {
+	return 0, nil
+}
+
 // SplitQuery is part of the VTGateService interface
 func (f *fakeVTGateService) SplitQuery(
 	ctx context.Context,

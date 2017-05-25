@@ -121,6 +121,10 @@ func (c *terminalClient) MessageAck(ctx context.Context, keyspace string, name s
 	return 0, errTerminal
 }
 
+func (c *terminalClient) MessageAckKeyspaceIds(ctx context.Context, keyspace string, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error) {
+	return 0, errTerminal
+}
+
 func (c *terminalClient) SplitQuery(
 	ctx context.Context,
 	keyspace string,

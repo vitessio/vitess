@@ -111,6 +111,10 @@ func (c fallbackClient) MessageAck(ctx context.Context, keyspace string, name st
 	return c.fallback.MessageAck(ctx, keyspace, name, ids)
 }
 
+func (c fallbackClient) MessageAckKeyspaceIds(ctx context.Context, keyspace string, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error) {
+	return c.fallback.MessageAckKeyspaceIds(ctx, keyspace, name, idKeyspaceIDs)
+}
+
 func (c fallbackClient) SplitQuery(
 	ctx context.Context,
 	keyspace string,

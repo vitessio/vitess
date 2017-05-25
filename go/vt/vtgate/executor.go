@@ -399,7 +399,12 @@ func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []
 		"",
 		e,
 	)
+
 	newKeyspace, _, allShards, err := getKeyspaceShards(ctx, e.serv, e.cell, table.Keyspace.Name, topodatapb.TabletType_MASTER)
+	if err != nil {
+		return 0, err
+	}
+
 	shardIDs := make(map[string][]*querypb.Value)
 	if table.Keyspace.Sharded {
 		// We always use the (unique) primary vindex. The ID must be the

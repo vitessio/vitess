@@ -655,13 +655,38 @@ message MessageAckRequest {
   // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
-  // Optional keyspace for message table.
+  // keyspace to target the message to.
   string keyspace = 2;
 
   // name is the message table name.
   string name = 3;
   // ids is the list of ids to ack.
   repeated query.Value ids = 4;
+}
+
+// IdKeyspaceId represents an id and keyspace_id pair.
+// The kesypace_id represents the routing info for id.
+message IdKeyspaceId {
+  // id represents the message id.
+  query.Value id = 1;
+
+  // keyspace_id is the associated keyspace_id for the id.
+  bytes keyspace_id = 2;
+}
+
+// MessageAckKeyspaceIdsRequest is the payload to MessageAckKeyspaceIds.
+message MessageAckKeyspaceIdsRequest {
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 1;
+
+  // Optional keyspace for message table.
+  string keyspace = 2;
+
+  // name is the message table name.
+  string name = 3;
+
+  repeated IdKeyspaceId id_keyspace_ids = 4;
 }
 
 // ResolveTransactionResponse is the returned value from Rollback.

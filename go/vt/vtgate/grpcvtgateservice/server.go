@@ -465,6 +465,22 @@ func (vtg *VTGate) MessageAck(ctx context.Context, request *vtgatepb.MessageAckR
 	}, nil
 }
 
+// MessageAckKeyspaceIds routes Message Acks using the associated
+// keyspace ids.
+func (vtg *VTGate) MessageAckKeyspaceIds(ctx context.Context, request *vtgatepb.MessageAckKeyspaceIdsRequest) (response *querypb.MessageAckResponse, err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx = withCallerIDContext(ctx, request.CallerId)
+	count, vtgErr := vtg.server.MessageAckKeyspaceIds(ctx, request.Keyspace, request.Name, request.IdKeyspaceIds)
+	if vtgErr != nil {
+		return nil, vterrors.ToGRPC(vtgErr)
+	}
+	return &querypb.MessageAckResponse{
+		Result: &querypb.QueryResult{
+			RowsAffected: uint64(count),
+		},
+	}, nil
+}
+
 // SplitQuery is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) SplitQuery(ctx context.Context, request *vtgatepb.SplitQueryRequest) (response *vtgatepb.SplitQueryResponse, err error) {
 

@@ -838,13 +838,24 @@ func (vtg *VTGate) MessageStream(ctx context.Context, keyspace string, shard str
 // MessageAck is part of the vtgate service API. This is a V3 level API that's sent
 // to the executor. The table name will be resolved using V3 rules, and the routing
 // will make use of vindexes for sharded keyspaces.
-// TODO(sougou): Make this call use Session.
+// TODO(sougou): Deprecate this in favor of an SQL statement.
 func (vtg *VTGate) MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error) {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(topodatapb.TabletType_MASTER)
 	statsKey := []string{"MessageAck", keyspace, ltt}
 	defer vtg.timings.Record(statsKey, startTime)
 	count, err := vtg.executor.MessageAck(ctx, keyspace, name, ids)
+	return count, formatError(err)
+}
+
+// MessageAckKeyspaceIds is part of the vtgate service API. It routes
+// message acks based on the associated keyspace ids.
+func (vtg *VTGate) MessageAckKeyspaceIds(ctx context.Context, keyspace string, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error) {
+	startTime := time.Now()
+	ltt := topoproto.TabletTypeLString(topodatapb.TabletType_MASTER)
+	statsKey := []string{"MessageAckKeyspaceIds", keyspace, ltt}
+	defer vtg.timings.Record(statsKey, startTime)
+	count, err := vtg.resolver.MessageAckKeyspaceIds(ctx, keyspace, name, idKeyspaceIDs)
 	return count, formatError(err)
 }
 

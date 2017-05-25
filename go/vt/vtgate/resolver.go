@@ -377,6 +377,24 @@ func (res *Resolver) MessageStream(ctx context.Context, keyspace string, shard s
 	return res.scatterConn.MessageStream(ctx, keyspace, shards, name, callback)
 }
 
+// MessageAckKeyspaceIds routes message acks based on the associated keyspace ids.
+func (res *Resolver) MessageAckKeyspaceIds(ctx context.Context, keyspace, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error) {
+	newKeyspace, _, allShards, err := getKeyspaceShards(ctx, res.toposerv, res.cell, keyspace, topodatapb.TabletType_MASTER)
+	if err != nil {
+		return 0, err
+	}
+
+	shardIDs := make(map[string][]*querypb.Value)
+	for _, idKeyspaceID := range idKeyspaceIDs {
+		shard, err := getShardForKeyspaceID(allShards, idKeyspaceID.KeyspaceId)
+		if err != nil {
+			return 0, err
+		}
+		shardIDs[shard] = append(shardIDs[shard], idKeyspaceID.Id)
+	}
+	return res.scatterConn.MessageAck(ctx, newKeyspace, shardIDs, name)
+}
+
 // UpdateStream streams the events.
 // TODO(alainjobart): Implement the multi-shards merge code.
 func (res *Resolver) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, callback func(*querypb.StreamEvent, int64) error) error {
@@ -402,7 +420,7 @@ func (res *Resolver) UpdateStream(ctx context.Context, keyspace string, shard st
 			return err
 		}
 		if len(shards) != 1 {
-			return fmt.Errorf("UpdateStream only supports exactly one shard per keyrange at the moment, but provided keyrange %v maps to %v.", keyRange, shards)
+			return fmt.Errorf("UpdateStream only supports exactly one shard per keyrange at the moment, but provided keyrange %v maps to %v", keyRange, shards)
 		}
 		shard = shards[0]
 	}

@@ -55,6 +55,7 @@ type VTGateService interface {
 	// Messaging
 	MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error
 	MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error)
+	MessageAckKeyspaceIds(ctx context.Context, keyspace string, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error)
 
 	// Map Reduce support
 	SplitQuery(
