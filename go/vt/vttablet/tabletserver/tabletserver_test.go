@@ -1840,7 +1840,7 @@ func TestMessageStream(t *testing.T) {
 	// Skip first result (field info).
 	newMessages := map[string][]*messager.MessageRow{
 		"msg": {
-			&messager.MessageRow{ID: sqltypes.MakeString([]byte("1"))},
+			&messager.MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("1")), sqltypes.NULL}},
 		},
 	}
 	// We may have to iterate a few times before the stream kicks in.

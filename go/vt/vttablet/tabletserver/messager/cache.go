@@ -26,11 +26,11 @@ import (
 //_______________________________________________
 
 // MessageRow represents a message row.
+// The first column in Row is always the "id".
 type MessageRow struct {
 	TimeNext int64
 	Epoch    int64
-	ID       sqltypes.Value
-	Message  sqltypes.Value
+	Row      []sqltypes.Value
 }
 
 type messageHeap []*MessageRow
@@ -97,7 +97,7 @@ func (mc *cache) Add(mr *MessageRow) bool {
 	if len(mc.sendQueue) >= mc.size {
 		return false
 	}
-	id := mr.ID.String()
+	id := mr.Row[0].String()
 	// Don't check for nil. Messages that are popped for
 	// send are nilled out.
 	if _, ok := mc.messages[id]; ok {
@@ -122,7 +122,7 @@ func (mc *cache) Pop() *MessageRow {
 			return nil
 		}
 		mr := heap.Pop(&mc.sendQueue).(*MessageRow)
-		id := mr.ID.String()
+		id := mr.Row[0].String()
 		// If message was previously marked as defunct, drop
 		// it and continue.
 		if id == "" {
@@ -144,9 +144,7 @@ func (mc *cache) Discard(ids []string) {
 		if mr := mc.messages[id]; mr != nil {
 			// The row is still in the queue somewhere. Mark
 			// it as defunct. It will be "garbage collected" later.
-			mr.ID = sqltypes.NULL
-			// "Free" the message.
-			mr.Message = sqltypes.NULL
+			mr.Row[0] = sqltypes.NULL
 		}
 		delete(mc.messages, id)
 	}

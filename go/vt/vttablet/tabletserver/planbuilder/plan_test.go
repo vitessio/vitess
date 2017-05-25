@@ -41,35 +41,33 @@ import (
 // golden files e.g. data/test/tabletserver/exec_cases.txt.)
 func toJSON(p *Plan) ([]byte, error) {
 	mplan := struct {
-		PlanID               PlanType
-		Reason               ReasonType             `json:",omitempty"`
-		TableName            sqlparser.TableIdent   `json:",omitempty"`
-		FieldQuery           *sqlparser.ParsedQuery `json:",omitempty"`
-		FullQuery            *sqlparser.ParsedQuery `json:",omitempty"`
-		OuterQuery           *sqlparser.ParsedQuery `json:",omitempty"`
-		Subquery             *sqlparser.ParsedQuery `json:",omitempty"`
-		UpsertQuery          *sqlparser.ParsedQuery `json:",omitempty"`
-		ColumnNumbers        []int                  `json:",omitempty"`
-		PKValues             []interface{}          `json:",omitempty"`
-		SecondaryPKValues    []interface{}          `json:",omitempty"`
-		WhereClause          *sqlparser.ParsedQuery `json:",omitempty"`
-		SubqueryPKColumns    []int                  `json:",omitempty"`
-		MessageReloaderQuery *sqlparser.ParsedQuery `json:",omitempty"`
+		PlanID            PlanType
+		Reason            ReasonType             `json:",omitempty"`
+		TableName         sqlparser.TableIdent   `json:",omitempty"`
+		FieldQuery        *sqlparser.ParsedQuery `json:",omitempty"`
+		FullQuery         *sqlparser.ParsedQuery `json:",omitempty"`
+		OuterQuery        *sqlparser.ParsedQuery `json:",omitempty"`
+		Subquery          *sqlparser.ParsedQuery `json:",omitempty"`
+		UpsertQuery       *sqlparser.ParsedQuery `json:",omitempty"`
+		ColumnNumbers     []int                  `json:",omitempty"`
+		PKValues          []interface{}          `json:",omitempty"`
+		SecondaryPKValues []interface{}          `json:",omitempty"`
+		WhereClause       *sqlparser.ParsedQuery `json:",omitempty"`
+		SubqueryPKColumns []int                  `json:",omitempty"`
 	}{
-		PlanID:               p.PlanID,
-		Reason:               p.Reason,
-		TableName:            p.TableName(),
-		FieldQuery:           p.FieldQuery,
-		FullQuery:            p.FullQuery,
-		OuterQuery:           p.OuterQuery,
-		Subquery:             p.Subquery,
-		UpsertQuery:          p.UpsertQuery,
-		ColumnNumbers:        p.ColumnNumbers,
-		PKValues:             p.PKValues,
-		SecondaryPKValues:    p.SecondaryPKValues,
-		WhereClause:          p.WhereClause,
-		SubqueryPKColumns:    p.SubqueryPKColumns,
-		MessageReloaderQuery: p.MessageReloaderQuery,
+		PlanID:            p.PlanID,
+		Reason:            p.Reason,
+		TableName:         p.TableName(),
+		FieldQuery:        p.FieldQuery,
+		FullQuery:         p.FullQuery,
+		OuterQuery:        p.OuterQuery,
+		Subquery:          p.Subquery,
+		UpsertQuery:       p.UpsertQuery,
+		ColumnNumbers:     p.ColumnNumbers,
+		PKValues:          p.PKValues,
+		SecondaryPKValues: p.SecondaryPKValues,
+		WhereClause:       p.WhereClause,
+		SubqueryPKColumns: p.SubqueryPKColumns,
 	}
 	return json.Marshal(&mplan)
 }

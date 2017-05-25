@@ -233,9 +233,6 @@ type Plan struct {
 
 	// For PlanInsertSubquery: pk columns in the subquery result.
 	SubqueryPKColumns []int
-
-	// For PlanInsertMessage. Query used to reload inserted messages.
-	MessageReloaderQuery *sqlparser.ParsedQuery
 }
 
 // TableName returns the table name for the plan.

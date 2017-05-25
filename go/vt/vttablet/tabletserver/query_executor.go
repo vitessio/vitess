@@ -457,17 +457,27 @@ func (qre *QueryExecutor) execInsertMessage(conn *TxConnection) (*sqltypes.Resul
 	if err != nil {
 		return nil, err
 	}
+
+	// Re-read the inserted rows to prime the cache.
 	bv := map[string]interface{}{
 		"#pk": sqlparser.TupleEqualityList{
 			Columns: qre.plan.Table.Indexes[0].Columns,
 			Rows:    pkRows,
 		},
 	}
-	readback, err := qre.txFetch(conn, qre.plan.MessageReloaderQuery, bv, nil, false, false)
+	tableName := qre.plan.Table.Name.String()
+	loadMessages, err := qre.tsv.messager.GenerateLoadMessagesQuery(tableName)
 	if err != nil {
 		return nil, err
 	}
-	mrs := conn.NewMessages[qre.plan.Table.Name.String()]
+	readback, err := qre.txFetch(conn, loadMessages, bv, nil, false, false)
+	if err != nil {
+		return nil, err
+	}
+
+	// Append to the list of pending rows to be sent
+	// to the cache on successful commit.
+	mrs := conn.NewMessages[tableName]
 	for _, row := range readback.Rows {
 		mr, err := messager.BuildMessageRow(row)
 		if err != nil {
@@ -475,7 +485,7 @@ func (qre *QueryExecutor) execInsertMessage(conn *TxConnection) (*sqltypes.Resul
 		}
 		mrs = append(mrs, mr)
 	}
-	conn.NewMessages[qre.plan.Table.Name.String()] = mrs
+	conn.NewMessages[tableName] = mrs
 	return qr, nil
 }
 
