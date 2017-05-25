@@ -351,6 +351,11 @@ func (conn *FakeVTGateConn) MessageAck(ctx context.Context, keyspace string, nam
 	panic("not implemented")
 }
 
+// MessageAckKeyspaceIds is part of the vtgate service API.
+func (conn *FakeVTGateConn) MessageAckKeyspaceIds(ctx context.Context, keyspace string, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error) {
+	panic("not implemented")
+}
+
 // SplitQuery please see vtgateconn.Impl.SplitQuery
 func (conn *FakeVTGateConn) SplitQuery(
 	ctx context.Context,

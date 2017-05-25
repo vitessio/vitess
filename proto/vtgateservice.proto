@@ -109,6 +109,10 @@ service Vitess {
   // MessageAck acks messages for a table.
   rpc MessageAck(vtgate.MessageAckRequest) returns (query.MessageAckResponse) {};
 
+  // MessageAckKeyspaceIds routes Message Acks using the associated
+  // keyspace ids.
+  rpc MessageAckKeyspaceIds(vtgate.MessageAckKeyspaceIdsRequest) returns (query.MessageAckResponse) {};
+
   // Split a query into non-overlapping sub queries
   // API group: Map Reduce
   rpc SplitQuery(vtgate.SplitQueryRequest) returns (vtgate.SplitQueryResponse) {};

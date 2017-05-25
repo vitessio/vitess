@@ -796,6 +796,26 @@ func (f *fakeVTGateService) MessageAck(ctx context.Context, keyspace string, nam
 	return messageAckRowsAffected, nil
 }
 
+func (f *fakeVTGateService) MessageAckKeyspaceIds(ctx context.Context, keyspace string, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error) {
+	if f.hasError {
+		return 0, errTestVtGateError
+	}
+	if f.panics {
+		panic(fmt.Errorf("test forced panic"))
+	}
+	f.checkCallerID(ctx, "ResolveTransaction")
+	msg1 := &vtgatepb.MessageAckKeyspaceIdsRequest{
+		IdKeyspaceIds: idKeyspaceIDs,
+	}
+	msg2 := &vtgatepb.MessageAckKeyspaceIdsRequest{
+		IdKeyspaceIds: testIDKeyspaceIDs,
+	}
+	if !proto.Equal(msg1, msg2) {
+		return 0, errors.New("MessageAck ids mismatch")
+	}
+	return messageAckRowsAffected, nil
+}
+
 // querySplitQuery contains all the fields we use to test SplitQuery
 type querySplitQuery struct {
 	Keyspace            string
@@ -996,6 +1016,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testTxFail(t, conn)
 	testMessageStream(t, conn)
 	testMessageAck(t, conn)
+	testMessageAckKeyspaceIds(t, conn)
 	testSplitQuery(t, conn)
 	testGetSrvKeyspace(t, conn)
 	testUpdateStream(t, conn)
@@ -1019,7 +1040,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testStreamExecuteKeyRangesPanic(t, conn)
 	testStreamExecuteKeyspaceIdsPanic(t, conn)
 	testMessageStreamPanic(t, conn)
-	testMessageAckPanic(t, conn)
+	testMessageAckKeyspaceIdsPanic(t, conn)
 	testSplitQueryPanic(t, conn)
 	testGetSrvKeyspacePanic(t, conn)
 	testUpdateStreamPanic(t, conn)
@@ -1056,6 +1077,7 @@ func TestErrorSuite(t *testing.T, fakeServer vtgateservice.VTGateService) {
 	testStreamExecuteKeyspaceIdsError(t, conn, fs)
 	testMessageStreamError(t, conn)
 	testMessageAckError(t, conn)
+	testMessageAckKeyspaceIdsError(t, conn)
 	testSplitQueryError(t, conn)
 	testGetSrvKeyspaceError(t, conn)
 	testUpdateStreamError(t, conn, fs)
@@ -1989,6 +2011,29 @@ func testMessageAckPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	expectPanic(t, err)
 }
 
+func testMessageAckKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := newContext()
+	got, err := conn.MessageAckKeyspaceIds(ctx, "", messageName, testIDKeyspaceIDs)
+	if got != messageAckRowsAffected {
+		t.Errorf("MessageAckKeyspaceIds: %d, want %d", got, messageAckRowsAffected)
+	}
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func testMessageAckKeyspaceIdsError(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := newContext()
+	_, err := conn.MessageAckKeyspaceIds(ctx, "", messageName, testIDKeyspaceIDs)
+	verifyError(t, err, "MessageAckKeyspaceIds")
+}
+
+func testMessageAckKeyspaceIdsPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := newContext()
+	_, err := conn.MessageAckKeyspaceIds(ctx, "", messageName, testIDKeyspaceIDs)
+	expectPanic(t, err)
+}
+
 func testSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	qsl, err := conn.SplitQuery(ctx,
@@ -2723,3 +2768,8 @@ var messageids = []*querypb.Value{
 	sqltypes.MakeString([]byte("3")).ToProtoValue(),
 }
 var messageAckRowsAffected = int64(1)
+
+var testIDKeyspaceIDs = []*vtgatepb.IdKeyspaceId{{
+	Id:         sqltypes.MakeString([]byte("1")).ToProtoValue(),
+	KeyspaceId: []byte{0x6B},
+}}

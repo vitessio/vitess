@@ -491,6 +491,20 @@ func (conn *vtgateConn) MessageAck(ctx context.Context, keyspace string, name st
 	return int64(r.Result.RowsAffected), nil
 }
 
+func (conn *vtgateConn) MessageAckKeyspaceIds(ctx context.Context, keyspace string, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error) {
+	request := &vtgatepb.MessageAckKeyspaceIdsRequest{
+		CallerId:      callerid.EffectiveCallerIDFromContext(ctx),
+		Keyspace:      keyspace,
+		Name:          name,
+		IdKeyspaceIds: idKeyspaceIDs,
+	}
+	r, err := conn.c.MessageAckKeyspaceIds(ctx, request)
+	if err != nil {
+		return 0, vterrors.FromGRPC(err)
+	}
+	return int64(r.Result.RowsAffected), nil
+}
+
 func (conn *vtgateConn) SplitQuery(
 	ctx context.Context,
 	keyspace string,

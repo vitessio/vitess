@@ -134,6 +134,12 @@ func (conn *VTGateConn) MessageAck(ctx context.Context, keyspace string, name st
 	return conn.impl.MessageAck(ctx, keyspace, name, ids)
 }
 
+// MessageAckKeyspaceIds is part of the vtgate service API. It routes
+// message acks based on the associated keyspace ids.
+func (conn *VTGateConn) MessageAckKeyspaceIds(ctx context.Context, keyspace string, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error) {
+	return conn.impl.MessageAckKeyspaceIds(ctx, keyspace, name, idKeyspaceIDs)
+}
+
 // Begin starts a transaction and returns a VTGateTX.
 func (conn *VTGateConn) Begin(ctx context.Context) (*VTGateTx, error) {
 	session, err := conn.impl.Begin(ctx, false /* singledb */)
@@ -359,6 +365,7 @@ type Impl interface {
 	// Messaging functions.
 	MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error
 	MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error)
+	MessageAckKeyspaceIds(ctx context.Context, keyspace string, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error)
 
 	// SplitQuery splits a query into smaller queries. It is mostly used by batch job frameworks
 	// such as MapReduce. See the documentation for the vtgate.SplitQueryRequest protocol buffer

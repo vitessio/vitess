@@ -275,6 +275,15 @@ func (c *errorClient) MessageAck(ctx context.Context, keyspace string, name stri
 	return c.fallback.MessageAck(ctx, keyspace, name, ids)
 }
 
+func (c *errorClient) MessageAckKeyspaceIds(ctx context.Context, keyspace string, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error) {
+	cid := callerid.EffectiveCallerIDFromContext(ctx)
+	request := callerid.GetPrincipal(cid)
+	if err := requestToError(request); err != nil {
+		return 0, err
+	}
+	return c.fallback.MessageAckKeyspaceIds(ctx, keyspace, name, idKeyspaceIDs)
+}
+
 func (c *errorClient) SplitQuery(
 	ctx context.Context,
 	keyspace string,

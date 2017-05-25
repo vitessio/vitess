@@ -406,6 +406,95 @@ func testResolverStreamGeneric(t *testing.T, name string, action func(res *Resol
 	}
 }
 
+func TestResolverMessageAckSharded(t *testing.T) {
+	name := "TestResolverMessageAckSharded"
+	_ = createSandbox(name)
+	hc := discovery.NewFakeHealthCheck()
+	res := newTestResolver(hc, new(sandboxTopo), "aa")
+	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc1 := hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
+
+	sbc0.MessageIDs = nil
+	sbc1.MessageIDs = nil
+	idKeyspaceIDs := []*vtgatepb.IdKeyspaceId{
+		{
+			Id: &querypb.Value{
+				Type:  sqltypes.VarChar,
+				Value: []byte("1"),
+			},
+			KeyspaceId: []byte{0x10},
+		},
+		{
+			Id: &querypb.Value{
+				Type:  sqltypes.VarChar,
+				Value: []byte("3"),
+			},
+			KeyspaceId: []byte{0x30},
+		},
+	}
+	count, err := res.MessageAckKeyspaceIds(context.Background(), name, "user", idKeyspaceIDs)
+	if err != nil {
+		t.Error(err)
+	}
+	if count != 2 {
+		t.Errorf("count: %d, want 2", count)
+	}
+	wantids := []*querypb.Value{{
+		Type:  sqltypes.VarChar,
+		Value: []byte("1"),
+	}}
+	if !sqltypes.Proto3ValuesEqual(sbc0.MessageIDs, wantids) {
+		t.Errorf("sbc0.MessageIDs: %+v, want %+v\n", sbc0.MessageIDs, wantids)
+	}
+	wantids = []*querypb.Value{{
+		Type:  sqltypes.VarChar,
+		Value: []byte("3"),
+	}}
+	if !sqltypes.Proto3ValuesEqual(sbc1.MessageIDs, wantids) {
+		t.Errorf("sbc1.MessageIDs: %+v, want %+v\n", sbc1.MessageIDs, wantids)
+	}
+}
+
+func TestResolverMessageAckUnsharded(t *testing.T) {
+	createSandbox(KsTestUnsharded)
+	hc := discovery.NewFakeHealthCheck()
+	res := newTestResolver(hc, new(sandboxTopo), "aa")
+	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+
+	sbc0.MessageIDs = nil
+	idKeyspaceIDs := []*vtgatepb.IdKeyspaceId{
+		{
+			Id: &querypb.Value{
+				Type:  sqltypes.VarChar,
+				Value: []byte("1"),
+			},
+		},
+		{
+			Id: &querypb.Value{
+				Type:  sqltypes.VarChar,
+				Value: []byte("3"),
+			},
+		},
+	}
+	count, err := res.MessageAckKeyspaceIds(context.Background(), KsTestUnsharded, "user", idKeyspaceIDs)
+	if err != nil {
+		t.Error(err)
+	}
+	if count != 2 {
+		t.Errorf("count: %d, want 2", count)
+	}
+	wantids := []*querypb.Value{{
+		Type:  sqltypes.VarChar,
+		Value: []byte("1"),
+	}, {
+		Type:  sqltypes.VarChar,
+		Value: []byte("3"),
+	}}
+	if !sqltypes.Proto3ValuesEqual(sbc0.MessageIDs, wantids) {
+		t.Errorf("sbc0.MessageIDs: %+v, want %+v\n", sbc0.MessageIDs, wantids)
+	}
+}
+
 func TestResolverInsertSqlClause(t *testing.T) {
 	clause := "col in (:col1, :col2)"
 	tests := [][]string{
