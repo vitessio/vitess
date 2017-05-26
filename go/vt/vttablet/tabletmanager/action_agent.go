@@ -38,7 +38,6 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
-	"net"
 	"os"
 	"path"
 	"regexp"
@@ -500,16 +499,10 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 			return err
 		}
 	}
-	ipAddrs, err := net.LookupHost(hostname)
-	if err != nil {
-		return err
-	}
-	ipAddr := ipAddrs[0]
 
 	// Update bind addr for mysql and query service in the tablet node.
 	f := func(tablet *topodatapb.Tablet) error {
 		tablet.Hostname = hostname
-		tablet.Ip = ipAddr
 		if tablet.PortMap == nil {
 			tablet.PortMap = make(map[string]int32)
 		}

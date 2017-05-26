@@ -45,7 +45,6 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 			Uid:  123,
 		},
 		Hostname: "masterhost",
-		Ip:       "1.2.3.4",
 		PortMap: map[string]int32{
 			"vt":    8101,
 			"gprc":  8102,
@@ -64,7 +63,6 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 			Cell: "test_cell",
 			Uid:  234,
 		},
-		Ip: "2.3.4.5",
 		PortMap: map[string]int32{
 			"vt":    8101,
 			"grpc":  8102,

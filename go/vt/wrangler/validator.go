@@ -213,7 +213,12 @@ func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.Sha
 	tabletIPMap := make(map[string]*topodatapb.Tablet)
 	slaveIPMap := make(map[string]bool)
 	for _, tablet := range tabletMap {
-		tabletIPMap[normalizeIP(tablet.Ip)] = tablet.Tablet
+		ip, err := topoproto.TabletIP(tablet.Tablet)
+		if err != nil {
+			results <- fmt.Errorf("could not resolve IP for tablet %s: %v", tablet.Hostname, err)
+			continue
+		}
+		tabletIPMap[normalizeIP(ip)] = tablet.Tablet
 	}
 
 	// See if every slave is in the replication graph.
@@ -230,8 +235,13 @@ func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.Sha
 			continue
 		}
 
-		if !slaveIPMap[normalizeIP(tablet.Ip)] {
-			results <- fmt.Errorf("slave %v not replicating: %v slave list: %q", topoproto.TabletAliasString(tablet.Alias), tablet.Ip, slaveList)
+		ip, err := topoproto.TabletIP(tablet.Tablet)
+		if err != nil {
+			results <- fmt.Errorf("could not resolve IP for tablet %s: %v", tablet.Hostname, err)
+			continue
+		}
+		if !slaveIPMap[normalizeIP(ip)] {
+			results <- fmt.Errorf("slave %v not replicating: %v slave list: %q", topoproto.TabletAliasString(tablet.Alias), ip, slaveList)
 		}
 	}
 }

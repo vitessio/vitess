@@ -63,7 +63,6 @@ func TestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
 	tablet := &topodatapb.Tablet{
 		Alias:    &topodatapb.TabletAlias{Cell: "cell1", Uid: 1},
 		Hostname: "localhost",
-		Ip:       "10.11.12.13",
 		PortMap: map[string]int32{
 			"vt":    3333,
 			"mysql": 3334,

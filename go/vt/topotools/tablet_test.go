@@ -30,61 +30,61 @@ func TestCheckOwnership(t *testing.T) {
 	table := []testCase{
 		{
 			oldTablet: &topodatapb.Tablet{
-				Ip:      "1.2.3.4",
-				PortMap: map[string]int32{"vt": 123, "mysql": 555},
+				Hostname: "host1",
+				PortMap:  map[string]int32{"vt": 123, "mysql": 555},
 			},
 			newTablet: &topodatapb.Tablet{
-				Ip:      "1.2.3.4",
-				PortMap: map[string]int32{"vt": 123, "mysql": 222},
+				Hostname: "host1",
+				PortMap:  map[string]int32{"vt": 123, "mysql": 222},
 			},
 			wantError: false,
 		},
 		{
 			oldTablet: &topodatapb.Tablet{
-				Ip:      "4.3.2.1",
-				PortMap: map[string]int32{"vt": 123},
+				Hostname: "host2",
+				PortMap:  map[string]int32{"vt": 123},
 			},
 			newTablet: &topodatapb.Tablet{
-				Ip:      "1.2.3.4",
-				PortMap: map[string]int32{"vt": 123},
+				Hostname: "host1",
+				PortMap:  map[string]int32{"vt": 123},
 			},
 			wantError: true,
 		},
 		{
 			oldTablet: &topodatapb.Tablet{
-				Ip:      "1.2.3.4",
-				PortMap: map[string]int32{"vt": 123},
+				Hostname: "host1",
+				PortMap:  map[string]int32{"vt": 123},
 			},
 			newTablet: &topodatapb.Tablet{
-				Ip:      "1.2.3.4",
-				PortMap: map[string]int32{"vt": 321},
+				Hostname: "host1",
+				PortMap:  map[string]int32{"vt": 321},
 			},
 			wantError: true,
 		},
 		{
 			newTablet: &topodatapb.Tablet{
-				Ip:      "1.2.3.4",
-				PortMap: map[string]int32{"vt": 123},
-			},
-			wantError: true,
-		},
-		{
-			oldTablet: &topodatapb.Tablet{
-				PortMap: map[string]int32{"vt": 123},
-			},
-			newTablet: &topodatapb.Tablet{
-				Ip:      "1.2.3.4",
-				PortMap: map[string]int32{"vt": 123},
+				Hostname: "host1",
+				PortMap:  map[string]int32{"vt": 123},
 			},
 			wantError: true,
 		},
 		{
 			oldTablet: &topodatapb.Tablet{
-				Ip: "1.2.3.4",
+				PortMap: map[string]int32{"vt": 123},
 			},
 			newTablet: &topodatapb.Tablet{
-				Ip:      "1.2.3.4",
-				PortMap: map[string]int32{"vt": 123},
+				Hostname: "host1",
+				PortMap:  map[string]int32{"vt": 123},
+			},
+			wantError: true,
+		},
+		{
+			oldTablet: &topodatapb.Tablet{
+				Hostname: "host1",
+			},
+			newTablet: &topodatapb.Tablet{
+				Hostname: "host1",
+				PortMap:  map[string]int32{"vt": 123},
 			},
 			wantError: true,
 		},

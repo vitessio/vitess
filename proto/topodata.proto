@@ -110,9 +110,6 @@ message Tablet {
   // Fully qualified domain name of the host.
   string hostname = 2;
 
-  // IP address, stored as a string.
-  string ip = 3;
-
   // Map of named ports. Normally this should include vt, grpc, and mysql.
   map<string, int32> port_map = 4;
 
@@ -136,9 +133,10 @@ message Tablet {
   // tablet tags
   map<string, string> tags = 10;
 
-  // OBSOLETE: tablet health information
+  // OBSOLETE: ip and tablet health information
+  // string ip = 3;
   // map<string, string> health_map = 11;
-  reserved 11;
+  reserved 3, 11;
 }
 
 // A Shard contains data about a subset of the data whithin a keyspace.

@@ -95,7 +95,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -687,7 +686,6 @@ func commandGetTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 
 func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	hostname := subFlags.String("hostname", "", "The fully qualified host name of the server on which the tablet is running.")
-	ipAddr := subFlags.String("ip-addr", "", "IP address")
 	mysqlPort := subFlags.Int("mysql-port", 0, "The mysql port for the mysql daemon")
 	vtPort := subFlags.Int("vt-port", 0, "The main port for the vttablet process")
 	grpcPort := subFlags.Int("grpc-port", 0, "The gRPC port for the vttablet process")
@@ -698,9 +696,6 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("the <tablet alias> argument is required for the UpdateTabletAddrs command")
 	}
-	if *ipAddr != "" && net.ParseIP(*ipAddr) == nil {
-		return fmt.Errorf("malformed address: %v", *ipAddr)
-	}
 
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
@@ -709,9 +704,6 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 	_, err = wr.TopoServer().UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
 		if *hostname != "" {
 			tablet.Hostname = *hostname
-		}
-		if *ipAddr != "" {
-			tablet.Ip = *ipAddr
 		}
 		if *vtPort != 0 || *grpcPort != 0 || *mysqlPort != 0 {
 			if tablet.PortMap == nil {
