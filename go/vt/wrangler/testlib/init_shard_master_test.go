@@ -84,7 +84,7 @@ func TestInitMasterShard(t *testing.T) {
 	goodSlave1.FakeMysqlDaemon.ResetReplicationResult = []string{"reset rep 1"}
 	goodSlave1.FakeMysqlDaemon.SetSlavePositionCommandsPos = master.FakeMysqlDaemon.CurrentMasterPosition
 	goodSlave1.FakeMysqlDaemon.SetSlavePositionCommandsResult = []string{"cmd1"}
-	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", master.Tablet.Hostname, master.Tablet.PortMap["mysql"])
+	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = topoproto.MysqlAddr(master.Tablet)
 	goodSlave1.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"reset rep 1",
@@ -100,7 +100,7 @@ func TestInitMasterShard(t *testing.T) {
 	goodSlave2.FakeMysqlDaemon.ResetReplicationResult = []string{"reset rep 2"}
 	goodSlave2.FakeMysqlDaemon.SetSlavePositionCommandsPos = master.FakeMysqlDaemon.CurrentMasterPosition
 	goodSlave2.FakeMysqlDaemon.SetSlavePositionCommandsResult = []string{"cmd1", "cmd2"}
-	goodSlave2.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", master.Tablet.Hostname, master.Tablet.PortMap["mysql"])
+	goodSlave2.FakeMysqlDaemon.SetMasterCommandsInput = topoproto.MysqlAddr(master.Tablet)
 	goodSlave2.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"reset rep 2",
@@ -217,7 +217,7 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	goodSlave.FakeMysqlDaemon.ReadOnly = true
 	goodSlave.FakeMysqlDaemon.SetSlavePositionCommandsPos = master.FakeMysqlDaemon.CurrentMasterPosition
 	goodSlave.FakeMysqlDaemon.SetSlavePositionCommandsResult = []string{"cmd1"}
-	goodSlave.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", master.Tablet.Hostname, master.Tablet.PortMap["mysql"])
+	goodSlave.FakeMysqlDaemon.SetMasterCommandsInput = topoproto.MysqlAddr(master.Tablet)
 	goodSlave.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"cmd1",
@@ -231,7 +231,7 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	// on purpose
 	badSlave.FakeMysqlDaemon.ReadOnly = true
 	badSlave.FakeMysqlDaemon.SetSlavePositionCommandsPos = master.FakeMysqlDaemon.CurrentMasterPosition
-	badSlave.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", "", master.Tablet.PortMap["mysql"])
+	badSlave.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", "", topoproto.MysqlPort(master.Tablet))
 	badSlave.StartActionLoop(t, wr)
 	defer badSlave.StopActionLoop(t)
 

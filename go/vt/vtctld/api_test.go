@@ -164,7 +164,9 @@ func TestAPI(t *testing.T) {
 				"shard": "-80",
 				"key_range": {"end": "gA=="},
 				"type": 2,
-				"db_name_override": ""
+				"db_name_override": "",
+				"mysql_hostname":"",
+				"mysql_port":0
 			}`},
 		{"GET", "tablets/nonexistent-999", "", "404 page not found"},
 		{"POST", "tablets/cell1-100?action=TestTabletAction", "", `{
@@ -288,7 +290,7 @@ func TestAPI(t *testing.T) {
 			got = strings.TrimSpace(string(body))
 		}
 		if got != want {
-			t.Errorf("[%v] got '%v', want '%v'", in.path, got, want)
+			t.Errorf("[%v] got\n'%v', want\n'%v'", in.path, got, want)
 			continue
 		}
 	}

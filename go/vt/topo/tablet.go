@@ -146,6 +146,12 @@ func TabletEquality(left, right *topodatapb.Tablet) bool {
 	if left.Hostname != right.Hostname {
 		return false
 	}
+	if left.MysqlHostname != right.MysqlHostname {
+		return false
+	}
+	if left.MysqlPort != right.MysqlPort {
+		return false
+	}
 	if len(left.PortMap) != len(right.PortMap) {
 		return false
 	}
@@ -184,7 +190,7 @@ func (ti *TabletInfo) Addr() string {
 
 // MysqlAddr returns hostname:mysql port.
 func (ti *TabletInfo) MysqlAddr() string {
-	return netutil.JoinHostPort(ti.Hostname, int32(ti.PortMap["mysql"]))
+	return netutil.JoinHostPort(topoproto.MysqlHostname(ti.Tablet), topoproto.MysqlPort(ti.Tablet))
 }
 
 // DbName is usually implied by keyspace. Having the shard information in the

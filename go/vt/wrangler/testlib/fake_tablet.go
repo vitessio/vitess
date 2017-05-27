@@ -33,6 +33,7 @@ import (
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttablet/grpctmserver"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletconn"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletmanager"
@@ -121,18 +122,20 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 		t.Fatalf("uid has to be between 0 and 99: %v", uid)
 	}
 	mysqlPort := int32(3300 + uid)
+	hostname := fmt.Sprintf("%v.%d", cell, uid)
 	tablet := &topodatapb.Tablet{
-		Alias:    &topodatapb.TabletAlias{Cell: cell, Uid: uid},
-		Hostname: fmt.Sprintf("%v.%d", cell, uid),
+		Alias:         &topodatapb.TabletAlias{Cell: cell, Uid: uid},
+		Hostname:      hostname,
+		MysqlHostname: hostname,
 		PortMap: map[string]int32{
-			"vt":    int32(8100 + uid),
-			"mysql": mysqlPort,
-			"grpc":  int32(8200 + uid),
+			"vt":   int32(8100 + uid),
+			"grpc": int32(8200 + uid),
 		},
 		Keyspace: "test_keyspace",
 		Shard:    "0",
 		Type:     tabletType,
 	}
+	topoproto.SetMysqlPort(tablet, mysqlPort)
 	for _, option := range options {
 		option(tablet)
 	}

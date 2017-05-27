@@ -74,7 +74,6 @@ func CheckOwnership(oldTablet, newTablet *topodatapb.Tablet) error {
 	if oldTablet == nil || newTablet == nil {
 		return errors.New("unable to verify ownership of tablet record")
 	}
-	fmt.Printf("Comparing:\n%v\n%v\n", oldTablet, newTablet)
 	if oldTablet.Hostname != newTablet.Hostname || oldTablet.PortMap["vt"] != newTablet.PortMap["vt"] {
 		return fmt.Errorf(
 			"tablet record was taken over by another process: "+

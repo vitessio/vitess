@@ -17,7 +17,6 @@ limitations under the License.
 package testlib
 
 import (
-	"fmt"
 	"testing"
 
 	"golang.org/x/net/context"
@@ -72,8 +71,8 @@ func TestShardReplicationStatuses(t *testing.T) {
 			Sequence: 890,
 		},
 	}
-	slave.FakeMysqlDaemon.CurrentMasterHost = master.Tablet.Hostname
-	slave.FakeMysqlDaemon.CurrentMasterPort = int(master.Tablet.PortMap["mysql"])
+	slave.FakeMysqlDaemon.CurrentMasterHost = topoproto.MysqlHostname(master.Tablet)
+	slave.FakeMysqlDaemon.CurrentMasterPort = int(topoproto.MysqlPort(master.Tablet))
 	slave.StartActionLoop(t, wr)
 	defer slave.StopActionLoop(t)
 
@@ -124,7 +123,7 @@ func TestReparentTablet(t *testing.T) {
 	defer master.StopActionLoop(t)
 
 	// slave loop
-	slave.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", master.Tablet.Hostname, master.Tablet.PortMap["mysql"])
+	slave.FakeMysqlDaemon.SetMasterCommandsInput = topoproto.MysqlAddr(master.Tablet)
 	slave.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	slave.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"set master cmd 1",

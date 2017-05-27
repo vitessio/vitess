@@ -17,7 +17,6 @@ limitations under the License.
 package testlib
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -163,7 +162,7 @@ func TestBackupRestore(t *testing.T) {
 	}
 	destTablet.FakeMysqlDaemon.SetSlavePositionCommandsPos = sourceTablet.FakeMysqlDaemon.CurrentMasterPosition
 	destTablet.FakeMysqlDaemon.SetSlavePositionCommandsResult = []string{"cmd1"}
-	destTablet.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", master.Tablet.Hostname, master.Tablet.PortMap["mysql"])
+	destTablet.FakeMysqlDaemon.SetMasterCommandsInput = topoproto.MysqlAddr(master.Tablet)
 	destTablet.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 
 	destTablet.StartActionLoop(t, wr)

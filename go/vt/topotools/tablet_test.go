@@ -31,11 +31,11 @@ func TestCheckOwnership(t *testing.T) {
 		{
 			oldTablet: &topodatapb.Tablet{
 				Hostname: "host1",
-				PortMap:  map[string]int32{"vt": 123, "mysql": 555},
+				PortMap:  map[string]int32{"vt": 123, "grpc": 555},
 			},
 			newTablet: &topodatapb.Tablet{
 				Hostname: "host1",
-				PortMap:  map[string]int32{"vt": 123, "mysql": 222},
+				PortMap:  map[string]int32{"vt": 123, "grpc": 222},
 			},
 			wantError: false,
 		},
