@@ -20,6 +20,7 @@ package topoproto
 
 import (
 	"fmt"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -202,6 +203,17 @@ func MakeStringTypeList(types []topodatapb.TabletType) []string {
 // TabletAddr returns hostname:vt port associated with a tablet
 func TabletAddr(tablet *topodatapb.Tablet) string {
 	return netutil.JoinHostPort(tablet.Hostname, tablet.PortMap["vt"])
+}
+
+// TabletIP returns the tablet's IP by resolving the host name.
+// TODO(sougou): The only use case for this is in validator, which
+// should be changed to use the upcoming MySQLIP function instead.
+func TabletIP(tablet *topodatapb.Tablet) (string, error) {
+	ipAddrs, err := net.LookupHost(tablet.Hostname)
+	if err != nil {
+		return "", err
+	}
+	return ipAddrs[0], nil
 }
 
 // TabletDbName is usually implied by keyspace. Having the shard

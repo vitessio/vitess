@@ -36,7 +36,6 @@ func checkTablet(t *testing.T, ts topo.Impl) {
 	tablet := &topodatapb.Tablet{
 		Alias:    &topodatapb.TabletAlias{Cell: cell, Uid: 1},
 		Hostname: "localhost",
-		Ip:       "10.11.12.13",
 		PortMap: map[string]int32{
 			"vt":    3333,
 			"mysql": 3334,

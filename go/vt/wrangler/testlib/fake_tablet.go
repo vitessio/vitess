@@ -123,13 +123,12 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	mysqlPort := int32(3300 + uid)
 	tablet := &topodatapb.Tablet{
 		Alias:    &topodatapb.TabletAlias{Cell: cell, Uid: uid},
-		Hostname: fmt.Sprintf("%vhost", cell),
+		Hostname: fmt.Sprintf("%v.%d", cell, uid),
 		PortMap: map[string]int32{
 			"vt":    int32(8100 + uid),
 			"mysql": mysqlPort,
 			"grpc":  int32(8200 + uid),
 		},
-		Ip:       fmt.Sprintf("%v.0.0.1", 100+uid),
 		Keyspace: "test_keyspace",
 		Shard:    "0",
 		Type:     tabletType,

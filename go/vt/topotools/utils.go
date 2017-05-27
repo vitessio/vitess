@@ -30,10 +30,10 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// FindTabletByIPAddrAndPort searches within a tablet map for tablets
-func FindTabletByIPAddrAndPort(tabletMap map[string]*topo.TabletInfo, addr, portName string, port int32) (*topodatapb.TabletAlias, error) {
+// FindTabletByHostAndPort searches within a tablet map for tablets.
+func FindTabletByHostAndPort(tabletMap map[string]*topo.TabletInfo, addr, portName string, port int32) (*topodatapb.TabletAlias, error) {
 	for _, ti := range tabletMap {
-		if ti.Ip == addr && ti.PortMap[portName] == port {
+		if ti.Hostname == addr && ti.PortMap[portName] == port {
 			return ti.Alias, nil
 		}
 	}

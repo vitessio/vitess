@@ -72,33 +72,33 @@ func TestTabletExternallyReparented(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTabletMapForShardByCell should have worked but got: %v", err)
 	}
-	master, err := topotools.FindTabletByIPAddrAndPort(tabletMap, oldMaster.Tablet.Ip, "vt", oldMaster.Tablet.PortMap["vt"])
+	master, err := topotools.FindTabletByHostAndPort(tabletMap, oldMaster.Tablet.Hostname, "vt", oldMaster.Tablet.PortMap["vt"])
 	if err != nil || !topoproto.TabletAliasEqual(master, oldMaster.Tablet.Alias) {
-		t.Fatalf("FindTabletByIPAddrAndPort(master) failed: %v %v", err, master)
+		t.Fatalf("FindTabletByHostAndPort(master) failed: %v %v", err, master)
 	}
-	slave1, err := topotools.FindTabletByIPAddrAndPort(tabletMap, goodSlave1.Tablet.Ip, "vt", goodSlave1.Tablet.PortMap["vt"])
+	slave1, err := topotools.FindTabletByHostAndPort(tabletMap, goodSlave1.Tablet.Hostname, "vt", goodSlave1.Tablet.PortMap["vt"])
 	if err != nil || !topoproto.TabletAliasEqual(slave1, goodSlave1.Tablet.Alias) {
-		t.Fatalf("FindTabletByIPAddrAndPort(slave1) failed: %v %v", err, master)
+		t.Fatalf("FindTabletByHostAndPort(slave1) failed: %v %v", err, master)
 	}
-	slave2, err := topotools.FindTabletByIPAddrAndPort(tabletMap, goodSlave2.Tablet.Ip, "vt", goodSlave2.Tablet.PortMap["vt"])
+	slave2, err := topotools.FindTabletByHostAndPort(tabletMap, goodSlave2.Tablet.Hostname, "vt", goodSlave2.Tablet.PortMap["vt"])
 	if err != topo.ErrNoNode {
-		t.Fatalf("FindTabletByIPAddrAndPort(slave2) worked: %v %v", err, slave2)
+		t.Fatalf("FindTabletByHostAndPort(slave2) worked: %v %v", err, slave2)
 	}
 
 	// Make sure the master is not exported in other cells
 	tabletMap, err = ts.GetTabletMapForShardByCell(ctx, "test_keyspace", "0", []string{"cell2"})
-	master, err = topotools.FindTabletByIPAddrAndPort(tabletMap, oldMaster.Tablet.Ip, "vt", oldMaster.Tablet.PortMap["vt"])
+	master, err = topotools.FindTabletByHostAndPort(tabletMap, oldMaster.Tablet.Hostname, "vt", oldMaster.Tablet.PortMap["vt"])
 	if err != topo.ErrNoNode {
-		t.Fatalf("FindTabletByIPAddrAndPort(master) worked in cell2: %v %v", err, master)
+		t.Fatalf("FindTabletByHostAndPort(master) worked in cell2: %v %v", err, master)
 	}
 
 	tabletMap, err = ts.GetTabletMapForShard(ctx, "test_keyspace", "0")
 	if err != topo.ErrPartialResult {
 		t.Fatalf("GetTabletMapForShard should have returned ErrPartialResult but got: %v", err)
 	}
-	master, err = topotools.FindTabletByIPAddrAndPort(tabletMap, oldMaster.Tablet.Ip, "vt", oldMaster.Tablet.PortMap["vt"])
+	master, err = topotools.FindTabletByHostAndPort(tabletMap, oldMaster.Tablet.Hostname, "vt", oldMaster.Tablet.PortMap["vt"])
 	if err != nil || !topoproto.TabletAliasEqual(master, oldMaster.Tablet.Alias) {
-		t.Fatalf("FindTabletByIPAddrAndPort(master) failed: %v %v", err, master)
+		t.Fatalf("FindTabletByHostAndPort(master) failed: %v %v", err, master)
 	}
 
 	// On the elected master, we will respond to

@@ -67,36 +67,19 @@ func ChangeType(ctx context.Context, ts topo.Server, tabletAlias *topodatapb.Tab
 	})
 }
 
-// ChangeOwnType is like ChangeType, except it fails if you no longer own the
-// tablet record, as determined by CheckOwnership().
-//
-// Note that oldTablet is only used for its Alias, and to call CheckOwnership().
-// Other fields in oldTablet have no effect on the update, which will read the
-// latest tablet record before setting the type (just like ChangeType() does).
-//
-// If successful, the updated tablet record is returned.
-func ChangeOwnType(ctx context.Context, ts topo.Server, oldTablet *topodatapb.Tablet, newType topodatapb.TabletType) (*topodatapb.Tablet, error) {
-	return ts.UpdateTabletFields(ctx, oldTablet.Alias, func(tablet *topodatapb.Tablet) error {
-		if err := CheckOwnership(oldTablet, tablet); err != nil {
-			return err
-		}
-		tablet.Type = newType
-		return nil
-	})
-}
-
-// CheckOwnership returns nil iff the IP and port match on oldTablet and
+// CheckOwnership returns nil iff the Hostname and port match on oldTablet and
 // newTablet, which implies that no other tablet process has taken over the
 // record.
 func CheckOwnership(oldTablet, newTablet *topodatapb.Tablet) error {
 	if oldTablet == nil || newTablet == nil {
 		return errors.New("unable to verify ownership of tablet record")
 	}
-	if oldTablet.Ip != newTablet.Ip || oldTablet.PortMap["vt"] != newTablet.PortMap["vt"] {
+	fmt.Printf("Comparing:\n%v\n%v\n", oldTablet, newTablet)
+	if oldTablet.Hostname != newTablet.Hostname || oldTablet.PortMap["vt"] != newTablet.PortMap["vt"] {
 		return fmt.Errorf(
 			"tablet record was taken over by another process: "+
 				"my address is %v:%v, but record is owned by %v:%v",
-			oldTablet.Ip, oldTablet.PortMap["vt"], newTablet.Ip, newTablet.PortMap["vt"])
+			oldTablet.Hostname, oldTablet.PortMap["vt"], newTablet.Hostname, newTablet.PortMap["vt"])
 	}
 	return nil
 }

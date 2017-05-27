@@ -145,7 +145,6 @@ func createTestAgent(ctx context.Context, t *testing.T, preStart func(*ActionAge
 		PortMap: map[string]int32{
 			"vt": port,
 		},
-		Ip:       "1.0.0.1",
 		Keyspace: "test_keyspace",
 		Shard:    "0",
 		Type:     topodatapb.TabletType_REPLICA,
