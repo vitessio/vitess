@@ -16,6 +16,13 @@
 
 package io.vitess.jdbc;
 
+import java.io.IOException;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
+
 import io.vitess.client.Context;
 import io.vitess.client.RpcClient;
 import io.vitess.client.VTGateConn;
@@ -24,12 +31,6 @@ import io.vitess.client.grpc.RetryingInterceptorConfig;
 import io.vitess.client.grpc.tls.TlsOptions;
 import io.vitess.util.CommonUtils;
 import io.vitess.util.Constants;
-import java.io.IOException;
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Created by naveen.nahata on 24/02/16.
@@ -56,7 +57,7 @@ public class VitessVTGateManager {
          */
         public VTGateConnections(VitessConnection connection) {
             for (VitessJDBCUrl.HostInfo hostInfo : connection.getUrl().getHostInfos()) {
-                String identifier = getIdentifer(hostInfo.getHostname(), hostInfo.getPort(), connection.getUsername());
+                String identifier = getIdentifer(hostInfo.getHostname(), hostInfo.getPort(), connection.getUsername(), connection.getKeyspace());
                 synchronized (VitessVTGateManager.class) {
                     if (!vtGateConnHashMap.containsKey(identifier)) {
                         updateVtGateConnHashMap(identifier, hostInfo, connection);
@@ -81,8 +82,8 @@ public class VitessVTGateManager {
 
     }
 
-    private static String getIdentifer(String hostname, int port, String userIdentifer) {
-        return (hostname + port + userIdentifer);
+    private static String getIdentifer(String hostname, int port, String userIdentifer, String keyspace) {
+        return (hostname + port + userIdentifer + keyspace);
     }
 
     /**
