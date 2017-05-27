@@ -159,7 +159,6 @@ func TestAPI(t *testing.T) {
 		{"GET", "tablets/cell1-100", "", `{
 				"alias": {"cell": "cell1", "uid": 100},
 				"hostname": "",
-				"ip": "",
 				"port_map": {"vt": 100},
 				"keyspace": "ks1",
 				"shard": "-80",
