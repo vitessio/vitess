@@ -24,10 +24,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
-// A builder is used to build a primitive. The top-level
-// builder will be a tree that points to other builders.
-// Each builder builds an engine.Primitive.
-// The primitives themselves will mirror the same tree.
+// builder defines the interface that a primitive must
+// satisfy.
 type builder interface {
 	// Symtab returns the associated symtab.
 	Symtab() *symtab
@@ -37,11 +35,11 @@ type builder interface {
 	SetSymtab(*symtab)
 
 	// MaxOrder must return the order number of the
-	// highest route within the current sub-tree.
-	// The routes are numbered by their execution order.
+	// highest columnOriginator within the current sub-tree.
+	// The originators are numbered by their execution order.
 	// When two trees are brought together into a join,
 	// the MaxOrder from the left is used as starting point
-	// to renumber the routes on the right. Execution order
+	// to renumber the originators on the right. Execution order
 	// always goes from left to right. A node that contains
 	// sub-nodes (like a join), can cache these values
 	// and use them for efficient b-tree style traversal.
@@ -53,20 +51,23 @@ type builder interface {
 	// Primitve returns the underlying primitive.
 	Primitive() engine.Primitive
 
-	// Leftmost returns the leftmost route.
-	Leftmost() *route
+	// Leftmost returns the leftmost columnOriginator.
+	Leftmost() columnOriginator
+
+	// ResultColumns returns the list of result columns the
+	// primitive returns
+	ResultColumns() []*resultColumn
 
 	// PushFilter pushes the a WHERE or HAVING clause expression
 	// to the specified route.
 	PushFilter(filter sqlparser.Expr, whereType string, rb *route) error
 
-	// PushSelect pushes the select expression through the tree
-	// all the way to the route that resultColumn points to.
-	// PushSelect is similar to SupplyCol except that it always
-	// adds a new column, whereas SupplyCol can reuse an existing
-	// column. The function must return a resultColumn for the expression
-	// and the column number of the result.
-	PushSelect(expr *sqlparser.AliasedExpr, rb *route) (rc *resultColumn, colnum int, err error)
+	// PushSelect pushes the select expression to the specified
+	// originator. If successful, the originator must create
+	// a resultColumn entry and return it. The top level caller
+	// must accumulate these result columns and set the symtab
+	// after analysis.
+	PushSelect(expr *sqlparser.AliasedExpr, origin columnOriginator) (rc *resultColumn, colnum int, err error)
 
 	// PushOrderBy pushes the ORDER BY clause down to the route.
 	PushOrderBy(order *sqlparser.Order, rb *route) error
@@ -77,7 +78,6 @@ type builder interface {
 	PushOrderByNull()
 
 	// PushMisc pushes miscelleaneous constructs to all the routes.
-	// This should not propagate to subqueries.
 	PushMisc(sel *sqlparser.Select)
 
 	// Wireup performs the wire-up work. Nodes should be traversed
@@ -89,11 +89,20 @@ type builder interface {
 	// the common root, it supplies the requested var to the rhs tree.
 	SupplyVar(from, to int, col *sqlparser.ColName, varname string)
 
-	// SupplyCol will be used for the wire-up process. This function
+	// SupplyCol is meant to be used for the wire-up process. This function
 	// changes the primitive to supply the requested column and returns
-	// the resultColumn and column number of the result.
-	// The request is passed down recursively as needed.
+	// the resultColumn and column number of the result. SupplyCol
+	// is different from PushSelect because it may reuse an existing
+	// resultColumn, whereas PushSelect guarantees the addition of a new
+	// result column and returns a distinct symbol for it.
 	SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int)
+}
+
+// columnOriginator is a builder that originates
+// column symbols. It can be a route or a subquery.
+type columnOriginator interface {
+	builder
+	Order() int
 }
 
 // VSchema defines the interface for this package to fetch

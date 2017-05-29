@@ -882,6 +882,7 @@ func TestSimpleJoin(t *testing.T) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
+
 func TestJoinComments(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	_, err := executorExec(executor, "select u1.id, u2.id from user u1 join user u2 where u1.id = 1 and u2.id = 3 /* trailing */", nil)
@@ -968,10 +969,6 @@ func TestVarJoin(t *testing.T) {
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
-	wantQueries = []querytypes.BoundQuery{{
-		Sql:           "select u2.id from user as u2 where u2.id = :u1_col",
-		BindVariables: map[string]interface{}{},
-	}}
 	// We have to use string representation because bindvars type is too complex.
 	got := fmt.Sprintf("%+v", sbc2.Queries)
 	want := "[{Sql:select u2.id from user as u2 where u2.id = :u1_col BindVariables:map[u1_col:3]}]"
@@ -1365,5 +1362,140 @@ func TestJoinErrors(t *testing.T) {
 	want = "INVALID_ARGUMENT error"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
+	}
+}
+
+func TestCrossShardSubquery(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	result1 := []*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
+		},
+		RowsAffected: 1,
+		InsertID:     0,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+		}},
+	}}
+	sbc1.SetResults(result1)
+	result, err := executorExec(executor, "select id1 from (select u1.id id1, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1) as t", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           "select u1.id as id1, u1.col from user as u1 where u1.id = 1",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	// We have to use string representation because bindvars type is too complex.
+	got := fmt.Sprintf("%+v", sbc2.Queries)
+	want := "[{Sql:select u2.id from user as u2 where u2.id = :u1_col BindVariables:map[u1_col:3]}]"
+	if got != want {
+		t.Errorf("sbc2.Queries: %s, want %s\n", got, want)
+	}
+
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+		}},
+	}
+	if !result.Equal(wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+}
+
+func TestCrossShardSubqueryStream(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	result1 := []*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
+		},
+		RowsAffected: 1,
+		InsertID:     0,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+		}},
+	}}
+	sbc1.SetResults(result1)
+	result, err := executorStream(executor, "select id1 from (select u1.id id1, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1) as t")
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           "select u1.id as id1, u1.col from user as u1 where u1.id = 1",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	// We have to use string representation because bindvars type is too complex.
+	got := fmt.Sprintf("%+v", sbc2.Queries)
+	want := "[{Sql:select u2.id from user as u2 where u2.id = :u1_col BindVariables:map[u1_col:3]}]"
+	if got != want {
+		t.Errorf("sbc2.Queries: %s, want %s\n", got, want)
+	}
+
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+		}},
+	}
+	if !result.Equal(wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+}
+
+func TestCrossShardSubqueryGetFields(t *testing.T) {
+	executor, sbc1, _, sbclookup := createExecutorEnv()
+	sbclookup.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "col", Type: sqltypes.Int32},
+		},
+	}})
+	result1 := []*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
+		},
+	}}
+	sbc1.SetResults(result1)
+	result, err := executorExec(executor, "select main1.col, t.id1 from main1 join (select u1.id id1, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1) as t", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           "select u1.id as id1, u1.col from user as u1 where 1 != 1",
+		BindVariables: map[string]interface{}{},
+	}, {
+		Sql: "select u2.id from user as u2 where 1 != 1",
+		BindVariables: map[string]interface{}{
+			"u1_col": nil,
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "col", Type: sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
+		},
+	}
+	if !result.Equal(wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }

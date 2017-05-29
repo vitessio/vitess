@@ -35,13 +35,9 @@
 "select * from user where id in (select * from user union select * from user_extra)"
 "unsupported: UNION on multi-shard queries"
 
-# subquery with join primitive (FROM)
-"select * from (select user.id from user join user_extra) as t"
-"unsupported: complex join in subqueries"
-
 # subquery with join primitive (expressions)
 "select * from user where id in (select user.id from user join user_extra)"
-"unsupported: complex join in subqueries"
+"unsupported: cross-shard join in subqueries"
 
 # subquery keyspace different from outer query
 "select * from user where id in (select m from unsharded)"
@@ -58,6 +54,22 @@
 # subquery does not depend on scatter outer query
 "select id from user where id in (select user_id from user_extra where user_extra.user_id = 4)"
 "unsupported: subquery does not depend on scatter outer query"
+
+# subquery depends on a cross-shard subquery
+"select id from (select user.id, user.col from user join user_extra) as t where id in (select t.col from user)"
+"unsupported: subquery cannot be merged with cross-shard subquery"
+
+# order by on a cross-shard subquery
+"select id from (select user.id, user.col from user join user_extra) as t order by id"
+"unsupported: cannot order by on a cross-shard subquery"
+
+# filtering on a cross-shard subquery
+"select id from (select user.id, user.col from user join user_extra) as t where id=5"
+"unsupported: filtering on results of a cross-shard subquery"
+
+# expression on a cross-shard subquery
+"select id+1 from (select user.id, user.col from user join user_extra) as t"
+"unsupported: expression on results of a cross-shard subquery"
 
 # subquery and outer query route to different shards
 "select id from user where id = 5 and id in (select user_id from user_extra where user_extra.user_id = 4)"
@@ -93,19 +105,19 @@
 
 # left join with expressions
 "select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col"
-"unsupported: complex left join and column expressions"
+"unsupported: cross-shard left join and column expressions"
 
 # left join with expressions, with three-way join (different code path)
 "select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col join user_extra e"
-"unsupported: complex left join and column expressions"
+"unsupported: cross-shard left join and column expressions"
 
 # left join where clauses
 "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.col = 5"
-"unsupported: complex left join and where clause"
+"unsupported: cross-shard left join and where clause"
 
-# * expresson not allowed for complex joins
+# * expresson not allowed for cross-shard joins
 "select * from user join user_extra"
-"unsupported: '*' expression in complex join"
+"unsupported: '*' expression in cross-shard join"
 
 # Aggregate on sharded with colvindex
 "select count(*), id from user"
@@ -113,7 +125,7 @@
 
 # Aggregates and joins
 "select count(*) from user join user_extra"
-"unsupported: complex join with aggregates"
+"unsupported: cross-shard join with aggregates"
 
 # Aggregates and scatter
 "select count(*) from user"
@@ -121,11 +133,11 @@
 
 # group by and joins
 "select user.id from user join user_extra group by id"
-"unsupported: complex join with aggregates"
+"unsupported: cross-shard join with aggregates"
 
 # group by and ',' joins
 "select user.id from user, user_extra group by id"
-"unsupported: complex join with aggregates"
+"unsupported: cross-shard join with aggregates"
 
 # Group by and scatter
 "select col from user group by col"
@@ -143,11 +155,11 @@
 "select (select * from information_schema.a) from unsharded"
 "unsupported: intermixing of information_schema and regular tables"
 
-# Order by uses complex expression
+# Order by uses cross-shard expression
 "select id from user order by id+1"
 "unsupported: scatter and order by"
 
-# Order by for join, but sequce is too complex
+# Order by for join, but sequce is too cross-shard
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 3 desc, 2 asc"
 "unsupported: order by spans across shards"
 
@@ -163,13 +175,13 @@
 "select user.col1 as a from user order by 1 collate utf8_general_ci"
 "unsupported: scatter and order by"
 
-#Order by for join, but order by is complex
+#Order by for join, but order by is cross-shard
 "select user.col1 as a, user_extra.col2 as b from user join user_extra on user_extra.user_id = 5 where user.id = 5 order by a+b"
 "unsupported: order by spans across shards"
 
 # limit for joins
 "select user.col from user join user_extra limit 1"
-"unsupported: limits with complex joins"
+"unsupported: limits with cross-shard joins"
 
 # limit for scatter
 "select col from user limit 1"
@@ -247,7 +259,7 @@
 "update music set id = 1 where id = 1"
 "unsupported: DML cannot change vindex column"
 
-# complex update tables
+# cross-shard update tables
 "update (select id from user) as u set id = 4"
 "unsupported: subqueries in DML"
 
@@ -263,13 +275,13 @@
 "insert into unsharded select 1 from dual union select 1 from dual"
 "unsupported: union in insert"
 
-# unsharded insert with complex select
+# unsharded insert with cross-shard select
 "insert into unsharded select col from user limit 1"
 "unsupported: limits with scatter"
 
-# unsharded insert with complex join"
+# unsharded insert with cross-shard join"
 "insert into unsharded select u.col from user u join user u1"
-"unsupported: complex join in insert"
+"unsupported: cross-shard join in insert"
 
 # unsharded insert with mismatched keyspaces"
 "insert into unsharded select col from user where id=1"
@@ -335,11 +347,11 @@
 "replace into user(id) values (1), (2)"
 "unsupported: REPLACE INTO with sharded schema"
 
-# complex expression in parenthesis with limit not supported yet
+# cross-shard expression in parenthesis with limit not supported yet
 "select * from user where (id = 4 AND name ='abc') limit 5"
 "unsupported: limits with scatter"
 
-# complex expression in parenthesis with order by not supported yet
+# cross-shard expression in parenthesis with order by not supported yet
 "select * from user where (id = 4 AND name ='abc') order by id"
 "unsupported: scatter and order by"
 

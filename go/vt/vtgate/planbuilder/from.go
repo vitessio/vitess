@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -93,7 +92,10 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 			if !tableExpr.As.IsEmpty() {
 				alias = sqlparser.TableName{Name: tableExpr.As}
 			}
-			rb.symtab.InitWithAlias(alias, table, rb)
+			if err := rb.symtab.AddVindexTable(alias, table, rb); err != nil {
+				// unreachable: since the symtab is empty, the function should not fail.
+				panic(err)
+			}
 		}
 		return rb, nil
 	case *sqlparser.Subquery:
@@ -110,14 +112,20 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 		if err != nil {
 			return nil, err
 		}
+
 		subroute, ok := subplan.(*route)
 		if !ok {
-			return nil, errors.New("unsupported: complex join in subqueries")
+			return newSubquery(tableExpr.As, subplan, vschema), nil
 		}
+
+		// Since a route is more versatile than a subquery, we
+		// build a route primitive that has the subquery in its
+		// FROM clause. This allows for other constructs to be
+		// later pushed into it.
 		table := &vindexes.Table{
 			Keyspace: subroute.ERoute.Keyspace,
 		}
-		for _, rc := range subroute.ResultColumns {
+		for _, rc := range subroute.ResultColumns() {
 			if rc.column.Vindex == nil {
 				continue
 			}
@@ -138,7 +146,10 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 			subroute.ERoute,
 			vschema,
 		)
-		rb.symtab.InitWithAlias(sqlparser.TableName{Name: tableExpr.As}, table, rb)
+		if err := rb.symtab.AddVindexTable(sqlparser.TableName{Name: tableExpr.As}, table, rb); err != nil {
+			// unreachable: since the symtab is empty, the function should not fail.
+			panic(err)
+		}
 		subroute.Redirect = rb
 		return rb, nil
 	}

@@ -84,9 +84,13 @@ func pushFilter(boolExpr sqlparser.Expr, bldr builder, whereType string) error {
 	filters := splitAndExpression(nil, boolExpr)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
-		rb, err := findRoute(filter, bldr)
+		origin, err := findOrigin(filter, bldr)
 		if err != nil {
 			return err
+		}
+		rb, ok := origin.(*route)
+		if !ok {
+			return errors.New("unsupported: filtering on results of a cross-shard subquery")
 		}
 		if err := bldr.PushFilter(filter, whereType, rb); err != nil {
 			return err
@@ -174,7 +178,7 @@ func checkAggregates(sel *sqlparser.Select, bldr builder) error {
 		return nil
 	}
 	if hasAggregates && !isRoute {
-		return errors.New("unsupported: complex join with aggregates")
+		return errors.New("unsupported: cross-shard join with aggregates")
 	}
 
 	// It's a scatter rb. If group by has a unique vindex, then
@@ -209,11 +213,11 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*resul
 	for i, node := range selectExprs {
 		switch node := node.(type) {
 		case *sqlparser.AliasedExpr:
-			rb, err := findRoute(node.Expr, bldr)
+			origin, err := findOrigin(node.Expr, bldr)
 			if err != nil {
 				return nil, err
 			}
-			resultColumns[i], _, err = bldr.PushSelect(node, rb)
+			resultColumns[i], _, err = bldr.PushSelect(node, origin)
 			if err != nil {
 				return nil, err
 			}
@@ -221,7 +225,7 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*resul
 			// We'll allow select * for simple routes.
 			rb, ok := bldr.(*route)
 			if !ok {
-				return nil, errors.New("unsupported: '*' expression in complex join")
+				return nil, errors.New("unsupported: '*' expression in cross-shard join")
 			}
 			// Validate keyspace reference if any.
 			if !node.TableName.IsEmpty() {
@@ -236,7 +240,7 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*resul
 			rb, ok := bldr.(*route)
 			if !ok {
 				// This code is unreachable because the parser doesn't allow joins for next val statements.
-				return nil, errors.New("unsupported: SELECT NEXT query in complex join")
+				return nil, errors.New("unsupported: SELECT NEXT query in cross-shard join")
 			}
 			if err := rb.SetOpcode(engine.SelectNext); err != nil {
 				return nil, err

@@ -24,6 +24,9 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
+var _ builder = (*route)(nil)
+var _ columnOriginator = (*route)(nil)
+
 var errIntermixingUnsupported = errors.New("unsupported: intermixing of information_schema and regular tables")
 
 // route is used to build a Route primitive.
@@ -33,7 +36,7 @@ var errIntermixingUnsupported = errors.New("unsupported: intermixing of informat
 // the final SQL for this route.
 type route struct {
 	symtab *symtab
-	Order  int
+	order  int
 
 	// Redirect may point to another route if this route
 	// was merged with it. The Resolve function chases
@@ -44,8 +47,8 @@ type route struct {
 	// executed by this route.
 	Select sqlparser.SelectStatement
 
-	// ResultColumns represent the columns returned by this route.
-	ResultColumns []*resultColumn
+	// resultColumns represent the columns returned by this route.
+	resultColumns []*resultColumn
 
 	// ERoute is the primitive being built.
 	ERoute *engine.Route
@@ -54,7 +57,7 @@ type route struct {
 func newRoute(stmt sqlparser.SelectStatement, eroute *engine.Route, vschema VSchema) *route {
 	rb := &route{
 		Select: stmt,
-		Order:  1,
+		order:  1,
 		ERoute: eroute,
 	}
 	rb.symtab = newSymtab(vschema, rb)
@@ -80,14 +83,19 @@ func (rb *route) SetSymtab(symtab *symtab) {
 	rb.symtab = symtab
 }
 
+// Order returns the order of the route.
+func (rb *route) Order() int {
+	return rb.order
+}
+
 // MaxOrder returns the max order of the node.
 func (rb *route) MaxOrder() int {
-	return rb.Order
+	return rb.order
 }
 
 // SetOrder sets the order to one above the specified number.
 func (rb *route) SetOrder(order int) {
-	rb.Order = order + 1
+	rb.order = order + 1
 }
 
 // Primitve returns the built primitive.
@@ -96,8 +104,13 @@ func (rb *route) Primitive() engine.Primitive {
 }
 
 // Leftmost returns the current route.
-func (rb *route) Leftmost() *route {
+func (rb *route) Leftmost() columnOriginator {
 	return rb
+}
+
+// ResultColumns returns the result columns.
+func (rb *route) ResultColumns() []*resultColumn {
+	return rb.resultColumns
 }
 
 // Join joins with the RHS. This could produce a merged route
@@ -176,7 +189,7 @@ func (rb *route) merge(rhs *route, ajoin *sqlparser.JoinTableExpr) (builder, err
 	for _, filter := range splitAndExpression(nil, ajoin.On) {
 		// If VTGate evolves, this section should be rewritten
 		// to use processExpr.
-		_, err = findRoute(filter, rb)
+		_, err = findOrigin(filter, rb)
 		if err != nil {
 			return nil, err
 		}
@@ -217,7 +230,7 @@ func (rb *route) isSameRoute(rhs *route, filter sqlparser.Expr) bool {
 }
 
 // PushFilter pushes the filter into the route. The primitive will
-// be updated if the new filter improves it.
+// be updated if the new filter improves the plan.
 func (rb *route) PushFilter(filter sqlparser.Expr, whereType string, _ *route) error {
 	sel := rb.Select.(*sqlparser.Select)
 	switch whereType {
@@ -278,7 +291,7 @@ func (rb *route) updateRoute(opcode engine.RouteOpcode, vindex vindexes.Vindex, 
 	rb.ERoute.Values = values
 }
 
-// ComputePlan computes the plan for the specified filter.
+// computePlan computes the plan for the specified filter.
 func (rb *route) computePlan(filter sqlparser.Expr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, values interface{}) {
 	switch node := filter.(type) {
 	case *sqlparser.ComparisonExpr:
@@ -339,20 +352,20 @@ func (rb *route) computeINPlan(comparison *sqlparser.ComparisonExpr) (opcode eng
 // for the route. External references are treated as value.
 func (rb *route) exprIsValue(expr sqlparser.Expr) bool {
 	if node, ok := expr.(*sqlparser.ColName); ok {
-		return node.Metadata.(*column).Route() != rb
+		return node.Metadata.(*column).Origin() != rb
 	}
 	return sqlparser.IsValue(expr)
 }
 
 // PushSelect pushes the select expression into the route.
-func (rb *route) PushSelect(expr *sqlparser.AliasedExpr, _ *route) (rc *resultColumn, colnum int, err error) {
+func (rb *route) PushSelect(expr *sqlparser.AliasedExpr, _ columnOriginator) (rc *resultColumn, colnum int, err error) {
 	sel := rb.Select.(*sqlparser.Select)
 	sel.SelectExprs = append(sel.SelectExprs, expr)
 
 	rc = rb.Symtab().NewResultColumn(expr, rb)
-	rb.ResultColumns = append(rb.ResultColumns, rc)
+	rb.resultColumns = append(rb.resultColumns, rc)
 
-	return rc, len(rb.ResultColumns) - 1, nil
+	return rc, len(rb.resultColumns) - 1, nil
 }
 
 // PushAnonymous pushes an anonymous expression like '*' or NEXT VALUES
@@ -364,8 +377,8 @@ func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *resultColumn {
 
 	// We just create a place-holder resultColumn. It won't
 	// match anything.
-	rc := &resultColumn{column: &column{route: rb}}
-	rb.ResultColumns = append(rb.ResultColumns, rc)
+	rc := &resultColumn{column: &column{origin: rb}}
+	rb.resultColumns = append(rb.resultColumns, rc)
 
 	return rc
 }
@@ -448,7 +461,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
 			if !rb.isLocal(node) {
-				joinVar := jt.Procure(bldr, node, rb.Order)
+				joinVar := jt.Procure(bldr, node, rb.Order())
 				rb.ERoute.JoinVars[joinVar] = struct{}{}
 				buf.Myprintf("%a", ":"+joinVar)
 				return
@@ -485,7 +498,7 @@ func (rb *route) procureValues(bldr builder, jt *jointab, val interface{}) (inte
 		}
 		return vals, nil
 	case *sqlparser.ColName:
-		joinVar := jt.Procure(bldr, val, rb.Order)
+		joinVar := jt.Procure(bldr, val, rb.Order())
 		rb.ERoute.JoinVars[joinVar] = struct{}{}
 		return ":" + joinVar, nil
 	case sqlparser.ListArg:
@@ -497,7 +510,7 @@ func (rb *route) procureValues(bldr builder, jt *jointab, val interface{}) (inte
 }
 
 func (rb *route) isLocal(col *sqlparser.ColName) bool {
-	return col.Metadata.(*column).Route() == rb
+	return col.Metadata.(*column).Origin() == rb
 }
 
 // generateFieldQuery generates a query with an impossible where.
@@ -532,20 +545,20 @@ func (rb *route) SupplyVar(from, to int, col *sqlparser.ColName, varname string)
 // SupplyCol changes the executor to supply the requested column
 // name, and returns the result column number. If the column
 // is already in the list, it's reused.
-func (rb *route) SupplyCol(col *sqlparser.ColName) (rs *resultColumn, colnum int) {
+func (rb *route) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int) {
 	c := col.Metadata.(*column)
-	for i, rs := range rb.ResultColumns {
-		if rs.column == c {
-			return rs, i
+	for i, rc := range rb.resultColumns {
+		if rc.column == c {
+			return rc, i
 		}
 	}
 
 	// A new result has to be returned.
-	rs = &resultColumn{column: c}
-	rb.ResultColumns = append(rb.ResultColumns, rs)
+	rc = &resultColumn{column: c}
+	rb.resultColumns = append(rb.resultColumns, rc)
 	sel := rb.Select.(*sqlparser.Select)
 	sel.SelectExprs = append(sel.SelectExprs, &sqlparser.AliasedExpr{Expr: col})
-	return rs, len(rb.ResultColumns) - 1
+	return rc, len(rb.resultColumns) - 1
 }
 
 // IsSingle returns true if the route targets only one database.

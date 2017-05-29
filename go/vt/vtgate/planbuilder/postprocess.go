@@ -55,12 +55,10 @@ func pushGroupBy(groupBy sqlparser.GroupBy, bldr builder) error {
 	return nil
 }
 
-// pushOrderBy pushes the order by clause to the appropriate routes.
-// In the case of a join, this is allowed only if the order by columns
-// match the join order. Otherwise, it's an error.
-// If column numbers were used to reference the columns, those numbers
-// are readjusted on push-down to match the numbers of the individual
-// queries.
+// pushOrderBy pushes the order by clause to the appropriate route.
+// In the case of a join, it's only possible to push down if the
+// order by references columns of the left-most route. Otherwise, the
+// function returns an unsupported error.
 func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 	switch len(orderBy) {
 	case 0:
@@ -73,9 +71,10 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 		}
 	}
 
-	// ORDER BY can be pushed down only if it references columns from the
-	// lef-most route.
-	rb := bldr.Leftmost()
+	rb, ok := bldr.Leftmost().(*route)
+	if !ok {
+		return errors.New("unsupported: cannot order by on a cross-shard subquery")
+	}
 	for _, order := range orderBy {
 		if node, ok := order.Expr.(*sqlparser.SQLVal); ok && node.Type == sqlparser.IntVal {
 			// This block handles constructs that use ordinals for 'ORDER BY'. For example:
@@ -87,7 +86,7 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 			if num < 1 || num > int64(len(bldr.Symtab().ResultColumns)) {
 				return errors.New("order by column number out of range")
 			}
-			target := bldr.Symtab().ResultColumns[num-1].column.Route()
+			target := bldr.Symtab().ResultColumns[num-1].column.Origin()
 			if target != rb {
 				return errors.New("unsupported: order by spans across shards")
 			}
@@ -131,7 +130,7 @@ func pushLimit(limit *sqlparser.Limit, bldr builder) error {
 	}
 	rb, ok := bldr.(*route)
 	if !ok {
-		return errors.New("unsupported: limits with complex joins")
+		return errors.New("unsupported: limits with cross-shard joins")
 	}
 	if !rb.IsSingle() {
 		return errors.New("unsupported: limits with scatter")

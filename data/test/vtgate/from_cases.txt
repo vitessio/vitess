@@ -864,6 +864,161 @@
   }
 }
 
+# wire-up on join with cross-shard subquery
+"select t.col1 from (select user.id, user.col1 from user join user_extra) as t join unsharded on unsharded.col1 = t.col1 and unsharded.id = t.id"
+{
+  "Original": "select t.col1 from (select user.id, user.col1 from user join user_extra) as t join unsharded on unsharded.col1 = t.col1 and unsharded.id = t.id",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Cols": [
+        1,
+        0
+      ],
+      "Subquery": {
+        "Opcode": "Join",
+        "Left": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "Query": "select user.id, user.col1 from user",
+          "FieldQuery": "select user.id, user.col1 from user where 1 != 1"
+        },
+        "Right": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "Query": "select 1 from user_extra",
+          "FieldQuery": "select 1 from user_extra where 1 != 1"
+        },
+        "Cols": [
+          -1,
+          -2
+        ]
+      }
+    },
+    "Right": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select 1 from unsharded where unsharded.col1 = :t_col1 and unsharded.id = :t_id",
+      "FieldQuery": "select 1 from unsharded where 1 != 1",
+      "JoinVars": {
+        "t_col1": {},
+        "t_id": {}
+      }
+    },
+    "Cols": [
+      -1
+    ],
+    "Vars": {
+      "t_col1": 0,
+      "t_id": 1
+    }
+  }
+}
+
+# wire-up on within cross-shard subquery
+"select t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t"
+{
+  "Original": "select t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t",
+  "Instructions": {
+    "Cols": [
+      0
+    ],
+    "Subquery": {
+      "Opcode": "Join",
+      "Left": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select user.id, user.col1, user.col from user",
+        "FieldQuery": "select user.id, user.col1, user.col from user where 1 != 1"
+      },
+      "Right": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select 1 from user_extra where user_extra.col = :user_col",
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "JoinVars": {
+          "user_col": {}
+        }
+      },
+      "Cols": [
+        -1,
+        -2
+      ],
+      "Vars": {
+        "user_col": 2
+      }
+    }
+  }
+}
+
+
+# Join with cross-shard subquery on rhs
+"select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t"
+{
+  "Original": "select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select 1 from unsharded_a as ua",
+      "FieldQuery": "select 1 from unsharded_a as ua where 1 != 1"
+    },
+    "Right": {
+      "Cols": [
+        1
+      ],
+      "Subquery": {
+        "Opcode": "Join",
+        "Left": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "Query": "select user.id, user.col1 from user",
+          "FieldQuery": "select user.id, user.col1 from user where 1 != 1"
+        },
+        "Right": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "Query": "select 1 from user_extra",
+          "FieldQuery": "select 1 from user_extra where 1 != 1"
+        },
+        "Cols": [
+          -1,
+          -2
+        ]
+      }
+    },
+    "Cols": [
+      1
+    ]
+  }
+}
+
+
 # keyspace-qualified queries
 "select user.user.col1, main.unsharded.col1 from user.user join main.unsharded where main.unsharded.col2 = user.user.col2"
 {
@@ -928,6 +1083,42 @@
     },
     "Query": "select user.col from user join user_extra on user.ID = user_extra.User_Id",
     "FieldQuery": "select user.col from user join user_extra on user.ID = user_extra.User_Id where 1 != 1"
+  }
+}
+
+# subquery with join primitive (FROM)
+"select id, t.id from (select user.id from user join user_extra) as t"
+{ 
+  "Original": "select id, t.id from (select user.id from user join user_extra) as t",
+  "Instructions": {
+    "Cols": [
+      0,
+      0
+    ],
+    "Subquery": {
+      "Opcode": "Join",
+      "Left": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select user.id from user",
+        "FieldQuery": "select user.id from user where 1 != 1"
+      },
+      "Right": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select 1 from user_extra",
+        "FieldQuery": "select 1 from user_extra where 1 != 1"
+      },
+      "Cols": [
+        -1
+      ]
+    }
   }
 }
 

@@ -1,3 +1,1 @@
-# subquery with join, duplicate columns
-"select t.id from (select user.id, id from user where user.id = 5) as t join user_extra on t.id = user_extra.user_id"
-"duplicate column aliases: id"
+# Add your test case here for debugging and run go test -run=One.

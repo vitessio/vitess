@@ -24,6 +24,8 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
+var _ Primitive = (*Join)(nil)
+
 // Join specifies the parameters for a join primitive.
 type Join struct {
 	Opcode JoinOpcode

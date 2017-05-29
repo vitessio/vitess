@@ -58,7 +58,7 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vsch
 		}
 		innerRoute, ok := bldr.(*route)
 		if !ok {
-			return nil, errors.New("unsupported: complex join in insert")
+			return nil, errors.New("unsupported: cross-shard join in insert")
 		}
 		if innerRoute.ERoute.Keyspace.Name != eRoute.Keyspace.Name {
 			return nil, errors.New("unsupported: cross-keyspace select in insert")
