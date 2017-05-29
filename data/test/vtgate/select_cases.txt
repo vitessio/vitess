@@ -317,21 +317,6 @@
   }
 }
 
-# Aggregate on sharded with colvindex
-"select count(*), id from user"
-{
-  "Original": "select count(*), id from user",
-  "Instructions": {
-    "Opcode": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "Query": "select count(*), id from user",
-    "FieldQuery": "select count(*), id from user where 1 != 1"
-  }
-}
-
 # Non-aggregate function on sharded with no colvindex
 "select fun(1), col from user"
 {

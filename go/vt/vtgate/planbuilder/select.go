@@ -88,8 +88,7 @@ func pushFilter(boolExpr sqlparser.Expr, bldr builder, whereType string) error {
 		if err != nil {
 			return err
 		}
-		err = rb.PushFilter(filter, whereType)
-		if err != nil {
+		if err := bldr.PushFilter(filter, whereType, rb); err != nil {
 			return err
 		}
 	}
@@ -144,6 +143,12 @@ func pushSelectExprs(sel *sqlparser.Select, bldr builder) error {
 // has aggregates that cannot be pushed down due to a complex
 // plan.
 func checkAggregates(sel *sqlparser.Select, bldr builder) error {
+	rb, isRoute := bldr.(*route)
+	if isRoute && rb.IsSingle() {
+		return nil
+	}
+
+	// Check if we can allow aggregates.
 	hasAggregates := false
 	if sel.Distinct != "" {
 		hasAggregates = true
@@ -162,26 +167,35 @@ func checkAggregates(sel *sqlparser.Select, bldr builder) error {
 			return true, nil
 		}, sel.SelectExprs)
 	}
+	if len(sel.GroupBy) > 0 {
+		hasAggregates = true
+	}
 	if !hasAggregates {
 		return nil
 	}
-
-	// Check if we can allow aggregates.
-	rb, ok := bldr.(*route)
-	if !ok {
+	if hasAggregates && !isRoute {
 		return errors.New("unsupported: complex join with aggregates")
 	}
-	if rb.IsSingle() {
-		return nil
+
+	// It's a scatter rb. If group by has a unique vindex, then
+	// the aggregate can be scattered.
+	for _, expr := range sel.GroupBy {
+		vindex := bldr.Symtab().Vindex(expr, rb)
+		if vindex != nil && vindexes.IsUnique(vindex) {
+			return nil
+		}
 	}
-	// It's a scatter rb. We can allow aggregates if there is a unique
-	// vindex in the select list.
-	for _, selectExpr := range sel.SelectExprs {
-		switch selectExpr := selectExpr.(type) {
-		case *sqlparser.AliasedExpr:
-			vindex := bldr.Symtab().Vindex(selectExpr.Expr, rb)
-			if vindex != nil && vindexes.IsUnique(vindex) {
-				return nil
+
+	// If there is a distinct clause, we can check the select list
+	// to see if it has a unique vindex reference.
+	if sel.Distinct != "" {
+		for _, selectExpr := range sel.SelectExprs {
+			switch selectExpr := selectExpr.(type) {
+			case *sqlparser.AliasedExpr:
+				vindex := bldr.Symtab().Vindex(selectExpr.Expr, rb)
+				if vindex != nil && vindexes.IsUnique(vindex) {
+					return nil
+				}
 			}
 		}
 	}

@@ -41,7 +41,7 @@ func processTableExprs(tableExprs sqlparser.TableExprs, vschema VSchema) (builde
 		if err != nil {
 			return nil, err
 		}
-		return lplan.Join(rplan, nil)
+		return joinBuilders(lplan, rplan, nil)
 	}
 	return processTableExpr(tableExprs[0], vschema)
 }
@@ -53,15 +53,11 @@ func processTableExpr(tableExpr sqlparser.TableExpr, vschema VSchema) (builder, 
 		return processAliasedTable(tableExpr, vschema)
 	case *sqlparser.ParenTableExpr:
 		bldr, err := processTableExprs(tableExpr.Exprs, vschema)
-		// We want to point to the higher level parenthesis because
-		// more routes can be merged with this one. If so, the order
-		// should be maintained as dictated by the parenthesis.
+		// If it's a route, re-parenthesize the FROM clause because
+		// more things can be pushed into it.
 		if rb, ok := bldr.(*route); ok {
-			// If a route is returned in this context, then we know that it only
-			// contains the from clause of a brand new, partially built Select.
-			// If there was a subquery, it would have been aliased to a name and the
-			// entire thing would still be the from clause of a partially built Select.
-			rb.Select.(*sqlparser.Select).From = sqlparser.TableExprs{tableExpr}
+			sel := rb.Select.(*sqlparser.Select)
+			sel.From = sqlparser.TableExprs{&sqlparser.ParenTableExpr{Exprs: sel.From}}
 		}
 		return bldr, err
 	case *sqlparser.JoinTableExpr:
@@ -190,7 +186,7 @@ func processJoin(ajoin *sqlparser.JoinTableExpr, vschema VSchema) (builder, erro
 	if err != nil {
 		return nil, err
 	}
-	return lplan.Join(rplan, ajoin)
+	return joinBuilders(lplan, rplan, ajoin)
 }
 
 // convertToLeftJoin converts a right join into a left join.
@@ -205,4 +201,17 @@ func convertToLeftJoin(ajoin *sqlparser.JoinTableExpr) {
 	}
 	ajoin.LeftExpr, ajoin.RightExpr = ajoin.RightExpr, newRHS
 	ajoin.Join = sqlparser.LeftJoinStr
+}
+
+func joinBuilders(left, right builder, ajoin *sqlparser.JoinTableExpr) (builder, error) {
+	lRoute, ok := left.(*route)
+	if !ok {
+		return newJoin(left, right, ajoin)
+	}
+	rRoute, ok := right.(*route)
+	if !ok {
+		return newJoin(left, right, ajoin)
+	}
+
+	return lRoute.Join(rRoute, ajoin)
 }

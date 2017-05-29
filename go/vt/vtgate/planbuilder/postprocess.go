@@ -22,7 +22,6 @@ import (
 	"strconv"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
 // This file has functions to analyze postprocessing
@@ -33,10 +32,6 @@ import (
 func pushGroupBy(groupBy sqlparser.GroupBy, bldr builder) error {
 	if groupBy == nil {
 		return nil
-	}
-	rb, ok := bldr.(*route)
-	if !ok {
-		return errors.New("unsupported: complex join and group by")
 	}
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
@@ -53,20 +48,11 @@ func pushGroupBy(groupBy sqlparser.GroupBy, bldr builder) error {
 	if err != nil {
 		return err
 	}
-	if rb.IsSingle() {
-		rb.SetGroupBy(groupBy)
-		return nil
-	}
-	// It's a scatter route. We can allow group by if it references a
-	// column with a unique vindex.
-	for _, expr := range groupBy {
-		vindex := bldr.Symtab().Vindex(expr, rb)
-		if vindex != nil && vindexes.IsUnique(vindex) {
-			rb.SetGroupBy(groupBy)
-			return nil
-		}
-	}
-	return errors.New("unsupported: scatter and group by")
+
+	// We can be here only if it was a route. All sanity checks have been
+	// performed by checkAggregates.
+	bldr.(*route).SetGroupBy(groupBy)
+	return nil
 }
 
 // pushOrderBy pushes the order by clause to the appropriate routes.
@@ -86,21 +72,14 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 			return nil
 		}
 	}
-	routeNumber := 0
-	for _, order := range orderBy {
-		// Only generator is allowed to change the AST.
-		// If we have to change the order by expression,
-		// we have to build a new node.
-		pushOrder := order
-		var rb *route
 
+	// ORDER BY can be pushed down only if it references columns from the
+	// lef-most route.
+	rb := bldr.Leftmost()
+	for _, order := range orderBy {
 		if node, ok := order.Expr.(*sqlparser.SQLVal); ok && node.Type == sqlparser.IntVal {
 			// This block handles constructs that use ordinals for 'ORDER BY'. For example:
 			// SELECT a, b, c FROM t1, t2 ORDER BY 1, 2, 3.
-			// If this query is broken into two, the ordinals would have to be renumbered
-			// as follows:
-			// 1. SELECT a, b FROM t1 ORDER BY 1, 2
-			// 2. SELECT c FROM t2 ORDER BY 1 // instead of 3.
 			num, err := strconv.ParseInt(string(node.Val), 0, 64)
 			if err != nil {
 				return fmt.Errorf("error parsing order by clause: %s", sqlparser.String(node))
@@ -108,19 +87,9 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 			if num < 1 || num > int64(len(bldr.Symtab().ResultColumns)) {
 				return errors.New("order by column number out of range")
 			}
-			rc := bldr.Symtab().ResultColumns[num-1]
-			rb = rc.column.Route()
-			// We have to recompute the column number.
-			for num, s := range rb.ResultColumns {
-				if s == rc {
-					pushOrder = &sqlparser.Order{
-						Expr:      sqlparser.NewIntVal(strconv.AppendInt(nil, int64(num+1), 10)),
-						Direction: order.Direction,
-					}
-				}
-			}
-			if pushOrder == order {
-				panic("unexpected: column not found for order by")
+			target := bldr.Symtab().ResultColumns[num-1].column.Route()
+			if target != rb {
+				return errors.New("unsupported: order by spans across shards")
 			}
 		} else {
 			// Analyze column references within the expression to make sure they all
@@ -128,15 +97,13 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 			err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 				switch node := node.(type) {
 				case *sqlparser.ColName:
-					curRoute, _, err := bldr.Symtab().Find(node)
+					target, _, err := bldr.Symtab().Find(node)
 					if err != nil {
 						return false, err
 					}
-					if rb == nil || rb == curRoute {
-						rb = curRoute
-						return true, nil
+					if target != rb {
+						return false, errors.New("unsupported: order by spans across shards")
 					}
-					return false, errors.New("unsupported: complex join and complex order by")
 				}
 				return true, nil
 			}, order.Expr)
@@ -144,17 +111,14 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 				return err
 			}
 		}
-		if rb == nil {
-			return errors.New("unsupported: complex order by")
-		}
-		if rb.Order < routeNumber {
-			return errors.New("unsupported: complex join and out of sequence order by")
-		}
+
+		// The check for scatter route must be done at this level.
+		// Future primitives may still want to push an order by clause
+		// into a scatter route for the sake of optimization.
 		if !rb.IsSingle() {
 			return errors.New("unsupported: scatter and order by")
 		}
-		routeNumber = rb.Order
-		if err := rb.AddOrderBy(pushOrder); err != nil {
+		if err := bldr.PushOrderBy(order, rb); err != nil {
 			return err
 		}
 	}

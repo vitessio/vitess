@@ -107,6 +107,10 @@
 "select * from user join user_extra"
 "unsupported: '*' expression in complex join"
 
+# Aggregate on sharded with colvindex
+"select count(*), id from user"
+"unsupported: scatter with aggregates"
+
 # Aggregates and joins
 "select count(*) from user join user_extra"
 "unsupported: complex join with aggregates"
@@ -117,18 +121,18 @@
 
 # group by and joins
 "select user.id from user join user_extra group by id"
-"unsupported: complex join and group by"
+"unsupported: complex join with aggregates"
 
 # group by and ',' joins
 "select user.id from user, user_extra group by id"
-"unsupported: complex join and group by"
+"unsupported: complex join with aggregates"
 
 # Group by and scatter
 "select col from user group by col"
-"unsupported: scatter and group by"
+"unsupported: scatter with aggregates"
 
 # subqueries not supported in group by
-"select id from user group by (select id from user_extra)"
+"select id from user group by id, (select id from user_extra)"
 "unsupported: subqueries in group by expression"
 
 # subquery of information_schema with normal table
@@ -145,7 +149,7 @@
 
 # Order by for join, but sequce is too complex
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 3 desc, 2 asc"
-"unsupported: complex join and out of sequence order by"
+"unsupported: order by spans across shards"
 
 # Order by for scatter routes
 "select col from user order by col"
@@ -153,15 +157,15 @@
 
 # Order by and left join
 "select user.col1 as a, user_extra.col2 as b from user left join user_extra on user_extra.user_id = 5 where user.id = 5 order by 1, 2"
-"unsupported: complex left join and order by"
+"unsupported: order by spans across shards"
 
 # Order by column number with collate
 "select user.col1 as a from user order by 1 collate utf8_general_ci"
-"unsupported: complex order by"
+"unsupported: scatter and order by"
 
 #Order by for join, but order by is complex
 "select user.col1 as a, user_extra.col2 as b from user join user_extra on user_extra.user_id = 5 where user.id = 5 order by a+b"
-"unsupported: complex join and complex order by"
+"unsupported: order by spans across shards"
 
 # limit for joins
 "select user.col from user join user_extra limit 1"

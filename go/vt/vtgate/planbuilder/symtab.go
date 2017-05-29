@@ -70,18 +70,6 @@ func (c *column) Route() *route {
 	return c.route.Resolve()
 }
 
-// SelectExpr returns a select expression that
-// can be added to the AST.
-func (c *column) SelectExpr() sqlparser.SelectExpr {
-	return &sqlparser.AliasedExpr{
-		Expr: &sqlparser.ColName{
-			Metadata:  c,
-			Qualifier: sqlparser.TableName{Name: c.table.alias.Name},
-			Name:      c.name,
-		},
-	}
-}
-
 // symtab represents the symbol table for a SELECT statement
 // or a subquery. The symtab evolves over time. Each symtab starts off
 // with one table. As a query is analyzed, multiple independent

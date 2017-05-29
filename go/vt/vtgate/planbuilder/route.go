@@ -32,20 +32,21 @@ var errIntermixingUnsupported = errors.New("unsupported: intermixing of informat
 // are moved into this node, which will be used to build
 // the final SQL for this route.
 type route struct {
+	symtab *symtab
+	Order  int
+
 	// Redirect may point to another route if this route
 	// was merged with it. The Resolve function chases
 	// this pointer till the last un-redirected route.
 	Redirect *route
-	// IsRHS is true if the route is the RHS of a
-	// LEFT JOIN. If so, many restrictions come into play.
-	IsRHS bool
+
 	// Select is the AST for the query fragment that will be
 	// executed by this route.
 	Select sqlparser.SelectStatement
-	Order  int
-	symtab *symtab
+
 	// ResultColumns represent the columns returned by this route.
 	ResultColumns []*resultColumn
+
 	// ERoute is the primitive being built.
 	ERoute *engine.Route
 }
@@ -101,13 +102,9 @@ func (rb *route) Leftmost() *route {
 
 // Join joins with the RHS. This could produce a merged route
 // or a new join node.
-func (rb *route) Join(rhs builder, ajoin *sqlparser.JoinTableExpr) (builder, error) {
+func (rb *route) Join(rRoute *route, ajoin *sqlparser.JoinTableExpr) (builder, error) {
 	if rb.ERoute.Opcode == engine.SelectNext {
 		return nil, errors.New("unsupported: sequence join with another table")
-	}
-	rRoute, ok := rhs.(*route)
-	if !ok {
-		return newJoin(rb, rhs, ajoin)
 	}
 	if rRoute.ERoute.Opcode == engine.SelectNext {
 		return nil, errors.New("unsupported: sequence join with another table")
@@ -149,11 +146,6 @@ func (rb *route) Join(rhs builder, ajoin *sqlparser.JoinTableExpr) (builder, err
 	}
 
 	return newJoin(rb, rRoute, ajoin)
-}
-
-// SetRHS marks the route as RHS.
-func (rb *route) SetRHS() {
-	rb.IsRHS = true
 }
 
 // merge merges the two routes. The ON clause is also analyzed to
@@ -226,10 +218,7 @@ func (rb *route) isSameRoute(rhs *route, filter sqlparser.Expr) bool {
 
 // PushFilter pushes the filter into the route. The primitive will
 // be updated if the new filter improves it.
-func (rb *route) PushFilter(filter sqlparser.Expr, whereType string) error {
-	if rb.IsRHS {
-		return errors.New("unsupported: complex left join and where clause")
-	}
+func (rb *route) PushFilter(filter sqlparser.Expr, whereType string, _ *route) error {
 	sel := rb.Select.(*sqlparser.Select)
 	switch whereType {
 	case sqlparser.WhereStr:
@@ -317,7 +306,7 @@ func (rb *route) computeEqualPlan(comparison *sqlparser.ComparisonExpr) (opcode 
 			return engine.SelectScatter, nil, nil
 		}
 	}
-	if !exprIsValue(right, rb) {
+	if !rb.exprIsValue(right) {
 		return engine.SelectScatter, nil, nil
 	}
 	if vindexes.IsUnique(vindex) {
@@ -335,7 +324,7 @@ func (rb *route) computeINPlan(comparison *sqlparser.ComparisonExpr) (opcode eng
 	switch node := comparison.Right.(type) {
 	case sqlparser.ValTuple:
 		for _, n := range node {
-			if !exprIsValue(n, rb) {
+			if !rb.exprIsValue(n) {
 				return engine.SelectScatter, nil, nil
 			}
 		}
@@ -346,13 +335,17 @@ func (rb *route) computeINPlan(comparison *sqlparser.ComparisonExpr) (opcode eng
 	return engine.SelectScatter, nil, nil
 }
 
+// exprIsValue returns true if the expression can be treated as a value
+// for the route. External references are treated as value.
+func (rb *route) exprIsValue(expr sqlparser.Expr) bool {
+	if node, ok := expr.(*sqlparser.ColName); ok {
+		return node.Metadata.(*column).Route() != rb
+	}
+	return sqlparser.IsValue(expr)
+}
+
 // PushSelect pushes the select expression into the route.
 func (rb *route) PushSelect(expr *sqlparser.AliasedExpr, _ *route) (rc *resultColumn, colnum int, err error) {
-	// Pushing of non-trivial expressions not allowed for RHS of left joins.
-	if _, ok := expr.Expr.(*sqlparser.ColName); !ok && rb.IsRHS {
-		return nil, 0, errors.New("unsupported: complex left join and column expressions")
-	}
-
 	sel := rb.Select.(*sqlparser.Select)
 	sel.SelectExprs = append(sel.SelectExprs, expr)
 
@@ -387,11 +380,8 @@ func (rb *route) SetGroupBy(groupBy sqlparser.GroupBy) {
 	rb.Select.(*sqlparser.Select).GroupBy = groupBy
 }
 
-// AddOrderBy adds an ORDER BY expression to the route.
-func (rb *route) AddOrderBy(order *sqlparser.Order) error {
-	if rb.IsRHS {
-		return errors.New("unsupported: complex left join and order by")
-	}
+// PushOrderBy adds an ORDER BY expression to the route.
+func (rb *route) PushOrderBy(order *sqlparser.Order, _ *route) error {
 	rb.Select.AddOrder(order)
 	return nil
 }
@@ -445,7 +435,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 			}
 		case *sqlparser.ComparisonExpr:
 			if node.Operator == sqlparser.EqualStr {
-				if exprIsValue(node.Left, rb) && !exprIsValue(node.Right, rb) {
+				if rb.exprIsValue(node.Left) && !rb.exprIsValue(node.Right) {
 					node.Left, node.Right = node.Right, node.Left
 				}
 			}
@@ -542,7 +532,8 @@ func (rb *route) SupplyVar(from, to int, col *sqlparser.ColName, varname string)
 // SupplyCol changes the executor to supply the requested column
 // name, and returns the result column number. If the column
 // is already in the list, it's reused.
-func (rb *route) SupplyCol(c *column) (rs *resultColumn, colnum int) {
+func (rb *route) SupplyCol(col *sqlparser.ColName) (rs *resultColumn, colnum int) {
+	c := col.Metadata.(*column)
 	for i, rs := range rb.ResultColumns {
 		if rs.column == c {
 			return rs, i
@@ -553,7 +544,7 @@ func (rb *route) SupplyCol(c *column) (rs *resultColumn, colnum int) {
 	rs = &resultColumn{column: c}
 	rb.ResultColumns = append(rb.ResultColumns, rs)
 	sel := rb.Select.(*sqlparser.Select)
-	sel.SelectExprs = append(sel.SelectExprs, c.SelectExpr())
+	sel.SelectExprs = append(sel.SelectExprs, &sqlparser.AliasedExpr{Expr: col})
 	return rs, len(rb.ResultColumns) - 1
 }
 
