@@ -74,3 +74,17 @@ func VtMysqlRoot() (string, error) {
 	}
 	return root, nil
 }
+
+func VtMysqlBaseDir() (string, error) {
+	// if the environment variable is set, use that
+	if root := os.Getenv("VT_MYSQL_BASEDIR"); root != "" {
+		return root, nil
+	}
+
+	// otherwise let's use VtMysqlRoot
+	root, err := VtMysqlRoot()
+	if err != nil {
+		return "", errors.New("VT_MYSQL_BASEDIR is not set and could not be guessed from the executable location. Please set $VT_MYSQL_BASEDIR.")
+	}
+	return root, nil
+}

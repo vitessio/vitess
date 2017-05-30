@@ -531,6 +531,12 @@ func (mysqld *Mysqld) installDataDir() error {
 	if err != nil {
 		return err
 	}
+
+	mysqlBaseDir, err := vtenv.VtMysqlBaseDir()
+	if err != nil {
+		return err
+	}
+
 	mysqldPath, err := binaryPath(mysqlRoot, "mysqld")
 	if err != nil {
 		return err
@@ -549,7 +555,7 @@ func (mysqld *Mysqld) installDataDir() error {
 
 		args := []string{
 			"--defaults-file=" + mysqld.config.path,
-			"--basedir=" + mysqlRoot,
+			"--basedir=" + mysqlBaseDir,
 			"--initialize-insecure", // Use empty 'root'@'localhost' password.
 		}
 		if _, _, err = execCmd(mysqldPath, args, nil, mysqlRoot, nil); err != nil {
@@ -562,7 +568,7 @@ func (mysqld *Mysqld) installDataDir() error {
 	log.Infof("Installing data dir with mysql_install_db")
 	args := []string{
 		"--defaults-file=" + mysqld.config.path,
-		"--basedir=" + mysqlRoot,
+		"--basedir=" + mysqlBaseDir,
 	}
 	cmdPath, err := binaryPath(mysqlRoot, "mysql_install_db")
 	if err != nil {
