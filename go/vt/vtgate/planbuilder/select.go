@@ -1,6 +1,18 @@
-// Copyright 2016, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package planbuilder
 
@@ -116,11 +128,11 @@ func pushSelectExprs(sel *sqlparser.Select, bldr builder) error {
 		// in the distant future.
 		bldr.(*route).MakeDistinct()
 	}
-	colsyms, err := pushSelectRoutes(sel.SelectExprs, bldr)
+	resultColumns, err := pushSelectRoutes(sel.SelectExprs, bldr)
 	if err != nil {
 		return err
 	}
-	bldr.Symtab().Colsyms = colsyms
+	bldr.Symtab().ResultColumns = resultColumns
 	err = pushGroupBy(sel.GroupBy, bldr)
 	if err != nil {
 		return err
@@ -166,8 +178,8 @@ func checkAggregates(sel *sqlparser.Select, bldr builder) error {
 	// vindex in the select list.
 	for _, selectExpr := range sel.SelectExprs {
 		switch selectExpr := selectExpr.(type) {
-		case *sqlparser.NonStarExpr:
-			vindex := bldr.Symtab().Vindex(selectExpr.Expr, rb, true)
+		case *sqlparser.AliasedExpr:
+			vindex := bldr.Symtab().Vindex(selectExpr.Expr, rb)
 			if vindex != nil && vindexes.IsUnique(vindex) {
 				return nil
 			}
@@ -177,17 +189,17 @@ func checkAggregates(sel *sqlparser.Select, bldr builder) error {
 }
 
 // pusheSelectRoutes is a convenience function that pushes all the select
-// expressions and returns the list of colsyms generated for it.
-func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*colsym, error) {
-	colsyms := make([]*colsym, len(selectExprs))
+// expressions and returns the list of resultColumns generated for it.
+func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*resultColumn, error) {
+	resultColumns := make([]*resultColumn, len(selectExprs))
 	for i, node := range selectExprs {
 		switch node := node.(type) {
-		case *sqlparser.NonStarExpr:
+		case *sqlparser.AliasedExpr:
 			rb, err := findRoute(node.Expr, bldr)
 			if err != nil {
 				return nil, err
 			}
-			colsyms[i], _, err = bldr.PushSelect(node, rb)
+			resultColumns[i], _, err = bldr.PushSelect(node, rb)
 			if err != nil {
 				return nil, err
 			}
@@ -205,14 +217,18 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*colsy
 					}
 				}
 			}
-			// We can push without validating the reference because
-			// MySQL will fail if it's invalid.
-			colsyms[i] = rb.PushStar(node)
+			resultColumns[i] = rb.PushAnonymous(node)
 		case sqlparser.Nextval:
-			// For now, this is only supported as an implicit feature
-			// for auto_inc in inserts.
-			return nil, errors.New("unsupported: NEXT VALUES construct")
+			rb, ok := bldr.(*route)
+			if !ok {
+				// This code is unreachable because the parser doesn't allow joins for next val statements.
+				return nil, errors.New("unsupported: SELECT NEXT query in complex join")
+			}
+			if err := rb.SetOpcode(engine.SelectNext); err != nil {
+				return nil, err
+			}
+			resultColumns[i] = rb.PushAnonymous(node)
 		}
 	}
-	return colsyms, nil
+	return resultColumns, nil
 }

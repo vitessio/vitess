@@ -1,3 +1,19 @@
+/*
+ * Copyright 2017 Google Inc.
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.vitess.jdbc;
 
 import com.google.common.collect.ImmutableMap;
@@ -26,6 +42,7 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+import javax.sql.rowset.serial.SerialClob;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -505,6 +522,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
         preparedStatement.setObject(39, dateValue, Types.DATE, 0);
         preparedStatement.setObject(40, timeValue, Types.TIME, 0);
         preparedStatement.setObject(41, timestampValue, Types.TIMESTAMP, 0);
+        preparedStatement.setClob(42, new SerialClob("clob".toCharArray()));
         try {
             preparedStatement.setObject(42, bytesValue);
             Assert.fail("Shown have thrown exception for not able to set byte[] parameter");
@@ -557,6 +575,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
         Assert.assertEquals(dateValue.toString(), bindVariables.get("v39"));
         Assert.assertEquals(timeValue.toString(), bindVariables.get("v40"));
         Assert.assertEquals(timestampValue.toString(), bindVariables.get("v41"));
+        Assert.assertEquals("clob", bindVariables.get("v42"));
 
         preparedStatement.clearParameters();
     }

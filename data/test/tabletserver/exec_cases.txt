@@ -492,8 +492,7 @@
   "PKValues": [
     1,
     2
-  ],
-  "MessageReloaderQuery": "select time_next, epoch, id, message from msg where :#pk"
+  ]
 }
 
 # message insert with no time_schedule
@@ -506,8 +505,7 @@
   "PKValues": [
     ":#time_now",
     2
-  ],
-  "MessageReloaderQuery": "select time_next, epoch, id, message from msg where :#pk"
+  ]
 }
 
 # message multi-value insert
@@ -526,8 +524,7 @@
       2,
       4
     ]
-  ],
-  "MessageReloaderQuery": "select time_next, epoch, id, message from msg where :#pk"
+  ]
 }
 
 # message insert subquery
@@ -566,9 +563,41 @@
 "insert into msg(message) values('aa')"
 "id must be specified for message insert"
 
-# message insert message missing
-"insert into msg(id) values(1)"
-"message must be specified for message insert"
+# multi-row
+"replace into b (eid, id) values (1, 2), (3, 4)"
+{
+  "PlanID": "PASS_DML",
+  "Reason":"REPLACE",
+  "TableName": "",
+  "FullQuery": "replace into b(eid, id) values (1, 2), (3, 4)"
+}
+
+# single-row with set
+"replace into b set eid = 1, id = 2"
+{
+  "PlanID": "PASS_DML",
+  "Reason":"REPLACE",
+  "TableName": "",
+  "FullQuery": "replace into b(eid, id) values (1, 2)"
+}
+
+# replace subquery
+"replace into b (eid, id) select * from a"
+{
+  "PlanID": "PASS_DML",
+  "Reason":"REPLACE",
+  "TableName": "",
+  "FullQuery": "replace into b(eid, id) select * from a"
+}
+
+# subquery with no column list
+"replace into b select * from a"
+{
+  "PlanID": "PASS_DML",
+  "Reason":"REPLACE",
+  "TableName": "",
+  "FullQuery": "replace into b select * from a"
+}
 
 # update cross-db
 "update b.a set name='foo' where eid=1 and id=1"
@@ -577,6 +606,24 @@
   "Reason": "TABLE",
   "TableName": "",
   "FullQuery": "update b.a set name = 'foo' where eid = 1 and id = 1"
+}
+
+# multi-table update
+"update a, b set a.name = 'foo' where a.id = b.id and b.var = 'test'"
+{
+  "PlanID": "PASS_DML",
+  "Reason": "MULTI_TABLE",
+  "TableName": "",
+  "FullQuery": "update a, b set a.name = 'foo' where a.id = b.id and b.var = 'test'"
+}
+
+# multi-table update
+"update a join b on a.id = b.id set a.name = 'foo' where b.var = 'test'"
+{
+  "PlanID": "PASS_DML",
+  "Reason": "MULTI_TABLE",
+  "TableName": "",
+  "FullQuery": "update a join b on a.id = b.id set a.name = 'foo' where b.var = 'test'"
 }
 
 # pk changed
@@ -885,6 +932,24 @@
   "OuterQuery":"delete from a where :#pk",
   "Subquery":"select eid, id from a where eid = 1 and eid = 2 limit :#maxLimit for update",
   "WhereClause": " where eid = 1 and eid = 2"
+}
+
+# multi-table delete
+"delete a, b from a, b, c where a.id = b.id and b.id = c.id and c.name = 'foo'"
+{
+  "PlanID": "PASS_DML",
+  "Reason": "MULTI_TABLE",
+  "TableName": "",
+  "FullQuery": "delete a, b from a, b, c where a.id = b.id and b.id = c.id and c.name = 'foo'"
+}
+
+# multi-table delete with join
+"delete a  from a join b on a.id = b.id where a.name = 'foo'"
+{
+  "PlanID": "PASS_DML",
+  "Reason": "MULTI_TABLE",
+  "TableName": "",
+  "FullQuery": "delete a from a join b on a.id = b.id where a.name = 'foo'"
 }
 
 # single value sequence

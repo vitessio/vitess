@@ -1,22 +1,30 @@
+/*
+ * Copyright 2017 Google Inc.
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.vitess.hadoop;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.common.collect.Lists;
-import com.google.common.net.HostAndPort;
-import io.vitess.client.Context;
-import io.vitess.client.RpcClient;
-import io.vitess.client.RpcClientFactory;
-import io.vitess.client.VTGateBlockingConn;
-import io.vitess.proto.Query.SplitQueryRequest.Algorithm;
-import io.vitess.proto.Vtgate.SplitQueryResponse;
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Random;
+
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.InputSplit;
@@ -25,6 +33,15 @@ import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.joda.time.Duration;
+
+import com.google.common.collect.Lists;
+
+import io.vitess.client.Context;
+import io.vitess.client.RpcClient;
+import io.vitess.client.RpcClientFactory;
+import io.vitess.client.VTGateBlockingConn;
+import io.vitess.proto.Query.SplitQueryRequest.Algorithm;
+import io.vitess.proto.Vtgate.SplitQueryResponse;
 
 /**
  * {@link VitessInputFormat} is the {@link org.apache.hadoop.mapreduce.InputFormat} for tables in
@@ -43,11 +60,10 @@ public class VitessInputFormat extends InputFormat<NullWritable, RowWritable> {
           (Class<? extends RpcClientFactory>) Class.forName(conf.getRpcFactoryClass());
       List<String> addressList = Arrays.asList(conf.getHosts().split(","));
       int index = new Random().nextInt(addressList.size());
-      HostAndPort hostAndPort = HostAndPort.fromString(addressList.get(index));
 
       RpcClient rpcClient = rpcFactoryClass.newInstance().create(
           Context.getDefault().withDeadlineAfter(Duration.millis(conf.getTimeoutMs())),
-          new InetSocketAddress(hostAndPort.getHostText(), hostAndPort.getPort()));
+          addressList.get(index));
 
       try (VTGateBlockingConn vtgate = new VTGateBlockingConn(rpcClient)) {
         splitResult = vtgate.splitQuery(

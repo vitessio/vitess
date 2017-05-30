@@ -1,12 +1,23 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package tabletserver
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -14,10 +25,11 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cache"
-	"github.com/youtube/vitess/go/mysqlconn"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/trace"
@@ -132,6 +144,8 @@ type QueryEngine struct {
 	// TODO(sougou) There are two acl packages. Need to rename.
 	exemptACL tacl.ACL
 
+	strictTransTables bool
+
 	// Loggers
 	accessCheckerLogger *logutil.ThrottledLogger
 }
@@ -172,6 +186,8 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 	qe.autoCommit.Set(config.EnableAutoCommit)
 	qe.strictTableACL = config.StrictTableACL
 	qe.enableTableACLDryRun = config.EnableTableACLDryRun
+
+	qe.strictTransTables = config.EnforceStrictTransTables
 
 	if config.TableACLExemptACL != "" {
 		if f, err := tableacl.GetCurrentAclFactory(); err == nil {
@@ -235,7 +251,7 @@ func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
 		qe.conns.Close()
 		return err
 	}
-	qe.binlogFormat, err = conn.VerifyMode()
+	qe.binlogFormat, err = conn.VerifyMode(qe.strictTransTables)
 	conn.Recycle()
 
 	if err != nil {
@@ -337,7 +353,7 @@ func (qe *QueryEngine) ClearQueryPlanCache() {
 func (qe *QueryEngine) IsMySQLReachable() bool {
 	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App, tabletenv.MySQLStats)
 	if err != nil {
-		if mysqlconn.IsConnErr(err) {
+		if mysql.IsConnErr(err) {
 			return false
 		}
 		log.Warningf("checking MySQL, unexpected error: %v", err)

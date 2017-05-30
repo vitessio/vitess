@@ -1,3 +1,19 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreedto in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package planbuilder
 
 import (
@@ -5,7 +21,6 @@ import (
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
 func buildUnionPlan(union *sqlparser.Union, vschema VSchema) (primitive engine.Primitive, err error) {
@@ -77,21 +92,15 @@ func unionRouteMerge(union *sqlparser.Union, left, right builder, vschema VSchem
 	if !ok {
 		return nil, errors.New("unsupported construct: SELECT of UNION is non-trivial")
 	}
-	if err := routesCanMerge(lroute, rroute); err != nil {
+	if err := lroute.UnionCanMerge(rroute); err != nil {
 		return nil, err
 	}
-	table := &vindexes.Table{
-		Keyspace: lroute.ERoute.Keyspace,
-	}
-	rtb := newRoute(
+	rb := newRoute(
 		&sqlparser.Union{Type: union.Type, Left: union.Left, Right: union.Right, Lock: union.Lock},
 		lroute.ERoute,
-		table,
 		vschema,
-		&sqlparser.TableName{Name: sqlparser.NewTableIdent("")}, // Unions don't have an addressable table name.
-		sqlparser.NewTableIdent(""),
 	)
-	lroute.Redirect = rtb
-	rroute.Redirect = rtb
-	return rtb, nil
+	lroute.Redirect = rb
+	rroute.Redirect = rb
+	return rb, nil
 }

@@ -1,8 +1,18 @@
 #!/bin/bash
 
-# Copyright 2012, Google Inc. All rights reserved.
-# Use of this source code is governed by a BSD-style license that can
-# be found in the LICENSE file.
+# Copyright 2017 Google Inc.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 SKIP_ROOT_INSTALLS=False
 if [ "$1" = "--skip_root_installs" ]; then
@@ -10,7 +20,11 @@ if [ "$1" = "--skip_root_installs" ]; then
 fi
 
 # Run parallel make, based on number of cores available.
-NB_CORES=$(grep -c '^processor' /proc/cpuinfo)
+case $(uname) in
+Linux)	NB_CORES=$(grep -c '^processor' /proc/cpuinfo);;
+Darwin)	NB_CORES=$(sysctl hw.ncpu | awk '{ print $2 }');;
+esac
+
 if [ -n "$NB_CORES" ]; then
   export MAKEFLAGS="-j$((NB_CORES+1)) -l${NB_CORES}"
 fi
@@ -21,8 +35,6 @@ function fail() {
 }
 
 [ -f bootstrap.sh ] || fail "bootstrap.sh must be run from its current directory"
-
-[ "$USER" != "root" ] || fail "Vitess cannot run as root. Please bootstrap with a non-root user."
 
 go version 2>&1 >/dev/null || fail "Go is not installed or is not on \$PATH"
 

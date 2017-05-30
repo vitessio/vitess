@@ -1,3 +1,19 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreedto in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vindexes
 
 import (
@@ -37,7 +53,7 @@ func (lkp *lookup) MapUniqueLookup(vcursor VCursor, ids []interface{}) ([][]byte
 	for _, id := range ids {
 		result, err := vcursor.Execute(lkp.sel, map[string]interface{}{
 			lkp.From: id,
-		})
+		}, false /* isDML */)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
@@ -67,7 +83,7 @@ func (lkp *lookup) MapNonUniqueLookup(vcursor VCursor, ids []interface{}) ([][][
 	for _, id := range ids {
 		result, err := vcursor.Execute(lkp.sel, map[string]interface{}{
 			lkp.From: id,
-		})
+		}, false /* isDML */)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
@@ -124,7 +140,7 @@ func (lkp *lookup) Verify(vcursor VCursor, ids []interface{}, ksids [][]byte) (b
 		bindVars[toStr] = val[rowNum]
 	}
 	lkp.ver = fmt.Sprintf("select %s from %s where %s", lkp.From, lkp.Table, strings.Trim(colBuff.String(), "or")+")")
-	result, err := vcursor.Execute(lkp.ver, bindVars)
+	result, err := vcursor.Execute(lkp.ver, bindVars, false /* isDML */)
 	if err != nil {
 		return false, fmt.Errorf("lookup.Verify: %v", err)
 	}
@@ -168,7 +184,7 @@ func (lkp *lookup) Create(vcursor VCursor, ids []interface{}, ksids [][]byte) er
 		bindVars[toStr] = val[rowNum]
 	}
 	lkp.ins = strings.Trim(insBuffer.String(), ",")
-	if _, err := vcursor.Execute(lkp.ins, bindVars); err != nil {
+	if _, err := vcursor.Execute(lkp.ins, bindVars, true /* isDML */); err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
 	}
 	return nil
@@ -191,7 +207,7 @@ func (lkp *lookup) Delete(vcursor VCursor, ids []interface{}, ksid []byte) error
 	}
 	for _, id := range ids {
 		bindvars[lkp.From] = id
-		if _, err := vcursor.Execute(lkp.del, bindvars); err != nil {
+		if _, err := vcursor.Execute(lkp.del, bindvars, true /* isDML */); err != nil {
 			return fmt.Errorf("lookup.Delete: %v", err)
 		}
 	}

@@ -1,6 +1,18 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package tabletserver
 
@@ -14,9 +26,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysqlconn"
-	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
@@ -118,6 +129,42 @@ func TestQueryExecutorPlanPassDmlAutoCommitRBR(t *testing.T) {
 	if code := vterrors.Code(err); code != vtrpcpb.Code_UNIMPLEMENTED {
 		t.Errorf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
 	}
+}
+
+func TestQueryExecutorPlanPassDmlReplaceInto(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	query := "replace into test_table values (1)"
+	want := &sqltypes.Result{}
+	db.AddQuery(query, want)
+	ctx := context.Background()
+	// RBR mode
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+	txid := newTransaction(tsv)
+	qre := newTestQueryExecutor(ctx, tsv, query, txid)
+	tsv.qe.binlogFormat = connpool.BinlogFormatRow
+	checkPlanID(t, planbuilder.PlanPassDML, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+	wantqueries := []string{query}
+	gotqueries := fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	}
+
+	// Statement mode
+	tsv.qe.binlogFormat = connpool.BinlogFormatStatement
+	_, err = qre.Execute()
+	if code := vterrors.Code(err); code != vtrpcpb.Code_UNIMPLEMENTED {
+		t.Errorf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
+	}
+	testCommitHelper(t, tsv, qre)
 }
 
 func TestQueryExecutorPlanInsertPk(t *testing.T) {
@@ -375,7 +422,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 
 	db.AddRejectedQuery(
 		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
-		sqldb.NewSQLError(mysqlconn.ERDupEntry, mysqlconn.SSDupKey, "err"),
+		mysql.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "err"),
 	)
 	db.AddQuery("update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
 	txid = newTransaction(tsv)
@@ -393,7 +440,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 
 	db.AddRejectedQuery(
 		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
-		sqldb.NewSQLError(mysqlconn.ERDupEntry, mysqlconn.SSDupKey, "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
+		mysql.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
 	)
 	db.AddQuery(
 		"update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */",
@@ -476,7 +523,7 @@ func TestQueryExecutorPlanUpsertPkAutoCommit(t *testing.T) {
 
 	db.AddRejectedQuery(
 		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
-		sqldb.NewSQLError(mysqlconn.ERDupEntry, mysqlconn.SSDupKey, "err"),
+		mysql.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "err"),
 	)
 	db.AddQuery("update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
 	_, err = qre.Execute()
@@ -487,7 +534,7 @@ func TestQueryExecutorPlanUpsertPkAutoCommit(t *testing.T) {
 
 	db.AddRejectedQuery(
 		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
-		sqldb.NewSQLError(mysqlconn.ERDupEntry, mysqlconn.SSDupKey, "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
+		mysql.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
 	)
 	db.AddQuery(
 		"update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */",
@@ -743,11 +790,6 @@ func TestQueryExecutorPlanOtherWithinATransaction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
 	}
-	// Clear the flags, they interfere with the diff.
-	// FIXME(alainjobart) the new mysqlconn client won't have this issue.
-	for _, field := range got.Fields {
-		field.Flags = 0
-	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
 	}
@@ -784,11 +826,6 @@ func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	// Clear the flags, they interfere with the diff.
-	// FIXME(alainjobart) the new mysqlconn client won't have this issue.
-	for _, field := range got.Fields {
-		field.Flags = 0
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
@@ -840,11 +877,6 @@ func TestQueryExecutorPlanPassSelect(t *testing.T) {
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	// Clear the flags, they interfere with the diff.
-	// FIXME(alainjobart) the new mysqlconn client won't have this issue.
-	for _, field := range got.Fields {
-		field.Flags = 0
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
@@ -907,11 +939,6 @@ func TestQueryExecutorPlanOther(t *testing.T) {
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("got: %v, want nil", err)
-	}
-	// Clear the flags, they interfere with the diff.
-	// FIXME(alainjobart) the new mysqlconn client won't have this issue.
-	for _, field := range got.Fields {
-		field.Flags = 0
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
@@ -1088,11 +1115,6 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 	if err != nil {
 		t.Fatalf("got: %v, want nil", err)
 	}
-	// Clear the flags, they interfere with the diff.
-	// FIXME(alainjobart) the new mysqlconn client won't have this issue.
-	for _, field := range got.Fields {
-		field.Flags = 0
-	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
 	}
@@ -1136,11 +1158,6 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("got: %v, want nil", err)
-	}
-	// Clear the flags, they interfere with the diff.
-	// FIXME(alainjobart) the new mysqlconn client won't have this issue.
-	for _, f := range got.Fields {
-		f.Flags = 0
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
@@ -1443,7 +1460,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 }
 
 func newTransaction(tsv *TabletServer) int64 {
-	transactionID, err := tsv.Begin(context.Background(), &tsv.target)
+	transactionID, err := tsv.Begin(context.Background(), &tsv.target, nil)
 	if err != nil {
 		panic(fmt.Errorf("failed to start a transaction: %v", err))
 	}
@@ -1565,13 +1582,13 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 				sqltypes.MakeString([]byte("STATEMENT")),
 			}},
 		},
-		mysqlconn.BaseShowTables: {
-			Fields:       mysqlconn.BaseShowTablesFields,
+		mysql.BaseShowTables: {
+			Fields:       mysql.BaseShowTablesFields,
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.BaseShowTablesRow("test_table", false, ""),
-				mysqlconn.BaseShowTablesRow("seq", false, "vitess_sequence"),
-				mysqlconn.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+				mysql.BaseShowTablesRow("test_table", false, ""),
+				mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 			},
 		},
 		"select * from test_table where 1 != 1": {
@@ -1587,30 +1604,30 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			}},
 		},
 		"describe test_table": {
-			Fields:       mysqlconn.DescribeTableFields,
+			Fields:       mysql.DescribeTableFields,
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
-				mysqlconn.DescribeTableRow("name", "int(11)", false, "", "0"),
-				mysqlconn.DescribeTableRow("addr", "int(11)", false, "", "0"),
+				mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
+				mysql.DescribeTableRow("name", "int(11)", false, "", "0"),
+				mysql.DescribeTableRow("addr", "int(11)", false, "", "0"),
 			},
 		},
 		// for SplitQuery because it needs a primary key column
 		"show index from test_table": {
-			Fields:       mysqlconn.ShowIndexFromTableFields,
+			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 2,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false),
-				mysqlconn.ShowIndexFromTableRow("test_table", false, "index", 1, "name", true),
+				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false),
+				mysql.ShowIndexFromTableRow("test_table", false, "index", 1, "name", true),
 			},
 		},
 		"begin":  {},
 		"commit": {},
-		mysqlconn.BaseShowTablesForTable("test_table"): {
-			Fields:       mysqlconn.BaseShowTablesFields,
+		mysql.BaseShowTablesForTable("test_table"): {
+			Fields:       mysql.BaseShowTablesFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.BaseShowTablesRow("test_table", false, ""),
+				mysql.BaseShowTablesRow("test_table", false, ""),
 			},
 		},
 		"rollback": {},
@@ -1630,27 +1647,27 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			}},
 		},
 		"describe seq": {
-			Fields:       mysqlconn.DescribeTableFields,
+			Fields:       mysql.DescribeTableFields,
 			RowsAffected: 4,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.DescribeTableRow("id", "int(11)", false, "PRI", "0"),
-				mysqlconn.DescribeTableRow("next_id", "bigint(20)", false, "", "0"),
-				mysqlconn.DescribeTableRow("cache", "bigint(20)", false, "", "0"),
-				mysqlconn.DescribeTableRow("increment", "bigint(20)", false, "", "0"),
+				mysql.DescribeTableRow("id", "int(11)", false, "PRI", "0"),
+				mysql.DescribeTableRow("next_id", "bigint(20)", false, "", "0"),
+				mysql.DescribeTableRow("cache", "bigint(20)", false, "", "0"),
+				mysql.DescribeTableRow("increment", "bigint(20)", false, "", "0"),
 			},
 		},
 		"show index from seq": {
-			Fields:       mysqlconn.ShowIndexFromTableFields,
+			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.ShowIndexFromTableRow("seq", true, "PRIMARY", 1, "id", false),
+				mysql.ShowIndexFromTableRow("seq", true, "PRIMARY", 1, "id", false),
 			},
 		},
-		mysqlconn.BaseShowTablesForTable("seq"): {
-			Fields:       mysqlconn.BaseShowTablesFields,
+		mysql.BaseShowTablesForTable("seq"): {
+			Fields:       mysql.BaseShowTablesFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.BaseShowTablesRow("seq", false, "vitess_sequence"),
+				mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
 			},
 		},
 		"select * from msg where 1 != 1": {
@@ -1678,31 +1695,31 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			}},
 		},
 		"describe msg": {
-			Fields:       mysqlconn.DescribeTableFields,
+			Fields:       mysql.DescribeTableFields,
 			RowsAffected: 7,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.DescribeTableRow("time_scheduled", "int(11)", false, "PRI", "0"),
-				mysqlconn.DescribeTableRow("id", "bigint(20)", false, "PRI", "0"),
-				mysqlconn.DescribeTableRow("time_next", "bigint(20)", false, "", "0"),
-				mysqlconn.DescribeTableRow("epoch", "bigint(20)", false, "", "0"),
-				mysqlconn.DescribeTableRow("time_created", "bigint(20)", false, "", "0"),
-				mysqlconn.DescribeTableRow("time_acked", "bigint(20)", false, "", "0"),
-				mysqlconn.DescribeTableRow("message", "bigint(20)", false, "", "0"),
+				mysql.DescribeTableRow("time_scheduled", "int(11)", false, "PRI", "0"),
+				mysql.DescribeTableRow("id", "bigint(20)", false, "PRI", "0"),
+				mysql.DescribeTableRow("time_next", "bigint(20)", false, "", "0"),
+				mysql.DescribeTableRow("epoch", "bigint(20)", false, "", "0"),
+				mysql.DescribeTableRow("time_created", "bigint(20)", false, "", "0"),
+				mysql.DescribeTableRow("time_acked", "bigint(20)", false, "", "0"),
+				mysql.DescribeTableRow("message", "bigint(20)", false, "", "0"),
 			},
 		},
 		"show index from msg": {
-			Fields:       mysqlconn.ShowIndexFromTableFields,
+			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.ShowIndexFromTableRow("msg", true, "PRIMARY", 1, "time_scheduled", false),
-				mysqlconn.ShowIndexFromTableRow("msg", true, "PRIMARY", 2, "id", false),
+				mysql.ShowIndexFromTableRow("msg", true, "PRIMARY", 1, "time_scheduled", false),
+				mysql.ShowIndexFromTableRow("msg", true, "PRIMARY", 2, "id", false),
 			},
 		},
-		mysqlconn.BaseShowTablesForTable("msg"): {
-			Fields:       mysqlconn.BaseShowTablesFields,
+		mysql.BaseShowTablesForTable("msg"): {
+			Fields:       mysql.BaseShowTablesFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.BaseShowTablesRow("test_table", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+				mysql.BaseShowTablesRow("test_table", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 			},
 		},
 		fmt.Sprintf(sqlReadAllRedo, "`_vt`", "`_vt`"): {},

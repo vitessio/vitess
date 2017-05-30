@@ -1,6 +1,18 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 // The following comment section contains definitions for command arguments.
 /*
@@ -83,7 +95,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -96,7 +107,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/flagutil"
-	"github.com/youtube/vitess/go/mysqlconn/replication"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	hk "github.com/youtube/vitess/go/vt/hook"
@@ -268,7 +279,7 @@ var commands = []commandGroup{
 				"Deletes the specified keyspace. In recursive mode, it also recursively deletes all shards in the keyspace. Otherwise, there must be no shards left in the keyspace."},
 			{"RemoveKeyspaceCell", commandRemoveKeyspaceCell,
 				"[-force] [-recursive] <keyspace> <cell>",
-				"Removes the cell from the Cells list for all shards in the keyspace."},
+				"Removes the cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell."},
 			{"GetKeyspace", commandGetKeyspace,
 				"<keyspace>",
 				"Outputs a JSON structure that contains information about the Keyspace."},
@@ -675,7 +686,6 @@ func commandGetTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 
 func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	hostname := subFlags.String("hostname", "", "The fully qualified host name of the server on which the tablet is running.")
-	ipAddr := subFlags.String("ip-addr", "", "IP address")
 	mysqlPort := subFlags.Int("mysql-port", 0, "The mysql port for the mysql daemon")
 	vtPort := subFlags.Int("vt-port", 0, "The main port for the vttablet process")
 	grpcPort := subFlags.Int("grpc-port", 0, "The gRPC port for the vttablet process")
@@ -686,9 +696,6 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("the <tablet alias> argument is required for the UpdateTabletAddrs command")
 	}
-	if *ipAddr != "" && net.ParseIP(*ipAddr) == nil {
-		return fmt.Errorf("malformed address: %v", *ipAddr)
-	}
 
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
@@ -697,9 +704,6 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 	_, err = wr.TopoServer().UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
 		if *hostname != "" {
 			tablet.Hostname = *hostname
-		}
-		if *ipAddr != "" {
-			tablet.Ip = *ipAddr
 		}
 		if *vtPort != 0 || *grpcPort != 0 || *mysqlPort != 0 {
 			if tablet.PortMap == nil {
@@ -2212,11 +2216,11 @@ func (rts rTablets) Less(i, j int) bool {
 		return false
 	}
 	// then compare replication positions
-	lpos, err := replication.DecodePosition(l.Position)
+	lpos, err := mysql.DecodePosition(l.Position)
 	if err != nil {
 		return true
 	}
-	rpos, err := replication.DecodePosition(r.Position)
+	rpos, err := mysql.DecodePosition(r.Position)
 	if err != nil {
 		return false
 	}

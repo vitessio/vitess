@@ -1,3 +1,19 @@
+/*
+ * Copyright 2017 Google Inc.
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.vitess.jdbc;
 
 import io.vitess.proto.Query;
@@ -11,6 +27,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 public class ConnectionProperties {
 
@@ -92,6 +109,26 @@ public class ConnectionProperties {
         "Tablet Type to which Vitess will connect(master, replica, rdonly)",
         Constants.DEFAULT_TABLET_TYPE);
 
+    private BooleanConnectionProperty grpcRetriesEnabled = new BooleanConnectionProperty(
+        "grpcRetriesEnabled",
+        "If enabled, a gRPC interceptor will ensure retries happen in the case of TRANSIENT gRPC errors.",
+        true
+    );
+    private LongConnectionProperty grpcRetryInitialBackoffMillis = new LongConnectionProperty(
+        "grpcRetriesInitialBackoffMillis",
+        "If grpcRetriesEnabled is set, what is the initial backoff time in milliseconds for exponential retry backoff.",
+        10
+    );
+    private LongConnectionProperty grpcRetryMaxBackoffMillis = new LongConnectionProperty(
+        "grpcRetriesMaxBackoffMillis",
+        "If grpcRetriesEnabled is set, what is the maximum backoff time in milliseconds for exponential retry backoff. After this threshold, failures will propagate.",
+        TimeUnit.MINUTES.toMillis(2)
+    );
+    private DoubleConnectionProperty grpcRetryBackoffMultiplier = new DoubleConnectionProperty(
+        "grpcRetriesBackoffMultiplier",
+        "If grpcRetriesEnabled is set, what multiplier should be used to increase exponential backoff on each retry.",
+        1.6
+    );
     // TLS-related configs
     private BooleanConnectionProperty useSSL = new BooleanConnectionProperty(
         Constants.Property.USE_SSL,
@@ -317,6 +354,38 @@ public class ConnectionProperties {
         this.tabletTypeCache = this.tabletType.getValueAsEnum();
     }
 
+    public Boolean getGrpcRetriesEnabled() {
+        return grpcRetriesEnabled.getValueAsBoolean();
+    }
+
+    public void setGrpcRetriesEnabled(Boolean grpcRetriesEnabled) {
+        this.grpcRetriesEnabled.setValue(grpcRetriesEnabled);
+    }
+
+    public Long getGrpcRetryInitialBackoffMillis() {
+        return grpcRetryInitialBackoffMillis.getValueAsLong();
+    }
+
+    public void setGrpcRetryInitialBackoffMillis(Long grpcRetryInitialBackoffMillis) {
+        this.grpcRetryInitialBackoffMillis.setValue(grpcRetryInitialBackoffMillis);
+    }
+
+    public Long getGrpcRetryMaxBackoffMillis() {
+        return grpcRetryMaxBackoffMillis.getValueAsLong();
+    }
+
+    public void setGrpcRetryMaxBackoffMillis(Long grpcRetryMaxBackoffMillis) {
+        this.grpcRetryMaxBackoffMillis.setValue(grpcRetryMaxBackoffMillis);
+    }
+
+    public Double getGrpcRetryBackoffMultiplier() {
+        return grpcRetryBackoffMultiplier.getValueAsDouble();
+    }
+
+    public void setGrpcRetryBackoffMultiplier(DoubleConnectionProperty grpcRetryBackoffMultiplier) {
+        this.grpcRetryBackoffMultiplier = grpcRetryBackoffMultiplier;
+    }
+
     public boolean getUseSSL() {
         return useSSL.getValueAsBoolean();
     }
@@ -455,6 +524,64 @@ public class ConnectionProperties {
 
         String getValueAsString() {
             return valueAsObject == null ? null : valueAsObject.toString();
+        }
+    }
+
+    private static class LongConnectionProperty extends ConnectionProperty {
+
+        private LongConnectionProperty(String name, String description, long defaultValue) {
+            super(name, description, defaultValue);
+        }
+
+        @Override
+        void initializeFrom(String extractedValue) {
+            if (extractedValue != null) {
+                setValue(Long.parseLong(extractedValue));
+            } else {
+                this.valueAsObject = this.defaultValue;
+            }
+        }
+
+        @Override
+        String[] getAllowableValues() {
+            return null;
+        }
+
+        public void setValue(Long value) {
+            this.valueAsObject = value;
+        }
+
+        Long getValueAsLong() {
+            return valueAsObject == null ? null : (Long) valueAsObject;
+        }
+    }
+
+    private static class DoubleConnectionProperty extends ConnectionProperty {
+
+        private DoubleConnectionProperty(String name, String description, double defaultValue) {
+            super(name, description, defaultValue);
+        }
+
+        @Override
+        void initializeFrom(String extractedValue) {
+            if (extractedValue != null) {
+                setValue(Double.parseDouble(extractedValue));
+            } else {
+                this.valueAsObject = this.defaultValue;
+            }
+        }
+
+        @Override
+        String[] getAllowableValues() {
+            return null;
+        }
+
+        public void setValue(Double value) {
+            this.valueAsObject = value;
+        }
+
+        Double getValueAsDouble() {
+            return valueAsObject == null ? null : (Double) valueAsObject;
         }
     }
 

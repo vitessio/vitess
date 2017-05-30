@@ -1,0 +1,196 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package endtoend
+
+import (
+	"flag"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"os/exec"
+	"path"
+	"strings"
+	"testing"
+
+	"github.com/youtube/vitess/go/mysql"
+	vtenv "github.com/youtube/vitess/go/vt/env"
+	"github.com/youtube/vitess/go/vt/tlstest"
+	"github.com/youtube/vitess/go/vt/vttest"
+)
+
+var (
+	connParams mysql.ConnParams
+)
+
+// assertSQLError makes sure we get the right error.
+func assertSQLError(t *testing.T, err error, code int, sqlState string, subtext string, query string) {
+	if err == nil {
+		t.Fatalf("was expecting SQLError %v / %v / %v but got no error.", code, sqlState, subtext)
+	}
+	serr, ok := err.(*mysql.SQLError)
+	if !ok {
+		t.Fatalf("was expecting SQLError %v / %v / %v but got: %v", code, sqlState, subtext, err)
+	}
+	if serr.Num != code {
+		t.Fatalf("was expecting SQLError %v / %v / %v but got code %v", code, sqlState, subtext, serr.Num)
+	}
+	if serr.State != sqlState {
+		t.Fatalf("was expecting SQLError %v / %v / %v but got state %v", code, sqlState, subtext, serr.State)
+	}
+	if subtext != "" && !strings.Contains(serr.Message, subtext) {
+		t.Fatalf("was expecting SQLError %v / %v / %v but got message %v", code, sqlState, subtext, serr.Message)
+	}
+	if serr.Query != query {
+		t.Fatalf("was expecting SQLError %v / %v / %v with Query '%v' but got query '%v'", code, sqlState, subtext, query, serr.Query)
+	}
+}
+
+// runMysql forks a mysql command line process connecting to the provided server.
+func runMysql(t *testing.T, params *mysql.ConnParams, command string) (string, bool) {
+	dir, err := vtenv.VtMysqlRoot()
+	if err != nil {
+		t.Fatalf("vtenv.VtMysqlRoot failed: %v", err)
+	}
+	name, err := binaryPath(dir, "mysql")
+	if err != nil {
+		t.Fatalf("binaryPath failed: %v", err)
+	}
+	// The args contain '-v' 3 times, to switch to very verbose output.
+	// In particular, it has the message:
+	// Query OK, 1 row affected (0.00 sec)
+	args := []string{
+		"-v", "-v", "-v",
+	}
+	args = append(args, "-e", command)
+	if params.UnixSocket != "" {
+		args = append(args, "-S", params.UnixSocket)
+	} else {
+		args = append(args,
+			"-h", params.Host,
+			"-P", fmt.Sprintf("%v", params.Port))
+	}
+	if params.Uname != "" {
+		args = append(args, "-u", params.Uname)
+	}
+	if params.Pass != "" {
+		args = append(args, "-p"+params.Pass)
+	}
+	if params.DbName != "" {
+		args = append(args, "-D", params.DbName)
+	}
+	if params.Flags&mysql.CapabilityClientSSL > 0 {
+		args = append(args,
+			"--ssl",
+			"--ssl-ca", params.SslCa,
+			"--ssl-cert", params.SslCert,
+			"--ssl-key", params.SslKey,
+			"--ssl-verify-server-cert")
+	}
+	env := []string{
+		"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql"),
+	}
+
+	cmd := exec.Command(name, args...)
+	cmd.Env = env
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	output := string(out)
+	if err != nil {
+		return output, false
+	}
+	return output, true
+}
+
+// binaryPath does a limited path lookup for a command,
+// searching only within sbin and bin in the given root.
+//
+// FIXME(alainjobart) move this to vt/env, and use it from
+// go/vt/mysqlctl too.
+func binaryPath(root, binary string) (string, error) {
+	subdirs := []string{"sbin", "bin"}
+	for _, subdir := range subdirs {
+		binPath := path.Join(root, subdir, binary)
+		if _, err := os.Stat(binPath); err == nil {
+			return binPath, nil
+		}
+	}
+	return "", fmt.Errorf("%s not found in any of %s/{%s}",
+		binary, root, strings.Join(subdirs, ","))
+}
+
+func TestMain(m *testing.M) {
+	flag.Parse() // Do not remove this comment, import into google3 depends on it
+
+	exitCode := func() int {
+		// Create the certs.
+		root, err := ioutil.TempDir("", "TestTLSServer")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "TempDir failed: %v", err)
+			return 1
+		}
+		defer os.RemoveAll(root)
+		tlstest.CreateCA(root)
+		tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "localhost")
+		tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
+
+		// Create the extra SSL my.cnf lines.
+		cnf := fmt.Sprintf(`
+ssl-ca=%v/ca-cert.pem
+ssl-cert=%v/server-cert.pem
+ssl-key=%v/server-key.pem
+`, root, root, root)
+		extraMyCnf := path.Join(root, "ssl_my.cnf")
+		if err := ioutil.WriteFile(extraMyCnf, []byte(cnf), os.ModePerm); err != nil {
+			fmt.Fprintf(os.Stderr, "ioutil.WriteFile(%v) failed: %v", extraMyCnf, err)
+			return 1
+		}
+
+		// Launch MySQL.
+		hdl, err := vttest.LaunchVitess(
+			vttest.MySQLOnly("vttest"),
+			vttest.NoStderr(),
+			vttest.ExtraMyCnf(extraMyCnf))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "could not launch mysql: %v\n", err)
+			return 1
+		}
+		defer func() {
+			err = hdl.TearDown()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "hdl.TearDown failed: %v", err)
+			}
+		}()
+		connParams, err = hdl.MySQLConnParams()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "could not fetch mysql params: %v\n", err)
+			return 1
+		}
+
+		// Add the SSL parts, but they're not enabled until
+		// the flag is set.
+		connParams.SslCa = path.Join(root, "ca-cert.pem")
+		connParams.SslCert = path.Join(root, "client-cert.pem")
+		connParams.SslKey = path.Join(root, "client-key.pem")
+
+		// Uncomment to sleep and be able to connect to MySQL
+		// fmt.Printf("Connect to MySQL using parameters: %v\n", connParams)
+		// time.Sleep(10 * time.Minute)
+
+		return m.Run()
+	}()
+	os.Exit(exitCode)
+}

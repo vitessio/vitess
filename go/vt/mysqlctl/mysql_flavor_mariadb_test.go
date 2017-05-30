@@ -1,6 +1,18 @@
-// Copyright 2014, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package mysqlctl
 
@@ -8,20 +20,19 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/mysqlconn/replication"
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 )
 
 func TestMariadbMakeBinlogEvent(t *testing.T) {
 	input := []byte{1, 2, 3}
-	want := replication.NewMariadbBinlogEvent([]byte{1, 2, 3})
+	want := mysql.NewMariadbBinlogEvent([]byte{1, 2, 3})
 	if got := (&mariaDB10{}).MakeBinlogEvent(input); !reflect.DeepEqual(got, want) {
 		t.Errorf("(&mariaDB10{}).MakeBinlogEvent(%#v) = %#v, want %#v", input, got, want)
 	}
 }
 
 func TestMariadbSetSlavePositionCommands(t *testing.T) {
-	pos := replication.Position{GTIDSet: replication.MariadbGTID{Domain: 1, Server: 41983, Sequence: 12345}}
+	pos := mysql.Position{GTIDSet: mysql.MariadbGTID{Domain: 1, Server: 41983, Sequence: 12345}}
 	want := []string{
 		"RESET MASTER",
 		"SET GLOBAL gtid_slave_pos = '1-41983-12345'",
@@ -39,7 +50,7 @@ func TestMariadbSetSlavePositionCommands(t *testing.T) {
 }
 
 func TestMariadbSetMasterCommands(t *testing.T) {
-	params := &sqldb.ConnParams{
+	params := &mysql.ConnParams{
 		Uname: "username",
 		Pass:  "password",
 	}
@@ -67,7 +78,7 @@ func TestMariadbSetMasterCommands(t *testing.T) {
 }
 
 func TestMariadbSetMasterCommandsSSL(t *testing.T) {
-	params := &sqldb.ConnParams{
+	params := &mysql.ConnParams{
 		Uname:     "username",
 		Pass:      "password",
 		SslCa:     "ssl-ca",
@@ -106,7 +117,7 @@ func TestMariadbSetMasterCommandsSSL(t *testing.T) {
 
 func TestMariadbParseGTID(t *testing.T) {
 	input := "12-34-5678"
-	want := replication.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678}
+	want := mysql.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678}
 
 	got, err := (&mariaDB10{}).ParseGTID(input)
 	if err != nil {
@@ -119,7 +130,7 @@ func TestMariadbParseGTID(t *testing.T) {
 
 func TestMariadbParseReplicationPosition(t *testing.T) {
 	input := "12-34-5678"
-	want := replication.Position{GTIDSet: replication.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678}}
+	want := mysql.Position{GTIDSet: mysql.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678}}
 
 	got, err := (&mariaDB10{}).ParseReplicationPosition(input)
 	if err != nil {

@@ -1,6 +1,18 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package connpool
 
@@ -11,8 +23,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysqlconn"
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/trace"
@@ -39,7 +50,7 @@ const (
 // It will also trigger a CheckMySQL whenever applicable.
 type DBConn struct {
 	conn    *dbconnpool.DBConnection
-	info    *sqldb.ConnParams
+	info    *mysql.ConnParams
 	pool    *Pool
 	current sync2.AtomicString
 }
@@ -48,7 +59,7 @@ type DBConn struct {
 func NewDBConn(
 	cp *Pool,
 	appParams,
-	dbaParams *sqldb.ConnParams) (*DBConn, error) {
+	dbaParams *mysql.ConnParams) (*DBConn, error) {
 	c, err := dbconnpool.NewDBConnection(appParams, tabletenv.MySQLStats)
 	if err != nil {
 		cp.checker.CheckMySQL()
@@ -73,7 +84,7 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 		switch {
 		case err == nil:
 			return r, nil
-		case !mysqlconn.IsConnErr(err):
+		case !mysql.IsConnErr(err):
 			// MySQL error that isn't due to a connection issue
 			return nil, err
 		case attempt == 2:
@@ -141,7 +152,7 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 		switch {
 		case err == nil:
 			return nil
-		case !mysqlconn.IsConnErr(err) || resultSent || attempt == 2:
+		case !mysql.IsConnErr(err) || resultSent || attempt == 2:
 			// MySQL error that isn't due to a connection issue
 			return err
 		}
@@ -177,18 +188,20 @@ var (
 // VerifyMode is a helper method to verify mysql is running with
 // sql_mode = STRICT_TRANS_TABLES and autocommit=ON. It also returns
 // the current binlog format.
-func (dbc *DBConn) VerifyMode() (BinlogFormat, error) {
-	qr, err := dbc.conn.ExecuteFetch(getModeSQL, 2, false)
-	if err != nil {
-		return 0, fmt.Errorf("could not verify mode: %v", err)
+func (dbc *DBConn) VerifyMode(strictTransTables bool) (BinlogFormat, error) {
+	if strictTransTables {
+		qr, err := dbc.conn.ExecuteFetch(getModeSQL, 2, false)
+		if err != nil {
+			return 0, fmt.Errorf("could not verify mode: %v", err)
+		}
+		if len(qr.Rows) != 1 {
+			return 0, fmt.Errorf("incorrect rowcount received for %s: %d", getModeSQL, len(qr.Rows))
+		}
+		if !strings.Contains(qr.Rows[0][0].String(), "STRICT_TRANS_TABLES") {
+			return 0, fmt.Errorf("require sql_mode to be STRICT_TRANS_TABLES: got '%s'", qr.Rows[0][0].String())
+		}
 	}
-	if len(qr.Rows) != 1 {
-		return 0, fmt.Errorf("incorrect rowcount received for %s: %d", getModeSQL, len(qr.Rows))
-	}
-	if !strings.Contains(qr.Rows[0][0].String(), "STRICT_TRANS_TABLES") {
-		return 0, fmt.Errorf("require sql_mode to be STRICT_TRANS_TABLES: got %s", qr.Rows[0][0].String())
-	}
-	qr, err = dbc.conn.ExecuteFetch(getAutocommit, 2, false)
+	qr, err := dbc.conn.ExecuteFetch(getAutocommit, 2, false)
 	if err != nil {
 		return 0, fmt.Errorf("could not verify mode: %v", err)
 	}

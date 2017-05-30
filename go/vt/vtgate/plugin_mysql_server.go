@@ -1,3 +1,19 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreedto in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vtgate
 
 import (
@@ -8,8 +24,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysqlconn"
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -42,19 +57,19 @@ func newVtgateHandler(vtg *VTGate) *vtgateHandler {
 	}
 }
 
-func (vh *vtgateHandler) NewConnection(c *mysqlconn.Conn) {
+func (vh *vtgateHandler) NewConnection(c *mysql.Conn) {
 }
 
-func (vh *vtgateHandler) ConnectionClosed(c *mysqlconn.Conn) {
+func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	// Rollback if there is an ongoing transaction. Ignore error.
 	ctx := context.Background()
 	session, _ := c.ClientData.(*vtgatepb.Session)
 	if (session != nil) {
-		_, _, _ = vh.vtg.Execute(ctx, "rollback", make(map[string]interface{}), session)
+		_, _, _ = vh.vtg.Execute(ctx, session, "rollback", make(map[string]interface{}))
 	}
 }
 
-func (vh *vtgateHandler) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Result, error) {
+func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query []byte) (*sqltypes.Result, error) {
 	// FIXME(alainjobart): Add some kind of timeout to the context.
 	ctx := context.Background()
 
@@ -77,17 +92,20 @@ func (vh *vtgateHandler) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Re
 				IncludedFields: querypb.ExecuteOptions_ALL,
 			},
 		}
+		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
+			session.Options.ClientFoundRows = true
+		}
 	}
 	if c.SchemaName != "" {
 		session.TargetString = c.SchemaName
 	}
-	session, result, err := vh.vtg.Execute(ctx, query, make(map[string]interface{}), session)
+	session, result, err := vh.vtg.Execute(ctx, session, string(query), make(map[string]interface{}))
 	c.ClientData = session
-	return result, sqldb.NewSQLErrorFromError(err)
+	return result, mysql.NewSQLErrorFromError(err)
 }
 
 func init() {
-	var listener *mysqlconn.Listener
+	var listener *mysql.Listener
 
 	servenv.OnRun(func() {
 		// Flag is not set, just return.
@@ -104,14 +122,14 @@ func init() {
 		for _, initFn := range pluginInitializers {
 			initFn()
 		}
-		authServer := mysqlconn.GetAuthServer(*mysqlAuthServerImpl)
+		authServer := mysql.GetAuthServer(*mysqlAuthServerImpl)
 
 		// Create a Listener.
 		var err error
 		vh := newVtgateHandler(rpcVTGate)
-		listener, err = mysqlconn.NewListener("tcp", net.JoinHostPort("", fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh)
+		listener, err = mysql.NewListener("tcp", net.JoinHostPort("", fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh)
 		if err != nil {
-			log.Fatalf("mysqlconn.NewListener failed: %v", err)
+			log.Fatalf("mysql.NewListener failed: %v", err)
 		}
 		if *mysqlSslCert != "" && *mysqlSslKey != "" {
 			listener.TLSConfig, err = grpcutils.TLSServerConfig(*mysqlSslCert, *mysqlSslKey, *mysqlSslCa)
