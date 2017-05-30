@@ -1,6 +1,10 @@
 # This file is executed immediately after mysql_install_db,
 # to initialize a fresh data directory.
 
+# This gets run on all new tablets. Disable binlog to avoid errant GTID when
+# creating a new cluster
+SET sql_log_bin = 0;
+
 ##########################################
 # Equivalent of mysql_secure_installation
 ##########################################
@@ -71,3 +75,4 @@ GRANT SELECT
 
 FLUSH PRIVILEGES;
 
+SET sql_log_bin = 1;
