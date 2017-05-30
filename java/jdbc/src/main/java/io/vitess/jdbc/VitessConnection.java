@@ -269,10 +269,8 @@ public class VitessConnection extends ConnectionProperties implements Connection
                 Constants.SQLExceptionMessages.METHOD_CALLED_ON_OPEN_TRANSACTION);
         }
 
-        if (readOnly) {
-            throw new SQLFeatureNotSupportedException(Constants.SQLExceptionMessages.READ_ONLY);
-        }
-        this.readOnly = false;
+        // TODO implement read only properly
+        this.readOnly = readOnly;
     }
 
     /**

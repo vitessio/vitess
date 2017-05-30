@@ -335,6 +335,24 @@ import org.powermock.modules.junit4.PowerMockRunner;
                 Assert.assertEquals("Failed to execute this method", ex.getMessage());
             }
 
+            //cursor is null
+            PowerMockito.when(mockConn.isReadOnly()).thenReturn(true);
+            try {
+                preparedStatement.executeUpdate();
+                Assert.fail("Should have thrown exception for read only");
+            } catch (SQLException ex) {
+                Assert.assertEquals("Connection has been set to read only and an update was attempted", ex.getMessage());
+            }
+
+            //cursor is null
+            PowerMockito.when(mockConn.isReadOnly()).thenReturn(true);
+            try {
+                preparedStatement.executeBatch();
+                Assert.fail("Should have thrown exception for read only");
+            } catch (SQLException ex) {
+                Assert.assertEquals("Connection has been set to read only and an update was attempted", ex.getMessage());
+            }
+
         } catch (SQLException e) {
             Assert.fail("Test failed " + e.getMessage());
         }
