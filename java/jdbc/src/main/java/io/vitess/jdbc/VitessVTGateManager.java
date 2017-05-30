@@ -56,7 +56,7 @@ public class VitessVTGateManager {
          */
         public VTGateConnections(VitessConnection connection) {
             for (VitessJDBCUrl.HostInfo hostInfo : connection.getUrl().getHostInfos()) {
-                String identifier = getIdentifer(hostInfo.getHostname(), hostInfo.getPort(), connection.getUsername());
+                String identifier = getIdentifer(hostInfo.getHostname(), hostInfo.getPort(), connection.getUsername(), connection.getKeyspace());
                 synchronized (VitessVTGateManager.class) {
                     if (!vtGateConnHashMap.containsKey(identifier)) {
                         updateVtGateConnHashMap(identifier, hostInfo, connection);
@@ -81,8 +81,8 @@ public class VitessVTGateManager {
 
     }
 
-    private static String getIdentifer(String hostname, int port, String userIdentifer) {
-        return (hostname + port + userIdentifer);
+    private static String getIdentifer(String hostname, int port, String userIdentifer, String keyspace) {
+        return (hostname + port + userIdentifer + keyspace);
     }
 
     /**
