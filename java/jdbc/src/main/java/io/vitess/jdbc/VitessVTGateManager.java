@@ -1,14 +1,30 @@
+/*
+ * Copyright 2017 Google Inc.
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.vitess.jdbc;
 
 import io.vitess.client.Context;
 import io.vitess.client.RpcClient;
 import io.vitess.client.VTGateConn;
 import io.vitess.client.grpc.GrpcClientFactory;
+import io.vitess.client.grpc.RetryingInterceptorConfig;
 import io.vitess.client.grpc.tls.TlsOptions;
 import io.vitess.util.CommonUtils;
 import io.vitess.util.Constants;
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
@@ -40,10 +56,10 @@ public class VitessVTGateManager {
          */
         public VTGateConnections(VitessConnection connection) {
             for (VitessJDBCUrl.HostInfo hostInfo : connection.getUrl().getHostInfos()) {
-                String identifier = getIdentifer(hostInfo.getHostname(), hostInfo.getPort(), connection.getUsername());
+                String identifier = getIdentifer(hostInfo.getHostname(), hostInfo.getPort(), connection.getUsername(), connection.getKeyspace());
                 synchronized (VitessVTGateManager.class) {
                     if (!vtGateConnHashMap.containsKey(identifier)) {
-                        updateVtGateConnHashMap(identifier, hostInfo.getHostname(), hostInfo.getPort(), connection);
+                        updateVtGateConnHashMap(identifier, hostInfo, connection);
                     }
                 }
                 vtGateIdentifiers.add(identifier);
@@ -65,51 +81,34 @@ public class VitessVTGateManager {
 
     }
 
-    private static String getIdentifer(String hostname, int port, String userIdentifer) {
-        return (hostname + port + userIdentifer);
+    private static String getIdentifer(String hostname, int port, String userIdentifer, String keyspace) {
+        return (hostname + port + userIdentifer + keyspace);
     }
 
     /**
      * Create VTGateConn and update vtGateConnHashMap.
      *
      * @param identifier
-     * @param hostname
-     * @param port
+     * @param hostInfo
      * @param connection
      */
-    private static void updateVtGateConnHashMap(String identifier, String hostname, int port,
+    private static void updateVtGateConnHashMap(String identifier, VitessJDBCUrl.HostInfo hostInfo,
                                                 VitessConnection connection) {
-        vtGateConnHashMap.put(identifier, getVtGateConn(hostname, port, connection));
+        vtGateConnHashMap.put(identifier, getVtGateConn(hostInfo, connection));
     }
 
     /**
      * Create vtGateConn object with given identifier.
      *
-     * @param hostname
-     * @param port
-     * @param username
-     * @return
-     */
-    private static VTGateConn getVtGateConn(String hostname, int port, String username) {
-        Context context = CommonUtils.createContext(username, Constants.CONNECTION_TIMEOUT);
-        InetSocketAddress inetSocketAddress = new InetSocketAddress(hostname, port);
-        RpcClient client = new GrpcClientFactory().create(context, inetSocketAddress);
-        return (new VTGateConn(client));
-    }
-
-    /**
-     * Create vtGateConn object with given identifier.
-     *
-     * @param hostname
-     * @param port
+     * @param hostInfo
      * @param connection
      * @return
      */
-    private static VTGateConn getVtGateConn(String hostname, int port, VitessConnection connection) {
+    private static VTGateConn getVtGateConn(VitessJDBCUrl.HostInfo hostInfo, VitessConnection connection) {
         final String username = connection.getUsername();
         final String keyspace = connection.getKeyspace();
         final Context context = CommonUtils.createContext(username, Constants.CONNECTION_TIMEOUT);
-        final InetSocketAddress inetSocketAddress = new InetSocketAddress(hostname, port);
+        RetryingInterceptorConfig retryingConfig = getRetryingInterceptorConfig(connection);
         RpcClient client;
         if (connection.getUseSSL()) {
             final String keyStorePath = connection.getKeyStore() != null
@@ -136,14 +135,22 @@ public class VitessVTGateManager {
                     .trustStorePassword(trustStorePassword)
                     .trustAlias(trustAlias);
 
-            client = new GrpcClientFactory().createTls(context, inetSocketAddress, tlsOptions);
+            client = new GrpcClientFactory(retryingConfig).createTls(context, hostInfo.toString(), tlsOptions);
         } else {
-            client = new GrpcClientFactory().create(context, inetSocketAddress);
+            client = new GrpcClientFactory(retryingConfig).create(context, hostInfo.toString());
         }
         if (null == keyspace) {
             return (new VTGateConn(client));
         }
         return (new VTGateConn(client, keyspace));
+    }
+
+    private static RetryingInterceptorConfig getRetryingInterceptorConfig(VitessConnection conn) {
+        if (!conn.getGrpcRetriesEnabled()) {
+            return RetryingInterceptorConfig.noOpConfig();
+        }
+
+        return RetryingInterceptorConfig.exponentialConfig(conn.getGrpcRetryInitialBackoffMillis(), conn.getGrpcRetryMaxBackoffMillis(), conn.getGrpcRetryBackoffMultiplier());
     }
 
     public static void close() throws SQLException {

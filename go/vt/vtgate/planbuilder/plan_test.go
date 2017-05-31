@@ -1,6 +1,18 @@
-// Copyright 2014, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package planbuilder
 
@@ -94,13 +106,18 @@ func init() {
 func TestPlan(t *testing.T) {
 	vschema := loadSchema(t, "schema_test.json")
 
+	// You will notice that some tests expect user.Id instead of user.id.
+	// This is because we now pre-create vindex columns in the symbol
+	// table, which come from vschema. In the test vschema,
+	// the column is named as Id. This is to make sure that
+	// column names are case-preserved, but treated as
+	// case-insensitive even if they come from the vschema.
 	testFile(t, "from_cases.txt", vschema)
 	testFile(t, "filter_cases.txt", vschema)
 	testFile(t, "select_cases.txt", vschema)
 	testFile(t, "postprocess_cases.txt", vschema)
 	testFile(t, "wireup_cases.txt", vschema)
 	testFile(t, "dml_cases.txt", vschema)
-	testFile(t, "show_cases.txt", vschema)
 	testFile(t, "unsupported_cases.txt", vschema)
 }
 
@@ -125,8 +142,12 @@ type vschemaWrapper struct {
 	v *vindexes.VSchema
 }
 
-func (vw *vschemaWrapper) Find(ks, tab sqlparser.TableIdent) (*vindexes.Table, error) {
-	return vw.v.Find(ks.String(), tab.String())
+func (vw *vschemaWrapper) Find(tab sqlparser.TableName) (*vindexes.Table, error) {
+	return vw.v.Find(tab.Qualifier.String(), tab.Name.String())
+}
+
+func (vw *vschemaWrapper) DefaultKeyspace() (*vindexes.Keyspace, error) {
+	return vw.v.Keyspaces["main"].Keyspace, nil
 }
 
 func testFile(t *testing.T, filename string, vschema *vindexes.VSchema) {

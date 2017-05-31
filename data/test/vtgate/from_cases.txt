@@ -28,6 +28,21 @@
   }
 }
 
+# Single information_schema query
+"select col from information_schema.foo"
+{
+  "Original": "select col from information_schema.foo",
+  "Instructions": {
+    "Opcode": "ExecDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select col from information_schema.foo",
+    "FieldQuery": "select col from information_schema.foo where 1 != 1"
+  }
+}
+
 # Multi-table unsharded
 "select m1.col from unsharded as m1 join unsharded as m2"
 {
@@ -115,6 +130,21 @@
     },
     "Query": "select u1.a, u2.a from unsharded as u1, unsharded as u2",
     "FieldQuery": "select u1.a, u2.a from unsharded as u1, unsharded as u2 where 1 != 1"
+  }
+}
+
+# ',' join information_schema
+"select * from information_schema.a, information_schema.b"
+{
+  "Original": "select * from information_schema.a, information_schema.b",
+  "Instructions": {
+    "Opcode": "ExecDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select * from information_schema.a, information_schema.b",
+    "FieldQuery": "select * from information_schema.a, information_schema.b where 1 != 1"
   }
 }
 
@@ -547,8 +577,8 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select user.col, user.id from user",
-      "FieldQuery": "select user.col, user.id from user where 1 != 1"
+      "Query": "select user.col, user.Id from user",
+      "FieldQuery": "select user.col, user.Id from user where 1 != 1"
     },
     "Right": {
       "Opcode": "SelectScatter",
@@ -647,8 +677,8 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select user.col, user.id from user",
-      "FieldQuery": "select user.col, user.id from user where 1 != 1"
+      "Query": "select user.col, user.Id from user",
+      "FieldQuery": "select user.col, user.Id from user where 1 != 1"
     },
     "Right": {
       "Opcode": "SelectScatter",

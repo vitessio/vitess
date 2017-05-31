@@ -1,6 +1,18 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package wrangler
 
@@ -201,7 +213,12 @@ func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.Sha
 	tabletIPMap := make(map[string]*topodatapb.Tablet)
 	slaveIPMap := make(map[string]bool)
 	for _, tablet := range tabletMap {
-		tabletIPMap[normalizeIP(tablet.Ip)] = tablet.Tablet
+		ip, err := topoproto.TabletIP(tablet.Tablet)
+		if err != nil {
+			results <- fmt.Errorf("could not resolve IP for tablet %s: %v", tablet.Hostname, err)
+			continue
+		}
+		tabletIPMap[normalizeIP(ip)] = tablet.Tablet
 	}
 
 	// See if every slave is in the replication graph.
@@ -218,8 +235,13 @@ func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.Sha
 			continue
 		}
 
-		if !slaveIPMap[normalizeIP(tablet.Ip)] {
-			results <- fmt.Errorf("slave %v not replicating: %v slave list: %q", topoproto.TabletAliasString(tablet.Alias), tablet.Ip, slaveList)
+		ip, err := topoproto.TabletIP(tablet.Tablet)
+		if err != nil {
+			results <- fmt.Errorf("could not resolve IP for tablet %s: %v", tablet.Hostname, err)
+			continue
+		}
+		if !slaveIPMap[normalizeIP(ip)] {
+			results <- fmt.Errorf("slave %v not replicating: %v slave list: %q", topoproto.TabletAliasString(tablet.Alias), ip, slaveList)
 		}
 	}
 }

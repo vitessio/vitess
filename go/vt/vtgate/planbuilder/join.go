@@ -1,6 +1,18 @@
-// Copyright 2016, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package planbuilder
 
@@ -10,21 +22,52 @@ import (
 )
 
 // join is used to build a Join primitive.
-// It's used to buid a normal join or a left join
+// It's used to build a normal join or a left join
 // operation.
 type join struct {
-	// LeftOrder and RightOrder store the order
-	// of the left node and right node. The Order
-	// of this join will be the same as RightOrder.
-	// This information is used for traversal.
-	LeftOrder, RightOrder int
+	// leftMaxOrder and rightMaxOrder store the max order
+	// of the left node and right node. This is essentially
+	// used for a b-tree style traversal towards the target route.
+	// Let us assume the following execution tree:
+	//      Ja
+	//     /  \
+	//    /    \
+	//   Jb     Jc
+	//  / \    /  \
+	// R1  R2  Jd  R5
+	//        / \
+	//        R3 R4
+	//
+	// R1-R5 are routes. Their numbers indicate execution
+	// order: R1 is executed first, then it's R2, which will
+	// be joined at Jb, etc.
+	//
+	// The values for left and right max order for the join
+	// nodes will be:
+	//     left right
+	// Jb: 1    2
+	// Jd: 3    4
+	// Jc: 4    5
+	// Ja: 2    5
+	// The route to R3 would be:
+	// Go right from Ja->Jc because Left(Ja)==2, which is <3.
+	// Go left from Jc->Jd because Left(Jc)==4, which is >=3.
+	// Go left from Jd->R3 because Left(Jd)==3, the destination.
+	//
+	// There are many use cases for these Orders. Look for 'isOnLeft'
+	// to see how these numbers are used. 'isOnLeft' is a convenience
+	// function to help with traversal.
+	// The MaxOrder for a join is the same as rightMaxOrder.
+	// A join can currently not be a destination. It therefore does
+	// not have its own Order.
+	leftMaxOrder, rightMaxOrder int
 	// Left and Right are the nodes for the join.
 	Left, Right builder
 	symtab      *symtab
-	// Colsyms specifies the colsyms supplied by this
+	// ResultColumns specifies the result columns supplied by this
 	// join.
-	Colsyms []*colsym
-	ejoin   *engine.Join
+	ResultColumns []*resultColumn
+	ejoin         *engine.Join
 }
 
 // newJoin makes a new joinBuilder using the two nodes. ajoin can be nil
@@ -41,17 +84,17 @@ func newJoin(lhs, rhs builder, ajoin *sqlparser.JoinTableExpr) (*join, error) {
 		return nil, err
 	}
 	rhs.SetSymtab(lhs.Symtab())
-	rhs.SetOrder(lhs.Order())
+	rhs.SetOrder(lhs.MaxOrder())
 	opcode := engine.NormalJoin
 	if ajoin != nil && ajoin.Join == sqlparser.LeftJoinStr {
 		opcode = engine.LeftJoin
 	}
 	jb := &join{
-		LeftOrder:  lhs.Order(),
-		RightOrder: rhs.Order(),
-		Left:       lhs,
-		Right:      rhs,
-		symtab:     lhs.Symtab(),
+		leftMaxOrder:  lhs.MaxOrder(),
+		rightMaxOrder: rhs.MaxOrder(),
+		Left:          lhs,
+		Right:         rhs,
+		symtab:        lhs.Symtab(),
 		ejoin: &engine.Join{
 			Opcode: opcode,
 			Left:   lhs.Primitive(),
@@ -90,20 +133,20 @@ func (jb *join) SetSymtab(symtab *symtab) {
 	jb.Right.SetSymtab(symtab)
 }
 
-// Order returns the order of the node.
-func (jb *join) Order() int {
-	return jb.RightOrder
+// MaxOrder returns the max order of the node.
+func (jb *join) MaxOrder() int {
+	return jb.rightMaxOrder
 }
 
-// SetOrder sets the order for the unerlying routes.
+// SetOrder sets the order for the underlying routes.
 func (jb *join) SetOrder(order int) {
 	jb.Left.SetOrder(order)
-	jb.LeftOrder = jb.Left.Order()
-	jb.Right.SetOrder(jb.LeftOrder)
-	jb.RightOrder = jb.Right.Order()
+	jb.leftMaxOrder = jb.Left.MaxOrder()
+	jb.Right.SetOrder(jb.leftMaxOrder)
+	jb.rightMaxOrder = jb.Right.MaxOrder()
 }
 
-// Primitve returns the built primitive.
+// Primitive returns the built primitive.
 func (jb *join) Primitive() engine.Primitive {
 	return jb.ejoin
 }
@@ -126,25 +169,25 @@ func (jb *join) SetRHS() {
 
 // PushSelect pushes the select expression into the join and
 // recursively down.
-func (jb *join) PushSelect(expr *sqlparser.NonStarExpr, rb *route) (colsym *colsym, colnum int, err error) {
-	if rb.Order() <= jb.LeftOrder {
-		colsym, colnum, err = jb.Left.PushSelect(expr, rb)
+func (jb *join) PushSelect(expr *sqlparser.AliasedExpr, rb *route) (rc *resultColumn, colnum int, err error) {
+	if jb.isOnLeft(rb.Order) {
+		rc, colnum, err = jb.Left.PushSelect(expr, rb)
 		if err != nil {
 			return nil, 0, err
 		}
 		jb.ejoin.Cols = append(jb.ejoin.Cols, -colnum-1)
 	} else {
-		colsym, colnum, err = jb.Right.PushSelect(expr, rb)
+		rc, colnum, err = jb.Right.PushSelect(expr, rb)
 		if err != nil {
 			return nil, 0, err
 		}
 		jb.ejoin.Cols = append(jb.ejoin.Cols, colnum+1)
 	}
-	jb.Colsyms = append(jb.Colsyms, colsym)
-	return colsym, len(jb.Colsyms) - 1, nil
+	jb.ResultColumns = append(jb.ResultColumns, rc)
+	return rc, len(jb.ResultColumns) - 1, nil
 }
 
-// PushOrderByNull pushes misc constructs to the underlying routes.
+// PushOrderByNull pushes 'ORDER BY NULL' to the underlying routes.
 func (jb *join) PushOrderByNull() {
 	jb.Left.PushOrderByNull()
 	jb.Right.PushOrderByNull()
@@ -169,11 +212,11 @@ func (jb *join) Wireup(bldr builder, jt *jointab) error {
 // column as a join variable. If the column is not already in
 // its list, it requests the LHS node to supply it using SupplyCol.
 func (jb *join) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	if from > jb.LeftOrder {
+	if !jb.isOnLeft(from) {
 		jb.Right.SupplyVar(from, to, col, varname)
 		return
 	}
-	if to <= jb.LeftOrder {
+	if jb.isOnLeft(to) {
 		jb.Left.SupplyVar(from, to, col, varname)
 		return
 	}
@@ -181,52 +224,45 @@ func (jb *join) SupplyVar(from, to int, col *sqlparser.ColName, varname string) 
 		// Looks like somebody else already requested this.
 		return
 	}
-	switch meta := col.Metadata.(type) {
-	case *colsym:
-		for i, colsym := range jb.Colsyms {
-			if jb.ejoin.Cols[i] > 0 {
-				continue
-			}
-			if meta == colsym {
-				jb.ejoin.Vars[varname] = -jb.ejoin.Cols[i] - 1
-				return
-			}
+	c := col.Metadata.(*column)
+	for i, rc := range jb.ResultColumns {
+		if jb.ejoin.Cols[i] > 0 {
+			continue
 		}
-		panic("unexpected: column not found")
-	case *tabsym:
-		ref := newColref(col)
-		for i, colsym := range jb.Colsyms {
-			if jb.ejoin.Cols[i] > 0 {
-				continue
-			}
-			if colsym.Underlying == ref {
-				jb.ejoin.Vars[varname] = -jb.ejoin.Cols[i] - 1
-				return
-			}
+		if rc.column == c {
+			jb.ejoin.Vars[varname] = -jb.ejoin.Cols[i] - 1
+			return
 		}
-		jb.ejoin.Vars[varname] = jb.Left.SupplyCol(ref)
-		return
 	}
-	panic("unreachable")
+	_, jb.ejoin.Vars[varname] = jb.Left.SupplyCol(col.Metadata.(*column))
 }
 
 // SupplyCol changes the join to supply the requested column
 // name, and returns the result column number. If the column
 // is already in the list, it's reused.
-func (jb *join) SupplyCol(ref colref) int {
-	for i, colsym := range jb.Colsyms {
-		if colsym.Underlying == ref {
-			return i
+func (jb *join) SupplyCol(c *column) (rs *resultColumn, colnum int) {
+	for i, rs := range jb.ResultColumns {
+		if rs.column == c {
+			return rs, i
 		}
 	}
-	routeNumber := ref.Route().Order()
-	if routeNumber <= jb.LeftOrder {
-		ret := jb.Left.SupplyCol(ref)
-		jb.ejoin.Cols = append(jb.ejoin.Cols, -ret-1)
+
+	routeNumber := c.Route().Order
+	var sourceCol int
+	if jb.isOnLeft(routeNumber) {
+		rs, sourceCol = jb.Left.SupplyCol(c)
+		jb.ejoin.Cols = append(jb.ejoin.Cols, -sourceCol-1)
 	} else {
-		ret := jb.Right.SupplyCol(ref)
-		jb.ejoin.Cols = append(jb.ejoin.Cols, ret+1)
+		rs, sourceCol = jb.Right.SupplyCol(c)
+		jb.ejoin.Cols = append(jb.ejoin.Cols, sourceCol+1)
 	}
-	jb.Colsyms = append(jb.Colsyms, &colsym{Underlying: ref})
-	return len(jb.ejoin.Cols) - 1
+	jb.ResultColumns = append(jb.ResultColumns, rs)
+	return rs, len(jb.ejoin.Cols) - 1
+}
+
+// isOnLeft returns true if the specified route number
+// is on the left side of the join. If false, it means
+// the node is on the right.
+func (jb *join) isOnLeft(nodeNum int) bool {
+	return nodeNum <= jb.leftMaxOrder
 }

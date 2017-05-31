@@ -41,7 +41,7 @@ writes will fail since they'll be routed to a read-only replica
 (the old master). Use the [TabletExternallyReparented](/reference/vtctl.html#tabletexternallyreparented)
 command to tell Vitess the new master tablet for a shard.
 
-Tools like [Orchestrator](https://github.com/outbrain/orchestrator)
+Tools like [Orchestrator](https://github.com/github/orchestrator)
 can be configured to call this automatically when a failover occurs.
 See our sample [orchestrator.conf.json](https://github.com/youtube/vitess/blob/1129d69282bb738c94b8af661b984b6377a759f7/docker/orchestrator/orchestrator.conf.json#L131)
 for an example of this.

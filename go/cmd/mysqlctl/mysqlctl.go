@@ -1,6 +1,18 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 // mysqlctl initializes and controls mysqld with Vitess-specific configuration.
 package main
@@ -16,7 +28,7 @@ import (
 
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/flagutil"
-	"github.com/youtube/vitess/go/mysqlconn/replication"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -138,30 +150,30 @@ func positionCmd(subFlags *flag.FlagSet, args []string) error {
 		return fmt.Errorf("not enough arguments for position operation")
 	}
 
-	pos1, err := replication.DecodePosition(args[1])
+	pos1, err := mysql.DecodePosition(args[1])
 	if err != nil {
 		return err
 	}
 
 	switch args[0] {
 	case "equal":
-		pos2, err := replication.DecodePosition(args[2])
+		pos2, err := mysql.DecodePosition(args[2])
 		if err != nil {
 			return err
 		}
 		fmt.Println(pos1.Equal(pos2))
 	case "at_least":
-		pos2, err := replication.DecodePosition(args[2])
+		pos2, err := mysql.DecodePosition(args[2])
 		if err != nil {
 			return err
 		}
 		fmt.Println(pos1.AtLeast(pos2))
 	case "append":
-		gtid, err := replication.DecodeGTID(args[2])
+		gtid, err := mysql.DecodeGTID(args[2])
 		if err != nil {
 			return err
 		}
-		fmt.Println(replication.AppendGTID(pos1, gtid))
+		fmt.Println(mysql.AppendGTID(pos1, gtid))
 	}
 
 	return nil

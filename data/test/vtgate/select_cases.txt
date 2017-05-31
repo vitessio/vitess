@@ -77,6 +77,90 @@
 "select a.user.* from user"
 "cannot resolve a.user.* to keyspace user"
 
+# auto-resolve anonymous columns for simple route
+"select col from user join user_extra on user.id = user_extra.user_id"
+{
+  "Original": "select col from user join user_extra on user.id = user_extra.user_id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col from user join user_extra on user.id = user_extra.user_id",
+    "FieldQuery": "select col from user join user_extra on user.id = user_extra.user_id where 1 != 1"
+  }
+}
+
+# Cannot auto-resolve for cross-shard joins
+"select col from user join user_extra"
+"symbol col not found"
+
+# Auto-resolve should work if unique vindex columns are referenced
+"select id, user_id from user join user_extra"
+{
+  "Original": "select id, user_id from user join user_extra",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select id from user",
+      "FieldQuery": "select id from user where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user_id from user_extra",
+      "FieldQuery": "select user_id from user_extra where 1 != 1"
+    },
+    "Cols": [
+      -1,
+      1
+    ]
+  }
+}
+
+# nextval for simple route
+"select next value from user"
+"NEXT used on a sharded table"
+
+# next n values for simple route
+"select next 2 values from seq"
+{
+  "Original": "select next 2 values from seq",
+  "Instructions": {
+    "Opcode": "SelectNext",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select next 2 values from seq",
+    "FieldQuery": "select next 2 values from seq where 1 != 1"
+  }
+}
+
+# last_insert_id for unsharded route
+"select last_insert_id() from main.dual"
+{
+  "Original": "select last_insert_id() from main.dual",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select last_insert_id() from dual",
+    "FieldQuery": "select last_insert_id() from dual where 1 != 1"
+  }
+}
+
 # RHS route referenced
 "select user_extra.id from user join user_extra"
 {
@@ -541,6 +625,38 @@
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
     "Values": 5
+  }
+}
+
+# union of information_schema
+"select * from information_schema.a union select * from information_schema.b"
+{
+  "Original": "select * from information_schema.a union select * from information_schema.b",
+  "Instructions": {
+    "Opcode": "ExecDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select * from information_schema.a union select * from information_schema.b",
+    "FieldQuery": "select * from information_schema.a where 1 != 1 union select * from information_schema.b where 1 != 1"
+  }
+}
+
+# union with the same target shard
+"select * from music where user_id = 1 union select * from user where id = 1"
+{
+  "Original": "select * from music where user_id = 1 union select * from user where id = 1",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from music where user_id = 1 union select * from user where id = 1",
+    "FieldQuery": "select * from music where 1 != 1 union select * from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 1
   }
 }
 

@@ -4,7 +4,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>io.vitess</groupId>
   <artifactId>vitess-parent</artifactId>
-  <version>2.1.1-SNAPSHOT</version>
+  <version>2.1.2-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>Vitess Java Client libraries and Hadoop support [Parent]</name>
@@ -37,7 +37,7 @@
 
   <licenses>
     <license>
-      <name>BSD-style license</name>
+      <name>Apache Version 2.0</name>
       <url>https://github.com/youtube/vitess/blob/master/LICENSE</url>
       <distribution>manual</distribution>
     </license>
@@ -112,6 +112,11 @@
       <dependency>
         <groupId>io.grpc</groupId>
         <artifactId>grpc-protobuf</artifactId>
+        <version>${grpc.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.grpc</groupId>
+        <artifactId>grpc-context</artifactId>
         <version>${grpc.version}</version>
       </dependency>
       <dependency>

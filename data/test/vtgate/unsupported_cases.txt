@@ -1,10 +1,14 @@
 # Unions
 "select * from user union select * from user_extra"
-"unsupported: scatter subquery"
+"unsupported: UNION on multi-shard queries"
 
 # SET
 "set a=1"
 "unsupported construct: set"
+
+# SHOW
+"show create database"
+"unsupported construct: show"
 
 # DDL
 "create table a(id int)"
@@ -25,11 +29,11 @@
 
 # union operations in subqueries (FROM)
 "select * from (select * from user union all select * from user_extra) as t"
-"unsupported: scatter subquery"
+"unsupported: UNION on multi-shard queries"
 
 # union operations in subqueries (expressions)
 "select * from user where id in (select * from user union select * from user_extra)"
-"unsupported: scatter subquery"
+"unsupported: UNION on multi-shard queries"
 
 # subquery with join primitive (FROM)
 "select * from (select user.id from user join user_extra) as t"
@@ -58,6 +62,18 @@
 # subquery and outer query route to different shards
 "select id from user where id = 5 and id in (select user_id from user_extra where user_extra.user_id = 4)"
 "unsupported: subquery and parent route to different shards"
+
+# last_insert_id for sharded keyspace
+"select last_insert_id() from user"
+"unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces"
+
+# join of information_schema with normal table
+"select foo from information_schema.a join unsharded"
+"unsupported: intermixing of information_schema and regular tables"
+
+# join of normal table with information_schema
+"select foo from unsharded join information_schema.a"
+"unsupported: intermixing of information_schema and regular tables"
 
 # scatter subquery in select
 "select id, (select id from user) from user"
@@ -115,6 +131,14 @@
 "select id from user group by (select id from user_extra)"
 "unsupported: subqueries in group by expression"
 
+# subquery of information_schema with normal table
+"select (select * from unsharded) from information_schema.a"
+"unsupported: intermixing of information_schema and regular tables"
+
+# subquery of normal table with information_schema
+"select (select * from information_schema.a) from unsharded"
+"unsupported: intermixing of information_schema and regular tables"
+
 # Order by uses complex expression
 "select id from user order by id+1"
 "unsupported: scatter and order by"
@@ -146,6 +170,10 @@
 # limit for scatter
 "select col from user limit 1"
 "unsupported: limits with scatter"
+
+# sequence in subquery
+"select col from unsharded where id in (select next value from seq)"
+"unsupported: use of sequence in subquery"
 
 # subqueries in update
 "update user set col = (select id from unsharded)"
@@ -203,9 +231,29 @@
 "delete from music where id in (1, 2)"
 "unsupported: multi-shard where clause in DML"
 
+# delete with multi-table targets
+"delete music from music where id = 1"
+"unsupported: multi-table delete statement in sharded keyspace"
+
+# multi delete multi table
+"delete user from user join user_extra on user.id = user_extra.id where user.name = 'foo'"
+"unsupported: multi-table delete statement in sharded keyspace"
+
 # update changes index column
 "update music set id = 1 where id = 1"
 "unsupported: DML cannot change vindex column"
+
+# complex update tables
+"update (select id from user) as u set id = 4"
+"unsupported: subqueries in DML"
+
+# join in update tables
+"update user join user_extra on user.id = user_extra.id set user.name = 'foo'"
+"unsupported: multi-table update statement in sharded keyspace"
+
+# multiple tables in update
+"update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id"
+"unsupported: multi-table update statement in sharded keyspace"
 
 # unsharded insert from union
 "insert into unsharded select 1 from dual union select 1 from dual"
@@ -247,9 +295,41 @@
 "insert into user(id, val) values((select 1), 1)"
 "unsupported: subquery in insert values"
 
-# nextval not supported yet
-"select next value from user"
-"unsupported: NEXT VALUES construct"
+# sharded replace no vindex
+"replace into user(val) values(1, 'foo')"
+"unsupported: REPLACE INTO with sharded schema"
+
+# sharded replace with vindex
+"replace into user(id, name) values(1, 'foo')"
+"unsupported: REPLACE INTO with sharded schema"
+
+# replace no column list
+"replace into user values(1, 2, 3)"
+"unsupported: REPLACE INTO with sharded schema"
+
+# replace with mimatched column list
+"replace into user(id) values (1, 2)"
+"unsupported: REPLACE INTO with sharded schema"
+
+# replace with one vindex
+"replace into user(id) values (1)"
+"unsupported: REPLACE INTO with sharded schema"
+
+# replace with non vindex on vindex-enabled table
+"replace into user(nonid) values (2)"
+"unsupported: REPLACE INTO with sharded schema"
+
+# replace with all vindexes supplied
+"replace into user(nonid, name, id) values (2, 'foo', 1)"
+"unsupported: REPLACE INTO with sharded schema"
+
+# replace for non-vindex autoinc
+"replace into user_extra(nonid) values (2)"
+"unsupported: REPLACE INTO with sharded schema"
+
+# replace with multiple rows
+"replace into user(id) values (1), (2)"
+"unsupported: REPLACE INTO with sharded schema"
 
 # complex expression in parenthesis with limit not supported yet
 "select * from user where (id = 4 AND name ='abc') limit 5"
@@ -259,25 +339,37 @@
 "select * from user where (id = 4 AND name ='abc') order by id"
 "unsupported: scatter and order by"
 
+# union of information_schema with normal table
+"select * from information_schema.a union select * from unsharded"
+"unsupported: intermixing of information_schema and regular tables"
+
+# union of information_schema with normal table
+"select * from unsharded union select * from information_schema.a"
+"unsupported: intermixing of information_schema and regular tables"
+
 # multi-shard union
 "(select id from user union select id from music) union select 1 from dual"
-"unsupported: scatter subquery"
+"unsupported: UNION on multi-shard queries"
 
 # multi-shard union
 "select 1 from music union (select id from user union all select name from unsharded)"
-"unsupported: subquery keyspace different from outer query"
+"unsupported: UNION on different keyspaces"
 
 # multi-shard union
 "select 1 from music union (select id from user union select name from unsharded)"
-"unsupported: subquery keyspace different from outer query"
+"unsupported: UNION on different keyspaces"
 
 # multi-shard union
 "select id from user union all select id from music"
-"unsupported: scatter subquery"
+"unsupported: UNION on multi-shard queries"
+
+# union with different target shards
+"select 1 from music where id = 1 union select 1 from music where id = 2"
+"unsupported: UNION queries with different target shards"
 
 # Union all
 "select col1, col2 from user union all select col1, col2 from user_extra"
-"unsupported: scatter subquery"
+"unsupported: UNION on multi-shard queries"
 
 "(select user.id, user.name from user join user_extra where user_extra.extra = 'asdf') union select 'b','c' from user"
 "unsupported construct: SELECT of UNION is non-trivial"

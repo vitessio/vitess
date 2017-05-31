@@ -1,6 +1,18 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 // Package fakerpcvtgateconn provides a fake implementation of
 // vtgateconn.Impl that doesn't do any RPC, but uses a local
@@ -159,7 +171,7 @@ func (conn *FakeVTGateConn) AddSplitQuery(
 }
 
 // Execute please see vtgateconn.Impl.Execute
-func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*vtgatepb.Session, *sqltypes.Result, error) {
+func (conn *FakeVTGateConn) Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*vtgatepb.Session, *sqltypes.Result, error) {
 	response, ok := conn.execMap[sql]
 	if !ok {
 		return nil, nil, fmt.Errorf("no match for: %s", sql)
@@ -177,6 +189,48 @@ func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars ma
 	reply = *response.reply
 	s := newSession(true, "test_keyspace", []string{}, topodatapb.TabletType_MASTER)
 	return s, &reply, nil
+}
+
+// ExecuteBatch please see vtgateconn.Impl.ExecuteBatch
+func (conn *FakeVTGateConn) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVarsList []map[string]interface{}) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
+	panic("not implemented")
+}
+
+// StreamExecute please see vtgateconn.Impl.StreamExecute
+func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
+	response, ok := conn.execMap[sql]
+	if !ok {
+		return nil, fmt.Errorf("no match for: %s", sql)
+	}
+	query := &queryExecute{
+		SQL:           sql,
+		BindVariables: bindVars,
+		Session:       session,
+	}
+	if !reflect.DeepEqual(query, response.execQuery) {
+		return nil, fmt.Errorf("StreamExecute: %+v, want %+v", sql, response.execQuery)
+	}
+	if response.err != nil {
+		return nil, response.err
+	}
+	var resultChan chan *sqltypes.Result
+	defer close(resultChan)
+	if response.reply != nil {
+		// create a result channel big enough to buffer all of
+		// the responses so we don't need to fork a go routine.
+		resultChan = make(chan *sqltypes.Result, len(response.reply.Rows)+1)
+		result := &sqltypes.Result{}
+		result.Fields = response.reply.Fields
+		resultChan <- result
+		for _, row := range response.reply.Rows {
+			result := &sqltypes.Result{}
+			result.Rows = [][]sqltypes.Value{row}
+			resultChan <- result
+		}
+	} else {
+		resultChan = make(chan *sqltypes.Result)
+	}
+	return &streamExecuteAdapter{resultChan}, nil
 }
 
 // ExecuteShards please see vtgateconn.Impl.ExecuteShard
@@ -224,11 +278,6 @@ func (conn *FakeVTGateConn) ExecuteEntityIds(ctx context.Context, query string, 
 	panic("not implemented")
 }
 
-// ExecuteBatch please see vtgateconn.Impl.ExecuteBatch
-func (conn *FakeVTGateConn) ExecuteBatch(ctx context.Context, sqlList []string, bindVarsList []map[string]interface{}, session *vtgatepb.Session) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
-	panic("not implemented")
-}
-
 // ExecuteBatchShards please see vtgateconn.Impl.ExecuteBatchShards
 func (conn *FakeVTGateConn) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, []sqltypes.Result, error) {
 	panic("not implemented")
@@ -249,43 +298,6 @@ func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
 		return nil, io.EOF
 	}
 	return r, nil
-}
-
-// StreamExecute please see vtgateconn.Impl.StreamExecute
-func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (sqltypes.ResultStream, error) {
-	response, ok := conn.execMap[sql]
-	if !ok {
-		return nil, fmt.Errorf("no match for: %s", sql)
-	}
-	query := &queryExecute{
-		SQL:           sql,
-		BindVariables: bindVars,
-		Session:       session,
-	}
-	if !reflect.DeepEqual(query, response.execQuery) {
-		return nil, fmt.Errorf("StreamExecute: %+v, want %+v", sql, response.execQuery)
-	}
-	if response.err != nil {
-		return nil, response.err
-	}
-	var resultChan chan *sqltypes.Result
-	defer close(resultChan)
-	if response.reply != nil {
-		// create a result channel big enough to buffer all of
-		// the responses so we don't need to fork a go routine.
-		resultChan = make(chan *sqltypes.Result, len(response.reply.Rows)+1)
-		result := &sqltypes.Result{}
-		result.Fields = response.reply.Fields
-		resultChan <- result
-		for _, row := range response.reply.Rows {
-			result := &sqltypes.Result{}
-			result.Rows = [][]sqltypes.Value{row}
-			resultChan <- result
-		}
-	} else {
-		resultChan = make(chan *sqltypes.Result)
-	}
-	return &streamExecuteAdapter{resultChan}, nil
 }
 
 // StreamExecuteShards please see vtgateconn.Impl.StreamExecuteShards
@@ -336,6 +348,11 @@ func (conn *FakeVTGateConn) MessageStream(ctx context.Context, keyspace string, 
 
 // MessageAck is part of the vtgate service API.
 func (conn *FakeVTGateConn) MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error) {
+	panic("not implemented")
+}
+
+// MessageAckKeyspaceIds is part of the vtgate service API.
+func (conn *FakeVTGateConn) MessageAckKeyspaceIds(ctx context.Context, keyspace string, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error) {
 	panic("not implemented")
 }
 

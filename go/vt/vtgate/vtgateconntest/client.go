@@ -1,6 +1,18 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 // Package vtgateconntest provides the test methods to make sure a
 // vtgateconn/vtgateservice pair over RPC works correctly.
@@ -78,7 +90,7 @@ func (q *queryExecute) equal(q2 *queryExecute) bool {
 }
 
 // Execute is part of the VTGateService interface
-func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, session *vtgatepb.Session) (*vtgatepb.Session, *sqltypes.Result, error) {
+func (f *fakeVTGateService) Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]interface{}) (*vtgatepb.Session, *sqltypes.Result, error) {
 	if f.hasError {
 		return session, nil, errTestVtGateError
 	}
@@ -106,7 +118,7 @@ func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariabl
 }
 
 // ExecuteBatch is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, session *vtgatepb.Session) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
+func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]interface{}) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
 	if f.hasError {
 		return session, nil, errTestVtGateError
 	}
@@ -134,6 +146,51 @@ func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, sqlList []string, 
 		QueryResult: execCase.result,
 		QueryError:  nil,
 	}}, nil
+}
+
+// StreamExecute is part of the VTGateService interface
+func (f *fakeVTGateService) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]interface{}, callback func(*sqltypes.Result) error) error {
+	if f.panics {
+		panic(fmt.Errorf("test forced panic"))
+	}
+	execCase, ok := execMap[sql]
+	if !ok {
+		return fmt.Errorf("no match for: %s", sql)
+	}
+	f.checkCallerID(ctx, "StreamExecute")
+	query := &queryExecute{
+		SQL:           sql,
+		BindVariables: bindVariables,
+		Session:       session,
+	}
+	if !query.equal(execCase.execQuery) {
+		f.t.Errorf("StreamExecute:\n%+v, want\n%+v", query, execCase.execQuery)
+		return nil
+	}
+	if execCase.result != nil {
+		result := &sqltypes.Result{
+			Fields: execCase.result.Fields,
+		}
+		if err := callback(result); err != nil {
+			return err
+		}
+		if f.hasError {
+			// wait until the client has the response, since all streaming implementation may not
+			// send previous messages if an error has been triggered.
+			<-f.errorWait
+			f.errorWait = make(chan struct{}) // for next test
+			return errTestVtGateError
+		}
+		for _, row := range execCase.result.Rows {
+			result := &sqltypes.Result{
+				Rows: [][]sqltypes.Value{row},
+			}
+			if err := callback(result); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // queryExecuteShards contains all the fields we use to test ExecuteShards
@@ -501,51 +558,6 @@ func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, queries
 	return nil, nil
 }
 
-// StreamExecute is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, session *vtgatepb.Session, callback func(*sqltypes.Result) error) error {
-	if f.panics {
-		panic(fmt.Errorf("test forced panic"))
-	}
-	execCase, ok := execMap[sql]
-	if !ok {
-		return fmt.Errorf("no match for: %s", sql)
-	}
-	f.checkCallerID(ctx, "StreamExecute")
-	query := &queryExecute{
-		SQL:           sql,
-		BindVariables: bindVariables,
-		Session:       session,
-	}
-	if !query.equal(execCase.execQuery) {
-		f.t.Errorf("StreamExecute:\n%+v, want\n%+v", query, execCase.execQuery)
-		return nil
-	}
-	if execCase.result != nil {
-		result := &sqltypes.Result{
-			Fields: execCase.result.Fields,
-		}
-		if err := callback(result); err != nil {
-			return err
-		}
-		if f.hasError {
-			// wait until the client has the response, since all streaming implementation may not
-			// send previous messages if an error has been triggered.
-			<-f.errorWait
-			f.errorWait = make(chan struct{}) // for next test
-			return errTestVtGateError
-		}
-		for _, row := range execCase.result.Rows {
-			result := &sqltypes.Result{
-				Rows: [][]sqltypes.Value{row},
-			}
-			if err := callback(result); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
 // StreamExecuteShards is part of the VTGateService interface
 func (f *fakeVTGateService) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if f.panics {
@@ -784,6 +796,26 @@ func (f *fakeVTGateService) MessageAck(ctx context.Context, keyspace string, nam
 	return messageAckRowsAffected, nil
 }
 
+func (f *fakeVTGateService) MessageAckKeyspaceIds(ctx context.Context, keyspace string, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error) {
+	if f.hasError {
+		return 0, errTestVtGateError
+	}
+	if f.panics {
+		panic(fmt.Errorf("test forced panic"))
+	}
+	f.checkCallerID(ctx, "ResolveTransaction")
+	msg1 := &vtgatepb.MessageAckKeyspaceIdsRequest{
+		IdKeyspaceIds: idKeyspaceIDs,
+	}
+	msg2 := &vtgatepb.MessageAckKeyspaceIdsRequest{
+		IdKeyspaceIds: testIDKeyspaceIDs,
+	}
+	if !proto.Equal(msg1, msg2) {
+		return 0, errors.New("MessageAck ids mismatch")
+	}
+	return messageAckRowsAffected, nil
+}
+
 // querySplitQuery contains all the fields we use to test SplitQuery
 type querySplitQuery struct {
 	Keyspace            string
@@ -984,6 +1016,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testTxFail(t, conn)
 	testMessageStream(t, conn)
 	testMessageAck(t, conn)
+	testMessageAckKeyspaceIds(t, conn)
 	testSplitQuery(t, conn)
 	testGetSrvKeyspace(t, conn)
 	testUpdateStream(t, conn)
@@ -1007,7 +1040,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testStreamExecuteKeyRangesPanic(t, conn)
 	testStreamExecuteKeyspaceIdsPanic(t, conn)
 	testMessageStreamPanic(t, conn)
-	testMessageAckPanic(t, conn)
+	testMessageAckKeyspaceIdsPanic(t, conn)
 	testSplitQueryPanic(t, conn)
 	testGetSrvKeyspacePanic(t, conn)
 	testUpdateStreamPanic(t, conn)
@@ -1044,6 +1077,7 @@ func TestErrorSuite(t *testing.T, fakeServer vtgateservice.VTGateService) {
 	testStreamExecuteKeyspaceIdsError(t, conn, fs)
 	testMessageStreamError(t, conn)
 	testMessageAckError(t, conn)
+	testMessageAckKeyspaceIdsError(t, conn)
 	testSplitQueryError(t, conn)
 	testGetSrvKeyspaceError(t, conn)
 	testUpdateStreamError(t, conn, fs)
@@ -1977,6 +2011,29 @@ func testMessageAckPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	expectPanic(t, err)
 }
 
+func testMessageAckKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := newContext()
+	got, err := conn.MessageAckKeyspaceIds(ctx, "", messageName, testIDKeyspaceIDs)
+	if got != messageAckRowsAffected {
+		t.Errorf("MessageAckKeyspaceIds: %d, want %d", got, messageAckRowsAffected)
+	}
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func testMessageAckKeyspaceIdsError(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := newContext()
+	_, err := conn.MessageAckKeyspaceIds(ctx, "", messageName, testIDKeyspaceIDs)
+	verifyError(t, err, "MessageAckKeyspaceIds")
+}
+
+func testMessageAckKeyspaceIdsPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := newContext()
+	_, err := conn.MessageAckKeyspaceIds(ctx, "", messageName, testIDKeyspaceIDs)
+	expectPanic(t, err)
+}
+
 func testSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	qsl, err := conn.SplitQuery(ctx,
@@ -2711,3 +2768,8 @@ var messageids = []*querypb.Value{
 	sqltypes.MakeString([]byte("3")).ToProtoValue(),
 }
 var messageAckRowsAffected = int64(1)
+
+var testIDKeyspaceIDs = []*vtgatepb.IdKeyspaceId{{
+	Id:         sqltypes.MakeString([]byte("1")).ToProtoValue(),
+	KeyspaceId: []byte{0x6B},
+}}

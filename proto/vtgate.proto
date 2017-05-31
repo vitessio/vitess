@@ -1,3 +1,19 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreedto in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 // Data definitions for service vtgateservice.
 
 syntax = "proto3";
@@ -9,6 +25,19 @@ option java_package="io.vitess.proto";
 import "query.proto";
 import "topodata.proto";
 import "vtrpc.proto";
+
+// TransactionMode controls the execution of distributed transaction
+// across multiple shards.
+enum TransactionMode {
+  // UNSPECIFIED uses the transaction mode set by the VTGate flag 'transaction_mode'.
+  UNSPECIFIED = 0;
+  // SINGLE disallows distributed transactions.
+  SINGLE = 1;
+  // MULTI allows distributed transactions with best effort commit.
+  MULTI = 2;
+  // TWOPC is for distributed transactions with atomic commits.
+  TWOPC = 3;
+}
 
 // Session objects are exchanged like cookies through various
 // calls to VTGate. The behavior differs between V2 & V3 APIs.
@@ -31,8 +60,9 @@ message Session {
   // shard_sessions keep track of per-shard transaction info.
   repeated ShardSession shard_sessions = 2;
 
-  // single_db specifies if the transaction should be restricted
-  // to a single database. This is deprecated.
+  // single_db is deprecated. Use transaction_mode instead.
+  // The value specifies if the transaction should be restricted
+  // to a single shard.
   // TODO(sougou): remove in 3.1
   bool single_db = 3;
 
@@ -47,6 +77,9 @@ message Session {
 
   // options is used only for V3.
   query.ExecuteOptions options = 6;
+
+  // transaction_mode specifies the current transaction mode.
+  TransactionMode transaction_mode = 7;
 }
 
 // ExecuteRequest is the payload to Execute.
@@ -540,8 +573,10 @@ message BeginRequest {
   // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
-  // single_db specifies if the transaction should be restricted
+  // single_db is deprecated. Use transaction_mode instead.
+  // The value specifies if the transaction should be restricted
   // to a single database.
+  // TODO(sougou): remove in 3.1
   bool single_db = 2;
 }
 
@@ -560,8 +595,10 @@ message CommitRequest {
   // session carries the current transaction data to commit.
   Session session = 2;
 
-  // atomic specifies if the commit should go through the
+  // atomic is deprecated. Use transaction_mode instead.
+  // The value specifies if the commit should go through the
   // 2PC workflow to ensure atomicity.
+  // TODO(sougou): remove in 3.1
   bool atomic = 3;
 }
 
@@ -618,13 +655,38 @@ message MessageAckRequest {
   // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
-  // Optional keyspace for message table.
+  // keyspace to target the message to.
   string keyspace = 2;
 
   // name is the message table name.
   string name = 3;
   // ids is the list of ids to ack.
   repeated query.Value ids = 4;
+}
+
+// IdKeyspaceId represents an id and keyspace_id pair.
+// The kesypace_id represents the routing info for id.
+message IdKeyspaceId {
+  // id represents the message id.
+  query.Value id = 1;
+
+  // keyspace_id is the associated keyspace_id for the id.
+  bytes keyspace_id = 2;
+}
+
+// MessageAckKeyspaceIdsRequest is the payload to MessageAckKeyspaceIds.
+message MessageAckKeyspaceIdsRequest {
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 1;
+
+  // Optional keyspace for message table.
+  string keyspace = 2;
+
+  // name is the message table name.
+  string name = 3;
+
+  repeated IdKeyspaceId id_keyspace_ids = 4;
 }
 
 // ResolveTransactionResponse is the returned value from Rollback.

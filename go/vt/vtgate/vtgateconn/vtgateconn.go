@@ -1,6 +1,18 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package vtgateconn
 
@@ -122,6 +134,12 @@ func (conn *VTGateConn) MessageAck(ctx context.Context, keyspace string, name st
 	return conn.impl.MessageAck(ctx, keyspace, name, ids)
 }
 
+// MessageAckKeyspaceIds is part of the vtgate service API. It routes
+// message acks based on the associated keyspace ids.
+func (conn *VTGateConn) MessageAckKeyspaceIds(ctx context.Context, keyspace string, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error) {
+	return conn.impl.MessageAckKeyspaceIds(ctx, keyspace, name, idKeyspaceIDs)
+}
+
 // Begin starts a transaction and returns a VTGateTX.
 func (conn *VTGateConn) Begin(ctx context.Context) (*VTGateTx, error) {
 	session, err := conn.impl.Begin(ctx, false /* singledb */)
@@ -181,14 +199,14 @@ type VTGateSession struct {
 
 // Execute performs a VTGate Execute.
 func (sn *VTGateSession) Execute(ctx context.Context, query string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
-	session, res, err := sn.impl.Execute(ctx, query, bindVars, sn.session)
+	session, res, err := sn.impl.Execute(ctx, sn.session, query, bindVars)
 	sn.session = session
 	return res, err
 }
 
 // ExecuteBatch executes a list of queries on vtgate within the current transaction.
 func (sn *VTGateSession) ExecuteBatch(ctx context.Context, query []string, bindVars []map[string]interface{}) ([]sqltypes.QueryResponse, error) {
-	session, res, errs := sn.impl.ExecuteBatch(ctx, query, bindVars, sn.session)
+	session, res, errs := sn.impl.ExecuteBatch(ctx, sn.session, query, bindVars)
 	sn.session = session
 	return res, errs
 }
@@ -201,7 +219,7 @@ func (sn *VTGateSession) StreamExecute(ctx context.Context, query string, bindVa
 	// StreamExecute is only used for SELECT queries that don't change
 	// the session. So, the protocol doesn't return an updated session.
 	// This may change in the future.
-	return sn.impl.StreamExecute(ctx, query, bindVars, sn.session)
+	return sn.impl.StreamExecute(ctx, sn.session, query, bindVars)
 }
 
 // VTGateTx defines an ongoing transaction.
@@ -298,54 +316,56 @@ func (tx *VTGateTx) Rollback(ctx context.Context) error {
 // Impl defines the interface for a vtgate client protocol
 // implementation. It can be used concurrently across goroutines.
 type Impl interface {
-	// Execute executes a non-streaming query on vtgate.
-	Execute(ctx context.Context, query string, bindVars map[string]interface{}, session *vtgatepb.Session) (*vtgatepb.Session, *sqltypes.Result, error)
+	// Execute executes a non-streaming query on vtgate. This is a V3 function.
+	Execute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]interface{}) (*vtgatepb.Session, *sqltypes.Result, error)
 
-	// ExecuteShards executes a non-streaming query for multiple shards on vtgate.
+	// ExecuteBatch executes a non-streaming queries on vtgate. This is a V3 function.
+	ExecuteBatch(ctx context.Context, session *vtgatepb.Session, queryList []string, bindVarsList []map[string]interface{}) (*vtgatepb.Session, []sqltypes.QueryResponse, error)
+
+	// StreamExecute executes a streaming query on vtgate. This is a V3 function.
+	StreamExecute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error)
+
+	// ExecuteShards executes a non-streaming query for multiple shards on vtgate. This is a legacy function.
 	ExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, *sqltypes.Result, error)
 
-	// ExecuteKeyspaceIds executes a non-streaming query for multiple keyspace_ids.
+	// ExecuteKeyspaceIds executes a non-streaming query for multiple keyspace_ids. This is a legacy function.
 	ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, *sqltypes.Result, error)
 
-	// ExecuteKeyRanges executes a non-streaming query on a key range.
+	// ExecuteKeyRanges executes a non-streaming query on a key range. This is a legacy function.
 	ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*topodatapb.KeyRange, bindVars map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, *sqltypes.Result, error)
 
-	// ExecuteEntityIds executes a non-streaming query for multiple entities.
+	// ExecuteEntityIds executes a non-streaming query for multiple entities. This is a legacy function.
 	ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*vtgatepb.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, *sqltypes.Result, error)
 
-	// ExecuteBatch executes a non-streaming queries on vtgate.
-	ExecuteBatch(ctx context.Context, queryList []string, bindVarsList []map[string]interface{}, session *vtgatepb.Session) (*vtgatepb.Session, []sqltypes.QueryResponse, error)
-
-	// ExecuteBatchShards executes a set of non-streaming queries for multiple shards.
+	// ExecuteBatchShards executes a set of non-streaming queries for multiple shards. This is a legacy function.
 	ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, []sqltypes.Result, error)
 
-	// ExecuteBatchKeyspaceIds executes a set of non-streaming queries for multiple keyspace ids.
+	// ExecuteBatchKeyspaceIds executes a set of non-streaming queries for multiple keyspace ids. This is a legacy function.
 	ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, []sqltypes.Result, error)
 
-	// StreamExecute executes a streaming query on vtgate.
-	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, session *vtgatepb.Session) (sqltypes.ResultStream, error)
-
-	// StreamExecuteShards executes a streaming query on vtgate, on a set of shards.
+	// StreamExecuteShards executes a streaming query on vtgate, on a set of shards. This is a legacy function.
 	StreamExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error)
 
-	// StreamExecuteKeyRanges executes a streaming query on vtgate, on a set of keyranges.
+	// StreamExecuteKeyRanges executes a streaming query on vtgate, on a set of keyranges. This is a legacy function.
 	StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*topodatapb.KeyRange, bindVars map[string]interface{}, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error)
 
-	// StreamExecuteKeyspaceIds executes a streaming query on vtgate, for the given keyspaceIds.
+	// StreamExecuteKeyspaceIds executes a streaming query on vtgate, for the given keyspaceIds. This is a legacy function.
 	StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error)
 
-	// Begin starts a transaction and returns a VTGateTX.
+	// Begin starts a transaction and returns a VTGateTX. This is a legacy function.
 	Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error)
-	// Commit commits the current transaction.
+	// Commit commits the current transaction. This is a legacy function.
 	Commit(ctx context.Context, session *vtgatepb.Session, twopc bool) error
-	// Rollback rolls back the current transaction.
+	// Rollback rolls back the current transaction. This is a legacy function.
 	Rollback(ctx context.Context, session *vtgatepb.Session) error
+
 	// ResolveTransaction resolves the specified 2pc transaction.
 	ResolveTransaction(ctx context.Context, dtid string) error
 
 	// Messaging functions.
 	MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error
 	MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error)
+	MessageAckKeyspaceIds(ctx context.Context, keyspace string, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error)
 
 	// SplitQuery splits a query into smaller queries. It is mostly used by batch job frameworks
 	// such as MapReduce. See the documentation for the vtgate.SplitQueryRequest protocol buffer

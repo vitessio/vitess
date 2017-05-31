@@ -1,6 +1,18 @@
-// Copyright 2013, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 /*
 Package testlib contains utility methods to include in unit tests to
@@ -18,7 +30,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
+	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vttablet/grpctmserver"
@@ -111,13 +123,12 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	mysqlPort := int32(3300 + uid)
 	tablet := &topodatapb.Tablet{
 		Alias:    &topodatapb.TabletAlias{Cell: cell, Uid: uid},
-		Hostname: fmt.Sprintf("%vhost", cell),
+		Hostname: fmt.Sprintf("%v.%d", cell, uid),
 		PortMap: map[string]int32{
 			"vt":    int32(8100 + uid),
 			"mysql": mysqlPort,
 			"grpc":  int32(8200 + uid),
 		},
-		Ip:       fmt.Sprintf("%v.0.0.1", 100+uid),
 		Keyspace: "test_keyspace",
 		Shard:    "0",
 		Type:     tabletType,

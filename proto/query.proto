@@ -1,3 +1,19 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreedto in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 // This file contains all the types necessary to make
 // RPC calls to Vttablet.
 
@@ -187,6 +203,7 @@ enum Type {
   // used in binlog parsing. There is no way to reserve a value in enums,
   // so just using a comment here.
   // Properties: 245, None.
+  // SQL = 245;
 }
 
 // Value represents a typed value.
@@ -236,6 +253,11 @@ message ExecuteOptions {
   // field name, table name, etc. This is an optimization for high-QPS queries where
   // the client knows what it's getting
   IncludedFields included_fields = 4;
+
+  // client_rows_found specifies if rows_affected should return
+  // rows found instead of rows affected. Behavior is defined
+  // by MySQL's CLIENT_FOUND_ROWS flag.
+  bool client_found_rows = 5;
 }
 
 // Field describes a single column returned by a query
@@ -399,6 +421,7 @@ message BeginRequest {
   vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
+  ExecuteOptions options = 4;
 }
 
 // BeginResponse is the returned value from Begin
