@@ -1,6 +1,18 @@
-// Copyright 2013, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package topo
 
@@ -368,7 +380,8 @@ func DeleteTabletReplicationData(ctx context.Context, ts Server, tablet *topodat
 // and returns them all in a map.
 // If error is ErrPartialResult, the results in the dictionary are
 // incomplete, meaning some tablets couldn't be read.
-func (ts Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.TabletAlias) (map[topodatapb.TabletAlias]*TabletInfo, error) {
+// The map is indexed by topoproto.TabletAliasString(tablet alias).
+func (ts Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.TabletAlias) (map[string]*TabletInfo, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("topo.GetTabletMap")
 	span.Annotate("num_tablets", len(tabletAliases))
@@ -377,7 +390,7 @@ func (ts Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.T
 	wg := sync.WaitGroup{}
 	mutex := sync.Mutex{}
 
-	tabletMap := make(map[topodatapb.TabletAlias]*TabletInfo)
+	tabletMap := make(map[string]*TabletInfo)
 	var someError error
 
 	for _, tabletAlias := range tabletAliases {
@@ -393,7 +406,7 @@ func (ts Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.T
 					someError = ErrPartialResult
 				}
 			} else {
-				tabletMap[*tabletAlias] = tabletInfo
+				tabletMap[topoproto.TabletAliasString(tabletAlias)] = tabletInfo
 			}
 			mutex.Unlock()
 		}(tabletAlias)

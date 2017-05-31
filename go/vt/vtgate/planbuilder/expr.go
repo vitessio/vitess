@@ -1,6 +1,18 @@
-// Copyright 2016, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package planbuilder
 
@@ -11,7 +23,6 @@ import (
 	"strconv"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/vtgate/engine"
 )
 
 // splitAndExpression breaks up the Expr into AND-separated conditions
@@ -53,11 +64,11 @@ func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
-			newRoute, isLocal, err := bldr.Symtab().Find(node, true)
+			newRoute, isLocal, err := bldr.Symtab().Find(node)
 			if err != nil {
 				return false, err
 			}
-			if isLocal && newRoute.Order() > highestRoute.Order() {
+			if isLocal && newRoute.Order > highestRoute.Order {
 				highestRoute = newRoute
 			}
 		case *sqlparser.Subquery:
@@ -79,13 +90,21 @@ func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
 			}
 			for _, extern := range subroute.Symtab().Externs {
 				// No error expected. These are resolved externs.
-				newRoute, isLocal, _ := bldr.Symtab().Find(extern, false)
-				if isLocal && newRoute.Order() > highestRoute.Order() {
+				newRoute, isLocal, _ := bldr.Symtab().Find(extern)
+				if isLocal && newRoute.Order > highestRoute.Order {
 					highestRoute = newRoute
 				}
 			}
 			subroutes = append(subroutes, subroute)
 			return false, nil
+		case *sqlparser.FuncExpr:
+			// If it's last_insert_id, ensure it's a single unsharded route.
+			if !node.Name.EqualString("last_insert_id") {
+				return true, nil
+			}
+			if rb, ok := bldr.(*route); !ok || rb.ERoute.Keyspace.Sharded {
+				return false, errors.New("unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces")
+			}
 		}
 		return true, nil
 	}, expr)
@@ -93,8 +112,7 @@ func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
 		return nil, err
 	}
 	for _, subroute := range subroutes {
-		err = routesCanMerge(highestRoute, subroute)
-		if err != nil {
+		if err := highestRoute.SubqueryCanMerge(subroute); err != nil {
 			return nil, err
 		}
 		// This should be moved out if we become capable of processing
@@ -102,36 +120,6 @@ func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
 		subroute.Redirect = highestRoute
 	}
 	return highestRoute, nil
-}
-
-// routesCanMerge returns nil if the inner subquery
-// can be merged with the specified outer route. If it
-// cannot, then it returns an appropriate error.
-func routesCanMerge(outer, inner *route) error {
-	if outer.ERoute.Keyspace.Name != inner.ERoute.Keyspace.Name {
-		return errors.New("unsupported: subquery keyspace different from outer query")
-	}
-	if !inner.IsSingle() {
-		return errors.New("unsupported: scatter subquery")
-	}
-	if inner.ERoute.Opcode == engine.SelectUnsharded {
-		return nil
-	}
-	// SelectEqualUnique
-	switch vals := inner.ERoute.Values.(type) {
-	case *sqlparser.ColName:
-		outerVindex := outer.Symtab().Vindex(vals, outer, false)
-		if outerVindex == inner.ERoute.Vindex {
-			return nil
-		}
-	}
-	if outer.ERoute.Opcode != engine.SelectEqualUnique {
-		return errors.New("unsupported: subquery does not depend on scatter outer query")
-	}
-	if !valEqual(outer.ERoute.Values, inner.ERoute.Values) {
-		return errors.New("unsupported: subquery and parent route to different shards")
-	}
-	return nil
 }
 
 func hasSubquery(node sqlparser.SQLNode) bool {
@@ -150,7 +138,7 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 // for the current route. External references are treated as value.
 func exprIsValue(expr sqlparser.Expr, rb *route) bool {
 	if node, ok := expr.(*sqlparser.ColName); ok {
-		return node.Metadata.(sym).Route() != rb
+		return node.Metadata.(*column).Route() != rb
 	}
 	return sqlparser.IsValue(expr)
 }
@@ -159,7 +147,7 @@ func valEqual(a, b interface{}) bool {
 	switch a := a.(type) {
 	case *sqlparser.ColName:
 		if b, ok := b.(*sqlparser.ColName); ok {
-			return newColref(a) == newColref(b)
+			return a.Metadata == b.Metadata
 		}
 	case *sqlparser.SQLVal:
 		b, ok := b.(*sqlparser.SQLVal)

@@ -1,6 +1,18 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package topotools
 
@@ -18,14 +30,14 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// FindTabletByIPAddrAndPort searches within a tablet map for tablets
-func FindTabletByIPAddrAndPort(tabletMap map[topodatapb.TabletAlias]*topo.TabletInfo, addr, portName string, port int32) (topodatapb.TabletAlias, error) {
-	for alias, ti := range tabletMap {
-		if ti.Ip == addr && ti.PortMap[portName] == port {
-			return alias, nil
+// FindTabletByHostAndPort searches within a tablet map for tablets.
+func FindTabletByHostAndPort(tabletMap map[string]*topo.TabletInfo, addr, portName string, port int32) (*topodatapb.TabletAlias, error) {
+	for _, ti := range tabletMap {
+		if ti.Hostname == addr && ti.PortMap[portName] == port {
+			return ti.Alias, nil
 		}
 	}
-	return topodatapb.TabletAlias{}, topo.ErrNoNode
+	return nil, topo.ErrNoNode
 }
 
 // GetAllTablets returns a sorted list of tablets.
@@ -43,7 +55,7 @@ func GetAllTablets(ctx context.Context, ts topo.Server, cell string) ([]*topo.Ta
 	}
 	tablets := make([]*topo.TabletInfo, 0, len(aliases))
 	for _, tabletAlias := range aliases {
-		tabletInfo, ok := tabletMap[*tabletAlias]
+		tabletInfo, ok := tabletMap[topoproto.TabletAliasString(tabletAlias)]
 		if !ok {
 			// tablet disappeared on us (GetTabletMap ignores
 			// topo.ErrNoNode), just echo a warning
@@ -94,9 +106,9 @@ func GetAllTabletsAcrossCells(ctx context.Context, ts topo.Server) ([]*topo.Tabl
 // - The masterMap contains all the tablets without parents
 //   (scrapped or not). This can be used to special case
 //   the old master, and any tablet in a weird state, left over, ...
-func SortedTabletMap(tabletMap map[topodatapb.TabletAlias]*topo.TabletInfo) (map[topodatapb.TabletAlias]*topo.TabletInfo, map[topodatapb.TabletAlias]*topo.TabletInfo) {
-	slaveMap := make(map[topodatapb.TabletAlias]*topo.TabletInfo)
-	masterMap := make(map[topodatapb.TabletAlias]*topo.TabletInfo)
+func SortedTabletMap(tabletMap map[string]*topo.TabletInfo) (map[string]*topo.TabletInfo, map[string]*topo.TabletInfo) {
+	slaveMap := make(map[string]*topo.TabletInfo)
+	masterMap := make(map[string]*topo.TabletInfo)
 	for alias, ti := range tabletMap {
 		if ti.Type == topodatapb.TabletType_MASTER {
 			masterMap[alias] = ti

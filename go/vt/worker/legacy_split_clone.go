@@ -1,6 +1,18 @@
-// Copyright 2014, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package worker
 
@@ -82,7 +94,7 @@ type LegacySplitCloneWorker struct {
 	// aliases of tablets that need to have their state refreshed.
 	// Only populated once, read-only after that.
 	refreshAliases [][]*topodatapb.TabletAlias
-	refreshTablets []map[topodatapb.TabletAlias]*topo.TabletInfo
+	refreshTablets []map[string]*topo.TabletInfo
 
 	ev *events.SplitClone
 }
@@ -418,7 +430,7 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 // state on these tablets, to minimize the chances of the topo changing in between.
 func (scw *LegacySplitCloneWorker) findRefreshTargets(ctx context.Context) error {
 	scw.refreshAliases = make([][]*topodatapb.TabletAlias, len(scw.destinationShards))
-	scw.refreshTablets = make([]map[topodatapb.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
+	scw.refreshTablets = make([]map[string]*topo.TabletInfo, len(scw.destinationShards))
 
 	for shardIndex, si := range scw.destinationShards {
 		refreshAliases, refreshTablets, err := resolveRefreshTabletsForShard(ctx, si.Keyspace(), si.ShardName(), scw.wr)
@@ -673,7 +685,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 				if err != nil {
 					processError("RefreshState failed on tablet %v: %v", ti.AliasString(), err)
 				}
-			}(scw.refreshTablets[shardIndex][*tabletAlias])
+			}(scw.refreshTablets[shardIndex][topoproto.TabletAliasString(tabletAlias)])
 		}
 	}
 	destinationWaitGroup.Wait()

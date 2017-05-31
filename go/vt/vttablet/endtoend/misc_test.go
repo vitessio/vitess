@@ -1,6 +1,18 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package endtoend
 
@@ -15,10 +27,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -81,7 +95,7 @@ func TestBinary(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(*qr, want) {
+	if !qr.Equal(&want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
 	}
 
@@ -99,7 +113,7 @@ func TestBinary(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if !reflect.DeepEqual(*qr, want) {
+	if !qr.Equal(&want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
 	}
 }
@@ -203,7 +217,7 @@ func TestTrailingComment(t *testing.T) {
 
 func TestUpsertNonPKHit(t *testing.T) {
 	client := framework.NewClient()
-	err := client.Begin()
+	err := client.Begin(false)
 	if err != nil {
 		t.Error(err)
 		return
@@ -227,7 +241,8 @@ func TestUpsertNonPKHit(t *testing.T) {
 }
 
 func TestSchemaReload(t *testing.T) {
-	conn, err := sqldb.Connect(connParams)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &connParams)
 	if err != nil {
 		t.Error(err)
 		return
@@ -261,7 +276,8 @@ func TestSchemaReload(t *testing.T) {
 }
 
 func TestSidecarTables(t *testing.T) {
-	conn, err := sqldb.Connect(connParams)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &connParams)
 	if err != nil {
 		t.Error(err)
 		return
@@ -334,7 +350,7 @@ func TestBindInSelect(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(qr, want) {
+	if !qr.Equal(want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
 	}
 
@@ -363,7 +379,7 @@ func TestBindInSelect(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(qr, want) {
+	if !qr.Equal(want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
 	}
 
@@ -392,7 +408,7 @@ func TestBindInSelect(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(qr, want) {
+	if !qr.Equal(want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
 	}
 }
@@ -423,7 +439,7 @@ func TestStreamHealth(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(*health.Target, framework.Target) {
+	if !proto.Equal(health.Target, &framework.Target) {
 		t.Errorf("Health: %+v, want %+v", *health.Target, framework.Target)
 	}
 }
@@ -515,5 +531,88 @@ func TestDBAStatements(t *testing.T) {
 	}
 	if qr.RowsAffected != 4 {
 		t.Errorf("RowsAffected: %d, want 4", qr.RowsAffected)
+	}
+}
+
+func TestLogTruncation(t *testing.T) {
+	client := framework.NewClient()
+
+	// Test that a long error string is not truncated by default
+	_, err := client.Execute(
+		"insert into vitess_test values(123, :data, null, null)",
+		map[string]interface{}{"data": "THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED"},
+	)
+	want := "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess_test values (123, 'THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED', null, null) /* _stream vitess_test (intval ) (123 ); */"
+	if err == nil {
+		t.Errorf("query unexpectedly succeeded")
+	}
+	if err.Error() != want {
+		t.Errorf("log was unexpectedly truncated... got %s, wanted %s", err, want)
+	}
+
+	// Test that the data too long error is truncated once the option is set
+	*sqlparser.TruncateErrLen = 30
+	_, err = client.Execute(
+		"insert into vitess_test values(123, :data, null, null)",
+		map[string]interface{}{"data": "THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED"},
+	)
+	want = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess [TRUNCATED] /* _stream vitess_test (intval ) (123 ); */"
+	if err == nil {
+		t.Errorf("query unexpectedly succeeded")
+	}
+	if err.Error() != want {
+		t.Errorf("log was not truncated properly... got %s, wanted %s", err, want)
+	}
+
+	// Test that trailing comments are preserved data too long error is truncated once the option is set
+	*sqlparser.TruncateErrLen = 30
+	_, err = client.Execute(
+		"insert into vitess_test values(123, :data, null, null) /* KEEP ME */",
+		map[string]interface{}{"data": "THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED"},
+	)
+	want = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess [TRUNCATED] /* _stream vitess_test (intval ) (123 ); */ /* KEEP ME */"
+	if err == nil {
+		t.Errorf("query unexpectedly succeeded")
+	}
+	if err.Error() != want {
+		t.Errorf("log was not truncated properly... got %s, wanted %s", err, want)
+	}
+}
+
+func TestClientFoundRows(t *testing.T) {
+	client := framework.NewClient()
+	if _, err := client.Execute("insert into vitess_test(intval, charval) values(124, 'aa')", nil); err != nil {
+		t.Fatal(err)
+	}
+	defer client.Execute("delete from vitess_test where intval= 124", nil)
+
+	// CLIENT_FOUND_ROWS flag is off.
+	if err := client.Begin(false); err != nil {
+		t.Error(err)
+	}
+	qr, err := client.Execute("update vitess_test set charval='aa' where intval=124", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	if qr.RowsAffected != 0 {
+		t.Errorf("Execute(rowsFound==false): %d, want 0", qr.RowsAffected)
+	}
+	if err := client.Rollback(); err != nil {
+		t.Error(err)
+	}
+
+	// CLIENT_FOUND_ROWS flag is on.
+	if err := client.Begin(true); err != nil {
+		t.Error(err)
+	}
+	qr, err = client.Execute("update vitess_test set charval='aa' where intval=124", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	if qr.RowsAffected != 1 {
+		t.Errorf("Execute(rowsFound==true): %d, want 1", qr.RowsAffected)
+	}
+	if err := client.Rollback(); err != nil {
+		t.Error(err)
 	}
 }

@@ -166,6 +166,14 @@
             <li><a href="/contributing/code-reviews.html">Code Reviews</a>
           </ul>
         </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Internal</h4>
+          <ul style="display: none">
+            <li><a href="/internal/">Overview</a>
+            <li><a href="/internal/release-instructions.html">Release Instructions</a>
+            <li><a href="/internal/publish-website.html">Publish Website</a>
+          </ul>
+        </li>
 
         <div>
           <form method="get" action="/search/">
@@ -274,6 +282,14 @@
             <li><a href="/contributing/">Contributing to Vitess</a>
             <li><a href="/contributing/github-workflow.html">GitHub Workflow</a>
             <li><a href="/contributing/code-reviews.html">Code Reviews</a>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Internal</h4>
+          <ul style="display: none">
+            <li><a href="/internal/">Overview</a>
+            <li><a href="/internal/release-instructions.html">Release Instructions</a>
+            <li><a href="/internal/publish-website.html">Publish Website</a>
           </ul>
         </li>
 
@@ -482,7 +498,7 @@ none of replica slaves have).</p></li>
 failure, there is at least one other <em>replica</em> type slave that has every
 transaction that was ever reported to clients as having completed.
 You can then (<a href="http://vitess.io/reference/vtctl.html#emergencyreparentshard">manually</a>,
-or with an automated tool like <a href="https://github.com/outbrain/orchestrator">Orchestrator</a>)
+or with an automated tool like <a href="https://github.com/github/orchestrator">Orchestrator</a>)
 pick the replica that is farthest ahead in GTID position and promote that to be
 the new master.</p>
 

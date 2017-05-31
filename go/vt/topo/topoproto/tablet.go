@@ -1,6 +1,18 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 // Package topoproto contains utility functions to deal with the proto3
 // structures defined in proto/topodata.
@@ -8,9 +20,12 @@ package topoproto
 
 import (
 	"fmt"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/golang/protobuf/proto"
 
 	"github.com/youtube/vitess/go/netutil"
 
@@ -41,13 +56,7 @@ func TabletAliasIsZero(ta *topodatapb.TabletAlias) bool {
 
 // TabletAliasEqual returns true if two TabletAlias match
 func TabletAliasEqual(left, right *topodatapb.TabletAlias) bool {
-	if left == nil {
-		return right == nil
-	}
-	if right == nil {
-		return false
-	}
-	return *left == *right
+	return proto.Equal(left, right)
 }
 
 // TabletAliasString formats a TabletAlias
@@ -138,13 +147,26 @@ var SlaveTabletTypes = []topodatapb.TabletType{
 	topodatapb.TabletType_DRAINED,
 }
 
-// ParseTabletType parses the tablet type into the enum
+// ParseTabletType parses the tablet type into the enum.
 func ParseTabletType(param string) (topodatapb.TabletType, error) {
 	value, ok := topodatapb.TabletType_value[strings.ToUpper(param)]
 	if !ok {
 		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("unknown TabletType %v", param)
 	}
 	return topodatapb.TabletType(value), nil
+}
+
+// ParseTabletTypes parses a comma separated list of tablet types and returns a slice with the respective enums.
+func ParseTabletTypes(param string) ([]topodatapb.TabletType, error) {
+	var tabletTypes []topodatapb.TabletType
+	for _, typeStr := range strings.Split(param, ",") {
+		t, err := ParseTabletType(typeStr)
+		if err != nil {
+			return nil, err
+		}
+		tabletTypes = append(tabletTypes, t)
+	}
+	return tabletTypes, nil
 }
 
 // TabletTypeLString returns a lower case version of the tablet type,
@@ -181,6 +203,17 @@ func MakeStringTypeList(types []topodatapb.TabletType) []string {
 // TabletAddr returns hostname:vt port associated with a tablet
 func TabletAddr(tablet *topodatapb.Tablet) string {
 	return netutil.JoinHostPort(tablet.Hostname, tablet.PortMap["vt"])
+}
+
+// TabletIP returns the tablet's IP by resolving the host name.
+// TODO(sougou): The only use case for this is in validator, which
+// should be changed to use the upcoming MySQLIP function instead.
+func TabletIP(tablet *topodatapb.Tablet) (string, error) {
+	ipAddrs, err := net.LookupHost(tablet.Hostname)
+	if err != nil {
+		return "", err
+	}
+	return ipAddrs[0], nil
 }
 
 // TabletDbName is usually implied by keyspace. Having the shard

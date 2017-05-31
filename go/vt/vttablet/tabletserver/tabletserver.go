@@ -1,6 +1,18 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package tabletserver
 
@@ -19,9 +31,7 @@ import (
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/hack"
 	"github.com/youtube/vitess/go/history"
-	"github.com/youtube/vitess/go/mysqlconn"
-	"github.com/youtube/vitess/go/mysqlconn/replication"
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
@@ -486,6 +496,8 @@ func (tsv *TabletServer) StopService() {
 	tsv.waitForShutdown()
 	tsv.qe.Close()
 	tsv.se.Close()
+	tsv.hw.Close()
+	tsv.hr.Close()
 	log.Infof("Shutdown complete.")
 	tsv.transition(StateNotConnected)
 }
@@ -498,8 +510,6 @@ func (tsv *TabletServer) waitForShutdown() {
 	// transactions.
 	tsv.txRequests.Wait()
 	tsv.messager.Close()
-	tsv.hr.Close()
-	tsv.hw.Close()
 	tsv.te.Close(false)
 	tsv.qe.streamQList.TerminateAll()
 	tsv.updateStreamList.Stop()
@@ -628,7 +638,7 @@ func (tsv *TabletServer) SchemaEngine() *schema.Engine {
 }
 
 // Begin starts a new transaction. This is allowed only if the state is StateServing.
-func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target) (transactionID int64, err error) {
+func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (transactionID int64, err error) {
 	err = tsv.execRequest(
 		ctx, tsv.BeginTimeout.Get(),
 		"Begin", "begin", nil,
@@ -639,7 +649,7 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target) (tra
 				// TODO(erez): I think this should be RESOURCE_EXHAUSTED.
 				return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "Transaction throttled")
 			}
-			transactionID, err = tsv.te.txPool.Begin(ctx)
+			transactionID, err = tsv.te.txPool.Begin(ctx, options.GetClientFoundRows())
 			logStats.TransactionID = transactionID
 			return err
 		},
@@ -844,6 +854,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 				query:         sql,
 				bindVars:      bindVariables,
 				transactionID: transactionID,
+				options:       options,
 				plan:          plan,
 				ctx:           ctx,
 				logStats:      logStats,
@@ -882,12 +893,13 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 			qre := &QueryExecutor{
 				query:    sql,
 				bindVars: bindVariables,
+				options:  options,
 				plan:     plan,
 				ctx:      ctx,
 				logStats: logStats,
 				tsv:      tsv,
 			}
-			return qre.Stream(sqltypes.IncludeFieldsOrDefault(options), callback)
+			return qre.Stream(callback)
 		},
 	)
 }
@@ -912,7 +924,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	defer tsv.handlePanicAndSendLogStats("batch", nil, &err, nil)
 
 	if asTransaction {
-		transactionID, err = tsv.Begin(ctx, target)
+		transactionID, err = tsv.Begin(ctx, target, options)
 		if err != nil {
 			return nil, tsv.convertAndLogError("batch", nil, err, nil)
 		}
@@ -954,7 +966,7 @@ func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Targe
 		}
 	}
 
-	transactionID, err := tsv.Begin(ctx, target)
+	transactionID, err := tsv.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1038,7 +1050,7 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 
 // BeginExecuteBatch combines Begin and ExecuteBatch.
 func (tsv *TabletServer) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
-	transactionID, err := tsv.Begin(ctx, target)
+	transactionID, err := tsv.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1116,7 +1128,7 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 	}
 
-	transactionID, err := tsv.Begin(ctx, target)
+	transactionID, err := tsv.Begin(ctx, target, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -1289,7 +1301,7 @@ func (tsv *TabletServer) convertAndLogError(sql string, bindVariables map[string
 }
 
 func (tsv *TabletServer) convertError(sql string, bindVariables map[string]interface{}, err error) error {
-	sqlErr, ok := err.(*sqldb.SQLError)
+	sqlErr, ok := err.(*mysql.SQLError)
 	if !ok {
 		return err
 	}
@@ -1299,7 +1311,7 @@ func (tsv *TabletServer) convertError(sql string, bindVariables map[string]inter
 	errnum := sqlErr.Number()
 	sqlState := sqlErr.SQLState()
 	switch errnum {
-	case mysqlconn.EROptionPreventsStatement:
+	case mysql.EROptionPreventsStatement:
 		// Special-case this error code. It's probably because
 		// there was a failover and there are old clients still connected.
 		if strings.Contains(errstr, "read-only") {
@@ -1309,19 +1321,19 @@ func (tsv *TabletServer) convertError(sql string, bindVariables map[string]inter
 		if strings.Contains(errstr, "failover in progress") {
 			errCode = vtrpcpb.Code_FAILED_PRECONDITION
 		}
-	case mysqlconn.ERDupEntry:
+	case mysql.ERDupEntry:
 		errCode = vtrpcpb.Code_ALREADY_EXISTS
-	case mysqlconn.ERDataTooLong, mysqlconn.ERDataOutOfRange, mysqlconn.ERBadNullError:
+	case mysql.ERDataTooLong, mysql.ERDataOutOfRange, mysql.ERBadNullError:
 		errCode = vtrpcpb.Code_INVALID_ARGUMENT
-	case mysqlconn.ERLockWaitTimeout:
+	case mysql.ERLockWaitTimeout:
 		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
-	case mysqlconn.ERLockDeadlock:
+	case mysql.ERLockDeadlock:
 		// A deadlock rolls back the transaction.
 		errCode = vtrpcpb.Code_ABORTED
-	case mysqlconn.CRServerLost:
+	case mysql.CRServerLost:
 		// Query was killed.
 		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
-	case mysqlconn.CRServerGone, mysqlconn.ERServerShutdown:
+	case mysql.CRServerGone, mysql.ERServerShutdown:
 		errCode = vtrpcpb.Code_UNAVAILABLE
 	}
 
@@ -1337,7 +1349,7 @@ func (tsv *TabletServer) convertError(sql string, bindVariables map[string]inter
 	// If so, we don't want to suppress the error. This will allow VTGate to
 	// detect and perform buffering during failovers.
 	if tsv.TerseErrors && len(bindVariables) != 0 && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
-		errstr = fmt.Sprintf("(errno %d) (sqlstate %s) during query: %s", errnum, sqlState, sql)
+		errstr = fmt.Sprintf("(errno %d) (sqlstate %s) during query: %s", errnum, sqlState, sqlparser.TruncateForLog(sql))
 	}
 	return vterrors.New(errCode, errstr)
 }
@@ -1574,11 +1586,11 @@ func (tsv *TabletServer) HeartbeatLag() (time.Duration, error) {
 // UpdateStream streams binlog events.
 func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
 	// Parse the position if needed.
-	var p replication.Position
+	var p mysql.Position
 	var err error
 	if timestamp == 0 {
 		if position != "" {
-			p, err = replication.DecodePosition(position)
+			p, err = mysql.DecodePosition(position)
 			if err != nil {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot parse position: %v", err)
 			}

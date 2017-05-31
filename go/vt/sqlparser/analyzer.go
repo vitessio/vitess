@@ -1,6 +1,18 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package sqlparser
 
@@ -15,10 +27,84 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
+// These constants are used to identify the SQL statement type.
+const (
+	StmtSelect = iota
+	StmtInsert
+	StmtReplace
+	StmtUpdate
+	StmtDelete
+	StmtDDL
+	StmtBegin
+	StmtCommit
+	StmtRollback
+	StmtSet
+	StmtShow
+	StmtUse
+	StmtOther
+	StmtUnknown
+)
+
+// Preview analyzes the beginning of the query using a simpler and faster
+// textual comparison to identify the statement type.
+func Preview(sql string) int {
+	trimmed := StripLeadingComments(sql)
+
+	firstWord := trimmed
+	if end := strings.IndexFunc(trimmed, unicode.IsSpace); end != -1 {
+		firstWord = trimmed[:end]
+	}
+
+	// Comparison is done in order of priority.
+	loweredFirstWord := strings.ToLower(firstWord)
+	switch loweredFirstWord {
+	case "select":
+		return StmtSelect
+	case "insert":
+		return StmtInsert
+	case "replace":
+		return StmtReplace
+	case "update":
+		return StmtUpdate
+	case "delete":
+		return StmtDelete
+	}
+	switch strings.ToLower(trimmed) {
+	case "begin", "start transaction":
+		return StmtBegin
+	case "commit":
+		return StmtCommit
+	case "rollback":
+		return StmtRollback
+	}
+	switch loweredFirstWord {
+	case "create", "alter", "rename", "drop":
+		return StmtDDL
+	case "set":
+		return StmtSet
+	case "show":
+		return StmtShow
+	case "use":
+		return StmtUse
+	case "analyze", "describe", "explain", "repair", "optimize", "truncate":
+		return StmtOther
+	}
+	return StmtUnknown
+}
+
+// IsDML returns true if the query is an INSERT, UPDATE or DELETE statement.
+func IsDML(sql string) bool {
+	switch Preview(sql) {
+	case StmtInsert, StmtReplace, StmtUpdate, StmtDelete:
+		return true
+	}
+	return false
+}
+
 // GetTableName returns the table name from the SimpleTableExpr
 // only if it's a simple expression. Otherwise, it returns "".
 func GetTableName(node SimpleTableExpr) TableIdent {
-	if n, ok := node.(*TableName); ok && n.Qualifier.IsEmpty() {
+	if n, ok := node.(TableName); ok && n.Qualifier.IsEmpty() {
 		return n.Name
 	}
 	// sub-select or '.' expression
@@ -133,10 +219,11 @@ func StringIn(str string, values ...string) bool {
 	return false
 }
 
-// ExtractSetNums returns a map of key-num pairs
-// if the query is a SET statement. Otherwise, it returns an
-// error.
-func ExtractSetNums(sql string) (map[string]int64, error) {
+// ExtractSetValues returns a map of key-value pairs
+// if the query is a SET statement. Values can be int64 or string.
+// Since set variable names are case insensitive, all keys are returned
+// as lower case.
+func ExtractSetValues(sql string) (map[string]interface{}, error) {
 	stmt, err := Parse(sql)
 	if err != nil {
 		return nil, err
@@ -145,9 +232,9 @@ func ExtractSetNums(sql string) (map[string]int64, error) {
 	if !ok {
 		return nil, fmt.Errorf("ast did not yield *sqlparser.Set: %T", stmt)
 	}
-	result := make(map[string]int64)
+	result := make(map[string]interface{})
 	for _, expr := range setStmt.Exprs {
-		if expr.Name.Qualifier != nil {
+		if !expr.Name.Qualifier.IsEmpty() {
 			return nil, fmt.Errorf("invalid syntax: %v", String(expr.Name))
 		}
 		key := expr.Name.Name.Lowered()
@@ -156,44 +243,18 @@ func ExtractSetNums(sql string) (map[string]int64, error) {
 		if !ok {
 			return nil, fmt.Errorf("invalid syntax: %s", String(expr.Expr))
 		}
-		if sqlval.Type != IntVal {
+		switch sqlval.Type {
+		case StrVal:
+			result[key] = string(sqlval.Val)
+		case IntVal:
+			num, err := strconv.ParseInt(string(sqlval.Val), 0, 64)
+			if err != nil {
+				return nil, err
+			}
+			result[key] = num
+		default:
 			return nil, fmt.Errorf("invalid value type: %v", String(expr.Expr))
 		}
-		num, err := strconv.ParseInt(string(sqlval.Val), 0, 64)
-		if err != nil {
-			return nil, err
-		}
-		result[key] = num
 	}
 	return result, nil
-}
-
-// HasPrefix returns true if the query has one of the specified
-// statement prefixes. For example, you can find out if a query
-// is a DML with HasPrefix(sql, "insert", "update", "delete").
-func HasPrefix(sql string, values ...string) bool {
-	sql = strings.TrimLeftFunc(sql, unicode.IsSpace)
-	end := strings.IndexFunc(sql, unicode.IsSpace)
-	word := sql
-	if end != -1 {
-		word = sql[:end]
-	}
-	for _, val := range values {
-		if strings.EqualFold(word, val) {
-			return true
-		}
-	}
-	return false
-}
-
-// IsDML returns true if the query is an INSERT, UPDATE or DELETE statement.
-func IsDML(sql string) bool {
-	return HasPrefix(sql, "insert", "update", "delete")
-}
-
-// IsStatement returns true if the sql matches a single-word
-// statement like begin, commit or rollback.
-func IsStatement(sql, statement string) bool {
-	sql = strings.TrimFunc(sql, unicode.IsSpace)
-	return strings.EqualFold(sql, statement)
 }

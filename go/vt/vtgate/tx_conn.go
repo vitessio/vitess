@@ -1,6 +1,18 @@
-// Copyright 2016, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package vtgate
 
@@ -24,24 +36,59 @@ import (
 // TxConn is used for executing transactional requests.
 type TxConn struct {
 	gateway gateway.Gateway
+	mode    vtgatepb.TransactionMode
 }
 
 // NewTxConn builds a new TxConn.
-func NewTxConn(gw gateway.Gateway) *TxConn {
-	return &TxConn{gateway: gw}
+func NewTxConn(gw gateway.Gateway, txMode vtgatepb.TransactionMode) *TxConn {
+	return &TxConn{
+		gateway: gw,
+		mode:    txMode,
+	}
 }
 
-// Commit commits the current transaction. If twopc is true, then the 2PC protocol
-// is used to ensure atomicity.
-func (txc *TxConn) Commit(ctx context.Context, twopc bool, session *SafeSession) error {
-	if session == nil {
-		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot commit: empty session")
+// Begin begins a new transaction. If one is already in progress, it commmits it
+// and starts a new one.
+func (txc *TxConn) Begin(ctx context.Context, session *SafeSession) error {
+	if session.InTransaction() {
+		if err := txc.Commit(ctx, session); err != nil {
+			return err
+		}
 	}
-	if !session.InTransaction() {
-		return vterrors.New(vtrpcpb.Code_ABORTED, "cannot commit: not in transaction")
+	// UNSPECIFIED & SINGLE mode are always allowed.
+	switch session.TransactionMode {
+	case vtgatepb.TransactionMode_MULTI:
+		if txc.mode == vtgatepb.TransactionMode_SINGLE {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requested transaction mode %v disallowed: vtgate must be started with --transaction_mode=MULTI (or TWOPC). Current transaction mode: %v", session.TransactionMode, txc.mode)
+		}
+	case vtgatepb.TransactionMode_TWOPC:
+		if txc.mode != vtgatepb.TransactionMode_TWOPC {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requested transaction mode %v disallowed: vtgate must be started with --transaction_mode=TWOPC. Current transaction mode: %v", session.TransactionMode, txc.mode)
+		}
 	}
-	defer session.Reset()
+	session.Session.InTransaction = true
+	return nil
+}
 
+// Commit commits the current transaction. The type of commit can be
+// best effort or 2pc depending on the session setting.
+func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
+	defer session.Reset()
+	if !session.InTransaction() {
+		return nil
+	}
+
+	twopc := false
+	switch session.TransactionMode {
+	case vtgatepb.TransactionMode_TWOPC:
+		if txc.mode != vtgatepb.TransactionMode_TWOPC {
+			txc.Rollback(ctx, session)
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "2pc transaction disallowed")
+		}
+		twopc = true
+	case vtgatepb.TransactionMode_UNSPECIFIED:
+		twopc = (txc.mode == vtgatepb.TransactionMode_TWOPC)
+	}
 	if twopc {
 		return txc.commit2PC(ctx, session)
 	}

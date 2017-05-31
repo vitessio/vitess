@@ -1,7 +1,22 @@
+/*
+ * Copyright 2017 Google Inc.
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.vitess.example;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.net.HostAndPort;
 import com.google.common.primitives.UnsignedLong;
 import io.vitess.client.Context;
 import io.vitess.client.RpcClient;
@@ -31,12 +46,8 @@ public class VitessClientExample {
       System.exit(1);
     }
 
-    // Connect to vtgate.
-    HostAndPort hostAndPort = HostAndPort.fromString(args[0]);
-    InetSocketAddress addr =
-        new InetSocketAddress(hostAndPort.getHostText(), hostAndPort.getPort());
     Context ctx = Context.getDefault().withDeadlineAfter(Duration.millis(5 * 1000));
-    try (RpcClient client = new GrpcClientFactory().create(ctx, addr);
+    try (RpcClient client = new GrpcClientFactory().create(ctx, args[0]);
         VTGateBlockingConn conn = new VTGateBlockingConn(client)) {
       // Insert some messages on random pages.
       System.out.println("Inserting into master...");

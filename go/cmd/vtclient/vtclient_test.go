@@ -1,3 +1,19 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreedto in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package main
 
 import (
@@ -74,27 +90,27 @@ func TestVtclient(t *testing.T) {
 			args: []string{"SELECT * FROM table1"},
 		},
 		{
-			args: []string{"-tablet_type", "master", "-bind_variables", `[ 1, 100 ]`,
+			args: []string{"-target", "@master", "-bind_variables", `[ 1, 100 ]`,
 				"INSERT INTO table1 (id, i) VALUES (:v1, :v2)"},
 			rowsAffected: 1,
 		},
 		{
-			args: []string{"-tablet_type", "master",
+			args: []string{"-target", "@master",
 				"UPDATE table1 SET i = (i + 1)"},
 			rowsAffected: 1,
 		},
 		{
-			args: []string{"-tablet_type", "master",
+			args: []string{"-target", "@master",
 				"SELECT * FROM table1"},
 			rowsAffected: 1,
 		},
 		{
-			args: []string{"-tablet_type", "master", "-bind_variables", `[ 1 ]`,
+			args: []string{"-target", "@master", "-bind_variables", `[ 1 ]`,
 				"DELETE FROM table1 WHERE id = :v1"},
 			rowsAffected: 1,
 		},
 		{
-			args: []string{"-tablet_type", "master",
+			args: []string{"-target", "@master",
 				"SELECT * FROM table1"},
 			rowsAffected: 0,
 		},

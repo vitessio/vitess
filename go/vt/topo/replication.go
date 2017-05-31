@@ -1,11 +1,24 @@
-// Copyright 2013, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package topo
 
 import (
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/trace"
@@ -52,7 +65,7 @@ func (sri *ShardReplicationInfo) Shard() string {
 // GetShardReplicationNode finds a node for a given tablet.
 func (sri *ShardReplicationInfo) GetShardReplicationNode(tabletAlias *topodatapb.TabletAlias) (*topodatapb.ShardReplication_Node, error) {
 	for _, rl := range sri.Nodes {
-		if *rl.TabletAlias == *tabletAlias {
+		if proto.Equal(rl.TabletAlias, tabletAlias) {
 			return rl, nil
 		}
 	}
@@ -76,7 +89,7 @@ func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shar
 		found := false
 		modified := false
 		for _, node := range sr.Nodes {
-			if *node.TabletAlias == *tabletAlias {
+			if proto.Equal(node.TabletAlias, tabletAlias) {
 				if found {
 					log.Warningf("Found a second ShardReplication_Node for tablet %v, deleting it", tabletAlias)
 					modified = true
@@ -104,7 +117,7 @@ func RemoveShardReplicationRecord(ctx context.Context, ts Server, cell, keyspace
 	err := ts.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(sr *topodatapb.ShardReplication) error {
 		nodes := make([]*topodatapb.ShardReplication_Node, 0, len(sr.Nodes))
 		for _, node := range sr.Nodes {
-			if *node.TabletAlias != *tabletAlias {
+			if !proto.Equal(node.TabletAlias, tabletAlias) {
 				nodes = append(nodes, node)
 			}
 		}

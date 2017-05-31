@@ -1,6 +1,18 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package vttest
 
@@ -13,12 +25,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
-
-	// FIXME(alainjobart) remove this when it's the only option.
-	// Registers our implementation.
-	_ "github.com/youtube/vitess/go/mysql"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
@@ -81,7 +89,7 @@ func TestVitess(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	conn, err := vtgateconn.DialProtocol(ctx, vtgateProtocol(), vtgateAddr, 5*time.Second, "")
+	conn, err := vtgateconn.DialProtocol(ctx, vtgateProtocol(), vtgateAddr, 5*time.Second)
 	if err != nil {
 		t.Error(err)
 		return
@@ -93,7 +101,7 @@ func TestVitess(t *testing.T) {
 	}
 	// Test that vtgate can use the VSchema to route the query to the keyspace.
 	// TODO(mberlin): This also works without a vschema for the table. How to fix?
-	_, err = conn.Execute(ctx, "select * from messages", nil, topodatapb.TabletType_MASTER, nil)
+	_, err = conn.Session("", nil).Execute(ctx, "select * from messages", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -134,7 +142,8 @@ func TestMySQL(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	conn, err := sqldb.Connect(params)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &params)
 	if err != nil {
 		t.Fatal(err)
 	}

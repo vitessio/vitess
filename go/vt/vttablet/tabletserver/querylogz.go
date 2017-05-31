@@ -1,6 +1,18 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package tabletserver
 
@@ -16,8 +28,8 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/logz"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"github.com/youtube/vitess/go/vt/utils"
 )
 
 var (
@@ -45,10 +57,10 @@ var (
 		</thead>
 	`)
 	querylogzFuncMap = template.FuncMap{
-		"stampMicro":   func(t time.Time) string { return t.Format(time.StampMicro) },
-		"cssWrappable": logz.Wrappable,
-		"truncateQuery": utils.TruncateQuery,
-		"unquote":      func(s string) string { return strings.Trim(s, "\"") },
+		"stampMicro":    func(t time.Time) string { return t.Format(time.StampMicro) },
+		"cssWrappable":  logz.Wrappable,
+		"truncateQuery": sqlparser.TruncateForUI,
+		"unquote":       func(s string) string { return strings.Trim(s, "\"") },
 	}
 	querylogzTmpl = template.Must(template.New("example").Funcs(querylogzFuncMap).Parse(`
 		<tr class="{{.ColorLevel}}">

@@ -166,6 +166,14 @@
             <li><a href="/contributing/code-reviews.html">Code Reviews</a>
           </ul>
         </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Internal</h4>
+          <ul style="display: none">
+            <li><a href="/internal/">Overview</a>
+            <li><a href="/internal/release-instructions.html">Release Instructions</a>
+            <li><a href="/internal/publish-website.html">Publish Website</a>
+          </ul>
+        </li>
 
         <div>
           <form method="get" action="/search/">
@@ -276,6 +284,14 @@
             <li><a href="/contributing/code-reviews.html">Code Reviews</a>
           </ul>
         </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Internal</h4>
+          <ul style="display: none">
+            <li><a href="/internal/">Overview</a>
+            <li><a href="/internal/release-instructions.html">Release Instructions</a>
+            <li><a href="/internal/publish-website.html">Publish Website</a>
+          </ul>
+        </li>
 
         <div>
           <form method="get" action="/search/">
@@ -350,7 +366,7 @@
 <p><strong>Optional functionality to implement</strong></p>
 
 <ul>
-<li><p><em>Recommended</em>.  Vitess has basic support for identifying or changing a master, but it doesn&#39;t aim to fully address this feature. As such, we recommend using another program, like <a href="https://github.com/outbrain/orchestrator">Orchestrator</a>, to monitor the health of your servers and to change your master database when necessary. (In a sharded database, each shard has a master.)</p></li>
+<li><p><em>Recommended</em>.  Vitess has basic support for identifying or changing a master, but it doesn&#39;t aim to fully address this feature. As such, we recommend using another program, like <a href="https://github.com/github/orchestrator">Orchestrator</a>, to monitor the health of your servers and to change your master database when necessary. (In a sharded database, each shard has a master.)</p></li>
 <li><p><em>Recommended</em>. You should have a way to monitor your database topology and set up alerts as needed. Vitess components facilitate this monitoring by exporting a lot of runtime variables, like QPS over the last few minutes, error rates, and query latency. The variables are exported in JSON format, and Vitess also supports an InfluxDB plug-in.</p></li>
 <li><p><em>Optional</em>. Using the Kubernetes scripts as a base, you could run Vitess components with other configuration management systems (like Puppet) or frameworks (like Mesos or AWS images).</p></li>
 </ul>

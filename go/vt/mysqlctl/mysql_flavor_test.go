@@ -1,6 +1,18 @@
-// Copyright 2014, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package mysqlctl
 
@@ -10,36 +22,36 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysqlconn/replication"
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 )
 
 type fakeMysqlFlavor string
 
-func (f fakeMysqlFlavor) VersionMatch(version string) bool                 { return version == string(f) }
-func (fakeMysqlFlavor) PromoteSlaveCommands() []string                     { return nil }
-func (fakeMysqlFlavor) ResetReplicationCommands() []string                 { return nil }
-func (fakeMysqlFlavor) ParseGTID(string) (replication.GTID, error)         { return nil, nil }
-func (fakeMysqlFlavor) MakeBinlogEvent(buf []byte) replication.BinlogEvent { return nil }
-func (fakeMysqlFlavor) ParseReplicationPosition(string) (replication.Position, error) {
-	return replication.Position{}, nil
+func (f fakeMysqlFlavor) VersionMatch(version string) bool           { return version == string(f) }
+func (fakeMysqlFlavor) PromoteSlaveCommands() []string               { return nil }
+func (fakeMysqlFlavor) ResetReplicationCommands() []string           { return nil }
+func (fakeMysqlFlavor) ResetSlaveCommands() []string                 { return nil }
+func (fakeMysqlFlavor) ParseGTID(string) (mysql.GTID, error)         { return nil, nil }
+func (fakeMysqlFlavor) MakeBinlogEvent(buf []byte) mysql.BinlogEvent { return nil }
+func (fakeMysqlFlavor) ParseReplicationPosition(string) (mysql.Position, error) {
+	return mysql.Position{}, nil
 }
-func (fakeMysqlFlavor) SendBinlogDumpCommand(conn *SlaveConnection, startPos replication.Position) error {
+func (fakeMysqlFlavor) SendBinlogDumpCommand(conn *SlaveConnection, startPos mysql.Position) error {
 	return nil
 }
-func (fakeMysqlFlavor) WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos replication.Position) error {
+func (fakeMysqlFlavor) WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos mysql.Position) error {
 	return nil
 }
-func (fakeMysqlFlavor) MasterPosition(mysqld *Mysqld) (replication.Position, error) {
-	return replication.Position{}, nil
+func (fakeMysqlFlavor) MasterPosition(mysqld *Mysqld) (mysql.Position, error) {
+	return mysql.Position{}, nil
 }
 func (fakeMysqlFlavor) SlaveStatus(mysqld *Mysqld) (Status, error) {
 	return Status{}, nil
 }
-func (fakeMysqlFlavor) SetSlavePositionCommands(pos replication.Position) ([]string, error) {
+func (fakeMysqlFlavor) SetSlavePositionCommands(pos mysql.Position) ([]string, error) {
 	return nil, nil
 }
-func (fakeMysqlFlavor) SetMasterCommands(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
+func (fakeMysqlFlavor) SetMasterCommands(params *mysql.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
 	return nil, nil
 }
 func (fakeMysqlFlavor) EnableBinlogPlayback(mysqld *Mysqld) error  { return nil }

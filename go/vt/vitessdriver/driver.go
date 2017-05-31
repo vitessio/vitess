@@ -1,6 +1,18 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package vitessdriver
 
@@ -14,11 +26,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
-
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func init() {
@@ -30,12 +38,12 @@ func init() {
 // It opens a database connection to vtgate running at "address".
 //
 // Note that this is the vtgate v3 mode and requires a loaded VSchema.
-func Open(address, keyspace, tabletType string, timeout time.Duration) (*sql.DB, error) {
-	c := newDefaultConfiguration()
-	c.Address = address
-	c.Keyspace = keyspace
-	c.TabletType = tabletType
-	c.Timeout = timeout
+func Open(address, target string, timeout time.Duration) (*sql.DB, error) {
+	c := Configuration{
+		Address: address,
+		Target:  target,
+		Timeout: timeout,
+	}
 	return OpenWithConfiguration(c)
 }
 
@@ -43,13 +51,13 @@ func Open(address, keyspace, tabletType string, timeout time.Duration) (*sql.DB,
 // the results.
 //
 // The streaming mode is recommended for large results.
-func OpenForStreaming(address, keyspace, tabletType string, timeout time.Duration) (*sql.DB, error) {
-	c := newDefaultConfiguration()
-	c.Address = address
-	c.Keyspace = keyspace
-	c.TabletType = tabletType
-	c.Streaming = true
-	c.Timeout = timeout
+func OpenForStreaming(address, target string, timeout time.Duration) (*sql.DB, error) {
+	c := Configuration{
+		Address:   address,
+		Target:    target,
+		Streaming: true,
+		Timeout:   timeout,
+	}
 	return OpenWithConfiguration(c)
 }
 
@@ -79,17 +87,13 @@ type drv struct {
 //
 // Example for a JSON string:
 //
-//   {"protocol": "grpc", "address": "localhost:1111", "tablet_type": "master", "timeout": 1000000000}
+//   {"protocol": "grpc", "address": "localhost:1111", "target": "@master", "timeout": 1000000000}
 //
 // For a description of the available fields, see the Configuration struct.
 // Note: In the JSON string, timeout has to be specified in nanoseconds.
 func (d drv) Open(name string) (driver.Conn, error) {
-	c := &conn{Configuration: newDefaultConfiguration()}
+	c := &conn{}
 	err := json.Unmarshal([]byte(name), c)
-	if err != nil {
-		return nil, err
-	}
-	c.tabletTypeProto, err = topoproto.ParseTabletType(c.TabletType)
 	if err != nil {
 		return nil, err
 	}
@@ -114,18 +118,8 @@ type Configuration struct {
 	// Format: hostname:port
 	Address string
 
-	// Keyspace specifies the default keyspace.
-	Keyspace string
-
-	// TabletType is the type of tablet you want to access and affects the
-	// freshness of read data.
-	//
-	// For example, "replica" means eventually consistent reads, while
-	// "master" supports transactions and gives you read-after-write consistency.
-	//
-	// Default: "master"
-	// Allowed values: "master", "replica", "rdonly"
-	TabletType string `json:"tablet_type"`
+	// Target specifies the default target.
+	Target string
 
 	// Streaming is true when streaming RPCs are used.
 	// Recommended for large results.
@@ -135,12 +129,6 @@ type Configuration struct {
 	// Timeout after which a pending query will be aborted.
 	// TODO(sougou): deprecate once we switch to go1.8.
 	Timeout time.Duration
-}
-
-func newDefaultConfiguration() Configuration {
-	c := Configuration{}
-	c.setDefaults()
-	return c
 }
 
 // toJSON converts Configuration to the JSON string which is required by the
@@ -159,27 +147,26 @@ func (c *Configuration) setDefaults() {
 	if c.Protocol == "" {
 		c.Protocol = "grpc"
 	}
-	if c.TabletType == "" {
-		c.TabletType = "master"
-	}
 }
 
 type conn struct {
 	Configuration
-	// tabletTypeProto is the protobof enum value of the string Configuration.TabletType.
-	tabletTypeProto topodatapb.TabletType
-	vtgateConn      *vtgateconn.VTGateConn
-	tx              *vtgateconn.VTGateTx
+	conn    *vtgateconn.VTGateConn
+	session *vtgateconn.VTGateSession
 }
 
 func (c *conn) dial() error {
 	var err error
 	if c.Protocol == "" {
-		c.vtgateConn, err = vtgateconn.Dial(context.Background(), c.Address, c.Timeout, c.Keyspace)
+		c.conn, err = vtgateconn.Dial(context.Background(), c.Address, c.Timeout)
 	} else {
-		c.vtgateConn, err = vtgateconn.DialProtocol(context.Background(), c.Protocol, c.Address, c.Timeout, c.Keyspace)
+		c.conn, err = vtgateconn.DialProtocol(context.Background(), c.Protocol, c.Address, c.Timeout)
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	c.session = c.conn.Session(c.Target, nil)
+	return nil
 }
 
 func (c *conn) Prepare(query string) (driver.Stmt, error) {
@@ -191,55 +178,25 @@ func (c *conn) PrepareContext(ctx context.Context, query string) (driver.Stmt, e
 }
 
 func (c *conn) Close() error {
-	c.vtgateConn.Close()
+	c.conn.Close()
 	return nil
 }
 
 func (c *conn) Begin() (driver.Tx, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
-	defer cancel()
-
-	if c.Streaming {
-		return nil, errors.New("transaction not allowed for streaming connection")
-	}
-	tx, err := c.vtgateConn.Begin(ctx)
-	if err != nil {
+	if _, err := c.Exec("begin", nil); err != nil {
 		return nil, err
 	}
-	c.tx = tx
 	return c, nil
 }
 
 func (c *conn) Commit() error {
-	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
-	defer cancel()
-	return c.CommitContext(ctx)
-}
-
-func (c *conn) CommitContext(ctx context.Context) error {
-	if c.tx == nil {
-		return errors.New("commit: not in transaction")
-	}
-	defer func() {
-		c.tx = nil
-	}()
-	return c.tx.Commit(ctx)
+	_, err := c.Exec("commit", nil)
+	return err
 }
 
 func (c *conn) Rollback() error {
-	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
-	defer cancel()
-	return c.RollbackContext(ctx)
-}
-
-func (c *conn) RollbackContext(ctx context.Context) error {
-	if c.tx == nil {
-		return nil
-	}
-	defer func() {
-		c.tx = nil
-	}()
-	return c.tx.Rollback(ctx)
+	_, err := c.Exec("rollback", nil)
+	return err
 }
 
 func (c *conn) Exec(query string, args []driver.Value) (driver.Result, error) {
@@ -250,7 +207,7 @@ func (c *conn) Exec(query string, args []driver.Value) (driver.Result, error) {
 		return nil, errors.New("Exec not allowed for streaming connections")
 	}
 
-	qr, err := c.exec(ctx, query, bindVarsFromValues(args))
+	qr, err := c.session.Execute(ctx, query, bindVarsFromValues(args))
 	if err != nil {
 		return nil, err
 	}
@@ -262,7 +219,7 @@ func (c *conn) Query(query string, args []driver.Value) (driver.Rows, error) {
 	bindVars := bindVarsFromValues(args)
 
 	if c.Streaming {
-		stream, err := c.vtgateConn.StreamExecute(ctx, query, bindVars, c.tabletTypeProto, nil)
+		stream, err := c.session.StreamExecute(ctx, query, bindVars)
 		if err != nil {
 			cancel()
 			return nil, err
@@ -273,19 +230,11 @@ func (c *conn) Query(query string, args []driver.Value) (driver.Rows, error) {
 	// It will be called when streamingRows is closed later.
 	defer cancel()
 
-	qr, err := c.exec(ctx, query, bindVars)
+	qr, err := c.session.Execute(ctx, query, bindVars)
 	if err != nil {
 		return nil, err
 	}
 	return newRows(qr), nil
-}
-
-func (c *conn) exec(ctx context.Context, query string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
-	if c.tx != nil {
-		return c.tx.Execute(ctx, query, bindVars, c.tabletTypeProto, nil)
-	}
-	// Non-transactional case.
-	return c.vtgateConn.Execute(ctx, query, bindVars, c.tabletTypeProto, nil)
 }
 
 type stmt struct {

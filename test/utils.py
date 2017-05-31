@@ -1,5 +1,20 @@
 #!/usr/bin/env python
 
+# Copyright 2017 Google Inc.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
 """Common import for all tests."""
 
 import base64
@@ -686,16 +701,17 @@ class VtGate(object):
     protocol, addr = self.rpc_endpoint()
     args = environment.binary_args('vtclient') + [
         '-server', addr,
-        '-tablet_type', tablet_type,
         '-vtgate_protocol', protocol]
     if json_output:
       args.append('-json')
-    if keyspace:
-      args.extend(['-keyspace', keyspace])
     if bindvars:
       args.extend(['-bind_variables', json.dumps(bindvars)])
     if streaming:
       args.append('-streaming')
+    if keyspace:
+      args.extend(['-target', '%s@%s' % (keyspace, tablet_type)])
+    else:
+      args.extend(['-target', '@'+tablet_type])
     if verbose:
       args.append('-alsologtostderr')
     args.append(sql)
@@ -721,7 +737,7 @@ class VtGate(object):
     _, addr = self.rpc_endpoint()
     args = ['VtGateExecute', '-json',
             '-server', addr,
-            '-tablet_type', tablet_type]
+            '-target', '@'+tablet_type]
     if bindvars:
       args.extend(['-bind_variables', json.dumps(bindvars)])
     if execute_options:

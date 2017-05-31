@@ -1,6 +1,18 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package vtgateconn
 
@@ -21,29 +33,15 @@ func TestRegisterDialer(t *testing.T) {
 
 func TestGetDialerWithProtocol(t *testing.T) {
 	protocol := "test2"
-	c, err := DialProtocol(context.Background(), protocol, "", 0, "")
+	c, err := DialProtocol(context.Background(), protocol, "", 0)
 	if err == nil || err.Error() != "no dialer registered for VTGate protocol "+protocol {
 		t.Fatalf("protocol: %s is not registered, should return error: %v", protocol, err)
 	}
 	RegisterDialer(protocol, func(context.Context, string, time.Duration) (Impl, error) {
 		return nil, nil
 	})
-	c, err = DialProtocol(context.Background(), protocol, "", 0, "test_ks")
+	c, err = DialProtocol(context.Background(), protocol, "", 0)
 	if err != nil || c == nil {
 		t.Fatalf("dialerFunc has been registered, should not get nil: %v %v", err, c)
-	}
-	if c.keyspace != "test_ks" {
-		t.Errorf("not setting keyspace properly.")
-	}
-}
-
-func TestAtomicity(t *testing.T) {
-	ctx := context.Background()
-	if v := AtomicityFromContext(ctx); v != AtomicityMulti {
-		t.Errorf("Atomicity: %v, want %d", v, AtomicityMulti)
-	}
-	ctx = WithAtomicity(ctx, Atomicity2PC)
-	if v := AtomicityFromContext(ctx); v != Atomicity2PC {
-		t.Errorf("Atomicity: %v, want %d", v, Atomicity2PC)
 	}
 }

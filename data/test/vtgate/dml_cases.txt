@@ -16,8 +16,7 @@
       "Name": "main",
       "Sharded": false
     },
-    "Query": "update m1 set val = 1",
-    "Table": "m1"
+    "Query": "update m1 set val = 1"
   }
 }
 
@@ -31,8 +30,7 @@
       "Name": "main",
       "Sharded": false
     },
-    "Query": "update unsharded set val = 1",
-    "Table": "unsharded"
+    "Query": "update unsharded set val = 1"
   }
 }
 
@@ -46,8 +44,7 @@
       "Name": "main",
       "Sharded": false
     },
-    "Query": "delete from unsharded",
-    "Table": "unsharded"
+    "Query": "delete from unsharded"
   }
 }
 
@@ -120,6 +117,34 @@
   }
 }
 
+# multi-table delete with comma join
+"delete a from unsharded_a a, unsharded_b b where a.id = b.id and b.val = 1"
+{
+  "Original": "delete a from unsharded_a a, unsharded_b b where a.id = b.id and b.val = 1",
+  "Instructions": {
+    "Opcode": "DeleteUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "delete a from unsharded_a as a, unsharded_b as b where a.id = b.id and b.val = 1"
+  }
+}
+
+# multi-table delete with ansi join
+"delete a from unsharded_a a join unsharded_b b on a.id = b.id where b.val = 1"
+{
+  "Original": "delete a from unsharded_a a join unsharded_b b on a.id = b.id where b.val = 1",
+  "Instructions": {
+    "Opcode": "DeleteUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "delete a from unsharded_a as a join unsharded_b as b on a.id = b.id where b.val = 1"
+  }
+}
+
 # update by lookup
 "update music set val = 1 where id = 1"
 {
@@ -134,6 +159,34 @@
     "Vindex": "music_user_map",
     "Values": 1,
     "Table": "music"
+  }
+}
+
+# update multi-table ansi join
+"update unsharded_a a join unsharded_b b on a.id = b.id set a.val = 'foo' where b.val = 1"
+{
+  "Original": "update unsharded_a a join unsharded_b b on a.id = b.id set a.val = 'foo' where b.val = 1",
+  "Instructions": {
+    "Opcode": "UpdateUnsharded",
+    "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+     },
+    "Query": "update unsharded_a as a join unsharded_b as b on a.id = b.id set a.val = 'foo' where b.val = 1"
+  }
+}
+
+# update multi-table comma join
+"update unsharded_a a, unsharded_b b set a.val = 'foo' where a.id = b.id and b.val = 1"
+{
+  "Original": "update unsharded_a a, unsharded_b b set a.val = 'foo' where a.id = b.id and b.val = 1",
+  "Instructions": {
+    "Opcode": "UpdateUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "update unsharded_a as a, unsharded_b as b set a.val = 'foo' where a.id = b.id and b.val = 1"
   }
 }
 
@@ -234,13 +287,12 @@
     "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')",
     "Table": "unsharded_auto",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [
+      "Values": [
         1
       ]
     }
@@ -260,13 +312,12 @@
     "Query": "insert into unsharded_auto(val, id) values ('aa', :__seq0)",
     "Table": "unsharded_auto",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [
+      "Values": [
         null
       ]
     }
@@ -286,13 +337,12 @@
     "Query": "insert into unsharded_auto(val, id) values (false, :__seq0)",
     "Table": "unsharded_auto",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [
+      "Values": [
         null
       ]
     }
@@ -312,13 +362,12 @@
     "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
     "Table": "unsharded_auto",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [
+      "Values": [
         1,
         null
       ]
@@ -356,13 +405,12 @@
     ]],
     "Table": "user",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [1]
+      "Values": [1]
     },
     "Prefix": "insert into user(id, Name, Costly) values ",
     "Mid":["(:_Id0, :_Name0, :_Costly0)"]
@@ -387,13 +435,12 @@
     ]],
     "Table": "user",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [null]
+      "Values": [null]
     },
     "Prefix": "insert into user(nonid, Id, Name, Costly) values ",
     "Mid": ["(2, :_Id0, :_Name0, :_Costly0)"]
@@ -418,13 +465,12 @@
     ]],
     "Table": "user",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [null]
+      "Values": [null]
     },
     "Prefix": "insert into user(nonid, Id, Name, Costly) values ",
     "Mid": ["(true, :_Id0, :_Name0, :_Costly0)"]
@@ -449,13 +495,12 @@
     ]],
     "Table": "user",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [1]
+      "Values": [1]
     },
     "Prefix": "insert into user(nonid, name, id, Costly) values ",
     "Mid": ["(2, :_Name0, :_Id0, :_Costly0)"]
@@ -478,13 +523,12 @@
     ]],
     "Table": "user_extra",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [null]
+      "Values": [null]
     },
     "Prefix": "insert into user_extra(nonid, user_id, extra_id) values ",
     "Mid": ["(2, :_user_id0, :__seq0)"]
@@ -556,15 +600,128 @@
     ],
     "Table": "user",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [1,2]
+      "Values": [1,2]
     },
     "Prefix": "insert into user(id, Name, Costly) values ",
     "Mid": ["(:_Id0, :_Name0, :_Costly0)","(:_Id1, :_Name1, :_Costly1)"]
   }
 }
+
+# simple replace unsharded
+"replace into unsharded values(1, 2)"
+{
+  "Original": "replace into unsharded values(1, 2)",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "replace into unsharded values (1, 2)",
+    "Table": "unsharded"
+  }
+}
+
+# replace unsharded with select
+"replace into unsharded select id from unsharded_auto"
+{
+  "Original": "replace into unsharded select id from unsharded_auto",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "replace into unsharded select id from unsharded_auto",
+    "Table": "unsharded"
+  }
+}
+
+# replace unsharded, invalid value for auto-inc
+"replace into unsharded_auto(id, val) values(18446744073709551616, 'aa')"
+"could not convert val: 18446744073709551616, pos: 0: strconv.ParseUint: parsing "18446744073709551616": value out of range"
+
+# replace unsharded, column present
+"replace into unsharded_auto(id, val) values(1, 'aa')"
+{
+  "Original": "replace into unsharded_auto(id, val) values(1, 'aa')",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')",
+    "Table": "unsharded_auto",
+    "Generate": {
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from seq",
+      "Values": [
+        1
+      ]
+    }
+  }
+}
+
+# replace unsharded, column absent
+"replace into unsharded_auto(val) values('aa')"
+{
+  "Original": "replace into unsharded_auto(val) values('aa')",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "replace into unsharded_auto(val, id) values ('aa', :__seq0)",
+    "Table": "unsharded_auto",
+    "Generate": {
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from seq",
+      "Values": [
+        null
+      ]
+    }
+  }
+}
+
+# replace unsharded, multi-val
+"replace into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')"
+{
+  "Original": "replace into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
+    "Table": "unsharded_auto",
+    "Generate": {
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from seq",
+      "Values": [
+        1,
+        null
+      ]
+    }
+  }
+}
+
+# replace invalid table
+"replace into noexist(music_id, user_id) values(1, 18446744073709551616)"
+"table noexist not found"

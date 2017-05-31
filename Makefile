@@ -1,6 +1,16 @@
-# Copyright 2012, Google Inc. All rights reserved.
-# Use of this source code is governed by a BSD-style license that can
-# be found in the LICENSE file.
+# Copyright 2017 Google Inc.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 MAKEFLAGS = -s
 
@@ -194,17 +204,17 @@ docker_base_percona57:
 docker_lite:
 	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE)
 
-docker_lite_mysql56: docker_base_mysql56
-	cd docker/lite && ./build.sh mysql56
+docker_lite_mysql56:
+	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) mysql56
 
-docker_lite_mariadb: docker_base_mariadb
-	cd docker/lite && ./build.sh mariadb
+docker_lite_mariadb:
+	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) mariadb
 
-docker_lite_percona: docker_base_percona
-	cd docker/lite && ./build.sh percona
+docker_lite_percona:
+	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) percona
 
-docker_lite_percona57: docker_base_percona57
-	cd docker/lite && ./build.sh percona57
+docker_lite_percona57:
+	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) percona57
 
 docker_guestbook:
 	cd examples/kubernetes/guestbook && ./build.sh

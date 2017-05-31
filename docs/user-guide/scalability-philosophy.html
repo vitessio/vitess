@@ -166,6 +166,14 @@
             <li><a href="/contributing/code-reviews.html">Code Reviews</a>
           </ul>
         </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Internal</h4>
+          <ul style="display: none">
+            <li><a href="/internal/">Overview</a>
+            <li><a href="/internal/release-instructions.html">Release Instructions</a>
+            <li><a href="/internal/publish-website.html">Publish Website</a>
+          </ul>
+        </li>
 
         <div>
           <form method="get" action="/search/">
@@ -274,6 +282,14 @@
             <li><a href="/contributing/">Contributing to Vitess</a>
             <li><a href="/contributing/github-workflow.html">GitHub Workflow</a>
             <li><a href="/contributing/code-reviews.html">Code Reviews</a>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Internal</h4>
+          <ul style="display: none">
+            <li><a href="/internal/">Overview</a>
+            <li><a href="/internal/release-instructions.html">Release Instructions</a>
+            <li><a href="/internal/publish-website.html">Publish Website</a>
           </ul>
         </li>
 
@@ -441,9 +457,8 @@ available and consistent data store.</p>
 
 <p>Lock servers were built for this exact purpose, and Vitess needs one such
 cluster to be setup to run smoothly. Vitess can be customized to utilize any
-lock server, and by default it supports zookeeper and etcd. We call this
-component
-<a href="/user-guide/topology-service.html">Topology Service</a>.</p>
+lock server, and by default it supports Zookeeper, etcd and Consul. We call this
+component <a href="/user-guide/topology-service.html">Topology Service</a>.</p>
 
 <p>As Vitess is meant to run in multiple data centers / regions (called cells
 below), it relies on two different lock servers:</p>

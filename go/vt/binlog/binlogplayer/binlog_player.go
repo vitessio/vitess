@@ -1,6 +1,18 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 // Package binlogplayer contains the code that plays a filtered replication
 // stream on a client database. It usually runs inside the destination master
@@ -15,10 +27,10 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysqlconn/replication"
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
@@ -59,20 +71,20 @@ type Stats struct {
 	Rates   *stats.Rates
 
 	// Last saved status
-	lastPosition        replication.Position
+	lastPosition        mysql.Position
 	lastPositionMutex   sync.RWMutex
 	SecondsBehindMaster sync2.AtomicInt64
 }
 
 // SetLastPosition sets the last replication position.
-func (bps *Stats) SetLastPosition(pos replication.Position) {
+func (bps *Stats) SetLastPosition(pos mysql.Position) {
 	bps.lastPositionMutex.Lock()
 	defer bps.lastPositionMutex.Unlock()
 	bps.lastPosition = pos
 }
 
 // GetLastPosition gets the last replication position.
-func (bps *Stats) GetLastPosition() replication.Position {
+func (bps *Stats) GetLastPosition() mysql.Position {
 	bps.lastPositionMutex.RLock()
 	defer bps.lastPositionMutex.RUnlock()
 	return bps.lastPosition
@@ -99,8 +111,8 @@ type BinlogPlayer struct {
 
 	// common to all
 	uid            uint32
-	position       replication.Position
-	stopPosition   replication.Position
+	position       mysql.Position
+	stopPosition   mysql.Position
 	blplStats      *Stats
 	defaultCharset *binlogdatapb.Charset
 	currentCharset *binlogdatapb.Charset
@@ -119,12 +131,12 @@ func NewBinlogPlayerKeyRange(dbClient VtClient, tablet *topodatapb.Tablet, keyRa
 		blplStats: blplStats,
 	}
 	var err error
-	result.position, err = replication.DecodePosition(startPosition)
+	result.position, err = mysql.DecodePosition(startPosition)
 	if err != nil {
 		return nil, err
 	}
 	if stopPosition != "" {
-		result.stopPosition, err = replication.DecodePosition(stopPosition)
+		result.stopPosition, err = mysql.DecodePosition(stopPosition)
 		if err != nil {
 			return nil, err
 		}
@@ -145,13 +157,13 @@ func NewBinlogPlayerTables(dbClient VtClient, tablet *topodatapb.Tablet, tables 
 		blplStats: blplStats,
 	}
 	var err error
-	result.position, err = replication.DecodePosition(startPosition)
+	result.position, err = mysql.DecodePosition(startPosition)
 	if err != nil {
 		return nil, err
 	}
 	if stopPosition != "" {
 		var err error
-		result.stopPosition, err = replication.DecodePosition(stopPosition)
+		result.stopPosition, err = mysql.DecodePosition(stopPosition)
 		if err != nil {
 			return nil, err
 		}
@@ -169,7 +181,7 @@ func NewBinlogPlayerTables(dbClient VtClient, tablet *topodatapb.Tablet, tables 
 //   transaction_timestamp alone (keeping the old value), and we don't
 //   change SecondsBehindMaster
 func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransaction) error {
-	position, err := replication.DecodePosition(tx.EventToken.Position)
+	position, err := mysql.DecodePosition(tx.EventToken.Position)
 	if err != nil {
 		return err
 	}
@@ -251,13 +263,13 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 				// charset we specified in the request.
 				stmtCharset = blp.defaultCharset
 			}
-			if *blp.currentCharset != *stmtCharset {
+			if !proto.Equal(blp.currentCharset, stmtCharset) {
 				// In regular MySQL replication, the charset is silently adjusted as
 				// needed during event playback. Here we also adjust so that playback
 				// proceeds, but in Vitess-land this usually means a misconfigured
 				// server or a misbehaving client, so we spam the logs with warnings.
 				log.Warningf("BinlogPlayer changing charset from %v to %v for statement %d in transaction %v", blp.currentCharset, stmtCharset, i, *tx)
-				err = sqldb.SetCharset(dbClient.dbConn, stmtCharset)
+				err = mysql.SetCharset(dbClient.dbConn, stmtCharset)
 				if err != nil {
 					return false, fmt.Errorf("can't set charset for statement %d in transaction %v: %v", i, *tx, err)
 				}
@@ -267,7 +279,7 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 		if _, err = blp.exec(string(stmt.Sql)); err == nil {
 			continue
 		}
-		if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == 1213 {
+		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == 1213 {
 			// Deadlock: ask for retry
 			log.Infof("Deadlock: %v", err)
 			if err = blp.dbClient.Rollback(); err != nil {
@@ -362,7 +374,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	// to check that they match. The streamer will also only send per-statement
 	// charset data if that statement's charset is different from what we specify.
 	if dbClient, ok := blp.dbClient.(*DBClient); ok {
-		blp.defaultCharset, err = sqldb.GetCharset(dbClient.dbConn)
+		blp.defaultCharset, err = mysql.GetCharset(dbClient.dbConn)
 		if err != nil {
 			return fmt.Errorf("can't get charset to request binlog stream: %v", err)
 		}
@@ -376,7 +388,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 				return
 			}
 			log.Infof("restoring original charset %v", blp.defaultCharset)
-			if csErr := sqldb.SetCharset(dbClient.dbConn, blp.defaultCharset); csErr != nil {
+			if csErr := mysql.SetCharset(dbClient.dbConn, blp.defaultCharset); csErr != nil {
 				log.Errorf("can't restore original charset %v: %v", blp.defaultCharset, csErr)
 			}
 		}()
@@ -384,9 +396,9 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 
 	var stream BinlogTransactionStream
 	if len(blp.tables) > 0 {
-		stream, err = blplClient.StreamTables(ctx, replication.EncodePosition(blp.position), blp.tables, blp.defaultCharset)
+		stream, err = blplClient.StreamTables(ctx, mysql.EncodePosition(blp.position), blp.tables, blp.defaultCharset)
 	} else {
-		stream, err = blplClient.StreamKeyRange(ctx, replication.EncodePosition(blp.position), blp.keyRange, blp.defaultCharset)
+		stream, err = blplClient.StreamKeyRange(ctx, mysql.EncodePosition(blp.position), blp.keyRange, blp.defaultCharset)
 	}
 	if err != nil {
 		err := fmt.Errorf("error sending streaming query to binlog server: %v", err)
@@ -464,7 +476,7 @@ func CreateBlpCheckpoint() []string {
   transaction_timestamp BIGINT(20) UNSIGNED NOT NULL,
   flags VARBINARY(250) DEFAULT NULL,
   PRIMARY KEY (source_shard_uid)
-) ENGINE=InnoDB`, replication.MaximumPositionSize)}
+) ENGINE=InnoDB`, mysql.MaximumPositionSize)}
 }
 
 // PopulateBlpCheckpoint returns a statement to populate the first value into
@@ -478,20 +490,20 @@ func PopulateBlpCheckpoint(index uint32, position string, maxTPS int64, maxRepli
 
 // updateBlpCheckpoint returns a statement to update a value in the
 // _vt.blp_checkpoint table.
-func updateBlpCheckpoint(uid uint32, pos replication.Position, timeUpdated int64, txTimestamp int64) string {
+func updateBlpCheckpoint(uid uint32, pos mysql.Position, timeUpdated int64, txTimestamp int64) string {
 	if txTimestamp != 0 {
 		return fmt.Sprintf(
 			"UPDATE _vt.blp_checkpoint "+
 				"SET pos='%v', time_updated=%v, transaction_timestamp=%v "+
 				"WHERE source_shard_uid=%v",
-			replication.EncodePosition(pos), timeUpdated, txTimestamp, uid)
+			mysql.EncodePosition(pos), timeUpdated, txTimestamp, uid)
 	}
 
 	return fmt.Sprintf(
 		"UPDATE _vt.blp_checkpoint "+
 			"SET pos='%v', time_updated=%v "+
 			"WHERE source_shard_uid=%v",
-		replication.EncodePosition(pos), timeUpdated, uid)
+		mysql.EncodePosition(pos), timeUpdated, uid)
 }
 
 // QueryBlpCheckpoint returns a statement to query the gtid and flags for a

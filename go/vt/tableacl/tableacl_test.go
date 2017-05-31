@@ -1,6 +1,18 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package tableacl
 
@@ -13,10 +25,13 @@ import (
 	"testing"
 	"time"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
+	"github.com/golang/protobuf/proto"
+
 	"github.com/youtube/vitess/go/vt/tableacl/acl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
 )
 
 type fakeACLFactory struct{}
@@ -86,7 +101,7 @@ func TestInitFromProto(t *testing.T) {
 		t.Fatalf("tableacl init should succeed, but got error: %v", err)
 	}
 
-	if !reflect.DeepEqual(GetCurrentConfig(), config) {
+	if !proto.Equal(GetCurrentConfig(), config) {
 		t.Fatalf("GetCurrentConfig() = %v, want: %v", GetCurrentConfig(), config)
 	}
 

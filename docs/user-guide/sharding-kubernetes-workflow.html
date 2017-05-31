@@ -166,6 +166,14 @@
             <li><a href="/contributing/code-reviews.html">Code Reviews</a>
           </ul>
         </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Internal</h4>
+          <ul style="display: none">
+            <li><a href="/internal/">Overview</a>
+            <li><a href="/internal/release-instructions.html">Release Instructions</a>
+            <li><a href="/internal/publish-website.html">Publish Website</a>
+          </ul>
+        </li>
 
         <div>
           <form method="get" action="/search/">
@@ -274,6 +282,14 @@
             <li><a href="/contributing/">Contributing to Vitess</a>
             <li><a href="/contributing/github-workflow.html">GitHub Workflow</a>
             <li><a href="/contributing/code-reviews.html">Code Reviews</a>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Internal</h4>
+          <ul style="display: none">
+            <li><a href="/internal/">Overview</a>
+            <li><a href="/internal/release-instructions.html">Release Instructions</a>
+            <li><a href="/internal/publish-website.html">Publish Website</a>
           </ul>
         </li>
 
@@ -447,36 +463,33 @@ kubernetes cluster, you can check out more information
 <h2 id="troubleshooting">Troubleshooting</h2>
 
 <h3 id="checking-status-of-your-setup">Checking status of your setup.</h3>
-<div class="highlight"><pre><code class="language-text" data-lang="text">To get status of pods and services you&#39;ve setup, you can use the commands
-(all pods should be in Running status, guestbook and vtworker services
-should have assign external IP):
 
-``` sh
-$ kubectl get pods
-$ kubectl get services
-```
+<p>To get status of pods and services you&#39;ve setup, you can use the commands
+(all pods should be in Running status, guestbook and vtworker services
+should have assign external IP):</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>kubectl get pods
+<span class="nv">$ </span>kubectl get services
 </code></pre></div>
 <h3 id="debugging-pods">Debugging pods.</h3>
-<div class="highlight"><pre><code class="language-text" data-lang="text">If you find out a component (e.g. vttablet, vtgate) doesn&#39;t respond as
-expected, you can surface the log using this command (the pod name can be
-found out using the command mentioned above):
 
-``` sh
-$ kubectl logs &lt;pod name&gt; [-c &lt;container&gt;]
-### example
-# $ kubectl logs vtworker
-# $ kubectl logs vttablet-XXXX -c vttablet
-```
+<p>If you find out a component (e.g. vttablet, vtgate) doesn&#39;t respond as
+expected, you can surface the log using this command (the pod name can be
+found out using the command mentioned above):</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>kubectl logs &lt;pod name&gt; <span class="o">[</span>-c &lt;container&gt;<span class="o">]</span>
+<span class="c">### example</span>
+<span class="c"># $ kubectl logs vtworker</span>
+<span class="c"># $ kubectl logs vttablet-XXXX -c vttablet</span>
 </code></pre></div>
 <h3 id="debugging-pending-external-ip-issue">Debugging pending external IP issue.</h3>
-<div class="highlight"><pre><code class="language-text" data-lang="text">If you found that your service has a pending external IP for long time, it
+
+<p>If you found that your service has a pending external IP for long time, it
 maybe because you&#39;ve reached the limitation of networking resource. Please
-go to your project console on gcloud (cloud.google.com), then go to *Load
-balancing* page (you can search &quot;Load balancing&quot; in the search bar to get
+go to your project console on gcloud (cloud.google.com), then go to <em>Load
+balancing</em> page (you can search &quot;Load balancing&quot; in the search bar to get
 to the page) under Networking section. Then, click &quot;advanced menu&quot; for
 editing load balancing resources. Check the forwarding rules you have and
-delete the unused ones if there are too many.
-</code></pre></div>
+delete the unused ones if there are too many.</p>
+
       </div>
     </div>
   </div>

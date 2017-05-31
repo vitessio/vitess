@@ -9,6 +9,9 @@ namespace Vitess\Proto\Query {
     /**  @var string */
     public $username = null;
     
+    /**  @var string[]  */
+    public $groups = array();
+    
 
     /** @var \Closure[] */
     protected static $__extensions = array();
@@ -23,6 +26,14 @@ namespace Vitess\Proto\Query {
       $f->name      = "username";
       $f->type      = \DrSlump\Protobuf::TYPE_STRING;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $descriptor->addField($f);
+
+      // REPEATED STRING groups = 2
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 2;
+      $f->name      = "groups";
+      $f->type      = \DrSlump\Protobuf::TYPE_STRING;
+      $f->rule      = \DrSlump\Protobuf::RULE_REPEATED;
       $descriptor->addField($f);
 
       foreach (self::$__extensions as $cb) {
@@ -67,6 +78,63 @@ namespace Vitess\Proto\Query {
      */
     public function setUsername( $value){
       return $this->_set(1, $value);
+    }
+    
+    /**
+     * Check if <groups> has a value
+     *
+     * @return boolean
+     */
+    public function hasGroups(){
+      return $this->_has(2);
+    }
+    
+    /**
+     * Clear <groups> value
+     *
+     * @return \Vitess\Proto\Query\VTGateCallerID
+     */
+    public function clearGroups(){
+      return $this->_clear(2);
+    }
+    
+    /**
+     * Get <groups> value
+     *
+     * @param int $idx
+     * @return string
+     */
+    public function getGroups($idx = NULL){
+      return $this->_get(2, $idx);
+    }
+    
+    /**
+     * Set <groups> value
+     *
+     * @param string $value
+     * @return \Vitess\Proto\Query\VTGateCallerID
+     */
+    public function setGroups( $value, $idx = NULL){
+      return $this->_set(2, $value, $idx);
+    }
+    
+    /**
+     * Get all elements of <groups>
+     *
+     * @return string[]
+     */
+    public function getGroupsList(){
+     return $this->_get(2);
+    }
+    
+    /**
+     * Add a new element to <groups>
+     *
+     * @param string $value
+     * @return \Vitess\Proto\Query\VTGateCallerID
+     */
+    public function addGroups( $value){
+     return $this->_add(2, $value);
     }
   }
 }

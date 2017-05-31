@@ -1,6 +1,18 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package wrangler
 
@@ -182,11 +194,11 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 			}
 
 			wr.Logger().Infof("Deleting all tablets in shard %v/%v cell %v", keyspace, shard, cell)
-			for tabletAlias := range tabletMap {
+			for tabletAlias, tabletInfo := range tabletMap {
 				// We don't care about scrapping or updating the replication graph,
 				// because we're about to delete the entire replication graph.
-				wr.Logger().Infof("Deleting tablet %v", topoproto.TabletAliasString(&tabletAlias))
-				if err := wr.TopoServer().DeleteTablet(ctx, &tabletAlias); err != nil && err != topo.ErrNoNode {
+				wr.Logger().Infof("Deleting tablet %v", tabletAlias)
+				if err := wr.TopoServer().DeleteTablet(ctx, tabletInfo.Alias); err != nil && err != topo.ErrNoNode {
 					// We don't want to continue if a DeleteTablet fails for
 					// any good reason (other than missing tablet, in which
 					// case it's just a topology server inconsistency we can
@@ -196,7 +208,7 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 					//
 					// If the problem is temporary, or resolved externally, re-running
 					// DeleteShard will skip over tablets that were already deleted.
-					return fmt.Errorf("can't delete tablet %v: %v", topoproto.TabletAliasString(&tabletAlias), err)
+					return fmt.Errorf("can't delete tablet %v: %v", tabletAlias, err)
 				}
 			}
 		}

@@ -185,7 +185,7 @@ These behaviors combine to give you the property that, in case of master
 failure, there is at least one other *replica* type slave that has every
 transaction that was ever reported to clients as having completed.
 You can then ([manually](http://vitess.io/reference/vtctl.html#emergencyreparentshard),
-or with an automated tool like [Orchestrator](https://github.com/outbrain/orchestrator))
+or with an automated tool like [Orchestrator](https://github.com/github/orchestrator))
 pick the replica that is farthest ahead in GTID position and promote that to be
 the new master.
 

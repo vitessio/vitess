@@ -1,14 +1,27 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package vtgate
 
 import (
-	"context"
-	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -20,29 +33,74 @@ import (
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
+func TestTxConnBegin(t *testing.T) {
+	sc, sbc0, _ := newTestTxConnEnv("TestTxConn")
+	session := &vtgatepb.Session{}
+
+	// begin
+	if err := sc.txConn.Begin(context.Background(), NewSafeSession(session)); err != nil {
+		t.Error(err)
+	}
+	wantSession := &vtgatepb.Session{InTransaction: true}
+	if !proto.Equal(session, wantSession) {
+		t.Errorf("begin: %v, want %v", session, wantSession)
+	}
+	if _, err := sc.Execute(context.Background(), "query1", nil, "TestTxConn", []string{"0"}, topodatapb.TabletType_MASTER, NewSafeSession(session), false, nil); err != nil {
+		t.Error(err)
+	}
+
+	// Begin again should cause a commit and a new begin.
+	if err := sc.txConn.Begin(context.Background(), NewSafeSession(session)); err != nil {
+		t.Error(err)
+	}
+	if !proto.Equal(session, wantSession) {
+		t.Errorf("begin: %v, want %v", session, wantSession)
+	}
+	if commitCount := sbc0.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("want 1, got %d", commitCount)
+	}
+}
+
+func TestTxConnBeginDisallowed(t *testing.T) {
+	sc, _, _ := newTestTxConnEnv("TestTxConn")
+	session := &vtgatepb.Session{}
+
+	sc.txConn.mode = vtgatepb.TransactionMode_SINGLE
+	session = &vtgatepb.Session{TransactionMode: vtgatepb.TransactionMode_MULTI}
+	err := sc.txConn.Begin(context.Background(), NewSafeSession(session))
+	wantErr := "requested transaction mode MULTI disallowed: vtgate must be started with --transaction_mode=MULTI (or TWOPC). Current transaction mode: SINGLE"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("txConn.Begin: %v, want %s", err, wantErr)
+	}
+
+	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+	session = &vtgatepb.Session{TransactionMode: vtgatepb.TransactionMode_TWOPC}
+	err = sc.txConn.Begin(context.Background(), NewSafeSession(session))
+	wantErr = "requested transaction mode TWOPC disallowed: vtgate must be started with --transaction_mode=TWOPC. Current transaction mode: MULTI"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("txConn.Begin: %v, want %s", err, wantErr)
+	}
+}
+
 func TestTxConnCommitRollbackIncorrectSession(t *testing.T) {
 	sc, _, _ := newTestTxConnEnv("TestTxConn")
 	// nil session
-	err := sc.txConn.Commit(context.Background(), false, nil)
-	if got := vterrors.Code(err); got != vtrpcpb.Code_INVALID_ARGUMENT {
-		t.Errorf("Commit: %v, want %v", got, vtrpcpb.Code_INVALID_ARGUMENT)
-	}
-
-	err = sc.txConn.Rollback(context.Background(), nil)
+	err := sc.txConn.Rollback(context.Background(), nil)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// not in transaction
 	session := NewSafeSession(&vtgatepb.Session{})
-	err = sc.txConn.Commit(context.Background(), false, session)
-	if got := vterrors.Code(err); got != vtrpcpb.Code_ABORTED {
-		t.Errorf("Commit: %v, want %v", got, vtrpcpb.Code_ABORTED)
+	err = sc.txConn.Commit(context.Background(), session)
+	if err != nil {
+		t.Error(err)
 	}
 }
 
 func TestTxConnCommitSuccess(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
+	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
@@ -58,7 +116,7 @@ func TestTxConnCommitSuccess(t *testing.T) {
 			TransactionId: 1,
 		}},
 	}
-	if !reflect.DeepEqual(*session.Session, wantSession) {
+	if !proto.Equal(session.Session, &wantSession) {
 		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
 	}
 	sc.Execute(context.Background(), "query1", nil, "TestTxConn", []string{"0", "1"}, topodatapb.TabletType_MASTER, session, false, nil)
@@ -80,18 +138,18 @@ func TestTxConnCommitSuccess(t *testing.T) {
 			TransactionId: 1,
 		}},
 	}
-	if !reflect.DeepEqual(*session.Session, wantSession) {
+	if !proto.Equal(session.Session, &wantSession) {
 		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
 	}
 
 	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	err := sc.txConn.Commit(context.Background(), false, session)
+	err := sc.txConn.Commit(context.Background(), session)
 	want := "INVALID_ARGUMENT error"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Commit: %v, want %s", err, want)
 	}
 	wantSession = vtgatepb.Session{}
-	if !reflect.DeepEqual(*session.Session, wantSession) {
+	if !proto.Equal(session.Session, &wantSession) {
 		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
 	}
 	if commitCount := sbc0.CommitCount.Get(); commitCount != 1 {
@@ -108,7 +166,8 @@ func TestTxConnCommit2PC(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.Execute(context.Background(), "query1", nil, "TestTxConnCommit2PC", []string{"0"}, topodatapb.TabletType_MASTER, session, false, nil)
 	sc.Execute(context.Background(), "query1", nil, "TestTxConnCommit2PC", []string{"0", "1"}, topodatapb.TabletType_MASTER, session, false, nil)
-	if err := sc.txConn.Commit(context.Background(), true, session); err != nil {
+	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
+	if err := sc.txConn.Commit(context.Background(), session); err != nil {
 		t.Error(err)
 	}
 	if c := sbc0.CreateTransactionCount.Get(); c != 1 {
@@ -132,7 +191,8 @@ func TestTxConnCommit2PCOneParticipant(t *testing.T) {
 	sc, sbc0, _ := newTestTxConnEnv("TestTxConnCommit2PCOneParticipant")
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.Execute(context.Background(), "query1", nil, "TestTxConnCommit2PCOneParticipant", []string{"0"}, topodatapb.TabletType_MASTER, session, false, nil)
-	if err := sc.txConn.Commit(context.Background(), true, session); err != nil {
+	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
+	if err := sc.txConn.Commit(context.Background(), session); err != nil {
 		t.Error(err)
 	}
 	if c := sbc0.CommitCount.Get(); c != 1 {
@@ -148,7 +208,8 @@ func TestTxConnCommit2PCCreateTransactionFail(t *testing.T) {
 	sc.Execute(context.Background(), "query1", nil, "TestTxConnCommit2PCCreateTransactionFail", []string{"1"}, topodatapb.TabletType_MASTER, session, false, nil)
 
 	sbc0.MustFailCreateTransaction = 1
-	err := sc.txConn.Commit(context.Background(), true, session)
+	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
+	err := sc.txConn.Commit(context.Background(), session)
 	want := "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Commit: %v, must contain %s", err, want)
@@ -184,7 +245,8 @@ func TestTxConnCommit2PCPrepareFail(t *testing.T) {
 	sc.Execute(context.Background(), "query1", nil, "TestTxConnCommit2PCPrepareFail", []string{"0", "1"}, topodatapb.TabletType_MASTER, session, false, nil)
 
 	sbc1.MustFailPrepare = 1
-	err := sc.txConn.Commit(context.Background(), true, session)
+	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
+	err := sc.txConn.Commit(context.Background(), session)
 	want := "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Commit: %v, must contain %s", err, want)
@@ -214,7 +276,8 @@ func TestTxConnCommit2PCStartCommitFail(t *testing.T) {
 	sc.Execute(context.Background(), "query1", nil, "TestTxConnCommit2PCStartCommitFail", []string{"0", "1"}, topodatapb.TabletType_MASTER, session, false, nil)
 
 	sbc0.MustFailStartCommit = 1
-	err := sc.txConn.Commit(context.Background(), true, session)
+	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
+	err := sc.txConn.Commit(context.Background(), session)
 	want := "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Commit: %v, must contain %s", err, want)
@@ -244,7 +307,8 @@ func TestTxConnCommit2PCCommitPreparedFail(t *testing.T) {
 	sc.Execute(context.Background(), "query1", nil, "TestTxConnCommit2PCCommitPreparedFail", []string{"0", "1"}, topodatapb.TabletType_MASTER, session, false, nil)
 
 	sbc1.MustFailCommitPrepared = 1
-	err := sc.txConn.Commit(context.Background(), true, session)
+	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
+	err := sc.txConn.Commit(context.Background(), session)
 	want := "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Commit: %v, must contain %s", err, want)
@@ -274,7 +338,8 @@ func TestTxConnCommit2PCConcludeTransactionFail(t *testing.T) {
 	sc.Execute(context.Background(), "query1", nil, "TestTxConnCommit2PCConcludeTransactionFail", []string{"0", "1"}, topodatapb.TabletType_MASTER, session, false, nil)
 
 	sbc0.MustFailConcludeTransaction = 1
-	err := sc.txConn.Commit(context.Background(), true, session)
+	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
+	err := sc.txConn.Commit(context.Background(), session)
 	want := "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Commit: %v, must contain %s", err, want)
@@ -306,7 +371,7 @@ func TestTxConnRollback(t *testing.T) {
 		t.Error(err)
 	}
 	wantSession := vtgatepb.Session{}
-	if !reflect.DeepEqual(*session.Session, wantSession) {
+	if !proto.Equal(session.Session, &wantSession) {
 		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
 	}
 	if c := sbc0.RollbackCount.Get(); c != 1 {

@@ -1,3 +1,19 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreedto in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 // Data definitions for service vtgateservice.
 
 syntax = "proto3";
@@ -10,24 +26,60 @@ import "query.proto";
 import "topodata.proto";
 import "vtrpc.proto";
 
-// Session objects are session cookies and are invalidated on
-// use. Query results will contain updated session values.
-// Their content should be opaque to the user.
+// TransactionMode controls the execution of distributed transaction
+// across multiple shards.
+enum TransactionMode {
+  // UNSPECIFIED uses the transaction mode set by the VTGate flag 'transaction_mode'.
+  UNSPECIFIED = 0;
+  // SINGLE disallows distributed transactions.
+  SINGLE = 1;
+  // MULTI allows distributed transactions with best effort commit.
+  MULTI = 2;
+  // TWOPC is for distributed transactions with atomic commits.
+  TWOPC = 3;
+}
+
+// Session objects are exchanged like cookies through various
+// calls to VTGate. The behavior differs between V2 & V3 APIs.
+// V3 APIs are Execute, ExecuteBatch and StreamExecute. All
+// other APIs are V2. For the V3 APIs, the session
+// must be sent with every call to Execute or ExecuteBatch.
+// For the V2 APIs, Begin does not accept a session. It instead
+// returns a brand new one with in_transaction set to true.
+// After a call to Commit or Rollback, the session can be
+// discarded. If you're not in a transaction, Session is
+// an optional parameter for the V2 APIs.
 message Session {
+  // in_transaction is set to true if the session is in a transaction.
   bool in_transaction = 1;
 
   message ShardSession {
     query.Target target = 1;
     int64 transaction_id = 2;
   }
+  // shard_sessions keep track of per-shard transaction info.
   repeated ShardSession shard_sessions = 2;
 
-  // single_db specifies if the transaction should be restricted
-  // to a single database.
+  // single_db is deprecated. Use transaction_mode instead.
+  // The value specifies if the transaction should be restricted
+  // to a single shard.
+  // TODO(sougou): remove in 3.1
   bool single_db = 3;
 
   // autocommit specifies if the session is in autocommit mode.
+  // This is used only for V3.
   bool autocommit = 4;
+
+  // target_string is the target expressed as a string. Valid
+  // names are: keyspace:shard@target, keyspace@target or @target.
+  // This is used only for V3.
+  string target_string = 5;
+
+  // options is used only for V3.
+  query.ExecuteOptions options = 6;
+
+  // transaction_mode specifies the current transaction mode.
+  TransactionMode transaction_mode = 7;
 }
 
 // ExecuteRequest is the payload to Execute.
@@ -36,23 +88,17 @@ message ExecuteRequest {
   // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
-  // session carries the current transaction data. It is returned by Begin.
-  // Do not fill it in if outside of a transaction.
+  // session carries the session state.
   Session session = 2;
 
   // query is the query and bind variables to execute.
   query.BoundQuery query = 3;
 
-  // tablet_type is the type of tablets that this query is targeted to.
+  // These values are deprecated. Use session instead.
+  // TODO(sougou): remove in 3.1
   topodata.TabletType tablet_type = 4;
-
-  // not_in_transaction is deprecated and should not be used.
   bool not_in_transaction = 5;
-
-  // keyspace_shard can be 'keyspace' or 'keyspace/shard'.
   string keyspace_shard = 6;
-
-  // options
   query.ExecuteOptions options = 7;
 }
 
@@ -63,7 +109,7 @@ message ExecuteResponse {
   // instance if a database integrity error happened).
   vtrpc.RPCError error = 1;
 
-  // session is the updated session information (only returned inside a transaction).
+  // session is the updated session information.
   Session session = 2;
 
   // result contains the query result, only set if error is unset.
@@ -92,7 +138,7 @@ message ExecuteShardsRequest {
   // tablet_type is the type of tablets that this query is targeted to.
   topodata.TabletType tablet_type = 6;
 
-  // not_in_transaction is deprecated and should not be used.
+  // not_in_transaction is deprecated.
   bool not_in_transaction = 7;
 
   // options
@@ -136,7 +182,7 @@ message ExecuteKeyspaceIdsRequest {
   // tablet_type is the type of tablets that this query is targeted to.
   topodata.TabletType tablet_type = 6;
 
-  // not_in_transaction is deprecated and should not be used.
+  // not_in_transaction is deprecated.
   bool not_in_transaction = 7;
 
   // options
@@ -180,7 +226,7 @@ message ExecuteKeyRangesRequest {
   // tablet_type is the type of tablets that this query is targeted to.
   topodata.TabletType tablet_type = 6;
 
-  // not_in_transaction is deprecated and should not be used.
+  // not_in_transaction is deprecated.
   bool not_in_transaction = 7;
 
   // options
@@ -238,7 +284,7 @@ message ExecuteEntityIdsRequest {
   // tablet_type is the type of tablets that this query is targeted to.
   topodata.TabletType tablet_type = 7;
 
-  // not_in_transaction is deprecated and should not be used.
+  // not_in_transaction is deprecated.
   bool not_in_transaction = 8;
 
   // options
@@ -265,25 +311,17 @@ message ExecuteBatchRequest {
   // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
-  // session carries the current transaction data. It is returned by Begin.
-  // Do not fill it in if outside of a transaction.
+  // session carries the session state.
   Session session = 2;
 
   // queries is a list of query and bind variables to execute.
   repeated query.BoundQuery queries = 3;
 
-  // tablet_type is the type of tablets that these queries is targeted to.
+  // These values are deprecated. Use session instead.
+  // TODO(sougou): remove in 3.1
   topodata.TabletType tablet_type = 4;
-
-  // as_transaction is deprecated.
-  // We cannot use the proto3 deprecated feature yet because
-  // the php compiler doesn't recognize that construct.
   bool as_transaction = 5;
-
-  // keyspace_shard can be 'keyspace' or 'keyspace/shard'.
   string keyspace_shard = 6;
-
-  // options
   query.ExecuteOptions options = 7;
 }
 
@@ -295,7 +333,7 @@ message ExecuteBatchResponse {
   // instance if a database integrity error happened).
   vtrpc.RPCError error = 1;
 
-  // session is the updated session information (only returned inside a transaction).
+  // session is the updated session information.
   Session session = 2;
 
   // results contains the query results, only set if application level error is unset.
@@ -417,17 +455,19 @@ message StreamExecuteRequest {
   // query is the query and bind variables to execute.
   query.BoundQuery query = 2;
 
-  // tablet_type is the type of tablets that this query is targeted to.
+  // These values are deprecated. Use session instead.
+  // TODO(sougou): remove in 3.1
   topodata.TabletType tablet_type = 3;
-
-  // keyspace_shard can be 'keyspace' or 'keyspace/shard'.
   string keyspace_shard = 4;
-
-  // options
   query.ExecuteOptions options = 5;
+
+  // session carries the session state.
+  Session session = 6;
 }
 
 // StreamExecuteResponse is the returned value from StreamExecute.
+// The session is currently not returned because StreamExecute is
+// not expected to modify it.
 message StreamExecuteResponse {
   // result contains the result data.
   // The first value contains only Fields information.
@@ -533,8 +573,10 @@ message BeginRequest {
   // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
-  // single_db specifies if the transaction should be restricted
+  // single_db is deprecated. Use transaction_mode instead.
+  // The value specifies if the transaction should be restricted
   // to a single database.
+  // TODO(sougou): remove in 3.1
   bool single_db = 2;
 }
 
@@ -553,8 +595,10 @@ message CommitRequest {
   // session carries the current transaction data to commit.
   Session session = 2;
 
-  // atomic specifies if the commit should go through the
+  // atomic is deprecated. Use transaction_mode instead.
+  // The value specifies if the commit should go through the
   // 2PC workflow to ensure atomicity.
+  // TODO(sougou): remove in 3.1
   bool atomic = 3;
 }
 
@@ -611,13 +655,38 @@ message MessageAckRequest {
   // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
-  // Optional keyspace for message table.
+  // keyspace to target the message to.
   string keyspace = 2;
 
   // name is the message table name.
   string name = 3;
   // ids is the list of ids to ack.
   repeated query.Value ids = 4;
+}
+
+// IdKeyspaceId represents an id and keyspace_id pair.
+// The kesypace_id represents the routing info for id.
+message IdKeyspaceId {
+  // id represents the message id.
+  query.Value id = 1;
+
+  // keyspace_id is the associated keyspace_id for the id.
+  bytes keyspace_id = 2;
+}
+
+// MessageAckKeyspaceIdsRequest is the payload to MessageAckKeyspaceIds.
+message MessageAckKeyspaceIdsRequest {
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 1;
+
+  // Optional keyspace for message table.
+  string keyspace = 2;
+
+  // name is the message table name.
+  string name = 3;
+
+  repeated IdKeyspaceId id_keyspace_ids = 4;
 }
 
 // ResolveTransactionResponse is the returned value from Rollback.

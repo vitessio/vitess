@@ -1,6 +1,18 @@
-// Copyright 2017, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package messager
 
@@ -13,7 +25,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
+	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -167,7 +179,7 @@ func TestMessageManagerAdd(t *testing.T) {
 	defer mm.Close()
 
 	row1 := &MessageRow{
-		ID: sqltypes.MakeString([]byte("1")),
+		Row: []sqltypes.Value{sqltypes.MakeString([]byte("1"))},
 	}
 	if mm.Add(row1) {
 		t.Error("Add(no receivers): true, want false")
@@ -182,10 +194,10 @@ func TestMessageManagerAdd(t *testing.T) {
 	// Make sure message is enqueued.
 	r1.WaitForCount(2)
 	// This will fill up the cache.
-	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("2"))})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("2"))}})
 
 	// The third add has to fail.
-	if mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("3"))}) {
+	if mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("3"))}}) {
 		t.Error("Add(cache full): true, want false")
 	}
 	// Drain the receiver to prevent hangs.
@@ -213,7 +225,7 @@ func TestMessageManagerSend(t *testing.T) {
 	// Set the channel to verify call to Postpone.
 	ch := make(chan string)
 	tsv.SetChannel(ch)
-	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("1"))})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("1")), sqltypes.NULL}})
 	want = &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("1")),
@@ -239,8 +251,8 @@ func TestMessageManagerSend(t *testing.T) {
 	r2 := newTestReceiver(1)
 	mm.Subscribe(r2.rcv)
 	<-r2.ch
-	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("2"))})
-	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("3"))})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("2"))}})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("3"))}})
 	// Send should be round-robin.
 	<-r1.ch
 	<-r2.ch
@@ -248,9 +260,9 @@ func TestMessageManagerSend(t *testing.T) {
 	r2.WaitForDone()
 	// One of these messages will fail to send
 	// because r1 will return EOF.
-	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("4"))})
-	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("5"))})
-	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("6"))})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("4"))}})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("5"))}})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("6"))}})
 	// Only r1 should be receiving.
 	<-r1.ch
 	<-r1.ch
@@ -268,7 +280,7 @@ func TestMessageManagerBatchSend(t *testing.T) {
 	mm.Subscribe(r1.rcv)
 	<-r1.ch
 	row1 := &MessageRow{
-		ID: sqltypes.MakeString([]byte("1")),
+		Row: []sqltypes.Value{sqltypes.MakeString([]byte("1")), sqltypes.NULL},
 	}
 	mm.Add(row1)
 	want := &sqltypes.Result{
@@ -281,8 +293,8 @@ func TestMessageManagerBatchSend(t *testing.T) {
 		t.Errorf("Received: %v, want %v", got, row1)
 	}
 	mm.mu.Lock()
-	mm.cache.Add(&MessageRow{ID: sqltypes.MakeString([]byte("2"))})
-	mm.cache.Add(&MessageRow{ID: sqltypes.MakeString([]byte("3"))})
+	mm.cache.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("2")), sqltypes.NULL}})
+	mm.cache.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("3")), sqltypes.NULL}})
 	mm.cond.Broadcast()
 	mm.mu.Unlock()
 	want = &sqltypes.Result{
@@ -404,12 +416,12 @@ func TestMessagesPending1(t *testing.T) {
 	mm.Subscribe(r1.rcv)
 	<-r1.ch
 
-	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("1"))})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("1"))}})
 	// Make sure the first message is enqueued.
 	r1.WaitForCount(2)
 	// This will fill up the cache.
-	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("2"))})
-	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("3"))})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("2"))}})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("3"))}})
 
 	// Trigger the poller. It should do nothing.
 	mm.pollerTicks.Trigger()

@@ -1,14 +1,32 @@
+/*
+ * Copyright 2017 Google Inc.
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.vitess.jdbc;
 
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.regex.PatternSyntaxException;
+
 import com.google.common.annotations.VisibleForTesting;
+
 import io.vitess.proto.Query;
 import io.vitess.util.Constants;
 import io.vitess.util.MysqlDefs;
 import io.vitess.util.StringUtils;
 import io.vitess.util.charset.CharsetMapping;
-import java.sql.SQLException;
-import java.sql.Types;
-import java.util.regex.PatternSyntaxException;
 
 public class FieldWithMetadata {
 
@@ -94,11 +112,14 @@ public class FieldWithMetadata {
                     this.encoding = "UTF-8";
                 }
                 this.isSingleBit = this.javaType == Types.BIT && (field.getColumnLength() == 0 || field.getColumnLength() == 1);
-                // Re-map improperly typed binary types as non-binary counterparts if BINARY flag not set
-                boolean isBinary = isBinary();
-                if (javaType == Types.LONGVARBINARY && !isBinary) {
-                    this.javaType = Types.LONGVARCHAR;
-                } else if (javaType == Types.VARBINARY && !isBinary) {
+
+                // The server sends back a VARBINARY field whenever varchar/text data is stored on disk as binary, but
+                // that doesn't mean the data is actually binary. For instance, a field with collation ascii_bin
+                // gets stored on disk as bytes for case-sensitive comparison, but is still an ascii string.
+                // Re-map these VARBINARY types to VARCHAR when the data is not actually
+                // binary encoded
+                boolean isBinaryEncoded = isBinary() && collationIndex == CharsetMapping.MYSQL_COLLATION_INDEX_binary;
+                if (javaType == Types.VARBINARY && !isBinaryEncoded) {
                     this.javaType = Types.VARCHAR;
                 }
             } else {

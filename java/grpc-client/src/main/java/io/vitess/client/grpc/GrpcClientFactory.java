@@ -1,18 +1,24 @@
+/*
+ * Copyright 2017 Google Inc.
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.vitess.client.grpc;
 
-import io.grpc.netty.GrpcSslContexts;
-import io.grpc.netty.NegotiationType;
-import io.grpc.netty.NettyChannelBuilder;
-import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
-import io.vitess.client.Context;
-import io.vitess.client.RpcClient;
-import io.vitess.client.RpcClientFactory;
-import io.vitess.client.grpc.tls.TlsOptions;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -23,24 +29,46 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.Enumeration;
+
 import javax.net.ssl.SSLException;
+
+import io.grpc.netty.GrpcSslContexts;
+import io.grpc.netty.NegotiationType;
+import io.grpc.netty.NettyChannelBuilder;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.vitess.client.Context;
+import io.vitess.client.RpcClient;
+import io.vitess.client.RpcClientFactory;
+import io.vitess.client.grpc.tls.TlsOptions;
 
 /**
  * GrpcClientFactory creates RpcClients with the gRPC implementation.
  */
 public class GrpcClientFactory implements RpcClientFactory {
 
+  private RetryingInterceptorConfig config;
+
+  public GrpcClientFactory() {
+    this(RetryingInterceptorConfig.noOpConfig());
+  }
+
+  public GrpcClientFactory(RetryingInterceptorConfig config) {
+    this.config = config;
+  }
+
   /**
    * Factory method to construct a gRPC client connection with no transport-layer security.
    *
    * @param ctx TODO: This parameter is not actually used, but probably SHOULD be so that timeout duration and caller ID settings aren't discarded
-   * @param address
+   * @param target
+   *    target is passed to NettyChannelBuilder which will resolve based on scheme, by default dns.
    * @return
    */
   @Override
-  public RpcClient create(Context ctx, InetSocketAddress address) {
+  public RpcClient create(Context ctx, String target) {
     return new GrpcClient(
-            NettyChannelBuilder.forAddress(address).negotiationType(NegotiationType.PLAINTEXT).build());
+            NettyChannelBuilder.forTarget(target).negotiationType(NegotiationType.PLAINTEXT).intercept(new RetryingInterceptor(config)).build());
   }
 
   /**
@@ -50,12 +78,13 @@ public class GrpcClientFactory implements RpcClientFactory {
    * always be populated.  All other fields are optional.</p>
    *
    * @param ctx TODO: This parameter is not actually used, but probably SHOULD be so that timeout duration and caller ID settings aren't discarded
-   * @param address
+   * @param target
+   *    target is passed to NettyChannelBuilder which will resolve based on scheme, by default dns.
    * @param tlsOptions
    * @return
    */
   @Override
-  public RpcClient createTls(Context ctx, InetSocketAddress address, TlsOptions tlsOptions) {
+  public RpcClient createTls(Context ctx, String target, TlsOptions tlsOptions) {
     final SslContextBuilder sslContextBuilder = GrpcSslContexts.forClient();
 
     // trustManager should always be set
@@ -93,7 +122,7 @@ public class GrpcClientFactory implements RpcClientFactory {
     }
 
     return new GrpcClient(
-        NettyChannelBuilder.forAddress(address).negotiationType(NegotiationType.TLS).sslContext(sslContext).build());
+        NettyChannelBuilder.forTarget(target).negotiationType(NegotiationType.TLS).sslContext(sslContext).intercept(new RetryingInterceptor(config)).build());
   }
 
   /**

@@ -74,10 +74,6 @@
   }
 }
 
-# Group by references outer query
-"select aa, id from user where id = 5 having id in (select u.id from user u join user_extra e on u.id = e.user_id where u.id = 5 group by aa)"
-"symbol aa not found"
-
 # HAVING implicitly references table col
 "select user.col1 from user having col2 = 2"
 {
@@ -160,32 +156,6 @@
   }
 }
 
-# Correlated subquery in having clause.
-# We're testing to make sure that the inner 'id' finds the outer id of the select.
-# The subquery query needs to be a join. Otherwise, unqualified references bind to the default inner table.
-"select id, col from user having col in (select user_extra.col from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = id)"
-{
-  "Original": "select id, col from user having col in (select user_extra.col from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = id)",
-  "Instructions": {
-    "Opcode": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "Query": "select id, col from user having col in (select user_extra.col from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = id)",
-    "FieldQuery": "select id, col from user where 1 != 1"
-  }
-}
-
-# Correlated subquery in having clause, subquery also has having clause. Not allowed
-"select id, col from user having col in (select user_extra.col extra_col, user.id as user_id from user join user_extra on user.id = user_extra.user_id having user_id = id and extra_col = col)"
-"symbol id not found"
-
-# Correlated subquery in having clause, subquery also has having clause, even more rare case.
-# We're looking for symbol not found error this time.
-"select id, col from user having col in (select user_extra.col, user.id as user_id from user join user_extra on user.id = user_extra.user_id having user_id = notthere)"
-"symbol notthere not found"
-
 # ORDER BY, reference col from local table.
 "select col from user where id = 5 order by aa"
 {
@@ -247,8 +217,8 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by a asc, user.col2 desc",
-      "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
+      "Query": "select user.col1 as a, user.col2, user.Id from user where user.id = 1 order by a asc, user.col2 desc",
+      "FieldQuery": "select user.col1 as a, user.col2, user.Id from user where 1 != 1",
       "Vindex": "user_index",
       "Values": 1
     },
@@ -289,8 +259,8 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by null",
-      "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
+      "Query": "select user.col1 as a, user.col2, user.Id from user where user.id = 1 order by null",
+      "FieldQuery": "select user.col1 as a, user.col2, user.Id from user where 1 != 1",
       "Vindex": "user_index",
       "Values": 1
     },
@@ -331,8 +301,8 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by 1 asc, 2 desc",
-      "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
+      "Query": "select user.col1 as a, user.col2, user.Id from user where user.id = 1 order by 1 asc, 2 desc",
+      "FieldQuery": "select user.col1 as a, user.col2, user.Id from user where 1 != 1",
       "Vindex": "user_index",
       "Values": 1
     },
@@ -449,13 +419,9 @@
   }
 }
 
-# Order by references outer query
-"select aa, id from user where id = 5 having id in (select u.id from user u join user_extra e on u.id = e.user_id where u.id = 5 order by aa)"
-"symbol aa not found"
-
 # Order by, verify outer symtab is searched according to its own context.
 "select u.id from user u having u.id in (select col2 from user where user.id = u.id order by u.col)"
-"symbol u.col not found"
+"symbol u.col not found in subquery"
 
 # Order by, qualified '*' expression, name mismatched.
 "select user.* from user where id = 5 order by e.col"

@@ -518,8 +518,8 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select user.id from user",
-      "FieldQuery": "select user.id from user where 1 != 1"
+      "Query": "select user.Id from user",
+      "FieldQuery": "select user.Id from user where 1 != 1"
     },
     "Right": {
       "Opcode": "SelectUnsharded",
@@ -539,6 +539,21 @@
     "Vars": {
       "user_id": 0
     }
+  }
+}
+
+# subquery of information_schema with itself
+"select * from information_schema.a where id in (select * from information_schema.b)"
+{
+  "Original": "select * from information_schema.a where id in (select * from information_schema.b)",
+  "Instructions": {
+    "Opcode": "ExecDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select * from information_schema.a where id in (select * from information_schema.b)",
+    "FieldQuery": "select * from information_schema.a where 1 != 1"
   }
 }
 

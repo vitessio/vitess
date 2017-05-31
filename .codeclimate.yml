@@ -1,0 +1,17 @@
+engines:
+  gofmt:
+    enabled: true
+  golint:
+    enabled: true
+  govet:
+    enabled: true
+
+ratings:
+  paths:
+    - "**.go"
+
+# Ignore generated code.
+exclude_paths:
+- "go/vt/proto/"
+- "go/vt/sqlparser/sql.go"
+

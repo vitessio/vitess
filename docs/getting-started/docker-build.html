@@ -166,6 +166,14 @@
             <li><a href="/contributing/code-reviews.html">Code Reviews</a>
           </ul>
         </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Internal</h4>
+          <ul style="display: none">
+            <li><a href="/internal/">Overview</a>
+            <li><a href="/internal/release-instructions.html">Release Instructions</a>
+            <li><a href="/internal/publish-website.html">Publish Website</a>
+          </ul>
+        </li>
 
         <div>
           <form method="get" action="/search/">
@@ -276,6 +284,14 @@
             <li><a href="/contributing/code-reviews.html">Code Reviews</a>
           </ul>
         </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Internal</h4>
+          <ul style="display: none">
+            <li><a href="/internal/">Overview</a>
+            <li><a href="/internal/release-instructions.html">Release Instructions</a>
+            <li><a href="/internal/publish-website.html">Publish Website</a>
+          </ul>
+        </li>
 
         <div>
           <form method="get" action="/search/">
@@ -293,10 +309,18 @@
     <div class="col-md-7" id="centerCol">
       <div id="centerTextCol">
         <p>By default, the <a href="https://github.com/youtube/vitess/tree/master/examples/kubernetes">Kubernetes configs</a>
-point to the <code class="prettyprint">vitess/lite</code> image on <a href="https://hub.docker.com/u/vitess/">Docker Hub</a>.
-This image is built periodically from the master branch on GitHub.</p>
+point to the <code class="prettyprint">vitess/lite</code> image on <a href="https://hub.docker.com/u/vitess/">Docker Hub</a>.</p>
 
-<p>If you want to customize this image, you can build your own like this:</p>
+<p>We created the <code class="prettyprint">lite</code> image as a stripped down version of our main image <code class="prettyprint">base</code> such that Kubernetes pods can start faster.
+The <code class="prettyprint">lite</code> image does not change very often and is updated manually by the Vitess team with every release.
+In contrast, the <code class="prettyprint">base</code> image is updated automatically after every push to the GitHub master branch.
+For more information on the different images we provide, please read the <a href="https://github.com/youtube/vitess/tree/master/docker"><code class="prettyprint">docker/README.md</code> file</a>.</p>
+
+<p>If your goal is run the latest Vitess code, the simplest solution is to use the bigger <code class="prettyprint">base</code> image instead of <code class="prettyprint">lite</code>.</p>
+
+<p>Another alternative is to customize our Docker images and build them yourselves.
+This is described below and involves building the <code class="prettyprint">base</code> image first.
+Then you can run our build script for the <code class="prettyprint">lite</code> image which extracts the Vitess binaries from the built <code class="prettyprint">base</code> image.</p>
 
 <ol>
 <li><p>Install <a href="https://www.docker.com/">Docker</a> on your workstation.</p>
@@ -321,14 +345,24 @@ vitess<span class="nv">$ </span>docker pull vitess/bootstrap:mariadb   <span cla
 <p><strong>Note:</strong> If you have already downloaded the <code class="prettyprint">vitess/bootstrap:&lt;flavor&gt;</code>
 image on your machine before then it could be old, which may cause build
 failures. So it would be a good idea to always execute this step.</p></li>
-<li><p>Build the <code class="prettyprint">vitess/lite[:&lt;flavor&gt;]</code> image. This will build
-<code class="prettyprint">vitess/base[:&lt;flavor&gt;]</code> image and run a script that extracts only the files
-needed to run Vitess (<code class="prettyprint">vitess/base</code> contains everything needed for
-development work). You will be asked to authenticate with <code class="prettyprint">sudo</code>, which is
-needed to fix up some file permissions.</p>
+<li><p>Build the <code class="prettyprint">vitess/base[:&lt;flavor&gt;]</code> image.
+It will include the compiled the Vitess binaries.
+(<code class="prettyprint">vitess/base</code> also contains the source code and tests i.e. everything needed for development work.)</p>
 
 <p>Choose one of the following commands (the command without suffix builds
-default image containing MySQL 5.7):</p>
+the default image containing MySQL 5.7):</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess<span class="nv">$ </span>make docker_base
+vitess<span class="nv">$ </span>make docker_base_mysql56
+vitess<span class="nv">$ </span>make docker_base_percona57
+vitess<span class="nv">$ </span>make docker_base_percona
+vitess<span class="nv">$ </span>make docker_base_mariadb
+</code></pre></div></li>
+<li><p>Build the <code class="prettyprint">vitess/lite[:&lt;flavor&gt;]</code> image.
+This will run a script that extracts from <code class="prettyprint">vitess/base</code> only the files
+needed to run Vitess.</p>
+
+<p>Choose one of the following commands (the command without suffix builds
+the default image containing MySQL 5.7):</p>
 <div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess<span class="nv">$ </span>make docker_lite
 vitess<span class="nv">$ </span>make docker_lite_mysql56
 vitess<span class="nv">$ </span>make docker_lite_percona57
@@ -339,7 +373,7 @@ vitess<span class="nv">$ </span>make docker_lite_mariadb
 <div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess<span class="nv">$ </span>docker tag -f vitess/lite yourname/vitess
 vitess<span class="nv">$ </span>docker push yourname/vitess
 </code></pre></div>
-<p><strong>Note:</strong> If you chose non-default flavor above then change <code class="prettyprint">vitess/lite</code> in
+<p><strong>Note:</strong> If you chose a non-default flavor above, then change <code class="prettyprint">vitess/lite</code> in
 the above command to <code class="prettyprint">vitess/lite:&lt;flavor&gt;</code>.</p></li>
 <li><p>Change the Kubernetes configs to point to your personal repository:</p>
 <div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>sed -i -e <span class="s1">&#39;s,image: vitess/lite,image: yourname/vitess:latest,&#39;</span> *.yaml
