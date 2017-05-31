@@ -41,7 +41,8 @@ type builder interface {
 	// and use them for efficient b-tree style traversal.
 	MaxOrder() int
 
-	// SetOrder sets the order for the underlying routes.
+	// SetOrder reassigns order for the primitive and its sub-primitives.
+	// The input is the max order of the previous primitive.
 	SetOrder(int)
 
 	// Primitve returns the underlying primitive.
@@ -55,8 +56,8 @@ type builder interface {
 	ResultColumns() []*resultColumn
 
 	// PushFilter pushes a WHERE or HAVING clause expression
-	// to the specified route.
-	PushFilter(filter sqlparser.Expr, whereType string, rb *route) error
+	// to the specified origin.
+	PushFilter(filter sqlparser.Expr, whereType string, origin columnOriginator) error
 
 	// PushSelect pushes the select expression to the specified
 	// originator. If successful, the originator must create
@@ -65,15 +66,12 @@ type builder interface {
 	// after analysis.
 	PushSelect(expr *sqlparser.AliasedExpr, origin columnOriginator) (rc *resultColumn, colnum int, err error)
 
-	// PushOrderBy pushes the ORDER BY clause down to the route.
-	PushOrderBy(order *sqlparser.Order, rb *route) error
-
 	// PushOrderByNull pushes the special case ORDER By NULL to
-	// all routes. It's safe to push down this clause because it's
+	// all primitives. It's safe to push down this clause because it's
 	// just on optimization hint.
 	PushOrderByNull()
 
-	// PushMisc pushes miscelleaneous constructs to all the routes.
+	// PushMisc pushes miscelleaneous constructs to all the primitives.
 	PushMisc(sel *sqlparser.Select)
 
 	// Wireup performs the wire-up work. Nodes should be traversed
@@ -95,7 +93,7 @@ type builder interface {
 }
 
 // columnOriginator is a builder that originates
-// column symbols. It can be a route or a subquery.
+// column symbols.
 type columnOriginator interface {
 	builder
 	Order() int
@@ -147,7 +145,7 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema VSchema) (*en
 	case *sqlparser.Other:
 		return nil, errors.New("unsupported construct: other")
 	default:
-		panic("unexpected statement type")
+		panic("BUG: unexpected statement type")
 	}
 	if err != nil {
 		return nil, err

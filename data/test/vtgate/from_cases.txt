@@ -1146,10 +1146,6 @@
 "select user.id from user join user_extra user on user.id = user.user_id"
 "duplicate symbol: user"
 
-# error in subquery
-"select c from (select count(*) from user) as t"
-"unsupported: scatter with aggregates"
-
 # non-existent table
 "select c from t"
 "table t not found"

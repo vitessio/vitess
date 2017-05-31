@@ -112,6 +112,7 @@ func TestPlan(t *testing.T) {
 	// the column is named as Id. This is to make sure that
 	// column names are case-preserved, but treated as
 	// case-insensitive even if they come from the vschema.
+	testFile(t, "aggr_cases.txt", vschema)
 	testFile(t, "from_cases.txt", vschema)
 	testFile(t, "filter_cases.txt", vschema)
 	testFile(t, "select_cases.txt", vschema)
@@ -163,7 +164,7 @@ func testFile(t *testing.T, filename string, vschema *vindexes.VSchema) {
 			out = string(bout)
 		}
 		if out != tcase.output {
-			t.Errorf("File: %s, Line:%v\ngot  = %s\nwant = %s", filename, tcase.lineno, out, tcase.output)
+			t.Errorf("File: %s, Line:%v\n%s, want\n%s", filename, tcase.lineno, out, tcase.output)
 			// Uncomment these lines to re-generate input files
 			if err != nil {
 				out = fmt.Sprintf("\"%s\"", out)

@@ -22,7 +22,6 @@ import (
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
 // buildSelectPlan is the new function to build a Select plan.
@@ -54,6 +53,10 @@ func processSelect(sel *sqlparser.Select, vschema VSchema, outer builder) (build
 		if err != nil {
 			return nil, err
 		}
+	}
+	bldr, err = checkAggregates(sel, bldr)
+	if err != nil {
+		return nil, err
 	}
 	err = pushSelectExprs(sel, bldr)
 	if err != nil {
@@ -88,11 +91,7 @@ func pushFilter(boolExpr sqlparser.Expr, bldr builder, whereType string) error {
 		if err != nil {
 			return err
 		}
-		rb, ok := origin.(*route)
-		if !ok {
-			return errors.New("unsupported: filtering on results of a cross-shard subquery")
-		}
-		if err := bldr.PushFilter(filter, whereType, rb); err != nil {
+		if err := bldr.PushFilter(filter, whereType, origin); err != nil {
 			return err
 		}
 	}
@@ -122,88 +121,17 @@ func reorderBySubquery(filters []sqlparser.Expr) {
 // pushSelectExprs identifies the target route for the
 // select expressions and pushes them down.
 func pushSelectExprs(sel *sqlparser.Select, bldr builder) error {
-	err := checkAggregates(sel, bldr)
-	if err != nil {
-		return err
-	}
-	if sel.Distinct != "" {
-		// We know it's a route, but this may change
-		// in the distant future.
-		bldr.(*route).MakeDistinct()
-	}
 	resultColumns, err := pushSelectRoutes(sel.SelectExprs, bldr)
 	if err != nil {
 		return err
 	}
 	bldr.Symtab().ResultColumns = resultColumns
-	err = pushGroupBy(sel.GroupBy, bldr)
+
+	err = pushGroupBy(sel, bldr)
 	if err != nil {
 		return err
 	}
 	return nil
-}
-
-// checkAggregates returns an error if the select statement
-// has aggregates that cannot be pushed down due to a complex
-// plan.
-func checkAggregates(sel *sqlparser.Select, bldr builder) error {
-	rb, isRoute := bldr.(*route)
-	if isRoute && rb.IsSingle() {
-		return nil
-	}
-
-	// Check if we can allow aggregates.
-	hasAggregates := false
-	if sel.Distinct != "" {
-		hasAggregates = true
-	} else {
-		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			switch node := node.(type) {
-			case *sqlparser.FuncExpr:
-				if node.IsAggregate() {
-					hasAggregates = true
-					return false, errors.New("dummy")
-				}
-			case *sqlparser.GroupConcatExpr:
-				hasAggregates = true
-				return false, errors.New("dummy")
-			}
-			return true, nil
-		}, sel.SelectExprs)
-	}
-	if len(sel.GroupBy) > 0 {
-		hasAggregates = true
-	}
-	if !hasAggregates {
-		return nil
-	}
-	if hasAggregates && !isRoute {
-		return errors.New("unsupported: cross-shard join with aggregates")
-	}
-
-	// It's a scatter rb. If group by has a unique vindex, then
-	// the aggregate can be scattered.
-	for _, expr := range sel.GroupBy {
-		vindex := bldr.Symtab().Vindex(expr, rb)
-		if vindex != nil && vindexes.IsUnique(vindex) {
-			return nil
-		}
-	}
-
-	// If there is a distinct clause, we can check the select list
-	// to see if it has a unique vindex reference.
-	if sel.Distinct != "" {
-		for _, selectExpr := range sel.SelectExprs {
-			switch selectExpr := selectExpr.(type) {
-			case *sqlparser.AliasedExpr:
-				vindex := bldr.Symtab().Vindex(selectExpr.Expr, rb)
-				if vindex != nil && vindexes.IsUnique(vindex) {
-					return nil
-				}
-			}
-		}
-	}
-	return errors.New("unsupported: scatter with aggregates")
 }
 
 // pusheSelectRoutes is a convenience function that pushes all the select
@@ -225,7 +153,7 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*resul
 			// We'll allow select * for simple routes.
 			rb, ok := bldr.(*route)
 			if !ok {
-				return nil, errors.New("unsupported: '*' expression in cross-shard join")
+				return nil, errors.New("unsupported: '*' expression in cross-shard query")
 			}
 			// Validate keyspace reference if any.
 			if !node.TableName.IsEmpty() {
@@ -240,12 +168,14 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*resul
 			rb, ok := bldr.(*route)
 			if !ok {
 				// This code is unreachable because the parser doesn't allow joins for next val statements.
-				return nil, errors.New("unsupported: SELECT NEXT query in cross-shard join")
+				return nil, errors.New("unsupported: SELECT NEXT query in cross-shard query")
 			}
 			if err := rb.SetOpcode(engine.SelectNext); err != nil {
 				return nil, err
 			}
 			resultColumns[i] = rb.PushAnonymous(node)
+		default:
+			panic("BUG: unexpcted select expression type")
 		}
 	}
 	return resultColumns, nil

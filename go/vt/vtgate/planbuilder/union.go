@@ -75,7 +75,7 @@ func processPart(part sqlparser.SelectStatement, vschema VSchema, outer builder)
 	case *sqlparser.ParenSelect:
 		bldr, err = processPart(part.Select, vschema, outer)
 	default:
-		panic("unreachable")
+		panic("BUG: unexpected SELECT type")
 	}
 	if err != nil {
 		return nil, err

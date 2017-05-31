@@ -285,68 +285,6 @@
   }
 }
 
-# Aggregate on unsharded
-"select count(*), col from unsharded"
-{
-  "Original": "select count(*), col from unsharded",
-  "Instructions": {
-    "Opcode": "SelectUnsharded",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "Query": "select count(*), col from unsharded",
-    "FieldQuery": "select count(*), col from unsharded where 1 != 1"
-  }
-}
-
-# Aggregate on unique sharded
-"select count(*), col from user where id = 1"
-{
-  "Original": "select count(*), col from user where id = 1",
-  "Instructions": {
-    "Opcode": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "Query": "select count(*), col from user where id = 1",
-    "FieldQuery": "select count(*), col from user where 1 != 1",
-    "Vindex": "user_index",
-    "Values": 1
-  }
-}
-
-# Non-aggregate function on sharded with no colvindex
-"select fun(1), col from user"
-{
-  "Original": "select fun(1), col from user",
-  "Instructions": {
-    "Opcode": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "Query": "select fun(1), col from user",
-    "FieldQuery": "select fun(1), col from user where 1 != 1"
-  }
-}
-
-# Distinct
-"select distinct col, id from user"
-{
-  "Original": "select distinct col, id from user",
-  "Instructions": {
-    "Opcode": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "Query": "select distinct col, id from user",
-    "FieldQuery": "select col, id from user where 1 != 1"
-  }
-}
-
 # Comments
 "select /* comment */ user.col from user join user_extra"
 {

@@ -71,59 +71,53 @@ func newSubquery(alias sqlparser.TableIdent, bldr builder, vschema VSchema) *sub
 
 	// Populate the table with those columns and add it to symtab.
 	t.columns = cols
-	if err := sq.symtab.AddTable(t); err != nil {
-		panic(err)
-	}
-
+	_ = sq.symtab.AddTable(t)
 	return sq
 }
 
-// Symtab returns the associated symtab.
+// Symtab satisfies the builder interface.
 func (sq *subquery) Symtab() *symtab {
 	return sq.symtab.Resolve()
 }
 
-// Order returns the order of the route.
+// Order returns the order of the subquery.
 func (sq *subquery) Order() int {
 	return sq.order
 }
 
-// MaxOrder returns the max order of the node.
+// MaxOrder satisfies the builder interface.
 func (sq *subquery) MaxOrder() int {
 	return sq.order
 }
 
-// SetOrder sets the order to one above the specified number.
+// SetOrder satisfies the builder interface.
 func (sq *subquery) SetOrder(order int) {
 	sq.bldr.SetOrder(order)
 	sq.order = sq.bldr.MaxOrder() + 1
 }
 
-// Primitve returns the built primitive.
+// Primitive satisfies the builder interface.
 func (sq *subquery) Primitive() engine.Primitive {
 	sq.esubquery.Subquery = sq.bldr.Primitive()
 	return sq.esubquery
 }
 
-// Leftmost returns the current subquery.
+// Leftmost satisfies the builder interface.
 func (sq *subquery) Leftmost() columnOriginator {
 	return sq
 }
 
-// ResultColumns returns the result columns.
+// ResultColumns satisfies the builder interface.
 func (sq *subquery) ResultColumns() []*resultColumn {
 	return sq.resultColumns
 }
 
-// PushFilter is unreachable.
-func (sq *subquery) PushFilter(filter sqlparser.Expr, whereType string, rb *route) error {
-	panic("unreachable")
+// PushFilter satisfies the builder interface.
+func (sq *subquery) PushFilter(_ sqlparser.Expr, whereType string, _ columnOriginator) error {
+	return errors.New("unsupported: filtering on results of cross-shard subquery")
 }
 
-// PushSelect pushes the select expression to the subquery.
-// Only a trivial column expression that reference a result
-// column of the subquery is allowed. Anything else results
-// in an unsupported error.
+// PushSelect satisfies the builder interface.
 func (sq *subquery) PushSelect(expr *sqlparser.AliasedExpr, _ columnOriginator) (rc *resultColumn, colnum int, err error) {
 	col, ok := expr.Expr.(*sqlparser.ColName)
 	if !ok {
@@ -141,32 +135,25 @@ func (sq *subquery) PushSelect(expr *sqlparser.AliasedExpr, _ columnOriginator) 
 	return rc, len(sq.resultColumns) - 1, nil
 }
 
-// PushOrderBy is unreachable.
-func (sq *subquery) PushOrderBy(order *sqlparser.Order, rb *route) error {
-	panic("unreachable")
-}
-
-// PushOrderByNull is ignored.
+// PushOrderByNull satisfies the builder interface.
 func (sq *subquery) PushOrderByNull() {
 }
 
-// PushMisc is ignored.
+// PushMisc satisfies the builder interface.
 func (sq *subquery) PushMisc(sel *sqlparser.Select) {
 }
 
-// Wireup performs the wireup.
+// Wireup satisfies the builder interface.
 func (sq *subquery) Wireup(bldr builder, jt *jointab) error {
 	return sq.bldr.Wireup(bldr, jt)
 }
 
-// SupplyVar delegates the request to the inner primitive.
-// This can be called if there are dependencies between
-// the primitives in the subquery.
+// SupplyVar satisfies the builder interface.
 func (sq *subquery) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	sq.bldr.SupplyVar(from, to, col, varname)
 }
 
-// SupplyCol changes the executor to supply the requested column.
+// SupplyCol satisfies the builder interface.
 func (sq *subquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int) {
 	c := col.Metadata.(*column)
 	for i, rc := range sq.resultColumns {

@@ -64,19 +64,14 @@ func processTableExpr(tableExpr sqlparser.TableExpr, vschema VSchema) (builder, 
 	case *sqlparser.JoinTableExpr:
 		return processJoin(tableExpr, vschema)
 	}
-	panic("unreachable")
+	panic("BUG: unexpcted table expression type")
 }
 
 // processAliasedTable produces a builder subtree for the given AliasedTableExpr.
-// If the expression is a subquery, then the route built for it will contain
-// the entire subquery tree in the from clause, as if it were a table.
-// The symtab entry for the query will be a table where the columns
-// will be built from the select expressions of the subquery.
-// Since the table aliases only contain vindex columns, we'll follow
-// the same rule: only columns from the subquery that are identified as
-// vindex columns will be added to the table.
-// A symtab symbol can only point to a route. This means that we cannot
-// support complex joins in subqueries yet.
+// If the expression is a subquery, then the primitive will create a table
+// for it in the symtab. If the subquery is a route, then we build a route
+// prinmitive with the subquery in the From clause, because a route is more
+// versatile than a subquery.
 func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema) (builder, error) {
 	switch expr := tableExpr.Expr.(type) {
 	case sqlparser.TableName:
@@ -94,10 +89,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 			if !tableExpr.As.IsEmpty() {
 				alias = sqlparser.TableName{Name: tableExpr.As}
 			}
-			if err := rb.symtab.AddVindexTable(alias, table, rb); err != nil {
-				// unreachable: since the symtab is empty, the function should not fail.
-				panic(err)
-			}
+			_ = rb.symtab.AddVindexTable(alias, table, rb)
 		}
 		return rb, nil
 	case *sqlparser.Subquery:
@@ -109,7 +101,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 		case *sqlparser.Union:
 			subplan, err = processUnion(stmt, vschema, nil)
 		default:
-			panic("unreachable")
+			panic("BUG: unexpcted SELECT type")
 		}
 		if err != nil {
 			return nil, err
@@ -148,14 +140,11 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 			subroute.ERoute,
 			vschema,
 		)
-		if err := rb.symtab.AddVindexTable(sqlparser.TableName{Name: tableExpr.As}, table, rb); err != nil {
-			// unreachable: since the symtab is empty, the function should not fail.
-			panic(err)
-		}
+		_ = rb.symtab.AddVindexTable(sqlparser.TableName{Name: tableExpr.As}, table, rb)
 		subroute.Redirect = rb
 		return rb, nil
 	}
-	panic("unreachable")
+	panic("BUG: unexpected table expression type")
 }
 
 // buildERoute produces the initial engine.Route for the specified TableName.
