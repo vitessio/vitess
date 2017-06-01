@@ -756,6 +756,9 @@ func TestValid(t *testing.T) {
 		input:  "describe foobar",
 		output: "other",
 	}, {
+		input:  "desc foobar",
+		output: "other",
+	}, {
 		input:  "explain foobar",
 		output: "other",
 	}, {

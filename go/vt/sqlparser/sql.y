@@ -460,7 +460,11 @@ use_statement:
   }
 
 other_statement:
-  DESCRIBE force_eof
+  DESC force_eof
+  {
+    $$ = &Other{}
+  }
+| DESCRIBE force_eof
   {
     $$ = &Other{}
   }
