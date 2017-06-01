@@ -176,6 +176,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         int truncatedUpdateCount;
 
         checkOpen();
+        checkNotReadOnly();
         closeOpenResultSetAndResetCount();
 
         vtGateConn = this.vitessConnection.getVtGateConn();
@@ -428,6 +429,14 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
      */
     @Override public int[] executeBatch() throws SQLException {
         checkOpen();
+        // An executeBatch can't contain SELECT statements as defined by the documentation:
+        // https://docs.oracle.com/javase/tutorial/jdbc/basics/retrieving.html
+        // "This list may contain statements for updating, inserting, or deleting a row; and it may
+        // also contain DDL statements such as CREATE TABLE and DROP TABLE. It cannot, however,
+        // contain a statement that would produce a ResultSet object, such as a SELECT statement.
+        // In other words, the list can contain only statements that produce an update count."
+        checkNotReadOnly();
+
         VTGateConn vtGateConn;
         Topodata.TabletType tabletType;
         VTGateTx vtGateTx;

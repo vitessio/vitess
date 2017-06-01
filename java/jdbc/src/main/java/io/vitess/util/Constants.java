@@ -60,7 +60,6 @@ public class Constants {
         public static final String CONN_CLOSED = "Connection is Closed";
         public static final String INIT_FAILED = "Failed to Initialize Vitess JDBC Driver";
         public static final String INVALID_CONN_URL = "Connection URL is invalid";
-        public static final String READ_ONLY = "Read Only mode is not supported";
         public static final String STMT_CLOSED = "Statement is closed";
         public static final String SQL_FEATURE_NOT_SUPPORTED = "SQL Feature Not Supported";
         public static final String TIMEOUT_NEGATIVE = "Timeout value cannot be negative";
@@ -108,6 +107,8 @@ public class Constants {
         public static final String NO_KEYSPACE =
             "Querying Database Information without providing keyspace";
         public static final String QUERY_FAILED = "One or more queries failed in batch execution";
+        public static final String READ_ONLY =
+            "Connection has been set to read only and an update was attempted";
     }
 
 

@@ -290,6 +290,24 @@ import org.powermock.modules.junit4.PowerMockRunner;
                 Assert.assertEquals("Failed to execute this method", ex.getMessage());
             }
 
+            //read only
+            PowerMockito.when(mockConn.isReadOnly()).thenReturn(true);
+            try {
+                statement.execute("UPDATE SET foo = 1 ON mytable WHERE id = 1");
+                Assert.fail("Should have thrown exception for read only");
+            } catch (SQLException ex) {
+                Assert.assertEquals(Constants.SQLExceptionMessages.READ_ONLY, ex.getMessage());
+            }
+
+            //read only
+            PowerMockito.when(mockConn.isReadOnly()).thenReturn(true);
+            try {
+                statement.executeBatch();
+                Assert.fail("Should have thrown exception for read only");
+            } catch (SQLException ex) {
+                Assert.assertEquals(Constants.SQLExceptionMessages.READ_ONLY, ex.getMessage());
+            }
+
         } catch (SQLException e) {
             Assert.fail("Test failed " + e.getMessage());
         }
