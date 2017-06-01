@@ -75,12 +75,7 @@ func (rb *route) Resolve() *route {
 
 // Symtab returns the associated symtab.
 func (rb *route) Symtab() *symtab {
-	return rb.symtab
-}
-
-// SetSymtab sets the symtab.
-func (rb *route) SetSymtab(symtab *symtab) {
-	rb.symtab = symtab
+	return rb.symtab.Resolve()
 }
 
 // Order returns the order of the route.

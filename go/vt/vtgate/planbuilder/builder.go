@@ -30,10 +30,6 @@ type builder interface {
 	// Symtab returns the associated symtab.
 	Symtab() *symtab
 
-	// SetSymtab sets the symtab for the current node and
-	// its non-subquery children.
-	SetSymtab(*symtab)
-
 	// MaxOrder must return the order number of the
 	// highest columnOriginator within the current sub-tree.
 	// The originators are numbered by their execution order.

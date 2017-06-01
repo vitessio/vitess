@@ -88,7 +88,6 @@ func newJoin(lhs, rhs builder, ajoin *sqlparser.JoinTableExpr) (*join, error) {
 	if err != nil {
 		return nil, err
 	}
-	rhs.SetSymtab(lhs.Symtab())
 	rhs.SetOrder(lhs.MaxOrder())
 	opcode := engine.NormalJoin
 	if ajoin != nil && ajoin.Join == sqlparser.LeftJoinStr {
@@ -126,15 +125,7 @@ func newJoin(lhs, rhs builder, ajoin *sqlparser.JoinTableExpr) (*join, error) {
 
 // Symtab returns the associated symtab.
 func (jb *join) Symtab() *symtab {
-	return jb.symtab
-}
-
-// SetSymtab sets the symtab for the current node and its
-// non-subquery children.
-func (jb *join) SetSymtab(symtab *symtab) {
-	jb.symtab = symtab
-	jb.Left.SetSymtab(symtab)
-	jb.Right.SetSymtab(symtab)
+	return jb.symtab.Resolve()
 }
 
 // MaxOrder returns the max order of the node.

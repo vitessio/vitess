@@ -43,6 +43,11 @@ import (
 // which is later used to dtermine if the subquery can be
 // merged with an outer route.
 type symtab struct {
+	// if the symtab was merged with another one. The
+	// redirect is set to point to the merged symtab.
+	// Resolve is used to find the target.
+	redirect *symtab
+
 	tables map[sqlparser.TableName]*table
 
 	// uniqueColumns has the column name as key
@@ -75,6 +80,13 @@ func newSymtab(vschema VSchema, rb *route) *symtab {
 		VSchema:       vschema,
 		singleRoute:   rb,
 	}
+}
+
+func (st *symtab) Resolve() *symtab {
+	if st.redirect != nil {
+		return st.redirect.Resolve()
+	}
+	return st
 }
 
 // AddVindexTable creates a table from a vindex table
@@ -118,6 +130,7 @@ func (st *symtab) Merge(newsyms *symtab) error {
 			return err
 		}
 	}
+	newsyms.redirect = st
 	return nil
 }
 

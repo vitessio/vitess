@@ -73,12 +73,7 @@ func newSubquery(alias sqlparser.TableIdent, bldr builder, vschema VSchema) *sub
 
 // Symtab returns the associated symtab.
 func (sq *subquery) Symtab() *symtab {
-	return sq.symtab
-}
-
-// SetSymtab sets the symtab.
-func (sq *subquery) SetSymtab(symtab *symtab) {
-	sq.symtab = symtab
+	return sq.symtab.Resolve()
 }
 
 // Order returns the order of the route.
