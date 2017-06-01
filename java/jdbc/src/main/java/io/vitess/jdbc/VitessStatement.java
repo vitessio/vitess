@@ -420,6 +420,7 @@ public class VitessStatement implements Statement {
         int truncatedUpdateCount;
 
         checkOpen();
+        checkNotReadOnly();
         checkSQLNullOrEmpty(sql);
         closeOpenResultSetAndResetCount();
 
@@ -565,6 +566,7 @@ public class VitessStatement implements Statement {
      */
     public int[] executeBatch() throws SQLException {
         checkOpen();
+        checkNotReadOnly();
         VTGateConn vtGateConn;
         Topodata.TabletType tabletType;
         VTGateTx vtGateTx;
@@ -631,6 +633,12 @@ public class VitessStatement implements Statement {
     protected void checkOpen() throws SQLException {
         if (closed) {
             throw new SQLException(Constants.SQLExceptionMessages.STMT_CLOSED);
+        }
+    }
+
+    protected void checkNotReadOnly() throws SQLException {
+        if (vitessConnection.isReadOnly()) {
+            throw new SQLException(Constants.SQLExceptionMessages.READ_ONLY);
         }
     }
 
