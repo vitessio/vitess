@@ -133,7 +133,8 @@ func normKey(bkey []byte) string {
 	return string(bytes.Replace(bytes.TrimSpace(bkey), []byte("_"), []byte("-"), -1))
 }
 
-// ReadMycnf will read an existing my.cnf from disk, and create a Mycnf object.
+// ReadMycnf will read an existing my.cnf from disk, and update the passed in Mycnf object
+// with values from the my.cnf on disk.
 func ReadMycnf(mycnf *Mycnf) (*Mycnf, error) {
 	var err error
 	defer func(err *error) {
