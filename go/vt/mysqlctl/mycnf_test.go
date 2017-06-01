@@ -59,7 +59,9 @@ func TestMycnf(t *testing.T) {
 		t.Errorf("failed reading, err %v", err)
 		return
 	}
-	mycnf, err := ReadMycnf(MycnfPath, Defaults(uid))
+	mycnf := NewMycnf(uid, 0)
+	mycnf.path = MycnfPath
+	mycnf, err = ReadMycnf(mycnf)
 	if err != nil {
 		t.Errorf("failed reading, err %v", err)
 	} else {
