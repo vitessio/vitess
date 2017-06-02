@@ -317,26 +317,23 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		return fmt.Errorf("failed to parse list of source tablet types: %v", *sourceTabletTypeStr)
 	}
 
-	// wait for the tablet set (useful for the first run at least, fast for next runs)
-	if err := bpc.tabletStatsCache.WaitForTablets(bpc.ctx, bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, sourceTabletTypes); err != nil {
-		return fmt.Errorf("error waiting for tablets for %v %v %v: %v", bpc.cell, bpc.sourceShard.String(), sourceTabletTypes, err)
-	}
-
 	// Find the server list from the health check.
 	// Note: We cannot use tsc.GetHealthyTabletStats() here because it does
 	// not return non-serving tablets. We must include non-serving tablets because
 	// REPLICA source tablets may not be serving anymore because their traffic was
 	// already migrated to the destination shards.
-	var addrs []discovery.TabletStats
+	var tablet *topodatapb.Tablet
 	for _, sourceTabletType := range sourceTabletTypes {
-		typeAddrs := discovery.RemoveUnhealthyTablets(bpc.tabletStatsCache.GetTabletStats(bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, sourceTabletType))
-		addrs = append(addrs, typeAddrs...)
+		addrs := discovery.RemoveUnhealthyTablets(bpc.tabletStatsCache.GetTabletStats(bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, sourceTabletType))
+		if len(addrs) > 0 {
+			newServerIndex := rand.Intn(len(addrs))
+			tablet = addrs[newServerIndex].Tablet
+			break
+		}
 	}
-	if len(addrs) == 0 {
+	if tablet == nil {
 		return fmt.Errorf("can't find any healthy source tablet for %v %v %v", bpc.cell, bpc.sourceShard.String(), sourceTabletTypes)
 	}
-	newServerIndex := rand.Intn(len(addrs))
-	tablet := addrs[newServerIndex].Tablet
 
 	// save our current server
 	bpc.playerMutex.Lock()
