@@ -60,7 +60,7 @@ func newRoute(stmt sqlparser.SelectStatement, eroute *engine.Route, vschema VSch
 		order:  1,
 		ERoute: eroute,
 	}
-	rb.symtab = newSymtab(vschema, rb)
+	rb.symtab = newSymtabWithRoute(vschema, rb)
 	return rb
 }
 

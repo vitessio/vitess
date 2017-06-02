@@ -56,6 +56,8 @@ func (sq *Subquery) GetFields(vcursor VCursor, bindVars, joinVars map[string]int
 	return &sqltypes.Result{Fields: sq.buildFields(inner)}, nil
 }
 
+// buildResult builds a new result by pulling the necessary columns from
+// the subquery in the requested order.
 func (sq *Subquery) buildResult(inner *sqltypes.Result) *sqltypes.Result {
 	result := &sqltypes.Result{Fields: sq.buildFields(inner)}
 	result.Rows = make([][]sqltypes.Value, 0, len(inner.Rows))

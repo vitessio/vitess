@@ -29,8 +29,8 @@ import (
 // symtabs are created, and they are later merged as each
 // sub-expression of a FROM clause is merged.
 //
-// A symtab maintains uniqueColumns, which a list of unique vindex
-// column names. These names can be resolved without the
+// A symtab maintains uniqueColumns, which is a list of unique
+// vindex column names. These names can be resolved without the
 // need to qualify them by their table names. If there are
 // duplicates during a merge, those columns are removed from
 // the unique list, thereby disallowing unqualifed references
@@ -40,7 +40,7 @@ import (
 // ResultColumns field is set. In the case of a subquery, the
 // Outer field points to the outer symtab. Any symbols that
 // are not resolved locally are added to the Externs field,
-// which is later used to dtermine if the subquery can be
+// which is later used to determine if the subquery can be
 // merged with an outer route.
 type symtab struct {
 	// if the symtab was merged with another one. The
@@ -70,10 +70,18 @@ type symtab struct {
 	VSchema       VSchema
 }
 
+// newSymtab creates a new symtab.
+func newSymtab(vschema VSchema) *symtab {
+	return &symtab{
+		tables:        make(map[sqlparser.TableName]*table),
+		uniqueColumns: make(map[string]*column),
+		VSchema:       vschema,
+	}
+}
+
 // newSymtab creates a new symtab initialized
-// to containe just one route. The route can be nil
-// if the symtab is created for a cross-shard subquery.
-func newSymtab(vschema VSchema, rb *route) *symtab {
+// to contain just one route.
+func newSymtabWithRoute(vschema VSchema, rb *route) *symtab {
 	return &symtab{
 		tables:        make(map[sqlparser.TableName]*table),
 		uniqueColumns: make(map[string]*column),
@@ -377,7 +385,7 @@ type table struct {
 //
 // Anonymous columns can be created by symtab to represent
 // ambiguous column references, but whose route can still be
-// identified. For exeample, in the case of 'select a from t1, t2',
+// identified. For example, in the case of 'select a from t1, t2',
 // if t1 and t2 are from the same unsharded keyspace, 'a' will
 // be created as an anonymous column because we don't know
 // which table it's coming from. Consequently, anonymous columns
@@ -402,7 +410,7 @@ type column struct {
 	colnum int
 }
 
-// Route returns the route that originates the column.
+// Origin returns the route that originates the column.
 func (c *column) Origin() columnOriginator {
 	// If it's a route, we have to resolve it.
 	if rb, ok := c.origin.(*route); ok {

@@ -27,7 +27,14 @@ var _ builder = (*subquery)(nil)
 var _ columnOriginator = (*subquery)(nil)
 
 // subquery is a builder that wraps a subquery.
-// TODO(sougou): explain.
+// This primitive wraps any subquery that results
+// in something that's not a route. It builds a
+// 'table' for the subquery allowing higher level
+// constructs to reference its columns. If a subquery
+// results in a route primitive, we instead build
+// a new route that keeps the subquery in the FROM
+// clause, because a route is more versatile than
+// a subquery.
 type subquery struct {
 	order         int
 	symtab        *symtab
@@ -41,7 +48,7 @@ func newSubquery(alias sqlparser.TableIdent, bldr builder, vschema VSchema) *sub
 	sq := &subquery{
 		order:     bldr.MaxOrder() + 1,
 		bldr:      bldr,
-		symtab:    newSymtab(vschema, nil),
+		symtab:    newSymtab(vschema),
 		esubquery: &engine.Subquery{},
 	}
 

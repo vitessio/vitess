@@ -88,8 +88,8 @@ func findOrigin(expr sqlparser.Expr, bldr builder) (origin columnOriginator, err
 			if err != nil {
 				return false, err
 			}
-			subroute, ok := subplan.(*route)
-			if !ok {
+			subroute, isRoute := subplan.(*route)
+			if !isRoute {
 				return false, errors.New("unsupported: cross-shard join in subqueries")
 			}
 			for _, extern := range subroute.Symtab().Externs {
@@ -106,7 +106,7 @@ func findOrigin(expr sqlparser.Expr, bldr builder) (origin columnOriginator, err
 			if !node.Name.EqualString("last_insert_id") {
 				return true, nil
 			}
-			if rb, ok := bldr.(*route); !ok || rb.ERoute.Keyspace.Sharded {
+			if rb, isRoute := bldr.(*route); !isRoute || rb.ERoute.Keyspace.Sharded {
 				return false, errors.New("unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces")
 			}
 		}
@@ -115,8 +115,8 @@ func findOrigin(expr sqlparser.Expr, bldr builder) (origin columnOriginator, err
 	if err != nil {
 		return nil, err
 	}
-	highestRoute, ok := highestOrigin.(*route)
-	if !ok && len(subroutes) > 0 {
+	highestRoute, isRoute := highestOrigin.(*route)
+	if !isRoute && len(subroutes) > 0 {
 		return nil, errors.New("unsupported: subquery cannot be merged with cross-shard subquery")
 	}
 	for _, subroute := range subroutes {

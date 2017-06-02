@@ -31,18 +31,19 @@ var infoSchema = sqlparser.NewTableIdent("information_schema")
 // processTableExprs analyzes the FROM clause. It produces a builder
 // with all the routes identified.
 func processTableExprs(tableExprs sqlparser.TableExprs, vschema VSchema) (builder, error) {
-	if len(tableExprs) != 1 {
-		lplan, err := processTableExpr(tableExprs[0], vschema)
-		if err != nil {
-			return nil, err
-		}
-		rplan, err := processTableExprs(tableExprs[1:], vschema)
-		if err != nil {
-			return nil, err
-		}
-		return joinBuilders(lplan, rplan, nil)
+	if len(tableExprs) == 1 {
+		return processTableExpr(tableExprs[0], vschema)
 	}
-	return processTableExpr(tableExprs[0], vschema)
+
+	lplan, err := processTableExpr(tableExprs[0], vschema)
+	if err != nil {
+		return nil, err
+	}
+	rplan, err := processTableExprs(tableExprs[1:], vschema)
+	if err != nil {
+		return nil, err
+	}
+	return joinBuilders(lplan, rplan, nil)
 }
 
 // processTableExpr produces a builder subtree for the given TableExpr.
@@ -52,8 +53,9 @@ func processTableExpr(tableExpr sqlparser.TableExpr, vschema VSchema) (builder, 
 		return processAliasedTable(tableExpr, vschema)
 	case *sqlparser.ParenTableExpr:
 		bldr, err := processTableExprs(tableExpr.Exprs, vschema)
-		// If it's a route, re-parenthesize the FROM clause because
-		// more things can be pushed into it.
+		// If it's a route, preserve the parenthesis so things
+		// don't associate differently when more things are pushed
+		// into it. FROM a, (b, c) should not become FROM a, b, c.
 		if rb, ok := bldr.(*route); ok {
 			sel := rb.Select.(*sqlparser.Select)
 			sel.From = sqlparser.TableExprs{&sqlparser.ParenTableExpr{Exprs: sel.From}}
@@ -215,14 +217,15 @@ func convertToLeftJoin(ajoin *sqlparser.JoinTableExpr) {
 }
 
 func joinBuilders(left, right builder, ajoin *sqlparser.JoinTableExpr) (builder, error) {
-	lRoute, ok := left.(*route)
-	if !ok {
-		return newJoin(left, right, ajoin)
-	}
-	rRoute, ok := right.(*route)
-	if !ok {
-		return newJoin(left, right, ajoin)
+	lRoute, leftIsRoute := left.(*route)
+	rRoute, rightIsRoute := right.(*route)
+	if leftIsRoute && rightIsRoute {
+		// If both are routes, they have an opportunity
+		// to merge into one. route.Join performs this work.
+		return lRoute.Join(rRoute, ajoin)
 	}
 
-	return lRoute.Join(rRoute, ajoin)
+	// If any of them is not a route, we have to build
+	// a new join primitve.
+	return newJoin(left, right, ajoin)
 }

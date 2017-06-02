@@ -23,7 +23,7 @@ points for this package are Build and BuildFromStmt.
 package planbuilder
 
 /*
-The main strategy of the plambuilder is to push down as
+The main strategy of the planbuilder is to push down as
 much of the work as possible down to the vttablets. The
 special primitive for doing this is route, which can
 execute any SQL on a single shard (or scatter). Any
@@ -67,8 +67,15 @@ is valid and we rely on the underlying vttablet/MySQL
 to eventually validate such references.
 
 Every 'builder' primitive must satisfy the builder
-interface. This allows the planbuilder to oursource
+interface. This allows the planbuilder to outsource
 primitive-specific handling into those implementaions.
+
+Any primitive that computes or generates a new column
+must satisfy the 'columnOriginator' interface. When
+you search for a symbol, the symtab returns the
+columnOriginator that originates the symbol. Such
+primitives must also have a unique Order, which will
+allow the push-down algorithms to navigate to it.
 
 Variable naming: The AST, planbuilder and engine
 are three different worlds that use overloaded

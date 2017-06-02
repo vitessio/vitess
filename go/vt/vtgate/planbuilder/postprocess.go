@@ -71,7 +71,7 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 		}
 	}
 
-	rb, ok := bldr.Leftmost().(*route)
+	leftmostRB, ok := bldr.Leftmost().(*route)
 	if !ok {
 		return errors.New("unsupported: cannot order by on a cross-shard subquery")
 	}
@@ -87,7 +87,7 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 				return errors.New("order by column number out of range")
 			}
 			target := bldr.Symtab().ResultColumns[num-1].column.Origin()
-			if target != rb {
+			if target != leftmostRB {
 				return errors.New("unsupported: order by spans across shards")
 			}
 		} else {
@@ -100,7 +100,7 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 					if err != nil {
 						return false, err
 					}
-					if target != rb {
+					if target != leftmostRB {
 						return false, errors.New("unsupported: order by spans across shards")
 					}
 				}
@@ -114,10 +114,10 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 		// The check for scatter route must be done at this level.
 		// Future primitives may still want to push an order by clause
 		// into a scatter route for the sake of optimization.
-		if !rb.IsSingle() {
+		if !leftmostRB.IsSingle() {
 			return errors.New("unsupported: scatter and order by")
 		}
-		if err := bldr.PushOrderBy(order, rb); err != nil {
+		if err := bldr.PushOrderBy(order, leftmostRB); err != nil {
 			return err
 		}
 	}

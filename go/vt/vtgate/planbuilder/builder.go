@@ -51,10 +51,10 @@ type builder interface {
 	Leftmost() columnOriginator
 
 	// ResultColumns returns the list of result columns the
-	// primitive returns
+	// primitive returns.
 	ResultColumns() []*resultColumn
 
-	// PushFilter pushes the a WHERE or HAVING clause expression
+	// PushFilter pushes a WHERE or HAVING clause expression
 	// to the specified route.
 	PushFilter(filter sqlparser.Expr, whereType string, rb *route) error
 
