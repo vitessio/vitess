@@ -263,6 +263,9 @@ func (c *errorClient) MessageStream(ctx context.Context, keyspace string, shard 
 	if err := requestToError(request); err != nil {
 		return err
 	}
+	if err := requestToError(name); err != nil {
+		return err
+	}
 	return c.fallback.MessageStream(ctx, keyspace, shard, keyRange, name, callback)
 }
 
@@ -270,6 +273,9 @@ func (c *errorClient) MessageAck(ctx context.Context, keyspace string, name stri
 	cid := callerid.EffectiveCallerIDFromContext(ctx)
 	request := callerid.GetPrincipal(cid)
 	if err := requestToError(request); err != nil {
+		return 0, err
+	}
+	if err := requestToError(name); err != nil {
 		return 0, err
 	}
 	return c.fallback.MessageAck(ctx, keyspace, name, ids)

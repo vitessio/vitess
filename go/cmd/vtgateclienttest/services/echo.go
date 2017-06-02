@@ -312,6 +312,34 @@ func (c *echoClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bin
 	return c.fallbackClient.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, options, callback)
 }
 
+func (c *echoClient) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error {
+	if strings.HasPrefix(name, EchoPrefix) {
+		callback(echoQueryResult(map[string]interface{}{
+			"callerId": callerid.EffectiveCallerIDFromContext(ctx),
+			"keyspace": keyspace,
+			"shard":    shard,
+			"keyRange": keyRange,
+			"name":     name,
+		}))
+		return nil
+	}
+	return c.fallbackClient.MessageStream(ctx, keyspace, shard, keyRange, name, callback)
+}
+
+func (c *echoClient) MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error) {
+	if strings.HasPrefix(name, EchoPrefix) {
+		return int64(len(ids)), nil
+	}
+	return c.fallback.MessageAck(ctx, keyspace, name, ids)
+}
+
+func (c *echoClient) MessageAckKeyspaceIds(ctx context.Context, keyspace string, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error) {
+	if strings.HasPrefix(name, EchoPrefix) {
+		return int64(len(idKeyspaceIDs)), nil
+	}
+	return c.fallback.MessageAckKeyspaceIds(ctx, keyspace, name, idKeyspaceIDs)
+}
+
 func (c *echoClient) SplitQuery(
 	ctx context.Context,
 	keyspace string,
