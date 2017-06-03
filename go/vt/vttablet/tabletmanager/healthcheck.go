@@ -39,6 +39,7 @@ import (
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -285,7 +286,7 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 	agent.History.Add(record)
 
 	// try to figure out the mysql port if we don't have it yet
-	if _, ok := tablet.PortMap["mysql"]; !ok && !agent.skipMysqlPortCheck {
+	if topoproto.MysqlPort(tablet) == 0 && !agent.skipMysqlPortCheck {
 		// we don't know the port, try to get it from mysqld
 		mysqlPort, err := agent.MysqlDaemon.GetMysqlPort()
 		if err != nil {
@@ -303,7 +304,7 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 					if err := topotools.CheckOwnership(agent.initialTablet, tablet); err != nil {
 						return err
 					}
-					tablet.PortMap["mysql"] = mysqlPort
+					topoproto.SetMysqlPort(tablet, mysqlPort)
 					return nil
 				})
 			if err != nil {
@@ -312,7 +313,7 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 				// save the port so we don't update it again next time
 				// we do the health check.
 				agent.mutex.Lock()
-				agent._tablet.PortMap["mysql"] = mysqlPort
+				topoproto.SetMysqlPort(agent._tablet, mysqlPort)
 				agent._waitingForMysql = false
 				agent.mutex.Unlock()
 			}

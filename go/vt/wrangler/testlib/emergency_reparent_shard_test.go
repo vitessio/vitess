@@ -17,7 +17,6 @@ limitations under the License.
 package testlib
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -87,7 +86,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 			Sequence: 455,
 		},
 	}
-	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.PortMap["mysql"])
+	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = topoproto.MysqlAddr(newMaster.Tablet)
 	goodSlave1.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
@@ -107,7 +106,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 			Sequence: 454,
 		},
 	}
-	goodSlave2.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.PortMap["mysql"])
+	goodSlave2.FakeMysqlDaemon.SetMasterCommandsInput = topoproto.MysqlAddr(newMaster.Tablet)
 	goodSlave2.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave2.StartActionLoop(t, wr)
 	goodSlave2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{

@@ -235,19 +235,27 @@ func NewActionAgent(
 	servenv.OnTerm(agent.BinlogPlayerMap.StopAllPlayersAndReset)
 	RegisterBinlogPlayerMap(agent.BinlogPlayerMap)
 
-	// try to figure out the mysql port
-	mysqlPort := mycnf.MysqlPort
-	if mysqlPort == 0 {
-		// we don't know the port, try to get it from mysqld
-		var err error
-		mysqlPort, err = mysqld.GetMysqlPort()
-		if err != nil {
-			log.Warningf("Cannot get current mysql port, will use 0 for now: %v", err)
+	var mysqlHost string
+	var mysqlPort int32
+	if dbcfgs.App.Host != "" {
+		mysqlHost = dbcfgs.App.Host
+		mysqlPort = int32(dbcfgs.App.Port)
+	} else {
+		// Assume unix socket was specified and try to figure out the mysql port
+		// by other means.
+		mysqlPort = mycnf.MysqlPort
+		if mysqlPort == 0 {
+			// we don't know the port, try to get it from mysqld
+			var err error
+			mysqlPort, err = mysqld.GetMysqlPort()
+			if err != nil {
+				log.Warningf("Cannot get current mysql port, will use 0 for now: %v", err)
+			}
 		}
 	}
 
 	// Start will get the tablet info, and update our state from it
-	if err := agent.Start(batchCtx, int32(mysqlPort), port, gRPCPort, true); err != nil {
+	if err := agent.Start(batchCtx, mysqlHost, int32(mysqlPort), port, gRPCPort, true); err != nil {
 		return nil, err
 	}
 
@@ -311,7 +319,7 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *t
 	}
 
 	// Start will update the topology and setup services.
-	if err := agent.Start(batchCtx, 0, vtPort, grpcPort, false); err != nil {
+	if err := agent.Start(batchCtx, "", 0, vtPort, grpcPort, false); err != nil {
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
 	}
 
@@ -353,7 +361,7 @@ func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *
 	}
 
 	// Start the agent.
-	if err := agent.Start(batchCtx, 0, vtPort, grpcPort, false); err != nil {
+	if err := agent.Start(batchCtx, "", 0, vtPort, grpcPort, false); err != nil {
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
 	}
 
@@ -489,7 +497,7 @@ func (agent *ActionAgent) verifyTopology(ctx context.Context) {
 // Start validates and updates the topology records for the tablet, and performs
 // the initial state change callback to start tablet services.
 // If initUpdateStream is set, update stream service will also be registered.
-func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort int32, initUpdateStream bool) error {
+func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort, vtPort, gRPCPort int32, initUpdateStream bool) error {
 	// find our hostname as fully qualified, and IP
 	hostname := *tabletHostname
 	if hostname == "" {
@@ -500,16 +508,23 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		}
 	}
 
+	// If mysqlHost is not set, a unix socket was specified. So, assume
+	// it's the same as the current host.
+	if mysqlHost == "" {
+		mysqlHost = hostname
+	}
+
 	// Update bind addr for mysql and query service in the tablet node.
 	f := func(tablet *topodatapb.Tablet) error {
 		tablet.Hostname = hostname
+		tablet.MysqlHostname = mysqlHost
 		if tablet.PortMap == nil {
 			tablet.PortMap = make(map[string]int32)
 		}
 		if mysqlPort != 0 {
 			// only overwrite mysql port if we know it, otherwise
 			// leave it as is.
-			tablet.PortMap["mysql"] = mysqlPort
+			topoproto.SetMysqlPort(tablet, int32(mysqlPort))
 		}
 		if vtPort != 0 {
 			tablet.PortMap["vt"] = vtPort
@@ -636,13 +651,13 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 		return nil
 	}
 
-	if mport == tablet.PortMap["mysql"] {
+	if mport == topoproto.MysqlPort(tablet) {
 		return nil
 	}
 
-	log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", tablet.PortMap["mysql"], mport)
+	log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", topoproto.MysqlPort(tablet), mport)
 	newTablet, err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
-		t.PortMap["mysql"] = mport
+		topoproto.SetMysqlPort(t, mport)
 		return nil
 	})
 	if err != nil {

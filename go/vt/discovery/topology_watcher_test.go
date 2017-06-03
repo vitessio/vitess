@@ -119,7 +119,11 @@ func (ft *fakeTopo) AddTablet(cell string, uid uint32, host string, ports map[st
 		PortMap:  make(map[string]int32),
 	}
 	for name, port := range ports {
-		tablet.PortMap[name] = port
+		if name == "mysql" {
+			topoproto.SetMysqlPort(tablet, port)
+		} else {
+			tablet.PortMap[name] = port
+		}
 	}
 	ft.tablets[topoproto.TabletAliasString(&ta)] = tablet
 }

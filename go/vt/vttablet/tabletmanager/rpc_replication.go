@@ -262,7 +262,7 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.Tabl
 	if err != nil {
 		return err
 	}
-	cmds2, err := agent.MysqlDaemon.SetMasterCommands(ti.Hostname, int(ti.PortMap["mysql"]))
+	cmds2, err := agent.MysqlDaemon.SetMasterCommands(topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)))
 	if err != nil {
 		return err
 	}
@@ -439,7 +439,7 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 	if wasReplicating {
 		cmds = append(cmds, mysqlctl.SQLStopSlave)
 	}
-	smc, err := agent.MysqlDaemon.SetMasterCommands(parent.Hostname, int(parent.PortMap["mysql"]))
+	smc, err := agent.MysqlDaemon.SetMasterCommands(topoproto.MysqlHostname(parent.Tablet), int(topoproto.MysqlPort(parent.Tablet)))
 	if err != nil {
 		return err
 	}
