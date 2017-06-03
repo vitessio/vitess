@@ -978,7 +978,7 @@ primary key (name)
     utils.run_vtctl(
         ['RemoveShardCell', 'test_keyspace/80-', 'test_ny'], auto_log=True)
     shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/80-'])
-    self.assertNotIn('cells', shard)
+    self.assertTrue('cells' not in shard or not shard['cells'])
 
     # delete the original shard
     utils.run_vtctl(['DeleteShard', 'test_keyspace/80-'], auto_log=True)

@@ -1148,7 +1148,7 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64',
     for shard in partition['shard_references']:
       s = ''
       e = ''
-      if 'key_range' in shard:
+      if 'key_range' in shard and shard['key_range']:
         if 'start' in shard['key_range']:
           s = shard['key_range']['start']
           s = base64.b64decode(s).encode('hex') if s else ''

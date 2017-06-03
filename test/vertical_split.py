@@ -516,7 +516,7 @@ msg varchar(64)
     for ksf in keyspace_json['served_froms']:
       if ksf['tablet_type'] == topodata_pb2.RDONLY:
         found = True
-        self.assertNotIn('cells', ksf)
+        self.assertTrue('cells' not in ksf or not ksf['cells'])
     self.assertTrue(found)
 
     # now serve rdonly from the destination shards
@@ -626,7 +626,8 @@ msg varchar(64)
     utils.run_vtctl(['SetShardTabletControl', '--remove', 'source_keyspace/0',
                      'master'], auto_log=True)
     shard_json = utils.run_vtctl_json(['GetShard', 'source_keyspace/0'])
-    self.assertNotIn('tablet_controls', shard_json)
+    self.assertTrue('tablet_controls' not in shard_json or
+                    not shard_json['tablet_controls'])
 
   def _assert_tablet_controls(self, expected_dbtypes):
     shard_json = utils.run_vtctl_json(['GetShard', 'source_keyspace/0'])
