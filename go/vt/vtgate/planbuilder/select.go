@@ -84,12 +84,15 @@ func pushFilter(boolExpr sqlparser.Expr, bldr builder, whereType string) error {
 	filters := splitAndExpression(nil, boolExpr)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
-		rb, err := findRoute(filter, bldr)
+		origin, err := findOrigin(filter, bldr)
 		if err != nil {
 			return err
 		}
-		err = rb.PushFilter(filter, whereType)
-		if err != nil {
+		rb, ok := origin.(*route)
+		if !ok {
+			return errors.New("unsupported: filtering on results of a cross-shard subquery")
+		}
+		if err := bldr.PushFilter(filter, whereType, rb); err != nil {
 			return err
 		}
 	}
@@ -144,6 +147,12 @@ func pushSelectExprs(sel *sqlparser.Select, bldr builder) error {
 // has aggregates that cannot be pushed down due to a complex
 // plan.
 func checkAggregates(sel *sqlparser.Select, bldr builder) error {
+	rb, isRoute := bldr.(*route)
+	if isRoute && rb.IsSingle() {
+		return nil
+	}
+
+	// Check if we can allow aggregates.
 	hasAggregates := false
 	if sel.Distinct != "" {
 		hasAggregates = true
@@ -162,26 +171,35 @@ func checkAggregates(sel *sqlparser.Select, bldr builder) error {
 			return true, nil
 		}, sel.SelectExprs)
 	}
+	if len(sel.GroupBy) > 0 {
+		hasAggregates = true
+	}
 	if !hasAggregates {
 		return nil
 	}
+	if hasAggregates && !isRoute {
+		return errors.New("unsupported: cross-shard join with aggregates")
+	}
 
-	// Check if we can allow aggregates.
-	rb, ok := bldr.(*route)
-	if !ok {
-		return errors.New("unsupported: complex join with aggregates")
+	// It's a scatter rb. If group by has a unique vindex, then
+	// the aggregate can be scattered.
+	for _, expr := range sel.GroupBy {
+		vindex := bldr.Symtab().Vindex(expr, rb)
+		if vindex != nil && vindexes.IsUnique(vindex) {
+			return nil
+		}
 	}
-	if rb.IsSingle() {
-		return nil
-	}
-	// It's a scatter rb. We can allow aggregates if there is a unique
-	// vindex in the select list.
-	for _, selectExpr := range sel.SelectExprs {
-		switch selectExpr := selectExpr.(type) {
-		case *sqlparser.AliasedExpr:
-			vindex := bldr.Symtab().Vindex(selectExpr.Expr, rb)
-			if vindex != nil && vindexes.IsUnique(vindex) {
-				return nil
+
+	// If there is a distinct clause, we can check the select list
+	// to see if it has a unique vindex reference.
+	if sel.Distinct != "" {
+		for _, selectExpr := range sel.SelectExprs {
+			switch selectExpr := selectExpr.(type) {
+			case *sqlparser.AliasedExpr:
+				vindex := bldr.Symtab().Vindex(selectExpr.Expr, rb)
+				if vindex != nil && vindexes.IsUnique(vindex) {
+					return nil
+				}
 			}
 		}
 	}
@@ -195,11 +213,11 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*resul
 	for i, node := range selectExprs {
 		switch node := node.(type) {
 		case *sqlparser.AliasedExpr:
-			rb, err := findRoute(node.Expr, bldr)
+			origin, err := findOrigin(node.Expr, bldr)
 			if err != nil {
 				return nil, err
 			}
-			resultColumns[i], _, err = bldr.PushSelect(node, rb)
+			resultColumns[i], _, err = bldr.PushSelect(node, origin)
 			if err != nil {
 				return nil, err
 			}
@@ -207,7 +225,7 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*resul
 			// We'll allow select * for simple routes.
 			rb, ok := bldr.(*route)
 			if !ok {
-				return nil, errors.New("unsupported: '*' expression in complex join")
+				return nil, errors.New("unsupported: '*' expression in cross-shard join")
 			}
 			// Validate keyspace reference if any.
 			if !node.TableName.IsEmpty() {
@@ -222,7 +240,7 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*resul
 			rb, ok := bldr.(*route)
 			if !ok {
 				// This code is unreachable because the parser doesn't allow joins for next val statements.
-				return nil, errors.New("unsupported: SELECT NEXT query in complex join")
+				return nil, errors.New("unsupported: SELECT NEXT query in cross-shard join")
 			}
 			if err := rb.SetOpcode(engine.SelectNext); err != nil {
 				return nil, err

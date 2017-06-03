@@ -17,40 +17,34 @@ limitations under the License.
 /*
 Package planbuilder allows you to build execution
 plans that describe how to fulfill a query that may
-span multiple keyspaces or shards.
-
-The main entry point for the planbuilder is the
-Build function that accepts a query and vschema
-and returns the plan.
+span multiple keyspaces or shards. The main entry
+points for this package are Build and BuildFromStmt.
 */
 package planbuilder
 
 /*
-The two core primitives built by this package are Route and Join.
+The main strategy of the planbuilder is to push down as
+much of the work as possible down to the vttablets. The
+special primitive for doing this is route, which can
+execute any SQL on a single shard (or scatter). Any
+work that cannot be done by a single route is stitched
+together by VTGate using relational primitives. If
+stitching is not possible using existing primitives,
+then an "unsupported" error is returned.
 
-The Route primitive executes a query and returns the result.
-This can be either to a single keyspace or shard, or it can
-be a scatter query that spans multiple shards. In the case
-of a scatter, the rows can be returned in any order.
-
-The Join primitive can perform a normal or a left join.
-If there is a join condition, it's actually executed
-as a constraint on the second (RHS) query. The Join
-primitive specifies the join variables (bind vars)
-that need to be built from the results of the first
-(LHS) query. For example:
+If a query is split into multiple parts, like a
+cross-shard join, the latter parts may carry references
+to the former parts. If this happens, the primitive
+specifies how to build these cross-shard references as
+"join variables" that will essentially be sent in
+as bind vars during execution. For example:
 
 	select ... from a join b on b.col = a.col
 
 will be executed as:
 
-	select ..., a.col from a (produce "a_col" from a.col)
+	select ... a.col from a (produce "a_col" from a.col)
 	select ... from b where b.col = :a_col
-
-The planbuilder tries to push all the constructs of
-the original request into a Route. If it's not possible,
-we see if we can build a primitive for it. If none exist,
-we return an error.
 
 The central design element for analyzing queries and
 building plans is the symbol table (symtab). This data
@@ -62,7 +56,7 @@ and reused as needed.
 The plan is built in two phases. In the
 first phase (break-up and push-down), the query is
 broken into smaller parts and pushed down into
-Join or Route primitives. In the second phase (wire-up),
+various primitives. In the second phase (wire-up),
 external references are wired up using bind vars, and
 the individual ASTs are converted into actual queries.
 
@@ -71,6 +65,17 @@ underlying MySQL schema. Due to this, we assume that
 any qualified or implicit column reference of a table
 is valid and we rely on the underlying vttablet/MySQL
 to eventually validate such references.
+
+Every 'builder' primitive must satisfy the builder
+interface. This allows the planbuilder to outsource
+primitive-specific handling into those implementaions.
+
+Any primitive that computes or generates a new column
+must satisfy the 'columnOriginator' interface. When
+you search for a symbol, the symtab returns the
+columnOriginator that originates the symbol. Such
+primitives must also have a unique Order, which will
+allow the push-down algorithms to navigate to it.
 
 Variable naming: The AST, planbuilder and engine
 are three different worlds that use overloaded

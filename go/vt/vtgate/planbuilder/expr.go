@@ -39,37 +39,41 @@ func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlpars
 	return append(filters, node)
 }
 
-// findRoute identifies the right-most route for expr. In situations where
-// the expression addresses multiple routes, the expectation is that the
-// executor will use the results of the previous routes to feed the necessary
-// values for the external references.
-// If the expression contains a subquery, the right-most route identification
+// findOrigin identifies the right-most origin referenced by expr. In situations where
+// the expression references columns from multiple origins, the expression will be
+// pushed to the right-most origin, and the executor will use the results of
+// the previous origins to feed the necessary values to the primitives on the right.
+//
+// If the expression contains a subquery, the right-most origin identification
 // also follows the same rules of a normal expression. This is achieved by
 // looking at the Externs field of its symbol table that contains the list of
 // external references.
-// Once the target route is identified, we have to verify that the subquery's
+//
+// Once the target origin is identified, we have to verify that the subquery's
 // route can be merged with it. If it cannot, we fail the query. This is because
 // we don't have the ability to wire up subqueries through expression evaluation
 // primitives. Consequently, if the plan for a subquery comes out as a Join,
 // we can immediately error out.
-// Since findRoute can itself be called from within a subquery, it has to assume
+//
+// Since findOrigin can itself be called from within a subquery, it has to assume
 // that some of the external references may actually be pointing to an outer
 // query. The isLocal response from the symtab is used to make sure that we
 // only analyze symbols that point to the current symtab.
+//
 // If an expression has no references to the current query, then the left-most
-// route is chosen as the default.
-func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
-	highestRoute := bldr.Leftmost()
+// origin is chosen as the default.
+func findOrigin(expr sqlparser.Expr, bldr builder) (origin columnOriginator, err error) {
+	highestOrigin := bldr.Leftmost()
 	var subroutes []*route
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
-			newRoute, isLocal, err := bldr.Symtab().Find(node)
+			newOrigin, isLocal, err := bldr.Symtab().Find(node)
 			if err != nil {
 				return false, err
 			}
-			if isLocal && newRoute.Order > highestRoute.Order {
-				highestRoute = newRoute
+			if isLocal && newOrigin.Order() > highestOrigin.Order() {
+				highestOrigin = newOrigin
 			}
 		case *sqlparser.Subquery:
 			var subplan builder
@@ -84,15 +88,15 @@ func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
 			if err != nil {
 				return false, err
 			}
-			subroute, ok := subplan.(*route)
-			if !ok {
-				return false, errors.New("unsupported: complex join in subqueries")
+			subroute, isRoute := subplan.(*route)
+			if !isRoute {
+				return false, errors.New("unsupported: cross-shard join in subqueries")
 			}
 			for _, extern := range subroute.Symtab().Externs {
 				// No error expected. These are resolved externs.
-				newRoute, isLocal, _ := bldr.Symtab().Find(extern)
-				if isLocal && newRoute.Order > highestRoute.Order {
-					highestRoute = newRoute
+				newOrigin, isLocal, _ := bldr.Symtab().Find(extern)
+				if isLocal && newOrigin.Order() > highestOrigin.Order() {
+					highestOrigin = newOrigin
 				}
 			}
 			subroutes = append(subroutes, subroute)
@@ -102,7 +106,7 @@ func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
 			if !node.Name.EqualString("last_insert_id") {
 				return true, nil
 			}
-			if rb, ok := bldr.(*route); !ok || rb.ERoute.Keyspace.Sharded {
+			if rb, isRoute := bldr.(*route); !isRoute || rb.ERoute.Keyspace.Sharded {
 				return false, errors.New("unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces")
 			}
 		}
@@ -111,15 +115,17 @@ func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
 	if err != nil {
 		return nil, err
 	}
+	highestRoute, isRoute := highestOrigin.(*route)
+	if !isRoute && len(subroutes) > 0 {
+		return nil, errors.New("unsupported: subquery cannot be merged with cross-shard subquery")
+	}
 	for _, subroute := range subroutes {
 		if err := highestRoute.SubqueryCanMerge(subroute); err != nil {
 			return nil, err
 		}
-		// This should be moved out if we become capable of processing
-		// subqueries without push-down.
 		subroute.Redirect = highestRoute
 	}
-	return highestRoute, nil
+	return highestOrigin, nil
 }
 
 func hasSubquery(node sqlparser.SQLNode) bool {
@@ -132,15 +138,6 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 		return true, nil
 	}, node)
 	return has
-}
-
-// exprIsValue returns true if the expression can be treated as a value
-// for the current route. External references are treated as value.
-func exprIsValue(expr sqlparser.Expr, rb *route) bool {
-	if node, ok := expr.(*sqlparser.ColName); ok {
-		return node.Metadata.(*column).Route() != rb
-	}
-	return sqlparser.IsValue(expr)
 }
 
 func valEqual(a, b interface{}) bool {

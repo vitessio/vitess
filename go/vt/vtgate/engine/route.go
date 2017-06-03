@@ -30,6 +30,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 )
 
+var _ Primitive = (*Route)(nil)
+
 // Route represents the instructions to route a query to
 // one or many vttablets. The meaning and values for the
 // the fields are described in the RouteOpcode values comments.

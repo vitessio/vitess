@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -32,18 +31,19 @@ var infoSchema = sqlparser.NewTableIdent("information_schema")
 // processTableExprs analyzes the FROM clause. It produces a builder
 // with all the routes identified.
 func processTableExprs(tableExprs sqlparser.TableExprs, vschema VSchema) (builder, error) {
-	if len(tableExprs) != 1 {
-		lplan, err := processTableExpr(tableExprs[0], vschema)
-		if err != nil {
-			return nil, err
-		}
-		rplan, err := processTableExprs(tableExprs[1:], vschema)
-		if err != nil {
-			return nil, err
-		}
-		return lplan.Join(rplan, nil)
+	if len(tableExprs) == 1 {
+		return processTableExpr(tableExprs[0], vschema)
 	}
-	return processTableExpr(tableExprs[0], vschema)
+
+	lplan, err := processTableExpr(tableExprs[0], vschema)
+	if err != nil {
+		return nil, err
+	}
+	rplan, err := processTableExprs(tableExprs[1:], vschema)
+	if err != nil {
+		return nil, err
+	}
+	return joinBuilders(lplan, rplan, nil)
 }
 
 // processTableExpr produces a builder subtree for the given TableExpr.
@@ -53,15 +53,12 @@ func processTableExpr(tableExpr sqlparser.TableExpr, vschema VSchema) (builder, 
 		return processAliasedTable(tableExpr, vschema)
 	case *sqlparser.ParenTableExpr:
 		bldr, err := processTableExprs(tableExpr.Exprs, vschema)
-		// We want to point to the higher level parenthesis because
-		// more routes can be merged with this one. If so, the order
-		// should be maintained as dictated by the parenthesis.
+		// If it's a route, preserve the parenthesis so things
+		// don't associate differently when more things are pushed
+		// into it. FROM a, (b, c) should not become FROM a, b, c.
 		if rb, ok := bldr.(*route); ok {
-			// If a route is returned in this context, then we know that it only
-			// contains the from clause of a brand new, partially built Select.
-			// If there was a subquery, it would have been aliased to a name and the
-			// entire thing would still be the from clause of a partially built Select.
-			rb.Select.(*sqlparser.Select).From = sqlparser.TableExprs{tableExpr}
+			sel := rb.Select.(*sqlparser.Select)
+			sel.From = sqlparser.TableExprs{&sqlparser.ParenTableExpr{Exprs: sel.From}}
 		}
 		return bldr, err
 	case *sqlparser.JoinTableExpr:
@@ -97,7 +94,10 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 			if !tableExpr.As.IsEmpty() {
 				alias = sqlparser.TableName{Name: tableExpr.As}
 			}
-			rb.symtab.InitWithAlias(alias, table, rb)
+			if err := rb.symtab.AddVindexTable(alias, table, rb); err != nil {
+				// unreachable: since the symtab is empty, the function should not fail.
+				panic(err)
+			}
 		}
 		return rb, nil
 	case *sqlparser.Subquery:
@@ -114,14 +114,20 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 		if err != nil {
 			return nil, err
 		}
+
 		subroute, ok := subplan.(*route)
 		if !ok {
-			return nil, errors.New("unsupported: complex join in subqueries")
+			return newSubquery(tableExpr.As, subplan, vschema), nil
 		}
+
+		// Since a route is more versatile than a subquery, we
+		// build a route primitive that has the subquery in its
+		// FROM clause. This allows for other constructs to be
+		// later pushed into it.
 		table := &vindexes.Table{
 			Keyspace: subroute.ERoute.Keyspace,
 		}
-		for _, rc := range subroute.ResultColumns {
+		for _, rc := range subroute.ResultColumns() {
 			if rc.column.Vindex == nil {
 				continue
 			}
@@ -142,7 +148,10 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 			subroute.ERoute,
 			vschema,
 		)
-		rb.symtab.InitWithAlias(sqlparser.TableName{Name: tableExpr.As}, table, rb)
+		if err := rb.symtab.AddVindexTable(sqlparser.TableName{Name: tableExpr.As}, table, rb); err != nil {
+			// unreachable: since the symtab is empty, the function should not fail.
+			panic(err)
+		}
 		subroute.Redirect = rb
 		return rb, nil
 	}
@@ -190,7 +199,7 @@ func processJoin(ajoin *sqlparser.JoinTableExpr, vschema VSchema) (builder, erro
 	if err != nil {
 		return nil, err
 	}
-	return lplan.Join(rplan, ajoin)
+	return joinBuilders(lplan, rplan, ajoin)
 }
 
 // convertToLeftJoin converts a right join into a left join.
@@ -205,4 +214,18 @@ func convertToLeftJoin(ajoin *sqlparser.JoinTableExpr) {
 	}
 	ajoin.LeftExpr, ajoin.RightExpr = ajoin.RightExpr, newRHS
 	ajoin.Join = sqlparser.LeftJoinStr
+}
+
+func joinBuilders(left, right builder, ajoin *sqlparser.JoinTableExpr) (builder, error) {
+	lRoute, leftIsRoute := left.(*route)
+	rRoute, rightIsRoute := right.(*route)
+	if leftIsRoute && rightIsRoute {
+		// If both are routes, they have an opportunity
+		// to merge into one. route.Join performs this work.
+		return lRoute.Join(rRoute, ajoin)
+	}
+
+	// If any of them is not a route, we have to build
+	// a new join primitve.
+	return newJoin(left, right, ajoin)
 }
