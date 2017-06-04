@@ -332,3 +332,15 @@ func TestTypeError(t *testing.T) {
 		t.Errorf("MySQLToType: %v, want %s", err, want)
 	}
 }
+
+func TestIsTypeValid(t *testing.T) {
+	if !IsTypeValid(Int64) {
+		t.Errorf("IsTypeValid(%v): false, want true", Int64)
+	}
+	if !IsTypeValid(Expression) {
+		t.Errorf("IsTypeValid(%v): false, want true", Expression)
+	}
+	if IsTypeValid(querypb.Type(1)) {
+		t.Errorf("IsTypeValid(%v): true, want false", querypb.Type(1))
+	}
+}

@@ -810,7 +810,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 			if err != nil {
 				return sqltypes.NULL, 0, fmt.Errorf("error parsing JSON data %v: %v", data[pos:pos+l], err)
 			}
-			return sqltypes.MakeTrusted(sqltypes.TypeSQL,
+			return sqltypes.MakeTrusted(sqltypes.Expression,
 				d), l + int(metadata), nil
 		}
 

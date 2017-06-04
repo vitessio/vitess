@@ -577,9 +577,10 @@ func (route *Route) resolveList(val interface{}, bindVars map[string]interface{}
 			}
 			result := make([]interface{}, len(l.Values))
 			for i, val := range l.Values {
-				// We can use MakeTrusted as the lower
-				// layers will verify the value if needed.
-				result[i] = sqltypes.MakeTrusted(val.Type, val.Value)
+				var err error
+				if result[i], err = sqltypes.ValueFromBytes(val.Type, val.Value); err != nil {
+					return nil, err
+				}
 			}
 			return result, nil
 		default:

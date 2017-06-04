@@ -67,13 +67,6 @@ func QueryAsString(sql string, bindVariables map[string]interface{}) string {
 	return string(buf.Bytes())
 }
 
-func slimit(s string, max int) string {
-	if l := len(s); l > max {
-		return s[:max]
-	}
-	return s
-}
-
 // BoundQueriesEqual compares two slices of BoundQuery objects.
 func BoundQueriesEqual(x, y []BoundQuery) bool {
 	if len(x) != len(y) {

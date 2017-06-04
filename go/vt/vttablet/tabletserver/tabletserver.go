@@ -1089,7 +1089,7 @@ func (tsv *TabletServer) MessageStream(ctx context.Context, target *querypb.Targ
 func (tsv *TabletServer) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (count int64, err error) {
 	sids := make([]string, 0, len(ids))
 	for _, val := range ids {
-		v, err := sqltypes.BuildConverted(val.Type, val.Value)
+		v, err := sqltypes.ValueFromBytes(val.Type, val.Value)
 		if err != nil {
 			return 0, tsv.convertAndLogError("message_ack", nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid type: %v", err), nil)
 		}

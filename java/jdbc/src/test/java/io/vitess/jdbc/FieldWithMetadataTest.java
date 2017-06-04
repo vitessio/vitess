@@ -340,7 +340,7 @@ public class FieldWithMetadataTest extends BaseTest {
 
         conn.setIncludedFields(Query.ExecuteOptions.IncludedFields.TYPE_AND_NAME);
         for (Query.Type type : Query.Type.values()) {
-            if (type == Query.Type.UNRECOGNIZED) {
+            if (type == Query.Type.UNRECOGNIZED || type == Query.Type.EXPRESSION) {
                 continue;
             }
 

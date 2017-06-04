@@ -148,6 +148,9 @@ func BuildConverted(typ querypb.Type, goval interface{}) (v Value, err error) {
 // matches the requested type. If type is an integral it's converted to
 // a cannonical form. Otherwise, the original representation is preserved.
 func ValueFromBytes(typ querypb.Type, val []byte) (v Value, err error) {
+	if !IsTypeValid(typ) {
+		return NULL, fmt.Errorf("type: %v is invalid", typ)
+	}
 	switch {
 	case IsSigned(typ):
 		signed, err := strconv.ParseInt(string(val), 0, 64)
@@ -161,8 +164,6 @@ func ValueFromBytes(typ querypb.Type, val []byte) (v Value, err error) {
 			return NULL, err
 		}
 		v = MakeTrusted(typ, strconv.AppendUint(nil, unsigned, 10))
-	case typ == Tuple:
-		return NULL, errors.New("tuple not allowed for ValueFromBytes")
 	case IsFloat(typ) || typ == Decimal:
 		_, err := strconv.ParseFloat(string(val), 64)
 		if err != nil {

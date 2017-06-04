@@ -615,7 +615,7 @@ func (conn *gRPCQueryClient) SplitQuery(
 	if err != nil {
 		return nil, tabletconn.ErrorFromGRPC(err)
 	}
-	split, err := querytypes.Proto3ToQuerySplits(sqr.Queries)
+	split, err := querytypes.Proto3ToQuerySplits(sqr.Queries, false /* enforceSafety */)
 	if err != nil {
 		return nil, tabletconn.ErrorFromGRPC(err)
 	}

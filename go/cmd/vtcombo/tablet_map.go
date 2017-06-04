@@ -292,7 +292,7 @@ func (itc *internalTabletConn) Execute(ctx context.Context, target *querypb.Targ
 	if err != nil {
 		return nil, err
 	}
-	bindVars, err = querytypes.Proto3ToBindVariables(bv)
+	bindVars, err = querytypes.Proto3ToBindVariables(bv, false /* enforceSafety */)
 	if err != nil {
 		return nil, err
 	}
@@ -312,7 +312,7 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, target *querypb
 		if err != nil {
 			return nil, err
 		}
-		bindVars, err := querytypes.Proto3ToBindVariables(bv)
+		bindVars, err := querytypes.Proto3ToBindVariables(bv, false /* enforceSafety */)
 		if err != nil {
 			return nil, err
 		}
@@ -333,7 +333,7 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, target *queryp
 	if err != nil {
 		return err
 	}
-	bindVars, err = querytypes.Proto3ToBindVariables(bv)
+	bindVars, err = querytypes.Proto3ToBindVariables(bv, false /* enforceSafety */)
 	if err != nil {
 		return err
 	}

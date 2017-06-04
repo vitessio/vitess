@@ -102,7 +102,7 @@ func withCallerIDContext(ctx context.Context, effectiveCallerID *vtrpcpb.CallerI
 func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest) (response *vtgatepb.ExecuteResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, true /* enforceSafety */)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -133,7 +133,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 	sqlQueries := make([]string, len(request.Queries))
 	bindVars := make([]map[string]interface{}, len(request.Queries))
 	for queryNum, query := range request.Queries {
-		bv, err := querytypes.Proto3ToBindVariables(query.BindVariables)
+		bv, err := querytypes.Proto3ToBindVariables(query.BindVariables, true /* enforceSafety */)
 		if err != nil {
 			return nil, vterrors.ToGRPC(err)
 		}
@@ -163,7 +163,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream vtgateservicepb.Vitess_StreamExecuteServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx := withCallerIDContext(stream.Context(), request.CallerId)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, true /* enforceSafety */)
 	if err != nil {
 		return vterrors.ToGRPC(err)
 	}
@@ -190,7 +190,7 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 func (vtg *VTGate) ExecuteShards(ctx context.Context, request *vtgatepb.ExecuteShardsRequest) (response *vtgatepb.ExecuteShardsResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, true /* enforceSafety */)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -214,7 +214,7 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, request *vtgatepb.ExecuteS
 func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *vtgatepb.ExecuteKeyspaceIdsRequest) (response *vtgatepb.ExecuteKeyspaceIdsResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, true /* enforceSafety */)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -238,7 +238,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *vtgatepb.Exe
 func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *vtgatepb.ExecuteKeyRangesRequest) (response *vtgatepb.ExecuteKeyRangesResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, true /* enforceSafety */)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -262,7 +262,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *vtgatepb.Execu
 func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *vtgatepb.ExecuteEntityIdsRequest) (response *vtgatepb.ExecuteEntityIdsResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, true /* enforceSafety */)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -322,7 +322,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *vtgatep
 func (vtg *VTGate) StreamExecuteShards(request *vtgatepb.StreamExecuteShardsRequest, stream vtgateservicepb.Vitess_StreamExecuteShardsServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx := withCallerIDContext(stream.Context(), request.CallerId)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, true /* enforceSafety */)
 	if err != nil {
 		return vterrors.ToGRPC(err)
 	}
@@ -346,7 +346,7 @@ func (vtg *VTGate) StreamExecuteShards(request *vtgatepb.StreamExecuteShardsRequ
 func (vtg *VTGate) StreamExecuteKeyspaceIds(request *vtgatepb.StreamExecuteKeyspaceIdsRequest, stream vtgateservicepb.Vitess_StreamExecuteKeyspaceIdsServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx := withCallerIDContext(stream.Context(), request.CallerId)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, true /* enforceSafety */)
 	if err != nil {
 		return vterrors.ToGRPC(err)
 	}
@@ -370,7 +370,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(request *vtgatepb.StreamExecuteKeysp
 func (vtg *VTGate) StreamExecuteKeyRanges(request *vtgatepb.StreamExecuteKeyRangesRequest, stream vtgateservicepb.Vitess_StreamExecuteKeyRangesServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx := withCallerIDContext(stream.Context(), request.CallerId)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, true /* enforceSafety */)
 	if err != nil {
 		return vterrors.ToGRPC(err)
 	}
@@ -486,7 +486,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, request *vtgatepb.SplitQueryR
 
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, true /* enforceSafety */)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
