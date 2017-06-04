@@ -359,10 +359,10 @@
 			"revisionTime": "2016-01-21T18:51:14Z"
 		},
 		{
-			"checksumSHA1": "APDDi2ohrU7OkChQCekD9tSVUhs=",
+			"checksumSHA1": "ITzWX1LucDMHcZh509uUwc920KY=",
 			"path": "github.com/golang/protobuf/jsonpb",
-			"revision": "8ee79997227bf9b34611aee7946ae64735e6fd93",
-			"revisionTime": "2016-11-17T03:31:26Z"
+			"revision": "5a0f697c9ed9d68fef0116532c6e05cfeae00e55",
+			"revisionTime": "2017-06-01T23:02:30Z"
 		},
 		{
 			"checksumSHA1": "uaSm4Hhyzl+DHL8kSt4mrZ7GBIk=",
