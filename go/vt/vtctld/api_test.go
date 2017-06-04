@@ -121,7 +121,8 @@ func TestAPI(t *testing.T) {
 		{"GET", "keyspaces", "", `["ks1"]`},
 		{"GET", "keyspaces/ks1", "", `{
 				"sharding_column_name": "shardcol",
-				"sharding_column_type": 0
+				"sharding_column_type": 0,
+				"served_froms": []
 			}`},
 		{"GET", "keyspaces/nonexistent", "", "404 page not found"},
 		{"POST", "keyspaces/ks1?action=TestKeyspaceAction", "", `{
@@ -134,8 +135,15 @@ func TestAPI(t *testing.T) {
 		// Shards
 		{"GET", "shards/ks1/", "", `["-80","80-"]`},
 		{"GET", "shards/ks1/-80", "", `{
-				"key_range": {"end":"gA=="},
-				"cells": ["cell1", "cell2"]
+				"master_alias": null,
+				"key_range": {
+					"start": null,
+					"end":"gA=="
+				},
+				"served_types": [],
+				"source_shards": [],
+				"cells": ["cell1", "cell2"],
+				"tablet_controls": []
 			}`},
 		{"GET", "shards/ks1/-DEAD", "", "404 page not found"},
 		{"POST", "shards/ks1/-80?action=TestShardAction", "", `{
@@ -162,9 +170,13 @@ func TestAPI(t *testing.T) {
 				"port_map": {"vt": 100},
 				"keyspace": "ks1",
 				"shard": "-80",
-				"key_range": {"end": "gA=="},
+				"key_range": {
+					"start": null,
+					"end": "gA=="
+				},
 				"type": 2,
 				"db_name_override": "",
+				"tags": {},
 				"mysql_hostname":"",
 				"mysql_port":0
 			}`},
@@ -246,7 +258,7 @@ func TestAPI(t *testing.T) {
 		// vtctl RunCommand
 		{"POST", "vtctl/", `["GetKeyspace","ks1"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"sharding_column_name\": \"shardcol\",\n  \"sharding_column_type\": 0\n}\n\n"
+		   "Output": "{\n  \"sharding_column_name\": \"shardcol\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [\n  ]\n}\n\n"
 		}`},
 		{"POST", "vtctl/", `["GetKeyspace","does_not_exist"]`, `{
 		   "Error": "node doesn't exist",
