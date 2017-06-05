@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"reflect"
 	"strings"
 	"time"
 
@@ -86,13 +85,6 @@ func handleCollection(collection string, getFunc func(*http.Request) (interface{
 				return nil
 			}
 			return fmt.Errorf("can't get %v: %v", collection, err)
-		}
-
-		// JSON marshals a nil slice as "null", but we prefer "[]".
-		if val := reflect.ValueOf(obj); val.Kind() == reflect.Slice && val.IsNil() {
-			w.Header().Set("Content-Type", jsonContentType)
-			w.Write([]byte("[]"))
-			return nil
 		}
 
 		// JSON encode response.

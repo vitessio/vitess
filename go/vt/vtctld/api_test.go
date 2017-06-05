@@ -164,6 +164,7 @@ func TestAPI(t *testing.T) {
 		{"GET", "tablets/?shard=ks1%2F-80&cell=cell2", "", `[
 				{"cell":"cell2","uid":200}
 			]`},
+		{"GET", "tablets/?shard=ks1%2F80-&cell=cell1", "", `[]`},
 		{"GET", "tablets/cell1-100", "", `{
 				"alias": {"cell": "cell1", "uid": 100},
 				"hostname": "",
