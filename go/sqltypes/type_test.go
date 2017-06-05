@@ -119,6 +119,9 @@ func TestTypeValues(t *testing.T) {
 	}, {
 		defined:  TypeJSON,
 		expected: 30 | flagIsQuoted,
+	}, {
+		defined:  Expression,
+		expected: 31,
 	}}
 	for _, tcase := range testcases {
 		if int(tcase.defined) != tcase.expected {
@@ -169,6 +172,9 @@ func TestIsFunctions(t *testing.T) {
 	}
 	if !IsBinary(Binary) {
 		t.Error("Char: !IsBinary, must be true")
+	}
+	if !isNumber(Int64) {
+		t.Error("Int64: !isNumber, must be true")
 	}
 }
 
