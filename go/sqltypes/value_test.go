@@ -100,6 +100,9 @@ func TestBuildValue(t *testing.T) {
 	}, {
 		in:  testVal(VarBinary, "a"),
 		out: testVal(VarBinary, "a"),
+	}, {
+		in:  &querypb.BindVariable{Type: VarBinary, Value: []byte("a")},
+		out: testVal(VarBinary, "a"),
 	}}
 	for _, tcase := range testcases {
 		v, err := BuildValue(tcase.in)
@@ -294,6 +297,10 @@ func TestValueFromBytes(t *testing.T) {
 		inVal:  "a",
 		outVal: testVal(VarBinary, "a"),
 	}, {
+		inType: Expression,
+		inVal:  "a",
+		outVal: testVal(Expression, "a"),
+	}, {
 		inType: Int64,
 		inVal:  InvalidNeg,
 		outErr: "out of range",
@@ -316,7 +323,7 @@ func TestValueFromBytes(t *testing.T) {
 	}, {
 		inType: Tuple,
 		inVal:  "a",
-		outErr: "not allowed",
+		outErr: "type: TUPLE is invalid",
 	}}
 	for _, tcase := range testcases {
 		v, err := ValueFromBytes(tcase.inType, []byte(tcase.inVal))

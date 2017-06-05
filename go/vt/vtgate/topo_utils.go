@@ -205,7 +205,7 @@ func boundShardQueriesToScatterBatchRequest(boundQueries []*vtgatepb.BoundShardQ
 				}
 				requests.Requests[key] = request
 			}
-			bq, err := querytypes.Proto3ToBoundQuery(boundQuery.Query)
+			bq, err := querytypes.Proto3ToBoundQuery(boundQuery.Query, true /* enforceSafety */)
 			if err != nil {
 				return nil, err
 			}

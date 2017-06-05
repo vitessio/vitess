@@ -322,9 +322,10 @@ func TestBindVariablesToProto3Errors(t *testing.T) {
 
 func TestProto3ToBindVariables(t *testing.T) {
 	testcases := []struct {
-		name string
-		in   *querypb.BindVariable
-		out  *querypb.BindVariable
+		name   string
+		in     *querypb.BindVariable
+		out    *querypb.BindVariable
+		unsafe bool
 	}{{
 		name: "value set",
 		in: &querypb.BindVariable{
@@ -335,6 +336,7 @@ func TestProto3ToBindVariables(t *testing.T) {
 			Type:  sqltypes.Int16,
 			Value: []byte("-1"),
 		},
+		unsafe: false,
 	}, {
 		name: "Null",
 		in: &querypb.BindVariable{
@@ -343,10 +345,23 @@ func TestProto3ToBindVariables(t *testing.T) {
 		out: &querypb.BindVariable{
 			Type: sqltypes.Null,
 		},
+		unsafe: false,
 	}, {
-		name: "nil",
-		in:   nil,
-		out:  nil,
+		name:   "nil",
+		in:     nil,
+		out:    nil,
+		unsafe: false,
+	}, {
+		name: "unsafe expression",
+		in: &querypb.BindVariable{
+			Type:  sqltypes.Expression,
+			Value: []byte("rand()"),
+		},
+		out: &querypb.BindVariable{
+			Type:  sqltypes.Expression,
+			Value: []byte("rand()"),
+		},
+		unsafe: true,
 	}, {
 		name: "Tuple",
 		in: &querypb.BindVariable{
@@ -364,6 +379,10 @@ func TestProto3ToBindVariables(t *testing.T) {
 					Type:  sqltypes.Float64,
 					Value: []byte("1.5"),
 				},
+				{
+					Type:  sqltypes.Expression,
+					Value: []byte("rand()"),
+				},
 			},
 		},
 		out: &querypb.BindVariable{
@@ -381,14 +400,19 @@ func TestProto3ToBindVariables(t *testing.T) {
 					Type:  sqltypes.Float64,
 					Value: []byte("1.5"),
 				},
+				{
+					Type:  sqltypes.Expression,
+					Value: []byte("rand()"),
+				},
 			},
 		},
+		unsafe: true,
 	}}
 	for _, tcase := range testcases {
 		p3 := map[string]*querypb.BindVariable{
 			"bv": tcase.in,
 		}
-		bv, err := Proto3ToBindVariables(p3)
+		bv, err := Proto3ToBindVariables(p3, false /* enforceSafety */)
 		if err != nil {
 			t.Errorf("Error on %v: %v", tcase.name, err)
 		}
@@ -401,5 +425,14 @@ func TestProto3ToBindVariables(t *testing.T) {
 				t.Errorf("Mismatch on %v: %+v, want %+v", tcase.name, bv["bv"], tcase.out)
 			}
 		}
+
+		_, err = Proto3ToBindVariables(p3, true /* enforceSafety */)
+		// XOR: If the operation is unsafe, it should return an error.
+		if tcase.unsafe != (err != nil) {
+			t.Errorf("Proto3ToBindVariables(enforceSafety): %v, unsafe: %v", err, tcase.unsafe)
+		}
 	}
+}
+
+func TestProto3ToBindVariablesUnsafe(t *testing.T) {
 }

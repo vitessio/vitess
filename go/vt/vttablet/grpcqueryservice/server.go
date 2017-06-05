@@ -44,7 +44,7 @@ func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (r
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, false /* enforceSafety */)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -64,7 +64,7 @@ func (q *query) ExecuteBatch(ctx context.Context, request *querypb.ExecuteBatchR
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	bql, err := querytypes.Proto3ToBoundQueryList(request.Queries)
+	bql, err := querytypes.Proto3ToBoundQueryList(request.Queries, false /* enforceSafety */)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -84,7 +84,7 @@ func (q *query) StreamExecute(request *querypb.StreamExecuteRequest, stream quer
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, false /* enforceSafety */)
 	if err != nil {
 		return vterrors.ToGRPC(err)
 	}
@@ -262,7 +262,7 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, false /* enforceSafety */)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -291,7 +291,7 @@ func (q *query) BeginExecuteBatch(ctx context.Context, request *querypb.BeginExe
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	bql, err := querytypes.Proto3ToBoundQueryList(request.Queries)
+	bql, err := querytypes.Proto3ToBoundQueryList(request.Queries, false /* enforceSafety */)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -356,7 +356,7 @@ func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryReque
 		request.ImmediateCallerId,
 	)
 
-	bq, err := querytypes.Proto3ToBoundQuery(request.Query)
+	bq, err := querytypes.Proto3ToBoundQuery(request.Query, false /* enforceSafety */)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}

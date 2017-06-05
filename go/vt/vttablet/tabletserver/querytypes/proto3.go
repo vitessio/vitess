@@ -219,8 +219,8 @@ func bindVariableToValue(v interface{}) (querypb.Type, []byte, error) {
 }
 
 // Proto3ToBoundQuery converts a proto.BoundQuery to the internal data structure
-func Proto3ToBoundQuery(query *querypb.BoundQuery) (*BoundQuery, error) {
-	bv, err := Proto3ToBindVariables(query.BindVariables)
+func Proto3ToBoundQuery(query *querypb.BoundQuery, enforceSafety bool) (*BoundQuery, error) {
+	bv, err := Proto3ToBindVariables(query.BindVariables, enforceSafety)
 	if err != nil {
 		return nil, err
 	}
@@ -231,13 +231,13 @@ func Proto3ToBoundQuery(query *querypb.BoundQuery) (*BoundQuery, error) {
 }
 
 // Proto3ToBoundQueryList converts am array of proto.BoundQuery to the internal data structure
-func Proto3ToBoundQueryList(queries []*querypb.BoundQuery) ([]BoundQuery, error) {
+func Proto3ToBoundQueryList(queries []*querypb.BoundQuery, enforceSafety bool) ([]BoundQuery, error) {
 	if len(queries) == 0 {
 		return nil, nil
 	}
 	result := make([]BoundQuery, len(queries))
 	for i, q := range queries {
-		res, err := Proto3ToBoundQuery(q)
+		res, err := Proto3ToBoundQuery(q, enforceSafety)
 		if err != nil {
 			return nil, err
 		}
@@ -247,7 +247,7 @@ func Proto3ToBoundQueryList(queries []*querypb.BoundQuery) ([]BoundQuery, error)
 }
 
 // Proto3ToBindVariables converts a proto.BinVariable map to internal data structure
-func Proto3ToBindVariables(bv map[string]*querypb.BindVariable) (map[string]interface{}, error) {
+func Proto3ToBindVariables(bv map[string]*querypb.BindVariable, enforceSafety bool) (map[string]interface{}, error) {
 	if len(bv) == 0 {
 		return nil, nil
 	}
@@ -256,9 +256,31 @@ func Proto3ToBindVariables(bv map[string]*querypb.BindVariable) (map[string]inte
 		if v == nil {
 			continue
 		}
+		if enforceSafety {
+			if err := checkBindvar(v); err != nil {
+				return nil, err
+			}
+		}
 		result[k] = v
 	}
 	return result, nil
+}
+
+var errUnsafe = fmt.Errorf("type: %v is not allowed as a bind variable", querypb.Type_EXPRESSION)
+
+// checkBindvar returns an error if the bind var uses an unsafe type.
+func checkBindvar(v *querypb.BindVariable) error {
+	switch v.Type {
+	case querypb.Type_EXPRESSION:
+		return errUnsafe
+	case querypb.Type_TUPLE:
+		for _, tv := range v.Values {
+			if tv.Type == querypb.Type_EXPRESSION {
+				return errUnsafe
+			}
+		}
+	}
+	return nil
 }
 
 // QueryResultListToProto3 temporarily resurrected.
@@ -274,13 +296,13 @@ func QueryResultListToProto3(results []sqltypes.Result) []*querypb.QueryResult {
 }
 
 // Proto3ToQuerySplits converts a proto3 QuerySplit array to a native QuerySplit array
-func Proto3ToQuerySplits(queries []*querypb.QuerySplit) ([]QuerySplit, error) {
+func Proto3ToQuerySplits(queries []*querypb.QuerySplit, enforceSafety bool) ([]QuerySplit, error) {
 	if len(queries) == 0 {
 		return nil, nil
 	}
 	result := make([]QuerySplit, len(queries))
 	for i, qs := range queries {
-		bv, err := Proto3ToBindVariables(qs.Query.BindVariables)
+		bv, err := Proto3ToBindVariables(qs.Query.BindVariables, enforceSafety)
 		if err != nil {
 			return nil, err
 		}

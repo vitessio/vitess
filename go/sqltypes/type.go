@@ -77,41 +77,38 @@ func IsBinary(t querypb.Type) bool {
 // Vitess data types. These are idiomatically
 // named synonyms for the querypb.Type values.
 const (
-	Null      = querypb.Type_NULL_TYPE
-	Int8      = querypb.Type_INT8
-	Uint8     = querypb.Type_UINT8
-	Int16     = querypb.Type_INT16
-	Uint16    = querypb.Type_UINT16
-	Int24     = querypb.Type_INT24
-	Uint24    = querypb.Type_UINT24
-	Int32     = querypb.Type_INT32
-	Uint32    = querypb.Type_UINT32
-	Int64     = querypb.Type_INT64
-	Uint64    = querypb.Type_UINT64
-	Float32   = querypb.Type_FLOAT32
-	Float64   = querypb.Type_FLOAT64
-	Timestamp = querypb.Type_TIMESTAMP
-	Date      = querypb.Type_DATE
-	Time      = querypb.Type_TIME
-	Datetime  = querypb.Type_DATETIME
-	Year      = querypb.Type_YEAR
-	Decimal   = querypb.Type_DECIMAL
-	Text      = querypb.Type_TEXT
-	Blob      = querypb.Type_BLOB
-	VarChar   = querypb.Type_VARCHAR
-	VarBinary = querypb.Type_VARBINARY
-	Char      = querypb.Type_CHAR
-	Binary    = querypb.Type_BINARY
-	Bit       = querypb.Type_BIT
-	Enum      = querypb.Type_ENUM
-	Set       = querypb.Type_SET
-	Tuple     = querypb.Type_TUPLE
-	Geometry  = querypb.Type_GEOMETRY
-	TypeJSON  = querypb.Type_JSON
-
-	// TypeSQL is exposed here in the code, but not in the proto file.
-	// This is an internal type used for binlogs only.
-	TypeSQL = querypb.Type(245)
+	Null       = querypb.Type_NULL_TYPE
+	Int8       = querypb.Type_INT8
+	Uint8      = querypb.Type_UINT8
+	Int16      = querypb.Type_INT16
+	Uint16     = querypb.Type_UINT16
+	Int24      = querypb.Type_INT24
+	Uint24     = querypb.Type_UINT24
+	Int32      = querypb.Type_INT32
+	Uint32     = querypb.Type_UINT32
+	Int64      = querypb.Type_INT64
+	Uint64     = querypb.Type_UINT64
+	Float32    = querypb.Type_FLOAT32
+	Float64    = querypb.Type_FLOAT64
+	Timestamp  = querypb.Type_TIMESTAMP
+	Date       = querypb.Type_DATE
+	Time       = querypb.Type_TIME
+	Datetime   = querypb.Type_DATETIME
+	Year       = querypb.Type_YEAR
+	Decimal    = querypb.Type_DECIMAL
+	Text       = querypb.Type_TEXT
+	Blob       = querypb.Type_BLOB
+	VarChar    = querypb.Type_VARCHAR
+	VarBinary  = querypb.Type_VARBINARY
+	Char       = querypb.Type_CHAR
+	Binary     = querypb.Type_BINARY
+	Bit        = querypb.Type_BIT
+	Enum       = querypb.Type_ENUM
+	Set        = querypb.Type_SET
+	Tuple      = querypb.Type_TUPLE
+	Geometry   = querypb.Type_GEOMETRY
+	TypeJSON   = querypb.Type_JSON
+	Expression = querypb.Type_EXPRESSION
 )
 
 // bit-shift the mysql flags by two byte so we
@@ -257,4 +254,14 @@ var typeToMySQL = map[querypb.Type]struct {
 func TypeToMySQL(typ querypb.Type) (mysqlType, flags int64) {
 	val := typeToMySQL[typ]
 	return val.typ, val.flags
+}
+
+// IsTypeValid returns true if the type is valid.
+func IsTypeValid(typ querypb.Type) bool {
+	if _, ok := typeToMySQL[typ]; ok {
+		return true
+	}
+
+	// Expression is an exception.
+	return typ == Expression
 }
