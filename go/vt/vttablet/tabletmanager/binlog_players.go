@@ -317,6 +317,11 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		return fmt.Errorf("failed to parse list of source tablet types: %v", *sourceTabletTypeStr)
 	}
 
+	// wait for any of required the tablets (useful for the first run at least, fast for next runs)
+	if err := bpc.tabletStatsCache.WaitForAnyTablet(bpc.ctx, bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, sourceTabletTypes); err != nil {
+		return fmt.Errorf("error waiting for tablets for %v %v %v: %v", bpc.cell, bpc.sourceShard.String(), sourceTabletTypes, err)
+	}
+
 	// Find the server list from the health check.
 	// Note: We cannot use tsc.GetHealthyTabletStats() here because it does
 	// not return non-serving tablets. We must include non-serving tablets because
