@@ -610,6 +610,11 @@ func (c *Conn) ID() int64 {
 	return int64(c.ConnectionID)
 }
 
+// IDENTITY with IP info for diagnostics
+func (c *Conn) Ident() string {
+	return fmt.Sprintf("client %v (%s)", c.ConnectionID, c.RemoteAddr().String())
+}
+
 // Close closes the connection. It can be called from a different go
 // routine to interrupt the current connection.
 func (c *Conn) Close() {
