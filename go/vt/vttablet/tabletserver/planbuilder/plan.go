@@ -68,8 +68,10 @@ const (
 	PlanDDL
 	// PlanSelectStream is used for streaming queries
 	PlanSelectStream
-	// PlanOther is for SHOW, DESCRIBE & EXPLAIN statements
-	PlanOther
+	// PlanOtherRead is for SHOW, DESCRIBE & EXPLAIN statements
+	PlanOtherRead
+	// PlanOtherAdmin is for REPAIR, OPTIMIZE and TRUNCATE statements
+	PlanOtherAdmin
 	// NumPlans stores the total number of plans
 	NumPlans
 )
@@ -89,7 +91,8 @@ var planName = []string{
 	"SET",
 	"DDL",
 	"SELECT_STREAM",
-	"OTHER",
+	"OTHER_READ",
+	"OTHER_ADMIN",
 }
 
 func (pt PlanType) String() string {
@@ -137,7 +140,8 @@ var tableACLRoles = map[PlanType]tableacl.Role{
 	PlanInsertSubquery: tableacl.WRITER,
 	PlanDDL:            tableacl.ADMIN,
 	PlanSelectStream:   tableacl.READER,
-	PlanOther:          tableacl.ADMIN,
+	PlanOtherRead:      tableacl.READER,
+	PlanOtherAdmin:     tableacl.ADMIN,
 	PlanUpsertPK:       tableacl.WRITER,
 	PlanNextval:        tableacl.WRITER,
 }
@@ -197,9 +201,10 @@ type MessageRowValues struct {
 
 // Plan is built for selects and DMLs.
 type Plan struct {
-	PlanID PlanType
-	Reason ReasonType
-	Table  *schema.Table
+	PlanID  PlanType
+	Reason  ReasonType
+	Table   *schema.Table
+	NewName sqlparser.TableIdent
 
 	// FieldQuery is used to fetch field info
 	FieldQuery *sqlparser.ParsedQuery
@@ -277,9 +282,11 @@ func Build(sql string, tables map[string]*schema.Table) (plan *Plan, err error) 
 	case *sqlparser.DDL:
 		return analyzeDDL(stmt, tables), nil
 	case *sqlparser.Show:
-		return &Plan{PlanID: PlanOther}, nil
-	case *sqlparser.Other:
-		return &Plan{PlanID: PlanOther}, nil
+		return &Plan{PlanID: PlanOtherRead}, nil
+	case *sqlparser.OtherRead:
+		return &Plan{PlanID: PlanOtherRead}, nil
+	case *sqlparser.OtherAdmin:
+		return &Plan{PlanID: PlanOtherAdmin}, nil
 	}
 	return nil, errors.New("invalid SQL")
 }
@@ -304,7 +311,7 @@ func BuildStreaming(sql string, tables map[string]*schema.Table) (plan *Plan, er
 		if tableName := analyzeFrom(stmt.From); !tableName.IsEmpty() {
 			plan.setTable(tableName, tables)
 		}
-	case *sqlparser.Other, *sqlparser.Show, *sqlparser.Union:
+	case *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Union:
 		// pass
 	default:
 		return nil, fmt.Errorf("'%v' not allowed for streaming", sqlparser.String(stmt))

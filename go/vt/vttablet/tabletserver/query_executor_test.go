@@ -788,7 +788,7 @@ func TestQueryExecutorPlanOtherWithinATransaction(t *testing.T) {
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	defer tsv.StopService()
 	defer testCommitHelper(t, tsv, qre)
-	checkPlanID(t, planbuilder.PlanOther, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanOtherRead, qre.plan.PlanID)
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
@@ -938,7 +938,7 @@ func TestQueryExecutorPlanOther(t *testing.T) {
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanOther, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanOtherRead, qre.plan.PlanID)
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("got: %v, want nil", err)

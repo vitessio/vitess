@@ -48,7 +48,8 @@ func DDLParse(sql string) (plan *DDLPlan) {
 func analyzeDDL(ddl *sqlparser.DDL, tables map[string]*schema.Table) *Plan {
 	// TODO(sougou): Add support for sequences.
 	return &Plan{
-		PlanID: PlanDDL,
-		Table:  tables[ddl.Table.Name.String()],
+		PlanID:  PlanDDL,
+		Table:   tables[ddl.Table.Name.String()],
+		NewName: ddl.NewName.Name,
 	}
 }

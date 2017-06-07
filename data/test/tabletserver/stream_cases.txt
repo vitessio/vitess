@@ -39,7 +39,7 @@
 {
   "PlanID": "SELECT_STREAM",
   "TableName": "",
-  "FullQuery": "other"
+  "FullQuery": "otherread"
 }
 
 # dml

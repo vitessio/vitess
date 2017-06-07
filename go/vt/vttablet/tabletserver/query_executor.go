@@ -31,6 +31,7 @@ import (
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/messager"
@@ -116,7 +117,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 			return qre.execDMLPK(conn)
 		case planbuilder.PlanDMLSubquery:
 			return qre.execDMLSubquery(conn)
-		case planbuilder.PlanOther:
+		case planbuilder.PlanOtherRead, planbuilder.PlanOtherAdmin:
 			return qre.execSQL(conn, qre.query, true)
 		case planbuilder.PlanUpsertPK:
 			return qre.execUpsertPK(conn)
@@ -133,7 +134,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed outside transaction")
 		case planbuilder.PlanSet:
 			return qre.execSet()
-		case planbuilder.PlanOther:
+		case planbuilder.PlanOtherRead:
 			conn, connErr := qre.getConn(qre.tsv.qe.conns)
 			if connErr != nil {
 				return nil, connErr
@@ -271,35 +272,41 @@ func (qre *QueryExecutor) checkPermissions() error {
 	}
 
 	// empty table name, do not need a table ACL check.
-	if qre.plan.TableName().IsEmpty() {
+	if qre.plan.TableName().IsEmpty() && qre.plan.NewName.IsEmpty() {
 		return nil
 	}
-
+	if !qre.plan.NewName.IsEmpty() {
+		altAuthorized := tableacl.Authorized(qre.plan.NewName.String(), qre.plan.PlanID.MinRole())
+		err := qre.checkAccess(altAuthorized, qre.plan.NewName, callerID)
+		if err != nil {
+			return err
+		}
+	}
 	if qre.plan.Authorized == nil {
-		return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "table acl error: nil acl")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table acl error: nil acl")
 	}
-	tableACLStatsKey := []string{
-		qre.plan.TableName().String(),
-		qre.plan.Authorized.GroupName,
-		qre.plan.PlanID.String(),
-		callerID.Username,
+	if !qre.plan.TableName().IsEmpty() {
+		return qre.checkAccess(qre.plan.Authorized, qre.plan.TableName(), callerID)
 	}
-	// perform table ACL check if it is enabled.
-	if !qre.plan.Authorized.IsMember(callerID) {
+	return nil
+}
+
+func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName sqlparser.TableIdent, callerID *querypb.VTGateCallerID) error {
+	statsKey := []string{tableName.String(), authorized.GroupName, qre.plan.PlanID.String(), callerID.Username}
+	if !authorized.IsMember(callerID) {
 		if qre.tsv.qe.enableTableACLDryRun {
-			tabletenv.TableaclPseudoDenied.Add(tableACLStatsKey, 1)
+			tabletenv.TableaclPseudoDenied.Add(statsKey, 1)
 			return nil
 		}
-		// raise error if in strictTableAcl mode, else just log an error.
 		if qre.tsv.qe.strictTableACL {
-			errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", callerID.Username, qre.plan.PlanID, qre.plan.TableName())
-			tabletenv.TableaclDenied.Add(tableACLStatsKey, 1)
+			errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", callerID.Username, qre.plan.PlanID, tableName)
+			tabletenv.TableaclDenied.Add(statsKey, 1)
 			qre.tsv.qe.accessCheckerLogger.Infof("%s", errStr)
 			return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "%s", errStr)
 		}
 		return nil
 	}
-	tabletenv.TableaclAllowed.Add(tableACLStatsKey, 1)
+	tabletenv.TableaclAllowed.Add(statsKey, 1)
 	return nil
 }
 
