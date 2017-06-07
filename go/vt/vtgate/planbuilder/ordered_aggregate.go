@@ -29,14 +29,46 @@ var _ builder = (*orderedAggregate)(nil)
 
 // orderedAggregate is the builder for engine.OrderedAggregate.
 // This gets built if there are aggregations on a SelectScatter
-// route. Then this primitve pushes down the aggregation to all
+// route. Then this primitive pushes down the aggregation to all
 // shards and forces the results to be ordered. This will allow
 // for the engine code to merge sort and aggregate the results
 // as they come.
+// For example: 'select col1, col2, count(*) from t group by col1, col2'
+// will be sent to the scatter route as:
+// 'select col1, col2, count(*) from t group by col1, col2 order by col1, col2`
+// The orderAggregate primitive built for this will be:
+//    &engine.OrderedAggregate {
+//      // Results has 3 columns: First two point at
+//      // the underlying column numbers of the route.
+//      // The third one points at the first element of Aggregates.
+//      Results: []int{0, 1, -1},
+//
+//      // Aggregates has one column. It computes the count
+//      // using column 2 of the underlying route.
+//      Aggregates: []AggregateParams{{
+//        Opcode: AggregateCount,
+//        Col: 2,
+//      }},
+//
+//      // Keys has the two group by values for col1 and col2.
+//      // The column numbers are from the underlying route.
+//      // These values will be used to perform the final grouping
+//      // of the ordered results as they come from various scatter
+//      // streams.
+//      Keys: []AggregateKey{{
+//        Col: 0,
+//        Desc: false,
+//      },{
+//        Col: 1,
+//        Desc: false,
+//      }},
+//      Input: (Scatter Route),
+//    }
+//
 // orderedAggregate relies on the values of eaggr, mainly Results
 // and Keys. To understand this code, it will be important to keep
 // in mind that the numbers in those fields are indexes into the
-// underlying 'input' primitive.
+// underlying route (input) primitive.
 type orderedAggregate struct {
 	symtab        *symtab
 	resultColumns []*resultColumn
@@ -45,7 +77,7 @@ type orderedAggregate struct {
 	eaggr         *engine.OrderedAggregate
 }
 
-// checkAggregates analyzes the select expresstion for aggregates. If it determines
+// checkAggregates analyzes the select expression for aggregates. If it determines
 // that a primitive is needed to handle the aggregation, it builds an orderedAggregate
 // primitive and returns it.
 func checkAggregates(sel *sqlparser.Select, bldr builder) (builder, error) {
@@ -72,9 +104,14 @@ func checkAggregates(sel *sqlparser.Select, bldr builder) (builder, error) {
 	}
 
 	// If there is a distinct clause, we can check the select list
-	// to see if it has a unique vindex reference. The group by clause
-	// could also have this property, but it cannot be analyzed until
-	// the symbol table has been updated with select expressions.
+	// to see if it has a unique vindex reference. For example,
+	// if the query was 'select distinct id, col from t' (with id
+	// as a unique vindex), then the distinct operation can be
+	// safely pushed down because the unique vindex guarantees
+	// that each id can only be in a single shard. Without the
+	// unique vindex property, the id could come from multiple
+	// shards, which will require us to perform the grouping
+	// at the vtgate level.
 	if sel.Distinct != "" {
 		for _, selectExpr := range sel.SelectExprs {
 			switch selectExpr := selectExpr.(type) {
@@ -87,10 +124,16 @@ func checkAggregates(sel *sqlparser.Select, bldr builder) (builder, error) {
 		}
 	}
 
-	// The group by clause could also reference a unique vindex, but
-	// it cannot be analyzed until the symbol table has been
-	// updated with select expressions. In such cases, we'll live with
-	// an orderedAggregate because it's not a very common use case.
+	// The group by clause could also reference a unique vindex. The above
+	// example could itself have been written as
+	// 'select id, col from t group by id, col', or a query could be like
+	// 'select id, count(*) from t group by id'. In the above cases,
+	// the grouping can be done at the shard level, which allows the entire query
+	// to be pushed down. However, we cannot analyze group by clauses here
+	// because it can only be done after the symbol table has been updated
+	// with select expressions.
+	// For the sake of simplicity, we won't perform this optimization because
+	// these use cases are rare.
 
 	// We need an aggregator primitive.
 	return &orderedAggregate{
@@ -108,11 +151,11 @@ func nodeHasAggregates(node sqlparser.SQLNode) bool {
 		case *sqlparser.FuncExpr:
 			if node.IsAggregate() {
 				hasAggregates = true
-				return false, errors.New("dummy")
+				return false, errors.New("unused error")
 			}
 		case *sqlparser.GroupConcatExpr:
 			hasAggregates = true
-			return false, errors.New("dummy")
+			return false, errors.New("unused error")
 		case *sqlparser.Subquery:
 			// Subqueries are analyzed by themselves.
 			return false, nil
@@ -164,6 +207,17 @@ func (oa *orderedAggregate) PushFilter(_ sqlparser.Expr, whereType string, _ col
 }
 
 // PushSelect satisfies the builder interface.
+// oa can accept expressions that are normal (a+b), or aggregate (MAX(v)).
+// Normal expressions are pushed through to the underlying route. But aggregate
+// expressions require post-processing. In such cases, oa shares the work with
+// the underlying route: It asks the scatter route to perform the MAX operation
+// also, and only performs the final aggregation with what the route returns.
+// Since the results are expected to be ordered, this is something that can
+// be performed 'as they come'. In this respect, oa is the originator for
+// aggregate expressions like MAX, which will be added to symtab. The underlying
+// MAX sent to the route will not be added to symtab and will not be reachable by
+// others. This functionality depends on the the PushOrderBy to request that
+// the rows be correctly ordered for a merge sort.
 func (oa *orderedAggregate) PushSelect(expr *sqlparser.AliasedExpr, origin columnOriginator) (rc *resultColumn, colnum int, err error) {
 	if inner, ok := expr.Expr.(*sqlparser.FuncExpr); ok {
 		if opcode, ok := engine.SupportedAggregates[inner.Name.Lowered()]; ok {
@@ -238,7 +292,18 @@ outer:
 	return oa.input.SetGroupBy(groupBy)
 }
 
-// PushOrderBy satisfies the builder interface.
+// PushOrderBy pushes the order by expression into the primitive.
+// The requested order must be such that the ordering can be done
+// before the group by, which will allow us to push it down to the
+// route. This is actually true in most use cases, except for situations
+// where ordering is requested on values of an aggregate result.
+// Such constructs will need to be handled by a separate 'Sorter'
+// primitive, after aggregation is done. For example, the following
+// constructs are allowed:
+// 'select a, b, count(*) from t group by a, b order by a desc, b asc'
+// 'select a, b, count(*) from t group by a, b order by b'
+// The following construct is not allowed:
+// 'select a, count(*) from t group by a order by count(*)'
 func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) error {
 	// Treat order by null as nil order by.
 	if len(orderBy) == 1 {
@@ -272,7 +337,7 @@ func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) error {
 
 	// An order by was specified. Reorder the group by keys to match
 	// the specified ordering. This requires that the order by columns
-	// be present in the group by list also.
+	// are present in the group by list also.
 	for i, order := range orderBy {
 		// Identify the order by column.
 		var orderByCol *column
@@ -336,6 +401,7 @@ func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) error {
 
 // PushOrderByNull satisfies the builder interface.
 func (oa *orderedAggregate) PushOrderByNull() {
+	panic("BUG: unreachable")
 }
 
 // PushMisc satisfies the builder interface.

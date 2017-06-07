@@ -226,6 +226,7 @@ func (rb *route) isSameRoute(rhs *route, filter sqlparser.Expr) bool {
 }
 
 // PushFilter satisfies the builder interface.
+// The primitive will be updated if the new filter improves the plan.
 func (rb *route) PushFilter(filter sqlparser.Expr, whereType string, _ columnOriginator) error {
 	sel := rb.Select.(*sqlparser.Select)
 	switch whereType {
@@ -502,7 +503,7 @@ func (rb *route) procureValues(bldr builder, jt *jointab, val interface{}) (inte
 	case sqlparser.Expr:
 		return valConvert(val)
 	}
-	panic("BUG: unrecognized symbol")
+	panic(fmt.Sprintf("BUG: unrecognized symbol: %T", val))
 }
 
 func (rb *route) isLocal(col *sqlparser.ColName) bool {
@@ -676,7 +677,7 @@ func (rb *route) SetOpcode(code engine.RouteOpcode) error {
 			return errors.New("NEXT used on a sharded table")
 		}
 	default:
-		panic("BUG: unrecognized transition")
+		panic(fmt.Sprintf("BUG: unrecognized transition: %v", code))
 	}
 	rb.ERoute.Opcode = code
 	return nil

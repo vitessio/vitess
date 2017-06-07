@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
@@ -75,7 +76,7 @@ func processPart(part sqlparser.SelectStatement, vschema VSchema, outer builder)
 	case *sqlparser.ParenSelect:
 		bldr, err = processPart(part.Select, vschema, outer)
 	default:
-		panic("BUG: unexpected SELECT type")
+		panic(fmt.Sprintf("BUG: unexpected SELECT type: %T", part))
 	}
 	if err != nil {
 		return nil, err

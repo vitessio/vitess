@@ -83,7 +83,7 @@ func findOrigin(expr sqlparser.Expr, bldr builder) (origin columnOriginator, err
 			case *sqlparser.Union:
 				subplan, err = processUnion(stmt, bldr.Symtab().VSchema, bldr)
 			default:
-				panic("BUG: unexpcted SELECT type")
+				panic(fmt.Sprintf("BUG: unexpected SELECT type: %T", node))
 			}
 			if err != nil {
 				return false, err

@@ -175,7 +175,7 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*resul
 			}
 			resultColumns[i] = rb.PushAnonymous(node)
 		default:
-			panic("BUG: unexpcted select expression type")
+			panic(fmt.Sprintf("BUG: unexpceted select expression type: %T", node))
 		}
 	}
 	return resultColumns, nil

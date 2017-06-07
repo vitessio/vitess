@@ -71,6 +71,7 @@ func newSubquery(alias sqlparser.TableIdent, bldr builder, vschema VSchema) *sub
 
 	// Populate the table with those columns and add it to symtab.
 	t.columns = cols
+	// AddTable will not fail because symtab is empty.
 	_ = sq.symtab.AddTable(t)
 	return sq
 }

@@ -93,7 +93,7 @@ func (code AggregateOpcode) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
 }
 
-// AggregateKey specifies the each input value to build the
+// AggregateKey specifies the input value to build the
 // key and if the sorting on it is ascending or descending.
 type AggregateKey struct {
 	Col  int

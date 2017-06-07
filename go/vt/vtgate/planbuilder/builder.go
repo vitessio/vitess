@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
@@ -42,7 +43,8 @@ type builder interface {
 	MaxOrder() int
 
 	// SetOrder reassigns order for the primitive and its sub-primitives.
-	// The input is the max order of the previous primitive.
+	// The input is the max order of the previous primitive that should
+	// execute before this one.
 	SetOrder(int)
 
 	// Primitve returns the underlying primitive.
@@ -81,6 +83,10 @@ type builder interface {
 
 	// SupplyVar finds the common root between from and to. If it's
 	// the common root, it supplies the requested var to the rhs tree.
+	// If the primitive already has the column in its list, it should
+	// just supply it to the 'to' node. Otherwise, it should request
+	// for it by calling SupplyCol on the 'from' sub-tree to request the
+	// column, and then supply it to the 'to' node.
 	SupplyVar(from, to int, col *sqlparser.ColName, varname string)
 
 	// SupplyCol is meant to be used for the wire-up process. This function
@@ -145,7 +151,7 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema VSchema) (*en
 	case *sqlparser.Other:
 		return nil, errors.New("unsupported construct: other")
 	default:
-		panic("BUG: unexpected statement type")
+		panic(fmt.Sprintf("BUG: unexpected statement type: %T", stmt))
 	}
 	if err != nil {
 		return nil, err

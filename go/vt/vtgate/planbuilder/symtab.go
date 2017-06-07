@@ -129,12 +129,6 @@ func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexe
 // analysis for the FROM clause. At that time, there should be
 // no ResultColumns or Externs.
 func (st *symtab) Merge(newsyms *symtab) error {
-	if st.ResultColumns != nil || newsyms.ResultColumns != nil {
-		panic("BUG: unexpected ResultColumns")
-	}
-	if st.Externs != nil || newsyms.Externs != nil {
-		panic("BUG: unexpected Externs")
-	}
 	for _, t := range newsyms.tables {
 		if err := st.AddTable(t); err != nil {
 			return err

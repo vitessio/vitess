@@ -29,7 +29,11 @@ import (
 // groupByHandler is a primitive that can handle a group by expression.
 type groupByHandler interface {
 	builder
+	// SetGroupBy makes the primitive handle the group by clause.
+	// The primitive may outsource some of its work to an underlying
+	// primitive that is also a groupByHandler (like a route).
 	SetGroupBy(sqlparser.GroupBy) error
+	// MakeDistinct makes the primitive handle the distinct clause.
 	MakeDistinct() error
 }
 
@@ -62,6 +66,7 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 	if oa, ok := bldr.(*orderedAggregate); ok {
 		return oa.PushOrderBy(orderBy)
 	}
+
 	switch len(orderBy) {
 	case 0:
 		return nil
