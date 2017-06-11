@@ -29,20 +29,14 @@ var _ builder = (*orderedAggregate)(nil)
 
 // orderedAggregate is the builder for engine.OrderedAggregate.
 // This gets built if there are aggregations on a SelectScatter
-// route. Then this primitive pushes down the aggregation to all
-// shards and forces the results to be ordered. This will allow
-// for the engine code to merge sort and aggregate the results
-// as they come.
+// route. The primitive requests the underlying route to order
+// the results by the grouping columns. This will allow the
+// engine code to aggregate the results as they come.
 // For example: 'select col1, col2, count(*) from t group by col1, col2'
 // will be sent to the scatter route as:
 // 'select col1, col2, count(*) from t group by col1, col2 order by col1, col2`
 // The orderAggregate primitive built for this will be:
 //    &engine.OrderedAggregate {
-//      // Results has 3 columns: First two point at
-//      // the underlying column numbers of the route.
-//      // The third one points at the first element of Aggregates.
-//      Results: []int{0, 1, -1},
-//
 //      // Aggregates has one column. It computes the count
 //      // using column 2 of the underlying route.
 //      Aggregates: []AggregateParams{{
@@ -52,23 +46,12 @@ var _ builder = (*orderedAggregate)(nil)
 //
 //      // Keys has the two group by values for col1 and col2.
 //      // The column numbers are from the underlying route.
-//      // These values will be used to perform the final grouping
-//      // of the ordered results as they come from various scatter
-//      // streams.
-//      Keys: []AggregateKey{{
-//        Col: 0,
-//        Desc: false,
-//      },{
-//        Col: 1,
-//        Desc: false,
-//      }},
-//      Input: (Scatter Route),
+//      // These values will be used to perform the grouping
+//      // of the ordered results as they come from the underlying
+//      // route.
+//      Keys: []int{0, 1},
+//      Input: (Scatter Route with the order by request),
 //    }
-//
-// orderedAggregate relies on the values of eaggr, mainly Results
-// and Keys. To understand this code, it will be important to keep
-// in mind that the numbers in those fields are indexes into the
-// underlying route (input) primitive.
 type orderedAggregate struct {
 	symtab        *symtab
 	resultColumns []*resultColumn
@@ -229,13 +212,10 @@ func (oa *orderedAggregate) PushSelect(expr *sqlparser.AliasedExpr, origin colum
 				Col:    innerCol,
 			})
 
-			// Add to Results.
 			// Build a new rc with oa as origin because it's semantically different
 			// from the expression we pushed down.
 			rc := &resultColumn{alias: innerRC.alias, column: &column{origin: oa}}
 			oa.resultColumns = append(oa.resultColumns, rc)
-			// Index should be made negative to indicate aggregate function.
-			oa.eaggr.Results = append(oa.eaggr.Results, -len(oa.eaggr.Aggregates))
 			return rc, len(oa.resultColumns) - 1, nil
 		}
 	}
@@ -245,18 +225,17 @@ func (oa *orderedAggregate) PushSelect(expr *sqlparser.AliasedExpr, origin colum
 		return nil, 0, errors.New("unsupported: in scatter query: complex aggregate expression")
 	}
 
-	innerRC, innerCol, _ := oa.input.PushSelect(expr, origin)
+	innerRC, _, _ := oa.input.PushSelect(expr, origin)
 	oa.resultColumns = append(oa.resultColumns, innerRC)
-	oa.eaggr.Results = append(oa.eaggr.Results, innerCol)
 	return innerRC, len(oa.resultColumns) - 1, nil
 }
 
 func (oa *orderedAggregate) MakeDistinct() error {
-	for i := range oa.resultColumns {
-		if oa.eaggr.Results[i] < 0 {
+	for i, rc := range oa.resultColumns {
+		if rc.column.Origin() == oa {
 			return errors.New("unsupported: distinct cannot be combined with aggregate functions")
 		}
-		oa.eaggr.Keys = append(oa.eaggr.Keys, engine.AggregateKey{Col: oa.eaggr.Results[i]})
+		oa.eaggr.Keys = append(oa.eaggr.Keys, i)
 	}
 	return oa.input.MakeDistinct()
 }
@@ -268,11 +247,11 @@ func (oa *orderedAggregate) SetGroupBy(groupBy sqlparser.GroupBy) (builder, erro
 		switch node := expr.(type) {
 		case *sqlparser.ColName:
 			c := node.Metadata.(*column)
+			if c.Origin() == oa {
+				return nil, fmt.Errorf("group by expression cannot reference an aggregate function: %v", sqlparser.String(node))
+			}
 			for i, rc := range oa.resultColumns {
 				if rc.column == c {
-					if oa.eaggr.Results[i] < 0 {
-						return nil, fmt.Errorf("group by expression cannot reference an aggregate function: %v", sqlparser.String(node))
-					}
 					colnum = i
 					break
 				}
@@ -281,7 +260,7 @@ func (oa *orderedAggregate) SetGroupBy(groupBy sqlparser.GroupBy) (builder, erro
 				return nil, errors.New("unsupported: in scatter query: group by column must reference column in SELECT list")
 			}
 		case *sqlparser.SQLVal:
-			num, err := oa.Symtab().ResultFromNumber(node)
+			num, err := ResultFromNumber(oa.resultColumns, node)
 			if err != nil {
 				return nil, err
 			}
@@ -293,7 +272,7 @@ func (oa *orderedAggregate) SetGroupBy(groupBy sqlparser.GroupBy) (builder, erro
 			oa.setDefunct()
 			return oa.input.SetGroupBy(groupBy)
 		}
-		oa.eaggr.Keys = append(oa.eaggr.Keys, engine.AggregateKey{Col: oa.eaggr.Results[colnum]})
+		oa.eaggr.Keys = append(oa.eaggr.Keys, colnum)
 	}
 
 	_, _ = oa.input.SetGroupBy(groupBy)
@@ -332,46 +311,18 @@ func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) error {
 		}
 	}
 
-	// If no order by was specified, we specify the ordering to be
-	// the same as the group by keys.
-	if orderBy == nil {
-		if len(oa.eaggr.Keys) == 0 {
-			return nil
-		}
-		for _, key := range oa.eaggr.Keys {
-			// Since the aggregation can be caused by a group by or distinct,
-			// it will be confusing to reuse those AST elements. It's also
-			// possible that those references are ambiguous. So, it's better
-			// to build brand new non-ambiguous AST elements that are safe
-			// to push down. See the test cases that shows how BuildColName
-			// can fail.
-			col, err := oa.input.BuildColName(key.Col)
-			if err != nil {
-				return fmt.Errorf("generating order by clause: %v", err)
-			}
-			order := &sqlparser.Order{Expr: col, Direction: sqlparser.AscScr}
-			oa.input.PushOrderBy(order)
-		}
-		return nil
-	}
-
-	// An order by was specified. Reorder the group by keys to match
-	// the specified ordering. This requires that the order by columns
-	// are present in the group by list also.
-	for i, order := range orderBy {
+	// referenced tracks the keys referenced by the order by clause.
+	referenced := make([]bool, len(oa.eaggr.Keys))
+	for _, order := range orderBy {
 		// Identify the order by column.
 		var orderByCol *column
 		switch expr := order.Expr.(type) {
 		case *sqlparser.SQLVal:
-			num, err := oa.Symtab().ResultFromNumber(expr)
+			num, err := ResultFromNumber(oa.resultColumns, expr)
 			if err != nil {
 				return fmt.Errorf("in order by: %v", err)
 			}
-			inputCol := oa.eaggr.Results[num]
-			if inputCol < 0 {
-				return fmt.Errorf("unsupported: in scatter query: order by expression cannot reference an aggregate function: %v", sqlparser.String(expr))
-			}
-			orderByCol = oa.input.ResultColumns()[inputCol].column
+			orderByCol = oa.input.ResultColumns()[num].column
 		case *sqlparser.ColName:
 			_, _, err := oa.Symtab().Find(expr)
 			if err != nil {
@@ -382,38 +333,40 @@ func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) error {
 			return fmt.Errorf("unsupported: in scatter query: complex order by expression: %v", sqlparser.String(expr))
 		}
 
-		// Match orderByCol against the group by columns
-		// and reorder the group by keys accordingly. This
-		// will ensure that the merge-sort performed by vtgate
-		// will follow the same order as the input results.
+		// Match orderByCol against the group by columns.
 		found := false
-		for j := i; j < len(oa.eaggr.Keys); j++ {
-			key := oa.eaggr.Keys[j]
-			inputForKey := oa.input.ResultColumns()[key.Col]
+		for j, key := range oa.eaggr.Keys {
+			inputForKey := oa.input.ResultColumns()[key]
 			if inputForKey.column != orderByCol {
 				continue
 			}
 
 			found = true
-			for k := i; k <= j; k++ {
-				key, oa.eaggr.Keys[k] = oa.eaggr.Keys[k], key
-			}
+			referenced[j] = true
 			break
 		}
 		if !found {
 			return fmt.Errorf("unsupported: in scatter query: order by column must reference group by expression: %v", sqlparser.String(order))
 		}
 
-		// At this point, we're guaranteed that Keys[i] represents
-		// the same column as the order by expression.
-		if order.Direction == sqlparser.DescScr {
-			oa.eaggr.Keys[i].Desc = true
-		}
-
 		// Push down the order by.
 		// It's ok to push the original AST down because all references
 		// should point to the route. Only aggregate functions are originated
 		// by oa, and we currently don't allow the ORDER BY to reference them.
+		oa.input.PushOrderBy(order)
+	}
+
+	// Append any unreferenced keys at the end of the order by.
+	for i, key := range oa.eaggr.Keys {
+		if referenced[i] {
+			continue
+		}
+		// Build a brand new reference for the key.
+		col, err := oa.input.BuildColName(key)
+		if err != nil {
+			return fmt.Errorf("generating order by clause: %v", err)
+		}
+		order := &sqlparser.Order{Expr: col, Direction: sqlparser.AscScr}
 		oa.input.PushOrderBy(order)
 	}
 	return nil

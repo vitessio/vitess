@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var _ Primitive = (*OrderedAggregate)(nil)
@@ -31,23 +32,15 @@ var _ Primitive = (*OrderedAggregate)(nil)
 // is that the underlying primitive is a scatter select with pre-sorted
 // rows.
 type OrderedAggregate struct {
-	// Results specifies where to get the value from. If the number is
-	// >=0, then the result is taken from the input primitive. If it's
-	// negative then the result is pulled from the aggregate function
-	// at -index-1.
-	Results []int
-
 	// Aggregates specifies the aggregation parameters for each
 	// aggregation function: function opcode and input column number.
-	// The negative indexes of Results point to this slice.
 	Aggregates []AggregateParams
 
 	// Keys specifies the input values that must be used for
 	// the aggregation key.
-	Keys []AggregateKey
+	Keys []int
 
 	// Input is the primitive that will feed into this Primitive.
-	// TODO(sougou): still need to work out the sorting mechanism.
 	Input Primitive
 }
 
@@ -93,16 +86,35 @@ func (code AggregateOpcode) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
 }
 
-// AggregateKey specifies the input value to build the
-// key and if the sorting on it is ascending or descending.
-type AggregateKey struct {
-	Col  int
-	Desc bool
-}
-
 // Execute is a Primitive function.
 func (oa *OrderedAggregate) Execute(vcursor VCursor, bindVars, joinVars map[string]interface{}, wantfields bool) (*sqltypes.Result, error) {
-	return nil, errors.New("unimplemented")
+	result, err := oa.Input.Execute(vcursor, bindVars, joinVars, wantfields)
+	if err != nil {
+		return nil, err
+	}
+	out := &sqltypes.Result{
+		Fields: result.Fields,
+		Rows:   make([][]sqltypes.Value, 0, len(result.Rows)),
+		Extras: result.Extras,
+	}
+	curRow := 0
+	if err := oa.aggregate(
+		result.Fields,
+		func() []sqltypes.Value {
+			if curRow >= len(result.Rows) {
+				return nil
+			}
+			curRow++
+			return result.Rows[curRow-1]
+		},
+		func(row []sqltypes.Value) {
+			out.Rows = append(out.Rows, row)
+		},
+	); err != nil {
+		return nil, err
+	}
+	out.RowsAffected = uint64(len(out.Rows))
+	return out, nil
 }
 
 // StreamExecute is a Primitive function.
@@ -112,5 +124,59 @@ func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars, joinVars ma
 
 // GetFields is a Primitive function.
 func (oa *OrderedAggregate) GetFields(vcursor VCursor, bindVars, joinVars map[string]interface{}) (*sqltypes.Result, error) {
-	return nil, errors.New("unimplemented")
+	return oa.Input.GetFields(vcursor, bindVars, joinVars)
+}
+
+func (oa *OrderedAggregate) aggregate(fields []*querypb.Field, nextRow func() []sqltypes.Value, emit func([]sqltypes.Value)) error {
+	current := nextRow()
+	if current == nil {
+		return nil
+	}
+	for {
+		next := nextRow()
+		if next == nil {
+			emit(current)
+			return nil
+		}
+		equal, err := oa.keysEqual(current, next)
+		if err != nil {
+			return err
+		}
+		if equal {
+			if err := oa.merge(fields, current, next); err != nil {
+				return err
+			}
+			next = nil
+		} else {
+			emit(current)
+			current = next
+		}
+	}
+}
+
+func (oa *OrderedAggregate) keysEqual(row1, row2 []sqltypes.Value) (bool, error) {
+	for _, key := range oa.Keys {
+		cmp, err := sqltypes.NullsafeCompare(row1[key], row2[key])
+		if err != nil {
+			return false, err
+		}
+		if cmp != 0 {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes.Value) error {
+	for _, aggr := range oa.Aggregates {
+		switch aggr.Opcode {
+		case AggregateCount, AggregateSum:
+			var err error
+			row1[aggr.Col], err = sqltypes.Add(row1[aggr.Col], row2[aggr.Col], fields[aggr.Col].Type)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

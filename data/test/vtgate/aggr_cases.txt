@@ -98,9 +98,6 @@
 {
   "Original": "select count(*) from user",
   "Instructions": {
-    "Results": [
-      -1
-    ],
     "Aggregates": [
       {
         "Opcode": "count",
@@ -125,24 +122,11 @@
 {
   "Original": "select distinct col1, col2 from user group by col1",
   "Instructions": {
-    "Results": [
-      0,
-      1
-    ],
     "Aggregates": null,
     "Keys": [
-      {
-        "Col": 0,
-        "Desc": false
-      },
-      {
-        "Col": 1,
-        "Desc": false
-      },
-      {
-        "Col": 0,
-        "Desc": false
-      }
+      0,
+      1,
+      0
     ],
     "Input": {
       "Opcode": "SelectScatter",
@@ -151,7 +135,21 @@
         "Sharded": true
       },
       "Query": "select distinct col1, col2 from user group by col1 order by col1 asc, col2 asc, col1 asc",
-      "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1"
+      "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        },
+        {
+          "Col": 1,
+          "Desc": false
+        },
+        {
+          "Col": 0,
+          "Desc": false
+        }
+      ]
     }
   }
 }
@@ -228,9 +226,6 @@
       0
     ],
     "Subquery": {
-      "Results": [
-        -1
-      ],
       "Aggregates": [
         {
           "Opcode": "count",
@@ -256,10 +251,6 @@
 {
   "Original": "select id, count(*) from user",
   "Instructions": {
-    "Results": [
-      0,
-      -1
-    ],
     "Aggregates": [
       {
         "Opcode": "count",
@@ -284,15 +275,9 @@
 {
   "Original": "select distinct col from user",
   "Instructions": {
-    "Results": [
-      0
-    ],
     "Aggregates": null,
     "Keys": [
-      {
-        "Col": 0,
-        "Desc": false
-      }
+      0
     ],
     "Input": {
       "Opcode": "SelectScatter",
@@ -301,7 +286,13 @@
         "Sharded": true
       },
       "Query": "select distinct col from user order by col asc",
-      "FieldQuery": "select col from user where 1 != 1"
+      "FieldQuery": "select col from user where 1 != 1",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        }
+      ]
     }
   }
 }
@@ -311,15 +302,9 @@
 {
   "Original": "select col from user group by col",
   "Instructions": {
-    "Results": [
-      0
-    ],
     "Aggregates": null,
     "Keys": [
-      {
-        "Col": 0,
-        "Desc": false
-      }
+      0
     ],
     "Input": {
       "Opcode": "SelectScatter",
@@ -328,7 +313,13 @@
         "Sharded": true
       },
       "Query": "select col from user group by col order by col asc",
-      "FieldQuery": "select col from user where 1 != 1 group by col"
+      "FieldQuery": "select col from user where 1 != 1 group by col",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        }
+      ]
     }
   }
 }
@@ -342,11 +333,6 @@
 {
   "Original": "select a, b, count(*) from user group by b, a",
   "Instructions": {
-    "Results": [
-      0,
-      1,
-      -1
-    ],
     "Aggregates": [
       {
         "Opcode": "count",
@@ -354,14 +340,8 @@
       }
     ],
     "Keys": [
-      {
-        "Col": 1,
-        "Desc": false
-      },
-      {
-        "Col": 0,
-        "Desc": false
-      }
+      1,
+      0
     ],
     "Input": {
       "Opcode": "SelectScatter",
@@ -370,7 +350,17 @@
         "Sharded": true
       },
       "Query": "select a, b, count(*) from user group by b, a order by b asc, a asc",
-      "FieldQuery": "select a, b, count(*) from user where 1 != 1 group by b, a"
+      "FieldQuery": "select a, b, count(*) from user where 1 != 1 group by b, a",
+      "OrderBy": [
+        {
+          "Col": 1,
+          "Desc": false
+        },
+        {
+          "Col": 0,
+          "Desc": false
+        }
+      ]
     }
   }
 }
@@ -380,11 +370,6 @@
 {
   "Original": "select a, b, count(*) from user group by 2, 1",
   "Instructions": {
-    "Results": [
-      0,
-      1,
-      -1
-    ],
     "Aggregates": [
       {
         "Opcode": "count",
@@ -392,14 +377,8 @@
       }
     ],
     "Keys": [
-      {
-        "Col": 1,
-        "Desc": false
-      },
-      {
-        "Col": 0,
-        "Desc": false
-      }
+      1,
+      0
     ],
     "Input": {
       "Opcode": "SelectScatter",
@@ -408,7 +387,17 @@
         "Sharded": true
       },
       "Query": "select a, b, count(*) from user group by 2, 1 order by b asc, a asc",
-      "FieldQuery": "select a, b, count(*) from user where 1 != 1 group by 2, 1"
+      "FieldQuery": "select a, b, count(*) from user where 1 != 1 group by 2, 1",
+      "OrderBy": [
+        {
+          "Col": 1,
+          "Desc": false
+        },
+        {
+          "Col": 0,
+          "Desc": false
+        }
+      ]
     }
   }
 }
@@ -418,15 +407,9 @@
 {
   "Original": "select col from user group by 1",
   "Instructions": {
-    "Results": [
-      0
-    ],
     "Aggregates": null,
     "Keys": [
-      {
-        "Col": 0,
-        "Desc": false
-      }
+      0
     ],
     "Input": {
       "Opcode": "SelectScatter",
@@ -435,7 +418,13 @@
         "Sharded": true
       },
       "Query": "select col from user group by 1 order by col asc",
-      "FieldQuery": "select col from user where 1 != 1 group by 1"
+      "FieldQuery": "select col from user where 1 != 1 group by 1",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        }
+      ]
     }
   }
 }
@@ -458,9 +447,6 @@
 {
   "Original": "select count(*) from user order by null",
   "Instructions": {
-    "Results": [
-      -1
-    ],
     "Aggregates": [
       {
         "Opcode": "count",
@@ -493,13 +479,6 @@
 {
   "Original": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1, 2, 3",
   "Instructions": {
-    "Results": [
-      0,
-      1,
-      2,
-      3,
-      -1
-    ],
     "Aggregates": [
       {
         "Opcode": "count",
@@ -507,18 +486,9 @@
       }
     ],
     "Keys": [
-      {
-        "Col": 0,
-        "Desc": false
-      },
-      {
-        "Col": 1,
-        "Desc": false
-      },
-      {
-        "Col": 2,
-        "Desc": false
-      }
+      0,
+      1,
+      2
     ],
     "Input": {
       "Opcode": "SelectScatter",
@@ -527,7 +497,21 @@
         "Sharded": true
       },
       "Query": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1 asc, 2 asc, 3 asc",
-      "FieldQuery": "select a, b, c, d, count(*) from user where 1 != 1 group by 1, 2, 3"
+      "FieldQuery": "select a, b, c, d, count(*) from user where 1 != 1 group by 1, 2, 3",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        },
+        {
+          "Col": 1,
+          "Desc": false
+        },
+        {
+          "Col": 2,
+          "Desc": false
+        }
+      ]
     }
   }
 }
@@ -537,13 +521,6 @@
 {
   "Original": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by a, b, c",
   "Instructions": {
-    "Results": [
-      0,
-      1,
-      2,
-      3,
-      -1
-    ],
     "Aggregates": [
       {
         "Opcode": "count",
@@ -551,18 +528,9 @@
       }
     ],
     "Keys": [
-      {
-        "Col": 0,
-        "Desc": false
-      },
-      {
-        "Col": 1,
-        "Desc": false
-      },
-      {
-        "Col": 2,
-        "Desc": false
-      }
+      0,
+      1,
+      2
     ],
     "Input": {
       "Opcode": "SelectScatter",
@@ -571,7 +539,21 @@
         "Sharded": true
       },
       "Query": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by a asc, b asc, c asc",
-      "FieldQuery": "select a, b, c, d, count(*) from user where 1 != 1 group by 1, 2, 3"
+      "FieldQuery": "select a, b, c, d, count(*) from user where 1 != 1 group by 1, 2, 3",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        },
+        {
+          "Col": 1,
+          "Desc": false
+        },
+        {
+          "Col": 2,
+          "Desc": false
+        }
+      ]
     }
   }
 }
@@ -581,13 +563,6 @@
 {
   "Original": "select a, b, c, d, count(*) from user group by 1, 2, 3, 4 order by d, b, a, c",
   "Instructions": {
-    "Results": [
-      0,
-      1,
-      2,
-      3,
-      -1
-    ],
     "Aggregates": [
       {
         "Opcode": "count",
@@ -595,22 +570,10 @@
       }
     ],
     "Keys": [
-      {
-        "Col": 3,
-        "Desc": false
-      },
-      {
-        "Col": 1,
-        "Desc": false
-      },
-      {
-        "Col": 0,
-        "Desc": false
-      },
-      {
-        "Col": 2,
-        "Desc": false
-      }
+      0,
+      1,
+      2,
+      3
     ],
     "Input": {
       "Opcode": "SelectScatter",
@@ -619,7 +582,25 @@
         "Sharded": true
       },
       "Query": "select a, b, c, d, count(*) from user group by 1, 2, 3, 4 order by d asc, b asc, a asc, c asc",
-      "FieldQuery": "select a, b, c, d, count(*) from user where 1 != 1 group by 1, 2, 3, 4"
+      "FieldQuery": "select a, b, c, d, count(*) from user where 1 != 1 group by 1, 2, 3, 4",
+      "OrderBy": [
+        {
+          "Col": 3,
+          "Desc": false
+        },
+        {
+          "Col": 1,
+          "Desc": false
+        },
+        {
+          "Col": 0,
+          "Desc": false
+        },
+        {
+          "Col": 2,
+          "Desc": false
+        }
+      ]
     }
   }
 }
@@ -629,13 +610,6 @@
 {
   "Original": "select a, b, c, d, count(*) from user group by 3, 2, 1, 4 order by d, b, a, c",
   "Instructions": {
-    "Results": [
-      0,
-      1,
-      2,
-      3,
-      -1
-    ],
     "Aggregates": [
       {
         "Opcode": "count",
@@ -643,22 +617,10 @@
       }
     ],
     "Keys": [
-      {
-        "Col": 3,
-        "Desc": false
-      },
-      {
-        "Col": 1,
-        "Desc": false
-      },
-      {
-        "Col": 0,
-        "Desc": false
-      },
-      {
-        "Col": 2,
-        "Desc": false
-      }
+      2,
+      1,
+      0,
+      3
     ],
     "Input": {
       "Opcode": "SelectScatter",
@@ -667,7 +629,25 @@
         "Sharded": true
       },
       "Query": "select a, b, c, d, count(*) from user group by 3, 2, 1, 4 order by d asc, b asc, a asc, c asc",
-      "FieldQuery": "select a, b, c, d, count(*) from user where 1 != 1 group by 3, 2, 1, 4"
+      "FieldQuery": "select a, b, c, d, count(*) from user where 1 != 1 group by 3, 2, 1, 4",
+      "OrderBy": [
+        {
+          "Col": 3,
+          "Desc": false
+        },
+        {
+          "Col": 1,
+          "Desc": false
+        },
+        {
+          "Col": 0,
+          "Desc": false
+        },
+        {
+          "Col": 2,
+          "Desc": false
+        }
+      ]
     }
   }
 }
@@ -677,12 +657,6 @@
 {
   "Original": "select a, b, c, count(*) from user group by 3, 2, 1 order by 1 desc, 3 desc, b",
   "Instructions": {
-    "Results": [
-      0,
-      1,
-      2,
-      -1
-    ],
     "Aggregates": [
       {
         "Opcode": "count",
@@ -690,18 +664,9 @@
       }
     ],
     "Keys": [
-      {
-        "Col": 0,
-        "Desc": true
-      },
-      {
-        "Col": 2,
-        "Desc": true
-      },
-      {
-        "Col": 1,
-        "Desc": false
-      }
+      2,
+      1,
+      0
     ],
     "Input": {
       "Opcode": "SelectScatter",
@@ -710,7 +675,21 @@
         "Sharded": true
       },
       "Query": "select a, b, c, count(*) from user group by 3, 2, 1 order by 1 desc, 3 desc, b asc",
-      "FieldQuery": "select a, b, c, count(*) from user where 1 != 1 group by 3, 2, 1"
+      "FieldQuery": "select a, b, c, count(*) from user where 1 != 1 group by 3, 2, 1",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": true
+        },
+        {
+          "Col": 2,
+          "Desc": true
+        },
+        {
+          "Col": 1,
+          "Desc": false
+        }
+      ]
     }
   }
 }

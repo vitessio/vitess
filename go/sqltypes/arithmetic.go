@@ -200,22 +200,22 @@ func floatPlusAny(v1 float64, v2 numeric) numeric {
 }
 
 func castFromNumeric(v numeric, resultType querypb.Type) (Value, error) {
-	switch resultType {
-	case Int64:
+	switch {
+	case IsSigned(resultType):
 		switch v.typ {
 		case Int64:
 			return MakeTrusted(resultType, strconv.AppendInt(nil, v.ival, 10)), nil
 		case Uint64, Float64:
 			return NULL, fmt.Errorf("unexpected type conversion: %v to %v", v.typ, resultType)
 		}
-	case Uint64:
+	case IsUnsigned(resultType):
 		switch v.typ {
 		case Uint64:
 			return MakeTrusted(resultType, strconv.AppendUint(nil, v.uval, 10)), nil
 		case Int64, Float64:
 			return NULL, fmt.Errorf("unexpected type conversion: %v to %v", v.typ, resultType)
 		}
-	case Float64, Decimal:
+	case IsFloat(resultType) || resultType == Decimal:
 		switch v.typ {
 		case Int64:
 			return MakeTrusted(resultType, strconv.AppendInt(nil, v.ival, 10)), nil

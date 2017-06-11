@@ -392,8 +392,35 @@ func (rb *route) SetGroupBy(groupBy sqlparser.GroupBy) (builder, error) {
 }
 
 // PushOrderBy sets the order by for the route.
-func (rb *route) PushOrderBy(order *sqlparser.Order) {
+func (rb *route) PushOrderBy(order *sqlparser.Order) error {
+	if !rb.IsSingle() {
+		var colnum int
+		switch expr := order.Expr.(type) {
+		case *sqlparser.SQLVal:
+			var err error
+			if colnum, err = ResultFromNumber(rb.resultColumns, expr); err != nil {
+				return fmt.Errorf("in order by: %v", err)
+			}
+		case *sqlparser.ColName:
+			c := expr.Metadata.(*column)
+			// The column is guaranteed to be found because this function is called
+			// only after a successful symbol resolution that points to this route.
+			for i, rc := range rb.resultColumns {
+				if rc.column == c {
+					colnum = i
+					break
+				}
+			}
+		default:
+			return fmt.Errorf("unsupported: in scatter query: complex order by expression: %v", sqlparser.String(expr))
+		}
+		rb.ERoute.OrderBy = append(rb.ERoute.OrderBy, engine.OrderbyParams{
+			Col:  colnum,
+			Desc: order.Direction == sqlparser.DescScr,
+		})
+	}
 	rb.Select.AddOrder(order)
+	return nil
 }
 
 // SetLimit adds a LIMIT clause to the route.

@@ -18,7 +18,9 @@ package engine
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sort"
 
 	"strconv"
 	"strings"
@@ -36,19 +38,55 @@ var _ Primitive = (*Route)(nil)
 // one or many vttablets. The meaning and values for the
 // the fields are described in the RouteOpcode values comments.
 type Route struct {
-	Opcode     RouteOpcode
-	Keyspace   *vindexes.Keyspace
-	Query      string
+	// Opcode is the execution opcode.
+	Opcode RouteOpcode
+
+	// Keyspace specifies the keyspace to send the query to.
+	Keyspace *vindexes.Keyspace
+
+	// Query specifies the query to be executed.
+	Query string
+
+	// FieldQuery specifies the query to be executed for a GetFieldInfo request.
 	FieldQuery string
-	Vindex     vindexes.Vindex
-	Values     interface{}
-	JoinVars   map[string]struct{}
-	Table      *vindexes.Table
-	Subquery   string
-	Generate   *Generate
-	Prefix     string
-	Mid        []string
-	Suffix     string
+
+	// Vindex and values specify how routing must be computed
+	Vindex vindexes.Vindex
+	Values interface{}
+
+	// JoinVars contains the list of joinvar keys that will be used
+	// to extract join variables.
+	JoinVars map[string]struct{}
+
+	// OrderBy specifies the key order for merge sorting. This will be
+	// set only for scatter queries that need the results to be
+	// merge-sorted.
+	OrderBy []OrderbyParams
+
+	// The following variables are only set for DMLs.
+
+	// Table sepcifies the table for the route.
+	Table *vindexes.Table
+
+	// Subquery is only set for deletes. A select of the rows to be
+	// deleted is performed to figure out which lookup vindex entries must
+	// be deleteed.
+	Subquery string
+
+	// Generate is only set for inserts where a sequence must be generated.
+	Generate *Generate
+
+	// Prefix, Mid and Suffix are set for multi-value inserts.
+	Prefix string
+	Mid    []string
+	Suffix string
+}
+
+// OrderbyParams specifies the parameters for ordering,
+// This is used for merge-sorting scatter queries.
+type OrderbyParams struct {
+	Col  int
+	Desc bool
 }
 
 // NewRoute creates a new Route.
@@ -78,6 +116,7 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		Vindex     string              `json:",omitempty"`
 		Values     interface{}         `json:",omitempty"`
 		JoinVars   map[string]struct{} `json:",omitempty"`
+		OrderBy    []OrderbyParams     `json:",omitempty"`
 		Table      string              `json:",omitempty"`
 		Subquery   string              `json:",omitempty"`
 		Generate   *Generate           `json:",omitempty"`
@@ -92,6 +131,7 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		Vindex:     vindexName,
 		Values:     prettyValue(route.Values),
 		JoinVars:   route.JoinVars,
+		OrderBy:    route.OrderBy,
 		Table:      tname,
 		Subquery:   route.Subquery,
 		Generate:   route.Generate,
@@ -303,11 +343,25 @@ func (route *Route) Execute(vcursor VCursor, bindVars, joinVars map[string]inter
 	}
 
 	shardQueries := route.getShardQueries(route.Query, params)
-	return vcursor.ExecuteMultiShard(params.ks, shardQueries, isDML)
+	result, err := vcursor.ExecuteMultiShard(params.ks, shardQueries, isDML)
+	if err != nil {
+		return nil, err
+	}
+	if len(route.OrderBy) == 0 {
+		return result, nil
+	}
+
+	if err := route.sort(result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // StreamExecute performs a streaming exec.
 func (route *Route) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]interface{}, wantfields bool, callback func(*sqltypes.Result) error) error {
+	if len(route.OrderBy) != 0 {
+		return errors.New("unimplemented: WIP")
+	}
 	bindVars = combineVars(bindVars, joinVars)
 
 	var err error
@@ -405,6 +459,34 @@ func (route *Route) execAnyShard(vcursor VCursor, bindVars map[string]interface{
 		return nil, fmt.Errorf("execAnyShard: %v", err)
 	}
 	return vcursor.ExecuteStandalone(route.Query, bindVars, ks, shard)
+}
+
+func (route *Route) sort(result *sqltypes.Result) error {
+	var err error
+	sort.Slice(result.Rows, func(i, j int) bool {
+		for _, order := range route.OrderBy {
+			if err != nil {
+				return true
+			}
+			var cmp int
+			cmp, err = sqltypes.NullsafeCompare(result.Rows[i][order.Col], result.Rows[j][order.Col])
+			if err != nil {
+				return true
+			}
+			if cmp == 0 {
+				continue
+			}
+			if order.Desc {
+				cmp = -cmp
+			}
+			if cmp < 0 {
+				return true
+			}
+			return false
+		}
+		return true
+	})
+	return err
 }
 
 func (route *Route) execUpdateEqual(vcursor VCursor, bindVars map[string]interface{}) (*sqltypes.Result, error) {
