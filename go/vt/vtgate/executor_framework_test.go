@@ -200,7 +200,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	executor = NewExecutor(context.Background(), serv, cell, "", resolver, false)
+	executor = NewExecutor(context.Background(), serv, cell, "", resolver, false, 10)
 	return executor, sbc1, sbc2, sbclookup
 }
 
@@ -212,7 +212,7 @@ func executorExec(executor *Executor, sql string, bv map[string]interface{}) (*s
 }
 
 func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err error) {
-	results := make(chan *sqltypes.Result, 10)
+	results := make(chan *sqltypes.Result, 100)
 	err = executor.StreamExecute(
 		context.Background(),
 		masterSession,
@@ -237,7 +237,6 @@ func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err er
 			first = false
 		}
 		qr.Rows = append(qr.Rows, r.Rows...)
-		qr.RowsAffected += r.RowsAffected
 	}
 	return qr, nil
 }
