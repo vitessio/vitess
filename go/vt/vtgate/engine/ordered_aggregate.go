@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -97,21 +96,30 @@ func (oa *OrderedAggregate) Execute(vcursor VCursor, bindVars, joinVars map[stri
 		Rows:   make([][]sqltypes.Value, 0, len(result.Rows)),
 		Extras: result.Extras,
 	}
-	curRow := 0
-	if err := oa.aggregate(
-		result.Fields,
-		func() []sqltypes.Value {
-			if curRow >= len(result.Rows) {
-				return nil
+	// This code is similar to the one in StreamExecute.
+	var current []sqltypes.Value
+	for _, row := range result.Rows {
+		if current == nil {
+			current = row
+			continue
+		}
+
+		equal, err := oa.keysEqual(current, row)
+		if err != nil {
+			return nil, err
+		}
+
+		if equal {
+			if err := oa.merge(result.Fields, current, row); err != nil {
+				return nil, err
 			}
-			curRow++
-			return result.Rows[curRow-1]
-		},
-		func(row []sqltypes.Value) {
-			out.Rows = append(out.Rows, row)
-		},
-	); err != nil {
-		return nil, err
+			continue
+		}
+		out.Rows = append(out.Rows, current)
+		current = row
+	}
+	if current != nil {
+		out.Rows = append(out.Rows, current)
 	}
 	out.RowsAffected = uint64(len(out.Rows))
 	return out, nil
@@ -119,41 +127,55 @@ func (oa *OrderedAggregate) Execute(vcursor VCursor, bindVars, joinVars map[stri
 
 // StreamExecute is a Primitive function.
 func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]interface{}, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return errors.New("unimplemented")
+	var current []sqltypes.Value
+	var fields []*querypb.Field
+	err := oa.Input.StreamExecute(vcursor, bindVars, joinVars, wantfields, func(qr *sqltypes.Result) error {
+		if len(qr.Fields) != 0 {
+			fields = qr.Fields
+			if err := callback(&sqltypes.Result{Fields: qr.Fields}); err != nil {
+				return err
+			}
+		}
+		// This code is similar to the one in Execute.
+		for _, row := range qr.Rows {
+			if current == nil {
+				current = row
+				continue
+			}
+
+			equal, err := oa.keysEqual(current, row)
+			if err != nil {
+				return err
+			}
+
+			if equal {
+				if err := oa.merge(fields, current, row); err != nil {
+					return err
+				}
+				continue
+			}
+			if err := callback(&sqltypes.Result{Rows: [][]sqltypes.Value{current}}); err != nil {
+				return err
+			}
+			current = row
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	if current != nil {
+		if err := callback(&sqltypes.Result{Rows: [][]sqltypes.Value{current}}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // GetFields is a Primitive function.
 func (oa *OrderedAggregate) GetFields(vcursor VCursor, bindVars, joinVars map[string]interface{}) (*sqltypes.Result, error) {
 	return oa.Input.GetFields(vcursor, bindVars, joinVars)
-}
-
-func (oa *OrderedAggregate) aggregate(fields []*querypb.Field, nextRow func() []sqltypes.Value, emit func([]sqltypes.Value)) error {
-	current := nextRow()
-	if current == nil {
-		return nil
-	}
-	for {
-		next := nextRow()
-		if next == nil {
-			emit(current)
-			return nil
-		}
-
-		equal, err := oa.keysEqual(current, next)
-		if err != nil {
-			return err
-		}
-
-		if equal {
-			if err := oa.merge(fields, current, next); err != nil {
-				return err
-			}
-			next = nil
-		} else {
-			emit(current)
-			current = next
-		}
-	}
 }
 
 func (oa *OrderedAggregate) keysEqual(row1, row2 []sqltypes.Value) (bool, error) {
@@ -178,6 +200,8 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 			if err != nil {
 				return err
 			}
+		default:
+			return fmt.Errorf("unimplemented: %v", aggr.Opcode)
 		}
 	}
 	return nil

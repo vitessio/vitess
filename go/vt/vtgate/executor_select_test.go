@@ -977,7 +977,70 @@ func TestSelectScatterOrderBy(t *testing.T) {
 	}
 }
 
-// TestSelectScatterOrderBy will run an ORDER BY query that will scatter out to 8 shards, with
+func TestStreamSelectScatterOrderBy(t *testing.T) {
+	// Special setup: Don't use createExecutorEnv.
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck()
+	s := createSandbox("TestExecutor")
+	s.VSchema = executorVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := new(sandboxTopo)
+	resolver := newTestResolver(hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	var conns []*sandboxconn.SandboxConn
+	for i, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc.SetResults([]*sqltypes.Result{{
+			Fields: []*querypb.Field{
+				{Name: "id", Type: sqltypes.Int32},
+				{Name: "col", Type: sqltypes.Int32},
+			},
+			RowsAffected: 1,
+			InsertID:     0,
+			Rows: [][]sqltypes.Value{{
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(i%4))),
+			}},
+		}})
+		conns = append(conns, sbc)
+	}
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, 10)
+
+	query := "select id, col from user order by col desc"
+	gotResult, err := executorStream(executor, query)
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           query,
+		BindVariables: map[string]interface{}{},
+	}}
+	for _, conn := range conns {
+		if !reflect.DeepEqual(conn.Queries, wantQueries) {
+			t.Errorf("conn.Queries = %#v, want %#v", conn.Queries, wantQueries)
+		}
+	}
+
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
+		},
+	}
+	for i := 0; i < 4; i++ {
+		row := []sqltypes.Value{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(3-i))),
+		}
+		wantResult.Rows = append(wantResult.Rows, row, row)
+	}
+	if !reflect.DeepEqual(gotResult, wantResult) {
+		t.Errorf("scatter order by:\n%v, want\n%v", gotResult, wantResult)
+	}
+}
+
+// TestSelectScatterOrderByFail will run an ORDER BY query that will scatter out to 8 shards, with
 // the order by column as VarChar, which is unsupported.
 func TestSelectScatterOrderByFail(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
@@ -1013,7 +1076,7 @@ func TestSelectScatterOrderByFail(t *testing.T) {
 	}
 }
 
-// TestSelectScatterOrderBy will run an aggregate query that will scatter out to 8 shards and return 4 aggregated rows.
+// TestSelectScatterAggregate will run an aggregate query that will scatter out to 8 shards and return 4 aggregated rows.
 func TestSelectScatterAggregate(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
@@ -1066,6 +1129,69 @@ func TestSelectScatterAggregate(t *testing.T) {
 		},
 		RowsAffected: 4,
 		InsertID:     0,
+	}
+	for i := 0; i < 4; i++ {
+		row := []sqltypes.Value{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(i))),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(i*2+4))),
+		}
+		wantResult.Rows = append(wantResult.Rows, row)
+	}
+	if !reflect.DeepEqual(gotResult, wantResult) {
+		t.Errorf("scatter order by:\n%v, want\n%v", gotResult, wantResult)
+	}
+}
+
+func TestStreamSelectScatterAggregate(t *testing.T) {
+	// Special setup: Don't use createExecutorEnv.
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck()
+	s := createSandbox("TestExecutor")
+	s.VSchema = executorVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := new(sandboxTopo)
+	resolver := newTestResolver(hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	var conns []*sandboxconn.SandboxConn
+	for i, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc.SetResults([]*sqltypes.Result{{
+			Fields: []*querypb.Field{
+				{Name: "col", Type: sqltypes.Int32},
+				{Name: "sum(foo)", Type: sqltypes.Int32},
+			},
+			RowsAffected: 1,
+			InsertID:     0,
+			Rows: [][]sqltypes.Value{{
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(i%4))),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(i))),
+			}},
+		}})
+		conns = append(conns, sbc)
+	}
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, 10)
+
+	query := "select col, sum(foo) from user group by col"
+	gotResult, err := executorStream(executor, query)
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           query + " order by col asc",
+		BindVariables: map[string]interface{}{},
+	}}
+	for _, conn := range conns {
+		if !reflect.DeepEqual(conn.Queries, wantQueries) {
+			t.Errorf("conn.Queries = %#v, want %#v", conn.Queries, wantQueries)
+		}
+	}
+
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "col", Type: sqltypes.Int32},
+			{Name: "sum(foo)", Type: sqltypes.Int32},
+		},
 	}
 	for i := 0; i < 4; i++ {
 		row := []sqltypes.Value{
