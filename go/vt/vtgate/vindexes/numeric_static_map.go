@@ -24,6 +24,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"strconv"
+
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 // NumericLookupTable stores the mapping of keys.
@@ -75,15 +77,15 @@ func (vind *NumericStaticMap) Verify(_ VCursor, ids []interface{}, ksids [][]byt
 	}
 	for rowNum := range ids {
 		var keybytes [8]byte
-		num, err := getNumber(ids[rowNum])
+		num, err := sqltypes.ConvertToUint64(ids[rowNum])
 		if err != nil {
 			return false, fmt.Errorf("NumericStaticMap.Verify: %v", err)
 		}
-		lookupNum, ok := vind.lookup[uint64(num)]
+		lookupNum, ok := vind.lookup[num]
 		if ok {
-			num = int64(lookupNum)
+			num = lookupNum
 		}
-		binary.BigEndian.PutUint64(keybytes[:], uint64(num))
+		binary.BigEndian.PutUint64(keybytes[:], num)
 		if bytes.Compare(keybytes[:], ksids[rowNum]) != 0 {
 			return false, nil
 		}
@@ -95,16 +97,16 @@ func (vind *NumericStaticMap) Verify(_ VCursor, ids []interface{}, ksids [][]byt
 func (vind *NumericStaticMap) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
-		num, err := getNumber(id)
+		num, err := sqltypes.ConvertToUint64(id)
 		if err != nil {
 			return nil, fmt.Errorf("NumericStaticMap.Map: %v", err)
 		}
-		lookupNum, ok := vind.lookup[uint64(num)]
+		lookupNum, ok := vind.lookup[num]
 		if ok {
-			num = int64(lookupNum)
+			num = lookupNum
 		}
 		var keybytes [8]byte
-		binary.BigEndian.PutUint64(keybytes[:], uint64(num))
+		binary.BigEndian.PutUint64(keybytes[:], num)
 		out = append(out, keybytes[:])
 	}
 	return out, nil

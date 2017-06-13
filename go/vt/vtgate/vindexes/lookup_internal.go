@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 // lookup implements the functions for the Lookup vindexes.
@@ -65,7 +67,7 @@ func (lkp *lookup) MapUniqueLookup(vcursor VCursor, ids []interface{}) ([][]byte
 			return nil, fmt.Errorf("lookup.Map: unexpected multiple results from vindex %s: %v", lkp.Table, id)
 		}
 		if lkp.isHashedIndex {
-			num, err := getNumber(result.Rows[0][0].ToNative())
+			num, err := sqltypes.ConvertToUint64(result.Rows[0][0].ToNative())
 			if err != nil {
 				return nil, fmt.Errorf("lookup.Map: %v", err)
 			}
@@ -90,7 +92,7 @@ func (lkp *lookup) MapNonUniqueLookup(vcursor VCursor, ids []interface{}) ([][][
 		var ksids [][]byte
 		if lkp.isHashedIndex {
 			for _, row := range result.Rows {
-				num, err := getNumber(row[0].ToNative())
+				num, err := sqltypes.ConvertToUint64(row[0].ToNative())
 				if err != nil {
 					return nil, fmt.Errorf("lookup.Map: %v", err)
 				}

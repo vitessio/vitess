@@ -23,6 +23,8 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 // Hash defines vindex that hashes an int64 to a KeyspaceId
@@ -51,7 +53,7 @@ func (vind *Hash) Cost() int {
 func (vind *Hash) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
-		num, err := getNumber(id)
+		num, err := sqltypes.ConvertToUint64(id)
 		if err != nil {
 			return nil, fmt.Errorf("hash.Map: %v", err)
 		}
@@ -66,7 +68,7 @@ func (vind *Hash) Verify(_ VCursor, ids []interface{}, ksids [][]byte) (bool, er
 		return false, fmt.Errorf("hash.Verify: length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
 	}
 	for rowNum := range ids {
-		num, err := getNumber(ids[rowNum])
+		num, err := sqltypes.ConvertToUint64(ids[rowNum])
 		if err != nil {
 			return false, fmt.Errorf("hash.Verify: %v", err)
 		}
@@ -101,18 +103,18 @@ func init() {
 	Register("hash", NewHash)
 }
 
-func vhash(shardKey int64) []byte {
+func vhash(shardKey uint64) []byte {
 	var keybytes, hashed [8]byte
-	binary.BigEndian.PutUint64(keybytes[:], uint64(shardKey))
+	binary.BigEndian.PutUint64(keybytes[:], shardKey)
 	block3DES.Encrypt(hashed[:], keybytes[:])
 	return []byte(hashed[:])
 }
 
-func vunhash(k []byte) (int64, error) {
+func vunhash(k []byte) (uint64, error) {
 	if len(k) != 8 {
 		return 0, fmt.Errorf("invalid keyspace id: %v", hex.EncodeToString(k))
 	}
 	var unhashed [8]byte
 	block3DES.Decrypt(unhashed[:], k)
-	return int64(binary.BigEndian.Uint64(unhashed[:])), nil
+	return binary.BigEndian.Uint64(unhashed[:]), nil
 }
