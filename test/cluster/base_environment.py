@@ -398,7 +398,10 @@ class BaseEnvironment(object):
     """
     tablet_info = json.loads(self.vtctl_helper.execute_vtctl_command(
         ['GetTablet', tablet_name]))
-    return '%s:%s' % (tablet_info['ip'], tablet_info['port_map']['vt'])
+    host = tablet_info['hostname']
+    if ':' in host:
+      host = '[%s]' % host
+    return '%s:%s' % (host, tablet_info['port_map']['vt'])
 
   def get_tablet_types_for_shard(self, keyspace, shard_name):
     """Get the types for all tablets in a shard.
