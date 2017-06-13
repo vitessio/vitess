@@ -127,5 +127,7 @@ func NewMycnfFromFlags(uid uint32) (mycnf *Mycnf, err error) {
 	} else {
 		log.Infof("No mycnf_server_id specified, using mycnf-file file %v", *flagMycnfFile)
 	}
-	return ReadMycnf(*flagMycnfFile)
+	mycnf = NewMycnf(uid, 0)
+	mycnf.path = *flagMycnfFile
+	return ReadMycnf(mycnf)
 }

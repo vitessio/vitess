@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 )
 
@@ -113,12 +112,19 @@ func (cnf *Mycnf) lookup(key string) string {
 	return cnf.mycnfMap[key]
 }
 
-func (cnf *Mycnf) lookupAndCheck(key string) string {
+func (cnf *Mycnf) lookupWithDefault(key, defaultVal string) string {
 	val := cnf.lookup(key)
 	if val == "" {
-		panic(fmt.Errorf("Value for key '%v' not set", key))
+		if defaultVal == "" {
+			panic(fmt.Errorf("Value for key '%v' not set and no default value set", key))
+		}
+		return defaultVal
 	}
 	return val
+}
+
+func (cnf *Mycnf) lookupAndCheck(key string) string {
+	return cnf.lookupWithDefault(key, "")
 }
 
 func normKey(bkey []byte) string {
@@ -127,23 +133,23 @@ func normKey(bkey []byte) string {
 	return string(bytes.Replace(bytes.TrimSpace(bkey), []byte("_"), []byte("-"), -1))
 }
 
-// ReadMycnf will read an existing my.cnf from disk, and create a Mycnf object.
-func ReadMycnf(cnfFile string) (mycnf *Mycnf, err error) {
+// ReadMycnf will read an existing my.cnf from disk, and update the passed in Mycnf object
+// with values from the my.cnf on disk.
+func ReadMycnf(mycnf *Mycnf) (*Mycnf, error) {
+	var err error
 	defer func(err *error) {
 		if x := recover(); x != nil {
 			*err = x.(error)
 		}
 	}(&err)
 
-	f, err := os.Open(cnfFile)
+	f, err := os.Open(mycnf.path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
 	buf := bufio.NewReader(f)
-	mycnf = new(Mycnf)
-	mycnf.path, err = filepath.Abs(cnfFile)
 	if err != nil {
 		return nil, err
 	}
@@ -181,21 +187,21 @@ func ReadMycnf(cnfFile string) (mycnf *Mycnf, err error) {
 	}
 
 	mycnf.MysqlPort = int32(port)
-	mycnf.DataDir = mycnf.lookupAndCheck("datadir")
-	mycnf.InnodbDataHomeDir = mycnf.lookupAndCheck("innodb_data_home_dir")
-	mycnf.InnodbLogGroupHomeDir = mycnf.lookupAndCheck("innodb_log_group_home_dir")
-	mycnf.SocketFile = mycnf.lookupAndCheck("socket")
-	mycnf.GeneralLogPath = mycnf.lookup("general_log_file")
-	mycnf.ErrorLogPath = mycnf.lookup("log-error")
-	mycnf.SlowLogPath = mycnf.lookupAndCheck("slow-query-log-file")
-	mycnf.RelayLogPath = mycnf.lookupAndCheck("relay-log")
-	mycnf.RelayLogIndexPath = mycnf.lookupAndCheck("relay-log-index")
-	mycnf.RelayLogInfoPath = mycnf.lookupAndCheck("relay-log-info-file")
-	mycnf.BinLogPath = mycnf.lookupAndCheck("log-bin")
-	mycnf.MasterInfoFile = mycnf.lookupAndCheck("master-info-file")
-	mycnf.PidFile = mycnf.lookupAndCheck("pid-file")
-	mycnf.TmpDir = mycnf.lookupAndCheck("tmpdir")
-	mycnf.SlaveLoadTmpDir = mycnf.lookupAndCheck("slave_load_tmpdir")
+	mycnf.DataDir = mycnf.lookupWithDefault("datadir", mycnf.DataDir)
+	mycnf.InnodbDataHomeDir = mycnf.lookupWithDefault("innodb_data_home_dir", mycnf.InnodbDataHomeDir)
+	mycnf.InnodbLogGroupHomeDir = mycnf.lookupWithDefault("innodb_log_group_home_dir", mycnf.InnodbLogGroupHomeDir)
+	mycnf.SocketFile = mycnf.lookupWithDefault("socket", mycnf.SocketFile)
+	mycnf.GeneralLogPath = mycnf.lookupWithDefault("general_log_file", mycnf.GeneralLogPath)
+	mycnf.ErrorLogPath = mycnf.lookupWithDefault("log-error", mycnf.ErrorLogPath)
+	mycnf.SlowLogPath = mycnf.lookupWithDefault("slow-query-log-file", mycnf.SlowLogPath)
+	mycnf.RelayLogPath = mycnf.lookupWithDefault("relay-log", mycnf.RelayLogPath)
+	mycnf.RelayLogIndexPath = mycnf.lookupWithDefault("relay-log-index", mycnf.RelayLogIndexPath)
+	mycnf.RelayLogInfoPath = mycnf.lookupWithDefault("relay-log-info-file", mycnf.RelayLogInfoPath)
+	mycnf.BinLogPath = mycnf.lookupWithDefault("log-bin", mycnf.BinLogPath)
+	mycnf.MasterInfoFile = mycnf.lookupWithDefault("master-info-file", mycnf.MasterInfoFile)
+	mycnf.PidFile = mycnf.lookupWithDefault("pid-file", mycnf.PidFile)
+	mycnf.TmpDir = mycnf.lookupWithDefault("tmpdir", mycnf.TmpDir)
+	mycnf.SlaveLoadTmpDir = mycnf.lookupWithDefault("slave_load_tmpdir", mycnf.SlaveLoadTmpDir)
 
 	return mycnf, nil
 }
