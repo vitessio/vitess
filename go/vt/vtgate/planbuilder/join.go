@@ -123,17 +123,17 @@ func newJoin(lhs, rhs builder, ajoin *sqlparser.JoinTableExpr) (*join, error) {
 	return jb, nil
 }
 
-// Symtab returns the associated symtab.
+// Symtab satisfies the builder interface.
 func (jb *join) Symtab() *symtab {
 	return jb.symtab.Resolve()
 }
 
-// MaxOrder returns the max order of the node.
+// MaxOrder satisfies the builder interface.
 func (jb *join) MaxOrder() int {
 	return jb.rightMaxOrder
 }
 
-// SetOrder sets the order for the underlying routes.
+// SetOrder satisfies the builder interface.
 func (jb *join) SetOrder(order int) {
 	jb.Left.SetOrder(order)
 	jb.leftMaxOrder = jb.Left.MaxOrder()
@@ -141,35 +141,33 @@ func (jb *join) SetOrder(order int) {
 	jb.rightMaxOrder = jb.Right.MaxOrder()
 }
 
-// Primitive returns the built primitive.
+// Primitive satisfies the builder interface.
 func (jb *join) Primitive() engine.Primitive {
 	return jb.ejoin
 }
 
-// Leftmost returns the leftmost route.
+// Leftmost satisfies the builder interface.
 func (jb *join) Leftmost() columnOriginator {
 	return jb.Left.Leftmost()
 }
 
-// ResultColumns returns the result columns.
+// ResultColumns satisfies the builder interface.
 func (jb *join) ResultColumns() []*resultColumn {
 	return jb.resultColumns
 }
 
-// PushFilter pushes the filter into the target route.
-func (jb *join) PushFilter(filter sqlparser.Expr, whereType string, rb *route) error {
-	if jb.isOnLeft(rb.Order()) {
-		return jb.Left.PushFilter(filter, whereType, rb)
+// PushFilter satisfies the builder interface.
+func (jb *join) PushFilter(filter sqlparser.Expr, whereType string, origin columnOriginator) error {
+	if jb.isOnLeft(origin.Order()) {
+		return jb.Left.PushFilter(filter, whereType, origin)
 	}
 	if jb.ejoin.Opcode == engine.LeftJoin {
 		return errors.New("unsupported: cross-shard left join and where clause")
 	}
-	return jb.Right.PushFilter(filter, whereType, rb)
+	return jb.Right.PushFilter(filter, whereType, origin)
 }
 
-// PushSelect pushes the select expression into the join and
-// recursively down. For left joins, only trivial column expressions
-// can be pushed to the RHS. Otherwise, an unsupported error is returned.
+// PushSelect satisfies the builder interface.
 func (jb *join) PushSelect(expr *sqlparser.AliasedExpr, origin columnOriginator) (rc *resultColumn, colnum int, err error) {
 	if jb.isOnLeft(origin.Order()) {
 		rc, colnum, err = jb.Left.PushSelect(expr, origin)
@@ -193,32 +191,19 @@ func (jb *join) PushSelect(expr *sqlparser.AliasedExpr, origin columnOriginator)
 	return rc, len(jb.resultColumns) - 1, nil
 }
 
-// PushOrderBy pushes the ORDER BY to the route.
-func (jb *join) PushOrderBy(order *sqlparser.Order, rb *route) error {
-	if jb.isOnLeft(rb.Order()) {
-		return jb.Left.PushOrderBy(order, rb)
-	}
-	// This is currently dead code because we only allow pushing of
-	// order by to the left-most node. But it will be used in the future.
-	if jb.ejoin.Opcode == engine.LeftJoin {
-		return errors.New("unsupported: cross-shard left join and order by")
-	}
-	return jb.Right.PushOrderBy(order, rb)
-}
-
-// PushOrderByNull pushes 'ORDER BY NULL' to the underlying routes.
+// PushOrderByNull satisfies the builder interface.
 func (jb *join) PushOrderByNull() {
 	jb.Left.PushOrderByNull()
 	jb.Right.PushOrderByNull()
 }
 
-// PushMisc pushes misc constructs to the underlying routes.
+// PushMisc satisfies the builder interface.
 func (jb *join) PushMisc(sel *sqlparser.Select) {
 	jb.Left.PushMisc(sel)
 	jb.Right.PushMisc(sel)
 }
 
-// Wireup performs the wireup for join.
+// Wireup satisfies the builder interface.
 func (jb *join) Wireup(bldr builder, jt *jointab) error {
 	err := jb.Right.Wireup(bldr, jt)
 	if err != nil {
@@ -227,12 +212,7 @@ func (jb *join) Wireup(bldr builder, jt *jointab) error {
 	return jb.Left.Wireup(bldr, jt)
 }
 
-// SupplyVar updates the join to make it supply the requested
-// column as a join variable. If the column is not already in
-// its list, it requests the LHS node to supply it using SupplyCol.
-// If the join is not the common root node for from and to, then
-// the work is delegated to the subtree that has the common
-// root node.
+// SupplyVar satisfies the builder interface.
 func (jb *join) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	if !jb.isOnLeft(from) {
 		jb.Right.SupplyVar(from, to, col, varname)
@@ -259,28 +239,26 @@ func (jb *join) SupplyVar(from, to int, col *sqlparser.ColName, varname string) 
 	_, jb.ejoin.Vars[varname] = jb.Left.SupplyCol(col)
 }
 
-// SupplyCol changes the join to supply the requested column
-// name, and returns the result column number. If the column
-// is already in the list, it's reused.
-func (jb *join) SupplyCol(col *sqlparser.ColName) (rs *resultColumn, colnum int) {
+// SupplyCol satisfies the builder interface.
+func (jb *join) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int) {
 	c := col.Metadata.(*column)
-	for i, rs := range jb.resultColumns {
-		if rs.column == c {
-			return rs, i
+	for i, rc := range jb.resultColumns {
+		if rc.column == c {
+			return rc, i
 		}
 	}
 
 	routeNumber := c.Origin().Order()
 	var sourceCol int
 	if jb.isOnLeft(routeNumber) {
-		rs, sourceCol = jb.Left.SupplyCol(col)
+		rc, sourceCol = jb.Left.SupplyCol(col)
 		jb.ejoin.Cols = append(jb.ejoin.Cols, -sourceCol-1)
 	} else {
-		rs, sourceCol = jb.Right.SupplyCol(col)
+		rc, sourceCol = jb.Right.SupplyCol(col)
 		jb.ejoin.Cols = append(jb.ejoin.Cols, sourceCol+1)
 	}
-	jb.resultColumns = append(jb.resultColumns, rs)
-	return rs, len(jb.ejoin.Cols) - 1
+	jb.resultColumns = append(jb.resultColumns, rc)
+	return rc, len(jb.ejoin.Cols) - 1
 }
 
 // isOnLeft returns true if the specified route number

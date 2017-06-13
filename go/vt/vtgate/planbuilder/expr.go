@@ -83,14 +83,14 @@ func findOrigin(expr sqlparser.Expr, bldr builder) (origin columnOriginator, err
 			case *sqlparser.Union:
 				subplan, err = processUnion(stmt, bldr.Symtab().VSchema, bldr)
 			default:
-				panic("unreachable")
+				panic(fmt.Sprintf("BUG: unexpected SELECT type: %T", node))
 			}
 			if err != nil {
 				return false, err
 			}
 			subroute, isRoute := subplan.(*route)
 			if !isRoute {
-				return false, errors.New("unsupported: cross-shard join in subqueries")
+				return false, errors.New("unsupported: cross-shard query in subqueries")
 			}
 			for _, extern := range subroute.Symtab().Externs {
 				// No error expected. These are resolved externs.

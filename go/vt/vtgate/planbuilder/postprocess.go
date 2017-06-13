@@ -19,40 +19,43 @@ package planbuilder
 import (
 	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 // This file has functions to analyze postprocessing
-// clauses like GROUP BY, etc.
+// clauses like ORDER BY, etc.
+
+// groupByHandler is a primitive that can handle a group by expression.
+type groupByHandler interface {
+	builder
+	// SetGroupBy makes the primitive handle the group by clause.
+	// The primitive may outsource some of its work to an underlying
+	// primitive that is also a groupByHandler (like a route).
+	SetGroupBy(sqlparser.GroupBy) error
+	// MakeDistinct makes the primitive handle the distinct clause.
+	MakeDistinct() error
+}
 
 // pushGroupBy processes the group by clause. It resolves all symbols,
 // and ensures that there are no subqueries.
-func pushGroupBy(groupBy sqlparser.GroupBy, bldr builder) error {
-	if groupBy == nil {
-		return nil
-	}
-	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node := node.(type) {
-		case *sqlparser.ColName:
-			_, _, err := bldr.Symtab().Find(node)
-			if err != nil {
-				return false, err
-			}
-		case *sqlparser.Subquery:
-			return false, errors.New("unsupported: subqueries in group by expression")
+func pushGroupBy(sel *sqlparser.Select, bldr builder) error {
+	if sel.Distinct != "" {
+		if len(sel.GroupBy) != 0 {
+			return errors.New("unsupported: distinct and group by in the same query")
 		}
-		return true, nil
-	}, groupBy)
-	if err != nil {
-		return err
+		return bldr.(groupByHandler).MakeDistinct()
 	}
 
-	// We can be here only if it was a route. All sanity checks have been
-	// performed by checkAggregates.
-	bldr.(*route).SetGroupBy(groupBy)
-	return nil
+	if sel.GroupBy == nil {
+		return nil
+	}
+	if err := bldr.Symtab().ResolveSymbols(sel.GroupBy); err != nil {
+		return fmt.Errorf("unsupported: in group by: %v", err)
+	}
+
+	// We can be here only if the builder could handle a group by.
+	return bldr.(groupByHandler).SetGroupBy(sel.GroupBy)
 }
 
 // pushOrderBy pushes the order by clause to the appropriate route.
@@ -60,6 +63,10 @@ func pushGroupBy(groupBy sqlparser.GroupBy, bldr builder) error {
 // order by references columns of the left-most route. Otherwise, the
 // function returns an unsupported error.
 func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
+	if oa, ok := bldr.(*orderedAggregate); ok {
+		return oa.PushOrderBy(orderBy)
+	}
+
 	switch len(orderBy) {
 	case 0:
 		return nil
@@ -76,17 +83,14 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 		return errors.New("unsupported: cannot order by on a cross-shard subquery")
 	}
 	for _, order := range orderBy {
-		if node, ok := order.Expr.(*sqlparser.SQLVal); ok && node.Type == sqlparser.IntVal {
+		if node, ok := order.Expr.(*sqlparser.SQLVal); ok {
 			// This block handles constructs that use ordinals for 'ORDER BY'. For example:
 			// SELECT a, b, c FROM t1, t2 ORDER BY 1, 2, 3.
-			num, err := strconv.ParseInt(string(node.Val), 0, 64)
+			num, err := bldr.Symtab().ResultFromNumber(node)
 			if err != nil {
-				return fmt.Errorf("error parsing order by clause: %s", sqlparser.String(node))
+				return err
 			}
-			if num < 1 || num > int64(len(bldr.Symtab().ResultColumns)) {
-				return errors.New("order by column number out of range")
-			}
-			target := bldr.Symtab().ResultColumns[num-1].column.Origin()
+			target := bldr.Symtab().ResultColumns[num].column.Origin()
 			if target != leftmostRB {
 				return errors.New("unsupported: order by spans across shards")
 			}
@@ -103,6 +107,8 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 					if target != leftmostRB {
 						return false, errors.New("unsupported: order by spans across shards")
 					}
+				case *sqlparser.Subquery:
+					return false, errors.New("unsupported: order by has subquery")
 				}
 				return true, nil
 			}, order.Expr)
@@ -117,9 +123,7 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 		if !leftmostRB.IsSingle() {
 			return errors.New("unsupported: scatter and order by")
 		}
-		if err := bldr.PushOrderBy(order, leftmostRB); err != nil {
-			return err
-		}
+		leftmostRB.PushOrderBy(order)
 	}
 	return nil
 }
@@ -130,7 +134,7 @@ func pushLimit(limit *sqlparser.Limit, bldr builder) error {
 	}
 	rb, ok := bldr.(*route)
 	if !ok {
-		return errors.New("unsupported: limits with cross-shard joins")
+		return errors.New("unsupported: limits with cross-shard query")
 	}
 	if !rb.IsSingle() {
 		return errors.New("unsupported: limits with scatter")

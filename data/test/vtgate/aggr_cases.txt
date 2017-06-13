@@ -1,0 +1,650 @@
+# Test cases in this file follow the code in ordered_aggregate.go.
+
+# Aggregate on unsharded
+"select count(*), col from unsharded"
+{
+  "Original": "select count(*), col from unsharded",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select count(*), col from unsharded",
+    "FieldQuery": "select count(*), col from unsharded where 1 != 1"
+  }
+}
+
+# Aggregate on unique sharded
+"select count(*), col from user where id = 1"
+{
+  "Original": "select count(*), col from user where id = 1",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select count(*), col from user where id = 1",
+    "FieldQuery": "select count(*), col from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 1
+  }
+}
+
+# Aggregate detection (distinct)
+"select distinct user.a from user join user_extra"
+"unsupported: cross-shard query with aggregates"
+
+# Aggregate detection (function)
+"select count(*) from user join user_extra"
+"unsupported: cross-shard query with aggregates"
+
+# Aggregate detection (non-aggregate function)
+"select fun(1), col from user"
+{
+  "Original": "select fun(1), col from user",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select fun(1), col from user",
+    "FieldQuery": "select fun(1), col from user where 1 != 1"
+  }
+}
+
+# Aggregate detection (group_concat)
+"select group_concat(user.a) from user join user_extra"
+"unsupported: cross-shard query with aggregates"
+
+# Aggregate detection (group by)
+"select user.a from user join user_extra group by user.a"
+"unsupported: cross-shard query with aggregates"
+
+# select distinct with unique vindex for scatter route.
+"select distinct col1, id from user"
+{
+  "Original": "select distinct col1, id from user",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select distinct col1, id from user",
+    "FieldQuery": "select col1, id from user where 1 != 1"
+  }
+}
+
+# simple aggregate
+"select count(*) from user"
+{
+  "Original": "select count(*) from user",
+  "Instructions": {
+    "Results": [
+      -1
+    ],
+    "Aggregates": [
+      {
+        "Opcode": "count",
+        "Col": 0
+      }
+    ],
+    "Keys": null,
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select count(*) from user",
+      "FieldQuery": "select count(*) from user where 1 != 1"
+    }
+  }
+}
+
+# aggregate on RHS subquery (tests symbol table merge)
+"select user.a, t.b from user join (select count(*) b from unsharded) as t"
+{
+  "Original": "select user.a, t.b from user join (select count(*) b from unsharded) as t",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.a from user",
+      "FieldQuery": "select user.a from user where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select t.b from (select count(*) as b from unsharded) as t",
+      "FieldQuery": "select t.b from (select count(*) as b from unsharded where 1 != 1) as t where 1 != 1"
+    },
+    "Cols": [
+      -1,
+      1
+    ]
+  }
+}
+
+# scatter aggregate in a subquery
+"select a from (select count(*) as a from user) t"
+{
+  "Original": "select a from (select count(*) as a from user) t",
+  "Instructions": {
+    "Cols": [
+      0
+    ],
+    "Subquery": {
+      "Results": [
+        -1
+      ],
+      "Aggregates": [
+        {
+          "Opcode": "count",
+          "Col": 0
+        }
+      ],
+      "Keys": null,
+      "Input": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select count(*) as a from user",
+        "FieldQuery": "select count(*) as a from user where 1 != 1"
+      }
+    }
+  }
+}
+
+# scatter aggregate with non-aggregate expressions.
+"select id, count(*) from user"
+{
+  "Original": "select id, count(*) from user",
+  "Instructions": {
+    "Results": [
+      0,
+      -1
+    ],
+    "Aggregates": [
+      {
+        "Opcode": "count",
+        "Col": 1
+      }
+    ],
+    "Keys": null,
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select id, count(*) from user",
+      "FieldQuery": "select id, count(*) from user where 1 != 1"
+    }
+  }
+}
+
+# scatter aggregate using distinct
+"select distinct col from user"
+{
+  "Original": "select distinct col from user",
+  "Instructions": {
+    "Results": [
+      0
+    ],
+    "Aggregates": null,
+    "Keys": [
+      {
+        "Col": 0,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select distinct col from user order by col asc",
+      "FieldQuery": "select col from user where 1 != 1"
+    }
+  }
+}
+
+# scatter aggregate group by select col
+"select col from user group by col"
+{
+  "Original": "select col from user group by col",
+  "Instructions": {
+    "Results": [
+      0
+    ],
+    "Aggregates": null,
+    "Keys": [
+      {
+        "Col": 0,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user group by col order by col asc",
+      "FieldQuery": "select col from user where 1 != 1 group by col"
+    }
+  }
+}
+
+# scatter aggregate group by aggregate function
+" select count(*) b from user group by b"
+"group by expression cannot reference an aggregate function: b"
+
+# scatter aggregate multiple group by (columns)
+"select a, b, count(*) from user group by b, a"
+{
+  "Original": "select a, b, count(*) from user group by b, a",
+  "Instructions": {
+    "Results": [
+      0,
+      1,
+      -1
+    ],
+    "Aggregates": [
+      {
+        "Opcode": "count",
+        "Col": 2
+      }
+    ],
+    "Keys": [
+      {
+        "Col": 1,
+        "Desc": false
+      },
+      {
+        "Col": 0,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select a, b, count(*) from user group by b, a order by b asc, a asc",
+      "FieldQuery": "select a, b, count(*) from user where 1 != 1 group by b, a"
+    }
+  }
+}
+
+# scatter aggregate multiple group by (numbers)
+"select a, b, count(*) from user group by 2, 1"
+{
+  "Original": "select a, b, count(*) from user group by 2, 1",
+  "Instructions": {
+    "Results": [
+      0,
+      1,
+      -1
+    ],
+    "Aggregates": [
+      {
+        "Opcode": "count",
+        "Col": 2
+      }
+    ],
+    "Keys": [
+      {
+        "Col": 1,
+        "Desc": false
+      },
+      {
+        "Col": 0,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select a, b, count(*) from user group by 2, 1 order by b asc, a asc",
+      "FieldQuery": "select a, b, count(*) from user where 1 != 1 group by 2, 1"
+    }
+  }
+}
+
+# scatter aggregate group by column number
+"select col from user group by 1"
+{
+  "Original": "select col from user group by 1",
+  "Instructions": {
+    "Results": [
+      0
+    ],
+    "Aggregates": null,
+    "Keys": [
+      {
+        "Col": 0,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user group by 1 order by col asc",
+      "FieldQuery": "select col from user where 1 != 1 group by 1"
+    }
+  }
+}
+
+
+# scatter aggregate group by invalid column number
+"select col from user group by 2"
+"column number out of range: 2"
+
+# scatter aggregate group by invalid column number
+"select col from user group by col+1"
+"unsupported: in scatter query: only simple references allowed"
+
+# scatter aggregate with ambiguous column names
+"select col1, col2 as col1 from user group by col1"
+"unsupported: in group by: ambiguous symbol reference: col1"
+
+# scatter aggregate order by null
+"select count(*) from user order by null"
+{
+  "Original": "select count(*) from user order by null",
+  "Instructions": {
+    "Results": [
+      -1
+    ],
+    "Aggregates": [
+      {
+        "Opcode": "count",
+        "Col": 0
+      }
+    ],
+    "Keys": null,
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select count(*) from user",
+      "FieldQuery": "select count(*) from user where 1 != 1"
+    }
+  }
+}
+
+# scatter aggregate with complex select list (can't build order by)
+"select distinct a+1 from user"
+"generating order by clause: cannot reference a complex expression"
+
+# scatter aggregate with ambiguous aliases
+"select distinct a, b as a from user"
+"generating order by clause: ambiguous symbol reference: a"
+
+# scatter aggregate with numbered order by columns
+"select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1, 2, 3"
+{
+  "Original": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1, 2, 3",
+  "Instructions": {
+    "Results": [
+      0,
+      1,
+      2,
+      3,
+      -1
+    ],
+    "Aggregates": [
+      {
+        "Opcode": "count",
+        "Col": 4
+      }
+    ],
+    "Keys": [
+      {
+        "Col": 0,
+        "Desc": false
+      },
+      {
+        "Col": 1,
+        "Desc": false
+      },
+      {
+        "Col": 2,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1 asc, 2 asc, 3 asc",
+      "FieldQuery": "select a, b, c, d, count(*) from user where 1 != 1 group by 1, 2, 3"
+    }
+  }
+}
+
+# scatter aggregate with named order by columns
+"select a, b, c, d, count(*) from user group by 1, 2, 3 order by a, b, c"
+{
+  "Original": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by a, b, c",
+  "Instructions": {
+    "Results": [
+      0,
+      1,
+      2,
+      3,
+      -1
+    ],
+    "Aggregates": [
+      {
+        "Opcode": "count",
+        "Col": 4
+      }
+    ],
+    "Keys": [
+      {
+        "Col": 0,
+        "Desc": false
+      },
+      {
+        "Col": 1,
+        "Desc": false
+      },
+      {
+        "Col": 2,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by a asc, b asc, c asc",
+      "FieldQuery": "select a, b, c, d, count(*) from user where 1 != 1 group by 1, 2, 3"
+    }
+  }
+}
+
+# scatter aggregate with jumbled order by columns
+"select a, b, c, d, count(*) from user group by 1, 2, 3, 4 order by d, b, a, c"
+{
+  "Original": "select a, b, c, d, count(*) from user group by 1, 2, 3, 4 order by d, b, a, c",
+  "Instructions": {
+    "Results": [
+      0,
+      1,
+      2,
+      3,
+      -1
+    ],
+    "Aggregates": [
+      {
+        "Opcode": "count",
+        "Col": 4
+      }
+    ],
+    "Keys": [
+      {
+        "Col": 3,
+        "Desc": false
+      },
+      {
+        "Col": 1,
+        "Desc": false
+      },
+      {
+        "Col": 0,
+        "Desc": false
+      },
+      {
+        "Col": 2,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select a, b, c, d, count(*) from user group by 1, 2, 3, 4 order by d asc, b asc, a asc, c asc",
+      "FieldQuery": "select a, b, c, d, count(*) from user where 1 != 1 group by 1, 2, 3, 4"
+    }
+  }
+}
+
+# scatter aggregate with jumbled group by and order by columns
+"select a, b, c, d, count(*) from user group by 3, 2, 1, 4 order by d, b, a, c"
+{
+  "Original": "select a, b, c, d, count(*) from user group by 3, 2, 1, 4 order by d, b, a, c",
+  "Instructions": {
+    "Results": [
+      0,
+      1,
+      2,
+      3,
+      -1
+    ],
+    "Aggregates": [
+      {
+        "Opcode": "count",
+        "Col": 4
+      }
+    ],
+    "Keys": [
+      {
+        "Col": 3,
+        "Desc": false
+      },
+      {
+        "Col": 1,
+        "Desc": false
+      },
+      {
+        "Col": 0,
+        "Desc": false
+      },
+      {
+        "Col": 2,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select a, b, c, d, count(*) from user group by 3, 2, 1, 4 order by d asc, b asc, a asc, c asc",
+      "FieldQuery": "select a, b, c, d, count(*) from user where 1 != 1 group by 3, 2, 1, 4"
+    }
+  }
+}
+
+# scatter aggregate with some descending order by cols
+"select a, b, c, count(*) from user group by 3, 2, 1 order by 1 desc, 3 desc, b"
+{
+  "Original": "select a, b, c, count(*) from user group by 3, 2, 1 order by 1 desc, 3 desc, b",
+  "Instructions": {
+    "Results": [
+      0,
+      1,
+      2,
+      -1
+    ],
+    "Aggregates": [
+      {
+        "Opcode": "count",
+        "Col": 3
+      }
+    ],
+    "Keys": [
+      {
+        "Col": 0,
+        "Desc": true
+      },
+      {
+        "Col": 2,
+        "Desc": true
+      },
+      {
+        "Col": 1,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select a, b, c, count(*) from user group by 3, 2, 1 order by 1 desc, 3 desc, b asc",
+      "FieldQuery": "select a, b, c, count(*) from user where 1 != 1 group by 3, 2, 1"
+    }
+  }
+}
+
+# Group by with collate operator
+"select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci"
+{
+   "Original":"select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
+   "Instructions":{
+      "Opcode":"SelectEqualUnique",
+      "Keyspace":{
+         "Name":"user",
+         "Sharded":true
+      },
+      "Query":"select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
+      "FieldQuery":"select user.col1 as a from user where 1 != 1 group by a collate utf8_general_ci",
+      "Vindex":"user_index",
+      "Values":5
+   }
+}

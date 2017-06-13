@@ -17,7 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
+	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
@@ -127,12 +129,6 @@ func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexe
 // analysis for the FROM clause. At that time, there should be
 // no ResultColumns or Externs.
 func (st *symtab) Merge(newsyms *symtab) error {
-	if st.ResultColumns != nil || newsyms.ResultColumns != nil {
-		panic("unexpected ResultColumns")
-	}
-	if st.Externs != nil || newsyms.Externs != nil {
-		panic("unexpected Externs")
-	}
 	for _, t := range newsyms.tables {
 		if err := st.AddTable(t); err != nil {
 			return err
@@ -345,6 +341,22 @@ func (st *symtab) NewResultColumn(expr *sqlparser.AliasedExpr, origin columnOrig
 	return rc
 }
 
+// ResultFromNumber returns the result column index based on the column
+// order expression.
+func (st *symtab) ResultFromNumber(val *sqlparser.SQLVal) (int, error) {
+	if val.Type != sqlparser.IntVal {
+		return 0, errors.New("column number is not an int")
+	}
+	num, err := strconv.ParseInt(string(val.Val), 0, 64)
+	if err != nil {
+		return 0, fmt.Errorf("error parsing column number: %s", sqlparser.String(val))
+	}
+	if num < 1 || num > int64(len(st.ResultColumns)) {
+		return 0, fmt.Errorf("column number out of range: %d", num)
+	}
+	return int(num - 1), nil
+}
+
 // Vindex returns the vindex if the expression is a plain column reference
 // that is part of the specified route, and has an associated vindex.
 func (st *symtab) Vindex(expr sqlparser.Expr, scope *route) vindexes.Vindex {
@@ -363,6 +375,24 @@ func (st *symtab) Vindex(expr sqlparser.Expr, scope *route) vindexes.Vindex {
 		return nil
 	}
 	return c.Vindex
+}
+
+// ResolveSymbols resolves all column references against symtab.
+// This makes sure that they all have their Metadata initialized.
+// If a symbol cannot be resolved or if the expression contains
+// a subquery, an error is returned.
+func (st *symtab) ResolveSymbols(node sqlparser.SQLNode) error {
+	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.ColName:
+			if _, _, err := st.Find(node); err != nil {
+				return false, err
+			}
+		case *sqlparser.Subquery:
+			return false, errors.New("subqueries disallowed")
+		}
+		return true, nil
+	}, node)
 }
 
 // table is part of symtab.

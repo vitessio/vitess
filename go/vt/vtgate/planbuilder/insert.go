@@ -74,7 +74,7 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vsch
 			return nil, errors.New("unsupported: subquery in insert values")
 		}
 	default:
-		panic("unexpected construct in insert")
+		panic(fmt.Sprintf("BUG: unexpected construct in insert: %T", rows))
 	}
 	if eRoute.Table.AutoIncrement == nil {
 		eRoute.Query = generateQuery(ins)
@@ -126,7 +126,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 			return nil, errors.New("unsupported: subquery in insert values")
 		}
 	default:
-		panic("unexpected construct in insert")
+		panic(fmt.Sprintf("BUG: unexpected construct in insert: %T", rows))
 	}
 	for _, value := range values {
 		if len(ins.Columns) != len(value) {

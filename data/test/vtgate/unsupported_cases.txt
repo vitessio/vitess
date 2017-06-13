@@ -37,7 +37,7 @@
 
 # subquery with join primitive (expressions)
 "select * from user where id in (select user.id from user join user_extra)"
-"unsupported: cross-shard join in subqueries"
+"unsupported: cross-shard query in subqueries"
 
 # subquery keyspace different from outer query
 "select * from user where id in (select m from unsharded)"
@@ -65,7 +65,7 @@
 
 # filtering on a cross-shard subquery
 "select id from (select user.id, user.col from user join user_extra) as t where id=5"
-"unsupported: filtering on results of a cross-shard subquery"
+"unsupported: filtering on results of cross-shard subquery"
 
 # expression on a cross-shard subquery
 "select id+1 from (select user.id, user.col from user join user_extra) as t"
@@ -117,35 +117,71 @@
 
 # * expresson not allowed for cross-shard joins
 "select * from user join user_extra"
-"unsupported: '*' expression in cross-shard join"
+"unsupported: '*' expression in cross-shard query"
 
-# Aggregate on sharded with colvindex
-"select count(*), id from user"
-"unsupported: scatter with aggregates"
+# Filtering on scatter aggregates
+"select count(*) a from user having a >10"
+"unsupported: filtering on results of aggregates"
+
+# distinct and aggregate functions
+"select distinct a, count(*) from user"
+"unsupported: distinct cannot be combined with aggregate functions"
+
+# distinct and group by
+"select distinct a from user group by a"
+"unsupported: distinct and group by in the same query"
+
+# group by must reference select list
+"select a from user group by b"
+"unsupported: in scatter query: group by column must reference column in SELECT list"
+
+# complex group by expression
+"select a from user group by a+1"
+"unsupported: in scatter query: only simple references allowed"
+
+# Complex aggregate expression on scatter
+"select 1+count(*) from user"
+"unsupported: in scatter query: complex aggregate expression"
+
+# scatter aggregate group by doesn't reference select list
+"select id from user group by col"
+"unsupported: in scatter query: group by column must reference column in SELECT list"
+
+# scatter aggregate invalid order by number
+"select id from user group by id order by 2"
+"in order by: column number out of range: 2"
+
+# scatter aggregate order by (number) references aggregate function.
+"select id, count(*) from user group by id order by 2"
+"unsupported: in scatter query: order by expression cannot reference an aggregate function: 2"
+
+# scatter aggregate symtab lookup error
+"select id, b as id, count(*) from user order by id"
+"in order by: ambiguous symbol reference: id"
+
+# scatter aggregate complex order by
+"select id from user group by id order by id+1"
+"unsupported: in scatter query: complex order by expression: id + 1"
+
+# scatter aggregate order by does not reference group by
+"select a, b, count(*) from user group by a order by b"
+"unsupported: in scatter query: order by column must reference group by expression: b asc"
 
 # Aggregates and joins
 "select count(*) from user join user_extra"
-"unsupported: cross-shard join with aggregates"
-
-# Aggregates and scatter
-"select count(*) from user"
-"unsupported: scatter with aggregates"
+"unsupported: cross-shard query with aggregates"
 
 # group by and joins
 "select user.id from user join user_extra group by id"
-"unsupported: cross-shard join with aggregates"
+"unsupported: cross-shard query with aggregates"
 
 # group by and ',' joins
 "select user.id from user, user_extra group by id"
-"unsupported: cross-shard join with aggregates"
-
-# Group by and scatter
-"select col from user group by col"
-"unsupported: scatter with aggregates"
+"unsupported: cross-shard query with aggregates"
 
 # subqueries not supported in group by
 "select id from user group by id, (select id from user_extra)"
-"unsupported: subqueries in group by expression"
+"unsupported: in group by: subqueries disallowed"
 
 # subquery of information_schema with normal table
 "select (select * from unsharded) from information_schema.a"
@@ -179,9 +215,13 @@
 "select user.col1 as a, user_extra.col2 as b from user join user_extra on user_extra.user_id = 5 where user.id = 5 order by a+b"
 "unsupported: order by spans across shards"
 
+# Order by has subqueries
+"select id from unsharded order by (select id from unsharded)"
+"unsupported: order by has subquery"
+
 # limit for joins
 "select user.col from user join user_extra limit 1"
-"unsupported: limits with cross-shard joins"
+"unsupported: limits with cross-shard query"
 
 # limit for scatter
 "select col from user limit 1"

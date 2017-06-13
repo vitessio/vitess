@@ -1,79 +1,3 @@
-# Group by with aggregation
-"select col1, count(col2) as col2_count from unsharded group by col1 order by col2_count asc"
-{
-  "Original": "select col1, count(col2) as col2_count from unsharded group by col1 order by col2_count asc",
-  "Instructions": {
-    "Opcode": "SelectUnsharded",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "Query": "select col1, count(col2) as col2_count from unsharded group by col1 order by col2_count asc",
-    "FieldQuery": "select col1, count(col2) as col2_count from unsharded where 1 != 1 group by col1"
-  }
-}
-# Group by unsharded
-"select col1, col2 from unsharded group by col2"
-{
-  "Original": "select col1, col2 from unsharded group by col2",
-  "Instructions": {
-    "Opcode": "SelectUnsharded",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "Query": "select col1, col2 from unsharded group by col2",
-    "FieldQuery": "select col1, col2 from unsharded where 1 != 1 group by col2"
-  }
-}
-
-# Group by on unique sharded
-"select col1, col2 from user where id = 1 group by col2"
-{
-  "Original": "select col1, col2 from user where id = 1 group by col2",
-  "Instructions": {
-    "Opcode": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "Query": "select col1, col2 from user where id = 1 group by col2",
-    "FieldQuery": "select col1, col2 from user where 1 != 1 group by col2",
-    "Vindex": "user_index",
-    "Values": 1
-  }
-}
-
-# Group by on unique vindex
-"select col1, id from user group by id"
-{
-  "Original": "select col1, id from user group by id",
-  "Instructions": {
-    "Opcode": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "Query": "select col1, id from user group by id",
-    "FieldQuery": "select col1, id from user where 1 != 1 group by id"
-  }
-}
-
-# Group by implicitly references table col
-"select id from user group by id, col"
-{
-  "Original": "select id from user group by id, col",
-  "Instructions": {
-    "Opcode": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "Query": "select id from user group by id, col",
-    "FieldQuery": "select id from user where 1 != 1 group by id, col"
-  }
-}
-
 # HAVING implicitly references table col
 "select user.col1 from user having col2 = 2"
 {
@@ -345,11 +269,11 @@
 
 # Order by, invalid column number
 "select col from user order by 18446744073709551616"
-"error parsing order by clause: 18446744073709551616"
+"error parsing column number: 18446744073709551616"
 
 # Order by, out of range column number
 "select col from user order by 2"
-"order by column number out of range"
+"column number out of range: 2"
 
 # Order by, '*' expression with qualified reference and using collate
 "select * from user where id = 5 order by user.col collate utf8_general_ci"
@@ -366,40 +290,6 @@
     "Vindex": "user_index",
     "Values": 5
   }
-}
-
-# Group by with collate operator
-"select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci"
-{
-   "Original":"select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
-   "Instructions":{
-      "Opcode":"SelectEqualUnique",
-      "Keyspace":{
-         "Name":"user",
-         "Sharded":true
-      },
-      "Query":"select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
-      "FieldQuery":"select user.col1 as a from user where 1 != 1 group by a collate utf8_general_ci",
-      "Vindex":"user_index",
-      "Values":5
-   }
-}
-
-#Order by with aggregates
-"select * from user where id = 5 order by count(id)"
-{
-   "Original":"select * from user where id = 5 order by count(id)",
-   "Instructions":{
-      "Opcode":"SelectEqualUnique",
-      "Keyspace":{
-         "Name":"user",
-         "Sharded":true
-      },
-      "Query":"select * from user where id = 5 order by count(id) asc",
-      "FieldQuery":"select * from user where 1 != 1",
-      "Vindex":"user_index",
-      "Values":5
-   }
 }
 
 #Order by with math functions

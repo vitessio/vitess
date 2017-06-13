@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
@@ -73,7 +74,7 @@ func (rb *route) Resolve() *route {
 	return rb
 }
 
-// Symtab returns the associated symtab.
+// Symtab satisfies the builder interface.
 func (rb *route) Symtab() *symtab {
 	return rb.symtab.Resolve()
 }
@@ -83,27 +84,27 @@ func (rb *route) Order() int {
 	return rb.order
 }
 
-// MaxOrder returns the max order of the node.
+// MaxOrder satisfies the builder interface.
 func (rb *route) MaxOrder() int {
 	return rb.order
 }
 
-// SetOrder sets the order to one above the specified number.
+// SetOrder satisfies the builder interface.
 func (rb *route) SetOrder(order int) {
 	rb.order = order + 1
 }
 
-// Primitve returns the built primitive.
+// Primitive satisfies the builder interface.
 func (rb *route) Primitive() engine.Primitive {
 	return rb.ERoute
 }
 
-// Leftmost returns the current route.
+// Leftmost satisfies the builder interface.
 func (rb *route) Leftmost() columnOriginator {
 	return rb
 }
 
-// ResultColumns returns the result columns.
+// ResultColumns satisfies the builder interface.
 func (rb *route) ResultColumns() []*resultColumn {
 	return rb.resultColumns
 }
@@ -224,9 +225,9 @@ func (rb *route) isSameRoute(rhs *route, filter sqlparser.Expr) bool {
 	return true
 }
 
-// PushFilter pushes the filter into the route. The primitive will
-// be updated if the new filter improves the plan.
-func (rb *route) PushFilter(filter sqlparser.Expr, whereType string, _ *route) error {
+// PushFilter satisfies the builder interface.
+// The primitive will be updated if the new filter improves the plan.
+func (rb *route) PushFilter(filter sqlparser.Expr, whereType string, _ columnOriginator) error {
 	sel := rb.Select.(*sqlparser.Select)
 	switch whereType {
 	case sqlparser.WhereStr:
@@ -352,7 +353,7 @@ func (rb *route) exprIsValue(expr sqlparser.Expr) bool {
 	return sqlparser.IsValue(expr)
 }
 
-// PushSelect pushes the select expression into the route.
+// PushSelect satisfies the builder interface.
 func (rb *route) PushSelect(expr *sqlparser.AliasedExpr, _ columnOriginator) (rc *resultColumn, colnum int, err error) {
 	sel := rb.Select.(*sqlparser.Select)
 	sel.SelectExprs = append(sel.SelectExprs, expr)
@@ -379,19 +380,20 @@ func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *resultColumn {
 }
 
 // MakeDistinct sets the DISTINCT property to the select.
-func (rb *route) MakeDistinct() {
+func (rb *route) MakeDistinct() error {
 	rb.Select.(*sqlparser.Select).Distinct = sqlparser.DistinctStr
+	return nil
 }
 
 // SetGroupBy sets the GROUP BY clause for the route.
-func (rb *route) SetGroupBy(groupBy sqlparser.GroupBy) {
+func (rb *route) SetGroupBy(groupBy sqlparser.GroupBy) error {
 	rb.Select.(*sqlparser.Select).GroupBy = groupBy
+	return nil
 }
 
-// PushOrderBy adds an ORDER BY expression to the route.
-func (rb *route) PushOrderBy(order *sqlparser.Order, _ *route) error {
+// PushOrderBy sets the order by for the route.
+func (rb *route) PushOrderBy(order *sqlparser.Order) {
 	rb.Select.AddOrder(order)
-	return nil
 }
 
 // SetLimit adds a LIMIT clause to the route.
@@ -399,18 +401,18 @@ func (rb *route) SetLimit(limit *sqlparser.Limit) {
 	rb.Select.SetLimit(limit)
 }
 
-// PushOrderByNull updates the comments & 'for update' sections of the route.
+// PushOrderByNull satisfies the builder interface.
 func (rb *route) PushOrderByNull() {
 	rb.Select.(*sqlparser.Select).OrderBy = sqlparser.OrderBy{&sqlparser.Order{Expr: &sqlparser.NullVal{}}}
 }
 
-// PushMisc updates the comments & 'for update' sections of the route.
+// PushMisc satisfies the builder interface.
 func (rb *route) PushMisc(sel *sqlparser.Select) {
 	rb.Select.(*sqlparser.Select).Comments = sel.Comments
 	rb.Select.(*sqlparser.Select).Lock = sel.Lock
 }
 
-// Wireup performs the wire-up tasks.
+// Wireup satisfies the builder interface.
 func (rb *route) Wireup(bldr builder, jt *jointab) error {
 	// Resolve values stored in the builder.
 	var err error
@@ -501,7 +503,7 @@ func (rb *route) procureValues(bldr builder, jt *jointab, val interface{}) (inte
 	case sqlparser.Expr:
 		return valConvert(val)
 	}
-	panic("unrecognized symbol")
+	panic(fmt.Sprintf("BUG: unrecognized symbol: %T", val))
 }
 
 func (rb *route) isLocal(col *sqlparser.ColName) bool {
@@ -532,14 +534,14 @@ func (rb *route) generateFieldQuery(sel sqlparser.SelectStatement, jt *jointab) 
 	return sqlparser.NewTrackedBuffer(formatter).WriteNode(sel).ParsedQuery().Query
 }
 
-// SupplyVar should be unreachable.
+// SupplyVar satisfies the builder interface.
 func (rb *route) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	panic("unreachable")
+	// route is an atomic primitive. So, SupplyVar cannot be
+	// called on it.
+	panic("BUG: route is an atomic node.")
 }
 
-// SupplyCol changes the executor to supply the requested column
-// name, and returns the result column number. If the column
-// is already in the list, it's reused.
+// SupplyCol satisfies the builder interface.
 func (rb *route) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int) {
 	c := col.Metadata.(*column)
 	for i, rc := range rb.resultColumns {
@@ -554,6 +556,28 @@ func (rb *route) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int
 	sel := rb.Select.(*sqlparser.Select)
 	sel.SelectExprs = append(sel.SelectExprs, &sqlparser.AliasedExpr{Expr: col})
 	return rc, len(rb.resultColumns) - 1
+}
+
+// BuildColName builds a *sqlparser.ColName for the resultColumn specified
+// by the index. The built ColName will correctly reference the resultColumn
+// it was built from, which is safe to push down into the route.
+func (rb *route) BuildColName(index int) (*sqlparser.ColName, error) {
+	alias := rb.resultColumns[index].alias
+	if alias.IsEmpty() {
+		return nil, errors.New("cannot reference a complex expression")
+	}
+	for i, rc := range rb.resultColumns {
+		if i == index {
+			continue
+		}
+		if rc.alias.Equal(alias) {
+			return nil, fmt.Errorf("ambiguous symbol reference: %v", alias)
+		}
+	}
+	return &sqlparser.ColName{
+		Metadata: rb.resultColumns[index].column,
+		Name:     alias,
+	}, nil
 }
 
 // IsSingle returns true if the route targets only one database.
@@ -653,7 +677,7 @@ func (rb *route) SetOpcode(code engine.RouteOpcode) error {
 			return errors.New("NEXT used on a sharded table")
 		}
 	default:
-		panic("unreachable")
+		panic(fmt.Sprintf("BUG: unrecognized transition: %v", code))
 	}
 	rb.ERoute.Opcode = code
 	return nil
