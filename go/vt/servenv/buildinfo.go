@@ -31,7 +31,7 @@ var (
 	buildTime   = ""
 	buildGitRev = ""
 
-	// Command line flag to expose build info.
+	// Version registers the command line flag to expose build info.
 	Version = flag.Bool("version", false, "print binary version")
 )
 
