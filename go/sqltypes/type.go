@@ -74,6 +74,11 @@ func IsBinary(t querypb.Type) bool {
 	return int(t)&flagIsBinary == flagIsBinary
 }
 
+// isNumber returns true if the type is any type of number.
+func isNumber(t querypb.Type) bool {
+	return IsIntegral(t) || IsFloat(t) || t == Decimal
+}
+
 // Vitess data types. These are idiomatically
 // named synonyms for the querypb.Type values.
 const (
