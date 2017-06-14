@@ -58,7 +58,7 @@ func processSelect(sel *sqlparser.Select, vschema VSchema, outer builder) (build
 	if err != nil {
 		return nil, err
 	}
-	err = pushSelectExprs(sel, bldr)
+	bldr, err = pushSelectExprs(sel, bldr)
 	if err != nil {
 		return nil, err
 	}
@@ -120,18 +120,18 @@ func reorderBySubquery(filters []sqlparser.Expr) {
 
 // pushSelectExprs identifies the target route for the
 // select expressions and pushes them down.
-func pushSelectExprs(sel *sqlparser.Select, bldr builder) error {
+func pushSelectExprs(sel *sqlparser.Select, bldr builder) (builder, error) {
 	resultColumns, err := pushSelectRoutes(sel.SelectExprs, bldr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	bldr.Symtab().ResultColumns = resultColumns
 
-	err = pushGroupBy(sel, bldr)
+	bldr, err = pushGroupBy(sel, bldr)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return bldr, nil
 }
 
 // pusheSelectRoutes is a convenience function that pushes all the select

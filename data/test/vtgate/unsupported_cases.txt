@@ -143,13 +143,9 @@
 "select id from user group by col"
 "unsupported: in scatter query: group by column must reference column in SELECT list"
 
-# scatter aggregate invalid order by number
-"select id from user group by id order by 2"
-"in order by: column number out of range: 2"
-
 # scatter aggregate order by (number) references aggregate function.
 "select id, count(*) from user group by id order by 2"
-"unsupported: in scatter query: order by expression cannot reference an aggregate function: 2"
+"unsupported: scatter and order by"
 
 # scatter aggregate symtab lookup error
 "select id, b as id, count(*) from user order by id"
@@ -157,7 +153,7 @@
 
 # scatter aggregate complex order by
 "select id from user group by id order by id+1"
-"unsupported: in scatter query: complex order by expression: id + 1"
+"unsupported: scatter and order by"
 
 # scatter aggregate order by does not reference group by
 "select a, b, count(*) from user group by a order by b"
