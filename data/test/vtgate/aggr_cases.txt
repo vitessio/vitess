@@ -187,6 +187,38 @@
   }
 }
 
+# group by a unique vindex should revert to simple route
+"select id, count(*) from user group by id"
+{
+  "Original": "select id, count(*) from user group by id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id, count(*) from user group by id",
+    "FieldQuery": "select id, count(*) from user where 1 != 1 group by id"
+  }
+}
+
+# group by a unique vindex should revert to simple route, and having clause should find the correct symbols.
+"select id, count(*) c from user group by id having id=1 and c=10"
+{
+  "Original": "select id, count(*) c from user group by id having id=1 and c=10",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id, count(*) as c from user group by id having id = 1 and c = 10",
+    "FieldQuery": "select id, count(*) as c from user where 1 != 1 group by id",
+    "Vindex": "user_index",
+    "Values": 1
+  }
+}
+
 # scatter aggregate in a subquery
 "select a from (select count(*) as a from user) t"
 {

@@ -262,8 +262,8 @@ func (oa *orderedAggregate) MakeDistinct() error {
 }
 
 // SetGroupBy satisfies the builder interface.
-func (oa *orderedAggregate) SetGroupBy(groupBy sqlparser.GroupBy) error {
-outer:
+func (oa *orderedAggregate) SetGroupBy(groupBy sqlparser.GroupBy) (builder, error) {
+	colnum := -1
 	for _, expr := range groupBy {
 		switch node := expr.(type) {
 		case *sqlparser.ColName:
@@ -271,25 +271,45 @@ outer:
 			for i, rc := range oa.resultColumns {
 				if rc.column == c {
 					if oa.eaggr.Results[i] < 0 {
-						return fmt.Errorf("group by expression cannot reference an aggregate function: %v", sqlparser.String(node))
+						return nil, fmt.Errorf("group by expression cannot reference an aggregate function: %v", sqlparser.String(node))
 					}
-					oa.eaggr.Keys = append(oa.eaggr.Keys, engine.AggregateKey{Col: oa.eaggr.Results[i]})
-					continue outer
+					colnum = i
+					break
 				}
 			}
-			return errors.New("unsupported: in scatter query: group by column must reference column in SELECT list")
+			if colnum == -1 {
+				return nil, errors.New("unsupported: in scatter query: group by column must reference column in SELECT list")
+			}
 		case *sqlparser.SQLVal:
 			num, err := oa.Symtab().ResultFromNumber(node)
 			if err != nil {
-				return err
+				return nil, err
 			}
-			oa.eaggr.Keys = append(oa.eaggr.Keys, engine.AggregateKey{Col: oa.eaggr.Results[num]})
+			colnum = num
 		default:
-			return errors.New("unsupported: in scatter query: only simple references allowed")
+			return nil, errors.New("unsupported: in scatter query: only simple references allowed")
 		}
+		if vindexes.IsUnique(oa.resultColumns[colnum].column.Vindex) {
+			oa.setDefunct()
+			return oa.input.SetGroupBy(groupBy)
+		}
+		oa.eaggr.Keys = append(oa.eaggr.Keys, engine.AggregateKey{Col: oa.eaggr.Results[colnum]})
 	}
 
-	return oa.input.SetGroupBy(groupBy)
+	_, _ = oa.input.SetGroupBy(groupBy)
+	return oa, nil
+}
+
+// setDefunct replaces the column references originated by
+// oa into the ones of the underlying route, effectively
+// removing itself as an originator. Because resultColumns
+// are shared objects, this change equally affects the ones
+// in symtab. So, the change is global. All future resolves
+// will yield the column originated by the underlying route.
+func (oa *orderedAggregate) setDefunct() {
+	for i, rc := range oa.resultColumns {
+		rc.column = oa.input.ResultColumns()[i].column
+	}
 }
 
 // PushOrderBy pushes the order by expression into the primitive.

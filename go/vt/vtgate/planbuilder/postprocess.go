@@ -32,26 +32,28 @@ type groupByHandler interface {
 	// SetGroupBy makes the primitive handle the group by clause.
 	// The primitive may outsource some of its work to an underlying
 	// primitive that is also a groupByHandler (like a route).
-	SetGroupBy(sqlparser.GroupBy) error
+	// This function returns either the current builder or a different
+	// one depending on the result of the analysis.
+	SetGroupBy(sqlparser.GroupBy) (builder, error)
 	// MakeDistinct makes the primitive handle the distinct clause.
 	MakeDistinct() error
 }
 
 // pushGroupBy processes the group by clause. It resolves all symbols,
 // and ensures that there are no subqueries.
-func pushGroupBy(sel *sqlparser.Select, bldr builder) error {
+func pushGroupBy(sel *sqlparser.Select, bldr builder) (builder, error) {
 	if sel.Distinct != "" {
 		// We can be here only if the builder could handle a group by.
 		if err := bldr.(groupByHandler).MakeDistinct(); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	if len(sel.GroupBy) == 0 {
-		return nil
+		return bldr, nil
 	}
 	if err := bldr.Symtab().ResolveSymbols(sel.GroupBy); err != nil {
-		return fmt.Errorf("unsupported: in group by: %v", err)
+		return nil, fmt.Errorf("unsupported: in group by: %v", err)
 	}
 
 	// We can be here only if the builder could handle a group by.
