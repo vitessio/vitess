@@ -2283,6 +2283,14 @@ func MarshalJSON(obj interface{}) (data []byte, err error) {
 			return nil, fmt.Errorf("jsonpb error: %v", err)
 		}
 		data = b.Bytes()
+	case []string:
+		if len(obj) == 0 {
+			return []byte{'[', ']'}, nil
+		}
+		data, err = json.MarshalIndent(obj, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("json error: %v", err)
+		}
 	default:
 		data, err = json.MarshalIndent(obj, "", "  ")
 		if err != nil {
