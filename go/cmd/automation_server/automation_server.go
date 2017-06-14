@@ -34,8 +34,16 @@ func init() {
 }
 
 func main() {
+
 	flag.Parse()
+
+	if *servenv.Version {
+		servenv.AppVersion.Print()
+		os.Exit(0)
+	}
+
 	fmt.Println("Automation Server, listening on:", *servenv.Port)
+
 	if *servenv.Port == 0 {
 		fmt.Println("No port specified using --port.")
 		os.Exit(1)

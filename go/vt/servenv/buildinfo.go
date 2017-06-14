@@ -17,7 +17,9 @@ limitations under the License.
 package servenv
 
 import (
+	"flag"
 	"fmt"
+	"runtime"
 	"time"
 
 	"github.com/youtube/vitess/go/stats"
@@ -28,15 +30,52 @@ var (
 	buildUser   = ""
 	buildTime   = ""
 	buildGitRev = ""
+
+	// Version registers the command line flag to expose build info.
+	Version = flag.Bool("version", false, "print binary version")
 )
+
+// AppVersion is the struct to store build info.
+var AppVersion versionInfo
+
+type versionInfo struct {
+	buildHost       string
+	buildUser       string
+	buildTime       int64
+	buildTimePretty string
+	buildGitRev     string
+	goVersion       string
+	goOS            string
+	goArch          string
+}
+
+func (v *versionInfo) Print() {
+	fmt.Printf("Version: %s built on %s by %s@%s using %s %s/%s\n", v.buildGitRev, v.buildTimePretty, v.buildUser, v.buildHost, v.goVersion, v.goOS, v.goArch)
+}
 
 func init() {
 	t, err := time.Parse(time.UnixDate, buildTime)
 	if buildTime != "" && err != nil {
 		panic(fmt.Sprintf("Couldn't parse build timestamp %q: %v", buildTime, err))
 	}
-	stats.NewString("BuildHost").Set(buildHost)
-	stats.NewString("BuildUser").Set(buildUser)
-	stats.NewInt("BuildTimestamp").Set(t.Unix())
-	stats.NewString("BuildGitRev").Set(buildGitRev)
+
+	AppVersion = versionInfo{
+		buildHost:       buildHost,
+		buildUser:       buildUser,
+		buildTime:       t.Unix(),
+		buildTimePretty: buildTime,
+		buildGitRev:     buildGitRev,
+		goVersion:       runtime.Version(),
+		goOS:            runtime.GOOS,
+		goArch:          runtime.GOARCH,
+	}
+
+	stats.NewString("BuildHost").Set(AppVersion.buildHost)
+	stats.NewString("BuildUser").Set(AppVersion.buildUser)
+	stats.NewInt("BuildTimestamp").Set(AppVersion.buildTime)
+	stats.NewString("BuildGitRev").Set(AppVersion.buildGitRev)
+	stats.NewString("GoVersion").Set(AppVersion.goVersion)
+	stats.NewString("GoOS").Set(AppVersion.goOS)
+	stats.NewString("GoArch").Set(AppVersion.goArch)
+
 }
