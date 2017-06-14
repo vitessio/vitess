@@ -30,9 +30,12 @@ var (
 	buildUser   = ""
 	buildTime   = ""
 	buildGitRev = ""
-	Version     = flag.Bool("version", false, "print binary version")
+
+	// Command line flag to expose build info.
+	Version = flag.Bool("version", false, "print binary version")
 )
 
+// AppVersion is the struct to store build info.
 var AppVersion versionInfo
 
 type versionInfo struct {
