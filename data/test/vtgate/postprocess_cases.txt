@@ -401,3 +401,76 @@
     "Values": 1
   }
 }
+
+# limit for joins
+"select user.col from user join user_extra limit 1"
+{
+  "Original": "select user.col from user join user_extra limit 1",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": 1,
+    "Input": {
+      "Opcode": "Join",
+      "Left": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select user.col from user",
+        "FieldQuery": "select user.col from user where 1 != 1"
+      },
+      "Right": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select 1 from user_extra",
+        "FieldQuery": "select 1 from user_extra where 1 != 1"
+      },
+      "Cols": [
+        -1
+      ]
+    }
+  }
+}
+
+# limit for scatter
+"select col from user limit 1"
+{
+  "Original": "select col from user limit 1",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": 1,
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user limit 1",
+      "FieldQuery": "select col from user where 1 != 1"
+    }
+  }
+}
+
+# cross-shard expression in parenthesis with limit
+"select * from user where (id = 4 AND name ='abc') limit 5"
+{
+  "Original": "select * from user where (id = 4 AND name ='abc') limit 5",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": 5,
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select * from user where (id = 4 and name = 'abc') limit 5",
+      "FieldQuery": "select * from user where 1 != 1"
+    }
+  }
+}
+

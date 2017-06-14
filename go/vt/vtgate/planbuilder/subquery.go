@@ -140,6 +140,11 @@ func (sq *subquery) PushSelect(expr *sqlparser.AliasedExpr, _ columnOriginator) 
 func (sq *subquery) PushOrderByNull() {
 }
 
+// SetUpperLimit satisfies the builder interface.
+// TODO(sougou): this could be improved.
+func (sq *subquery) SetUpperLimit(_ interface{}) {
+}
+
 // PushMisc satisfies the builder interface.
 func (sq *subquery) PushMisc(sel *sqlparser.Select) {
 }
