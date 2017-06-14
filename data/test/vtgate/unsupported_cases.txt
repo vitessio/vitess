@@ -127,10 +127,6 @@
 "select distinct a, count(*) from user"
 "unsupported: distinct cannot be combined with aggregate functions"
 
-# distinct and group by
-"select distinct a from user group by a"
-"unsupported: distinct and group by in the same query"
-
 # group by must reference select list
 "select a from user group by b"
 "unsupported: in scatter query: group by column must reference column in SELECT list"
