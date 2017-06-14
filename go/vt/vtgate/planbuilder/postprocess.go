@@ -41,13 +41,13 @@ type groupByHandler interface {
 // and ensures that there are no subqueries.
 func pushGroupBy(sel *sqlparser.Select, bldr builder) error {
 	if sel.Distinct != "" {
-		if len(sel.GroupBy) != 0 {
-			return errors.New("unsupported: distinct and group by in the same query")
+		// We can be here only if the builder could handle a group by.
+		if err := bldr.(groupByHandler).MakeDistinct(); err != nil {
+			return err
 		}
-		return bldr.(groupByHandler).MakeDistinct()
 	}
 
-	if sel.GroupBy == nil {
+	if len(sel.GroupBy) == 0 {
 		return nil
 	}
 	if err := bldr.Symtab().ResolveSymbols(sel.GroupBy); err != nil {

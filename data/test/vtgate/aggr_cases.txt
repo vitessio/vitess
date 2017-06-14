@@ -78,6 +78,21 @@
   }
 }
 
+# distinct and group by together for single route.
+"select distinct col1, id from user group by col1"
+{
+  "Original": "select distinct col1, id from user group by col1",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select distinct col1, id from user group by col1",
+    "FieldQuery": "select col1, id from user where 1 != 1 group by col1"
+  }
+}
+
 # simple aggregate
 "select count(*) from user"
 {
@@ -101,6 +116,42 @@
       },
       "Query": "select count(*) from user",
       "FieldQuery": "select count(*) from user where 1 != 1"
+    }
+  }
+}
+
+# distinct and group by together for scatter route
+"select distinct col1, col2 from user group by col1"
+{
+  "Original": "select distinct col1, col2 from user group by col1",
+  "Instructions": {
+    "Results": [
+      0,
+      1
+    ],
+    "Aggregates": null,
+    "Keys": [
+      {
+        "Col": 0,
+        "Desc": false
+      },
+      {
+        "Col": 1,
+        "Desc": false
+      },
+      {
+        "Col": 0,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select distinct col1, col2 from user group by col1 order by col1 asc, col2 asc, col1 asc",
+      "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1"
     }
   }
 }
