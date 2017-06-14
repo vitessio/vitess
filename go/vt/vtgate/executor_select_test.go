@@ -1205,6 +1205,152 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 	}
 }
 
+// TestSelectScatterLimit will run a limit query (ordered for consistency) against
+// a scatter route and verify that the limit primitive works as intended.
+func TestSelectScatterLimit(t *testing.T) {
+	// Special setup: Don't use createExecutorEnv.
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck()
+	s := createSandbox("TestExecutor")
+	s.VSchema = executorVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := new(sandboxTopo)
+	resolver := newTestResolver(hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	var conns []*sandboxconn.SandboxConn
+	for i, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc.SetResults([]*sqltypes.Result{{
+			Fields: []*querypb.Field{
+				{Name: "col1", Type: sqltypes.Int32},
+				{Name: "col2", Type: sqltypes.Int32},
+			},
+			RowsAffected: 1,
+			InsertID:     0,
+			Rows: [][]sqltypes.Value{{
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(i%4))),
+			}},
+		}})
+		conns = append(conns, sbc)
+	}
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, 10)
+
+	query := "select col1, col2 from user order by col2 desc limit 3"
+	gotResult, err := executorExec(executor, query, nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           query,
+		BindVariables: map[string]interface{}{},
+	}}
+	for _, conn := range conns {
+		if !reflect.DeepEqual(conn.Queries, wantQueries) {
+			t.Errorf("conn.Queries = %#v, want %#v", conn.Queries, wantQueries)
+		}
+	}
+
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "col1", Type: sqltypes.Int32},
+			{Name: "col2", Type: sqltypes.Int32},
+		},
+		RowsAffected: 3,
+		InsertID:     0,
+	}
+	wantResult.Rows = append(wantResult.Rows,
+		[]sqltypes.Value{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+		},
+		[]sqltypes.Value{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+		},
+		[]sqltypes.Value{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+		})
+
+	if !reflect.DeepEqual(gotResult, wantResult) {
+		t.Errorf("scatter order by:\n%v, want\n%v", gotResult, wantResult)
+	}
+}
+
+// TestStreamSelectScatterLimit will run a streaming limit query (ordered for consistency) against
+// a scatter route and verify that the limit primitive works as intended.
+func TestStreamSelectScatterLimit(t *testing.T) {
+	// Special setup: Don't use createExecutorEnv.
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck()
+	s := createSandbox("TestExecutor")
+	s.VSchema = executorVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := new(sandboxTopo)
+	resolver := newTestResolver(hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	var conns []*sandboxconn.SandboxConn
+	for i, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc.SetResults([]*sqltypes.Result{{
+			Fields: []*querypb.Field{
+				{Name: "col1", Type: sqltypes.Int32},
+				{Name: "col2", Type: sqltypes.Int32},
+			},
+			RowsAffected: 1,
+			InsertID:     0,
+			Rows: [][]sqltypes.Value{{
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(i%4))),
+			}},
+		}})
+		conns = append(conns, sbc)
+	}
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, 10)
+
+	query := "select col1, col2 from user order by col2 desc limit 3"
+	gotResult, err := executorStream(executor, query)
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           query,
+		BindVariables: map[string]interface{}{},
+	}}
+	for _, conn := range conns {
+		if !reflect.DeepEqual(conn.Queries, wantQueries) {
+			t.Errorf("conn.Queries = %#v, want %#v", conn.Queries, wantQueries)
+		}
+	}
+
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "col1", Type: sqltypes.Int32},
+			{Name: "col2", Type: sqltypes.Int32},
+		},
+	}
+	wantResult.Rows = append(wantResult.Rows,
+		[]sqltypes.Value{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+		},
+		[]sqltypes.Value{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+		},
+		[]sqltypes.Value{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+		})
+
+	if !reflect.DeepEqual(gotResult, wantResult) {
+		t.Errorf("scatter order by:\n%v, want\n%v", gotResult, wantResult)
+	}
+}
+
 // TODO(sougou): stream and non-stream testing are very similar.
 // Could reuse code,
 func TestSimpleJoin(t *testing.T) {

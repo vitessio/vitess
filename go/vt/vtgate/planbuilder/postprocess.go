@@ -127,17 +127,18 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 	return nil
 }
 
-func pushLimit(limit *sqlparser.Limit, bldr builder) error {
+func pushLimit(limit *sqlparser.Limit, bldr builder) (builder, error) {
 	if limit == nil {
-		return nil
+		return bldr, nil
 	}
 	rb, ok := bldr.(*route)
-	if !ok {
-		return errors.New("unsupported: limits with cross-shard query")
+	if ok && rb.IsSingle() {
+		rb.SetLimit(limit)
+		return bldr, nil
 	}
-	if !rb.IsSingle() {
-		return errors.New("unsupported: limits with scatter")
+	l := newLimit(bldr)
+	if err := l.SetLimit(limit); err != nil {
+		return nil, err
 	}
-	rb.SetLimit(limit)
-	return nil
+	return l, nil
 }

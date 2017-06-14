@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
@@ -432,14 +433,30 @@ func (rb *route) PushOrderBy(order *sqlparser.Order) error {
 	return nil
 }
 
+// PushOrderByNull satisfies the builder interface.
+func (rb *route) PushOrderByNull() {
+	rb.Select.(*sqlparser.Select).OrderBy = sqlparser.OrderBy{&sqlparser.Order{Expr: &sqlparser.NullVal{}}}
+}
+
 // SetLimit adds a LIMIT clause to the route.
 func (rb *route) SetLimit(limit *sqlparser.Limit) {
 	rb.Select.SetLimit(limit)
 }
 
-// PushOrderByNull satisfies the builder interface.
-func (rb *route) PushOrderByNull() {
-	rb.Select.(*sqlparser.Select).OrderBy = sqlparser.OrderBy{&sqlparser.Order{Expr: &sqlparser.NullVal{}}}
+// SetUpperLimit satisfies the builder interface.
+// The route pushes the limit regardless of the plan.
+// If it's a scatter query, the rows returned will be
+// more than the upper limit, but enough for the limit
+// primitive to chop off where needed.
+func (rb *route) SetUpperLimit(count interface{}) {
+	limit := &sqlparser.Limit{}
+	switch count := count.(type) {
+	case string:
+		limit.Rowcount = sqlparser.NewValArg([]byte(count))
+	default:
+		limit.Rowcount = sqlparser.NewIntVal(strconv.AppendInt(nil, count.(int64), 10))
+	}
+	rb.Select.SetLimit(limit)
 }
 
 // PushMisc satisfies the builder interface.
