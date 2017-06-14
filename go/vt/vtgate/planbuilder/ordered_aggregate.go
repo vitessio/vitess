@@ -381,6 +381,11 @@ func (oa *orderedAggregate) PushOrderByNull() {
 	panic("BUG: unreachable")
 }
 
+// SetUpperLimit satisfies the builder interface.
+func (oa *orderedAggregate) SetUpperLimit(count interface{}) {
+	oa.input.SetUpperLimit(count)
+}
+
 // PushMisc satisfies the builder interface.
 func (oa *orderedAggregate) PushMisc(sel *sqlparser.Select) {
 	oa.input.PushMisc(sel)
