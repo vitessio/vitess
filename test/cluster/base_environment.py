@@ -400,6 +400,8 @@ class BaseEnvironment(object):
         ['GetTablet', tablet_name]))
     host = tablet_info['hostname']
     if ':' in host:
+      # If host is an IPv6 address we need to put it into square brackets to
+      # form a correct "host:port" value.
       host = '[%s]' % host
     return '%s:%s' % (host, tablet_info['port_map']['vt'])
 
