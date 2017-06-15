@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 
 # Copyright 2017 Google Inc.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -44,8 +44,8 @@ healthy_expr = re.compile(r'Current status: <span.+?>healthy')
 def setUpModule():
   try:
     topo_flavor = environment.topo_server().flavor()
-    if topo_flavor == 'zookeeper' or topo_flavor == 'zk2':
-      # This is a one-off test to make sure our zookeeper implementations
+    if topo_flavor == 'zk2':
+      # This is a one-off test to make sure our 'zk2' implementation
       # behave with a server that is not DNS-resolveable.
       environment.topo_server().setup(add_bad_host=True)
     else:
@@ -204,23 +204,6 @@ class TestTabletManager(unittest.TestCase):
 
     # wait for the background vtctl
     bg.wait()
-
-    if environment.topo_server().flavor() == 'zookeeper':
-      # extra small test: we ran for a while, get the states we were in,
-      # make sure they're accounted for properly
-      # first the query engine States
-      v = utils.get_vars(tablet_62344.port)
-      logging.debug('vars: %s', v)
-
-      # then the Zookeeper connections
-      if v['ZkCachedConn']['test_nj'] != 'Connected':
-        self.fail('invalid zk test_nj state: %s' %
-                  v['ZkCachedConn']['test_nj'])
-      if v['ZkCachedConn']['global'] != 'Connected':
-        self.fail('invalid zk global state: %s' %
-                  v['ZkCachedConn']['global'])
-      if v['TabletType'] != 'master':
-        self.fail('TabletType not exported correctly')
 
     tablet_62344.kill_vttablet()
 
