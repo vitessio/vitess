@@ -138,10 +138,12 @@ func (oa *OrderedAggregate) aggregate(fields []*querypb.Field, nextRow func() []
 			emit(current)
 			return nil
 		}
+
 		equal, err := oa.keysEqual(current, next)
 		if err != nil {
 			return err
 		}
+
 		if equal {
 			if err := oa.merge(fields, current, next); err != nil {
 				return err

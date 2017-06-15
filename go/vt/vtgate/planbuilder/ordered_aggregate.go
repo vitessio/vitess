@@ -232,6 +232,10 @@ func (oa *orderedAggregate) PushSelect(expr *sqlparser.AliasedExpr, origin colum
 
 func (oa *orderedAggregate) MakeDistinct() error {
 	for i, rc := range oa.resultColumns {
+		// If the column origin is oa (and not the underlying route),
+		// it means that it's an aggregate function supplied by oa.
+		// So, the distinct 'operator' cannot be pushed down into the
+		// route.
 		if rc.column.Origin() == oa {
 			return errors.New("unsupported: distinct cannot be combined with aggregate functions")
 		}
@@ -320,13 +324,13 @@ func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) error {
 		case *sqlparser.SQLVal:
 			num, err := ResultFromNumber(oa.resultColumns, expr)
 			if err != nil {
-				return fmt.Errorf("in order by: %v", err)
+				return fmt.Errorf("invalid order by: %v", err)
 			}
 			orderByCol = oa.input.ResultColumns()[num].column
 		case *sqlparser.ColName:
 			_, _, err := oa.Symtab().Find(expr)
 			if err != nil {
-				return fmt.Errorf("in order by: %v", err)
+				return fmt.Errorf("invalid order by: %v", err)
 			}
 			orderByCol = expr.Metadata.(*column)
 		default:

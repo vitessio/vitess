@@ -145,7 +145,7 @@
 
 # scatter aggregate symtab lookup error
 "select id, b as id, count(*) from user order by id"
-"in order by: ambiguous symbol reference: id"
+"invalid order by: ambiguous symbol reference: id"
 
 # scatter aggregate complex order by
 "select id from user group by id order by id+1"

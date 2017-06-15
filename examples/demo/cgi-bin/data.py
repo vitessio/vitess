@@ -168,6 +168,12 @@ def main():
 
 
 def decimal_default(obj):
+  """Provide json-encodable conversion for decimal.Decimal type.
+
+  json encoding fails on decimal.Decimal. This
+  function converts the decimal into a float object
+  which json knows how to encode.
+  """
   if isinstance(obj, decimal.Decimal):
     return float(obj)
   raise TypeError

@@ -844,6 +844,7 @@ func TestSelectScatterFail(t *testing.T) {
 	}
 }
 
+// TestSelectScatterOrderBy will run an ORDER BY query that will scatter out to 8 shards and return the 8 rows (one per shard) sorted.
 func TestSelectScatterOrderBy(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
@@ -859,8 +860,8 @@ func TestSelectScatterOrderBy(t *testing.T) {
 		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 		sbc.SetResults([]*sqltypes.Result{{
 			Fields: []*querypb.Field{
-				{Name: "id", Type: sqltypes.Int32},
-				{Name: "col", Type: sqltypes.Int32},
+				{Name: "col1", Type: sqltypes.Int32},
+				{Name: "col2", Type: sqltypes.Int32},
 			},
 			RowsAffected: 1,
 			InsertID:     0,
@@ -873,7 +874,7 @@ func TestSelectScatterOrderBy(t *testing.T) {
 	}
 	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false)
 
-	query := "select id, col from user order by col desc"
+	query := "select col1, col2 from user order by col2 desc"
 	gotResult, err := executorExec(executor, query, nil)
 	if err != nil {
 		t.Error(err)
@@ -891,24 +892,29 @@ func TestSelectScatterOrderBy(t *testing.T) {
 
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32},
-			{Name: "col", Type: sqltypes.Int32},
+			{Name: "col1", Type: sqltypes.Int32},
+			{Name: "col2", Type: sqltypes.Int32},
 		},
 		RowsAffected: 8,
 		InsertID:     0,
 	}
 	for i := 0; i < 4; i++ {
-		row := []sqltypes.Value{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(3-i))),
+		// There should be a duplicate for each row returned.
+		for j := 0; j < 2; j++ {
+			row := []sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(3-i))),
+			}
+			wantResult.Rows = append(wantResult.Rows, row)
 		}
-		wantResult.Rows = append(wantResult.Rows, row, row)
 	}
 	if !reflect.DeepEqual(gotResult, wantResult) {
 		t.Errorf("scatter order by:\n%v, want\n%v", gotResult, wantResult)
 	}
 }
 
+// TestSelectScatterOrderBy will run an ORDER BY query that will scatter out to 8 shards, with
+// the order by column as VarChar, which is unsupported.
 func TestSelectScatterOrderByFail(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
@@ -943,6 +949,7 @@ func TestSelectScatterOrderByFail(t *testing.T) {
 	}
 }
 
+// TestSelectScatterOrderBy will run an aggregate query that will scatter out to 8 shards and return 4 aggregated rows.
 func TestSelectScatterAggregate(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"

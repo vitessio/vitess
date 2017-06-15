@@ -50,7 +50,7 @@ type Route struct {
 	// FieldQuery specifies the query to be executed for a GetFieldInfo request.
 	FieldQuery string
 
-	// Vindex and values specify how routing must be computed
+	// Vindex and Values specify how routing must be computed
 	Vindex vindexes.Vindex
 	Values interface{}
 
@@ -70,7 +70,7 @@ type Route struct {
 
 	// Subquery is only set for deletes. A select of the rows to be
 	// deleted is performed to figure out which lookup vindex entries must
-	// be deleteed.
+	// be deleted.
 	Subquery string
 
 	// Generate is only set for inserts where a sequence must be generated.
@@ -82,7 +82,7 @@ type Route struct {
 	Suffix string
 }
 
-// OrderbyParams specifies the parameters for ordering,
+// OrderbyParams specifies the parameters for ordering.
 // This is used for merge-sorting scatter queries.
 type OrderbyParams struct {
 	Col  int
@@ -464,6 +464,11 @@ func (route *Route) execAnyShard(vcursor VCursor, bindVars map[string]interface{
 func (route *Route) sort(result *sqltypes.Result) error {
 	var err error
 	sort.Slice(result.Rows, func(i, j int) bool {
+		// If there are any errors below, the function sets
+		// the external err and returns true. Once err is set,
+		// all subsequent calls return true. This will make
+		// Slice think that all elements are in the correct
+		// order and return more quickly.
 		for _, order := range route.OrderBy {
 			if err != nil {
 				return true
