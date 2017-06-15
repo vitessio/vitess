@@ -343,7 +343,7 @@ func (st *symtab) NewResultColumn(expr *sqlparser.AliasedExpr, origin columnOrig
 
 // ResultFromNumber returns the result column index based on the column
 // order expression.
-func (st *symtab) ResultFromNumber(val *sqlparser.SQLVal) (int, error) {
+func ResultFromNumber(resultColumns []*resultColumn, val *sqlparser.SQLVal) (int, error) {
 	if val.Type != sqlparser.IntVal {
 		return 0, errors.New("column number is not an int")
 	}
@@ -351,7 +351,7 @@ func (st *symtab) ResultFromNumber(val *sqlparser.SQLVal) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("error parsing column number: %s", sqlparser.String(val))
 	}
-	if num < 1 || num > int64(len(st.ResultColumns)) {
+	if num < 1 || num > int64(len(resultColumns)) {
 		return 0, fmt.Errorf("column number out of range: %d", num)
 	}
 	return int(num - 1), nil

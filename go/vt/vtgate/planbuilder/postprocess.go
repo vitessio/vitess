@@ -88,7 +88,7 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 		if node, ok := order.Expr.(*sqlparser.SQLVal); ok {
 			// This block handles constructs that use ordinals for 'ORDER BY'. For example:
 			// SELECT a, b, c FROM t1, t2 ORDER BY 1, 2, 3.
-			num, err := bldr.Symtab().ResultFromNumber(node)
+			num, err := ResultFromNumber(bldr.Symtab().ResultColumns, node)
 			if err != nil {
 				return err
 			}
@@ -119,13 +119,10 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 			}
 		}
 
-		// The check for scatter route must be done at this level.
-		// Future primitives may still want to push an order by clause
-		// into a scatter route for the sake of optimization.
-		if !leftmostRB.IsSingle() {
-			return errors.New("unsupported: scatter and order by")
+		// There were no errors. We can push the order by to the left-most route.
+		if err := leftmostRB.PushOrderBy(order); err != nil {
+			return err
 		}
-		leftmostRB.PushOrderBy(order)
 	}
 	return nil
 }
