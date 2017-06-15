@@ -116,6 +116,9 @@ func TestLoadTableMessage(t *testing.T) {
 				Name: "id",
 				Type: sqltypes.Int64,
 			}, {
+				Name: "time_scheduled",
+				Type: sqltypes.Int64,
+			}, {
 				Name: "message",
 				Type: sqltypes.VarBinary,
 			}},

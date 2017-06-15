@@ -183,13 +183,17 @@ class TestMessaging(unittest.TestCase):
         keyspace, name)
     self.assertEqual(
         fields,
-        [('id', query_pb2.INT64), ('message', query_pb2.VARCHAR)])
+        [
+          ('id', query_pb2.INT64),
+          ('time_scheduled', query_pb2.INT64),
+          ('message', query_pb2.VARCHAR),
+        ])
 
     # We should get both messages.
     result = {}
     for _ in xrange(2):
       row = it.next()
-      result[row[0]] = row[1]
+      result[row[0]] = row[2]
     self.assertEqual(result, {1: 'hello world 1', 4: 'hello world 4'})
 
     # After ack, we should get only one message.
@@ -198,7 +202,7 @@ class TestMessaging(unittest.TestCase):
     result = {}
     for _ in xrange(2):
       row = it.next()
-      result[row[0]] = row[1]
+      result[row[0]] = row[2]
     self.assertEqual(result, {1: 'hello world 1'})
     # Only one should be acked.
     count = vtgate_conn.message_ack(name, [1, 4])

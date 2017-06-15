@@ -41,6 +41,9 @@ var (
 		Name: "id",
 		Type: sqltypes.VarBinary,
 	}, {
+		Name: "time_scheduled",
+		Type: sqltypes.Int64,
+	}, {
 		Name: "message",
 		Type: sqltypes.VarBinary,
 	}}
@@ -315,9 +318,10 @@ func TestMessageManagerPoller(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQueryPattern(
-		"select time_next, epoch, id, message from foo.*",
+		"select time_next, epoch, id, time_scheduled, message from foo.*",
 		&sqltypes.Result{
 			Fields: []*querypb.Field{
+				{Type: sqltypes.Int64},
 				{Type: sqltypes.Int64},
 				{Type: sqltypes.Int64},
 				{Type: sqltypes.Int64},
@@ -327,16 +331,19 @@ func TestMessageManagerPoller(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("0")),
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("10")),
 				sqltypes.MakeString([]byte("01")),
 			}, {
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("0")),
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("20")),
 				sqltypes.MakeString([]byte("02")),
 			}, {
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("30")),
 				sqltypes.MakeString([]byte("11")),
 			}},
 		},
@@ -353,12 +360,15 @@ func TestMessageManagerPoller(t *testing.T) {
 	mm.pollerTicks.Trigger()
 	want := [][]sqltypes.Value{{
 		sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
+		sqltypes.MakeTrusted(sqltypes.Int64, []byte("20")),
 		sqltypes.MakeString([]byte("02")),
 	}, {
 		sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+		sqltypes.MakeTrusted(sqltypes.Int64, []byte("10")),
 		sqltypes.MakeString([]byte("01")),
 	}, {
 		sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
+		sqltypes.MakeTrusted(sqltypes.Int64, []byte("30")),
 		sqltypes.MakeString([]byte("11")),
 	}}
 	var got [][]sqltypes.Value
@@ -389,9 +399,10 @@ func TestMessagesPending1(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQueryPattern(
-		"select time_next, epoch, id, message from foo.*",
+		"select time_next, epoch, id, time_scheduled, message from foo.*",
 		&sqltypes.Result{
 			Fields: []*querypb.Field{
+				{Type: sqltypes.Int64},
 				{Type: sqltypes.Int64},
 				{Type: sqltypes.Int64},
 				{Type: sqltypes.Int64},
@@ -401,6 +412,7 @@ func TestMessagesPending1(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("0")),
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("a")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("10")),
 				sqltypes.MakeString([]byte("a")),
 			}},
 		},
@@ -454,9 +466,10 @@ func TestMessagesPending2(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQueryPattern(
-		"select time_next, epoch, id, message from foo.*",
+		"select time_next, epoch, id, time_scheduled, message from foo.*",
 		&sqltypes.Result{
 			Fields: []*querypb.Field{
+				{Type: sqltypes.Int64},
 				{Type: sqltypes.Int64},
 				{Type: sqltypes.Int64},
 				{Type: sqltypes.Int64},
@@ -466,6 +479,7 @@ func TestMessagesPending2(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("0")),
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("a")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("10")),
 				sqltypes.MakeString([]byte("a")),
 			}},
 		},
