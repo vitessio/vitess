@@ -21,5 +21,6 @@ echo "\
   -X 'github.com/youtube/vitess/go/vt/servenv.buildHost=$(hostname)' \
   -X 'github.com/youtube/vitess/go/vt/servenv.buildUser=$(whoami)' \
   -X 'github.com/youtube/vitess/go/vt/servenv.buildGitRev=$(git rev-parse --short HEAD)' \
+  -X 'github.com/youtube/vitess/go/vt/servenv.buildGitBranch=$(git rev-parse --abbrev-ref HEAD)' \
   -X 'github.com/youtube/vitess/go/vt/servenv.buildTime=$(LC_ALL=C date)' \
 "
