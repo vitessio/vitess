@@ -26,10 +26,11 @@ import (
 )
 
 var (
-	buildHost   = ""
-	buildUser   = ""
-	buildTime   = ""
-	buildGitRev = ""
+	buildHost      = ""
+	buildUser      = ""
+	buildTime      = ""
+	buildGitRev    = ""
+	buildGitBranch = ""
 
 	// Version registers the command line flag to expose build info.
 	Version = flag.Bool("version", false, "print binary version")
@@ -44,13 +45,14 @@ type versionInfo struct {
 	buildTime       int64
 	buildTimePretty string
 	buildGitRev     string
+	buildGitBranch  string
 	goVersion       string
 	goOS            string
 	goArch          string
 }
 
 func (v *versionInfo) Print() {
-	fmt.Printf("Version: %s built on %s by %s@%s using %s %s/%s\n", v.buildGitRev, v.buildTimePretty, v.buildUser, v.buildHost, v.goVersion, v.goOS, v.goArch)
+	fmt.Printf("Version: %s (Git branch '%s') built on %s by %s@%s using %s %s/%s\n", v.buildGitRev, v.buildGitBranch, v.buildTimePretty, v.buildUser, v.buildHost, v.goVersion, v.goOS, v.goArch)
 }
 
 func init() {
@@ -65,6 +67,7 @@ func init() {
 		buildTime:       t.Unix(),
 		buildTimePretty: buildTime,
 		buildGitRev:     buildGitRev,
+		buildGitBranch:  buildGitBranch,
 		goVersion:       runtime.Version(),
 		goOS:            runtime.GOOS,
 		goArch:          runtime.GOARCH,
@@ -74,6 +77,7 @@ func init() {
 	stats.NewString("BuildUser").Set(AppVersion.buildUser)
 	stats.NewInt("BuildTimestamp").Set(AppVersion.buildTime)
 	stats.NewString("BuildGitRev").Set(AppVersion.buildGitRev)
+	stats.NewString("BuildGitBranch").Set(AppVersion.buildGitBranch)
 	stats.NewString("GoVersion").Set(AppVersion.goVersion)
 	stats.NewString("GoOS").Set(AppVersion.goOS)
 	stats.NewString("GoArch").Set(AppVersion.goArch)
