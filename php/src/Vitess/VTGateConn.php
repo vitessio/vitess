@@ -40,6 +40,7 @@ class VTGateConn
 
         $session = new Proto\Vtgate\Session();
         $session->setTargetString($keyspace);
+        $session->setAutocommit(true);
         $this->session = $session;
     }
 
