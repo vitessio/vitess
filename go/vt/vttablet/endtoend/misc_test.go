@@ -305,11 +305,11 @@ func TestConsolidation(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
-		framework.NewClient().Execute("select sleep(0.25) from dual", nil)
+		framework.NewClient().Execute("select sleep(0.5) from dual", nil)
 		wg.Done()
 	}()
 	go func() {
-		framework.NewClient().Execute("select sleep(0.25) from dual", nil)
+		framework.NewClient().Execute("select sleep(0.5) from dual", nil)
 		wg.Done()
 	}()
 	wg.Wait()
