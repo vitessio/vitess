@@ -5,7 +5,6 @@ use Vitess\Proto\Vtgate\Session;
 
 class VTGateConn
 {
-
     /**
      *
      * @var RpcClient The underlying RPC client.
@@ -16,7 +15,7 @@ class VTGateConn
      * @var Session
      */
     protected $session;
-    
+
     /**
      * Create a VTGateConn.
      *
@@ -69,7 +68,7 @@ class VTGateConn
         $call = $this->client->streamExecute($ctx, $request);
         return new StreamCursor($call);
     }
-    
+
     public function begin(Context $ctx)
     {
         $this->execute($ctx, 'BEGIN', array());
