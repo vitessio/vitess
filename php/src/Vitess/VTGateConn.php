@@ -1,6 +1,8 @@
 <?php
 namespace Vitess;
 
+use Vitess\Proto\Vtgate\Session;
+
 class VTGateConn
 {
 
@@ -16,6 +18,11 @@ class VTGateConn
      */
     protected $keyspace;
 
+    /**
+     * @var Session
+     */
+    protected $session;
+    
     /**
      * Create a VTGateConn.
      *
@@ -36,20 +43,24 @@ class VTGateConn
      */
     public function __construct(RpcClient $client, $keyspace = '')
     {
-        $this->client = $client;
+        $this->client   = $client;
         $this->keyspace = $keyspace;
+
+        $session = new Proto\Vtgate\Session();
+        $session->setTargetString($keyspace);
+        $this->session = $session;
     }
 
-    public function execute(Context $ctx, $query, array $bind_vars, $tablet_type)
+    public function execute(Context $ctx, $query, array $bind_vars)
     {
         $request = new Proto\Vtgate\ExecuteRequest();
+        $request->setSession($this->session);
         $request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
-        $request->setTabletType($tablet_type);
-        $request->setKeyspaceShard($this->keyspace);
         if ($ctx->getCallerId()) {
             $request->setCallerId($ctx->getCallerId());
         }
         $response = $this->client->execute($ctx, $request);
+        $this->session = $response->getSession();
         ProtoUtils::checkError($response);
         return new Cursor($response->getResult());
     }
@@ -57,6 +68,7 @@ class VTGateConn
     public function executeShards(Context $ctx, $query, $keyspace, array $shards, array $bind_vars, $tablet_type)
     {
         $request = new Proto\Vtgate\ExecuteShardsRequest();
+        $request->setSession($this->session);
         $request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
         $request->setTabletType($tablet_type);
         $request->setKeyspace($keyspace);
@@ -72,6 +84,7 @@ class VTGateConn
     public function executeKeyspaceIds(Context $ctx, $query, $keyspace, array $keyspace_ids, array $bind_vars, $tablet_type)
     {
         $request = new Proto\Vtgate\ExecuteKeyspaceIdsRequest();
+        $request->setSession($this->session);
         $request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
         $request->setTabletType($tablet_type);
         $request->setKeyspace($keyspace);
@@ -87,6 +100,7 @@ class VTGateConn
     public function executeKeyRanges(Context $ctx, $query, $keyspace, array $key_ranges, array $bind_vars, $tablet_type)
     {
         $request = new Proto\Vtgate\ExecuteKeyRangesRequest();
+        $request->setSession($this->session);
         $request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
         $request->setTabletType($tablet_type);
         $request->setKeyspace($keyspace);
@@ -102,6 +116,7 @@ class VTGateConn
     public function executeEntityIds(Context $ctx, $query, $keyspace, $entity_column_name, array $entity_keyspace_ids, array $bind_vars, $tablet_type)
     {
         $request = new Proto\Vtgate\ExecuteEntityIdsRequest();
+        $request->setSession($this->session);
         $request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
         $request->setTabletType($tablet_type);
         $request->setKeyspace($keyspace);
@@ -125,6 +140,7 @@ class VTGateConn
     public function executeBatchShards(Context $ctx, array $bound_shard_queries, $tablet_type, $as_transaction)
     {
         $request = new Proto\Vtgate\ExecuteBatchShardsRequest();
+        $request->setSession($this->session);
         ProtoUtils::addQueries($request, $bound_shard_queries);
         $request->setTabletType($tablet_type);
         $request->setAsTransaction($as_transaction);
@@ -150,6 +166,7 @@ class VTGateConn
     public function executeBatchKeyspaceIds(Context $ctx, array $bound_keyspace_id_queries, $tablet_type, $as_transaction)
     {
         $request = new Proto\Vtgate\ExecuteBatchKeyspaceIdsRequest();
+        $request->setSession($this->session);
         ProtoUtils::addQueries($request, $bound_keyspace_id_queries);
         $request->setTabletType($tablet_type);
         $request->setAsTransaction($as_transaction);
@@ -165,12 +182,11 @@ class VTGateConn
         return $results;
     }
 
-    public function streamExecute(Context $ctx, $query, array $bind_vars, $tablet_type)
+    public function streamExecute(Context $ctx, $query, array $bind_vars)
     {
         $request = new Proto\Vtgate\StreamExecuteRequest();
+        $request->setSession($this->session);
         $request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
-        $request->setTabletType($tablet_type);
-        $request->setKeyspaceShard($this->keyspace);
         if ($ctx->getCallerId()) {
             $request->setCallerId($ctx->getCallerId());
         }
