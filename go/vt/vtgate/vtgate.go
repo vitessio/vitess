@@ -55,6 +55,7 @@ import (
 var (
 	transactionMode  = flag.String("transaction_mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
 	normalizeQueries = flag.Bool("normalize_queries", true, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
+	streamBufferSize = flag.Int("stream_buffer_size", 32*1024, "the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size.")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -158,7 +159,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 	resolver := NewResolver(serv, cell, sc)
 
 	rpcVTGate = &VTGate{
-		executor:     NewExecutor(ctx, serv, cell, "VTGateExecutor", resolver, *normalizeQueries),
+		executor:     NewExecutor(ctx, serv, cell, "VTGateExecutor", resolver, *normalizeQueries, *streamBufferSize),
 		resolver:     resolver,
 		txConn:       tc,
 		timings:      stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),

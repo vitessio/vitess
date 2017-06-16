@@ -386,3 +386,17 @@ var SingleRowResult = &sqltypes.Result{
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte("foo")),
 	}},
 }
+
+// StreamRowResult is SingleRowResult with RowsAffected set to 0.
+var StreamRowResult = &sqltypes.Result{
+	Fields: []*querypb.Field{
+		{Name: "id", Type: sqltypes.Int32},
+		{Name: "value", Type: sqltypes.VarChar},
+	},
+	RowsAffected: 0,
+	InsertID:     0,
+	Rows: [][]sqltypes.Value{{
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+		sqltypes.MakeTrusted(sqltypes.VarChar, []byte("foo")),
+	}},
+}

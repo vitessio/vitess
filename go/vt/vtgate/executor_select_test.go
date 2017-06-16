@@ -199,9 +199,74 @@ func TestStreamUnsharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantResult := sandboxconn.SingleRowResult
+	wantResult := sandboxconn.StreamRowResult
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+}
+
+func TestStreamBuffering(t *testing.T) {
+	executor, _, _, sbclookup := createExecutorEnv()
+
+	// This test is similar to TestStreamUnsharded except that it returns a Result > 10 bytes,
+	// such that the splitting of the Result into multiple Result responses gets tested.
+	sbclookup.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("01234567890123456789")),
+		}, {
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("12345678901234567890")),
+		}},
+	}})
+
+	results := make(chan *sqltypes.Result, 10)
+	err := executor.StreamExecute(
+		context.Background(),
+		masterSession,
+		"select id from music_user_map where id = 1",
+		nil,
+		querypb.Target{
+			TabletType: topodatapb.TabletType_MASTER,
+		},
+		func(qr *sqltypes.Result) error {
+			results <- qr
+			return nil
+		},
+	)
+	close(results)
+	if err != nil {
+		t.Error(err)
+	}
+	wantResults := []*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
+		},
+	}, {
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("01234567890123456789")),
+		}},
+	}, {
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("12345678901234567890")),
+		}},
+	}}
+	var gotResults []*sqltypes.Result
+	for r := range results {
+		gotResults = append(gotResults, r)
+	}
+	if !reflect.DeepEqual(gotResults, wantResults) {
+		t.Logf("len: %d", len(gotResults))
+		for i := range gotResults {
+			t.Errorf("Buffered streaming:\n%v, want\n%v", gotResults[i], wantResults[i])
+		}
 	}
 }
 
@@ -429,7 +494,7 @@ func TestStreamSelectEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantResult := sandboxconn.SingleRowResult
+	wantResult := sandboxconn.StreamRowResult
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
@@ -672,7 +737,7 @@ func TestStreamSelectIN(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantResult := sandboxconn.SingleRowResult
+	wantResult := sandboxconn.StreamRowResult
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
@@ -683,12 +748,12 @@ func TestStreamSelectIN(t *testing.T) {
 		t.Error(err)
 	}
 	wantResult = &sqltypes.Result{
-		Fields: sandboxconn.SingleRowResult.Fields,
+		Fields: sandboxconn.StreamRowResult.Fields,
 		Rows: [][]sqltypes.Value{
-			sandboxconn.SingleRowResult.Rows[0],
-			sandboxconn.SingleRowResult.Rows[0],
+			sandboxconn.StreamRowResult.Rows[0],
+			sandboxconn.StreamRowResult.Rows[0],
 		},
-		RowsAffected: 2,
+		RowsAffected: 0,
 	}
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
@@ -699,7 +764,7 @@ func TestStreamSelectIN(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantResult = sandboxconn.SingleRowResult
+	wantResult = sandboxconn.StreamRowResult
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
@@ -761,7 +826,7 @@ func TestSelectScatter(t *testing.T) {
 		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false)
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize)
 
 	_, err := executorExec(executor, "select id from user", nil)
 	if err != nil {
@@ -793,7 +858,7 @@ func TestStreamSelectScatter(t *testing.T) {
 		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false)
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize)
 
 	sql := "select id from user"
 	result, err := executorStream(executor, sql)
@@ -803,16 +868,15 @@ func TestStreamSelectScatter(t *testing.T) {
 	wantResult := &sqltypes.Result{
 		Fields: sandboxconn.SingleRowResult.Fields,
 		Rows: [][]sqltypes.Value{
-			sandboxconn.SingleRowResult.Rows[0],
-			sandboxconn.SingleRowResult.Rows[0],
-			sandboxconn.SingleRowResult.Rows[0],
-			sandboxconn.SingleRowResult.Rows[0],
-			sandboxconn.SingleRowResult.Rows[0],
-			sandboxconn.SingleRowResult.Rows[0],
-			sandboxconn.SingleRowResult.Rows[0],
-			sandboxconn.SingleRowResult.Rows[0],
+			sandboxconn.StreamRowResult.Rows[0],
+			sandboxconn.StreamRowResult.Rows[0],
+			sandboxconn.StreamRowResult.Rows[0],
+			sandboxconn.StreamRowResult.Rows[0],
+			sandboxconn.StreamRowResult.Rows[0],
+			sandboxconn.StreamRowResult.Rows[0],
+			sandboxconn.StreamRowResult.Rows[0],
+			sandboxconn.StreamRowResult.Rows[0],
 		},
-		RowsAffected: 8,
 	}
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
@@ -835,7 +899,7 @@ func TestSelectScatterFail(t *testing.T) {
 	}
 	serv := new(sandboxTopo)
 	resolver := newTestResolver(hc, serv, cell)
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false)
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize)
 
 	_, err := executorExec(executor, "select id from user", nil)
 	want := "paramsAllShards: keyspace TestExecutor fetch error: topo error GetSrvKeyspace"
@@ -872,7 +936,7 @@ func TestSelectScatterOrderBy(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false)
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize)
 
 	query := "select col1, col2 from user order by col2 desc"
 	gotResult, err := executorExec(executor, query, nil)
@@ -940,7 +1004,7 @@ func TestSelectScatterOrderByFail(t *testing.T) {
 			}},
 		}})
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false)
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize)
 
 	_, err := executorExec(executor, "select id, col from user order by col asc", nil)
 	want := "text fields cannot be compared"
@@ -977,7 +1041,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false)
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize)
 
 	query := "select col, sum(foo) from user group by col"
 	gotResult, err := executorExec(executor, query, nil)
