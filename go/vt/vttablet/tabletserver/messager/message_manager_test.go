@@ -226,7 +226,8 @@ func TestMessageManagerSend(t *testing.T) {
 		t.Errorf("Received: %v, want %v", got, want)
 	}
 	// Set the channel to verify call to Postpone.
-	ch := make(chan string)
+	// Make it buffered so the thread doesn't block on repeated calls.
+	ch := make(chan string, 20)
 	tsv.SetChannel(ch)
 	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("1")), sqltypes.NULL}})
 	want = &sqltypes.Result{
@@ -243,8 +244,6 @@ func TestMessageManagerSend(t *testing.T) {
 	if got := <-ch; got != mmTable.Name.String() {
 		t.Errorf("Postpone: %s, want %v", got, mmTable.Name)
 	}
-	// Set the channel back to nil so we don't block any more.
-	tsv.SetChannel(nil)
 
 	// Verify item has been removed from cache.
 	if _, ok := mm.cache.messages["1"]; ok {
@@ -519,7 +518,9 @@ func TestMessageManagerPurge(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	tsv := newFakeTabletServer()
-	ch := make(chan string)
+
+	// Make a buffered channel so the thread doesn't block on repeated calls.
+	ch := make(chan string, 20)
 	tsv.SetChannel(ch)
 
 	ti := newMMTable()
@@ -531,7 +532,6 @@ func TestMessageManagerPurge(t *testing.T) {
 	if got := <-ch; got != mmTable.Name.String() {
 		t.Errorf("Postpone: %s, want %v", got, mmTable.Name)
 	}
-	tsv.SetChannel(nil)
 }
 
 func TestMMGenerate(t *testing.T) {
