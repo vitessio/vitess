@@ -90,7 +90,7 @@ func newTestReceiver(size int) *testReceiver {
 		tr.count.Add(1)
 		select {
 		case tr.ch <- qr:
-		case <-time.After(10 * time.Second):
+		case <-time.After(20 * time.Second):
 			panic("test may be hung")
 		}
 		return nil
