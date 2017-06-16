@@ -52,6 +52,7 @@ func TestMessage(t *testing.T) {
 	}
 	defer client.Execute("drop table vitess_message", nil)
 
+	// Start goroutine to consume message stream.
 	go func() {
 		if err := client.MessageStream("vitess_message", func(qr *sqltypes.Result) error {
 			select {
@@ -81,6 +82,9 @@ func TestMessage(t *testing.T) {
 			Name: "id",
 			Type: sqltypes.Int64,
 		}, {
+			Name: "time_scheduled",
+			Type: sqltypes.Int64,
+		}, {
 			Name: "message",
 			Type: sqltypes.VarChar,
 		}},
@@ -90,6 +94,8 @@ func TestMessage(t *testing.T) {
 	}
 	runtime.Gosched()
 	defer func() { close(done) }()
+
+	// Create message.
 	err := client.Begin(false)
 	if err != nil {
 		t.Error(err)
@@ -105,11 +111,22 @@ func TestMessage(t *testing.T) {
 		t.Error(err)
 		return
 	}
+
+	// Consume first message.
 	start := time.Now().UnixNano()
 	got = <-ch
+	// Check time_scheduled separately.
+	scheduled, err := got.Rows[0][1].ParseInt64()
+	if err != nil {
+		t.Error(err)
+	}
+	if now := time.Now().UnixNano(); now-scheduled >= int64(10*time.Second) {
+		t.Errorf("scheduled: %v, must be close to %v", scheduled, now)
+	}
 	want = &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+			got.Rows[0][1],
 			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("hello world")),
 		}},
 	}
@@ -134,6 +151,8 @@ func TestMessage(t *testing.T) {
 	default:
 		t.Errorf("epoch: %d, must be 0 or 1", epoch)
 	}
+
+	// Consume the resend.
 	<-ch
 	qr, err = client.Execute("select time_next, epoch from vitess_message where id = 1", nil)
 	if err != nil {
@@ -153,6 +172,8 @@ func TestMessage(t *testing.T) {
 	default:
 		t.Errorf("epoch: %d, must be 1 or 2", epoch)
 	}
+
+	// Ack the message.
 	count, err := client.MessageAck("vitess_message", []string{"1"})
 	if err != nil {
 		t.Error(err)
@@ -169,6 +190,7 @@ func TestMessage(t *testing.T) {
 	if !(end-1e9 < ack && ack < end) {
 		t.Errorf("ack: %d. must be within 1s of end: %d", ack/1e9, end/1e9)
 	}
+
 	// Within 3+1 seconds, the row should be deleted.
 	time.Sleep(4 * time.Second)
 	qr, err = client.Execute("select time_acked, epoch from vitess_message where id = 1", nil)
@@ -234,6 +256,9 @@ func TestThreeColMessage(t *testing.T) {
 			Name: "id",
 			Type: sqltypes.Int64,
 		}, {
+			Name: "time_scheduled",
+			Type: sqltypes.Int64,
+		}, {
 			Name: "msg1",
 			Type: sqltypes.VarChar,
 		}, {
@@ -267,6 +292,7 @@ func TestThreeColMessage(t *testing.T) {
 	want = &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+			got.Rows[0][1],
 			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("hello world")),
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
 		}},

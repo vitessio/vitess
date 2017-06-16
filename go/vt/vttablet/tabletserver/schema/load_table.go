@@ -108,13 +108,26 @@ func fetchIndexes(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
 
 func loadMessageInfo(ta *Table, comment string) error {
 	findCols := map[string]struct{}{
-		"time_scheduled": {},
 		"id":             {},
+		"time_scheduled": {},
 		"time_next":      {},
 		"epoch":          {},
 		"time_created":   {},
 		"time_acked":     {},
 	}
+
+	// orderedColumns are necessary to ensure that they
+	// get added in the correct order to fields if they
+	// need to be returned with the stream.
+	orderedColumns := []string{
+		"id",
+		"time_scheduled",
+		"time_next",
+		"epoch",
+		"time_created",
+		"time_acked",
+	}
+
 	ta.MessageInfo = &MessageInfo{}
 	// Extract keyvalues.
 	keyvals := make(map[string]string)
@@ -142,14 +155,14 @@ func loadMessageInfo(ta *Table, comment string) error {
 	if ta.MessageInfo.PollInterval, err = getDuration(keyvals, "vt_poller_interval"); err != nil {
 		return err
 	}
-	for col := range findCols {
+	for _, col := range orderedColumns {
 		num := ta.FindColumn(sqlparser.NewColIdent(col))
 		if num == -1 {
 			return fmt.Errorf("%s missing from message table: %s", col, ta.Name.String())
 		}
 
-		// "id" must always the first column for Messages.
-		if col == "id" {
+		// id and time_scheduled must be the first two columns.
+		if col == "id" || col == "time_scheduled" {
 			ta.MessageInfo.Fields = append(ta.MessageInfo.Fields, &querypb.Field{
 				Name: ta.Columns[num].Name.String(),
 				Type: ta.Columns[num].Type,
