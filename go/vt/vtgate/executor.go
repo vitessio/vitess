@@ -381,6 +381,11 @@ func (e *Executor) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 	if err != nil {
 		return err
 	}
+
+	// Some of the underlying primitives may send results one row at a time.
+	// So, we need the ability to consolidate those into reasonable chunks.
+	// The callback wrapper below accumulates rows and sends them as chunks
+	// dictated by stream_buffer_size.
 	result := &sqltypes.Result{}
 	byteCount := 0
 	err = plan.Instructions.StreamExecute(vcursor, bindVars, make(map[string]interface{}), true, func(qr *sqltypes.Result) error {

@@ -208,7 +208,8 @@ func TestStreamUnsharded(t *testing.T) {
 func TestStreamBuffering(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 
-	// Set each result to be >10 bytes, which is the buffer size for tests.
+	// This test is similar to TestStreamUnsharded except that it returns a Result > 10 bytes,
+	// such that the splitting of the Result into multiple Result responses gets tested.
 	sbclookup.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
@@ -825,7 +826,7 @@ func TestSelectScatter(t *testing.T) {
 		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, 10)
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize)
 
 	_, err := executorExec(executor, "select id from user", nil)
 	if err != nil {
@@ -857,7 +858,7 @@ func TestStreamSelectScatter(t *testing.T) {
 		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, 10)
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize)
 
 	sql := "select id from user"
 	result, err := executorStream(executor, sql)
@@ -898,7 +899,7 @@ func TestSelectScatterFail(t *testing.T) {
 	}
 	serv := new(sandboxTopo)
 	resolver := newTestResolver(hc, serv, cell)
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, 10)
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize)
 
 	_, err := executorExec(executor, "select id from user", nil)
 	want := "paramsAllShards: keyspace TestExecutor fetch error: topo error GetSrvKeyspace"
@@ -935,7 +936,7 @@ func TestSelectScatterOrderBy(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, 10)
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize)
 
 	query := "select col1, col2 from user order by col2 desc"
 	gotResult, err := executorExec(executor, query, nil)
@@ -1003,7 +1004,7 @@ func TestSelectScatterOrderByFail(t *testing.T) {
 			}},
 		}})
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, 10)
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize)
 
 	_, err := executorExec(executor, "select id, col from user order by col asc", nil)
 	want := "text fields cannot be compared"
@@ -1040,7 +1041,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, 10)
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize)
 
 	query := "select col, sum(foo) from user group by col"
 	gotResult, err := executorExec(executor, query, nil)
