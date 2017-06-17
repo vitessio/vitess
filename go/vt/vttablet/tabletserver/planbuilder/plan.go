@@ -304,7 +304,7 @@ func BuildStreaming(sql string, tables map[string]*schema.Table) (plan *Plan, er
 		if tableName := analyzeFrom(stmt.From); !tableName.IsEmpty() {
 			plan.setTable(tableName, tables)
 		}
-	case *sqlparser.Union:
+	case *sqlparser.Other, *sqlparser.Show, *sqlparser.Union:
 		// pass
 	default:
 		return nil, fmt.Errorf("'%v' not allowed for streaming", sqlparser.String(stmt))
