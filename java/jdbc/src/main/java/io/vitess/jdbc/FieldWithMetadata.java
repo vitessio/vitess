@@ -122,6 +122,9 @@ public class FieldWithMetadata {
                 if (javaType == Types.VARBINARY && !isBinaryEncoded) {
                     this.javaType = Types.VARCHAR;
                 }
+                if (javaType == Types.BINARY && !isBinaryEncoded) {
+                    this.javaType = Types.CHAR;
+                }
             } else {
                 // Default encoding for number-types and date-types
                 // We keep the default javaType as passed from the server, and just set the encoding
