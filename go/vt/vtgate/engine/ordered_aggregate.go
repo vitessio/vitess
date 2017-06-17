@@ -110,7 +110,8 @@ func (oa *OrderedAggregate) Execute(vcursor VCursor, bindVars, joinVars map[stri
 		}
 
 		if equal {
-			if err := oa.merge(result.Fields, current, row); err != nil {
+			current, err = oa.merge(result.Fields, current, row)
+			if err != nil {
 				return nil, err
 			}
 			continue
@@ -149,7 +150,8 @@ func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars, joinVars ma
 			}
 
 			if equal {
-				if err := oa.merge(fields, current, row); err != nil {
+				current, err = oa.merge(fields, current, row)
+				if err != nil {
 					return err
 				}
 				continue
@@ -191,18 +193,19 @@ func (oa *OrderedAggregate) keysEqual(row1, row2 []sqltypes.Value) (bool, error)
 	return true, nil
 }
 
-func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes.Value) error {
+func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes.Value) ([]sqltypes.Value, error) {
+	result := sqltypes.CopyRow(row1)
 	for _, aggr := range oa.Aggregates {
 		switch aggr.Opcode {
 		case AggregateCount, AggregateSum:
 			var err error
-			row1[aggr.Col], err = sqltypes.Add(row1[aggr.Col], row2[aggr.Col], fields[aggr.Col].Type)
+			result[aggr.Col], err = sqltypes.Add(row1[aggr.Col], row2[aggr.Col], fields[aggr.Col].Type)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		default:
-			return fmt.Errorf("unimplemented: %v", aggr.Opcode)
+			return nil, fmt.Errorf("unimplemented: %v", aggr.Opcode)
 		}
 	}
-	return nil
+	return result, nil
 }
