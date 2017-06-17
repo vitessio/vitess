@@ -89,7 +89,7 @@ func NewSimpleHook(name string) *Hook {
 func (hook *Hook) findHook() (*exec.Cmd, int, error) {
 	// Check the hook path.
 	if strings.Contains(hook.Name, "/") {
-		return nil, HOOK_INVALID_NAME, fmt.Errorf("hooks cannot contains '/'")
+		return nil, HOOK_INVALID_NAME, fmt.Errorf("hook cannot contain '/'")
 	}
 
 	// Find our root.
