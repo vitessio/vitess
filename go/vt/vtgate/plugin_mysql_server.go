@@ -99,6 +99,10 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query []byte, callback func(*sq
 	if c.SchemaName != "" {
 		session.TargetString = c.SchemaName
 	}
+	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
+		err := vh.vtg.StreamExecute(ctx, session, string(query), make(map[string]interface{}), callback)
+		return mysql.NewSQLErrorFromError(err)
+	}
 	session, result, err := vh.vtg.Execute(ctx, session, string(query), make(map[string]interface{}))
 	c.ClientData = session
 	err = mysql.NewSQLErrorFromError(err)

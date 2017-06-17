@@ -228,15 +228,13 @@ func (e *Executor) handleSet(ctx context.Context, session *vtgatepb.Session, sql
 			if !ok {
 				return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for client_found_rows: %T", v)
 			}
+			if session.Options == nil {
+				session.Options = &querypb.ExecuteOptions{}
+			}
 			switch val {
 			case 0:
-				if session.Options != nil {
-					session.Options.ClientFoundRows = false
-				}
+				session.Options.ClientFoundRows = false
 			case 1:
-				if session.Options == nil {
-					session.Options = &querypb.ExecuteOptions{}
-				}
 				session.Options.ClientFoundRows = true
 			default:
 				return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for client_found_rows: %d", val)
@@ -251,6 +249,19 @@ func (e *Executor) handleSet(ctx context.Context, session *vtgatepb.Session, sql
 				return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid transaction_mode: %s", val)
 			}
 			session.TransactionMode = vtgatepb.TransactionMode(out)
+		case "workload":
+			val, ok := v.(string)
+			if !ok {
+				return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for workload: %T", v)
+			}
+			out, ok := querypb.ExecuteOptions_Workload_value[strings.ToUpper(val)]
+			if !ok {
+				return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid workload: %s", val)
+			}
+			if session.Options == nil {
+				session.Options = &querypb.ExecuteOptions{}
+			}
+			session.Options.Workload = querypb.ExecuteOptions_Workload(out)
 		default:
 			return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported construct: %s", sql)
 		}

@@ -308,7 +308,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 				c.recycleReadPacket()
 				// This is just a failsafe. Should never happen.
 				if err == nil || err == io.EOF {
-					err = errors.New("unexpected: query ended without no results and no error")
+					err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
 				}
 				if werr := c.writeErrorPacketFromError(err); werr != nil {
 					// If we can't even write the error, we're done.
