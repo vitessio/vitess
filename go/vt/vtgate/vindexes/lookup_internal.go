@@ -73,7 +73,7 @@ func (lkp *lookup) MapUniqueLookup(vcursor VCursor, ids []interface{}) ([][]byte
 			}
 			out = append(out, vhash(num))
 		} else {
-			out = append(out, result.Rows[0][0].Raw())
+			out = append(out, result.Rows[0][0].Bytes())
 		}
 	}
 	return out, nil
@@ -100,7 +100,7 @@ func (lkp *lookup) MapNonUniqueLookup(vcursor VCursor, ids []interface{}) ([][][
 			}
 		} else {
 			for _, row := range result.Rows {
-				ksids = append(ksids, row[0].Raw())
+				ksids = append(ksids, row[0].Bytes())
 			}
 		}
 		out = append(out, ksids)

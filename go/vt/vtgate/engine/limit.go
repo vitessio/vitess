@@ -80,6 +80,14 @@ func (l *Limit) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]int
 				return err
 			}
 		}
+		if len(qr.Rows) == 0 {
+			return nil
+		}
+
+		if count == 0 {
+			// Unreachable: this is just a failsafe.
+			return io.EOF
+		}
 
 		// reduce count till 0.
 		result := &sqltypes.Result{Rows: qr.Rows}

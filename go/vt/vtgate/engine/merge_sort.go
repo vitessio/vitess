@@ -91,6 +91,7 @@ func mergeSort(vcursor VCursor, query string, orderBy []OrderbyParams, params *s
 	for len(sh.rows) != 0 {
 		sr := heap.Pop(sh).(streamRow)
 		if sh.err != nil {
+			// Unreachable: This should never fail.
 			return sh.err
 		}
 		if err := callback(&sqltypes.Result{Rows: [][]sqltypes.Value{sr.row}}); err != nil {
@@ -141,7 +142,7 @@ func runOneStream(ctx context.Context, vcursor VCursor, query, ks, shard string,
 		defer close(handle.fields)
 		defer close(handle.row)
 
-		err := vcursor.StreamExecuteMulti(
+		handle.err = vcursor.StreamExecuteMulti(
 			query,
 			ks,
 			map[string]map[string]interface{}{shard: vars},
@@ -164,9 +165,6 @@ func runOneStream(ctx context.Context, vcursor VCursor, query, ks, shard string,
 				return nil
 			},
 		)
-		if err != nil {
-			handle.err = err
-		}
 	}()
 
 	return handle

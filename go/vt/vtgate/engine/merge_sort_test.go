@@ -17,8 +17,7 @@ limitations under the License.
 package engine
 
 import (
-	"bytes"
-	"fmt"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -28,63 +27,33 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// TestMergeSortNormal tests the normal flow of a merge
-// sort where all shards return ordered rows with no errors.
+// TestMergeSortAscending tests the normal flow of a merge
+// sort where all shards return ascending rows.
 func TestMergeSortNormal(t *testing.T) {
-	vc := &testVCursor{
+	idColFields := sqltypes.MakeTestFields("id|col", "int32|varchar")
+	vc := &fakeVcursor{
 		shardResults: map[string]*shardResult{
-			"0": {
-				results: []*sqltypes.Result{
-					fieldResult,
-					{
-						Rows: [][]sqltypes.Value{
-							makeRow("1", "a"),
-							makeRow("7", "g"),
-						},
-					},
-				},
-			},
-			"1": {
-				results: []*sqltypes.Result{
-					fieldResult,
-					{
-						Rows: [][]sqltypes.Value{
-							makeRow("2", "b"),
-						},
-					},
-					{
-						Rows: [][]sqltypes.Value{
-							makeRow("3", "c"),
-						},
-					},
-				},
-			},
-			"2": {
-				results: []*sqltypes.Result{
-					fieldResult,
-					{
-						Rows: [][]sqltypes.Value{
-							makeRow("4", "d"),
-							makeRow("6", "f"),
-						},
-					},
-				},
-			},
-			"3": {
-				results: []*sqltypes.Result{
-					fieldResult,
-					{
-						Rows: [][]sqltypes.Value{
-							makeRow("4", "d"),
-							makeRow("8", "h"),
-						},
-					},
-				},
-			},
+			"0": {results: sqltypes.MakeTestStreamingResults(idColFields,
+				"1|a",
+				"7|g",
+			)},
+			"1": {results: sqltypes.MakeTestStreamingResults(idColFields,
+				"2|b",
+				"---",
+				"3|c",
+			)},
+			"2": {results: sqltypes.MakeTestStreamingResults(idColFields,
+				"4|d",
+				"6|f",
+			)},
+			"3": {results: sqltypes.MakeTestStreamingResults(idColFields,
+				"4|d",
+				"---",
+				"8|h",
+			)},
 		},
 	}
 	orderBy := []OrderbyParams{{
@@ -107,75 +76,247 @@ func TestMergeSortNormal(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantResults := []*sqltypes.Result{
-		fieldResult,
-		{
-			Rows: [][]sqltypes.Value{
-				makeRow("1", "a"),
-			},
-		},
-		{
-			Rows: [][]sqltypes.Value{
-				makeRow("2", "b"),
-			},
-		},
-		{
-			Rows: [][]sqltypes.Value{
-				makeRow("3", "c"),
-			},
-		},
-		{
-			Rows: [][]sqltypes.Value{
-				makeRow("4", "d"),
-			},
-		},
-		{
-			Rows: [][]sqltypes.Value{
-				makeRow("4", "d"),
-			},
-		},
-		{
-			Rows: [][]sqltypes.Value{
-				makeRow("6", "f"),
-			},
-		},
-		{
-			Rows: [][]sqltypes.Value{
-				makeRow("7", "g"),
-			},
-		},
-		{
-			Rows: [][]sqltypes.Value{
-				makeRow("8", "h"),
-			},
-		},
-	}
+
+	// Results are retuned one row at a time.
+	wantResults := sqltypes.MakeTestStreamingResults(idColFields,
+		"1|a",
+		"---",
+		"2|b",
+		"---",
+		"3|c",
+		"---",
+		"4|d",
+		"---",
+		"4|d",
+		"---",
+		"6|f",
+		"---",
+		"7|g",
+		"---",
+		"8|h",
+	)
 	if !reflect.DeepEqual(results, wantResults) {
-		t.Errorf("merge-sort:\n%s, want\n%s", printResults(results), printResults(wantResults))
+		t.Errorf("mergeSort:\n%s, want\n%s", sqltypes.PrintResults(results), sqltypes.PrintResults(wantResults))
 	}
 }
 
-func printResults(results []*sqltypes.Result) string {
-	b := new(bytes.Buffer)
-	delim := ""
-	for _, r := range results {
-		fmt.Fprintf(b, "%s%v", delim, r)
-		delim = ", "
+// TestMergeSortNormal tests the normal flow of a merge
+// sort where all shards return descending rows.
+func TestMergeSortDescending(t *testing.T) {
+	idColFields := sqltypes.MakeTestFields("id|col", "int32|varchar")
+	vc := &fakeVcursor{
+		shardResults: map[string]*shardResult{
+			"0": {results: sqltypes.MakeTestStreamingResults(idColFields,
+				"7|g",
+				"1|a",
+			)},
+			"1": {results: sqltypes.MakeTestStreamingResults(idColFields,
+				"3|c",
+				"---",
+				"2|b",
+			)},
+			"2": {results: sqltypes.MakeTestStreamingResults(idColFields,
+				"6|f",
+				"4|d",
+			)},
+			"3": {results: sqltypes.MakeTestStreamingResults(idColFields,
+				"8|h",
+				"---",
+				"4|d",
+			)},
+		},
 	}
-	return b.String()
+	orderBy := []OrderbyParams{{
+		Col:  0,
+		Desc: true,
+	}}
+	params := &scatterParams{
+		shardVars: map[string]map[string]interface{}{
+			"0": nil,
+			"1": nil,
+			"2": nil,
+			"3": nil,
+		},
+	}
+
+	var results []*sqltypes.Result
+	err := mergeSort(vc, "", orderBy, params, func(qr *sqltypes.Result) error {
+		results = append(results, qr)
+		return nil
+	})
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Results are retuned one row at a time.
+	wantResults := sqltypes.MakeTestStreamingResults(idColFields,
+		"8|h",
+		"---",
+		"7|g",
+		"---",
+		"6|f",
+		"---",
+		"4|d",
+		"---",
+		"4|d",
+		"---",
+		"3|c",
+		"---",
+		"2|b",
+		"---",
+		"1|a",
+	)
+	if !reflect.DeepEqual(results, wantResults) {
+		t.Errorf("mergeSort:\n%s, want\n%s", sqltypes.PrintResults(results), sqltypes.PrintResults(wantResults))
+	}
 }
 
-var fieldResult = &sqltypes.Result{
-	Fields: []*querypb.Field{
-		{Name: "id", Type: sqltypes.Int32},
-		{Name: "col", Type: sqltypes.VarChar},
-	},
+func TestMergeSortEmptyResults(t *testing.T) {
+	idColFields := sqltypes.MakeTestFields("id|col", "int32|varchar")
+	vc := &fakeVcursor{
+		shardResults: map[string]*shardResult{
+			"0": {results: sqltypes.MakeTestStreamingResults(idColFields,
+				"1|a",
+				"7|g",
+			)},
+			"1": {results: sqltypes.MakeTestStreamingResults(idColFields)},
+			"2": {results: sqltypes.MakeTestStreamingResults(idColFields,
+				"4|d",
+				"6|f",
+			)},
+			"3": {results: sqltypes.MakeTestStreamingResults(idColFields)},
+		},
+	}
+	orderBy := []OrderbyParams{{
+		Col: 0,
+	}}
+	params := &scatterParams{
+		shardVars: map[string]map[string]interface{}{
+			"0": nil,
+			"1": nil,
+			"2": nil,
+			"3": nil,
+		},
+	}
+
+	var results []*sqltypes.Result
+	err := mergeSort(vc, "", orderBy, params, func(qr *sqltypes.Result) error {
+		results = append(results, qr)
+		return nil
+	})
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Results are retuned one row at a time.
+	wantResults := sqltypes.MakeTestStreamingResults(idColFields,
+		"1|a",
+		"---",
+		"4|d",
+		"---",
+		"6|f",
+		"---",
+		"7|g",
+	)
+	if !reflect.DeepEqual(results, wantResults) {
+		t.Errorf("mergeSort:\n%s, want\n%s", sqltypes.PrintResults(results), sqltypes.PrintResults(wantResults))
+	}
 }
 
-func makeRow(id, col string) []sqltypes.Value {
-	return []sqltypes.Value{
-		sqltypes.MakeTrusted(sqltypes.Int32, []byte(id)),
-		sqltypes.MakeTrusted(sqltypes.Int32, []byte(col)),
+func TestMergeSortResultFailures(t *testing.T) {
+	vc := &fakeVcursor{
+		shardResults: make(map[string]*shardResult),
+	}
+	orderBy := []OrderbyParams{{
+		Col: 0,
+	}}
+	params := &scatterParams{
+		shardVars: map[string]map[string]interface{}{
+			"0": nil,
+		},
+	}
+
+	vc.shardResults["0"] = &shardResult{
+		sendErr: errors.New("early error"),
+	}
+	err := mergeSort(vc, "", orderBy, params, func(qr *sqltypes.Result) error { return nil })
+	want := "early error"
+	if err == nil || err.Error() != want {
+		t.Errorf("mergeSort(): %v, want %v", err, want)
+	}
+
+	idFields := sqltypes.MakeTestFields("id", "int32")
+	vc.shardResults["0"] = &shardResult{
+		results: sqltypes.MakeTestStreamingResults(idFields),
+		sendErr: errors.New("fail after fields"),
+	}
+	err = mergeSort(vc, "", orderBy, params, func(qr *sqltypes.Result) error { return nil })
+	want = "fail after fields"
+	if err == nil || err.Error() != want {
+		t.Errorf("mergeSort(): %v, want %v", err, want)
+	}
+
+	vc.shardResults["0"] = &shardResult{
+		results: sqltypes.MakeTestStreamingResults(idFields, "1"),
+		sendErr: errors.New("fail after first row"),
+	}
+	err = mergeSort(vc, "", orderBy, params, func(qr *sqltypes.Result) error { return nil })
+	want = "fail after first row"
+	if err == nil || err.Error() != want {
+		t.Errorf("mergeSort(): %v, want %v", err, want)
+	}
+
+	vc.shardResults["0"] = &shardResult{
+		results: sqltypes.MakeTestStreamingResults(idFields, "1"),
+		sendErr: errors.New("fail after first row"),
+	}
+}
+
+func TestMergeSortDataFailures(t *testing.T) {
+	idColFields := sqltypes.MakeTestFields("id|col", "int32|varchar")
+	vc := &fakeVcursor{
+		shardResults: map[string]*shardResult{
+			"0": {results: sqltypes.MakeTestStreamingResults(idColFields,
+				"1|a",
+			)},
+			"1": {results: sqltypes.MakeTestStreamingResults(idColFields,
+				"2.1|b",
+			)},
+		},
+	}
+	orderBy := []OrderbyParams{{
+		Col: 0,
+	}}
+	params := &scatterParams{
+		shardVars: map[string]map[string]interface{}{
+			"0": nil,
+			"1": nil,
+		},
+	}
+
+	err := mergeSort(vc, "", orderBy, params, func(qr *sqltypes.Result) error { return nil })
+	want := `strconv.ParseInt: parsing "2.1": invalid syntax`
+	if err == nil || err.Error() != want {
+		t.Errorf("mergeSort(): %v, want %v", err, want)
+	}
+
+	// Create a new VCursor because the previous mergeSort will still
+	// have lingering goroutines that can cause data race.
+	vc = &fakeVcursor{
+		shardResults: map[string]*shardResult{
+			"0": {results: sqltypes.MakeTestStreamingResults(idColFields,
+				"1|a",
+				"1.1|a",
+			)},
+			"1": {results: sqltypes.MakeTestStreamingResults(idColFields,
+				"2|b",
+			)},
+		},
+	}
+	err = mergeSort(vc, "", orderBy, params, func(qr *sqltypes.Result) error { return nil })
+	want = `strconv.ParseInt: parsing "1.1": invalid syntax`
+	if err == nil || err.Error() != want {
+		t.Errorf("mergeSort(): %v, want %v", err, want)
 	}
 }
 
@@ -183,31 +324,34 @@ type shardResult struct {
 	results []*sqltypes.Result
 	// sendErr is sent at the end of the stream if it's set.
 	sendErr error
-	// recvErr is set if a callback returned an error.
-	recvErr error
 }
 
-type testVCursor struct {
+// fakeVCursor fakes a VCursor. Currently, the only supported functionality
+// is a single-shard streaming query through StreamExecuteMulti.
+type fakeVcursor struct {
 	shardResults map[string]*shardResult
 }
 
-func (t *testVCursor) Context() context.Context {
+func (t *fakeVcursor) Context() context.Context {
 	return context.Background()
 }
 
-func (t *testVCursor) Execute(query string, bindvars map[string]interface{}, isDML bool) (*sqltypes.Result, error) {
+func (t *fakeVcursor) Execute(query string, bindvars map[string]interface{}, isDML bool) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
 
-func (t *testVCursor) ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery, isDML bool) (*sqltypes.Result, error) {
+func (t *fakeVcursor) ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery, isDML bool) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
 
-func (t *testVCursor) ExecuteStandalone(query string, bindvars map[string]interface{}, keyspace, shard string) (*sqltypes.Result, error) {
+func (t *fakeVcursor) ExecuteStandalone(query string, bindvars map[string]interface{}, keyspace, shard string) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
 
-func (t *testVCursor) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]interface{}, callback func(reply *sqltypes.Result) error) error {
+// StreamExecuteMulti streams a result from the specified shard.
+// The shard is specifed by the only entry in shardVars. At the
+// end of a stream, if sendErr is set, that error is returned.
+func (t *fakeVcursor) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]interface{}, callback func(reply *sqltypes.Result) error) error {
 	var shard string
 	for k := range shardVars {
 		shard = k
@@ -215,7 +359,6 @@ func (t *testVCursor) StreamExecuteMulti(query string, keyspace string, shardVar
 	}
 	for _, r := range t.shardResults[shard].results {
 		if err := callback(r); err != nil {
-			t.shardResults[shard].recvErr = err
 			return err
 		}
 	}
@@ -225,10 +368,10 @@ func (t *testVCursor) StreamExecuteMulti(query string, keyspace string, shardVar
 	return nil
 }
 
-func (t *testVCursor) GetKeyspaceShards(vkeyspace *vindexes.Keyspace) (string, []*topodatapb.ShardReference, error) {
+func (t *fakeVcursor) GetKeyspaceShards(vkeyspace *vindexes.Keyspace) (string, []*topodatapb.ShardReference, error) {
 	panic("unimplemented")
 }
 
-func (t *testVCursor) GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error) {
+func (t *fakeVcursor) GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error) {
 	panic("unimplemented")
 }

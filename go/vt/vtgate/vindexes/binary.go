@@ -98,7 +98,7 @@ func getBytes(key interface{}) ([]byte, error) {
 	case []byte:
 		return v, nil
 	case sqltypes.Value:
-		return v.Raw(), nil
+		return v.Bytes(), nil
 	case *querypb.BindVariable:
 		return v.Value, nil
 	}
