@@ -71,10 +71,10 @@ func (th *testHandler) NewConnection(c *Conn) {
 func (th *testHandler) ConnectionClosed(c *Conn) {
 }
 
-func (th *testHandler) ComQuery(c *Conn, q []byte) (*sqltypes.Result, error) {
+func (th *testHandler) ComQuery(c *Conn, q []byte, callback func(*sqltypes.Result) error) error {
 	query := string(q)
 	if query == "error" {
-		return nil, NewSQLError(ERUnknownComError, SSUnknownComError, "forced query handling error for: %v", query)
+		return NewSQLError(ERUnknownComError, SSUnknownComError, "forced query handling error for: %v", query)
 	}
 
 	if query == "panic" {
@@ -82,18 +82,20 @@ func (th *testHandler) ComQuery(c *Conn, q []byte) (*sqltypes.Result, error) {
 	}
 
 	if query == "select rows" {
-		return selectRowsResult, nil
+		callback(selectRowsResult)
+		return nil
 	}
 
 	if query == "insert" {
-		return &sqltypes.Result{
+		callback(&sqltypes.Result{
 			RowsAffected: 123,
 			InsertID:     123456789,
-		}, nil
+		})
+		return nil
 	}
 
 	if query == "schema echo" {
-		return &sqltypes.Result{
+		callback(&sqltypes.Result{
 			Fields: []*querypb.Field{
 				{
 					Name: "schema_name",
@@ -105,7 +107,8 @@ func (th *testHandler) ComQuery(c *Conn, q []byte) (*sqltypes.Result, error) {
 					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(c.SchemaName)),
 				},
 			},
-		}, nil
+		})
+		return nil
 	}
 
 	if query == "ssl echo" {
@@ -113,7 +116,7 @@ func (th *testHandler) ComQuery(c *Conn, q []byte) (*sqltypes.Result, error) {
 		if c.Capabilities&CapabilityClientSSL > 0 {
 			value = "ON"
 		}
-		return &sqltypes.Result{
+		callback(&sqltypes.Result{
 			Fields: []*querypb.Field{
 				{
 					Name: "ssl_flag",
@@ -125,11 +128,12 @@ func (th *testHandler) ComQuery(c *Conn, q []byte) (*sqltypes.Result, error) {
 					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(value)),
 				},
 			},
-		}, nil
+		})
+		return nil
 	}
 
 	if query == "userData echo" {
-		return &sqltypes.Result{
+		callback(&sqltypes.Result{
 			Fields: []*querypb.Field{
 				{
 					Name: "user",
@@ -146,10 +150,12 @@ func (th *testHandler) ComQuery(c *Conn, q []byte) (*sqltypes.Result, error) {
 					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(c.UserData.Get().Username)),
 				},
 			},
-		}, nil
+		})
+		return nil
 	}
 
-	return &sqltypes.Result{}, nil
+	callback(&sqltypes.Result{})
+	return nil
 }
 
 func TestClientFoundRows(t *testing.T) {

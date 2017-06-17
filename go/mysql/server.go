@@ -18,7 +18,9 @@ package mysql
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 
 	log "github.com/golang/glog"
@@ -54,9 +56,10 @@ type Handler interface {
 	ConnectionClosed(c *Conn)
 
 	// ComQuery is called when a connection receives a query.
-	// Note the contents of the query slice may change after this method
-	// returns, so the Handler should not hang on to the byte slice.
-	ComQuery(c *Conn, query []byte) (*sqltypes.Result, error)
+	// Note the contents of the query slice may change after
+	// the first call to callback. So the Handler should not
+	// hang on to the byte slice.
+	ComQuery(c *Conn, query []byte, callback func(*sqltypes.Result) error) error
 }
 
 // Listener is the MySQL server protocol listener.
@@ -275,9 +278,38 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 			}
 		case ComQuery:
 			query := c.parseComQuery(data)
-			result, err := l.handler.ComQuery(c, query)
-			c.recycleReadPacket()
-			if err != nil {
+			fieldSent := false
+			// sendFinished is a failsafe to prevent illegal packets
+			// from being sent after a response has completed.
+			sendFinished := false
+			err := l.handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
+				if sendFinished {
+					return io.EOF
+				}
+
+				if !fieldSent {
+					c.recycleReadPacket()
+					fieldSent = true
+
+					if len(qr.Fields) == 0 {
+						// We should not send any more packets after this.
+						sendFinished = true
+					}
+					if err := c.writeFields(qr); err != nil {
+						return err
+					}
+				}
+
+				return c.writeRows(qr)
+			})
+
+			// If no field was sent, we expect an error.
+			if !fieldSent {
+				c.recycleReadPacket()
+				// This is just a failsafe. Should never happen.
+				if err == nil || err == io.EOF {
+					err = errors.New("unexpected: query ended without no results and no error")
+				}
 				if werr := c.writeErrorPacketFromError(err); werr != nil {
 					// If we can't even write the error, we're done.
 					log.Errorf("Error writing query error to client %v: %v", c.ConnectionID, werr)
@@ -285,9 +317,20 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 				}
 				continue
 			}
-			if err := c.writeResult(result); err != nil {
-				log.Errorf("Error writing result to client %v: %v", c.ConnectionID, err)
+
+			if err != nil {
+				// We can't send an error in the middle of a stream.
+				// All we can do is abort the send, which will cause a 2013.
+				log.Errorf("Error in the middle of a stream to client %v: %v", c.ConnectionID, err)
 				return
+			}
+
+			// if send was finished (DML), don't send any more packets.
+			if !sendFinished {
+				if err := c.writeEndResult(); err != nil {
+					log.Errorf("Error writing result to client %v: %v", c.ConnectionID, err)
+					return
+				}
 			}
 		case ComPing:
 			// No payload to that one, just return OKPacket.
