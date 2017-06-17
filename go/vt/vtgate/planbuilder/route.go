@@ -419,6 +419,10 @@ func (rb *route) PushOrderBy(order *sqlparser.Order) error {
 	default:
 		return fmt.Errorf("unsupported: in scatter query: complex order by expression: %v", sqlparser.String(expr))
 	}
+	// Ensure that it's not an anonymous column (* expression).
+	if rb.resultColumns[colnum].alias.IsEmpty() {
+		return errors.New("unsupported: scatter order by with a '*' in select expression")
+	}
 	rb.ERoute.OrderBy = append(rb.ERoute.OrderBy, engine.OrderbyParams{
 		Col:  colnum,
 		Desc: order.Direction == sqlparser.DescScr,
