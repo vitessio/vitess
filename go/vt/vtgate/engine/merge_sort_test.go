@@ -22,6 +22,8 @@ import (
 	"reflect"
 	"testing"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
@@ -187,6 +189,10 @@ type shardResult struct {
 
 type testVCursor struct {
 	shardResults map[string]*shardResult
+}
+
+func (t *testVCursor) Context() context.Context {
+	return context.Background()
 }
 
 func (t *testVCursor) Execute(query string, bindvars map[string]interface{}, isDML bool) (*sqltypes.Result, error) {

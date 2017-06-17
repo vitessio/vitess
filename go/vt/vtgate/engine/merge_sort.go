@@ -36,9 +36,8 @@ import (
 // was pulled out. Since the input streams are sorted the same way that the heap is
 // sorted, this guarantees that the merged stream will also be sorted the same way.
 func mergeSort(vcursor VCursor, query string, orderBy []OrderbyParams, params *scatterParams, callback func(*sqltypes.Result) error) error {
-	// We could consider exposing vcursor's context and
-	// using that here. Needs to be discussed.
-	ctx := context.TODO()
+	ctx, cancel := context.WithCancel(vcursor.Context())
+	defer cancel()
 
 	handles := make([]*streamHandle, len(params.shardVars))
 	id := 0
@@ -46,11 +45,6 @@ func mergeSort(vcursor VCursor, query string, orderBy []OrderbyParams, params *s
 		handles[id] = runOneStream(ctx, vcursor, query, params.ks, shard, vars)
 		id++
 	}
-	defer func() {
-		for _, handle := range handles {
-			handle.cancel()
-		}
-	}()
 
 	// Fetch field info from just one stream.
 	fields := <-handles[0].fields
@@ -129,21 +123,18 @@ func mergeSort(vcursor VCursor, query string, orderBy []OrderbyParams, params *s
 // channel. At the end of the stream, fields and row are closed. If there
 // was an error, err is set before the channels are closed. The mergeSort
 // routine that pulls the rows out of each streamHandle can abort the stream
-// by calling cancel.
+// by calling canceling the context.
 type streamHandle struct {
 	fields chan []*querypb.Field
 	row    chan []sqltypes.Value
 	err    error
-	cancel context.CancelFunc
 }
 
 // runOnestream starts a streaming query on one shard, and returns a streamHandle for it.
 func runOneStream(ctx context.Context, vcursor VCursor, query, ks, shard string, vars map[string]interface{}) *streamHandle {
-	ctx, cancel := context.WithCancel(ctx)
 	handle := &streamHandle{
 		fields: make(chan []*querypb.Field, 1),
 		row:    make(chan []sqltypes.Value, 10),
-		cancel: cancel,
 	}
 
 	go func() {
