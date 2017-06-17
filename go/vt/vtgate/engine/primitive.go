@@ -17,10 +17,13 @@ limitations under the License.
 package engine
 
 import (
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/sqltypes"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // SeqVarName is a reserved bind var name for sequence values.
@@ -34,6 +37,7 @@ const ListVarName = "__vals"
 // VCursor defines the interface the engine will use
 // to execute routes.
 type VCursor interface {
+	Context() context.Context
 	Execute(query string, bindvars map[string]interface{}, isDML bool) (*sqltypes.Result, error)
 	ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery, isDML bool) (*sqltypes.Result, error)
 	ExecuteStandalone(query string, bindvars map[string]interface{}, keyspace, shard string) (*sqltypes.Result, error)
