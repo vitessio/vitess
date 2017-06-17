@@ -69,7 +69,7 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	}
 }
 
-func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query []byte) (*sqltypes.Result, error) {
+func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query []byte, callback func(*sqltypes.Result) error) error {
 	// FIXME(alainjobart): Add some kind of timeout to the context.
 	ctx := context.Background()
 
@@ -101,7 +101,11 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query []byte) (*sqltypes.Result
 	}
 	session, result, err := vh.vtg.Execute(ctx, session, string(query), make(map[string]interface{}))
 	c.ClientData = session
-	return result, mysql.NewSQLErrorFromError(err)
+	err = mysql.NewSQLErrorFromError(err)
+	if err != nil {
+		return err
+	}
+	return callback(result)
 }
 
 func init() {
