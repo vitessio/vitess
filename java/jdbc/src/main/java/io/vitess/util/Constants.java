@@ -38,13 +38,12 @@ public class Constants {
     public static final long CONNECTION_TIMEOUT = 30000;
     public static final String LITERAL_V = "v";
     public static final String LITERAL_SINGLE_QUOTE = "'";
-    public static final String SQL_SELECT = "select";
+    public static final String SQL_S = "s";
     public static final int DRIVER_MAJOR_VERSION = 1;
     public static final int DRIVER_MINOR_VERSION = 0;
     public static final int MAX_BUFFER_SIZE = 65535;
     //Default Timeout in miliseconds
     public static final int DEFAULT_TIMEOUT = 30000;
-    public static final String SQL_SHOW = "show";
     public static final String VITESS_KEYSPACE = "Keyspace name in Vitess Server";
     public static final Constants.QueryExecuteType DEFAULT_EXECUTE_TYPE = QueryExecuteType.SIMPLE;
     public static final String EXECUTE_TYPE_DESC = "Query execution type: simple or stream \n";
