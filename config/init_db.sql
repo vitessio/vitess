@@ -5,11 +5,17 @@
 # Equivalent of mysql_secure_installation
 ##########################################
 
+# Do not write to the binlog (avoid these statements replicating)
+SET sql_log_bin=0;
+
 # Remove anonymous users.
 DELETE FROM mysql.user WHERE User = '';
 
 # Disable remote root access (only allow UNIX socket).
 DELETE FROM mysql.user WHERE User = 'root' AND Host != 'localhost';
+
+# Ensure that privileges in memory match what's stored on disk.
+FLUSH PRIVILEGES;
 
 # Remove test database.
 DROP DATABASE IF EXISTS test;
