@@ -292,12 +292,10 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 		mysqlPort, err := agent.MysqlDaemon.GetMysqlPort()
 		if err != nil {
 			// Don't log if we're already in a waiting-for-mysql state.
-			agent.mutex.Lock()
-			if !agent._waitingForMysql {
+			if !agent.waitingForMysql {
 				log.Warningf("Can't get mysql port, won't populate Tablet record in topology (will retry silently at healthcheck interval %v): %v", *healthCheckInterval, err)
-				agent._waitingForMysql = true
+				agent.waitingForMysql = true
 			}
-			agent.mutex.Unlock()
 		} else {
 			log.Infof("Updating tablet mysql port to %v", mysqlPort)
 			_, err := agent.TopoServer.UpdateTabletFields(agent.batchCtx, tablet.Alias,
@@ -315,8 +313,8 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 				// again next time we do the health check.
 				agent.mutex.Lock()
 				topoproto.SetMysqlPort(agent._tablet, mysqlPort)
-				agent._waitingForMysql = false
 				agent.mutex.Unlock()
+				agent.waitingForMysql = false
 				agent.gotMysqlPort = true
 			}
 		}

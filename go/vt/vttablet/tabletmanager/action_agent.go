@@ -114,6 +114,11 @@ type ActionAgent struct {
 	// take actionMutex first.
 	actionMutex sync.Mutex
 
+	// waitingForMysql is set to true if mysql is not up when we
+	// start. That way, we only log once that we're waiting for
+	// mysql.  It is protected by actionMutex.
+	waitingForMysql bool
+
 	// gotMysqlPort is set when we got the current MySQL port and
 	// successfully saved it into the topology. That way we don't
 	// keep writing to the topology server on every heartbeat, but we
@@ -161,10 +166,6 @@ type ActionAgent struct {
 	// _blacklistedTables has the list of tables we are currently
 	// blacklisting.
 	_blacklistedTables []string
-
-	// set to true if mysql is not up when we start. That way, we
-	// only log once that we'r waiting for mysql.
-	_waitingForMysql bool
 
 	// if the agent is healthy, this is nil. Otherwise it contains
 	// the reason we're not healthy.
