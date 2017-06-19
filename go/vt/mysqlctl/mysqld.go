@@ -526,6 +526,13 @@ func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 	return nil
 }
 
+// MySQL 5.7 GA and up have deprecated mysql_install_db.
+// Instead, initialization is built into mysqld.
+func useMysqldInitialize(version string) bool {
+	return strings.Contains(version, "Ver 5.7.") ||
+		strings.Contains(version, "Ver 8.0.")
+}
+
 func (mysqld *Mysqld) installDataDir() error {
 	mysqlRoot, err := vtenv.VtMysqlRoot()
 	if err != nil {
@@ -542,9 +549,7 @@ func (mysqld *Mysqld) installDataDir() error {
 		return err
 	}
 
-	if strings.Contains(version, "Ver 5.7.") {
-		// MySQL 5.7 GA and up have deprecated mysql_install_db.
-		// Instead, initialization is built into mysqld.
+	if useMysqldInitialize(version) {
 		log.Infof("Installing data dir with mysqld --initialize-insecure")
 
 		args := []string{
