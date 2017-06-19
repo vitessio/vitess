@@ -754,16 +754,22 @@ func TestValid(t *testing.T) {
 		output: "use `ks:-80@master`",
 	}, {
 		input:  "describe foobar",
-		output: "other",
+		output: "otherread",
 	}, {
 		input:  "desc foobar",
-		output: "other",
+		output: "otherread",
 	}, {
 		input:  "explain foobar",
-		output: "other",
+		output: "otherread",
 	}, {
 		input:  "truncate foo",
-		output: "other",
+		output: "otheradmin",
+	}, {
+		input:  "repair foo",
+		output: "otheradmin",
+	}, {
+		input:  "optimize foo",
+		output: "otheradmin",
 	}, {
 		input: "select /* EQ true */ 1 from t where a = true",
 	}, {

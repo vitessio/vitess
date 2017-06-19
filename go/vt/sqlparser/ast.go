@@ -113,16 +113,17 @@ type Statement interface {
 	SQLNode
 }
 
-func (*Union) iStatement()  {}
-func (*Select) iStatement() {}
-func (*Insert) iStatement() {}
-func (*Update) iStatement() {}
-func (*Delete) iStatement() {}
-func (*Set) iStatement()    {}
-func (*DDL) iStatement()    {}
-func (*Show) iStatement()   {}
-func (*Use) iStatement()    {}
-func (*Other) iStatement()  {}
+func (*Union) iStatement()      {}
+func (*Select) iStatement()     {}
+func (*Insert) iStatement()     {}
+func (*Update) iStatement()     {}
+func (*Delete) iStatement()     {}
+func (*Set) iStatement()        {}
+func (*DDL) iStatement()        {}
+func (*Show) iStatement()       {}
+func (*Use) iStatement()        {}
+func (*OtherRead) iStatement()  {}
+func (*OtherAdmin) iStatement() {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -571,18 +572,34 @@ func (node *Use) WalkSubtree(visit Visit) error {
 	return Walk(visit, node.DBName)
 }
 
-// Other represents a DESCRIBE, or EXPLAIN statement.
+// OtherRead represents a DESCRIBE, or EXPLAIN statement.
 // It should be used only as an indicator. It does not contain
 // the full AST for the statement.
-type Other struct{}
+type OtherRead struct{}
 
 // Format formats the node.
-func (node *Other) Format(buf *TrackedBuffer) {
-	buf.WriteString("other")
+func (node *OtherRead) Format(buf *TrackedBuffer) {
+	buf.WriteString("otherread")
 }
 
 // WalkSubtree walks the nodes of the subtree.
-func (node *Other) WalkSubtree(visit Visit) error {
+func (node *OtherRead) WalkSubtree(visit Visit) error {
+	return nil
+}
+
+// OtherAdmin represents a misc statement that relies on ADMIN privileges,
+// such as REPAIR, OPTIMIZE, or TRUNCATE statement.
+// It should be used only as an indicator. It does not contain
+// the full AST for the statement.
+type OtherAdmin struct{}
+
+// Format formats the node.
+func (node *OtherAdmin) Format(buf *TrackedBuffer) {
+	buf.WriteString("otheradmin")
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *OtherAdmin) WalkSubtree(visit Visit) error {
 	return nil
 }
 

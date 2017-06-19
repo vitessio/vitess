@@ -1061,21 +1061,21 @@
 # show
 "show a"
 {
-  "PlanID": "OTHER",
+  "PlanID": "OTHER_READ",
   "TableName": ""
 }
 
 # describe
 "describe a"
 {
-  "PlanID": "OTHER",
+  "PlanID": "OTHER_READ",
   "TableName": ""
 }
 
 # explain
 "explain a"
 {
-  "PlanID": "OTHER",
+  "PlanID": "OTHER_READ",
   "TableName": ""
 }
 
