@@ -97,12 +97,6 @@ type ActionAgent struct {
 	// only used if exportStats is true.
 	statsTabletType *stats.String
 
-	// skipMysqlPortCheck is set when we don't want healthcheck to
-	// alter the mysql port of the Tablet record. This is used by
-	// vtcombo, because we dont configure the 'dba' pool, used to
-	// get the mysql port.
-	skipMysqlPortCheck bool
-
 	// batchCtx is given to the agent by its creator, and should be used for
 	// any background tasks spawned by the agent.
 	batchCtx context.Context
@@ -119,6 +113,16 @@ type ActionAgent struct {
 	// both agent.actionMutex and agent.mutex needs to be taken,
 	// take actionMutex first.
 	actionMutex sync.Mutex
+
+	// gotMysqlPort is set when we got the current MySQL port and
+	// successfully saved it into the topology. That way we don't
+	// keep writing to the topology server on every heartbeat, but we
+	// know to try again if we fail to get it.
+	// We clear it when the tablet goes from unhealthy to healthy,
+	// so we are sure to get the up-to-date version in case of
+	// a MySQL server restart.
+	// It is protected by actionMutex.
+	gotMysqlPort bool
 
 	// initReplication remembers whether an action has initialized
 	// replication.  It is protected by actionMutex.
@@ -345,7 +349,7 @@ func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           dbcfgs,
 		BinlogPlayerMap:     nil,
-		skipMysqlPortCheck:  true,
+		gotMysqlPort:        true,
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
@@ -652,6 +656,7 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 	}
 
 	if mport == topoproto.MysqlPort(tablet) {
+		agent.gotMysqlPort = true
 		return nil
 	}
 
@@ -665,7 +670,8 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 		return nil
 	}
 
-	// update worked, return the new record
+	// update worked, return the new record.
+	agent.gotMysqlPort = true
 	return newTablet
 }
 

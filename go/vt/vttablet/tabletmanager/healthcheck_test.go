@@ -210,6 +210,9 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	if port := topoproto.MysqlPort(ti.Tablet); port != 3306 {
 		t.Errorf("First health check failed to update mysql port: %v", port)
 	}
+	if !agent.gotMysqlPort {
+		t.Errorf("Healthcheck didn't record it updated the MySQL port.")
+	}
 	if !agent.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should be running")
 	}

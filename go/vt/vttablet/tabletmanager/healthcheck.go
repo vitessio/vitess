@@ -242,6 +242,7 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 			if healthErr == nil {
 				// we were unhealthy, are now healthy,
 				// make sure we have the right mysql port.
+				agent.gotMysqlPort = false
 				if updatedTablet := agent.checkTabletMysqlPort(agent.batchCtx, tablet); updatedTablet != nil {
 					agent.setTablet(updatedTablet)
 					tablet = updatedTablet
@@ -286,8 +287,8 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 	agent.History.Add(record)
 
 	// try to figure out the mysql port if we don't have it yet
-	if topoproto.MysqlPort(tablet) == 0 && !agent.skipMysqlPortCheck {
-		// we don't know the port, try to get it from mysqld
+	if !agent.gotMysqlPort {
+		// We haven't checked the port yet, try to get it from mysqld.
 		mysqlPort, err := agent.MysqlDaemon.GetMysqlPort()
 		if err != nil {
 			// Don't log if we're already in a waiting-for-mysql state.
@@ -310,12 +311,13 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 			if err != nil {
 				log.Infof("Error updating mysql port in tablet record (will try again at healthcheck interval): %v", err)
 			} else {
-				// save the port so we don't update it again next time
-				// we do the health check.
+				// save the port so we don't update it
+				// again next time we do the health check.
 				agent.mutex.Lock()
 				topoproto.SetMysqlPort(agent._tablet, mysqlPort)
 				agent._waitingForMysql = false
 				agent.mutex.Unlock()
+				agent.gotMysqlPort = true
 			}
 		}
 	}
