@@ -188,7 +188,7 @@ public class FieldWithMetadataTest extends BaseTest {
             .build();
 
         fieldWithMetadata = new FieldWithMetadata(conn, raw);
-        Assert.assertEquals(Types.BINARY, fieldWithMetadata.getJavaType());
+        Assert.assertEquals(Types.CHAR, fieldWithMetadata.getJavaType());
         Assert.assertEquals("UTF-8", fieldWithMetadata.getEncoding());
         Assert.assertEquals(false, fieldWithMetadata.isSingleBit());
 
