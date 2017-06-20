@@ -188,7 +188,7 @@ public class FieldWithMetadataTest extends BaseTest {
             .build();
 
         fieldWithMetadata = new FieldWithMetadata(conn, raw);
-        Assert.assertEquals(Types.BINARY, fieldWithMetadata.getJavaType());
+        Assert.assertEquals(Types.CHAR, fieldWithMetadata.getJavaType());
         Assert.assertEquals("UTF-8", fieldWithMetadata.getEncoding());
         Assert.assertEquals(false, fieldWithMetadata.isSingleBit());
 
@@ -257,6 +257,28 @@ public class FieldWithMetadataTest extends BaseTest {
         raw = raw.toBuilder().setCharset(CharsetMapping.MYSQL_COLLATION_INDEX_utf8).build();
         fieldWithMetadata = new FieldWithMetadata(conn, raw);
         Assert.assertEquals("remap to varchar due to non-binary encoding", Types.VARCHAR, fieldWithMetadata.getJavaType());
+    }
+
+    @Test
+    public void testBinaryToCharRemapping() throws SQLException {
+        VitessConnection conn = getVitessConnection();
+
+        Query.Field raw = Query.Field.newBuilder()
+            .setTable("foo")
+            .setColumnLength(3)
+            .setType(Query.Type.BINARY)
+            .setName("foo")
+            .setOrgName("foo")
+            .setCharset(CharsetMapping.MYSQL_COLLATION_INDEX_binary)
+            .setFlags(Query.MySqlFlag.BINARY_FLAG_VALUE)
+            .build();
+
+        FieldWithMetadata fieldWithMetadata = new FieldWithMetadata(conn, raw);
+        Assert.assertEquals("no remapping - base case", Types.BINARY, fieldWithMetadata.getJavaType());
+
+        raw = raw.toBuilder().setCharset(CharsetMapping.MYSQL_COLLATION_INDEX_utf8).build();
+        fieldWithMetadata = new FieldWithMetadata(conn, raw);
+        Assert.assertEquals("remap to char due to non-binary encoding", Types.CHAR, fieldWithMetadata.getJavaType());
     }
 
     @Test
