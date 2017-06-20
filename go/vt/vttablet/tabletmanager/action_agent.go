@@ -61,6 +61,7 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletservermock"
 
@@ -648,31 +649,59 @@ func (agent *ActionAgent) hookExtraEnv() map[string]string {
 
 // checkTabletMysqlPort will check the mysql port for the tablet is good,
 // and if not will try to update it. It returns the modified Tablet record,
-// if it was changed.
+// if it was updated successfully in the topology server.
+//
+// We use the agent.waitingForMysql flag to log only the first
+// error we get when trying to get the port from MySQL, and store it in the
+// topology. That way we don't spam the logs.
+//
+// The actionMutex lock must be held when calling this function.
 func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topodatapb.Tablet) *topodatapb.Tablet {
 	mport, err := agent.MysqlDaemon.GetMysqlPort()
 	if err != nil {
-		log.Warningf("Cannot get current mysql port, not checking it: %v", err)
+		// Only log the first time, so we don't spam the logs.
+		if !agent.waitingForMysql {
+			log.Warningf("Cannot get current mysql port, not checking it (will retry at healthcheck interval): %v", err)
+			agent.waitingForMysql = true
+		}
 		return nil
 	}
 
 	if mport == topoproto.MysqlPort(tablet) {
+		// The topology record contains the right port.
+		// Remember we successfully checked it, and that we're
+		// not waiting on MySQL to start any more.
 		agent.gotMysqlPort = true
+		agent.waitingForMysql = false
 		return nil
 	}
 
-	log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", topoproto.MysqlPort(tablet), mport)
+	if !agent.waitingForMysql {
+		log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", topoproto.MysqlPort(tablet), mport)
+	}
 	newTablet, err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
+		if err := topotools.CheckOwnership(agent.initialTablet, tablet); err != nil {
+			return err
+		}
 		topoproto.SetMysqlPort(t, mport)
 		return nil
 	})
 	if err != nil {
-		log.Warningf("Failed to update tablet record, may use old mysql port")
+		if !agent.waitingForMysql {
+			// After this, we will try again on every
+			// heartbeat to go through this code, but we
+			// won't log it.
+			log.Warningf("Failed to update tablet record, may use old mysql port: %v", err)
+			agent.waitingForMysql = true
+		}
 		return nil
 	}
 
-	// update worked, return the new record.
+	// Update worked, return the new record, so the agent can save it.
+	// This should not happen often, so we can log it.
+	log.Infof("MySQL port has changed from %v to %v, successfully updated the tablet record in topology", topoproto.MysqlPort(tablet), mport)
 	agent.gotMysqlPort = true
+	agent.waitingForMysql = false
 	return newTablet
 }
 
