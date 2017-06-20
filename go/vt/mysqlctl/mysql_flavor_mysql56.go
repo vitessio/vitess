@@ -35,7 +35,9 @@ const mysql56FlavorID = "MySQL56"
 
 // VersionMatch implements MysqlFlavor.VersionMatch().
 func (*mysql56) VersionMatch(version string) bool {
-	return strings.HasPrefix(version, "5.6") || strings.HasPrefix(version, "5.7")
+	return strings.HasPrefix(version, "5.6") ||
+		strings.HasPrefix(version, "5.7") ||
+		strings.HasPrefix(version, "8.0")
 }
 
 // MasterPosition implements MysqlFlavor.MasterPosition().
