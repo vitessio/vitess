@@ -93,7 +93,7 @@
   }
 }
 
-# simple aggregate
+# count aggregate
 "select count(*) from user"
 {
   "Original": "select count(*) from user",
@@ -113,6 +113,78 @@
       },
       "Query": "select count(*) from user",
       "FieldQuery": "select count(*) from user where 1 != 1"
+    }
+  }
+}
+
+# sum aggregate
+"select sum(col) from user"
+{
+  "Original": "select sum(col) from user",
+  "Instructions": {
+    "Aggregates": [
+      {
+        "Opcode": "sum",
+        "Col": 0
+      }
+    ],
+    "Keys": null,
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select sum(col) from user",
+      "FieldQuery": "select sum(col) from user where 1 != 1"
+    }
+  }
+}
+
+# min aggregate
+"select min(col) from user"
+{
+  "Original": "select min(col) from user",
+  "Instructions": {
+    "Aggregates": [
+      {
+        "Opcode": "min",
+        "Col": 0
+      }
+    ],
+    "Keys": null,
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select min(col) from user",
+      "FieldQuery": "select min(col) from user where 1 != 1"
+    }
+  }
+}
+
+# max aggregate
+"select max(col) from user"
+{
+  "Original": "select max(col) from user",
+  "Instructions": {
+    "Aggregates": [
+      {
+        "Opcode": "max",
+        "Col": 0
+      }
+    ],
+    "Keys": null,
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select max(col) from user",
+      "FieldQuery": "select max(col) from user where 1 != 1"
     }
   }
 }

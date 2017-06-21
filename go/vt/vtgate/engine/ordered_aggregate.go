@@ -196,15 +196,19 @@ func (oa *OrderedAggregate) keysEqual(row1, row2 []sqltypes.Value) (bool, error)
 func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes.Value) ([]sqltypes.Value, error) {
 	result := sqltypes.CopyRow(row1)
 	for _, aggr := range oa.Aggregates {
+		var err error
 		switch aggr.Opcode {
 		case AggregateCount, AggregateSum:
-			var err error
-			result[aggr.Col], err = sqltypes.Add(row1[aggr.Col], row2[aggr.Col], fields[aggr.Col].Type)
-			if err != nil {
-				return nil, err
-			}
+			result[aggr.Col], err = sqltypes.NullsafeAdd(row1[aggr.Col], row2[aggr.Col], fields[aggr.Col].Type)
+		case AggregateMin:
+			result[aggr.Col], err = sqltypes.Min(row1[aggr.Col], row2[aggr.Col])
+		case AggregateMax:
+			result[aggr.Col], err = sqltypes.Max(row1[aggr.Col], row2[aggr.Col])
 		default:
-			return nil, fmt.Errorf("unimplemented: %v", aggr.Opcode)
+			return nil, fmt.Errorf("BUG: Unexpected opcode: %v", aggr.Opcode)
+		}
+		if err != nil {
+			return nil, err
 		}
 	}
 	return result, nil

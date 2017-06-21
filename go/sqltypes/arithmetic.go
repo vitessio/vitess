@@ -34,7 +34,9 @@ type numeric struct {
 	fval float64
 }
 
-// Add adds two Values. A numeric value is first built
+// NullsafeAdd adds two Values in a null-safe manner. A null value
+// is treated as 0. If both values are null, then a null is returned.
+// If both values are not null, a numeric value is built
 // from each input: Signed->int64, Unsigned->uint64, Float->float64.
 // Otherwise the 'best type fit' is chosen for the number: int64 or float64.
 // Addition is performed by upgrading types as needed, or in case
@@ -42,11 +44,15 @@ type numeric struct {
 // Unsigned ints can only be added to positive ints. After the
 // addition, if one of the input types was Decimal, then
 // a Decimal is built. Otherwise, the final type of the
-// result is preserved. If any value is NULL, the result is NULL.
-func Add(v1, v2 Value, resultType querypb.Type) (Value, error) {
-	if v1.IsNull() || v2.IsNull() {
-		return NULL, nil
+// result is preserved.
+func NullsafeAdd(v1, v2 Value, resultType querypb.Type) (Value, error) {
+	if v1.IsNull() {
+		return v2, nil
 	}
+	if v2.IsNull() {
+		return v1, nil
+	}
+
 	lv1, err := newNumeric(v1)
 	if err != nil {
 		return NULL, err
@@ -92,6 +98,39 @@ func NullsafeCompare(v1, v2 Value) (int, error) {
 		return compareNumeric(lv1, lv2), nil
 	}
 	return bytes.Compare(v1.Raw(), v2.Raw()), nil
+}
+
+// Min returns the minimum of v1 and v2. If one of the
+// values is NULL, it returns the other value. If both
+// are NULL, it returns NULL.
+func Min(v1, v2 Value) (Value, error) {
+	return minmax(v1, v2, true)
+}
+
+// Max returns the maximum of v1 and v2. If one of the
+// values is NULL, it returns the other value. If both
+// are NULL, it returns NULL.
+func Max(v1, v2 Value) (Value, error) {
+	return minmax(v1, v2, false)
+}
+
+func minmax(v1, v2 Value, min bool) (Value, error) {
+	if v1.IsNull() {
+		return v2, nil
+	}
+	if v2.IsNull() {
+		return v1, nil
+	}
+
+	n, err := NullsafeCompare(v1, v2)
+	if err != nil {
+		return NULL, err
+	}
+	// XNOR: see tests.
+	if min == (n < 0) {
+		return v1, nil
+	}
+	return v2, nil
 }
 
 // ConvertToUint64 converts any go, sqltypes, or querypb
