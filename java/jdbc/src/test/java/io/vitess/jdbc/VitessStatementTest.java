@@ -28,6 +28,7 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Matchers;
+import org.mockito.Mockito;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
@@ -219,60 +220,48 @@ import io.vitess.util.Constants;
     }
 
     @Test public void testExecuteFetchSizeAsStreaming() throws SQLException {
-        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+        testExecute(5, true, false, true);
+        testExecute(5, false, false, true);
+        testExecute(0, true, true, false);
+        testExecute(0, false, false, true);
+    }
+
+    private void testExecute(int fetchSize, boolean simpleExecute, boolean shouldRunExecute, boolean shouldRunStreamExecute) throws SQLException {
         VTGateConn mockVtGateConn = PowerMockito.mock(VTGateConn.class);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
-        Cursor mockCursor = PowerMockito.mock(Cursor.class);
-        SQLFuture mockSqlFutureCursor = PowerMockito.mock(SQLFuture.class);
-        SQLFuture mockSqlFutureVtGateTx = PowerMockito.mock(SQLFuture.class);
 
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+        PowerMockito.when(mockConn.isSimpleExecute()).thenReturn(simpleExecute);
+        PowerMockito.when(mockConn.getTabletType()).thenReturn(Topodata.TabletType.REPLICA);
         PowerMockito.when(mockConn.getKeyspace()).thenReturn("test_keyspace");
         PowerMockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
         PowerMockito.when(mockConn.getVtGateTx()).thenReturn(mockVtGateTx);
-        PowerMockito.when(mockVtGateTx
+
+        Cursor mockCursor = PowerMockito.mock(Cursor.class);
+        SQLFuture mockSqlFutureCursor = PowerMockito.mock(SQLFuture.class);
+        PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
+
+        PowerMockito.when(mockVtGateConn
             .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
                 Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockSqlFutureCursor);
         PowerMockito.when(mockVtGateConn
             .streamExecute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
                 Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockCursor);
-        PowerMockito.when(mockConn.getExecuteType())
-            .thenReturn(Constants.QueryExecuteType.SIMPLE);
-        PowerMockito.when(mockConn.isSimpleExecute()).thenReturn(true);
-        PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
-        PowerMockito.when(mockSqlFutureVtGateTx.checkedGet()).thenReturn(mockVtGateTx);
-        PowerMockito.when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
 
         VitessStatement statement = new VitessStatement(mockConn);
-        statement.setFetchSize(5);
+        statement.setFetchSize(fetchSize);
+        statement.executeQuery(sqlSelect);
 
-        //select on replica
-        PowerMockito.when(mockConn.getTabletType()).thenReturn(Topodata.TabletType.REPLICA);
-        ResultSet rs = statement.executeQuery(sqlSelect);
-        Assert.assertEquals(-1, statement.getUpdateCount());
+        if (shouldRunExecute) {
+            Mockito.verify(mockVtGateConn).execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class));
+        }
 
-        //show query
-        rs = statement.executeQuery(sqlShow);
-        Assert.assertEquals(-1, statement.getUpdateCount());
-
-        //select on master when tx is null and autocommit is false
-        PowerMockito.when(mockConn.getTabletType()).thenReturn(Topodata.TabletType.MASTER);
-        PowerMockito.when(mockConn.getVtGateTx()).thenReturn(null);
-        PowerMockito.when(mockVtGateConn.begin(Matchers.any(Context.class)))
-            .thenReturn(mockSqlFutureVtGateTx);
-        PowerMockito.when(mockConn.getAutoCommit()).thenReturn(false);
-        rs = statement.executeQuery(sqlSelect);
-        Assert.assertEquals(-1, statement.getUpdateCount());
-
-        //when returned cursor is null
-        PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(null);
-        try {
-            statement.executeQuery(sqlSelect);
-            Assert.fail("Should have thrown exception for cursor null");
-        } catch (SQLException ex) {
-            Assert.assertEquals("Failed to execute this method", ex.getMessage());
+        if (shouldRunStreamExecute) {
+            Mockito.verify(mockVtGateConn).streamExecute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class));
         }
     }
-
 
     @Test public void testExecuteUpdate() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
