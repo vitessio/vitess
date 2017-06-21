@@ -676,6 +676,11 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 		return nil
 	}
 
+	// Update the port in the topology. Use a shorter timeout, so if
+	// the topo server is busy / throttling us, we don't hang forever here.
+	// The healthcheck go routine will try again next time.
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 	if !agent.waitingForMysql {
 		log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", topoproto.MysqlPort(tablet), mport)
 	}
