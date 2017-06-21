@@ -141,6 +141,11 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 	}
 	tablet := ti.Tablet
 
+	// Also refresh the MySQL port, to be sure it's correct.
+	// Note if this run doesn't succeed, the healthcheck go routine
+	// will try again.
+	agent.gotMysqlPort = false
+	agent.waitingForMysql = false
 	if updatedTablet := agent.checkTabletMysqlPort(ctx, tablet); updatedTablet != nil {
 		tablet = updatedTablet
 	}
