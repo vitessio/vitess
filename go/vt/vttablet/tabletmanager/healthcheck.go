@@ -39,8 +39,6 @@ import (
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/topotools"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -240,8 +238,11 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 			_ /* state changed */, healthErr = agent.QueryServiceControl.SetServingType(tablet.Type, true, nil)
 
 			if healthErr == nil {
-				// we were unhealthy, are now healthy,
+				// We were unhealthy, are now healthy,
 				// make sure we have the right mysql port.
+				// Also make sure to display any error message.
+				agent.gotMysqlPort = false
+				agent.waitingForMysql = false
 				if updatedTablet := agent.checkTabletMysqlPort(agent.batchCtx, tablet); updatedTablet != nil {
 					agent.setTablet(updatedTablet)
 					tablet = updatedTablet
@@ -285,38 +286,11 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 	record.ReplicationDelay = replicationDelay
 	agent.History.Add(record)
 
-	// try to figure out the mysql port if we don't have it yet
-	if topoproto.MysqlPort(tablet) == 0 && !agent.skipMysqlPortCheck {
-		// we don't know the port, try to get it from mysqld
-		mysqlPort, err := agent.MysqlDaemon.GetMysqlPort()
-		if err != nil {
-			// Don't log if we're already in a waiting-for-mysql state.
-			agent.mutex.Lock()
-			if !agent._waitingForMysql {
-				log.Warningf("Can't get mysql port, won't populate Tablet record in topology (will retry silently at healthcheck interval %v): %v", *healthCheckInterval, err)
-				agent._waitingForMysql = true
-			}
-			agent.mutex.Unlock()
-		} else {
-			log.Infof("Updating tablet mysql port to %v", mysqlPort)
-			_, err := agent.TopoServer.UpdateTabletFields(agent.batchCtx, tablet.Alias,
-				func(tablet *topodatapb.Tablet) error {
-					if err := topotools.CheckOwnership(agent.initialTablet, tablet); err != nil {
-						return err
-					}
-					topoproto.SetMysqlPort(tablet, mysqlPort)
-					return nil
-				})
-			if err != nil {
-				log.Infof("Error updating mysql port in tablet record (will try again at healthcheck interval): %v", err)
-			} else {
-				// save the port so we don't update it again next time
-				// we do the health check.
-				agent.mutex.Lock()
-				topoproto.SetMysqlPort(agent._tablet, mysqlPort)
-				agent._waitingForMysql = false
-				agent.mutex.Unlock()
-			}
+	// Try to figure out the mysql port if we don't have it yet.
+	if !agent.gotMysqlPort {
+		if updatedTablet := agent.checkTabletMysqlPort(agent.batchCtx, tablet); updatedTablet != nil {
+			agent.setTablet(updatedTablet)
+			tablet = updatedTablet
 		}
 	}
 
