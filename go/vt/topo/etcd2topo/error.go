@@ -44,6 +44,18 @@ func convertError(err error) error {
 		switch typeErr.Code() {
 		case codes.NotFound:
 			return topo.ErrNoNode
+		case codes.Unavailable, codes.DeadlineExceeded:
+			// The etcd2 client library may return this error:
+			// grpc.Errorf(codes.Unavailable,
+			// "etcdserver: request timed out") which seems to be
+			// misclassified, it should be using
+			// codes.DeadlineExceeded. All timeouts errors
+			// seem to be using the codes.Unavailable
+			// category. So changing all of them to ErrTimeout.
+			// The other reasons for codes.Unavailable are when
+			// etcd master election is failing, so timeout
+			// also sounds reasonable there.
+			return topo.ErrTimeout
 		}
 	default:
 		switch err {
