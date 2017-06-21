@@ -694,6 +694,50 @@
   }
 }
 
+# Scatter order by is complex
+"select col, count(*) from user group by col order by col+1"
+"unsupported: in scatter query: complex order by expression: col + 1"
+
+# invalid order by column numner for scatter
+"select col, count(*) from user group by col order by 5 limit 10"
+"invalid order by: column number out of range: 5"
+
+# aggregate with limit
+"select col, count(*) from user group by col limit 10"
+{
+  "Original": "select col, count(*) from user group by col limit 10",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": 10,
+    "Input": {
+      "Aggregates": [
+        {
+          "Opcode": "count",
+          "Col": 1
+        }
+      ],
+      "Keys": [
+        0
+      ],
+      "Input": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select col, count(*) from user group by col order by col asc limit 10",
+        "FieldQuery": "select col, count(*) from user where 1 != 1 group by col",
+        "OrderBy": [
+          {
+            "Col": 0,
+            "Desc": false
+          }
+        ]
+      }
+    }
+  }
+}
+
 # Group by with collate operator
 "select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci"
 {
