@@ -298,29 +298,38 @@ func TestSidecarTables(t *testing.T) {
 }
 
 func TestConsolidation(t *testing.T) {
-	vstart := framework.DebugVars()
 	defer framework.Server.SetPoolSize(framework.Server.PoolSize())
 	framework.Server.SetPoolSize(1)
 
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		framework.NewClient().Execute("select sleep(0.5) from dual", nil)
-		wg.Done()
-	}()
-	go func() {
-		framework.NewClient().Execute("select sleep(0.5) from dual", nil)
-		wg.Done()
-	}()
-	wg.Wait()
+	for sleep := 0.1; sleep < 10.0; sleep *= 2 {
+		query := fmt.Sprintf("select sleep(%v) from dual", sleep)
 
-	vend := framework.DebugVars()
-	if err := compareIntDiff(vend, "Waits/TotalCount", vstart, 1); err != nil {
-		t.Error(err)
+		vstart := framework.DebugVars()
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			framework.NewClient().Execute(query, nil)
+			wg.Done()
+		}()
+		go func() {
+			framework.NewClient().Execute(query, nil)
+			wg.Done()
+		}()
+		wg.Wait()
+
+		vend := framework.DebugVars()
+		if err := compareIntDiff(vend, "Waits/TotalCount", vstart, 1); err != nil {
+			t.Logf("DebugVars Waits/TotalCount not incremented with sleep=%v", sleep)
+			continue
+		}
+		if err := compareIntDiff(vend, "Waits/Histograms/Consolidations/Count", vstart, 1); err != nil {
+			t.Logf("DebugVars Waits/Histograms/Consolidations/Count not incremented with sleep=%v", sleep)
+			continue
+		}
+		t.Logf("DebugVars properly incremented with sleep=%v", sleep)
+		return
 	}
-	if err := compareIntDiff(vend, "Waits/Histograms/Consolidations/Count", vstart, 1); err != nil {
-		t.Error(err)
-	}
+	t.Error("DebugVars for consolidation not incremented")
 }
 
 func TestBindInSelect(t *testing.T) {
