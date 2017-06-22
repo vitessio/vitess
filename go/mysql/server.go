@@ -279,11 +279,12 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 		case ComQuery:
 			query := c.parseComQuery(data)
 			fieldSent := false
-			// sendFinished is a failsafe to prevent illegal packets
-			// from being sent after a response has completed.
+			// sendFinished is set if a response has completed and
+			// no further packets must be sent.
 			sendFinished := false
 			err := l.handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
 				if sendFinished {
+					// Failsafe: Unreachable if server is well-behaved.
 					return io.EOF
 				}
 
@@ -308,7 +309,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 				c.recycleReadPacket()
 				// This is just a failsafe. Should never happen.
 				if err == nil || err == io.EOF {
-					err = errors.New("unexpected: query ended without no results and no error")
+					err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
 				}
 				if werr := c.writeErrorPacketFromError(err); werr != nil {
 					// If we can't even write the error, we're done.
@@ -325,7 +326,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 				return
 			}
 
-			// if send was finished (DML), don't send any more packets.
+			// Send the end packet only is sendFinished is false (not a DML).
 			if !sendFinished {
 				if err := c.writeEndResult(); err != nil {
 					log.Errorf("Error writing result to client %v: %v", c.ConnectionID, err)

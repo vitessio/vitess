@@ -72,29 +72,22 @@ func (th *testHandler) ConnectionClosed(c *Conn) {
 }
 
 func (th *testHandler) ComQuery(c *Conn, q []byte, callback func(*sqltypes.Result) error) error {
-	query := string(q)
-	if query == "error" {
+	switch query := string(q); query {
+	case "error":
 		return NewSQLError(ERUnknownComError, SSUnknownComError, "forced query handling error for: %v", query)
-	}
-
-	if query == "panic" {
+	case "panic":
 		panic("test panic attack!")
-	}
-
-	if query == "select rows" {
+	case "select rows":
 		callback(selectRowsResult)
-		return nil
-	}
-
-	if query == "insert" {
+	case "error after send":
+		callback(selectRowsResult)
+		return NewSQLError(ERUnknownComError, SSUnknownComError, "forced query handling error for: %v", query)
+	case "insert":
 		callback(&sqltypes.Result{
 			RowsAffected: 123,
 			InsertID:     123456789,
 		})
-		return nil
-	}
-
-	if query == "schema echo" {
+	case "schema echo":
 		callback(&sqltypes.Result{
 			Fields: []*querypb.Field{
 				{
@@ -108,10 +101,7 @@ func (th *testHandler) ComQuery(c *Conn, q []byte, callback func(*sqltypes.Resul
 				},
 			},
 		})
-		return nil
-	}
-
-	if query == "ssl echo" {
+	case "ssl echo":
 		value := "OFF"
 		if c.Capabilities&CapabilityClientSSL > 0 {
 			value = "ON"
@@ -129,10 +119,7 @@ func (th *testHandler) ComQuery(c *Conn, q []byte, callback func(*sqltypes.Resul
 				},
 			},
 		})
-		return nil
-	}
-
-	if query == "userData echo" {
+	case "userData echo":
 		callback(&sqltypes.Result{
 			Fields: []*querypb.Field{
 				{
@@ -151,10 +138,9 @@ func (th *testHandler) ComQuery(c *Conn, q []byte, callback func(*sqltypes.Resul
 				},
 			},
 		})
-		return nil
+	default:
+		callback(&sqltypes.Result{})
 	}
-
-	callback(&sqltypes.Result{})
 	return nil
 }
 
@@ -271,6 +257,17 @@ func TestServer(t *testing.T) {
 		!strings.Contains(output, "nicer name") ||
 		!strings.Contains(output, "2 rows in set") {
 		t.Errorf("Unexpected output for 'select rows'")
+	}
+
+	// If there's an error after streaming has started,
+	// we should get a 2013
+	output, ok = runMysql(t, params, "error after send")
+	if ok {
+		t.Fatalf("mysql should have failed: %v", output)
+	}
+	if !strings.Contains(output, "ERROR 2013 (HY000)") ||
+		!strings.Contains(output, "Lost connection to MySQL server during query") {
+		t.Errorf("Unexpected output for 'panic'")
 	}
 
 	// Run an 'insert' command, no rows, but rows affected.
