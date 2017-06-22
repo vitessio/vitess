@@ -35,7 +35,7 @@ import (
 )
 
 var (
-	mysqlServerPort               = flag.Int("mysql_server_port", 0, "If set, also listen for MySQL binary protocol connections on this port.")
+	mysqlServerPort               = flag.Int("mysql_server_port", -1, "If set, also listen for MySQL binary protocol connections on this port.")
 	mysqlAuthServerImpl           = flag.String("mysql_auth_server_impl", "static", "Which auth server implementation to use.")
 	mysqlAllowClearTextWithoutTLS = flag.Bool("mysql_allow_clear_text_without_tls", false, "If set, the server will allow the use of a clear text password over non-SSL connections.")
 
@@ -112,51 +112,56 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query []byte, callback func(*sq
 	return callback(result)
 }
 
-func init() {
-	var listener *mysql.Listener
+var mysqlListener *mysql.Listener
 
-	servenv.OnRun(func() {
-		// Flag is not set, just return.
-		if *mysqlServerPort == 0 {
-			return
-		}
+// initiMySQLProtocol starts the mysql protocol.
+// It should be called only once in a process.
+func initMySQLProtocol() {
+	// Flag is not set, just return.
+	if *mysqlServerPort < 0 {
+		return
+	}
 
-		// If no VTGate was created, just return.
-		if rpcVTGate == nil {
-			return
-		}
+	// If no VTGate was created, just return.
+	if rpcVTGate == nil {
+		return
+	}
 
-		// Initialize registered AuthServer implementations (or other plugins)
-		for _, initFn := range pluginInitializers {
-			initFn()
-		}
-		authServer := mysql.GetAuthServer(*mysqlAuthServerImpl)
+	// Initialize registered AuthServer implementations (or other plugins)
+	for _, initFn := range pluginInitializers {
+		initFn()
+	}
+	authServer := mysql.GetAuthServer(*mysqlAuthServerImpl)
 
-		// Create a Listener.
-		var err error
-		vh := newVtgateHandler(rpcVTGate)
-		listener, err = mysql.NewListener("tcp", net.JoinHostPort("", fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh)
+	// Create a Listener.
+	var err error
+	vh := newVtgateHandler(rpcVTGate)
+	mysqlListener, err = mysql.NewListener("tcp", net.JoinHostPort("", fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh)
+	if err != nil {
+		log.Fatalf("mysql.NewListener failed: %v", err)
+	}
+	if *mysqlSslCert != "" && *mysqlSslKey != "" {
+		mysqlListener.TLSConfig, err = grpcutils.TLSServerConfig(*mysqlSslCert, *mysqlSslKey, *mysqlSslCa)
 		if err != nil {
-			log.Fatalf("mysql.NewListener failed: %v", err)
+			log.Fatalf("grpcutils.TLSServerConfig failed: %v", err)
+			return
 		}
-		if *mysqlSslCert != "" && *mysqlSslKey != "" {
-			listener.TLSConfig, err = grpcutils.TLSServerConfig(*mysqlSslCert, *mysqlSslKey, *mysqlSslCa)
-			if err != nil {
-				log.Fatalf("grpcutils.TLSServerConfig failed: %v", err)
-				return
-			}
-		}
-		listener.AllowClearTextWithoutTLS = *mysqlAllowClearTextWithoutTLS
+	}
+	mysqlListener.AllowClearTextWithoutTLS = *mysqlAllowClearTextWithoutTLS
 
-		// And starts listening.
-		go func() {
-			listener.Accept()
-		}()
-	})
+	// And starts listening.
+	go func() {
+		mysqlListener.Accept()
+	}()
+}
+
+func init() {
+	servenv.OnRun(initMySQLProtocol)
 
 	servenv.OnTerm(func() {
-		if listener != nil {
-			listener.Close()
+		if mysqlListener != nil {
+			mysqlListener.Close()
+			mysqlListener = nil
 		}
 	})
 }
