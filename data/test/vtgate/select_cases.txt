@@ -161,6 +161,38 @@
   }
 }
 
+# select from dual on unqualified keyspace
+"select @@session.auto_increment_increment from dual"
+{
+  "Original": "select @@session.auto_increment_increment from dual",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select @@session.auto_increment_increment from dual",
+    "FieldQuery": "select @@session.auto_increment_increment from dual where 1 != 1"
+  }
+}
+
+# select from dual on sharded keyspace
+"select @@session.auto_increment_increment from user.dual"
+{
+  "Original": "select @@session.auto_increment_increment from user.dual",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select @@session.auto_increment_increment from dual",
+    "FieldQuery": "select @@session.auto_increment_increment from dual where 1 != 1",
+    "Vindex": "binary",
+    "Values": "\u0000"
+  }
+}
+
 # RHS route referenced
 "select user_extra.id from user join user_extra"
 {

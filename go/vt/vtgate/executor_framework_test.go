@@ -197,7 +197,9 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	createSandbox(KsTestUnsharded)
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
 
-	bad := createSandbox("TestBadSharding")
+	// Ues the 'X' in the name to ensure it's not alphabetically first.
+	// Otherwise, it would become the default keyspace for the dual table.
+	bad := createSandbox("TestXBadSharding")
 	bad.VSchema = badVSchema
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema

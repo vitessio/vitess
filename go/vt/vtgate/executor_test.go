@@ -253,10 +253,10 @@ func TestExecutorShow(t *testing.T) {
 		wantqr := &sqltypes.Result{
 			Fields: buildVarCharFields("Databases"),
 			Rows: [][]sqltypes.Value{
-				buildVarCharRow("TestBadSharding"),
 				buildVarCharRow("TestExecutor"),
 				buildVarCharRow(KsTestSharded),
 				buildVarCharRow(KsTestUnsharded),
+				buildVarCharRow("TestXBadSharding"),
 			},
 			RowsAffected: 4,
 		}
@@ -274,8 +274,8 @@ func TestExecutorShow(t *testing.T) {
 	wantqr := &sqltypes.Result{
 		Fields: buildVarCharFields("Shards"),
 		Rows: [][]sqltypes.Value{
-			buildVarCharRow("TestBadSharding/-20"),
-			buildVarCharRow(KsTestUnsharded + "/0"),
+			buildVarCharRow("TestExecutor/-20"),
+			buildVarCharRow("TestXBadSharding/e0-"),
 		},
 		RowsAffected: 25,
 	}
@@ -291,16 +291,17 @@ func TestExecutorShow(t *testing.T) {
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Tables"),
 		Rows: [][]sqltypes.Value{
+			buildVarCharRow("dual"),
 			buildVarCharRow("main1"),
 			buildVarCharRow("music_user_map"),
 			buildVarCharRow("name_user_map"),
 			buildVarCharRow("simple"),
 			buildVarCharRow("user_seq"),
 		},
-		RowsAffected: 5,
+		RowsAffected: 6,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("show databases:\n%+v, want\n%+v", qr, wantqr)
+		t.Errorf("show vschema_tables:\n%+v, want\n%+v", qr, wantqr)
 	}
 
 	session = &vtgatepb.Session{}
@@ -548,7 +549,7 @@ func TestVSchemaStats(t *testing.T) {
 		t.Fatalf("error executing template: %v", err)
 	}
 	result := wr.String()
-	if !strings.Contains(result, "<td>TestBadSharding</td>") ||
+	if !strings.Contains(result, "<td>TestXBadSharding</td>") ||
 		!strings.Contains(result, "<td>TestUnsharded</td>") {
 		t.Errorf("invalid html result: %v", result)
 	}
