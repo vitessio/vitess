@@ -168,10 +168,19 @@ func buildERoute(tableName sqlparser.TableName, vschema VSchema) (*engine.Route,
 	if err != nil {
 		return nil, nil, err
 	}
-	if table.Keyspace.Sharded {
+	if !table.Keyspace.Sharded {
+		return engine.NewRoute(engine.SelectUnsharded, table.Keyspace), table, nil
+	}
+	if table.Pinned == nil {
 		return engine.NewRoute(engine.SelectScatter, table.Keyspace), table, nil
 	}
-	return engine.NewRoute(engine.SelectUnsharded, table.Keyspace), table, nil
+	// Pinned tables have their keyspace ids already assigned.
+	// Use the Binary vindex, which is the identity function
+	// for keyspace id. Currently only dual tables are pinned.
+	route := engine.NewRoute(engine.SelectEqualUnique, table.Keyspace)
+	route.Vindex, _ = vindexes.NewBinary("binary", nil)
+	route.Values = sqlparser.NewStrVal(table.Pinned)
+	return route, table, nil
 }
 
 // processJoin produces a builder subtree for the given Join.

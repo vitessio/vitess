@@ -120,15 +120,21 @@ func TestUnshardedVSchema(t *testing.T) {
 		Name:     sqlparser.NewTableIdent("t1"),
 		Keyspace: ks,
 	}
+	dual := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ks,
+	}
 	want := &VSchema{
 		tables: map[string]*Table{
-			"t1": t1,
+			"t1":   t1,
+			"dual": dual,
 		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"unsharded": {
 				Keyspace: ks,
 				Tables: map[string]*Table{
-					"t1": t1,
+					"t1":   t1,
+					"dual": dual,
 				},
 			},
 		},
@@ -209,15 +215,22 @@ func TestShardedVSchemaOwned(t *testing.T) {
 		t1.ColumnVindexes[0],
 	}
 	t1.Owned = t1.ColumnVindexes[1:]
+	dual := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ks,
+		Pinned:   []byte{0},
+	}
 	want := &VSchema{
 		tables: map[string]*Table{
-			"t1": t1,
+			"t1":   t1,
+			"dual": dual,
 		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"sharded": {
 				Keyspace: ks,
 				Tables: map[string]*Table{
-					"t1": t1,
+					"t1":   t1,
+					"dual": dual,
 				},
 			},
 		},
@@ -292,15 +305,22 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 		t1.ColumnVindexes[1],
 		t1.ColumnVindexes[0],
 	}
+	dual := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ks,
+		Pinned:   []byte{0},
+	}
 	want := &VSchema{
 		tables: map[string]*Table{
-			"t1": t1,
+			"t1":   t1,
+			"dual": dual,
 		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"sharded": {
 				Keyspace: ks,
 				Tables: map[string]*Table{
-					"t1": t1,
+					"t1":   t1,
+					"dual": dual,
 				},
 			},
 		},
@@ -429,21 +449,32 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 		Keyspace:   ksb,
 		IsSequence: true,
 	}
+	duala := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ksa,
+	}
+	dualb := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ksb,
+	}
 	want := &VSchema{
 		tables: map[string]*Table{
-			"t1": nil,
+			"t1":   nil,
+			"dual": duala,
 		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"ksa": {
 				Keyspace: ksa,
 				Tables: map[string]*Table{
-					"t1": t1a,
+					"t1":   t1a,
+					"dual": duala,
 				},
 			},
 			"ksb": {
 				Keyspace: ksb,
 				Tables: map[string]*Table{
-					"t1": t1b,
+					"t1":   t1b,
+					"dual": dualb,
 				},
 			},
 		},
@@ -485,21 +516,32 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 		Name:     sqlparser.NewTableIdent("t1"),
 		Keyspace: ksb,
 	}
+	duala := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ksa,
+	}
+	dualb := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ksb,
+	}
 	want := &VSchema{
 		tables: map[string]*Table{
-			"t1": nil,
+			"t1":   nil,
+			"dual": duala,
 		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"ksa": {
 				Keyspace: ksa,
 				Tables: map[string]*Table{
-					"t1": t1a,
+					"t1":   t1a,
+					"dual": duala,
 				},
 			},
 			"ksb": {
 				Keyspace: ksb,
 				Tables: map[string]*Table{
-					"t1": t1b,
+					"t1":   t1b,
+					"dual": dualb,
 				},
 			},
 		},
@@ -716,24 +758,36 @@ func TestSequence(t *testing.T) {
 	t2.Ordered = []*ColumnVindex{
 		t2.ColumnVindexes[0],
 	}
+	duala := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ksu,
+	}
+	dualb := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: kss,
+		Pinned:   []byte{0},
+	}
 	want := &VSchema{
 		tables: map[string]*Table{
-			"seq": seq,
-			"t1":  t1,
-			"t2":  t2,
+			"seq":  seq,
+			"t1":   t1,
+			"t2":   t2,
+			"dual": dualb,
 		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"unsharded": {
 				Keyspace: ksu,
 				Tables: map[string]*Table{
-					"seq": seq,
+					"seq":  seq,
+					"dual": duala,
 				},
 			},
 			"sharded": {
 				Keyspace: kss,
 				Tables: map[string]*Table{
-					"t1": t1,
-					"t2": t2,
+					"t1":   t1,
+					"t2":   t2,
+					"dual": dualb,
 				},
 			},
 		},

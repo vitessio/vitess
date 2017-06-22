@@ -25,10 +25,11 @@ import (
 	"strings"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var _ Primitive = (*Route)(nil)

@@ -43,6 +43,7 @@ type Table struct {
 	Ordered        []*ColumnVindex      `json:"ordered,omitempty"`
 	Owned          []*ColumnVindex      `json:"owned,omitempty"`
 	AutoIncrement  *AutoIncrement       `json:"auto_increment,omitempty"`
+	Pinned         []byte               `json:"pinned,omitempty"`
 }
 
 // Keyspace contains the keyspcae info for each Table.
@@ -101,6 +102,7 @@ func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema, err error) {
 	if err != nil {
 		return nil, err
 	}
+	addDual(vschema)
 	return vschema, nil
 }
 
@@ -241,6 +243,26 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) error 
 		}
 	}
 	return nil
+}
+
+// addDual adds dual as a valid table to all keyspaces.
+// For unsharded keyspaces, it gets pinned against keyspace id '0x00'.
+func addDual(vschema *VSchema) {
+	first := ""
+	for ksname, ks := range vschema.Keyspaces {
+		t := &Table{
+			Name:     sqlparser.NewTableIdent("dual"),
+			Keyspace: ks.Keyspace,
+		}
+		if ks.Keyspace.Sharded {
+			t.Pinned = []byte{0}
+		}
+		ks.Tables["dual"] = t
+		if first == "" || first > ksname {
+			first = ksname
+			vschema.tables["dual"] = t
+		}
+	}
 }
 
 // findQualified finds a table t or k.t.
