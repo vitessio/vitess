@@ -61,6 +61,13 @@ type etcdMasterParticipation struct {
 
 // WaitForMastership is part of the topo.MasterParticipation interface.
 func (mp *etcdMasterParticipation) WaitForMastership() (context.Context, error) {
+	// If Stop was already called, mp.done is closed, so we are interrupted.
+	select {
+	case <-mp.done:
+		return nil, topo.ErrInterrupted
+	default:
+	}
+
 	electionPath := path.Join(mp.s.global.root, electionsPath, mp.name)
 	lockPath := ""
 

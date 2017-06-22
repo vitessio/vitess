@@ -78,9 +78,10 @@ func checkElection(t *testing.T, ts topo.Impl) {
 
 	// wait until mp2 gets to be the master in the background
 	mp2IsMaster := make(chan error)
+	var mp2Context context.Context
 	go func() {
 		var err error
-		_, err = mp2.WaitForMastership()
+		mp2Context, err = mp2.WaitForMastership()
 		mp2IsMaster <- err
 	}()
 
@@ -110,4 +111,21 @@ func checkElection(t *testing.T, ts topo.Impl) {
 
 	// stop mp2, we're done
 	mp2.Stop()
+
+	// mp2Context should then close.
+	select {
+	case <-mp2Context.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatalf("shutting down mp2 didn't close mp2Context in time")
+	}
+
+	// At this point, we should be able to call WaitForMastership
+	// again, and it should return topo.ErrInterrupted.  Testing
+	// this here as this is what the vtctld workflow manager loop
+	// does, for instance. There is a go routine that runs
+	// WaitForMastership and needs to exit cleanly at the end.
+	_, err = mp2.WaitForMastership()
+	if err != topo.ErrInterrupted {
+		t.Errorf("wrong error returned by WaitForMastership, got %v expected %v", err, topo.ErrInterrupted)
+	}
 }
