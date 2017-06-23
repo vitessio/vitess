@@ -141,10 +141,9 @@ class VtcomboProcess(VtProcess):
     VtProcess.__init__(self, 'vtcombo-%s' % os.environ['USER'], directory,
                        environment.vtcombo_binary, port_name='vtcombo')
     self.extraparams = [
-        '-db-config-app-charset', charset,
+        '-db-config-charset', charset,
         '-db-config-app-uname', mysql_db.username(),
         '-db-config-app-pass', mysql_db.password(),
-        '-db-config-dba-charset', charset,
         '-db-config-dba-uname', mysql_db.username(),
         '-db-config-dba-pass', mysql_db.password(),
         '-proto_topo', text_format.MessageToString(topology, as_one_line=True),
@@ -160,14 +159,13 @@ class VtcomboProcess(VtProcess):
       self.extraparams.extend(['-web_dir2', web_dir2])
     if mysql_db.unix_socket():
       self.extraparams.extend(
-          ['-db-config-app-unixsocket', mysql_db.unix_socket(),
-           '-db-config-dba-unixsocket', mysql_db.unix_socket()])
+          ['-db-config-unixsocket', mysql_db.unix_socket()])
     else:
       self.extraparams.extend(
-          ['-db-config-app-host', mysql_db.hostname(),
-           '-db-config-app-port', str(mysql_db.port()),
-           '-db-config-dba-host', mysql_db.hostname(),
-           '-db-config-dba-port', str(mysql_db.port())])
+          ['-db-config-host', mysql_db.hostname(),
+           '-db-config--port', str(mysql_db.port()),
+           '-db-config-host', mysql_db.hostname(),
+           '-db-config-port', str(mysql_db.port())])
     self.vtcombo_mysql_port = environment.get_port('vtcombo_mysql_port')
     self.extraparams.extend(
         ['-mysql_auth_server_impl', 'none',

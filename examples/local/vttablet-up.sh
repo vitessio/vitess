@@ -38,20 +38,15 @@ source $script_root/env.sh
 
 dbconfig_dba_flags="\
     -db-config-dba-uname vt_dba \
-    -db-config-dba-charset utf8"
+    -db-config-charset utf8"
+
 dbconfig_flags="$dbconfig_dba_flags \
+    -db-config-dbname vt_$keyspace \
     -db-config-app-uname vt_app \
-    -db-config-app-dbname vt_$keyspace \
-    -db-config-app-charset utf8 \
     -db-config-allprivs-uname vt_allprivs \
-    -db-config-allprivs-dbname vt_$keyspace \
-    -db-config-allprivs-charset utf8 \
     -db-config-repl-uname vt_repl \
-    -db-config-repl-dbname vt_$keyspace \
-    -db-config-repl-charset utf8 \
-    -db-config-filtered-uname vt_filtered \
-    -db-config-filtered-dbname vt_$keyspace \
-    -db-config-filtered-charset utf8"
+    -db-config-filtered-uname vt_filtered"
+
 init_db_sql_file="$VTROOT/config/init_db.sql"
 
 case "$MYSQL_FLAVOR" in
