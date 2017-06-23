@@ -1260,6 +1260,10 @@ func TestErrors(t *testing.T) {
 	}
 }
 
+// Benchmark run on 6/23/17, prior to improvements:
+// BenchmarkParse1-4         100000             16334 ns/op
+// BenchmarkParse2-4          30000             44121 ns/op
+
 func BenchmarkParse1(b *testing.B) {
 	sql := "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
 	for i := 0; i < b.N; i++ {
