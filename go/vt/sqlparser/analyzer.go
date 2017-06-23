@@ -239,21 +239,24 @@ func ExtractSetValues(sql string) (map[string]interface{}, error) {
 		}
 		key := expr.Name.Name.Lowered()
 
-		sqlval, ok := expr.Expr.(*SQLVal)
-		if !ok {
-			return nil, fmt.Errorf("invalid syntax: %s", String(expr.Expr))
-		}
-		switch sqlval.Type {
-		case StrVal:
-			result[key] = string(sqlval.Val)
-		case IntVal:
-			num, err := strconv.ParseInt(string(sqlval.Val), 0, 64)
-			if err != nil {
-				return nil, err
+		switch expr := expr.Expr.(type) {
+		case *SQLVal:
+			switch expr.Type {
+			case StrVal:
+				result[key] = string(expr.Val)
+			case IntVal:
+				num, err := strconv.ParseInt(string(expr.Val), 0, 64)
+				if err != nil {
+					return nil, err
+				}
+				result[key] = num
+			default:
+				return nil, fmt.Errorf("invalid value type: %v", String(expr))
 			}
-			result[key] = num
+		case *NullVal:
+			result[key] = nil
 		default:
-			return nil, fmt.Errorf("invalid value type: %v", String(expr.Expr))
+			return nil, fmt.Errorf("invalid syntax: %s", String(expr))
 		}
 	}
 	return result, nil
