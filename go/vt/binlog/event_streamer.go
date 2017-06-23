@@ -200,7 +200,7 @@ func parsePkNames(tokenizer *sqlparser.Tokenizer) ([]*querypb.Field, error) {
 				Name: string(val),
 			})
 		default:
-			return nil, fmt.Errorf("syntax error at position: %d", tokenizer.Position)
+			return nil, fmt.Errorf("syntax error at position: %d", tokenizer.Position())
 		}
 	}
 	return columns, nil
@@ -305,7 +305,7 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*quer
 			result.Lengths = append(result.Lengths, int64(numDecoded))
 			result.Values = append(result.Values, decoded[:numDecoded]...)
 		default:
-			return nil, insertid, fmt.Errorf("syntax error at position: %d", tokenizer.Position)
+			return nil, insertid, fmt.Errorf("syntax error at position: %d", tokenizer.Position())
 		}
 		index++
 	}

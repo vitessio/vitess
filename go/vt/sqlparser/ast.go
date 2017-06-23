@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"strings"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -43,7 +42,7 @@ import (
 func Parse(sql string) (Statement, error) {
 	tokenizer := NewStringTokenizer(sql)
 	if yyParse(tokenizer) != 0 {
-		return nil, errors.New(tokenizer.LastError)
+		return nil, tokenizer.LastError
 	}
 	return tokenizer.ParseTree, nil
 }
@@ -1364,10 +1363,8 @@ func (node *SQLVal) Format(buf *TrackedBuffer) {
 	case StrVal:
 		s := sqltypes.MakeString([]byte(node.Val))
 		s.EncodeSQL(buf)
-	case IntVal, FloatVal, HexNum:
+	case IntVal, FloatVal, HexNum, HexVal:
 		buf.Myprintf("%s", []byte(node.Val))
-	case HexVal:
-		buf.Myprintf("X'%s'", []byte(node.Val))
 	case ValArg:
 		buf.WriteArg(string(node.Val))
 	default:

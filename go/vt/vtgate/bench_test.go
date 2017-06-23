@@ -27,6 +27,10 @@ import (
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
+// Benchmark run on 6/23/17, parser improved to directly reference []byte:
+// BenchmarkWithNormalizer-4            300           5236269 ns/op
+// BenchmarkWithoutNormalizer-4      200000              8936 ns/op
+
 // Benchmark run on 6/23/17, prior to improvements:
 // BenchmarkWithNormalizer-4            100          10927765 ns/op
 // BenchmarkWithoutNormalizer-4      200000              8845 ns/op

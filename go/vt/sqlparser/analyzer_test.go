@@ -295,7 +295,7 @@ func TestExtractSetValues(t *testing.T) {
 		err string
 	}{{
 		sql: "invalid",
-		err: "syntax error at position 8 near 'invalid'",
+		err: "syntax error at position 7 near 'invalid'",
 	}, {
 		sql: "select * from t",
 		err: "ast did not yield *sqlparser.Set: *sqlparser.Select",
