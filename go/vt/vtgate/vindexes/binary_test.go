@@ -20,6 +20,9 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var binOnlyVindex Vindex
@@ -115,5 +118,42 @@ func TestBinaryReverseMap(t *testing.T) {
 	want := "Binary.ReverseMap: keyspaceId is nil"
 	if err.Error() != want {
 		t.Error(err)
+	}
+}
+
+func TestGetBytes(t *testing.T) {
+	tcases := []struct {
+		in  interface{}
+		out string
+	}{{
+		in:  []byte{'1', '2', '3'},
+		out: "123",
+	}, {
+		in:  "1234",
+		out: "1234",
+	}, {
+		in:  sqltypes.MakeTrusted(querypb.Type_UINT64, []byte{'1', '2', '3'}),
+		out: "123",
+	}, {
+		in: &querypb.BindVariable{
+			Type:  querypb.Type_VARBINARY,
+			Value: []byte{'1', '2', '3'},
+		},
+		out: "123",
+	}, {
+		in:  65,
+		out: "unexpected data type for getBytes: int",
+	}}
+	for _, tcase := range tcases {
+		b, err := getBytes(tcase.in)
+		got := ""
+		if err != nil {
+			got = err.Error()
+		} else {
+			got = string(b)
+		}
+		if got != tcase.out {
+			t.Errorf("getBytes(%v) got %v %v expected %v", tcase.in, b, err, tcase.out)
+		}
 	}
 }
