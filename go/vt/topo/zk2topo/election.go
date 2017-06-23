@@ -87,8 +87,14 @@ type zkMasterParticipation struct {
 
 // WaitForMastership is part of the topo.MasterParticipation interface.
 func (mp *zkMasterParticipation) WaitForMastership() (context.Context, error) {
-	ctx := context.TODO()
+	// If Stop was already called, mp.done is closed, so we are interrupted.
+	select {
+	case <-mp.done:
+		return nil, topo.ErrInterrupted
+	default:
+	}
 
+	ctx := context.TODO()
 	conn, root, err := mp.zs.connForCell(ctx, topo.GlobalCell)
 	if err != nil {
 		return nil, err
