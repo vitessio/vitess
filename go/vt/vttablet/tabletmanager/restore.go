@@ -44,8 +44,10 @@ var (
 // an error in case of a non-recoverable error.
 // It takes the action lock so no RPC interferes.
 func (agent *ActionAgent) RestoreData(ctx context.Context, logger logutil.Logger, deleteBeforeRestore bool) error {
-	agent.actionMutex.Lock()
-	defer agent.actionMutex.Unlock()
+	if err := agent.lock(ctx); err != nil {
+		return err
+	}
+	defer agent.unlock()
 	return agent.restoreDataLocked(ctx, logger, deleteBeforeRestore)
 }
 

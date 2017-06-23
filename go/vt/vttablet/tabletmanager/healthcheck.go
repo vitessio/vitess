@@ -170,8 +170,11 @@ func (agent *ActionAgent) initHealthCheck() {
 // This will not change the TabletControl record, but will use it
 // to see if we should be running the query service.
 func (agent *ActionAgent) runHealthCheck() {
-	agent.actionMutex.Lock()
-	defer agent.actionMutex.Unlock()
+	if err := agent.lock(agent.batchCtx); err != nil {
+		log.Warningf("cannot lock actionMutex, not running HealthCheck")
+		return
+	}
+	defer agent.unlock()
 
 	agent.runHealthCheckLocked()
 }
@@ -309,8 +312,9 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 // We will clean up our state, and set query service to lame duck mode.
 // We only do something if we are in a serving state, and not a master.
 func (agent *ActionAgent) terminateHealthChecks() {
-	agent.actionMutex.Lock()
-	defer agent.actionMutex.Unlock()
+	// No need to check for error, only a canceled batchCtx would fail this.
+	agent.lock(agent.batchCtx)
+	defer agent.unlock()
 	log.Info("agent.terminateHealthChecks is starting")
 
 	// read the current tablet record

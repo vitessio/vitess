@@ -36,11 +36,13 @@ import (
 // action mutex. It returns ctx.Err() if <-ctx.Done() after the lock.
 func (agent *ActionAgent) lock(ctx context.Context) error {
 	agent.actionMutex.Lock()
+	agent.actionMutexLocked = true
 
 	// After we take the lock (which could take a long time), we
 	// check the client is still here.
 	select {
 	case <-ctx.Done():
+		agent.actionMutexLocked = false
 		agent.actionMutex.Unlock()
 		return ctx.Err()
 	default:
@@ -50,7 +52,15 @@ func (agent *ActionAgent) lock(ctx context.Context) error {
 
 // unlock is the symetrical action to lock.
 func (agent *ActionAgent) unlock() {
+	agent.actionMutexLocked = false
 	agent.actionMutex.Unlock()
+}
+
+// checkLock checks we have locked the actionMutex.
+func (agent *ActionAgent) checkLock() {
+	if !agent.actionMutexLocked {
+		panic("programming error: this action should have taken the actionMutex")
+	}
 }
 
 // HandleRPCPanic is part of the RPCAgent interface.
