@@ -115,6 +115,12 @@ type ActionAgent struct {
 	// take actionMutex first.
 	actionMutex sync.Mutex
 
+	// actionMutexLocked is set to true after we acquire actionMutex,
+	// and reset to false when we release it.
+	// It is meant as a sanity check to make sure the methods that need
+	// to have the actionMutex have it.
+	actionMutexLocked bool
+
 	// waitingForMysql is set to true if mysql is not up when we
 	// start. That way, we only log once that we're waiting for
 	// mysql.  It is protected by actionMutex.
@@ -287,10 +293,15 @@ func NewActionAgent(
 			agent.initHealthCheck()
 		}()
 	} else {
-		// update our state
-		if err := agent.refreshTablet(batchCtx, "Start"); err != nil {
+		// Update our state (need the action lock).
+		if err := agent.lock(batchCtx); err != nil {
 			return nil, err
 		}
+		if err := agent.refreshTablet(batchCtx, "Start"); err != nil {
+			agent.unlock()
+			return nil, err
+		}
+		agent.unlock()
 
 		// synchronously start health check if needed
 		agent.initHealthCheck()
@@ -329,7 +340,11 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *t
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
 	}
 
-	// Update our running state.
+	// Update our running state. Need to take action lock.
+	if err := agent.lock(batchCtx); err != nil {
+		panic(fmt.Errorf("agent.lock() failed: %v", err))
+	}
+	defer agent.unlock()
 	if err := agent.refreshTablet(batchCtx, "Start"); err != nil {
 		panic(fmt.Errorf("agent.refreshTablet(%v) failed: %v", tabletAlias, err))
 	}
@@ -371,7 +386,11 @@ func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
 	}
 
-	// And update our running state.
+	// And update our running state (need to take the Action lock).
+	if err := agent.lock(batchCtx); err != nil {
+		panic(fmt.Errorf("agent.lock() failed: %v", err))
+	}
+	defer agent.unlock()
 	if err := agent.refreshTablet(batchCtx, "Start"); err != nil {
 		panic(fmt.Errorf("agent.refreshTablet(%v) failed: %v", tabletAlias, err))
 	}
@@ -657,6 +676,7 @@ func (agent *ActionAgent) hookExtraEnv() map[string]string {
 //
 // The actionMutex lock must be held when calling this function.
 func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topodatapb.Tablet) *topodatapb.Tablet {
+	agent.checkLock()
 	mport, err := agent.MysqlDaemon.GetMysqlPort()
 	if err != nil {
 		// Only log the first time, so we don't spam the logs.
