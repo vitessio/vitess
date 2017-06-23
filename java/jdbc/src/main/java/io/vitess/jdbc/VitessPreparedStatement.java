@@ -16,15 +16,6 @@
 
 package io.vitess.jdbc;
 
-import io.vitess.client.Context;
-import io.vitess.client.VTGateConn;
-import io.vitess.client.VTGateTx;
-import io.vitess.client.cursor.Cursor;
-import io.vitess.client.cursor.CursorWithError;
-import io.vitess.mysql.DateTime;
-import io.vitess.proto.Topodata;
-import io.vitess.util.Constants;
-import io.vitess.util.StringUtils;
 import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
@@ -58,6 +49,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.logging.Logger;
+
+import io.vitess.client.Context;
+import io.vitess.client.VTGateConn;
+import io.vitess.client.VTGateTx;
+import io.vitess.client.cursor.Cursor;
+import io.vitess.client.cursor.CursorWithError;
+import io.vitess.mysql.DateTime;
+import io.vitess.proto.Topodata;
+import io.vitess.util.Constants;
+import io.vitess.util.StringUtils;
 
 /**
  * Created by harshit.gangal on 25/01/16.
@@ -127,7 +128,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
                     .getAutoCommit()) {
                     Context context =
                         this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                    if (vitessConnection.isSimpleExecute()) {
+                    if (vitessConnection.isSimpleExecute() && this.fetchSize == 0) {
                         cursor =
                             vtGateConn.execute(context, this.sql, this.bindVariables, tabletType, vitessConnection.getIncludedFields())
                                 .checkedGet();

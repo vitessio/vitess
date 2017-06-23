@@ -16,17 +16,6 @@
 
 package io.vitess.jdbc;
 
-import com.google.common.collect.ImmutableMap;
-import io.vitess.client.Context;
-import io.vitess.client.SQLFuture;
-import io.vitess.client.VTGateConn;
-import io.vitess.client.VTGateTx;
-import io.vitess.client.cursor.Cursor;
-import io.vitess.client.cursor.CursorWithError;
-import io.vitess.proto.Query;
-import io.vitess.proto.Topodata;
-import io.vitess.proto.Vtrpc;
-import io.vitess.util.Constants;
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.sql.BatchUpdateException;
@@ -42,14 +31,30 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+
 import javax.sql.rowset.serial.SerialClob;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Matchers;
+import org.mockito.Mockito;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
+
+import com.google.common.collect.ImmutableMap;
+
+import io.vitess.client.Context;
+import io.vitess.client.SQLFuture;
+import io.vitess.client.VTGateConn;
+import io.vitess.client.VTGateTx;
+import io.vitess.client.cursor.Cursor;
+import io.vitess.client.cursor.CursorWithError;
+import io.vitess.proto.Query;
+import io.vitess.proto.Topodata;
+import io.vitess.proto.Vtrpc;
+import io.vitess.util.Constants;
 
 
 /**
@@ -434,6 +439,50 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
         } catch (SQLException e) {
             Assert.fail("Test failed " + e.getMessage());
+        }
+    }
+
+    @Test public void testExecuteFetchSizeAsStreaming() throws SQLException {
+        testExecute(5, true, false, true);
+        testExecute(5, false, false, true);
+        testExecute(0, true, true, false);
+        testExecute(0, false, false, true);
+    }
+
+    private void testExecute(int fetchSize, boolean simpleExecute, boolean shouldRunExecute, boolean shouldRunStreamExecute) throws SQLException {
+        VTGateConn mockVtGateConn = PowerMockito.mock(VTGateConn.class);
+        VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
+
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+        PowerMockito.when(mockConn.isSimpleExecute()).thenReturn(simpleExecute);
+        PowerMockito.when(mockConn.getTabletType()).thenReturn(Topodata.TabletType.REPLICA);
+        PowerMockito.when(mockConn.getKeyspace()).thenReturn("test_keyspace");
+        PowerMockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
+        PowerMockito.when(mockConn.getVtGateTx()).thenReturn(mockVtGateTx);
+
+        Cursor mockCursor = PowerMockito.mock(Cursor.class);
+        SQLFuture mockSqlFutureCursor = PowerMockito.mock(SQLFuture.class);
+        PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
+
+        PowerMockito.when(mockVtGateConn
+            .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockSqlFutureCursor);
+        PowerMockito.when(mockVtGateConn
+            .streamExecute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockCursor);
+
+        VitessPreparedStatement statement = new VitessPreparedStatement(mockConn, sqlSelect);
+        statement.setFetchSize(fetchSize);
+        statement.executeQuery();
+
+        if (shouldRunExecute) {
+            Mockito.verify(mockVtGateConn).execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class));
+        }
+
+        if (shouldRunStreamExecute) {
+            Mockito.verify(mockVtGateConn).streamExecute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class));
         }
     }
 

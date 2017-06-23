@@ -16,6 +16,17 @@
 
 package io.vitess.jdbc;
 
+import java.sql.BatchUpdateException;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
+import java.sql.SQLRecoverableException;
+import java.sql.SQLWarning;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.logging.Logger;
+
 import io.vitess.client.Context;
 import io.vitess.client.Proto;
 import io.vitess.client.VTGateConn;
@@ -27,16 +38,6 @@ import io.vitess.proto.Topodata;
 import io.vitess.proto.Vtrpc;
 import io.vitess.util.Constants;
 import io.vitess.util.StringUtils;
-import java.sql.BatchUpdateException;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.SQLFeatureNotSupportedException;
-import java.sql.SQLRecoverableException;
-import java.sql.SQLWarning;
-import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.logging.Logger;
 
 /**
  * Created by harshit.gangal on 19/01/16.
@@ -118,7 +119,7 @@ public class VitessStatement implements Statement {
                     .getAutoCommit()) {
                 Context context =
                         this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                if (vitessConnection.isSimpleExecute()) {
+                if (vitessConnection.isSimpleExecute() && this.fetchSize == 0) {
                     cursor = vtGateConn.execute(context, sql, null, tabletType, vitessConnection.getIncludedFields()).checkedGet();
                 } else {
                     cursor = vtGateConn.streamExecute(context, sql, null, tabletType, vitessConnection.getIncludedFields());
