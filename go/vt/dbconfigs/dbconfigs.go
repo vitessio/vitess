@@ -28,8 +28,12 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 )
 
-// We keep a global singleton for the db configs, and that's the one
-// the flags will change
+// global singleton for flag values other than Username and Password.
+var globalConnParams mysql.ConnParams
+
+// We keep a global singleton for the db configs. Username and Password are
+// directly changed by flags. The rest are copied from globalConnParams above.
+
 var dbConfigs = DBConfigs{
 	SidecarDBName: "_vt",
 }
@@ -54,19 +58,22 @@ const (
 const redactedPassword = "****"
 
 // The flags will change the global singleton
-func registerConnFlags(connParams *mysql.ConnParams, name string) {
-	flag.StringVar(&connParams.Host, "db-config-"+name+"-host", "", "db "+name+" connection host")
-	flag.IntVar(&connParams.Port, "db-config-"+name+"-port", 0, "db "+name+" connection port")
+func registerConnFlags(connParams *mysql.ConnParams) {
+	flag.StringVar(&connParams.Host, "db-config-host", "", "db connection host")
+	flag.IntVar(&connParams.Port, "db-config-port", 0, "db connection port")
+	flag.StringVar(&connParams.DbName, "db-config-dbname", "", "db connection dbname")
+	flag.StringVar(&connParams.UnixSocket, "db-config-unixsocket", "", "db connection unix socket")
+	flag.StringVar(&connParams.Charset, "db-config-charset", "", "db connection charset")
+	flag.Uint64Var(&connParams.Flags, "db-config-flags", 0, "db connection flags")
+	flag.StringVar(&connParams.SslCa, "db-config-ssl-ca", "", "db connection ssl ca")
+	flag.StringVar(&connParams.SslCaPath, "db-config-ssl-ca-path", "", "db connection ssl ca path")
+	flag.StringVar(&connParams.SslCert, "db-config-ssl-cert", "", "db connection ssl certificate")
+	flag.StringVar(&connParams.SslKey, "db-config-ssl-key", "", "db connection ssl key")
+}
+
+func registerCredsFlags(connParams *mysql.ConnParams, name string) {
 	flag.StringVar(&connParams.Uname, "db-config-"+name+"-uname", "", "db "+name+" connection uname")
 	flag.StringVar(&connParams.Pass, "db-config-"+name+"-pass", "", "db "+name+" connection pass")
-	flag.StringVar(&connParams.DbName, "db-config-"+name+"-dbname", "", "db "+name+" connection dbname")
-	flag.StringVar(&connParams.UnixSocket, "db-config-"+name+"-unixsocket", "", "db "+name+" connection unix socket")
-	flag.StringVar(&connParams.Charset, "db-config-"+name+"-charset", "", "db "+name+" connection charset")
-	flag.Uint64Var(&connParams.Flags, "db-config-"+name+"-flags", 0, "db "+name+" connection flags")
-	flag.StringVar(&connParams.SslCa, "db-config-"+name+"-ssl-ca", "", "db "+name+" connection ssl ca")
-	flag.StringVar(&connParams.SslCaPath, "db-config-"+name+"-ssl-ca-path", "", "db "+name+" connection ssl ca path")
-	flag.StringVar(&connParams.SslCert, "db-config-"+name+"-ssl-cert", "", "db "+name+" connection ssl certificate")
-	flag.StringVar(&connParams.SslKey, "db-config-"+name+"-ssl-key", "", "db "+name+" connection ssl key")
 }
 
 // RegisterFlags registers the flags for the given DBConfigFlag.
@@ -77,24 +84,25 @@ func RegisterFlags(flags DBConfigFlag) DBConfigFlag {
 		panic("No DB config is provided.")
 	}
 	registeredFlags := EmptyConfig
+	registerConnFlags(&globalConnParams)
 	if AppConfig&flags != 0 {
-		registerConnFlags(&dbConfigs.App, "app")
+		registerCredsFlags(&dbConfigs.App, "app")
 		registeredFlags |= AppConfig
 	}
 	if AllPrivsConfig&flags != 0 {
-		registerConnFlags(&dbConfigs.AllPrivs, "allprivs")
+		registerCredsFlags(&dbConfigs.AllPrivs, "allprivs")
 		registeredFlags |= AllPrivsConfig
 	}
 	if DbaConfig&flags != 0 {
-		registerConnFlags(&dbConfigs.Dba, "dba")
+		registerCredsFlags(&dbConfigs.Dba, "dba")
 		registeredFlags |= DbaConfig
 	}
 	if FilteredConfig&flags != 0 {
-		registerConnFlags(&dbConfigs.Filtered, "filtered")
+		registerCredsFlags(&dbConfigs.Filtered, "filtered")
 		registeredFlags |= FilteredConfig
 	}
 	if ReplConfig&flags != 0 {
-		registerConnFlags(&dbConfigs.Repl, "repl")
+		registerCredsFlags(&dbConfigs.Repl, "repl")
 		registeredFlags |= ReplConfig
 	}
 	return registeredFlags
@@ -156,32 +164,51 @@ func (dbcfgs *DBConfigs) IsZero() bool {
 	return dbcfgs.App.Uname == ""
 }
 
+// Copy fields other than Uname and Pass.
+func copyConnectionFields(fromConnParams *mysql.ConnParams, toConnParams *mysql.ConnParams) {
+	toConnParams.Host = fromConnParams.Host
+	toConnParams.Port = fromConnParams.Port
+	toConnParams.DbName = fromConnParams.DbName
+	toConnParams.UnixSocket = fromConnParams.UnixSocket
+	toConnParams.Charset = fromConnParams.Charset
+	toConnParams.Flags = fromConnParams.Flags
+	toConnParams.SslCa = fromConnParams.SslCa
+	toConnParams.SslCaPath = fromConnParams.SslCaPath
+	toConnParams.SslCert = fromConnParams.SslCert
+	toConnParams.SslKey = fromConnParams.SslKey
+}
+
 // Init will initialize app, allprivs, dba, filtered and repl configs.
 func Init(socketFile string, flags DBConfigFlag) (*DBConfigs, error) {
 	if flags == EmptyConfig {
 		panic("No DB config is provided.")
 	}
 	if AppConfig&flags != 0 {
+		copyConnectionFields(&globalConnParams, &dbConfigs.App)
 		if err := initConnParams(&dbConfigs.App, socketFile); err != nil {
 			return nil, fmt.Errorf("app dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if AllPrivsConfig&flags != 0 {
+		copyConnectionFields(&globalConnParams, &dbConfigs.AllPrivs)
 		if err := initConnParams(&dbConfigs.AllPrivs, socketFile); err != nil {
 			return nil, fmt.Errorf("allprivs dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if DbaConfig&flags != 0 {
+		copyConnectionFields(&globalConnParams, &dbConfigs.Dba)
 		if err := initConnParams(&dbConfigs.Dba, socketFile); err != nil {
 			return nil, fmt.Errorf("dba dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if FilteredConfig&flags != 0 {
+		copyConnectionFields(&globalConnParams, &dbConfigs.Filtered)
 		if err := initConnParams(&dbConfigs.Filtered, socketFile); err != nil {
 			return nil, fmt.Errorf("filtered dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if ReplConfig&flags != 0 {
+		copyConnectionFields(&globalConnParams, &dbConfigs.Repl)
 		if err := initConnParams(&dbConfigs.Repl, socketFile); err != nil {
 			return nil, fmt.Errorf("repl dbconfig cannot be initialized: %v", err)
 		}
