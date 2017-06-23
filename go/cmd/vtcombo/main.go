@@ -114,7 +114,10 @@ func main() {
 	if err != nil {
 		log.Warning(err)
 	}
-	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs, dbconfigFlags)
+	mysqld, err := mysqlctl.NewMysqld(mycnf, dbcfgs, dbconfigFlags)
+	if err != nil {
+		log.Exit(err)
+	}
 	servenv.OnClose(mysqld.Close)
 
 	// tablets configuration and init
