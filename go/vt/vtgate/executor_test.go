@@ -161,6 +161,12 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set autocommit=1+1",
 		err: "invalid syntax: 1 + 1",
 	}, {
+		in:  "set character_set_results=null",
+		out: &vtgatepb.Session{},
+	}, {
+		in:  "set character_set_results='abcd'",
+		err: "only NULL is allowed for character_set_results: abcd",
+	}, {
 		in:  "set foo=1",
 		err: "unsupported construct: set foo=1",
 	}}

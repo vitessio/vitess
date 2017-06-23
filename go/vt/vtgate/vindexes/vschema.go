@@ -259,6 +259,10 @@ func addDual(vschema *VSchema) {
 		}
 		ks.Tables["dual"] = t
 		if first == "" || first > ksname {
+			// In case of a reference to dual that's not qualified
+			// by keyspace, we still want to resolve it to one of
+			// the keyspaces. For consistency, we'll always use the
+			// first keyspace by lexical ordering.
 			first = ksname
 			vschema.tables["dual"] = t
 		}

@@ -314,6 +314,12 @@ func TestExtractSetValues(t *testing.T) {
 	}, {
 		sql: "set AUTOCOMMIT=1",
 		out: map[string]interface{}{"autocommit": int64(1)},
+	}, {
+		sql: "SET character_set_results = NULL",
+		out: map[string]interface{}{"character_set_results": nil},
+	}, {
+		sql: "SET foo = 0x1234",
+		err: "invalid value type: 0x1234",
 	}}
 	for _, tcase := range testcases {
 		out, err := ExtractSetValues(tcase.sql)
