@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
@@ -42,23 +43,35 @@ func Normalize(stmt Statement, bindVars map[string]interface{}, prefix string) {
 				// If unsuccessful continue.
 				return true, nil
 			}
-			// Check if there's a bindvar for that value already.
-			var key string
-			if bval.Type == sqltypes.VarBinary {
-				// Prefixing strings with "'" ensures that a string
-				// and number that have the same representation don't
-				// collide.
-				key = "'" + string(node.Val)
+
+			// Only reuse bindvars for small values.
+			// Otherwise their keys get too big.
+			// Do not create implicit variables in this block.
+			var bvname string
+			if len(node.Val) <= 1024 {
+				// Check if there's a bindvar for that value already.
+				var key string
+				if bval.Type == sqltypes.VarBinary {
+					// Prefixing strings with "'" ensures that a string
+					// and number that have the same representation don't
+					// collide.
+					key = "'" + string(node.Val)
+				} else {
+					key = string(node.Val)
+				}
+				var ok bool
+				bvname, ok = vals[key]
+				if !ok {
+					// If there's no such bindvar, make a new one.
+					bvname, counter = newName(prefix, counter, reserved)
+					vals[key] = bvname
+					bindVars[bvname] = bval
+				}
 			} else {
-				key = string(node.Val)
-			}
-			bvname, ok := vals[key]
-			if !ok {
-				// If there's no such bindvar, make a new one.
 				bvname, counter = newName(prefix, counter, reserved)
-				vals[key] = bvname
 				bindVars[bvname] = bval
 			}
+
 			// Modify the AST node to a bindvar.
 			node.Type = ValArg
 			node.Val = append([]byte(":"), bvname...)

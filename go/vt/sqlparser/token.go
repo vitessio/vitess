@@ -19,7 +19,6 @@ package sqlparser
 import (
 	"bytes"
 	"fmt"
-	"strings"
 
 	"github.com/youtube/vitess/go/sqltypes"
 )
@@ -29,22 +28,26 @@ const eofChar = 0x100
 // Tokenizer is the struct used to generate SQL
 // tokens for the parser.
 type Tokenizer struct {
-	InStream      *strings.Reader
 	AllowComments bool
 	ForceEOF      bool
-	lastChar      uint16
-	Position      int
 	lastToken     []byte
-	LastError     string
+	LastError     error
 	posVarIndex   int
 	ParseTree     Statement
 	nesting       int
+
+	sql         []byte
+	pos         int
+	tokenStart  int
+	tokenEnd    int
+	altTokenBuf []byte
+	lastChar    uint16
 }
 
 // NewStringTokenizer creates a new Tokenizer for the
 // sql string.
 func NewStringTokenizer(sql string) *Tokenizer {
-	return &Tokenizer{InStream: strings.NewReader(sql)}
+	return &Tokenizer{sql: []byte(sql)}
 }
 
 // keywords is a map of mysql keywords that fall into two categories:
@@ -328,15 +331,18 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 	return typ
 }
 
+// Position returns the current position.
+func (tkn *Tokenizer) Position() int {
+	return tkn.pos
+}
+
 // Error is called by go yacc if there's a parsing error.
 func (tkn *Tokenizer) Error(err string) {
-	buf := &bytes.Buffer{}
 	if tkn.lastToken != nil {
-		fmt.Fprintf(buf, "%s at position %v near '%s'", err, tkn.Position, tkn.lastToken)
+		tkn.LastError = fmt.Errorf("%s at position %v near '%s'", err, tkn.Position(), tkn.lastToken)
 	} else {
-		fmt.Fprintf(buf, "%s at position %v", err, tkn.Position)
+		tkn.LastError = fmt.Errorf("%s at position %v", err, tkn.Position())
 	}
-	tkn.LastError = buf.String()
 }
 
 // Scan scans the tokenizer for the next token and returns
@@ -350,11 +356,14 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		tkn.next()
 	}
 	tkn.skipBlank()
+	tkn.startToken()
 	switch ch := tkn.lastChar; {
 	case isLetter(ch):
 		tkn.next()
 		if ch == 'X' || ch == 'x' {
 			if tkn.lastChar == '\'' {
+				tkn.writeByte(byte(ch))
+				tkn.writeByte('\'')
 				tkn.next()
 				return tkn.scanHex()
 			}
@@ -364,6 +373,8 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		return tkn.scanNumber(false)
 	case ch == ':':
 		return tkn.scanBindVar()
+	case ch == eofChar:
+		return 0, nil
 	default:
 		tkn.next()
 		switch ch {
@@ -459,7 +470,7 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 			}
 			return int(ch), nil
 		case '\'', '"':
-			return tkn.scanString(ch, STRING)
+			return tkn.scanString(ch)
 		case '`':
 			return tkn.scanLiteralIdentifier()
 		default:
@@ -477,13 +488,12 @@ func (tkn *Tokenizer) skipBlank() {
 }
 
 func (tkn *Tokenizer) scanIdentifier(firstByte byte) (int, []byte) {
-	buffer := &bytes.Buffer{}
-	buffer.WriteByte(firstByte)
+	tkn.writeByte(firstByte)
 	for isLetter(tkn.lastChar) || isDigit(tkn.lastChar) {
-		buffer.WriteByte(byte(tkn.lastChar))
+		tkn.writeByte(byte(tkn.lastChar))
 		tkn.next()
 	}
-	lowered := bytes.ToLower(buffer.Bytes())
+	lowered := bytes.ToLower(tkn.token())
 	loweredStr := string(lowered)
 	if keywordID, found := keywords[loweredStr]; found {
 		return keywordID, lowered
@@ -492,24 +502,20 @@ func (tkn *Tokenizer) scanIdentifier(firstByte byte) (int, []byte) {
 	if loweredStr == "dual" {
 		return ID, lowered
 	}
-	return ID, buffer.Bytes()
+	return ID, tkn.token()
 }
 
 func (tkn *Tokenizer) scanHex() (int, []byte) {
-	buffer := &bytes.Buffer{}
-	tkn.scanMantissa(16, buffer)
+	tkn.scanMantissa(16)
 	if tkn.lastChar != '\'' {
-		return LEX_ERROR, buffer.Bytes()
+		return LEX_ERROR, tkn.token()
 	}
+	tkn.writeByte('\'')
 	tkn.next()
-	if buffer.Len()%2 != 0 {
-		return LEX_ERROR, buffer.Bytes()
-	}
-	return HEX, buffer.Bytes()
+	return HEX, tkn.token()
 }
 
 func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
-	buffer := &bytes.Buffer{}
 	backTickSeen := false
 	for {
 		if backTickSeen {
@@ -517,7 +523,7 @@ func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
 				break
 			}
 			backTickSeen = false
-			buffer.WriteByte('`')
+			tkn.writeByte('`')
 			tkn.next()
 			continue
 		}
@@ -527,94 +533,89 @@ func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
 			backTickSeen = true
 		case eofChar:
 			// Premature EOF.
-			return LEX_ERROR, buffer.Bytes()
+			return LEX_ERROR, tkn.token()
 		default:
-			buffer.WriteByte(byte(tkn.lastChar))
+			tkn.writeByte(byte(tkn.lastChar))
 		}
 		tkn.next()
 	}
-	if buffer.Len() == 0 {
-		return LEX_ERROR, buffer.Bytes()
+	tok := tkn.token()
+	if len(tok) == 0 {
+		return LEX_ERROR, tok
 	}
-	return ID, buffer.Bytes()
+	return ID, tok
 }
 
 func (tkn *Tokenizer) scanBindVar() (int, []byte) {
-	buffer := &bytes.Buffer{}
-	buffer.WriteByte(byte(tkn.lastChar))
 	token := VALUE_ARG
-	tkn.next()
+	tkn.consumeNext()
 	if tkn.lastChar == ':' {
 		token = LIST_ARG
-		buffer.WriteByte(byte(tkn.lastChar))
-		tkn.next()
+		tkn.consumeNext()
 	}
 	if !isLetter(tkn.lastChar) {
-		return LEX_ERROR, buffer.Bytes()
+		return LEX_ERROR, tkn.token()
 	}
 	for isLetter(tkn.lastChar) || isDigit(tkn.lastChar) || tkn.lastChar == '.' {
-		buffer.WriteByte(byte(tkn.lastChar))
-		tkn.next()
+		tkn.consumeNext()
 	}
-	return token, buffer.Bytes()
+	return token, tkn.token()
 }
 
-func (tkn *Tokenizer) scanMantissa(base int, buffer *bytes.Buffer) {
+func (tkn *Tokenizer) scanMantissa(base int) {
 	for digitVal(tkn.lastChar) < base {
-		tkn.consumeNext(buffer)
+		tkn.consumeNext()
 	}
 }
 
 func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) (int, []byte) {
 	token := INTEGRAL
-	buffer := &bytes.Buffer{}
 	if seenDecimalPoint {
 		token = FLOAT
-		buffer.WriteByte('.')
-		tkn.scanMantissa(10, buffer)
+		tkn.writeByte('.')
+		tkn.scanMantissa(10)
 		goto exponent
 	}
 
 	// 0x construct.
 	if tkn.lastChar == '0' {
-		tkn.consumeNext(buffer)
+		tkn.consumeNext()
 		if tkn.lastChar == 'x' || tkn.lastChar == 'X' {
 			token = HEXNUM
-			tkn.consumeNext(buffer)
-			tkn.scanMantissa(16, buffer)
+			tkn.consumeNext()
+			tkn.scanMantissa(16)
 			goto exit
 		}
 	}
 
-	tkn.scanMantissa(10, buffer)
+	tkn.scanMantissa(10)
 
 	if tkn.lastChar == '.' {
 		token = FLOAT
-		tkn.consumeNext(buffer)
-		tkn.scanMantissa(10, buffer)
+		tkn.consumeNext()
+		tkn.scanMantissa(10)
 	}
 
 exponent:
 	if tkn.lastChar == 'e' || tkn.lastChar == 'E' {
 		token = FLOAT
-		tkn.consumeNext(buffer)
+		tkn.consumeNext()
 		if tkn.lastChar == '+' || tkn.lastChar == '-' {
-			tkn.consumeNext(buffer)
+			tkn.consumeNext()
 		}
-		tkn.scanMantissa(10, buffer)
+		tkn.scanMantissa(10)
 	}
 
 exit:
 	// A letter cannot immediately follow a number.
 	if isLetter(tkn.lastChar) {
-		return LEX_ERROR, buffer.Bytes()
+		return LEX_ERROR, tkn.token()
 	}
 
-	return token, buffer.Bytes()
+	return token, tkn.token()
 }
 
-func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
-	buffer := &bytes.Buffer{}
+func (tkn *Tokenizer) scanString(delim uint16) (int, []byte) {
 	for {
 		ch := tkn.lastChar
 		tkn.next()
@@ -626,7 +627,7 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 			}
 		} else if ch == '\\' {
 			if tkn.lastChar == eofChar {
-				return LEX_ERROR, buffer.Bytes()
+				return LEX_ERROR, tkn.token()
 			}
 			if decodedChar := sqltypes.SQLDecodeMap[byte(tkn.lastChar)]; decodedChar == sqltypes.DontEscape {
 				ch = tkn.lastChar
@@ -635,64 +636,95 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 			}
 			tkn.next()
 		}
-		if ch == eofChar {
-			return LEX_ERROR, buffer.Bytes()
+		if ch == eofChar || tkn.lastChar == eofChar {
+			return LEX_ERROR, tkn.token()
 		}
-		buffer.WriteByte(byte(ch))
+		tkn.writeByte(byte(ch))
 	}
-	return typ, buffer.Bytes()
+	return STRING, tkn.token()
 }
 
 func (tkn *Tokenizer) scanCommentType1(prefix string) (int, []byte) {
-	buffer := &bytes.Buffer{}
-	buffer.WriteString(prefix)
+	tkn.writeString(prefix)
 	for tkn.lastChar != eofChar {
 		if tkn.lastChar == '\n' {
-			tkn.consumeNext(buffer)
+			tkn.consumeNext()
 			break
 		}
-		tkn.consumeNext(buffer)
+		tkn.consumeNext()
 	}
-	return COMMENT, buffer.Bytes()
+	return COMMENT, tkn.token()
 }
 
 func (tkn *Tokenizer) scanCommentType2() (int, []byte) {
-	buffer := &bytes.Buffer{}
-	buffer.WriteString("/*")
+	tkn.writeString("/*")
 	for {
 		if tkn.lastChar == '*' {
-			tkn.consumeNext(buffer)
+			tkn.consumeNext()
 			if tkn.lastChar == '/' {
-				tkn.consumeNext(buffer)
+				tkn.consumeNext()
 				break
 			}
 			continue
 		}
 		if tkn.lastChar == eofChar {
-			return LEX_ERROR, buffer.Bytes()
+			return LEX_ERROR, tkn.token()
 		}
-		tkn.consumeNext(buffer)
+		tkn.consumeNext()
 	}
-	return COMMENT, buffer.Bytes()
+	return COMMENT, tkn.token()
 }
 
-func (tkn *Tokenizer) consumeNext(buffer *bytes.Buffer) {
-	if tkn.lastChar == eofChar {
-		// This should never happen.
-		panic("unexpected EOF")
+func (tkn *Tokenizer) startToken() {
+	pos := tkn.pos - 1
+	if pos < 0 {
+		pos = 0
 	}
-	buffer.WriteByte(byte(tkn.lastChar))
-	tkn.next()
+	tkn.tokenStart = pos
+	tkn.tokenEnd = pos
+	tkn.altTokenBuf = nil
 }
 
 func (tkn *Tokenizer) next() {
-	if ch, err := tkn.InStream.ReadByte(); err != nil {
-		// Only EOF is possible.
+	if tkn.pos >= len(tkn.sql) {
 		tkn.lastChar = eofChar
-	} else {
-		tkn.lastChar = uint16(ch)
+		return
 	}
-	tkn.Position++
+	tkn.pos++
+	tkn.lastChar = uint16(tkn.sql[tkn.pos-1])
+}
+
+func (tkn *Tokenizer) consumeNext() {
+	tkn.writeByte(tkn.sql[tkn.pos-1])
+	tkn.next()
+}
+
+// writeByte performs a copy on write if the
+// byte written does not match the original content.
+func (tkn *Tokenizer) writeByte(ch byte) {
+	if tkn.altTokenBuf != nil {
+		tkn.altTokenBuf = append(tkn.altTokenBuf, ch)
+		return
+	}
+	if tkn.tokenEnd < len(tkn.sql) && ch == tkn.sql[tkn.tokenEnd] {
+		tkn.tokenEnd++
+		return
+	}
+	tkn.altTokenBuf = append(tkn.altTokenBuf, tkn.token()...)
+	tkn.altTokenBuf = append(tkn.altTokenBuf, ch)
+}
+
+func (tkn *Tokenizer) writeString(str string) {
+	for i := 0; i < len(str); i++ {
+		tkn.writeByte(str[i])
+	}
+}
+
+func (tkn *Tokenizer) token() []byte {
+	if tkn.altTokenBuf != nil {
+		return tkn.altTokenBuf
+	}
+	return tkn.sql[tkn.tokenStart:tkn.tokenEnd]
 }
 
 func isLetter(ch uint16) bool {

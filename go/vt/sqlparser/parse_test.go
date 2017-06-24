@@ -16,7 +16,9 @@ limitations under the License.
 
 package sqlparser
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestValid(t *testing.T) {
 	validSQL := []struct {
@@ -457,7 +459,7 @@ func TestValid(t *testing.T) {
 		input: "select /* octal */ 010 from t",
 	}, {
 		input:  "select /* hex */ x'f0A1' from t",
-		output: "select /* hex */ X'f0A1' from t",
+		output: "select /* hex */ x'f0A1' from t",
 	}, {
 		input: "select /* hex caps */ X'F0a1' from t",
 	}, {
@@ -1154,16 +1156,13 @@ func TestErrors(t *testing.T) {
 		output: "syntax error at position 10 near '0x'",
 	}, {
 		input:  "select x'78 from t",
-		output: "syntax error at position 12 near '78'",
-	}, {
-		input:  "select x'777' from t",
-		output: "syntax error at position 14 near '777'",
+		output: "syntax error at position 12 near 'x'78'",
 	}, {
 		input:  "select 'aa\\",
-		output: "syntax error at position 12 near 'aa'",
+		output: "syntax error at position 11 near 'aa'",
 	}, {
 		input:  "select 'aa",
-		output: "syntax error at position 12 near 'aa'",
+		output: "syntax error at position 10 near 'a'",
 	}, {
 		input:  "select * from t where :1 = 2",
 		output: "syntax error at position 24 near ':'",
@@ -1188,7 +1187,7 @@ func TestErrors(t *testing.T) {
 			"(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(" +
 			"F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
 			"(F(F(F(F(F(F(F(F(F(F(F(F(",
-		output: "max nesting level reached at position 406",
+		output: "max nesting level reached at position 405",
 	}, {
 		input: "select(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
 			"(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(" +
@@ -1198,17 +1197,17 @@ func TestErrors(t *testing.T) {
 			"(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(" +
 			"F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
 			"(F(F(F(F(F(F(F(F(F(F(F(",
-		output: "syntax error at position 405",
+		output: "syntax error at position 403",
 	}, {
 		input:  "select /* aa",
-		output: "syntax error at position 13 near '/* aa'",
+		output: "syntax error at position 12 near '/* aa'",
 	}, {
 		// This construct is considered invalid due to a grammar conflict.
 		input:  "insert into a select * from b join c on duplicate key update d=e",
 		output: "syntax error at position 54 near 'key'",
 	}, {
 		input:  "select * from a left join b",
-		output: "syntax error at position 29",
+		output: "syntax error at position 27",
 	}, {
 		input:  "select * from a natural join b on c = d",
 		output: "syntax error at position 34 near 'on'",
@@ -1223,7 +1222,7 @@ func TestErrors(t *testing.T) {
 		output: "syntax error at position 29 near 'select'",
 	}, {
 		input:  "select database",
-		output: "syntax error at position 17",
+		output: "syntax error at position 15",
 	}, {
 		input:  "select mod from t",
 		output: "syntax error at position 16 near 'from'",
@@ -1232,7 +1231,7 @@ func TestErrors(t *testing.T) {
 		output: "syntax error at position 26 near 'div'",
 	}, {
 		input:  "select 1 from t where binary",
-		output: "syntax error at position 30",
+		output: "syntax error at position 28",
 	}, {
 		input:  "select match(a1, a2) against ('foo' in boolean mode with query expansion) from t",
 		output: "syntax error at position 57 near 'with'",
@@ -1244,7 +1243,7 @@ func TestErrors(t *testing.T) {
 		output: "syntax error at position 81 near 'escape'",
 	}, {
 		input:  "(select /* parenthesized select */ * from t)",
-		output: "syntax error at position 46",
+		output: "syntax error at position 44",
 	}, {
 		input:  "select * from t where id = ((select a from t1 union select b from t2) order by a limit 1)",
 		output: "syntax error at position 76 near 'order'",
@@ -1259,6 +1258,10 @@ func TestErrors(t *testing.T) {
 		}
 	}
 }
+
+// Benchmark run on 6/23/17, prior to improvements:
+// BenchmarkParse1-4         100000             16334 ns/op
+// BenchmarkParse2-4          30000             44121 ns/op
 
 func BenchmarkParse1(b *testing.B) {
 	sql := "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"

@@ -311,7 +311,7 @@ func TestExecutorShow(t *testing.T) {
 	}
 
 	qr, err = executor.Execute(context.Background(), session, "show 10", nil)
-	want = "syntax error at position 8 near '10'"
+	want = "syntax error at position 7 near '10'"
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema_tables: %v, want %v", err, want)
 	}
@@ -348,7 +348,7 @@ func TestExecutorUse(t *testing.T) {
 	}
 
 	_, err := executor.Execute(context.Background(), &vtgatepb.Session{}, "use 1", nil)
-	wantErr := "syntax error at position 6 near '1'"
+	wantErr := "syntax error at position 5 near '1'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("use 1: %v, want %v", err, wantErr)
 	}
@@ -665,7 +665,7 @@ func TestGetPlanNormalized(t *testing.T) {
 
 	// Errors
 	_, err = r.getPlan(emptyvc, "syntax", map[string]interface{}{})
-	wantErr := "syntax error at position 7 near 'syntax'"
+	wantErr := "syntax error at position 6 near 'syntax'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("getPlan(syntax): %v, want %s", err, wantErr)
 	}
