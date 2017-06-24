@@ -97,7 +97,7 @@ containers:
           -tablet_uid "{{$uid}}"
           -socket_file "$VTDATAROOT/mysqlctl.sock"
           -db-config-dba-uname "vt_dba"
-          -db-config-dba-charset "utf8"
+          -db-config-charset "utf8"
           -init_db_sql_file "$VTROOT/config/init_db.sql"
 {{ include "format-flags-all" (tuple $0.mysqlctlExtraFlags .mysqlctlExtraFlags) | indent 10 }}
         END_OF_COMMAND

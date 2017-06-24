@@ -691,10 +691,14 @@ class Tablet(object):
       config['global']['dbname'] = self.dbname
     if 'repl' in config:
       config['repl'].update(repl_extra_flags)
-    for key1 in config:
-      for key2 in config[key1]:
-        fkey = '' if key1 == 'global' else '%s-' % key1
-        args.extend(['-db-config-' + fkey + key2, config[key1][key2]])
+
+    for category in config:
+      for param in config[category]:
+        if category == 'global':
+          flag = '-db-config-%s' % param
+        else:
+          flag = '-db-config-%s-%s' % (category, param)
+        args.extend([flag, config[category][param]])
 
   def get_status(self):
     return utils.get_status(self.port)

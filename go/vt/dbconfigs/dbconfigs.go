@@ -111,6 +111,8 @@ func RegisterFlags(flags DBConfigFlag) DBConfigFlag {
 // initConnParams may overwrite the socket file,
 // and refresh the password to check that works.
 func initConnParams(cp *mysql.ConnParams, socketFile string) error {
+	// Copy fields other than username and password.
+	copyConnectionFields(&globalConnParams, cp)
 	// Always try to connect with the socket if provided.
 	if socketFile != "" {
 		cp.UnixSocket = socketFile
@@ -184,31 +186,26 @@ func Init(socketFile string, flags DBConfigFlag) (*DBConfigs, error) {
 		panic("No DB config is provided.")
 	}
 	if AppConfig&flags != 0 {
-		copyConnectionFields(&globalConnParams, &dbConfigs.App)
 		if err := initConnParams(&dbConfigs.App, socketFile); err != nil {
 			return nil, fmt.Errorf("app dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if AllPrivsConfig&flags != 0 {
-		copyConnectionFields(&globalConnParams, &dbConfigs.AllPrivs)
 		if err := initConnParams(&dbConfigs.AllPrivs, socketFile); err != nil {
 			return nil, fmt.Errorf("allprivs dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if DbaConfig&flags != 0 {
-		copyConnectionFields(&globalConnParams, &dbConfigs.Dba)
 		if err := initConnParams(&dbConfigs.Dba, socketFile); err != nil {
 			return nil, fmt.Errorf("dba dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if FilteredConfig&flags != 0 {
-		copyConnectionFields(&globalConnParams, &dbConfigs.Filtered)
 		if err := initConnParams(&dbConfigs.Filtered, socketFile); err != nil {
 			return nil, fmt.Errorf("filtered dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if ReplConfig&flags != 0 {
-		copyConnectionFields(&globalConnParams, &dbConfigs.Repl)
 		if err := initConnParams(&dbConfigs.Repl, socketFile); err != nil {
 			return nil, fmt.Errorf("repl dbconfig cannot be initialized: %v", err)
 		}

@@ -163,8 +163,6 @@ class VtcomboProcess(VtProcess):
     else:
       self.extraparams.extend(
           ['-db-config-host', mysql_db.hostname(),
-           '-db-config--port', str(mysql_db.port()),
-           '-db-config-host', mysql_db.hostname(),
            '-db-config-port', str(mysql_db.port())])
     self.vtcombo_mysql_port = environment.get_port('vtcombo_mysql_port')
     self.extraparams.extend(
