@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -260,7 +261,10 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 		c.sequence = 0
 		data, err := c.readEphemeralPacket()
 		if err != nil {
-			log.Errorf("Error reading packet from client %v: %v", c.ConnectionID, err)
+			// Don't log EOF errors. They cause too much spam.
+			if !strings.HasSuffix(err.Error(), "EOF") {
+				log.Errorf("Error reading packet from client %v: %v", c.ConnectionID, err)
+			}
 			return
 		}
 
