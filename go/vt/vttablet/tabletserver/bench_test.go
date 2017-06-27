@@ -29,6 +29,10 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
+// Benchmark run on 6/27/17, with optimized byte-level operations
+// using bytes2.Buffer:
+// BenchmarkExecuteVarBinary-4          300           4751125 ns/op
+
 // Benchmark run on 6/25/17, prior to improvements:
 // BenchmarkExecuteVarBinary-4          100          14610045 ns/op
 // BenchmarkExecuteExpression-4        1000           1047798 ns/op

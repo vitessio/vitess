@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/youtube/vitess/go/bytes2"
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
@@ -330,7 +331,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 
 // Error is called by go yacc if there's a parsing error.
 func (tkn *Tokenizer) Error(err string) {
-	buf := &bytes.Buffer{}
+	buf := &bytes2.Buffer{}
 	if tkn.lastToken != nil {
 		fmt.Fprintf(buf, "%s at position %v near '%s'", err, tkn.Position, tkn.lastToken)
 	} else {
@@ -385,7 +386,7 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 			return int(ch), nil
 		case '?':
 			tkn.posVarIndex++
-			buf := new(bytes.Buffer)
+			buf := new(bytes2.Buffer)
 			fmt.Fprintf(buf, ":v%d", tkn.posVarIndex)
 			return VALUE_ARG, buf.Bytes()
 		case '.':
@@ -477,7 +478,7 @@ func (tkn *Tokenizer) skipBlank() {
 }
 
 func (tkn *Tokenizer) scanIdentifier(firstByte byte) (int, []byte) {
-	buffer := &bytes.Buffer{}
+	buffer := &bytes2.Buffer{}
 	buffer.WriteByte(firstByte)
 	for isLetter(tkn.lastChar) || isDigit(tkn.lastChar) {
 		buffer.WriteByte(byte(tkn.lastChar))
@@ -496,7 +497,7 @@ func (tkn *Tokenizer) scanIdentifier(firstByte byte) (int, []byte) {
 }
 
 func (tkn *Tokenizer) scanHex() (int, []byte) {
-	buffer := &bytes.Buffer{}
+	buffer := &bytes2.Buffer{}
 	tkn.scanMantissa(16, buffer)
 	if tkn.lastChar != '\'' {
 		return LEX_ERROR, buffer.Bytes()
@@ -509,7 +510,7 @@ func (tkn *Tokenizer) scanHex() (int, []byte) {
 }
 
 func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
-	buffer := &bytes.Buffer{}
+	buffer := &bytes2.Buffer{}
 	backTickSeen := false
 	for {
 		if backTickSeen {
@@ -540,7 +541,7 @@ func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
 }
 
 func (tkn *Tokenizer) scanBindVar() (int, []byte) {
-	buffer := &bytes.Buffer{}
+	buffer := &bytes2.Buffer{}
 	buffer.WriteByte(byte(tkn.lastChar))
 	token := VALUE_ARG
 	tkn.next()
@@ -559,7 +560,7 @@ func (tkn *Tokenizer) scanBindVar() (int, []byte) {
 	return token, buffer.Bytes()
 }
 
-func (tkn *Tokenizer) scanMantissa(base int, buffer *bytes.Buffer) {
+func (tkn *Tokenizer) scanMantissa(base int, buffer *bytes2.Buffer) {
 	for digitVal(tkn.lastChar) < base {
 		tkn.consumeNext(buffer)
 	}
@@ -567,7 +568,7 @@ func (tkn *Tokenizer) scanMantissa(base int, buffer *bytes.Buffer) {
 
 func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) (int, []byte) {
 	token := INTEGRAL
-	buffer := &bytes.Buffer{}
+	buffer := &bytes2.Buffer{}
 	if seenDecimalPoint {
 		token = FLOAT
 		buffer.WriteByte('.')
@@ -614,7 +615,7 @@ exit:
 }
 
 func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
-	buffer := &bytes.Buffer{}
+	buffer := &bytes2.Buffer{}
 	for {
 		ch := tkn.lastChar
 		tkn.next()
@@ -644,7 +645,7 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 }
 
 func (tkn *Tokenizer) scanCommentType1(prefix string) (int, []byte) {
-	buffer := &bytes.Buffer{}
+	buffer := &bytes2.Buffer{}
 	buffer.WriteString(prefix)
 	for tkn.lastChar != eofChar {
 		if tkn.lastChar == '\n' {
@@ -657,7 +658,7 @@ func (tkn *Tokenizer) scanCommentType1(prefix string) (int, []byte) {
 }
 
 func (tkn *Tokenizer) scanCommentType2() (int, []byte) {
-	buffer := &bytes.Buffer{}
+	buffer := &bytes2.Buffer{}
 	buffer.WriteString("/*")
 	for {
 		if tkn.lastChar == '*' {
@@ -676,7 +677,7 @@ func (tkn *Tokenizer) scanCommentType2() (int, []byte) {
 	return COMMENT, buffer.Bytes()
 }
 
-func (tkn *Tokenizer) consumeNext(buffer *bytes.Buffer) {
+func (tkn *Tokenizer) consumeNext(buffer *bytes2.Buffer) {
 	if tkn.lastChar == eofChar {
 		// This should never happen.
 		panic("unexpected EOF")

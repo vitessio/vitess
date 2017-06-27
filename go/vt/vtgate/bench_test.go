@@ -27,6 +27,10 @@ import (
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
+// Benchmark run on 6/27/17, with optimized byte-level operations
+// using bytes2.Buffer:
+// BenchmarkWithNormalizer-4            300           5694660 ns/op
+
 // Benchmark run on 6/25/17, prior to improvements:
 // BenchmarkWithNormalizer-4            100          10629161 ns/op
 // BenchmarkWithoutNormalizer-4      200000              8584 ns/op

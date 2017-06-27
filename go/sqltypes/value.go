@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/youtube/vitess/go/bytes2"
 	"github.com/youtube/vitess/go/hack"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -44,7 +45,6 @@ var (
 // So, we don't expect the write operations to fail.
 type BinWriter interface {
 	Write([]byte) (int, error)
-	WriteByte(byte) error
 }
 
 // Value can store any SQL value. If the value represents
@@ -280,11 +280,11 @@ func (v Value) EncodeSQL(b BinWriter) {
 	_ = v.ToNative()
 	switch {
 	case v.typ == Null:
-		writebytes(nullstr, b)
+		b.Write(nullstr)
 	case IsQuoted(v.typ):
 		encodeBytesSQL(v.val, b)
 	default:
-		writebytes(v.val, b)
+		b.Write(v.val)
 	}
 }
 
@@ -294,11 +294,11 @@ func (v Value) EncodeASCII(b BinWriter) {
 	_ = v.ToNative()
 	switch {
 	case v.typ == Null:
-		writebytes(nullstr, b)
+		b.Write(nullstr)
 	case IsQuoted(v.typ):
 		encodeBytesASCII(v.val, b)
 	default:
-		writebytes(v.val, b)
+		b.Write(v.val)
 	}
 }
 
@@ -386,40 +386,28 @@ func (v *Value) UnmarshalJSON(b []byte) error {
 }
 
 func encodeBytesSQL(val []byte, b BinWriter) {
-	writebyte('\'', b)
+	buf := &bytes2.Buffer{}
+	buf.WriteByte('\'')
 	for _, ch := range val {
 		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
-			writebyte(ch, b)
+			buf.WriteByte(ch)
 		} else {
-			writebyte('\\', b)
-			writebyte(encodedChar, b)
+			buf.WriteByte('\\')
+			buf.WriteByte(encodedChar)
 		}
 	}
-	writebyte('\'', b)
+	buf.WriteByte('\'')
+	b.Write(buf.Bytes())
 }
 
 func encodeBytesASCII(val []byte, b BinWriter) {
-	writebyte('\'', b)
-	encoder := base64.NewEncoder(base64.StdEncoding, b)
+	buf := &bytes2.Buffer{}
+	buf.WriteByte('\'')
+	encoder := base64.NewEncoder(base64.StdEncoding, buf)
 	encoder.Write(val)
 	encoder.Close()
-	writebyte('\'', b)
-}
-
-func writebyte(c byte, b BinWriter) {
-	if err := b.WriteByte(c); err != nil {
-		panic(err)
-	}
-}
-
-func writebytes(val []byte, b BinWriter) {
-	n, err := b.Write(val)
-	if err != nil {
-		panic(err)
-	}
-	if n != len(val) {
-		panic(errors.New("short write"))
-	}
+	buf.WriteByte('\'')
+	b.Write(buf.Bytes())
 }
 
 // SQLEncodeMap specifies how to escape binary data with '\'.
