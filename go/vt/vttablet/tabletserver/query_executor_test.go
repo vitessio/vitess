@@ -469,6 +469,56 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	}
 }
 
+func TestQueryExecutorPlanUpsertPkSingleUnique(t *testing.T) {
+	db := setUpQueryExecutorTestWithOneUniqueKey(t)
+	defer db.Close()
+	query := "insert into test_table values (1) on duplicate key update val = 1 /* _stream test_table (pk ) (1 ); */"
+	db.AddQuery(query, &sqltypes.Result{})
+	db.AddRejectedQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", errRejected)
+	want := &sqltypes.Result{}
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	txid := newTransaction(tsv)
+	qre := newTestQueryExecutor(ctx, tsv, query[0:strings.Index(query, " /*")], txid)
+	defer tsv.StopService()
+	defer testCommitHelper(t, tsv, qre)
+	checkPlanID(t, planbuilder.PlanUpsertPK, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+	wantqueries := []string{query}
+	gotqueries := fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	}
+
+	query = "insert into test_table values (1), (2), (3) on duplicate key update val = 5 /* _stream test_table (pk ) (1 ) (2 ) (3 ); */"
+	db.AddQuery(query, &sqltypes.Result{})
+	want = &sqltypes.Result{}
+	ctx = context.Background()
+	tsv = newTestTabletServer(ctx, noFlags, db)
+	txid = newTransaction(tsv)
+	qre = newTestQueryExecutor(ctx, tsv, query[0:strings.Index(query, " /*")], txid)
+	defer testCommitHelper(t, tsv, qre)
+	checkPlanID(t, planbuilder.PlanUpsertPK, qre.plan.PlanID)
+	got, err = qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+	wantqueries = []string{query}
+	gotqueries = fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	}
+}
+
 func TestQueryExecutorPlanUpsertPkRBR(t *testing.T) {
 	// For UPSERT, the query just becomes a pass-through in RBR mode.
 	db := setUpQueryExecutorTest(t)
@@ -1495,12 +1545,18 @@ func testCommitHelper(t *testing.T, tsv *TabletServer, queryExecutor *QueryExecu
 
 func setUpQueryExecutorTest(t *testing.T) *fakesqldb.DB {
 	db := fakesqldb.New(t)
-	initQueryExecutorTestDB(db)
+	initQueryExecutorTestDB(db, true)
 	return db
 }
 
-func initQueryExecutorTestDB(db *fakesqldb.DB) {
-	for query, result := range getQueryExecutorSupportedQueries() {
+func setUpQueryExecutorTestWithOneUniqueKey(t *testing.T) *fakesqldb.DB {
+	db := fakesqldb.New(t)
+	initQueryExecutorTestDB(db, false)
+	return db
+}
+
+func initQueryExecutorTestDB(db *fakesqldb.DB, testTableHasMultipleUniqueKeys bool) {
+	for query, result := range getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys) {
 		db.AddQuery(query, result)
 	}
 }
@@ -1532,7 +1588,7 @@ func checkPlanID(
 	}
 }
 
-func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
+func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		// queries for twopc
 		sqlTurnoffBinlog:                                  {},
@@ -1621,7 +1677,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			RowsAffected: 2,
 			Rows: [][]sqltypes.Value{
 				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false),
-				mysql.ShowIndexFromTableRow("test_table", false, "index", 1, "name", true),
+				mysql.ShowIndexFromTableRow("test_table", testTableHasMultipleUniqueKeys, "index", 1, "name", true),
 			},
 		},
 		"begin":  {},

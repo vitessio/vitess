@@ -296,25 +296,36 @@
   "PKValues": [1, 2]
 }
 
-# on dup
+# on dup multiple unique index
+"insert into a (eid, id) values (1, 2) on duplicate key update name = func(a)"
+{
+  "PlanID": "UPSERT_PK",
+  "TableName": "a",
+  "FullQuery": "insert into a(eid, id) values (1, 2) on duplicate key update name = func(a)",
+  "OuterQuery": "insert into a(eid, id) values (1, 2)",
+  "UpsertQuery": "update a set name = func(a) where :#pk",
+  "PKValues": [1, 2]
+}
+
+# on dup single unique index
 "insert into b (eid, id) values (1, 2) on duplicate key update name = func(a)"
 {
   "PlanID": "UPSERT_PK",
+  "Reason": "UPSERT_SINGLE_INDEX",
   "TableName": "b",
   "FullQuery": "insert into b(eid, id) values (1, 2) on duplicate key update name = func(a)",
-  "OuterQuery": "insert into b(eid, id) values (1, 2)",
-  "UpsertQuery": "update b set name = func(a) where :#pk",
+  "OuterQuery": "insert into b(eid, id) values (1, 2) on duplicate key update name = func(a)",
   "PKValues": [1, 2]
 }
 
 # on dup pk change
-"insert into b (eid, id) values (1, 2) on duplicate key update eid = 2"
+"insert into a (eid, id) values (1, 2) on duplicate key update eid = 2"
 {
   "PlanID": "UPSERT_PK",
-  "TableName": "b",
-  "FullQuery": "insert into b(eid, id) values (1, 2) on duplicate key update eid = 2",
-  "OuterQuery": "insert into b(eid, id) values (1, 2)",
-  "UpsertQuery": "update b set eid = 2 where :#pk",
+  "TableName": "a",
+  "FullQuery": "insert into a(eid, id) values (1, 2) on duplicate key update eid = 2",
+  "OuterQuery": "insert into a(eid, id) values (1, 2)",
+  "UpsertQuery": "update a set eid = 2 where :#pk",
   "PKValues": [1, 2],
   "SecondaryPKValues": [2, null]
 }
@@ -396,13 +407,13 @@
 }
 
 # on dup pk change, with values() func
-"insert into b (eid, id) values (1, 2) on duplicate key update eid = values(eid), id = values(id)"
+"insert into a (eid, id) values (1, 2) on duplicate key update eid = values(eid), id = values(id)"
 {
   "PlanID": "UPSERT_PK",
-  "TableName": "b",
-  "FullQuery": "insert into b(eid, id) values (1, 2) on duplicate key update eid = values(eid), id = values(id)",
-  "OuterQuery": "insert into b(eid, id) values (1, 2)",
-  "UpsertQuery": "update b set eid = 1, id = 2 where :#pk",
+  "TableName": "a",
+  "FullQuery": "insert into a(eid, id) values (1, 2) on duplicate key update eid = values(eid), id = values(id)",
+  "OuterQuery": "insert into a(eid, id) values (1, 2)",
+  "UpsertQuery": "update a set eid = 1, id = 2 where :#pk",
   "PKValues": [1, 2],
   "SecondaryPKValues": [1, 2]
 }
@@ -420,22 +431,33 @@
 }
 
 # on dup complex pk change
-"insert into b (id, eid) values (1, 2) on duplicate key update eid = func(a)"
+"insert into a (id, eid) values (1, 2) on duplicate key update eid = func(a)"
 {
   "PlanID": "PASS_DML",
   "Reason": "PK_CHANGE",
-  "TableName": "b",
-  "FullQuery": "insert into b(id, eid) values (1, 2) on duplicate key update eid = func(a)",
+  "TableName": "a",
+  "FullQuery": "insert into a(id, eid) values (1, 2) on duplicate key update eid = func(a)",
   "PKValues": [2, 1]
 }
 
-# on dup multi-row
-"insert into b (id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)"
+# on dup multi-row with multiple unique indexes
+"insert into a (id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)"
 {
   "PlanID": "PASS_DML",
-  "Reason": "UPSERT",
+  "Reason": "UPSERT_MULTI_ROW",
+  "TableName": "a",
+  "FullQuery": "insert into a(id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)",
+  "PKValues": [[2,3],[1,2]]
+}
+
+# on dup multi-row with 0-1 unique indexes
+"insert into b (id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)"
+{
+  "PlanID": "UPSERT_PK",
+  "Reason": "UPSERT_SINGLE_INDEX",
   "TableName": "b",
   "FullQuery": "insert into b(id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)",
+  "OuterQuery": "insert into b(id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)",
   "PKValues": [[2,3],[1,2]]
 }
 
@@ -443,7 +465,7 @@
 "insert into b (id, eid) select * from a on duplicate key update name = func(a)"
 {
   "PlanID": "PASS_DML",
-  "Reason": "UPSERT",
+  "Reason": "UPSERT_SUBQUERY",
   "TableName": "b",
   "FullQuery": "insert into b(id, eid) select * from a on duplicate key update name = func(a)"
 }
