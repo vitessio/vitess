@@ -205,7 +205,7 @@ func (ta *Table) HasPrimary() bool {
 func (ta *Table) UniqueIndexes() int {
 	unique := 0
 	for _, idx := range ta.Indexes {
-		if (idx.Unique) {
+		if idx.Unique {
 			unique++
 		}
 	}
@@ -214,7 +214,7 @@ func (ta *Table) UniqueIndexes() int {
 
 // Index contains info about a table index.
 type Index struct {
-	Name sqlparser.ColIdent
+	Name   sqlparser.ColIdent
 	Unique bool
 	// Columns are the columns comprising the index.
 	Columns []sqlparser.ColIdent
