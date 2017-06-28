@@ -65,14 +65,11 @@ func StartServer(connParams mysql.ConnParams) error {
 		SidecarDBName: "_vt",
 	}
 
-	mysqld, err := mysqlctl.NewMysqld(
+	mysqld := mysqlctl.NewMysqld(
 		&mysqlctl.Mycnf{},
 		&dbcfgs,
 		dbconfigs.AppConfig,
 	)
-	if err != nil {
-		return err
-	}
 
 	config := tabletenv.DefaultQsConfig
 	config.EnableAutoCommit = true
@@ -89,7 +86,7 @@ func StartServer(connParams mysql.ConnParams) error {
 
 	Server = tabletserver.NewTabletServerWithNilTopoServer(config)
 	Server.Register()
-	err = Server.StartService(Target, dbcfgs, mysqld)
+	err := Server.StartService(Target, dbcfgs, mysqld)
 	if err != nil {
 		return fmt.Errorf("could not start service: %v", err)
 	}
