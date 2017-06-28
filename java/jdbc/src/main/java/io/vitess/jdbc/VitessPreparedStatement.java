@@ -370,6 +370,8 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
             setTimestamp(parameterIndex, (Timestamp) x);
         } else if (x instanceof BigDecimal) {
             setBigDecimal(parameterIndex, (BigDecimal) x);
+        } else if (x instanceof byte[]) {
+            setBytes(parameterIndex, (byte[]) x);
         } else {
             throw new SQLException(
                 Constants.SQLExceptionMessages.SQL_TYPE_INFER + x.getClass().getCanonicalName());

@@ -590,13 +590,7 @@ import io.vitess.util.Constants;
         preparedStatement.setObject(40, timeValue, Types.TIME, 0);
         preparedStatement.setObject(41, timestampValue, Types.TIMESTAMP, 0);
         preparedStatement.setClob(42, new SerialClob("clob".toCharArray()));
-        try {
-            preparedStatement.setObject(42, bytesValue);
-            Assert.fail("Shown have thrown exception for not able to set byte[] parameter");
-        } catch (SQLException ex) {
-            Assert.assertEquals("Cannot infer the SQL type to use for an instance of byte[]",
-                ex.getMessage());
-        }
+        preparedStatement.setObject(43, bytesValue);
         Field bindVariablesMap = preparedStatement.getClass().getDeclaredField("bindVariables");
         bindVariablesMap.setAccessible(true);
         Map<String, Object> bindVariables =
@@ -643,6 +637,7 @@ import io.vitess.util.Constants;
         Assert.assertEquals(timeValue.toString(), bindVariables.get("v40"));
         Assert.assertEquals(timestampValue.toString(), bindVariables.get("v41"));
         Assert.assertEquals("clob", bindVariables.get("v42"));
+        Assert.assertArrayEquals(bytesValue, (byte[])bindVariables.get("v43"));
 
         preparedStatement.clearParameters();
     }
