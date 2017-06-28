@@ -148,8 +148,10 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema VSchema) (*en
 		return nil, errors.New("unsupported construct: show")
 	case *sqlparser.DDL:
 		return nil, errors.New("unsupported construct: ddl")
-	case *sqlparser.Other:
-		return nil, errors.New("unsupported construct: other")
+	case *sqlparser.OtherRead:
+		return nil, errors.New("unsupported construct: other read")
+	case *sqlparser.OtherAdmin:
+		return nil, errors.New("unsupported construct: other admin")
 	default:
 		panic(fmt.Sprintf("BUG: unexpected statement type: %T", stmt))
 	}

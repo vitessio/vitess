@@ -59,7 +59,7 @@ func TestQueryzHandler(t *testing.T) {
 	plan3 := &TabletPlan{
 		Plan: &planbuilder.Plan{
 			Table:  &schema.Table{Name: sqlparser.NewTableIdent("")},
-			PlanID: planbuilder.PlanOther,
+			PlanID: planbuilder.PlanOtherRead,
 			Reason: planbuilder.ReasonDefault,
 		},
 	}
@@ -70,7 +70,7 @@ func TestQueryzHandler(t *testing.T) {
 	plan4 := &TabletPlan{
 		Plan: &planbuilder.Plan{
 			Table:  &schema.Table{Name: sqlparser.NewTableIdent("")},
-			PlanID: planbuilder.PlanOther,
+			PlanID: planbuilder.PlanOtherRead,
 			Reason: planbuilder.ReasonDefault,
 		},
 	}
@@ -122,7 +122,7 @@ func TestQueryzHandler(t *testing.T) {
 		`<tr class="medium">`,
 		`<td>show tables</td>`,
 		`<td></td>`,
-		`<td>OTHER</td>`,
+		`<td>OTHER_READ</td>`,
 		`<td>DEFAULT</td>`,
 		`<td>1</td>`,
 		`<td>0.075000</td>`,
@@ -139,7 +139,7 @@ func TestQueryzHandler(t *testing.T) {
 		`<tr class="low">`,
 		`<td>insert into test_table values .* \[TRUNCATED\][^<]*</td>`,
 		`<td></td>`,
-		`<td>OTHER</td>`,
+		`<td>OTHER_READ</td>`,
 		`<td>DEFAULT</td>`,
 		`<td>1</td>`,
 		`<td>0.001000</td>`,

@@ -792,14 +792,14 @@ func writeIdentifiesAsSQL(sql *bytes.Buffer, tce *tableCacheEntry, rs *mysql.Row
 			sql.WriteString(" AND ")
 		}
 		sql.WriteString(tce.ti.Columns[c].Name.String())
-		sql.WriteByte('=')
 
 		if rs.Rows[rowIndex].NullIdentifyColumns.Bit(valueIndex) {
 			// This column is represented, but its value is NULL.
-			sql.WriteString("NULL")
+			sql.WriteString(" IS NULL")
 			valueIndex++
 			continue
 		}
+		sql.WriteByte('=')
 
 		// We have real data.
 		value, l, err := mysql.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], tce.ti.Columns[c].Type)

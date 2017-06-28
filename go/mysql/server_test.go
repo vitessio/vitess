@@ -71,29 +71,24 @@ func (th *testHandler) NewConnection(c *Conn) {
 func (th *testHandler) ConnectionClosed(c *Conn) {
 }
 
-func (th *testHandler) ComQuery(c *Conn, q []byte) (*sqltypes.Result, error) {
-	query := string(q)
-	if query == "error" {
-		return nil, NewSQLError(ERUnknownComError, SSUnknownComError, "forced query handling error for: %v", query)
-	}
-
-	if query == "panic" {
+func (th *testHandler) ComQuery(c *Conn, q []byte, callback func(*sqltypes.Result) error) error {
+	switch query := string(q); query {
+	case "error":
+		return NewSQLError(ERUnknownComError, SSUnknownComError, "forced query handling error for: %v", query)
+	case "panic":
 		panic("test panic attack!")
-	}
-
-	if query == "select rows" {
-		return selectRowsResult, nil
-	}
-
-	if query == "insert" {
-		return &sqltypes.Result{
+	case "select rows":
+		callback(selectRowsResult)
+	case "error after send":
+		callback(selectRowsResult)
+		return NewSQLError(ERUnknownComError, SSUnknownComError, "forced query handling error for: %v", query)
+	case "insert":
+		callback(&sqltypes.Result{
 			RowsAffected: 123,
 			InsertID:     123456789,
-		}, nil
-	}
-
-	if query == "schema echo" {
-		return &sqltypes.Result{
+		})
+	case "schema echo":
+		callback(&sqltypes.Result{
 			Fields: []*querypb.Field{
 				{
 					Name: "schema_name",
@@ -105,15 +100,13 @@ func (th *testHandler) ComQuery(c *Conn, q []byte) (*sqltypes.Result, error) {
 					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(c.SchemaName)),
 				},
 			},
-		}, nil
-	}
-
-	if query == "ssl echo" {
+		})
+	case "ssl echo":
 		value := "OFF"
 		if c.Capabilities&CapabilityClientSSL > 0 {
 			value = "ON"
 		}
-		return &sqltypes.Result{
+		callback(&sqltypes.Result{
 			Fields: []*querypb.Field{
 				{
 					Name: "ssl_flag",
@@ -125,11 +118,9 @@ func (th *testHandler) ComQuery(c *Conn, q []byte) (*sqltypes.Result, error) {
 					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(value)),
 				},
 			},
-		}, nil
-	}
-
-	if query == "userData echo" {
-		return &sqltypes.Result{
+		})
+	case "userData echo":
+		callback(&sqltypes.Result{
 			Fields: []*querypb.Field{
 				{
 					Name: "user",
@@ -146,10 +137,11 @@ func (th *testHandler) ComQuery(c *Conn, q []byte) (*sqltypes.Result, error) {
 					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(c.UserData.Get().Username)),
 				},
 			},
-		}, nil
+		})
+	default:
+		callback(&sqltypes.Result{})
 	}
-
-	return &sqltypes.Result{}, nil
+	return nil
 }
 
 func TestClientFoundRows(t *testing.T) {
@@ -265,6 +257,17 @@ func TestServer(t *testing.T) {
 		!strings.Contains(output, "nicer name") ||
 		!strings.Contains(output, "2 rows in set") {
 		t.Errorf("Unexpected output for 'select rows'")
+	}
+
+	// If there's an error after streaming has started,
+	// we should get a 2013
+	output, ok = runMysql(t, params, "error after send")
+	if ok {
+		t.Fatalf("mysql should have failed: %v", output)
+	}
+	if !strings.Contains(output, "ERROR 2013 (HY000)") ||
+		!strings.Contains(output, "Lost connection to MySQL server during query") {
+		t.Errorf("Unexpected output for 'panic'")
 	}
 
 	// Run an 'insert' command, no rows, but rows affected.

@@ -94,6 +94,69 @@ func NullsafeCompare(v1, v2 Value) (int, error) {
 	return bytes.Compare(v1.Raw(), v2.Raw()), nil
 }
 
+// ConvertToUint64 converts any go, sqltypes, or querypb
+// value to uint64. It returns an error if the conversion
+// fails.
+// TODO(sougou): deprecate support for go values after
+// bind vars are cleaned up to not carry go values.
+func ConvertToUint64(v interface{}) (uint64, error) {
+	var num numeric
+	var err error
+	switch v := v.(type) {
+	case int:
+		return int64ToUint64(int64(v))
+	case int8:
+		return int64ToUint64(int64(v))
+	case int16:
+		return int64ToUint64(int64(v))
+	case int32:
+		return int64ToUint64(int64(v))
+	case int64:
+		return int64ToUint64(int64(v))
+	case uint:
+		return uint64(v), nil
+	case uint8:
+		return uint64(v), nil
+	case uint16:
+		return uint64(v), nil
+	case uint32:
+		return uint64(v), nil
+	case uint64:
+		return uint64(v), nil
+	case []byte:
+		num, err = newIntegralNumeric(MakeTrusted(VarChar, v))
+	case string:
+		num, err = newIntegralNumeric(MakeTrusted(VarChar, []byte(v)))
+	case Value:
+		num, err = newIntegralNumeric(v)
+	case *querypb.BindVariable:
+		num, err = newIntegralNumeric(MakeTrusted(v.Type, v.Value))
+	default:
+		return 0, fmt.Errorf("getNumber: unexpected type for %v: %T", v, v)
+	}
+	if err != nil {
+		return 0, err
+	}
+	switch num.typ {
+	case Int64:
+		if num.ival < 0 {
+			return 0, fmt.Errorf("getNumber: negative number cannot be converted to unsigned: %d", num.ival)
+		}
+		return uint64(num.ival), nil
+	case Uint64:
+		return num.uval, nil
+	}
+	panic("unreachable")
+}
+
+func int64ToUint64(n int64) (uint64, error) {
+	if n < 0 {
+		return 0, fmt.Errorf("getNumber: negative number cannot be converted to unsigned: %d", n)
+	}
+	return uint64(n), nil
+}
+
+// newNumeric parses a value and produces an Int64, Uint64 or Float64.
 func newNumeric(v Value) (result numeric, err error) {
 	str := v.String()
 	switch {
@@ -120,6 +183,43 @@ func newNumeric(v Value) (result numeric, err error) {
 	result.fval, err = strconv.ParseFloat(str, 64)
 	if err == nil {
 		result.typ = Float64
+		return
+	}
+	err = fmt.Errorf("could not parse value: %s", str)
+	return
+}
+
+// newIntegralNumeric parses a value and produces an Int64 or Uint64.
+func newIntegralNumeric(v Value) (result numeric, err error) {
+	str := v.String()
+	switch {
+	case v.IsSigned():
+		result.ival, err = strconv.ParseInt(str, 10, 64)
+		if err != nil {
+			return
+		}
+		result.typ = Int64
+		return
+	case v.IsUnsigned():
+		result.uval, err = strconv.ParseUint(str, 10, 64)
+		if err != nil {
+			return
+		}
+		result.typ = Uint64
+		return
+	}
+
+	// For other types, do best effort.
+	result.ival, err = strconv.ParseInt(str, 10, 64)
+	if err == nil {
+		result.typ = Int64
+		return
+	}
+	// ParseInt can return a non-zero value on failure.
+	result.ival = 0
+	result.uval, err = strconv.ParseUint(str, 10, 64)
+	if err == nil {
+		result.typ = Uint64
 		return
 	}
 	err = fmt.Errorf("could not parse value: %s", str)

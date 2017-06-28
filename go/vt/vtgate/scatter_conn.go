@@ -341,11 +341,19 @@ func (stc *ScatterConn) ExecuteBatch(
 func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *bool, qr *sqltypes.Result, callback func(*sqltypes.Result) error) error {
 	mu.Lock()
 	defer mu.Unlock()
-	if *fieldSent && len(qr.Rows) == 0 {
-		return nil
+	if *fieldSent {
+		if len(qr.Rows) == 0 {
+			// It's another field info result. Don't send.
+			return nil
+		}
+	} else {
+		if len(qr.Fields) == 0 {
+			// Unreachable: this can happen only if vttablet misbehaves.
+			return vterrors.New(vtrpcpb.Code_INTERNAL, "received rows before fields for shard")
+		}
+		*fieldSent = true
 	}
-	// First result is always the field info.
-	*fieldSent = true
+
 	return callback(qr)
 }
 

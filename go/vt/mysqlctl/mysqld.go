@@ -85,7 +85,7 @@ type Mysqld struct {
 
 // NewMysqld creates a Mysqld object based on the provided configuration
 // and connection parameters.
-func NewMysqld(config *Mycnf, dbcfgs *dbconfigs.DBConfigs, dbconfigsFlags dbconfigs.DBConfigFlag) *Mysqld {
+func NewMysqld(config *Mycnf, dbcfgs *dbconfigs.DBConfigs, dbconfigsFlags dbconfigs.DBConfigFlag) (*Mysqld, error) {
 	result := &Mysqld{
 		config:    config,
 		dbcfgs:    dbcfgs,
@@ -94,17 +94,23 @@ func NewMysqld(config *Mycnf, dbcfgs *dbconfigs.DBConfigs, dbconfigsFlags dbconf
 
 	// Create and open the connection pool for dba access.
 	if dbconfigs.DbaConfig&dbconfigsFlags != 0 {
+		if err := dbcfgs.Dba.Validate(); err != nil {
+			return nil, fmt.Errorf("DBA connection: %v", err)
+		}
 		result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *dbaIdleTimeout)
 		result.dbaPool.Open(dbconnpool.DBConnectionCreator(&dbcfgs.Dba, dbaMysqlStats))
 	}
 
 	// Create and open the connection pool for app access.
 	if dbconfigs.AppConfig&dbconfigsFlags != 0 {
+		if err := dbcfgs.App.Validate(); err != nil {
+			return nil, fmt.Errorf("App connection: %v", err)
+		}
 		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout)
 		result.appPool.Open(dbconnpool.DBConnectionCreator(&dbcfgs.App, appMysqlStats))
 	}
 
-	return result
+	return result, nil
 }
 
 // Cnf returns the mysql config for the daemon
@@ -526,6 +532,13 @@ func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 	return nil
 }
 
+// MySQL 5.7 GA and up have deprecated mysql_install_db.
+// Instead, initialization is built into mysqld.
+func useMysqldInitialize(version string) bool {
+	return strings.Contains(version, "Ver 5.7.") ||
+		strings.Contains(version, "Ver 8.0.")
+}
+
 func (mysqld *Mysqld) installDataDir() error {
 	mysqlRoot, err := vtenv.VtMysqlRoot()
 	if err != nil {
@@ -542,9 +555,7 @@ func (mysqld *Mysqld) installDataDir() error {
 		return err
 	}
 
-	if strings.Contains(version, "Ver 5.7.") {
-		// MySQL 5.7 GA and up have deprecated mysql_install_db.
-		// Instead, initialization is built into mysqld.
+	if useMysqldInitialize(version) {
 		log.Infof("Installing data dir with mysqld --initialize-insecure")
 
 		args := []string{

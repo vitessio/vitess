@@ -256,6 +256,20 @@ message ExecuteOptions {
   // rows found instead of rows affected. Behavior is defined
   // by MySQL's CLIENT_FOUND_ROWS flag.
   bool client_found_rows = 5;
+
+  enum Workload {
+    UNSPECIFIED = 0;
+    OLTP = 1;
+    OLAP = 2;
+  }
+
+  // workload specifies the type of workload:
+  // OLTP: DMLs allowed, results have row count limit, and
+  // query timeouts are shorter.
+  // OLAP: DMLS not allowed, no limit on row count, timeouts
+  // can be as high as desired.
+  Workload workload = 6;
+
 }
 
 // Field describes a single column returned by a query

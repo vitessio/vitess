@@ -18,7 +18,6 @@ package engine
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sort"
 
@@ -359,9 +358,6 @@ func (route *Route) Execute(vcursor VCursor, bindVars, joinVars map[string]inter
 
 // StreamExecute performs a streaming exec.
 func (route *Route) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]interface{}, wantfields bool, callback func(*sqltypes.Result) error) error {
-	if len(route.OrderBy) != 0 {
-		return errors.New("unimplemented: WIP")
-	}
 	bindVars = combineVars(bindVars, joinVars)
 
 	var err error
@@ -379,12 +375,16 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars, joinVars map[string
 	if err != nil {
 		return err
 	}
-	return vcursor.StreamExecuteMulti(
-		route.Query,
-		params.ks,
-		params.shardVars,
-		callback,
-	)
+	if len(route.OrderBy) == 0 {
+		return vcursor.StreamExecuteMulti(
+			route.Query,
+			params.ks,
+			params.shardVars,
+			callback,
+		)
+	}
+
+	return mergeSort(vcursor, route.Query, route.OrderBy, params, callback)
 }
 
 // GetFields fetches the field info.
@@ -484,10 +484,7 @@ func (route *Route) sort(result *sqltypes.Result) error {
 			if order.Desc {
 				cmp = -cmp
 			}
-			if cmp < 0 {
-				return true
-			}
-			return false
+			return cmp < 0
 		}
 		return true
 	})

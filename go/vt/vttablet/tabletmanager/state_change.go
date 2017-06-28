@@ -125,6 +125,7 @@ func (agent *ActionAgent) broadcastHealth() {
 // refreshTablet needs to be run after an action may have changed the current
 // state of the tablet.
 func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) error {
+	agent.checkLock()
 	log.Infof("Executing post-action state refresh: %v", reason)
 
 	span := trace.NewSpanFromContext(ctx)
@@ -141,6 +142,11 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 	}
 	tablet := ti.Tablet
 
+	// Also refresh the MySQL port, to be sure it's correct.
+	// Note if this run doesn't succeed, the healthcheck go routine
+	// will try again.
+	agent.gotMysqlPort = false
+	agent.waitingForMysql = false
 	if updatedTablet := agent.checkTabletMysqlPort(ctx, tablet); updatedTablet != nil {
 		tablet = updatedTablet
 	}
@@ -181,6 +187,8 @@ func (agent *ActionAgent) updateState(ctx context.Context, newTablet *topodatapb
 //
 // It owns reading the TabletControl for the current tablet, and storing it.
 func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTablet *topodatapb.Tablet) {
+	agent.checkLock()
+
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("ActionAgent.changeCallback")
 	defer span.Finish()

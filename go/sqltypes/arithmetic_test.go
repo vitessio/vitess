@@ -153,6 +153,87 @@ func TestNullsafeCompare(t *testing.T) {
 	}
 }
 
+func TestConvertToUint64(t *testing.T) {
+	tcases := []struct {
+		v   interface{}
+		out uint64
+		err string
+	}{{
+		v:   int(1),
+		out: 1,
+	}, {
+		v:   int8(1),
+		out: 1,
+	}, {
+		v:   int16(1),
+		out: 1,
+	}, {
+		v:   int32(1),
+		out: 1,
+	}, {
+		v:   int64(1),
+		out: 1,
+	}, {
+		v:   int64(1),
+		out: 1,
+	}, {
+		v:   int64(-1),
+		err: "getNumber: negative number cannot be converted to unsigned: -1",
+	}, {
+		v:   uint(1),
+		out: 1,
+	}, {
+		v:   uint8(1),
+		out: 1,
+	}, {
+		v:   uint16(1),
+		out: 1,
+	}, {
+		v:   uint32(1),
+		out: 1,
+	}, {
+		v:   uint64(1),
+		out: 1,
+	}, {
+		v:   []byte("1"),
+		out: 1,
+	}, {
+		v:   "1",
+		out: 1,
+	}, {
+		v:   makeInt(1),
+		out: 1,
+	}, {
+		v:   &querypb.BindVariable{Type: Int64, Value: []byte("1")},
+		out: 1,
+	}, {
+		v:   nil,
+		err: "getNumber: unexpected type for <nil>: <nil>",
+	}, {
+		v:   makeAny(VarChar, "abcd"),
+		err: "could not parse value: abcd",
+	}, {
+		v:   makeInt(-1),
+		err: "getNumber: negative number cannot be converted to unsigned: -1",
+	}, {
+		v:   makeUint(1),
+		out: 1,
+	}}
+	for _, tcase := range tcases {
+		got, err := ConvertToUint64(tcase.v)
+		errstr := ""
+		if err != nil {
+			errstr = err.Error()
+		}
+		if errstr != tcase.err {
+			t.Errorf("ConvertToUint64(%v) error: %v, want %v", tcase.v, err, tcase.err)
+		}
+		if got != tcase.out {
+			t.Errorf("ConvertToUint64(%v): %v, want %v", tcase.v, got, tcase.out)
+		}
+	}
+}
+
 func TestNewNumeric(t *testing.T) {
 	tcases := []struct {
 		v   Value
@@ -202,6 +283,55 @@ func TestNewNumeric(t *testing.T) {
 		}
 		if tcase.err == "" && got != tcase.out {
 			t.Errorf("newNumeric(%s): %v, want %v", printValue(tcase.v), got, tcase.out)
+		}
+	}
+}
+
+func TestNewIntegralNumeric(t *testing.T) {
+	tcases := []struct {
+		v   Value
+		out numeric
+		err string
+	}{{
+		v:   makeInt(1),
+		out: numeric{typ: Int64, ival: 1},
+	}, {
+		v:   makeUint(1),
+		out: numeric{typ: Uint64, uval: 1},
+	}, {
+		v:   makeFloat(1),
+		out: numeric{typ: Int64, ival: 1},
+	}, {
+		// For non-number type, Int64 is the default.
+		v:   makeAny(VarChar, "1"),
+		out: numeric{typ: Int64, ival: 1},
+	}, {
+		// If Int64 can't work, we use Uint64.
+		v:   makeAny(VarChar, "18446744073709551615"),
+		out: numeric{typ: Uint64, uval: 18446744073709551615},
+	}, {
+		// Only valid Int64 allowed if type is Int64.
+		v:   makeAny(Int64, "1.2"),
+		err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
+	}, {
+		// Only valid Uint64 allowed if type is Uint64.
+		v:   makeAny(Uint64, "1.2"),
+		err: "strconv.ParseUint: parsing \"1.2\": invalid syntax",
+	}, {
+		v:   makeAny(VarChar, "abcd"),
+		err: "could not parse value: abcd",
+	}}
+	for _, tcase := range tcases {
+		got, err := newIntegralNumeric(tcase.v)
+		errstr := ""
+		if err != nil {
+			errstr = err.Error()
+		}
+		if errstr != tcase.err {
+			t.Errorf("newIntegralNumeric(%s) error: %v, want %v", printValue(tcase.v), err, tcase.err)
+		}
+		if got != tcase.out {
+			t.Errorf("newIntegralNumeric(%s): %v, want %v", printValue(tcase.v), got, tcase.out)
 		}
 	}
 }

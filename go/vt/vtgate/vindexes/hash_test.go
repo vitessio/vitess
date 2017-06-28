@@ -106,7 +106,7 @@ func TestHashReverseMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if got[0].(int64) != 1 {
+	if got[0].(uint64) != 1 {
 		t.Errorf("ReverseMap(): %+v, want 1", got)
 	}
 }

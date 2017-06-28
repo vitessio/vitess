@@ -25,7 +25,7 @@
 
 # DBA statements
 "explain select * from user"
-"unsupported construct: other"
+"unsupported construct: other read"
 
 # union operations in subqueries (FROM)
 "select * from (select * from user union all select * from user_extra) as t"
@@ -62,6 +62,10 @@
 # order by on a cross-shard subquery
 "select id from (select user.id, user.col from user join user_extra) as t order by id"
 "unsupported: cannot order by on a cross-shard subquery"
+
+# scatter order by with * expression
+"select * from user order by id"
+"unsupported: scatter order by with a '*' in select expression"
 
 # filtering on a cross-shard subquery
 "select id from (select user.id, user.col from user join user_extra) as t where id=5"
