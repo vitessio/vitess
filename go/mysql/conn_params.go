@@ -16,8 +16,6 @@ limitations under the License.
 
 package mysql
 
-import "errors"
-
 // ConnParams contains all the parameters to use to connect to mysql.
 type ConnParams struct {
 	Host       string `json:"host"`
@@ -50,15 +48,4 @@ func (cp *ConnParams) SslEnabled() bool {
 // EnableClientFoundRows sets the flag for CLIENT_FOUND_ROWS.
 func (cp *ConnParams) EnableClientFoundRows() {
 	cp.Flags |= CapabilityClientFoundRows
-}
-
-// Validate returns an error if ConnParams has invalid fields.
-func (cp *ConnParams) Validate() error {
-	if cp == nil {
-		return errors.New("mysql connection parameters are empty")
-	}
-	if cp.Port == 0 && cp.UnixSocket == "" {
-		return errors.New("either a unix socket or port must be specified for the mysql connection")
-	}
-	return nil
 }

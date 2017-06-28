@@ -55,15 +55,11 @@ func (util *testUtils) newMysqld(dbcfgs *dbconfigs.DBConfigs) mysqlctl.MysqlDaem
 	// Assigning ServerID to be different from tablet UID to make sure that there are no
 	// assumptions in the code that those IDs are the same.
 	cnf.ServerID = 22222
-	mysqld, err := mysqlctl.NewMysqld(
+	return mysqlctl.NewMysqld(
 		cnf,
 		dbcfgs,
 		dbconfigs.AppConfig, // These tests only use the app pool.
 	)
-	if err != nil {
-		panic(err)
-	}
-	return mysqld
 }
 
 func (util *testUtils) newDBConfigs(db *fakesqldb.DB) dbconfigs.DBConfigs {
