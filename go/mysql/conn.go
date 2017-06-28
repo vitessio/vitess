@@ -250,6 +250,9 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 
 	var header [4]byte
 	if _, err := io.ReadFull(c.reader, header[:]); err != nil {
+		if err == io.EOF {
+			return nil, err
+		}
 		return nil, fmt.Errorf("io.ReadFull(header size) failed: %v", err)
 	}
 

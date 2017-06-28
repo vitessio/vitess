@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 

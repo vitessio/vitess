@@ -260,7 +260,10 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 		c.sequence = 0
 		data, err := c.readEphemeralPacket()
 		if err != nil {
-			log.Errorf("Error reading packet from client %v: %v", c.ConnectionID, err)
+			// Don't log EOF errors. They cause too much spam.
+			if err != io.EOF {
+				log.Errorf("Error reading packet from client %v: %v", c.ConnectionID, err)
+			}
 			return
 		}
 

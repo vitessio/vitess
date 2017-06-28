@@ -68,6 +68,9 @@ type DB struct {
 	// processing the next query. This will trigger a MySQL client error with
 	// errno 2013 ("server lost").
 	shouldClose bool
+	// AllowAll: if set to true, ComQuery returns an empty result
+	// for all queries. This flag is used for benchmarking.
+	AllowAll bool
 	// data maps tolower(query) to a result.
 	data map[string]*ExpectedResult
 	// rejectedData maps tolower(query) to an error.
@@ -215,7 +218,9 @@ func (db *DB) NewConnection(c *mysql.Conn) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	db.t.Logf("NewConnection(%v): client %v", db.name, c.ConnectionID)
+	if db.t != nil {
+		db.t.Logf("NewConnection(%v): client %v", db.name, c.ConnectionID)
+	}
 
 	if db.isConnFail {
 		panic(fmt.Errorf("simulating a connection failure"))
@@ -232,7 +237,9 @@ func (db *DB) ConnectionClosed(c *mysql.Conn) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	db.t.Logf("ConnectionClosed(%v): client %v", db.name, c.ConnectionID)
+	if db.t != nil {
+		db.t.Logf("ConnectionClosed(%v): client %v", db.name, c.ConnectionID)
+	}
 
 	if _, ok := db.connections[c.ConnectionID]; !ok {
 		db.t.Fatalf("BUG: Cannot delete connection from list of open connections because it is not registered. ID: %v Conn: %v", c.ConnectionID, c)
@@ -242,8 +249,14 @@ func (db *DB) ConnectionClosed(c *mysql.Conn) {
 
 // ComQuery is part of the mysql.Handler interface.
 func (db *DB) ComQuery(c *mysql.Conn, q []byte, callback func(*sqltypes.Result) error) error {
+	if db.AllowAll {
+		return callback(&sqltypes.Result{})
+	}
+
 	query := string(q)
-	db.t.Logf("ComQuery(%v): client %v: %v", db.name, c.ConnectionID, query)
+	if db.t != nil {
+		db.t.Logf("ComQuery(%v): client %v: %v", db.name, c.ConnectionID, query)
+	}
 
 	key := strings.ToLower(query)
 	db.mu.Lock()
