@@ -29,7 +29,10 @@ import (
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/tchap/go-patricia/patricia"
+	"github.com/youtube/vitess/go/vt/health"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tableacl/acl"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
 )
@@ -69,16 +72,18 @@ var acls = make(map[string]acl.Factory)
 var defaultACL string
 
 type tableACL struct {
+	// mutex protects entries, config, and callback
 	sync.RWMutex
 	entries aclEntries
 	config  tableaclpb.Config
+	// callback is executed on successful reload.
+	callback func()
+	// ACL Factory override for testing
+	factory acl.Factory
 }
 
-// currentACL stores current effective ACL information.
-var currentACL tableACL
-
-// aclCallback is the tablet callback executed on table acl reload.
-var aclCallback func()
+// currentTableACL stores current effective ACL information.
+var currentTableACL tableACL
 
 // Init initiates table ACLs.
 //
@@ -96,54 +101,62 @@ var aclCallback func()
 //   ]
 // }
 func Init(configFile string, aclCB func()) error {
-	aclCallback = aclCB
-	if configFile != "" {
-		log.Infof("Loading Table ACL from local file: %v", configFile)
-		data, err := ioutil.ReadFile(configFile)
-		if err != nil {
-			log.Infof("unable to read tableACL config file: %v", err)
-			return err
-		}
-		config := &tableaclpb.Config{}
-		if err := proto.Unmarshal(data, config); err != nil {
-			log.Infof("unable to parse tableACL config file as a protobuf file: %v", err)
-			// try to parse tableacl as json file
-			if jsonErr := json.Unmarshal(data, config); jsonErr != nil {
-				log.Infof("unable to parse tableACL config file as a json file: %v", jsonErr)
-				return fmt.Errorf("Unable to unmarshal Table ACL data: %v", data)
-			}
-		}
-		if err = load(config); err != nil {
-			log.Infof("tableACL initialization error: %v", err)
-			return err
+	return currentTableACL.init(configFile, aclCB)
+}
+
+func (tacl *tableACL) init(configFile string, aclCB func()) error {
+	tacl.SetCallback(aclCB)
+	if configFile == "" {
+		return nil
+	}
+	log.Infof("Loading Table ACL from local file: %v", configFile)
+	data, err := ioutil.ReadFile(configFile)
+	if err != nil {
+		log.Infof("unable to read tableACL config file: %v", err)
+		return err
+	}
+	config := &tableaclpb.Config{}
+	if err := proto.Unmarshal(data, config); err != nil {
+		log.Infof("unable to parse tableACL config file as a protobuf file: %v", err)
+		// try to parse tableacl as json file
+		if jsonErr := json.Unmarshal(data, config); jsonErr != nil {
+			log.Infof("unable to parse tableACL config file as a json file: %v", jsonErr)
+			return fmt.Errorf("Unable to unmarshal Table ACL data: %v", data)
 		}
 	}
-	return nil
+	return tacl.Set(config)
+}
+
+func (tacl *tableACL) SetCallback(callback func()) {
+	tacl.Lock()
+	defer tacl.Unlock()
+	tacl.callback = callback
 }
 
 // InitFromProto inits table ACLs from a proto.
-func InitFromProto(config *tableaclpb.Config) (err error) {
-	return load(config)
+func InitFromProto(config *tableaclpb.Config) error {
+	return currentTableACL.Set(config)
 }
 
 // load loads configurations from a proto-defined Config
-func load(config *tableaclpb.Config) error {
+// If err is nil, then entries is guaranteed to be non-nil (though possibly empty).
+func load(config *tableaclpb.Config, newACL func([]string) (acl.ACL, error)) (entries aclEntries, err error) {
 	if err := ValidateProto(config); err != nil {
-		return err
+		return nil, err
 	}
-	var entries aclEntries
+	entries = aclEntries{}
 	for _, group := range config.TableGroups {
 		readers, err := newACL(group.Readers)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		writers, err := newACL(group.Writers)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		admins, err := newACL(group.Admins)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		for _, tableNameOrPrefix := range group.TableNamesOrPrefixes {
 			entries = append(entries, aclEntry{
@@ -158,14 +171,42 @@ func load(config *tableaclpb.Config) error {
 		}
 	}
 	sort.Sort(entries)
-	currentACL.Lock()
-	currentACL.entries = entries
-	currentACL.config = *config
-	currentACL.Unlock()
-	if aclCallback != nil {
-		aclCallback()
+	return entries, nil
+}
+
+func (tacl *tableACL) aclFactory() (acl.Factory, error) {
+	if tacl.factory == nil {
+		return GetCurrentAclFactory()
+	}
+	return tacl.factory, nil
+}
+
+func (tacl *tableACL) Set(config *tableaclpb.Config) error {
+	factory, err := tacl.aclFactory()
+	if err != nil {
+		return err
+	}
+	entries, err := load(config, factory.New)
+	if err != nil {
+		return err
+	}
+	tacl.Lock()
+	tacl.entries = entries
+	tacl.config = *config
+	callback := tacl.callback
+	tacl.Unlock()
+	if callback != nil {
+		callback()
 	}
 	return nil
+}
+
+// Valid returns whether the tableACL is valid.
+// Currently it only checks that it has been initialized.
+func (tacl *tableACL) Valid() bool {
+	tacl.RLock()
+	defer tacl.RUnlock()
+	return tacl.entries != nil
 }
 
 // ValidateProto returns an error if the given proto has problems
@@ -200,19 +241,23 @@ func ValidateProto(config *tableaclpb.Config) (err error) {
 
 // Authorized returns the list of entities who have the specified role on a tablel.
 func Authorized(table string, role Role) *ACLResult {
-	currentACL.RLock()
-	defer currentACL.RUnlock()
+	return currentTableACL.Authorized(table, role)
+}
+
+func (tacl *tableACL) Authorized(table string, role Role) *ACLResult {
+	tacl.RLock()
+	defer tacl.RUnlock()
 	start := 0
-	end := len(currentACL.entries)
+	end := len(tacl.entries)
 	for start < end {
 		mid := start + (end-start)/2
-		val := currentACL.entries[mid].tableNameOrPrefix
+		val := tacl.entries[mid].tableNameOrPrefix
 		if table == val || (strings.HasSuffix(val, "%") && strings.HasPrefix(table, val[:len(val)-1])) {
-			acl, ok := currentACL.entries[mid].acl[role]
+			acl, ok := tacl.entries[mid].acl[role]
 			if ok {
 				return &ACLResult{
 					ACL:       acl,
-					GroupName: currentACL.entries[mid].groupName,
+					GroupName: tacl.entries[mid].groupName,
 				}
 			}
 			break
@@ -230,14 +275,16 @@ func Authorized(table string, role Role) *ACLResult {
 
 // GetCurrentConfig returns a copy of current tableacl configuration.
 func GetCurrentConfig() *tableaclpb.Config {
-	config := &tableaclpb.Config{}
-	currentACL.RLock()
-	defer currentACL.RUnlock()
-	*config = currentACL.config
-	return config
+	return currentTableACL.Config()
 }
 
-// Register registers a AclFactory.
+func (tacl *tableACL) Config() *tableaclpb.Config {
+	tacl.RLock()
+	defer tacl.RUnlock()
+	return proto.Clone(&tacl.config).(*tableaclpb.Config)
+}
+
+// Register registers an AclFactory.
 func Register(name string, factory acl.Factory) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -272,9 +319,18 @@ func GetCurrentAclFactory() (acl.Factory, error) {
 	return nil, fmt.Errorf("aclFactory for given default: %s is not found", defaultACL)
 }
 
-func newACL(entries []string) (_ acl.ACL, err error) {
-	if f, err := GetCurrentAclFactory(); err == nil {
-		return f.New(entries)
+func checkHealth(acl *tableACL) error {
+	if !acl.Valid() {
+		return errors.New("the tableacl is not valid")
 	}
-	return nil, err
+	return nil
+}
+
+func init() {
+	servenv.OnRun(func() {
+		if !tabletenv.Config.StrictTableACL {
+			return
+		}
+		health.DefaultAggregator.RegisterSimpleCheck("tableacl", func() error { return checkHealth(&currentTableACL) })
+	})
 }
