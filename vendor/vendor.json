@@ -33,6 +33,12 @@
 			"revisionTime": "2016-12-16T21:27:53Z"
 		},
 		{
+			"checksumSHA1": "HUIPHSprvfPdJ5cvbLIo0siif1A=",
+			"path": "github.com/Knetic/govaluate",
+			"revision": "91facc4ae520fef82c9aee6b6ae720d9ae789131",
+			"revisionTime": "2017-06-21T16:20:16Z"
+		},
+		{
 			"checksumSHA1": "L4I+Spyy1yw6GbDjnx+Qyj+q9kw=",
 			"path": "github.com/aws/aws-sdk-go/aws",
 			"revision": "2e1a49c71fb7d8f6b7e8cca2259ed9b68d9b97ce",
@@ -271,6 +277,42 @@
 			"path": "github.com/beorn7/perks/quantile",
 			"revision": "3ac7bf7a47d159a033b107610db8a1b6575507a4",
 			"revisionTime": "2016-02-29T21:34:45Z"
+		},
+		{
+			"checksumSHA1": "SktMhq66T+Gs4YAa1N+bF0Iq4qk=",
+			"path": "github.com/casbin/casbin",
+			"revision": "120a03f49336b0834a3721429ce81a4f86e3a295",
+			"revisionTime": "2017-07-02T03:44:24Z"
+		},
+		{
+			"checksumSHA1": "QoutF8oQWD3YqQnyQaSmTCF2yU8=",
+			"path": "github.com/casbin/casbin/config",
+			"revision": "120a03f49336b0834a3721429ce81a4f86e3a295",
+			"revisionTime": "2017-07-02T03:44:24Z"
+		},
+		{
+			"checksumSHA1": "YmHRROVO2ij5B2DWocjasVRKLEU=",
+			"path": "github.com/casbin/casbin/model",
+			"revision": "120a03f49336b0834a3721429ce81a4f86e3a295",
+			"revisionTime": "2017-07-02T03:44:24Z"
+		},
+		{
+			"checksumSHA1": "z70xWzJUpbqUX45trGo2DmN4m0I=",
+			"path": "github.com/casbin/casbin/persist",
+			"revision": "120a03f49336b0834a3721429ce81a4f86e3a295",
+			"revisionTime": "2017-07-02T03:44:24Z"
+		},
+		{
+			"checksumSHA1": "fG39jhUcP7IQEHnktxydCPMwDLg=",
+			"path": "github.com/casbin/casbin/rbac",
+			"revision": "120a03f49336b0834a3721429ce81a4f86e3a295",
+			"revisionTime": "2017-07-02T03:44:24Z"
+		},
+		{
+			"checksumSHA1": "Luf5UCU9jDANHTqtEk8MBny2+2E=",
+			"path": "github.com/casbin/casbin/util",
+			"revision": "120a03f49336b0834a3721429ce81a4f86e3a295",
+			"revisionTime": "2017-07-02T03:44:24Z"
 		},
 		{
 			"checksumSHA1": "7BC2/27NId9xaPDB5w3nWN2mn9A=",

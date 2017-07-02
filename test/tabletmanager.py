@@ -654,16 +654,6 @@ class TestTabletManager(unittest.TestCase):
     # And done.
     tablet.kill_tablets([tablet_62344, tablet_62044])
 
-  def test_fallback_policy(self):
-    tablet_62344.create_db('vt_test_keyspace')
-    tablet_62344.init_tablet('master', 'test_keyspace', '0')
-    tablet_62344.start_vttablet(security_policy='bogus')
-    f = urllib.urlopen('http://localhost:%d/queryz' % int(tablet_62344.port))
-    response = f.read()
-    f.close()
-    self.assertIn('not allowed', response)
-    tablet_62344.kill_vttablet()
-
   def test_ignore_health_error(self):
     tablet_62344.create_db('vt_test_keyspace')
 
