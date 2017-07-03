@@ -523,22 +523,33 @@ func TestResolverInsertSqlClause(t *testing.T) {
 }
 
 func TestResolverBuildEntityIds(t *testing.T) {
-	shardMap := make(map[string][]interface{})
-	shardMap["-20"] = []interface{}{"0", 1}
-	shardMap["20-40"] = []interface{}{"2"}
+	shardMap := map[string][]*querypb.Value{
+		"-20": {{
+			Type:  querypb.Type_VARCHAR,
+			Value: []byte("0"),
+		}, {
+			Type:  querypb.Type_INT64,
+			Value: []byte("1"),
+		}},
+		"20-40": {{
+			Type:  querypb.Type_VARCHAR,
+			Value: []byte("2"),
+		}},
+	}
 	sql := "select a from table where id=:id"
 	entityColName := "uid"
-	bindVar := make(map[string]interface{})
-	bindVar["id"] = 10
+	bindVar := sqltypes.MakeTestBindVars(map[string]interface{}{
+		"id": 10,
+	})
 	shards, sqls, bindVars := buildEntityIds(shardMap, sql, entityColName, bindVar)
 	wantShards := []string{"-20", "20-40"}
 	wantSqls := map[string]string{
 		"-20":   "select a from table where id=:id and uid in ::uid_entity_ids",
 		"20-40": "select a from table where id=:id and uid in ::uid_entity_ids",
 	}
-	wantBindVars := map[string]map[string]interface{}{
-		"-20":   {"id": 10, "uid_entity_ids": []interface{}{"0", 1}},
-		"20-40": {"id": 10, "uid_entity_ids": []interface{}{"2"}},
+	wantBindVars := map[string]map[string]*querypb.BindVariable{
+		"-20":   sqltypes.MakeTestBindVars(map[string]interface{}{"id": 10, "uid_entity_ids": []interface{}{"0", 1}}),
+		"20-40": sqltypes.MakeTestBindVars(map[string]interface{}{"id": 10, "uid_entity_ids": []interface{}{"2"}}),
 	}
 	sort.Strings(wantShards)
 	sort.Strings(shards)
@@ -549,7 +560,7 @@ func TestResolverBuildEntityIds(t *testing.T) {
 		t.Errorf("want %+v, got %+v", wantSqls, sqls)
 	}
 	if !reflect.DeepEqual(wantBindVars, bindVars) {
-		t.Errorf("want %+v, got %+v", wantBindVars, bindVars)
+		t.Errorf("want\n%+v, got\n%+v", wantBindVars, bindVars)
 	}
 }
 

@@ -24,19 +24,19 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 )
 
 type vcursor struct {
 	mustFail bool
 	numRows  int
 	result   *sqltypes.Result
-	bq       *querytypes.BoundQuery
+	bq       *querypb.BoundQuery
 }
 
-func (vc *vcursor) Execute(query string, bindvars map[string]interface{}, isDML bool) (*sqltypes.Result, error) {
-	vc.bq = &querytypes.BoundQuery{
+func (vc *vcursor) Execute(query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+	vc.bq = &querypb.BoundQuery{
 		Sql:           query,
 		BindVariables: bindvars,
 	}
@@ -104,7 +104,7 @@ func TestLookupHashString(t *testing.T) {
 
 func TestLookupHashMap(t *testing.T) {
 	vc := &vcursor{numRows: 2}
-	got, err := lookuphash.(NonUnique).Map(vc, []interface{}{1, int32(2)})
+	got, err := lookuphash.(NonUnique).Map(vc, []interface{}{1, int64(2)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -137,12 +137,12 @@ func TestLookupHashCreate(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &querytypes.BoundQuery{
+	wantQuery := &querypb.BoundQuery{
 		Sql: "insert into t(fromc,toc) values(:fromc0,:toc0)",
-		BindVariables: map[string]interface{}{
+		BindVariables: sqltypes.MakeTestBindVars(map[string]interface{}{
 			"fromc0": 1,
 			"toc0":   uint64(1),
-		},
+		}),
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
 		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)
@@ -162,12 +162,12 @@ func TestLookupHashDelete(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &querytypes.BoundQuery{
+	wantQuery := &querypb.BoundQuery{
 		Sql: "delete from t where fromc = :fromc and toc = :toc",
-		BindVariables: map[string]interface{}{
+		BindVariables: sqltypes.MakeTestBindVars(map[string]interface{}{
 			"fromc": 1,
 			"toc":   uint64(1),
-		},
+		}),
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
 		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)

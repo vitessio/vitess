@@ -191,7 +191,13 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	}
 	session := vtgateConn.Session(*targetString, executeOptions)
 	defer vtgateConn.Close()
-	qr, err := session.Execute(ctx, subFlags.Arg(0), *bindVariables)
+
+	bindVars, err := sqltypes.BuildBindVars(*bindVariables)
+	if err != nil {
+		return fmt.Errorf("Execute failed: %v", err)
+	}
+
+	qr, err := session.Execute(ctx, subFlags.Arg(0), bindVars)
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
@@ -236,7 +242,13 @@ func commandVtGateExecuteShards(ctx context.Context, wr *wrangler.Wrangler, subF
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
 	defer vtgateConn.Close()
-	qr, err := vtgateConn.ExecuteShards(ctx, subFlags.Arg(0), *keyspace, shards, *bindVariables, t, executeOptions)
+
+	bindVars, err := sqltypes.BuildBindVars(*bindVariables)
+	if err != nil {
+		return fmt.Errorf("Execute failed: %v", err)
+	}
+
+	qr, err := vtgateConn.ExecuteShards(ctx, subFlags.Arg(0), *keyspace, shards, bindVars, t, executeOptions)
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
@@ -288,7 +300,13 @@ func commandVtGateExecuteKeyspaceIds(ctx context.Context, wr *wrangler.Wrangler,
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
 	defer vtgateConn.Close()
-	qr, err := vtgateConn.ExecuteKeyspaceIds(ctx, subFlags.Arg(0), *keyspace, keyspaceIDs, *bindVariables, t, executeOptions)
+
+	bindVars, err := sqltypes.BuildBindVars(*bindVariables)
+	if err != nil {
+		return fmt.Errorf("Execute failed: %v", err)
+	}
+
+	qr, err := vtgateConn.ExecuteKeyspaceIds(ctx, subFlags.Arg(0), *keyspace, keyspaceIDs, bindVars, t, executeOptions)
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
@@ -345,11 +363,17 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
 	defer vtgateConn.Close()
+
+	bindVars, err := sqltypes.BuildBindVars(*bindVariables)
+	if err != nil {
+		return fmt.Errorf("Execute failed: %v", err)
+	}
+
 	r, err := vtgateConn.SplitQuery(
 		ctx,
 		*keyspace,
 		subFlags.Arg(0),
-		*bindVariables,
+		bindVars,
 		splitColumns,
 		int64(*splitCount),
 		int64(*numRowsPerQueryPart),

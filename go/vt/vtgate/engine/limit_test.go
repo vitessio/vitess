@@ -83,7 +83,7 @@ func TestLimitExecute(t *testing.T) {
 	// Test with bind vars.
 	tp.rewind()
 	l.Count = ":l"
-	result, err = l.Execute(nil, map[string]interface{}{"l": 2}, nil, false)
+	result, err = l.Execute(nil, sqltypes.MakeTestBindVars(map[string]interface{}{"l": 2}), nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -134,7 +134,7 @@ func TestLimitStreamExecute(t *testing.T) {
 	tp.rewind()
 	l.Count = ":l"
 	results = nil
-	err = l.StreamExecute(nil, map[string]interface{}{"l": 2}, nil, false, func(qr *sqltypes.Result) error {
+	err = l.StreamExecute(nil, sqltypes.MakeTestBindVars(map[string]interface{}{"l": 2}), nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})

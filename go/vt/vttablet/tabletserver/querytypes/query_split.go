@@ -16,8 +16,6 @@ limitations under the License.
 
 package querytypes
 
-import "github.com/youtube/vitess/go/sqltypes"
-
 // This file defines QuerySplit
 
 // QuerySplit represents a split of a query, used for MapReduce purposes.
@@ -35,7 +33,7 @@ type QuerySplit struct {
 // Equal compares two QuerySplit objects.
 func (q *QuerySplit) Equal(q2 *QuerySplit) bool {
 	return q.Sql == q2.Sql &&
-		sqltypes.BindVariablesEqual(q.BindVariables, q2.BindVariables) &&
+		BindVariablesEqual(q.BindVariables, q2.BindVariables) &&
 		q.RowCount == q2.RowCount
 }
 

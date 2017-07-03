@@ -32,7 +32,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -102,10 +101,7 @@ func withCallerIDContext(ctx context.Context, effectiveCallerID *vtrpcpb.CallerI
 func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest) (response *vtgatepb.ExecuteResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, true /* enforceSafety */)
-	if err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
+
 	// Handle backward compatibility.
 	session := request.Session
 	if session == nil {
@@ -117,7 +113,7 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 	if session.Options == nil {
 		session.Options = request.Options
 	}
-	session, result, err := vtg.server.Execute(ctx, session, string(request.Query.Sql), bv)
+	session, result, err := vtg.server.Execute(ctx, session, request.Query.Sql, request.Query.BindVariables)
 	return &vtgatepb.ExecuteResponse{
 		Result:  sqltypes.ResultToProto3(result),
 		Session: session,
@@ -131,14 +127,10 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 	ctx = withCallerIDContext(ctx, request.CallerId)
 	results := make([]sqltypes.QueryResponse, len(request.Queries))
 	sqlQueries := make([]string, len(request.Queries))
-	bindVars := make([]map[string]interface{}, len(request.Queries))
+	bindVars := make([]map[string]*querypb.BindVariable, len(request.Queries))
 	for queryNum, query := range request.Queries {
-		bv, err := querytypes.Proto3ToBindVariables(query.BindVariables, true /* enforceSafety */)
-		if err != nil {
-			return nil, vterrors.ToGRPC(err)
-		}
 		sqlQueries[queryNum] = query.Sql
-		bindVars[queryNum] = bv
+		bindVars[queryNum] = query.BindVariables
 	}
 	// Handle backward compatibility.
 	session := request.Session
@@ -163,10 +155,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream vtgateservicepb.Vitess_StreamExecuteServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx := withCallerIDContext(stream.Context(), request.CallerId)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, true /* enforceSafety */)
-	if err != nil {
-		return vterrors.ToGRPC(err)
-	}
+
 	// Handle backward compatibility.
 	session := request.Session
 	if session == nil {
@@ -178,7 +167,7 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 	if session.Options == nil {
 		session.Options = request.Options
 	}
-	vtgErr := vtg.server.StreamExecute(ctx, session, string(request.Query.Sql), bv, func(value *sqltypes.Result) error {
+	vtgErr := vtg.server.StreamExecute(ctx, session, request.Query.Sql, request.Query.BindVariables, func(value *sqltypes.Result) error {
 		return stream.Send(&vtgatepb.StreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(value),
 		})
@@ -190,13 +179,9 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 func (vtg *VTGate) ExecuteShards(ctx context.Context, request *vtgatepb.ExecuteShardsRequest) (response *vtgatepb.ExecuteShardsResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, true /* enforceSafety */)
-	if err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
 	result, err := vtg.server.ExecuteShards(ctx,
-		string(request.Query.Sql),
-		bv,
+		request.Query.Sql,
+		request.Query.BindVariables,
 		request.Keyspace,
 		request.Shards,
 		request.TabletType,
@@ -214,13 +199,9 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, request *vtgatepb.ExecuteS
 func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *vtgatepb.ExecuteKeyspaceIdsRequest) (response *vtgatepb.ExecuteKeyspaceIdsResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, true /* enforceSafety */)
-	if err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
 	result, err := vtg.server.ExecuteKeyspaceIds(ctx,
-		string(request.Query.Sql),
-		bv,
+		request.Query.Sql,
+		request.Query.BindVariables,
 		request.Keyspace,
 		request.KeyspaceIds,
 		request.TabletType,
@@ -238,13 +219,9 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *vtgatepb.Exe
 func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *vtgatepb.ExecuteKeyRangesRequest) (response *vtgatepb.ExecuteKeyRangesResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, true /* enforceSafety */)
-	if err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
 	result, err := vtg.server.ExecuteKeyRanges(ctx,
-		string(request.Query.Sql),
-		bv,
+		request.Query.Sql,
+		request.Query.BindVariables,
 		request.Keyspace,
 		request.KeyRanges,
 		request.TabletType,
@@ -262,13 +239,9 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *vtgatepb.Execu
 func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *vtgatepb.ExecuteEntityIdsRequest) (response *vtgatepb.ExecuteEntityIdsResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, true /* enforceSafety */)
-	if err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
 	result, err := vtg.server.ExecuteEntityIds(ctx,
-		string(request.Query.Sql),
-		bv,
+		request.Query.Sql,
+		request.Query.BindVariables,
 		request.Keyspace,
 		request.EntityColumnName,
 		request.EntityKeyspaceIds,
@@ -322,13 +295,9 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *vtgatep
 func (vtg *VTGate) StreamExecuteShards(request *vtgatepb.StreamExecuteShardsRequest, stream vtgateservicepb.Vitess_StreamExecuteShardsServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx := withCallerIDContext(stream.Context(), request.CallerId)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, true /* enforceSafety */)
-	if err != nil {
-		return vterrors.ToGRPC(err)
-	}
 	vtgErr := vtg.server.StreamExecuteShards(ctx,
-		string(request.Query.Sql),
-		bv,
+		request.Query.Sql,
+		request.Query.BindVariables,
 		request.Keyspace,
 		request.Shards,
 		request.TabletType,
@@ -346,13 +315,9 @@ func (vtg *VTGate) StreamExecuteShards(request *vtgatepb.StreamExecuteShardsRequ
 func (vtg *VTGate) StreamExecuteKeyspaceIds(request *vtgatepb.StreamExecuteKeyspaceIdsRequest, stream vtgateservicepb.Vitess_StreamExecuteKeyspaceIdsServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx := withCallerIDContext(stream.Context(), request.CallerId)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, true /* enforceSafety */)
-	if err != nil {
-		return vterrors.ToGRPC(err)
-	}
 	vtgErr := vtg.server.StreamExecuteKeyspaceIds(ctx,
-		string(request.Query.Sql),
-		bv,
+		request.Query.Sql,
+		request.Query.BindVariables,
 		request.Keyspace,
 		request.KeyspaceIds,
 		request.TabletType,
@@ -370,13 +335,9 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(request *vtgatepb.StreamExecuteKeysp
 func (vtg *VTGate) StreamExecuteKeyRanges(request *vtgatepb.StreamExecuteKeyRangesRequest, stream vtgateservicepb.Vitess_StreamExecuteKeyRangesServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx := withCallerIDContext(stream.Context(), request.CallerId)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, true /* enforceSafety */)
-	if err != nil {
-		return vterrors.ToGRPC(err)
-	}
 	vtgErr := vtg.server.StreamExecuteKeyRanges(ctx,
-		string(request.Query.Sql),
-		bv,
+		request.Query.Sql,
+		request.Query.BindVariables,
 		request.Keyspace,
 		request.KeyRanges,
 		request.TabletType,
@@ -486,15 +447,11 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, request *vtgatepb.SplitQueryR
 
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, true /* enforceSafety */)
-	if err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
 	splits, vtgErr := vtg.server.SplitQuery(
 		ctx,
 		request.Keyspace,
-		string(request.Query.Sql),
-		bv,
+		request.Query.Sql,
+		request.Query.BindVariables,
 		request.SplitColumn,
 		request.SplitCount,
 		request.NumRowsPerQueryPart,

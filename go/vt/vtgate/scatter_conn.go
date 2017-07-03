@@ -104,7 +104,7 @@ func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.Al
 func (stc *ScatterConn) Execute(
 	ctx context.Context,
 	query string,
-	bindVars map[string]interface{},
+	bindVars map[string]*querypb.BindVariable,
 	keyspace string,
 	shards []string,
 	tabletType topodatapb.TabletType,
@@ -116,6 +116,7 @@ func (stc *ScatterConn) Execute(
 	// mu protects qr
 	var mu sync.Mutex
 	qr := new(sqltypes.Result)
+	bvConverted, _ := querytypes.Proto3ToBindVariables(bindVars, false /* enfoceSafety*/)
 
 	err := stc.multiGoTransaction(
 		ctx,
@@ -129,13 +130,13 @@ func (stc *ScatterConn) Execute(
 			var innerqr *sqltypes.Result
 			if shouldBegin {
 				var err error
-				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, query, bindVars, options)
+				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, query, bvConverted, options)
 				if err != nil {
 					return transactionID, err
 				}
 			} else {
 				var err error
-				innerqr, err = stc.gateway.Execute(ctx, target, query, bindVars, transactionID, options)
+				innerqr, err = stc.gateway.Execute(ctx, target, query, bvConverted, transactionID, options)
 				if err != nil {
 					return transactionID, err
 				}
@@ -154,7 +155,7 @@ func (stc *ScatterConn) Execute(
 func (stc *ScatterConn) ExecuteMultiShard(
 	ctx context.Context,
 	keyspace string,
-	shardQueries map[string]querytypes.BoundQuery,
+	shardQueries map[string]*querypb.BoundQuery,
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
@@ -179,15 +180,16 @@ func (stc *ScatterConn) ExecuteMultiShard(
 		notInTransaction,
 		func(target *querypb.Target, shouldBegin bool, transactionID int64) (int64, error) {
 			var innerqr *sqltypes.Result
+			bvConverted, _ := querytypes.Proto3ToBindVariables(shardQueries[target.Shard].BindVariables, false /* enfoceSafety*/)
 			if shouldBegin {
 				var err error
-				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, options)
+				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, shardQueries[target.Shard].Sql, bvConverted, options)
 				if err != nil {
 					return transactionID, err
 				}
 			} else {
 				var err error
-				innerqr, err = stc.gateway.Execute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, transactionID, options)
+				innerqr, err = stc.gateway.Execute(ctx, target, shardQueries[target.Shard].Sql, bvConverted, transactionID, options)
 				if err != nil {
 					return transactionID, err
 				}
@@ -206,7 +208,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 	ctx context.Context,
 	shards []string,
 	sqls map[string]string,
-	bindVars map[string]map[string]interface{},
+	bindVars map[string]map[string]*querypb.BindVariable,
 	keyspace string,
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
@@ -228,18 +230,18 @@ func (stc *ScatterConn) ExecuteEntityIds(
 		notInTransaction,
 		func(target *querypb.Target, shouldBegin bool, transactionID int64) (int64, error) {
 			sql := sqls[target.Shard]
-			bindVar := bindVars[target.Shard]
+			bvConverted, _ := querytypes.Proto3ToBindVariables(bindVars[target.Shard], false /* enfoceSafety*/)
 			var innerqr *sqltypes.Result
 
 			if shouldBegin {
 				var err error
-				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, sql, bindVar, options)
+				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, sql, bvConverted, options)
 				if err != nil {
 					return transactionID, err
 				}
 			} else {
 				var err error
-				innerqr, err = stc.gateway.Execute(ctx, target, sql, bindVar, transactionID, options)
+				innerqr, err = stc.gateway.Execute(ctx, target, sql, bvConverted, transactionID, options)
 				if err != nil {
 					return transactionID, err
 				}
@@ -361,7 +363,7 @@ func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *boo
 func (stc *ScatterConn) StreamExecute(
 	ctx context.Context,
 	query string,
-	bindVars map[string]interface{},
+	bindVars map[string]*querypb.BindVariable,
 	keyspace string,
 	shards []string,
 	tabletType topodatapb.TabletType,
@@ -372,9 +374,10 @@ func (stc *ScatterConn) StreamExecute(
 	// mu protects fieldSent, replyErr and callback
 	var mu sync.Mutex
 	fieldSent := false
+	bvConverted, _ := querytypes.Proto3ToBindVariables(bindVars, false /* enfoceSafety*/)
 
 	allErrors := stc.multiGo(ctx, "StreamExecute", keyspace, shards, tabletType, func(target *querypb.Target) error {
-		return stc.gateway.StreamExecute(ctx, target, query, bindVars, options, func(qr *sqltypes.Result) error {
+		return stc.gateway.StreamExecute(ctx, target, query, bvConverted, options, func(qr *sqltypes.Result) error {
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
 	})
@@ -388,7 +391,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	ctx context.Context,
 	query string,
 	keyspace string,
-	shardVars map[string]map[string]interface{},
+	shardVars map[string]map[string]*querypb.BindVariable,
 	tabletType topodatapb.TabletType,
 	options *querypb.ExecuteOptions,
 	callback func(reply *sqltypes.Result) error,
@@ -398,7 +401,8 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	fieldSent := false
 
 	allErrors := stc.multiGo(ctx, "StreamExecute", keyspace, getShards(shardVars), tabletType, func(target *querypb.Target) error {
-		return stc.gateway.StreamExecute(ctx, target, query, shardVars[target.Shard], options, func(qr *sqltypes.Result) error {
+		bvConverted, _ := querytypes.Proto3ToBindVariables(shardVars[target.Shard], false /* enfoceSafety*/)
+		return stc.gateway.StreamExecute(ctx, target, query, bvConverted, options, func(qr *sqltypes.Result) error {
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
 	})
@@ -453,7 +457,7 @@ func (stc *ScatterConn) UpdateStream(ctx context.Context, target *querypb.Target
 func (stc *ScatterConn) SplitQuery(
 	ctx context.Context,
 	sql string,
-	bindVariables map[string]interface{},
+	bindVariables map[string]*querypb.BindVariable,
 	splitColumns []string,
 	perShardSplitCount int64,
 	numRowsPerQueryPart int64,
@@ -477,9 +481,10 @@ func (stc *ScatterConn) SplitQuery(
 		tabletType,
 		func(target *querypb.Target) error {
 			// Get all splits from this shard
+			bvConverted, _ := querytypes.Proto3ToBindVariables(bindVariables, false /* enfoceSafety*/)
 			query := querytypes.BoundQuery{
 				Sql:           sql,
-				BindVariables: bindVariables,
+				BindVariables: bvConverted,
 			}
 			querySplits, err := stc.gateway.SplitQuery(
 				ctx,
@@ -716,7 +721,7 @@ func transactionInfo(
 	return true, 0
 }
 
-func getShards(shardVars map[string]map[string]interface{}) []string {
+func getShards(shardVars map[string]map[string]*querypb.BindVariable) []string {
 	shards := make([]string, 0, len(shardVars))
 	for k := range shardVars {
 		shards = append(shards, k)

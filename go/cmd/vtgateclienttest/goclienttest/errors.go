@@ -83,7 +83,7 @@ func testExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgat
 			{
 				Query: &querypb.BoundQuery{
 					Sql:           query,
-					BindVariables: bindVarsP3,
+					BindVariables: bindVars,
 				},
 				Keyspace: keyspace,
 				Shards:   shards,
@@ -96,7 +96,7 @@ func testExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgat
 			{
 				Query: &querypb.BoundQuery{
 					Sql:           query,
-					BindVariables: bindVarsP3,
+					BindVariables: bindVars,
 				},
 				Keyspace:    keyspace,
 				KeyspaceIds: keyspaceIDs,
@@ -155,7 +155,7 @@ func testTransactionExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 			{
 				Query: &querypb.BoundQuery{
 					Sql:           query,
-					BindVariables: bindVarsP3,
+					BindVariables: bindVars,
 				},
 				Keyspace: keyspace,
 				Shards:   shards,
@@ -168,7 +168,7 @@ func testTransactionExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 			{
 				Query: &querypb.BoundQuery{
 					Sql:           query,
-					BindVariables: bindVarsP3,
+					BindVariables: bindVars,
 				},
 				Keyspace:    keyspace,
 				KeyspaceIds: keyspaceIDs,
