@@ -396,7 +396,7 @@ func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, 
 	if sql != ExecuteQuery {
 		f.t.Errorf("invalid Execute.Query.Sql: got %v expected %v", sql, ExecuteQuery)
 	}
-	if !sqltypes.BindVariablesEqual(bindVariables, ExecuteBindVars) {
+	if !querytypes.BindVariablesEqual(bindVariables, ExecuteBindVars) {
 		f.t.Errorf("invalid Execute.BindVariables: got %v expected %v", bindVariables, ExecuteBindVars)
 	}
 	if !proto.Equal(options, TestExecuteOptions) {
@@ -452,7 +452,7 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Ta
 	if sql != StreamExecuteQuery {
 		f.t.Errorf("invalid StreamExecute.Sql: got %v expected %v", sql, StreamExecuteQuery)
 	}
-	if !sqltypes.BindVariablesEqual(bindVariables, StreamExecuteBindVars) {
+	if !querytypes.BindVariablesEqual(bindVariables, StreamExecuteBindVars) {
 		f.t.Errorf("invalid StreamExecute.BindVariables: got %v expected %v", bindVariables, StreamExecuteBindVars)
 	}
 	if !proto.Equal(options, TestExecuteOptions) {

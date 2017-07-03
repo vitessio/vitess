@@ -22,6 +22,8 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 func TestOrderedAggregateExecute(t *testing.T) {
@@ -278,7 +280,7 @@ func (tp *fakePrimitive) rewind() {
 	tp.curResult = 0
 }
 
-func (tp *fakePrimitive) Execute(vcursor VCursor, bindVars, joinVars map[string]interface{}, wantfields bool) (*sqltypes.Result, error) {
+func (tp *fakePrimitive) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if tp.results == nil {
 		return nil, tp.sendErr
 	}
@@ -291,7 +293,7 @@ func (tp *fakePrimitive) Execute(vcursor VCursor, bindVars, joinVars map[string]
 	return r, nil
 }
 
-func (tp *fakePrimitive) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]interface{}, wantields bool, callback func(*sqltypes.Result) error) error {
+func (tp *fakePrimitive) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
 	if tp.results == nil {
 		return tp.sendErr
 	}
@@ -322,6 +324,6 @@ func (tp *fakePrimitive) StreamExecute(vcursor VCursor, bindVars, joinVars map[s
 	return nil
 }
 
-func (tp *fakePrimitive) GetFields(vcursor VCursor, bindVars, joinVars map[string]interface{}) (*sqltypes.Result, error) {
+func (tp *fakePrimitive) GetFields(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return tp.Execute(vcursor, bindVars, joinVars, false /* wantfields */)
 }

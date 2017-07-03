@@ -1094,7 +1094,7 @@ func TestVTGateSplitQuerySharded(t *testing.T) {
 		port++
 	}
 	sql := "select col1, col2 from table"
-	bindVars := map[string]interface{}{"bv1": nil}
+	bindVars := map[string]*querypb.BindVariable{}
 	splitColumns := []string{"sc1", "sc2"}
 	algorithm := querypb.SplitQueryRequest_FULL_SCAN
 	type testCaseType struct {
@@ -1145,7 +1145,7 @@ func TestVTGateSplitQuerySharded(t *testing.T) {
 				fmt.Sprintf(
 					"query:%v, splitColumns:%v, splitCount:%v,"+
 						" numRowsPerQueryPart:%v, algorithm:%v, shard:%v",
-					querytypes.BoundQuery{Sql: sql, BindVariables: bindVars},
+					querytypes.BoundQuery{Sql: sql, BindVariables: map[string]interface{}{}},
 					splitColumns,
 					perShardSplitCount,
 					testCase.numRowsPerQueryPart,
@@ -1296,7 +1296,7 @@ func TestVTGateSplitQueryUnsharded(t *testing.T) {
 	hcVTGateTest.Reset()
 	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, keyspace, "0", topodatapb.TabletType_RDONLY, true, 1, nil)
 	sql := "select col1, col2 from table"
-	bindVars := map[string]interface{}{"bv1": nil}
+	bindVars := map[string]*querypb.BindVariable{}
 	splitColumns := []string{"sc1", "sc2"}
 	algorithm := querypb.SplitQueryRequest_FULL_SCAN
 	type testCaseType struct {
@@ -1344,7 +1344,7 @@ func TestVTGateSplitQueryUnsharded(t *testing.T) {
 		expectedSQL := fmt.Sprintf(
 			"query:%v, splitColumns:%v, splitCount:%v,"+
 				" numRowsPerQueryPart:%v, algorithm:%v, shard:%v",
-			querytypes.BoundQuery{Sql: sql, BindVariables: bindVars},
+			querytypes.BoundQuery{Sql: sql, BindVariables: map[string]interface{}{}},
 			splitColumns,
 			testCase.splitCount,
 			testCase.numRowsPerQueryPart,
@@ -1354,6 +1354,116 @@ func TestVTGateSplitQueryUnsharded(t *testing.T) {
 		if split.Query.Sql != expectedSQL {
 			t.Errorf("got:\n%v\n, want:\n%v\n, testCase:\n%+v",
 				split.Query.Sql, expectedSQL, testCase)
+		}
+	}
+}
+
+func TestVTGateBindVarError(t *testing.T) {
+	ks := KsTestUnsharded
+	createSandbox(ks)
+	hcVTGateTest.Reset()
+	ctx := context.Background()
+	session := &vtgatepb.Session{}
+	bindVars := map[string]*querypb.BindVariable{
+		"v": {Type: querypb.Type_EXPRESSION,
+			Value: []byte("1"),
+		},
+	}
+	want := "v: type: EXPRESSION is invalid"
+
+	tcases := []struct {
+		name string
+		f    func() error
+	}{{
+		name: "Execute",
+		f: func() error {
+			_, _, err := rpcVTGate.Execute(ctx, session, "", bindVars)
+			return err
+		},
+	}, {
+		name: "ExecuteBatch",
+		f: func() error {
+			_, _, err := rpcVTGate.ExecuteBatch(ctx, session, []string{""}, []map[string]*querypb.BindVariable{bindVars})
+			return err
+		},
+	}, {
+		name: "StreamExecute",
+		f: func() error {
+			return rpcVTGate.StreamExecute(ctx, session, "", bindVars, func(_ *sqltypes.Result) error { return nil })
+		},
+	}, {
+		name: "ExecuteShards",
+		f: func() error {
+			_, err := rpcVTGate.ExecuteShards(ctx, "", bindVars, "", []string{""}, topodatapb.TabletType_MASTER, session, false, nil)
+			return err
+		},
+	}, {
+		name: "ExecuteKeyspaceIds",
+		f: func() error {
+			_, err := rpcVTGate.ExecuteKeyspaceIds(ctx, "", bindVars, "", [][]byte{}, topodatapb.TabletType_MASTER, session, false, nil)
+			return err
+		},
+	}, {
+		name: "ExecuteKeyRanges",
+		f: func() error {
+			_, err := rpcVTGate.ExecuteKeyRanges(ctx, "", bindVars, "", []*topodatapb.KeyRange{}, topodatapb.TabletType_MASTER, session, false, nil)
+			return err
+		},
+	}, {
+		name: "ExecuteEntityIds",
+		f: func() error {
+			_, err := rpcVTGate.ExecuteEntityIds(ctx, "", bindVars, "", "", []*vtgatepb.ExecuteEntityIdsRequest_EntityId{}, topodatapb.TabletType_MASTER, session, false, nil)
+			return err
+		},
+	}, {
+		name: "ExecuteBatchShards",
+		f: func() error {
+			_, err := rpcVTGate.ExecuteBatchShards(ctx,
+				[]*vtgatepb.BoundShardQuery{{
+					Query: &querypb.BoundQuery{
+						BindVariables: bindVars,
+					},
+				}},
+				topodatapb.TabletType_MASTER, false, session, nil)
+			return err
+		},
+	}, {
+		name: "ExecuteBatchKeyspaceIds",
+		f: func() error {
+			_, err := rpcVTGate.ExecuteBatchKeyspaceIds(ctx,
+				[]*vtgatepb.BoundKeyspaceIdQuery{{
+					Query: &querypb.BoundQuery{
+						BindVariables: bindVars,
+					},
+				}},
+				topodatapb.TabletType_MASTER, false, session, nil)
+			return err
+		},
+	}, {
+		name: "StreamExecuteKeyspaceIds",
+		f: func() error {
+			return rpcVTGate.StreamExecuteKeyspaceIds(ctx, "", bindVars, "", [][]byte{}, topodatapb.TabletType_MASTER, nil, func(_ *sqltypes.Result) error { return nil })
+		},
+	}, {
+		name: "StreamExecuteKeyRanges",
+		f: func() error {
+			return rpcVTGate.StreamExecuteKeyRanges(ctx, "", bindVars, "", []*topodatapb.KeyRange{}, topodatapb.TabletType_MASTER, nil, func(_ *sqltypes.Result) error { return nil })
+		},
+	}, {
+		name: "StreamExecuteShards",
+		f: func() error {
+			return rpcVTGate.StreamExecuteShards(ctx, "", bindVars, "", []string{}, topodatapb.TabletType_MASTER, nil, func(_ *sqltypes.Result) error { return nil })
+		},
+	}, {
+		name: "SplitQuery",
+		f: func() error {
+			_, err := rpcVTGate.SplitQuery(ctx, "", "", bindVars, []string{}, 0, 0, querypb.SplitQueryRequest_FULL_SCAN)
+			return err
+		},
+	}}
+	for _, tcase := range tcases {
+		if err := tcase.f(); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%v error: %v, must contain %s", tcase.name, err, want)
 		}
 	}
 }

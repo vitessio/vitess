@@ -86,7 +86,7 @@ func (code AggregateOpcode) MarshalJSON() ([]byte, error) {
 }
 
 // Execute is a Primitive function.
-func (oa *OrderedAggregate) Execute(vcursor VCursor, bindVars, joinVars map[string]interface{}, wantfields bool) (*sqltypes.Result, error) {
+func (oa *OrderedAggregate) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	result, err := oa.Input.Execute(vcursor, bindVars, joinVars, wantfields)
 	if err != nil {
 		return nil, err
@@ -127,7 +127,7 @@ func (oa *OrderedAggregate) Execute(vcursor VCursor, bindVars, joinVars map[stri
 }
 
 // StreamExecute is a Primitive function.
-func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]interface{}, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var current []sqltypes.Value
 	var fields []*querypb.Field
 	err := oa.Input.StreamExecute(vcursor, bindVars, joinVars, wantfields, func(qr *sqltypes.Result) error {
@@ -176,7 +176,7 @@ func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars, joinVars ma
 }
 
 // GetFields is a Primitive function.
-func (oa *OrderedAggregate) GetFields(vcursor VCursor, bindVars, joinVars map[string]interface{}) (*sqltypes.Result, error) {
+func (oa *OrderedAggregate) GetFields(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return oa.Input.GetFields(vcursor, bindVars, joinVars)
 }
 

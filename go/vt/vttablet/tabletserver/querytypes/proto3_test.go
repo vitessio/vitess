@@ -433,6 +433,3 @@ func TestProto3ToBindVariables(t *testing.T) {
 		}
 	}
 }
-
-func TestProto3ToBindVariablesUnsafe(t *testing.T) {
-}

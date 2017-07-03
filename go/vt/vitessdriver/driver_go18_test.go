@@ -27,6 +27,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+
 	"golang.org/x/net/context"
 )
 
@@ -47,7 +50,7 @@ func TestBindVars(t *testing.T) {
 	var testcases = []struct {
 		desc   string
 		in     []driver.NamedValue
-		out    map[string]interface{}
+		out    map[string]*querypb.BindVariable
 		outErr string
 	}{{
 		desc: "all names",
@@ -58,10 +61,10 @@ func TestBindVars(t *testing.T) {
 			Name:  "n2",
 			Value: "abcd",
 		}},
-		out: map[string]interface{}{
+		out: sqltypes.MakeTestBindVars(map[string]interface{}{
 			"n1": int64(0),
 			"n2": "abcd",
-		},
+		}),
 	}, {
 		desc: "prefixed names",
 		in: []driver.NamedValue{{
@@ -71,10 +74,10 @@ func TestBindVars(t *testing.T) {
 			Name:  "@n2",
 			Value: "abcd",
 		}},
-		out: map[string]interface{}{
+		out: sqltypes.MakeTestBindVars(map[string]interface{}{
 			"n1": int64(0),
 			"n2": "abcd",
-		},
+		}),
 	}, {
 		desc: "all positional",
 		in: []driver.NamedValue{{
@@ -84,10 +87,10 @@ func TestBindVars(t *testing.T) {
 			Ordinal: 2,
 			Value:   "abcd",
 		}},
-		out: map[string]interface{}{
+		out: sqltypes.MakeTestBindVars(map[string]interface{}{
 			"v1": int64(0),
 			"v2": "abcd",
-		},
+		}),
 	}, {
 		desc: "name, then position",
 		in: []driver.NamedValue{{

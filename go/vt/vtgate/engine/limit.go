@@ -22,6 +22,8 @@ import (
 	"io"
 
 	"github.com/youtube/vitess/go/sqltypes"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var _ Primitive = (*Limit)(nil)
@@ -49,7 +51,7 @@ func (l *Limit) MarshalJSON() ([]byte, error) {
 }
 
 // Execute is a Primitive function.
-func (l *Limit) Execute(vcursor VCursor, bindVars, joinVars map[string]interface{}, wantfields bool) (*sqltypes.Result, error) {
+func (l *Limit) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, err := l.fetchCount(bindVars, joinVars)
 	if err != nil {
 		return nil, err
@@ -68,7 +70,7 @@ func (l *Limit) Execute(vcursor VCursor, bindVars, joinVars map[string]interface
 }
 
 // StreamExecute is a Primitive function.
-func (l *Limit) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]interface{}, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (l *Limit) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	count, err := l.fetchCount(bindVars, joinVars)
 	if err != nil {
 		return err
@@ -112,11 +114,11 @@ func (l *Limit) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]int
 }
 
 // GetFields is a Primitive function.
-func (l *Limit) GetFields(vcursor VCursor, bindVars, joinVars map[string]interface{}) (*sqltypes.Result, error) {
+func (l *Limit) GetFields(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return l.Input.GetFields(vcursor, bindVars, joinVars)
 }
 
-func (l *Limit) fetchCount(bindVars, joinVars map[string]interface{}) (int, error) {
+func (l *Limit) fetchCount(bindVars, joinVars map[string]*querypb.BindVariable) (int, error) {
 	// TODO(sougou): to avoid duplication, check if this can be done
 	// by the supplier of joinVars instead.
 	bindVars = combineVars(bindVars, joinVars)
@@ -139,7 +141,7 @@ func (l *Limit) fetchCount(bindVars, joinVars map[string]interface{}) (int, erro
 // resolveBindvar may have a value or bind var name. If it's
 // a bind var name, it returns the resolved value.
 // TODO(sougou): move this to a more reusable location.
-func resolveBindvar(val interface{}, bindVars map[string]interface{}) (interface{}, error) {
+func resolveBindvar(val interface{}, bindVars map[string]*querypb.BindVariable) (interface{}, error) {
 	// If it's a bindvar, it will be a string.
 	if v, ok := val.(string); ok {
 		val, ok = bindVars[v[1:]]

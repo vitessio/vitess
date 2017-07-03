@@ -21,8 +21,9 @@ package querytypes
 import (
 	"bytes"
 	"fmt"
+	"reflect"
 
-	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
@@ -83,5 +84,31 @@ func BoundQueriesEqual(x, y []BoundQuery) bool {
 // BoundQueryEqual compares two BoundQuery objects.
 func BoundQueryEqual(x, y *BoundQuery) bool {
 	return x.Sql == y.Sql &&
-		sqltypes.BindVariablesEqual(x.BindVariables, y.BindVariables)
+		BindVariablesEqual(x.BindVariables, y.BindVariables)
+}
+
+// BindVariablesEqual compares two maps of legacy bind variables.
+// For protobuf messages we have to use "proto.Equal".
+// TODO(sougou): deprecate.
+func BindVariablesEqual(x, y map[string]interface{}) bool {
+	if len(x) != len(y) {
+		return false
+	}
+	for k := range x {
+		vx, vy := x[k], y[k]
+		if reflect.TypeOf(vx) != reflect.TypeOf(vy) {
+			return false
+		}
+		switch vx.(type) {
+		case proto.Message:
+			if !proto.Equal(vx.(proto.Message), vy.(proto.Message)) {
+				return false
+			}
+		default:
+			if !reflect.DeepEqual(vx, vy) {
+				return false
+			}
+		}
+	}
+	return true
 }

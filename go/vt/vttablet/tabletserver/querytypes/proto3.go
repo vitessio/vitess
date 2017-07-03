@@ -254,6 +254,7 @@ func Proto3ToBindVariables(bv map[string]*querypb.BindVariable, enforceSafety bo
 	result := make(map[string]interface{})
 	for k, v := range bv {
 		if v == nil {
+			result[k] = nil
 			continue
 		}
 		if enforceSafety {

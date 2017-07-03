@@ -30,7 +30,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -48,9 +47,9 @@ func TestScatterConnExecute(t *testing.T) {
 
 func TestScatterConnExecuteMulti(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnExecuteMultiShard", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
-		shardQueries := make(map[string]querytypes.BoundQuery, len(shards))
+		shardQueries := make(map[string]*querypb.BoundQuery, len(shards))
 		for _, shard := range shards {
-			query := querytypes.BoundQuery{
+			query := &querypb.BoundQuery{
 				Sql:           "query",
 				BindVariables: nil,
 			}
@@ -97,7 +96,7 @@ func TestScatterConnStreamExecute(t *testing.T) {
 func TestScatterConnStreamExecuteMulti(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnStreamExecuteMulti", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
 		qr := new(sqltypes.Result)
-		shardVars := make(map[string]map[string]interface{})
+		shardVars := make(map[string]map[string]*querypb.BindVariable)
 		for _, shard := range shards {
 			shardVars[shard] = nil
 		}
@@ -232,17 +231,23 @@ func TestMultiExecs(t *testing.T) {
 	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
 	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestMultiExecs", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestMultiExecs", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
-	shardVars := map[string]map[string]interface{}{
+	shardVars := map[string]map[string]*querypb.BindVariable{
 		"0": {
-			"bv0": 0,
+			"bv0": {
+				Type:  querypb.Type_INT64,
+				Value: []byte("0"),
+			},
 		},
 		"1": {
-			"bv1": 1,
+			"bv1": {
+				Type:  querypb.Type_INT64,
+				Value: []byte("1"),
+			},
 		},
 	}
-	shardQueries := make(map[string]querytypes.BoundQuery, len(shardVars))
+	shardQueries := make(map[string]*querypb.BoundQuery, len(shardVars))
 	for shard, shardBindVars := range shardVars {
-		query := querytypes.BoundQuery{
+		query := &querypb.BoundQuery{
 			Sql:           "query",
 			BindVariables: shardBindVars,
 		}
@@ -253,22 +258,28 @@ func TestMultiExecs(t *testing.T) {
 	if len(sbc0.Queries) == 0 || len(sbc1.Queries) == 0 {
 		t.Fatalf("didn't get expected query")
 	}
-	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, shardVars["0"]) {
-		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, shardVars["0"])
+	wantVars0 := map[string]interface{}{
+		"bv0": shardVars["0"]["bv0"],
 	}
-	if !reflect.DeepEqual(sbc1.Queries[0].BindVariables, shardVars["1"]) {
-		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, shardVars["1"])
+	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, wantVars0) {
+		t.Errorf("got %v, want %v", sbc0.Queries[0].BindVariables, wantVars0)
+	}
+	wantVars1 := map[string]interface{}{
+		"bv1": shardVars["1"]["bv1"],
+	}
+	if !reflect.DeepEqual(sbc1.Queries[0].BindVariables, wantVars1) {
+		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars1)
 	}
 	sbc0.Queries = nil
 	sbc1.Queries = nil
 	_ = sc.StreamExecuteMulti(context.Background(), "query", "TestMultiExecs", shardVars, topodatapb.TabletType_REPLICA, nil, func(*sqltypes.Result) error {
 		return nil
 	})
-	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, shardVars["0"]) {
-		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, shardVars["0"])
+	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, wantVars0) {
+		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars0)
 	}
-	if !reflect.DeepEqual(sbc1.Queries[0].BindVariables, shardVars["1"]) {
-		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, shardVars["1"])
+	if !reflect.DeepEqual(sbc1.Queries[0].BindVariables, wantVars1) {
+		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars1)
 	}
 }
 

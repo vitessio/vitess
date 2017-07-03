@@ -20,7 +20,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/sqltypes"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var lhu Vindex
@@ -41,7 +43,7 @@ func TestLookupHashUniqueCost(t *testing.T) {
 
 func TestLookupHashUniqueMap(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	got, err := lhu.(Unique).Map(vc, []interface{}{1, int32(2)})
+	got, err := lhu.(Unique).Map(vc, []interface{}{1, int64(2)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -71,12 +73,12 @@ func TestLookupHashUniqueCreate(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &querytypes.BoundQuery{
+	wantQuery := &querypb.BoundQuery{
 		Sql: "insert into t(fromc,toc) values(:fromc0,:toc0)",
-		BindVariables: map[string]interface{}{
+		BindVariables: sqltypes.MakeTestBindVars(map[string]interface{}{
 			"fromc0": 1,
 			"toc0":   uint64(1),
-		},
+		}),
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
 		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)
@@ -96,12 +98,12 @@ func TestLookupHashUniqueDelete(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &querytypes.BoundQuery{
+	wantQuery := &querypb.BoundQuery{
 		Sql: "delete from t where fromc = :fromc and toc = :toc",
-		BindVariables: map[string]interface{}{
+		BindVariables: sqltypes.MakeTestBindVars(map[string]interface{}{
 			"fromc": 1,
 			"toc":   uint64(1),
-		},
+		}),
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
 		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)
