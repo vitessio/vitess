@@ -137,6 +137,7 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context, si *topo.ShardInfo, ev *events.Reparent) (err error) {
 	var wg sync.WaitGroup
 	var errs concurrency.AllErrorRecorder
+	var oldMasterTablet *topodatapb.Tablet
 	oldMasterAlias := si.MasterAlias
 
 	// Update the tablet records concurrently.
@@ -159,29 +160,23 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	if !topoproto.TabletAliasIsZero(oldMasterAlias) {
 		wg.Add(1)
 		go func() {
+			defer wg.Done()
+
 			// Forcibly demote the old master in topology, since we can't rely on the
 			// old master to be up to change its own record.
-			oldMasterTablet, err := agent.TopoServer.UpdateTabletFields(ctx, oldMasterAlias,
+			var err error
+			oldMasterTablet, err = agent.TopoServer.UpdateTabletFields(ctx, oldMasterAlias,
 				func(tablet *topodatapb.Tablet) error {
 					tablet.Type = topodatapb.TabletType_REPLICA
 					return nil
 				})
 			if err != nil {
 				errs.RecordError(err)
-				wg.Done()
 				return
 			}
 
 			// We now know more about the old master, so add it to event data.
 			ev.OldMaster = *oldMasterTablet
-			wg.Done()
-
-			// Tell the old master to re-read its tablet record and change its state.
-			// We don't need to wait for it.
-			tmc := tmclient.NewTabletManagerClient()
-			if err := tmc.RefreshState(ctx, oldMasterTablet); err != nil {
-				log.Warningf("Error calling RefreshState on old master %v: %v", topoproto.TabletAliasString(oldMasterTablet.Alias), err)
-			}
 		}()
 	}
 
@@ -195,28 +190,53 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 		return errs.Error()
 	}
 
-	// Update the master field in the global shard record. We don't use a lock
-	// here anymore. The lock was only to ensure that the global shard record
-	// didn't get modified between the time when we read it and the time when we
-	// write it back. Now we use an update loop pattern to do that instead.
-	event.DispatchUpdate(ev, "updating global shard record")
-	log.Infof("finalizeTabletExternallyReparented: updating global shard record if needed")
-	_, err = agent.TopoServer.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(currentSi *topo.ShardInfo) error {
-		if topoproto.TabletAliasEqual(currentSi.MasterAlias, tablet.Alias) {
-			return topo.ErrNoUpdateNeeded
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		// Update the master field in the global shard record. We don't use a lock
+		// here anymore. The lock was only to ensure that the global shard record
+		// didn't get modified between the time when we read it and the time when we
+		// write it back. Now we use an update loop pattern to do that instead.
+		event.DispatchUpdate(ev, "updating global shard record")
+		log.Infof("finalizeTabletExternallyReparented: updating global shard record if needed")
+		_, err = agent.TopoServer.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(currentSi *topo.ShardInfo) error {
+			if topoproto.TabletAliasEqual(currentSi.MasterAlias, tablet.Alias) {
+				return topo.ErrNoUpdateNeeded
+			}
+			if !topoproto.TabletAliasEqual(currentSi.MasterAlias, oldMasterAlias) {
+				log.Warningf("old master alias (%v) not found in the global Shard record i.e. it has changed in the meantime."+
+					" We're not overwriting the value with the new master (%v) because the current value is probably newer."+
+					" (initial Shard record = %#v, current Shard record = %#v)",
+					oldMasterAlias, tablet.Alias, si, currentSi)
+				return topo.ErrNoUpdateNeeded
+			}
+			currentSi.MasterAlias = tablet.Alias
+			return nil
+		})
+		if err != nil {
+			errs.RecordError(err)
 		}
-		if !topoproto.TabletAliasEqual(currentSi.MasterAlias, oldMasterAlias) {
-			log.Warningf("old master alias (%v) not found in the global Shard record i.e. it has changed in the meantime."+
-				" We're not overwriting the value with the new master (%v) because the current value is probably newer."+
-				" (initial Shard record = %#v, current Shard record = %#v)",
-				oldMasterAlias, tablet.Alias, si, currentSi)
-			return topo.ErrNoUpdateNeeded
-		}
-		currentSi.MasterAlias = tablet.Alias
-		return nil
-	})
-	if err != nil {
-		return err
+	}()
+	if !topoproto.TabletAliasIsZero(oldMasterAlias) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			// Tell the old master to re-read its tablet record and change its state.
+			// We don't need to put error into errs if this fails, but we need to wait
+			// for it to make sure that old master tablet is not stuck in the MASTER
+			// state.
+			tmc := tmclient.NewTabletManagerClient()
+			if err := tmc.RefreshState(ctx, oldMasterTablet); err != nil {
+				log.Warningf("Error calling RefreshState on old master %v: %v", topoproto.TabletAliasString(oldMasterTablet.Alias), err)
+			}
+		}()
+	}
+
+	wg.Wait()
+	if errs.HasErrors() {
+		return errs.Error()
 	}
 
 	event.DispatchUpdate(ev, "finished")
