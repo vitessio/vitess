@@ -98,12 +98,7 @@ var slaveIDPool = pools.NewIDPool()
 func (sc *SlaveConnection) StartBinlogDumpFromCurrent(ctx context.Context) (mysql.Position, <-chan mysql.BinlogEvent, error) {
 	ctx, sc.cancel = context.WithCancel(ctx)
 
-	flavor, err := sc.mysqld.flavor()
-	if err != nil {
-		return mysql.Position{}, nil, fmt.Errorf("StartBinlogDump needs flavor: %v", err)
-	}
-
-	masterPosition, err := flavor.MasterPosition(sc.mysqld)
+	masterPosition, err := sc.mysqld.MasterPosition()
 	if err != nil {
 		return mysql.Position{}, nil, fmt.Errorf("failed to get master position: %v", err)
 	}

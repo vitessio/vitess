@@ -40,18 +40,6 @@ func (*mysql56) VersionMatch(version string) bool {
 		strings.HasPrefix(version, "8.0")
 }
 
-// MasterPosition implements MysqlFlavor.MasterPosition().
-func (flavor *mysql56) MasterPosition(mysqld *Mysqld) (rp mysql.Position, err error) {
-	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SELECT @@GLOBAL.gtid_executed")
-	if err != nil {
-		return rp, err
-	}
-	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return rp, fmt.Errorf("unexpected result format for gtid_executed: %#v", qr)
-	}
-	return flavor.ParseReplicationPosition(qr.Rows[0][0].String())
-}
-
 // SlaveStatus implements MysqlFlavor.SlaveStatus().
 func (flavor *mysql56) SlaveStatus(mysqld *Mysqld) (Status, error) {
 	fields, err := mysqld.fetchSuperQueryMap(context.TODO(), "SHOW SLAVE STATUS")

@@ -33,6 +33,7 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/hook"
 )
 
@@ -204,13 +205,15 @@ func (mysqld *Mysqld) SlaveStatus() (Status, error) {
 	return flavor.SlaveStatus(mysqld)
 }
 
-// MasterPosition returns master replication position
-func (mysqld *Mysqld) MasterPosition() (rp mysql.Position, err error) {
-	flavor, err := mysqld.flavor()
+// MasterPosition returns the master replication position.
+func (mysqld *Mysqld) MasterPosition() (mysql.Position, error) {
+	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
 	if err != nil {
-		return rp, fmt.Errorf("MasterPosition needs flavor: %v", err)
+		return mysql.Position{}, err
 	}
-	return flavor.MasterPosition(mysqld)
+	defer conn.Recycle()
+
+	return conn.(*dbconnpool.PooledDBConnection).MasterPosition()
 }
 
 // SetSlavePositionCommands returns the commands to set the

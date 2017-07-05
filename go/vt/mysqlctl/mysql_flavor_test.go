@@ -42,9 +42,6 @@ func (fakeMysqlFlavor) SendBinlogDumpCommand(conn *SlaveConnection, startPos mys
 func (fakeMysqlFlavor) WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos mysql.Position) error {
 	return nil
 }
-func (fakeMysqlFlavor) MasterPosition(mysqld *Mysqld) (mysql.Position, error) {
-	return mysql.Position{}, nil
-}
 func (fakeMysqlFlavor) SlaveStatus(mysqld *Mysqld) (Status, error) {
 	return Status{}, nil
 }

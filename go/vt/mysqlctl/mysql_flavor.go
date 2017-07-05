@@ -37,9 +37,6 @@ type MysqlFlavor interface {
 	// knows how to talk to.
 	VersionMatch(version string) bool
 
-	// MasterPosition returns the ReplicationPosition of a master.
-	MasterPosition(mysqld *Mysqld) (mysql.Position, error)
-
 	// SlaveStatus returns the ReplicationStatus of a slave.
 	SlaveStatus(mysqld *Mysqld) (Status, error)
 

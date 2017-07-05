@@ -67,3 +67,15 @@ func (c *Conn) WriteComBinlogDumpGTID(serverID uint32, binlogFilename string, bi
 	}
 	return nil
 }
+
+// MasterPosition returns the current master replication position.
+// Only valid for client connections (will panic for server connections).
+func (c *Conn) MasterPosition() (Position, error) {
+	gtidSet, err := c.flavor.masterGTIDSet(c)
+	if err != nil {
+		return Position{}, err
+	}
+	return Position{
+		GTIDSet: gtidSet,
+	}, nil
+}
