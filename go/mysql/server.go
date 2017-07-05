@@ -22,9 +22,11 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/tb"
 )
 
@@ -32,6 +34,17 @@ const (
 	// DefaultServerVersion is the default server version we're sending to the client.
 	// Can be changed.
 	DefaultServerVersion = "5.5.10-Vitess"
+
+	// Timing metric keys
+	ConnectTiming = "Connect"
+	QueryTiming   = "Query"
+)
+
+var (
+	// Metrics
+	timings    = stats.NewTimings("MysqlServerTimings")
+	connCount  = stats.NewInt("MysqlServerConnCount")
+	connAccept = stats.NewInt("MysqlServerConnAccepted")
 )
 
 // A Handler is an interface used by Listener to send queries.
@@ -129,17 +142,22 @@ func (l *Listener) Accept() {
 			return
 		}
 
+		acceptTime := time.Now()
+
 		connectionID := l.connectionID
 		l.connectionID++
 
-		go l.handle(conn, connectionID)
+		connCount.Add(1)
+		connAccept.Add(1)
+
+		go l.handle(conn, connectionID, acceptTime)
 	}
 }
 
 // handle is called in a go routine for each client connection.
 // FIXME(alainjobart) handle per-connection logs in a way that makes sense.
 // FIXME(alainjobart) add an idle timeout for the connection.
-func (l *Listener) handle(conn net.Conn, connectionID uint32) {
+func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Time) {
 	c := newConn(conn)
 	c.ConnectionID = connectionID
 
@@ -174,6 +192,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 		log.Errorf("Cannot parse client handshake response: %v", err)
 		return
 	}
+
 	if c.Capabilities&CapabilityClientSSL > 0 {
 		// SSL was enabled. We need to re-read the auth packet.
 		response, err = c.readEphemeralPacket()
@@ -190,6 +209,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 		}
 		c.recycleReadPacket()
 	}
+
 
 	// See what auth method the AuthServer wants to use for that user.
 	authServerMethod, err := l.authServer.AuthMethod(user)
@@ -252,9 +272,12 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 
 	// Negotiation worked, send OK packet.
 	if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
-		log.Errorf("Cannot write OK packet: %v", err)
+		log.Errorf("Cannot write OK packet to %s: %v", c.Ident(), err)
 		return
 	}
+
+	// Record how long we took to establish the connection
+	timings.Record(ConnectTiming, acceptTime)
 
 	for {
 		c.sequence = 0
@@ -280,6 +303,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 				return
 			}
 		case ComQuery:
+			queryStart := time.Now()
 			query := c.parseComQuery(data)
 			fieldSent := false
 			// sendFinished is set if a response has completed and
@@ -336,6 +360,9 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 					return
 				}
 			}
+
+			l.timings.Record(QueryTiming, queryStart)
+
 		case ComPing:
 			// No payload to that one, just return OKPacket.
 			c.recycleReadPacket()

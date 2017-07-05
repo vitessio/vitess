@@ -227,6 +227,9 @@ func TestServer(t *testing.T) {
 		Pass:  "password1",
 	}
 
+	initialTimingCounts := timings.Counts()
+	initialConnAccept := connAccept.Get()
+
 	// Run an 'error' command.
 	output, ok := runMysql(t, params, "error")
 	if ok {
@@ -235,6 +238,26 @@ func TestServer(t *testing.T) {
 	if !strings.Contains(output, "ERROR 1047 (08S01)") ||
 		!strings.Contains(output, "forced query handling error for") {
 		t.Errorf("Unexpected output for 'error'")
+	}
+	if connCount.Get() != 0 {
+		t.Errorf("Expected ConnCount=0, got %d", connCount.Get())
+	}
+	if connAccept.Get()-initialConnAccept != 1 {
+		t.Errorf("Expected ConnAccept delta=1, got %d", connAccept.Get()-initialConnAccept)
+	}
+
+	expectedTimingDeltas := map[string]int64{
+		"All":         2,
+		ConnectTiming: 1,
+		QueryTiming:   1,
+	}
+	gotTimingCounts := timings.Counts()
+	for key, got := range gotTimingCounts {
+		expected := expectedTimingDeltas[key]
+		delta := got - initialTimingCounts[key]
+		if delta != expected {
+			t.Errorf("Expected Timing count delta %s = %d, got %d", key, expected, delta)
+		}
 	}
 
 	// Run a 'panic' command, other side should panic, recover and
@@ -246,6 +269,12 @@ func TestServer(t *testing.T) {
 	if !strings.Contains(output, "ERROR 2013 (HY000)") ||
 		!strings.Contains(output, "Lost connection to MySQL server during query") {
 		t.Errorf("Unexpected output for 'panic'")
+	}
+	if connCount.Get() != 0 {
+		t.Errorf("Expected ConnCount=0, got %d", connCount.Get())
+	}
+	if connAccept.Get()-initialConnAccept != 2 {
+		t.Errorf("Expected ConnAccept=2, got %d", connAccept.Get()-initialConnAccept)
 	}
 
 	// Run a 'select rows' command with results.
