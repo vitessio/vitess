@@ -25,7 +25,7 @@ import "strings"
 // 1. Oracle MySQL 5.6, 5.7, 8.0, ...
 // 2. MariaDB 10.X
 type flavor interface {
-	// masterGTIDSet returns the replication Position of a server.
+	// masterGTIDSet returns the current GTIDSet of a server.
 	masterGTIDSet(conn *Conn) (GTIDSet, error)
 }
 

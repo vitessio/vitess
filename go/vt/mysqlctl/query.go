@@ -31,7 +31,7 @@ import (
 
 // getPoolReconnect gets a connection from a pool, tests it, and reconnects if
 // it gets errno 2006.
-func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (dbconnpool.PoolConnection, error) {
+func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (*dbconnpool.PooledDBConnection, error) {
 	conn, err := pool.Get(ctx)
 	if err != nil {
 		return conn, err
@@ -87,7 +87,7 @@ func (mysqld *Mysqld) FetchSuperQuery(ctx context.Context, query string) (*sqlty
 
 // executeFetchContext calls ExecuteFetch() on the given connection,
 // while respecting Context deadline and cancellation.
-func (mysqld *Mysqld) executeFetchContext(ctx context.Context, conn dbconnpool.PoolConnection, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+func (mysqld *Mysqld) executeFetchContext(ctx context.Context, conn *dbconnpool.PooledDBConnection, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	// Fast fail if context is done.
 	select {
 	case <-ctx.Done():

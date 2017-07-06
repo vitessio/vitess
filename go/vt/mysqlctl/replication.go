@@ -33,7 +33,6 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/hook"
 )
 
@@ -213,7 +212,7 @@ func (mysqld *Mysqld) MasterPosition() (mysql.Position, error) {
 	}
 	defer conn.Recycle()
 
-	return conn.(*dbconnpool.PooledDBConnection).MasterPosition()
+	return conn.MasterPosition()
 }
 
 // SetSlavePositionCommands returns the commands to set the

@@ -47,7 +47,7 @@ func (dbc *DBConnection) handleError(err error) {
 	}
 }
 
-// ExecuteFetch is part of PoolConnection interface.
+// ExecuteFetch overwrites mysql.Conn.ExecuteFetch.
 func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	defer dbc.mysqlStats.Record("Exec", time.Now())
 	mqr, err := dbc.Conn.ExecuteFetch(query, maxrows, wantfields)
@@ -58,7 +58,7 @@ func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool
 	return mqr, nil
 }
 
-// ExecuteStreamFetch is part of PoolConnection interface.
+// ExecuteStreamFetch overwrites mysql.Conn.ExecuteStreamFetch.
 func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
 	defer dbc.mysqlStats.Record("ExecStream", time.Now())
 

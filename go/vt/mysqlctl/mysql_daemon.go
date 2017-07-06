@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -85,7 +86,7 @@ type MysqlDaemon interface {
 	ApplySchemaChange(dbName string, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error)
 
 	// GetAppConnection returns a app connection to be able to talk to the database.
-	GetAppConnection(ctx context.Context) (dbconnpool.PoolConnection, error)
+	GetAppConnection(ctx context.Context) (*dbconnpool.PooledDBConnection, error)
 	// GetDbaConnection returns a dba connection.
 	GetDbaConnection() (*dbconnpool.DBConnection, error)
 	// GetAllPrivsConnection returns an allprivs connection (for user with all privileges except SUPER).
@@ -114,8 +115,11 @@ type MysqlDaemon interface {
 // FakeMysqlDaemon implements MysqlDaemon and allows the user to fake
 // everything.
 type FakeMysqlDaemon struct {
-	// The fake SQL DB we may use for some queries
+	// db is the fake SQL DB we may use for some queries.
 	db *fakesqldb.DB
+
+	// appPool is set if db is set.
+	appPool *dbconnpool.ConnectionPool
 
 	// Mycnf will be returned by Cnf()
 	Mycnf *Mycnf
@@ -207,9 +211,6 @@ type FakeMysqlDaemon struct {
 	// If nil we'll return an error.
 	ApplySchemaChangeResult *tabletmanagerdatapb.SchemaChangeResult
 
-	// DbAppConnectionFactory is the factory for making fake db app connections
-	DbAppConnectionFactory func() (dbconnpool.PoolConnection, error)
-
 	// ExpectedExecuteSuperQueryList is what we expect
 	// ExecuteSuperQueryList to be called with. If it doesn't
 	// match, ExecuteSuperQueryList will return an error.
@@ -238,10 +239,15 @@ type FakeMysqlDaemon struct {
 // to be running, based on a fakesqldb.DB.
 // 'db' can be nil if the test doesn't use a database at all.
 func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
-	return &FakeMysqlDaemon{
+	result := &FakeMysqlDaemon{
 		db:      db,
 		Running: true,
 	}
+	if db != nil {
+		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", 5, time.Minute)
+		result.appPool.Open(db.ConnParams(), stats.NewTimings(""))
+	}
+	return result
 }
 
 // Cnf is part of the MysqlDaemon interface
@@ -448,6 +454,9 @@ func (fmd *FakeMysqlDaemon) DisableBinlogPlayback() error {
 
 // Close is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) Close() {
+	if fmd.appPool != nil {
+		fmd.appPool.Close()
+	}
 }
 
 // CheckSuperQueryList returns an error if all the queries we expected
@@ -486,12 +495,9 @@ func (fmd *FakeMysqlDaemon) ApplySchemaChange(dbName string, change *tmutils.Sch
 	return fmd.ApplySchemaChangeResult, nil
 }
 
-// GetAppConnection is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetAppConnection(ctx context.Context) (dbconnpool.PoolConnection, error) {
-	if fmd.DbAppConnectionFactory == nil {
-		return nil, fmt.Errorf("no DbAppConnectionFactory set in this FakeMysqlDaemon")
-	}
-	return fmd.DbAppConnectionFactory()
+// GetAppConnection is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GetAppConnection(ctx context.Context) (*dbconnpool.PooledDBConnection, error) {
+	return fmd.appPool.Get(ctx)
 }
 
 // GetDbaConnection is part of the MysqlDaemon interface.
