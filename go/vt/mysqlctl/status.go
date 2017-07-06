@@ -40,11 +40,6 @@ func (rs *Status) SlaveRunning() bool {
 	return rs.SlaveIORunning && rs.SlaveSQLRunning
 }
 
-// MasterAddr returns the host:port address of the master.
-func (rs *Status) MasterAddr() string {
-	return netutil.JoinHostPort(rs.MasterHost, int32(rs.MasterPort))
-}
-
 // NewStatus creates a Status pointing to masterAddr.
 func NewStatus(masterAddr string) (*Status, error) {
 	host, port, err := netutil.SplitHostPort(masterAddr)

@@ -51,24 +51,6 @@ func TestStatusSlaveSQLNotRunning(t *testing.T) {
 	}
 }
 
-func TestStatusMasterAddr(t *testing.T) {
-	table := map[string]*Status{
-		"master-host:1234": {
-			MasterHost: "master-host",
-			MasterPort: 1234,
-		},
-		"[::1]:4321": {
-			MasterHost: "::1",
-			MasterPort: 4321,
-		},
-	}
-	for want, input := range table {
-		if got := input.MasterAddr(); got != want {
-			t.Errorf("%#v.MasterAddr() = %v, want %v", input, got, want)
-		}
-	}
-}
-
 func TestNewStatus(t *testing.T) {
 	table := map[string]*Status{
 		"master-host:1234": {
