@@ -25,6 +25,7 @@ import io.vitess.mysql.DateTime;
 import io.vitess.proto.Query;
 import io.vitess.proto.Query.Field;
 import io.vitess.proto.Query.Type;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.SQLDataException;
@@ -181,6 +182,28 @@ public class Row {
     ByteString value = values.get(columnIndex - 1);
     lastGetWasNull = (value == null);
     return value;
+  }
+
+  /**
+   * Returns the data at a given index as an InputStream.
+   *
+   * @param columnLabel case-insensitive column label
+   */
+  public InputStream getBinaryInputStream(String columnLabel) throws SQLException {
+    return getBinaryInputStream(findColumn(columnLabel));
+  }
+
+  /**
+   * Returns the data at a given index as an InputStream.
+   *
+   * @param columnIndex 1-based column number (0 is invalid)
+   */
+  public InputStream getBinaryInputStream(int columnIndex) throws SQLException {
+    ByteString rawValue = getRawValue(columnIndex);
+    if (rawValue == null) {
+      return null;
+    }
+    return rawValue.newInput();
   }
 
   /**
