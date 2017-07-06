@@ -160,32 +160,6 @@ func (*mariaDB10) ParseReplicationPosition(s string) (mysql.Position, error) {
 	return mysql.ParsePosition(mariadbFlavorID, s)
 }
 
-// SendBinlogDumpCommand implements MysqlFlavor.SendBinlogDumpCommand().
-func (*mariaDB10) SendBinlogDumpCommand(conn *SlaveConnection, startPos mysql.Position) error {
-	// Tell the server that we understand GTIDs by setting our slave capability
-	// to MARIA_SLAVE_CAPABILITY_GTID = 4 (MariaDB >= 10.0.1).
-	if _, err := conn.ExecuteFetch("SET @mariadb_slave_capability=4", 0, false); err != nil {
-		return fmt.Errorf("failed to set @mariadb_slave_capability=4: %v", err)
-	}
-
-	// Set the slave_connect_state variable before issuing COM_BINLOG_DUMP
-	// to provide the start position in GTID form.
-	query := fmt.Sprintf("SET @slave_connect_state='%s'", startPos)
-	if _, err := conn.ExecuteFetch(query, 0, false); err != nil {
-		return fmt.Errorf("failed to set @slave_connect_state='%s': %v", startPos, err)
-	}
-
-	// Real slaves set this upon connecting if their gtid_strict_mode option was
-	// enabled. We always use gtid_strict_mode because we need it to make our
-	// internal GTID comparisons safe.
-	if _, err := conn.ExecuteFetch("SET @slave_gtid_strict_mode=1", 0, false); err != nil {
-		return fmt.Errorf("failed to set @slave_gtid_strict_mode=1: %v", err)
-	}
-
-	// Since we use @slave_connect_state, the file and position here are ignored.
-	return conn.WriteComBinlogDump(conn.slaveID, "", 0, 0)
-}
-
 // MakeBinlogEvent implements MysqlFlavor.MakeBinlogEvent().
 func (*mariaDB10) MakeBinlogEvent(buf []byte) mysql.BinlogEvent {
 	return mysql.NewMariadbBinlogEvent(buf)

@@ -151,18 +151,6 @@ func (*mysql56) ParseReplicationPosition(s string) (mysql.Position, error) {
 	return mysql.ParsePosition(mysql56FlavorID, s)
 }
 
-// SendBinlogDumpCommand implements MysqlFlavor.SendBinlogDumpCommand().
-func (flavor *mysql56) SendBinlogDumpCommand(conn *SlaveConnection, startPos mysql.Position) error {
-	gtidSet, ok := startPos.GTIDSet.(mysql.Mysql56GTIDSet)
-	if !ok {
-		return fmt.Errorf("startPos.GTIDSet is wrong type - expected Mysql56GTIDSet, got: %#v", startPos.GTIDSet)
-	}
-
-	// Build the command.
-	sidBlock := gtidSet.SIDBlock()
-	return conn.WriteComBinlogDumpGTID(conn.slaveID, "", 4, 0, sidBlock)
-}
-
 // MakeBinlogEvent implements MysqlFlavor.MakeBinlogEvent().
 func (*mysql56) MakeBinlogEvent(buf []byte) mysql.BinlogEvent {
 	return mysql.NewMysql56BinlogEvent(buf)

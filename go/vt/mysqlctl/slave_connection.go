@@ -124,7 +124,7 @@ func (sc *SlaveConnection) StartBinlogDumpFromPosition(ctx context.Context, star
 	}
 
 	log.Infof("sending binlog dump command: startPos=%v, slaveID=%v", startPos, sc.slaveID)
-	if err = flavor.SendBinlogDumpCommand(sc, startPos); err != nil {
+	if err = sc.SendBinlogDumpCommand(sc.slaveID, startPos); err != nil {
 		log.Errorf("couldn't send binlog dump command: %v", err)
 		return nil, err
 	}

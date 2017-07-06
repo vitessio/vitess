@@ -22,8 +22,8 @@ import "fmt"
 type mysqlFlavor struct{}
 
 // masterGTIDSet is part of the Flavor interface.
-func (mysqlFlavor) masterGTIDSet(conn *Conn) (GTIDSet, error) {
-	qr, err := conn.ExecuteFetch("SELECT @@GLOBAL.gtid_executed", 1, false)
+func (mysqlFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
+	qr, err := c.ExecuteFetch("SELECT @@GLOBAL.gtid_executed", 1, false)
 	if err != nil {
 		return nil, err
 	}
@@ -31,4 +31,16 @@ func (mysqlFlavor) masterGTIDSet(conn *Conn) (GTIDSet, error) {
 		return nil, fmt.Errorf("unexpected result format for gtid_executed: %#v", qr)
 	}
 	return parseMysql56GTIDSet(qr.Rows[0][0].String())
+}
+
+// sendBinlogDumpCommand is part of the Flavor interface.
+func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Position) error {
+	gtidSet, ok := startPos.GTIDSet.(Mysql56GTIDSet)
+	if !ok {
+		return fmt.Errorf("startPos.GTIDSet is wrong type - expected Mysql56GTIDSet, got: %#v", startPos.GTIDSet)
+	}
+
+	// Build the command.
+	sidBlock := gtidSet.SIDBlock()
+	return c.WriteComBinlogDumpGTID(slaveID, "", 4, 0, sidBlock)
 }

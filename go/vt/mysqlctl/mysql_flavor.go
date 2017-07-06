@@ -72,11 +72,6 @@ type MysqlFlavor interface {
 	// mysql.Position struct.
 	ParseReplicationPosition(string) (mysql.Position, error)
 
-	// SendBinlogDumpCommand sends the flavor-specific version of
-	// the COM_BINLOG_DUMP command to start dumping raw binlog
-	// events over a slave connection, starting at a given GTID.
-	SendBinlogDumpCommand(conn *SlaveConnection, startPos mysql.Position) error
-
 	// MakeBinlogEvent takes a raw packet from the MySQL binlog
 	// stream connection and returns a BinlogEvent through which
 	// the packet can be examined.

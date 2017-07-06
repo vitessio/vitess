@@ -26,7 +26,11 @@ import "strings"
 // 2. MariaDB 10.X
 type flavor interface {
 	// masterGTIDSet returns the current GTIDSet of a server.
-	masterGTIDSet(conn *Conn) (GTIDSet, error)
+	masterGTIDSet(c *Conn) (GTIDSet, error)
+
+	// sendBinlogDumpCommand sends the packet required to start
+	// dumping binlogs from the specified location.
+	sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Position) error
 }
 
 // mariaDBReplicationHackPrefix is the prefix of a version for MariaDB 10.0
@@ -59,4 +63,27 @@ func (c *Conn) fillFlavor() {
 	}
 
 	c.flavor = mysqlFlavor{}
+}
+
+//
+// The following methods are dependent on the flavor.
+//
+
+// MasterPosition returns the current master replication position.
+// Only valid for client connections (will panic for server connections).
+func (c *Conn) MasterPosition() (Position, error) {
+	gtidSet, err := c.flavor.masterGTIDSet(c)
+	if err != nil {
+		return Position{}, err
+	}
+	return Position{
+		GTIDSet: gtidSet,
+	}, nil
+}
+
+// SendBinlogDumpCommand sends the flavor-specific version of
+// the COM_BINLOG_DUMP command to start dumping raw binlog
+// events over a slave connection, starting at a given GTID.
+func (c *Conn) SendBinlogDumpCommand(slaveID uint32, startPos Position) error {
+	return c.flavor.sendBinlogDumpCommand(c, slaveID, startPos)
 }

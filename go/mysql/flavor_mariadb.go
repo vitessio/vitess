@@ -22,8 +22,8 @@ import "fmt"
 type mariadbFlavor struct{}
 
 // masterGTIDSet is part of the Flavor interface.
-func (mariadbFlavor) masterGTIDSet(conn *Conn) (GTIDSet, error) {
-	qr, err := conn.ExecuteFetch("SELECT @@GLOBAL.gtid_binlog_pos", 1, false)
+func (mariadbFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
+	qr, err := c.ExecuteFetch("SELECT @@GLOBAL.gtid_binlog_pos", 1, false)
 	if err != nil {
 		return nil, err
 	}
@@ -32,4 +32,31 @@ func (mariadbFlavor) masterGTIDSet(conn *Conn) (GTIDSet, error) {
 	}
 
 	return parseMariadbGTIDSet(qr.Rows[0][0].String())
+}
+
+// sendBinlogDumpCommand is part of the Flavor interface.
+func (mariadbFlavor) sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Position) error {
+	// Tell the server that we understand GTIDs by setting our slave
+	// capability to MARIA_SLAVE_CAPABILITY_GTID = 4 (MariaDB >= 10.0.1).
+	if _, err := c.ExecuteFetch("SET @mariadb_slave_capability=4", 0, false); err != nil {
+		return fmt.Errorf("failed to set @mariadb_slave_capability=4: %v", err)
+	}
+
+	// Set the slave_connect_state variable before issuing COM_BINLOG_DUMP
+	// to provide the start position in GTID form.
+	query := fmt.Sprintf("SET @slave_connect_state='%s'", startPos)
+	if _, err := c.ExecuteFetch(query, 0, false); err != nil {
+		return fmt.Errorf("failed to set @slave_connect_state='%s': %v", startPos, err)
+	}
+
+	// Real slaves set this upon connecting if their gtid_strict_mode option
+	// was enabled. We always use gtid_strict_mode because we need it to
+	// make our internal GTID comparisons safe.
+	if _, err := c.ExecuteFetch("SET @slave_gtid_strict_mode=1", 0, false); err != nil {
+		return fmt.Errorf("failed to set @slave_gtid_strict_mode=1: %v", err)
+	}
+
+	// Since we use @slave_connect_state, the file and position here are
+	// ignored.
+	return c.WriteComBinlogDump(slaveID, "", 0, 0)
 }
