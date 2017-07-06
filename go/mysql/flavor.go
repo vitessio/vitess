@@ -16,7 +16,10 @@ limitations under the License.
 
 package mysql
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // flavor is the abstract interface for a flavor.
 // Flavors are auto-detected upon connection using the server version.
@@ -39,6 +42,10 @@ type flavor interface {
 	// setSlavePositionCommands returns the commands to set the
 	// replication position at which the slave will resume.
 	setSlavePositionCommands(pos Position) []string
+
+	// changeMasterArg returns the specific parameter to add to
+	// a change master command.
+	changeMasterArg() string
 }
 
 // mariaDBReplicationHackPrefix is the prefix of a version for MariaDB 10.0
@@ -107,4 +114,35 @@ func (c *Conn) ResetReplicationCommands() []string {
 // when it is later reparented with SetMasterCommands.
 func (c *Conn) SetSlavePositionCommands(pos Position) []string {
 	return c.flavor.setSlavePositionCommands(pos)
+}
+
+// SetMasterCommand returns the command to use the provided master
+// as the new master (without changing any GTID position).
+// It is guaranteed to be called with replication stopped.
+// It should not start or stop replication.
+func (c *Conn) SetMasterCommand(params *ConnParams, masterHost string, masterPort int, masterConnectRetry int) string {
+	args := []string{
+		fmt.Sprintf("MASTER_HOST = '%s'", masterHost),
+		fmt.Sprintf("MASTER_PORT = %d", masterPort),
+		fmt.Sprintf("MASTER_USER = '%s'", params.Uname),
+		fmt.Sprintf("MASTER_PASSWORD = '%s'", params.Pass),
+		fmt.Sprintf("MASTER_CONNECT_RETRY = %d", masterConnectRetry),
+	}
+	if params.SslEnabled() {
+		args = append(args, "MASTER_SSL = 1")
+	}
+	if params.SslCa != "" {
+		args = append(args, fmt.Sprintf("MASTER_SSL_CA = '%s'", params.SslCa))
+	}
+	if params.SslCaPath != "" {
+		args = append(args, fmt.Sprintf("MASTER_SSL_CAPATH = '%s'", params.SslCaPath))
+	}
+	if params.SslCert != "" {
+		args = append(args, fmt.Sprintf("MASTER_SSL_CERT = '%s'", params.SslCert))
+	}
+	if params.SslKey != "" {
+		args = append(args, fmt.Sprintf("MASTER_SSL_KEY = '%s'", params.SslKey))
+	}
+	args = append(args, c.flavor.changeMasterArg())
+	return "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
 }

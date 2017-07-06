@@ -63,7 +63,7 @@ type MysqlDaemon interface {
 	IsReadOnly() (bool, error)
 	SetReadOnly(on bool) error
 	SetSlavePosition(ctx context.Context, pos mysql.Position) error
-	SetMasterCommands(masterHost string, masterPort int) ([]string, error)
+	SetMaster(ctx context.Context, masterHost string, masterPort int, slaveStopBefore bool, slaveStartAfter bool) error
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
 
 	// DemoteMaster waits for all current transactions to finish,
@@ -156,14 +156,9 @@ type FakeMysqlDaemon struct {
 	// If it doesn't match, SetSlavePosition will return an error.
 	SetSlavePositionPos mysql.Position
 
-	// SetMasterCommandsInput is matched against the input
-	// of SetMasterCommands (as "%v:%v"). If it doesn't match,
-	// SetMasterCommands will return an error.
-	SetMasterCommandsInput string
-
-	// SetMasterCommandsResult is what
-	// SetMasterCommands will return
-	SetMasterCommandsResult []string
+	// SetMasterInput is matched against the input of SetMaster
+	// (as "%v:%v"). If it doesn't match, SetMaster will return an error.
+	SetMasterInput string
 
 	// DemoteMasterPosition is returned by DemoteMaster
 	DemoteMasterPosition mysql.Position
@@ -329,13 +324,21 @@ func (fmd *FakeMysqlDaemon) SetSlavePosition(ctx context.Context, pos mysql.Posi
 	})
 }
 
-// SetMasterCommands is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) SetMasterCommands(masterHost string, masterPort int) ([]string, error) {
+// SetMaster is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SetMaster(ctx context.Context, masterHost string, masterPort int, slaveStopBefore bool, slaveStartAfter bool) error {
 	input := fmt.Sprintf("%v:%v", masterHost, masterPort)
-	if fmd.SetMasterCommandsInput != input {
-		return nil, fmt.Errorf("wrong input for SetMasterCommands: expected %v got %v", fmd.SetMasterCommandsInput, input)
+	if fmd.SetMasterInput != input {
+		return fmt.Errorf("wrong input for SetMasterCommands: expected %v got %v", fmd.SetMasterInput, input)
 	}
-	return fmd.SetMasterCommandsResult, nil
+	cmds := []string{}
+	if slaveStopBefore {
+		cmds = append(cmds, SQLStopSlave)
+	}
+	cmds = append(cmds, "FAKE SET MASTER")
+	if slaveStartAfter {
+		cmds = append(cmds, SQLStartSlave)
+	}
+	return fmd.ExecuteSuperQueryList(ctx, cmds)
 }
 
 // WaitForReparentJournal is part of the MysqlDaemon interface

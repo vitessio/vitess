@@ -39,12 +39,6 @@ func (fakeMysqlFlavor) WaitMasterPos(ctx context.Context, mysqld *Mysqld, target
 func (fakeMysqlFlavor) SlaveStatus(mysqld *Mysqld) (Status, error) {
 	return Status{}, nil
 }
-func (fakeMysqlFlavor) SetSlavePositionCommands(pos mysql.Position) ([]string, error) {
-	return nil, nil
-}
-func (fakeMysqlFlavor) SetMasterCommands(params *mysql.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
-	return nil, nil
-}
 func (fakeMysqlFlavor) EnableBinlogPlayback(mysqld *Mysqld) error  { return nil }
 func (fakeMysqlFlavor) DisableBinlogPlayback(mysqld *Mysqld) error { return nil }
 

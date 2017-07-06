@@ -147,7 +147,7 @@ func TestBackupRestore(t *testing.T) {
 		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET SLAVE POSITION",
-		"set master cmd 1",
+		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	destTablet.FakeMysqlDaemon.Mycnf = &mysqlctl.Mycnf{
@@ -163,8 +163,7 @@ func TestBackupRestore(t *testing.T) {
 		"SHOW DATABASES": {},
 	}
 	destTablet.FakeMysqlDaemon.SetSlavePositionPos = sourceTablet.FakeMysqlDaemon.CurrentMasterPosition
-	destTablet.FakeMysqlDaemon.SetMasterCommandsInput = topoproto.MysqlAddr(master.Tablet)
-	destTablet.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
+	destTablet.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
 
 	destTablet.StartActionLoop(t, wr)
 	defer destTablet.StopActionLoop(t)

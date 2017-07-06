@@ -168,15 +168,9 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos mysql.Positi
 	}
 
 	// Set master and start slave.
-	cmds, err = agent.MysqlDaemon.SetMasterCommands(topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)))
-	if err != nil {
-		return fmt.Errorf("MysqlDaemon.SetMasterCommands failed: %v", err)
+	if err := agent.MysqlDaemon.SetMaster(ctx, topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)), false /* slaveStopBefore */, true /* slaveStartAfter */); err != nil {
+		return fmt.Errorf("MysqlDaemon.SetMaster failed: %v", err)
 	}
-	cmds = append(cmds, "START SLAVE")
-	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
-		return fmt.Errorf("failed to start replication: %v", err)
-	}
-
 	return nil
 }
 

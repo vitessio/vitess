@@ -93,3 +93,8 @@ func (mariadbFlavor) setSlavePositionCommands(pos Position) []string {
 		fmt.Sprintf("SET GLOBAL gtid_binlog_state = '%s'", pos),
 	}
 }
+
+// setSlavePositionCommands is part of the Flavor interface.
+func (mariadbFlavor) changeMasterArg() string {
+	return "MASTER_USE_GTID = current_pos"
+}

@@ -40,12 +40,6 @@ type MysqlFlavor interface {
 	// SlaveStatus returns the ReplicationStatus of a slave.
 	SlaveStatus(mysqld *Mysqld) (Status, error)
 
-	// SetMasterCommands returns the commands to use the provided master
-	// as the new master (without changing any GTID position).
-	// It is guaranteed to be called with replication stopped.
-	// It should not start or stop replication.
-	SetMasterCommands(params *mysql.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error)
-
 	// ParseGTID parses a GTID in the canonical format of this
 	// MySQL flavor into a replication.GTID interface value.
 	ParseGTID(string) (mysql.GTID, error)

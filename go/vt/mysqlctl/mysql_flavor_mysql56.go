@@ -99,16 +99,6 @@ func (*mysql56) WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos mys
 	return nil
 }
 
-// SetMasterCommands implements MysqlFlavor.SetMasterCommands().
-func (*mysql56) SetMasterCommands(params *mysql.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
-	// Make CHANGE MASTER TO command.
-	args := changeMasterArgs(params, masterHost, masterPort, masterConnectRetry)
-	args = append(args, "MASTER_AUTO_POSITION = 1")
-	changeMasterTo := "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
-
-	return []string{changeMasterTo}, nil
-}
-
 // ParseGTID implements MysqlFlavor.ParseGTID().
 func (*mysql56) ParseGTID(s string) (mysql.GTID, error) {
 	return mysql.ParseGTID(mysql56FlavorID, s)

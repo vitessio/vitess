@@ -44,32 +44,6 @@ const (
 	SQLStopSlave = "STOP SLAVE"
 )
 
-func changeMasterArgs(params *mysql.ConnParams, masterHost string, masterPort int, masterConnectRetry int) []string {
-	var args []string
-	args = append(args, fmt.Sprintf("MASTER_HOST = '%s'", masterHost))
-	args = append(args, fmt.Sprintf("MASTER_PORT = %d", masterPort))
-	args = append(args, fmt.Sprintf("MASTER_USER = '%s'", params.Uname))
-	args = append(args, fmt.Sprintf("MASTER_PASSWORD = '%s'", params.Pass))
-	args = append(args, fmt.Sprintf("MASTER_CONNECT_RETRY = %d", masterConnectRetry))
-
-	if params.SslEnabled() {
-		args = append(args, "MASTER_SSL = 1")
-	}
-	if params.SslCa != "" {
-		args = append(args, fmt.Sprintf("MASTER_SSL_CA = '%s'", params.SslCa))
-	}
-	if params.SslCaPath != "" {
-		args = append(args, fmt.Sprintf("MASTER_SSL_CAPATH = '%s'", params.SslCaPath))
-	}
-	if params.SslCert != "" {
-		args = append(args, fmt.Sprintf("MASTER_SSL_CERT = '%s'", params.SslCert))
-	}
-	if params.SslKey != "" {
-		args = append(args, fmt.Sprintf("MASTER_SSL_KEY = '%s'", params.SslKey))
-	}
-	return args
-}
-
 // parseSlaveStatus parses the common fields of SHOW SLAVE STATUS.
 func parseSlaveStatus(fields map[string]string) Status {
 	status := Status{
@@ -218,7 +192,7 @@ func (mysqld *Mysqld) MasterPosition() (mysql.Position, error) {
 // SetSlavePosition sets the replication position at which the slave will resume
 // when its replication is started.
 func (mysqld *Mysqld) SetSlavePosition(ctx context.Context, pos mysql.Position) error {
-	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return err
 	}
@@ -228,18 +202,29 @@ func (mysqld *Mysqld) SetSlavePosition(ctx context.Context, pos mysql.Position) 
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 
-// SetMasterCommands returns the commands to run to make the provided
-// host / port the master.
-func (mysqld *Mysqld) SetMasterCommands(masterHost string, masterPort int) ([]string, error) {
-	flavor, err := mysqld.flavor()
-	if err != nil {
-		return nil, fmt.Errorf("SetMasterCommands needs flavor: %v", err)
-	}
+// SetMaster makes the provided host / port the master. It optionally
+// stops replication before, and starts it after.
+func (mysqld *Mysqld) SetMaster(ctx context.Context, masterHost string, masterPort int, slaveStopBefore bool, slaveStartAfter bool) error {
 	params, err := dbconfigs.WithCredentials(&mysqld.dbcfgs.Repl)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return flavor.SetMasterCommands(&params, masterHost, masterPort, int(masterConnectRetry.Seconds()))
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	cmds := []string{}
+	if slaveStopBefore {
+		cmds = append(cmds, SQLStopSlave)
+	}
+	smc := conn.SetMasterCommand(&params, masterHost, masterPort, int(masterConnectRetry.Seconds()))
+	cmds = append(cmds, smc)
+	if slaveStartAfter {
+		cmds = append(cmds, SQLStartSlave)
+	}
+	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 
 // ResetReplication resets all replication for this host.

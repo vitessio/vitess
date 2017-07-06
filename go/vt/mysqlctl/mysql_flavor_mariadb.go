@@ -91,21 +91,6 @@ func (*mariaDB10) WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos m
 	return nil
 }
 
-// SetMasterCommands implements MysqlFlavor.SetMasterCommands().
-func (*mariaDB10) SetMasterCommands(params *mysql.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
-	// Make CHANGE MASTER TO command.
-	args := changeMasterArgs(params, masterHost, masterPort, masterConnectRetry)
-	// MASTER_USE_GTID = current_pos means it will request binlogs starting at
-	// MAX(master position, slave position), which handles the case where a
-	// demoted master is being converted back into a slave. In that case, the
-	// slave position might be behind the master position, since it stopped
-	// updating when the server was promoted to master.
-	args = append(args, "MASTER_USE_GTID = current_pos")
-	changeMasterTo := "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
-
-	return []string{changeMasterTo}, nil
-}
-
 // ParseGTID implements MysqlFlavor.ParseGTID().
 func (*mariaDB10) ParseGTID(s string) (mysql.GTID, error) {
 	return mysql.ParseGTID(mariadbFlavorID, s)

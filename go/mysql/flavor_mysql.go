@@ -54,10 +54,15 @@ func (mysqlFlavor) resetReplicationCommands() []string {
 	}
 }
 
-// setSlavePositionCommands implements MysqlFlavor.
+// setSlavePositionCommands is part of the Flavor interface.
 func (mysqlFlavor) setSlavePositionCommands(pos Position) []string {
 	return []string{
 		"RESET MASTER", // We must clear gtid_executed before setting gtid_purged.
 		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", pos),
 	}
+}
+
+// setSlavePositionCommands is part of the Flavor interface.
+func (mysqlFlavor) changeMasterArg() string {
+	return "MASTER_AUTO_POSITION = 1"
 }
