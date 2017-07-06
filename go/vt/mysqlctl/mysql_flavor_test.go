@@ -28,7 +28,6 @@ import (
 type fakeMysqlFlavor string
 
 func (f fakeMysqlFlavor) VersionMatch(version string) bool           { return version == string(f) }
-func (fakeMysqlFlavor) ResetReplicationCommands() []string           { return nil }
 func (fakeMysqlFlavor) ParseGTID(string) (mysql.GTID, error)         { return nil, nil }
 func (fakeMysqlFlavor) MakeBinlogEvent(buf []byte) mysql.BinlogEvent { return nil }
 func (fakeMysqlFlavor) ParseReplicationPosition(string) (mysql.Position, error) {

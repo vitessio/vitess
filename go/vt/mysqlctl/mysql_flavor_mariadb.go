@@ -91,16 +91,6 @@ func (*mariaDB10) WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos m
 	return nil
 }
 
-// ResetReplicationCommands implements MysqlFlavor.ResetReplicationCommands().
-func (*mariaDB10) ResetReplicationCommands() []string {
-	return []string{
-		"STOP SLAVE",
-		"RESET SLAVE ALL", // "ALL" makes it forget the master host:port.
-		"RESET MASTER",
-		"SET GLOBAL gtid_slave_pos = ''",
-	}
-}
-
 // SetSlavePositionCommands implements MysqlFlavor.
 func (*mariaDB10) SetSlavePositionCommands(pos mysql.Position) ([]string, error) {
 	return []string{

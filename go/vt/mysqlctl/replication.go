@@ -240,14 +240,16 @@ func (mysqld *Mysqld) SetMasterCommands(masterHost string, masterPort int) ([]st
 	return flavor.SetMasterCommands(&params, masterHost, masterPort, int(masterConnectRetry.Seconds()))
 }
 
-// ResetReplicationCommands returns the commands to run to reset all
-// replication for this host.
-func (mysqld *Mysqld) ResetReplicationCommands() ([]string, error) {
-	flavor, err := mysqld.flavor()
-	if err != nil {
-		return nil, fmt.Errorf("ResetReplicationCommands needs flavor: %v", err)
+// ResetReplication resets all replication for this host.
+func (mysqld *Mysqld) ResetReplication(ctx context.Context) error {
+	conn, connErr := getPoolReconnect(ctx, mysqld.dbaPool)
+	if connErr != nil {
+		return connErr
 	}
-	return flavor.ResetReplicationCommands(), nil
+	defer conn.Recycle()
+
+	cmds := conn.ResetReplicationCommands()
+	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 
 // +------+---------+---------------------+------+-------------+------+----------------------------------------------------------------+------------------+

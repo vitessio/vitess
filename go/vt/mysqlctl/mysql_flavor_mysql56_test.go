@@ -36,17 +36,6 @@ func TestMysql56VersionMatch(t *testing.T) {
 	}
 }
 
-func TestMysql56ResetReplicationCommands(t *testing.T) {
-	want := []string{
-		"STOP SLAVE",
-		"RESET SLAVE ALL",
-		"RESET MASTER",
-	}
-	if got := (&mysql56{}).ResetReplicationCommands(); !reflect.DeepEqual(got, want) {
-		t.Errorf("(&mysql56{}).ResetReplicationCommands() = %#v, want %#v", got, want)
-	}
-}
-
 func TestMysql56SetSlavePositionCommands(t *testing.T) {
 	pos, _ := (&mysql56{}).ParseReplicationPosition("00010203-0405-0607-0809-0a0b0c0d0e0f:1-2")
 	want := []string{

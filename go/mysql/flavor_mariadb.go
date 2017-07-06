@@ -60,3 +60,13 @@ func (mariadbFlavor) sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Pos
 	// ignored.
 	return c.WriteComBinlogDump(slaveID, "", 0, 0)
 }
+
+// resetReplicationCommands is part of the Flavor interface.
+func (mariadbFlavor) resetReplicationCommands() []string {
+	return []string{
+		"STOP SLAVE",
+		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
+		"RESET MASTER",
+		"SET GLOBAL gtid_slave_pos = ''",
+	}
+}

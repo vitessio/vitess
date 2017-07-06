@@ -31,6 +31,10 @@ type flavor interface {
 	// sendBinlogDumpCommand sends the packet required to start
 	// dumping binlogs from the specified location.
 	sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Position) error
+
+	// resetReplicationCommands returns the commands to completely reset
+	// replication on the host.
+	resetReplicationCommands() []string
 }
 
 // mariaDBReplicationHackPrefix is the prefix of a version for MariaDB 10.0
@@ -86,4 +90,10 @@ func (c *Conn) MasterPosition() (Position, error) {
 // events over a slave connection, starting at a given GTID.
 func (c *Conn) SendBinlogDumpCommand(slaveID uint32, startPos Position) error {
 	return c.flavor.sendBinlogDumpCommand(c, slaveID, startPos)
+}
+
+// ResetReplicationCommands returns the commands to completely reset
+// replication on the host.
+func (c *Conn) ResetReplicationCommands() []string {
+	return c.flavor.resetReplicationCommands()
 }

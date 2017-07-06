@@ -44,3 +44,12 @@ func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Posit
 	sidBlock := gtidSet.SIDBlock()
 	return c.WriteComBinlogDumpGTID(slaveID, "", 4, 0, sidBlock)
 }
+
+// resetReplicationCommands is part of the Flavor interface.
+func (mysqlFlavor) resetReplicationCommands() []string {
+	return []string{
+		"STOP SLAVE",
+		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
+		"RESET MASTER",    // This will also clear gtid_executed and gtid_purged.
+	}
+}

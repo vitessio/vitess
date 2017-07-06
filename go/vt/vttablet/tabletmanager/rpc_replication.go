@@ -155,12 +155,8 @@ func (agent *ActionAgent) ResetReplication(ctx context.Context) error {
 	}
 	defer agent.unlock()
 
-	cmds, err := agent.MysqlDaemon.ResetReplicationCommands()
-	if err != nil {
-		return err
-	}
 	agent.setSlaveStopped(true)
-	return agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
+	return agent.MysqlDaemon.ResetReplication(ctx)
 }
 
 // InitMaster enables writes and returns the replication position.

@@ -58,7 +58,7 @@ type MysqlDaemon interface {
 	SemiSyncSlaveStatus() (bool, error)
 
 	// reparenting related methods
-	ResetReplicationCommands() ([]string, error)
+	ResetReplication(ctx context.Context) error
 	MasterPosition() (mysql.Position, error)
 	IsReadOnly() (bool, error)
 	SetReadOnly(on bool) error
@@ -132,12 +132,6 @@ type FakeMysqlDaemon struct {
 	// (it is not used at all when calling SlaveStatus, it is the
 	// test owner responsability to have these two match)
 	Replicating bool
-
-	// ResetReplicationResult is returned by ResetReplication
-	ResetReplicationResult []string
-
-	// ResetReplicationError is returned by ResetReplication
-	ResetReplicationError error
 
 	// CurrentMasterPosition is returned by MasterPosition
 	// and SlaveStatus
@@ -307,9 +301,11 @@ func (fmd *FakeMysqlDaemon) SlaveStatus() (Status, error) {
 	}, nil
 }
 
-// ResetReplicationCommands is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) ResetReplicationCommands() ([]string, error) {
-	return fmd.ResetReplicationResult, fmd.ResetReplicationError
+// ResetReplication is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) ResetReplication(ctx context.Context) error {
+	return fmd.ExecuteSuperQueryList(ctx, []string{
+		"FAKE RESET ALL REPLICATION",
+	})
 }
 
 // MasterPosition is part of the MysqlDaemon interface

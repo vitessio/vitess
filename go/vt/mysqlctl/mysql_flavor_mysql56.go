@@ -99,15 +99,6 @@ func (*mysql56) WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos mys
 	return nil
 }
 
-// ResetReplicationCommands implements MysqlFlavor.ResetReplicationCommands().
-func (*mysql56) ResetReplicationCommands() []string {
-	return []string{
-		"STOP SLAVE",
-		"RESET SLAVE ALL", // "ALL" makes it forget the master host:port.
-		"RESET MASTER",    // This will also clear gtid_executed and gtid_purged.
-	}
-}
-
 // SetSlavePositionCommands implements MysqlFlavor.
 func (*mysql56) SetSlavePositionCommands(pos mysql.Position) ([]string, error) {
 	return []string{

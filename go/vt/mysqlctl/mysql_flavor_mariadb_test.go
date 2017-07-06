@@ -141,18 +141,6 @@ func TestMariadbParseReplicationPosition(t *testing.T) {
 	}
 }
 
-func TestMariadbResetReplicationCommands(t *testing.T) {
-	want := []string{
-		"STOP SLAVE",
-		"RESET SLAVE ALL",
-		"RESET MASTER",
-		"SET GLOBAL gtid_slave_pos = ''",
-	}
-	if got := (&mariaDB10{}).ResetReplicationCommands(); !reflect.DeepEqual(got, want) {
-		t.Errorf("(&mariaDB10{}).ResetReplicationCommands() = %#v, want %#v", got, want)
-	}
-}
-
 func TestMariadbVersionMatch(t *testing.T) {
 	table := map[string]bool{
 		"10.0.13-MariaDB-1~precise-log": true,

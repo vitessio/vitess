@@ -56,11 +56,16 @@ func (mysqld *Mysqld) ExecuteSuperQuery(ctx context.Context, query string) error
 
 // ExecuteSuperQueryList alows the user to execute queries as a super user.
 func (mysqld *Mysqld) ExecuteSuperQueryList(ctx context.Context, queryList []string) error {
-	conn, connErr := getPoolReconnect(ctx, mysqld.dbaPool)
-	if connErr != nil {
-		return connErr
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
 	}
 	defer conn.Recycle()
+
+	return mysqld.executeSuperQueryListConn(ctx, conn, queryList)
+}
+
+func (mysqld *Mysqld) executeSuperQueryListConn(ctx context.Context, conn *dbconnpool.PooledDBConnection, queryList []string) error {
 	for _, query := range queryList {
 		log.Infof("exec %v", redactMasterPassword(query))
 		if _, err := mysqld.executeFetchContext(ctx, conn, query, 10000, false); err != nil {
