@@ -255,9 +255,9 @@ func TestServer(t *testing.T) {
 	}
 
 	expectedTimingDeltas := map[string]int64{
-		"All":         2,
-		ConnectTiming: 1,
-		QueryTiming:   1,
+		"All":            2,
+		connectTimingKey: 1,
+		queryTimingKey:   1,
 	}
 	gotTimingCounts := timings.Counts()
 	for key, got := range gotTimingCounts {

@@ -35,9 +35,9 @@ const (
 	// Can be changed.
 	DefaultServerVersion = "5.5.10-Vitess"
 
-	// Timing metric keys
-	ConnectTiming = "Connect"
-	QueryTiming   = "Query"
+	// timing metric keys
+	connectTimingKey = "Connect"
+	queryTimingKey   = "Query"
 )
 
 var (
@@ -47,7 +47,8 @@ var (
 	connAccept = stats.NewInt("MysqlServerConnAccepted")
 	connSlow   = stats.NewInt("MysqlServerConnSlow")
 
-	// If non-nil, warn if it takes more than the given amount of time to connect
+	// SlowConnectWarnThreshold, if non-nil, specifies an amount of time
+	// beyond which a warning is logged to identify the slow connection
 	SlowConnectWarnThreshold *time.Duration
 )
 
@@ -283,7 +284,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	}
 
 	// Record how long we took to establish the connection
-	timings.Record(ConnectTiming, acceptTime)
+	timings.Record(connectTimingKey, acceptTime)
 
 	// Log a warning if it took too long to connect
 	connectTime := time.Since(acceptTime)
@@ -374,7 +375,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 				}
 			}
 
-			timings.Record(QueryTiming, queryStart)
+			timings.Record(queryTimingKey, queryStart)
 
 		case ComPing:
 			// No payload to that one, just return OKPacket.
