@@ -16,20 +16,22 @@
 
 package io.vitess.jdbc;
 
-import io.vitess.proto.Query;
-import io.vitess.proto.Topodata;
-import io.vitess.util.Constants;
 import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Properties;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.mockito.Mockito;
 
+import io.vitess.proto.Query;
+import io.vitess.proto.Topodata;
+import io.vitess.util.Constants;
+
 public class ConnectionPropertiesTest {
 
-    private static final int NUM_PROPS = 24;
+    private static final int NUM_PROPS = 25;
 
     @Test
     public void testReflection() throws Exception {

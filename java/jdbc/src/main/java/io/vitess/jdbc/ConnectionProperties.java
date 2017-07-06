@@ -16,10 +16,6 @@
 
 package io.vitess.jdbc;
 
-import io.vitess.proto.Query;
-import io.vitess.proto.Topodata;
-import io.vitess.util.Constants;
-import io.vitess.util.StringUtils;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Field;
 import java.sql.DriverPropertyInfo;
@@ -28,6 +24,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+
+import io.vitess.proto.Query;
+import io.vitess.proto.Topodata;
+import io.vitess.util.Constants;
+import io.vitess.util.StringUtils;
 
 public class ConnectionProperties {
 
@@ -172,6 +173,11 @@ public class ConnectionProperties {
                 + "the first valid `X509Certificate` will be used)",
         null,
         null);
+
+    private BooleanConnectionProperty treatUtilDateAsTimestamp = new BooleanConnectionProperty(
+        "treatUtilDateAsTimestamp",
+        "Should the driver treat java.util.Date as a TIMESTAMP for the purposes of PreparedStatement.setObject()",
+        true);
 
     // Caching of some hot properties to avoid casting over and over
     private Topodata.TabletType tabletTypeCache;
@@ -416,6 +422,14 @@ public class ConnectionProperties {
 
     public String getTrustAlias() {
         return trustAlias.getValueAsString();
+    }
+
+    public boolean getTreatUtilDateAsTimestamp() {
+        return treatUtilDateAsTimestamp.getValueAsBoolean();
+    }
+
+    public void setTreatUtilDateAsTimestamp(boolean treatUtilDateAsTimestamp) {
+        this.treatUtilDateAsTimestamp.setValue(treatUtilDateAsTimestamp);
     }
 
     abstract static class ConnectionProperty {
