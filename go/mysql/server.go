@@ -47,7 +47,7 @@ var (
 	connAccept = stats.NewInt("MysqlServerConnAccepted")
 	connSlow   = stats.NewInt("MysqlServerConnSlow")
 
-	// SlowConnectWarnThreshold, if non-nil, specifies an amount of time
+	// SlowConnectWarnThreshold if non-nil, specifies an amount of time
 	// beyond which a warning is logged to identify the slow connection
 	SlowConnectWarnThreshold *time.Duration
 )
