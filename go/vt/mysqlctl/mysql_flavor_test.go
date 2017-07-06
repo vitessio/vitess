@@ -36,9 +36,6 @@ func (fakeMysqlFlavor) ParseReplicationPosition(string) (mysql.Position, error) 
 func (fakeMysqlFlavor) WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos mysql.Position) error {
 	return nil
 }
-func (fakeMysqlFlavor) SlaveStatus(mysqld *Mysqld) (Status, error) {
-	return Status{}, nil
-}
 func (fakeMysqlFlavor) EnableBinlogPlayback(mysqld *Mysqld) error  { return nil }
 func (fakeMysqlFlavor) DisableBinlogPlayback(mysqld *Mysqld) error { return nil }
 

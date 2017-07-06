@@ -52,7 +52,7 @@ type MysqlDaemon interface {
 	GetMysqlPort() (int32, error)
 
 	// replication related methods
-	SlaveStatus() (Status, error)
+	SlaveStatus() (mysql.SlaveStatus, error)
 	SetSemiSyncEnabled(master, slave bool) error
 	SemiSyncEnabled() (master, slave bool)
 	SemiSyncSlaveStatus() (bool, error)
@@ -277,11 +277,11 @@ func (fmd *FakeMysqlDaemon) GetMysqlPort() (int32, error) {
 }
 
 // SlaveStatus is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) SlaveStatus() (Status, error) {
+func (fmd *FakeMysqlDaemon) SlaveStatus() (mysql.SlaveStatus, error) {
 	if fmd.SlaveStatusError != nil {
-		return Status{}, fmd.SlaveStatusError
+		return mysql.SlaveStatus{}, fmd.SlaveStatusError
 	}
-	return Status{
+	return mysql.SlaveStatus{
 		Position:            fmd.CurrentMasterPosition,
 		SecondsBehindMaster: fmd.SecondsBehindMaster,
 		SlaveIORunning:      fmd.Replicating,

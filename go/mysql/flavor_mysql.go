@@ -66,3 +66,28 @@ func (mysqlFlavor) setSlavePositionCommands(pos Position) []string {
 func (mysqlFlavor) changeMasterArg() string {
 	return "MASTER_AUTO_POSITION = 1"
 }
+
+// status is part of the Flavor interface.
+func (mysqlFlavor) status(c *Conn) (SlaveStatus, error) {
+	qr, err := c.ExecuteFetch("SHOW SLAVE STATUS", 100, true /* wantfields */)
+	if err != nil {
+		return SlaveStatus{}, err
+	}
+	if len(qr.Fields) == 0 {
+		// The query returned no data, meaning the server
+		// is not configured as a slave.
+		return SlaveStatus{}, ErrNotSlave
+	}
+
+	resultMap, err := resultToMap(qr)
+	if err != nil {
+		return SlaveStatus{}, err
+	}
+
+	status := parseSlaveStatus(resultMap)
+	status.Position.GTIDSet, err = parseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
+	if err != nil {
+		return SlaveStatus{}, fmt.Errorf("SlaveStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v): %v", resultMap["Executed_Gtid_Set"], err)
+	}
+	return status, nil
+}

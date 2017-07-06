@@ -40,26 +40,6 @@ func (*mysql56) VersionMatch(version string) bool {
 		strings.HasPrefix(version, "8.0")
 }
 
-// SlaveStatus implements MysqlFlavor.SlaveStatus().
-func (flavor *mysql56) SlaveStatus(mysqld *Mysqld) (Status, error) {
-	fields, err := mysqld.fetchSuperQueryMap(context.TODO(), "SHOW SLAVE STATUS")
-	if err != nil {
-		return Status{}, err
-	}
-	if len(fields) == 0 {
-		// The query returned no data, meaning the server
-		// is not configured as a slave.
-		return Status{}, ErrNotSlave
-	}
-	status := parseSlaveStatus(fields)
-
-	status.Position, err = flavor.ParseReplicationPosition(fields["Executed_Gtid_Set"])
-	if err != nil {
-		return Status{}, fmt.Errorf("SlaveStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v): %v", fields["Executed_Gtid_Set"], err)
-	}
-	return status, nil
-}
-
 // WaitMasterPos implements MysqlFlavor.WaitMasterPos().
 func (*mysql56) WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos mysql.Position) error {
 	var query string

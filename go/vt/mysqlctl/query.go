@@ -178,32 +178,6 @@ func (mysqld *Mysqld) killConnection(connID int64) error {
 	return err
 }
 
-// fetchSuperQueryMap returns a map from column names to cell data for a query
-// that should return either 0 or 1 row. If the query returns zero rows, this
-// will return a nil map and nil error.
-func (mysqld *Mysqld) fetchSuperQueryMap(ctx context.Context, query string) (map[string]string, error) {
-	qr, err := mysqld.FetchSuperQuery(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	if len(qr.Rows) == 0 {
-		// The query succeeded, but there is no data.
-		return nil, nil
-	}
-	if len(qr.Rows) > 1 {
-		return nil, fmt.Errorf("query %#v returned %d rows, expected 1", query, len(qr.Rows))
-	}
-	if len(qr.Fields) != len(qr.Rows[0]) {
-		return nil, fmt.Errorf("query %#v returned %d column names, expected %d", query, len(qr.Fields), len(qr.Rows[0]))
-	}
-
-	rowMap := make(map[string]string, len(qr.Rows[0]))
-	for i, value := range qr.Rows[0] {
-		rowMap[qr.Fields[i].Name] = value.String()
-	}
-	return rowMap, nil
-}
-
 // fetchVariables returns a map from MySQL variable names to variable value
 // for variables that match the given pattern.
 func (mysqld *Mysqld) fetchVariables(ctx context.Context, pattern string) (map[string]string, error) {

@@ -44,7 +44,7 @@ func (agent *ActionAgent) SlaveStatus(ctx context.Context) (*replicationdatapb.S
 	if err != nil {
 		return nil, err
 	}
-	return mysqlctl.StatusToProto(status), nil
+	return mysql.SlaveStatusToProto(status), nil
 }
 
 // MasterPosition returns the master position
@@ -503,7 +503,7 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*rep
 	}
 	if !rs.SlaveIORunning && !rs.SlaveSQLRunning {
 		// no replication is running, just return what we got
-		return mysqlctl.StatusToProto(rs), nil
+		return mysql.SlaveStatusToProto(rs), nil
 	}
 	if err := agent.stopSlaveLocked(ctx); err != nil {
 		return nil, fmt.Errorf("stop slave failed: %v", err)
@@ -513,7 +513,7 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*rep
 	if err != nil {
 		return nil, fmt.Errorf("after position failed: %v", err)
 	}
-	return mysqlctl.StatusToProto(rs), nil
+	return mysql.SlaveStatusToProto(rs), nil
 }
 
 // PromoteSlave makes the current tablet the master

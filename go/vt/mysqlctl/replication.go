@@ -44,22 +44,6 @@ const (
 	SQLStopSlave = "STOP SLAVE"
 )
 
-// parseSlaveStatus parses the common fields of SHOW SLAVE STATUS.
-func parseSlaveStatus(fields map[string]string) Status {
-	status := Status{
-		MasterHost:      fields["Master_Host"],
-		SlaveIORunning:  fields["Slave_IO_Running"] == "Yes",
-		SlaveSQLRunning: fields["Slave_SQL_Running"] == "Yes",
-	}
-	parseInt, _ := strconv.ParseInt(fields["Master_Port"], 10, 0)
-	status.MasterPort = int(parseInt)
-	parseInt, _ = strconv.ParseInt(fields["Connect_Retry"], 10, 0)
-	status.MasterConnectRetry = int(parseInt)
-	parseUint, _ := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
-	status.SecondsBehindMaster = uint(parseUint)
-	return status
-}
-
 // WaitForSlaveStart waits until the deadline for replication to start.
 // This validates the current master is correct and can be connected to.
 func WaitForSlaveStart(mysqld MysqlDaemon, slaveStartDeadline int) error {
@@ -154,8 +138,6 @@ func (mysqld *Mysqld) SetReadOnly(on bool) error {
 }
 
 var (
-	// ErrNotSlave means there is no slave status
-	ErrNotSlave = errors.New("no slave status")
 	// ErrNotMaster means there is no master status
 	ErrNotMaster = errors.New("no master status")
 )
@@ -170,12 +152,14 @@ func (mysqld *Mysqld) WaitMasterPos(ctx context.Context, targetPos mysql.Positio
 }
 
 // SlaveStatus returns the slave replication statuses
-func (mysqld *Mysqld) SlaveStatus() (Status, error) {
-	flavor, err := mysqld.flavor()
+func (mysqld *Mysqld) SlaveStatus() (mysql.SlaveStatus, error) {
+	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
 	if err != nil {
-		return Status{}, fmt.Errorf("SlaveStatus needs flavor: %v", err)
+		return mysql.SlaveStatus{}, err
 	}
-	return flavor.SlaveStatus(mysqld)
+	defer conn.Recycle()
+
+	return conn.ShowSlaveStatus()
 }
 
 // MasterPosition returns the master replication position.

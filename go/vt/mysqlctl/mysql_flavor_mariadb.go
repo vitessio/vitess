@@ -38,26 +38,6 @@ func (*mariaDB10) VersionMatch(version string) bool {
 	return strings.HasPrefix(version, "10.0") && strings.Contains(strings.ToLower(version), "mariadb")
 }
 
-// SlaveStatus implements MysqlFlavor.SlaveStatus().
-func (flavor *mariaDB10) SlaveStatus(mysqld *Mysqld) (Status, error) {
-	fields, err := mysqld.fetchSuperQueryMap(context.TODO(), "SHOW ALL SLAVES STATUS")
-	if err != nil {
-		return Status{}, err
-	}
-	if len(fields) == 0 {
-		// The query returned no data, meaning the server
-		// is not configured as a slave.
-		return Status{}, ErrNotSlave
-	}
-	status := parseSlaveStatus(fields)
-
-	status.Position, err = flavor.ParseReplicationPosition(fields["Gtid_Slave_Pos"])
-	if err != nil {
-		return Status{}, fmt.Errorf("SlaveStatus can't parse MariaDB GTID (Gtid_Slave_Pos: %#v): %v", fields["Gtid_Slave_Pos"], err)
-	}
-	return status, nil
-}
-
 // WaitMasterPos implements MysqlFlavor.WaitMasterPos().
 //
 // Note: Unlike MASTER_POS_WAIT(), MASTER_GTID_WAIT() will continue waiting even

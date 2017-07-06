@@ -16,7 +16,9 @@ limitations under the License.
 
 package mysql
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // mariadbFlavor implements the Flavor interface for MariaDB.
 type mariadbFlavor struct{}
@@ -97,4 +99,29 @@ func (mariadbFlavor) setSlavePositionCommands(pos Position) []string {
 // setSlavePositionCommands is part of the Flavor interface.
 func (mariadbFlavor) changeMasterArg() string {
 	return "MASTER_USE_GTID = current_pos"
+}
+
+// status is part of the Flavor interface.
+func (mariadbFlavor) status(c *Conn) (SlaveStatus, error) {
+	qr, err := c.ExecuteFetch("SHOW ALL SLAVES STATUS", 100, true /* wantfields */)
+	if err != nil {
+		return SlaveStatus{}, err
+	}
+	if len(qr.Fields) == 0 {
+		// The query returned no data, meaning the server
+		// is not configured as a slave.
+		return SlaveStatus{}, ErrNotSlave
+	}
+
+	resultMap, err := resultToMap(qr)
+	if err != nil {
+		return SlaveStatus{}, err
+	}
+
+	status := parseSlaveStatus(resultMap)
+	status.Position.GTIDSet, err = parseMariadbGTIDSet(resultMap["Gtid_Slave_Pos"])
+	if err != nil {
+		return SlaveStatus{}, fmt.Errorf("SlaveStatus can't parse MariaDB GTID (Gtid_Slave_Pos: %#v): %v", resultMap["Gtid_Slave_Pos"], err)
+	}
+	return status, nil
 }

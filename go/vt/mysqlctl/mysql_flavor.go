@@ -37,9 +37,6 @@ type MysqlFlavor interface {
 	// knows how to talk to.
 	VersionMatch(version string) bool
 
-	// SlaveStatus returns the ReplicationStatus of a slave.
-	SlaveStatus(mysqld *Mysqld) (Status, error)
-
 	// ParseGTID parses a GTID in the canonical format of this
 	// MySQL flavor into a replication.GTID interface value.
 	ParseGTID(string) (mysql.GTID, error)

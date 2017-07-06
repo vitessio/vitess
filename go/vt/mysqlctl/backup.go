@@ -272,7 +272,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 	switch err {
 	case nil:
 		slaveStartRequired = slaveStatus.SlaveRunning()
-	case ErrNotSlave:
+	case mysql.ErrNotSlave:
 		// keep going if we're the master, might be a degenerate case
 		sourceIsMaster = true
 	default:
@@ -301,7 +301,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 		if err = StopSlave(mysqld, hookExtraEnv); err != nil {
 			return false, fmt.Errorf("can't stop slave: %v", err)
 		}
-		var slaveStatus Status
+		var slaveStatus mysql.SlaveStatus
 		slaveStatus, err = mysqld.SlaveStatus()
 		if err != nil {
 			return false, fmt.Errorf("can't get slave status: %v", err)

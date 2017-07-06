@@ -17,8 +17,18 @@ limitations under the License.
 package mysql
 
 import (
+	"errors"
 	"fmt"
+	"strconv"
 	"strings"
+
+	"github.com/youtube/vitess/go/sqltypes"
+)
+
+var (
+	// ErrNotSlave means there is no slave status.
+	// Returned by ShowSlaveStatus().
+	ErrNotSlave = errors.New("no slave status")
 )
 
 // flavor is the abstract interface for a flavor.
@@ -46,6 +56,10 @@ type flavor interface {
 	// changeMasterArg returns the specific parameter to add to
 	// a change master command.
 	changeMasterArg() string
+
+	// status returns the result of 'SHOW SLAVE STATUS',
+	// with parsed replication position.
+	status(c *Conn) (SlaveStatus, error)
 }
 
 // mariaDBReplicationHackPrefix is the prefix of a version for MariaDB 10.0
@@ -145,4 +159,46 @@ func (c *Conn) SetMasterCommand(params *ConnParams, masterHost string, masterPor
 	}
 	args = append(args, c.flavor.changeMasterArg())
 	return "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
+}
+
+// resultToMap is a helper function used by ShowSlaveStatus.
+func resultToMap(qr *sqltypes.Result) (map[string]string, error) {
+	if len(qr.Rows) == 0 {
+		// The query succeeded, but there is no data.
+		return nil, nil
+	}
+	if len(qr.Rows) > 1 {
+		return nil, fmt.Errorf("query returned %d rows, expected 1", len(qr.Rows))
+	}
+	if len(qr.Fields) != len(qr.Rows[0]) {
+		return nil, fmt.Errorf("query returned %d column names, expected %d", len(qr.Fields), len(qr.Rows[0]))
+	}
+
+	result := make(map[string]string, len(qr.Fields))
+	for i, field := range qr.Fields {
+		result[field.Name] = qr.Rows[0][i].String()
+	}
+	return result, nil
+}
+
+// parseSlaveStatus parses the common fields of SHOW SLAVE STATUS.
+func parseSlaveStatus(fields map[string]string) SlaveStatus {
+	status := SlaveStatus{
+		MasterHost:      fields["Master_Host"],
+		SlaveIORunning:  fields["Slave_IO_Running"] == "Yes",
+		SlaveSQLRunning: fields["Slave_SQL_Running"] == "Yes",
+	}
+	parseInt, _ := strconv.ParseInt(fields["Master_Port"], 10, 0)
+	status.MasterPort = int(parseInt)
+	parseInt, _ = strconv.ParseInt(fields["Connect_Retry"], 10, 0)
+	status.MasterConnectRetry = int(parseInt)
+	parseUint, _ := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
+	status.SecondsBehindMaster = uint(parseUint)
+	return status
+}
+
+// ShowSlaveStatus executes the right SHOW SLAVE STATUS command,
+// and returns a parse Position with other fields.
+func (c *Conn) ShowSlaveStatus() (SlaveStatus, error) {
+	return c.flavor.status(c)
 }
