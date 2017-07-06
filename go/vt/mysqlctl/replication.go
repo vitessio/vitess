@@ -215,15 +215,17 @@ func (mysqld *Mysqld) MasterPosition() (mysql.Position, error) {
 	return conn.MasterPosition()
 }
 
-// SetSlavePositionCommands returns the commands to set the
-// replication position at which the slave will resume
-// when it is later reparented with SetMasterCommands.
-func (mysqld *Mysqld) SetSlavePositionCommands(pos mysql.Position) ([]string, error) {
-	flavor, err := mysqld.flavor()
+// SetSlavePosition sets the replication position at which the slave will resume
+// when its replication is started.
+func (mysqld *Mysqld) SetSlavePosition(ctx context.Context, pos mysql.Position) error {
+	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
 	if err != nil {
-		return nil, fmt.Errorf("SetSlavePositionCommands needs flavor: %v", err)
+		return err
 	}
-	return flavor.SetSlavePositionCommands(pos)
+	defer conn.Recycle()
+
+	cmds := conn.SetSlavePositionCommands(pos)
+	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 
 // SetMasterCommands returns the commands to run to make the provided

@@ -35,6 +35,10 @@ type flavor interface {
 	// resetReplicationCommands returns the commands to completely reset
 	// replication on the host.
 	resetReplicationCommands() []string
+
+	// setSlavePositionCommands returns the commands to set the
+	// replication position at which the slave will resume.
+	setSlavePositionCommands(pos Position) []string
 }
 
 // mariaDBReplicationHackPrefix is the prefix of a version for MariaDB 10.0
@@ -71,10 +75,10 @@ func (c *Conn) fillFlavor() {
 
 //
 // The following methods are dependent on the flavor.
+// Only valid for client connections (will panic for server connections).
 //
 
 // MasterPosition returns the current master replication position.
-// Only valid for client connections (will panic for server connections).
 func (c *Conn) MasterPosition() (Position, error) {
 	gtidSet, err := c.flavor.masterGTIDSet(c)
 	if err != nil {
@@ -96,4 +100,11 @@ func (c *Conn) SendBinlogDumpCommand(slaveID uint32, startPos Position) error {
 // replication on the host.
 func (c *Conn) ResetReplicationCommands() []string {
 	return c.flavor.resetReplicationCommands()
+}
+
+// SetSlavePositionCommands returns the commands to set the
+// replication position at which the slave will resume
+// when it is later reparented with SetMasterCommands.
+func (c *Conn) SetSlavePositionCommands(pos Position) []string {
+	return c.flavor.setSlavePositionCommands(pos)
 }

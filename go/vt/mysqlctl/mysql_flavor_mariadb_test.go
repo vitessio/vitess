@@ -31,24 +31,6 @@ func TestMariadbMakeBinlogEvent(t *testing.T) {
 	}
 }
 
-func TestMariadbSetSlavePositionCommands(t *testing.T) {
-	pos := mysql.Position{GTIDSet: mysql.MariadbGTID{Domain: 1, Server: 41983, Sequence: 12345}}
-	want := []string{
-		"RESET MASTER",
-		"SET GLOBAL gtid_slave_pos = '1-41983-12345'",
-		"SET GLOBAL gtid_binlog_state = '1-41983-12345'",
-	}
-
-	got, err := (&mariaDB10{}).SetSlavePositionCommands(pos)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("(&mariaDB10{}).SetSlavePositionCommands(%#v) = %#v, want %#v", pos, got, want)
-	}
-}
-
 func TestMariadbSetMasterCommands(t *testing.T) {
 	params := &mysql.ConnParams{
 		Uname: "username",

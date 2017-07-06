@@ -99,14 +99,6 @@ func (*mysql56) WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos mys
 	return nil
 }
 
-// SetSlavePositionCommands implements MysqlFlavor.
-func (*mysql56) SetSlavePositionCommands(pos mysql.Position) ([]string, error) {
-	return []string{
-		"RESET MASTER", // We must clear gtid_executed before setting gtid_purged.
-		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", pos),
-	}, nil
-}
-
 // SetMasterCommands implements MysqlFlavor.SetMasterCommands().
 func (*mysql56) SetMasterCommands(params *mysql.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
 	// Make CHANGE MASTER TO command.

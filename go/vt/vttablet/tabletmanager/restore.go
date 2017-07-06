@@ -131,11 +131,7 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos mysql.Positi
 	}
 
 	// Set the position at which to resume from the master.
-	cmds, err := agent.MysqlDaemon.SetSlavePositionCommands(pos)
-	if err != nil {
-		return err
-	}
-	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
+	if err := agent.MysqlDaemon.SetSlavePosition(ctx, pos); err != nil {
 		return fmt.Errorf("failed to set slave position: %v", err)
 	}
 

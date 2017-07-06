@@ -254,17 +254,14 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.Tabl
 		return err
 	}
 
-	cmds, err := agent.MysqlDaemon.SetSlavePositionCommands(pos)
+	if err := agent.MysqlDaemon.SetSlavePosition(ctx, pos); err != nil {
+		return err
+	}
+	cmds, err := agent.MysqlDaemon.SetMasterCommands(topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)))
 	if err != nil {
 		return err
 	}
-	cmds2, err := agent.MysqlDaemon.SetMasterCommands(topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)))
-	if err != nil {
-		return err
-	}
-	cmds = append(cmds, cmds2...)
 	cmds = append(cmds, "START SLAVE")
-
 	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
 		return err
 	}

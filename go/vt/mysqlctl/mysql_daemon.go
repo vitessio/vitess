@@ -62,7 +62,7 @@ type MysqlDaemon interface {
 	MasterPosition() (mysql.Position, error)
 	IsReadOnly() (bool, error)
 	SetReadOnly(on bool) error
-	SetSlavePositionCommands(pos mysql.Position) ([]string, error)
+	SetSlavePosition(ctx context.Context, pos mysql.Position) error
 	SetMasterCommands(masterHost string, masterPort int) ([]string, error)
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
 
@@ -152,14 +152,9 @@ type FakeMysqlDaemon struct {
 	// ReadOnly is the current value of the flag
 	ReadOnly bool
 
-	// SetSlavePositionCommandsPos is matched against the input
-	// of SetSlavePositionCommands. If it doesn't match,
-	// SetSlavePositionCommands will return an error.
-	SetSlavePositionCommandsPos mysql.Position
-
-	// SetSlavePositionCommandsResult is what
-	// SetSlavePositionCommands will return
-	SetSlavePositionCommandsResult []string
+	// SetSlavePositionPos is matched against the input of SetSlavePosition.
+	// If it doesn't match, SetSlavePosition will return an error.
+	SetSlavePositionPos mysql.Position
 
 	// SetMasterCommandsInput is matched against the input
 	// of SetMasterCommands (as "%v:%v"). If it doesn't match,
@@ -324,12 +319,14 @@ func (fmd *FakeMysqlDaemon) SetReadOnly(on bool) error {
 	return nil
 }
 
-// SetSlavePositionCommands is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) SetSlavePositionCommands(pos mysql.Position) ([]string, error) {
-	if !reflect.DeepEqual(fmd.SetSlavePositionCommandsPos, pos) {
-		return nil, fmt.Errorf("wrong pos for SetSlavePositionCommands: expected %v got %v", fmd.SetSlavePositionCommandsPos, pos)
+// SetSlavePosition is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SetSlavePosition(ctx context.Context, pos mysql.Position) error {
+	if !reflect.DeepEqual(fmd.SetSlavePositionPos, pos) {
+		return fmt.Errorf("wrong pos for SetSlavePosition: expected %v got %v", fmd.SetSlavePositionPos, pos)
 	}
-	return fmd.SetSlavePositionCommandsResult, nil
+	return fmd.ExecuteSuperQueryList(ctx, []string{
+		"FAKE SET SLAVE POSITION",
+	})
 }
 
 // SetMasterCommands is part of the MysqlDaemon interface

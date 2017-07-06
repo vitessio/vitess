@@ -36,23 +36,6 @@ func TestMysql56VersionMatch(t *testing.T) {
 	}
 }
 
-func TestMysql56SetSlavePositionCommands(t *testing.T) {
-	pos, _ := (&mysql56{}).ParseReplicationPosition("00010203-0405-0607-0809-0a0b0c0d0e0f:1-2")
-	want := []string{
-		"RESET MASTER",
-		"SET GLOBAL gtid_purged = '00010203-0405-0607-0809-0a0b0c0d0e0f:1-2'",
-	}
-
-	got, err := (&mysql56{}).SetSlavePositionCommands(pos)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("(&mysql56{}).SetSlavePositionCommands(%#v) = %#v, want %#v", pos, got, want)
-	}
-}
-
 func TestMysql56SetMasterCommands(t *testing.T) {
 	params := &mysql.ConnParams{
 		Uname: "username",

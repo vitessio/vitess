@@ -40,11 +40,6 @@ type MysqlFlavor interface {
 	// SlaveStatus returns the ReplicationStatus of a slave.
 	SlaveStatus(mysqld *Mysqld) (Status, error)
 
-	// SetSlavePositionCommands returns the commands to set the
-	// replication position at which the slave will resume
-	// when it is later reparented with SetMasterCommands.
-	SetSlavePositionCommands(pos mysql.Position) ([]string, error)
-
 	// SetMasterCommands returns the commands to use the provided master
 	// as the new master (without changing any GTID position).
 	// It is guaranteed to be called with replication stopped.

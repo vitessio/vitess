@@ -146,7 +146,7 @@ func TestBackupRestore(t *testing.T) {
 	destTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
 		"RESET SLAVE ALL",
-		"cmd1",
+		"FAKE SET SLAVE POSITION",
 		"set master cmd 1",
 		"START SLAVE",
 	}
@@ -162,8 +162,7 @@ func TestBackupRestore(t *testing.T) {
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SHOW DATABASES": {},
 	}
-	destTablet.FakeMysqlDaemon.SetSlavePositionCommandsPos = sourceTablet.FakeMysqlDaemon.CurrentMasterPosition
-	destTablet.FakeMysqlDaemon.SetSlavePositionCommandsResult = []string{"cmd1"}
+	destTablet.FakeMysqlDaemon.SetSlavePositionPos = sourceTablet.FakeMysqlDaemon.CurrentMasterPosition
 	destTablet.FakeMysqlDaemon.SetMasterCommandsInput = topoproto.MysqlAddr(master.Tablet)
 	destTablet.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 

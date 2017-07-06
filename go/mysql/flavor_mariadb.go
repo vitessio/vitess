@@ -70,3 +70,26 @@ func (mariadbFlavor) resetReplicationCommands() []string {
 		"SET GLOBAL gtid_slave_pos = ''",
 	}
 }
+
+// setSlavePositionCommands is part of the Flavor interface.
+func (mariadbFlavor) setSlavePositionCommands(pos Position) []string {
+	return []string{
+		// RESET MASTER will clear out gtid_binlog_pos,
+		// which then guarantees that gtid_current_pos = gtid_slave_pos,
+		// since gtid_current_pos = MAX(gtid_binlog_pos,gtid_slave_pos).
+		// This also emptys the binlogs, which allows us to set
+		// gtid_binlog_state.
+		"RESET MASTER",
+		// Set gtid_slave_pos to tell the slave where to start
+		// replicating.
+		fmt.Sprintf("SET GLOBAL gtid_slave_pos = '%s'", pos),
+		// Set gtid_binlog_state so that if this server later becomes a
+		// master, it will know that it has seen everything up to and
+		// including 'pos'. Otherwise, if another slave asks this
+		// server to replicate starting at exactly 'pos', this server
+		// will throw an error when in gtid_strict_mode, since it
+		// doesn't see 'pos' in its binlog - it only has everything
+		// AFTER.
+		fmt.Sprintf("SET GLOBAL gtid_binlog_state = '%s'", pos),
+	}
+}
