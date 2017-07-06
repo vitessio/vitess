@@ -45,6 +45,10 @@ var (
 	timings    = stats.NewTimings("MysqlServerTimings")
 	connCount  = stats.NewInt("MysqlServerConnCount")
 	connAccept = stats.NewInt("MysqlServerConnAccepted")
+	connSlow   = stats.NewInt("MysqlServerConnSlow")
+
+	// If non-nil, warn if it takes more than the given amount of time to connect
+	SlowConnectWarnThreshold *time.Duration
 )
 
 // A Handler is an interface used by Listener to send queries.
@@ -280,6 +284,13 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	// Record how long we took to establish the connection
 	timings.Record(ConnectTiming, acceptTime)
+
+	// Log a warning if it took too long to connect
+	connectTime := time.Since(acceptTime)
+	if SlowConnectWarnThreshold != nil && connectTime > *SlowConnectWarnThreshold {
+		connSlow.Add(1)
+		log.Warningf("Slow connection from %s: %v", c.Ident(), connectTime)
+	}
 
 	for {
 		c.sequence = 0

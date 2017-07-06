@@ -25,6 +25,7 @@ import (
 	"path"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -229,6 +230,10 @@ func TestServer(t *testing.T) {
 
 	initialTimingCounts := timings.Counts()
 	initialConnAccept := connAccept.Get()
+	initialConnSlow := connSlow.Get()
+
+	slowConnectThreshold := time.Duration(time.Nanosecond * 1)
+	SlowConnectWarnThreshold = &slowConnectThreshold
 
 	// Run an 'error' command.
 	output, ok := runMysql(t, params, "error")
@@ -245,6 +250,9 @@ func TestServer(t *testing.T) {
 	if connAccept.Get()-initialConnAccept != 1 {
 		t.Errorf("Expected ConnAccept delta=1, got %d", connAccept.Get()-initialConnAccept)
 	}
+	if connSlow.Get()-initialConnSlow != 1 {
+		t.Errorf("Expected ConnSlow delta=1, got %d", connSlow.Get()-initialConnSlow)
+	}
 
 	expectedTimingDeltas := map[string]int64{
 		"All":         2,
@@ -260,6 +268,9 @@ func TestServer(t *testing.T) {
 		}
 	}
 
+	// Set the slow connect threshold to something high that we don't expect to trigger
+	slowConnectThreshold = time.Duration(time.Second * 1)
+
 	// Run a 'panic' command, other side should panic, recover and
 	// close the connection.
 	output, ok = runMysql(t, params, "panic")
@@ -274,7 +285,10 @@ func TestServer(t *testing.T) {
 		t.Errorf("Expected ConnCount=0, got %d", connCount.Get())
 	}
 	if connAccept.Get()-initialConnAccept != 2 {
-		t.Errorf("Expected ConnAccept=2, got %d", connAccept.Get()-initialConnAccept)
+		t.Errorf("Expected ConnAccept delta=2, got %d", connAccept.Get()-initialConnAccept)
+	}
+	if connSlow.Get()-initialConnSlow != 1 {
+		t.Errorf("Expected ConnSlow delta=1, got %d", connSlow.Get()-initialConnSlow)
 	}
 
 	// Run a 'select rows' command with results.
