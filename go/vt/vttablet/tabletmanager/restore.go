@@ -122,17 +122,16 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 }
 
 func (agent *ActionAgent) startReplication(ctx context.Context, pos mysql.Position, tabletType topodatapb.TabletType) error {
-	cmds, err := agent.MysqlDaemon.ResetSlaveCommands()
-	if err != nil {
-		return err
+	cmds := []string{
+		"STOP SLAVE",
+		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
 	}
-
 	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
 		return fmt.Errorf("failed to reset slave: %v", err)
 	}
 
 	// Set the position at which to resume from the master.
-	cmds, err = agent.MysqlDaemon.SetSlavePositionCommands(pos)
+	cmds, err := agent.MysqlDaemon.SetSlavePositionCommands(pos)
 	if err != nil {
 		return err
 	}

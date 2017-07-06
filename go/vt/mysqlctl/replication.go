@@ -250,15 +250,6 @@ func (mysqld *Mysqld) ResetReplicationCommands() ([]string, error) {
 	return flavor.ResetReplicationCommands(), nil
 }
 
-// ResetSlaveCommands returns the commands to run to reset just slave settings for this host
-func (mysqld *Mysqld) ResetSlaveCommands() ([]string, error) {
-	flavor, err := mysqld.flavor()
-	if err != nil {
-		return nil, fmt.Errorf("ResetReplicationCommands needs flavor: %v", err)
-	}
-	return flavor.ResetSlaveCommands(), nil
-}
-
 // +------+---------+---------------------+------+-------------+------+----------------------------------------------------------------+------------------+
 // | Id   | User    | Host                | db   | Command     | Time | State                                                          | Info             |
 // +------+---------+---------------------+------+-------------+------+----------------------------------------------------------------+------------------+

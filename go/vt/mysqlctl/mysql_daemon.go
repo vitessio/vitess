@@ -66,9 +66,6 @@ type MysqlDaemon interface {
 	SetMasterCommands(masterHost string, masterPort int) ([]string, error)
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
 
-	// Used for backup restoration, to ensure we have a clean slate
-	ResetSlaveCommands() ([]string, error)
-
 	// DemoteMaster waits for all current transactions to finish,
 	// and returns the current replication position. It will not
 	// change the read_only state of the server.
@@ -141,12 +138,6 @@ type FakeMysqlDaemon struct {
 
 	// ResetReplicationError is returned by ResetReplication
 	ResetReplicationError error
-
-	// ResetSlaveResult is returned by ResetSlave
-	ResetSlaveResult []string
-
-	// ResetSlaveError is returned by ResetSlave
-	ResetSlaveError error
 
 	// CurrentMasterPosition is returned by MasterPosition
 	// and SlaveStatus
@@ -319,11 +310,6 @@ func (fmd *FakeMysqlDaemon) SlaveStatus() (Status, error) {
 // ResetReplicationCommands is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) ResetReplicationCommands() ([]string, error) {
 	return fmd.ResetReplicationResult, fmd.ResetReplicationError
-}
-
-// ResetSlaveCommands is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) ResetSlaveCommands() ([]string, error) {
-	return fmd.ResetSlaveResult, fmd.ResetSlaveError
 }
 
 // MasterPosition is part of the MysqlDaemon interface

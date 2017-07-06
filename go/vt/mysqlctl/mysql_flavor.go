@@ -44,14 +44,6 @@ type MysqlFlavor interface {
 	// replication on the host.
 	ResetReplicationCommands() []string
 
-	// ResetSlaveCommands returns the commands to reset just slave
-	// settings on the host.
-	ResetSlaveCommands() []string
-
-	// PromoteSlaveCommands returns the commands to run to change
-	// a slave into a master.
-	PromoteSlaveCommands() []string
-
 	// SetSlavePositionCommands returns the commands to set the
 	// replication position at which the slave will resume
 	// when it is later reparented with SetMasterCommands.

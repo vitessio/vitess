@@ -144,6 +144,8 @@ func TestBackupRestore(t *testing.T) {
 		},
 	}
 	destTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP SLAVE",
+		"RESET SLAVE ALL",
 		"cmd1",
 		"set master cmd 1",
 		"START SLAVE",

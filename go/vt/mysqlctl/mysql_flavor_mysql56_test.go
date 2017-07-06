@@ -47,13 +47,6 @@ func TestMysql56ResetReplicationCommands(t *testing.T) {
 	}
 }
 
-func TestMysql56PromoteSlaveCommands(t *testing.T) {
-	want := []string{"RESET SLAVE ALL"}
-	if got := (&mysql56{}).PromoteSlaveCommands(); !reflect.DeepEqual(got, want) {
-		t.Errorf("(&mysql56{}).PromoteSlaveCommands() = %#v, want %#v", got, want)
-	}
-}
-
 func TestMysql56SetSlavePositionCommands(t *testing.T) {
 	pos, _ := (&mysql56{}).ParseReplicationPosition("00010203-0405-0607-0809-0a0b0c0d0e0f:1-2")
 	want := []string{

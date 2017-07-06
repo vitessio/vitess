@@ -141,13 +141,6 @@ func TestMariadbParseReplicationPosition(t *testing.T) {
 	}
 }
 
-func TestMariadbPromoteSlaveCommands(t *testing.T) {
-	want := []string{"RESET SLAVE ALL"}
-	if got := (&mariaDB10{}).PromoteSlaveCommands(); !reflect.DeepEqual(got, want) {
-		t.Errorf("(&mariaDB10{}).PromoteSlaveCommands() = %#v, want %#v", got, want)
-	}
-}
-
 func TestMariadbResetReplicationCommands(t *testing.T) {
 	want := []string{
 		"STOP SLAVE",
