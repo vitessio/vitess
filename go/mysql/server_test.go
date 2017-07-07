@@ -232,8 +232,7 @@ func TestServer(t *testing.T) {
 	initialConnAccept := connAccept.Get()
 	initialConnSlow := connSlow.Get()
 
-	slowConnectThreshold := time.Duration(time.Nanosecond * 1)
-	SlowConnectWarnThreshold = &slowConnectThreshold
+	l.SlowConnectWarnThreshold = time.Duration(time.Nanosecond * 1)
 
 	// Run an 'error' command.
 	output, ok := runMysql(t, params, "error")
@@ -269,7 +268,7 @@ func TestServer(t *testing.T) {
 	}
 
 	// Set the slow connect threshold to something high that we don't expect to trigger
-	slowConnectThreshold = time.Duration(time.Second * 1)
+	l.SlowConnectWarnThreshold = time.Duration(time.Second * 1)
 
 	// Run a 'panic' command, other side should panic, recover and
 	// close the connection.

@@ -46,10 +46,6 @@ var (
 	connCount  = stats.NewInt("MysqlServerConnCount")
 	connAccept = stats.NewInt("MysqlServerConnAccepted")
 	connSlow   = stats.NewInt("MysqlServerConnSlow")
-
-	// SlowConnectWarnThreshold if non-nil, specifies an amount of time
-	// beyond which a warning is logged to identify the slow connection
-	SlowConnectWarnThreshold *time.Duration
 )
 
 // A Handler is an interface used by Listener to send queries.
@@ -109,6 +105,10 @@ type Listener struct {
 	// mysql_clear_password authentication method to be accepted
 	// by the server when TLS is not in use.
 	AllowClearTextWithoutTLS bool
+
+	// SlowConnectWarnThreshold if non-zero specifies an amount of time
+	// beyond which a warning is logged to identify the slow connection
+	SlowConnectWarnThreshold time.Duration
 
 	// The following parameters are changed by the Accept routine.
 
@@ -288,7 +288,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	// Log a warning if it took too long to connect
 	connectTime := time.Since(acceptTime)
-	if SlowConnectWarnThreshold != nil && connectTime > *SlowConnectWarnThreshold {
+	if l.SlowConnectWarnThreshold != 0 && connectTime > l.SlowConnectWarnThreshold {
 		connSlow.Add(1)
 		log.Warningf("Slow connection from %s: %v", c.Ident(), connectTime)
 	}

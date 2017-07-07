@@ -129,12 +129,6 @@ func initMySQLProtocol() {
 		return
 	}
 
-	// Check for the connection threshold
-	if mysqlSlowConnectWarnThreshold.Nanoseconds() != 0 {
-		log.Infof("setting mysql slow connection threshold to %v", mysqlSlowConnectWarnThreshold)
-		mysql.SlowConnectWarnThreshold = mysqlSlowConnectWarnThreshold
-	}
-
 	// Initialize registered AuthServer implementations (or other plugins)
 	for _, initFn := range pluginInitializers {
 		initFn()
@@ -156,6 +150,12 @@ func initMySQLProtocol() {
 		}
 	}
 	mysqlListener.AllowClearTextWithoutTLS = *mysqlAllowClearTextWithoutTLS
+
+	// Check for the connection threshold
+	if mysqlSlowConnectWarnThreshold.Nanoseconds() != 0 {
+		log.Infof("setting mysql slow connection threshold to %v", mysqlSlowConnectWarnThreshold)
+		mysqlListener.SlowConnectWarnThreshold = *mysqlSlowConnectWarnThreshold
+	}
 
 	// And starts listening.
 	go func() {
