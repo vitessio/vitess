@@ -40,16 +40,6 @@ func (*mysql56) ParseGTID(s string) (mysql.GTID, error) {
 	return mysql.ParseGTID(mysql56FlavorID, s)
 }
 
-// EnableBinlogPlayback implements MysqlFlavor.EnableBinlogPlayback().
-func (*mysql56) EnableBinlogPlayback(mysqld *Mysqld) error {
-	return nil
-}
-
-// DisableBinlogPlayback implements MysqlFlavor.DisableBinlogPlayback().
-func (*mysql56) DisableBinlogPlayback(mysqld *Mysqld) error {
-	return nil
-}
-
 func init() {
 	registerFlavorBuiltin(mysql56FlavorID, &mysql56{})
 }

@@ -122,3 +122,13 @@ func (mysqlFlavor) waitUntilPositionCommand(ctx context.Context, pos Position) (
 func (mysqlFlavor) makeBinlogEvent(buf []byte) BinlogEvent {
 	return NewMysql56BinlogEvent(buf)
 }
+
+// enableBinlogPlaybackCommand is part of the Flavor interface.
+func (mysqlFlavor) enableBinlogPlaybackCommand() string {
+	return ""
+}
+
+// disableBinlogPlaybackCommand is part of the Flavor interface.
+func (mysqlFlavor) disableBinlogPlaybackCommand() string {
+	return ""
+}

@@ -72,6 +72,13 @@ type flavor interface {
 	// stream connection and returns a BinlogEvent through which
 	// the packet can be examined.
 	makeBinlogEvent(buf []byte) BinlogEvent
+
+	// enableBinlogPlaybackCommand and disableBinlogPlaybackCommand return an
+	// optional command to run to enable or disable binlog
+	// playback. This is used internally in Google, as the
+	// timestamp cannot be set by regular clients.
+	enableBinlogPlaybackCommand() string
+	disableBinlogPlaybackCommand() string
 }
 
 // mariaDBReplicationHackPrefix is the prefix of a version for MariaDB 10.0
@@ -228,4 +235,16 @@ func (c *Conn) WaitUntilPositionCommand(ctx context.Context, pos Position) (stri
 // the packet can be examined.
 func (c *Conn) MakeBinlogEvent(buf []byte) BinlogEvent {
 	return c.flavor.makeBinlogEvent(buf)
+}
+
+// EnableBinlogPlaybackCommand returns a command to run to enable
+// binlog playback.
+func (c *Conn) EnableBinlogPlaybackCommand() string {
+	return c.flavor.enableBinlogPlaybackCommand()
+}
+
+// DisableBinlogPlaybackCommand returns a command to run to disable
+// binlog playback.
+func (c *Conn) DisableBinlogPlaybackCommand() string {
+	return c.flavor.disableBinlogPlaybackCommand()
 }

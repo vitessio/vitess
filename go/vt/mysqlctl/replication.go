@@ -335,21 +335,49 @@ func WaitBlpPosition(ctx context.Context, mysqld MysqlDaemon, sql string, replic
 // EnableBinlogPlayback prepares the server to play back events from a binlog stream.
 // Whatever it does for a given flavor, it must be idempotent.
 func (mysqld *Mysqld) EnableBinlogPlayback() error {
-	flavor, err := mysqld.flavor()
+	// Get a connection.
+	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
 	if err != nil {
-		return fmt.Errorf("EnableBinlogPlayback needs flavor: %v", err)
+		return err
 	}
-	return flavor.EnableBinlogPlayback(mysqld)
+	defer conn.Recycle()
+
+	// See if we have a command to run, and run it.
+	cmd := conn.EnableBinlogPlaybackCommand()
+	if cmd == "" {
+		return nil
+	}
+	if err := mysqld.ExecuteSuperQuery(context.TODO(), cmd); err != nil {
+		log.Errorf("EnableBinlogPlayback: cannot run query '%v': %v", cmd, err)
+		return fmt.Errorf("EnableBinlogPlayback: cannot run query '%v': %v", cmd, err)
+	}
+
+	log.Info("EnableBinlogPlayback: successfully ran %v", cmd)
+	return nil
 }
 
 // DisableBinlogPlayback returns the server to the normal state after streaming.
 // Whatever it does for a given flavor, it must be idempotent.
 func (mysqld *Mysqld) DisableBinlogPlayback() error {
-	flavor, err := mysqld.flavor()
+	// Get a connection.
+	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
 	if err != nil {
-		return fmt.Errorf("DisableBinlogPlayback needs flavor: %v", err)
+		return err
 	}
-	return flavor.DisableBinlogPlayback(mysqld)
+	defer conn.Recycle()
+
+	// See if we have a command to run, and run it.
+	cmd := conn.DisableBinlogPlaybackCommand()
+	if cmd == "" {
+		return nil
+	}
+	if err := mysqld.ExecuteSuperQuery(context.TODO(), cmd); err != nil {
+		log.Errorf("DisableBinlogPlayback: cannot run query '%v': %v", cmd, err)
+		return fmt.Errorf("DisableBinlogPlayback: cannot run query '%v': %v", cmd, err)
+	}
+
+	log.Info("DisableBinlogPlayback: successfully ran '%v'", cmd)
+	return nil
 }
 
 // SetSemiSyncEnabled enables or disables semi-sync replication for

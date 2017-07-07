@@ -40,16 +40,6 @@ type MysqlFlavor interface {
 	// ParseGTID parses a GTID in the canonical format of this
 	// MySQL flavor into a replication.GTID interface value.
 	ParseGTID(string) (mysql.GTID, error)
-
-	// EnableBinlogPlayback prepares the server to play back
-	// events from a binlog stream.  Whatever it does for a given
-	// flavor, it must be idempotent.
-	EnableBinlogPlayback(mysqld *Mysqld) error
-
-	// DisableBinlogPlayback returns the server to the normal
-	// state after playback is done.  Whatever it does for a given
-	// flavor, it must be idempotent.
-	DisableBinlogPlayback(mysqld *Mysqld) error
 }
 
 var mysqlFlavors = make(map[string]MysqlFlavor)
