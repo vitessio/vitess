@@ -67,6 +67,11 @@ type flavor interface {
 	// expires.  The command returns -1 if it times out. It
 	// returns NULL if GTIDs are not enabled.
 	waitUntilPositionCommand(ctx context.Context, pos Position) (string, error)
+
+	// makeBinlogEvent takes a raw packet from the MySQL binlog
+	// stream connection and returns a BinlogEvent through which
+	// the packet can be examined.
+	makeBinlogEvent(buf []byte) BinlogEvent
 }
 
 // mariaDBReplicationHackPrefix is the prefix of a version for MariaDB 10.0
@@ -216,4 +221,11 @@ func (c *Conn) ShowSlaveStatus() (SlaveStatus, error) {
 // returns NULL if GTIDs are not enabled.
 func (c *Conn) WaitUntilPositionCommand(ctx context.Context, pos Position) (string, error) {
 	return c.flavor.waitUntilPositionCommand(ctx, pos)
+}
+
+// MakeBinlogEvent takes a raw packet from the MySQL binlog
+// stream connection and returns a BinlogEvent through which
+// the packet can be examined.
+func (c *Conn) MakeBinlogEvent(buf []byte) BinlogEvent {
+	return c.flavor.makeBinlogEvent(buf)
 }

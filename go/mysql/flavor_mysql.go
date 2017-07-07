@@ -117,3 +117,8 @@ func (mysqlFlavor) waitUntilPositionCommand(ctx context.Context, pos Position) (
 
 	return fmt.Sprintf("SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS('%s', %v)", pos, timeoutSeconds), nil
 }
+
+// makeBinlogEvent is part of the Flavor interface.
+func (mysqlFlavor) makeBinlogEvent(buf []byte) BinlogEvent {
+	return NewMysql56BinlogEvent(buf)
+}

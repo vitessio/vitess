@@ -17,19 +17,10 @@ limitations under the License.
 package mysqlctl
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/youtube/vitess/go/mysql"
 )
-
-func TestMariadbMakeBinlogEvent(t *testing.T) {
-	input := []byte{1, 2, 3}
-	want := mysql.NewMariadbBinlogEvent([]byte{1, 2, 3})
-	if got := (&mariaDB10{}).MakeBinlogEvent(input); !reflect.DeepEqual(got, want) {
-		t.Errorf("(&mariaDB10{}).MakeBinlogEvent(%#v) = %#v, want %#v", input, got, want)
-	}
-}
 
 func TestMariadbParseGTID(t *testing.T) {
 	input := "12-34-5678"

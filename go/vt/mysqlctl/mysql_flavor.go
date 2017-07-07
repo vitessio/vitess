@@ -41,11 +41,6 @@ type MysqlFlavor interface {
 	// MySQL flavor into a replication.GTID interface value.
 	ParseGTID(string) (mysql.GTID, error)
 
-	// MakeBinlogEvent takes a raw packet from the MySQL binlog
-	// stream connection and returns a BinlogEvent through which
-	// the packet can be examined.
-	MakeBinlogEvent(buf []byte) mysql.BinlogEvent
-
 	// EnableBinlogPlayback prepares the server to play back
 	// events from a binlog stream.  Whatever it does for a given
 	// flavor, it must be idempotent.

@@ -118,13 +118,8 @@ func (sc *SlaveConnection) StartBinlogDumpFromCurrent(ctx context.Context) (mysq
 func (sc *SlaveConnection) StartBinlogDumpFromPosition(ctx context.Context, startPos mysql.Position) (<-chan mysql.BinlogEvent, error) {
 	ctx, sc.cancel = context.WithCancel(ctx)
 
-	flavor, err := sc.mysqld.flavor()
-	if err != nil {
-		return nil, fmt.Errorf("StartBinlogDump needs flavor: %v", err)
-	}
-
 	log.Infof("sending binlog dump command: startPos=%v, slaveID=%v", startPos, sc.slaveID)
-	if err = sc.SendBinlogDumpCommand(sc.slaveID, startPos); err != nil {
+	if err := sc.SendBinlogDumpCommand(sc.slaveID, startPos); err != nil {
 		log.Errorf("couldn't send binlog dump command: %v", err)
 		return nil, err
 	}
@@ -160,7 +155,7 @@ func (sc *SlaveConnection) StartBinlogDumpFromPosition(ctx context.Context, star
 
 			select {
 			// Skip the first byte because it's only used for signaling EOF / error.
-			case eventChan <- flavor.MakeBinlogEvent(buf[1:]):
+			case eventChan <- sc.Conn.MakeBinlogEvent(buf[1:]):
 			case <-ctx.Done():
 				return
 			}
@@ -214,11 +209,6 @@ func (sc *SlaveConnection) StartBinlogDumpFromPosition(ctx context.Context, star
 func (sc *SlaveConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context.Context, timestamp int64) (<-chan mysql.BinlogEvent, error) {
 	ctx, sc.cancel = context.WithCancel(ctx)
 
-	flavor, err := sc.mysqld.flavor()
-	if err != nil {
-		return nil, fmt.Errorf("StartBinlogDump needs flavor: %v", err)
-	}
-
 	// List the binlogs.
 	binlogs, err := sc.Conn.ExecuteFetch("SHOW BINARY LOGS", 1000, false)
 	if err != nil {
@@ -263,7 +253,7 @@ func (sc *SlaveConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context.
 			}
 
 			// Parse the full event.
-			event = flavor.MakeBinlogEvent(buf[1:])
+			event = sc.Conn.MakeBinlogEvent(buf[1:])
 			if !event.IsValid() {
 				return nil, fmt.Errorf("first event from binlog %v is not valid", binlog)
 			}
@@ -340,7 +330,7 @@ func (sc *SlaveConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context.
 
 			// Skip the first byte because it's only used
 			// for signaling EOF / error.
-			event = flavor.MakeBinlogEvent(buf[1:])
+			event = sc.Conn.MakeBinlogEvent(buf[1:])
 		}
 	}()
 

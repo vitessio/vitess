@@ -38,11 +38,6 @@ func (*mariaDB10) ParseGTID(s string) (mysql.GTID, error) {
 	return mysql.ParseGTID(mariadbFlavorID, s)
 }
 
-// MakeBinlogEvent implements MysqlFlavor.MakeBinlogEvent().
-func (*mariaDB10) MakeBinlogEvent(buf []byte) mysql.BinlogEvent {
-	return mysql.NewMariadbBinlogEvent(buf)
-}
-
 // EnableBinlogPlayback implements MysqlFlavor.EnableBinlogPlayback().
 func (*mariaDB10) EnableBinlogPlayback(mysqld *Mysqld) error {
 	return nil

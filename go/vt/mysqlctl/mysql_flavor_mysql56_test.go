@@ -17,10 +17,7 @@ limitations under the License.
 package mysqlctl
 
 import (
-	"reflect"
 	"testing"
-
-	"github.com/youtube/vitess/go/mysql"
 )
 
 func TestMysql56VersionMatch(t *testing.T) {
@@ -33,13 +30,5 @@ func TestMysql56VersionMatch(t *testing.T) {
 		if got := (&mysql56{}).VersionMatch(input); got != want {
 			t.Errorf("(&mysql56{}).VersionMatch(%#v) = %v, want %v", input, got, want)
 		}
-	}
-}
-
-func TestMysql56MakeBinlogEvent(t *testing.T) {
-	input := []byte{1, 2, 3}
-	want := mysql.NewMysql56BinlogEvent([]byte{1, 2, 3})
-	if got := (&mysql56{}).MakeBinlogEvent(input); !reflect.DeepEqual(got, want) {
-		t.Errorf("(&mysql56{}).MakeBinlogEvent(%#v) = %#v, want %#v", input, got, want)
 	}
 }

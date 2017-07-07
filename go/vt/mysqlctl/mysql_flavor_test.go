@@ -25,11 +25,10 @@ import (
 
 type fakeMysqlFlavor string
 
-func (f fakeMysqlFlavor) VersionMatch(version string) bool           { return version == string(f) }
-func (fakeMysqlFlavor) ParseGTID(string) (mysql.GTID, error)         { return nil, nil }
-func (fakeMysqlFlavor) MakeBinlogEvent(buf []byte) mysql.BinlogEvent { return nil }
-func (fakeMysqlFlavor) EnableBinlogPlayback(mysqld *Mysqld) error    { return nil }
-func (fakeMysqlFlavor) DisableBinlogPlayback(mysqld *Mysqld) error   { return nil }
+func (f fakeMysqlFlavor) VersionMatch(version string) bool         { return version == string(f) }
+func (fakeMysqlFlavor) ParseGTID(string) (mysql.GTID, error)       { return nil, nil }
+func (fakeMysqlFlavor) EnableBinlogPlayback(mysqld *Mysqld) error  { return nil }
+func (fakeMysqlFlavor) DisableBinlogPlayback(mysqld *Mysqld) error { return nil }
 
 func TestMysqlFlavorEnvironmentVariable(t *testing.T) {
 	os.Setenv("MYSQL_FLAVOR", "fake flavor")

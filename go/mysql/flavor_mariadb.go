@@ -146,3 +146,8 @@ func (mariadbFlavor) waitUntilPositionCommand(ctx context.Context, pos Position)
 	// return immediately.
 	return fmt.Sprintf("SELECT MASTER_GTID_WAIT('%s')", pos), nil
 }
+
+// makeBinlogEvent is part of the Flavor interface.
+func (mariadbFlavor) makeBinlogEvent(buf []byte) BinlogEvent {
+	return NewMariadbBinlogEvent(buf)
+}
