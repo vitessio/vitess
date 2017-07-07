@@ -78,7 +78,6 @@ type Mysqld struct {
 
 	// mutex protects the fields below.
 	mutex         sync.Mutex
-	mysqlFlavor   MysqlFlavor
 	onTermFuncs   []func()
 	cancelWaitCmd chan struct{}
 }
