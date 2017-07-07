@@ -118,6 +118,14 @@ func (c *Conn) fillFlavor() {
 // Only valid for client connections (will panic for server connections).
 //
 
+// IsMariaDB returns true iff the other side of the client connection
+// is identified as MariaDB. Most applications should not care, but
+// this is useful in tests.
+func (c *Conn) IsMariaDB() bool {
+	_, ok := c.flavor.(mariadbFlavor)
+	return ok
+}
+
 // MasterPosition returns the current master replication position.
 func (c *Conn) MasterPosition() (Position, error) {
 	gtidSet, err := c.flavor.masterGTIDSet(c)

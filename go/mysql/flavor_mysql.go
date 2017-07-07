@@ -78,7 +78,7 @@ func (mysqlFlavor) status(c *Conn) (SlaveStatus, error) {
 	if err != nil {
 		return SlaveStatus{}, err
 	}
-	if len(qr.Fields) == 0 {
+	if len(qr.Rows) == 0 {
 		// The query returned no data, meaning the server
 		// is not configured as a slave.
 		return SlaveStatus{}, ErrNotSlave
