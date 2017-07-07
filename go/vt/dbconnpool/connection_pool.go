@@ -26,10 +26,11 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/stats"
-	"golang.org/x/net/context"
 )
 
 var (
@@ -143,6 +144,13 @@ func (cp *ConnectionPool) Put(conn *PooledDBConnection) {
 	p := cp.pool()
 	if p == nil {
 		panic(ErrConnPoolClosed)
+	}
+	if conn == nil {
+		// conn has a type, if we just Put(conn), we end up
+		// putting an interface with a nil value, that is not
+		// equal to a nil value. So just put a plain nil.
+		p.Put(nil)
+		return
 	}
 	p.Put(conn)
 }
