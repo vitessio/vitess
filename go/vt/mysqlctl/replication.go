@@ -144,11 +144,33 @@ var (
 
 // WaitMasterPos lets slaves wait to given replication position
 func (mysqld *Mysqld) WaitMasterPos(ctx context.Context, targetPos mysql.Position) error {
-	flavor, err := mysqld.flavor()
+	// Get a connection.
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
-		return fmt.Errorf("WaitMasterPos needs flavor: %v", err)
+		return err
 	}
-	return flavor.WaitMasterPos(ctx, mysqld, targetPos)
+	defer conn.Recycle()
+
+	// Find the query to run, run it.
+	query, err := conn.WaitUntilPositionCommand(ctx, targetPos)
+	if err != nil {
+		return err
+	}
+	qr, err := mysqld.FetchSuperQuery(ctx, query)
+	if err != nil {
+		return fmt.Errorf("WaitUntilPositionCommand(%v) failed: %v", query, err)
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return fmt.Errorf("unexpected result format from WaitUntilPositionCommand(%v): %#v", query, qr)
+	}
+	result := qr.Rows[0][0]
+	if result.IsNull() {
+		return fmt.Errorf("WaitUntilPositionCommand(%v) failed: gtid_mode is OFF", query)
+	}
+	if result.String() == "-1" {
+		return fmt.Errorf("timed out waiting for position %v", targetPos)
+	}
+	return nil
 }
 
 // SlaveStatus returns the slave replication statuses

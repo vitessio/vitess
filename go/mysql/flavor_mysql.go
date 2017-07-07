@@ -16,7 +16,12 @@ limitations under the License.
 
 package mysql
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+
+	"golang.org/x/net/context"
+)
 
 // mysqlFlavor implements the Flavor interface for Mysql.
 type mysqlFlavor struct{}
@@ -90,4 +95,25 @@ func (mysqlFlavor) status(c *Conn) (SlaveStatus, error) {
 		return SlaveStatus{}, fmt.Errorf("SlaveStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v): %v", resultMap["Executed_Gtid_Set"], err)
 	}
 	return status, nil
+}
+
+// waitUntilPositionCommand is part of the Flavor interface.
+func (mysqlFlavor) waitUntilPositionCommand(ctx context.Context, pos Position) (string, error) {
+	// A timeout of 0 means wait indefinitely.
+	timeoutSeconds := 0
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout := deadline.Sub(time.Now())
+		if timeout <= 0 {
+			return "", fmt.Errorf("timed out waiting for position %v", pos)
+		}
+
+		// Only whole numbers of seconds are supported.
+		timeoutSeconds = int(timeout.Seconds())
+		if timeoutSeconds == 0 {
+			// We don't want a timeout <1.0s to truncate down to become infinite.
+			timeoutSeconds = 1
+		}
+	}
+
+	return fmt.Sprintf("SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS('%s', %v)", pos, timeoutSeconds), nil
 }

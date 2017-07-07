@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -60,6 +61,12 @@ type flavor interface {
 	// status returns the result of 'SHOW SLAVE STATUS',
 	// with parsed replication position.
 	status(c *Conn) (SlaveStatus, error)
+
+	// waitUntilPositionCommand returns the SQL command to issue
+	// to wait until the given position, until the context
+	// expires.  The command returns -1 if it times out. It
+	// returns NULL if GTIDs are not enabled.
+	waitUntilPositionCommand(ctx context.Context, pos Position) (string, error)
 }
 
 // mariaDBReplicationHackPrefix is the prefix of a version for MariaDB 10.0
@@ -201,4 +208,12 @@ func parseSlaveStatus(fields map[string]string) SlaveStatus {
 // and returns a parse Position with other fields.
 func (c *Conn) ShowSlaveStatus() (SlaveStatus, error) {
 	return c.flavor.status(c)
+}
+
+// WaitUntilPositionCommand returns the SQL command to issue
+// to wait until the given position, until the context
+// expires.  The command returns -1 if it times out. It
+// returns NULL if GTIDs are not enabled.
+func (c *Conn) WaitUntilPositionCommand(ctx context.Context, pos Position) (string, error) {
+	return c.flavor.waitUntilPositionCommand(ctx, pos)
 }

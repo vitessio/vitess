@@ -51,10 +51,6 @@ type MysqlFlavor interface {
 	// the packet can be examined.
 	MakeBinlogEvent(buf []byte) mysql.BinlogEvent
 
-	// WaitMasterPos waits until slave replication reaches at
-	// least targetPos.
-	WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos mysql.Position) error
-
 	// EnableBinlogPlayback prepares the server to play back
 	// events from a binlog stream.  Whatever it does for a given
 	// flavor, it must be idempotent.

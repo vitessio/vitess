@@ -17,12 +17,7 @@ limitations under the License.
 package mysqlctl
 
 import (
-	"fmt"
 	"strings"
-	"time"
-
-	log "github.com/golang/glog"
-	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
 )
@@ -38,45 +33,6 @@ func (*mysql56) VersionMatch(version string) bool {
 	return strings.HasPrefix(version, "5.6") ||
 		strings.HasPrefix(version, "5.7") ||
 		strings.HasPrefix(version, "8.0")
-}
-
-// WaitMasterPos implements MysqlFlavor.WaitMasterPos().
-func (*mysql56) WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos mysql.Position) error {
-	var query string
-
-	// A timeout of 0 means wait indefinitely.
-	var timeoutSeconds int
-	if deadline, ok := ctx.Deadline(); ok {
-		timeout := deadline.Sub(time.Now())
-		if timeout <= 0 {
-			return fmt.Errorf("timed out waiting for position %v", targetPos)
-		}
-		// Only whole numbers of seconds are supported.
-		timeoutSeconds = int(timeout.Seconds())
-		if timeoutSeconds == 0 {
-			// We don't want a timeout <1.0s to truncate down to become infinite.
-			timeoutSeconds = 1
-		}
-	}
-
-	query = fmt.Sprintf("SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS('%s', %v)", targetPos, timeoutSeconds)
-
-	log.Infof("Waiting for minimum replication position with query: %v", query)
-	qr, err := mysqld.FetchSuperQuery(ctx, query)
-	if err != nil {
-		return fmt.Errorf("WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS() failed: %v", err)
-	}
-	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return fmt.Errorf("unexpected result format from WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS(): %#v", qr)
-	}
-	result := qr.Rows[0][0]
-	if result.IsNull() {
-		return fmt.Errorf("WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS() failed: gtid_mode is OFF")
-	}
-	if result.String() == "-1" {
-		return fmt.Errorf("timed out waiting for position %v", targetPos)
-	}
-	return nil
 }
 
 // ParseGTID implements MysqlFlavor.ParseGTID().

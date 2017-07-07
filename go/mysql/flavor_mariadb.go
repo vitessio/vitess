@@ -18,6 +18,9 @@ package mysql
 
 import (
 	"fmt"
+	"time"
+
+	"golang.org/x/net/context"
 )
 
 // mariadbFlavor implements the Flavor interface for MariaDB.
@@ -124,4 +127,22 @@ func (mariadbFlavor) status(c *Conn) (SlaveStatus, error) {
 		return SlaveStatus{}, fmt.Errorf("SlaveStatus can't parse MariaDB GTID (Gtid_Slave_Pos: %#v): %v", resultMap["Gtid_Slave_Pos"], err)
 	}
 	return status, nil
+}
+
+// waitUntilPositionCommand is part of the Flavor interface.
+//
+// Note: Unlike MASTER_POS_WAIT(), MASTER_GTID_WAIT() will continue waiting even
+// if the slave thread stops. If that is a problem, we'll have to change this.
+func (mariadbFlavor) waitUntilPositionCommand(ctx context.Context, pos Position) (string, error) {
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout := deadline.Sub(time.Now())
+		if timeout <= 0 {
+			return "", fmt.Errorf("timed out waiting for position %v", pos)
+		}
+		return fmt.Sprintf("SELECT MASTER_GTID_WAIT('%s', %.6f)", pos, timeout.Seconds()), nil
+	}
+
+	// Omit the timeout to wait indefinitely. In MariaDB, a timeout of 0 means
+	// return immediately.
+	return fmt.Sprintf("SELECT MASTER_GTID_WAIT('%s')", pos), nil
 }
