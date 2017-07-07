@@ -41,11 +41,6 @@ type MysqlFlavor interface {
 	// MySQL flavor into a replication.GTID interface value.
 	ParseGTID(string) (mysql.GTID, error)
 
-	// ParseReplicationPosition parses a replication position in
-	// the canonical format of this MySQL flavor into a
-	// mysql.Position struct.
-	ParseReplicationPosition(string) (mysql.Position, error)
-
 	// MakeBinlogEvent takes a raw packet from the MySQL binlog
 	// stream connection and returns a BinlogEvent through which
 	// the packet can be examined.

@@ -40,11 +40,6 @@ func (*mysql56) ParseGTID(s string) (mysql.GTID, error) {
 	return mysql.ParseGTID(mysql56FlavorID, s)
 }
 
-// ParseReplicationPosition implements MysqlFlavor.ParseReplicationPosition().
-func (*mysql56) ParseReplicationPosition(s string) (mysql.Position, error) {
-	return mysql.ParsePosition(mysql56FlavorID, s)
-}
-
 // MakeBinlogEvent implements MysqlFlavor.MakeBinlogEvent().
 func (*mysql56) MakeBinlogEvent(buf []byte) mysql.BinlogEvent {
 	return mysql.NewMysql56BinlogEvent(buf)

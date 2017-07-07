@@ -38,11 +38,6 @@ func (*mariaDB10) ParseGTID(s string) (mysql.GTID, error) {
 	return mysql.ParseGTID(mariadbFlavorID, s)
 }
 
-// ParseReplicationPosition implements MysqlFlavor.ParseReplicationposition().
-func (*mariaDB10) ParseReplicationPosition(s string) (mysql.Position, error) {
-	return mysql.ParsePosition(mariadbFlavorID, s)
-}
-
 // MakeBinlogEvent implements MysqlFlavor.MakeBinlogEvent().
 func (*mariaDB10) MakeBinlogEvent(buf []byte) mysql.BinlogEvent {
 	return mysql.NewMariadbBinlogEvent(buf)

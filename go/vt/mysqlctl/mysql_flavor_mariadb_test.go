@@ -44,19 +44,6 @@ func TestMariadbParseGTID(t *testing.T) {
 	}
 }
 
-func TestMariadbParseReplicationPosition(t *testing.T) {
-	input := "12-34-5678"
-	want := mysql.Position{GTIDSet: mysql.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678}}
-
-	got, err := (&mariaDB10{}).ParseReplicationPosition(input)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if !got.Equal(want) {
-		t.Errorf("(&mariaDB10{}).ParseReplicationPosition(%#v) = %#v, want %#v", input, got, want)
-	}
-}
-
 func TestMariadbVersionMatch(t *testing.T) {
 	table := map[string]bool{
 		"10.0.13-MariaDB-1~precise-log": true,
