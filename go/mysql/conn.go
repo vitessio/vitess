@@ -614,7 +614,7 @@ func (c *Conn) ID() int64 {
 }
 
 // Ident returns a useful identification string for error logging
-func (c *Conn) Ident() string {
+func (c *Conn) String() string {
 	return fmt.Sprintf("client %v (%s)", c.ConnectionID, c.RemoteAddr().String())
 }
 
