@@ -23,6 +23,8 @@ import io.vitess.proto.Query;
 import io.vitess.util.MysqlDefs;
 import io.vitess.util.StringUtils;
 import io.vitess.util.charset.CharsetMapping;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -89,25 +91,18 @@ public class VitessResultSetTest extends BaseTest {
             .addFields(Query.Field.newBuilder().setName("col8").setType(Query.Type.UINT32).build())
             .addFields(Query.Field.newBuilder().setName("col9").setType(Query.Type.INT64).build())
             .addFields(Query.Field.newBuilder().setName("col10").setType(Query.Type.UINT64).build())
-            .addFields(
-                Query.Field.newBuilder().setName("col11").setType(Query.Type.FLOAT32).build())
-            .addFields(
-                Query.Field.newBuilder().setName("col12").setType(Query.Type.FLOAT64).build())
-            .addFields(
-                Query.Field.newBuilder().setName("col13").setType(Query.Type.TIMESTAMP).build())
+            .addFields(Query.Field.newBuilder().setName("col11").setType(Query.Type.FLOAT32).build())
+            .addFields(Query.Field.newBuilder().setName("col12").setType(Query.Type.FLOAT64).build())
+            .addFields(Query.Field.newBuilder().setName("col13").setType(Query.Type.TIMESTAMP).build())
             .addFields(Query.Field.newBuilder().setName("col14").setType(Query.Type.DATE).build())
             .addFields(Query.Field.newBuilder().setName("col15").setType(Query.Type.TIME).build())
-            .addFields(
-                Query.Field.newBuilder().setName("col16").setType(Query.Type.DATETIME).build())
+            .addFields(Query.Field.newBuilder().setName("col16").setType(Query.Type.DATETIME).build())
             .addFields(Query.Field.newBuilder().setName("col17").setType(Query.Type.YEAR).build())
-            .addFields(
-                Query.Field.newBuilder().setName("col18").setType(Query.Type.DECIMAL).build())
+            .addFields(Query.Field.newBuilder().setName("col18").setType(Query.Type.DECIMAL).build())
             .addFields(Query.Field.newBuilder().setName("col19").setType(Query.Type.TEXT).build())
             .addFields(Query.Field.newBuilder().setName("col20").setType(Query.Type.BLOB).build())
-            .addFields(
-                Query.Field.newBuilder().setName("col21").setType(Query.Type.VARCHAR).build())
-            .addFields(
-                Query.Field.newBuilder().setName("col22").setType(Query.Type.VARBINARY).build())
+            .addFields(Query.Field.newBuilder().setName("col21").setType(Query.Type.VARCHAR).build())
+            .addFields(Query.Field.newBuilder().setName("col22").setType(Query.Type.VARBINARY).build())
             .addFields(Query.Field.newBuilder().setName("col23").setType(Query.Type.CHAR).build())
             .addFields(Query.Field.newBuilder().setName("col24").setType(Query.Type.BINARY).build())
             .addFields(Query.Field.newBuilder().setName("col25").setType(Query.Type.BIT).build())
@@ -125,13 +120,12 @@ public class VitessResultSetTest extends BaseTest {
                 .addLengths("HELLO TDS TEAM".length()).addLengths("HELLO TDS TEAM".length())
                 .addLengths("N".length()).addLengths("HELLO TDS TEAM".length())
                 .addLengths("1".length()).addLengths("val123".length())
-                .addLengths("val123".length()).setValues(ByteString
-                    .copyFromUtf8("-5050-2300023000-100100-100100-1000100024.52100.432016-02-06 " +
-                        "14:15:162016-02-0612:34:562016-02-06 14:15:1620161234.56789HELLO TDS TEAMHELLO TDS TEAMHELLO"
-                        +
-                        " TDS TEAMHELLO TDS TEAMNHELLO TDS TEAM1val123val123"))).build());
+                .addLengths("val123".length()).setValues(ByteString.copyFromUtf8(
+                "-5050-2300023000-100100-100100-1000100024.52100.432016-02-06 " +
+                "14:15:162016-02-0612:34:562016-02-06 14:15:1620161234.56789HELLO TDS TEAMHELLO TDS TEAMHELLO" +
+                " TDS TEAMHELLO TDS TEAMNHELLO TDS TEAM1val123val123"))).build());
     }
-
+    
     public Cursor getCursorWithRowsAsNull() {
         /*
         INT8(1, 257), -50
@@ -175,25 +169,18 @@ public class VitessResultSetTest extends BaseTest {
             .addFields(Query.Field.newBuilder().setName("col8").setType(Query.Type.UINT32).build())
             .addFields(Query.Field.newBuilder().setName("col9").setType(Query.Type.INT64).build())
             .addFields(Query.Field.newBuilder().setName("col10").setType(Query.Type.UINT64).build())
-            .addFields(
-                Query.Field.newBuilder().setName("col11").setType(Query.Type.FLOAT32).build())
-            .addFields(
-                Query.Field.newBuilder().setName("col12").setType(Query.Type.FLOAT64).build())
-            .addFields(
-                Query.Field.newBuilder().setName("col13").setType(Query.Type.TIMESTAMP).build())
+            .addFields(Query.Field.newBuilder().setName("col11").setType(Query.Type.FLOAT32).build())
+            .addFields(Query.Field.newBuilder().setName("col12").setType(Query.Type.FLOAT64).build())
+            .addFields(Query.Field.newBuilder().setName("col13").setType(Query.Type.TIMESTAMP).build())
             .addFields(Query.Field.newBuilder().setName("col14").setType(Query.Type.DATE).build())
             .addFields(Query.Field.newBuilder().setName("col15").setType(Query.Type.TIME).build())
-            .addFields(
-                Query.Field.newBuilder().setName("col16").setType(Query.Type.DATETIME).build())
+            .addFields(Query.Field.newBuilder().setName("col16").setType(Query.Type.DATETIME).build())
             .addFields(Query.Field.newBuilder().setName("col17").setType(Query.Type.YEAR).build())
-            .addFields(
-                Query.Field.newBuilder().setName("col18").setType(Query.Type.DECIMAL).build())
+            .addFields(Query.Field.newBuilder().setName("col18").setType(Query.Type.DECIMAL).build())
             .addFields(Query.Field.newBuilder().setName("col19").setType(Query.Type.TEXT).build())
             .addFields(Query.Field.newBuilder().setName("col20").setType(Query.Type.BLOB).build())
-            .addFields(
-                Query.Field.newBuilder().setName("col21").setType(Query.Type.VARCHAR).build())
-            .addFields(
-                Query.Field.newBuilder().setName("col22").setType(Query.Type.VARBINARY).build())
+            .addFields(Query.Field.newBuilder().setName("col21").setType(Query.Type.VARCHAR).build())
+            .addFields(Query.Field.newBuilder().setName("col22").setType(Query.Type.VARBINARY).build())
             .addFields(Query.Field.newBuilder().setName("col23").setType(Query.Type.CHAR).build())
             .addFields(Query.Field.newBuilder().setName("col24").setType(Query.Type.BINARY).build())
             .addFields(Query.Field.newBuilder().setName("col25").setType(Query.Type.BIT).build())
@@ -210,14 +197,11 @@ public class VitessResultSetTest extends BaseTest {
                 .addLengths("HELLO TDS TEAM".length()).addLengths("HELLO TDS TEAM".length())
                 .addLengths("HELLO TDS TEAM".length()).addLengths("HELLO TDS TEAM".length())
                 .addLengths("N".length()).addLengths("HELLO TDS TEAM".length())
-                .addLengths("0".length()).addLengths("val123".length()).addLengths(-1).setValues(
-                    ByteString.copyFromUtf8(
-                        "-5050-2300023000-100100-100100-1000100024.52100.432016-02-06 " +
-                            "14:15:162016-02-0612:34:562016-02-06 14:15:1620161234.56789HELLO TDS TEAMHELLO TDS "
-                            +
-                            "TEAMHELLO TDS TEAMHELLO TDS TEAMNHELLO TDS TEAM0val123"))).build());
+                .addLengths("0".length()).addLengths("val123".length()).addLengths(-1).setValues(ByteString.copyFromUtf8(
+                "-5050-2300023000-100100-100100-1000100024.52100.432016-02-06 " +
+                "14:15:162016-02-0612:34:562016-02-06 14:15:1620161234.56789HELLO TDS TEAMHELLO TDS " +
+                "TEAMHELLO TDS TEAMHELLO TDS TEAMNHELLO TDS TEAM0val123"))).build());
     }
-
 
     @Test public void testNextWithZeroRows() throws Exception {
         Cursor cursor = new SimpleCursor(Query.QueryResult.newBuilder()
@@ -493,6 +477,23 @@ public class VitessResultSetTest extends BaseTest {
         // Need to implement AssertEquivalant
         //Assert.assertEquals((InputStream)(new ByteArrayInputStream("HELLO TDS TEAM".getBytes())), vitessResultSet
         // .getAsciiStream(19));
+    }
+
+    @Test public void testGetBinaryStream() throws SQLException, IOException {
+        Cursor cursor = getCursorWithRowsAsNull();
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
+        vitessResultSet.next();
+        byte[] ba1 = new byte[128];
+        new ByteArrayInputStream("HELLO TDS TEAM".getBytes()).read(ba1, 0, 128);
+        byte[] ba2 = new byte[128];
+        vitessResultSet.getBinaryStream(19).read(ba2, 0, 128);
+        Assert.assertArrayEquals(ba1, ba2);
+
+        byte[] ba3 = new byte[128];
+        vitessResultSet.getBinaryStream(22).read(ba3, 0, 128);
+        Assert.assertArrayEquals(ba1, ba3);
+
+        Assert.assertEquals(null, vitessResultSet.getBinaryStream(27));
     }
 
     @Test public void testEnhancedFieldsFromCursor() throws Exception {

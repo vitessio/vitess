@@ -331,4 +331,26 @@ public class CursorTest {
       Assert.assertTrue(row.wasNull());
     }
   }
+
+  @Test
+  public void testGetBinaryInputStream() throws Exception {
+    ByteString travel = ByteString.copyFromUtf8("მოგზაურობა");
+    try (Cursor cursor = new SimpleCursor(QueryResult.newBuilder()
+                                          .addFields(Field.newBuilder().setName("col1").setType(Query.Type.INT32).build())
+                                          .addRows(Query.Row.newBuilder().addLengths(travel.size()).setValues(travel))
+                                          .build())) {
+      Row row = cursor.next();
+      Assert.assertNotNull(row);
+
+      byte[] ba1 = new byte[128];
+      travel.newInput().read(ba1, 0, 128);
+      byte[] ba2 = new byte[128];
+      row.getBinaryInputStream("col1").read(ba2, 0, 128);
+      byte[] ba3 = new byte[128];
+      row.getBinaryInputStream(1).read(ba3, 0, 128);
+
+      Assert.assertArrayEquals(ba1, ba2);
+      Assert.assertArrayEquals(ba1, ba3);
+    }
+  }
 }
