@@ -52,22 +52,20 @@ func testDescribeTable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !sqltypes.FieldsEqual(result.Fields, mysql.DescribeTableFields) {
-		// MariaDB has '81' instead of '90' of Extra ColumnLength.
-		// Just try it and see if it's the only difference.
-		if result.Fields[5].ColumnLength == 81 {
-			result.Fields[5].ColumnLength = 90
-		}
+	// MariaDB has '81' instead of '90' of Extra ColumnLength.
+	// Just try it and see if it's the only difference.
+	if conn.IsMariaDB() && result.Fields[5].ColumnLength == 81 {
+		result.Fields[5].ColumnLength = 90
+	}
 
-		if !sqltypes.FieldsEqual(result.Fields, mysql.DescribeTableFields) {
-			for i, f := range result.Fields {
-				if !proto.Equal(f, mysql.DescribeTableFields[i]) {
-					t.Logf("result.Fields[%v] = %v", i, f)
-					t.Logf("        expected = %v", mysql.DescribeTableFields[i])
-				}
+	if !sqltypes.FieldsEqual(result.Fields, mysql.DescribeTableFields) {
+		for i, f := range result.Fields {
+			if !proto.Equal(f, mysql.DescribeTableFields[i]) {
+				t.Logf("result.Fields[%v] = %v", i, f)
+				t.Logf("        expected = %v", mysql.DescribeTableFields[i])
 			}
-			t.Errorf("Fields returned by 'describe' differ from expected fields: got:\n%v\nexpected:\n%v", result.Fields, mysql.DescribeTableFields)
 		}
+		t.Errorf("Fields returned by 'describe' differ from expected fields: got:\n%v\nexpected:\n%v", result.Fields, mysql.DescribeTableFields)
 	}
 
 	want := mysql.DescribeTableRow("id", "int(11)", false, "PRI", "0")
@@ -159,22 +157,19 @@ func testBaseShowTables(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !sqltypes.FieldsEqual(result.Fields, mysql.BaseShowTablesFields) {
-		// MariaDB has length 17 for unix_timestamp(create_time), see if that's the only difference.
-		if result.Fields[2].ColumnLength == 17 {
-			result.Fields[2].ColumnLength = 11
-		}
+	// MariaDB has length 17 for unix_timestamp(create_time).
+	if conn.IsMariaDB() && result.Fields[2].ColumnLength == 17 {
+		result.Fields[2].ColumnLength = 11
+	}
 
-		// And try again.
-		if !sqltypes.FieldsEqual(result.Fields, mysql.BaseShowTablesFields) {
-			for i, f := range result.Fields {
-				if i < len(mysql.BaseShowTablesFields) && !proto.Equal(f, mysql.BaseShowTablesFields[i]) {
-					t.Logf("result.Fields[%v] = %v", i, f)
-					t.Logf("        expected = %v", mysql.BaseShowTablesFields[i])
-				}
+	if !sqltypes.FieldsEqual(result.Fields, mysql.BaseShowTablesFields) {
+		for i, f := range result.Fields {
+			if i < len(mysql.BaseShowTablesFields) && !proto.Equal(f, mysql.BaseShowTablesFields[i]) {
+				t.Logf("result.Fields[%v] = %v", i, f)
+				t.Logf("        expected = %v", mysql.BaseShowTablesFields[i])
 			}
-			t.Errorf("Fields returned by BaseShowTables differ from expected fields: got:\n%v\nexpected:\n%v", result.Fields, mysql.BaseShowTablesFields)
 		}
+		t.Errorf("Fields returned by BaseShowTables differ from expected fields: got:\n%v\nexpected:\n%v", result.Fields, mysql.BaseShowTablesFields)
 	}
 
 	want := mysql.BaseShowTablesRow("for_base_show_tables", false, "fancy table")

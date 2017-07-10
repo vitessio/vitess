@@ -23,8 +23,8 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vttablet/faketmclient"
 	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
@@ -59,9 +59,9 @@ func runCommand(t *testing.T, wi *Instance, wr *wrangler.Wrangler, args []string
 
 // expectBlpCheckpointCreationQueries fakes out the queries which vtworker
 // sends out to create the Binlog Player (BLP) checkpoint.
-func expectBlpCheckpointCreationQueries(f *FakePoolConnection) {
-	f.addExpectedQuery("CREATE DATABASE IF NOT EXISTS _vt", nil)
-	f.addExpectedQuery("CREATE TABLE IF NOT EXISTS _vt.blp_checkpoint (\n"+
+func expectBlpCheckpointCreationQueries(f *fakesqldb.DB) {
+	f.AddExpectedQuery("CREATE DATABASE IF NOT EXISTS _vt", nil)
+	f.AddExpectedQuery("CREATE TABLE IF NOT EXISTS _vt.blp_checkpoint (\n"+
 		"  source_shard_uid INT(10) UNSIGNED NOT NULL,\n"+
 		"  pos VARBINARY(64000) DEFAULT NULL,\n"+
 		"  max_tps BIGINT(20) NOT NULL,\n"+
@@ -70,15 +70,15 @@ func expectBlpCheckpointCreationQueries(f *FakePoolConnection) {
 		"  transaction_timestamp BIGINT(20) UNSIGNED NOT NULL,\n"+
 		"  flags VARBINARY(250) DEFAULT NULL,\n"+
 		"  PRIMARY KEY (source_shard_uid)\n) ENGINE=InnoDB", nil)
-	f.addExpectedQuery("INSERT INTO _vt.blp_checkpoint (source_shard_uid, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, flags) VALUES (0, 'MariaDB/12-34-5678', *", nil)
+	f.AddExpectedQuery("INSERT INTO _vt.blp_checkpoint (source_shard_uid, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, flags) VALUES (0, 'MariaDB/12-34-5678', *", nil)
 }
 
-// sourceRdonlyFactory fakes out the MIN, MAX query on the primary key.
+// sourceRdonlyFakeDB fakes out the MIN, MAX query on the primary key.
 // (This query is used to calculate the split points for reading a table
 // using multiple threads.)
-func sourceRdonlyFactory(t *testing.T, dbName, tableName string, min, max int) func() (dbconnpool.PoolConnection, error) {
-	f := NewFakePoolConnectionQuery(t, "sourceRdonly")
-	f.addExpectedExecuteFetch(ExpectedExecuteFetch{
+func sourceRdonlyFakeDB(t *testing.T, dbName, tableName string, min, max int) *fakesqldb.DB {
+	f := fakesqldb.New(t).OrderMatters()
+	f.AddExpectedExecuteFetch(fakesqldb.ExpectedExecuteFetch{
 		Query: fmt.Sprintf("SELECT MIN(`id`), MAX(`id`) FROM `%s`.`%s`", dbName, tableName),
 		QueryResult: &sqltypes.Result{
 			Fields: []*querypb.Field{
@@ -99,8 +99,8 @@ func sourceRdonlyFactory(t *testing.T, dbName, tableName string, min, max int) f
 			},
 		},
 	})
-	f.enableInfinite()
-	return f.getFactory()
+	f.EnableInfinite()
+	return f
 }
 
 // fakeTMCTopo is a FakeTabletManagerClient extension that implements ChangeType

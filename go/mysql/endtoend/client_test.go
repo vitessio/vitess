@@ -154,3 +154,18 @@ func TestTLS(t *testing.T) {
 		t.Fatalf("SHOW STATUS LIKE 'Ssl_cipher' returned unexpected result: %v", result)
 	}
 }
+
+func TestSlaveStatus(t *testing.T) {
+	params := connParams
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	status, err := conn.ShowSlaveStatus()
+	if err != mysql.ErrNotSlave {
+		t.Errorf("Got unexpected result for ShowSlaveStatus: %v %v", status, err)
+	}
+}

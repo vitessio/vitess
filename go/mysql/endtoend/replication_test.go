@@ -35,18 +35,15 @@ import (
 
 // connectForReplication is a helper method to connect for replication
 // from the current binlog position.
-func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, bool, mysql.BinlogFormat) {
+func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, mysql.BinlogFormat) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &connParams)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// We need to know if this is MariaDB.
-	isMariaDB := false
-	if strings.Contains(strings.ToLower(conn.ServerVersion), "mariadb") {
-		isMariaDB = true
-
+	// We need to know if this is MariaDB, to set the right flag.
+	if conn.IsMariaDB() {
 		// This flag is required to get GTIDs from MariaDB.
 		t.Log("MariaDB: sensing SET @mariadb_slave_capability=4")
 		if _, err := conn.ExecuteFetch("SET @mariadb_slave_capability=4", 0, false); err != nil {
@@ -108,7 +105,7 @@ func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, bool, mysql.Bin
 		}
 
 		// See what we got.
-		be := newBinlogEvent(isMariaDB, data)
+		be := conn.MakeBinlogEvent(data[1:])
 		if !be.IsValid() {
 			t.Fatalf("NewMysql56BinlogEvent has an invalid packet: %v", be)
 		}
@@ -132,23 +129,14 @@ func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, bool, mysql.Bin
 		break
 	}
 
-	return conn, isMariaDB, f
-}
-
-// newBinlogEvent uses the flavor to create the right packet.
-func newBinlogEvent(isMariaDB bool, data []byte) mysql.BinlogEvent {
-	// Hardcoded test for MySQL server version.
-	if isMariaDB {
-		return mysql.NewMariadbBinlogEvent(data[1:])
-	}
-	return mysql.NewMysql56BinlogEvent(data[1:])
+	return conn, f
 }
 
 // TestReplicationConnectionClosing connects as a replication client,
 // gets the first packet, then waits a few milliseconds and closes the
 // connection. We should get the right error.
 func TestReplicationConnectionClosing(t *testing.T) {
-	conn, _, _ := connectForReplication(t, false /* rbr */)
+	conn, _ := connectForReplication(t, false /* rbr */)
 	defer conn.Close()
 
 	// One go routine is waiting on events.
@@ -219,7 +207,7 @@ func TestReplicationConnectionClosing(t *testing.T) {
 }
 
 func TestStatementReplicationWithRealDatabase(t *testing.T) {
-	conn, isMariaDB, f := connectForReplication(t, false /* rbr */)
+	conn, f := connectForReplication(t, false /* rbr */)
 	defer conn.Close()
 
 	// Create a table, insert some data in it.
@@ -269,7 +257,7 @@ func TestStatementReplicationWithRealDatabase(t *testing.T) {
 		}
 
 		// See what we got, strip the checksum.
-		be := newBinlogEvent(isMariaDB, data)
+		be := conn.MakeBinlogEvent(data[1:])
 		if !be.IsValid() {
 			t.Fatalf("read an invalid packet: %v", be)
 		}
@@ -321,7 +309,7 @@ func TestStatementReplicationWithRealDatabase(t *testing.T) {
 }
 
 func testRowReplicationWithRealDatabase(t *testing.T) {
-	conn, isMariaDB, f := connectForReplication(t, true /* rbr */)
+	conn, f := connectForReplication(t, true /* rbr */)
 	defer conn.Close()
 
 	// Create a table, insert some data in it.
@@ -392,7 +380,7 @@ func testRowReplicationWithRealDatabase(t *testing.T) {
 		}
 
 		// See what we got, strip the checksum.
-		be := newBinlogEvent(isMariaDB, data)
+		be := conn.MakeBinlogEvent(data[1:])
 		if !be.IsValid() {
 			t.Fatalf("read an invalid packet: %v", be)
 		}
@@ -813,11 +801,11 @@ func TestRowReplicationTypes(t *testing.T) {
 		createValue: "ST_GeomFromText('POINT(1 1)')",
 	}}
 
-	conn, isMariaDB, f := connectForReplication(t, true /* rbr */)
+	conn, f := connectForReplication(t, true /* rbr */)
 	defer conn.Close()
 
 	// MariaDB timestamp(N) is not supported by our RBR. See doc.go.
-	if !isMariaDB {
+	if !conn.IsMariaDB() {
 		testcases = append(testcases, []struct {
 			name        string
 			createType  string
@@ -1125,7 +1113,7 @@ func TestRowReplicationTypes(t *testing.T) {
 		}
 
 		// See what we got, strip the checksum.
-		be := newBinlogEvent(isMariaDB, data)
+		be := conn.MakeBinlogEvent(data[1:])
 		if !be.IsValid() {
 			t.Fatalf("read an invalid packet: %v", be)
 		}

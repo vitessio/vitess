@@ -123,10 +123,9 @@ func TestReparentTablet(t *testing.T) {
 	defer master.StopActionLoop(t)
 
 	// slave loop
-	slave.FakeMysqlDaemon.SetMasterCommandsInput = topoproto.MysqlAddr(master.Tablet)
-	slave.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
+	slave.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
 	slave.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"set master cmd 1",
+		"FAKE SET MASTER",
 	}
 	slave.StartActionLoop(t, wr)
 	defer slave.StopActionLoop(t)

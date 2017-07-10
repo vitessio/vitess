@@ -122,21 +122,16 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 }
 
 func (agent *ActionAgent) startReplication(ctx context.Context, pos mysql.Position, tabletType topodatapb.TabletType) error {
-	cmds, err := agent.MysqlDaemon.ResetSlaveCommands()
-	if err != nil {
-		return err
+	cmds := []string{
+		"STOP SLAVE",
+		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
 	}
-
 	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
 		return fmt.Errorf("failed to reset slave: %v", err)
 	}
 
 	// Set the position at which to resume from the master.
-	cmds, err = agent.MysqlDaemon.SetSlavePositionCommands(pos)
-	if err != nil {
-		return err
-	}
-	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
+	if err := agent.MysqlDaemon.SetSlavePosition(ctx, pos); err != nil {
 		return fmt.Errorf("failed to set slave position: %v", err)
 	}
 
@@ -173,15 +168,9 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos mysql.Positi
 	}
 
 	// Set master and start slave.
-	cmds, err = agent.MysqlDaemon.SetMasterCommands(topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)))
-	if err != nil {
-		return fmt.Errorf("MysqlDaemon.SetMasterCommands failed: %v", err)
+	if err := agent.MysqlDaemon.SetMaster(ctx, topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)), false /* slaveStopBefore */, true /* slaveStartAfter */); err != nil {
+		return fmt.Errorf("MysqlDaemon.SetMaster failed: %v", err)
 	}
-	cmds = append(cmds, "START SLAVE")
-	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
-		return fmt.Errorf("failed to start replication: %v", err)
-	}
-
 	return nil
 }
 

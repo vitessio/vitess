@@ -78,7 +78,6 @@ type Mysqld struct {
 
 	// mutex protects the fields below.
 	mutex         sync.Mutex
-	mysqlFlavor   MysqlFlavor
 	onTermFuncs   []func()
 	cancelWaitCmd chan struct{}
 }
@@ -95,13 +94,13 @@ func NewMysqld(config *Mycnf, dbcfgs *dbconfigs.DBConfigs, dbconfigsFlags dbconf
 	// Create and open the connection pool for dba access.
 	if dbconfigs.DbaConfig&dbconfigsFlags != 0 {
 		result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *dbaIdleTimeout)
-		result.dbaPool.Open(dbconnpool.DBConnectionCreator(&dbcfgs.Dba, dbaMysqlStats))
+		result.dbaPool.Open(&dbcfgs.Dba, dbaMysqlStats)
 	}
 
 	// Create and open the connection pool for app access.
 	if dbconfigs.AppConfig&dbconfigsFlags != 0 {
 		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout)
-		result.appPool.Open(dbconnpool.DBConnectionCreator(&dbcfgs.App, appMysqlStats))
+		result.appPool.Open(&dbcfgs.App, appMysqlStats)
 	}
 
 	return result
@@ -864,7 +863,7 @@ socket=%v
 
 // GetAppConnection returns a connection from the app pool.
 // Recycle needs to be called on the result.
-func (mysqld *Mysqld) GetAppConnection(ctx context.Context) (dbconnpool.PoolConnection, error) {
+func (mysqld *Mysqld) GetAppConnection(ctx context.Context) (*dbconnpool.PooledDBConnection, error) {
 	return mysqld.appPool.Get(ctx)
 }
 

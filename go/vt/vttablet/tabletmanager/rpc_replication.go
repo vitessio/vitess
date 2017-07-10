@@ -44,7 +44,7 @@ func (agent *ActionAgent) SlaveStatus(ctx context.Context) (*replicationdatapb.S
 	if err != nil {
 		return nil, err
 	}
-	return mysqlctl.StatusToProto(status), nil
+	return mysql.SlaveStatusToProto(status), nil
 }
 
 // MasterPosition returns the master position
@@ -155,12 +155,8 @@ func (agent *ActionAgent) ResetReplication(ctx context.Context) error {
 	}
 	defer agent.unlock()
 
-	cmds, err := agent.MysqlDaemon.ResetReplicationCommands()
-	if err != nil {
-		return err
-	}
 	agent.setSlaveStopped(true)
-	return agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
+	return agent.MysqlDaemon.ResetReplication(ctx)
 }
 
 // InitMaster enables writes and returns the replication position.
@@ -258,18 +254,10 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.Tabl
 		return err
 	}
 
-	cmds, err := agent.MysqlDaemon.SetSlavePositionCommands(pos)
-	if err != nil {
+	if err := agent.MysqlDaemon.SetSlavePosition(ctx, pos); err != nil {
 		return err
 	}
-	cmds2, err := agent.MysqlDaemon.SetMasterCommands(topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)))
-	if err != nil {
-		return err
-	}
-	cmds = append(cmds, cmds2...)
-	cmds = append(cmds, "START SLAVE")
-
-	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
+	if err := agent.MysqlDaemon.SetMaster(ctx, topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)), false /* slaveStopBefore */, true /* slaveStartAfter */); err != nil {
 		return err
 	}
 	agent.initReplication = true
@@ -434,20 +422,8 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 		}
 	}
 
-	// Create the list of commands to set the master
-	cmds := []string{}
-	if wasReplicating {
-		cmds = append(cmds, mysqlctl.SQLStopSlave)
-	}
-	smc, err := agent.MysqlDaemon.SetMasterCommands(topoproto.MysqlHostname(parent.Tablet), int(topoproto.MysqlPort(parent.Tablet)))
-	if err != nil {
-		return err
-	}
-	cmds = append(cmds, smc...)
-	if shouldbeReplicating {
-		cmds = append(cmds, mysqlctl.SQLStartSlave)
-	}
-	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
+	// Sets the master.
+	if err := agent.MysqlDaemon.SetMaster(ctx, topoproto.MysqlHostname(parent.Tablet), int(topoproto.MysqlPort(parent.Tablet)), wasReplicating, shouldbeReplicating); err != nil {
 		return err
 	}
 
@@ -527,7 +503,7 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*rep
 	}
 	if !rs.SlaveIORunning && !rs.SlaveSQLRunning {
 		// no replication is running, just return what we got
-		return mysqlctl.StatusToProto(rs), nil
+		return mysql.SlaveStatusToProto(rs), nil
 	}
 	if err := agent.stopSlaveLocked(ctx); err != nil {
 		return nil, fmt.Errorf("stop slave failed: %v", err)
@@ -537,7 +513,7 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*rep
 	if err != nil {
 		return nil, fmt.Errorf("after position failed: %v", err)
 	}
-	return mysqlctl.StatusToProto(rs), nil
+	return mysql.SlaveStatusToProto(rs), nil
 }
 
 // PromoteSlave makes the current tablet the master
