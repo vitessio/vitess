@@ -331,6 +331,9 @@ func init() {
 		if !tabletenv.Config.StrictTableACL {
 			return
 		}
+		if tabletenv.Config.EnableTableACLDryRun {
+			return
+		}
 		health.DefaultAggregator.RegisterSimpleCheck("tableacl", func() error { return checkHealth(&currentTableACL) })
 	})
 }
