@@ -48,7 +48,7 @@ import (
 type QueryExecutor struct {
 	query            string
 	trailingComments string
-	bindVars         map[string]interface{}
+	bindVars         map[string]*querypb.BindVariable
 	transactionID    int64
 	options          *querypb.ExecuteOptions
 	plan             *TabletPlan
@@ -456,7 +456,7 @@ func (qre *QueryExecutor) execInsertPK(conn *TxConnection) (*sqltypes.Result, er
 }
 
 func (qre *QueryExecutor) execInsertMessage(conn *TxConnection) (*sqltypes.Result, error) {
-	qre.bindVars["#time_now"] = time.Now().UnixNano()
+	qre.bindVars["#time_now"] = sqltypes.Int64BindVar(time.Now().UnixNano())
 	pkRows, err := buildValueList(qre.plan.Table, qre.plan.PKValues, qre.bindVars)
 	if err != nil {
 		return nil, err
@@ -664,7 +664,7 @@ func (qre *QueryExecutor) getConn(pool *connpool.Pool) (*connpool.DBConn, error)
 	return nil, err
 }
 
-func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {
+func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	sql, err := qre.generateFinalSQL(parsedQuery, bindVars, nil, nil)
 	if err != nil {
 		return nil, err
@@ -694,7 +694,7 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 }
 
 // txFetch fetches from a TxConnection.
-func (qre *QueryExecutor) txFetch(conn *TxConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, extras map[string]sqlparser.Encodable, buildStreamComment []byte, wantfields, record bool) (*sqltypes.Result, error) {
+func (qre *QueryExecutor) txFetch(conn *TxConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable, extras map[string]sqlparser.Encodable, buildStreamComment []byte, wantfields, record bool) (*sqltypes.Result, error) {
 	sql, err := qre.generateFinalSQL(parsedQuery, bindVars, extras, buildStreamComment)
 	if err != nil {
 		return nil, err
@@ -711,7 +711,7 @@ func (qre *QueryExecutor) txFetch(conn *TxConnection, parsedQuery *sqlparser.Par
 }
 
 // dbConnFetch fetches from a connpool.DBConn.
-func (qre *QueryExecutor) dbConnFetch(conn *connpool.DBConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte, wantfields bool) (*sqltypes.Result, error) {
+func (qre *QueryExecutor) dbConnFetch(conn *connpool.DBConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable, buildStreamComment []byte, wantfields bool) (*sqltypes.Result, error) {
 	sql, err := qre.generateFinalSQL(parsedQuery, bindVars, nil, buildStreamComment)
 	if err != nil {
 		return nil, err
@@ -720,7 +720,7 @@ func (qre *QueryExecutor) dbConnFetch(conn *connpool.DBConn, parsedQuery *sqlpar
 }
 
 // streamFetch performs a streaming fetch.
-func (qre *QueryExecutor) streamFetch(conn *connpool.DBConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte, callback func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) streamFetch(conn *connpool.DBConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable, buildStreamComment []byte, callback func(*sqltypes.Result) error) error {
 	sql, err := qre.generateFinalSQL(parsedQuery, bindVars, nil, buildStreamComment)
 	if err != nil {
 		return err
@@ -728,8 +728,8 @@ func (qre *QueryExecutor) streamFetch(conn *connpool.DBConn, parsedQuery *sqlpar
 	return qre.execStreamSQL(conn, sql, callback)
 }
 
-func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, extras map[string]sqlparser.Encodable, buildStreamComment []byte) (string, error) {
-	bindVars["#maxLimit"] = qre.tsv.qe.maxResultSize.Get() + 1
+func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable, extras map[string]sqlparser.Encodable, buildStreamComment []byte) (string, error) {
+	bindVars["#maxLimit"] = sqltypes.Int64BindVar(qre.tsv.qe.maxResultSize.Get() + 1)
 	sql, err := parsedQuery.GenerateQuery(bindVars, extras)
 	if err != nil {
 		return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)

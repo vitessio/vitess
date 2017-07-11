@@ -43,39 +43,64 @@ func BuildBindVars(in map[string]interface{}) (map[string]*querypb.BindVariable,
 	return out, nil
 }
 
+// Int64BindVar converts an int64 to a bind var.
+func Int64BindVar(v int64) *querypb.BindVariable {
+	return &querypb.BindVariable{
+		Type:  querypb.Type_INT64,
+		Value: strconv.AppendInt(nil, v, 10),
+	}
+}
+
+// Uint64BindVar converts a uint64 to a bind var.
+func Uint64BindVar(v uint64) *querypb.BindVariable {
+	return &querypb.BindVariable{
+		Type:  querypb.Type_UINT64,
+		Value: strconv.AppendUint(nil, v, 10),
+	}
+}
+
+// Float64BindVar converts a float64 to a bind var.
+func Float64BindVar(v float64) *querypb.BindVariable {
+	return &querypb.BindVariable{
+		Type:  querypb.Type_FLOAT64,
+		Value: strconv.AppendFloat(nil, v, 'g', -1, 64),
+	}
+}
+
+// StringBindVar converts a string to a bind var.
+func StringBindVar(v string) *querypb.BindVariable {
+	return &querypb.BindVariable{
+		Type:  querypb.Type_VARCHAR,
+		Value: []byte(v),
+	}
+}
+
+// BytesBindVar converts a []byte to a bind var.
+func BytesBindVar(v []byte) *querypb.BindVariable {
+	return &querypb.BindVariable{
+		Type:  querypb.Type_VARBINARY,
+		Value: v,
+	}
+}
+
 // BuildBindVar builds a *querypb.BindVariable from a valid input type.
 func BuildBindVar(v interface{}) (*querypb.BindVariable, error) {
 	switch v := v.(type) {
 	case string:
-		return &querypb.BindVariable{
-			Type:  querypb.Type_VARCHAR,
-			Value: []byte(v),
-		}, nil
+		return StringBindVar(v), nil
 	case []byte:
-		return &querypb.BindVariable{
-			Type:  querypb.Type_VARBINARY,
-			Value: v,
-		}, nil
+		return BytesBindVar(v), nil
 	case int:
 		return &querypb.BindVariable{
 			Type:  querypb.Type_INT64,
 			Value: strconv.AppendInt(nil, int64(v), 10),
 		}, nil
 	case int64:
-		return &querypb.BindVariable{
-			Type:  querypb.Type_INT64,
-			Value: strconv.AppendInt(nil, v, 10),
-		}, nil
+		return Int64BindVar(v), nil
 	case uint64:
-		return &querypb.BindVariable{
-			Type:  querypb.Type_UINT64,
-			Value: strconv.AppendUint(nil, v, 10),
-		}, nil
+		return Uint64BindVar(v), nil
 	case float64:
-		return &querypb.BindVariable{
-			Type:  querypb.Type_FLOAT64,
-			Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-		}, nil
+		return Float64BindVar(v), nil
 	case nil:
 		return &querypb.BindVariable{
 			Type: querypb.Type_NULL_TYPE,
@@ -235,11 +260,6 @@ func ValidateBindVar(bv *querypb.BindVariable) error {
 
 // BindVarToValue converts an already validated bind var into a Value.
 func BindVarToValue(bv *querypb.BindVariable) Value {
-	// This is a failsafe. There are still places in the code
-	// that send nil bind vars.
-	if bv == nil {
-		return NULL
-	}
 	return MakeTrusted(bv.Type, bv.Value)
 }
 

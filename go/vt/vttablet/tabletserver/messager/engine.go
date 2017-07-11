@@ -188,7 +188,7 @@ func (me *Engine) GenerateLoadMessagesQuery(name string) (*sqlparser.ParsedQuery
 }
 
 // GenerateAckQuery returns the query and bind vars for acking a message.
-func (me *Engine) GenerateAckQuery(name string, ids []string) (string, map[string]interface{}, error) {
+func (me *Engine) GenerateAckQuery(name string, ids []string) (string, map[string]*querypb.BindVariable, error) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	mm := me.managers[name]
@@ -200,7 +200,7 @@ func (me *Engine) GenerateAckQuery(name string, ids []string) (string, map[strin
 }
 
 // GeneratePostponeQuery returns the query and bind vars for postponing a message.
-func (me *Engine) GeneratePostponeQuery(name string, ids []string) (string, map[string]interface{}, error) {
+func (me *Engine) GeneratePostponeQuery(name string, ids []string) (string, map[string]*querypb.BindVariable, error) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	mm := me.managers[name]
@@ -212,7 +212,7 @@ func (me *Engine) GeneratePostponeQuery(name string, ids []string) (string, map[
 }
 
 // GeneratePurgeQuery returns the query and bind vars for purging messages.
-func (me *Engine) GeneratePurgeQuery(name string, timeCutoff int64) (string, map[string]interface{}, error) {
+func (me *Engine) GeneratePurgeQuery(name string, timeCutoff int64) (string, map[string]*querypb.BindVariable, error) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	mm := me.managers[name]

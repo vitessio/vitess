@@ -16,11 +16,13 @@ limitations under the License.
 
 package utils
 
+import querypb "github.com/youtube/vitess/go/vt/proto/query"
+
 // utils.go contains general utility functions used in the splitquery package.
 
 // CloneBindVariables returns a shallow-copy of the given bindVariables map.
-func CloneBindVariables(bindVariables map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{}, len(bindVariables))
+func CloneBindVariables(bindVariables map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {
+	result := make(map[string]*querypb.BindVariable, len(bindVariables))
 	for key, value := range bindVariables {
 		result[key] = value
 	}

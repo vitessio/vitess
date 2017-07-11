@@ -1479,7 +1479,7 @@ func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, tx
 	return &QueryExecutor{
 		ctx:           ctx,
 		query:         sql,
-		bindVars:      make(map[string]interface{}),
+		bindVars:      make(map[string]*querypb.BindVariable),
 		transactionID: txID,
 		plan:          plan,
 		logStats:      logStats,

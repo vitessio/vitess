@@ -258,13 +258,13 @@ func TestMultiExecs(t *testing.T) {
 	if len(sbc0.Queries) == 0 || len(sbc1.Queries) == 0 {
 		t.Fatalf("didn't get expected query")
 	}
-	wantVars0 := map[string]interface{}{
+	wantVars0 := map[string]*querypb.BindVariable{
 		"bv0": shardVars["0"]["bv0"],
 	}
 	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, wantVars0) {
 		t.Errorf("got %v, want %v", sbc0.Queries[0].BindVariables, wantVars0)
 	}
-	wantVars1 := map[string]interface{}{
+	wantVars1 := map[string]*querypb.BindVariable{
 		"bv1": shardVars["1"]["bv1"],
 	}
 	if !reflect.DeepEqual(sbc1.Queries[0].BindVariables, wantVars1) {

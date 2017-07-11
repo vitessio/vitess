@@ -424,11 +424,16 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	}
 	defer conn.Close(ctx)
 
+	bindVars, err := sqltypes.BuildBindVars(*bindVariables)
+	if err != nil {
+		return fmt.Errorf("Execute failed: %v", err)
+	}
+
 	qr, err := conn.Execute(ctx, &querypb.Target{
 		Keyspace:   tabletInfo.Tablet.Keyspace,
 		Shard:      tabletInfo.Tablet.Shard,
 		TabletType: tabletInfo.Tablet.Type,
-	}, subFlags.Arg(1), *bindVariables, int64(*transactionID), executeOptions)
+	}, subFlags.Arg(1), bindVars, int64(*transactionID), executeOptions)
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}

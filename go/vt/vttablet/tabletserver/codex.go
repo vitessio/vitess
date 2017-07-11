@@ -29,7 +29,7 @@ import (
 // buildValueList builds the set of PK reference rows used to drive the next query.
 // It uses the PK values supplied in the original query and bind variables.
 // The generated reference rows are validated for type match against the PK of the table.
-func buildValueList(table *schema.Table, pkValues []interface{}, bindVars map[string]interface{}) ([][]sqltypes.Value, error) {
+func buildValueList(table *schema.Table, pkValues []interface{}, bindVars map[string]*querypb.BindVariable) ([][]sqltypes.Value, error) {
 	resolved, length, err := resolvePKValues(table, pkValues, bindVars)
 	if err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func buildValueList(table *schema.Table, pkValues []interface{}, bindVars map[st
 	return valueList, nil
 }
 
-func resolvePKValues(table *schema.Table, pkValues []interface{}, bindVars map[string]interface{}) (resolved []interface{}, length int, err error) {
+func resolvePKValues(table *schema.Table, pkValues []interface{}, bindVars map[string]*querypb.BindVariable) (resolved []interface{}, length int, err error) {
 	length = -1
 	setLengthFunc := func(list []sqltypes.Value) error {
 		if length == -1 {
@@ -102,51 +102,29 @@ func resolvePKValues(table *schema.Table, pkValues []interface{}, bindVars map[s
 	return resolved, length, nil
 }
 
-func resolveListArg(col *schema.TableColumn, key string, bindVars map[string]interface{}) ([]sqltypes.Value, error) {
-	val, _, err := sqlparser.FetchBindVar(key, bindVars)
+func resolveListArg(col *schema.TableColumn, key string, bindVars map[string]*querypb.BindVariable) ([]sqltypes.Value, error) {
+	list, _, err := sqlparser.FetchBindVar(key, bindVars)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 	}
-
-	switch list := val.(type) {
-	case []interface{}:
-		resolved := make([]sqltypes.Value, len(list))
-		for i, v := range list {
-			sqlval, err := sqltypes.BuildConverted(col.Type, v)
-			if err != nil {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-			}
-			if err = validateValue(col, sqlval); err != nil {
-				return nil, err
-			}
-			resolved[i] = sqlval
-		}
-		return resolved, nil
-	case *querypb.BindVariable:
-		if list.Type != querypb.Type_TUPLE {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expecting list for bind var %s: %v", key, list)
-		}
-		resolved := make([]sqltypes.Value, len(list.Values))
-		for i, v := range list.Values {
-			// We can use MakeTrusted as BuildConverted will check the value.
-			sqlval := sqltypes.MakeTrusted(v.Type, v.Value)
-			sqlval, err := sqltypes.BuildConverted(col.Type, sqlval)
-			if err != nil {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-			}
-			if err = validateValue(col, sqlval); err != nil {
-				return nil, err
-			}
-			resolved[i] = sqlval
-		}
-		return resolved, nil
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown type for bind variable %v", key)
+	if list.Type != querypb.Type_TUPLE {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expecting list for bind var %s: %v", key, list)
 	}
+
+	resolved := make([]sqltypes.Value, len(list.Values))
+	for i, v := range list.Values {
+		// We can use MakeTrusted as BuildConverted will check the value.
+		sqlval := sqltypes.MakeTrusted(col.Type, v.Value)
+		if err = validateValue(col, sqlval); err != nil {
+			return nil, err
+		}
+		resolved[i] = sqlval
+	}
+	return resolved, nil
 }
 
 // buildSecondaryList is used for handling ON DUPLICATE DMLs, or those that change the PK.
-func buildSecondaryList(table *schema.Table, pkList [][]sqltypes.Value, secondaryList []interface{}, bindVars map[string]interface{}) ([][]sqltypes.Value, error) {
+func buildSecondaryList(table *schema.Table, pkList [][]sqltypes.Value, secondaryList []interface{}, bindVars map[string]*querypb.BindVariable) ([][]sqltypes.Value, error) {
 	if secondaryList == nil {
 		return nil, nil
 	}
@@ -167,7 +145,7 @@ func buildSecondaryList(table *schema.Table, pkList [][]sqltypes.Value, secondar
 	return valueList, nil
 }
 
-func resolveValue(col *schema.TableColumn, value interface{}, bindVars map[string]interface{}) (result sqltypes.Value, err error) {
+func resolveValue(col *schema.TableColumn, value interface{}, bindVars map[string]*querypb.BindVariable) (result sqltypes.Value, err error) {
 	if v, ok := value.(string); ok {
 		value, _, err = sqlparser.FetchBindVar(v, bindVars)
 		if err != nil {
@@ -185,7 +163,7 @@ func resolveValue(col *schema.TableColumn, value interface{}, bindVars map[strin
 }
 
 // resolveNumber extracts a number from a bind variable or sql value.
-func resolveNumber(value interface{}, bindVars map[string]interface{}) (int64, error) {
+func resolveNumber(value interface{}, bindVars map[string]*querypb.BindVariable) (int64, error) {
 	var err error
 	if v, ok := value.(string); ok {
 		value, _, err = sqlparser.FetchBindVar(v, bindVars)

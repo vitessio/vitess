@@ -100,18 +100,18 @@ func TestInts(t *testing.T) {
 	_, err := client.Execute(
 		"insert into vitess_ints values(:tiny, :tinyu, :small, "+
 			":smallu, :medium, :mediumu, :normal, :normalu, :big, :bigu, :year)",
-		map[string]interface{}{
-			"tiny":    int32(-128),
-			"tinyu":   uint32(255),
-			"small":   int32(-32768),
-			"smallu":  uint32(65535),
-			"medium":  int32(-8388608),
-			"mediumu": uint32(16777215),
-			"normal":  int64(-2147483648),
-			"normalu": uint64(4294967295),
-			"big":     int64(-9223372036854775808),
-			"bigu":    uint64(18446744073709551615),
-			"year":    2012,
+		map[string]*querypb.BindVariable{
+			"tiny":    sqltypes.Int64BindVar(-128),
+			"tinyu":   sqltypes.Uint64BindVar(255),
+			"small":   sqltypes.Int64BindVar(-32768),
+			"smallu":  sqltypes.Uint64BindVar(65535),
+			"medium":  sqltypes.Int64BindVar(-8388608),
+			"mediumu": sqltypes.Uint64BindVar(16777215),
+			"normal":  sqltypes.Int64BindVar(-2147483648),
+			"normalu": sqltypes.Uint64BindVar(4294967295),
+			"big":     sqltypes.Int64BindVar(-9223372036854775808),
+			"bigu":    sqltypes.Uint64BindVar(18446744073709551615),
+			"year":    sqltypes.Int64BindVar(2012),
 		},
 	)
 	if err != nil {
@@ -290,12 +290,12 @@ func TestFractionals(t *testing.T) {
 
 	_, err := client.Execute(
 		"insert into vitess_fracts values(:id, :deci, :num, :f, :d)",
-		map[string]interface{}{
-			"id":   1,
-			"deci": "1.99",
-			"num":  "2.99",
-			"f":    3.99,
-			"d":    4.99,
+		map[string]*querypb.BindVariable{
+			"id":   sqltypes.Int64BindVar(1),
+			"deci": sqltypes.StringBindVar("1.99"),
+			"num":  sqltypes.StringBindVar("2.99"),
+			"f":    sqltypes.Float64BindVar(3.99),
+			"d":    sqltypes.Float64BindVar(4.99),
 		},
 	)
 	if err != nil {
@@ -386,17 +386,17 @@ func TestStrings(t *testing.T) {
 	_, err := client.Execute(
 		"insert into vitess_strings values "+
 			"(:vb, :c, :vc, :b, :tb, :bl, :ttx, :tx, :en, :s)",
-		map[string]interface{}{
-			"vb":  "a",
-			"c":   "b",
-			"vc":  "c",
-			"b":   "d",
-			"tb":  "e",
-			"bl":  "f",
-			"ttx": "g",
-			"tx":  "h",
-			"en":  "a",
-			"s":   "a,b",
+		map[string]*querypb.BindVariable{
+			"vb":  sqltypes.StringBindVar("a"),
+			"c":   sqltypes.StringBindVar("b"),
+			"vc":  sqltypes.StringBindVar("c"),
+			"b":   sqltypes.StringBindVar("d"),
+			"tb":  sqltypes.StringBindVar("e"),
+			"bl":  sqltypes.StringBindVar("f"),
+			"ttx": sqltypes.StringBindVar("g"),
+			"tx":  sqltypes.StringBindVar("h"),
+			"en":  sqltypes.StringBindVar("a"),
+			"s":   sqltypes.StringBindVar("a,b"),
 		},
 	)
 	if err != nil {
@@ -535,12 +535,12 @@ func TestMiscTypes(t *testing.T) {
 
 	_, err := client.Execute(
 		"insert into vitess_misc values(:id, :b, :d, :dt, :t, point(1, 2))",
-		map[string]interface{}{
-			"id": 1,
-			"b":  "\x01",
-			"d":  "2012-01-01",
-			"dt": "2012-01-01 15:45:45",
-			"t":  "15:45:45",
+		map[string]*querypb.BindVariable{
+			"id": sqltypes.Int64BindVar(1),
+			"b":  sqltypes.StringBindVar("\x01"),
+			"d":  sqltypes.StringBindVar("2012-01-01"),
+			"dt": sqltypes.StringBindVar("2012-01-01 15:45:45"),
+			"t":  sqltypes.StringBindVar("15:45:45"),
 		},
 	)
 	if err != nil {
@@ -687,7 +687,7 @@ func TestTypeLimits(t *testing.T) {
 
 	mismatchCases := []struct {
 		query string
-		bv    map[string]interface{}
+		bv    map[string]*querypb.BindVariable
 		out   string
 	}{{
 		query: "insert into vitess_ints(tiny) values('str')",
@@ -695,7 +695,7 @@ func TestTypeLimits(t *testing.T) {
 		out:   "strconv.ParseInt",
 	}, {
 		query: "insert into vitess_ints(tiny) values(:str)",
-		bv:    map[string]interface{}{"str": "str"},
+		bv:    map[string]*querypb.BindVariable{"str": sqltypes.StringBindVar("str")},
 		out:   "strconv.ParseInt",
 	}, {
 		query: "insert into vitess_ints(tiny) values(1.2)",
@@ -703,15 +703,20 @@ func TestTypeLimits(t *testing.T) {
 		out:   "unsupported: cannot identify primary key of statement",
 	}, {
 		query: "insert into vitess_ints(tiny) values(:fl)",
-		bv:    map[string]interface{}{"fl": 1.2},
-		out:   "type mismatch",
+		bv: map[string]*querypb.BindVariable{
+			"fl": {
+				Type:  querypb.Type_FLOAT64,
+				Value: []byte("1.2"),
+			},
+		},
+		out: "type mismatch",
 	}, {
 		query: "insert into vitess_strings(vb) values(1)",
 		bv:    nil,
 		out:   "type mismatch",
 	}, {
 		query: "insert into vitess_strings(vb) values(:id)",
-		bv:    map[string]interface{}{"id": 1},
+		bv:    map[string]*querypb.BindVariable{"id": sqltypes.Int64BindVar(1)},
 		out:   "type mismatch",
 	}, {
 		query: "insert into vitess_strings(vb) select tiny from vitess_ints",

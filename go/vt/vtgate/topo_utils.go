@@ -24,7 +24,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -201,11 +200,7 @@ func boundShardQueriesToScatterBatchRequest(boundQueries []*vtgatepb.BoundShardQ
 				}
 				requests.Requests[key] = request
 			}
-			bq, err := querytypes.Proto3ToBoundQuery(boundQuery.Query, true /* enforceSafety */)
-			if err != nil {
-				return nil, err
-			}
-			request.Queries = append(request.Queries, *bq)
+			request.Queries = append(request.Queries, boundQuery.Query)
 			request.ResultIndexes = append(request.ResultIndexes, i)
 		}
 	}
