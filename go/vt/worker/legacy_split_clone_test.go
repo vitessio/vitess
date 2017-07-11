@@ -143,10 +143,6 @@ func (tc *legacySplitCloneTestCase) setUp(v3 bool) {
 
 	tc.tablets = []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster, leftRdonly, tc.leftReplica, rightMaster, rightRdonly}
 
-	for _, ft := range tc.tablets {
-		ft.StartActionLoop(tc.t, tc.wi.wr)
-	}
-
 	// add the topo and schema data we'll need
 	if err := tc.ts.CreateShard(ctx, "ks", "80-"); err != nil {
 		tc.t.Fatalf("CreateShard(\"-80\") failed: %v", err)
@@ -221,6 +217,11 @@ func (tc *legacySplitCloneTestCase) setUp(v3 bool) {
 		"-destination_pack_count", "4",
 		"-destination_writer_count", "10",
 		"ks/-80"}
+
+	// Start action loop after having registered all RPC services.
+	for _, ft := range tc.tablets {
+		ft.StartActionLoop(tc.t, tc.wi.wr)
+	}
 }
 
 func (tc *legacySplitCloneTestCase) tearDown() {
