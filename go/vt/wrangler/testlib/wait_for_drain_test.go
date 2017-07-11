@@ -87,10 +87,6 @@ func testWaitForDrain(t *testing.T, desc, cells string, drain drainDirective, ex
 		TabletKeyspaceShard(t, keyspace, shard))
 	t2 := NewFakeTablet(t, wr, "cell2", 1, topodatapb.TabletType_REPLICA, nil,
 		TabletKeyspaceShard(t, keyspace, shard))
-	for _, ft := range []*FakeTablet{t1, t2} {
-		ft.StartActionLoop(t, wr)
-		defer ft.StopActionLoop(t)
-	}
 
 	target := querypb.Target{
 		Keyspace:   keyspace,
@@ -101,6 +97,12 @@ func testWaitForDrain(t *testing.T, desc, cells string, drain drainDirective, ex
 	fqs2 := fakes.NewStreamHealthQueryService(target)
 	grpcqueryservice.Register(t1.RPCServer, fqs1)
 	grpcqueryservice.Register(t2.RPCServer, fqs2)
+
+	// Start the action loop after having registered the extra services.
+	for _, ft := range []*FakeTablet{t1, t2} {
+		ft.StartActionLoop(t, wr)
+		defer ft.StopActionLoop(t)
+	}
 
 	// Run vtctl WaitForDrain and react depending on its output.
 	timeout := "0.5s"

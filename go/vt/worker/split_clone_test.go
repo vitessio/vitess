@@ -173,10 +173,6 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 	tc.tablets = []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2,
 		leftMaster, tc.leftReplica, leftRdonly1, leftRdonly2, rightMaster, rightRdonly1, rightRdonly2}
 
-	for _, ft := range tc.tablets {
-		ft.StartActionLoop(tc.t, tc.wi.wr)
-	}
-
 	// add the topo and schema data we'll need
 	if err := tc.ts.CreateShard(ctx, "ks", "80-"); err != nil {
 		tc.t.Fatalf("CreateShard(\"-80\") failed: %v", err)
@@ -274,6 +270,11 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 		"-source_reader_count", strconv.Itoa(concurrency),
 		"-destination_writer_count", strconv.Itoa(concurrency),
 		"ks/-80"}
+
+	// Start action loop after having registered all RPC services.
+	for _, ft := range tc.tablets {
+		ft.StartActionLoop(tc.t, tc.wi.wr)
+	}
 }
 
 func (tc *splitCloneTestCase) tearDown() {

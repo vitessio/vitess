@@ -106,11 +106,6 @@ func TestVerticalSplitClone(t *testing.T) {
 	destRdonly := testlib.NewFakeTablet(t, wi.wr, "cell1", 11,
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 
-	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly, destMaster, destRdonly} {
-		ft.StartActionLoop(t, wi.wr)
-		defer ft.StopActionLoop(t)
-	}
-
 	// add the topo and schema data we'll need
 	if err := wi.wr.RebuildKeyspaceGraph(ctx, "source_ks", nil); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
@@ -169,6 +164,12 @@ func TestVerticalSplitClone(t *testing.T) {
 	// query service such that it will return them as well.
 	destMasterFakeDb.GetEntry(29).AfterFunc = func() {
 		destRdonlyQs.addGeneratedRows(verticalSplitCloneTestMin, verticalSplitCloneTestMax)
+	}
+
+	// Start action loop after having registered all RPC services.
+	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly, destMaster, destRdonly} {
+		ft.StartActionLoop(t, wi.wr)
+		defer ft.StopActionLoop(t)
 	}
 
 	// Run the vtworker command.

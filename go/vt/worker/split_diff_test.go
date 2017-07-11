@@ -223,11 +223,6 @@ func testSplitDiff(t *testing.T, v3 bool) {
 	leftRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 12,
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 
-	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster, leftRdonly1, leftRdonly2} {
-		ft.StartActionLoop(t, wi.wr)
-		defer ft.StopActionLoop(t)
-	}
-
 	// add the topo and schema data we'll need
 	if err := ts.CreateShard(ctx, "ks", "80-"); err != nil {
 		t.Fatalf("CreateShard(\"-80\") failed: %v", err)
@@ -285,6 +280,12 @@ func testSplitDiff(t *testing.T, v3 bool) {
 			StreamHealthQueryService: qs,
 			excludedTable:            excludedTable,
 		})
+	}
+
+	// Start action loop after having registered all RPC services.
+	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster, leftRdonly1, leftRdonly2} {
+		ft.StartActionLoop(t, wi.wr)
+		defer ft.StopActionLoop(t)
 	}
 
 	// Run the vtworker command.
