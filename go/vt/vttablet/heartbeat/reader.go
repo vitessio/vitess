@@ -33,6 +33,8 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 const (
@@ -180,8 +182,8 @@ func (r *Reader) fetchMostRecentHeartbeat(ctx context.Context) (*sqltypes.Result
 // fields to the query as bind vars. This is done to protect ourselves
 // against a badly formed keyspace or shard name.
 func (r *Reader) bindHeartbeatFetch() (string, error) {
-	bindVars := map[string]interface{}{
-		"ks": sqltypes.MakeString([]byte(r.keyspaceShard)),
+	bindVars := map[string]*querypb.BindVariable{
+		"ks": sqltypes.StringBindVar(r.keyspaceShard),
 	}
 	parsed := sqlparser.BuildParsedQuery(sqlFetchMostRecentHeartbeat, r.dbName, ":ks")
 	bound, err := parsed.GenerateQuery(bindVars, nil)

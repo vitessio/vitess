@@ -533,12 +533,6 @@ func TestBindVarToValue(t *testing.T) {
 	if !reflect.DeepEqual(v, want) {
 		t.Errorf("BindVarToValue(%v): %v, want %v", bv, v, want)
 	}
-
-	bv = nil
-	v = BindVarToValue(bv)
-	if !reflect.DeepEqual(v, NULL) {
-		t.Errorf("BindVarToValue(%v): %v, want %v", bv, v, NULL)
-	}
 }
 
 func TestValueToBindVar(t *testing.T) {

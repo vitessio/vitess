@@ -24,9 +24,10 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/splitquery/splitquery_testing"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 type FakeSplitAlgorithm struct {
@@ -41,7 +42,7 @@ func (a *FakeSplitAlgorithm) getSplitColumns() []*schema.TableColumn {
 	return a.splitColumns
 }
 
-func verifyQueryPartsEqual(t *testing.T, expected, got []querytypes.QuerySplit) {
+func verifyQueryPartsEqual(t *testing.T, expected, got []*querypb.QuerySplit) {
 	if reflect.DeepEqual(expected, got) {
 		return
 	}
@@ -51,17 +52,17 @@ func verifyQueryPartsEqual(t *testing.T, expected, got []querytypes.QuerySplit) 
 		return
 	}
 	for i := range expected {
-		if expected[i].Sql != got[i].Sql {
+		if expected[i].Query.Sql != got[i].Query.Sql {
 			message += fmt.Sprintf("expected[%v].Sql:\n%v\n!=\ngot[%v].Sql:\n%v\n",
-				i, expected[i].Sql, i, got[i].Sql)
+				i, expected[i].Query.Sql, i, got[i].Query.Sql)
 		}
 		if expected[i].RowCount != got[i].RowCount {
 			message += fmt.Sprintf("expected[%v].RowCount: %v != got[%v].RowCount: %v\n",
 				i, expected[i].RowCount, i, got[i].RowCount)
 		}
-		if !reflect.DeepEqual(expected[i].BindVariables, got[i].BindVariables) {
+		if !reflect.DeepEqual(expected[i].Query.BindVariables, got[i].Query.BindVariables) {
 			message += fmt.Sprintf("expected[%v].BindVariables:\n%v\n!=\ngot[%v].BindVariables:\n%v\n",
-				i, expected[i].BindVariables, i, got[i].BindVariables)
+				i, expected[i].Query.BindVariables, i, got[i].Query.BindVariables)
 		}
 	}
 	t.Errorf("%s", message)
@@ -69,9 +70,9 @@ func verifyQueryPartsEqual(t *testing.T, expected, got []querytypes.QuerySplit) 
 
 func TestSplit1SplitColumn(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
-		querytypes.BoundQuery{
+		&querypb.BoundQuery{
 			Sql:           "select * from test_table",
-			BindVariables: map[string]interface{}{},
+			BindVariables: map[string]*querypb.BindVariable{},
 		},
 		[]sqlparser.ColIdent{sqlparser.NewColIdent("id")},
 		1000, // numRowsPerQueryPart
@@ -88,43 +89,51 @@ func TestSplit1SplitColumn(t *testing.T) {
 			},
 			splitColumns: splitParams.splitColumns,
 		})
-	var queryParts []querytypes.QuerySplit
+	var queryParts []*querypb.QuerySplit
 	queryParts, err = splitter.Split()
 	if err != nil {
 		t.Errorf("Splitter.Split() failed with: %v", err)
 	}
-	expected := []querytypes.QuerySplit{
+	expected := []*querypb.QuerySplit{
 		{
-			Sql: "select * from test_table where id < :_splitquery_end_id",
-			BindVariables: map[string]interface{}{
-				"_splitquery_end_id": int64(1),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where id < :_splitquery_end_id",
+				BindVariables: map[string]*querypb.BindVariable{
+					"_splitquery_end_id": sqltypes.Int64BindVar(1),
+				},
 			},
 		},
 		{
-			Sql: "select * from test_table where" +
-				" (:_splitquery_start_id <= id)" +
-				" and" +
-				" (id < :_splitquery_end_id)",
-			BindVariables: map[string]interface{}{
-				"_splitquery_start_id": int64(1),
-				"_splitquery_end_id":   int64(10),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where" +
+					" (:_splitquery_start_id <= id)" +
+					" and" +
+					" (id < :_splitquery_end_id)",
+				BindVariables: map[string]*querypb.BindVariable{
+					"_splitquery_start_id": sqltypes.Int64BindVar(1),
+					"_splitquery_end_id":   sqltypes.Int64BindVar(10),
+				},
 			},
 		},
 		{
-			Sql: "select * from test_table where" +
-				" (:_splitquery_start_id <= id)" +
-				" and" +
-				" (id < :_splitquery_end_id)",
-			BindVariables: map[string]interface{}{
-				"_splitquery_start_id": int64(10),
-				"_splitquery_end_id":   int64(50),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where" +
+					" (:_splitquery_start_id <= id)" +
+					" and" +
+					" (id < :_splitquery_end_id)",
+				BindVariables: map[string]*querypb.BindVariable{
+					"_splitquery_start_id": sqltypes.Int64BindVar(10),
+					"_splitquery_end_id":   sqltypes.Int64BindVar(50),
+				},
 			},
 		},
 		{
-			Sql: "select * from test_table where" +
-				" :_splitquery_start_id <= id",
-			BindVariables: map[string]interface{}{
-				"_splitquery_start_id": int64(50),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where" +
+					" :_splitquery_start_id <= id",
+				BindVariables: map[string]*querypb.BindVariable{
+					"_splitquery_start_id": sqltypes.Int64BindVar(50),
+				},
 			},
 		},
 	}
@@ -133,9 +142,9 @@ func TestSplit1SplitColumn(t *testing.T) {
 
 func TestSplit2SplitColumns(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
-		querytypes.BoundQuery{
+		&querypb.BoundQuery{
 			Sql:           "select * from test_table",
-			BindVariables: map[string]interface{}{},
+			BindVariables: map[string]*querypb.BindVariable{},
 		},
 		[]sqlparser.ColIdent{
 			sqlparser.NewColIdent("id"),
@@ -155,56 +164,64 @@ func TestSplit2SplitColumns(t *testing.T) {
 			},
 			splitColumns: splitParams.splitColumns,
 		})
-	var queryParts []querytypes.QuerySplit
+	var queryParts []*querypb.QuerySplit
 	queryParts, err = splitter.Split()
 	if err != nil {
 		t.Errorf("Splitter.Split() failed with: %v", err)
 	}
-	expected := []querytypes.QuerySplit{
+	expected := []*querypb.QuerySplit{
 		{
-			Sql: "select * from test_table where" +
-				" id < :_splitquery_end_id or" +
-				" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id)",
-			BindVariables: map[string]interface{}{
-				"_splitquery_end_id":      int64(1),
-				"_splitquery_end_user_id": int64(2),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where" +
+					" id < :_splitquery_end_id or" +
+					" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id)",
+				BindVariables: map[string]*querypb.BindVariable{
+					"_splitquery_end_id":      sqltypes.Int64BindVar(1),
+					"_splitquery_end_user_id": sqltypes.Int64BindVar(2),
+				},
 			},
 		},
 		{
-			Sql: "select * from test_table where" +
-				" (:_splitquery_start_id < id or" +
-				" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))" +
-				" and" +
-				" (id < :_splitquery_end_id or" +
-				" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
-			BindVariables: map[string]interface{}{
-				"_splitquery_start_id":      int64(1),
-				"_splitquery_start_user_id": int64(2),
-				"_splitquery_end_id":        int64(1),
-				"_splitquery_end_user_id":   int64(3),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where" +
+					" (:_splitquery_start_id < id or" +
+					" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))" +
+					" and" +
+					" (id < :_splitquery_end_id or" +
+					" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
+				BindVariables: map[string]*querypb.BindVariable{
+					"_splitquery_start_id":      sqltypes.Int64BindVar(1),
+					"_splitquery_start_user_id": sqltypes.Int64BindVar(2),
+					"_splitquery_end_id":        sqltypes.Int64BindVar(1),
+					"_splitquery_end_user_id":   sqltypes.Int64BindVar(3),
+				},
 			},
 		},
 		{
-			Sql: "select * from test_table where" +
-				" (:_splitquery_start_id < id or" +
-				" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))" +
-				" and" +
-				" (id < :_splitquery_end_id or" +
-				" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
-			BindVariables: map[string]interface{}{
-				"_splitquery_start_id":      int64(1),
-				"_splitquery_start_user_id": int64(3),
-				"_splitquery_end_id":        int64(5),
-				"_splitquery_end_user_id":   int64(1),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where" +
+					" (:_splitquery_start_id < id or" +
+					" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))" +
+					" and" +
+					" (id < :_splitquery_end_id or" +
+					" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
+				BindVariables: map[string]*querypb.BindVariable{
+					"_splitquery_start_id":      sqltypes.Int64BindVar(1),
+					"_splitquery_start_user_id": sqltypes.Int64BindVar(3),
+					"_splitquery_end_id":        sqltypes.Int64BindVar(5),
+					"_splitquery_end_user_id":   sqltypes.Int64BindVar(1),
+				},
 			},
 		},
 		{
-			Sql: "select * from test_table where" +
-				" :_splitquery_start_id < id or" +
-				" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id)",
-			BindVariables: map[string]interface{}{
-				"_splitquery_start_user_id": int64(1),
-				"_splitquery_start_id":      int64(5),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where" +
+					" :_splitquery_start_id < id or" +
+					" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id)",
+				BindVariables: map[string]*querypb.BindVariable{
+					"_splitquery_start_user_id": sqltypes.Int64BindVar(1),
+					"_splitquery_start_id":      sqltypes.Int64BindVar(5),
+				},
 			},
 		},
 	}
@@ -213,9 +230,9 @@ func TestSplit2SplitColumns(t *testing.T) {
 
 func TestSplit3SplitColumns(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
-		querytypes.BoundQuery{
+		&querypb.BoundQuery{
 			Sql:           "select * from test_table",
-			BindVariables: map[string]interface{}{},
+			BindVariables: map[string]*querypb.BindVariable{},
 		},
 		[]sqlparser.ColIdent{
 			sqlparser.NewColIdent("id"),
@@ -243,54 +260,60 @@ func TestSplit3SplitColumns(t *testing.T) {
 			},
 			splitColumns: splitParams.splitColumns,
 		})
-	var queryParts []querytypes.QuerySplit
+	var queryParts []*querypb.QuerySplit
 	queryParts, err = splitter.Split()
 	if err != nil {
 		t.Errorf("Splitter.Split() failed with: %v", err)
 	}
-	expected := []querytypes.QuerySplit{
+	expected := []*querypb.QuerySplit{
 		{
-			Sql: "select * from test_table where" +
-				" id < :_splitquery_end_id or" +
-				" (id = :_splitquery_end_id and" +
-				" (user_id < :_splitquery_end_user_id or" +
-				" (user_id = :_splitquery_end_user_id and user_id2 < :_splitquery_end_user_id2)))",
-			BindVariables: map[string]interface{}{
-				"_splitquery_end_id":       int64(1),
-				"_splitquery_end_user_id":  int64(2),
-				"_splitquery_end_user_id2": int64(2),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where" +
+					" id < :_splitquery_end_id or" +
+					" (id = :_splitquery_end_id and" +
+					" (user_id < :_splitquery_end_user_id or" +
+					" (user_id = :_splitquery_end_user_id and user_id2 < :_splitquery_end_user_id2)))",
+				BindVariables: map[string]*querypb.BindVariable{
+					"_splitquery_end_id":       sqltypes.Int64BindVar(1),
+					"_splitquery_end_user_id":  sqltypes.Int64BindVar(2),
+					"_splitquery_end_user_id2": sqltypes.Int64BindVar(2),
+				},
 			},
 		},
 		{
-			Sql: "select * from test_table where" +
-				" (:_splitquery_start_id < id or" +
-				" (:_splitquery_start_id = id and" +
-				" (:_splitquery_start_user_id < user_id or" +
-				" (:_splitquery_start_user_id = user_id and :_splitquery_start_user_id2 <= user_id2))))" +
-				" and" +
-				" (id < :_splitquery_end_id or" +
-				" (id = :_splitquery_end_id and" +
-				" (user_id < :_splitquery_end_user_id or" +
-				" (user_id = :_splitquery_end_user_id and user_id2 < :_splitquery_end_user_id2))))",
-			BindVariables: map[string]interface{}{
-				"_splitquery_start_id":       int64(1),
-				"_splitquery_start_user_id":  int64(2),
-				"_splitquery_start_user_id2": int64(2),
-				"_splitquery_end_id":         int64(2),
-				"_splitquery_end_user_id":    int64(1),
-				"_splitquery_end_user_id2":   int64(1),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where" +
+					" (:_splitquery_start_id < id or" +
+					" (:_splitquery_start_id = id and" +
+					" (:_splitquery_start_user_id < user_id or" +
+					" (:_splitquery_start_user_id = user_id and :_splitquery_start_user_id2 <= user_id2))))" +
+					" and" +
+					" (id < :_splitquery_end_id or" +
+					" (id = :_splitquery_end_id and" +
+					" (user_id < :_splitquery_end_user_id or" +
+					" (user_id = :_splitquery_end_user_id and user_id2 < :_splitquery_end_user_id2))))",
+				BindVariables: map[string]*querypb.BindVariable{
+					"_splitquery_start_id":       sqltypes.Int64BindVar(1),
+					"_splitquery_start_user_id":  sqltypes.Int64BindVar(2),
+					"_splitquery_start_user_id2": sqltypes.Int64BindVar(2),
+					"_splitquery_end_id":         sqltypes.Int64BindVar(2),
+					"_splitquery_end_user_id":    sqltypes.Int64BindVar(1),
+					"_splitquery_end_user_id2":   sqltypes.Int64BindVar(1),
+				},
 			},
 		},
 		{
-			Sql: "select * from test_table where" +
-				" :_splitquery_start_id < id or" +
-				" (:_splitquery_start_id = id and" +
-				" (:_splitquery_start_user_id < user_id or" +
-				" (:_splitquery_start_user_id = user_id and :_splitquery_start_user_id2 <= user_id2)))",
-			BindVariables: map[string]interface{}{
-				"_splitquery_start_id":       int64(2),
-				"_splitquery_start_user_id":  int64(1),
-				"_splitquery_start_user_id2": int64(1),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where" +
+					" :_splitquery_start_id < id or" +
+					" (:_splitquery_start_id = id and" +
+					" (:_splitquery_start_user_id < user_id or" +
+					" (:_splitquery_start_user_id = user_id and :_splitquery_start_user_id2 <= user_id2)))",
+				BindVariables: map[string]*querypb.BindVariable{
+					"_splitquery_start_id":       sqltypes.Int64BindVar(2),
+					"_splitquery_start_user_id":  sqltypes.Int64BindVar(1),
+					"_splitquery_start_user_id2": sqltypes.Int64BindVar(1),
+				},
 			},
 		},
 	}
@@ -299,9 +322,9 @@ func TestSplit3SplitColumns(t *testing.T) {
 
 func TestSplitWithWhereClause(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
-		querytypes.BoundQuery{
+		&querypb.BoundQuery{
 			Sql:           "select * from test_table where name!='foo'",
-			BindVariables: map[string]interface{}{},
+			BindVariables: map[string]*querypb.BindVariable{},
 		},
 		[]sqlparser.ColIdent{
 			sqlparser.NewColIdent("id"),
@@ -321,56 +344,64 @@ func TestSplitWithWhereClause(t *testing.T) {
 			},
 			splitColumns: splitParams.splitColumns,
 		})
-	var queryParts []querytypes.QuerySplit
+	var queryParts []*querypb.QuerySplit
 	queryParts, err = splitter.Split()
 	if err != nil {
 		t.Errorf("Splitter.Split() failed with: %v", err)
 	}
-	expected := []querytypes.QuerySplit{
+	expected := []*querypb.QuerySplit{
 		{
-			Sql: "select * from test_table where (name != 'foo') and" +
-				" (id < :_splitquery_end_id or" +
-				" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
-			BindVariables: map[string]interface{}{
-				"_splitquery_end_id":      int64(1),
-				"_splitquery_end_user_id": int64(2),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where (name != 'foo') and" +
+					" (id < :_splitquery_end_id or" +
+					" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
+				BindVariables: map[string]*querypb.BindVariable{
+					"_splitquery_end_id":      sqltypes.Int64BindVar(1),
+					"_splitquery_end_user_id": sqltypes.Int64BindVar(2),
+				},
 			},
 		},
 		{
-			Sql: "select * from test_table where (name != 'foo') and" +
-				" ((:_splitquery_start_id < id or" +
-				" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))" +
-				" and" +
-				" (id < :_splitquery_end_id or" +
-				" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id)))",
-			BindVariables: map[string]interface{}{
-				"_splitquery_start_id":      int64(1),
-				"_splitquery_start_user_id": int64(2),
-				"_splitquery_end_id":        int64(1),
-				"_splitquery_end_user_id":   int64(3),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where (name != 'foo') and" +
+					" ((:_splitquery_start_id < id or" +
+					" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))" +
+					" and" +
+					" (id < :_splitquery_end_id or" +
+					" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id)))",
+				BindVariables: map[string]*querypb.BindVariable{
+					"_splitquery_start_id":      sqltypes.Int64BindVar(1),
+					"_splitquery_start_user_id": sqltypes.Int64BindVar(2),
+					"_splitquery_end_id":        sqltypes.Int64BindVar(1),
+					"_splitquery_end_user_id":   sqltypes.Int64BindVar(3),
+				},
 			},
 		},
 		{
-			Sql: "select * from test_table where (name != 'foo') and" +
-				" ((:_splitquery_start_id < id or" +
-				" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))" +
-				" and" +
-				" (id < :_splitquery_end_id or" +
-				" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id)))",
-			BindVariables: map[string]interface{}{
-				"_splitquery_start_id":      int64(1),
-				"_splitquery_start_user_id": int64(3),
-				"_splitquery_end_id":        int64(5),
-				"_splitquery_end_user_id":   int64(1),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where (name != 'foo') and" +
+					" ((:_splitquery_start_id < id or" +
+					" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))" +
+					" and" +
+					" (id < :_splitquery_end_id or" +
+					" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id)))",
+				BindVariables: map[string]*querypb.BindVariable{
+					"_splitquery_start_id":      sqltypes.Int64BindVar(1),
+					"_splitquery_start_user_id": sqltypes.Int64BindVar(3),
+					"_splitquery_end_id":        sqltypes.Int64BindVar(5),
+					"_splitquery_end_user_id":   sqltypes.Int64BindVar(1),
+				},
 			},
 		},
 		{
-			Sql: "select * from test_table where (name != 'foo') and" +
-				" (:_splitquery_start_id < id or" +
-				" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))",
-			BindVariables: map[string]interface{}{
-				"_splitquery_start_user_id": int64(1),
-				"_splitquery_start_id":      int64(5),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where (name != 'foo') and" +
+					" (:_splitquery_start_id < id or" +
+					" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))",
+				BindVariables: map[string]*querypb.BindVariable{
+					"_splitquery_start_user_id": sqltypes.Int64BindVar(1),
+					"_splitquery_start_id":      sqltypes.Int64BindVar(5),
+				},
 			},
 		},
 	}
@@ -379,9 +410,9 @@ func TestSplitWithWhereClause(t *testing.T) {
 
 func TestSplitWithExistingBindVariables(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
-		querytypes.BoundQuery{
+		&querypb.BoundQuery{
 			Sql:           "select * from test_table",
-			BindVariables: map[string]interface{}{"foo": int64(100)},
+			BindVariables: map[string]*querypb.BindVariable{"foo": sqltypes.Int64BindVar(100)},
 		},
 		[]sqlparser.ColIdent{
 			sqlparser.NewColIdent("id"),
@@ -401,60 +432,68 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 			},
 			splitColumns: splitParams.splitColumns,
 		})
-	var queryParts []querytypes.QuerySplit
+	var queryParts []*querypb.QuerySplit
 	queryParts, err = splitter.Split()
 	if err != nil {
 		t.Errorf("Splitter.Split() failed with: %v", err)
 	}
-	expected := []querytypes.QuerySplit{
+	expected := []*querypb.QuerySplit{
 		{
-			Sql: "select * from test_table where" +
-				" id < :_splitquery_end_id or" +
-				" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id)",
-			BindVariables: map[string]interface{}{
-				"foo":                     int64(100),
-				"_splitquery_end_id":      int64(1),
-				"_splitquery_end_user_id": int64(2),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where" +
+					" id < :_splitquery_end_id or" +
+					" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id)",
+				BindVariables: map[string]*querypb.BindVariable{
+					"foo":                     sqltypes.Int64BindVar(100),
+					"_splitquery_end_id":      sqltypes.Int64BindVar(1),
+					"_splitquery_end_user_id": sqltypes.Int64BindVar(2),
+				},
 			},
 		},
 		{
-			Sql: "select * from test_table where" +
-				" (:_splitquery_start_id < id or" +
-				" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))" +
-				" and" +
-				" (id < :_splitquery_end_id or" +
-				" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
-			BindVariables: map[string]interface{}{
-				"foo": int64(100),
-				"_splitquery_start_id":      int64(1),
-				"_splitquery_start_user_id": int64(2),
-				"_splitquery_end_id":        int64(1),
-				"_splitquery_end_user_id":   int64(3),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where" +
+					" (:_splitquery_start_id < id or" +
+					" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))" +
+					" and" +
+					" (id < :_splitquery_end_id or" +
+					" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
+				BindVariables: map[string]*querypb.BindVariable{
+					"foo": sqltypes.Int64BindVar(100),
+					"_splitquery_start_id":      sqltypes.Int64BindVar(1),
+					"_splitquery_start_user_id": sqltypes.Int64BindVar(2),
+					"_splitquery_end_id":        sqltypes.Int64BindVar(1),
+					"_splitquery_end_user_id":   sqltypes.Int64BindVar(3),
+				},
 			},
 		},
 		{
-			Sql: "select * from test_table where" +
-				" (:_splitquery_start_id < id or" +
-				" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))" +
-				" and" +
-				" (id < :_splitquery_end_id or" +
-				" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
-			BindVariables: map[string]interface{}{
-				"foo": int64(100),
-				"_splitquery_start_id":      int64(1),
-				"_splitquery_start_user_id": int64(3),
-				"_splitquery_end_id":        int64(5),
-				"_splitquery_end_user_id":   int64(1),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where" +
+					" (:_splitquery_start_id < id or" +
+					" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))" +
+					" and" +
+					" (id < :_splitquery_end_id or" +
+					" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
+				BindVariables: map[string]*querypb.BindVariable{
+					"foo": sqltypes.Int64BindVar(100),
+					"_splitquery_start_id":      sqltypes.Int64BindVar(1),
+					"_splitquery_start_user_id": sqltypes.Int64BindVar(3),
+					"_splitquery_end_id":        sqltypes.Int64BindVar(5),
+					"_splitquery_end_user_id":   sqltypes.Int64BindVar(1),
+				},
 			},
 		},
 		{
-			Sql: "select * from test_table where" +
-				" :_splitquery_start_id < id or" +
-				" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id)",
-			BindVariables: map[string]interface{}{
-				"foo": int64(100),
-				"_splitquery_start_user_id": int64(1),
-				"_splitquery_start_id":      int64(5),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where" +
+					" :_splitquery_start_id < id or" +
+					" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id)",
+				BindVariables: map[string]*querypb.BindVariable{
+					"foo": sqltypes.Int64BindVar(100),
+					"_splitquery_start_user_id": sqltypes.Int64BindVar(1),
+					"_splitquery_start_id":      sqltypes.Int64BindVar(5),
+				},
 			},
 		},
 	}
@@ -463,9 +502,9 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 
 func TestSplitWithEmptyBoundaryList(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
-		querytypes.BoundQuery{
+		&querypb.BoundQuery{
 			Sql:           "select * from test_table",
-			BindVariables: map[string]interface{}{"foo": int64(100)},
+			BindVariables: map[string]*querypb.BindVariable{"foo": sqltypes.Int64BindVar(100)},
 		},
 		[]sqlparser.ColIdent{
 			sqlparser.NewColIdent("id"),
@@ -481,16 +520,18 @@ func TestSplitWithEmptyBoundaryList(t *testing.T) {
 			boundaries:   []tuple{},
 			splitColumns: splitParams.splitColumns,
 		})
-	var queryParts []querytypes.QuerySplit
+	var queryParts []*querypb.QuerySplit
 	queryParts, err = splitter.Split()
 	if err != nil {
 		t.Errorf("Splitter.Split() failed with: %v", err)
 	}
-	expected := []querytypes.QuerySplit{
+	expected := []*querypb.QuerySplit{
 		{
-			Sql: "select * from test_table",
-			BindVariables: map[string]interface{}{
-				"foo": int64(100),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table",
+				BindVariables: map[string]*querypb.BindVariable{
+					"foo": sqltypes.Int64BindVar(100),
+				},
 			},
 		},
 	}
@@ -499,9 +540,9 @@ func TestSplitWithEmptyBoundaryList(t *testing.T) {
 
 func TestWithRealEqualSplits(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenSplitCount(
-		querytypes.BoundQuery{
+		&querypb.BoundQuery{
 			Sql:           "select * from test_table",
-			BindVariables: map[string]interface{}{},
+			BindVariables: map[string]*querypb.BindVariable{},
 		},
 		[]sqlparser.ColIdent{sqlparser.NewColIdent("id"), sqlparser.NewColIdent("user_id")},
 		3, /* split_count */
@@ -528,28 +569,34 @@ func TestWithRealEqualSplits(t *testing.T) {
 	if err != nil {
 		t.Errorf("Splitter.Split() failed with: %v", err)
 	}
-	expected := []querytypes.QuerySplit{
+	expected := []*querypb.QuerySplit{
 		{
-			Sql: "select * from test_table where id < :_splitquery_end_id",
-			BindVariables: map[string]interface{}{
-				"_splitquery_end_id": int64(1010),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where id < :_splitquery_end_id",
+				BindVariables: map[string]*querypb.BindVariable{
+					"_splitquery_end_id": sqltypes.Int64BindVar(1010),
+				},
 			},
 		},
 		{
-			Sql: "select * from test_table where" +
-				" (:_splitquery_start_id <= id)" +
-				" and" +
-				" (id < :_splitquery_end_id)",
-			BindVariables: map[string]interface{}{
-				"_splitquery_start_id": int64(1010),
-				"_splitquery_end_id":   int64(2010),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where" +
+					" (:_splitquery_start_id <= id)" +
+					" and" +
+					" (id < :_splitquery_end_id)",
+				BindVariables: map[string]*querypb.BindVariable{
+					"_splitquery_start_id": sqltypes.Int64BindVar(1010),
+					"_splitquery_end_id":   sqltypes.Int64BindVar(2010),
+				},
 			},
 		},
 		{
-			Sql: "select * from test_table where" +
-				" :_splitquery_start_id <= id",
-			BindVariables: map[string]interface{}{
-				"_splitquery_start_id": int64(2010),
+			Query: &querypb.BoundQuery{
+				Sql: "select * from test_table where" +
+					" :_splitquery_start_id <= id",
+				BindVariables: map[string]*querypb.BindVariable{
+					"_splitquery_start_id": sqltypes.Int64BindVar(2010),
+				},
 			},
 		},
 	}

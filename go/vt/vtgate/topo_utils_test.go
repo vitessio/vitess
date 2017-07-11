@@ -24,7 +24,6 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -170,11 +169,11 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 				Length: 3,
 				Requests: map[string]*shardBatchRequest{
 					"ks1:0": {
-						Queries: []querytypes.BoundQuery{
+						Queries: []*querypb.BoundQuery{
 							{
 								Sql: "q1",
-								BindVariables: map[string]interface{}{
-									"q1var": &querypb.BindVariable{
+								BindVariables: map[string]*querypb.BindVariable{
+									"q1var": {
 										Type:  sqltypes.Int64,
 										Value: []byte("1"),
 									},
@@ -186,19 +185,19 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 						ResultIndexes: []int{0},
 					},
 					"ks1:1": {
-						Queries: []querytypes.BoundQuery{
+						Queries: []*querypb.BoundQuery{
 							{
 								Sql: "q1",
-								BindVariables: map[string]interface{}{
-									"q1var": &querypb.BindVariable{
+								BindVariables: map[string]*querypb.BindVariable{
+									"q1var": {
 										Type:  sqltypes.Int64,
 										Value: []byte("1"),
 									},
 								},
 							}, {
 								Sql: "q2",
-								BindVariables: map[string]interface{}{
-									"q2var": &querypb.BindVariable{
+								BindVariables: map[string]*querypb.BindVariable{
+									"q2var": {
 										Type:  sqltypes.Int64,
 										Value: []byte("2"),
 									},
@@ -210,11 +209,11 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 						ResultIndexes: []int{0, 1},
 					},
 					"ks2:1": {
-						Queries: []querytypes.BoundQuery{
+						Queries: []*querypb.BoundQuery{
 							{
 								Sql: "q3",
-								BindVariables: map[string]interface{}{
-									"q3var": &querypb.BindVariable{
+								BindVariables: map[string]*querypb.BindVariable{
+									"q3var": {
 										Type:  sqltypes.Int64,
 										Value: []byte("3"),
 									},
@@ -248,11 +247,11 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 				Length: 1,
 				Requests: map[string]*shardBatchRequest{
 					"ks1:0": {
-						Queries: []querytypes.BoundQuery{
+						Queries: []*querypb.BoundQuery{
 							{
 								Sql: "q1",
-								BindVariables: map[string]interface{}{
-									"q1var": &querypb.BindVariable{
+								BindVariables: map[string]*querypb.BindVariable{
+									"q1var": {
 										Type:  sqltypes.Int64,
 										Value: []byte("1"),
 									},

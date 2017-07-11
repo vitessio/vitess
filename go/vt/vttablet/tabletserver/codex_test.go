@@ -17,7 +17,6 @@ limitations under the License.
 package tabletserver
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -37,7 +36,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 		[]string{"pk1", "pk2"})
 
 	// simple PK clause. e.g. where pk1 = 1
-	bindVars := map[string]interface{}{}
+	bindVars := map[string]*querypb.BindVariable{}
 	pk1Val, _ := sqltypes.BuildValue(1)
 	pkValues := []interface{}{pk1Val}
 	// want [[1]]
@@ -48,7 +47,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	}
 
 	// simple PK clause with bindVars. e.g. where pk1 = :pk1
-	bindVars["pk1"] = 1
+	bindVars["pk1"] = sqltypes.Int64BindVar(1)
 	pkValues = []interface{}{":pk1"}
 	// want [[1]]
 	want = [][]sqltypes.Value{{pk1Val}}
@@ -57,40 +56,19 @@ func TestCodexBuildValuesList(t *testing.T) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 
-	// null value
-	bindVars["pk1"] = nil
+	// type mismatch int
+	bindVars["pk1"] = sqltypes.StringBindVar("str")
 	pkValues = []interface{}{":pk1"}
-	// want [[1]]
-	want = [][]sqltypes.Value{{{}}}
-	got, _ = buildValueList(table, pkValues, bindVars)
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %v, want %v", got, want)
-	}
-
-	// invalid value
-	bindVars["pk1"] = struct{}{}
-	pkValues = []interface{}{":pk1"}
-	wantErr := "unexpected type struct {}: {}"
+	wantErr := "strconv.ParseInt"
 
 	got, err := buildValueList(table, pkValues, bindVars)
-
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("got %v, want %v", err, wantErr)
-	}
-
-	// type mismatch int
-	bindVars["pk1"] = "str"
-	pkValues = []interface{}{":pk1"}
-	wantErr = "strconv.ParseInt"
-
-	got, err = buildValueList(table, pkValues, bindVars)
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("got %v, want %v", err, wantErr)
 	}
 
 	// type mismatch binary
-	bindVars["pk1"] = 1
-	bindVars["pk2"] = 1
+	bindVars["pk1"] = sqltypes.Int64BindVar(1)
+	bindVars["pk2"] = sqltypes.Int64BindVar(1)
 	pkValues = []interface{}{":pk1", ":pk2"}
 	wantErr = "type mismatch, expecting string type for 1"
 
@@ -143,32 +121,10 @@ func TestCodexBuildValuesList(t *testing.T) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 
-	// list arg two values
+	// list arg two values.
 	// e.g. where pk1 = 1 and pk2 IN ::list
-	bindVars = map[string]interface{}{
-		"list": []interface{}{
-			"abc",
-			"xyz",
-		},
-	}
-	pkValues = []interface{}{
-		pk1Val,
-		"::list",
-	}
-	// want [[1 abc][1 xyz]]
-	want = [][]sqltypes.Value{
-		{pk1Val, pk2Val},
-		{pk1Val, pk2Val2},
-	}
-	got, _ = buildValueList(table, pkValues, bindVars)
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %v, want %v", got, want)
-	}
-
-	// list arg two values, using *querypb.BindVariable of type TUPLE
-	// e.g. where pk1 = 1 and pk2 IN ::list
-	bindVars = map[string]interface{}{
-		"list": &querypb.BindVariable{
+	bindVars = map[string]*querypb.BindVariable{
+		"list": {
 			Type: querypb.Type_TUPLE,
 			Values: []*querypb.Value{
 				{
@@ -198,9 +154,15 @@ func TestCodexBuildValuesList(t *testing.T) {
 
 	// list arg one value
 	// e.g. where pk1 = 1 and pk2 IN ::list
-	bindVars = map[string]interface{}{
-		"list": []interface{}{
-			"abc",
+	bindVars = map[string]*querypb.BindVariable{
+		"list": {
+			Type: querypb.Type_TUPLE,
+			Values: []*querypb.Value{
+				{
+					Type:  querypb.Type_VARBINARY,
+					Value: []byte("abc"),
+				},
+			},
 		},
 	}
 	pkValues = []interface{}{
@@ -217,8 +179,11 @@ func TestCodexBuildValuesList(t *testing.T) {
 	}
 
 	// list arg empty list
-	bindVars = map[string]interface{}{
-		"list": []interface{}{},
+	bindVars = map[string]*querypb.BindVariable{
+		"list": {
+			Type:   querypb.Type_TUPLE,
+			Values: []*querypb.Value{},
+		},
 	}
 	pkValues = []interface{}{
 		pk1Val,
@@ -231,14 +196,17 @@ func TestCodexBuildValuesList(t *testing.T) {
 	}
 
 	// list arg for non-list
-	bindVars = map[string]interface{}{
-		"list": []interface{}{},
+	bindVars = map[string]*querypb.BindVariable{
+		"list": {
+			Type:   querypb.Type_TUPLE,
+			Values: []*querypb.Value{},
+		},
 	}
 	pkValues = []interface{}{
 		pk1Val,
 		":list",
 	}
-	wantErr = "unexpected arg type []interface {} for key list"
+	wantErr = "unexpected arg type (TUPLE) for non-list key list"
 	got, err = buildValueList(table, pkValues, bindVars)
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("got %v, want %v", err, wantErr)
@@ -251,8 +219,8 @@ func TestCodexResolvePKValues(t *testing.T) {
 		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
 	key := "var"
-	bindVariables := make(map[string]interface{})
-	bindVariables[key] = "1"
+	bindVariables := make(map[string]*querypb.BindVariable)
+	bindVariables[key] = sqltypes.StringBindVar("1")
 
 	pkValues := make([]interface{}, 0, 10)
 	pkValues = append(pkValues, []interface{}{":" + key})
@@ -273,12 +241,12 @@ func TestCodexResolvePKValues(t *testing.T) {
 		t.Errorf("resolvePKValues: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
 	}
 	// pkValues with different length
-	bindVariables = make(map[string]interface{})
-	bindVariables[key] = 1
+	bindVariables = make(map[string]*querypb.BindVariable)
+	bindVariables[key] = sqltypes.Int64BindVar(1)
 	key2 := "var2"
 	key3 := "var3"
-	bindVariables[key2] = "2"
-	bindVariables[key3] = "3"
+	bindVariables[key2] = sqltypes.StringBindVar("2")
+	bindVariables[key3] = sqltypes.StringBindVar("3")
 	pkValues = make([]interface{}, 0, 10)
 	pkValues = append(pkValues, []interface{}{":" + key})
 	pkValues = append(pkValues, []interface{}{":" + key2, ":" + key3})
@@ -296,16 +264,9 @@ func TestCodexResolveListArg(t *testing.T) {
 		[]string{"pk1", "pk2"})
 
 	key := "var"
-	bindVariables := make(map[string]interface{})
-	bindVariables[key] = []interface{}{fmt.Errorf("error is not supported")}
-
-	_, err := resolveListArg(table.GetPKColumn(0), "::"+key, bindVariables)
-	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
-		t.Errorf("resolvePKValues: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
-	}
-
-	// This should successfully convert.
-	bindVariables[key] = []interface{}{"1"}
+	bindVariables := sqltypes.MakeTestBindVars(map[string]interface{}{
+		key: []interface{}{"1"},
+	})
 	v, err := resolveListArg(table.GetPKColumn(0), "::"+key, bindVariables)
 	if err != nil {
 		t.Error(err)
@@ -315,7 +276,9 @@ func TestCodexResolveListArg(t *testing.T) {
 		t.Errorf("resolvePKValues: %#v, want %#v", v, wantV)
 	}
 
-	bindVariables[key] = []interface{}{10}
+	bindVariables = sqltypes.MakeTestBindVars(map[string]interface{}{
+		key: []interface{}{10},
+	})
 	result, err := resolveListArg(table.GetPKColumn(0), "::"+key, bindVariables)
 	if err != nil {
 		t.Fatalf("should not get an error, but got error: %v", err)
@@ -326,21 +289,21 @@ func TestCodexResolveListArg(t *testing.T) {
 func TestResolveNumber(t *testing.T) {
 	testcases := []struct {
 		v      interface{}
-		bv     map[string]interface{}
+		bv     map[string]*querypb.BindVariable
 		out    int64
 		outErr string
 	}{{
 		v: ":a",
-		bv: map[string]interface{}{
-			"a": 10,
+		bv: map[string]*querypb.BindVariable{
+			"a": sqltypes.Int64BindVar(10),
 		},
 		out: int64(10),
 	}, {
 		v: "::a",
-		bv: map[string]interface{}{
+		bv: sqltypes.MakeTestBindVars(map[string]interface{}{
 			"a": []interface{}{10},
-		},
-		outErr: "unexpected type []interface {}: [10]",
+		}),
+		outErr: "type: TUPLE is invalid",
 	}, {
 		v:      ":a",
 		outErr: "missing bind var a",
@@ -377,7 +340,7 @@ func TestCodexBuildSecondaryList(t *testing.T) {
 		[]string{pk1, pk2})
 
 	// set pk2 = 'xyz' where pk1=1 and pk2 = 'abc'
-	bindVars := map[string]interface{}{}
+	bindVars := map[string]*querypb.BindVariable{}
 	pk1Val, _ := sqltypes.BuildValue(1)
 	pk2Val, _ := sqltypes.BuildValue("abc")
 	pkValues := []interface{}{pk1Val, pk2Val}
@@ -408,7 +371,7 @@ func TestCodexBuildStreamComment(t *testing.T) {
 		[]string{pk1, pk2})
 
 	// set pk2 = 'xyz' where pk1=1 and pk2 = 'abc'
-	bindVars := map[string]interface{}{}
+	bindVars := map[string]*querypb.BindVariable{}
 	pk1Val, _ := sqltypes.BuildValue(1)
 	pk2Val, _ := sqltypes.BuildValue("abc")
 	pkValues := []interface{}{pk1Val, pk2Val}

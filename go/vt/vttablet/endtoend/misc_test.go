@@ -102,7 +102,7 @@ func TestBinary(t *testing.T) {
 	// Test with bindvars.
 	_, err = client.Execute(
 		"insert into vitess_test values(5, null, null, :bindata)",
-		map[string]interface{}{"bindata": binaryData},
+		map[string]*querypb.BindVariable{"bindata": sqltypes.StringBindVar(binaryData)},
 	)
 	if err != nil {
 		t.Error(err)
@@ -124,9 +124,9 @@ func TestNocacheListArgs(t *testing.T) {
 
 	qr, err := client.Execute(
 		query,
-		map[string]interface{}{
+		sqltypes.MakeTestBindVars(map[string]interface{}{
 			"list": []interface{}{2, 3, 4},
-		},
+		}),
 	)
 	if err != nil {
 		t.Error(err)
@@ -138,9 +138,9 @@ func TestNocacheListArgs(t *testing.T) {
 
 	qr, err = client.Execute(
 		query,
-		map[string]interface{}{
+		sqltypes.MakeTestBindVars(map[string]interface{}{
 			"list": []interface{}{3, 4},
-		},
+		}),
 	)
 	if err != nil {
 		t.Error(err)
@@ -152,9 +152,9 @@ func TestNocacheListArgs(t *testing.T) {
 
 	qr, err = client.Execute(
 		query,
-		map[string]interface{}{
+		sqltypes.MakeTestBindVars(map[string]interface{}{
 			"list": []interface{}{3},
-		},
+		}),
 	)
 	if err != nil {
 		t.Error(err)
@@ -167,9 +167,9 @@ func TestNocacheListArgs(t *testing.T) {
 	// Error case
 	_, err = client.Execute(
 		query,
-		map[string]interface{}{
+		sqltypes.MakeTestBindVars(map[string]interface{}{
 			"list": []interface{}{},
-		},
+		}),
 	)
 	want := "empty list supplied for list"
 	if err == nil || err.Error() != want {
@@ -195,7 +195,7 @@ func TestTrailingComment(t *testing.T) {
 	vstart := framework.DebugVars()
 	v1 := framework.FetchInt(vstart, "QueryCacheLength")
 
-	bindVars := map[string]interface{}{"ival": 1}
+	bindVars := map[string]*querypb.BindVariable{"ival": sqltypes.Int64BindVar(1)}
 	client := framework.NewClient()
 
 	for _, query := range []string{
@@ -338,7 +338,7 @@ func TestBindInSelect(t *testing.T) {
 	// Int bind var.
 	qr, err := client.Execute(
 		"select :bv from dual",
-		map[string]interface{}{"bv": 1},
+		map[string]*querypb.BindVariable{"bv": sqltypes.Int64BindVar(1)},
 	)
 	if err != nil {
 		t.Error(err)
@@ -366,7 +366,7 @@ func TestBindInSelect(t *testing.T) {
 	// String bind var.
 	qr, err = client.Execute(
 		"select :bv from dual",
-		map[string]interface{}{"bv": "abcd"},
+		map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVar("abcd")},
 	)
 	if err != nil {
 		t.Error(err)
@@ -395,7 +395,7 @@ func TestBindInSelect(t *testing.T) {
 	// Binary bind var.
 	qr, err = client.Execute(
 		"select :bv from dual",
-		map[string]interface{}{"bv": "\x00\xff"},
+		map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVar("\x00\xff")},
 	)
 	if err != nil {
 		t.Error(err)
@@ -459,7 +459,7 @@ func TestQueryStats(t *testing.T) {
 
 	start := time.Now()
 	query := "select /* query_stats */ eid from vitess_a where eid = :eid"
-	bv := map[string]interface{}{"eid": 1}
+	bv := map[string]*querypb.BindVariable{"eid": sqltypes.Int64BindVar(1)}
 	_, _ = client.Execute(query, bv)
 	stat := framework.QueryStats()[query]
 	duration := int(time.Now().Sub(start))
@@ -549,7 +549,7 @@ func TestLogTruncation(t *testing.T) {
 	// Test that a long error string is not truncated by default
 	_, err := client.Execute(
 		"insert into vitess_test values(123, :data, null, null)",
-		map[string]interface{}{"data": "THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED"},
+		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVar("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
 	want := "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess_test values (123, 'THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED', null, null) /* _stream vitess_test (intval ) (123 ); */"
 	if err == nil {
@@ -563,7 +563,7 @@ func TestLogTruncation(t *testing.T) {
 	*sqlparser.TruncateErrLen = 30
 	_, err = client.Execute(
 		"insert into vitess_test values(123, :data, null, null)",
-		map[string]interface{}{"data": "THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED"},
+		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVar("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
 	want = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess [TRUNCATED] /* _stream vitess_test (intval ) (123 ); */"
 	if err == nil {
@@ -577,7 +577,7 @@ func TestLogTruncation(t *testing.T) {
 	*sqlparser.TruncateErrLen = 30
 	_, err = client.Execute(
 		"insert into vitess_test values(123, :data, null, null) /* KEEP ME */",
-		map[string]interface{}{"data": "THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED"},
+		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVar("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
 	want = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess [TRUNCATED] /* _stream vitess_test (intval ) (123 ); */ /* KEEP ME */"
 	if err == nil {

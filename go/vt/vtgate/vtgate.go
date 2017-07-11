@@ -41,7 +41,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
@@ -814,7 +813,7 @@ func (vtg *VTGate) SplitQuery(
 	// We return 'KeyRangeParts' for sharded keyspaces that are not custom sharded. If the
 	// keyspace is custom sharded or unsharded we return 'ShardParts'.
 	var querySplitToQueryPartFunc func(
-		querySplit *querytypes.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error)
+		querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error)
 	if vtg.isKeyspaceRangeBasedSharded(keyspace, srvKeyspace) {
 		// Index the shard references in 'shardRefs' by shard name.
 		shardRefByName := make(map[string]*topodatapb.ShardReference, len(shardRefs))
@@ -851,10 +850,10 @@ func (vtg *VTGate) SplitQuery(
 func getQuerySplitToKeyRangePartFunc(
 	keyspace string,
 	shardReferenceByName map[string]*topodatapb.ShardReference) func(
-	querySplit *querytypes.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
+	querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
 
 	return func(
-		querySplit *querytypes.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
+		querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
 		// TODO(erez): Assert that shardReferenceByName contains an entry for 'shard'.
 		// Keyrange can be nil for the shard (e.g. for single-sharded keyspaces during resharding).
 		// In this case we append an empty keyrange that represents the entire keyspace.
@@ -862,15 +861,8 @@ func getQuerySplitToKeyRangePartFunc(
 		if shardReferenceByName[shard].KeyRange != nil {
 			keyranges = []*topodatapb.KeyRange{shardReferenceByName[shard].KeyRange}
 		}
-		bindVars, err := querytypes.BindVariablesToProto3(querySplit.BindVariables)
-		if err != nil {
-			return nil, err
-		}
 		return &vtgatepb.SplitQueryResponse_Part{
-			Query: &querypb.BoundQuery{
-				Sql:           querySplit.Sql,
-				BindVariables: bindVars,
-			},
+			Query: querySplit.Query,
 			KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{
 				Keyspace:  keyspace,
 				KeyRanges: keyranges,
@@ -884,19 +876,12 @@ func getQuerySplitToKeyRangePartFunc(
 // that converts the given QuerySplit to a SplitQueryResponse_Part message whose ShardPart field
 // is set.
 func getQuerySplitToShardPartFunc(keyspace string) func(
-	querySplit *querytypes.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
+	querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
 
 	return func(
-		querySplit *querytypes.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
-		bindVars, err := querytypes.BindVariablesToProto3(querySplit.BindVariables)
-		if err != nil {
-			return nil, err
-		}
+		querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
 		return &vtgatepb.SplitQueryResponse_Part{
-			Query: &querypb.BoundQuery{
-				Sql:           querySplit.Sql,
-				BindVariables: bindVars,
-			},
+			Query: querySplit.Query,
 			ShardPart: &vtgatepb.SplitQueryResponse_ShardPart{
 				Keyspace: keyspace,
 				Shards:   []string{shard},

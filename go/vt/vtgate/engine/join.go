@@ -48,6 +48,8 @@ type Join struct {
 	Vars map[string]int `json:",omitempty"`
 }
 
+var nullBV = &querypb.BindVariable{Type: querypb.Type_NULL_TYPE}
+
 // Execute performs a non-streaming exec.
 func (jn *Join) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	lresult, err := jn.Left.Execute(vcursor, bindVars, joinVars, wantfields)
@@ -57,7 +59,7 @@ func (jn *Join) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.
 	result := &sqltypes.Result{}
 	if len(lresult.Rows) == 0 && wantfields {
 		for k := range jn.Vars {
-			joinVars[k] = nil
+			joinVars[k] = nullBV
 		}
 		rresult, err := jn.Right.GetFields(vcursor, bindVars, joinVars)
 		if err != nil {
@@ -133,7 +135,7 @@ func (jn *Join) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]*qu
 		if wantfields {
 			wantfields = false
 			for k := range jn.Vars {
-				joinVars[k] = nil
+				joinVars[k] = nullBV
 			}
 			result := &sqltypes.Result{}
 			rresult, err := jn.Right.GetFields(vcursor, bindVars, joinVars)
@@ -156,7 +158,7 @@ func (jn *Join) GetFields(vcursor VCursor, bindVars, joinVars map[string]*queryp
 	}
 	result := &sqltypes.Result{}
 	for k := range jn.Vars {
-		joinVars[k] = nil
+		joinVars[k] = nullBV
 	}
 	rresult, err := jn.Right.GetFields(vcursor, bindVars, joinVars)
 	if err != nil {

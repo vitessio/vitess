@@ -37,7 +37,6 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/messager"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -1203,7 +1202,7 @@ func TestTabletServerExecuteBatch(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	if _, err := tsv.ExecuteBatch(ctx, &target, []querytypes.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{
 		{
 			Sql:           sql,
 			BindVariables: nil,
@@ -1228,7 +1227,7 @@ func TestTabletServerExecuteBatchFailEmptyQueryList(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	_, err = tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{}, false, 0, nil)
+	_, err = tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{}, false, 0, nil)
 	want := "Empty query list"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("ExecuteBatch: %v, must contain %s", err, want)
@@ -1249,7 +1248,7 @@ func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	_, err = tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+	_, err = tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
 		{
 			Sql:           "begin",
 			BindVariables: nil,
@@ -1277,7 +1276,7 @@ func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
 		{
 			Sql:           "begin",
 			BindVariables: nil,
@@ -1303,7 +1302,7 @@ func TestTabletServerExecuteBatchCommitFail(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
 		{
 			Sql:           "begin",
 			BindVariables: nil,
@@ -1346,7 +1345,7 @@ func TestTabletServerExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 		t.Fatalf("rollback should not be executed.")
 	}
 
-	if _, err := tsv.ExecuteBatch(ctx, &target, []querytypes.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{
 		{
 			Sql:           sql,
 			BindVariables: nil,
@@ -1385,7 +1384,7 @@ func TestTabletServerExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	if _, err := tsv.ExecuteBatch(ctx, &target, []querytypes.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{
 		{
 			Sql:           sql,
 			BindVariables: nil,
@@ -1409,7 +1408,7 @@ func TestTabletServerExecuteBatchCallCommitWithoutABegin(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
 		{
 			Sql:           "commit",
 			BindVariables: nil,
@@ -1439,7 +1438,7 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
 		{
 			Sql:           "begin",
 			BindVariables: nil,
@@ -1495,17 +1494,17 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	q2 := "update test_table set name_string = 'tx2' where pk = :pk and name = :name"
 	q3 := "update test_table set name_string = 'tx3' where pk = :pk and name = :name"
 	// Every request needs their own bind variables to avoid data races.
-	bvTx1 := map[string]interface{}{
-		"pk":   1,
-		"name": 1,
+	bvTx1 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVar(1),
+		"name": sqltypes.Int64BindVar(1),
 	}
-	bvTx2 := map[string]interface{}{
-		"pk":   1,
-		"name": 1,
+	bvTx2 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVar(1),
+		"name": sqltypes.Int64BindVar(1),
 	}
-	bvTx3 := map[string]interface{}{
-		"pk":   2,
-		"name": 1,
+	bvTx3 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVar(2),
+		"name": sqltypes.Int64BindVar(1),
 	}
 
 	// Make sure that tx2 and tx3 start only after tx1 is running its Execute().
@@ -1624,13 +1623,13 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 	q1 := "update test_table set name_string = 'tx1' where pk = :pk and name = :name"
 	q2 := "update test_table set name_string = 'tx2' where pk = :pk and name = :name"
 	// Every request needs their own bind variables to avoid data races.
-	bvTx1 := map[string]interface{}{
-		"pk":   1,
-		"name": 1,
+	bvTx1 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVar(1),
+		"name": sqltypes.Int64BindVar(1),
 	}
-	bvTx2 := map[string]interface{}{
-		"pk":   1,
-		"name": 1,
+	bvTx2 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVar(1),
+		"name": sqltypes.Int64BindVar(1),
 	}
 
 	// Make sure that tx2 starts only after tx1 is running its Execute().
@@ -1711,17 +1710,17 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	q2 := "update test_table set name_string = 'tx2' where pk = :pk and name = :name"
 	q3 := "update test_table set name_string = 'tx3' where pk = :pk and name = :name"
 	// Every request needs their own bind variables to avoid data races.
-	bvTx1 := map[string]interface{}{
-		"pk":   1,
-		"name": 1,
+	bvTx1 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVar(1),
+		"name": sqltypes.Int64BindVar(1),
 	}
-	bvTx2 := map[string]interface{}{
-		"pk":   1,
-		"name": 1,
+	bvTx2 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVar(1),
+		"name": sqltypes.Int64BindVar(1),
 	}
-	bvTx3 := map[string]interface{}{
-		"pk":   1,
-		"name": 1,
+	bvTx3 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVar(1),
+		"name": sqltypes.Int64BindVar(1),
 	}
 
 	// Make sure that tx2 starts only after tx1 is running its Execute().
@@ -2037,7 +2036,7 @@ func TestTabletServerSplitQuery(t *testing.T) {
 	splits, err := tsv.SplitQuery(
 		ctx,
 		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
-		querytypes.BoundQuery{Sql: sql},
+		&querypb.BoundQuery{Sql: sql},
 		[]string{}, /* splitColumns */
 		10,         /* splitCount */
 		0,          /* numRowsPerQueryPart */
@@ -2069,7 +2068,7 @@ func TestTabletServerSplitQueryInvalidQuery(t *testing.T) {
 	_, err = tsv.SplitQuery(
 		ctx,
 		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
-		querytypes.BoundQuery{Sql: sql},
+		&querypb.BoundQuery{Sql: sql},
 		[]string{}, /* splitColumns */
 		10,         /* splitCount */
 		0,          /* numRowsPerQueryPart */
@@ -2098,7 +2097,7 @@ func TestTabletServerSplitQueryInvalidParams(t *testing.T) {
 	_, err = tsv.SplitQuery(
 		ctx,
 		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
-		querytypes.BoundQuery{Sql: sql},
+		&querypb.BoundQuery{Sql: sql},
 		[]string{}, /* splitColumns */
 		10,         /* splitCount */
 		11,         /* numRowsPerQueryPart */
@@ -2127,7 +2126,7 @@ func TestTabletServerSplitQueryEqualSplitsOnStringColumn(t *testing.T) {
 	_, err = tsv.SplitQuery(
 		ctx,
 		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
-		querytypes.BoundQuery{Sql: sql},
+		&querypb.BoundQuery{Sql: sql},
 		// EQUAL_SPLITS should not work on a string column.
 		[]string{"name_string"}, /* splitColumns */
 		10, /* splitCount */
@@ -2191,7 +2190,7 @@ func TestTerseErrorsBindVars(t *testing.T) {
 	tsv := NewTabletServerWithNilTopoServer(config)
 	err := tsv.convertError(
 		"select * from test_table",
-		map[string]interface{}{"a": 1},
+		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVar(1)},
 		mysql.NewSQLError(10, "HY000", "msg"),
 	)
 	want := "(errno 10) (sqlstate HY000) during query: select * from test_table"
@@ -2219,7 +2218,7 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	tsv := NewTabletServerWithNilTopoServer(config)
 
 	err := tsv.convertError("select * from test_table where id = :a",
-		map[string]interface{}{"a": 1},
+		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVar(1)},
 		mysql.NewSQLError(1227, "42000", "failover in progress"),
 	)
 	if got, want := err.Error(), "failover in progress (errno 1227) (sqlstate 42000)"; got != want {

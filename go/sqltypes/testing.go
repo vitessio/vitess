@@ -130,30 +130,6 @@ func MakeTestBindVars(bindVars map[string]interface{}) map[string]*querypb.BindV
 	return result
 }
 
-// MakeTabletBindVars converts bindvars to a form expected
-// by vttablet. This is a temporary transition function.
-// This function should only be used for testing.
-func MakeTabletBindVars(bindVars map[string]interface{}) map[string]interface{} {
-	if len(bindVars) == 0 {
-		return nil
-	}
-
-	result := make(map[string]interface{})
-	for k, v := range bindVars {
-		// nil values are allowed internally.
-		if v == nil {
-			result[k] = &querypb.BindVariable{Type: querypb.Type_NULL_TYPE}
-			continue
-		}
-		bv, err := BuildBindVar(v)
-		if err != nil {
-			panic(fmt.Errorf("%s: %v", k, err))
-		}
-		result[k] = bv
-	}
-	return result
-}
-
 // PrintResults prints []*Results into a string.
 // This function should only be used for testing.
 func PrintResults(results []*Result) string {

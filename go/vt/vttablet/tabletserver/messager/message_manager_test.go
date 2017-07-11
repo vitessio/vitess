@@ -545,13 +545,22 @@ func TestMMGenerate(t *testing.T) {
 	if query != wantQuery {
 		t.Errorf("GenerateAckQuery query: %s, want %s", query, wantQuery)
 	}
-	gotAcked := bv["time_acked"].(int64)
+	gotAcked, _ := sqltypes.BindVarToValue(bv["time_acked"]).ParseInt64()
 	wantAcked := time.Now().UnixNano()
 	if wantAcked-gotAcked > 10e9 {
 		t.Errorf("gotAcked: %d, should be with 10s of %d", gotAcked, wantAcked)
 	}
-	wantids := []interface{}{"1", "2"}
-	gotids := bv["ids"].([]interface{})
+	wantids := &querypb.BindVariable{
+		Type: querypb.Type_TUPLE,
+		Values: []*querypb.Value{{
+			Type:  querypb.Type_VARCHAR,
+			Value: []byte("1"),
+		}, {
+			Type:  querypb.Type_VARCHAR,
+			Value: []byte("2"),
+		}},
+	}
+	gotids := bv["ids"]
 	if !reflect.DeepEqual(gotids, wantids) {
 		t.Errorf("gotid: %v, want %v", gotids, wantids)
 	}
@@ -567,9 +576,9 @@ func TestMMGenerate(t *testing.T) {
 		// time_now cannot be compared.
 		delete(bv, "time_now")
 	}
-	wantbv := map[string]interface{}{
-		"wait_time": int64(1e9),
-		"ids":       []interface{}{"1", "2"},
+	wantbv := map[string]*querypb.BindVariable{
+		"wait_time": sqltypes.Int64BindVar(1e9),
+		"ids":       wantids,
 	}
 	if !reflect.DeepEqual(bv, wantbv) {
 		t.Errorf("gotid: %v, want %v", bv, wantbv)
@@ -580,8 +589,8 @@ func TestMMGenerate(t *testing.T) {
 	if query != wantQuery {
 		t.Errorf("GeneratePurgeQuery query: %s, want %s", query, wantQuery)
 	}
-	wantbv = map[string]interface{}{
-		"time_scheduled": int64(3),
+	wantbv = map[string]*querypb.BindVariable{
+		"time_scheduled": sqltypes.Int64BindVar(3),
 	}
 	if !reflect.DeepEqual(bv, wantbv) {
 		t.Errorf("gotid: %v, want %v", bv, wantbv)

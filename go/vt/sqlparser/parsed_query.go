@@ -40,7 +40,7 @@ type bindLocation struct {
 // GenerateQuery generates a query by substituting the specified
 // bindVariables. The extras parameter specifies special parameters
 // that can perform custom encoding.
-func (pq *ParsedQuery) GenerateQuery(bindVariables map[string]interface{}, extras map[string]Encodable) ([]byte, error) {
+func (pq *ParsedQuery) GenerateQuery(bindVariables map[string]*querypb.BindVariable, extras map[string]Encodable) ([]byte, error) {
 	if len(pq.bindLocations) == 0 {
 		return []byte(pq.Query), nil
 	}
@@ -56,9 +56,7 @@ func (pq *ParsedQuery) GenerateQuery(bindVariables map[string]interface{}, extra
 			if err != nil {
 				return nil, err
 			}
-			if err := EncodeValue(buf, supplied); err != nil {
-				return nil, err
-			}
+			EncodeValue(buf, supplied)
 		}
 		current = loc.offset + loc.length
 	}
@@ -73,79 +71,25 @@ func (pq *ParsedQuery) MarshalJSON() ([]byte, error) {
 }
 
 // EncodeValue encodes one bind variable value into the query.
-func EncodeValue(buf *bytes.Buffer, value interface{}) error {
-	switch bindVal := value.(type) {
-	case nil:
-		buf.WriteString("null")
-	case sqltypes.Value:
-		bindVal.EncodeSQL(buf)
-	case []sqltypes.Value:
-		for i, bv := range bindVal {
-			if i != 0 {
-				buf.WriteString(", ")
-			}
-			bv.EncodeSQL(buf)
-		}
-	case [][]sqltypes.Value:
-		for i, bvs := range bindVal {
-			if i != 0 {
-				buf.WriteString(", ")
-			}
-			buf.WriteByte('(')
-			for j, bv := range bvs {
-				if j != 0 {
-					buf.WriteString(", ")
-				}
-				bv.EncodeSQL(buf)
-			}
-			buf.WriteByte(')')
-		}
-	case []interface{}:
-		buf.WriteByte('(')
-		for i, v := range bindVal {
-			if i != 0 {
-				buf.WriteString(", ")
-			}
-			if err := EncodeValue(buf, v); err != nil {
-				return err
-			}
-		}
-		buf.WriteByte(')')
-	case *TupleEqualityList:
-		bindVal.EncodeSQL(buf)
-	case *querypb.BindVariable:
-		if bindVal.Type == querypb.Type_TUPLE {
-			buf.WriteByte('(')
-			for i, bv := range bindVal.Values {
-				if i != 0 {
-					buf.WriteString(", ")
-				}
-				v, err := sqltypes.ValueFromBytes(bv.Type, bv.Value)
-				if err != nil {
-					return err
-				}
-				v.EncodeSQL(buf)
-			}
-			buf.WriteByte(')')
-		} else {
-			v, err := sqltypes.ValueFromBytes(bindVal.Type, bindVal.Value)
-			if err != nil {
-				return err
-			}
-			v.EncodeSQL(buf)
-		}
-	default:
-		v, err := sqltypes.BuildValue(bindVal)
-		if err != nil {
-			return err
-		}
-		v.EncodeSQL(buf)
+func EncodeValue(buf *bytes.Buffer, value *querypb.BindVariable) {
+	if value.Type != querypb.Type_TUPLE {
+		sqltypes.BindVarToValue(value).EncodeSQL(buf)
+		return
 	}
-	return nil
+
+	// It's a TUPLE.
+	buf.WriteByte('(')
+	for i, bv := range value.Values {
+		if i != 0 {
+			buf.WriteString(", ")
+		}
+		sqltypes.MakeTrusted(bv.Type, bv.Value).EncodeSQL(buf)
+	}
+	buf.WriteByte(')')
 }
 
 // FetchBindVar resolves the bind variable by fetching it from bindVariables.
-func FetchBindVar(name string, bindVariables map[string]interface{}) (val interface{}, isList bool, err error) {
+func FetchBindVar(name string, bindVariables map[string]*querypb.BindVariable) (val *querypb.BindVariable, isList bool, err error) {
 	name = name[1:]
 	if name[0] == ':' {
 		name = name[1:]
@@ -157,37 +101,17 @@ func FetchBindVar(name string, bindVariables map[string]interface{}) (val interf
 	}
 
 	if isList {
-		// two ways to have a list:
-		// - []interface{}
-		// - *querypb.BindVariable with Type == querypb.Type_TUPLE
-
-		if list, gotList := supplied.([]interface{}); gotList {
-			if len(list) == 0 {
-				return nil, false, fmt.Errorf("empty list supplied for %s", name)
-			}
-			return list, true, nil
+		if supplied.Type != querypb.Type_TUPLE {
+			return nil, false, fmt.Errorf("unexpected list arg type (%v) for key %s", supplied.Type, name)
 		}
-
-		if bv, gotBindVariable := supplied.(*querypb.BindVariable); gotBindVariable {
-			if bv.Type == querypb.Type_TUPLE {
-				if len(bv.Values) == 0 {
-					return nil, false, fmt.Errorf("empty list supplied for %s", name)
-				}
-				return bv, true, nil
-			}
-
-			return nil, false, fmt.Errorf("unexpected list arg type *querypb.BindVariable(%v) for key %s", bv.Type, name)
+		if len(supplied.Values) == 0 {
+			return nil, false, fmt.Errorf("empty list supplied for %s", name)
 		}
-
-		return nil, false, fmt.Errorf("unexpected list arg type %T for key %s", supplied, name)
+		return supplied, true, nil
 	}
 
-	// check we didn't get a list.
-	if _, gotList := supplied.([]interface{}); gotList {
-		return nil, false, fmt.Errorf("unexpected arg type %T for key %s", supplied, name)
-	}
-	if bv, gotBindVariable := supplied.(*querypb.BindVariable); gotBindVariable && bv.Type == querypb.Type_TUPLE {
-		return nil, false, fmt.Errorf("unexpected arg type *querypb.BindVariable(TUPLE) for key %s", name)
+	if supplied.Type == querypb.Type_TUPLE {
+		return nil, false, fmt.Errorf("unexpected arg type (TUPLE) for non-list key %s", name)
 	}
 
 	return supplied, false, nil

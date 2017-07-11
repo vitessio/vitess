@@ -33,7 +33,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/sandboxconn"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -1145,7 +1144,7 @@ func TestVTGateSplitQuerySharded(t *testing.T) {
 				fmt.Sprintf(
 					"query:%v, splitColumns:%v, splitCount:%v,"+
 						" numRowsPerQueryPart:%v, algorithm:%v, shard:%v",
-					querytypes.BoundQuery{Sql: sql, BindVariables: map[string]interface{}{}},
+					&querypb.BoundQuery{Sql: sql, BindVariables: map[string]*querypb.BindVariable{}},
 					splitColumns,
 					perShardSplitCount,
 					testCase.numRowsPerQueryPart,
@@ -1344,7 +1343,7 @@ func TestVTGateSplitQueryUnsharded(t *testing.T) {
 		expectedSQL := fmt.Sprintf(
 			"query:%v, splitColumns:%v, splitCount:%v,"+
 				" numRowsPerQueryPart:%v, algorithm:%v, shard:%v",
-			querytypes.BoundQuery{Sql: sql, BindVariables: map[string]interface{}{}},
+			&querypb.BoundQuery{Sql: sql, BindVariables: map[string]*querypb.BindVariable{}},
 			splitColumns,
 			testCase.splitCount,
 			testCase.numRowsPerQueryPart,
@@ -1742,7 +1741,7 @@ func verifyQueryAnnotatedWithKeyspaceID(t *testing.T, expectedKeyspaceID []byte,
 	if !verifyNumQueries(t, 1, shard.Queries) {
 		return
 	}
-	verifyBoundQueryAnnotatedWithKeyspaceID(t, expectedKeyspaceID, &shard.Queries[0])
+	verifyBoundQueryAnnotatedWithKeyspaceID(t, expectedKeyspaceID, shard.Queries[0])
 }
 
 // Verifies that 'shard' was sent exactly one query and that it
@@ -1751,12 +1750,12 @@ func verifyQueryAnnotatedAsUnfriendly(t *testing.T, shard *sandboxconn.SandboxCo
 	if !verifyNumQueries(t, 1, shard.Queries) {
 		return
 	}
-	verifyBoundQueryAnnotatedAsUnfriendly(t, &shard.Queries[0])
+	verifyBoundQueryAnnotatedAsUnfriendly(t, shard.Queries[0])
 }
 
 // Verifies 'queries' has exactly 'expectedNumQueries' elements.
 // Returns true if verification succeeds.
-func verifyNumQueries(t *testing.T, expectedNumQueries int, queries []querytypes.BoundQuery) bool {
+func verifyNumQueries(t *testing.T, expectedNumQueries int, queries []*querypb.BoundQuery) bool {
 	numElements := len(queries)
 	if numElements != expectedNumQueries {
 		t.Errorf("want %v queries, got: %v (queries: %v)", expectedNumQueries, numElements, queries)
@@ -1767,7 +1766,7 @@ func verifyNumQueries(t *testing.T, expectedNumQueries int, queries []querytypes
 
 // Verifies 'batchQueries' has exactly 'expectedNumQueries' elements.
 // Returns true if verification succeeds.
-func verifyNumBatchQueries(t *testing.T, expectedNumQueries int, batchQueries [][]querytypes.BoundQuery) bool {
+func verifyNumBatchQueries(t *testing.T, expectedNumQueries int, batchQueries [][]*querypb.BoundQuery) bool {
 	numElements := len(batchQueries)
 	if numElements != expectedNumQueries {
 		t.Errorf("want %v batch queries, got: %v (batch queries: %v)", expectedNumQueries, numElements, batchQueries)
@@ -1776,21 +1775,21 @@ func verifyNumBatchQueries(t *testing.T, expectedNumQueries int, batchQueries []
 	return true
 }
 
-func verifyBoundQueryAnnotatedWithKeyspaceID(t *testing.T, expectedKeyspaceID []byte, query *querytypes.BoundQuery) {
+func verifyBoundQueryAnnotatedWithKeyspaceID(t *testing.T, expectedKeyspaceID []byte, query *querypb.BoundQuery) {
 	verifyBoundQueryAnnotatedWithComment(
 		t,
 		"/* vtgate:: keyspace_id:"+hex.EncodeToString(expectedKeyspaceID)+" */",
 		query)
 }
 
-func verifyBoundQueryAnnotatedAsUnfriendly(t *testing.T, query *querytypes.BoundQuery) {
+func verifyBoundQueryAnnotatedAsUnfriendly(t *testing.T, query *querypb.BoundQuery) {
 	verifyBoundQueryAnnotatedWithComment(
 		t,
 		"/* vtgate:: filtered_replication_unfriendly */",
 		query)
 }
 
-func verifyBoundQueryAnnotatedWithComment(t *testing.T, expectedComment string, query *querytypes.BoundQuery) {
+func verifyBoundQueryAnnotatedWithComment(t *testing.T, expectedComment string, query *querypb.BoundQuery) {
 	if !strings.Contains(query.Sql, expectedComment) {
 		t.Errorf("want query '%v' to be annotated with '%v'", query.Sql, expectedComment)
 	}
@@ -1815,21 +1814,21 @@ func verifyBatchQueryAnnotatedAsUnfriendly(t *testing.T, expectedNumQueries int,
 	verifyBoundQueriesAnnotatedAsUnfriendly(t, expectedNumQueries, shard.BatchQueries[0])
 }
 
-func verifyBoundQueriesAnnotatedWithKeyspaceIds(t *testing.T, expectedKeyspaceIDs [][]byte, queries []querytypes.BoundQuery) {
+func verifyBoundQueriesAnnotatedWithKeyspaceIds(t *testing.T, expectedKeyspaceIDs [][]byte, queries []*querypb.BoundQuery) {
 	if !verifyNumQueries(t, len(expectedKeyspaceIDs), queries) {
 		return
 	}
 	for i := range queries {
-		verifyBoundQueryAnnotatedWithKeyspaceID(t, expectedKeyspaceIDs[i], &queries[i])
+		verifyBoundQueryAnnotatedWithKeyspaceID(t, expectedKeyspaceIDs[i], queries[i])
 	}
 }
 
-func verifyBoundQueriesAnnotatedAsUnfriendly(t *testing.T, expectedNumQueries int, queries []querytypes.BoundQuery) {
+func verifyBoundQueriesAnnotatedAsUnfriendly(t *testing.T, expectedNumQueries int, queries []*querypb.BoundQuery) {
 	if !verifyNumQueries(t, expectedNumQueries, queries) {
 		return
 	}
 	for i := range queries {
-		verifyBoundQueryAnnotatedAsUnfriendly(t, &queries[i])
+		verifyBoundQueryAnnotatedAsUnfriendly(t, queries[i])
 	}
 }
 
