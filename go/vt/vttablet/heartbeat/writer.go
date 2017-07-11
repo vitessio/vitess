@@ -184,7 +184,7 @@ func (w *Writer) bindHeartbeatVars(query string) (string, error) {
 		"uid": sqltypes.MakeTrusted(sqltypes.Uint32, strconv.AppendUint(nil, uint64(w.tabletAlias.Uid), 10)),
 	}
 	parsed := sqlparser.BuildParsedQuery(query, w.dbName, ":ts", ":uid", ":ks")
-	bound, err := parsed.GenerateQuery(bindVars)
+	bound, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return "", err
 	}
