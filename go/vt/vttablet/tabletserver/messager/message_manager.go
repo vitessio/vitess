@@ -527,7 +527,7 @@ func (mm *messageManager) receiverCount() int {
 }
 
 func (mm *messageManager) read(ctx context.Context, conn *connpool.DBConn, pq *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {
-	b, err := pq.GenerateQuery(bindVars)
+	b, err := pq.GenerateQuery(bindVars, nil)
 	if err != nil {
 		// TODO(sougou): increment internal error.
 		log.Errorf("Error reading rows from message table: %v", err)

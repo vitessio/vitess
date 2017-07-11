@@ -525,7 +525,7 @@ func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*DistributedTx, er
 }
 
 func (tpc *TwoPC) exec(ctx context.Context, conn *TxConnection, pq *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {
-	b, err := pq.GenerateQuery(bindVars)
+	b, err := pq.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -533,7 +533,7 @@ func (tpc *TwoPC) exec(ctx context.Context, conn *TxConnection, pq *sqlparser.Pa
 }
 
 func (tpc *TwoPC) read(ctx context.Context, conn *connpool.DBConn, pq *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {
-	b, err := pq.GenerateQuery(bindVars)
+	b, err := pq.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err
 	}

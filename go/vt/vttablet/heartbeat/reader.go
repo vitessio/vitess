@@ -184,7 +184,7 @@ func (r *Reader) bindHeartbeatFetch() (string, error) {
 		"ks": sqltypes.MakeString([]byte(r.keyspaceShard)),
 	}
 	parsed := sqlparser.BuildParsedQuery(sqlFetchMostRecentHeartbeat, r.dbName, ":ks")
-	bound, err := parsed.GenerateQuery(bindVars)
+	bound, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return "", err
 	}

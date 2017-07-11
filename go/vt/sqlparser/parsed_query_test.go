@@ -30,58 +30,59 @@ func TestParsedQuery(t *testing.T) {
 		desc     string
 		query    string
 		bindVars map[string]interface{}
+		extras   map[string]Encodable
 		output   string
 	}{
 		{
-			"no subs",
-			"select * from a where id = 2",
-			map[string]interface{}{
+			desc:  "no subs",
+			query: "select * from a where id = 2",
+			bindVars: map[string]interface{}{
 				"id": 1,
 			},
-			"select * from a where id = 2",
+			output: "select * from a where id = 2",
 		}, {
-			"simple bindvar sub",
-			"select * from a where id1 = :id1 and id2 = :id2",
-			map[string]interface{}{
+			desc:  "simple bindvar sub",
+			query: "select * from a where id1 = :id1 and id2 = :id2",
+			bindVars: map[string]interface{}{
 				"id1": 1,
 				"id2": nil,
 			},
-			"select * from a where id1 = 1 and id2 = null",
+			output: "select * from a where id1 = 1 and id2 = null",
 		}, {
-			"missing bind var",
-			"select * from a where id1 = :id1 and id2 = :id2",
-			map[string]interface{}{
+			desc:  "missing bind var",
+			query: "select * from a where id1 = :id1 and id2 = :id2",
+			bindVars: map[string]interface{}{
 				"id1": 1,
 			},
-			"missing bind var id2",
+			output: "missing bind var id2",
 		}, {
-			"unencodable bind var",
-			"select * from a where id1 = :id",
-			map[string]interface{}{
+			desc:  "unencodable bind var",
+			query: "select * from a where id1 = :id",
+			bindVars: map[string]interface{}{
 				"id": make([]int, 1),
 			},
-			"unexpected type []int: [0]",
+			output: "unexpected type []int: [0]",
 		}, {
-			"simple sqltypes.Value",
-			"select * from a where id1 = :id1",
-			map[string]interface{}{
+			desc:  "simple sqltypes.Value",
+			query: "select * from a where id1 = :id1",
+			bindVars: map[string]interface{}{
 				"id1": sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 			},
-			"select * from a where id1 = 1",
+			output: "select * from a where id1 = 1",
 		}, {
-			"list inside bind vars",
-			"select * from a where id in (:vals)",
-			map[string]interface{}{
+			desc:  "list inside bind vars",
+			query: "select * from a where id in (:vals)",
+			bindVars: map[string]interface{}{
 				"vals": []sqltypes.Value{
 					sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 					sqltypes.MakeString([]byte("aa")),
 				},
 			},
-			"select * from a where id in (1, 'aa')",
+			output: "select * from a where id in (1, 'aa')",
 		}, {
-			"two lists inside bind vars",
-			"select * from a where id in (:vals)",
-			map[string]interface{}{
+			desc:  "two lists inside bind vars",
+			query: "select * from a where id in (:vals)",
+			bindVars: map[string]interface{}{
 				"vals": [][]sqltypes.Value{
 					{
 						sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
@@ -93,53 +94,52 @@ func TestParsedQuery(t *testing.T) {
 					},
 				},
 			},
-			"select * from a where id in ((1, 'aa'), (null, 'bb'))",
+			output: "select * from a where id in ((1, 'aa'), (null, 'bb'))",
 		}, {
-			"list bind vars",
-			"select * from a where id in ::vals",
-			map[string]interface{}{
+			desc:  "list bind vars",
+			query: "select * from a where id in ::vals",
+			bindVars: map[string]interface{}{
 				"vals": []interface{}{
 					1,
 					"aa",
 				},
 			},
-			"select * from a where id in (1, 'aa')",
+			output: "select * from a where id in (1, 'aa')",
 		}, {
-			"list bind vars single argument",
-			"select * from a where id in ::vals",
-			map[string]interface{}{
+			desc:  "list bind vars single argument",
+			query: "select * from a where id in ::vals",
+			bindVars: map[string]interface{}{
 				"vals": []interface{}{
 					1,
 				},
 			},
-			"select * from a where id in (1)",
+			output: "select * from a where id in (1)",
 		}, {
-			"list bind vars 0 arguments",
-			"select * from a where id in ::vals",
-			map[string]interface{}{
+			desc:  "list bind vars 0 arguments",
+			query: "select * from a where id in ::vals",
+			bindVars: map[string]interface{}{
 				"vals": []interface{}{},
 			},
-			"empty list supplied for vals",
+			output: "empty list supplied for vals",
 		}, {
-			"non-list bind var supplied",
-			"select * from a where id in ::vals",
-			map[string]interface{}{
+			desc:  "non-list bind var supplied",
+			query: "select * from a where id in ::vals",
+			bindVars: map[string]interface{}{
 				"vals": 1,
 			},
-			"unexpected list arg type int for key vals",
+			output: "unexpected list arg type int for key vals",
 		}, {
-			"list bind var for non-list",
-			"select * from a where id = :vals",
-			map[string]interface{}{
+			desc:  "list bind var for non-list",
+			query: "select * from a where id = :vals",
+			bindVars: map[string]interface{}{
 				"vals": []interface{}{1},
 			},
-			"unexpected arg type []interface {} for key vals",
+			output: "unexpected arg type []interface {} for key vals",
 		}, {
-			"single column tuple equality",
-			// We have to use an incorrect construct to get around the parser.
-			"select * from a where b = :equality",
-			map[string]interface{}{
-				"equality": TupleEqualityList{
+			desc:  "single column tuple equality (legacy)",
+			query: "select * from a where b = :equality",
+			bindVars: map[string]interface{}{
+				"equality": &TupleEqualityList{
 					Columns: []ColIdent{NewColIdent("pk")},
 					Rows: [][]sqltypes.Value{
 						{sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))},
@@ -147,12 +147,12 @@ func TestParsedQuery(t *testing.T) {
 					},
 				},
 			},
-			"select * from a where b = pk in (1, 'aa')",
+			output: "select * from a where b = pk in (1, 'aa')",
 		}, {
-			"multi column tuple equality",
-			"select * from a where b = :equality",
-			map[string]interface{}{
-				"equality": TupleEqualityList{
+			desc:  "multi column tuple equality (legacy)",
+			query: "select * from a where b = :equality",
+			bindVars: map[string]interface{}{
+				"equality": &TupleEqualityList{
 					Columns: []ColIdent{NewColIdent("pk1"), NewColIdent("pk2")},
 					Rows: [][]sqltypes.Value{
 						{
@@ -166,55 +166,30 @@ func TestParsedQuery(t *testing.T) {
 					},
 				},
 			},
-			"select * from a where b = (pk1 = 1 and pk2 = 'aa') or (pk1 = 2 and pk2 = 'bb')",
+			output: "select * from a where b = (pk1 = 1 and pk2 = 'aa') or (pk1 = 2 and pk2 = 'bb')",
 		}, {
-			"0 rows",
-			"select * from a where b = :equality",
-			map[string]interface{}{
-				"equality": TupleEqualityList{
-					Columns: []ColIdent{NewColIdent("pk")},
-					Rows:    [][]sqltypes.Value{},
-				},
-			},
-			"cannot encode with 0 rows",
-		}, {
-			"values don't match column count",
-			"select * from a where b = :equality",
-			map[string]interface{}{
-				"equality": TupleEqualityList{
-					Columns: []ColIdent{NewColIdent("pk")},
-					Rows: [][]sqltypes.Value{
-						{
-							sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-							sqltypes.MakeString([]byte("aa")),
-						},
-					},
-				},
-			},
-			"values don't match column count",
-		}, {
-			"simple *querypb.BindVariable",
-			"select * from a where id1 = :id",
-			map[string]interface{}{
+			desc:  "simple *querypb.BindVariable",
+			query: "select * from a where id1 = :id",
+			bindVars: map[string]interface{}{
 				"id": &querypb.BindVariable{
 					Type:  querypb.Type_INT64,
 					Value: []byte("123"),
 				},
 			},
-			"select * from a where id1 = 123",
+			output: "select * from a where id1 = 123",
 		}, {
-			"null *querypb.BindVariable",
-			"select * from a where id1 = :id",
-			map[string]interface{}{
+			desc:  "null *querypb.BindVariable",
+			query: "select * from a where id1 = :id",
+			bindVars: map[string]interface{}{
 				"id": &querypb.BindVariable{
 					Type: querypb.Type_NULL_TYPE,
 				},
 			},
-			"select * from a where id1 = null",
+			output: "select * from a where id1 = null",
 		}, {
-			"tuple *querypb.BindVariable",
-			"select * from a where id in ::vals",
-			map[string]interface{}{
+			desc:  "tuple *querypb.BindVariable",
+			query: "select * from a where id in ::vals",
+			bindVars: map[string]interface{}{
 				"vals": &querypb.BindVariable{
 					Type: querypb.Type_TUPLE,
 					Values: []*querypb.Value{
@@ -229,30 +204,30 @@ func TestParsedQuery(t *testing.T) {
 					},
 				},
 			},
-			"select * from a where id in (1, 'aa')",
+			output: "select * from a where id in (1, 'aa')",
 		}, {
-			"list bind vars 0 arguments",
-			"select * from a where id in ::vals",
-			map[string]interface{}{
+			desc:  "list bind vars 0 arguments",
+			query: "select * from a where id in ::vals",
+			bindVars: map[string]interface{}{
 				"vals": &querypb.BindVariable{
 					Type: querypb.Type_TUPLE,
 				},
 			},
-			"empty list supplied for vals",
+			output: "empty list supplied for vals",
 		}, {
-			"non-list bind var supplied",
-			"select * from a where id in ::vals",
-			map[string]interface{}{
+			desc:  "non-list bind var supplied",
+			query: "select * from a where id in ::vals",
+			bindVars: map[string]interface{}{
 				"vals": &querypb.BindVariable{
 					Type:  querypb.Type_INT64,
 					Value: []byte("1"),
 				},
 			},
-			"unexpected list arg type *querypb.BindVariable(INT64) for key vals",
+			output: "unexpected list arg type *querypb.BindVariable(INT64) for key vals",
 		}, {
-			"list bind var for non-list",
-			"select * from a where id = :vals",
-			map[string]interface{}{
+			desc:  "list bind var for non-list",
+			query: "select * from a where id = :vals",
+			bindVars: map[string]interface{}{
 				"vals": &querypb.BindVariable{
 					Type: querypb.Type_TUPLE,
 					Values: []*querypb.Value{
@@ -263,7 +238,39 @@ func TestParsedQuery(t *testing.T) {
 					},
 				},
 			},
-			"unexpected arg type *querypb.BindVariable(TUPLE) for key vals",
+			output: "unexpected arg type *querypb.BindVariable(TUPLE) for key vals",
+		}, {
+			desc:  "single column tuple equality",
+			query: "select * from a where b = :equality",
+			extras: map[string]Encodable{
+				"equality": &TupleEqualityList{
+					Columns: []ColIdent{NewColIdent("pk")},
+					Rows: [][]sqltypes.Value{
+						{sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))},
+						{sqltypes.MakeString([]byte("aa"))},
+					},
+				},
+			},
+			output: "select * from a where b = pk in (1, 'aa')",
+		}, {
+			desc:  "multi column tuple equality",
+			query: "select * from a where b = :equality",
+			extras: map[string]Encodable{
+				"equality": &TupleEqualityList{
+					Columns: []ColIdent{NewColIdent("pk1"), NewColIdent("pk2")},
+					Rows: [][]sqltypes.Value{
+						{
+							sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+							sqltypes.MakeString([]byte("aa")),
+						},
+						{
+							sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
+							sqltypes.MakeString([]byte("bb")),
+						},
+					},
+				},
+			},
+			output: "select * from a where b = (pk1 = 1 and pk2 = 'aa') or (pk1 = 2 and pk2 = 'bb')",
 		},
 	}
 
@@ -276,7 +283,7 @@ func TestParsedQuery(t *testing.T) {
 		buf := NewTrackedBuffer(nil)
 		buf.Myprintf("%v", tree)
 		pq := buf.ParsedQuery()
-		bytes, err := pq.GenerateQuery(tcase.bindVars)
+		bytes, err := pq.GenerateQuery(tcase.bindVars, tcase.extras)
 		var got string
 		if err != nil {
 			got = err.Error()
@@ -309,8 +316,8 @@ func TestGenerateParsedQuery(t *testing.T) {
 // that we use internally for efficient SQL generation.
 func TestUnorthodox(t *testing.T) {
 	query := "insert into `%s` values %a"
-	bindVars := map[string]interface{}{
-		"vals": [][]sqltypes.Value{{
+	extras := map[string]Encodable{
+		"vals": InsertValues{{
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 			sqltypes.MakeString([]byte("foo('a')")),
 		}, {
@@ -321,7 +328,7 @@ func TestUnorthodox(t *testing.T) {
 	buf := NewTrackedBuffer(nil)
 	buf.Myprintf(query, "t", ":vals")
 	pq := buf.ParsedQuery()
-	bytes, err := pq.GenerateQuery(bindVars)
+	bytes, err := pq.GenerateQuery(nil, extras)
 	if err != nil {
 		t.Error(err)
 	}

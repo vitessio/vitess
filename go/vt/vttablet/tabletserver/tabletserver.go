@@ -845,20 +845,21 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 			if bindVariables == nil {
 				bindVariables = make(map[string]interface{})
 			}
-			sql = stripTrailing(sql, bindVariables)
-			plan, err := tsv.qe.GetPlan(ctx, logStats, sql)
+			query, comments := sqlparser.SplitTrailingComments(sql)
+			plan, err := tsv.qe.GetPlan(ctx, logStats, query)
 			if err != nil {
 				return err
 			}
 			qre := &QueryExecutor{
-				query:         sql,
-				bindVars:      bindVariables,
-				transactionID: transactionID,
-				options:       options,
-				plan:          plan,
-				ctx:           ctx,
-				logStats:      logStats,
-				tsv:           tsv,
+				query:            query,
+				trailingComments: comments,
+				bindVars:         bindVariables,
+				transactionID:    transactionID,
+				options:          options,
+				plan:             plan,
+				ctx:              ctx,
+				logStats:         logStats,
+				tsv:              tsv,
 			}
 			extras := tsv.watcher.ComputeExtras(options)
 			result, err = qre.Execute()
@@ -885,19 +886,20 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 			if bindVariables == nil {
 				bindVariables = make(map[string]interface{})
 			}
-			sql = stripTrailing(sql, bindVariables)
-			plan, err := tsv.qe.GetStreamPlan(sql)
+			query, comments := sqlparser.SplitTrailingComments(sql)
+			plan, err := tsv.qe.GetStreamPlan(query)
 			if err != nil {
 				return err
 			}
 			qre := &QueryExecutor{
-				query:    sql,
-				bindVars: bindVariables,
-				options:  options,
-				plan:     plan,
-				ctx:      ctx,
-				logStats: logStats,
-				tsv:      tsv,
+				query:            query,
+				trailingComments: comments,
+				bindVars:         bindVariables,
+				options:          options,
+				plan:             plan,
+				ctx:              ctx,
+				logStats:         logStats,
+				tsv:              tsv,
 			}
 			return qre.Stream(callback)
 		},
@@ -1037,7 +1039,7 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 		return "", ""
 	}
 
-	where, err := plan.WhereClause.GenerateQuery(bindVariables)
+	where, err := plan.WhereClause.GenerateQuery(bindVariables, nil)
 	if err != nil {
 		logComputeRowSerializerKey.Errorf("failed to substitute bind vars in where clause: %v query: %v bind vars: %v", err, sql, bindVariables)
 		return "", ""
