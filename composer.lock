@@ -4,8 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "hash": "b37bde69302058ef01f45bfe5858e396",
-    "content-hash": "64f1877959de9ad06d22633049abb636",
+    "content-hash": "1c2b88b236cb8ef7dcdb964ec1dc6780",
     "packages": [
         {
             "name": "firebase/php-jwt",
@@ -48,7 +47,7 @@
             ],
             "description": "A simple library to encode and decode JSON Web Tokens (JWT) in PHP. Should conform to the current spec.",
             "homepage": "https://github.com/firebase/php-jwt",
-            "time": "2015-07-22 18:31:08"
+            "time": "2015-07-22T18:31:08+00:00"
         },
         {
             "name": "google/auth",
@@ -96,28 +95,31 @@
                 "google",
                 "oauth2"
             ],
-            "time": "2016-08-02 22:00:48"
+            "time": "2016-08-02T22:00:48+00:00"
         },
         {
             "name": "grpc/grpc",
-            "version": "v1.0.0",
+            "version": "v1.4.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/grpc/grpc.git",
-                "reference": "2a69139aa7f609e439c24a46754252a5f9d37500"
+                "reference": "5cb6a1f86129fc2833de9a27cfe174260934342b"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/grpc/grpc/zipball/2a69139aa7f609e439c24a46754252a5f9d37500",
-                "reference": "2a69139aa7f609e439c24a46754252a5f9d37500",
+                "url": "https://api.github.com/repos/grpc/grpc/zipball/5cb6a1f86129fc2833de9a27cfe174260934342b",
+                "reference": "5cb6a1f86129fc2833de9a27cfe174260934342b",
                 "shasum": ""
             },
             "require": {
-                "php": ">=5.5.0",
-                "stanley-cheung/protobuf-php": "v0.6"
+                "php": ">=5.5.0"
             },
             "require-dev": {
                 "google/auth": "v0.9"
+            },
+            "suggest": {
+                "ext-protobuf": "For better performance, install the protobuf C extension.",
+                "google/protobuf": "To get started using grpc quickly, install the native protobuf library."
             },
             "type": "library",
             "autoload": {
@@ -134,7 +136,7 @@
             "keywords": [
                 "rpc"
             ],
-            "time": "2016-08-19 00:55:10"
+            "time": "2017-07-11T21:11:30+00:00"
         },
         {
             "name": "guzzlehttp/guzzle",
@@ -142,23 +144,26 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/guzzle/guzzle.git",
-                "reference": "3b45e7675e8997ac96142b0265d158343958f708"
+                "reference": "dfd01d60a38cf7e16b3456d4b1d7c10033b929c0"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/guzzle/guzzle/zipball/3b45e7675e8997ac96142b0265d158343958f708",
-                "reference": "3b45e7675e8997ac96142b0265d158343958f708",
+                "url": "https://api.github.com/repos/guzzle/guzzle/zipball/dfd01d60a38cf7e16b3456d4b1d7c10033b929c0",
+                "reference": "dfd01d60a38cf7e16b3456d4b1d7c10033b929c0",
                 "shasum": ""
             },
             "require": {
                 "guzzlehttp/promises": "^1.0",
-                "guzzlehttp/psr7": "^1.3.1",
+                "guzzlehttp/psr7": "^1.4",
                 "php": ">=5.5"
             },
             "require-dev": {
                 "ext-curl": "*",
-                "phpunit/phpunit": "^4.0",
+                "phpunit/phpunit": "^4.0 || ^5.0",
                 "psr/log": "^1.0"
+            },
+            "suggest": {
+                "psr/log": "Required for using the Log middleware"
             },
             "type": "library",
             "extra": {
@@ -196,7 +201,7 @@
                 "rest",
                 "web service"
             ],
-            "time": "2016-08-04 00:05:49"
+            "time": "2017-06-28 21:17:38"
         },
         {
             "name": "guzzlehttp/promises",
@@ -247,7 +252,7 @@
             "keywords": [
                 "promise"
             ],
-            "time": "2016-05-18 16:56:05"
+            "time": "2016-05-18T16:56:05+00:00"
         },
         {
             "name": "guzzlehttp/psr7",
@@ -255,12 +260,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/guzzle/psr7.git",
-                "reference": "64862e854f876bc5aee2996cab2f552db8586065"
+                "reference": "526d8ef63e8701e02216b621e4a3a16085e2286f"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/guzzle/psr7/zipball/64862e854f876bc5aee2996cab2f552db8586065",
-                "reference": "64862e854f876bc5aee2996cab2f552db8586065",
+                "url": "https://api.github.com/repos/guzzle/psr7/zipball/526d8ef63e8701e02216b621e4a3a16085e2286f",
+                "reference": "526d8ef63e8701e02216b621e4a3a16085e2286f",
                 "shasum": ""
             },
             "require": {
@@ -312,7 +317,7 @@
                 "uri",
                 "url"
             ],
-            "time": "2016-08-03 09:33:34"
+            "time": "2017-06-19 13:30:27"
         },
         {
             "name": "psr/cache",
@@ -320,12 +325,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/php-fig/cache.git",
-                "reference": "d11b50ad223250cf17b86e38383413f5a6764bf8"
+                "reference": "78c5a01ddbf11cf731f1338a4f5aba23b14d5b47"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/php-fig/cache/zipball/d11b50ad223250cf17b86e38383413f5a6764bf8",
-                "reference": "d11b50ad223250cf17b86e38383413f5a6764bf8",
+                "url": "https://api.github.com/repos/php-fig/cache/zipball/78c5a01ddbf11cf731f1338a4f5aba23b14d5b47",
+                "reference": "78c5a01ddbf11cf731f1338a4f5aba23b14d5b47",
                 "shasum": ""
             },
             "require": {
@@ -358,7 +363,7 @@
                 "psr",
                 "psr-6"
             ],
-            "time": "2016-08-06 20:24:11"
+            "time": "2016-10-13 14:48:10"
         },
         {
             "name": "psr/http-message",
@@ -460,7 +465,7 @@
                 "protocol buffer",
                 "serializing"
             ],
-            "time": "2016-07-22 02:12:15"
+            "time": "2016-07-22T02:12:15+00:00"
         }
     ],
     "packages-dev": [],
