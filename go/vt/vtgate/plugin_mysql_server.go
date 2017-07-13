@@ -43,6 +43,8 @@ var (
 	mysqlSslCert = flag.String("mysql_server_ssl_cert", "", "Path to the ssl cert for mysql server plugin SSL")
 	mysqlSslKey  = flag.String("mysql_server_ssl_key", "", "Path to ssl key for mysql server plugin SSL")
 	mysqlSslCa   = flag.String("mysql_server_ssl_ca", "", "Path to ssl CA for mysql server plugin SSL. If specified, server will require and validate client certs.")
+
+	mysqlSlowConnectWarnThreshold = flag.Duration("mysql_slow_connect_warn_threshold", 0, "Warn if it takes more than the given threshold for a mysql connection to establish")
 )
 
 // vtgateHandler implements the Listener interface.
@@ -149,6 +151,12 @@ func initMySQLProtocol() {
 		}
 	}
 	mysqlListener.AllowClearTextWithoutTLS = *mysqlAllowClearTextWithoutTLS
+
+	// Check for the connection threshold
+	if *mysqlSlowConnectWarnThreshold != 0 {
+		log.Infof("setting mysql slow connection threshold to %v", mysqlSlowConnectWarnThreshold)
+		mysqlListener.SlowConnectWarnThreshold = *mysqlSlowConnectWarnThreshold
+	}
 
 	// And starts listening.
 	go func() {
