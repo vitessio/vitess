@@ -26,6 +26,9 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
+// NullBV is a bindvar with NULL value.
+var NullBV = &querypb.BindVariable{Type: querypb.Type_NULL_TYPE}
+
 // BuildBindVars builds a map[string]*querypb.BindVariable from a map[string]interface{}.
 func BuildBindVars(in map[string]interface{}) (map[string]*querypb.BindVariable, error) {
 	if len(in) == 0 {
@@ -83,6 +86,14 @@ func BytesBindVar(v []byte) *querypb.BindVariable {
 	}
 }
 
+// ValueBindVar converts a Value to a bind var.
+func ValueBindVar(v Value) *querypb.BindVariable {
+	return &querypb.BindVariable{
+		Type:  v.typ,
+		Value: v.val,
+	}
+}
+
 // BuildBindVar builds a *querypb.BindVariable from a valid input type.
 func BuildBindVar(v interface{}) (*querypb.BindVariable, error) {
 	switch v := v.(type) {
@@ -102,14 +113,9 @@ func BuildBindVar(v interface{}) (*querypb.BindVariable, error) {
 	case float64:
 		return Float64BindVar(v), nil
 	case nil:
-		return &querypb.BindVariable{
-			Type: querypb.Type_NULL_TYPE,
-		}, nil
+		return NullBV, nil
 	case Value:
-		return &querypb.BindVariable{
-			Type:  v.Type(),
-			Value: v.Raw(),
-		}, nil
+		return ValueBindVar(v), nil
 	case *querypb.BindVariable:
 		return v, nil
 	case []interface{}:
@@ -258,17 +264,12 @@ func ValidateBindVar(bv *querypb.BindVariable) error {
 	return nil
 }
 
-// BindVarToValue converts an already validated bind var into a Value.
-func BindVarToValue(bv *querypb.BindVariable) Value {
-	return MakeTrusted(bv.Type, bv.Value)
-}
-
-// ValueToBindVar converts a Value to a *querypb.BindVariable.
-func ValueToBindVar(v Value) *querypb.BindVariable {
-	return &querypb.BindVariable{
-		Type:  v.typ,
-		Value: v.val,
+// BindVarToValue converts a bind var into a Value.
+func BindVarToValue(bv *querypb.BindVariable) (Value, error) {
+	if bv.Type == querypb.Type_TUPLE {
+		return NULL, errors.New("cannot convert a TUPLE bind var into a value")
 	}
+	return MakeTrusted(bv.Type, bv.Value), nil
 }
 
 // BindVariablesEqual compares two maps of bind variables.

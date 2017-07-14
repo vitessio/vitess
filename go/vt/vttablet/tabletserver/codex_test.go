@@ -124,19 +124,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	// list arg two values.
 	// e.g. where pk1 = 1 and pk2 IN ::list
 	bindVars = map[string]*querypb.BindVariable{
-		"list": {
-			Type: querypb.Type_TUPLE,
-			Values: []*querypb.Value{
-				{
-					Type:  querypb.Type_VARBINARY,
-					Value: []byte("abc"),
-				},
-				{
-					Type:  querypb.Type_VARBINARY,
-					Value: []byte("xyz"),
-				},
-			},
-		},
+		"list": sqltypes.MakeTestBindVar([]interface{}{[]byte("abc"), []byte("xyz")}),
 	}
 	pkValues = []interface{}{
 		pk1Val,
@@ -155,15 +143,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	// list arg one value
 	// e.g. where pk1 = 1 and pk2 IN ::list
 	bindVars = map[string]*querypb.BindVariable{
-		"list": {
-			Type: querypb.Type_TUPLE,
-			Values: []*querypb.Value{
-				{
-					Type:  querypb.Type_VARBINARY,
-					Value: []byte("abc"),
-				},
-			},
-		},
+		"list": sqltypes.MakeTestBindVar([]interface{}{[]byte("abc")}),
 	}
 	pkValues = []interface{}{
 		pk1Val,
@@ -180,10 +160,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 
 	// list arg empty list
 	bindVars = map[string]*querypb.BindVariable{
-		"list": {
-			Type:   querypb.Type_TUPLE,
-			Values: []*querypb.Value{},
-		},
+		"list": sqltypes.MakeTestBindVar([]interface{}{}),
 	}
 	pkValues = []interface{}{
 		pk1Val,
@@ -197,10 +174,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 
 	// list arg for non-list
 	bindVars = map[string]*querypb.BindVariable{
-		"list": {
-			Type:   querypb.Type_TUPLE,
-			Values: []*querypb.Value{},
-		},
+		"list": sqltypes.MakeTestBindVar([]interface{}{}),
 	}
 	pkValues = []interface{}{
 		pk1Val,
@@ -264,9 +238,9 @@ func TestCodexResolveListArg(t *testing.T) {
 		[]string{"pk1", "pk2"})
 
 	key := "var"
-	bindVariables := sqltypes.MakeTestBindVars(map[string]interface{}{
-		key: []interface{}{"1"},
-	})
+	bindVariables := map[string]*querypb.BindVariable{
+		key: sqltypes.MakeTestBindVar([]interface{}{"1"}),
+	}
 	v, err := resolveListArg(table.GetPKColumn(0), "::"+key, bindVariables)
 	if err != nil {
 		t.Error(err)
@@ -276,9 +250,9 @@ func TestCodexResolveListArg(t *testing.T) {
 		t.Errorf("resolvePKValues: %#v, want %#v", v, wantV)
 	}
 
-	bindVariables = sqltypes.MakeTestBindVars(map[string]interface{}{
-		key: []interface{}{10},
-	})
+	bindVariables = map[string]*querypb.BindVariable{
+		key: sqltypes.MakeTestBindVar([]interface{}{10}),
+	}
 	result, err := resolveListArg(table.GetPKColumn(0), "::"+key, bindVariables)
 	if err != nil {
 		t.Fatalf("should not get an error, but got error: %v", err)
@@ -300,9 +274,9 @@ func TestResolveNumber(t *testing.T) {
 		out: int64(10),
 	}, {
 		v: "::a",
-		bv: sqltypes.MakeTestBindVars(map[string]interface{}{
-			"a": []interface{}{10},
-		}),
+		bv: map[string]*querypb.BindVariable{
+			"a": sqltypes.MakeTestBindVar([]interface{}{10}),
+		},
 		outErr: "type: TUPLE is invalid",
 	}, {
 		v:      ":a",

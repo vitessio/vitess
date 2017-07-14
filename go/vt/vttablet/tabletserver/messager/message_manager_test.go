@@ -545,22 +545,14 @@ func TestMMGenerate(t *testing.T) {
 	if query != wantQuery {
 		t.Errorf("GenerateAckQuery query: %s, want %s", query, wantQuery)
 	}
-	gotAcked, _ := sqltypes.BindVarToValue(bv["time_acked"]).ParseInt64()
+	bvv, _ := sqltypes.BindVarToValue(bv["time_acked"])
+	gotAcked, _ := bvv.ParseInt64()
 	wantAcked := time.Now().UnixNano()
 	if wantAcked-gotAcked > 10e9 {
 		t.Errorf("gotAcked: %d, should be with 10s of %d", gotAcked, wantAcked)
 	}
-	wantids := &querypb.BindVariable{
-		Type: querypb.Type_TUPLE,
-		Values: []*querypb.Value{{
-			Type:  querypb.Type_VARCHAR,
-			Value: []byte("1"),
-		}, {
-			Type:  querypb.Type_VARCHAR,
-			Value: []byte("2"),
-		}},
-	}
 	gotids := bv["ids"]
+	wantids := sqltypes.MakeTestBindVar([]interface{}{"1", "2"})
 	if !reflect.DeepEqual(gotids, wantids) {
 		t.Errorf("gotid: %v, want %v", gotids, wantids)
 	}

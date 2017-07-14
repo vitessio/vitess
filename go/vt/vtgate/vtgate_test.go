@@ -1364,7 +1364,8 @@ func TestVTGateBindVarError(t *testing.T) {
 	ctx := context.Background()
 	session := &vtgatepb.Session{}
 	bindVars := map[string]*querypb.BindVariable{
-		"v": {Type: querypb.Type_EXPRESSION,
+		"v": {
+			Type:  querypb.Type_EXPRESSION,
 			Value: []byte("1"),
 		},
 	}

@@ -75,10 +75,10 @@ func TestLookupHashUniqueCreate(t *testing.T) {
 	}
 	wantQuery := &querypb.BoundQuery{
 		Sql: "insert into t(fromc,toc) values(:fromc0,:toc0)",
-		BindVariables: sqltypes.MakeTestBindVars(map[string]interface{}{
-			"fromc0": 1,
-			"toc0":   uint64(1),
-		}),
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc0": sqltypes.Int64BindVar(1),
+			"toc0":   sqltypes.Uint64BindVar(1),
+		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
 		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)
@@ -100,10 +100,10 @@ func TestLookupHashUniqueDelete(t *testing.T) {
 	}
 	wantQuery := &querypb.BoundQuery{
 		Sql: "delete from t where fromc = :fromc and toc = :toc",
-		BindVariables: sqltypes.MakeTestBindVars(map[string]interface{}{
-			"fromc": 1,
-			"toc":   uint64(1),
-		}),
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc": sqltypes.Int64BindVar(1),
+			"toc":   sqltypes.Uint64BindVar(1),
+		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
 		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)

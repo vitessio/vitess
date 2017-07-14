@@ -61,10 +61,10 @@ func TestBindVars(t *testing.T) {
 			Name:  "n2",
 			Value: "abcd",
 		}},
-		out: sqltypes.MakeTestBindVars(map[string]interface{}{
-			"n1": int64(0),
-			"n2": "abcd",
-		}),
+		out: map[string]*querypb.BindVariable{
+			"n1": sqltypes.Int64BindVar(0),
+			"n2": sqltypes.StringBindVar("abcd"),
+		},
 	}, {
 		desc: "prefixed names",
 		in: []driver.NamedValue{{
@@ -74,10 +74,10 @@ func TestBindVars(t *testing.T) {
 			Name:  "@n2",
 			Value: "abcd",
 		}},
-		out: sqltypes.MakeTestBindVars(map[string]interface{}{
-			"n1": int64(0),
-			"n2": "abcd",
-		}),
+		out: map[string]*querypb.BindVariable{
+			"n1": sqltypes.Int64BindVar(0),
+			"n2": sqltypes.StringBindVar("abcd"),
+		},
 	}, {
 		desc: "all positional",
 		in: []driver.NamedValue{{
@@ -87,10 +87,10 @@ func TestBindVars(t *testing.T) {
 			Ordinal: 2,
 			Value:   "abcd",
 		}},
-		out: sqltypes.MakeTestBindVars(map[string]interface{}{
-			"v1": int64(0),
-			"v2": "abcd",
-		}),
+		out: map[string]*querypb.BindVariable{
+			"v1": sqltypes.Int64BindVar(0),
+			"v2": sqltypes.StringBindVar("abcd"),
+		},
 	}, {
 		desc: "name, then position",
 		in: []driver.NamedValue{{

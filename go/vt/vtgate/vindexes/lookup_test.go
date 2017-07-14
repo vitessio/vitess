@@ -73,10 +73,10 @@ func TestLookupUniqueVerify(t *testing.T) {
 	_, err := lookupUnique.Verify(vc, []interface{}{1}, [][]byte{[]byte("test")})
 	wantQuery := &querypb.BoundQuery{
 		Sql: "select fromc from t where ((fromc=:fromc0 and toc=:toc0))",
-		BindVariables: sqltypes.MakeTestBindVars(map[string]interface{}{
-			"fromc0": 1,
-			"toc0":   []byte("test"),
-		}),
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc0": sqltypes.Int64BindVar(1),
+			"toc0":   sqltypes.BytesBindVar([]byte("test")),
+		},
 	}
 	if err != nil {
 		t.Error(err)
@@ -107,9 +107,9 @@ func TestLookupUniqueMap(t *testing.T) {
 	}
 	wantQuery := &querypb.BoundQuery{
 		Sql: "select toc from t where fromc = :fromc",
-		BindVariables: sqltypes.MakeTestBindVars(map[string]interface{}{
-			"fromc": 2,
-		}),
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc": sqltypes.Int64BindVar(2),
+		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
 		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)
@@ -124,10 +124,10 @@ func TestLookupUniqueCreate(t *testing.T) {
 	}
 	wantQuery := &querypb.BoundQuery{
 		Sql: "insert into t(fromc,toc) values(:fromc0,:toc0)",
-		BindVariables: sqltypes.MakeTestBindVars(map[string]interface{}{
-			"fromc0": 1,
-			"toc0":   []byte("test"),
-		}),
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc0": sqltypes.Int64BindVar(1),
+			"toc0":   sqltypes.BytesBindVar([]byte("test")),
+		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
 		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)
@@ -162,10 +162,10 @@ func TestLookupUniqueDelete(t *testing.T) {
 	}
 	wantQuery := &querypb.BoundQuery{
 		Sql: "delete from t where fromc = :fromc and toc = :toc",
-		BindVariables: sqltypes.MakeTestBindVars(map[string]interface{}{
-			"fromc": 1,
-			"toc":   []byte("test"),
-		}),
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc": sqltypes.Int64BindVar(1),
+			"toc":   sqltypes.BytesBindVar([]byte("test")),
+		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
 		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)
@@ -184,10 +184,10 @@ func TestLookupNonUniqueVerify(t *testing.T) {
 	_, err := lookupNonUnique.Verify(vc, []interface{}{1}, [][]byte{[]byte("test")})
 	wantQuery := &querypb.BoundQuery{
 		Sql: "select fromc from t where ((fromc=:fromc0 and toc=:toc0))",
-		BindVariables: sqltypes.MakeTestBindVars(map[string]interface{}{
-			"fromc0": 1,
-			"toc0":   []byte("test"),
-		}),
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc0": sqltypes.Int64BindVar(1),
+			"toc0":   sqltypes.BytesBindVar([]byte("test")),
+		},
 	}
 	if err != nil {
 		t.Error(err)
@@ -205,9 +205,9 @@ func TestLookupNonUniqueMap(t *testing.T) {
 	}
 	wantQuery := &querypb.BoundQuery{
 		Sql: "select toc from t where fromc = :fromc",
-		BindVariables: sqltypes.MakeTestBindVars(map[string]interface{}{
-			"fromc": 2,
-		}),
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc": sqltypes.Int64BindVar(2),
+		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
 		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)
@@ -222,10 +222,10 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 	}
 	wantQuery := &querypb.BoundQuery{
 		Sql: "insert into t(fromc,toc) values(:fromc0,:toc0)",
-		BindVariables: sqltypes.MakeTestBindVars(map[string]interface{}{
-			"fromc0": 1,
-			"toc0":   []byte("test"),
-		}),
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc0": sqltypes.Int64BindVar(1),
+			"toc0":   sqltypes.BytesBindVar([]byte("test")),
+		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
 		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)
@@ -247,10 +247,10 @@ func TestLookupNonUniqueDelete(t *testing.T) {
 	}
 	wantQuery := &querypb.BoundQuery{
 		Sql: "delete from t where fromc = :fromc and toc = :toc",
-		BindVariables: sqltypes.MakeTestBindVars(map[string]interface{}{
-			"fromc": 1,
-			"toc":   []byte("test"),
-		}),
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc": sqltypes.Int64BindVar(1),
+			"toc":   sqltypes.BytesBindVar([]byte("test")),
+		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
 		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)

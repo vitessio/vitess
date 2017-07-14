@@ -703,13 +703,8 @@ func TestTypeLimits(t *testing.T) {
 		out:   "unsupported: cannot identify primary key of statement",
 	}, {
 		query: "insert into vitess_ints(tiny) values(:fl)",
-		bv: map[string]*querypb.BindVariable{
-			"fl": {
-				Type:  querypb.Type_FLOAT64,
-				Value: []byte("1.2"),
-			},
-		},
-		out: "type mismatch",
+		bv:    map[string]*querypb.BindVariable{"fl": sqltypes.Float64BindVar(1.2)},
+		out:   "type mismatch",
 	}, {
 		query: "insert into vitess_strings(vb) values(1)",
 		bv:    nil,

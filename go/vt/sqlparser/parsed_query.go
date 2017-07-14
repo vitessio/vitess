@@ -73,7 +73,7 @@ func (pq *ParsedQuery) MarshalJSON() ([]byte, error) {
 // EncodeValue encodes one bind variable value into the query.
 func EncodeValue(buf *bytes.Buffer, value *querypb.BindVariable) {
 	if value.Type != querypb.Type_TUPLE {
-		sqltypes.BindVarToValue(value).EncodeSQL(buf)
+		sqltypes.MakeTrusted(value.Type, value.Value).EncodeSQL(buf)
 		return
 	}
 

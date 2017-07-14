@@ -1040,6 +1040,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testStreamExecuteKeyRangesPanic(t, conn)
 	testStreamExecuteKeyspaceIdsPanic(t, conn)
 	testMessageStreamPanic(t, conn)
+	testMessageAckPanic(t, conn)
 	testMessageAckKeyspaceIdsPanic(t, conn)
 	testSplitQueryPanic(t, conn)
 	testGetSrvKeyspacePanic(t, conn)
@@ -2220,10 +2221,7 @@ var execMap = map[string]struct {
 		execQuery: &queryExecute{
 			SQL: "request1",
 			BindVariables: map[string]*querypb.BindVariable{
-				"bind1": {
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": sqltypes.Int64BindVar(0),
 			},
 			Session: &vtgatepb.Session{
 				TargetString: "connection_ks@rdonly",
@@ -2233,10 +2231,7 @@ var execMap = map[string]struct {
 		shardQuery: &queryExecuteShards{
 			SQL: "request1",
 			BindVariables: map[string]*querypb.BindVariable{
-				"bind1": {
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": sqltypes.Int64BindVar(0),
 			},
 			Keyspace:   "ks",
 			Shards:     []string{"1", "2"},
@@ -2246,10 +2241,7 @@ var execMap = map[string]struct {
 		keyspaceIDQuery: &queryExecuteKeyspaceIds{
 			SQL: "request1",
 			BindVariables: map[string]*querypb.BindVariable{
-				"bind1": {
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": sqltypes.Int64BindVar(0),
 			},
 			Keyspace: "ks",
 			KeyspaceIds: [][]byte{
@@ -2261,10 +2253,7 @@ var execMap = map[string]struct {
 		keyRangeQuery: &queryExecuteKeyRanges{
 			SQL: "request1",
 			BindVariables: map[string]*querypb.BindVariable{
-				"bind1": {
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": sqltypes.Int64BindVar(0),
 			},
 			Keyspace: "ks",
 			KeyRanges: []*topodatapb.KeyRange{
@@ -2279,10 +2268,7 @@ var execMap = map[string]struct {
 		entityIdsQuery: &queryExecuteEntityIds{
 			SQL: "request1",
 			BindVariables: map[string]*querypb.BindVariable{
-				"bind1": {
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": sqltypes.Int64BindVar(0),
 			},
 			Keyspace:         "ks",
 			EntityColumnName: "column",
@@ -2302,10 +2288,7 @@ var execMap = map[string]struct {
 					Query: &querypb.BoundQuery{
 						Sql: "request1",
 						BindVariables: map[string]*querypb.BindVariable{
-							"bind1": {
-								Type:  sqltypes.Int64,
-								Value: []byte("11143"),
-							},
+							"bind1": sqltypes.Int64BindVar(11143),
 						},
 					},
 					Keyspace: "ks",
@@ -2322,10 +2305,7 @@ var execMap = map[string]struct {
 					Query: &querypb.BoundQuery{
 						Sql: "request1",
 						BindVariables: map[string]*querypb.BindVariable{
-							"bind1": {
-								Type:  sqltypes.Int64,
-								Value: []byte("11143"),
-							},
+							"bind1": sqltypes.Int64BindVar(11143),
 						},
 					},
 					Keyspace: "ks",
@@ -2360,10 +2340,7 @@ var execMap = map[string]struct {
 		execQuery: &queryExecute{
 			SQL: "errorRequst",
 			BindVariables: map[string]*querypb.BindVariable{
-				"bind1": {
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": sqltypes.Int64BindVar(0),
 			},
 			Session: &vtgatepb.Session{
 				TargetString: "connection_ks@rdonly",
@@ -2373,10 +2350,7 @@ var execMap = map[string]struct {
 		shardQuery: &queryExecuteShards{
 			SQL: "errorRequst",
 			BindVariables: map[string]*querypb.BindVariable{
-				"bind1": {
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": sqltypes.Int64BindVar(0),
 			},
 			TabletType: topodatapb.TabletType_RDONLY,
 			Keyspace:   "",
@@ -2386,10 +2360,7 @@ var execMap = map[string]struct {
 		keyspaceIDQuery: &queryExecuteKeyspaceIds{
 			SQL: "errorRequst",
 			BindVariables: map[string]*querypb.BindVariable{
-				"bind1": {
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": sqltypes.Int64BindVar(0),
 			},
 			Keyspace: "ks",
 			KeyspaceIds: [][]byte{
@@ -2401,10 +2372,7 @@ var execMap = map[string]struct {
 		keyRangeQuery: &queryExecuteKeyRanges{
 			SQL: "errorRequst",
 			BindVariables: map[string]*querypb.BindVariable{
-				"bind1": {
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": sqltypes.Int64BindVar(0),
 			},
 			Keyspace: "ks",
 			KeyRanges: []*topodatapb.KeyRange{
@@ -2419,10 +2387,7 @@ var execMap = map[string]struct {
 		entityIdsQuery: &queryExecuteEntityIds{
 			SQL: "errorRequst",
 			BindVariables: map[string]*querypb.BindVariable{
-				"bind1": {
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": sqltypes.Int64BindVar(0),
 			},
 			Keyspace:         "ks",
 			EntityColumnName: "column",
@@ -2442,10 +2407,7 @@ var execMap = map[string]struct {
 					Query: &querypb.BoundQuery{
 						Sql: "errorRequst",
 						BindVariables: map[string]*querypb.BindVariable{
-							"bind1": {
-								Type:  sqltypes.Int64,
-								Value: []byte("11143"),
-							},
+							"bind1": sqltypes.Int64BindVar(11143),
 						},
 					},
 					Keyspace: "ks",
@@ -2462,10 +2424,7 @@ var execMap = map[string]struct {
 					Query: &querypb.BoundQuery{
 						Sql: "errorRequst",
 						BindVariables: map[string]*querypb.BindVariable{
-							"bind1": {
-								Type:  sqltypes.Int64,
-								Value: []byte("11143"),
-							},
+							"bind1": sqltypes.Int64BindVar(11143),
 						},
 					},
 					Keyspace: "ks",
@@ -2500,20 +2459,14 @@ var execMap = map[string]struct {
 		execQuery: &queryExecute{
 			SQL: "txRequest",
 			BindVariables: map[string]*querypb.BindVariable{
-				"bind1": {
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": sqltypes.Int64BindVar(0),
 			},
 			Session: session1,
 		},
 		shardQuery: &queryExecuteShards{
 			SQL: "txRequest",
 			BindVariables: map[string]*querypb.BindVariable{
-				"bind1": {
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": sqltypes.Int64BindVar(0),
 			},
 			TabletType: topodatapb.TabletType_MASTER,
 			Keyspace:   "",
@@ -2523,10 +2476,7 @@ var execMap = map[string]struct {
 		keyspaceIDQuery: &queryExecuteKeyspaceIds{
 			SQL: "txRequest",
 			BindVariables: map[string]*querypb.BindVariable{
-				"bind1": {
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": sqltypes.Int64BindVar(0),
 			},
 			Keyspace: "ks",
 			KeyspaceIds: [][]byte{
@@ -2538,10 +2488,7 @@ var execMap = map[string]struct {
 		keyRangeQuery: &queryExecuteKeyRanges{
 			SQL: "txRequest",
 			BindVariables: map[string]*querypb.BindVariable{
-				"bind1": {
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": sqltypes.Int64BindVar(0),
 			},
 			Keyspace: "ks",
 			KeyRanges: []*topodatapb.KeyRange{
@@ -2556,10 +2503,7 @@ var execMap = map[string]struct {
 		entityIdsQuery: &queryExecuteEntityIds{
 			SQL: "txRequest",
 			BindVariables: map[string]*querypb.BindVariable{
-				"bind1": {
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": sqltypes.Int64BindVar(0),
 			},
 			Keyspace:         "ks",
 			EntityColumnName: "column",
@@ -2579,10 +2523,7 @@ var execMap = map[string]struct {
 					Query: &querypb.BoundQuery{
 						Sql: "txRequest",
 						BindVariables: map[string]*querypb.BindVariable{
-							"bind1": {
-								Type:  sqltypes.Int64,
-								Value: []byte("11143"),
-							},
+							"bind1": sqltypes.Int64BindVar(11143),
 						},
 					},
 					Keyspace: "ks",
@@ -2598,10 +2539,7 @@ var execMap = map[string]struct {
 					Query: &querypb.BoundQuery{
 						Sql: "txRequest",
 						BindVariables: map[string]*querypb.BindVariable{
-							"bind1": {
-								Type:  sqltypes.Int64,
-								Value: []byte("11143"),
-							},
+							"bind1": sqltypes.Int64BindVar(11143),
 						},
 					},
 					Keyspace: "ks",
@@ -2702,10 +2640,7 @@ var splitQueryRequest = &querySplitQuery{
 	Keyspace: "ks2",
 	SQL:      "in for SplitQuery",
 	BindVariables: map[string]*querypb.BindVariable{
-		"bind2": {
-			Type:  querypb.Type_INT64,
-			Value: []byte("43"),
-		},
+		"bind2": sqltypes.Int64BindVar(43),
 	},
 	SplitColumns:        []string{"split_column1", "split_column2"},
 	SplitCount:          145,
@@ -2718,10 +2653,7 @@ var splitQueryResult = []*vtgatepb.SplitQueryResponse_Part{
 		Query: &querypb.BoundQuery{
 			Sql: "out for SplitQuery",
 			BindVariables: map[string]*querypb.BindVariable{
-				"bind1": {
-					Type:  sqltypes.Int64,
-					Value: []byte("1114444"),
-				},
+				"bind1": sqltypes.Int64BindVar(1114444),
 			},
 		},
 		KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{

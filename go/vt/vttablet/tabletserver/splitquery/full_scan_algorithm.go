@@ -116,7 +116,7 @@ func (a *FullScanAlgorithm) populatePrevTupleInBindVariables(
 			len(prevTuple), len(a.prevBindVariableNames)))
 	}
 	for i, tupleElement := range prevTuple {
-		bindVariables[a.prevBindVariableNames[i]] = sqltypes.ValueToBindVar(tupleElement)
+		bindVariables[a.prevBindVariableNames[i]] = sqltypes.ValueBindVar(tupleElement)
 	}
 }
 

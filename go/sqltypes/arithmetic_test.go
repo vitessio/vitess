@@ -209,8 +209,11 @@ func TestConvertToUint64(t *testing.T) {
 		v:   makeInt(1),
 		out: 1,
 	}, {
-		v:   &querypb.BindVariable{Type: Int64, Value: []byte("1")},
+		v:   Int64BindVar(1),
 		out: 1,
+	}, {
+		v:   MakeTestBindVar([]interface{}{}),
+		err: "cannot convert a TUPLE bind var into a value",
 	}, {
 		v:   nil,
 		err: "getNumber: unexpected type for <nil>: <nil>",

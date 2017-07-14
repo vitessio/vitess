@@ -106,28 +106,18 @@ func MakeTestStreamingResults(fields []*querypb.Field, rows ...string) []*Result
 	return results
 }
 
-// MakeTestBindVars makes a map[string]*querypb.BindVariable
-// from a map[string]interface{}. It panics on invalid input.
+// MakeTestBindVar makes a *querypb.BindVariable from
+// an interface{}.It panics on invalid input.
 // This function should only be used for testing.
-func MakeTestBindVars(bindVars map[string]interface{}) map[string]*querypb.BindVariable {
-	if len(bindVars) == 0 {
-		return nil
+func MakeTestBindVar(v interface{}) *querypb.BindVariable {
+	if v == nil {
+		return NullBV
 	}
-
-	result := make(map[string]*querypb.BindVariable)
-	for k, v := range bindVars {
-		// nil values are allowed internally.
-		if v == nil {
-			result[k] = &querypb.BindVariable{Type: querypb.Type_NULL_TYPE}
-			continue
-		}
-		bv, err := BuildBindVar(v)
-		if err != nil {
-			panic(fmt.Errorf("%s: %v", k, err))
-		}
-		result[k] = bv
+	bv, err := BuildBindVar(v)
+	if err != nil {
+		panic(err)
 	}
-	return result
+	return bv
 }
 
 // PrintResults prints []*Results into a string.
