@@ -233,16 +233,10 @@ func TestMultiExecs(t *testing.T) {
 	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestMultiExecs", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 	shardVars := map[string]map[string]*querypb.BindVariable{
 		"0": {
-			"bv0": {
-				Type:  querypb.Type_INT64,
-				Value: []byte("0"),
-			},
+			"bv0": sqltypes.Int64BindVar(0),
 		},
 		"1": {
-			"bv1": {
-				Type:  querypb.Type_INT64,
-				Value: []byte("1"),
-			},
+			"bv1": sqltypes.Int64BindVar(1),
 		},
 	}
 	shardQueries := make(map[string]*querypb.BoundQuery, len(shardVars))

@@ -148,7 +148,7 @@ func populateBoundaryBindVariables(
 			len(inputTuple), len(bindVariableNames)))
 	}
 	for i := range inputTuple {
-		populateNewBindVariable(bindVariableNames[i], sqltypes.ValueToBindVar(inputTuple[i]), resultBindVariables)
+		populateNewBindVariable(bindVariableNames[i], sqltypes.ValueBindVar(inputTuple[i]), resultBindVariables)
 	}
 }
 

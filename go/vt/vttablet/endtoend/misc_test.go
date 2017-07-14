@@ -124,9 +124,9 @@ func TestNocacheListArgs(t *testing.T) {
 
 	qr, err := client.Execute(
 		query,
-		sqltypes.MakeTestBindVars(map[string]interface{}{
-			"list": []interface{}{2, 3, 4},
-		}),
+		map[string]*querypb.BindVariable{
+			"list": sqltypes.MakeTestBindVar([]interface{}{2, 3, 4}),
+		},
 	)
 	if err != nil {
 		t.Error(err)
@@ -138,9 +138,9 @@ func TestNocacheListArgs(t *testing.T) {
 
 	qr, err = client.Execute(
 		query,
-		sqltypes.MakeTestBindVars(map[string]interface{}{
-			"list": []interface{}{3, 4},
-		}),
+		map[string]*querypb.BindVariable{
+			"list": sqltypes.MakeTestBindVar([]interface{}{3, 4}),
+		},
 	)
 	if err != nil {
 		t.Error(err)
@@ -152,9 +152,9 @@ func TestNocacheListArgs(t *testing.T) {
 
 	qr, err = client.Execute(
 		query,
-		sqltypes.MakeTestBindVars(map[string]interface{}{
-			"list": []interface{}{3},
-		}),
+		map[string]*querypb.BindVariable{
+			"list": sqltypes.MakeTestBindVar([]interface{}{3}),
+		},
 	)
 	if err != nil {
 		t.Error(err)
@@ -167,9 +167,9 @@ func TestNocacheListArgs(t *testing.T) {
 	// Error case
 	_, err = client.Execute(
 		query,
-		sqltypes.MakeTestBindVars(map[string]interface{}{
-			"list": []interface{}{},
-		}),
+		map[string]*querypb.BindVariable{
+			"list": sqltypes.MakeTestBindVar([]interface{}{}),
+		},
 	)
 	want := "empty list supplied for list"
 	if err == nil || err.Error() != want {

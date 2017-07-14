@@ -662,10 +662,7 @@ func (route *Route) resolveList(val interface{}, bindVars map[string]*querypb.Bi
 
 		result := make([]interface{}, len(list.Values))
 		for i, val := range list.Values {
-			var err error
-			if result[i], err = sqltypes.ValueFromBytes(val.Type, val.Value); err != nil {
-				return nil, err
-			}
+			result[i] = sqltypes.MakeTrusted(val.Type, val.Value)
 		}
 		return result, nil
 	default:

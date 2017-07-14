@@ -52,60 +52,35 @@ func TestParsedQuery(t *testing.T) {
 			query: "select * from a where id1 = :id1 and id2 = :id2",
 			bindVars: map[string]*querypb.BindVariable{
 				"id1": sqltypes.Int64BindVar(1),
-				"id2": {Type: querypb.Type_NULL_TYPE},
+				"id2": sqltypes.NullBV,
 			},
 			output: "select * from a where id1 = 1 and id2 = null",
 		}, {
 			desc:  "tuple *querypb.BindVariable",
 			query: "select * from a where id in ::vals",
 			bindVars: map[string]*querypb.BindVariable{
-				"vals": {
-					Type: querypb.Type_TUPLE,
-					Values: []*querypb.Value{
-						{
-							Type:  querypb.Type_INT64,
-							Value: []byte("1"),
-						},
-						{
-							Type:  querypb.Type_VARCHAR,
-							Value: []byte("aa"),
-						},
-					},
-				},
+				"vals": sqltypes.MakeTestBindVar([]interface{}{1, "aa"}),
 			},
 			output: "select * from a where id in (1, 'aa')",
 		}, {
 			desc:  "list bind vars 0 arguments",
 			query: "select * from a where id in ::vals",
 			bindVars: map[string]*querypb.BindVariable{
-				"vals": {
-					Type: querypb.Type_TUPLE,
-				},
+				"vals": sqltypes.MakeTestBindVar([]interface{}{}),
 			},
 			output: "empty list supplied for vals",
 		}, {
 			desc:  "non-list bind var supplied",
 			query: "select * from a where id in ::vals",
 			bindVars: map[string]*querypb.BindVariable{
-				"vals": {
-					Type:  querypb.Type_INT64,
-					Value: []byte("1"),
-				},
+				"vals": sqltypes.Int64BindVar(1),
 			},
 			output: "unexpected list arg type (INT64) for key vals",
 		}, {
 			desc:  "list bind var for non-list",
 			query: "select * from a where id = :vals",
 			bindVars: map[string]*querypb.BindVariable{
-				"vals": {
-					Type: querypb.Type_TUPLE,
-					Values: []*querypb.Value{
-						{
-							Type:  querypb.Type_INT64,
-							Value: []byte("1"),
-						},
-					},
-				},
+				"vals": sqltypes.MakeTestBindVar([]interface{}{1}),
 			},
 			output: "unexpected arg type (TUPLE) for non-list key vals",
 		}, {

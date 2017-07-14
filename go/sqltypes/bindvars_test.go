@@ -39,10 +39,7 @@ func TestBuildBindVars(t *testing.T) {
 			"k": int64(1),
 		},
 		out: map[string]*querypb.BindVariable{
-			"k": {
-				Type:  querypb.Type_INT64,
-				Value: []byte("1"),
-			},
+			"k": Int64BindVar(1),
 		},
 	}, {
 		in: map[string]interface{}{
@@ -110,10 +107,8 @@ func TestBuildBindVar(t *testing.T) {
 			Value: []byte("1"),
 		},
 	}, {
-		in: nil,
-		out: &querypb.BindVariable{
-			Type: querypb.Type_NULL_TYPE,
-		},
+		in:  nil,
+		out: NullBV,
 	}, {
 		in: MakeTrusted(Int64, []byte("1")),
 		out: &querypb.BindVariable{
@@ -296,10 +291,7 @@ func TestValidateBindVar(t *testing.T) {
 		in  *querypb.BindVariable
 		err string
 	}{{
-		in: &querypb.BindVariable{
-			Type:  querypb.Type_NULL_TYPE,
-			Value: []byte(""),
-		},
+		in:  NullBV,
 		err: "NULL_TYPE is invalid",
 	}, {
 		in: &querypb.BindVariable{
@@ -524,26 +516,19 @@ func TestValidateBindVar(t *testing.T) {
 }
 
 func TestBindVarToValue(t *testing.T) {
-	bv := &querypb.BindVariable{
-		Type:  querypb.Type_INT64,
-		Value: []byte("1"),
+	v, err := BindVarToValue(Int64BindVar(1))
+	if err != nil {
+		t.Error(err)
 	}
-	v := BindVarToValue(bv)
 	want := MakeTrusted(querypb.Type_INT64, []byte("1"))
 	if !reflect.DeepEqual(v, want) {
-		t.Errorf("BindVarToValue(%v): %v, want %v", bv, v, want)
+		t.Errorf("BindVarToValue(1): %v, want %v", v, want)
 	}
-}
 
-func TestValueToBindVar(t *testing.T) {
-	v := MakeTrusted(querypb.Type_INT64, []byte("1"))
-	bv := ValueToBindVar(v)
-	want := &querypb.BindVariable{
-		Type:  querypb.Type_INT64,
-		Value: []byte("1"),
-	}
-	if !reflect.DeepEqual(bv, want) {
-		t.Errorf("ValueToBindVar(%v): %v, want %v", v, bv, want)
+	v, err = BindVarToValue(&querypb.BindVariable{Type: querypb.Type_TUPLE})
+	wantErr := "cannot convert a TUPLE bind var into a value"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf(" BindVarToValue(TUPLE): %v, want %s", err, wantErr)
 	}
 }
 

@@ -101,7 +101,7 @@ func TestBuildValue(t *testing.T) {
 		in:  testVal(VarBinary, "a"),
 		out: testVal(VarBinary, "a"),
 	}, {
-		in:  &querypb.BindVariable{Type: VarBinary, Value: []byte("a")},
+		in:  BytesBindVar([]byte("a")),
 		out: testVal(VarBinary, "a"),
 	}}
 	for _, tcase := range testcases {
@@ -153,10 +153,7 @@ func TestBuildConverted(t *testing.T) {
 		out: testVal(Float32, "123"),
 	}, {
 		typ: Int64,
-		val: &querypb.BindVariable{
-			Type:  querypb.Type_VARCHAR,
-			Value: []byte("123"),
-		},
+		val: StringBindVar("123"),
 		out: testVal(Int64, "123"),
 	}}
 	for _, tcase := range testcases {
