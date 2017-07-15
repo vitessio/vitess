@@ -184,7 +184,7 @@ func (mc *MultiCounters) Add(names []string, value int64) {
 	if len(names) != len(mc.labels) {
 		panic("MultiCounters: wrong number of values in Add")
 	}
-	mc.Counters.Add(strings.Join(names, "."), value)
+	mc.Counters.Add(mapKey(names), value)
 }
 
 // Set sets the value of a named counter. len(names) must be equal to
@@ -193,7 +193,7 @@ func (mc *MultiCounters) Set(names []string, value int64) {
 	if len(names) != len(mc.labels) {
 		panic("MultiCounters: wrong number of values in Set")
 	}
-	mc.Counters.Set(strings.Join(names, "."), value)
+	mc.Counters.Set(mapKey(names), value)
 }
 
 // MultiCountersFunc is a multidimensional CountersFunc implementation
@@ -223,4 +223,14 @@ func NewMultiCountersFunc(name string, labels []string, f CountersFunc) *MultiCo
 		publish(name, t)
 	}
 	return t
+}
+
+var escaper = strings.NewReplacer(".", "\\.", "\\", "\\\\")
+
+func mapKey(ss []string) string {
+	esc := make([]string, len(ss))
+	for i, f := range ss {
+		esc[i] = escaper.Replace(f)
+	}
+	return strings.Join(esc, ".")
 }
