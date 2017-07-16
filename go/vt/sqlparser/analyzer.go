@@ -19,6 +19,7 @@ package sqlparser
 // analyzer.go contains utility analysis functions.
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -159,6 +160,55 @@ func IsSimpleTuple(node Expr) bool {
 	}
 	// It's a subquery
 	return false
+}
+
+// NewPlanValue builds a sqltypes.PlanValue from an Expr.
+func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
+	switch node := node.(type) {
+	case *SQLVal:
+		switch node.Type {
+		case ValArg:
+			return sqltypes.PlanValue{Key: string(node.Val[1:])}, nil
+		case IntVal:
+			n, err := sqltypes.BuildIntegral(string(node.Val))
+			if err != nil {
+				return sqltypes.PlanValue{}, err
+			}
+			return sqltypes.PlanValue{Value: n}, nil
+		case StrVal:
+			return sqltypes.PlanValue{Value: sqltypes.MakeString(node.Val)}, nil
+		case HexVal:
+			v, err := node.HexDecode()
+			if err != nil {
+				return sqltypes.PlanValue{}, err
+			}
+			return sqltypes.PlanValue{Value: sqltypes.MakeString(v)}, nil
+		}
+	case ListArg:
+		return sqltypes.PlanValue{ListKey: string(node[2:])}, nil
+	case ValTuple:
+		pv := sqltypes.PlanValue{
+			Values: make([]sqltypes.PlanValue, 0, len(node)),
+		}
+		for _, val := range node {
+			innerpv, err := NewPlanValue(val)
+			if err != nil {
+				return sqltypes.PlanValue{}, err
+			}
+			if innerpv.ListKey != "" || innerpv.Values != nil {
+				return sqltypes.PlanValue{}, errors.New("unsupported: nested lists")
+			}
+			pv.Values = append(pv.Values, innerpv)
+		}
+		return pv, nil
+	case *ValuesFuncExpr:
+		if node.Resolved != nil {
+			return NewPlanValue(node.Resolved)
+		}
+	case *NullVal:
+		return sqltypes.PlanValue{}, nil
+	}
+	return sqltypes.PlanValue{}, fmt.Errorf("expression is too complex '%v'", String(node))
 }
 
 // AsInterface converts the Expr to an interface. It converts
