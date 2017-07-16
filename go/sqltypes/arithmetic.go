@@ -86,7 +86,7 @@ func NullsafeCompare(v1, v2 Value) (int, error) {
 	if v1.IsText() || v2.IsText() {
 		return 0, errors.New("text fields cannot be compared")
 	}
-	if isNumber(v1.typ) || isNumber(v2.typ) {
+	if isNumber(v1.Type()) || isNumber(v2.Type()) {
 		lv1, err := newNumeric(v1)
 		if err != nil {
 			return 0, err
@@ -97,6 +97,7 @@ func NullsafeCompare(v1, v2 Value) (int, error) {
 		}
 		return compareNumeric(lv1, lv2), nil
 	}
+	// TODO(sougou): perform a more type-aware comparison instead.
 	return bytes.Compare(v1.Raw(), v2.Raw()), nil
 }
 
@@ -133,6 +134,52 @@ func minmax(v1, v2 Value, min bool) (Value, error) {
 		return v1, nil
 	}
 	return v2, nil
+}
+
+// Cast converts a Value to the target type.
+func Cast(v Value, typ querypb.Type) (Value, error) {
+	// Fast paths.
+	if v.Type() == typ || v.IsNull() {
+		return v, nil
+	}
+
+	if IsSigned(typ) {
+		if v.IsSigned() {
+			return MakeTrusted(typ, v.Raw()), nil
+		}
+		if _, err := strconv.ParseInt(v.String(), 10, 64); err != nil {
+			return NULL, err
+		}
+		return MakeTrusted(typ, v.Raw()), nil
+	}
+
+	if IsUnsigned(typ) {
+		if v.IsUnsigned() {
+			return MakeTrusted(typ, v.Raw()), nil
+		}
+		if _, err := strconv.ParseUint(v.String(), 10, 64); err != nil {
+			return NULL, err
+		}
+		return MakeTrusted(typ, v.Raw()), nil
+	}
+
+	if IsFloat(typ) || typ == Decimal {
+		if v.IsIntegral() || v.IsFloat() || v.Type() == Decimal {
+			return MakeTrusted(typ, v.Raw()), nil
+		}
+		if _, err := strconv.ParseFloat(v.String(), 64); err != nil {
+			return NULL, err
+		}
+		return MakeTrusted(typ, v.Raw()), nil
+	}
+
+	if IsQuoted(typ) {
+		if v.IsIntegral() || v.IsFloat() || v.Type() == Decimal || v.IsQuoted() {
+			return MakeTrusted(typ, v.Raw()), nil
+		}
+	}
+
+	return NULL, fmt.Errorf("cannot convert val: '%v' of type %v to %v", v, v.Type(), typ)
 }
 
 // ConvertToUint64 converts any go, sqltypes, or querypb
