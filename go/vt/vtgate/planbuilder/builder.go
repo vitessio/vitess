@@ -74,8 +74,10 @@ type builder interface {
 	PushOrderByNull()
 
 	// SetUpperLimit is an optimization hint that tells that primitive
-	// that it need not return more than the specified number of rows.
+	// that it it does not need to return more than the specified number of rows.
 	// A primitive that cannot perform this can ignore the request.
+	// The count is similar to a plan Value. In this case, it can be
+	// a string (bindvar name), or an int64.
 	SetUpperLimit(count interface{})
 
 	// PushMisc pushes miscelleaneous constructs to all the primitives.

@@ -141,6 +141,10 @@ func (sq *subquery) PushOrderByNull() {
 }
 
 // SetUpperLimit satisfies the builder interface.
+// For now, the call is ignored because the
+// repercussions of pushing this limit down
+// into a subquery have not been studied yet.
+// We can consider doing it in the future.
 // TODO(sougou): this could be improved.
 func (sq *subquery) SetUpperLimit(_ interface{}) {
 }

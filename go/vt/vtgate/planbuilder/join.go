@@ -198,6 +198,9 @@ func (jb *join) PushOrderByNull() {
 }
 
 // SetUpperLimit satisfies the builder interface.
+// The call is ignored because results get multiplied
+// as they join with others. So, it's hard to reliably
+// predict if a limit push down will work correctly.
 func (jb *join) SetUpperLimit(_ interface{}) {
 }
 

@@ -136,9 +136,9 @@ func pushLimit(limit *sqlparser.Limit, bldr builder) (builder, error) {
 		rb.SetLimit(limit)
 		return bldr, nil
 	}
-	l := newLimit(bldr)
-	if err := l.SetLimit(limit); err != nil {
+	lb := newLimit(bldr)
+	if err := lb.SetLimit(limit); err != nil {
 		return nil, err
 	}
-	return l, nil
+	return lb, nil
 }

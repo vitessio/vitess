@@ -402,7 +402,8 @@
   }
 }
 
-# limit for joins
+# limit for joins. Can't push down the limit because result
+# counts get multiplied by join operations.
 "select user.col from user join user_extra limit 1"
 {
   "Original": "select user.col from user join user_extra limit 1",

@@ -48,7 +48,7 @@ func (l *Limit) MarshalJSON() ([]byte, error) {
 	return json.Marshal(marshalLimit)
 }
 
-// Execute is a Primitive function.
+// Execute satisfies the Primtive interface.
 func (l *Limit) Execute(vcursor VCursor, bindVars, joinVars map[string]interface{}, wantfields bool) (*sqltypes.Result, error) {
 	count, err := l.fetchCount(bindVars, joinVars)
 	if err != nil {
@@ -67,7 +67,7 @@ func (l *Limit) Execute(vcursor VCursor, bindVars, joinVars map[string]interface
 	return result, nil
 }
 
-// StreamExecute is a Primitive function.
+// StreamExecute satisfies the Primtive interface.
 func (l *Limit) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]interface{}, wantfields bool, callback func(*sqltypes.Result) error) error {
 	count, err := l.fetchCount(bindVars, joinVars)
 	if err != nil {
@@ -95,15 +95,18 @@ func (l *Limit) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]int
 		return io.EOF
 	})
 
-	// We may get back the EOF we returned in the callback.
-	// If so, suppress it.
-	if err != nil && err != io.EOF {
+	if err == io.EOF {
+		// We may get back the EOF we returned in the callback.
+		// If so, suppress it.
+		return nil
+	}
+	if err != nil {
 		return err
 	}
 	return nil
 }
 
-// GetFields is a Primitive function.
+// GetFields satisfies the Primtive interface.
 func (l *Limit) GetFields(vcursor VCursor, bindVars, joinVars map[string]interface{}) (*sqltypes.Result, error) {
 	return l.Input.GetFields(vcursor, bindVars, joinVars)
 }
@@ -128,16 +131,18 @@ func (l *Limit) fetchCount(bindVars, joinVars map[string]interface{}) (int, erro
 	return count, nil
 }
 
-// resolveBindvar may have a value or bind var name. If it's
-// a bind var name, it returns the resolved value.
+// resolveBindvar resolves "var" if it's a bind variable.
+// Otherwise, it's an integer literal and returned as is.
 // TODO(sougou): move this to a more reusable location.
 func resolveBindvar(val interface{}, bindVars map[string]interface{}) (interface{}, error) {
 	// If it's a bindvar, it will be a string.
-	if v, ok := val.(string); ok {
-		val, ok = bindVars[v[1:]]
-		if !ok {
-			return nil, fmt.Errorf("could not find bind var %s", v)
-		}
+	v, ok := val.(string)
+	if !ok {
+		return val, nil
+	}
+	val, ok = bindVars[v[1:]]
+	if !ok {
+		return nil, fmt.Errorf("could not find bind var %s", v)
 	}
 	return val, nil
 }

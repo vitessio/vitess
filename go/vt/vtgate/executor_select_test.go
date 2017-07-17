@@ -931,6 +931,9 @@ func TestSelectScatterOrderBy(t *testing.T) {
 			InsertID:     0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+				// i%4 ensures that there are duplicates across shards.
+				// This will allow us to test that cross-shard ordering
+				// still works correctly.
 				sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(i%4))),
 			}},
 		}})
