@@ -207,14 +207,6 @@
 "select id from unsharded order by (select id from unsharded)"
 "unsupported: order by has subquery"
 
-# limit for joins
-"select user.col from user join user_extra limit 1"
-"unsupported: limits with cross-shard query"
-
-# limit for scatter
-"select col from user limit 1"
-"unsupported: limits with scatter"
-
 # sequence in subquery
 "select col from unsharded where id in (select next value from seq)"
 "unsupported: use of sequence in subquery"
@@ -303,10 +295,6 @@
 "insert into unsharded select 1 from dual union select 1 from dual"
 "unsupported: union in insert"
 
-# unsharded insert with cross-shard select
-"insert into unsharded select col from user limit 1"
-"unsupported: limits with scatter"
-
 # unsharded insert with cross-shard join"
 "insert into unsharded select u.col from user u join user u1"
 "unsupported: cross-shard join in insert"
@@ -374,10 +362,6 @@
 # replace with multiple rows
 "replace into user(id) values (1), (2)"
 "unsupported: REPLACE INTO with sharded schema"
-
-# cross-shard expression in parenthesis with limit not supported yet
-"select * from user where (id = 4 AND name ='abc') limit 5"
-"unsupported: limits with scatter"
 
 # union of information_schema with normal table
 "select * from information_schema.a union select * from unsharded"

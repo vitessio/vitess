@@ -72,7 +72,7 @@ func processSelect(sel *sqlparser.Select, vschema VSchema, outer builder) (build
 	if err != nil {
 		return nil, err
 	}
-	err = pushLimit(sel.Limit, bldr)
+	bldr, err = pushLimit(sel.Limit, bldr)
 	if err != nil {
 		return nil, err
 	}
