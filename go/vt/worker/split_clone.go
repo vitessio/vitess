@@ -854,6 +854,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 	var firstError error
 
 	ctx, cancelCopy := context.WithCancel(ctx)
+	defer cancelCopy()
 	processError := func(format string, args ...interface{}) {
 		scw.wr.Logger().Errorf(format, args...)
 		mu.Lock()

@@ -698,7 +698,7 @@ func TestSplitCloneV2_Online_TabletsUnavailableDuringRestart(t *testing.T) {
 	// Let vtworker keep retrying and give up rather quickly because the test
 	// will be blocked until it finally fails.
 	defaultRetryDuration := *retryDuration
-	*retryDuration = 100 * time.Millisecond
+	*retryDuration = 500 * time.Millisecond
 	defer func() {
 		*retryDuration = defaultRetryDuration
 	}()
@@ -709,7 +709,7 @@ func TestSplitCloneV2_Online_TabletsUnavailableDuringRestart(t *testing.T) {
 		// We require only 1 instead of the default 2 replicas.
 		"--min_healthy_rdonly_tablets", "1"}
 	args = append(args, tc.defaultWorkerArgs[2:]...)
-	if err := runCommand(t, tc.wi, tc.wi.wr, args); err == nil || !strings.Contains(err.Error(), "failed to restart the streaming connection after retrying for 100ms") {
+	if err := runCommand(t, tc.wi, tc.wi.wr, args); err == nil || !strings.Contains(err.Error(), "failed to restart the streaming connection") {
 		t.Fatalf("worker should have failed because all tablets became unavailable and it gave up retrying. err: %v", err)
 	}
 
