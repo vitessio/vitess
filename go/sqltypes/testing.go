@@ -34,7 +34,7 @@ import (
 //     "int64|varchar",
 //   )
 // The field types are as defined in querypb and are case
-// insensitive. Delimiters must be used only to sepearate
+// insensitive. Column delimiters must be used only to sepearate
 // strings and not at the beginning or the end.
 func MakeTestFields(names, types string) []*querypb.Field {
 	n := split(names)
@@ -72,7 +72,7 @@ func MakeTestResult(fields []*querypb.Field, rows ...string) *Result {
 	return result
 }
 
-// MakeTestStreamingResults builds a list or results for streaming.
+// MakeTestStreamingResults builds a list of results for streaming.
 //   results := sqltypes.MakeStreamingResults(
 //     fields,
 //		 "1|a",
@@ -82,14 +82,14 @@ func MakeTestResult(fields []*querypb.Field, rows ...string) *Result {
 //   )
 // The first result contains only the fields. Subsequent results
 // are built using the field types. Every input that starts with a "-"
-// is treated as delimiter for one result. A final delimiter must
-// not be supplied.
+// is treated as streaming delimiter for one result. A final
+// delimiter must not be supplied.
 func MakeTestStreamingResults(fields []*querypb.Field, rows ...string) []*Result {
 	var results []*Result
 	results = append(results, &Result{Fields: fields})
 	start := 0
 	cur := 0
-	// Add a final delimiter to simplify the loop below.
+	// Add a final streaming delimiter to simplify the loop below.
 	rows = append(rows, "-")
 	for cur < len(rows) {
 		if rows[cur][0] != '-' {
@@ -110,10 +110,12 @@ func MakeTestStreamingResults(fields []*querypb.Field, rows ...string) []*Result
 // This function should only be used for testing.
 func PrintResults(results []*Result) string {
 	b := new(bytes.Buffer)
-	delim := ""
-	for _, r := range results {
-		fmt.Fprintf(b, "%s%v", delim, r)
-		delim = ", "
+	for i, r := range results {
+		if i == 0 {
+			fmt.Fprintf(b, "%v", r)
+			continue
+		}
+		fmt.Fprintf(b, ", %v", r)
 	}
 	return b.String()
 }

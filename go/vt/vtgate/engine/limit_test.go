@@ -144,13 +144,10 @@ func TestLimitStreamExecute(t *testing.T) {
 	if !reflect.DeepEqual(results, wantResults) {
 		t.Errorf("l.StreamExecute:\n%s, want\n%s", sqltypes.PrintResults(results), sqltypes.PrintResults(wantResults))
 	}
-	if !reflect.DeepEqual(results, wantResults) {
-		t.Errorf("l.StreamExecute:\n%s, want\n%s", sqltypes.PrintResults(results), sqltypes.PrintResults(wantResults))
-	}
 
 	// Test with limit equal to input
 	tp.rewind()
-	l.Count = 4
+	l.Count = 3
 	results = nil
 	err = l.StreamExecute(nil, nil, nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
@@ -187,7 +184,7 @@ func TestLimitStreamExecute(t *testing.T) {
 	}
 }
 
-func TestOrderedAggregateGetFields(t *testing.T) {
+func TestLimitGetFields(t *testing.T) {
 	result := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"col1|col2",
@@ -218,7 +215,8 @@ func TestLimitInputFail(t *testing.T) {
 	}
 
 	tp.rewind()
-	if err := l.StreamExecute(nil, nil, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
+	err := l.StreamExecute(nil, nil, nil, false, func(_ *sqltypes.Result) error { return nil })
+	if err == nil || err.Error() != want {
 		t.Errorf("l.StreamExecute(): %v, want %s", err, want)
 	}
 
@@ -252,7 +250,7 @@ func TestLimitInvalidCount(t *testing.T) {
 		t.Errorf("fetchCount: %v, want %s", err, want)
 	}
 
-	// Test the API.
+	// When going through the API, it should return the same error.
 	_, err = l.Execute(nil, nil, nil, false)
 	if err == nil || err.Error() != want {
 		t.Errorf("l.Execute: %v, want %s", err, want)

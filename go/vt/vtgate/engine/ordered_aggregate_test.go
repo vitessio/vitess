@@ -112,7 +112,7 @@ func TestOrderedAggregateStreamExecute(t *testing.T) {
 	}
 }
 
-func TestLimitGetFields(t *testing.T) {
+func TestOrderedAggregateGetFields(t *testing.T) {
 	result := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"col|count(*)",
@@ -217,67 +217,4 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 	if err := oa.StreamExecute(nil, nil, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
 		t.Errorf("oa.StreamExecute(): %v, want %s", err, want)
 	}
-}
-
-// fakePrimitive fakes a primitive. For every call, it sends the
-// next result from the results. If the next result is nil, it
-// returns sendErr. For streaming calls, it sends the field info
-// first and two rows at a time till all rows are sent.
-type fakePrimitive struct {
-	results   []*sqltypes.Result
-	curResult int
-	// sendErr is sent at the end of the stream if it's set.
-	sendErr error
-}
-
-func (tp *fakePrimitive) rewind() {
-	tp.curResult = 0
-}
-
-func (tp *fakePrimitive) Execute(vcursor VCursor, bindVars, joinVars map[string]interface{}, wantfields bool) (*sqltypes.Result, error) {
-	if tp.results == nil {
-		return nil, tp.sendErr
-	}
-
-	r := tp.results[tp.curResult]
-	tp.curResult++
-	if r == nil {
-		return nil, tp.sendErr
-	}
-	return r, nil
-}
-
-func (tp *fakePrimitive) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]interface{}, wantields bool, callback func(*sqltypes.Result) error) error {
-	if tp.results == nil {
-		return tp.sendErr
-	}
-
-	r := tp.results[tp.curResult]
-	tp.curResult++
-	if r == nil {
-		return tp.sendErr
-	}
-	if err := callback(&sqltypes.Result{Fields: r.Fields}); err != nil {
-		return err
-	}
-	result := &sqltypes.Result{}
-	for i := 0; i < len(r.Rows); i++ {
-		result.Rows = append(result.Rows, r.Rows[i])
-		if i%2 == 1 {
-			if err := callback(result); err != nil {
-				return err
-			}
-			result = &sqltypes.Result{}
-		}
-	}
-	if len(result.Rows) != 0 {
-		if err := callback(result); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (tp *fakePrimitive) GetFields(vcursor VCursor, bindVars, joinVars map[string]interface{}) (*sqltypes.Result, error) {
-	return tp.Execute(vcursor, bindVars, joinVars, false /* wantfields */)
 }

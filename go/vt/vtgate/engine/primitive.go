@@ -37,6 +37,7 @@ const ListVarName = "__vals"
 // VCursor defines the interface the engine will use
 // to execute routes.
 type VCursor interface {
+	// Context returns the context of the current request.
 	Context() context.Context
 	Execute(query string, bindvars map[string]interface{}, isDML bool) (*sqltypes.Result, error)
 	ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery, isDML bool) (*sqltypes.Result, error)

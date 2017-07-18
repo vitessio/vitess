@@ -30,7 +30,7 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// TestMergeSortAscending tests the normal flow of a merge
+// TestMergeSortNormal tests the normal flow of a merge
 // sort where all shards return ascending rows.
 func TestMergeSortNormal(t *testing.T) {
 	idColFields := sqltypes.MakeTestFields("id|col", "int32|varchar")
@@ -100,7 +100,7 @@ func TestMergeSortNormal(t *testing.T) {
 	}
 }
 
-// TestMergeSortNormal tests the normal flow of a merge
+// TestMergeSortDescending tests the normal flow of a merge
 // sort where all shards return descending rows.
 func TestMergeSortDescending(t *testing.T) {
 	idColFields := sqltypes.MakeTestFields("id|col", "int32|varchar")
@@ -223,6 +223,8 @@ func TestMergeSortEmptyResults(t *testing.T) {
 	}
 }
 
+// TestMergeSortResultFailures tests failures at various
+// stages of result return.
 func TestMergeSortResultFailures(t *testing.T) {
 	vc := &fakeVcursor{
 		shardResults: make(map[string]*shardResult),
@@ -236,6 +238,7 @@ func TestMergeSortResultFailures(t *testing.T) {
 		},
 	}
 
+	// Test early error.
 	vc.shardResults["0"] = &shardResult{
 		sendErr: errors.New("early error"),
 	}
@@ -245,6 +248,7 @@ func TestMergeSortResultFailures(t *testing.T) {
 		t.Errorf("mergeSort(): %v, want %v", err, want)
 	}
 
+	// Test fail after fields.
 	idFields := sqltypes.MakeTestFields("id", "int32")
 	vc.shardResults["0"] = &shardResult{
 		results: sqltypes.MakeTestStreamingResults(idFields),
@@ -256,6 +260,7 @@ func TestMergeSortResultFailures(t *testing.T) {
 		t.Errorf("mergeSort(): %v, want %v", err, want)
 	}
 
+	// Test fail after first row.
 	vc.shardResults["0"] = &shardResult{
 		results: sqltypes.MakeTestStreamingResults(idFields, "1"),
 		sendErr: errors.New("fail after first row"),
@@ -265,14 +270,11 @@ func TestMergeSortResultFailures(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("mergeSort(): %v, want %v", err, want)
 	}
-
-	vc.shardResults["0"] = &shardResult{
-		results: sqltypes.MakeTestStreamingResults(idFields, "1"),
-		sendErr: errors.New("fail after first row"),
-	}
 }
 
 func TestMergeSortDataFailures(t *testing.T) {
+	// The first row being bad fails in a differnt code path than
+	// the case of subsequent rows. So, test the two cases separately.
 	idColFields := sqltypes.MakeTestFields("id|col", "int32|varchar")
 	vc := &fakeVcursor{
 		shardResults: map[string]*shardResult{
