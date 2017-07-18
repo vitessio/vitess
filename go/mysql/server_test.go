@@ -262,8 +262,8 @@ func TestServer(t *testing.T) {
 	for key, got := range gotTimingCounts {
 		expected := expectedTimingDeltas[key]
 		delta := got - initialTimingCounts[key]
-		if delta != expected {
-			t.Errorf("Expected Timing count delta %s = %d, got %d", key, expected, delta)
+		if delta < expected {
+			t.Errorf("Expected Timing count delta %s should be >= %d, got %d", key, expected, delta)
 		}
 	}
 
