@@ -17,6 +17,7 @@ limitations under the License.
 package stats
 
 import (
+	"encoding/json"
 	"expvar"
 	"math/rand"
 	"reflect"
@@ -106,17 +107,36 @@ func TestMultiCountersDot(t *testing.T) {
 	c.Add([]string{"c1.a", "c1b"}, 1)
 	c.Add([]string{"c2a", "c2.b"}, 1)
 	c.Add([]string{"c2a", "c2.b"}, 1)
-	want1 := `{"c1\.a.c1b": 1, "c2a.c2\.b": 2}`
-	want2 := `{"c2a.c2\.b": 2, "c1\.a.c1b": 1}`
+	want1 := `{"c1\\.a.c1b": 1, "c2a.c2\\.b": 2}`
+	want2 := `{"c2a.c2\\.b": 2, "c1\\.a.c1b": 1}`
 	if s := c.String(); s != want1 && s != want2 {
 		t.Errorf("want %s or %s, got %s", want1, want2, s)
 	}
 	counts := c.Counts()
-	if counts["c1\\.a.c1b"] != 1 {
-		t.Errorf("want 1, got %d", counts["c1\\.a.c1b"])
+	if counts["c1\\\\.a.c1b"] != 1 {
+		t.Errorf("want 1, got %d", counts["c1\\\\.a.c1b"])
 	}
-	if counts["c2a.c2\\.b"] != 2 {
-		t.Errorf("want 2, got %d", counts["c2a.c2\\.b"])
+	if counts["c2a.c2\\\\.b"] != 2 {
+		t.Errorf("want 2, got %d", counts["c2a.c2\\\\.b"])
+	}
+
+	m := make(map[string]interface{})
+	if err := json.Unmarshal([]byte(c.String()), &m); err != nil {
+		t.Errorf("failed to parse as json: %v", err)
+	}
+
+	c = NewMultiCounters("mapCounter3", []string{"aaa", "bbb"})
+	c.Add([]string{"c2a", `c2\b`}, 1)
+	if s, want := c.String(), `{"c2a.c2\\\b": 1}`; s != want {
+		t.Errorf("want %v, got %v", want, s)
+	}
+	counts = c.Counts()
+	if got := counts[`c2a.c2\\\b`]; got != 1 {
+		t.Errorf("want 1, got %d: %v", got, counts)
+	}
+
+	if err := json.Unmarshal([]byte(c.String()), &m); err != nil {
+		t.Errorf("failed to parse as json: %v", err)
 	}
 }
 

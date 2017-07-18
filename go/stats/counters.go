@@ -225,7 +225,7 @@ func NewMultiCountersFunc(name string, labels []string, f CountersFunc) *MultiCo
 	return t
 }
 
-var escaper = strings.NewReplacer(".", "\\.", "\\", "\\\\")
+var escaper = strings.NewReplacer(".", "\\\\.", "\\", "\\\\\\")
 
 func mapKey(ss []string) string {
 	esc := make([]string, len(ss))
