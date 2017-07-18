@@ -156,7 +156,7 @@ func (ta *Table) AddColumn(name string, columnType querypb.Type, defval sqltypes
 		return
 	}
 	// Schema values are trusted.
-	ta.Columns[index].Default = sqltypes.MakeTrusted(ta.Columns[index].Type, defval.Raw())
+	ta.Columns[index].Default = sqltypes.MakeTrusted(ta.Columns[index].Type, defval.Bytes())
 }
 
 // FindColumn finds a column in the table. It returns the index if found.

@@ -82,7 +82,7 @@ func (l *limit) ResultColumns() []*resultColumn {
 
 // PushFilter satisfies the builder interface.
 func (l *limit) PushFilter(_ sqlparser.Expr, whereType string, _ columnOriginator) error {
-	return errors.New("unsupported: filtering on results of aggregates")
+	panic("BUG: unreachable")
 }
 
 // PushSelect satisfies the builder interface.

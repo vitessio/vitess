@@ -456,6 +456,25 @@
   }
 }
 
+# limit for scatter with bind var
+"select col from user limit :a"
+{
+  "Original": "select col from user limit :a",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": ":a",
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user limit :a",
+      "FieldQuery": "select col from user where 1 != 1"
+    }
+  }
+}
+
 # cross-shard expression in parenthesis with limit
 "select * from user where (id = 4 AND name ='abc') limit 5"
 {
@@ -475,3 +494,10 @@
   }
 }
 
+# invalid limit expression
+"select id from user limit 1+1"
+"unexpected expression in LIMIT:  limit 1 + 1"
+
+# invalid value in limit
+"select id from user limit 'a'"
+"unexpected expression in LIMIT:  limit 'a'"

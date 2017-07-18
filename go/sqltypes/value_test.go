@@ -419,6 +419,18 @@ func TestAccessors(t *testing.T) {
 	}
 }
 
+func TestBytes(t *testing.T) {
+	for _, v := range []Value{
+		NULL,
+		testVal(Int64, "1"),
+		testVal(Int64, "12"),
+	} {
+		if b := v.Bytes(); bytes.Compare(b, v.Raw()) != 0 {
+			t.Errorf("v1.Bytes: %s, want %s", b, v.Raw())
+		}
+	}
+}
+
 func TestToNative(t *testing.T) {
 	testcases := []struct {
 		in  Value

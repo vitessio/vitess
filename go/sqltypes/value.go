@@ -206,6 +206,15 @@ func (v Value) Raw() []byte {
 	return v.val
 }
 
+// Bytes returns a copy of the raw data. All types are currently implemented as []byte.
+// Use this function instead of Raw if you can't be sure about maintaining the read-only
+// requirements of the bytes.
+func (v Value) Bytes() []byte {
+	out := make([]byte, len(v.val))
+	copy(out, v.val)
+	return out
+}
+
 // Len returns the length.
 func (v Value) Len() int {
 	return len(v.val)

@@ -59,6 +59,11 @@ func newVCursorImpl(ctx context.Context, session *vtgatepb.Session, target query
 	}
 }
 
+// Context returns the current Context.
+func (vc *vcursorImpl) Context() context.Context {
+	return vc.ctx
+}
+
 // Find finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
 // Otherwise, the keyspace from the request is used, if one was provided.
 func (vc *vcursorImpl) Find(name sqlparser.TableName) (table *vindexes.Table, err error) {

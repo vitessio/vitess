@@ -350,10 +350,7 @@ func (route *Route) Execute(vcursor VCursor, bindVars, joinVars map[string]inter
 		return result, nil
 	}
 
-	if err := route.sort(result); err != nil {
-		return nil, err
-	}
-	return result, nil
+	return route.sort(result)
 }
 
 // StreamExecute performs a streaming exec.
@@ -461,9 +458,19 @@ func (route *Route) execAnyShard(vcursor VCursor, bindVars map[string]interface{
 	return vcursor.ExecuteStandalone(route.Query, bindVars, ks, shard)
 }
 
-func (route *Route) sort(result *sqltypes.Result) error {
+func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 	var err error
-	sort.Slice(result.Rows, func(i, j int) bool {
+	// Since Result is immutable, we make a copy.
+	// The copy can be shallow because we won't be changing
+	// the contents of any row.
+	out := &sqltypes.Result{
+		Fields:       in.Fields,
+		Rows:         in.Rows,
+		RowsAffected: in.RowsAffected,
+		InsertID:     in.InsertID,
+	}
+
+	sort.Slice(out.Rows, func(i, j int) bool {
 		// If there are any errors below, the function sets
 		// the external err and returns true. Once err is set,
 		// all subsequent calls return true. This will make
@@ -474,7 +481,7 @@ func (route *Route) sort(result *sqltypes.Result) error {
 				return true
 			}
 			var cmp int
-			cmp, err = sqltypes.NullsafeCompare(result.Rows[i][order.Col], result.Rows[j][order.Col])
+			cmp, err = sqltypes.NullsafeCompare(out.Rows[i][order.Col], out.Rows[j][order.Col])
 			if err != nil {
 				return true
 			}
@@ -488,7 +495,8 @@ func (route *Route) sort(result *sqltypes.Result) error {
 		}
 		return true
 	})
-	return err
+
+	return out, err
 }
 
 func (route *Route) execUpdateEqual(vcursor VCursor, bindVars map[string]interface{}) (*sqltypes.Result, error) {
