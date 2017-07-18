@@ -731,6 +731,9 @@ message StreamHealthResponse {
 
   // realtime_stats contains information about the tablet status
   RealtimeStats realtime_stats = 4;
+
+  // the alias as understood by the sending tablet
+  topodata.TabletAlias tablet_alias = 5;
 }
 
 // UpdateStreamRequest is the payload for UpdateStream. At most one of

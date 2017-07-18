@@ -381,13 +381,35 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 	}
 	hc.initialUpdatesWG.Done()
 
-	// Read stream health responses.
 	for {
-		hcc.stream(hc, func(shr *querypb.StreamHealthResponse) error {
+		ctx, cancel := context.WithCancel(hcc.ctx)
+		receipt := make(chan time.Time, 2)
+
+		go func() {
+			defer cancel()
+			var lastReceived time.Time
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case lastReceived = <-receipt:
+					continue
+				case <-time.After(hc.healthCheckTimeout):
+					log.Warningf("Canceling StreamHealth for %+v, last response received at %v", ts.Tablet, lastReceived)
+					return
+				}
+			}
+		}()
+
+		// Read stream health responses.
+		hcc.stream(ctx, hc, func(shr *querypb.StreamHealthResponse) error {
+			receipt <- time.Now()
 			return hcc.processResponse(hc, shr)
 		})
 
-		// Streaming RPC failed e.g. because vttablet was restarted.
+		cancel()
+
+		// Streaming RPC failed e.g. because vttablet was restarted or took too long.
 		// Sleep until the next retry is up or the context is done/canceled.
 		select {
 		case <-hcc.ctx.Done():
@@ -398,7 +420,7 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 }
 
 // stream streams healthcheck responses to callback.
-func (hcc *healthCheckConn) stream(hc *HealthCheckImpl, callback func(*querypb.StreamHealthResponse) error) {
+func (hcc *healthCheckConn) stream(ctx context.Context, hc *HealthCheckImpl, callback func(*querypb.StreamHealthResponse) error) {
 	hcc.mu.Lock()
 	conn := hcc.conn
 	hcc.mu.Unlock()
@@ -419,9 +441,9 @@ func (hcc *healthCheckConn) stream(hc *HealthCheckImpl, callback func(*querypb.S
 		hcc.mu.Unlock()
 	}
 
-	if err := conn.StreamHealth(hcc.ctx, callback); err != nil {
+	if err := conn.StreamHealth(ctx, callback); err != nil {
 		hcc.mu.Lock()
-		hcc.conn.Close(hcc.ctx)
+		hcc.conn.Close(ctx)
 		hcc.conn = nil
 		hcc.tabletStats.Target = &querypb.Target{}
 		hcc.tabletStats.Serving = false
@@ -445,6 +467,10 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, shr *querypb.St
 		return fmt.Errorf("health stats is not valid: %v", shr)
 	}
 
+	hcc.mu.RLock()
+	oldTs := hcc.tabletStats
+	hcc.mu.RUnlock()
+
 	// an app-level error from tablet, force serving state.
 	var healthErr error
 	serving := shr.Serving
@@ -453,14 +479,13 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, shr *querypb.St
 		serving = false
 	}
 
+	if shr.TabletAlias != nil && shr.TabletAlias != oldTs.Tablet.Alias {
+		return fmt.Errorf("health stats mismatch, tablet %+v alias not match response alias %v", oldTs.Tablet, shr.TabletAlias)
+	}
+
 	// In the case where a tablet changes type (but not for the
 	// initial message), we want to log it, and maybe advertise it too.
 	if hcc.tabletStats.Target.TabletType != topodatapb.TabletType_UNKNOWN && hcc.tabletStats.Target.TabletType != shr.Target.TabletType {
-		// The Tablet type changed for the tablet. Get old value.
-		hcc.mu.RLock()
-		oldTs := hcc.tabletStats
-		hcc.mu.RUnlock()
-
 		// Log and maybe notify
 		log.Infof("HealthCheckUpdate(Type Change): %v, tablet: %v/%+v, target %+v => %+v, reparent time: %v", oldTs.Name, oldTs.Tablet.Alias.Cell, oldTs.Tablet, oldTs.Target, shr.Target, shr.TabletExternallyReparentedTimestamp)
 		if hc.listener != nil && hc.sendDownEvents {
