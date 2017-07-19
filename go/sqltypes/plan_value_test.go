@@ -95,6 +95,14 @@ func TestResolveRows(t *testing.T) {
 			{strValue},
 		},
 	}, {
+		in: []PlanValue{
+			{Values: []PlanValue{{Key: "int"}, {Value: strValue}}},
+		},
+		out: [][]Value{
+			{intValue},
+			{strValue},
+		},
+	}, {
 		in: []PlanValue{{}},
 		out: [][]Value{
 			{NULL},
@@ -157,6 +165,11 @@ func TestResolveRows(t *testing.T) {
 			{ListKey: "absent"},
 		},
 		err: "missing bind var",
+	}, {
+		in: []PlanValue{
+			{Values: []PlanValue{{Key: "absent"}}},
+		},
+		err: "missing bind var",
 	}}
 
 	for _, tc := range tcases {
@@ -195,7 +208,13 @@ func TestResolveList(t *testing.T) {
 		in:  PlanValue{Values: []PlanValue{{Value: intValue}, {Value: strValue}}},
 		out: []Value{intValue, strValue},
 	}, {
+		in:  PlanValue{Values: []PlanValue{{Key: "int"}, {Value: strValue}}},
+		out: []Value{intValue, strValue},
+	}, {
 		in:  PlanValue{ListKey: "absent"},
+		err: "missing bind var",
+	}, {
+		in:  PlanValue{Values: []PlanValue{{Key: "absent"}, {Value: strValue}}},
 		err: "missing bind var",
 	}, {
 		in:  PlanValue{ListKey: "int"},

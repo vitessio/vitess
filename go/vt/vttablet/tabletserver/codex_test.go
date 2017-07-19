@@ -18,7 +18,6 @@ package tabletserver
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -34,305 +33,137 @@ func TestCodexBuildValuesList(t *testing.T) {
 		[]string{"pk1", "pk2", "col1"},
 		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
-
-	// simple PK clause. e.g. where pk1 = 1
-	bindVars := map[string]*querypb.BindVariable{}
-	pk1Val, _ := sqltypes.BuildValue(1)
-	pkValues := []interface{}{pk1Val}
-	// want [[1]]
-	want := [][]sqltypes.Value{{pk1Val}}
-	got, _ := buildValueList(table, pkValues, bindVars)
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %v, want %v", got, want)
+	bindVars := map[string]*querypb.BindVariable{
+		"key": sqltypes.Int64BindVariable(10),
 	}
-
-	// simple PK clause with bindVars. e.g. where pk1 = :pk1
-	bindVars["pk1"] = sqltypes.Int64BindVariable(1)
-	pkValues = []interface{}{":pk1"}
-	// want [[1]]
-	want = [][]sqltypes.Value{{pk1Val}}
-	got, _ = buildValueList(table, pkValues, bindVars)
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %v, want %v", got, want)
-	}
-
-	// type mismatch int
-	bindVars["pk1"] = sqltypes.StringBindVariable("str")
-	pkValues = []interface{}{":pk1"}
-	wantErr := "strconv.ParseInt"
-
-	got, err := buildValueList(table, pkValues, bindVars)
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("got %v, want %v", err, wantErr)
-	}
-
-	// type mismatch binary
-	bindVars["pk1"] = sqltypes.Int64BindVariable(1)
-	bindVars["pk2"] = sqltypes.Int64BindVariable(1)
-	pkValues = []interface{}{":pk1", ":pk2"}
-	wantErr = "type mismatch, expecting string type for 1"
-
-	got, err = buildValueList(table, pkValues, bindVars)
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("got %v, want %v", err, wantErr)
-	}
-
-	// composite PK clause. e.g. where pk1 = 1 and pk2 = "abc"
-	pk2Val, _ := sqltypes.BuildValue("abc")
-	pkValues = []interface{}{pk1Val, pk2Val}
-	// want [[1 abc]]
-	want = [][]sqltypes.Value{{pk1Val, pk2Val}}
-	got, _ = buildValueList(table, pkValues, bindVars)
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %v, want %v", got, want)
-	}
-
-	// multi row composite PK insert
-	// e.g. insert into Table(pk1,pk2) values (1, "abc"), (2, "xyz")
-	pk1Val2, _ := sqltypes.BuildValue(2)
-	pk2Val2, _ := sqltypes.BuildValue("xyz")
-	pkValues = []interface{}{
-		[]interface{}{pk1Val, pk1Val2},
-		[]interface{}{pk2Val, pk2Val2},
-	}
-	// want [[1 abc][2 xyz]]
-	want = [][]sqltypes.Value{
-		{pk1Val, pk2Val},
-		{pk1Val2, pk2Val2}}
-	got, _ = buildValueList(table, pkValues, bindVars)
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %v, want %v", got, want)
-	}
-
-	// composite PK IN clause
-	// e.g. where pk1 = 1 and pk2 IN ("abc", "xyz")
-	pkValues = []interface{}{
-		pk1Val,
-		[]interface{}{pk2Val, pk2Val2},
-	}
-	// want [[1 abc][1 xyz]]
-	want = [][]sqltypes.Value{
-		{pk1Val, pk2Val},
-		{pk1Val, pk2Val2},
-	}
-
-	got, _ = buildValueList(table, pkValues, bindVars)
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %v, want %v", got, want)
-	}
-
-	// list arg two values.
-	// e.g. where pk1 = 1 and pk2 IN ::list
-	bindVars = map[string]*querypb.BindVariable{
-		"list": sqltypes.MakeTestBindVar([]interface{}{[]byte("abc"), []byte("xyz")}),
-	}
-	pkValues = []interface{}{
-		pk1Val,
-		"::list",
-	}
-	// want [[1 abc][1 xyz]]
-	want = [][]sqltypes.Value{
-		{pk1Val, pk2Val},
-		{pk1Val, pk2Val2},
-	}
-	got, err = buildValueList(table, pkValues, bindVars)
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %v / %v, want %v", got, err, want)
-	}
-
-	// list arg one value
-	// e.g. where pk1 = 1 and pk2 IN ::list
-	bindVars = map[string]*querypb.BindVariable{
-		"list": sqltypes.MakeTestBindVar([]interface{}{[]byte("abc")}),
-	}
-	pkValues = []interface{}{
-		pk1Val,
-		"::list",
-	}
-	// want [[1 abc][1 xyz]]
-	want = [][]sqltypes.Value{
-		{pk1Val, pk2Val},
-	}
-	got, _ = buildValueList(table, pkValues, bindVars)
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %v, want %v", got, want)
-	}
-
-	// list arg empty list
-	bindVars = map[string]*querypb.BindVariable{
-		"list": sqltypes.MakeTestBindVar([]interface{}{}),
-	}
-	pkValues = []interface{}{
-		pk1Val,
-		"::list",
-	}
-	wantErr = "empty list supplied for list"
-	got, err = buildValueList(table, pkValues, bindVars)
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("got %v, want %v", err, wantErr)
-	}
-
-	// list arg for non-list
-	bindVars = map[string]*querypb.BindVariable{
-		"list": sqltypes.MakeTestBindVar([]interface{}{}),
-	}
-	pkValues = []interface{}{
-		pk1Val,
-		":list",
-	}
-	wantErr = "unexpected arg type (TUPLE) for non-list key list"
-	got, err = buildValueList(table, pkValues, bindVars)
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("got %v, want %v", err, wantErr)
-	}
-}
-
-func TestCodexResolvePKValues(t *testing.T) {
-	table := createTable("Table",
-		[]string{"pk1", "pk2", "col1"},
-		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
-		[]string{"pk1", "pk2"})
-	key := "var"
-	bindVariables := make(map[string]*querypb.BindVariable)
-	bindVariables[key] = sqltypes.StringBindVariable("1")
-
-	pkValues := make([]interface{}, 0, 10)
-	pkValues = append(pkValues, []interface{}{":" + key})
-	// resolvePKValues should succeed for strings that can be converted to int.
-	v, _, err := resolvePKValues(table, pkValues, bindVariables)
-	if err != nil {
-		t.Error(err)
-	}
-	wantV := []interface{}{[]sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))}}
-	if !reflect.DeepEqual(v, wantV) {
-		t.Errorf("resolvePKValues: %#v, want %#v", v, wantV)
-	}
-	// resolvePKValues should fail because of conversion error.
-	pkValues = make([]interface{}, 0, 10)
-	pkValues = append(pkValues, sqltypes.MakeString([]byte("type_mismatch")))
-	_, _, err = resolvePKValues(table, pkValues, nil)
-	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
-		t.Errorf("resolvePKValues: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
-	}
-	// pkValues with different length
-	bindVariables = make(map[string]*querypb.BindVariable)
-	bindVariables[key] = sqltypes.Int64BindVariable(1)
-	key2 := "var2"
-	key3 := "var3"
-	bindVariables[key2] = sqltypes.StringBindVariable("2")
-	bindVariables[key3] = sqltypes.StringBindVariable("3")
-	pkValues = make([]interface{}, 0, 10)
-	pkValues = append(pkValues, []interface{}{":" + key})
-	pkValues = append(pkValues, []interface{}{":" + key2, ":" + key3})
-	_, _, err = resolvePKValues(table, pkValues, bindVariables)
-	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
-		t.Errorf("resolvePKValues: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
-	}
-}
-
-func TestCodexResolveListArg(t *testing.T) {
-	testUtils := newTestUtils()
-	table := createTable("Table",
-		[]string{"pk1", "pk2", "col1"},
-		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
-		[]string{"pk1", "pk2"})
-
-	key := "var"
-	bindVariables := map[string]*querypb.BindVariable{
-		key: sqltypes.MakeTestBindVar([]interface{}{"1"}),
-	}
-	v, err := resolveListArg(table.GetPKColumn(0), "::"+key, bindVariables)
-	if err != nil {
-		t.Error(err)
-	}
-	wantV := []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))}
-	if !reflect.DeepEqual(v, wantV) {
-		t.Errorf("resolvePKValues: %#v, want %#v", v, wantV)
-	}
-
-	bindVariables = map[string]*querypb.BindVariable{
-		key: sqltypes.MakeTestBindVar([]interface{}{10}),
-	}
-	result, err := resolveListArg(table.GetPKColumn(0), "::"+key, bindVariables)
-	if err != nil {
-		t.Fatalf("should not get an error, but got error: %v", err)
-	}
-	testUtils.checkEqual(t, []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int64, []byte("10"))}, result)
-}
-
-func TestResolveNumber(t *testing.T) {
-	testcases := []struct {
-		v      interface{}
-		bv     map[string]*querypb.BindVariable
-		out    int64
-		outErr string
+	tcases := []struct {
+		pkValues []sqltypes.PlanValue
+		out      [][]sqltypes.Value
+		err      string
 	}{{
-		v: ":a",
-		bv: map[string]*querypb.BindVariable{
-			"a": sqltypes.Int64BindVariable(10),
+		pkValues: []sqltypes.PlanValue{{
+			Key: "key",
+		}, {
+			Value: sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("aa")),
+		}},
+		out: [][]sqltypes.Value{
+			{sqltypes.MakeTrusted(sqltypes.Int64, []byte("10")), sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("aa"))},
 		},
-		out: int64(10),
 	}, {
-		v: "::a",
-		bv: map[string]*querypb.BindVariable{
-			"a": sqltypes.MakeTestBindVar([]interface{}{10}),
-		},
-		outErr: "type: TUPLE is invalid",
+		pkValues: []sqltypes.PlanValue{{
+			Key: "nokey",
+		}},
+		err: "missing bind var nokey",
 	}, {
-		v:      ":a",
-		outErr: "missing bind var a",
-	}, {
-		v:      make(chan int),
-		outErr: "unexpected type chan int",
-	}, {
-		v:   int64(1),
-		out: int64(1),
-	}, {
-		v:      1.2,
-		outErr: "strconv.ParseInt",
+		pkValues: []sqltypes.PlanValue{{
+			Value: sqltypes.MakeTrusted(sqltypes.VarChar, []byte("aa")),
+		}},
+		err: `strconv.ParseInt: parsing "aa": invalid syntax`,
 	}}
-	for _, tc := range testcases {
-		got, err := resolveNumber(tc.v, tc.bv)
-		if err != nil {
-			if !strings.Contains(err.Error(), tc.outErr) {
-				t.Errorf("resolveNumber(%#v, %v): %v, must contain %s", tc.v, tc.bv, err, tc.outErr)
+	for _, tc := range tcases {
+		got, err := buildValueList(table, tc.pkValues, bindVars)
+		if tc.err != "" {
+			if err == nil || err.Error() != tc.err {
+				t.Errorf("buildValueList(%v) error: %v, want %s", tc.pkValues, err, tc.err)
 			}
 			continue
 		}
-		if got != tc.out {
-			t.Errorf("resolveNumber(%#v, %v): %d, want %d", tc.v, tc.bv, got, tc.out)
+		if err != nil {
+			t.Errorf("buildValueList(%v) error: %v", tc.pkValues, err)
+		}
+		if !reflect.DeepEqual(got, tc.out) {
+			t.Errorf("buildValueList(%v): %v, want %s", tc.pkValues, got, tc.out)
 		}
 	}
 }
 
-func TestCodexBuildSecondaryList(t *testing.T) {
-	pk1 := "pk1"
-	pk2 := "pk2"
+func TestBuildSecondaryList(t *testing.T) {
 	table := createTable("Table",
 		[]string{"pk1", "pk2", "col1"},
 		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
-		[]string{pk1, pk2})
-
-	// set pk2 = 'xyz' where pk1=1 and pk2 = 'abc'
-	bindVars := map[string]*querypb.BindVariable{}
-	pk1Val, _ := sqltypes.BuildValue(1)
-	pk2Val, _ := sqltypes.BuildValue("abc")
-	pkValues := []interface{}{pk1Val, pk2Val}
-	pkList, _ := buildValueList(table, pkValues, bindVars)
-	pk2SecVal, _ := sqltypes.BuildValue("xyz")
-	secondaryPKValues := []interface{}{nil, pk2SecVal}
-	// want [[1 xyz]]
-	want := [][]sqltypes.Value{
-		{pk1Val, pk2SecVal}}
-	got, _ := buildSecondaryList(table, pkList, secondaryPKValues, bindVars)
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("case 1 failed, got %v, want %v", got, want)
+		[]string{"pk1", "pk2"})
+	bindVars := map[string]*querypb.BindVariable{
+		"key": sqltypes.Int64BindVariable(10),
 	}
+	r := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"pk1|pk2",
+			"int64|varchar",
+		),
+		"1|aa",
+		"2|bb",
+	)
+	pkList := r.Rows
+	tcases := []struct {
+		secondaryList []sqltypes.PlanValue
+		out           [][]sqltypes.Value
+		err           string
+	}{{
+		secondaryList: nil,
+		out:           nil,
+	}, {
+		secondaryList: []sqltypes.PlanValue{{}, {
+			Value: sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("cc")),
+		}},
+		out: [][]sqltypes.Value{
+			{sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")), sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("cc"))},
+			{sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")), sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("cc"))},
+		},
+	}, {
+		secondaryList: []sqltypes.PlanValue{{
+			Key: "nokey",
+		}},
+		err: "missing bind var nokey",
+	}}
+	for _, tc := range tcases {
+		got, err := buildSecondaryList(table, pkList, tc.secondaryList, bindVars)
+		if tc.err != "" {
+			if err == nil || err.Error() != tc.err {
+				t.Errorf("buildSecondaryList(%v) error: %v, want %s", tc.secondaryList, err, tc.err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("buildSecondaryList(%v) error: %v", tc.secondaryList, err)
+		}
+		if !reflect.DeepEqual(got, tc.out) {
+			t.Errorf("buildSecondaryList(%v): %v, want %s", tc.secondaryList, got, tc.out)
+		}
+	}
+}
 
-	secondaryPKValues = []interface{}{"invalid_type", 1}
-	_, err := buildSecondaryList(table, pkList, secondaryPKValues, bindVars)
-	if err == nil {
-		t.Fatalf("should get an error, column 0 is int type, but secondary list provides a string")
+func TestResolveNumber(t *testing.T) {
+	bindVars := map[string]*querypb.BindVariable{
+		"key": sqltypes.Int64BindVariable(10),
+	}
+	tcases := []struct {
+		pv  sqltypes.PlanValue
+		out int64
+		err string
+	}{{
+		pv:  sqltypes.PlanValue{Key: "key"},
+		out: 10,
+	}, {
+		pv:  sqltypes.PlanValue{Key: "nokey"},
+		err: "missing bind var nokey",
+	}, {
+		pv:  sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarChar, []byte("aa"))},
+		err: `strconv.ParseInt: parsing "aa": invalid syntax`,
+	}}
+	for _, tc := range tcases {
+		got, err := resolveNumber(tc.pv, bindVars)
+		if tc.err != "" {
+			if err == nil || err.Error() != tc.err {
+				t.Errorf("resolveNumber(%v) error: %v, want %s", tc.pv, err, tc.err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("resolveNumber(%v) error: %v", tc.pv, err)
+		}
+		if got != tc.out {
+			t.Errorf("resolveNumber(%v): %d, want %d", tc.pv, got, tc.out)
+		}
 	}
 }
 
@@ -348,10 +179,10 @@ func TestCodexBuildStreamComment(t *testing.T) {
 	bindVars := map[string]*querypb.BindVariable{}
 	pk1Val, _ := sqltypes.BuildValue(1)
 	pk2Val, _ := sqltypes.BuildValue("abc")
-	pkValues := []interface{}{pk1Val, pk2Val}
+	pkValues := []sqltypes.PlanValue{{Value: pk1Val}, {Value: pk2Val}}
 	pkList, _ := buildValueList(table, pkValues, bindVars)
 	pk2SecVal, _ := sqltypes.BuildValue("xyz")
-	secondaryPKValues := []interface{}{nil, pk2SecVal}
+	secondaryPKValues := []sqltypes.PlanValue{{}, {Value: pk2SecVal}}
 	secondaryList, _ := buildSecondaryList(table, pkList, secondaryPKValues, bindVars)
 	want := []byte(" /* _stream `Table` (pk1 pk2 ) (1 'YWJj' ) (1 'eHl6' ); */")
 	got := buildStreamComment(table, pkList, secondaryList)

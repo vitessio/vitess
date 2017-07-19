@@ -17,6 +17,7 @@ limitations under the License.
 package sqltypes
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -89,7 +90,7 @@ func (pv PlanValue) ResolveValue(bindVars map[string]*querypb.BindVariable) (Val
 func (pv PlanValue) lookupValue(bindVars map[string]*querypb.BindVariable) (*querypb.BindVariable, error) {
 	bv, ok := bindVars[pv.Key]
 	if !ok {
-		return nil, fmt.Errorf("missing bind var %s", pv.ListKey)
+		return nil, fmt.Errorf("missing bind var %s", pv.Key)
 	}
 	if bv.Type == querypb.Type_TUPLE {
 		return nil, fmt.Errorf("TUPLE was supplied for single value bind var %s", pv.ListKey)
@@ -113,7 +114,11 @@ func (pv PlanValue) ResolveList(bindVars map[string]*querypb.BindVariable) ([]Va
 	case pv.Values != nil:
 		values := make([]Value, 0, len(pv.Values))
 		for _, val := range pv.Values {
-			values = append(values, val.Value)
+			v, err := val.ResolveValue(bindVars)
+			if err != nil {
+				return nil, err
+			}
+			values = append(values, v)
 		}
 		return values, nil
 	}
@@ -131,6 +136,24 @@ func (pv PlanValue) lookupList(bindVars map[string]*querypb.BindVariable) (*quer
 		return nil, fmt.Errorf("single value was supplied for TUPLE bind var %s", pv.ListKey)
 	}
 	return bv, nil
+}
+
+// MarshalJSON should be used only for testing.
+func (pv PlanValue) MarshalJSON() ([]byte, error) {
+	switch {
+	case pv.Key != "":
+		return json.Marshal(":" + pv.Key)
+	case !pv.Value.IsNull():
+		if pv.Value.IsIntegral() {
+			return pv.Value.Raw(), nil
+		}
+		return json.Marshal(pv.Value.String())
+	case pv.ListKey != "":
+		return json.Marshal("::" + pv.Key)
+	case pv.Values != nil:
+		return json.Marshal(pv.Values)
+	}
+	return []byte("null"), nil
 }
 
 func rowCount(pvs []PlanValue, bindVars map[string]*querypb.BindVariable) (int, error) {
@@ -219,7 +242,10 @@ func ResolveRows(pvs []PlanValue, bindVars map[string]*querypb.BindVariable) ([]
 			}
 		case pv.Values != nil:
 			for i := range rows {
-				rows[i][j] = pv.Values[i].Value
+				rows[i][j], err = pv.Values[i].ResolveValue(bindVars)
+				if err != nil {
+					return nil, err
+				}
 			}
 			// default case is a NULL value, which the row values are already initialized to.
 		}

@@ -704,15 +704,7 @@ func TestTypeLimits(t *testing.T) {
 	}, {
 		query: "insert into vitess_ints(tiny) values(:fl)",
 		bv:    map[string]*querypb.BindVariable{"fl": sqltypes.Float64BindVariable(1.2)},
-		out:   "type mismatch",
-	}, {
-		query: "insert into vitess_strings(vb) values(1)",
-		bv:    nil,
-		out:   "type mismatch",
-	}, {
-		query: "insert into vitess_strings(vb) values(:id)",
-		bv:    map[string]*querypb.BindVariable{"id": sqltypes.Int64BindVariable(1)},
-		out:   "type mismatch",
+		out:   "invalid syntax",
 	}, {
 		query: "insert into vitess_strings(vb) select tiny from vitess_ints",
 		bv:    nil,
@@ -728,7 +720,7 @@ func TestTypeLimits(t *testing.T) {
 	}}
 	for _, tcase := range mismatchCases {
 		_, err := client.Execute(tcase.query, tcase.bv)
-		if err == nil || !strings.HasPrefix(err.Error(), tcase.out) {
+		if err == nil || !strings.Contains(err.Error(), tcase.out) {
 			t.Errorf("Error(%s): %v, want %s", tcase.query, err, tcase.out)
 		}
 	}
