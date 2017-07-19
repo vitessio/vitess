@@ -218,3 +218,47 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 		t.Errorf("oa.StreamExecute(): %v, want %s", err, want)
 	}
 }
+
+func TestMerge(t *testing.T) {
+	oa := &OrderedAggregate{
+		Aggregates: []AggregateParams{{
+			Opcode: AggregateCount,
+			Col:    1,
+		}, {
+			Opcode: AggregateSum,
+			Col:    2,
+		}, {
+			Opcode: AggregateMin,
+			Col:    3,
+		}, {
+			Opcode: AggregateMax,
+			Col:    4,
+		}},
+	}
+	fields := sqltypes.MakeTestFields(
+		"a|b|c|d|e",
+		"int64|int64|decimal|in32|varbinary",
+	)
+	r := sqltypes.MakeTestResult(fields,
+		"1|2|3.2|3|ab",
+		"1|3|2.8|2|bc",
+	)
+
+	merged, err := oa.merge(fields, r.Rows[0], r.Rows[1])
+	if err != nil {
+		t.Error(err)
+	}
+	want := sqltypes.MakeTestResult(fields, "1|5|6|2|bc").Rows[0]
+	if !reflect.DeepEqual(merged, want) {
+		t.Errorf("oa.merge(row1, row2): %v, want %v", merged, want)
+	}
+
+	// swap and retry
+	merged, err = oa.merge(fields, r.Rows[1], r.Rows[0])
+	if err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(merged, want) {
+		t.Errorf("oa.merge(row1, row2): %v, want %v", merged, want)
+	}
+}

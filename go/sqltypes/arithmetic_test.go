@@ -37,10 +37,15 @@ func TestAdd(t *testing.T) {
 		v2:  NULL,
 		out: NULL,
 	}, {
-		// One null.
+		// First value null.
 		v1:  makeInt(1),
 		v2:  NULL,
-		out: NULL,
+		out: makeInt(1),
+	}, {
+		// Second value null.
+		v1:  NULL,
+		v2:  makeInt(1),
+		out: makeInt(1),
 	}, {
 		// Normal case.
 		v1:  makeInt(1),
@@ -68,7 +73,7 @@ func TestAdd(t *testing.T) {
 		err: "unexpected type conversion: FLOAT64 to INT64",
 	}}
 	for _, tcase := range tcases {
-		got, err := Add(tcase.v1, tcase.v2, Int64)
+		got, err := NullsafeAdd(tcase.v1, tcase.v2, Int64)
 		errstr := ""
 		if err != nil {
 			errstr = err.Error()
@@ -653,6 +658,104 @@ func TestCompareNumeric(t *testing.T) {
 	}
 }
 
+func TestMin(t *testing.T) {
+	tcases := []struct {
+		v1, v2 Value
+		min    Value
+		err    string
+	}{{
+		v1:  NULL,
+		v2:  NULL,
+		min: NULL,
+	}, {
+		v1:  makeInt(1),
+		v2:  NULL,
+		min: makeInt(1),
+	}, {
+		v1:  NULL,
+		v2:  makeInt(1),
+		min: makeInt(1),
+	}, {
+		v1:  makeInt(1),
+		v2:  makeInt(2),
+		min: makeInt(1),
+	}, {
+		v1:  makeInt(2),
+		v2:  makeInt(1),
+		min: makeInt(1),
+	}, {
+		v1:  makeInt(1),
+		v2:  makeInt(1),
+		min: makeInt(1),
+	}, {
+		v1:  makeAny(VarChar, "aa"),
+		v2:  makeInt(1),
+		err: "text fields cannot be compared",
+	}}
+	for _, tcase := range tcases {
+		v, err := Min(tcase.v1, tcase.v2)
+		errstr := ""
+		if err != nil {
+			errstr = err.Error()
+		}
+		if errstr != tcase.err {
+			t.Errorf("Min error: %v, want %s", err, tcase.err)
+		}
+		if !reflect.DeepEqual(v, tcase.min) {
+			t.Errorf("Min(%v, %v): %v, want %v", tcase.v1, tcase.v2, v, tcase.min)
+		}
+	}
+}
+
+func TestMax(t *testing.T) {
+	tcases := []struct {
+		v1, v2 Value
+		max    Value
+		err    string
+	}{{
+		v1:  NULL,
+		v2:  NULL,
+		max: NULL,
+	}, {
+		v1:  makeInt(1),
+		v2:  NULL,
+		max: makeInt(1),
+	}, {
+		v1:  NULL,
+		v2:  makeInt(1),
+		max: makeInt(1),
+	}, {
+		v1:  makeInt(1),
+		v2:  makeInt(2),
+		max: makeInt(2),
+	}, {
+		v1:  makeInt(2),
+		v2:  makeInt(1),
+		max: makeInt(2),
+	}, {
+		v1:  makeInt(1),
+		v2:  makeInt(1),
+		max: makeInt(1),
+	}, {
+		v1:  makeAny(VarChar, "aa"),
+		v2:  makeInt(1),
+		err: "text fields cannot be compared",
+	}}
+	for _, tcase := range tcases {
+		v, err := Max(tcase.v1, tcase.v2)
+		errstr := ""
+		if err != nil {
+			errstr = err.Error()
+		}
+		if errstr != tcase.err {
+			t.Errorf("Max error: %v, want %s", err, tcase.err)
+		}
+		if !reflect.DeepEqual(v, tcase.max) {
+			t.Errorf("Max(%v, %v): %v, want %v", tcase.v1, tcase.v2, v, tcase.max)
+		}
+	}
+}
+
 func makeInt(v int64) Value {
 	return MakeTrusted(Int64, strconv.AppendInt(nil, v, 10))
 }
@@ -694,7 +797,7 @@ func BenchmarkAddActual(b *testing.B) {
 	v1 := MakeTrusted(Int64, []byte("1"))
 	v2 := MakeTrusted(Int64, []byte("12"))
 	for i := 0; i < b.N; i++ {
-		v1, _ = Add(v1, v2, Int64)
+		v1, _ = NullsafeAdd(v1, v2, Int64)
 	}
 }
 
