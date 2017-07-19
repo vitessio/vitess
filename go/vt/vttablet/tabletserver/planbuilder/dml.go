@@ -21,6 +21,8 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
+
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 )
@@ -141,7 +143,7 @@ func analyzeSet(set *sqlparser.Set) (plan *Plan) {
 	}
 }
 
-func analyzeUpdateExpressions(exprs sqlparser.UpdateExprs, pkIndex *schema.Index) (pkValues []interface{}, err error) {
+func analyzeUpdateExpressions(exprs sqlparser.UpdateExprs, pkIndex *schema.Index) (pkValues []sqltypes.PlanValue, err error) {
 	for _, expr := range exprs {
 		index := pkIndex.FindColumn(expr.Name.Name)
 		if index == -1 {
@@ -151,10 +153,10 @@ func analyzeUpdateExpressions(exprs sqlparser.UpdateExprs, pkIndex *schema.Index
 			return nil, ErrTooComplex
 		}
 		if pkValues == nil {
-			pkValues = make([]interface{}, len(pkIndex.Columns))
+			pkValues = make([]sqltypes.PlanValue, len(pkIndex.Columns))
 		}
 		var err error
-		pkValues[index], err = sqlparser.AsInterface(expr.Expr)
+		pkValues[index], err = sqlparser.NewPlanValue(expr.Expr)
 		if err != nil {
 			return nil, err
 		}
@@ -187,11 +189,11 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 			return nil, fmt.Errorf("%s is not a sequence", tableName)
 		}
 		plan.PlanID = PlanNextval
-		v, err := sqlparser.AsInterface(nextVal.Expr)
+		v, err := sqlparser.NewPlanValue(nextVal.Expr)
 		if err != nil {
 			return nil, err
 		}
-		plan.PKValues = []interface{}{v}
+		plan.PKValues = []sqltypes.PlanValue{v}
 		plan.FieldQuery = nil
 		plan.FullQuery = nil
 	}
@@ -209,7 +211,7 @@ func analyzeFrom(tableExprs sqlparser.TableExprs) sqlparser.TableIdent {
 	return sqlparser.GetTableName(node.Expr)
 }
 
-func analyzeWhere(node *sqlparser.Where, pkIndex *schema.Index) []interface{} {
+func analyzeWhere(node *sqlparser.Where, pkIndex *schema.Index) []sqltypes.PlanValue {
 	if node == nil {
 		return nil
 	}
@@ -249,8 +251,8 @@ func analyzeBoolean(node sqlparser.Expr) (conditions []*sqlparser.ComparisonExpr
 	return nil
 }
 
-func getPKValues(conditions []*sqlparser.ComparisonExpr, pkIndex *schema.Index) []interface{} {
-	pkValues := make([]interface{}, len(pkIndex.Columns))
+func getPKValues(conditions []*sqlparser.ComparisonExpr, pkIndex *schema.Index) []sqltypes.PlanValue {
+	pkValues := make([]sqltypes.PlanValue, len(pkIndex.Columns))
 	inClauseSeen := false
 	for _, condition := range conditions {
 		if condition.Operator == sqlparser.InStr {
@@ -263,17 +265,17 @@ func getPKValues(conditions []*sqlparser.ComparisonExpr, pkIndex *schema.Index) 
 		if index == -1 {
 			return nil
 		}
-		if pkValues[index] != nil {
+		if !pkValues[index].IsNull() {
 			return nil
 		}
 		var err error
-		pkValues[index], err = sqlparser.AsInterface(condition.Right)
+		pkValues[index], err = sqlparser.NewPlanValue(condition.Right)
 		if err != nil {
 			return nil
 		}
 	}
 	for _, v := range pkValues {
-		if v == nil {
+		if v.IsNull() {
 			return nil
 		}
 	}
@@ -533,14 +535,15 @@ func copyVal(ins *sqlparser.Insert, col sqlparser.ColIdent, colIndex int) int {
 	return len(ins.Columns) - 1
 }
 
-func getInsertPKValues(pkColumnNumbers []int, rowList sqlparser.Values, table *schema.Table) (pkValues []interface{}, err error) {
-	pkValues = make([]interface{}, len(pkColumnNumbers))
-	for index, columnNumber := range pkColumnNumbers {
+func getInsertPKValues(pkColumnNumbers []int, rowList sqlparser.Values, table *schema.Table) (pkValues []sqltypes.PlanValue, err error) {
+	pkValues = make([]sqltypes.PlanValue, len(pkColumnNumbers))
+	for i, columnNumber := range pkColumnNumbers {
 		if columnNumber == -1 {
-			pkValues[index] = table.GetPKColumn(index).Default
+			// No value was specified. Use the default from the schema for all rows.
+			pkValues[i] = sqltypes.PlanValue{Value: table.GetPKColumn(i).Default}
 			continue
 		}
-		values := make([]interface{}, len(rowList))
+		pkValues[i].Values = make([]sqltypes.PlanValue, len(rowList))
 		for j := 0; j < len(rowList); j++ {
 			row := rowList[j]
 			if columnNumber >= len(row) {
@@ -551,15 +554,10 @@ func getInsertPKValues(pkColumnNumbers []int, rowList sqlparser.Values, table *s
 				return nil, nil
 			}
 			var err error
-			values[j], err = sqlparser.AsInterface(node)
+			pkValues[i].Values[j], err = sqlparser.NewPlanValue(node)
 			if err != nil {
 				return nil, err
 			}
-		}
-		if len(values) == 1 {
-			pkValues[index] = values[0]
-		} else {
-			pkValues[index] = values
 		}
 	}
 	return pkValues, nil
