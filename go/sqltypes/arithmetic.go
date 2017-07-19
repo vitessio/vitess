@@ -126,8 +126,10 @@ func minmax(v1, v2 Value, min bool) (Value, error) {
 	if err != nil {
 		return NULL, err
 	}
-	// XNOR: see tests.
-	if min == (n < 0) {
+
+	// XNOR construct. See tests.
+	v1isSmaller := n < 0
+	if min == v1isSmaller {
 		return v1, nil
 	}
 	return v2, nil
