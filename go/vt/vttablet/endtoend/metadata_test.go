@@ -32,8 +32,8 @@ func getAndSetup(t *testing.T) *framework.QueryClient {
 	_, err := client.Execute(
 		"insert into vitess_b values(:eid, :id)",
 		map[string]*querypb.BindVariable{
-			"id":  sqltypes.Int64BindVar(-2147483648),
-			"eid": sqltypes.Int64BindVar(-9223372036854775808),
+			"id":  sqltypes.Int64BindVariable(-2147483648),
+			"eid": sqltypes.Int64BindVariable(-9223372036854775808),
 		},
 	)
 	if err != nil {

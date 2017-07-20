@@ -128,7 +128,7 @@ func TestNocacheCases(t *testing.T) {
 			Name:  "limit",
 			Query: "select /* limit */ eid, id from vitess_a limit :a",
 			BindVars: map[string]*querypb.BindVariable{
-				"a": sqltypes.Int64BindVar(1),
+				"a": sqltypes.Int64BindVariable(1),
 			},
 			Result: [][]string{
 				{"1", "1"},
@@ -451,7 +451,7 @@ func TestNocacheCases(t *testing.T) {
 				&framework.TestCase{
 					Query: "select :bv from vitess_a where eid = 2 and id = 1",
 					BindVars: map[string]*querypb.BindVariable{
-						"bv": sqltypes.Int64BindVar(1),
+						"bv": sqltypes.Int64BindVariable(1),
 					},
 					Rewritten: []string{
 						"select 1 from vitess_a where eid = 2 and id = 1 limit 10001",
@@ -460,7 +460,7 @@ func TestNocacheCases(t *testing.T) {
 				&framework.TestCase{
 					Query: "select :bv from vitess_a where eid = 2 and id = 1",
 					BindVars: map[string]*querypb.BindVariable{
-						"bv": sqltypes.StringBindVar("abcd"),
+						"bv": sqltypes.StringBindVariable("abcd"),
 					},
 					Rewritten: []string{
 						"select 'abcd' from vitess_a where eid = 2 and id = 1 limit 10001",
@@ -676,10 +676,10 @@ func TestNocacheCases(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert /* bind values */ into vitess_a(eid, id, name, foo) values (:eid, :id, :name, :foo)",
 					BindVars: map[string]*querypb.BindVariable{
-						"foo":  sqltypes.StringBindVar("cccc"),
-						"eid":  sqltypes.Int64BindVar(4),
-						"name": sqltypes.StringBindVar("aaaa"),
-						"id":   sqltypes.Int64BindVar(1),
+						"foo":  sqltypes.StringBindVariable("cccc"),
+						"eid":  sqltypes.Int64BindVariable(4),
+						"name": sqltypes.StringBindVariable("aaaa"),
+						"id":   sqltypes.Int64BindVariable(1),
 					},
 					Rewritten: []string{
 						"insert /* bind values */ into vitess_a(eid, id, name, foo) values (4, 1, 'aaaa', 'cccc') /* _stream vitess_a (eid id ) (4 1 )",
@@ -705,10 +705,10 @@ func TestNocacheCases(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert /* positional values */ into vitess_a(eid, id, name, foo) values (?, ?, ?, ?)",
 					BindVars: map[string]*querypb.BindVariable{
-						"v1": sqltypes.Int64BindVar(4),
-						"v2": sqltypes.Int64BindVar(1),
-						"v3": sqltypes.StringBindVar("aaaa"),
-						"v4": sqltypes.StringBindVar("cccc"),
+						"v1": sqltypes.Int64BindVariable(4),
+						"v2": sqltypes.Int64BindVariable(1),
+						"v3": sqltypes.StringBindVariable("aaaa"),
+						"v4": sqltypes.StringBindVariable("cccc"),
 					},
 					Rewritten: []string{
 						"insert /* positional values */ into vitess_a(eid, id, name, foo) values (4, 1, 'aaaa', 'cccc') /* _stream vitess_a (eid id ) (4 1 )",
@@ -1441,17 +1441,17 @@ func TestNocacheCases(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into vitess_ints values(:tiny, :tinyu, :small, :smallu, :medium, :mediumu, :normal, :normalu, :big, :bigu, :year)",
 					BindVars: map[string]*querypb.BindVariable{
-						"medium":  sqltypes.Int64BindVar(-8388608),
-						"smallu":  sqltypes.Int64BindVar(65535),
-						"normal":  sqltypes.Int64BindVar(-2147483648),
-						"big":     sqltypes.Int64BindVar(-9223372036854775808),
-						"tinyu":   sqltypes.Int64BindVar(255),
-						"year":    sqltypes.Int64BindVar(2012),
-						"tiny":    sqltypes.Int64BindVar(-128),
-						"bigu":    sqltypes.Uint64BindVar(18446744073709551615),
-						"normalu": sqltypes.Int64BindVar(4294967295),
-						"small":   sqltypes.Int64BindVar(-32768),
-						"mediumu": sqltypes.Int64BindVar(16777215),
+						"medium":  sqltypes.Int64BindVariable(-8388608),
+						"smallu":  sqltypes.Int64BindVariable(65535),
+						"normal":  sqltypes.Int64BindVariable(-2147483648),
+						"big":     sqltypes.Int64BindVariable(-9223372036854775808),
+						"tinyu":   sqltypes.Int64BindVariable(255),
+						"year":    sqltypes.Int64BindVariable(2012),
+						"tiny":    sqltypes.Int64BindVariable(-128),
+						"bigu":    sqltypes.Uint64BindVariable(18446744073709551615),
+						"normalu": sqltypes.Int64BindVariable(4294967295),
+						"small":   sqltypes.Int64BindVariable(-32768),
+						"mediumu": sqltypes.Int64BindVariable(16777215),
 					},
 					Rewritten: []string{
 						"insert into vitess_ints values (-128, 255, -32768, 65535, -8388608, 16777215, -2147483648, 4294967295, -9223372036854775808, 18446744073709551615, 2012) /* _stream vitess_ints (tiny ) (-128 )",
@@ -1498,11 +1498,11 @@ func TestNocacheCases(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into vitess_fracts values(:id, :deci, :num, :f, :d)",
 					BindVars: map[string]*querypb.BindVariable{
-						"d":    sqltypes.Float64BindVar(4.99),
-						"num":  sqltypes.StringBindVar("2.99"),
-						"id":   sqltypes.Int64BindVar(1),
-						"f":    sqltypes.Float64BindVar(3.99),
-						"deci": sqltypes.StringBindVar("1.99"),
+						"d":    sqltypes.Float64BindVariable(4.99),
+						"num":  sqltypes.StringBindVariable("2.99"),
+						"id":   sqltypes.Int64BindVariable(1),
+						"f":    sqltypes.Float64BindVariable(3.99),
+						"deci": sqltypes.StringBindVariable("1.99"),
 					},
 					Rewritten: []string{
 						"insert into vitess_fracts values (1, '1.99', '2.99', 3.99, 4.99) /* _stream vitess_fracts (id ) (1 )",
@@ -1549,16 +1549,16 @@ func TestNocacheCases(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into vitess_strings values (:vb, :c, :vc, :b, :tb, :bl, :ttx, :tx, :en, :s)",
 					BindVars: map[string]*querypb.BindVariable{
-						"ttx": sqltypes.StringBindVar("g"),
-						"vb":  sqltypes.StringBindVar("a"),
-						"vc":  sqltypes.StringBindVar("c"),
-						"en":  sqltypes.StringBindVar("a"),
-						"tx":  sqltypes.StringBindVar("h"),
-						"bl":  sqltypes.StringBindVar("f"),
-						"s":   sqltypes.StringBindVar("a,b"),
-						"b":   sqltypes.StringBindVar("d"),
-						"tb":  sqltypes.StringBindVar("e"),
-						"c":   sqltypes.StringBindVar("b"),
+						"ttx": sqltypes.StringBindVariable("g"),
+						"vb":  sqltypes.StringBindVariable("a"),
+						"vc":  sqltypes.StringBindVariable("c"),
+						"en":  sqltypes.StringBindVariable("a"),
+						"tx":  sqltypes.StringBindVariable("h"),
+						"bl":  sqltypes.StringBindVariable("f"),
+						"s":   sqltypes.StringBindVariable("a,b"),
+						"b":   sqltypes.StringBindVariable("d"),
+						"tb":  sqltypes.StringBindVariable("e"),
+						"c":   sqltypes.StringBindVariable("b"),
 					},
 					Rewritten: []string{
 						"insert into vitess_strings values ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b') /* _stream vitess_strings (vb ) ('YQ==' )",
@@ -1605,11 +1605,11 @@ func TestNocacheCases(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into vitess_misc values(:id, :b, :d, :dt, :t, point(1, 2))",
 					BindVars: map[string]*querypb.BindVariable{
-						"t":  sqltypes.StringBindVar("15:45:45"),
-						"dt": sqltypes.StringBindVar("2012-01-01 15:45:45"),
-						"b":  sqltypes.StringBindVar("\x01"),
-						"id": sqltypes.Int64BindVar(1),
-						"d":  sqltypes.StringBindVar("2012-01-01"),
+						"t":  sqltypes.StringBindVariable("15:45:45"),
+						"dt": sqltypes.StringBindVariable("2012-01-01 15:45:45"),
+						"b":  sqltypes.StringBindVariable("\x01"),
+						"id": sqltypes.Int64BindVariable(1),
+						"d":  sqltypes.StringBindVariable("2012-01-01"),
 					},
 					Rewritten: []string{
 						"insert into vitess_misc values (1, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45', point(1, 2)) /* _stream vitess_misc (id ) (1 )",

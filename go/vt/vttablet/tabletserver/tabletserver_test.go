@@ -1495,16 +1495,16 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	q3 := "update test_table set name_string = 'tx3' where pk = :pk and name = :name"
 	// Every request needs their own bind variables to avoid data races.
 	bvTx1 := map[string]*querypb.BindVariable{
-		"pk":   sqltypes.Int64BindVar(1),
-		"name": sqltypes.Int64BindVar(1),
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
 	}
 	bvTx2 := map[string]*querypb.BindVariable{
-		"pk":   sqltypes.Int64BindVar(1),
-		"name": sqltypes.Int64BindVar(1),
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
 	}
 	bvTx3 := map[string]*querypb.BindVariable{
-		"pk":   sqltypes.Int64BindVar(2),
-		"name": sqltypes.Int64BindVar(1),
+		"pk":   sqltypes.Int64BindVariable(2),
+		"name": sqltypes.Int64BindVariable(1),
 	}
 
 	// Make sure that tx2 and tx3 start only after tx1 is running its Execute().
@@ -1624,12 +1624,12 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 	q2 := "update test_table set name_string = 'tx2' where pk = :pk and name = :name"
 	// Every request needs their own bind variables to avoid data races.
 	bvTx1 := map[string]*querypb.BindVariable{
-		"pk":   sqltypes.Int64BindVar(1),
-		"name": sqltypes.Int64BindVar(1),
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
 	}
 	bvTx2 := map[string]*querypb.BindVariable{
-		"pk":   sqltypes.Int64BindVar(1),
-		"name": sqltypes.Int64BindVar(1),
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
 	}
 
 	// Make sure that tx2 starts only after tx1 is running its Execute().
@@ -1711,16 +1711,16 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	q3 := "update test_table set name_string = 'tx3' where pk = :pk and name = :name"
 	// Every request needs their own bind variables to avoid data races.
 	bvTx1 := map[string]*querypb.BindVariable{
-		"pk":   sqltypes.Int64BindVar(1),
-		"name": sqltypes.Int64BindVar(1),
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
 	}
 	bvTx2 := map[string]*querypb.BindVariable{
-		"pk":   sqltypes.Int64BindVar(1),
-		"name": sqltypes.Int64BindVar(1),
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
 	}
 	bvTx3 := map[string]*querypb.BindVariable{
-		"pk":   sqltypes.Int64BindVar(1),
-		"name": sqltypes.Int64BindVar(1),
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
 	}
 
 	// Make sure that tx2 starts only after tx1 is running its Execute().
@@ -2190,7 +2190,7 @@ func TestTerseErrorsBindVars(t *testing.T) {
 	tsv := NewTabletServerWithNilTopoServer(config)
 	err := tsv.convertError(
 		"select * from test_table",
-		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVar(1)},
+		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(1)},
 		mysql.NewSQLError(10, "HY000", "msg"),
 	)
 	want := "(errno 10) (sqlstate HY000) during query: select * from test_table"
@@ -2218,7 +2218,7 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	tsv := NewTabletServerWithNilTopoServer(config)
 
 	err := tsv.convertError("select * from test_table where id = :a",
-		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVar(1)},
+		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(1)},
 		mysql.NewSQLError(1227, "42000", "failover in progress"),
 	)
 	if got, want := err.Error(), "failover in progress (errno 1227) (sqlstate 42000)"; got != want {

@@ -74,9 +74,9 @@ var (
 	tabletTypeEcho = topodatapb.TabletType_name[int32(tabletType)]
 
 	bindVars = map[string]*querypb.BindVariable{
-		"int":   sqltypes.Int64BindVar(123),
-		"float": sqltypes.Float64BindVar(2.1),
-		"bytes": sqltypes.BytesBindVar([]byte{1, 2, 3}),
+		"int":   sqltypes.Int64BindVariable(123),
+		"float": sqltypes.Float64BindVariable(2.1),
+		"bytes": sqltypes.BytesBindVariable([]byte{1, 2, 3}),
 	}
 	bindVarsEcho = "map[bytes:type:VARBINARY value:\"\\001\\002\\003\"  float:type:FLOAT64 value:\"2.1\"  int:type:INT64 value:\"123\" ]"
 

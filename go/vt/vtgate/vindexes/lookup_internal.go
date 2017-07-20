@@ -54,7 +54,7 @@ func (lkp *lookup) Init(lookupQueryParams map[string]string, isHashed bool) {
 func (lkp *lookup) MapUniqueLookup(vcursor VCursor, ids []interface{}) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
-		bv, err := sqltypes.BuildBindVar(id)
+		bv, err := sqltypes.BuildBindVariable(id)
 		if err != nil {
 			return nil, err
 		}
@@ -88,7 +88,7 @@ func (lkp *lookup) MapUniqueLookup(vcursor VCursor, ids []interface{}) ([][]byte
 func (lkp *lookup) MapNonUniqueLookup(vcursor VCursor, ids []interface{}) ([][][]byte, error) {
 	out := make([][][]byte, 0, len(ids))
 	for _, id := range ids {
-		bv, err := sqltypes.BuildBindVar(id)
+		bv, err := sqltypes.BuildBindVariable(id)
 		if err != nil {
 			return nil, err
 		}
@@ -144,11 +144,11 @@ func (lkp *lookup) Verify(vcursor VCursor, ids []interface{}, ksids [][]byte) (b
 			if err != nil {
 				return false, fmt.Errorf("lookup.Verify: %v", err)
 			}
-			val, _ = sqltypes.BuildBindVar(v)
+			val, _ = sqltypes.BuildBindVariable(v)
 		} else {
-			val, _ = sqltypes.BuildBindVar(keyspaceID)
+			val, _ = sqltypes.BuildBindVariable(keyspaceID)
 		}
-		idval, err := sqltypes.BuildBindVar(ids[rowNum])
+		idval, err := sqltypes.BuildBindVariable(ids[rowNum])
 		if err != nil {
 			return false, err
 		}
@@ -192,11 +192,11 @@ func (lkp *lookup) Create(vcursor VCursor, ids []interface{}, ksids [][]byte) er
 			if err != nil {
 				return fmt.Errorf("lookup.Create: %v", err)
 			}
-			val, _ = sqltypes.BuildBindVar(v)
+			val, _ = sqltypes.BuildBindVariable(v)
 		} else {
-			val, _ = sqltypes.BuildBindVar(keyspaceID)
+			val, _ = sqltypes.BuildBindVariable(keyspaceID)
 		}
-		idval, err := sqltypes.BuildBindVar(ids[rowNum])
+		idval, err := sqltypes.BuildBindVariable(ids[rowNum])
 		if err != nil {
 			return fmt.Errorf("lookup.Create: %v", err)
 		}
@@ -218,15 +218,15 @@ func (lkp *lookup) Delete(vcursor VCursor, ids []interface{}, ksid []byte) error
 		if err != nil {
 			return fmt.Errorf("lookup.Delete: %v", err)
 		}
-		val, _ = sqltypes.BuildBindVar(v)
+		val, _ = sqltypes.BuildBindVariable(v)
 	} else {
-		val, _ = sqltypes.BuildBindVar(ksid)
+		val, _ = sqltypes.BuildBindVariable(ksid)
 	}
 	bindvars := map[string]*querypb.BindVariable{
 		lkp.To: val,
 	}
 	for _, id := range ids {
-		idval, err := sqltypes.BuildBindVar(id)
+		idval, err := sqltypes.BuildBindVariable(id)
 		if err != nil {
 			return fmt.Errorf("lookup.Delete: %v", err)
 		}

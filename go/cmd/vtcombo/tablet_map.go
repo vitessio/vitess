@@ -37,7 +37,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
-	"github.com/youtube/vitess/go/vt/utils"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
@@ -288,7 +287,7 @@ type internalTabletConn struct {
 // Execute is part of queryservice.QueryService
 // We need to copy the bind variables as tablet server will change them.
 func (itc *internalTabletConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
-	bindVars = utils.CloneBindVariables(bindVars)
+	bindVars = sqltypes.CopyBindVariables(bindVars)
 	reply, err := itc.tablet.qsc.QueryService().Execute(ctx, target, query, bindVars, transactionID, options)
 	if err != nil {
 		return nil, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
@@ -302,7 +301,7 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, target *querypb
 	q := make([]*querypb.BoundQuery, len(queries))
 	for i, query := range queries {
 		q[i].Sql = query.Sql
-		q[i].BindVariables = utils.CloneBindVariables(query.BindVariables)
+		q[i].BindVariables = sqltypes.CopyBindVariables(query.BindVariables)
 	}
 	results, err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, target, q, asTransaction, transactionID, options)
 	if err != nil {
@@ -314,7 +313,7 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, target *querypb
 // StreamExecute is part of queryservice.QueryService
 // We need to copy the bind variables as tablet server will change them.
 func (itc *internalTabletConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
-	bindVars = utils.CloneBindVariables(bindVars)
+	bindVars = sqltypes.CopyBindVariables(bindVars)
 	err := itc.tablet.qsc.QueryService().StreamExecute(ctx, target, query, bindVars, options, callback)
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }

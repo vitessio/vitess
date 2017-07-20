@@ -135,7 +135,7 @@ func TestGetBytes(t *testing.T) {
 		in:  sqltypes.MakeTrusted(querypb.Type_UINT64, []byte{'1', '2', '3'}),
 		out: "123",
 	}, {
-		in:  sqltypes.BytesBindVar([]byte{'1', '2', '3'}),
+		in:  sqltypes.BytesBindVariable([]byte{'1', '2', '3'}),
 		out: "123",
 	}, {
 		in:  65,

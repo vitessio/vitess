@@ -64,8 +64,8 @@ func TestMultipleBoundaries(t *testing.T) {
 			" order by id asc, user_id asc"+
 			" limit 1000, 1",
 		map[string]*querypb.BindVariable{
-			"_splitquery_prev_id":      sqltypes.Int64BindVar(1),
-			"_splitquery_prev_user_id": sqltypes.Int64BindVar(1),
+			"_splitquery_prev_id":      sqltypes.Int64BindVariable(1),
+			"_splitquery_prev_user_id": sqltypes.Int64BindVariable(1),
 		})
 	expectedCall2.Return(
 		&sqltypes.Result{
@@ -82,8 +82,8 @@ func TestMultipleBoundaries(t *testing.T) {
 			" order by id asc, user_id asc"+
 			" limit 1000, 1",
 		map[string]*querypb.BindVariable{
-			"_splitquery_prev_id":      sqltypes.Int64BindVar(2),
-			"_splitquery_prev_user_id": sqltypes.Int64BindVar(10),
+			"_splitquery_prev_id":      sqltypes.Int64BindVariable(2),
+			"_splitquery_prev_user_id": sqltypes.Int64BindVariable(10),
 		})
 	expectedCall3.Return(
 		&sqltypes.Result{Rows: [][]sqltypes.Value{}}, nil)
@@ -179,8 +179,8 @@ func TestSQLExecuterReturnsError(t *testing.T) {
 			" order by id asc, user_id asc"+
 			" limit 1000, 1",
 		map[string]*querypb.BindVariable{
-			"_splitquery_prev_id":      sqltypes.Int64BindVar(1),
-			"_splitquery_prev_user_id": sqltypes.Int64BindVar(1),
+			"_splitquery_prev_id":      sqltypes.Int64BindVariable(1),
+			"_splitquery_prev_user_id": sqltypes.Int64BindVariable(1),
 		})
 	expectedErr := fmt.Errorf("Error accessing database!")
 	expectedCall2.Return(nil, expectedErr)

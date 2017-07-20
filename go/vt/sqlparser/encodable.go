@@ -62,13 +62,13 @@ type TupleEqualityList struct {
 // equality.
 func (tpl *TupleEqualityList) EncodeSQL(buf *bytes.Buffer) {
 	if len(tpl.Columns) == 1 {
-		tpl.encodeAsIN(buf)
+		tpl.encodeAsIn(buf)
 		return
 	}
 	tpl.encodeAsEquality(buf)
 }
 
-func (tpl *TupleEqualityList) encodeAsIN(buf *bytes.Buffer) {
+func (tpl *TupleEqualityList) encodeAsIn(buf *bytes.Buffer) {
 	Append(buf, tpl.Columns[0])
 	buf.WriteString(" in (")
 	for i, r := range tpl.Rows {

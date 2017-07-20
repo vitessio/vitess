@@ -43,7 +43,6 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/utils"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/heartbeat"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
@@ -1481,7 +1480,7 @@ func (se *splitQuerySQLExecuter) SQLExecute(
 	return se.queryExecutor.dbConnFetch(
 		se.conn,
 		parsedQuery,
-		utils.CloneBindVariables(bindVariables),
+		sqltypes.CopyBindVariables(bindVariables),
 		nil,  /* buildStreamComment */
 		true, /* wantfields */
 	)

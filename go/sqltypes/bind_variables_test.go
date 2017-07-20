@@ -26,7 +26,7 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
-func TestBuildBindVars(t *testing.T) {
+func TestBuildBindVariables(t *testing.T) {
 	tcases := []struct {
 		in  map[string]interface{}
 		out map[string]*querypb.BindVariable
@@ -39,7 +39,7 @@ func TestBuildBindVars(t *testing.T) {
 			"k": int64(1),
 		},
 		out: map[string]*querypb.BindVariable{
-			"k": Int64BindVar(1),
+			"k": Int64BindVariable(1),
 		},
 	}, {
 		in: map[string]interface{}{
@@ -48,7 +48,7 @@ func TestBuildBindVars(t *testing.T) {
 		err: "k: type uint8 not supported as bind var: 1",
 	}}
 	for _, tcase := range tcases {
-		bindVars, err := BuildBindVars(tcase.in)
+		bindVars, err := BuildBindVariables(tcase.in)
 		if err != nil {
 			if err.Error() != tcase.err {
 				t.Errorf("MapToBindVars(%v) error: %v, want %s", tcase.in, err, tcase.err)
@@ -65,7 +65,7 @@ func TestBuildBindVars(t *testing.T) {
 	}
 }
 
-func TestBuildBindVar(t *testing.T) {
+func TestBuildBindVariable(t *testing.T) {
 	tcases := []struct {
 		in  interface{}
 		out *querypb.BindVariable
@@ -108,7 +108,7 @@ func TestBuildBindVar(t *testing.T) {
 		},
 	}, {
 		in:  nil,
-		out: NullBV,
+		out: NullBindVariable,
 	}, {
 		in: MakeTrusted(Int64, []byte("1")),
 		out: &querypb.BindVariable{
@@ -216,7 +216,7 @@ func TestBuildBindVar(t *testing.T) {
 		err: "type uint8 not supported as bind var: 1",
 	}}
 	for _, tcase := range tcases {
-		bv, err := BuildBindVar(tcase.in)
+		bv, err := BuildBindVariable(tcase.in)
 		if err != nil {
 			if err.Error() != tcase.err {
 				t.Errorf("ToBindVar(%T(%v)) error: %v, want %s", tcase.in, tcase.in, err, tcase.err)
@@ -233,7 +233,7 @@ func TestBuildBindVar(t *testing.T) {
 	}
 }
 
-func TestValidateBindVars(t *testing.T) {
+func TestValidateBindVarables(t *testing.T) {
 	tcases := []struct {
 		in  map[string]*querypb.BindVariable
 		err string
@@ -266,7 +266,7 @@ func TestValidateBindVars(t *testing.T) {
 		err: `v: strconv.ParseInt: parsing "a": invalid syntax`,
 	}}
 	for _, tcase := range tcases {
-		err := ValidateBindVars(tcase.in)
+		err := ValidateBindVariables(tcase.in)
 		if tcase.err != "" {
 			if err == nil || err.Error() != tcase.err {
 				t.Errorf("ValidateBindVars(%v): %v, want %s", tcase.in, err, tcase.err)
@@ -286,12 +286,12 @@ const (
 	InvalidPos = "18446744073709551616"
 )
 
-func TestValidateBindVar(t *testing.T) {
+func TestValidateBindVariable(t *testing.T) {
 	testcases := []struct {
 		in  *querypb.BindVariable
 		err string
 	}{{
-		in:  NullBV,
+		in:  NullBindVariable,
 		err: "NULL_TYPE is invalid",
 	}, {
 		in: &querypb.BindVariable{
@@ -495,7 +495,7 @@ func TestValidateBindVar(t *testing.T) {
 		err: "type: NULL_TYPE is invalid",
 	}}
 	for _, tcase := range testcases {
-		err := ValidateBindVar(tcase.in)
+		err := ValidateBindVariable(tcase.in)
 		if tcase.err != "" {
 			if err == nil || !strings.Contains(err.Error(), tcase.err) {
 				t.Errorf("ValidateBindVar(%v) error: %v, must contain %v", tcase.in, err, tcase.err)
@@ -508,15 +508,15 @@ func TestValidateBindVar(t *testing.T) {
 	}
 
 	// Special case: nil bind var.
-	err := ValidateBindVar(nil)
+	err := ValidateBindVariable(nil)
 	want := "bind variable is nil"
 	if err == nil || err.Error() != want {
 		t.Errorf("ValidateBindVar(nil) error: %v, want %s", err, want)
 	}
 }
 
-func TestBindVarToValue(t *testing.T) {
-	v, err := BindVarToValue(Int64BindVar(1))
+func TestBindVariableToValue(t *testing.T) {
+	v, err := BindVariableToValue(Int64BindVariable(1))
 	if err != nil {
 		t.Error(err)
 	}
@@ -525,7 +525,7 @@ func TestBindVarToValue(t *testing.T) {
 		t.Errorf("BindVarToValue(1): %v, want %v", v, want)
 	}
 
-	v, err = BindVarToValue(&querypb.BindVariable{Type: querypb.Type_TUPLE})
+	v, err = BindVariableToValue(&querypb.BindVariable{Type: querypb.Type_TUPLE})
 	wantErr := "cannot convert a TUPLE bind var into a value"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf(" BindVarToValue(TUPLE): %v, want %s", err, wantErr)

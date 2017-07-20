@@ -175,7 +175,7 @@ func TestQueryRules(t *testing.T) {
 
 	client := framework.NewClient()
 	query := "select * from vitess_test where intval=:asdfg"
-	bv := map[string]*querypb.BindVariable{"asdfg": sqltypes.Int64BindVar(1)}
+	bv := map[string]*querypb.BindVariable{"asdfg": sqltypes.Int64BindVariable(1)}
 	_, err = client.Execute(query, bv)
 	want = "disallowed due to rule: disallow bindvar 'asdfg'"
 	if err == nil || err.Error() != want {

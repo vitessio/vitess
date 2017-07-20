@@ -60,10 +60,10 @@ func BenchmarkExecuteVarBinary(b *testing.B) {
 	testUtils := newTestUtils()
 	// sql that will be executed in this test
 	bv := map[string]*querypb.BindVariable{
-		"vtg1": sqltypes.Int64BindVar(1),
+		"vtg1": sqltypes.Int64BindVariable(1),
 	}
 	for i := 2; i <= 11; i++ {
-		bv[fmt.Sprintf("vtg%d", i)] = sqltypes.BytesBindVar(benchVarValue)
+		bv[fmt.Sprintf("vtg%d", i)] = sqltypes.BytesBindVariable(benchVarValue)
 	}
 
 	config := testUtils.newQueryServiceConfig()
@@ -89,7 +89,7 @@ func BenchmarkExecuteExpression(b *testing.B) {
 	testUtils := newTestUtils()
 	// sql that will be executed in this test
 	bv := map[string]*querypb.BindVariable{
-		"vtg1": sqltypes.Int64BindVar(1),
+		"vtg1": sqltypes.Int64BindVariable(1),
 	}
 	for i := 2; i <= 11; i++ {
 		bv[fmt.Sprintf("vtg%d", i)] = &querypb.BindVariable{

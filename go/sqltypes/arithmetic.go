@@ -172,7 +172,7 @@ func ConvertToUint64(v interface{}) (uint64, error) {
 		num, err = newIntegralNumeric(v)
 	case *querypb.BindVariable:
 		var sv Value
-		sv, err = BindVarToValue(v)
+		sv, err = BindVariableToValue(v)
 		if err != nil {
 			return 0, err
 		}

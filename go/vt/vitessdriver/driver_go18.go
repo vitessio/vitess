@@ -102,7 +102,7 @@ func bindVarsFromNamedValues(args []driver.NamedValue) (map[string]*querypb.Bind
 	bindVars := make(map[string]*querypb.BindVariable, len(args))
 	nameUsed := false
 	for i, v := range args {
-		bv, err := sqltypes.BuildBindVar(v.Value)
+		bv, err := sqltypes.BuildBindVariable(v.Value)
 		if err != nil {
 			return nil, err
 		}

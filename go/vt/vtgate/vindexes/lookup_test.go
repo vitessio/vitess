@@ -74,8 +74,8 @@ func TestLookupUniqueVerify(t *testing.T) {
 	wantQuery := &querypb.BoundQuery{
 		Sql: "select fromc from t where ((fromc=:fromc0 and toc=:toc0))",
 		BindVariables: map[string]*querypb.BindVariable{
-			"fromc0": sqltypes.Int64BindVar(1),
-			"toc0":   sqltypes.BytesBindVar([]byte("test")),
+			"fromc0": sqltypes.Int64BindVariable(1),
+			"toc0":   sqltypes.BytesBindVariable([]byte("test")),
 		},
 	}
 	if err != nil {
@@ -108,7 +108,7 @@ func TestLookupUniqueMap(t *testing.T) {
 	wantQuery := &querypb.BoundQuery{
 		Sql: "select toc from t where fromc = :fromc",
 		BindVariables: map[string]*querypb.BindVariable{
-			"fromc": sqltypes.Int64BindVar(2),
+			"fromc": sqltypes.Int64BindVariable(2),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
@@ -125,8 +125,8 @@ func TestLookupUniqueCreate(t *testing.T) {
 	wantQuery := &querypb.BoundQuery{
 		Sql: "insert into t(fromc,toc) values(:fromc0,:toc0)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"fromc0": sqltypes.Int64BindVar(1),
-			"toc0":   sqltypes.BytesBindVar([]byte("test")),
+			"fromc0": sqltypes.Int64BindVariable(1),
+			"toc0":   sqltypes.BytesBindVariable([]byte("test")),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
@@ -163,8 +163,8 @@ func TestLookupUniqueDelete(t *testing.T) {
 	wantQuery := &querypb.BoundQuery{
 		Sql: "delete from t where fromc = :fromc and toc = :toc",
 		BindVariables: map[string]*querypb.BindVariable{
-			"fromc": sqltypes.Int64BindVar(1),
-			"toc":   sqltypes.BytesBindVar([]byte("test")),
+			"fromc": sqltypes.Int64BindVariable(1),
+			"toc":   sqltypes.BytesBindVariable([]byte("test")),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
@@ -185,8 +185,8 @@ func TestLookupNonUniqueVerify(t *testing.T) {
 	wantQuery := &querypb.BoundQuery{
 		Sql: "select fromc from t where ((fromc=:fromc0 and toc=:toc0))",
 		BindVariables: map[string]*querypb.BindVariable{
-			"fromc0": sqltypes.Int64BindVar(1),
-			"toc0":   sqltypes.BytesBindVar([]byte("test")),
+			"fromc0": sqltypes.Int64BindVariable(1),
+			"toc0":   sqltypes.BytesBindVariable([]byte("test")),
 		},
 	}
 	if err != nil {
@@ -206,7 +206,7 @@ func TestLookupNonUniqueMap(t *testing.T) {
 	wantQuery := &querypb.BoundQuery{
 		Sql: "select toc from t where fromc = :fromc",
 		BindVariables: map[string]*querypb.BindVariable{
-			"fromc": sqltypes.Int64BindVar(2),
+			"fromc": sqltypes.Int64BindVariable(2),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
@@ -223,8 +223,8 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 	wantQuery := &querypb.BoundQuery{
 		Sql: "insert into t(fromc,toc) values(:fromc0,:toc0)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"fromc0": sqltypes.Int64BindVar(1),
-			"toc0":   sqltypes.BytesBindVar([]byte("test")),
+			"fromc0": sqltypes.Int64BindVariable(1),
+			"toc0":   sqltypes.BytesBindVariable([]byte("test")),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
@@ -248,8 +248,8 @@ func TestLookupNonUniqueDelete(t *testing.T) {
 	wantQuery := &querypb.BoundQuery{
 		Sql: "delete from t where fromc = :fromc and toc = :toc",
 		BindVariables: map[string]*querypb.BindVariable{
-			"fromc": sqltypes.Int64BindVar(1),
-			"toc":   sqltypes.BytesBindVar([]byte("test")),
+			"fromc": sqltypes.Int64BindVariable(1),
+			"toc":   sqltypes.BytesBindVariable([]byte("test")),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {

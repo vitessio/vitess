@@ -47,7 +47,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	}
 
 	// simple PK clause with bindVars. e.g. where pk1 = :pk1
-	bindVars["pk1"] = sqltypes.Int64BindVar(1)
+	bindVars["pk1"] = sqltypes.Int64BindVariable(1)
 	pkValues = []interface{}{":pk1"}
 	// want [[1]]
 	want = [][]sqltypes.Value{{pk1Val}}
@@ -57,7 +57,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	}
 
 	// type mismatch int
-	bindVars["pk1"] = sqltypes.StringBindVar("str")
+	bindVars["pk1"] = sqltypes.StringBindVariable("str")
 	pkValues = []interface{}{":pk1"}
 	wantErr := "strconv.ParseInt"
 
@@ -67,8 +67,8 @@ func TestCodexBuildValuesList(t *testing.T) {
 	}
 
 	// type mismatch binary
-	bindVars["pk1"] = sqltypes.Int64BindVar(1)
-	bindVars["pk2"] = sqltypes.Int64BindVar(1)
+	bindVars["pk1"] = sqltypes.Int64BindVariable(1)
+	bindVars["pk2"] = sqltypes.Int64BindVariable(1)
 	pkValues = []interface{}{":pk1", ":pk2"}
 	wantErr = "type mismatch, expecting string type for 1"
 
@@ -194,7 +194,7 @@ func TestCodexResolvePKValues(t *testing.T) {
 		[]string{"pk1", "pk2"})
 	key := "var"
 	bindVariables := make(map[string]*querypb.BindVariable)
-	bindVariables[key] = sqltypes.StringBindVar("1")
+	bindVariables[key] = sqltypes.StringBindVariable("1")
 
 	pkValues := make([]interface{}, 0, 10)
 	pkValues = append(pkValues, []interface{}{":" + key})
@@ -216,11 +216,11 @@ func TestCodexResolvePKValues(t *testing.T) {
 	}
 	// pkValues with different length
 	bindVariables = make(map[string]*querypb.BindVariable)
-	bindVariables[key] = sqltypes.Int64BindVar(1)
+	bindVariables[key] = sqltypes.Int64BindVariable(1)
 	key2 := "var2"
 	key3 := "var3"
-	bindVariables[key2] = sqltypes.StringBindVar("2")
-	bindVariables[key3] = sqltypes.StringBindVar("3")
+	bindVariables[key2] = sqltypes.StringBindVariable("2")
+	bindVariables[key3] = sqltypes.StringBindVariable("3")
 	pkValues = make([]interface{}, 0, 10)
 	pkValues = append(pkValues, []interface{}{":" + key})
 	pkValues = append(pkValues, []interface{}{":" + key2, ":" + key3})
@@ -269,7 +269,7 @@ func TestResolveNumber(t *testing.T) {
 	}{{
 		v: ":a",
 		bv: map[string]*querypb.BindVariable{
-			"a": sqltypes.Int64BindVar(10),
+			"a": sqltypes.Int64BindVariable(10),
 		},
 		out: int64(10),
 	}, {

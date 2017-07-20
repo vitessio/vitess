@@ -140,8 +140,8 @@ func TestLookupHashCreate(t *testing.T) {
 	wantQuery := &querypb.BoundQuery{
 		Sql: "insert into t(fromc,toc) values(:fromc0,:toc0)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"fromc0": sqltypes.Int64BindVar(1),
-			"toc0":   sqltypes.Uint64BindVar(1),
+			"fromc0": sqltypes.Int64BindVariable(1),
+			"toc0":   sqltypes.Uint64BindVariable(1),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
@@ -165,8 +165,8 @@ func TestLookupHashDelete(t *testing.T) {
 	wantQuery := &querypb.BoundQuery{
 		Sql: "delete from t where fromc = :fromc and toc = :toc",
 		BindVariables: map[string]*querypb.BindVariable{
-			"fromc": sqltypes.Int64BindVar(1),
-			"toc":   sqltypes.Uint64BindVar(1),
+			"fromc": sqltypes.Int64BindVariable(1),
+			"toc":   sqltypes.Uint64BindVariable(1),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {

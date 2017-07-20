@@ -156,8 +156,8 @@ func TestQueryCache(t *testing.T) {
 	framework.Server.SetQueryCacheCap(1)
 
 	bindVars := map[string]*querypb.BindVariable{
-		"ival1": sqltypes.Int64BindVar(1),
-		"ival2": sqltypes.Int64BindVar(1),
+		"ival1": sqltypes.Int64BindVariable(1),
+		"ival2": sqltypes.Int64BindVariable(1),
 	}
 	client := framework.NewClient()
 	_, _ = client.Execute("select * from vitess_test where intval=:ival1", bindVars)

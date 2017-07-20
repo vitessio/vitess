@@ -146,7 +146,7 @@ func (stats *LogStats) FmtBindVariables(full bool) string {
 			if sqltypes.IsIntegral(v.Type) || sqltypes.IsFloat(v.Type) {
 				out[k] = v
 			} else {
-				out[k] = sqltypes.StringBindVar(fmt.Sprintf("%v bytes", len(v.Value)))
+				out[k] = sqltypes.StringBindVariable(fmt.Sprintf("%v bytes", len(v.Value)))
 			}
 		}
 	}

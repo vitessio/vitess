@@ -192,7 +192,7 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	session := vtgateConn.Session(*targetString, executeOptions)
 	defer vtgateConn.Close()
 
-	bindVars, err := sqltypes.BuildBindVars(*bindVariables)
+	bindVars, err := sqltypes.BuildBindVariables(*bindVariables)
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
@@ -243,7 +243,7 @@ func commandVtGateExecuteShards(ctx context.Context, wr *wrangler.Wrangler, subF
 	}
 	defer vtgateConn.Close()
 
-	bindVars, err := sqltypes.BuildBindVars(*bindVariables)
+	bindVars, err := sqltypes.BuildBindVariables(*bindVariables)
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
@@ -301,7 +301,7 @@ func commandVtGateExecuteKeyspaceIds(ctx context.Context, wr *wrangler.Wrangler,
 	}
 	defer vtgateConn.Close()
 
-	bindVars, err := sqltypes.BuildBindVars(*bindVariables)
+	bindVars, err := sqltypes.BuildBindVariables(*bindVariables)
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
@@ -364,7 +364,7 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	}
 	defer vtgateConn.Close()
 
-	bindVars, err := sqltypes.BuildBindVars(*bindVariables)
+	bindVars, err := sqltypes.BuildBindVariables(*bindVariables)
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
@@ -424,7 +424,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	}
 	defer conn.Close(ctx)
 
-	bindVars, err := sqltypes.BuildBindVars(*bindVariables)
+	bindVars, err := sqltypes.BuildBindVariables(*bindVariables)
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}

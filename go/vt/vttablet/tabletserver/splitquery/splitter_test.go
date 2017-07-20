@@ -99,7 +99,7 @@ func TestSplit1SplitColumn(t *testing.T) {
 			Query: &querypb.BoundQuery{
 				Sql: "select * from test_table where id < :_splitquery_end_id",
 				BindVariables: map[string]*querypb.BindVariable{
-					"_splitquery_end_id": sqltypes.Int64BindVar(1),
+					"_splitquery_end_id": sqltypes.Int64BindVariable(1),
 				},
 			},
 		},
@@ -110,8 +110,8 @@ func TestSplit1SplitColumn(t *testing.T) {
 					" and" +
 					" (id < :_splitquery_end_id)",
 				BindVariables: map[string]*querypb.BindVariable{
-					"_splitquery_start_id": sqltypes.Int64BindVar(1),
-					"_splitquery_end_id":   sqltypes.Int64BindVar(10),
+					"_splitquery_start_id": sqltypes.Int64BindVariable(1),
+					"_splitquery_end_id":   sqltypes.Int64BindVariable(10),
 				},
 			},
 		},
@@ -122,8 +122,8 @@ func TestSplit1SplitColumn(t *testing.T) {
 					" and" +
 					" (id < :_splitquery_end_id)",
 				BindVariables: map[string]*querypb.BindVariable{
-					"_splitquery_start_id": sqltypes.Int64BindVar(10),
-					"_splitquery_end_id":   sqltypes.Int64BindVar(50),
+					"_splitquery_start_id": sqltypes.Int64BindVariable(10),
+					"_splitquery_end_id":   sqltypes.Int64BindVariable(50),
 				},
 			},
 		},
@@ -132,7 +132,7 @@ func TestSplit1SplitColumn(t *testing.T) {
 				Sql: "select * from test_table where" +
 					" :_splitquery_start_id <= id",
 				BindVariables: map[string]*querypb.BindVariable{
-					"_splitquery_start_id": sqltypes.Int64BindVar(50),
+					"_splitquery_start_id": sqltypes.Int64BindVariable(50),
 				},
 			},
 		},
@@ -176,8 +176,8 @@ func TestSplit2SplitColumns(t *testing.T) {
 					" id < :_splitquery_end_id or" +
 					" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id)",
 				BindVariables: map[string]*querypb.BindVariable{
-					"_splitquery_end_id":      sqltypes.Int64BindVar(1),
-					"_splitquery_end_user_id": sqltypes.Int64BindVar(2),
+					"_splitquery_end_id":      sqltypes.Int64BindVariable(1),
+					"_splitquery_end_user_id": sqltypes.Int64BindVariable(2),
 				},
 			},
 		},
@@ -190,10 +190,10 @@ func TestSplit2SplitColumns(t *testing.T) {
 					" (id < :_splitquery_end_id or" +
 					" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
 				BindVariables: map[string]*querypb.BindVariable{
-					"_splitquery_start_id":      sqltypes.Int64BindVar(1),
-					"_splitquery_start_user_id": sqltypes.Int64BindVar(2),
-					"_splitquery_end_id":        sqltypes.Int64BindVar(1),
-					"_splitquery_end_user_id":   sqltypes.Int64BindVar(3),
+					"_splitquery_start_id":      sqltypes.Int64BindVariable(1),
+					"_splitquery_start_user_id": sqltypes.Int64BindVariable(2),
+					"_splitquery_end_id":        sqltypes.Int64BindVariable(1),
+					"_splitquery_end_user_id":   sqltypes.Int64BindVariable(3),
 				},
 			},
 		},
@@ -206,10 +206,10 @@ func TestSplit2SplitColumns(t *testing.T) {
 					" (id < :_splitquery_end_id or" +
 					" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
 				BindVariables: map[string]*querypb.BindVariable{
-					"_splitquery_start_id":      sqltypes.Int64BindVar(1),
-					"_splitquery_start_user_id": sqltypes.Int64BindVar(3),
-					"_splitquery_end_id":        sqltypes.Int64BindVar(5),
-					"_splitquery_end_user_id":   sqltypes.Int64BindVar(1),
+					"_splitquery_start_id":      sqltypes.Int64BindVariable(1),
+					"_splitquery_start_user_id": sqltypes.Int64BindVariable(3),
+					"_splitquery_end_id":        sqltypes.Int64BindVariable(5),
+					"_splitquery_end_user_id":   sqltypes.Int64BindVariable(1),
 				},
 			},
 		},
@@ -219,8 +219,8 @@ func TestSplit2SplitColumns(t *testing.T) {
 					" :_splitquery_start_id < id or" +
 					" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id)",
 				BindVariables: map[string]*querypb.BindVariable{
-					"_splitquery_start_user_id": sqltypes.Int64BindVar(1),
-					"_splitquery_start_id":      sqltypes.Int64BindVar(5),
+					"_splitquery_start_user_id": sqltypes.Int64BindVariable(1),
+					"_splitquery_start_id":      sqltypes.Int64BindVariable(5),
 				},
 			},
 		},
@@ -274,9 +274,9 @@ func TestSplit3SplitColumns(t *testing.T) {
 					" (user_id < :_splitquery_end_user_id or" +
 					" (user_id = :_splitquery_end_user_id and user_id2 < :_splitquery_end_user_id2)))",
 				BindVariables: map[string]*querypb.BindVariable{
-					"_splitquery_end_id":       sqltypes.Int64BindVar(1),
-					"_splitquery_end_user_id":  sqltypes.Int64BindVar(2),
-					"_splitquery_end_user_id2": sqltypes.Int64BindVar(2),
+					"_splitquery_end_id":       sqltypes.Int64BindVariable(1),
+					"_splitquery_end_user_id":  sqltypes.Int64BindVariable(2),
+					"_splitquery_end_user_id2": sqltypes.Int64BindVariable(2),
 				},
 			},
 		},
@@ -293,12 +293,12 @@ func TestSplit3SplitColumns(t *testing.T) {
 					" (user_id < :_splitquery_end_user_id or" +
 					" (user_id = :_splitquery_end_user_id and user_id2 < :_splitquery_end_user_id2))))",
 				BindVariables: map[string]*querypb.BindVariable{
-					"_splitquery_start_id":       sqltypes.Int64BindVar(1),
-					"_splitquery_start_user_id":  sqltypes.Int64BindVar(2),
-					"_splitquery_start_user_id2": sqltypes.Int64BindVar(2),
-					"_splitquery_end_id":         sqltypes.Int64BindVar(2),
-					"_splitquery_end_user_id":    sqltypes.Int64BindVar(1),
-					"_splitquery_end_user_id2":   sqltypes.Int64BindVar(1),
+					"_splitquery_start_id":       sqltypes.Int64BindVariable(1),
+					"_splitquery_start_user_id":  sqltypes.Int64BindVariable(2),
+					"_splitquery_start_user_id2": sqltypes.Int64BindVariable(2),
+					"_splitquery_end_id":         sqltypes.Int64BindVariable(2),
+					"_splitquery_end_user_id":    sqltypes.Int64BindVariable(1),
+					"_splitquery_end_user_id2":   sqltypes.Int64BindVariable(1),
 				},
 			},
 		},
@@ -310,9 +310,9 @@ func TestSplit3SplitColumns(t *testing.T) {
 					" (:_splitquery_start_user_id < user_id or" +
 					" (:_splitquery_start_user_id = user_id and :_splitquery_start_user_id2 <= user_id2)))",
 				BindVariables: map[string]*querypb.BindVariable{
-					"_splitquery_start_id":       sqltypes.Int64BindVar(2),
-					"_splitquery_start_user_id":  sqltypes.Int64BindVar(1),
-					"_splitquery_start_user_id2": sqltypes.Int64BindVar(1),
+					"_splitquery_start_id":       sqltypes.Int64BindVariable(2),
+					"_splitquery_start_user_id":  sqltypes.Int64BindVariable(1),
+					"_splitquery_start_user_id2": sqltypes.Int64BindVariable(1),
 				},
 			},
 		},
@@ -356,8 +356,8 @@ func TestSplitWithWhereClause(t *testing.T) {
 					" (id < :_splitquery_end_id or" +
 					" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
 				BindVariables: map[string]*querypb.BindVariable{
-					"_splitquery_end_id":      sqltypes.Int64BindVar(1),
-					"_splitquery_end_user_id": sqltypes.Int64BindVar(2),
+					"_splitquery_end_id":      sqltypes.Int64BindVariable(1),
+					"_splitquery_end_user_id": sqltypes.Int64BindVariable(2),
 				},
 			},
 		},
@@ -370,10 +370,10 @@ func TestSplitWithWhereClause(t *testing.T) {
 					" (id < :_splitquery_end_id or" +
 					" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id)))",
 				BindVariables: map[string]*querypb.BindVariable{
-					"_splitquery_start_id":      sqltypes.Int64BindVar(1),
-					"_splitquery_start_user_id": sqltypes.Int64BindVar(2),
-					"_splitquery_end_id":        sqltypes.Int64BindVar(1),
-					"_splitquery_end_user_id":   sqltypes.Int64BindVar(3),
+					"_splitquery_start_id":      sqltypes.Int64BindVariable(1),
+					"_splitquery_start_user_id": sqltypes.Int64BindVariable(2),
+					"_splitquery_end_id":        sqltypes.Int64BindVariable(1),
+					"_splitquery_end_user_id":   sqltypes.Int64BindVariable(3),
 				},
 			},
 		},
@@ -386,10 +386,10 @@ func TestSplitWithWhereClause(t *testing.T) {
 					" (id < :_splitquery_end_id or" +
 					" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id)))",
 				BindVariables: map[string]*querypb.BindVariable{
-					"_splitquery_start_id":      sqltypes.Int64BindVar(1),
-					"_splitquery_start_user_id": sqltypes.Int64BindVar(3),
-					"_splitquery_end_id":        sqltypes.Int64BindVar(5),
-					"_splitquery_end_user_id":   sqltypes.Int64BindVar(1),
+					"_splitquery_start_id":      sqltypes.Int64BindVariable(1),
+					"_splitquery_start_user_id": sqltypes.Int64BindVariable(3),
+					"_splitquery_end_id":        sqltypes.Int64BindVariable(5),
+					"_splitquery_end_user_id":   sqltypes.Int64BindVariable(1),
 				},
 			},
 		},
@@ -399,8 +399,8 @@ func TestSplitWithWhereClause(t *testing.T) {
 					" (:_splitquery_start_id < id or" +
 					" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))",
 				BindVariables: map[string]*querypb.BindVariable{
-					"_splitquery_start_user_id": sqltypes.Int64BindVar(1),
-					"_splitquery_start_id":      sqltypes.Int64BindVar(5),
+					"_splitquery_start_user_id": sqltypes.Int64BindVariable(1),
+					"_splitquery_start_id":      sqltypes.Int64BindVariable(5),
 				},
 			},
 		},
@@ -412,7 +412,7 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
 		&querypb.BoundQuery{
 			Sql:           "select * from test_table",
-			BindVariables: map[string]*querypb.BindVariable{"foo": sqltypes.Int64BindVar(100)},
+			BindVariables: map[string]*querypb.BindVariable{"foo": sqltypes.Int64BindVariable(100)},
 		},
 		[]sqlparser.ColIdent{
 			sqlparser.NewColIdent("id"),
@@ -444,9 +444,9 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 					" id < :_splitquery_end_id or" +
 					" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id)",
 				BindVariables: map[string]*querypb.BindVariable{
-					"foo":                     sqltypes.Int64BindVar(100),
-					"_splitquery_end_id":      sqltypes.Int64BindVar(1),
-					"_splitquery_end_user_id": sqltypes.Int64BindVar(2),
+					"foo":                     sqltypes.Int64BindVariable(100),
+					"_splitquery_end_id":      sqltypes.Int64BindVariable(1),
+					"_splitquery_end_user_id": sqltypes.Int64BindVariable(2),
 				},
 			},
 		},
@@ -459,11 +459,11 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 					" (id < :_splitquery_end_id or" +
 					" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
 				BindVariables: map[string]*querypb.BindVariable{
-					"foo": sqltypes.Int64BindVar(100),
-					"_splitquery_start_id":      sqltypes.Int64BindVar(1),
-					"_splitquery_start_user_id": sqltypes.Int64BindVar(2),
-					"_splitquery_end_id":        sqltypes.Int64BindVar(1),
-					"_splitquery_end_user_id":   sqltypes.Int64BindVar(3),
+					"foo": sqltypes.Int64BindVariable(100),
+					"_splitquery_start_id":      sqltypes.Int64BindVariable(1),
+					"_splitquery_start_user_id": sqltypes.Int64BindVariable(2),
+					"_splitquery_end_id":        sqltypes.Int64BindVariable(1),
+					"_splitquery_end_user_id":   sqltypes.Int64BindVariable(3),
 				},
 			},
 		},
@@ -476,11 +476,11 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 					" (id < :_splitquery_end_id or" +
 					" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
 				BindVariables: map[string]*querypb.BindVariable{
-					"foo": sqltypes.Int64BindVar(100),
-					"_splitquery_start_id":      sqltypes.Int64BindVar(1),
-					"_splitquery_start_user_id": sqltypes.Int64BindVar(3),
-					"_splitquery_end_id":        sqltypes.Int64BindVar(5),
-					"_splitquery_end_user_id":   sqltypes.Int64BindVar(1),
+					"foo": sqltypes.Int64BindVariable(100),
+					"_splitquery_start_id":      sqltypes.Int64BindVariable(1),
+					"_splitquery_start_user_id": sqltypes.Int64BindVariable(3),
+					"_splitquery_end_id":        sqltypes.Int64BindVariable(5),
+					"_splitquery_end_user_id":   sqltypes.Int64BindVariable(1),
 				},
 			},
 		},
@@ -490,9 +490,9 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 					" :_splitquery_start_id < id or" +
 					" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id)",
 				BindVariables: map[string]*querypb.BindVariable{
-					"foo": sqltypes.Int64BindVar(100),
-					"_splitquery_start_user_id": sqltypes.Int64BindVar(1),
-					"_splitquery_start_id":      sqltypes.Int64BindVar(5),
+					"foo": sqltypes.Int64BindVariable(100),
+					"_splitquery_start_user_id": sqltypes.Int64BindVariable(1),
+					"_splitquery_start_id":      sqltypes.Int64BindVariable(5),
 				},
 			},
 		},
@@ -504,7 +504,7 @@ func TestSplitWithEmptyBoundaryList(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
 		&querypb.BoundQuery{
 			Sql:           "select * from test_table",
-			BindVariables: map[string]*querypb.BindVariable{"foo": sqltypes.Int64BindVar(100)},
+			BindVariables: map[string]*querypb.BindVariable{"foo": sqltypes.Int64BindVariable(100)},
 		},
 		[]sqlparser.ColIdent{
 			sqlparser.NewColIdent("id"),
@@ -530,7 +530,7 @@ func TestSplitWithEmptyBoundaryList(t *testing.T) {
 			Query: &querypb.BoundQuery{
 				Sql: "select * from test_table",
 				BindVariables: map[string]*querypb.BindVariable{
-					"foo": sqltypes.Int64BindVar(100),
+					"foo": sqltypes.Int64BindVariable(100),
 				},
 			},
 		},
@@ -574,7 +574,7 @@ func TestWithRealEqualSplits(t *testing.T) {
 			Query: &querypb.BoundQuery{
 				Sql: "select * from test_table where id < :_splitquery_end_id",
 				BindVariables: map[string]*querypb.BindVariable{
-					"_splitquery_end_id": sqltypes.Int64BindVar(1010),
+					"_splitquery_end_id": sqltypes.Int64BindVariable(1010),
 				},
 			},
 		},
@@ -585,8 +585,8 @@ func TestWithRealEqualSplits(t *testing.T) {
 					" and" +
 					" (id < :_splitquery_end_id)",
 				BindVariables: map[string]*querypb.BindVariable{
-					"_splitquery_start_id": sqltypes.Int64BindVar(1010),
-					"_splitquery_end_id":   sqltypes.Int64BindVar(2010),
+					"_splitquery_start_id": sqltypes.Int64BindVariable(1010),
+					"_splitquery_end_id":   sqltypes.Int64BindVariable(2010),
 				},
 			},
 		},
@@ -595,7 +595,7 @@ func TestWithRealEqualSplits(t *testing.T) {
 				Sql: "select * from test_table where" +
 					" :_splitquery_start_id <= id",
 				BindVariables: map[string]*querypb.BindVariable{
-					"_splitquery_start_id": sqltypes.Int64BindVar(2010),
+					"_splitquery_start_id": sqltypes.Int64BindVariable(2010),
 				},
 			},
 		},

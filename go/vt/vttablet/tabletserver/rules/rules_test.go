@@ -356,109 +356,109 @@ type BindVarTestCase struct {
 }
 
 var bvtestcases = []BindVarTestCase{
-	{BindVarCond{"b", true, true, QRNoOp, nil}, sqltypes.Int64BindVar(1), true},
-	{BindVarCond{"b", false, true, QRNoOp, nil}, sqltypes.Int64BindVar(1), false},
-	{BindVarCond{"a", true, true, QRNoOp, nil}, sqltypes.Int64BindVar(1), false},
-	{BindVarCond{"a", false, true, QRNoOp, nil}, sqltypes.Int64BindVar(1), true},
+	{BindVarCond{"b", true, true, QRNoOp, nil}, sqltypes.Int64BindVariable(1), true},
+	{BindVarCond{"b", false, true, QRNoOp, nil}, sqltypes.Int64BindVariable(1), false},
+	{BindVarCond{"a", true, true, QRNoOp, nil}, sqltypes.Int64BindVariable(1), false},
+	{BindVarCond{"a", false, true, QRNoOp, nil}, sqltypes.Int64BindVariable(1), true},
 
-	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, sqltypes.Int64BindVar(1), false},
-	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, sqltypes.Int64BindVar(10), true},
-	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, sqltypes.Uint64BindVar(1), false},
-	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, sqltypes.Uint64BindVar(10), true},
-	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, sqltypes.StringBindVar("abc"), false},
+	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, sqltypes.Int64BindVariable(1), false},
+	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, sqltypes.Int64BindVariable(10), true},
+	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, sqltypes.Uint64BindVariable(1), false},
+	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, sqltypes.Uint64BindVariable(10), true},
+	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, sqltypes.StringBindVariable("abc"), false},
 
-	{BindVarCond{"a", true, true, QRNotEqual, bvcuint64(10)}, sqltypes.Int64BindVar(1), true},
-	{BindVarCond{"a", true, true, QRNotEqual, bvcuint64(10)}, sqltypes.Int64BindVar(10), false},
-	{BindVarCond{"a", true, true, QRNotEqual, bvcuint64(10)}, sqltypes.Int64BindVar(11), true},
-	{BindVarCond{"a", true, true, QRNotEqual, bvcuint64(10)}, sqltypes.Int64BindVar(-1), true},
+	{BindVarCond{"a", true, true, QRNotEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(1), true},
+	{BindVarCond{"a", true, true, QRNotEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(10), false},
+	{BindVarCond{"a", true, true, QRNotEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(11), true},
+	{BindVarCond{"a", true, true, QRNotEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(-1), true},
 
-	{BindVarCond{"a", true, true, QRLessThan, bvcuint64(10)}, sqltypes.Int64BindVar(1), true},
-	{BindVarCond{"a", true, true, QRLessThan, bvcuint64(10)}, sqltypes.Int64BindVar(10), false},
-	{BindVarCond{"a", true, true, QRLessThan, bvcuint64(10)}, sqltypes.Int64BindVar(11), false},
-	{BindVarCond{"a", true, true, QRLessThan, bvcuint64(10)}, sqltypes.Int64BindVar(-1), true},
+	{BindVarCond{"a", true, true, QRLessThan, bvcuint64(10)}, sqltypes.Int64BindVariable(1), true},
+	{BindVarCond{"a", true, true, QRLessThan, bvcuint64(10)}, sqltypes.Int64BindVariable(10), false},
+	{BindVarCond{"a", true, true, QRLessThan, bvcuint64(10)}, sqltypes.Int64BindVariable(11), false},
+	{BindVarCond{"a", true, true, QRLessThan, bvcuint64(10)}, sqltypes.Int64BindVariable(-1), true},
 
-	{BindVarCond{"a", true, true, QRGreaterEqual, bvcuint64(10)}, sqltypes.Int64BindVar(1), false},
-	{BindVarCond{"a", true, true, QRGreaterEqual, bvcuint64(10)}, sqltypes.Int64BindVar(10), true},
-	{BindVarCond{"a", true, true, QRGreaterEqual, bvcuint64(10)}, sqltypes.Int64BindVar(11), true},
-	{BindVarCond{"a", true, true, QRGreaterEqual, bvcuint64(10)}, sqltypes.Int64BindVar(-1), false},
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(1), false},
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(10), true},
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(11), true},
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(-1), false},
 
-	{BindVarCond{"a", true, true, QRGreaterThan, bvcuint64(10)}, sqltypes.Int64BindVar(1), false},
-	{BindVarCond{"a", true, true, QRGreaterThan, bvcuint64(10)}, sqltypes.Int64BindVar(10), false},
-	{BindVarCond{"a", true, true, QRGreaterThan, bvcuint64(10)}, sqltypes.Int64BindVar(11), true},
-	{BindVarCond{"a", true, true, QRGreaterThan, bvcuint64(10)}, sqltypes.Int64BindVar(-1), false},
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcuint64(10)}, sqltypes.Int64BindVariable(1), false},
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcuint64(10)}, sqltypes.Int64BindVariable(10), false},
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcuint64(10)}, sqltypes.Int64BindVariable(11), true},
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcuint64(10)}, sqltypes.Int64BindVariable(-1), false},
 
-	{BindVarCond{"a", true, true, QRLessEqual, bvcuint64(10)}, sqltypes.Int64BindVar(1), true},
-	{BindVarCond{"a", true, true, QRLessEqual, bvcuint64(10)}, sqltypes.Int64BindVar(10), true},
-	{BindVarCond{"a", true, true, QRLessEqual, bvcuint64(10)}, sqltypes.Int64BindVar(11), false},
-	{BindVarCond{"a", true, true, QRLessEqual, bvcuint64(10)}, sqltypes.Int64BindVar(-1), true},
+	{BindVarCond{"a", true, true, QRLessEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(1), true},
+	{BindVarCond{"a", true, true, QRLessEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(10), true},
+	{BindVarCond{"a", true, true, QRLessEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(11), false},
+	{BindVarCond{"a", true, true, QRLessEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(-1), true},
 
-	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, sqltypes.Int64BindVar(1), false},
-	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, sqltypes.Int64BindVar(10), true},
-	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, sqltypes.Uint64BindVar(1), false},
-	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, sqltypes.Uint64BindVar(0xFFFFFFFFFFFFFFFF), false},
-	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, sqltypes.Uint64BindVar(10), true},
-	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, sqltypes.StringBindVar("abc"), false},
+	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, sqltypes.Int64BindVariable(1), false},
+	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, sqltypes.Int64BindVariable(10), true},
+	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, sqltypes.Uint64BindVariable(1), false},
+	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, sqltypes.Uint64BindVariable(0xFFFFFFFFFFFFFFFF), false},
+	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, sqltypes.Uint64BindVariable(10), true},
+	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, sqltypes.StringBindVariable("abc"), false},
 
-	{BindVarCond{"a", true, true, QRNotEqual, bvcint64(10)}, sqltypes.Int64BindVar(1), true},
-	{BindVarCond{"a", true, true, QRNotEqual, bvcint64(10)}, sqltypes.Int64BindVar(10), false},
-	{BindVarCond{"a", true, true, QRNotEqual, bvcint64(10)}, sqltypes.Int64BindVar(11), true},
-	{BindVarCond{"a", true, true, QRNotEqual, bvcint64(10)}, sqltypes.Uint64BindVar(0xFFFFFFFFFFFFFFFF), true},
+	{BindVarCond{"a", true, true, QRNotEqual, bvcint64(10)}, sqltypes.Int64BindVariable(1), true},
+	{BindVarCond{"a", true, true, QRNotEqual, bvcint64(10)}, sqltypes.Int64BindVariable(10), false},
+	{BindVarCond{"a", true, true, QRNotEqual, bvcint64(10)}, sqltypes.Int64BindVariable(11), true},
+	{BindVarCond{"a", true, true, QRNotEqual, bvcint64(10)}, sqltypes.Uint64BindVariable(0xFFFFFFFFFFFFFFFF), true},
 
-	{BindVarCond{"a", true, true, QRLessThan, bvcint64(10)}, sqltypes.Int64BindVar(1), true},
-	{BindVarCond{"a", true, true, QRLessThan, bvcint64(10)}, sqltypes.Int64BindVar(10), false},
-	{BindVarCond{"a", true, true, QRLessThan, bvcint64(10)}, sqltypes.Int64BindVar(11), false},
-	{BindVarCond{"a", true, true, QRLessThan, bvcint64(10)}, sqltypes.Uint64BindVar(0xFFFFFFFFFFFFFFFF), false},
+	{BindVarCond{"a", true, true, QRLessThan, bvcint64(10)}, sqltypes.Int64BindVariable(1), true},
+	{BindVarCond{"a", true, true, QRLessThan, bvcint64(10)}, sqltypes.Int64BindVariable(10), false},
+	{BindVarCond{"a", true, true, QRLessThan, bvcint64(10)}, sqltypes.Int64BindVariable(11), false},
+	{BindVarCond{"a", true, true, QRLessThan, bvcint64(10)}, sqltypes.Uint64BindVariable(0xFFFFFFFFFFFFFFFF), false},
 
-	{BindVarCond{"a", true, true, QRGreaterEqual, bvcint64(10)}, sqltypes.Int64BindVar(1), false},
-	{BindVarCond{"a", true, true, QRGreaterEqual, bvcint64(10)}, sqltypes.Int64BindVar(10), true},
-	{BindVarCond{"a", true, true, QRGreaterEqual, bvcint64(10)}, sqltypes.Int64BindVar(11), true},
-	{BindVarCond{"a", true, true, QRGreaterEqual, bvcint64(10)}, sqltypes.Uint64BindVar(0xFFFFFFFFFFFFFFFF), true},
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcint64(10)}, sqltypes.Int64BindVariable(1), false},
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcint64(10)}, sqltypes.Int64BindVariable(10), true},
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcint64(10)}, sqltypes.Int64BindVariable(11), true},
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcint64(10)}, sqltypes.Uint64BindVariable(0xFFFFFFFFFFFFFFFF), true},
 
-	{BindVarCond{"a", true, true, QRGreaterThan, bvcint64(10)}, sqltypes.Int64BindVar(1), false},
-	{BindVarCond{"a", true, true, QRGreaterThan, bvcint64(10)}, sqltypes.Int64BindVar(10), false},
-	{BindVarCond{"a", true, true, QRGreaterThan, bvcint64(10)}, sqltypes.Int64BindVar(11), true},
-	{BindVarCond{"a", true, true, QRGreaterThan, bvcint64(10)}, sqltypes.Uint64BindVar(0xFFFFFFFFFFFFFFFF), true},
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcint64(10)}, sqltypes.Int64BindVariable(1), false},
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcint64(10)}, sqltypes.Int64BindVariable(10), false},
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcint64(10)}, sqltypes.Int64BindVariable(11), true},
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcint64(10)}, sqltypes.Uint64BindVariable(0xFFFFFFFFFFFFFFFF), true},
 
-	{BindVarCond{"a", true, true, QRLessEqual, bvcint64(10)}, sqltypes.Int64BindVar(1), true},
-	{BindVarCond{"a", true, true, QRLessEqual, bvcint64(10)}, sqltypes.Int64BindVar(10), true},
-	{BindVarCond{"a", true, true, QRLessEqual, bvcint64(10)}, sqltypes.Int64BindVar(11), false},
-	{BindVarCond{"a", true, true, QRLessEqual, bvcint64(10)}, sqltypes.Uint64BindVar(0xFFFFFFFFFFFFFFFF), false},
+	{BindVarCond{"a", true, true, QRLessEqual, bvcint64(10)}, sqltypes.Int64BindVariable(1), true},
+	{BindVarCond{"a", true, true, QRLessEqual, bvcint64(10)}, sqltypes.Int64BindVariable(10), true},
+	{BindVarCond{"a", true, true, QRLessEqual, bvcint64(10)}, sqltypes.Int64BindVariable(11), false},
+	{BindVarCond{"a", true, true, QRLessEqual, bvcint64(10)}, sqltypes.Uint64BindVariable(0xFFFFFFFFFFFFFFFF), false},
 
-	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, sqltypes.StringBindVar("a"), false},
-	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, sqltypes.StringBindVar("b"), true},
-	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, sqltypes.StringBindVar("c"), false},
-	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, sqltypes.BytesBindVar([]byte("a")), false},
-	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, sqltypes.BytesBindVar([]byte("b")), true},
-	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, sqltypes.BytesBindVar([]byte("c")), false},
-	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, sqltypes.Int64BindVar(1), false},
+	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, sqltypes.StringBindVariable("a"), false},
+	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, sqltypes.StringBindVariable("b"), true},
+	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, sqltypes.StringBindVariable("c"), false},
+	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, sqltypes.BytesBindVariable([]byte("a")), false},
+	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, sqltypes.BytesBindVariable([]byte("b")), true},
+	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, sqltypes.BytesBindVariable([]byte("c")), false},
+	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, sqltypes.Int64BindVariable(1), false},
 
-	{BindVarCond{"a", true, true, QRNotEqual, bvcstring("b")}, sqltypes.StringBindVar("a"), true},
-	{BindVarCond{"a", true, true, QRNotEqual, bvcstring("b")}, sqltypes.StringBindVar("b"), false},
-	{BindVarCond{"a", true, true, QRNotEqual, bvcstring("b")}, sqltypes.StringBindVar("c"), true},
+	{BindVarCond{"a", true, true, QRNotEqual, bvcstring("b")}, sqltypes.StringBindVariable("a"), true},
+	{BindVarCond{"a", true, true, QRNotEqual, bvcstring("b")}, sqltypes.StringBindVariable("b"), false},
+	{BindVarCond{"a", true, true, QRNotEqual, bvcstring("b")}, sqltypes.StringBindVariable("c"), true},
 
-	{BindVarCond{"a", true, true, QRLessThan, bvcstring("b")}, sqltypes.StringBindVar("a"), true},
-	{BindVarCond{"a", true, true, QRLessThan, bvcstring("b")}, sqltypes.StringBindVar("b"), false},
-	{BindVarCond{"a", true, true, QRLessThan, bvcstring("b")}, sqltypes.StringBindVar("c"), false},
+	{BindVarCond{"a", true, true, QRLessThan, bvcstring("b")}, sqltypes.StringBindVariable("a"), true},
+	{BindVarCond{"a", true, true, QRLessThan, bvcstring("b")}, sqltypes.StringBindVariable("b"), false},
+	{BindVarCond{"a", true, true, QRLessThan, bvcstring("b")}, sqltypes.StringBindVariable("c"), false},
 
-	{BindVarCond{"a", true, true, QRGreaterEqual, bvcstring("b")}, sqltypes.StringBindVar("a"), false},
-	{BindVarCond{"a", true, true, QRGreaterEqual, bvcstring("b")}, sqltypes.StringBindVar("b"), true},
-	{BindVarCond{"a", true, true, QRGreaterEqual, bvcstring("b")}, sqltypes.StringBindVar("c"), true},
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcstring("b")}, sqltypes.StringBindVariable("a"), false},
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcstring("b")}, sqltypes.StringBindVariable("b"), true},
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcstring("b")}, sqltypes.StringBindVariable("c"), true},
 
-	{BindVarCond{"a", true, true, QRGreaterThan, bvcstring("b")}, sqltypes.StringBindVar("a"), false},
-	{BindVarCond{"a", true, true, QRGreaterThan, bvcstring("b")}, sqltypes.StringBindVar("b"), false},
-	{BindVarCond{"a", true, true, QRGreaterThan, bvcstring("b")}, sqltypes.StringBindVar("c"), true},
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcstring("b")}, sqltypes.StringBindVariable("a"), false},
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcstring("b")}, sqltypes.StringBindVariable("b"), false},
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcstring("b")}, sqltypes.StringBindVariable("c"), true},
 
-	{BindVarCond{"a", true, true, QRLessEqual, bvcstring("b")}, sqltypes.StringBindVar("a"), true},
-	{BindVarCond{"a", true, true, QRLessEqual, bvcstring("b")}, sqltypes.StringBindVar("b"), true},
-	{BindVarCond{"a", true, true, QRLessEqual, bvcstring("b")}, sqltypes.StringBindVar("c"), false},
+	{BindVarCond{"a", true, true, QRLessEqual, bvcstring("b")}, sqltypes.StringBindVariable("a"), true},
+	{BindVarCond{"a", true, true, QRLessEqual, bvcstring("b")}, sqltypes.StringBindVariable("b"), true},
+	{BindVarCond{"a", true, true, QRLessEqual, bvcstring("b")}, sqltypes.StringBindVariable("c"), false},
 
-	{BindVarCond{"a", true, true, QRMatch, makere("a.*")}, sqltypes.StringBindVar("c"), false},
-	{BindVarCond{"a", true, true, QRMatch, makere("a.*")}, sqltypes.StringBindVar("a"), true},
-	{BindVarCond{"a", true, true, QRMatch, makere("a.*")}, sqltypes.Int64BindVar(1), false},
+	{BindVarCond{"a", true, true, QRMatch, makere("a.*")}, sqltypes.StringBindVariable("c"), false},
+	{BindVarCond{"a", true, true, QRMatch, makere("a.*")}, sqltypes.StringBindVariable("a"), true},
+	{BindVarCond{"a", true, true, QRMatch, makere("a.*")}, sqltypes.Int64BindVariable(1), false},
 
-	{BindVarCond{"a", true, true, QRNoMatch, makere("a.*")}, sqltypes.StringBindVar("c"), true},
-	{BindVarCond{"a", true, true, QRNoMatch, makere("a.*")}, sqltypes.StringBindVar("a"), false},
-	{BindVarCond{"a", true, true, QRNoMatch, makere("a.*")}, sqltypes.Int64BindVar(1), true},
+	{BindVarCond{"a", true, true, QRNoMatch, makere("a.*")}, sqltypes.StringBindVariable("c"), true},
+	{BindVarCond{"a", true, true, QRNoMatch, makere("a.*")}, sqltypes.StringBindVariable("a"), false},
+	{BindVarCond{"a", true, true, QRNoMatch, makere("a.*")}, sqltypes.Int64BindVariable(1), true},
 }
 
 func makere(s string) bvcre {
@@ -493,7 +493,7 @@ func TestAction(t *testing.T) {
 	qrs.Add(qr3)
 
 	bv := make(map[string]*querypb.BindVariable)
-	bv["a"] = sqltypes.Uint64BindVar(0)
+	bv["a"] = sqltypes.Uint64BindVariable(0)
 	action, desc := qrs.GetAction("123", "user1", bv)
 	if action != QRFail {
 		t.Errorf("want fail")
@@ -512,7 +512,7 @@ func TestAction(t *testing.T) {
 	if action != QRContinue {
 		t.Errorf("want continue")
 	}
-	bv["a"] = sqltypes.Uint64BindVar(1)
+	bv["a"] = sqltypes.Uint64BindVariable(1)
 	action, desc = qrs.GetAction("1234", "user1", bv)
 	if action != QRFail {
 		t.Errorf("want fail")

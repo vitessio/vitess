@@ -111,9 +111,9 @@ func MakeTestStreamingResults(fields []*querypb.Field, rows ...string) []*Result
 // This function should only be used for testing.
 func MakeTestBindVar(v interface{}) *querypb.BindVariable {
 	if v == nil {
-		return NullBV
+		return NullBindVariable
 	}
-	bv, err := BuildBindVar(v)
+	bv, err := BuildBindVariable(v)
 	if err != nil {
 		panic(err)
 	}

@@ -29,10 +29,10 @@ func TestBatchRead(t *testing.T) {
 	client := framework.NewClient()
 	queries := []*querypb.BoundQuery{{
 		Sql:           "select * from vitess_a where id = :a",
-		BindVariables: map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVar(2)},
+		BindVariables: map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(2)},
 	}, {
 		Sql:           "select * from vitess_b where id = :b",
-		BindVariables: map[string]*querypb.BindVariable{"b": sqltypes.Int64BindVar(2)},
+		BindVariables: map[string]*querypb.BindVariable{"b": sqltypes.Int64BindVariable(2)},
 	}}
 	qr1 := sqltypes.Result{
 		Fields: []*querypb.Field{{

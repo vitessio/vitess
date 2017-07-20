@@ -545,7 +545,7 @@ func TestMMGenerate(t *testing.T) {
 	if query != wantQuery {
 		t.Errorf("GenerateAckQuery query: %s, want %s", query, wantQuery)
 	}
-	bvv, _ := sqltypes.BindVarToValue(bv["time_acked"])
+	bvv, _ := sqltypes.BindVariableToValue(bv["time_acked"])
 	gotAcked, _ := bvv.ParseInt64()
 	wantAcked := time.Now().UnixNano()
 	if wantAcked-gotAcked > 10e9 {
@@ -569,7 +569,7 @@ func TestMMGenerate(t *testing.T) {
 		delete(bv, "time_now")
 	}
 	wantbv := map[string]*querypb.BindVariable{
-		"wait_time": sqltypes.Int64BindVar(1e9),
+		"wait_time": sqltypes.Int64BindVariable(1e9),
 		"ids":       wantids,
 	}
 	if !reflect.DeepEqual(bv, wantbv) {
@@ -582,7 +582,7 @@ func TestMMGenerate(t *testing.T) {
 		t.Errorf("GeneratePurgeQuery query: %s, want %s", query, wantQuery)
 	}
 	wantbv = map[string]*querypb.BindVariable{
-		"time_scheduled": sqltypes.Int64BindVar(3),
+		"time_scheduled": sqltypes.Int64BindVariable(3),
 	}
 	if !reflect.DeepEqual(bv, wantbv) {
 		t.Errorf("gotid: %v, want %v", bv, wantbv)

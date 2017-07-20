@@ -37,22 +37,22 @@ func TestParsedQuery(t *testing.T) {
 			desc:  "no substitutions",
 			query: "select * from a where id = 2",
 			bindVars: map[string]*querypb.BindVariable{
-				"id": sqltypes.Int64BindVar(1),
+				"id": sqltypes.Int64BindVariable(1),
 			},
 			output: "select * from a where id = 2",
 		}, {
 			desc:  "missing bind var",
 			query: "select * from a where id1 = :id1 and id2 = :id2",
 			bindVars: map[string]*querypb.BindVariable{
-				"id1": sqltypes.Int64BindVar(1),
+				"id1": sqltypes.Int64BindVariable(1),
 			},
 			output: "missing bind var id2",
 		}, {
 			desc:  "simple bindvar substitution",
 			query: "select * from a where id1 = :id1 and id2 = :id2",
 			bindVars: map[string]*querypb.BindVariable{
-				"id1": sqltypes.Int64BindVar(1),
-				"id2": sqltypes.NullBV,
+				"id1": sqltypes.Int64BindVariable(1),
+				"id2": sqltypes.NullBindVariable,
 			},
 			output: "select * from a where id1 = 1 and id2 = null",
 		}, {
@@ -73,7 +73,7 @@ func TestParsedQuery(t *testing.T) {
 			desc:  "non-list bind var supplied",
 			query: "select * from a where id in ::vals",
 			bindVars: map[string]*querypb.BindVariable{
-				"vals": sqltypes.Int64BindVar(1),
+				"vals": sqltypes.Int64BindVariable(1),
 			},
 			output: "unexpected list arg type (INT64) for key vals",
 		}, {

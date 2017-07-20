@@ -356,7 +356,7 @@ const ExecuteQuery = "executeQuery"
 
 // ExecuteBindVars is a test bind var.
 var ExecuteBindVars = map[string]*querypb.BindVariable{
-	"bind1": sqltypes.Int64BindVar(1114444),
+	"bind1": sqltypes.Int64BindVariable(1114444),
 }
 
 // ExecuteTransactionID is a test transaction id.
@@ -425,7 +425,7 @@ const StreamExecuteQuery = "streamExecuteQuery"
 
 // StreamExecuteBindVars is a test bind var for streaming.
 var StreamExecuteBindVars = map[string]*querypb.BindVariable{
-	"bind1": sqltypes.Int64BindVar(93848000),
+	"bind1": sqltypes.Int64BindVariable(93848000),
 }
 
 // StreamExecuteQueryResult1 is the first packet of a streaming result.
@@ -497,13 +497,13 @@ var ExecuteBatchQueries = []*querypb.BoundQuery{
 	{
 		Sql: "executeBatchQueries1",
 		BindVariables: map[string]*querypb.BindVariable{
-			"bind1": sqltypes.Int64BindVar(43),
+			"bind1": sqltypes.Int64BindVariable(43),
 		},
 	},
 	{
 		Sql: "executeBatchQueries2",
 		BindVariables: map[string]*querypb.BindVariable{
-			"bind2": sqltypes.Int64BindVar(72),
+			"bind2": sqltypes.Int64BindVariable(72),
 		},
 	},
 }
@@ -596,7 +596,7 @@ const SplitQuerySplitCount = 372
 var SplitQueryBoundQuery = &querypb.BoundQuery{
 	Sql: "splitQuery",
 	BindVariables: map[string]*querypb.BindVariable{
-		"bind1": sqltypes.Int64BindVar(43),
+		"bind1": sqltypes.Int64BindVariable(43),
 	},
 }
 
@@ -612,8 +612,8 @@ var SplitQueryQuerySplitList = []*querypb.QuerySplit{
 		Query: &querypb.BoundQuery{
 			Sql: "splitQuery",
 			BindVariables: map[string]*querypb.BindVariable{
-				"bind1":       sqltypes.Int64BindVar(43),
-				"keyspace_id": sqltypes.Int64BindVar(3333),
+				"bind1":       sqltypes.Int64BindVariable(43),
+				"keyspace_id": sqltypes.Int64BindVariable(3333),
 			},
 		},
 		RowCount: 4456,

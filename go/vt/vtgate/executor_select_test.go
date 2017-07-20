@@ -40,14 +40,14 @@ func TestSelectNext(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 
 	query := "select next :n values from user_seq"
-	bv := map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVar(2)}
+	bv := map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)}
 	_, err := executorExec(executor, query, bv)
 	if err != nil {
 		t.Error(err)
 	}
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           query,
-		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVar(2)},
+		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries:\n%v, want\n%v\n", sbclookup.Queries, wantQueries)
@@ -285,14 +285,14 @@ func TestSelectBindvars(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 
 	_, err := executorExec(executor, "select id from user where id = :id", map[string]*querypb.BindVariable{
-		"id": sqltypes.Int64BindVar(1),
+		"id": sqltypes.Int64BindVariable(1),
 	})
 	if err != nil {
 		t.Error(err)
 	}
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select id from user where id = :id",
-		BindVariables: map[string]*querypb.BindVariable{"id": sqltypes.Int64BindVar(1)},
+		BindVariables: map[string]*querypb.BindVariable{"id": sqltypes.Int64BindVariable(1)},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
@@ -303,8 +303,8 @@ func TestSelectBindvars(t *testing.T) {
 	sbc1.Queries = nil
 
 	_, err = executorExec(executor, "select id from user where name in (:name1, :name2)", map[string]*querypb.BindVariable{
-		"name1": sqltypes.StringBindVar("foo1"),
-		"name2": sqltypes.StringBindVar("foo2"),
+		"name1": sqltypes.StringBindVariable("foo1"),
+		"name2": sqltypes.StringBindVariable("foo2"),
 	})
 	if err != nil {
 		t.Error(err)
@@ -312,8 +312,8 @@ func TestSelectBindvars(t *testing.T) {
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select id from user where name in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name1":  sqltypes.StringBindVar("foo1"),
-			"name2":  sqltypes.StringBindVar("foo2"),
+			"name1":  sqltypes.StringBindVariable("foo1"),
+			"name2":  sqltypes.StringBindVariable("foo2"),
 			"__vals": sqltypes.MakeTestBindVar([]interface{}{"foo1", "foo2"}),
 		},
 	}}
@@ -323,8 +323,8 @@ func TestSelectBindvars(t *testing.T) {
 	sbc1.Queries = nil
 
 	_, err = executorExec(executor, "select id from user where name in (:name1, :name2)", map[string]*querypb.BindVariable{
-		"name1": sqltypes.BytesBindVar([]byte("foo1")),
-		"name2": sqltypes.BytesBindVar([]byte("foo2")),
+		"name1": sqltypes.BytesBindVariable([]byte("foo1")),
+		"name2": sqltypes.BytesBindVariable([]byte("foo2")),
 	})
 	if err != nil {
 		t.Error(err)
@@ -332,8 +332,8 @@ func TestSelectBindvars(t *testing.T) {
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select id from user where name in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name1":  sqltypes.BytesBindVar([]byte("foo1")),
-			"name2":  sqltypes.BytesBindVar([]byte("foo2")),
+			"name1":  sqltypes.BytesBindVariable([]byte("foo1")),
+			"name2":  sqltypes.BytesBindVariable([]byte("foo2")),
 			"__vals": sqltypes.MakeTestBindVar([]interface{}{[]byte("foo1"), []byte("foo2")}),
 		},
 	}}
@@ -413,7 +413,7 @@ func TestSelectEqual(t *testing.T) {
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select user_id from name_user_map where name = :name",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name": sqltypes.BytesBindVar([]byte("foo")),
+			"name": sqltypes.BytesBindVariable([]byte("foo")),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -673,7 +673,7 @@ func TestSelectIN(t *testing.T) {
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select user_id from name_user_map where name = :name",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name": sqltypes.BytesBindVar([]byte("foo")),
+			"name": sqltypes.BytesBindVariable([]byte("foo")),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -724,7 +724,7 @@ func TestStreamSelectIN(t *testing.T) {
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "select user_id from name_user_map where name = :name",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name": sqltypes.BytesBindVar([]byte("foo")),
+			"name": sqltypes.BytesBindVariable([]byte("foo")),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -748,7 +748,7 @@ func TestSelectINFail(t *testing.T) {
 	}
 
 	_, err = executorExec(executor, "select id from user where id in ::aa", map[string]*querypb.BindVariable{
-		"aa": sqltypes.Int64BindVar(1),
+		"aa": sqltypes.Int64BindVariable(1),
 	})
 	want = `paramsSelectIN: expecting list for bind var ::aa: type:INT64 value:"1" `
 	if err == nil || err.Error() != want {
@@ -1587,7 +1587,7 @@ func TestEmptyJoin(t *testing.T) {
 	}, {
 		Sql: "select u2.id from user as u2 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
-			"u1_col": sqltypes.NullBV,
+			"u1_col": sqltypes.NullBindVariable,
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -1627,7 +1627,7 @@ func TestEmptyJoinStream(t *testing.T) {
 	}, {
 		Sql: "select u2.id from user as u2 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
-			"u1_col": sqltypes.NullBV,
+			"u1_col": sqltypes.NullBindVariable,
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -1674,7 +1674,7 @@ func TestEmptyJoinRecursive(t *testing.T) {
 	}, {
 		Sql: "select u3.id from user as u3 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
-			"u2_col": sqltypes.NullBV,
+			"u2_col": sqltypes.NullBindVariable,
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -1722,7 +1722,7 @@ func TestEmptyJoinRecursiveStream(t *testing.T) {
 	}, {
 		Sql: "select u3.id from user as u3 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
-			"u2_col": sqltypes.NullBV,
+			"u2_col": sqltypes.NullBindVariable,
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -1945,7 +1945,7 @@ func TestCrossShardSubqueryGetFields(t *testing.T) {
 	}, {
 		Sql: "select u2.id from user as u2 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
-			"u1_col": sqltypes.NullBV,
+			"u1_col": sqltypes.NullBindVariable,
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {

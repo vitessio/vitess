@@ -62,8 +62,8 @@ func TestBindVars(t *testing.T) {
 			Value: "abcd",
 		}},
 		out: map[string]*querypb.BindVariable{
-			"n1": sqltypes.Int64BindVar(0),
-			"n2": sqltypes.StringBindVar("abcd"),
+			"n1": sqltypes.Int64BindVariable(0),
+			"n2": sqltypes.StringBindVariable("abcd"),
 		},
 	}, {
 		desc: "prefixed names",
@@ -75,8 +75,8 @@ func TestBindVars(t *testing.T) {
 			Value: "abcd",
 		}},
 		out: map[string]*querypb.BindVariable{
-			"n1": sqltypes.Int64BindVar(0),
-			"n2": sqltypes.StringBindVar("abcd"),
+			"n1": sqltypes.Int64BindVariable(0),
+			"n2": sqltypes.StringBindVariable("abcd"),
 		},
 	}, {
 		desc: "all positional",
@@ -88,8 +88,8 @@ func TestBindVars(t *testing.T) {
 			Value:   "abcd",
 		}},
 		out: map[string]*querypb.BindVariable{
-			"v1": sqltypes.Int64BindVar(0),
-			"v2": sqltypes.StringBindVar("abcd"),
+			"v1": sqltypes.Int64BindVariable(0),
+			"v2": sqltypes.StringBindVariable("abcd"),
 		},
 	}, {
 		desc: "name, then position",

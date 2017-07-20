@@ -39,7 +39,7 @@ func Example() {
 	splitParams, err := NewSplitParamsGivenSplitCount(
 		&querypb.BoundQuery{
 			Sql:           "SELECT * FROM table WHERE id > :id",
-			BindVariables: map[string]*querypb.BindVariable{"id": sqltypes.Int64BindVar(5)},
+			BindVariables: map[string]*querypb.BindVariable{"id": sqltypes.Int64BindVariable(5)},
 		},
 		[]sqlparser.ColIdent{
 			sqlparser.NewColIdent("id"),

@@ -180,9 +180,9 @@ func (w *Writer) initializeTables(cp *mysql.ConnParams) error {
 // to protect ourselves against a badly formed keyspace or shard name.
 func (w *Writer) bindHeartbeatVars(query string) (string, error) {
 	bindVars := map[string]*querypb.BindVariable{
-		"ks":  sqltypes.StringBindVar(w.keyspaceShard),
-		"ts":  sqltypes.Int64BindVar(w.now().UnixNano()),
-		"uid": sqltypes.Int64BindVar(int64(w.tabletAlias.Uid)),
+		"ks":  sqltypes.StringBindVariable(w.keyspaceShard),
+		"ts":  sqltypes.Int64BindVariable(w.now().UnixNano()),
+		"uid": sqltypes.Int64BindVariable(int64(w.tabletAlias.Uid)),
 	}
 	parsed := sqlparser.BuildParsedQuery(query, w.dbName, ":ts", ":uid", ":ks")
 	bound, err := parsed.GenerateQuery(bindVars, nil)

@@ -706,7 +706,7 @@ func (route *Route) resolveShards(vcursor VCursor, bindVars map[string]*querypb.
 			if err != nil {
 				return "", nil, err
 			}
-			bv, err := sqltypes.BuildBindVar(vindexKeys[i])
+			bv, err := sqltypes.BuildBindVariable(vindexKeys[i])
 			if err != nil {
 				return "", nil, err
 			}
@@ -723,7 +723,7 @@ func (route *Route) resolveShards(vcursor VCursor, bindVars map[string]*querypb.
 				if err != nil {
 					return "", nil, err
 				}
-				bv, err := sqltypes.BuildBindVar(vindexKeys[i])
+				bv, err := sqltypes.BuildBindVariable(vindexKeys[i])
 				if err != nil {
 					return "", nil, err
 				}
@@ -823,7 +823,7 @@ func (route *Route) handleGenerate(vcursor VCursor, bindVars map[string]*querypb
 		if err != nil {
 			return 0, fmt.Errorf("handleGenerate: %v", err)
 		}
-		bv, _ := sqltypes.BuildBindVar(count)
+		bv, _ := sqltypes.BuildBindVariable(count)
 		bindVars := map[string]*querypb.BindVariable{"n": bv}
 		qr, err := vcursor.ExecuteStandalone(route.Generate.Query, bindVars, ks, shard)
 		if err != nil {
@@ -842,10 +842,10 @@ func (route *Route) handleGenerate(vcursor VCursor, bindVars map[string]*querypb
 	for i, v := range resolved {
 		if v != nil {
 			// TODO(sougou): This shouldn't be needed after full refactor.
-			bv, _ := sqltypes.BuildBindVar(v)
+			bv, _ := sqltypes.BuildBindVariable(v)
 			bindVars[SeqVarName+strconv.Itoa(i)] = bv
 		} else {
-			bv, _ := sqltypes.BuildBindVar(cur)
+			bv, _ := sqltypes.BuildBindVariable(cur)
 			bindVars[SeqVarName+strconv.Itoa(i)] = bv
 			cur++
 		}
@@ -871,7 +871,7 @@ func (route *Route) handlePrimary(vcursor VCursor, vindexKeys []interface{}, col
 		if len(keyspaceIDs[rowNum]) == 0 {
 			return nil, fmt.Errorf("could not map %v to a keyspace id", vindexKey)
 		}
-		keybv, err := sqltypes.BuildBindVar(vindexKey)
+		keybv, err := sqltypes.BuildBindVariable(vindexKey)
 		if err != nil {
 			return nil, err
 		}
@@ -886,7 +886,7 @@ func (route *Route) handleNonPrimary(vcursor VCursor, vindexKeys []interface{}, 
 			if vindexKey == nil {
 				return fmt.Errorf("value must be supplied for column %v", colVindex.Column)
 			}
-			keybv, err := sqltypes.BuildBindVar(vindexKey)
+			keybv, err := sqltypes.BuildBindVariable(vindexKey)
 			if err != nil {
 				return err
 			}
@@ -904,7 +904,7 @@ func (route *Route) handleNonPrimary(vcursor VCursor, vindexKeys []interface{}, 
 				reverseKsids = append(reverseKsids, ksids[rowNum])
 			} else {
 				verifyKsids = append(verifyKsids, ksids[rowNum])
-				keybv, err := sqltypes.BuildBindVar(vindexKey)
+				keybv, err := sqltypes.BuildBindVariable(vindexKey)
 				if err != nil {
 					return err
 				}
@@ -922,7 +922,7 @@ func (route *Route) handleNonPrimary(vcursor VCursor, vindexKeys []interface{}, 
 				return err
 			}
 			for rowNum, vindexKey := range vindexKeys {
-				keybv, err := sqltypes.BuildBindVar(vindexKey)
+				keybv, err := sqltypes.BuildBindVariable(vindexKey)
 				if err != nil {
 					return err
 				}

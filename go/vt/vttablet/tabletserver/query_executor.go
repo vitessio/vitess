@@ -456,7 +456,7 @@ func (qre *QueryExecutor) execInsertPK(conn *TxConnection) (*sqltypes.Result, er
 }
 
 func (qre *QueryExecutor) execInsertMessage(conn *TxConnection) (*sqltypes.Result, error) {
-	qre.bindVars["#time_now"] = sqltypes.Int64BindVar(time.Now().UnixNano())
+	qre.bindVars["#time_now"] = sqltypes.Int64BindVariable(time.Now().UnixNano())
 	pkRows, err := buildValueList(qre.plan.Table, qre.plan.PKValues, qre.bindVars)
 	if err != nil {
 		return nil, err
@@ -729,7 +729,7 @@ func (qre *QueryExecutor) streamFetch(conn *connpool.DBConn, parsedQuery *sqlpar
 }
 
 func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable, extras map[string]sqlparser.Encodable, buildStreamComment []byte) (string, error) {
-	bindVars["#maxLimit"] = sqltypes.Int64BindVar(qre.tsv.qe.maxResultSize.Get() + 1)
+	bindVars["#maxLimit"] = sqltypes.Int64BindVariable(qre.tsv.qe.maxResultSize.Get() + 1)
 	sql, err := parsedQuery.GenerateQuery(bindVars, extras)
 	if err != nil {
 		return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)

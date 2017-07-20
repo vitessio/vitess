@@ -408,8 +408,8 @@ func (mm *messageManager) runPoller() {
 
 		size := mm.cache.Size()
 		bindVars := map[string]*querypb.BindVariable{
-			"time_next": sqltypes.Int64BindVar(time.Now().UnixNano()),
-			"max":       sqltypes.Int64BindVar(int64(size)),
+			"time_next": sqltypes.Int64BindVariable(time.Now().UnixNano()),
+			"max":       sqltypes.Int64BindVariable(int64(size)),
 		}
 		qr, err := mm.read(ctx, conn, mm.readByTimeNext, bindVars)
 		if err != nil {
@@ -486,7 +486,7 @@ func (mm *messageManager) GenerateAckQuery(ids []string) (string, map[string]*qu
 		})
 	}
 	return mm.ackQuery.Query, map[string]*querypb.BindVariable{
-		"time_acked": sqltypes.Int64BindVar(time.Now().UnixNano()),
+		"time_acked": sqltypes.Int64BindVariable(time.Now().UnixNano()),
 		"ids":        idbvs,
 	}
 }
@@ -504,8 +504,8 @@ func (mm *messageManager) GeneratePostponeQuery(ids []string) (string, map[strin
 		})
 	}
 	return mm.postponeQuery.Query, map[string]*querypb.BindVariable{
-		"time_now":  sqltypes.Int64BindVar(time.Now().UnixNano()),
-		"wait_time": sqltypes.Int64BindVar(int64(mm.ackWaitTime)),
+		"time_now":  sqltypes.Int64BindVariable(time.Now().UnixNano()),
+		"wait_time": sqltypes.Int64BindVariable(int64(mm.ackWaitTime)),
 		"ids":       idbvs,
 	}
 }
@@ -513,7 +513,7 @@ func (mm *messageManager) GeneratePostponeQuery(ids []string) (string, map[strin
 // GeneratePurgeQuery returns the query and bind vars for purging messages.
 func (mm *messageManager) GeneratePurgeQuery(timeCutoff int64) (string, map[string]*querypb.BindVariable) {
 	return mm.purgeQuery.Query, map[string]*querypb.BindVariable{
-		"time_scheduled": sqltypes.Int64BindVar(timeCutoff),
+		"time_scheduled": sqltypes.Int64BindVariable(timeCutoff),
 	}
 }
 

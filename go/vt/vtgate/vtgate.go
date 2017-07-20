@@ -226,7 +226,7 @@ func (vtg *VTGate) Execute(ctx context.Context, session *vtgatepb.Session, sql s
 	statsKey := []string{"Execute", target.Keyspace, topoproto.TabletTypeLString(target.TabletType)}
 	defer vtg.timings.Record(statsKey, time.Now())
 
-	if bvErr := sqltypes.ValidateBindVars(bindVariables); bvErr != nil {
+	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 		goto handleError
 	}
@@ -254,7 +254,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 	defer vtg.timings.Record(statsKey, time.Now())
 
 	for _, bindVariables := range bindVariablesList {
-		if bvErr := sqltypes.ValidateBindVars(bindVariables); bvErr != nil {
+		if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 			return session, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 		}
 	}
@@ -280,7 +280,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 	defer vtg.timings.Record(statsKey, time.Now())
 
 	var err error
-	if bvErr := sqltypes.ValidateBindVars(bindVariables); bvErr != nil {
+	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 		goto handleError
 	}
@@ -335,7 +335,7 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables 
 	var qr *sqltypes.Result
 	var err error
 
-	if bvErr := sqltypes.ValidateBindVars(bindVariables); bvErr != nil {
+	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 		goto handleError
 	}
@@ -385,7 +385,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVaria
 	var qr *sqltypes.Result
 	var err error
 
-	if bvErr := sqltypes.ValidateBindVars(bindVariables); bvErr != nil {
+	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 		goto handleError
 	}
@@ -423,7 +423,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, sql string, bindVariabl
 	var qr *sqltypes.Result
 	var err error
 
-	if bvErr := sqltypes.ValidateBindVars(bindVariables); bvErr != nil {
+	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 		goto handleError
 	}
@@ -461,7 +461,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, sql string, bindVariabl
 	var qr *sqltypes.Result
 	var err error
 
-	if bvErr := sqltypes.ValidateBindVars(bindVariables); bvErr != nil {
+	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 		goto handleError
 	}
@@ -501,7 +501,7 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.B
 	var err error
 
 	for _, query := range queries {
-		if bvErr := sqltypes.ValidateBindVars(query.Query.BindVariables); bvErr != nil {
+		if bvErr := sqltypes.ValidateBindVariables(query.Query.BindVariables); bvErr != nil {
 			err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 			goto handleError
 		}
@@ -550,7 +550,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgat
 	var err error
 
 	for _, query := range queries {
-		if bvErr := sqltypes.ValidateBindVars(query.Query.BindVariables); bvErr != nil {
+		if bvErr := sqltypes.ValidateBindVariables(query.Query.BindVariables); bvErr != nil {
 			err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 			goto handleError
 		}
@@ -600,7 +600,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bin
 
 	var err error
 
-	if bvErr := sqltypes.ValidateBindVars(bindVariables); bvErr != nil {
+	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 		goto handleError
 	}
@@ -647,7 +647,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, sql string, bindV
 
 	var err error
 
-	if bvErr := sqltypes.ValidateBindVars(bindVariables); bvErr != nil {
+	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 		goto handleError
 	}
@@ -689,7 +689,7 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 
 	var err error
 
-	if bvErr := sqltypes.ValidateBindVars(bindVariables); bvErr != nil {
+	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 		goto handleError
 	}
@@ -794,7 +794,7 @@ func (vtg *VTGate) SplitQuery(
 	numRowsPerQueryPart int64,
 	algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 
-	if bvErr := sqltypes.ValidateBindVars(bindVariables); bvErr != nil {
+	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 	}
 

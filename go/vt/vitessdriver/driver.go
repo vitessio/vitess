@@ -271,7 +271,7 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 func buildBindVars(args []driver.Value) (map[string]*querypb.BindVariable, error) {
 	bindVars := make(map[string]*querypb.BindVariable, len(args))
 	for i, v := range args {
-		bv, err := sqltypes.BuildBindVar(v)
+		bv, err := sqltypes.BuildBindVariable(v)
 		if err != nil {
 			return nil, err
 		}

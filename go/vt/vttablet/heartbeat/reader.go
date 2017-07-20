@@ -183,7 +183,7 @@ func (r *Reader) fetchMostRecentHeartbeat(ctx context.Context) (*sqltypes.Result
 // against a badly formed keyspace or shard name.
 func (r *Reader) bindHeartbeatFetch() (string, error) {
 	bindVars := map[string]*querypb.BindVariable{
-		"ks": sqltypes.StringBindVar(r.keyspaceShard),
+		"ks": sqltypes.StringBindVariable(r.keyspaceShard),
 	}
 	parsed := sqlparser.BuildParsedQuery(sqlFetchMostRecentHeartbeat, r.dbName, ":ks")
 	bound, err := parsed.GenerateQuery(bindVars, nil)

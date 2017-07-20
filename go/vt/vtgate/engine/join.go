@@ -57,7 +57,7 @@ func (jn *Join) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.
 	result := &sqltypes.Result{}
 	if len(lresult.Rows) == 0 && wantfields {
 		for k := range jn.Vars {
-			joinVars[k] = sqltypes.NullBV
+			joinVars[k] = sqltypes.NullBindVariable
 		}
 		rresult, err := jn.Right.GetFields(vcursor, bindVars, joinVars)
 		if err != nil {
@@ -68,7 +68,7 @@ func (jn *Join) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.
 	}
 	for _, lrow := range lresult.Rows {
 		for k, col := range jn.Vars {
-			joinVars[k] = sqltypes.ValueBindVar(lrow[col])
+			joinVars[k] = sqltypes.ValueBindVariable(lrow[col])
 		}
 		rresult, err := jn.Right.Execute(vcursor, bindVars, joinVars, wantfields)
 		if err != nil {
@@ -96,7 +96,7 @@ func (jn *Join) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]*qu
 	err := jn.Left.StreamExecute(vcursor, bindVars, joinVars, wantfields, func(lresult *sqltypes.Result) error {
 		for _, lrow := range lresult.Rows {
 			for k, col := range jn.Vars {
-				joinVars[k] = sqltypes.ValueBindVar(lrow[col])
+				joinVars[k] = sqltypes.ValueBindVariable(lrow[col])
 			}
 			rowSent := false
 			err := jn.Right.StreamExecute(vcursor, bindVars, joinVars, wantfields, func(rresult *sqltypes.Result) error {
@@ -133,7 +133,7 @@ func (jn *Join) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]*qu
 		if wantfields {
 			wantfields = false
 			for k := range jn.Vars {
-				joinVars[k] = sqltypes.NullBV
+				joinVars[k] = sqltypes.NullBindVariable
 			}
 			result := &sqltypes.Result{}
 			rresult, err := jn.Right.GetFields(vcursor, bindVars, joinVars)
@@ -156,7 +156,7 @@ func (jn *Join) GetFields(vcursor VCursor, bindVars, joinVars map[string]*queryp
 	}
 	result := &sqltypes.Result{}
 	for k := range jn.Vars {
-		joinVars[k] = sqltypes.NullBV
+		joinVars[k] = sqltypes.NullBindVariable
 	}
 	rresult, err := jn.Right.GetFields(vcursor, bindVars, joinVars)
 	if err != nil {

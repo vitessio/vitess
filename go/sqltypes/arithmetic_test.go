@@ -209,7 +209,7 @@ func TestConvertToUint64(t *testing.T) {
 		v:   makeInt(1),
 		out: 1,
 	}, {
-		v:   Int64BindVar(1),
+		v:   Int64BindVariable(1),
 		out: 1,
 	}, {
 		v:   MakeTestBindVar([]interface{}{}),

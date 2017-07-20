@@ -692,7 +692,7 @@ func (reval bvcre) eval(bv *querypb.BindVariable, op Operator, onMismatch bool) 
 
 // getuint64 returns QROutOfRange for negative values
 func getuint64(val *querypb.BindVariable) (uv uint64, status int) {
-	bv, err := sqltypes.BindVarToValue(val)
+	bv, err := sqltypes.BindVariableToValue(val)
 	if err != nil {
 		return 0, QROutOfRange
 	}
@@ -705,7 +705,7 @@ func getuint64(val *querypb.BindVariable) (uv uint64, status int) {
 
 // getint64 returns QROutOfRange if a uint64 is too large
 func getint64(val *querypb.BindVariable) (iv int64, status int) {
-	bv, err := sqltypes.BindVarToValue(val)
+	bv, err := sqltypes.BindVariableToValue(val)
 	if err != nil {
 		return 0, QROutOfRange
 	}

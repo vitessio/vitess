@@ -262,7 +262,7 @@ var execMap = map[string]struct {
 		execQuery: &queryExecute{
 			SQL: "request",
 			BindVariables: map[string]*querypb.BindVariable{
-				"v1": sqltypes.Int64BindVar(0),
+				"v1": sqltypes.Int64BindVariable(0),
 			},
 			Session: &vtgatepb.Session{
 				TargetString: "@rdonly",
@@ -275,7 +275,7 @@ var execMap = map[string]struct {
 		execQuery: &queryExecute{
 			SQL: "txRequest",
 			BindVariables: map[string]*querypb.BindVariable{
-				"v1": sqltypes.Int64BindVar(0),
+				"v1": sqltypes.Int64BindVariable(0),
 			},
 			Session: session1,
 		},

@@ -539,7 +539,7 @@ func TestResolverBuildEntityIds(t *testing.T) {
 	sql := "select a from table where id=:id"
 	entityColName := "uid"
 	bindVar := map[string]*querypb.BindVariable{
-		"id": sqltypes.Int64BindVar(10),
+		"id": sqltypes.Int64BindVariable(10),
 	}
 	shards, sqls, bindVars := buildEntityIds(shardMap, sql, entityColName, bindVar)
 	wantShards := []string{"-20", "20-40"}
@@ -548,8 +548,8 @@ func TestResolverBuildEntityIds(t *testing.T) {
 		"20-40": "select a from table where id=:id and uid in ::uid_entity_ids",
 	}
 	wantBindVars := map[string]map[string]*querypb.BindVariable{
-		"-20":   {"id": sqltypes.Int64BindVar(10), "uid_entity_ids": sqltypes.MakeTestBindVar([]interface{}{"0", 1})},
-		"20-40": {"id": sqltypes.Int64BindVar(10), "uid_entity_ids": sqltypes.MakeTestBindVar([]interface{}{"2"})},
+		"-20":   {"id": sqltypes.Int64BindVariable(10), "uid_entity_ids": sqltypes.MakeTestBindVar([]interface{}{"0", 1})},
+		"20-40": {"id": sqltypes.Int64BindVariable(10), "uid_entity_ids": sqltypes.MakeTestBindVar([]interface{}{"2"})},
 	}
 	sort.Strings(wantShards)
 	sort.Strings(shards)

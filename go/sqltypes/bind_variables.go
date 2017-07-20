@@ -26,18 +26,18 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
-// NullBV is a bindvar with NULL value.
-var NullBV = &querypb.BindVariable{Type: querypb.Type_NULL_TYPE}
+// NullBindVariable is a bindvar with NULL value.
+var NullBindVariable = &querypb.BindVariable{Type: querypb.Type_NULL_TYPE}
 
-// BuildBindVars builds a map[string]*querypb.BindVariable from a map[string]interface{}.
-func BuildBindVars(in map[string]interface{}) (map[string]*querypb.BindVariable, error) {
+// BuildBindVariables builds a map[string]*querypb.BindVariable from a map[string]interface{}.
+func BuildBindVariables(in map[string]interface{}) (map[string]*querypb.BindVariable, error) {
 	if len(in) == 0 {
 		return nil, nil
 	}
 
 	out := make(map[string]*querypb.BindVariable, len(in))
 	for k, v := range in {
-		bv, err := BuildBindVar(v)
+		bv, err := BuildBindVariable(v)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %v", k, err)
 		}
@@ -46,76 +46,76 @@ func BuildBindVars(in map[string]interface{}) (map[string]*querypb.BindVariable,
 	return out, nil
 }
 
-// Int64BindVar converts an int64 to a bind var.
-func Int64BindVar(v int64) *querypb.BindVariable {
+// Int64BindVariable converts an int64 to a bind var.
+func Int64BindVariable(v int64) *querypb.BindVariable {
 	return &querypb.BindVariable{
 		Type:  querypb.Type_INT64,
 		Value: strconv.AppendInt(nil, v, 10),
 	}
 }
 
-// Uint64BindVar converts a uint64 to a bind var.
-func Uint64BindVar(v uint64) *querypb.BindVariable {
+// Uint64BindVariable converts a uint64 to a bind var.
+func Uint64BindVariable(v uint64) *querypb.BindVariable {
 	return &querypb.BindVariable{
 		Type:  querypb.Type_UINT64,
 		Value: strconv.AppendUint(nil, v, 10),
 	}
 }
 
-// Float64BindVar converts a float64 to a bind var.
-func Float64BindVar(v float64) *querypb.BindVariable {
+// Float64BindVariable converts a float64 to a bind var.
+func Float64BindVariable(v float64) *querypb.BindVariable {
 	return &querypb.BindVariable{
 		Type:  querypb.Type_FLOAT64,
 		Value: strconv.AppendFloat(nil, v, 'g', -1, 64),
 	}
 }
 
-// StringBindVar converts a string to a bind var.
-func StringBindVar(v string) *querypb.BindVariable {
+// StringBindVariable converts a string to a bind var.
+func StringBindVariable(v string) *querypb.BindVariable {
 	return &querypb.BindVariable{
 		Type:  querypb.Type_VARCHAR,
 		Value: []byte(v),
 	}
 }
 
-// BytesBindVar converts a []byte to a bind var.
-func BytesBindVar(v []byte) *querypb.BindVariable {
+// BytesBindVariable converts a []byte to a bind var.
+func BytesBindVariable(v []byte) *querypb.BindVariable {
 	return &querypb.BindVariable{
 		Type:  querypb.Type_VARBINARY,
 		Value: v,
 	}
 }
 
-// ValueBindVar converts a Value to a bind var.
-func ValueBindVar(v Value) *querypb.BindVariable {
+// ValueBindVariable converts a Value to a bind var.
+func ValueBindVariable(v Value) *querypb.BindVariable {
 	return &querypb.BindVariable{
 		Type:  v.typ,
 		Value: v.val,
 	}
 }
 
-// BuildBindVar builds a *querypb.BindVariable from a valid input type.
-func BuildBindVar(v interface{}) (*querypb.BindVariable, error) {
+// BuildBindVariable builds a *querypb.BindVariable from a valid input type.
+func BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
 	switch v := v.(type) {
 	case string:
-		return StringBindVar(v), nil
+		return StringBindVariable(v), nil
 	case []byte:
-		return BytesBindVar(v), nil
+		return BytesBindVariable(v), nil
 	case int:
 		return &querypb.BindVariable{
 			Type:  querypb.Type_INT64,
 			Value: strconv.AppendInt(nil, int64(v), 10),
 		}, nil
 	case int64:
-		return Int64BindVar(v), nil
+		return Int64BindVariable(v), nil
 	case uint64:
-		return Uint64BindVar(v), nil
+		return Uint64BindVariable(v), nil
 	case float64:
-		return Float64BindVar(v), nil
+		return Float64BindVariable(v), nil
 	case nil:
-		return NullBV, nil
+		return NullBindVariable, nil
 	case Value:
-		return ValueBindVar(v), nil
+		return ValueBindVariable(v), nil
 	case *querypb.BindVariable:
 		return v, nil
 	case []interface{}:
@@ -125,7 +125,7 @@ func BuildBindVar(v interface{}) (*querypb.BindVariable, error) {
 		}
 		values := make([]querypb.Value, len(v))
 		for i, lv := range v {
-			lbv, err := BuildBindVar(lv)
+			lbv, err := BuildBindVariable(lv)
 			if err != nil {
 				return nil, err
 			}
@@ -210,19 +210,19 @@ func BuildBindVar(v interface{}) (*querypb.BindVariable, error) {
 	return nil, fmt.Errorf("type %T not supported as bind var: %v", v, v)
 }
 
-// ValidateBindVars validates a map[string]*querypb.BindVariable.
-func ValidateBindVars(bv map[string]*querypb.BindVariable) error {
+// ValidateBindVariables validates a map[string]*querypb.BindVariable.
+func ValidateBindVariables(bv map[string]*querypb.BindVariable) error {
 	for k, v := range bv {
-		if err := ValidateBindVar(v); err != nil {
+		if err := ValidateBindVariable(v); err != nil {
 			return fmt.Errorf("%s: %v", k, err)
 		}
 	}
 	return nil
 }
 
-// ValidateBindVar returns an error if the bind variable has inconsistent
+// ValidateBindVariable returns an error if the bind variable has inconsistent
 // fields.
-func ValidateBindVar(bv *querypb.BindVariable) error {
+func ValidateBindVariable(bv *querypb.BindVariable) error {
 	if bv == nil {
 		return errors.New("bind variable is nil")
 	}
@@ -235,7 +235,7 @@ func ValidateBindVar(bv *querypb.BindVariable) error {
 			if val.Type == Tuple {
 				return errors.New("tuple not allowed inside another tuple")
 			}
-			if err := ValidateBindVar(&querypb.BindVariable{Type: val.Type, Value: val.Value}); err != nil {
+			if err := ValidateBindVariable(&querypb.BindVariable{Type: val.Type, Value: val.Value}); err != nil {
 				return err
 			}
 		}
@@ -264,8 +264,8 @@ func ValidateBindVar(bv *querypb.BindVariable) error {
 	return nil
 }
 
-// BindVarToValue converts a bind var into a Value.
-func BindVarToValue(bv *querypb.BindVariable) (Value, error) {
+// BindVariableToValue converts a bind var into a Value.
+func BindVariableToValue(bv *querypb.BindVariable) (Value, error) {
 	if bv.Type == querypb.Type_TUPLE {
 		return NULL, errors.New("cannot convert a TUPLE bind var into a value")
 	}
@@ -276,4 +276,13 @@ func BindVarToValue(bv *querypb.BindVariable) (Value, error) {
 // For protobuf messages we have to use "proto.Equal".
 func BindVariablesEqual(x, y map[string]*querypb.BindVariable) bool {
 	return proto.Equal(&querypb.BoundQuery{BindVariables: x}, &querypb.BoundQuery{BindVariables: y})
+}
+
+// CopyBindVariables returns a shallow-copy of the given bindVariables map.
+func CopyBindVariables(bindVariables map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {
+	result := make(map[string]*querypb.BindVariable, len(bindVariables))
+	for key, value := range bindVariables {
+		result[key] = value
+	}
+	return result
 }
