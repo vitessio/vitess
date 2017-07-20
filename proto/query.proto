@@ -223,7 +223,8 @@ message BoundQuery {
   // sql is the SQL query to execute
   string sql = 1;
 
-  // bind_variables is a map of all bind variables to expand in the query
+  // bind_variables is a map of all bind variables to expand in the query.
+  // nil values are not allowed. Use NULL_TYPE to express a NULL value.
   map<string, BindVariable> bind_variables = 2;
 }
 

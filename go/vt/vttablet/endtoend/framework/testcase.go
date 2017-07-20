@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // Testable restricts the types that can be added to
@@ -66,7 +67,7 @@ type TestCase struct {
 
 	// Query and BindVars are the input.
 	Query    string
-	BindVars map[string]interface{}
+	BindVars map[string]*querypb.BindVariable
 
 	// Result is the list of rows that must be returned.
 	// It's represented as 2-d strings. They byte values
@@ -158,7 +159,7 @@ func (tc *TestCase) Test(name string, client *QueryClient) error {
 	return nil
 }
 
-func exec(client *QueryClient, query string, bv map[string]interface{}) (*sqltypes.Result, error) {
+func exec(client *QueryClient, query string, bv map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	switch query {
 	case "begin":
 		return nil, client.Begin(false)

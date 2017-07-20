@@ -22,7 +22,9 @@ import (
 
 	"strings"
 
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/sqltypes"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var lookupUnique Vindex
@@ -69,11 +71,11 @@ func TestLookupNonUniqueString(t *testing.T) {
 func TestLookupUniqueVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
 	_, err := lookupUnique.Verify(vc, []interface{}{1}, [][]byte{[]byte("test")})
-	wantQuery := &querytypes.BoundQuery{
+	wantQuery := &querypb.BoundQuery{
 		Sql: "select fromc from t where ((fromc=:fromc0 and toc=:toc0))",
-		BindVariables: map[string]interface{}{
-			"fromc0": 1,
-			"toc0":   []byte("test"),
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc0": sqltypes.Int64BindVar(1),
+			"toc0":   sqltypes.BytesBindVar([]byte("test")),
 		},
 	}
 	if err != nil {
@@ -103,10 +105,10 @@ func TestLookupUniqueMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &querytypes.BoundQuery{
+	wantQuery := &querypb.BoundQuery{
 		Sql: "select toc from t where fromc = :fromc",
-		BindVariables: map[string]interface{}{
-			"fromc": 2,
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc": sqltypes.Int64BindVar(2),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
@@ -120,11 +122,11 @@ func TestLookupUniqueCreate(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &querytypes.BoundQuery{
+	wantQuery := &querypb.BoundQuery{
 		Sql: "insert into t(fromc,toc) values(:fromc0,:toc0)",
-		BindVariables: map[string]interface{}{
-			"fromc0": 1,
-			"toc0":   []byte("test"),
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc0": sqltypes.Int64BindVar(1),
+			"toc0":   sqltypes.BytesBindVar([]byte("test")),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
@@ -158,11 +160,11 @@ func TestLookupUniqueDelete(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &querytypes.BoundQuery{
+	wantQuery := &querypb.BoundQuery{
 		Sql: "delete from t where fromc = :fromc and toc = :toc",
-		BindVariables: map[string]interface{}{
-			"fromc": 1,
-			"toc":   []byte("test"),
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc": sqltypes.Int64BindVar(1),
+			"toc":   sqltypes.BytesBindVar([]byte("test")),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
@@ -180,11 +182,11 @@ func TestLookupUniqueDelete(t *testing.T) {
 func TestLookupNonUniqueVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
 	_, err := lookupNonUnique.Verify(vc, []interface{}{1}, [][]byte{[]byte("test")})
-	wantQuery := &querytypes.BoundQuery{
+	wantQuery := &querypb.BoundQuery{
 		Sql: "select fromc from t where ((fromc=:fromc0 and toc=:toc0))",
-		BindVariables: map[string]interface{}{
-			"fromc0": 1,
-			"toc0":   []byte("test"),
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc0": sqltypes.Int64BindVar(1),
+			"toc0":   sqltypes.BytesBindVar([]byte("test")),
 		},
 	}
 	if err != nil {
@@ -201,10 +203,10 @@ func TestLookupNonUniqueMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &querytypes.BoundQuery{
+	wantQuery := &querypb.BoundQuery{
 		Sql: "select toc from t where fromc = :fromc",
-		BindVariables: map[string]interface{}{
-			"fromc": 2,
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc": sqltypes.Int64BindVar(2),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
@@ -218,11 +220,11 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &querytypes.BoundQuery{
+	wantQuery := &querypb.BoundQuery{
 		Sql: "insert into t(fromc,toc) values(:fromc0,:toc0)",
-		BindVariables: map[string]interface{}{
-			"fromc0": 1,
-			"toc0":   []byte("test"),
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc0": sqltypes.Int64BindVar(1),
+			"toc0":   sqltypes.BytesBindVar([]byte("test")),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
@@ -243,11 +245,11 @@ func TestLookupNonUniqueDelete(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &querytypes.BoundQuery{
+	wantQuery := &querypb.BoundQuery{
 		Sql: "delete from t where fromc = :fromc and toc = :toc",
-		BindVariables: map[string]interface{}{
-			"fromc": 1,
-			"toc":   []byte("test"),
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc": sqltypes.Int64BindVar(1),
+			"toc":   sqltypes.BytesBindVar([]byte("test")),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {

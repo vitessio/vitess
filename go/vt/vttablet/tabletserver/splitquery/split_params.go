@@ -21,9 +21,9 @@ import (
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -34,7 +34,7 @@ type SplitParams struct {
 	// The following fields are directly given by the caller -- they have a corresponding
 	// parameter in each constructor.
 	sql           string
-	bindVariables map[string]interface{}
+	bindVariables map[string]*querypb.BindVariable
 
 	// Exactly one of splitCount, numRowsPerQueryPart will be given by the caller.
 	// See the two NewSplitParams... constructors below. The other field member
@@ -76,7 +76,7 @@ type SplitParams struct {
 // 'schema' should map a table name to a schema.Table. It is used for looking up the split-column
 // types and error checking.
 func NewSplitParamsGivenNumRowsPerQueryPart(
-	query querytypes.BoundQuery,
+	query *querypb.BoundQuery,
 	splitColumnNames []sqlparser.ColIdent,
 	numRowsPerQueryPart int64,
 	schema map[string]*schema.Table,
@@ -117,7 +117,7 @@ func NewSplitParamsGivenNumRowsPerQueryPart(
 // 'schema' should map a table name to a schema.Table. It is used for looking up the split-column
 // types and error checking.
 func NewSplitParamsGivenSplitCount(
-	query querytypes.BoundQuery,
+	query *querypb.BoundQuery,
 	splitColumnNames []sqlparser.ColIdent,
 	splitCount int64,
 	schema map[string]*schema.Table,
@@ -143,7 +143,7 @@ func (sp *SplitParams) GetSplitTableName() sqlparser.TableIdent {
 // newSplitParams validates and initializes all the fields except splitCount and
 // numRowsPerQueryPart. It contains the common code for the constructors above.
 func newSplitParams(
-	query querytypes.BoundQuery,
+	query *querypb.BoundQuery,
 	splitColumnNames []sqlparser.ColIdent,
 	schemaMap map[string]*schema.Table,
 ) (*SplitParams, error) {

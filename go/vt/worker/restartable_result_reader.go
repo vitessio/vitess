@@ -130,7 +130,7 @@ func (r *RestartableResultReader) startStream() (bool, error) {
 		Keyspace:   r.tablet.Keyspace,
 		Shard:      r.tablet.Shard,
 		TabletType: r.tablet.Type,
-	}, r.query, make(map[string]interface{}), nil)
+	}, r.query, make(map[string]*querypb.BindVariable), nil)
 
 	// Read the fields information.
 	cols, err := stream.Recv()

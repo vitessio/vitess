@@ -23,7 +23,6 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -89,7 +88,7 @@ func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
 }
 
 // Execute performs a V3 level execution of the query. It does not take any routing directives.
-func (vc *vcursorImpl) Execute(query string, BindVars map[string]interface{}, isDML bool) (*sqltypes.Result, error) {
+func (vc *vcursorImpl) Execute(query string, BindVars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
 	qr, err := vc.executor.Execute(vc.ctx, vc.session, query+vc.trailingComments, BindVars)
 	if err == nil {
 		vc.hasPartialDML = true
@@ -98,7 +97,7 @@ func (vc *vcursorImpl) Execute(query string, BindVars map[string]interface{}, is
 }
 
 // ExecuteMultiShard executes different queries on different shards and returns the combined result.
-func (vc *vcursorImpl) ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery, isDML bool) (*sqltypes.Result, error) {
+func (vc *vcursorImpl) ExecuteMultiShard(keyspace string, shardQueries map[string]*querypb.BoundQuery, isDML bool) (*sqltypes.Result, error) {
 	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, commentedShardQueries(shardQueries, vc.trailingComments), vc.target.TabletType, NewSafeSession(vc.session), false, vc.session.Options)
 	if err == nil {
 		vc.hasPartialDML = true
@@ -107,8 +106,8 @@ func (vc *vcursorImpl) ExecuteMultiShard(keyspace string, shardQueries map[strin
 }
 
 // ExecuteStandalone executes the specified query on keyspace:shard, but outside of the current transaction, as an independent statement.
-func (vc *vcursorImpl) ExecuteStandalone(query string, BindVars map[string]interface{}, keyspace, shard string) (*sqltypes.Result, error) {
-	bq := map[string]querytypes.BoundQuery{
+func (vc *vcursorImpl) ExecuteStandalone(query string, BindVars map[string]*querypb.BindVariable, keyspace, shard string) (*sqltypes.Result, error) {
+	bq := map[string]*querypb.BoundQuery{
 		shard: {
 			Sql:           query + vc.trailingComments,
 			BindVariables: BindVars,
@@ -122,7 +121,7 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, BindVars map[string]inter
 }
 
 // StreamExeculteMulti is the streaming version of ExecuteMultiShard.
-func (vc *vcursorImpl) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]interface{}, callback func(reply *sqltypes.Result) error) error {
+func (vc *vcursorImpl) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
 	return vc.executor.scatterConn.StreamExecuteMulti(vc.ctx, query+vc.trailingComments, keyspace, shardVars, vc.target.TabletType, vc.session.Options, callback)
 }
 
@@ -145,13 +144,13 @@ func (vc *vcursorImpl) GetShardForKeyspaceID(allShards []*topodatapb.ShardRefere
 	return getShardForKeyspaceID(allShards, keyspaceID)
 }
 
-func commentedShardQueries(shardQueries map[string]querytypes.BoundQuery, trailingComments string) map[string]querytypes.BoundQuery {
+func commentedShardQueries(shardQueries map[string]*querypb.BoundQuery, trailingComments string) map[string]*querypb.BoundQuery {
 	if trailingComments == "" {
 		return shardQueries
 	}
-	newQueries := make(map[string]querytypes.BoundQuery, len(shardQueries))
+	newQueries := make(map[string]*querypb.BoundQuery, len(shardQueries))
 	for k, v := range shardQueries {
-		newQueries[k] = querytypes.BoundQuery{
+		newQueries[k] = &querypb.BoundQuery{
 			Sql:           v.Sql + trailingComments,
 			BindVariables: v.BindVariables,
 		}

@@ -24,8 +24,8 @@ import (
 	"github.com/golang/mock/gomock"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/splitquery/splitquery_testing"
 )
 
@@ -152,7 +152,7 @@ func TestEqualSplitsAlgorithm(t *testing.T) {
 	// singleTest is a function that executes a single-test.
 	singleTest := func(testCase *equalSplitsAlgorithmTestCaseType) {
 		splitParams, err := NewSplitParamsGivenSplitCount(
-			querytypes.BoundQuery{Sql: "select * from test_table where int_col > 5"},
+			&querypb.BoundQuery{Sql: "select * from test_table where int_col > 5"},
 			[]sqlparser.ColIdent{sqlparser.NewColIdent(testCase.SplitColumn)},
 			testCase.SplitCount,
 			getTestSchema(),

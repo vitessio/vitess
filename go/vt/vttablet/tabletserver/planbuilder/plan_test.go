@@ -30,6 +30,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
@@ -50,8 +51,8 @@ func toJSON(p *Plan) ([]byte, error) {
 		Subquery          *sqlparser.ParsedQuery `json:",omitempty"`
 		UpsertQuery       *sqlparser.ParsedQuery `json:",omitempty"`
 		ColumnNumbers     []int                  `json:",omitempty"`
-		PKValues          []interface{}          `json:",omitempty"`
-		SecondaryPKValues []interface{}          `json:",omitempty"`
+		PKValues          []sqltypes.PlanValue   `json:",omitempty"`
+		SecondaryPKValues []sqltypes.PlanValue   `json:",omitempty"`
 		WhereClause       *sqlparser.ParsedQuery `json:",omitempty"`
 		SubqueryPKColumns []int                  `json:",omitempty"`
 	}{

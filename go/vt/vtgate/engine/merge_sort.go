@@ -132,7 +132,7 @@ type streamHandle struct {
 }
 
 // runOnestream starts a streaming query on one shard, and returns a streamHandle for it.
-func runOneStream(ctx context.Context, vcursor VCursor, query, ks, shard string, vars map[string]interface{}) *streamHandle {
+func runOneStream(ctx context.Context, vcursor VCursor, query, ks, shard string, vars map[string]*querypb.BindVariable) *streamHandle {
 	handle := &streamHandle{
 		fields: make(chan []*querypb.Field, 1),
 		row:    make(chan []sqltypes.Value, 10),
@@ -145,7 +145,7 @@ func runOneStream(ctx context.Context, vcursor VCursor, query, ks, shard string,
 		handle.err = vcursor.StreamExecuteMulti(
 			query,
 			ks,
-			map[string]map[string]interface{}{shard: vars},
+			map[string]map[string]*querypb.BindVariable{shard: vars},
 			func(qr *sqltypes.Result) error {
 				if len(qr.Fields) != 0 {
 					select {

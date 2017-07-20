@@ -29,171 +29,55 @@ import (
 // buildValueList builds the set of PK reference rows used to drive the next query.
 // It uses the PK values supplied in the original query and bind variables.
 // The generated reference rows are validated for type match against the PK of the table.
-func buildValueList(table *schema.Table, pkValues []interface{}, bindVars map[string]interface{}) ([][]sqltypes.Value, error) {
-	resolved, length, err := resolvePKValues(table, pkValues, bindVars)
+func buildValueList(table *schema.Table, pkValues []sqltypes.PlanValue, bindVars map[string]*querypb.BindVariable) ([][]sqltypes.Value, error) {
+	rows, err := sqltypes.ResolveRows(pkValues, bindVars)
 	if err != nil {
 		return nil, err
 	}
-	valueList := make([][]sqltypes.Value, length)
-	for i := 0; i < length; i++ {
-		valueList[i] = make([]sqltypes.Value, len(resolved))
-		for j, val := range resolved {
-			if list, ok := val.([]sqltypes.Value); ok {
-				valueList[i][j] = list[i]
-			} else {
-				valueList[i][j] = val.(sqltypes.Value)
-			}
-		}
-	}
-	return valueList, nil
-}
-
-func resolvePKValues(table *schema.Table, pkValues []interface{}, bindVars map[string]interface{}) (resolved []interface{}, length int, err error) {
-	length = -1
-	setLengthFunc := func(list []sqltypes.Value) error {
-		if length == -1 {
-			length = len(list)
-		} else if len(list) != length {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "mismatched lengths for values %v", pkValues)
-		}
-		return nil
-	}
-	resolved = make([]interface{}, len(pkValues))
-	for i, val := range pkValues {
-		switch val := val.(type) {
-		case string:
-			if val[1] != ':' {
-				resolved[i], err = resolveValue(table.GetPKColumn(i), val, bindVars)
-				if err != nil {
-					return nil, 0, err
-				}
-			} else {
-				list, err := resolveListArg(table.GetPKColumn(i), val, bindVars)
-				if err != nil {
-					return nil, 0, err
-				}
-				if err := setLengthFunc(list); err != nil {
-					return nil, 0, err
-				}
-				resolved[i] = list
-			}
-		case []interface{}:
-			list := make([]sqltypes.Value, len(val))
-			for j, listVal := range val {
-				list[j], err = resolveValue(table.GetPKColumn(i), listVal, bindVars)
-				if err != nil {
-					return nil, 0, err
-				}
-			}
-			if err := setLengthFunc(list); err != nil {
-				return nil, 0, err
-			}
-			resolved[i] = list
-		default:
-			resolved[i], err = resolveValue(table.GetPKColumn(i), val, nil)
+	// Iterate by columns.
+	for j := range pkValues {
+		typ := table.GetPKColumn(j).Type
+		for i := range rows {
+			rows[i][j], err = sqltypes.Cast(rows[i][j], typ)
 			if err != nil {
-				return nil, 0, err
-			}
-		}
-	}
-	if length == -1 {
-		length = 1
-	}
-	return resolved, length, nil
-}
-
-func resolveListArg(col *schema.TableColumn, key string, bindVars map[string]interface{}) ([]sqltypes.Value, error) {
-	val, _, err := sqlparser.FetchBindVar(key, bindVars)
-	if err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-	}
-
-	switch list := val.(type) {
-	case []interface{}:
-		resolved := make([]sqltypes.Value, len(list))
-		for i, v := range list {
-			sqlval, err := sqltypes.BuildConverted(col.Type, v)
-			if err != nil {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-			}
-			if err = validateValue(col, sqlval); err != nil {
 				return nil, err
 			}
-			resolved[i] = sqlval
 		}
-		return resolved, nil
-	case *querypb.BindVariable:
-		if list.Type != querypb.Type_TUPLE {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expecting list for bind var %s: %v", key, list)
-		}
-		resolved := make([]sqltypes.Value, len(list.Values))
-		for i, v := range list.Values {
-			// We can use MakeTrusted as BuildConverted will check the value.
-			sqlval := sqltypes.MakeTrusted(v.Type, v.Value)
-			sqlval, err := sqltypes.BuildConverted(col.Type, sqlval)
-			if err != nil {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-			}
-			if err = validateValue(col, sqlval); err != nil {
-				return nil, err
-			}
-			resolved[i] = sqlval
-		}
-		return resolved, nil
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown type for bind variable %v", key)
 	}
+	return rows, nil
 }
 
 // buildSecondaryList is used for handling ON DUPLICATE DMLs, or those that change the PK.
-func buildSecondaryList(table *schema.Table, pkList [][]sqltypes.Value, secondaryList []interface{}, bindVars map[string]interface{}) ([][]sqltypes.Value, error) {
+func buildSecondaryList(table *schema.Table, pkList [][]sqltypes.Value, secondaryList []sqltypes.PlanValue, bindVars map[string]*querypb.BindVariable) ([][]sqltypes.Value, error) {
 	if secondaryList == nil {
 		return nil, nil
 	}
-	valueList := make([][]sqltypes.Value, len(pkList))
+	secondaryRows, err := sqltypes.ResolveRows(secondaryList, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	// We only expect one row because ON DUPLICATE KEY SET
+	// statements can set only one value. Only pk columns
+	// whose values are changing will be set. The rest will
+	// be NULL.
+	changedValues := secondaryRows[0]
+	rows := make([][]sqltypes.Value, len(pkList))
 	for i, row := range pkList {
-		valueList[i] = make([]sqltypes.Value, len(row))
-		for j, cell := range row {
-			if secondaryList[j] == nil {
-				valueList[i][j] = cell
+		rows[i] = make([]sqltypes.Value, len(row))
+		for j, value := range row {
+			if changedValues[j].IsNull() {
+				rows[i][j] = value
 			} else {
-				var err error
-				if valueList[i][j], err = resolveValue(table.GetPKColumn(j), secondaryList[j], bindVars); err != nil {
-					return valueList, err
-				}
+				rows[i][j] = changedValues[j]
 			}
 		}
 	}
-	return valueList, nil
-}
-
-func resolveValue(col *schema.TableColumn, value interface{}, bindVars map[string]interface{}) (result sqltypes.Value, err error) {
-	if v, ok := value.(string); ok {
-		value, _, err = sqlparser.FetchBindVar(v, bindVars)
-		if err != nil {
-			return result, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-		}
-	}
-	result, err = sqltypes.BuildConverted(col.Type, value)
-	if err != nil {
-		return result, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-	}
-	if err = validateValue(col, result); err != nil {
-		return result, err
-	}
-	return result, nil
+	return rows, nil
 }
 
 // resolveNumber extracts a number from a bind variable or sql value.
-func resolveNumber(value interface{}, bindVars map[string]interface{}) (int64, error) {
-	var err error
-	if v, ok := value.(string); ok {
-		value, _, err = sqlparser.FetchBindVar(v, bindVars)
-		if err != nil {
-			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-		}
-	}
-	v, err := sqltypes.BuildValue(value)
+func resolveNumber(pv sqltypes.PlanValue, bindVars map[string]*querypb.BindVariable) (int64, error) {
+	v, err := pv.ResolveValue(bindVars)
 	if err != nil {
 		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 	}
