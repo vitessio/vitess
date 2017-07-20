@@ -276,7 +276,7 @@ func TestShardFail(t *testing.T) {
 	getSandbox(KsTestUnsharded).SrvKeyspaceMustFail = 1
 
 	_, err := executorExec(executor, "select id from sharded_table where id = 1", nil)
-	want := "paramsAllShards: unsharded keyspace TestBadSharding has multiple shards: possible cause: sharded keyspace is marked as unsharded in vschema"
+	want := "paramsAllShards: unsharded keyspace TestXBadSharding has multiple shards: possible cause: sharded keyspace is marked as unsharded in vschema"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}
@@ -419,6 +419,30 @@ func TestSelectEqual(t *testing.T) {
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
+	}
+}
+
+func TestSelectDual(t *testing.T) {
+	executor, sbc1, _, lookup := createExecutorEnv()
+
+	_, err := executorExec(executor, "select @@aa.bb from dual", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           "select @@aa.bb from dual",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+
+	_, err = executorExec(executor, "select @@aa.bb from TestUnsharded.dual", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(lookup.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
 }
 

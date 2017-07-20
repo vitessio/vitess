@@ -262,6 +262,11 @@ func (e *Executor) handleSet(ctx context.Context, session *vtgatepb.Session, sql
 				session.Options = &querypb.ExecuteOptions{}
 			}
 			session.Options.Workload = querypb.ExecuteOptions_Workload(out)
+		case "character_set_results":
+			// This is a statement that mysql-connector-j sends at the beginning. We return a canned response for it.
+			if v != nil {
+				return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "only NULL is allowed for character_set_results: %v", v)
+			}
 		default:
 			return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported construct: %s", sql)
 		}

@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
@@ -270,7 +271,9 @@ func (st *symtab) searchResultColumn(col *sqlparser.ColName) (c *column, err err
 // is as described in Find.
 func (st *symtab) searchTables(col *sqlparser.ColName) (*column, error) {
 	var t *table
-	if col.Qualifier.IsEmpty() {
+	// @@ syntax is only allowed for dual tables, in which case there should be
+	// only one in the symtab. So, such expressions will be implicitly matched.
+	if col.Qualifier.IsEmpty() || strings.HasPrefix(col.Qualifier.Name.String(), "@@") {
 		// Search uniqueColumns first. If found, our job is done.
 		if c, ok := st.uniqueColumns[col.Name.Lowered()]; ok {
 			return c, nil
