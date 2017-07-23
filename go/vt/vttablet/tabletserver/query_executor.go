@@ -59,7 +59,7 @@ type QueryExecutor struct {
 }
 
 // Used by vtexplain to create the private members of the struct
-func NewQueryExecutor(query string, bindVars map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions, plan *TabletPlan, ctx context.Context, logStats *tabletenv.LogStats, tsv *TabletServer) *QueryExecutor {
+func NewQueryExecutor(query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, plan *TabletPlan, ctx context.Context, logStats *tabletenv.LogStats, tsv *TabletServer) *QueryExecutor {
 	return &QueryExecutor{
 		query:         query,
 		bindVars:      bindVars,
