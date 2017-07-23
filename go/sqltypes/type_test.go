@@ -1,6 +1,18 @@
-// Copyright 2015| Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package sqltypes
 
@@ -107,6 +119,9 @@ func TestTypeValues(t *testing.T) {
 	}, {
 		defined:  TypeJSON,
 		expected: 30 | flagIsQuoted,
+	}, {
+		defined:  Expression,
+		expected: 31,
 	}}
 	for _, tcase := range testcases {
 		if int(tcase.defined) != tcase.expected {
@@ -157,6 +172,9 @@ func TestIsFunctions(t *testing.T) {
 	}
 	if !IsBinary(Binary) {
 		t.Error("Char: !IsBinary, must be true")
+	}
+	if !isNumber(Int64) {
+		t.Error("Int64: !isNumber, must be true")
 	}
 }
 
@@ -318,5 +336,17 @@ func TestTypeError(t *testing.T) {
 	want := "unsupported type: 15"
 	if err == nil || err.Error() != want {
 		t.Errorf("MySQLToType: %v, want %s", err, want)
+	}
+}
+
+func TestIsTypeValid(t *testing.T) {
+	if !IsTypeValid(Int64) {
+		t.Errorf("IsTypeValid(%v): false, want true", Int64)
+	}
+	if !IsTypeValid(Expression) {
+		t.Errorf("IsTypeValid(%v): false, want true", Expression)
+	}
+	if IsTypeValid(querypb.Type(1)) {
+		t.Errorf("IsTypeValid(%v): true, want false", querypb.Type(1))
 	}
 }

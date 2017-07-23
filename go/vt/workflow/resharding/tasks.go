@@ -1,7 +1,24 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreedto in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package resharding
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"golang.org/x/net/context"
@@ -28,7 +45,7 @@ func (hw *HorizontalReshardingWorkflow) GetTasks(phase PhaseType) []*workflowpb.
 	case phaseClone, phaseMigrateRdonly, phaseMigrateReplica, phaseMigrateMaster:
 		shards = strings.Split(hw.checkpoint.Settings["source_shards"], ",")
 	default:
-		panic(fmt.Sprintf("BUG: unknown phase type: %v", phase))
+		log.Fatalf("BUG: unknown phase type: %v", phase)
 	}
 
 	var tasks []*workflowpb.Task
@@ -55,7 +72,9 @@ func (hw *HorizontalReshardingWorkflow) runSplitClone(ctx context.Context, t *wo
 	sourceKeyspaceShard := topoproto.KeyspaceShardString(keyspace, sourceShard)
 	// Reset the vtworker to avoid error if vtworker command has been called elsewhere.
 	// This is because vtworker class doesn't cleanup the environment after execution.
-	automation.ExecuteVtworker(ctx, worker, []string{"Reset"})
+	if _, err := automation.ExecuteVtworker(ctx, worker, []string{"Reset"}); err != nil {
+		return err
+	}
 	// The flag min_healthy_rdonly_tablets is set to 1 (default value is 2).
 	// Therefore, we can reuse the normal end to end test setting, which has only 1 rdonly tablet.
 	// TODO(yipeiw): Add min_healthy_rdonly_tablets as an input argument in UI.
@@ -75,7 +94,9 @@ func (hw *HorizontalReshardingWorkflow) runSplitDiff(ctx context.Context, t *wor
 	destShard := t.Attributes["destination_shard"]
 	worker := t.Attributes["vtworker"]
 
-	automation.ExecuteVtworker(hw.ctx, worker, []string{"Reset"})
+	if _, err := automation.ExecuteVtworker(hw.ctx, worker, []string{"Reset"}); err != nil {
+		return err
+	}
 	args := []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", topoproto.KeyspaceShardString(keyspace, destShard)}
 	_, err := automation.ExecuteVtworker(ctx, worker, args)
 	return err

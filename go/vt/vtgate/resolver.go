@@ -1,6 +1,18 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 // Package vtgate provides query routing rpc services
 // for vttablets.
@@ -14,7 +26,7 @@ import (
 	"strings"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/sqlannotation"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
@@ -62,7 +74,7 @@ func isRetryableError(err error) bool {
 // This throws an error if a dml spans multiple keyspace_ids. Resharding depends
 // on being able to uniquely route a write.
 func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
-	if sqlannotation.IsDML(sql) && len(keyspaceIds) > 1 {
+	if sqlparser.IsDML(sql) && len(keyspaceIds) > 1 {
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "DML should not span multiple keyspace_ids")
 	}
 	mapToShards := func(k string) (string, []string, error) {
@@ -365,6 +377,24 @@ func (res *Resolver) MessageStream(ctx context.Context, keyspace string, shard s
 	return res.scatterConn.MessageStream(ctx, keyspace, shards, name, callback)
 }
 
+// MessageAckKeyspaceIds routes message acks based on the associated keyspace ids.
+func (res *Resolver) MessageAckKeyspaceIds(ctx context.Context, keyspace, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error) {
+	newKeyspace, _, allShards, err := getKeyspaceShards(ctx, res.toposerv, res.cell, keyspace, topodatapb.TabletType_MASTER)
+	if err != nil {
+		return 0, err
+	}
+
+	shardIDs := make(map[string][]*querypb.Value)
+	for _, idKeyspaceID := range idKeyspaceIDs {
+		shard, err := getShardForKeyspaceID(allShards, idKeyspaceID.KeyspaceId)
+		if err != nil {
+			return 0, err
+		}
+		shardIDs[shard] = append(shardIDs[shard], idKeyspaceID.Id)
+	}
+	return res.scatterConn.MessageAck(ctx, newKeyspace, shardIDs, name)
+}
+
 // UpdateStream streams the events.
 // TODO(alainjobart): Implement the multi-shards merge code.
 func (res *Resolver) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, callback func(*querypb.StreamEvent, int64) error) error {
@@ -390,7 +420,7 @@ func (res *Resolver) UpdateStream(ctx context.Context, keyspace string, shard st
 			return err
 		}
 		if len(shards) != 1 {
-			return fmt.Errorf("UpdateStream only supports exactly one shard per keyrange at the moment, but provided keyrange %v maps to %v.", keyRange, shards)
+			return fmt.Errorf("UpdateStream only supports exactly one shard per keyrange at the moment, but provided keyrange %v maps to %v", keyRange, shards)
 		}
 		shard = shards[0]
 	}

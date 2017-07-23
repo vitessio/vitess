@@ -1,3 +1,19 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreedto in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package discovery
 
 import (
@@ -9,6 +25,7 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 )
 
@@ -71,18 +88,22 @@ func checkWatcher(t *testing.T, cellTablets bool) {
 	tw.Stop()
 }
 
-func newFakeTopo(expectGetTabletsByCell bool) *fakeTopo {
-	return &fakeTopo{
-		expectGetTabletsByCell: expectGetTabletsByCell,
-		tablets:                make(map[topodatapb.TabletAlias]*topodatapb.Tablet),
-	}
-}
-
 type fakeTopo struct {
 	faketopo.FakeTopo
 	expectGetTabletsByCell bool
-	mu                     sync.RWMutex
-	tablets                map[topodatapb.TabletAlias]*topodatapb.Tablet
+
+	// mu protects the tablets map.
+	mu sync.RWMutex
+
+	// tablets key is topoproto.TabletAliasString(tablet alias).
+	tablets map[string]*topodatapb.Tablet
+}
+
+func newFakeTopo(expectGetTabletsByCell bool) *fakeTopo {
+	return &fakeTopo{
+		expectGetTabletsByCell: expectGetTabletsByCell,
+		tablets:                make(map[string]*topodatapb.Tablet),
+	}
 }
 
 func (ft *fakeTopo) AddTablet(cell string, uid uint32, host string, ports map[string]int32) {
@@ -98,9 +119,13 @@ func (ft *fakeTopo) AddTablet(cell string, uid uint32, host string, ports map[st
 		PortMap:  make(map[string]int32),
 	}
 	for name, port := range ports {
-		tablet.PortMap[name] = port
+		if name == "mysql" {
+			topoproto.SetMysqlPort(tablet, port)
+		} else {
+			tablet.PortMap[name] = port
+		}
 	}
-	ft.tablets[ta] = tablet
+	ft.tablets[topoproto.TabletAliasString(&ta)] = tablet
 }
 
 func (ft *fakeTopo) RemoveTablet(cell string, uid uint32) {
@@ -110,7 +135,7 @@ func (ft *fakeTopo) RemoveTablet(cell string, uid uint32) {
 		Cell: cell,
 		Uid:  uid,
 	}
-	delete(ft.tablets, ta)
+	delete(ft.tablets, topoproto.TabletAliasString(&ta))
 }
 
 func (ft *fakeTopo) GetTabletsByCell(ctx context.Context, cell string) ([]*topodatapb.TabletAlias, error) {
@@ -120,9 +145,9 @@ func (ft *fakeTopo) GetTabletsByCell(ctx context.Context, cell string) ([]*topod
 	ft.mu.RLock()
 	defer ft.mu.RUnlock()
 	res := make([]*topodatapb.TabletAlias, 0, 1)
-	for alias, tablet := range ft.tablets {
+	for _, tablet := range ft.tablets {
 		if tablet.Alias.Cell == cell {
-			res = append(res, &alias)
+			res = append(res, tablet.Alias)
 		}
 	}
 	return res, nil
@@ -139,10 +164,10 @@ func (ft *fakeTopo) GetShardReplication(ctx context.Context, cell, keyspace, sha
 	ft.mu.RLock()
 	defer ft.mu.RUnlock()
 	nodes := make([]*topodatapb.ShardReplication_Node, 0, 1)
-	for alias, tablet := range ft.tablets {
+	for _, tablet := range ft.tablets {
 		if tablet.Alias.Cell == cell {
 			nodes = append(nodes, &topodatapb.ShardReplication_Node{
-				TabletAlias: &alias,
+				TabletAlias: tablet.Alias,
 			})
 		}
 	}
@@ -154,7 +179,7 @@ func (ft *fakeTopo) GetShardReplication(ctx context.Context, cell, keyspace, sha
 func (ft *fakeTopo) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topodatapb.Tablet, int64, error) {
 	ft.mu.RLock()
 	defer ft.mu.RUnlock()
-	return ft.tablets[*alias], 0, nil
+	return ft.tablets[topoproto.TabletAliasString(alias)], 0, nil
 }
 
 func TestFilterByShard(t *testing.T) {

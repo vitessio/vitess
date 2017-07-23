@@ -1,11 +1,29 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package sqltypes
 
-import querypb "github.com/youtube/vitess/go/vt/proto/query"
-import "github.com/youtube/vitess/go/vt/vterrors"
+import (
+	"github.com/golang/protobuf/proto"
+
+	"github.com/youtube/vitess/go/vt/vterrors"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+)
 
 // This file contains the proto3 conversion functions for the structures
 // defined here.
@@ -160,4 +178,58 @@ func Proto3ToQueryReponses(qr []*querypb.ResultWithError) []QueryResponse {
 		}
 	}
 	return result
+}
+
+// Proto3ResultsEqual compares two arrays of proto3 Result.
+// reflect.DeepEqual shouldn't be used because of the protos.
+func Proto3ResultsEqual(r1, r2 []*querypb.QueryResult) bool {
+	if len(r1) != len(r2) {
+		return false
+	}
+	for i, r := range r1 {
+		if !proto.Equal(r, r2[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// Proto3QueryResponsesEqual compares two arrays of proto3 QueryResponse.
+// reflect.DeepEqual shouldn't be used because of the protos.
+func Proto3QueryResponsesEqual(r1, r2 []*querypb.ResultWithError) bool {
+	if len(r1) != len(r2) {
+		return false
+	}
+	for i, r := range r1 {
+		if !proto.Equal(r, r2[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// Proto3ValuesEqual compares two arrays of proto3 Value.
+func Proto3ValuesEqual(v1, v2 []*querypb.Value) bool {
+	if len(v1) != len(v2) {
+		return false
+	}
+	for i, v := range v1 {
+		if !proto.Equal(v, v2[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// SplitQueryResponsePartsEqual compares two arrays of SplitQueryResponse_Part.
+func SplitQueryResponsePartsEqual(s1, s2 []*vtgatepb.SplitQueryResponse_Part) bool {
+	if len(s1) != len(s2) {
+		return false
+	}
+	for i, s := range s1 {
+		if !proto.Equal(s, s2[i]) {
+			return false
+		}
+	}
+	return true
 }

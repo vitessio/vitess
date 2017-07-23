@@ -1,3 +1,19 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreedto in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package tabletconntest
 
 import (
@@ -81,12 +97,13 @@ var TestExecuteOptions = &querypb.ExecuteOptions{
 		Shard:     "ssss",
 		Position:  "pppp",
 	},
+	ClientFoundRows: true,
 }
 
 const TestAsTransaction bool = true
 
 func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string, target *querypb.Target) {
-	if !reflect.DeepEqual(target, TestTarget) {
+	if !proto.Equal(target, TestTarget) {
 		f.t.Errorf("invalid Target for %v: got %#v expected %#v", name, target, TestTarget)
 	}
 
@@ -94,7 +111,7 @@ func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string,
 	if ef == nil {
 		f.t.Errorf("no effective caller id for %v", name)
 	} else {
-		if !reflect.DeepEqual(ef, TestCallerID) {
+		if !proto.Equal(ef, TestCallerID) {
 			f.t.Errorf("invalid effective caller id for %v: got %v expected %v", name, ef, TestCallerID)
 		}
 	}
@@ -103,7 +120,7 @@ func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string,
 	if im == nil {
 		f.t.Errorf("no immediate caller id for %v", name)
 	} else {
-		if !reflect.DeepEqual(im, TestVTGateCallerID) {
+		if !proto.Equal(im, TestVTGateCallerID) {
 			f.t.Errorf("invalid immediate caller id for %v: got %v expected %v", name, im, TestVTGateCallerID)
 		}
 	}
@@ -112,7 +129,7 @@ func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string,
 const BeginTransactionID int64 = 9990
 
 // Begin is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target) (int64, error) {
+func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, error) {
 	if f.HasBeginError {
 		return 0, f.TabletError
 	}
@@ -120,6 +137,9 @@ func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target) (i
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "Begin", target)
+	if !proto.Equal(options, TestExecuteOptions) {
+		f.t.Errorf("invalid Execute.ExecuteOptions: got %v expected %v", options, TestExecuteOptions)
+	}
 	return BeginTransactionID, nil
 }
 
@@ -218,6 +238,18 @@ var Participants = []*querypb.Target{{
 	Shard:    "1",
 }}
 
+func TargetsEqual(t1, t2 []*querypb.Target) bool {
+	if len(t1) != len(t2) {
+		return false
+	}
+	for i, t := range t1 {
+		if !proto.Equal(t, t2[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // CreateTransaction is part of the queryservice.QueryService interface
 func (f *FakeQueryService) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
 	if f.HasError {
@@ -230,7 +262,7 @@ func (f *FakeQueryService) CreateTransaction(ctx context.Context, target *queryp
 	if dtid != Dtid {
 		f.t.Errorf("CreateTransaction: invalid dtid: got %s expected %s", dtid, Dtid)
 	}
-	if !reflect.DeepEqual(participants, Participants) {
+	if !TargetsEqual(participants, Participants) {
 		f.t.Errorf("invalid CreateTransaction participants: got %v, expected %v", participants, Participants)
 	}
 	return nil
@@ -364,7 +396,7 @@ func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, 
 	if sql != ExecuteQuery {
 		f.t.Errorf("invalid Execute.Query.Sql: got %v expected %v", sql, ExecuteQuery)
 	}
-	if !reflect.DeepEqual(bindVariables, ExecuteBindVars) {
+	if !sqltypes.BindVariablesEqual(bindVariables, ExecuteBindVars) {
 		f.t.Errorf("invalid Execute.BindVariables: got %v expected %v", bindVariables, ExecuteBindVars)
 	}
 	if !proto.Equal(options, TestExecuteOptions) {
@@ -420,7 +452,7 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Ta
 	if sql != StreamExecuteQuery {
 		f.t.Errorf("invalid StreamExecute.Sql: got %v expected %v", sql, StreamExecuteQuery)
 	}
-	if !reflect.DeepEqual(bindVariables, StreamExecuteBindVars) {
+	if !sqltypes.BindVariablesEqual(bindVariables, StreamExecuteBindVars) {
 		f.t.Errorf("invalid StreamExecute.BindVariables: got %v expected %v", bindVariables, StreamExecuteBindVars)
 	}
 	if !proto.Equal(options, TestExecuteOptions) {
@@ -526,7 +558,7 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Tar
 	if f.Panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	if !reflect.DeepEqual(queries, ExecuteBatchQueries) {
+	if !querytypes.BoundQueriesEqual(queries, ExecuteBatchQueries) {
 		f.t.Errorf("invalid ExecuteBatch.Queries: got %v expected %v", queries, ExecuteBatchQueries)
 	}
 	if !proto.Equal(options, TestExecuteOptions) {
@@ -578,7 +610,7 @@ var SplitQueryQuerySplitList = []querytypes.QuerySplit{
 
 // BeginExecute combines Begin and Execute.
 func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
-	transactionID, err := f.Begin(ctx, target)
+	transactionID, err := f.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -589,7 +621,7 @@ func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Tar
 
 // BeginExecuteBatch combines Begin and ExecuteBatch.
 func (f *FakeQueryService) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
-	transactionID, err := f.Begin(ctx, target)
+	transactionID, err := f.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -648,7 +680,7 @@ func (f *FakeQueryService) MessageAck(ctx context.Context, target *querypb.Targe
 	if name != MessageName {
 		f.t.Errorf("name: %s, want %s", name, MessageName)
 	}
-	if !reflect.DeepEqual(ids, MessageIDs) {
+	if !sqltypes.Proto3ValuesEqual(ids, MessageIDs) {
 		f.t.Errorf("ids: %v, want %v", ids, MessageIDs)
 	}
 	return 1, nil
@@ -672,7 +704,7 @@ func (f *FakeQueryService) SplitQuery(
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "SplitQuery", target)
-	if !reflect.DeepEqual(query, SplitQueryBoundQuery) {
+	if !querytypes.BoundQueryEqual(&query, &SplitQueryBoundQuery) {
 		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.Query: got %v expected %v",
 			querytypes.QueryAsString(query.Sql, query.BindVariables), SplitQueryBoundQuery)
 	}

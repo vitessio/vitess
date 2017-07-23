@@ -1,6 +1,18 @@
-// Copyright 2014, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package worker
 
@@ -10,7 +22,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysqlconn/replication"
+	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -29,14 +42,14 @@ const (
 	verticalSplitCloneTestMax int = 200
 )
 
-func createVerticalSplitCloneDestinationFakeDb(t *testing.T, name string, insertCount int) *FakePoolConnection {
-	f := NewFakePoolConnectionQuery(t, name)
+func createVerticalSplitCloneDestinationFakeDb(t *testing.T, name string, insertCount int) *fakesqldb.DB {
+	f := fakesqldb.New(t).SetName(name).OrderMatters()
 
 	// Provoke a retry to test the error handling. (Let the first write fail.)
-	f.addExpectedQuery("INSERT INTO `vt_destination_ks`.`moving1` (`id`, `msg`) VALUES (*", errReadOnly)
+	f.AddExpectedQuery("INSERT INTO `vt_destination_ks`.`moving1` (`id`, `msg`) VALUES (*", errReadOnly)
 
 	for i := 1; i <= insertCount; i++ {
-		f.addExpectedQuery("INSERT INTO `vt_destination_ks`.`moving1` (`id`, `msg`) VALUES (*", nil)
+		f.AddExpectedQuery("INSERT INTO `vt_destination_ks`.`moving1` (`id`, `msg`) VALUES (*", nil)
 	}
 
 	expectBlpCheckpointCreationQueries(f)
@@ -53,10 +66,12 @@ func TestVerticalSplitClone(t *testing.T) {
 	ctx := context.Background()
 	wi := NewInstance(ts, "cell1", time.Second)
 
+	sourceRdonlyFakeDB := sourceRdonlyFakeDB(t, "vt_source_ks", "moving1", verticalSplitCloneTestMin, verticalSplitCloneTestMax)
+
 	sourceMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
 		topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 	sourceRdonly := testlib.NewFakeTablet(t, wi.wr, "cell1", 1,
-		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
+		topodatapb.TabletType_RDONLY, sourceRdonlyFakeDB, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 
 	// Create the destination keyspace with the appropriate ServedFromMap
 	ki := &topodatapb.Keyspace{
@@ -77,15 +92,19 @@ func TestVerticalSplitClone(t *testing.T) {
 	}
 	wi.wr.TopoServer().CreateKeyspace(ctx, "destination_ks", ki)
 
+	// We read 100 source rows. sourceReaderCount is set to 10, so
+	// we'll have 100/10=10 rows per table chunk.
+	// destinationPackCount is set to 4, so we take 4 source rows
+	// at once. So we'll process 4 + 4 + 2 rows to get to 10.
+	// That means 3 insert statements on the target. So 3 * 10
+	// = 30 insert statements on the destination.
+	destMasterFakeDb := createVerticalSplitCloneDestinationFakeDb(t, "destMaster", 30)
+	defer destMasterFakeDb.VerifyAllExecutedOrFail()
+
 	destMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 10,
-		topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
+		topodatapb.TabletType_MASTER, destMasterFakeDb, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 	destRdonly := testlib.NewFakeTablet(t, wi.wr, "cell1", 11,
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
-
-	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly, destMaster, destRdonly} {
-		ft.StartActionLoop(t, wi.wr)
-		defer ft.StopActionLoop(t)
-	}
 
 	// add the topo and schema data we'll need
 	if err := wi.wr.RebuildKeyspaceGraph(ctx, "source_ks", nil); err != nil {
@@ -114,10 +133,8 @@ func TestVerticalSplitClone(t *testing.T) {
 			},
 		},
 	}
-	sourceRdonly.FakeMysqlDaemon.DbAppConnectionFactory = sourceRdonlyFactory(
-		t, "vt_source_ks", "moving1", verticalSplitCloneTestMin, verticalSplitCloneTestMax)
-	sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
-		GTIDSet: replication.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
+	sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+		GTIDSet: mysql.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
 	}
 	sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
@@ -136,16 +153,6 @@ func TestVerticalSplitClone(t *testing.T) {
 	// This tablet is empty and does not return any rows.
 	grpcqueryservice.Register(destRdonly.RPCServer, destRdonlyQs)
 
-	// We read 100 source rows. sourceReaderCount is set to 10, so
-	// we'll have 100/10=10 rows per table chunk.
-	// destinationPackCount is set to 4, so we take 4 source rows
-	// at once. So we'll process 4 + 4 + 2 rows to get to 10.
-	// That means 3 insert statements on the target. So 3 * 10
-	// = 30 insert statements on the destination.
-	destMasterFakeDb := createVerticalSplitCloneDestinationFakeDb(t, "destMaster", 30)
-	defer destMasterFakeDb.verifyAllExecutedOrFail()
-	destMaster.FakeMysqlDaemon.DbAppConnectionFactory = destMasterFakeDb.getFactory()
-
 	// Fake stream health reponses because vtworker needs them to find the master.
 	qs := fakes.NewStreamHealthQueryService(destMaster.Target())
 	qs.AddDefaultHealthResponse()
@@ -155,8 +162,14 @@ func TestVerticalSplitClone(t *testing.T) {
 
 	// When the online clone inserted the last rows, modify the destination test
 	// query service such that it will return them as well.
-	destMasterFakeDb.getEntry(29).AfterFunc = func() {
+	destMasterFakeDb.GetEntry(29).AfterFunc = func() {
 		destRdonlyQs.addGeneratedRows(verticalSplitCloneTestMin, verticalSplitCloneTestMax)
+	}
+
+	// Start action loop after having registered all RPC services.
+	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly, destMaster, destRdonly} {
+		ft.StartActionLoop(t, wi.wr)
+		defer ft.StopActionLoop(t)
 	}
 
 	// Run the vtworker command.

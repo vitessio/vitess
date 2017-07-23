@@ -9,13 +9,13 @@ The `kubectl` steps will apply to any Kubernetes cluster.
 
 ## Prerequisites
 
-To complete the exercise in this guide, you must locally install Go 1.7+,
+To complete the exercise in this guide, you must locally install Go 1.8+,
 Vitess' `vtctlclient` tool, and Google Cloud SDK. The
 following sections explain how to set these up in your environment.
 
-### Install Go 1.7+
+### Install Go 1.8+
 
-You need to install [Go 1.7+](http://golang.org/doc/install) to build the
+You need to install [Go 1.8+](http://golang.org/doc/install) to build the
 `vtctlclient` tool, which issues commands to Vitess.
 
 After installing Go, make sure your `GOPATH` environment
@@ -600,8 +600,9 @@ provides more detail about how the app server interacts with Vitess.
 ## Try Vitess resharding
 
 Now that you have a full Vitess stack running, you may want to go on to the
-[Sharding in Kubernetes](http://vitess.io/user-guide/sharding-kubernetes.html)
-guide to try out
+[Sharding in Kubernetes workflow guide](http://vitess.io/user-guide/sharding-kubernetes.html)
+or [Sharding in Kubernetes codelab](http://vitess.io/user-guide/sharding-kubernetes.html)
+(if you prefer to run each step manually through commands) to try out
 [dynamic resharding](http://vitess.io/user-guide/sharding.html#resharding).
 
 If so, you can skip the tear-down since the sharding guide picks up right here.

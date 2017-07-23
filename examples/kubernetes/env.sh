@@ -1,3 +1,17 @@
+# Copyright 2017 Google Inc.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # This is an include file used by the other scripts in this directory.
 
 # Most clusters will just be accessed with 'kubectl' on $PATH.
@@ -6,16 +20,18 @@
 # use cases just need KUBECTL=kubectl, we'll make that the default.
 KUBECTL=${KUBECTL:-kubectl}
 
-# Kubernetes api address for $KUBECTL 
-# The default value is 127.0.0.1:8080
-# When the Kubernetes api server is not local, We can easily access the api by edit KUBERNETES_API_SERVER's value
-KUBERNETES_API_SERVER=${KUBERNETES_API_SERVER:-'127.0.0.1:8080'}
+# Kubernetes API address for $KUBECTL. When the Kubernetes API server is not
+# local, We can easily access the API by editing KUBERNETES_API_SERVER's value
+KUBERNETES_API_SERVER=${KUBERNETES_API_SERVER:-""}
 
 # Kubernetes namespace for Vitess and components.
 VITESS_NAME=${VITESS_NAME:-'default'}
 
 # Kubernetes options config
-KUBECTL_OPTIONS="--namespace=$VITESS_NAME --server=$KUBERNETES_API_SERVER"
+KUBECTL_OPTIONS="--namespace=$VITESS_NAME"
+if [[ -n "$KUBERNETES_API_SERVER" ]]; then
+  KUBECTL_OPTIONS+=" --server=$KUBERNETES_API_SERVER"
+fi
 
 # CELLS should be a comma separated list of cells
 # the first cell listed will become local to vtctld.
@@ -52,7 +68,7 @@ start_vtctld_forward() {
   fi
 
   tmpfile=`mktemp`
-  $KUBECTL $KUBECTL_OPTIONS port-forward -p $pod 0:15999 &> $tmpfile &
+  $KUBECTL $KUBECTL_OPTIONS port-forward $pod 0:15999 &> $tmpfile &
   vtctld_forward_pid=$!
 
   until [[ `cat $tmpfile` =~ :([0-9]+)\ -\> ]]; do :; done

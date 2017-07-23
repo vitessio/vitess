@@ -3,56 +3,79 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <groupId>com.youtube.vitess</groupId>
+    <groupId>io.vitess</groupId>
     <artifactId>vitess-parent</artifactId>
-    <version>1.1.0-SNAPSHOT</version>
-    <relativePath>../pom.xml</relativePath>
+    <version>2.1.2-SNAPSHOT</version>
   </parent>
-  <artifactId>grpc-client</artifactId>
+  <artifactId>vitess-grpc-client</artifactId>
 
   <dependencies>
     <dependency>
-      <groupId>com.youtube.vitess</groupId>
-      <artifactId>client</artifactId>
-      <version>1.1.0-SNAPSHOT</version>
+      <groupId>com.google.code.findbugs</groupId>
+      <artifactId>jsr305</artifactId>
     </dependency>
     <dependency>
-      <groupId>com.youtube.vitess</groupId>
-      <artifactId>client</artifactId>
-      <version>1.1.0-SNAPSHOT</version>
-      <type>test-jar</type>
-      <scope>test</scope>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.google.protobuf</groupId>
+      <artifactId>protobuf-java</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-core</artifactId>
     </dependency>
     <dependency>
       <groupId>io.grpc</groupId>
-      <artifactId>grpc-all</artifactId>
-      <version>${grpc.version}</version>
+      <artifactId>grpc-netty</artifactId>
     </dependency>
     <dependency>
-      <groupId>joda-time</groupId>
-      <artifactId>joda-time</artifactId>
-      <version>2.5</version>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-stub</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-protobuf</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-context</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.netty</groupId>
+      <artifactId>netty-handler</artifactId>
     </dependency>
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-tcnative-boringssl-static</artifactId>
-      <version>1.1.33.Fork24</version>
+    </dependency>
+
+    <dependency>
+      <groupId>io.vitess</groupId>
+      <artifactId>vitess-client</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.vitess</groupId>
+      <artifactId>vitess-client</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>joda-time</groupId>
+      <artifactId>joda-time</artifactId>
+    </dependency>
+
+    <!-- Dependencies with limited scope. -->
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 
-  <pluginRepositories>
-    <pluginRepository>
-      <releases>
-        <updatePolicy>never</updatePolicy>
-      </releases>
-      <snapshots>
-        <enabled>false</enabled>
-      </snapshots>
-      <id>central</id>
-      <name>Central Repository</name>
-      <url>https://repo.maven.apache.org/maven2</url>
-    </pluginRepository>
-  </pluginRepositories>
   <build>
     <extensions>
       <extension>
@@ -87,6 +110,18 @@
             </goals>
           </execution>
         </executions>
+      </plugin>
+      <!-- Exclusions for dependency:analyze: -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <configuration>
+          <usedDependencies>
+            <!-- If this is not imported, tests fail with "Jetty ALPN/NPN has not
+              been properly configured." -->
+            <usedDependency>io.netty:netty-tcnative-boringssl-static</usedDependency>
+          </usedDependencies>
+        </configuration>
       </plugin>
     </plugins>
   </build>

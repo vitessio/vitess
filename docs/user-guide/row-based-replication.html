@@ -113,12 +113,15 @@
             <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
               <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
               </ul>
             <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
               <ul style="display: block">
-                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
-                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
             <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
@@ -161,6 +164,14 @@
             <li><a href="/contributing/">Contributing to Vitess</a>
             <li><a href="/contributing/github-workflow.html">GitHub Workflow</a>
             <li><a href="/contributing/code-reviews.html">Code Reviews</a>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Internal</h4>
+          <ul style="display: none">
+            <li><a href="/internal/">Overview</a>
+            <li><a href="/internal/release-instructions.html">Release Instructions</a>
+            <li><a href="/internal/publish-website.html">Publish Website</a>
           </ul>
         </li>
 
@@ -220,12 +231,15 @@
             <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
               <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
               </ul>
             <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
               <ul style="display: block">
-                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
-                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
             <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
@@ -268,6 +282,14 @@
             <li><a href="/contributing/">Contributing to Vitess</a>
             <li><a href="/contributing/github-workflow.html">GitHub Workflow</a>
             <li><a href="/contributing/code-reviews.html">Code Reviews</a>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Internal</h4>
+          <ul style="display: none">
+            <li><a href="/internal/">Overview</a>
+            <li><a href="/internal/release-instructions.html">Release Instructions</a>
+            <li><a href="/internal/publish-website.html">Publish Website</a>
           </ul>
         </li>
 
@@ -318,27 +340,31 @@ integers for instance).</p></li>
 <p>The
 <a href="https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html#sysvar_binlog_row_image"><code class="prettyprint">binlog-row-image</code> option</a> can
 be used to control which rows are used to identify the columns for the Update
-and Delete Rows events. The default setting for that option is to log all columns.</p>
+and Delete Rows events. The default setting for that option is to log all
+columns.</p>
 
-<h2 id="vitess-use-of-replication-stream">Vitess Use of Replication Stream</h2>
+<h2 id="vitess-use-of-mysql-replication-stream">Vitess Use of MySQL Replication Stream</h2>
 
 <p>Vitess uses the Replication Stream in a number of places. This part explains how
-we can use RBR for these.</p>
+we use RBR for these.</p>
 
 <h3 id="vttablet-replication-stream-watcher">vttablet Replication Stream Watcher</h3>
 
-<p>This is enabled by the <code class="prettyprint">watch_replication_stream</code> option, and is used by <a href="/user-guide/update-stream.html">Update
-Stream</a>. It only cares about the GTIDs for the events, so it is unaffected by the use of RBR.</p>
+<p>This is enabled by the <code class="prettyprint">watch_replication_stream</code> option, and is used
+by <a href="/user-guide/update-stream.html">Update Stream</a>. It only cares about the
+GTIDs for the events, so it is unaffected by the use of RBR.</p>
 
 <p><em>Note</em>: the current vttablet also reloads the schema when it sees a DDL in the
-stream. See below for more information on this.</p>
+stream. See below for more information on this. DDLs are however not represented
+in RBR, so this is an orthogonal issue.</p>
 
 <h3 id="update-stream">Update Stream</h3>
 
 <p>The current implementation uses comments in the original SQL (in SQR) to provide
 the primary key of the column that is being changed.</p>
 
-<p>We are changing this to also parse the RBR events, and extract the primary key value.</p>
+<p>We are changing this to also parse the RBR events, and extract the primary key
+value.</p>
 
 <p><em>Note</em>: this means we need accurate schema information. See below.</p>
 
@@ -405,6 +431,28 @@ handle this case, like <a href="https://github.com/github/gh-ost">gh-ost</a>.</p
 can be parsed correctly in all cases.</p></li>
 </ul>
 
+<h2 id="unsupported-features">Unsupported Features</h2>
+
+<p>This part describes the features that are not supported for RBR in Vitess as of
+March 2017:</p>
+
+<ul>
+<li><p><em>Fractional timestamps for MariaDB</em>: not supported. This affects the objects
+of type <code class="prettyprint">TIMESTAMP</code>, <code class="prettyprint">TIME</code> and <code class="prettyprint">DATETIME</code>. The way that feature is
+implemented in MariaDB, the binary logs do not contain enough information to
+be parsed, but instead MariaDB relies on the schema knowledge. This is very
+fragile. MySQL 5.6+ added new data types, and these are supported.</p></li>
+<li><p><em>JSON type in MySQL 5.7+</em>: the representation of these in the binlogs is a
+blob containing indexed binary data. Re-building the SQL version of the data,
+so it can be re-inserted during resharding, is not supported yet. It wouldn&#39;t
+however be a lot of work, with other libraries also supporting this, and the
+C++ MySQL code being well written and easy to read. See for instance
+<a href="https://github.com/shyiko/mysql-binlog-connector-java/pull/119">https://github.com/shyiko/mysql-binlog-connector-java/pull/119</a></p></li>
+<li><p><em>Timezones support</em>: the binary logs store timestamps in UTC. When converting
+these to SQL, we print the UTC value. If the server is not in UTC, that will
+result in data corruption. <em>Note</em>: we are working on a fix for that one.</p></li>
+</ul>
+
 <h2 id="update-stream-extensions">Update Stream Extensions</h2>
 
 <p><a href="/user-guide/update-stream.html">Update Stream</a> can be changed to contain both
@@ -427,8 +475,8 @@ switching traffic from old to new shards.</p>
 modified rows, to rewrite the queries in an efficient way and tag each statement
 with the Primary Key. None of this may be necessary with RBR.</p>
 
-<p>We plan to eventually add a <code class="prettyprint">rbr_mode</code> flag to vttablet to disable all the things it can
-skip if RBR is used.</p>
+<p>We plan to eventually add a <code class="prettyprint">rbr_mode</code> flag to vttablet to disable all the
+things it can skip if RBR is used.</p>
 
       </div>
     </div>

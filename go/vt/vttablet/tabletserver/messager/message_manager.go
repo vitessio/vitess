@@ -1,6 +1,18 @@
-// Copyright 2017, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package messager
 
@@ -100,10 +112,11 @@ type messageManager struct {
 	// The goroutine must in turn defer on Done.
 	wg sync.WaitGroup
 
-	readByTimeNext *sqlparser.ParsedQuery
-	ackQuery       *sqlparser.ParsedQuery
-	postponeQuery  *sqlparser.ParsedQuery
-	purgeQuery     *sqlparser.ParsedQuery
+	readByTimeNext    *sqlparser.ParsedQuery
+	loadMessagesQuery *sqlparser.ParsedQuery
+	ackQuery          *sqlparser.ParsedQuery
+	postponeQuery     *sqlparser.ParsedQuery
+	purgeQuery        *sqlparser.ParsedQuery
 }
 
 // newMessageManager creates a new message manager.
@@ -126,9 +139,13 @@ func newMessageManager(tsv TabletService, table *schema.Table, conns *connpool.P
 	}
 	mm.cond.L = &mm.mu
 
+	columnList := buildSelectColumnList(table)
 	mm.readByTimeNext = sqlparser.BuildParsedQuery(
-		"select time_next, epoch, id, message from %v where time_next < %a order by time_next desc limit %a",
-		mm.name, ":time_next", ":max")
+		"select time_next, epoch, %s from %v where time_next < %a order by time_next desc limit %a",
+		columnList, mm.name, ":time_next", ":max")
+	mm.loadMessagesQuery = sqlparser.BuildParsedQuery(
+		"select time_next, epoch, %s from %v where %a",
+		columnList, mm.name, ":#pk")
 	mm.ackQuery = sqlparser.BuildParsedQuery(
 		"update %v set time_acked = %a, time_next = null where id in %a and time_acked is null",
 		mm.name, ":time_acked", "::ids")
@@ -139,6 +156,21 @@ func newMessageManager(tsv TabletService, table *schema.Table, conns *connpool.P
 		"delete from %v where time_scheduled < %a and time_acked is not null limit 500",
 		mm.name, ":time_scheduled")
 	return mm
+}
+
+// buildSelectColumnList is a convenience function that
+// builds a 'select' list for the user-defined columns.
+func buildSelectColumnList(t *schema.Table) string {
+	buf := sqlparser.NewTrackedBuffer(nil)
+	for i, c := range t.MessageInfo.Fields {
+		// Column names may have to be escaped.
+		if i == 0 {
+			buf.Myprintf("%v", sqlparser.NewColIdent(c.Name))
+		} else {
+			buf.Myprintf(", %v", sqlparser.NewColIdent(c.Name))
+		}
+	}
+	return buf.String()
 }
 
 // Open starts the messageManager service.
@@ -272,7 +304,7 @@ func (mm *messageManager) runSend() {
 			}
 			for i := 0; i < mm.batchSize; i++ {
 				if mr := mm.cache.Pop(); mr != nil {
-					rows = append(rows, []sqltypes.Value{mr.ID, mr.Message})
+					rows = append(rows, mr.Row)
 					continue
 				}
 				break
@@ -484,8 +516,7 @@ func BuildMessageRow(row []sqltypes.Value) (*MessageRow, error) {
 	return &MessageRow{
 		TimeNext: timeNext,
 		Epoch:    epoch,
-		ID:       row[2],
-		Message:  row[3],
+		Row:      row[2:],
 	}, nil
 }
 

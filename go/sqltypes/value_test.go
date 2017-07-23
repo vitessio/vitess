@@ -1,6 +1,18 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package sqltypes
 
@@ -10,6 +22,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/golang/protobuf/proto"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
@@ -85,6 +99,9 @@ func TestBuildValue(t *testing.T) {
 		out: testVal(Datetime, "2012-02-24 23:19:43"),
 	}, {
 		in:  testVal(VarBinary, "a"),
+		out: testVal(VarBinary, "a"),
+	}, {
+		in:  &querypb.BindVariable{Type: VarBinary, Value: []byte("a")},
 		out: testVal(VarBinary, "a"),
 	}}
 	for _, tcase := range testcases {
@@ -280,6 +297,10 @@ func TestValueFromBytes(t *testing.T) {
 		inVal:  "a",
 		outVal: testVal(VarBinary, "a"),
 	}, {
+		inType: Expression,
+		inVal:  "a",
+		outVal: testVal(Expression, "a"),
+	}, {
 		inType: Int64,
 		inVal:  InvalidNeg,
 		outErr: "out of range",
@@ -302,7 +323,7 @@ func TestValueFromBytes(t *testing.T) {
 	}, {
 		inType: Tuple,
 		inVal:  "a",
-		outErr: "not allowed",
+		outErr: "type: TUPLE is invalid",
 	}}
 	for _, tcase := range testcases {
 		v, err := ValueFromBytes(tcase.inType, []byte(tcase.inVal))
@@ -395,6 +416,18 @@ func TestAccessors(t *testing.T) {
 	}
 	if v.IsBinary() {
 		t.Error("v.IsBinary: true, want false")
+	}
+}
+
+func TestBytes(t *testing.T) {
+	for _, v := range []Value{
+		NULL,
+		testVal(Int64, "1"),
+		testVal(Int64, "12"),
+	} {
+		if b := v.Bytes(); bytes.Compare(b, v.Raw()) != 0 {
+			t.Errorf("v1.Bytes: %s, want %s", b, v.Raw())
+		}
 	}
 }
 
@@ -501,7 +534,7 @@ func TestToProtoValue(t *testing.T) {
 		Type:  Int64,
 		Value: []byte("1"),
 	}
-	if !reflect.DeepEqual(got, want) {
+	if !proto.Equal(got, want) {
 		t.Errorf("bindvar: %v, want %v", got, want)
 	}
 }

@@ -1,8 +1,18 @@
 #!/usr/bin/env python
 #
-# Copyright 2015 Google Inc. All rights reserved.
-# Use of this source code is governed by a BSD-style license that can
-# be found in the LICENSE file.
+# Copyright 2017 Google Inc.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """This is the test suite for a vtgate_client implementation.
 """
 
@@ -247,20 +257,6 @@ class TestErrors(TestPythonClientBase):
       self.conn.get_srv_keyspace(error_request)
 
 
-class TestTransactionFlags(TestPythonClientBase):
-  """Test transaction flags."""
-
-  def test_begin(self):
-    """Test begin transaction flags."""
-    self.conn.begin()
-    with self.assertRaisesRegexp(dbexceptions.DatabaseError, 'single db'):
-      self.conn.begin(single_db=True)
-
-    self.conn.commit()
-    with self.assertRaisesRegexp(dbexceptions.DatabaseError, 'twopc'):
-      self.conn.commit(twopc=True)
-
-
 class TestSuccess(TestPythonClientBase):
   """Success test cases for the Python client."""
 
@@ -497,6 +493,10 @@ class TestEcho(TestPythonClientBase):
   options_echo = ('include_event_token:true compare_event_token:'
                   '<timestamp:123 shard:"-80" position:"test_pos" > ')
 
+  session_echo = ('target_string:"@replica" options:<include_event_token:'
+                  'true compare_event_token:<timestamp:123 shard:'
+                  '"-80" position:"test_pos" > > ')
+
   def test_echo_execute(self):
     """This test calls the echo method."""
 
@@ -511,10 +511,7 @@ class TestEcho(TestPythonClientBase):
         # FIXME(alainjobart) change this to query_echo once v3 understand binds
         'query': self.echo_prefix+self.query,
         'bindVars': self.bind_variables_echo,
-        'tabletType': self.tablet_type_echo,
-        'options': self.options_echo,
-        'fresher': True,
-        'eventToken': self.event_token,
+        'session': self.session_echo,
     })
     cursor.close()
 

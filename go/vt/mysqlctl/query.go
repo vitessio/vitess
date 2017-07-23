@@ -1,6 +1,18 @@
-// Copyright 2014, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package mysqlctl
 
@@ -12,14 +24,14 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 )
 
 // getPoolReconnect gets a connection from a pool, tests it, and reconnects if
 // it gets errno 2006.
-func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (dbconnpool.PoolConnection, error) {
+func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (*dbconnpool.PooledDBConnection, error) {
 	conn, err := pool.Get(ctx)
 	if err != nil {
 		return conn, err
@@ -27,7 +39,7 @@ func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (dbc
 	// Run a test query to see if this connection is still good.
 	if _, err := conn.ExecuteFetch("SELECT 1", 1, false); err != nil {
 		// If we get "MySQL server has gone away (errno 2006)", try to reconnect.
-		if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == 2006 {
+		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == 2006 {
 			if err := conn.Reconnect(); err != nil {
 				conn.Recycle()
 				return conn, err
@@ -44,11 +56,16 @@ func (mysqld *Mysqld) ExecuteSuperQuery(ctx context.Context, query string) error
 
 // ExecuteSuperQueryList alows the user to execute queries as a super user.
 func (mysqld *Mysqld) ExecuteSuperQueryList(ctx context.Context, queryList []string) error {
-	conn, connErr := getPoolReconnect(ctx, mysqld.dbaPool)
-	if connErr != nil {
-		return connErr
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
 	}
 	defer conn.Recycle()
+
+	return mysqld.executeSuperQueryListConn(ctx, conn, queryList)
+}
+
+func (mysqld *Mysqld) executeSuperQueryListConn(ctx context.Context, conn *dbconnpool.PooledDBConnection, queryList []string) error {
 	for _, query := range queryList {
 		log.Infof("exec %v", redactMasterPassword(query))
 		if _, err := mysqld.executeFetchContext(ctx, conn, query, 10000, false); err != nil {
@@ -75,7 +92,7 @@ func (mysqld *Mysqld) FetchSuperQuery(ctx context.Context, query string) (*sqlty
 
 // executeFetchContext calls ExecuteFetch() on the given connection,
 // while respecting Context deadline and cancellation.
-func (mysqld *Mysqld) executeFetchContext(ctx context.Context, conn dbconnpool.PoolConnection, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+func (mysqld *Mysqld) executeFetchContext(ctx context.Context, conn *dbconnpool.PooledDBConnection, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	// Fast fail if context is done.
 	select {
 	case <-ctx.Done():
@@ -159,32 +176,6 @@ func (mysqld *Mysqld) killConnection(connID int64) error {
 
 	_, err := killConn.ExecuteFetch(fmt.Sprintf("kill %d", connID), 10000, false)
 	return err
-}
-
-// fetchSuperQueryMap returns a map from column names to cell data for a query
-// that should return either 0 or 1 row. If the query returns zero rows, this
-// will return a nil map and nil error.
-func (mysqld *Mysqld) fetchSuperQueryMap(ctx context.Context, query string) (map[string]string, error) {
-	qr, err := mysqld.FetchSuperQuery(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	if len(qr.Rows) == 0 {
-		// The query succeeded, but there is no data.
-		return nil, nil
-	}
-	if len(qr.Rows) > 1 {
-		return nil, fmt.Errorf("query %#v returned %d rows, expected 1", query, len(qr.Rows))
-	}
-	if len(qr.Fields) != len(qr.Rows[0]) {
-		return nil, fmt.Errorf("query %#v returned %d column names, expected %d", query, len(qr.Fields), len(qr.Rows[0]))
-	}
-
-	rowMap := make(map[string]string, len(qr.Rows[0]))
-	for i, value := range qr.Rows[0] {
-		rowMap[qr.Fields[i].Name] = value.String()
-	}
-	return rowMap, nil
 }
 
 // fetchVariables returns a map from MySQL variable names to variable value

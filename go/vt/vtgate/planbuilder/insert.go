@@ -1,6 +1,18 @@
-// Copyright 2014, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package planbuilder
 
@@ -16,12 +28,15 @@ import (
 
 // buildInsertPlan builds the route for an INSERT statement.
 func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, error) {
-	table, err := vschema.Find(ins.Table.Qualifier, ins.Table.Name)
+	table, err := vschema.Find(ins.Table)
 	if err != nil {
 		return nil, err
 	}
 	if !table.Keyspace.Sharded {
 		return buildInsertUnshardedPlan(ins, table, vschema)
+	}
+	if ins.Action == sqlparser.ReplaceStr {
+		return nil, errors.New("unsupported: REPLACE INTO with sharded schema")
 	}
 	return buildInsertShardedPlan(ins, table)
 }
@@ -43,7 +58,7 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vsch
 		}
 		innerRoute, ok := bldr.(*route)
 		if !ok {
-			return nil, errors.New("unsupported: complex join in insert")
+			return nil, errors.New("unsupported: cross-shard join in insert")
 		}
 		if innerRoute.ERoute.Keyspace.Name != eRoute.Keyspace.Name {
 			return nil, errors.New("unsupported: cross-keyspace select in insert")
@@ -59,7 +74,7 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vsch
 			return nil, errors.New("unsupported: subquery in insert values")
 		}
 	default:
-		panic("unexpected construct in insert")
+		panic(fmt.Sprintf("BUG: unexpected construct in insert: %T", rows))
 	}
 	if eRoute.Table.AutoIncrement == nil {
 		eRoute.Query = generateQuery(ins)
@@ -83,10 +98,9 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vsch
 	}
 	if eRoute.Table.AutoIncrement != nil {
 		eRoute.Generate = &engine.Generate{
-			Opcode:   engine.SelectUnsharded,
 			Keyspace: eRoute.Table.AutoIncrement.Sequence.Keyspace,
 			Query:    fmt.Sprintf("select next :n values from %s", sqlparser.String(eRoute.Table.AutoIncrement.Sequence.Name)),
-			Value:    autoIncValues,
+			Values:   autoIncValues,
 		}
 	}
 	eRoute.Query = generateQuery(ins)
@@ -112,13 +126,14 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 			return nil, errors.New("unsupported: subquery in insert values")
 		}
 	default:
-		panic("unexpected construct in insert")
+		panic(fmt.Sprintf("BUG: unexpected construct in insert: %T", rows))
 	}
 	for _, value := range values {
 		if len(ins.Columns) != len(value) {
 			return nil, errors.New("column list doesn't match values")
 		}
 	}
+
 	colVindexes := eRoute.Table.ColumnVindexes
 	routeValues := make([]interface{}, 0, len(values))
 	autoIncValues := make([]interface{}, 0, len(values))
@@ -144,10 +159,9 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 	}
 	if eRoute.Table.AutoIncrement != nil {
 		eRoute.Generate = &engine.Generate{
-			Opcode:   engine.SelectUnsharded,
 			Keyspace: eRoute.Table.AutoIncrement.Sequence.Keyspace,
 			Query:    fmt.Sprintf("select next :n values from %s", sqlparser.String(eRoute.Table.AutoIncrement.Sequence.Name)),
-			Value:    autoIncValues,
+			Values:   autoIncValues,
 		}
 	}
 	eRoute.Values = routeValues

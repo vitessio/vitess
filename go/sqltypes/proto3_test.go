@@ -1,13 +1,25 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package sqltypes
 
 import (
-	"reflect"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -65,12 +77,12 @@ func TestResult(t *testing.T) {
 		},
 	}
 	p3converted := ResultToProto3(sqlResult)
-	if !reflect.DeepEqual(p3converted, p3Result) {
+	if !proto.Equal(p3converted, p3Result) {
 		t.Errorf("P3:\n%v, want\n%v", p3converted, p3Result)
 	}
 
 	reverse := Proto3ToResult(p3Result)
-	if !reflect.DeepEqual(reverse, sqlResult) {
+	if !reverse.Equal(sqlResult) {
 		t.Errorf("reverse:\n%#v, want\n%#v", reverse, sqlResult)
 	}
 
@@ -78,7 +90,7 @@ func TestResult(t *testing.T) {
 	fields[1].Type = VarBinary
 	sqlResult.Rows[0][1] = testVal(VarBinary, "1")
 	reverse = CustomProto3ToResult(fields, p3Result)
-	if !reflect.DeepEqual(reverse, sqlResult) {
+	if !reverse.Equal(sqlResult) {
 		t.Errorf("reverse:\n%#v, want\n%#v", reverse, sqlResult)
 	}
 }
@@ -169,12 +181,12 @@ func TestResults(t *testing.T) {
 		},
 	}}
 	p3converted := ResultsToProto3(sqlResults)
-	if !reflect.DeepEqual(p3converted, p3Results) {
+	if !Proto3ResultsEqual(p3converted, p3Results) {
 		t.Errorf("P3:\n%v, want\n%v", p3converted, p3Results)
 	}
 
 	reverse := Proto3ToResults(p3Results)
-	if !reflect.DeepEqual(reverse, sqlResults) {
+	if !ResultsEqual(reverse, sqlResults) {
 		t.Errorf("reverse:\n%#v, want\n%#v", reverse, sqlResults)
 	}
 }
@@ -293,12 +305,12 @@ func TestQueryReponses(t *testing.T) {
 		},
 	}
 	p3converted := QueryResponsesToProto3(queryResponses)
-	if !reflect.DeepEqual(p3converted, p3ResultWithError) {
+	if !Proto3QueryResponsesEqual(p3converted, p3ResultWithError) {
 		t.Errorf("P3:\n%v, want\n%v", p3converted, p3ResultWithError)
 	}
 
 	reverse := Proto3ToQueryReponses(p3ResultWithError)
-	if !reflect.DeepEqual(reverse, queryResponses) {
+	if !QueryResponsesEqual(reverse, queryResponses) {
 		t.Errorf("reverse:\n%#v, want\n%#v", reverse, queryResponses)
 	}
 }

@@ -1,6 +1,18 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package planbuilder
 
@@ -23,36 +35,39 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 )
 
-// MarshalJSON is only used for testing.
-func (ep *Plan) MarshalJSON() ([]byte, error) {
+// toJSON returns a JSON of the given Plan.
+// Except for "TableName", it's a 1:1 copy of the fields of "Plan".
+// (The JSON output is used in the tests to compare it against the data in the
+// golden files e.g. data/test/tabletserver/exec_cases.txt.)
+func toJSON(p *Plan) ([]byte, error) {
 	mplan := struct {
-		PlanID               PlanType
-		Reason               ReasonType             `json:",omitempty"`
-		TableName            sqlparser.TableIdent   `json:",omitempty"`
-		FieldQuery           *sqlparser.ParsedQuery `json:",omitempty"`
-		FullQuery            *sqlparser.ParsedQuery `json:",omitempty"`
-		OuterQuery           *sqlparser.ParsedQuery `json:",omitempty"`
-		Subquery             *sqlparser.ParsedQuery `json:",omitempty"`
-		UpsertQuery          *sqlparser.ParsedQuery `json:",omitempty"`
-		ColumnNumbers        []int                  `json:",omitempty"`
-		PKValues             []interface{}          `json:",omitempty"`
-		SecondaryPKValues    []interface{}          `json:",omitempty"`
-		SubqueryPKColumns    []int                  `json:",omitempty"`
-		MessageReloaderQuery *sqlparser.ParsedQuery `json:",omitempty"`
+		PlanID            PlanType
+		Reason            ReasonType             `json:",omitempty"`
+		TableName         sqlparser.TableIdent   `json:",omitempty"`
+		FieldQuery        *sqlparser.ParsedQuery `json:",omitempty"`
+		FullQuery         *sqlparser.ParsedQuery `json:",omitempty"`
+		OuterQuery        *sqlparser.ParsedQuery `json:",omitempty"`
+		Subquery          *sqlparser.ParsedQuery `json:",omitempty"`
+		UpsertQuery       *sqlparser.ParsedQuery `json:",omitempty"`
+		ColumnNumbers     []int                  `json:",omitempty"`
+		PKValues          []interface{}          `json:",omitempty"`
+		SecondaryPKValues []interface{}          `json:",omitempty"`
+		WhereClause       *sqlparser.ParsedQuery `json:",omitempty"`
+		SubqueryPKColumns []int                  `json:",omitempty"`
 	}{
-		PlanID:               ep.PlanID,
-		Reason:               ep.Reason,
-		TableName:            ep.TableName(),
-		FieldQuery:           ep.FieldQuery,
-		FullQuery:            ep.FullQuery,
-		OuterQuery:           ep.OuterQuery,
-		Subquery:             ep.Subquery,
-		UpsertQuery:          ep.UpsertQuery,
-		ColumnNumbers:        ep.ColumnNumbers,
-		PKValues:             ep.PKValues,
-		SecondaryPKValues:    ep.SecondaryPKValues,
-		SubqueryPKColumns:    ep.SubqueryPKColumns,
-		MessageReloaderQuery: ep.MessageReloaderQuery,
+		PlanID:            p.PlanID,
+		Reason:            p.Reason,
+		TableName:         p.TableName(),
+		FieldQuery:        p.FieldQuery,
+		FullQuery:         p.FullQuery,
+		OuterQuery:        p.OuterQuery,
+		Subquery:          p.Subquery,
+		UpsertQuery:       p.UpsertQuery,
+		ColumnNumbers:     p.ColumnNumbers,
+		PKValues:          p.PKValues,
+		SecondaryPKValues: p.SecondaryPKValues,
+		WhereClause:       p.WhereClause,
+		SubqueryPKColumns: p.SubqueryPKColumns,
 	}
 	return json.Marshal(&mplan)
 }
@@ -65,14 +80,14 @@ func TestPlan(t *testing.T) {
 		if err != nil {
 			out = err.Error()
 		} else {
-			bout, err := json.Marshal(plan)
+			bout, err := toJSON(plan)
 			if err != nil {
 				t.Fatalf("Error marshalling %v: %v", plan, err)
 			}
 			out = string(bout)
 		}
 		if out != tcase.output {
-			t.Errorf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, out)
+			t.Errorf("Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
 			if err != nil {
 				out = fmt.Sprintf("\"%s\"", out)
 			} else {
@@ -108,14 +123,14 @@ func TestCustom(t *testing.T) {
 				if err != nil {
 					out = err.Error()
 				} else {
-					bout, err := json.Marshal(plan)
+					bout, err := toJSON(plan)
 					if err != nil {
 						t.Fatalf("Error marshalling %v: %v", plan, err)
 					}
 					out = string(bout)
 				}
 				if out != tcase.output {
-					t.Errorf("File: %s: Line:%v\n%s\n%s", file, tcase.lineno, tcase.output, out)
+					t.Errorf("File: %s: Line:%v\ngot  = %s\nwant = %s", file, tcase.lineno, out, tcase.output)
 				}
 			}
 		}
@@ -130,14 +145,14 @@ func TestStreamPlan(t *testing.T) {
 		if err != nil {
 			out = err.Error()
 		} else {
-			bout, err := json.Marshal(plan)
+			bout, err := toJSON(plan)
 			if err != nil {
 				t.Fatalf("Error marshalling %v: %v", plan, err)
 			}
 			out = string(bout)
 		}
 		if out != tcase.output {
-			t.Errorf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, out)
+			t.Errorf("Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
 		}
 		//fmt.Printf("%s\n%s\n\n", tcase.input, out)
 	}

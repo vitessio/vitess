@@ -1,6 +1,18 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package mysqlctl
 
@@ -14,7 +26,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/youtube/vitess/go/mysqlconn/replication"
+	"github.com/youtube/vitess/go/mysql"
 
 	"golang.org/x/net/context"
 )
@@ -35,16 +47,16 @@ func CreateReparentJournal() []string {
   master_alias VARBINARY(32) NOT NULL,
   replication_position VARBINARY(%v) DEFAULT NULL,
   PRIMARY KEY (time_created_ns))
-ENGINE=InnoDB`, replication.MaximumPositionSize)}
+ENGINE=InnoDB`, mysql.MaximumPositionSize)}
 }
 
 // PopulateReparentJournal returns the SQL command to use to populate
 // the _vt.reparent_journal table, as well as the time_created_ns
 // value used.
-func PopulateReparentJournal(timeCreatedNS int64, actionName, masterAlias string, pos replication.Position) string {
-	posStr := replication.EncodePosition(pos)
-	if len(posStr) > replication.MaximumPositionSize {
-		posStr = posStr[:replication.MaximumPositionSize]
+func PopulateReparentJournal(timeCreatedNS int64, actionName, masterAlias string, pos mysql.Position) string {
+	posStr := mysql.EncodePosition(pos)
+	if len(posStr) > mysql.MaximumPositionSize {
+		posStr = posStr[:mysql.MaximumPositionSize]
 	}
 	return fmt.Sprintf("INSERT INTO _vt.reparent_journal "+
 		"(time_created_ns, action_name, master_alias, replication_position) "+
@@ -81,7 +93,7 @@ func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS 
 // DemoteMaster will gracefully demote a master mysql instance to read only.
 // If the master is still alive, then we need to demote it gracefully
 // make it read-only, flush the writes and get the position
-func (mysqld *Mysqld) DemoteMaster() (rp replication.Position, err error) {
+func (mysqld *Mysqld) DemoteMaster() (rp mysql.Position, err error) {
 	cmds := []string{
 		"FLUSH TABLES WITH READ LOCK",
 		"UNLOCK TABLES",
@@ -93,25 +105,17 @@ func (mysqld *Mysqld) DemoteMaster() (rp replication.Position, err error) {
 }
 
 // PromoteSlave will promote a slave to be the new master.
-func (mysqld *Mysqld) PromoteSlave(hookExtraEnv map[string]string) (replication.Position, error) {
-	// we handle replication, just stop it
-	cmds := []string{SQLStopSlave}
+func (mysqld *Mysqld) PromoteSlave(hookExtraEnv map[string]string) (mysql.Position, error) {
+	// Since we handle replication, just stop it.
+	cmds := []string{
+		SQLStopSlave,
+		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
+	}
 
 	// Promote to master.
-	flavor, err := mysqld.flavor()
-	if err != nil {
-		err = fmt.Errorf("PromoteSlave needs flavor: %v", err)
-		return replication.Position{}, err
-	}
-	cmds = append(cmds, flavor.PromoteSlaveCommands()...)
 	if err := mysqld.ExecuteSuperQueryList(context.TODO(), cmds); err != nil {
-		return replication.Position{}, err
+		return mysql.Position{}, err
 	}
 
-	rp, err := mysqld.MasterPosition()
-	if err != nil {
-		return replication.Position{}, err
-	}
-
-	return rp, nil
+	return mysqld.MasterPosition()
 }

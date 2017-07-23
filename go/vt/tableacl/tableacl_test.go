@@ -1,32 +1,49 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package tableacl
 
 import (
-	"fmt"
+	"errors"
+	"io"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"reflect"
 	"testing"
 	"time"
 
-	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
+	"github.com/golang/protobuf/proto"
+
+	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/tableacl/acl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
 )
 
-type fakeAclFactory struct{}
+type fakeACLFactory struct{}
 
-func (factory *fakeAclFactory) New(entries []string) (acl.ACL, error) {
-	return nil, fmt.Errorf("unable to create a new ACL")
+func (factory *fakeACLFactory) New(entries []string) (acl.ACL, error) {
+	return nil, errors.New("unable to create a new ACL")
 }
 
 func TestInitWithInvalidFilePath(t *testing.T) {
-	setUpTableACL(&simpleacl.Factory{})
-	if err := Init("/invalid_file_path", func() {}); err == nil {
+	tacl := tableACL{factory: &simpleacl.Factory{}}
+	if err := tacl.init("/invalid_file_path", func() {}); err == nil {
 		t.Fatalf("init should fail for an invalid config file path")
 	}
 }
@@ -43,33 +60,26 @@ var aclJSON = `{
 }`
 
 func TestInitWithValidConfig(t *testing.T) {
-	setUpTableACL(&simpleacl.Factory{})
+	tacl := tableACL{factory: &simpleacl.Factory{}}
 	f, err := ioutil.TempFile("", "tableacl")
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	defer os.Remove(f.Name())
-	n, err := f.WriteString(aclJSON)
-	if err != nil {
-		t.Error(err)
-		return
+	if _, err := io.WriteString(f, aclJSON); err != nil {
+		t.Fatal(err)
 	}
-	if n != len(aclJSON) {
-		t.Error("short write")
-		return
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
 	}
-	err = f.Close()
-	if err != nil {
-		t.Error(err)
-		return
+	if err := tacl.init(f.Name(), func() {}); err != nil {
+		t.Fatal(err)
 	}
-	Init(f.Name(), func() {})
 }
 
 func TestInitFromProto(t *testing.T) {
-	setUpTableACL(&simpleacl.Factory{})
-	readerACL := Authorized("my_test_table", READER)
+	tacl := tableACL{factory: &simpleacl.Factory{}}
+	readerACL := tacl.Authorized("my_test_table", READER)
 	want := &ACLResult{ACL: acl.DenyAllACL{}, GroupName: ""}
 	if !reflect.DeepEqual(readerACL, want) {
 		t.Fatalf("tableacl has not been initialized, got: %v, want: %v", readerACL, want)
@@ -81,21 +91,18 @@ func TestInitFromProto(t *testing.T) {
 			Readers:              []string{"vt"},
 		}},
 	}
-	if err := InitFromProto(config); err != nil {
+	if err := tacl.Set(config); err != nil {
 		t.Fatalf("tableacl init should succeed, but got error: %v", err)
 	}
-
-	if !reflect.DeepEqual(GetCurrentConfig(), config) {
-		t.Fatalf("GetCurrentConfig() = %v, want: %v", GetCurrentConfig(), config)
+	if got := tacl.Config(); !proto.Equal(got, config) {
+		t.Fatalf("GetCurrentConfig() = %v, want: %v", got, config)
 	}
-
-	readerACL = Authorized("unknown_table", READER)
+	readerACL = tacl.Authorized("unknown_table", READER)
 	if !reflect.DeepEqual(readerACL, want) {
 		t.Fatalf("there is no config for unknown_table, should deny by default")
 	}
-
-	readerACL = Authorized("test_table", READER)
-	if !readerACL.IsMember("vt") {
+	readerACL = tacl.Authorized("test_table", READER)
+	if !readerACL.IsMember(&querypb.VTGateCallerID{Username: "vt"}) {
 		t.Fatalf("user: vt should have reader permission to table: test_table")
 	}
 }
@@ -135,7 +142,7 @@ func TestTableACLValidateConfig(t *testing.T) {
 }
 
 func TestTableACLAuthorize(t *testing.T) {
-	setUpTableACL(&simpleacl.Factory{})
+	tacl := tableACL{factory: &simpleacl.Factory{}}
 	config := &tableaclpb.Config{
 		TableGroups: []*tableaclpb.TableGroupSpec{
 			{
@@ -168,21 +175,21 @@ func TestTableACLAuthorize(t *testing.T) {
 			},
 		},
 	}
-	if err := InitFromProto(config); err != nil {
+	if err := tacl.Set(config); err != nil {
 		t.Fatalf("InitFromProto(<data>) = %v, want: nil", err)
 	}
 
-	readerACL := Authorized("test_data_any", READER)
-	if !readerACL.IsMember("u1") {
+	readerACL := tacl.Authorized("test_data_any", READER)
+	if !readerACL.IsMember(&querypb.VTGateCallerID{Username: "u1"}) {
 		t.Fatalf("user u1 should have reader permission to table test_data_any")
 	}
-	if !readerACL.IsMember("u2") {
+	if !readerACL.IsMember(&querypb.VTGateCallerID{Username: "u2"}) {
 		t.Fatalf("user u2 should have reader permission to table test_data_any")
 	}
 }
 
 func TestFailedToCreateACL(t *testing.T) {
-	setUpTableACL(&fakeAclFactory{})
+	tacl := tableACL{factory: &fakeACLFactory{}}
 	config := &tableaclpb.Config{
 		TableGroups: []*tableaclpb.TableGroupSpec{{
 			Name:                 "group01",
@@ -191,14 +198,13 @@ func TestFailedToCreateACL(t *testing.T) {
 			Writers:              []string{"vt"},
 		}},
 	}
-	if err := InitFromProto(config); err == nil {
+	if err := tacl.Set(config); err == nil {
 		t.Fatalf("tableacl init should fail because fake ACL returns an error")
 	}
 }
 
 func TestDoubleRegisterTheSameKey(t *testing.T) {
-	acls = make(map[string]acl.Factory)
-	name := fmt.Sprintf("tableacl-name-%d", rand.Int63())
+	name := "tableacl-name-TestDoubleRegisterTheSameKey"
 	Register(name, &simpleacl.Factory{})
 	defer func() {
 		err := recover()
@@ -209,12 +215,12 @@ func TestDoubleRegisterTheSameKey(t *testing.T) {
 	Register(name, &simpleacl.Factory{})
 }
 
-func TestGetAclFactory(t *testing.T) {
+func TestGetCurrentAclFactory(t *testing.T) {
 	acls = make(map[string]acl.Factory)
 	defaultACL = ""
-	name := fmt.Sprintf("tableacl-name-%d", rand.Int63())
+	name := "tableacl-name-TestGetCurrentAclFactory"
 	aclFactory := &simpleacl.Factory{}
-	Register(name, aclFactory)
+	Register(name+"-1", aclFactory)
 	f, err := GetCurrentAclFactory()
 	if err != nil {
 		t.Errorf("Fail to get current ACL Factory: %v", err)
@@ -222,20 +228,20 @@ func TestGetAclFactory(t *testing.T) {
 	if !reflect.DeepEqual(aclFactory, f) {
 		t.Fatalf("should return registered acl factory even if default acl is not set.")
 	}
-	Register(name+"2", aclFactory)
+	Register(name+"-2", aclFactory)
 	_, err = GetCurrentAclFactory()
 	if err == nil {
 		t.Fatalf("there are more than one acl factories, but the default is not set")
 	}
 }
 
-func TestGetAclFactoryWithWrongDefault(t *testing.T) {
+func TestGetCurrentAclFactoryWithWrongDefault(t *testing.T) {
 	acls = make(map[string]acl.Factory)
 	defaultACL = ""
-	name := fmt.Sprintf("tableacl-name-%d", rand.Int63())
+	name := "tableacl-name-TestGetCurrentAclFactoryWithWrongDefault"
 	aclFactory := &simpleacl.Factory{}
-	Register(name, aclFactory)
-	Register(name+"2", aclFactory)
+	Register(name+"-1", aclFactory)
+	Register(name+"-2", aclFactory)
 	SetDefaultACL("wrong_name")
 	_, err := GetCurrentAclFactory()
 	if err == nil {
@@ -243,12 +249,47 @@ func TestGetAclFactoryWithWrongDefault(t *testing.T) {
 	}
 }
 
-func setUpTableACL(factory acl.Factory) {
-	name := fmt.Sprintf("tableacl-name-%d", rand.Int63())
-	Register(name, factory)
-	SetDefaultACL(name)
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
+func TestHealthWithACL(t *testing.T) {
+	tacl := tableACL{factory: &simpleacl.Factory{}}
+	ha := health.NewAggregator()
+	tests := []struct {
+		config *tableaclpb.Config
+		wantOK bool
+	}{
+		{
+			config: nil,
+			wantOK: false,
+		},
+		{
+			config: &tableaclpb.Config{
+				TableGroups: []*tableaclpb.TableGroupSpec{{
+					Name:                 "group01",
+					TableNamesOrPrefixes: []string{"test_table"},
+					Readers:              []string{"vt"},
+					Writers:              []string{"vt"},
+				}}},
+			wantOK: true,
+		},
+		{
+			config: &tableaclpb.Config{},
+			wantOK: true,
+		},
+	}
+	ha.RegisterSimpleCheck("tableacl", func() error { return checkHealth(&tacl) })
+	for _, test := range tests {
+		if test.config != nil {
+			if err := tacl.Set(test.config); err != nil {
+				t.Fatalf("tacl.Set(%#v) = %v, want %v", test.config, err, nil)
+			}
+		}
+		delay, err := ha.Report(true, true)
+		wantErr := error(nil)
+		if !test.wantOK {
+			wantErr = errors.New("<not nil>")
+		}
+		wantDelay := time.Duration(0)
+		if delay != wantDelay || (err == nil) != test.wantOK {
+			t.Errorf("ha.Report(true, true) == (%v, %v), want (%v, %v)", delay, err, wantDelay, wantErr)
+		}
+	}
 }

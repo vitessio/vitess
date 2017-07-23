@@ -1,3 +1,19 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreedto in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 // This file contains the Vitess topology related data structures.
 // Very few of these structures are exchanged over the wire (only
 // TabletType and KeyRange), but they are all used by the topology
@@ -5,7 +21,7 @@
 
 syntax = "proto3";
 
-option java_package="com.youtube.vitess.proto";
+option java_package="io.vitess.proto";
 
 package topodata;
 
@@ -94,10 +110,12 @@ message Tablet {
   // Fully qualified domain name of the host.
   string hostname = 2;
 
-  // IP address, stored as a string.
-  string ip = 3;
-
-  // Map of named ports. Normally this should include vt, grpc, and mysql.
+  // Map of named ports. Normally this should include vt and grpc.
+  // Going forward, the mysql port will be stored in mysql_port
+  // instead of here.
+  // For accessing mysql port, use topoproto.MysqlPort to fetch, and
+  // topoproto.SetMysqlPort to set. These wrappers will ensure
+  // legacy behavior is supported.
   map<string, int32> port_map = 4;
 
   // Keyspace name.
@@ -120,9 +138,18 @@ message Tablet {
   // tablet tags
   map<string, string> tags = 10;
 
-  // OBSOLETE: tablet health information
+  // MySQL hostname.
+  string mysql_hostname = 12;
+
+  // MySQL port. Use topoproto.MysqlPort and topoproto.SetMysqlPort
+  // to access this variable. The functions provide support
+  // for legacy behavior.
+  int32 mysql_port = 13;
+
+  // OBSOLETE: ip and tablet health information
+  // string ip = 3;
   // map<string, string> health_map = 11;
-  reserved 11;
+  reserved 3, 11;
 }
 
 // A Shard contains data about a subset of the data whithin a keyspace.

@@ -6,15 +6,27 @@ Generally speaking, upgrading Vitess is a safe and and easy process because it i
 
 ## Compatibility
 
-As of June 2016 we have not defined formal compatibility guarantees we will promise for future open-source releases. In general, we plan to follow industry standards e.g. compatibility when upgrading to a newer minor version is guaranteed. Upgrades to a higher major may require manual configuration changes and will be mentioned in the changelog.
+Our versioning strategy is based on [Semantic Versioning](http://semver.org/).
+
+Vitess version numbers follow the format `MAJOR.MINOR.PATCH`.
+We guarantee compatibility when upgrading to a newer **patch** or **minor** version.
+Upgrades to a higher **major** version may require manual configuration changes.
+
+In general, always **read the 'Upgrading' section of the release notes**.
+It will mention any incompatible changes and necessary manual steps.
 
 ## Upgrade Order
 
-We recommend to upgrade the different components in the following order:
+We recommend to upgrade components in a bottom-to-top order such that "old" clients will talk to "new" servers during the transition.
+
+Please use this upgrade order (unless otherwise noted in the release notes):
 
 - vtctld
-- vtgate
 - vttablet
+- vtgate
+- application code which links client libraries
+
+*vtctld* is listed first to make sure that you can still adminstrate Vitess - or if not find out as soon as possible.
 
 ## Canary Testing
 
@@ -30,7 +42,7 @@ Any upgrade should be a rolling release i.e. usually one tablet at a time within
 
 ## Upgrading the Master Tablet
 
-The *master* tablet of each shard should always be updated at last in the following manner:
+The *master* tablet of each shard should always be updated last in the following manner:
 
 - verify that all *replica* tablets in the shard have been upgraded
 - reparent away from the current *master* to a *replica* tablet

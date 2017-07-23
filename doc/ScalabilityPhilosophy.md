@@ -84,7 +84,7 @@ traffic.
 
 Vitess supports MapReduce access to the data. Vitess provides a Hadoop
 connector, that can also be used with Apache Spark. See the [Hadoop package
-documentation](https://github.com/youtube/vitess/tree/master/java/hadoop/src/main/java/com/youtube/vitess/hadoop)
+documentation](https://github.com/youtube/vitess/tree/master/java/hadoop/src/main/java/io/vitess/hadoop)
 for more information.
 
 With a MapReduce framework, Vitess does not support very complicated
@@ -139,9 +139,8 @@ available and consistent data store.
 
 Lock servers were built for this exact purpose, and Vitess needs one such
 cluster to be setup to run smoothly. Vitess can be customized to utilize any
-lock server, and by default it supports zookeeper and etcd. We call this
-component
-[Topology Service](/user-guide/topology-service.html).
+lock server, and by default it supports Zookeeper, etcd and Consul. We call this
+component [Topology Service](/user-guide/topology-service.html).
 
 As Vitess is meant to run in multiple data centers / regions (called cells
 below), it relies on two different lock servers:

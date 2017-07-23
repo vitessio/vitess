@@ -1,6 +1,18 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 /*
   Generate my.cnf files from templates.
@@ -14,7 +26,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 )
 
@@ -101,12 +112,19 @@ func (cnf *Mycnf) lookup(key string) string {
 	return cnf.mycnfMap[key]
 }
 
-func (cnf *Mycnf) lookupAndCheck(key string) string {
+func (cnf *Mycnf) lookupWithDefault(key, defaultVal string) string {
 	val := cnf.lookup(key)
 	if val == "" {
-		panic(fmt.Errorf("Value for key '%v' not set", key))
+		if defaultVal == "" {
+			panic(fmt.Errorf("Value for key '%v' not set and no default value set", key))
+		}
+		return defaultVal
 	}
 	return val
+}
+
+func (cnf *Mycnf) lookupAndCheck(key string) string {
+	return cnf.lookupWithDefault(key, "")
 }
 
 func normKey(bkey []byte) string {
@@ -115,23 +133,23 @@ func normKey(bkey []byte) string {
 	return string(bytes.Replace(bytes.TrimSpace(bkey), []byte("_"), []byte("-"), -1))
 }
 
-// ReadMycnf will read an existing my.cnf from disk, and create a Mycnf object.
-func ReadMycnf(cnfFile string) (mycnf *Mycnf, err error) {
+// ReadMycnf will read an existing my.cnf from disk, and update the passed in Mycnf object
+// with values from the my.cnf on disk.
+func ReadMycnf(mycnf *Mycnf) (*Mycnf, error) {
+	var err error
 	defer func(err *error) {
 		if x := recover(); x != nil {
 			*err = x.(error)
 		}
 	}(&err)
 
-	f, err := os.Open(cnfFile)
+	f, err := os.Open(mycnf.path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
 	buf := bufio.NewReader(f)
-	mycnf = new(Mycnf)
-	mycnf.path, err = filepath.Abs(cnfFile)
 	if err != nil {
 		return nil, err
 	}
@@ -169,19 +187,21 @@ func ReadMycnf(cnfFile string) (mycnf *Mycnf, err error) {
 	}
 
 	mycnf.MysqlPort = int32(port)
-	mycnf.DataDir = mycnf.lookupAndCheck("datadir")
-	mycnf.InnodbDataHomeDir = mycnf.lookupAndCheck("innodb_data_home_dir")
-	mycnf.InnodbLogGroupHomeDir = mycnf.lookupAndCheck("innodb_log_group_home_dir")
-	mycnf.SocketFile = mycnf.lookupAndCheck("socket")
-	mycnf.GeneralLogPath = mycnf.lookup("general_log_file")
-	mycnf.ErrorLogPath = mycnf.lookupAndCheck("log-error")
-	mycnf.SlowLogPath = mycnf.lookupAndCheck("slow-query-log-file")
-	mycnf.RelayLogPath = mycnf.lookupAndCheck("relay-log")
-	mycnf.RelayLogIndexPath = mycnf.lookupAndCheck("relay-log-index")
-	mycnf.RelayLogInfoPath = mycnf.lookupAndCheck("relay-log-info-file")
-	mycnf.BinLogPath = mycnf.lookupAndCheck("log-bin")
-	mycnf.MasterInfoFile = mycnf.lookupAndCheck("master-info-file")
-	mycnf.PidFile = mycnf.lookupAndCheck("pid-file")
+	mycnf.DataDir = mycnf.lookupWithDefault("datadir", mycnf.DataDir)
+	mycnf.InnodbDataHomeDir = mycnf.lookupWithDefault("innodb_data_home_dir", mycnf.InnodbDataHomeDir)
+	mycnf.InnodbLogGroupHomeDir = mycnf.lookupWithDefault("innodb_log_group_home_dir", mycnf.InnodbLogGroupHomeDir)
+	mycnf.SocketFile = mycnf.lookupWithDefault("socket", mycnf.SocketFile)
+	mycnf.GeneralLogPath = mycnf.lookupWithDefault("general_log_file", mycnf.GeneralLogPath)
+	mycnf.ErrorLogPath = mycnf.lookupWithDefault("log-error", mycnf.ErrorLogPath)
+	mycnf.SlowLogPath = mycnf.lookupWithDefault("slow-query-log-file", mycnf.SlowLogPath)
+	mycnf.RelayLogPath = mycnf.lookupWithDefault("relay-log", mycnf.RelayLogPath)
+	mycnf.RelayLogIndexPath = mycnf.lookupWithDefault("relay-log-index", mycnf.RelayLogIndexPath)
+	mycnf.RelayLogInfoPath = mycnf.lookupWithDefault("relay-log-info-file", mycnf.RelayLogInfoPath)
+	mycnf.BinLogPath = mycnf.lookupWithDefault("log-bin", mycnf.BinLogPath)
+	mycnf.MasterInfoFile = mycnf.lookupWithDefault("master-info-file", mycnf.MasterInfoFile)
+	mycnf.PidFile = mycnf.lookupWithDefault("pid-file", mycnf.PidFile)
+	mycnf.TmpDir = mycnf.lookupWithDefault("tmpdir", mycnf.TmpDir)
+	mycnf.SlaveLoadTmpDir = mycnf.lookupWithDefault("slave_load_tmpdir", mycnf.SlaveLoadTmpDir)
 
 	return mycnf, nil
 }

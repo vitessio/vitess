@@ -1,6 +1,18 @@
-// Copyright 2014, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package planbuilder
 
@@ -19,7 +31,18 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 		FullQuery: GenerateFullQuery(upd),
 	}
 
-	tableName := sqlparser.GetTableName(upd.Table.Expr)
+	if len(upd.TableExprs) > 1 {
+		plan.Reason = ReasonMultiTable
+		return plan, nil
+	}
+
+	aliased, ok := upd.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	if !ok {
+		plan.Reason = ReasonMultiTable
+		return plan, nil
+	}
+
+	tableName := sqlparser.GetTableName(aliased.Expr)
 	if tableName.IsEmpty() {
 		plan.Reason = ReasonTable
 		return plan, nil
@@ -28,6 +51,11 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 	if err != nil {
 		return nil, err
 	}
+
+	// Store the WHERE clause as string for the hot row protection (txserializer).
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("%v", upd.Where)
+	plan.WhereClause = buf.ParsedQuery()
 
 	if !table.HasPrimary() {
 		log.Warningf("no primary key for table %s", tableName)
@@ -53,7 +81,7 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 	}
 
 	plan.PlanID = PlanDMLSubquery
-	plan.Subquery = GenerateUpdateSubquery(upd, table)
+	plan.Subquery = GenerateUpdateSubquery(upd, table, aliased)
 	return plan, nil
 }
 
@@ -63,7 +91,16 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
 		FullQuery: GenerateFullQuery(del),
 	}
 
-	tableName := sqlparser.GetTableName(del.Table)
+	if len(del.TableExprs) > 1 {
+		plan.Reason = ReasonMultiTable
+		return plan, nil
+	}
+	aliased, ok := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	if !ok {
+		plan.Reason = ReasonMultiTable
+		return plan, nil
+	}
+	tableName := sqlparser.GetTableName(aliased.Expr)
 	if tableName.IsEmpty() {
 		plan.Reason = ReasonTable
 		return plan, nil
@@ -72,6 +109,11 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
 	if err != nil {
 		return nil, err
 	}
+
+	// Store the WHERE clause as string for the hot row protection (txserializer).
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("%v", del.Where)
+	plan.WhereClause = buf.ParsedQuery()
 
 	if !table.HasPrimary() {
 		log.Warningf("no primary key for table %s", tableName)
@@ -88,7 +130,7 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
 	}
 
 	plan.PlanID = PlanDMLSubquery
-	plan.Subquery = GenerateDeleteSubquery(del, table)
+	plan.Subquery = GenerateDeleteSubquery(del, table, aliased)
 	return plan, nil
 }
 
@@ -124,7 +166,7 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 	plan = &Plan{
 		PlanID:     PlanPassSelect,
 		FieldQuery: GenerateFieldQuery(sel),
-		FullQuery:  GenerateSelectLimitQuery(sel),
+		FullQuery:  GenerateLimitQuery(sel),
 	}
 	if sel.Lock != "" {
 		plan.PlanID = PlanSelectLock
@@ -243,6 +285,10 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 		PlanID:    PlanPassDML,
 		FullQuery: GenerateFullQuery(ins),
 	}
+	if ins.Action == sqlparser.ReplaceStr {
+		plan.Reason = ReasonReplace
+		return plan, nil
+	}
 	tableName := sqlparser.GetTableName(ins.Table)
 	if tableName.IsEmpty() {
 		plan.Reason = ReasonTable
@@ -280,7 +326,7 @@ func analyzeInsertNoType(ins *sqlparser.Insert, plan *Plan, table *schema.Table)
 		}
 		plan.PlanID = PlanInsertSubquery
 		plan.OuterQuery = GenerateInsertOuterQuery(ins)
-		plan.Subquery = GenerateSelectLimitQuery(sel)
+		plan.Subquery = GenerateLimitQuery(sel)
 		if len(ins.Columns) != 0 {
 			for _, col := range ins.Columns {
 				colIndex := table.FindColumn(col)
@@ -336,9 +382,9 @@ func analyzeInsertNoType(ins *sqlparser.Insert, plan *Plan, table *schema.Table)
 	newins.OnDup = nil
 	plan.OuterQuery = sqlparser.GenerateParsedQuery(&newins)
 	upd := &sqlparser.Update{
-		Comments: ins.Comments,
-		Table:    &sqlparser.AliasedTableExpr{Expr: ins.Table},
-		Exprs:    updateExprs,
+		Comments:   ins.Comments,
+		TableExprs: sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}},
+		Exprs:      updateExprs,
 	}
 	plan.UpsertQuery = GenerateUpdateOuterQuery(upd)
 	return plan, nil
@@ -424,12 +470,6 @@ func analyzeInsertMessage(ins *sqlparser.Insert, plan *Plan, table *schema.Table
 		return nil, fmt.Errorf("%s must be specified for message insert", col.String())
 	}
 
-	col = sqlparser.NewColIdent("message")
-	num = findCol(col, ins.Columns)
-	if num < 0 {
-		return nil, fmt.Errorf("%s must be specified for message insert", col.String())
-	}
-
 	pkColumnNumbers := getInsertPKColumns(ins.Columns, table)
 	pkValues, err := getInsertPKValues(pkColumnNumbers, rowList, table)
 	if err != nil {
@@ -444,7 +484,6 @@ func analyzeInsertMessage(ins *sqlparser.Insert, plan *Plan, table *schema.Table
 	plan.PKValues = pkValues
 	plan.PlanID = PlanInsertMessage
 	plan.OuterQuery = sqlparser.GenerateParsedQuery(ins)
-	plan.MessageReloaderQuery = GenerateLoadMessagesQuery(ins)
 	return plan, nil
 }
 

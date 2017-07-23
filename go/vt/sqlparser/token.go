@@ -1,6 +1,18 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package sqlparser
 
@@ -9,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/youtube/vitess/go/bytes2"
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
@@ -85,7 +98,7 @@ var keywords = map[string]int{
 	"current_user":        UNUSED,
 	"cursor":              UNUSED,
 	"database":            DATABASE,
-	"databases":           UNUSED,
+	"databases":           DATABASES,
 	"day_hour":            UNUSED,
 	"day_microsecond":     UNUSED,
 	"day_minute":          UNUSED,
@@ -199,7 +212,7 @@ var keywords = map[string]int{
 	"numeric":             UNUSED,
 	"offset":              OFFSET,
 	"on":                  ON,
-	"optimize":            UNUSED,
+	"optimize":            OPTIMIZE,
 	"optimizer_costs":     UNUSED,
 	"option":              UNUSED,
 	"optionally":          UNUSED,
@@ -222,6 +235,7 @@ var keywords = map[string]int{
 	"regexp":              REGEXP,
 	"release":             UNUSED,
 	"rename":              RENAME,
+	"repair":              REPAIR,
 	"repeat":              UNUSED,
 	"replace":             REPLACE,
 	"require":             UNUSED,
@@ -258,6 +272,7 @@ var keywords = map[string]int{
 	"stored":              UNUSED,
 	"straight_join":       STRAIGHT_JOIN,
 	"table":               TABLE,
+	"tables":              TABLES,
 	"terminated":          UNUSED,
 	"then":                THEN,
 	"tinyblob":            UNUSED,
@@ -267,6 +282,7 @@ var keywords = map[string]int{
 	"trailing":            UNUSED,
 	"trigger":             UNUSED,
 	"true":                TRUE,
+	"truncate":            TRUNCATE,
 	"undo":                UNUSED,
 	"union":               UNION,
 	"unique":              UNIQUE,
@@ -285,6 +301,9 @@ var keywords = map[string]int{
 	"varying":             UNUSED,
 	"virtual":             UNUSED,
 	"view":                VIEW,
+	"vitess_keyspaces":    VITESS_KEYSPACES,
+	"vitess_shards":       VITESS_SHARDS,
+	"vschema_tables":      VSCHEMA_TABLES,
 	"when":                WHEN,
 	"where":               WHERE,
 	"while":               UNUSED,
@@ -312,7 +331,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 
 // Error is called by go yacc if there's a parsing error.
 func (tkn *Tokenizer) Error(err string) {
-	buf := &bytes.Buffer{}
+	buf := &bytes2.Buffer{}
 	if tkn.lastToken != nil {
 		fmt.Fprintf(buf, "%s at position %v near '%s'", err, tkn.Position, tkn.lastToken)
 	} else {
@@ -367,7 +386,7 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 			return int(ch), nil
 		case '?':
 			tkn.posVarIndex++
-			buf := new(bytes.Buffer)
+			buf := new(bytes2.Buffer)
 			fmt.Fprintf(buf, ":v%d", tkn.posVarIndex)
 			return VALUE_ARG, buf.Bytes()
 		case '.':
@@ -459,7 +478,7 @@ func (tkn *Tokenizer) skipBlank() {
 }
 
 func (tkn *Tokenizer) scanIdentifier(firstByte byte) (int, []byte) {
-	buffer := &bytes.Buffer{}
+	buffer := &bytes2.Buffer{}
 	buffer.WriteByte(firstByte)
 	for isLetter(tkn.lastChar) || isDigit(tkn.lastChar) {
 		buffer.WriteByte(byte(tkn.lastChar))
@@ -478,7 +497,7 @@ func (tkn *Tokenizer) scanIdentifier(firstByte byte) (int, []byte) {
 }
 
 func (tkn *Tokenizer) scanHex() (int, []byte) {
-	buffer := &bytes.Buffer{}
+	buffer := &bytes2.Buffer{}
 	tkn.scanMantissa(16, buffer)
 	if tkn.lastChar != '\'' {
 		return LEX_ERROR, buffer.Bytes()
@@ -491,7 +510,7 @@ func (tkn *Tokenizer) scanHex() (int, []byte) {
 }
 
 func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
-	buffer := &bytes.Buffer{}
+	buffer := &bytes2.Buffer{}
 	backTickSeen := false
 	for {
 		if backTickSeen {
@@ -522,7 +541,7 @@ func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
 }
 
 func (tkn *Tokenizer) scanBindVar() (int, []byte) {
-	buffer := &bytes.Buffer{}
+	buffer := &bytes2.Buffer{}
 	buffer.WriteByte(byte(tkn.lastChar))
 	token := VALUE_ARG
 	tkn.next()
@@ -541,7 +560,7 @@ func (tkn *Tokenizer) scanBindVar() (int, []byte) {
 	return token, buffer.Bytes()
 }
 
-func (tkn *Tokenizer) scanMantissa(base int, buffer *bytes.Buffer) {
+func (tkn *Tokenizer) scanMantissa(base int, buffer *bytes2.Buffer) {
 	for digitVal(tkn.lastChar) < base {
 		tkn.consumeNext(buffer)
 	}
@@ -549,7 +568,7 @@ func (tkn *Tokenizer) scanMantissa(base int, buffer *bytes.Buffer) {
 
 func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) (int, []byte) {
 	token := INTEGRAL
-	buffer := &bytes.Buffer{}
+	buffer := &bytes2.Buffer{}
 	if seenDecimalPoint {
 		token = FLOAT
 		buffer.WriteByte('.')
@@ -596,7 +615,7 @@ exit:
 }
 
 func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
-	buffer := &bytes.Buffer{}
+	buffer := &bytes2.Buffer{}
 	for {
 		ch := tkn.lastChar
 		tkn.next()
@@ -626,7 +645,7 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 }
 
 func (tkn *Tokenizer) scanCommentType1(prefix string) (int, []byte) {
-	buffer := &bytes.Buffer{}
+	buffer := &bytes2.Buffer{}
 	buffer.WriteString(prefix)
 	for tkn.lastChar != eofChar {
 		if tkn.lastChar == '\n' {
@@ -639,7 +658,7 @@ func (tkn *Tokenizer) scanCommentType1(prefix string) (int, []byte) {
 }
 
 func (tkn *Tokenizer) scanCommentType2() (int, []byte) {
-	buffer := &bytes.Buffer{}
+	buffer := &bytes2.Buffer{}
 	buffer.WriteString("/*")
 	for {
 		if tkn.lastChar == '*' {
@@ -658,7 +677,7 @@ func (tkn *Tokenizer) scanCommentType2() (int, []byte) {
 	return COMMENT, buffer.Bytes()
 }
 
-func (tkn *Tokenizer) consumeNext(buffer *bytes.Buffer) {
+func (tkn *Tokenizer) consumeNext(buffer *bytes2.Buffer) {
 	if tkn.lastChar == eofChar {
 		// This should never happen.
 		panic("unexpected EOF")

@@ -1,6 +1,18 @@
-// Copyright 2016, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 /*
 This file contains common functions for cmd/mysqlctl and cmd/mysqlctld.
@@ -47,7 +59,8 @@ func CreateMysqld(tabletUID uint32, mysqlSocket string, mysqlPort int32, dbconfi
 // installation that already exists. This will look for an existing my.cnf file
 // and use that to call NewMysqld().
 func OpenMysqld(tabletUID uint32, dbconfigFlags dbconfigs.DBConfigFlag) (*Mysqld, error) {
-	mycnf, err := ReadMycnf(mycnfFile(tabletUID))
+	// We pass a port of 0, this will be read and overwritten from the path on disk
+	mycnf, err := ReadMycnf(NewMycnf(tabletUID, 0))
 	if err != nil {
 		return nil, fmt.Errorf("couldn't read my.cnf file: %v", err)
 	}

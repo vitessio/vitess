@@ -1,13 +1,25 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 // Package schematest provides support for testing packages
 // that depend on schema
 package schematest
 
 import (
-	"github.com/youtube/vitess/go/mysqlconn"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -45,13 +57,25 @@ func Queries() map[string]*sqltypes.Result {
 				{sqltypes.MakeString([]byte("1"))},
 			},
 		},
-		mysqlconn.BaseShowTables: {
-			Fields:       mysqlconn.BaseShowTablesFields,
+		"show variables like 'binlog_format'": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.VarChar,
+			}, {
+				Type: sqltypes.VarChar,
+			}},
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{{
+				sqltypes.MakeString([]byte("binlog_format")),
+				sqltypes.MakeString([]byte("STATEMENT")),
+			}},
+		},
+		mysql.BaseShowTables: {
+			Fields:       mysql.BaseShowTablesFields,
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.BaseShowTablesRow("test_table_01", false, ""),
-				mysqlconn.BaseShowTablesRow("test_table_02", false, ""),
-				mysqlconn.BaseShowTablesRow("test_table_03", false, ""),
+				mysql.BaseShowTablesRow("test_table_01", false, ""),
+				mysql.BaseShowTablesRow("test_table_02", false, ""),
+				mysql.BaseShowTablesRow("test_table_03", false, ""),
 			},
 		},
 		"select * from test_table_01 where 1 != 1": {
@@ -61,10 +85,10 @@ func Queries() map[string]*sqltypes.Result {
 			}},
 		},
 		"describe test_table_01": {
-			Fields:       mysqlconn.DescribeTableFields,
+			Fields:       mysql.DescribeTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
+				mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
 			},
 		},
 		"select * from test_table_02 where 1 != 1": {
@@ -74,10 +98,10 @@ func Queries() map[string]*sqltypes.Result {
 			}},
 		},
 		"describe test_table_02": {
-			Fields:       mysqlconn.DescribeTableFields,
+			Fields:       mysql.DescribeTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
+				mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
 			},
 		},
 		"select * from test_table_03 where 1 != 1": {
@@ -87,32 +111,32 @@ func Queries() map[string]*sqltypes.Result {
 			}},
 		},
 		"describe test_table_03": {
-			Fields:       mysqlconn.DescribeTableFields,
+			Fields:       mysql.DescribeTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
+				mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
 			},
 		},
 		// for SplitQuery because it needs a primary key column
 		"show index from test_table_01": {
-			Fields:       mysqlconn.ShowIndexFromTableFields,
+			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.ShowIndexFromTableRow("test_table_01", true, "PRIMARY", 1, "pk", false),
+				mysql.ShowIndexFromTableRow("test_table_01", true, "PRIMARY", 1, "pk", false),
 			},
 		},
 		"show index from test_table_02": {
-			Fields:       mysqlconn.ShowIndexFromTableFields,
+			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.ShowIndexFromTableRow("test_table_02", true, "PRIMARY", 1, "pk", false),
+				mysql.ShowIndexFromTableRow("test_table_02", true, "PRIMARY", 1, "pk", false),
 			},
 		},
 		"show index from test_table_03": {
-			Fields:       mysqlconn.ShowIndexFromTableFields,
+			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.ShowIndexFromTableRow("test_table_03", true, "PRIMARY", 1, "pk", false),
+				mysql.ShowIndexFromTableRow("test_table_03", true, "PRIMARY", 1, "pk", false),
 			},
 		},
 		"begin":  {},

@@ -31,27 +31,31 @@ A few binlog events are used:
 The
 [`binlog-row-image` option](https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html#sysvar_binlog_row_image) can
 be used to control which rows are used to identify the columns for the Update
-and Delete Rows events. The default setting for that option is to log all columns.
+and Delete Rows events. The default setting for that option is to log all
+columns.
 
-## Vitess Use of Replication Stream
+## Vitess Use of MySQL Replication Stream
 
 Vitess uses the Replication Stream in a number of places. This part explains how
-we can use RBR for these.
+we use RBR for these.
 
 ### vttablet Replication Stream Watcher
 
-This is enabled by the `watch_replication_stream` option, and is used by [Update
-Stream](/user-guide/update-stream.html). It only cares about the GTIDs for the events, so it is unaffected by the use of RBR.
+This is enabled by the `watch_replication_stream` option, and is used
+by [Update Stream](/user-guide/update-stream.html). It only cares about the
+GTIDs for the events, so it is unaffected by the use of RBR.
 
 *Note*: the current vttablet also reloads the schema when it sees a DDL in the
-stream. See below for more information on this.
+stream. See below for more information on this. DDLs are however not represented
+in RBR, so this is an orthogonal issue.
 
 ### Update Stream
 
 The current implementation uses comments in the original SQL (in SQR) to provide
 the primary key of the column that is being changed.
 
-We are changing this to also parse the RBR events, and extract the primary key value.
+We are changing this to also parse the RBR events, and extract the primary key
+value.
 
 *Note*: this means we need accurate schema information. See below.
 
@@ -116,6 +120,28 @@ We have future plans to:
 * Maintain a history of the schema changes that happen on all shards, so events
   can be parsed correctly in all cases.
 
+## Unsupported Features
+
+This part describes the features that are not supported for RBR in Vitess as of
+March 2017:
+
+* *Fractional timestamps for MariaDB*: not supported. This affects the objects
+  of type `TIMESTAMP`, `TIME` and `DATETIME`. The way that feature is
+  implemented in MariaDB, the binary logs do not contain enough information to
+  be parsed, but instead MariaDB relies on the schema knowledge. This is very
+  fragile. MySQL 5.6+ added new data types, and these are supported.
+
+* *JSON type in MySQL 5.7+*: the representation of these in the binlogs is a
+  blob containing indexed binary data. Re-building the SQL version of the data,
+  so it can be re-inserted during resharding, is not supported yet. It wouldn't
+  however be a lot of work, with other libraries also supporting this, and the
+  C++ MySQL code being well written and easy to read. See for instance
+  https://github.com/shyiko/mysql-binlog-connector-java/pull/119
+  
+* *Timezones support*: the binary logs store timestamps in UTC. When converting
+  these to SQL, we print the UTC value. If the server is not in UTC, that will
+  result in data corruption. *Note*: we are working on a fix for that one.
+
 ## Update Stream Extensions
 
 [Update Stream](/user-guide/update-stream.html) can be changed to contain both
@@ -138,5 +164,5 @@ A lot of the work done by vttablet now is to find the Primary Key of the
 modified rows, to rewrite the queries in an efficient way and tag each statement
 with the Primary Key. None of this may be necessary with RBR.
 
-We plan to eventually add a `rbr_mode` flag to vttablet to disable all the things it can
-skip if RBR is used.
+We plan to eventually add a `rbr_mode` flag to vttablet to disable all the
+things it can skip if RBR is used.

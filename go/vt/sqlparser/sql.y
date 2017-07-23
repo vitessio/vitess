@@ -1,6 +1,18 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 %{
 package sqlparser
@@ -32,40 +44,41 @@ func forceEOF(yylex interface{}) {
 %}
 
 %union {
-  empty       struct{}
-  statement   Statement
-  selStmt     SelectStatement
-  byt         byte
-  bytes       []byte
-  bytes2      [][]byte
-  str         string
-  selectExprs SelectExprs
-  selectExpr  SelectExpr
-  columns     Columns
-  colName     *ColName
-  tableExprs  TableExprs
-  tableExpr   TableExpr
-  tableName   *TableName
-  indexHints  *IndexHints
-  expr        Expr
-  exprs       Exprs
-  boolVal     BoolVal
-  colTuple    ColTuple
-  values      Values
-  valTuple    ValTuple
-  subquery    *Subquery
-  whens       []*When
-  when        *When
-  orderBy     OrderBy
-  order       *Order
-  limit       *Limit
-  insRows     InsertRows
-  updateExprs UpdateExprs
-  updateExpr  *UpdateExpr
-  colIdent    ColIdent
-  colIdents   []ColIdent
-  tableIdent  TableIdent
-  convertType *ConvertType
+  empty         struct{}
+  statement     Statement
+  selStmt       SelectStatement
+  ins           *Insert
+  byt           byte
+  bytes         []byte
+  bytes2        [][]byte
+  str           string
+  selectExprs   SelectExprs
+  selectExpr    SelectExpr
+  columns       Columns
+  colName       *ColName
+  tableExprs    TableExprs
+  tableExpr     TableExpr
+  tableName     TableName
+  tableNames    TableNames
+  indexHints    *IndexHints
+  expr          Expr
+  exprs         Exprs
+  boolVal       BoolVal
+  colTuple      ColTuple
+  values        Values
+  valTuple      ValTuple
+  subquery      *Subquery
+  whens         []*When
+  when          *When
+  orderBy       OrderBy
+  order         *Order
+  limit         *Limit
+  updateExprs   UpdateExprs
+  updateExpr    *UpdateExpr
+  colIdent      ColIdent
+  colIdents     []ColIdent
+  tableIdent    TableIdent
+  convertType   *ConvertType
   aliasedTableName *AliasedTableExpr
 }
 
@@ -111,7 +124,10 @@ func forceEOF(yylex interface{}) {
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE
 %token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING
-%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE
+%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
+
+// Supported SHOW tokens
+%token <bytes> DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VSCHEMA_TABLES
 
 // Convert Type Tokens
 %token <bytes> INTEGER CHARACTER
@@ -131,12 +147,12 @@ func forceEOF(yylex interface{}) {
 %token <bytes> UNUSED
 
 %type <statement> command
-%type <selStmt> select_statement
+%type <selStmt> select_statement base_select union_lhs union_rhs
 %type <statement> insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement
-%type <statement> analyze_statement other_statement
+%type <statement> analyze_statement show_statement use_statement other_statement
 %type <bytes2> comment_opt comment_list
-%type <str> union_op
+%type <str> union_op insert_or_replace
 %type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
@@ -144,6 +160,7 @@ func forceEOF(yylex interface{}) {
 %type <expr> expression
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
+%type <tableNames> table_name_list
 %type <str> inner_join outer_join natural_join
 %type <tableName> table_name into_table_name
 %type <aliasedTableName> aliased_table_name
@@ -153,7 +170,7 @@ func forceEOF(yylex interface{}) {
 %type <expr> condition
 %type <boolVal> boolean_value
 %type <str> compare
-%type <insRows> row_list
+%type <ins> insert_data
 %type <expr> value value_expression num_val
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
 %type <str> is_suffix
@@ -174,14 +191,14 @@ func forceEOF(yylex interface{}) {
 %type <str> asc_desc_opt
 %type <limit> limit_opt
 %type <str> lock_opt
-%type <columns> column_list ins_column_list ins_column_list_opt
+%type <columns> ins_column_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
 %type <updateExpr> update_expression
 %type <bytes> for_from
 %type <str> ignore_opt
 %type <byt> exists_opt
-%type <empty> not_exists_opt non_rename_operation to_opt constraint_opt using_opt
+%type <empty> not_exists_opt non_rename_operation to_opt index_opt constraint_opt using_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id
@@ -189,7 +206,7 @@ func forceEOF(yylex interface{}) {
 %type <empty> force_eof ddl_force_eof
 %type <str> charset
 %type <convertType> convert_type
-
+%type <str> show_statement_type
 %start any_command
 
 %%
@@ -218,28 +235,69 @@ command:
 | rename_statement
 | drop_statement
 | analyze_statement
+| show_statement
+| use_statement
 | other_statement
 
 select_statement:
-  SELECT comment_opt cache_opt distinct_opt straight_join_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
+  base_select order_by_opt limit_opt lock_opt
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $5, SelectExprs: $6, From: $7, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10), OrderBy: $11, Limit: $12, Lock: $13}
+    sel := $1.(*Select)
+    sel.OrderBy = $2
+    sel.Limit = $3
+    sel.Lock = $4
+    $$ = sel
+  }
+| union_lhs union_op union_rhs order_by_opt limit_opt lock_opt
+  {
+    $$ = &Union{Type: $2, Left: $1, Right: $3, OrderBy: $4, Limit: $5, Lock: $6}
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
     $$ = &Select{Comments: Comments($2), Cache: $3, SelectExprs: SelectExprs{Nextval{Expr: $5}}, From: TableExprs{&AliasedTableExpr{Expr: $7}}}
   }
-| select_statement union_op select_statement %prec UNION
+
+// base_select is an unparenthesized SELECT with no order by clause or beyond.
+base_select:
+  SELECT comment_opt cache_opt distinct_opt straight_join_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt
   {
-    $$ = &Union{Type: $2, Left: $1, Right: $3}
+    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $5, SelectExprs: $6, From: $7, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10)}
   }
 
-insert_statement:
-  INSERT comment_opt ignore_opt into_table_name ins_column_list_opt row_list on_dup_opt
+union_lhs:
+  select_statement
   {
-    $$ = &Insert{Comments: Comments($2), Ignore: $3, Table: $4, Columns: $5, Rows: $6, OnDup: OnDup($7)}
+    $$ = $1
   }
-| INSERT comment_opt ignore_opt into_table_name SET update_list on_dup_opt
+| openb select_statement closeb
+  {
+    $$ = &ParenSelect{Select: $2}
+  }
+
+union_rhs:
+  base_select
+  {
+    $$ = $1
+  }
+| openb select_statement closeb
+  {
+    $$ = &ParenSelect{Select: $2}
+  }
+
+
+insert_statement:
+  insert_or_replace comment_opt ignore_opt into_table_name insert_data on_dup_opt
+  {
+    // insert_data returns a *Insert pre-filled with Columns & Values
+    ins := $5
+    ins.Action = $1
+    ins.Comments = $2
+    ins.Ignore = $3
+    ins.Table = $4
+    ins.OnDup = OnDup($6)
+    $$ = ins
+  }
+| insert_or_replace comment_opt ignore_opt into_table_name SET update_list on_dup_opt
   {
     cols := make(Columns, 0, len($6))
     vals := make(ValTuple, 0, len($7))
@@ -247,19 +305,47 @@ insert_statement:
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Comments: Comments($2), Ignore: $3, Table: $4, Columns: cols, Rows: Values{vals}, OnDup: OnDup($7)}
+    $$ = &Insert{Action: $1, Comments: Comments($2), Ignore: $3, Table: $4, Columns: cols, Rows: Values{vals}, OnDup: OnDup($7)}
+  }
+
+insert_or_replace:
+  INSERT
+  {
+    $$ = InsertStr
+  }
+| REPLACE
+  {
+    $$ = ReplaceStr
   }
 
 update_statement:
-  UPDATE comment_opt aliased_table_name SET update_list where_expression_opt order_by_opt limit_opt
+  UPDATE comment_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{Comments: Comments($2), Table: $3, Exprs: $5, Where: NewWhere(WhereStr, $6), OrderBy: $7, Limit: $8}
+    $$ = &Update{Comments: Comments($2), TableExprs: $3, Exprs: $5, Where: NewWhere(WhereStr, $6), OrderBy: $7, Limit: $8}
   }
 
 delete_statement:
   DELETE comment_opt FROM table_name where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: Comments($2), Table: $4, Where: NewWhere(WhereStr, $5), OrderBy: $6, Limit: $7}
+    $$ = &Delete{Comments: Comments($2), TableExprs:  TableExprs{&AliasedTableExpr{Expr:$4}}, Where: NewWhere(WhereStr, $5), OrderBy: $6, Limit: $7}
+  }
+| DELETE comment_opt table_name_list from_or_using table_references where_expression_opt
+  {
+    $$ = &Delete{Comments: Comments($2), Targets: $3, TableExprs: $5, Where: NewWhere(WhereStr, $6)}
+  }
+
+from_or_using:
+  FROM {}
+| USING {}
+
+table_name_list:
+  table_name
+  {
+    $$ = TableNames{$1}
+  }
+| table_name_list ',' table_name
+  {
+    $$ = append($$, $3)
   }
 
 set_statement:
@@ -282,6 +368,10 @@ create_statement:
   {
     $$ = &DDL{Action: CreateStr, NewName: $3.ToViewName()}
   }
+| CREATE OR REPLACE VIEW table_name ddl_force_eof
+  {
+    $$ = &DDL{Action: CreateStr, NewName: $5.ToViewName()}
+  }
 
 alter_statement:
   ALTER ignore_opt TABLE table_name non_rename_operation force_eof
@@ -292,6 +382,11 @@ alter_statement:
   {
     // Change this to a rename statement
     $$ = &DDL{Action: RenameStr, Table: $4, NewName: $7}
+  }
+| ALTER ignore_opt TABLE table_name RENAME index_opt force_eof
+  {
+    // Rename an index can just be an alter
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
 | ALTER VIEW table_name ddl_force_eof
   {
@@ -333,18 +428,61 @@ analyze_statement:
     $$ = &DDL{Action: AlterStr, Table: $3, NewName: $3}
   }
 
-other_statement:
-  SHOW force_eof
+show_statement_type:
+  ID
   {
-    $$ = &Other{}
+    $$ = ShowUnsupportedStr
+  }
+| reserved_keyword
+  {
+    switch v := string($1); v {
+    case ShowDatabasesStr, ShowTablesStr, ShowKeyspacesStr, ShowShardsStr, ShowVSchemaTablesStr:
+      $$ = v
+    default:
+      $$ = ShowUnsupportedStr
+    }
+  }
+| non_reserved_keyword
+{
+  $$ = ShowUnsupportedStr
+}
+
+show_statement:
+  SHOW show_statement_type force_eof
+  {
+    $$ = &Show{Type: $2}
+  }
+
+use_statement:
+  USE table_id
+  {
+    $$ = &Use{DBName: $2}
+  }
+
+other_statement:
+  DESC force_eof
+  {
+    $$ = &OtherRead{}
   }
 | DESCRIBE force_eof
   {
-    $$ = &Other{}
+    $$ = &OtherRead{}
   }
 | EXPLAIN force_eof
   {
-    $$ = &Other{}
+    $$ = &OtherRead{}
+  }
+| REPAIR force_eof
+  {
+    $$ = &OtherAdmin{}
+  }
+| OPTIMIZE force_eof
+  {
+    $$ = &OtherAdmin{}
+  }
+| TRUNCATE force_eof
+  {
+    $$ = &OtherAdmin{}
   }
 
 comment_opt:
@@ -437,15 +575,15 @@ select_expression:
   }
 | expression as_ci_opt
   {
-    $$ = &NonStarExpr{Expr: $1, As: $2}
+    $$ = &AliasedExpr{Expr: $1, As: $2}
   }
 | table_id '.' '*'
   {
-    $$ = &StarExpr{TableName: &TableName{Name: $1}}
+    $$ = &StarExpr{TableName: TableName{Name: $1}}
   }
 | table_id '.' reserved_table_id '.' '*'
   {
-    $$ = &StarExpr{TableName: &TableName{Qualifier: $1, Name: $3}}
+    $$ = &StarExpr{TableName: TableName{Qualifier: $1, Name: $3}}
   }
 
 as_ci_opt:
@@ -470,7 +608,7 @@ col_alias:
 
 from_opt:
   {
-    $$ = TableExprs{&AliasedTableExpr{Expr:&TableName{Name: NewTableIdent("dual")}}}
+    $$ = TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}
   }
 | FROM table_references
   {
@@ -624,11 +762,11 @@ into_table_name:
 table_name:
   table_id
   {
-    $$ = &TableName{Name: $1}
+    $$ = TableName{Name: $1}
   }
 | table_id '.' reserved_table_id
   {
-    $$ = &TableName{Qualifier: $1, Name: $3}
+    $$ = TableName{Qualifier: $1, Name: $3}
   }
 
 index_hint_list:
@@ -1025,15 +1163,15 @@ function_call_keyword:
   {
     $$ = &ConvertExpr{Expr: $3, Type: $5}
   }
-| CONVERT openb expression USING convert_type closeb
-  {
-    $$ = &ConvertExpr{Expr: $3, Type: $5}
-  }
 | CAST openb expression AS convert_type closeb
   {
     $$ = &ConvertExpr{Expr: $3, Type: $5}
   }
-| MATCH openb column_list closeb AGAINST openb value_expression match_option closeb
+| CONVERT openb expression USING charset closeb
+  {
+    $$ = &ConvertUsingExpr{Expr: $3, Type: $5}
+  }
+| MATCH openb select_expression_list closeb AGAINST openb value_expression match_option closeb
   {
   $$ = &MatchExpr{Columns: $3, Expr: $7, Option: $8}
   }
@@ -1225,11 +1363,11 @@ column_name:
   }
 | table_id '.' reserved_sql_id
   {
-    $$ = &ColName{Qualifier: &TableName{Name: $1}, Name: $3}
+    $$ = &ColName{Qualifier: TableName{Name: $1}, Name: $3}
   }
 | table_id '.' reserved_table_id '.' reserved_sql_id
   {
-    $$ = &ColName{Qualifier: &TableName{Qualifier: $1, Name: $3}, Name: $5}
+    $$ = &ColName{Qualifier: TableName{Qualifier: $1, Name: $3}, Name: $5}
   }
 
 value:
@@ -1367,23 +1505,39 @@ lock_opt:
     $$ = ShareModeStr
   }
 
-column_list:
-  sql_id
+// insert_data expands all combinations into a single rule.
+// This avoids a shift/reduce conflict while encountering the
+// following two possible constructs:
+// insert into t1(a, b) (select * from t2)
+// insert into t1(select * from t2)
+// Because the rules are together, the parser can keep shifting
+// the tokens until it disambiguates a as sql_id and select as keyword.
+insert_data:
+  VALUES tuple_list
   {
-    $$ = Columns{$1}
+    $$ = &Insert{Rows: $2}
   }
-| column_list ',' sql_id
+| select_statement
   {
-    $$ = append($$, $3)
+    $$ = &Insert{Rows: $1}
   }
-
-ins_column_list_opt:
+| openb select_statement closeb
   {
-    $$ = nil
+    // Drop the redundant parenthesis.
+    $$ = &Insert{Rows: $2}
   }
-| openb ins_column_list closeb
+| openb ins_column_list closeb VALUES tuple_list
   {
-    $$ = $2
+    $$ = &Insert{Columns: $2, Rows: $5}
+  }
+| openb ins_column_list closeb select_statement
+  {
+    $$ = &Insert{Columns: $2, Rows: $4}
+  }
+| openb ins_column_list closeb openb select_statement closeb
+  {
+    // Drop the redundant parenthesis.
+    $$ = &Insert{Columns: $2, Rows: $5}
   }
 
 ins_column_list:
@@ -1411,16 +1565,6 @@ on_dup_opt:
 | ON DUPLICATE KEY UPDATE update_list
   {
     $$ = $5
-  }
-
-row_list:
-  VALUES tuple_list
-  {
-    $$ = $2
-  }
-| select_statement
-  {
-    $$ = $1
   }
 
 tuple_list:
@@ -1503,6 +1647,8 @@ non_rename_operation:
   { $$ = struct{}{} }
 | ORDER
   { $$ = struct{}{} }
+| CONVERT
+  { $$ = struct{}{} }
 | UNUSED
   { $$ = struct{}{} }
 | ID
@@ -1512,10 +1658,20 @@ to_opt:
   { $$ = struct{}{} }
 | TO
   { $$ = struct{}{} }
+| AS
+  { $$ = struct{}{} }
+
+index_opt:
+  INDEX
+  { $$ = struct{}{} }
+| KEY
+  { $$ = struct{}{} }
 
 constraint_opt:
   { $$ = struct{}{} }
 | UNIQUE
+  { $$ = struct{}{} }
+| sql_id
   { $$ = struct{}{} }
 
 using_opt:
@@ -1581,6 +1737,7 @@ reserved_keyword:
 | CURRENT_TIME
 | CURRENT_TIMESTAMP
 | DATABASE
+| DATABASES
 | DEFAULT
 | DELETE
 | DESC
@@ -1633,9 +1790,13 @@ reserved_keyword:
 | SELECT
 | SEPARATOR
 | SET
+| VITESS_KEYSPACES
+| VITESS_SHARDS
+| VSCHEMA_TABLES
 | SHOW
 | STRAIGHT_JOIN
 | TABLE
+| TABLES
 | THEN
 | TO
 | TRUE
@@ -1667,11 +1828,15 @@ non_reserved_keyword:
 | LANGUAGE
 | MODE
 | OFFSET
+| OPTIMIZE
 | QUERY
+| REPAIR
 | SHARE
+| TRUNCATE
 | UNUSED
 | VIEW
 | WITH
+| LAST_INSERT_ID
 
 openb:
   '('

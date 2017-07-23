@@ -1,6 +1,18 @@
-// Copyright 2014, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package worker
 
@@ -842,6 +854,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 	var firstError error
 
 	ctx, cancelCopy := context.WithCancel(ctx)
+	defer cancelCopy()
 	processError := func(format string, args ...interface{}) {
 		scw.wr.Logger().Errorf(format, args...)
 		mu.Lock()
@@ -851,6 +864,16 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 		}
 		mu.Unlock()
 	}
+
+	// NOTE: Code below this point must *not* use "return" to exit this Go routine
+	// early. Instead, "processError" must be called to cancel the context. This
+	// way all launched Go routines will terminate as well.
+	// (However, "return" in a new Go routine, i.e. not this one, is fine.)
+	// If Go routines have already been started, make sure that Wait() on the
+	// respective WaitGroup is called as well e.g. "destinationWaitGroup.Wait()"
+	// must always be reached. Waiting for the Go routines is important to avoid
+	// races between "defer throttler.ThreadFinished()" (must be executed first)
+	// and "defer scw.closeThrottlers()". Otherwise, vtworker will panic.
 
 	insertChannels := make([]chan string, len(scw.destinationShards))
 	destinationWaitGroup := sync.WaitGroup{}
@@ -884,14 +907,16 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 
 		keyResolver, err := scw.createKeyResolver(td)
 		if err != nil {
-			return fmt.Errorf("cannot resolve sharding keys for keyspace %v: %v", scw.destinationKeyspace, err)
+			processError("cannot resolve sharding keys for keyspace %v: %v", scw.destinationKeyspace, err)
+			break
 		}
 
 		// TODO(mberlin): We're going to chunk *all* source shards based on the MIN
 		// and MAX values of the *first* source shard. Is this going to be a problem?
 		chunks, err := generateChunks(ctx, scw.wr, firstSourceTablet, td, scw.chunkCount, scw.minRowsPerChunk)
 		if err != nil {
-			return err
+			processError("failed to split table into chunks: %v", err)
+			break
 		}
 		tableStatusList.setThreadCount(tableIndex, len(chunks))
 

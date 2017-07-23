@@ -1,3 +1,19 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreedto in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package testfiles
 
 import (
@@ -31,13 +47,9 @@ var (
 	// Takes three ports.
 	GoVtTabletserverCustomruleZkcustomrulePort = GoVtTopoZk2topoPort + 3
 
-	// GoVtZktopoPort is used by the go/vt/zktopo package.
-	// Takes three ports.
-	GoVtZktopoPort = GoVtTabletserverCustomruleZkcustomrulePort + 3
-
 	// GoVtEtcdtopoPort is used by the go/vt/etcdtopo package.
 	// Takes two ports.
-	GoVtEtcdtopoPort = GoVtZktopoPort + 3
+	GoVtEtcdtopoPort = GoVtTabletserverCustomruleZkcustomrulePort + 3
 
 	// GoVtTopoConsultopoPort is used by the go/vt/topo/consultopo package.
 	// Takes five ports.
@@ -55,9 +67,6 @@ var (
 	// GoVtTabletserverCustomruleZkcustomruleZkID is used by the
 	// go/vt/tabletserver/customrule/zkcustomrule package.
 	GoVtTabletserverCustomruleZkcustomruleZkID = 2
-
-	// GoVtZktopoZkID is used by the go/vt/zktopo package.
-	GoVtZktopoZkID = 3
 )
 
 func getPortStart() int {

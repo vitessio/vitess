@@ -1,6 +1,21 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+# Copyright 2017 Google Inc.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
 import logging
 import unittest
 
@@ -168,13 +183,17 @@ class TestMessaging(unittest.TestCase):
         keyspace, name)
     self.assertEqual(
         fields,
-        [('id', query_pb2.INT64), ('message', query_pb2.VARCHAR)])
+        [
+          ('id', query_pb2.INT64),
+          ('time_scheduled', query_pb2.INT64),
+          ('message', query_pb2.VARCHAR),
+        ])
 
     # We should get both messages.
     result = {}
     for _ in xrange(2):
       row = it.next()
-      result[row[0]] = row[1]
+      result[row[0]] = row[2]
     self.assertEqual(result, {1: 'hello world 1', 4: 'hello world 4'})
 
     # After ack, we should get only one message.
@@ -183,7 +202,7 @@ class TestMessaging(unittest.TestCase):
     result = {}
     for _ in xrange(2):
       row = it.next()
-      result[row[0]] = row[1]
+      result[row[0]] = row[2]
     self.assertEqual(result, {1: 'hello world 1'})
     # Only one should be acked.
     count = vtgate_conn.message_ack(name, [1, 4])

@@ -1,6 +1,21 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+# Copyright 2017 Google Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
 import logging
 from multiprocessing.pool import ThreadPool
 import pprint
@@ -850,7 +865,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
     query = 'select * from vt_field_types where uint_val in ::uint_val_1'
     rowcount = cursor.execute(query, {'uint_val_1': uint_val_list})
     self.assertEqual(rowcount, len(uint_val_list), "rowcount doesn't match")
-    for _, r in enumerate(cursor.results):
+    for r in cursor.results:
       row = DBRow(field_names, r)
       self.assertIsInstance(row.uint_val, long)
       self.assertGreaterEqual(

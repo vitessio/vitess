@@ -1,6 +1,18 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package vtctl
 
@@ -158,8 +170,7 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	server := subFlags.String("server", "", "VtGate server to connect to")
 	bindVariables := newBindvars(subFlags)
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vtgate client")
-	keyspace := subFlags.String("keyspace", "", "default keyspace to use")
-	tabletType := subFlags.String("tablet_type", "master", "tablet type to query")
+	targetString := subFlags.String("target", "", "keyspace:shard@tablet_type")
 	options := subFlags.String("options", "", "execute options values as a text encoded proto of the ExecuteOptions structure")
 	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
 
@@ -169,21 +180,18 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("the <sql> argument is required for the VtGateExecute command")
 	}
-	t, err := parseTabletType(*tabletType, []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
-	if err != nil {
-		return err
-	}
 	executeOptions, err := parseExecuteOptions(*options)
 	if err != nil {
 		return err
 	}
 
-	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout, *keyspace)
+	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
+	session := vtgateConn.Session(*targetString, executeOptions)
 	defer vtgateConn.Close()
-	qr, err := vtgateConn.Execute(ctx, subFlags.Arg(0), *bindVariables, t, executeOptions)
+	qr, err := session.Execute(ctx, subFlags.Arg(0), *bindVariables)
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
@@ -223,7 +231,7 @@ func commandVtGateExecuteShards(ctx context.Context, wr *wrangler.Wrangler, subF
 		return err
 	}
 
-	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout, "")
+	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
@@ -275,7 +283,7 @@ func commandVtGateExecuteKeyspaceIds(ctx context.Context, wr *wrangler.Wrangler,
 		return err
 	}
 
-	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout, "")
+	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
@@ -332,7 +340,7 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("the <sql> argument is required for the VtGateSplitQuery command")
 	}
-	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout, "")
+	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
@@ -441,7 +449,7 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 		Keyspace:   tabletInfo.Tablet.Keyspace,
 		Shard:      tabletInfo.Tablet.Shard,
 		TabletType: tabletInfo.Tablet.Type,
-	})
+	}, nil)
 	if err != nil {
 		return fmt.Errorf("Begin failed: %v", err)
 	}

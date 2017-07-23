@@ -1,6 +1,18 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package tabletmanager
 
@@ -18,11 +30,11 @@ import (
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletmanager/events"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/rules"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -113,6 +125,7 @@ func (agent *ActionAgent) broadcastHealth() {
 // refreshTablet needs to be run after an action may have changed the current
 // state of the tablet.
 func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) error {
+	agent.checkLock()
 	log.Infof("Executing post-action state refresh: %v", reason)
 
 	span := trace.NewSpanFromContext(ctx)
@@ -129,6 +142,11 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 	}
 	tablet := ti.Tablet
 
+	// Also refresh the MySQL port, to be sure it's correct.
+	// Note if this run doesn't succeed, the healthcheck go routine
+	// will try again.
+	agent.gotMysqlPort = false
+	agent.waitingForMysql = false
 	if updatedTablet := agent.checkTabletMysqlPort(ctx, tablet); updatedTablet != nil {
 		tablet = updatedTablet
 	}
@@ -169,6 +187,8 @@ func (agent *ActionAgent) updateState(ctx context.Context, newTablet *topodatapb
 //
 // It owns reading the TabletControl for the current tablet, and storing it.
 func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTablet *topodatapb.Tablet) {
+	agent.checkLock()
+
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("ActionAgent.changeCallback")
 	defer span.Finish()

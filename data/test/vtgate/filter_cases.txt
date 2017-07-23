@@ -542,6 +542,21 @@
   }
 }
 
+# subquery of information_schema with itself
+"select * from information_schema.a where id in (select * from information_schema.b)"
+{
+  "Original": "select * from information_schema.a where id in (select * from information_schema.b)",
+  "Instructions": {
+    "Opcode": "ExecDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select * from information_schema.a where id in (select * from information_schema.b)",
+    "FieldQuery": "select * from information_schema.a where 1 != 1"
+  }
+}
+
 # subquery
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col) and u.id in (user_extra.col, 1)"
 {

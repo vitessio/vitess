@@ -1,8 +1,18 @@
 #!/usr/bin/env python
 #
-# Copyright 2013, Google Inc. All rights reserved.
-# Use of this source code is governed by a BSD-style license that can
-# be found in the LICENSE file.
+# Copyright 2017 Google Inc.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 """Ensures the vtgate MySQL server protocol plugin works as expected.
 
@@ -24,8 +34,8 @@ shard_0_master = tablet.Tablet()
 shard_0_slave = tablet.Tablet()
 
 table_acl_config = environment.tmproot + '/table_acl_config.json'
-mysql_auth_server_config = (environment.tmproot +
-                            '/mysql_auth_server_config.json')
+mysql_auth_server_static = (environment.tmproot +
+                            '/mysql_auth_server_static.json')
 
 
 def setUpModule():
@@ -101,7 +111,7 @@ class TestMySQL(unittest.TestCase):
 }
 """)
 
-    with open(mysql_auth_server_config, 'w') as fd:
+    with open(mysql_auth_server_static, 'w') as fd:
       fd.write("""{
       "testuser1": {
         "Password": "testpassword1",
@@ -130,8 +140,8 @@ class TestMySQL(unittest.TestCase):
 
     # start vtgate
     utils.VtGate(mysql_server=True).start(
-        extra_args=['-mysql_auth_server_impl', 'config',
-                    '-mysql_auth_server_config_file', mysql_auth_server_config])
+        extra_args=['-mysql_auth_server_impl', 'static',
+                    '-mysql_auth_server_static_file', mysql_auth_server_static])
     params = dict(host='::',
                   port=utils.vtgate.mysql_port,
                   user='testuser1',

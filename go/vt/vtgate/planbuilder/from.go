@@ -1,11 +1,22 @@
-// Copyright 2016, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package planbuilder
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -15,21 +26,24 @@ import (
 
 // This file has functions to analyze the FROM clause.
 
+var infoSchema = sqlparser.NewTableIdent("information_schema")
+
 // processTableExprs analyzes the FROM clause. It produces a builder
 // with all the routes identified.
 func processTableExprs(tableExprs sqlparser.TableExprs, vschema VSchema) (builder, error) {
-	if len(tableExprs) != 1 {
-		lplan, err := processTableExpr(tableExprs[0], vschema)
-		if err != nil {
-			return nil, err
-		}
-		rplan, err := processTableExprs(tableExprs[1:], vschema)
-		if err != nil {
-			return nil, err
-		}
-		return lplan.Join(rplan, nil)
+	if len(tableExprs) == 1 {
+		return processTableExpr(tableExprs[0], vschema)
 	}
-	return processTableExpr(tableExprs[0], vschema)
+
+	lplan, err := processTableExpr(tableExprs[0], vschema)
+	if err != nil {
+		return nil, err
+	}
+	rplan, err := processTableExprs(tableExprs[1:], vschema)
+	if err != nil {
+		return nil, err
+	}
+	return joinBuilders(lplan, rplan, nil)
 }
 
 // processTableExpr produces a builder subtree for the given TableExpr.
@@ -39,116 +53,134 @@ func processTableExpr(tableExpr sqlparser.TableExpr, vschema VSchema) (builder, 
 		return processAliasedTable(tableExpr, vschema)
 	case *sqlparser.ParenTableExpr:
 		bldr, err := processTableExprs(tableExpr.Exprs, vschema)
-		// We want to point to the higher level parenthesis because
-		// more routes can be merged with this one. If so, the order
-		// should be maintained as dictated by the parenthesis.
+		// If it's a route, preserve the parenthesis so things
+		// don't associate differently when more things are pushed
+		// into it. FROM a, (b, c) should not become FROM a, b, c.
 		if rb, ok := bldr.(*route); ok {
-			rb.Select.From = sqlparser.TableExprs{tableExpr}
+			sel := rb.Select.(*sqlparser.Select)
+			sel.From = sqlparser.TableExprs{&sqlparser.ParenTableExpr{Exprs: sel.From}}
 		}
 		return bldr, err
 	case *sqlparser.JoinTableExpr:
 		return processJoin(tableExpr, vschema)
 	}
-	panic("unreachable")
+	panic(fmt.Sprintf("BUG: unexpected table expression type: %T", tableExpr))
 }
 
 // processAliasedTable produces a builder subtree for the given AliasedTableExpr.
-// If the expression is a subquery, then the the route built for it will contain
-// the entire subquery tree in the from clause, as if it was a table.
-// The symtab entry for the query will be a tabsym where the columns
-// will be built from the select expressions of the subquery.
-// Since the table aliases only contain vindex columns, we'll follow
-// the same rule: only columns from the subquery that are identified as
-// vindex columns will be added to the tabsym.
-// A symtab symbol can only point to a route. This means that we canoot
-// support complex joins in subqueries yet.
+// If the expression is a subquery, then the primitive will create a table
+// for it in the symtab. If the subquery is a route, then we build a route
+// primitive with the subquery in the From clause, because a route is more
+// versatile than a subquery. If a subquery becomes a route, then any result
+// columns that represent underlying vindex columns are also exposed as
+// vindex columns.
 func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema) (builder, error) {
 	switch expr := tableExpr.Expr.(type) {
-	case *sqlparser.TableName:
-		eroute, table, err := getTablePlan(expr, vschema)
+	case sqlparser.TableName:
+		eroute, table, err := buildERoute(expr, vschema)
 		if err != nil {
 			return nil, err
 		}
-		alias := expr
-		astName := expr.Name
-		if !tableExpr.As.IsEmpty() {
-			alias = &sqlparser.TableName{Name: tableExpr.As}
-			astName = tableExpr.As
-		}
-		return newRoute(
-			sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr}),
+		rb := newRoute(
+			&sqlparser.Select{From: sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr})},
 			eroute,
-			table,
 			vschema,
-			alias,
-			astName,
-		), nil
-	case *sqlparser.Subquery:
-		sel, ok := expr.Select.(*sqlparser.Select)
-		if !ok {
-			return nil, errors.New("unsupported: union operator in subqueries")
+		)
+		if table != nil {
+			alias := expr
+			if !tableExpr.As.IsEmpty() {
+				alias = sqlparser.TableName{Name: tableExpr.As}
+			}
+
+			// AddVindexTable can never fail because symtab is empty.
+			_ = rb.symtab.AddVindexTable(alias, table, rb)
 		}
-		subplan, err := processSelect(sel, vschema, nil)
+		return rb, nil
+	case *sqlparser.Subquery:
+		var err error
+		var subplan builder
+		switch stmt := expr.Select.(type) {
+		case *sqlparser.Select:
+			subplan, err = processSelect(stmt, vschema, nil)
+		case *sqlparser.Union:
+			subplan, err = processUnion(stmt, vschema, nil)
+		default:
+			panic(fmt.Sprintf("BUG: unexpected SELECT type: %T", stmt))
+		}
 		if err != nil {
 			return nil, err
 		}
+
 		subroute, ok := subplan.(*route)
 		if !ok {
-			return nil, errors.New("unsupported: complex join in subqueries")
+			return newSubquery(tableExpr.As, subplan, vschema), nil
 		}
+
+		// Since a route is more versatile than a subquery, we
+		// build a route primitive that has the subquery in its
+		// FROM clause. This allows for other constructs to be
+		// later pushed into it.
 		table := &vindexes.Table{
 			Keyspace: subroute.ERoute.Keyspace,
 		}
-		for _, colsyms := range subroute.Colsyms {
-			if colsyms.Vindex == nil {
+		for _, rc := range subroute.ResultColumns() {
+			if rc.column.Vindex == nil {
 				continue
 			}
 			// Check if a colvindex of the same name already exists.
 			// Dups are not allowed in subqueries in this situation.
 			for _, colVindex := range table.ColumnVindexes {
-				if colVindex.Column.Equal(colsyms.Alias) {
-					return nil, fmt.Errorf("duplicate column aliases: %v", colsyms.Alias)
+				if colVindex.Column.Equal(rc.alias) {
+					return nil, fmt.Errorf("duplicate column aliases: %v", rc.alias)
 				}
 			}
 			table.ColumnVindexes = append(table.ColumnVindexes, &vindexes.ColumnVindex{
-				Column: colsyms.Alias,
-				Vindex: colsyms.Vindex,
+				Column: rc.alias,
+				Vindex: rc.column.Vindex,
 			})
 		}
-		rtb := newRoute(
-			sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr}),
+		rb := newRoute(
+			&sqlparser.Select{From: sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr})},
 			subroute.ERoute,
-			table,
 			vschema,
-			&sqlparser.TableName{Name: tableExpr.As},
-			tableExpr.As,
 		)
-		subroute.Redirect = rtb
-		return rtb, nil
+		// AddVindexTable can never fail because symtab is empty.
+		_ = rb.symtab.AddVindexTable(sqlparser.TableName{Name: tableExpr.As}, table, rb)
+		subroute.Redirect = rb
+		return rb, nil
 	}
-	panic("unreachable")
+	panic(fmt.Sprintf("BUG: unexpected table expression type: %T", tableExpr.Expr))
 }
 
-// getTablePlan produces the initial engine.Route for the specified TableName.
+// buildERoute produces the initial engine.Route for the specified TableName.
 // It also returns the associated vschema info (*Table) so that
 // it can be used to create the symbol table entry.
-func getTablePlan(tableName *sqlparser.TableName, vschema VSchema) (*engine.Route, *vindexes.Table, error) {
-	table, err := vschema.Find(tableName.Qualifier, tableName.Name)
+func buildERoute(tableName sqlparser.TableName, vschema VSchema) (*engine.Route, *vindexes.Table, error) {
+	if tableName.Qualifier == infoSchema {
+		ks, err := vschema.DefaultKeyspace()
+		if err != nil {
+			return nil, nil, err
+		}
+		return engine.NewRoute(engine.ExecDBA, ks), nil, nil
+	}
+
+	table, err := vschema.Find(tableName)
 	if err != nil {
 		return nil, nil, err
 	}
-	if table.Keyspace.Sharded {
-		return &engine.Route{
-			Opcode:   engine.SelectScatter,
-			Keyspace: table.Keyspace,
-			JoinVars: make(map[string]struct{}),
-		}, table, nil
+	if !table.Keyspace.Sharded {
+		return engine.NewRoute(engine.SelectUnsharded, table.Keyspace), table, nil
 	}
-	return &engine.Route{
-		Opcode:   engine.SelectUnsharded,
-		Keyspace: table.Keyspace,
-		JoinVars: make(map[string]struct{}),
-	}, table, nil
+	if table.Pinned == nil {
+		return engine.NewRoute(engine.SelectScatter, table.Keyspace), table, nil
+	}
+	// Pinned tables have their keyspace ids already assigned.
+	// Use the Binary vindex, which is the identity function
+	// for keyspace id. Currently only dual tables are pinned.
+	route := engine.NewRoute(engine.SelectEqualUnique, table.Keyspace)
+	route.Vindex, _ = vindexes.NewBinary("binary", nil)
+	route.Values = sqlparser.NewStrVal(table.Pinned)
+	return route, table, nil
 }
 
 // processJoin produces a builder subtree for the given Join.
@@ -170,7 +202,7 @@ func processJoin(ajoin *sqlparser.JoinTableExpr, vschema VSchema) (builder, erro
 	if err != nil {
 		return nil, err
 	}
-	return lplan.Join(rplan, ajoin)
+	return joinBuilders(lplan, rplan, ajoin)
 }
 
 // convertToLeftJoin converts a right join into a left join.
@@ -185,4 +217,18 @@ func convertToLeftJoin(ajoin *sqlparser.JoinTableExpr) {
 	}
 	ajoin.LeftExpr, ajoin.RightExpr = ajoin.RightExpr, newRHS
 	ajoin.Join = sqlparser.LeftJoinStr
+}
+
+func joinBuilders(left, right builder, ajoin *sqlparser.JoinTableExpr) (builder, error) {
+	lRoute, leftIsRoute := left.(*route)
+	rRoute, rightIsRoute := right.(*route)
+	if leftIsRoute && rightIsRoute {
+		// If both are routes, they have an opportunity
+		// to merge into one. route.Join performs this work.
+		return lRoute.Join(rRoute, ajoin)
+	}
+
+	// If any of them is not a route, we have to build
+	// a new join primitve.
+	return newJoin(left, right, ajoin)
 }

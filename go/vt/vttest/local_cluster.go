@@ -1,6 +1,18 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 // Package vttest provides the functionality to bring
 // up a test cluster.
@@ -12,18 +24,16 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"os/exec"
 	"path"
 	"strconv"
 	"strings"
-	"time"
 
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
-	"github.com/youtube/vitess/go/sqldb"
 
+	"github.com/youtube/vitess/go/mysql"
 	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
 )
 
@@ -34,8 +44,31 @@ type Handle struct {
 	cmd   *exec.Cmd
 	stdin io.WriteCloser
 
+	// schemaDir is the directory which will be passed as --schema_dir flag.
+	// We store it here because the VSchema() option must reference it.
+	schemaDir string
+
 	// dbname is valid only for LaunchMySQL.
 	dbname string
+}
+
+// VtgateAddress returns the address under which vtgate is reachable e.g.
+// "localhost:15991".
+// An error is returned if the data is not available.
+func (hdl *Handle) VtgateAddress() (string, error) {
+	if hdl.Data == nil {
+		return "", errors.New("Data field in Handle is empty")
+	}
+	portName := "port"
+	if vtgateProtocol() == "grpc" {
+		portName = "grpc_port"
+	}
+	fport, ok := hdl.Data[portName]
+	if !ok {
+		return "", fmt.Errorf("port %v not found in map", portName)
+	}
+	port := int(fport.(float64))
+	return fmt.Sprintf("localhost:%d", port), nil
 }
 
 // VitessOption is the type for generic options to be passed in to LaunchVitess.
@@ -74,11 +107,16 @@ func NoStderr() VitessOption {
 // SchemaDirectory is used to specify a directory to read schema from.
 // It cannot be used at the same time as Schema.
 func SchemaDirectory(dir string) VitessOption {
+	if dir == "" {
+		log.Fatal("BUG: provided directory must not be empty")
+	}
+
 	return VitessOption{
 		beforeRun: func(hdl *Handle) error {
-			if dir != "" {
-				hdl.cmd.Args = append(hdl.cmd.Args, "--schema_dir", dir)
+			if hdl.schemaDir != "" {
+				return fmt.Errorf("SchemaDirectory option (%v) would overwrite directory set by another option (%v)", dir, hdl.schemaDir)
 			}
+			hdl.schemaDir = dir
 			return nil
 		},
 	}
@@ -90,6 +128,13 @@ func SchemaDirectory(dir string) VitessOption {
 func ProtoTopo(topo *vttestpb.VTTestTopology) VitessOption {
 	return VitessOption{
 		beforeRun: func(hdl *Handle) error {
+			if hdl.dbname != "" {
+				return fmt.Errorf("duplicate MySQLOnly option or conflicting ProtoTopo option. You can only use one")
+			}
+
+			if len(topo.GetKeyspaces()) > 0 {
+				hdl.dbname = topo.GetKeyspaces()[0].Name
+			}
 			hdl.cmd.Args = append(hdl.cmd.Args, "--proto_topo", proto.CompactTextString(topo))
 			return nil
 		},
@@ -97,11 +142,14 @@ func ProtoTopo(topo *vttestpb.VTTestTopology) VitessOption {
 }
 
 // MySQLOnly is used to launch only a mysqld instance, with the specified db name.
-// Use it before Schema option.
 // It cannot be used at the same as ProtoTopo.
 func MySQLOnly(dbName string) VitessOption {
 	return VitessOption{
 		beforeRun: func(hdl *Handle) error {
+			if hdl.dbname != "" {
+				return fmt.Errorf("duplicate MySQLOnly option or conflicting ProtoTopo option. You can only use one")
+			}
+
 			// the way to pass the dbname for creation in
 			// is to provide a topology
 			topo := &vttestpb.VTTestTopology{
@@ -128,23 +176,29 @@ func MySQLOnly(dbName string) VitessOption {
 }
 
 // Schema is used to specify SQL commands to run at startup.
-// It conflicts with SchemaDirectory
+// It conflicts with SchemaDirectory.
+// This option requires a ProtoTopo or MySQLOnly option before.
 func Schema(schema string) VitessOption {
-	schemaDir := ""
+	if schema == "" {
+		log.Fatal("BUG: provided schema must not be empty")
+	}
+
+	tempSchemaDir := ""
 	return VitessOption{
 		beforeRun: func(hdl *Handle) error {
-			if schema == "" {
-				return nil
-			}
 			if hdl.dbname == "" {
 				return fmt.Errorf("Schema option requires a previously passed MySQLOnly option")
 			}
+			if hdl.schemaDir != "" {
+				return fmt.Errorf("Schema option would overwrite directory set by another option (%v)", hdl.schemaDir)
+			}
+
 			var err error
-			schemaDir, err = ioutil.TempDir("", "vt")
+			tempSchemaDir, err = ioutil.TempDir("", "vt")
 			if err != nil {
 				return err
 			}
-			ksDir := path.Join(schemaDir, hdl.dbname)
+			ksDir := path.Join(tempSchemaDir, hdl.dbname)
 			err = os.Mkdir(ksDir, os.ModeDir|0775)
 			if err != nil {
 				return err
@@ -165,13 +219,47 @@ func Schema(schema string) VitessOption {
 			if err != nil {
 				return err
 			}
-			hdl.cmd.Args = append(hdl.cmd.Args, "--schema_dir", schemaDir)
+			hdl.schemaDir = tempSchemaDir
 			return nil
 		},
 		afterRun: func() {
-			if schemaDir != "" {
-				os.RemoveAll(schemaDir)
+			if tempSchemaDir != "" {
+				os.RemoveAll(tempSchemaDir)
 			}
+		},
+	}
+}
+
+// VSchema is used to create a vschema.json file in the --schema_dir directory.
+// It must be used *after* the Schema or SchemaDirectory option was provided.
+func VSchema(vschema interface{}) VitessOption {
+	if vschema == "" {
+		log.Fatal("BUG: provided vschema object must not be nil")
+	}
+
+	vschemaFilePath := ""
+	return VitessOption{
+		beforeRun: func(hdl *Handle) error {
+			if hdl.schemaDir == "" {
+				return errors.New("VSchema option must be specified after a Schema or SchemaDirectory option")
+			}
+
+			vschemaFilePath := path.Join(hdl.schemaDir, "vschema.json")
+			if _, err := os.Stat(vschemaFilePath); err == nil {
+				return fmt.Errorf("temporary vschema.json already exists at %v. delete it first", vschemaFilePath)
+			}
+
+			vschemaJSON, err := json.Marshal(vschema)
+			if err != nil {
+				return err
+			}
+			if err := ioutil.WriteFile(vschemaFilePath, vschemaJSON, 0644); err != nil {
+				return err
+			}
+			return nil
+		},
+		afterRun: func() {
+			os.Remove(vschemaFilePath)
 		},
 	}
 }
@@ -245,8 +333,8 @@ func (hdl *Handle) TearDown() error {
 
 // MySQLConnParams builds the MySQL connection params.
 // It's valid only if you used MySQLOnly option.
-func (hdl *Handle) MySQLConnParams() (sqldb.ConnParams, error) {
-	params := sqldb.ConnParams{
+func (hdl *Handle) MySQLConnParams() (mysql.ConnParams, error) {
+	params := mysql.ConnParams{
 		Charset: "utf8",
 		DbName:  hdl.dbname,
 	}
@@ -315,6 +403,9 @@ func (hdl *Handle) run(
 			defer option.afterRun()
 		}
 	}
+	if hdl.schemaDir != "" {
+		hdl.cmd.Args = append(hdl.cmd.Args, "--schema_dir", hdl.schemaDir)
+	}
 
 	log.Infof("executing: %v", strings.Join(hdl.cmd.Args, " "))
 
@@ -337,14 +428,4 @@ func (hdl *Handle) run(
 			"error (%v) parsing JSON output from command: %v", err, launcher)
 	}
 	return err
-}
-
-// randomPort returns a random number between 10k & 30k.
-func randomPort() int {
-	v := rand.Int31n(20000)
-	return int(v + 10000)
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
 }

@@ -1,6 +1,18 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package testlib
 
@@ -12,8 +24,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
-	"github.com/youtube/vitess/go/mysqlconn/replication"
+	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -45,19 +57,16 @@ func TestInitMasterShard(t *testing.T) {
 
 	// Master: set a plausible ReplicationPosition to return,
 	// and expect to add entry in _vt.reparent_journal
-	master.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
-		GTIDSet: replication.MariadbGTID{
+	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+		GTIDSet: mysql.MariadbGTID{
 			Domain:   5,
 			Server:   456,
 			Sequence: 890,
 		},
 	}
 	master.FakeMysqlDaemon.ReadOnly = true
-	master.FakeMysqlDaemon.ResetReplicationResult = []string{"reset rep 1"}
-	master.FakeMysqlDaemon.SetSlavePositionCommandsResult = []string{"new master shouldn't use this"}
-	master.FakeMysqlDaemon.SetMasterCommandsResult = []string{"new master shouldn't use this"}
 	master.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"reset rep 1",
+		"FAKE RESET ALL REPLICATION",
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
 		"CREATE DATABASE IF NOT EXISTS _vt",
@@ -69,15 +78,12 @@ func TestInitMasterShard(t *testing.T) {
 
 	// Slave1: expect to be reset and re-parented
 	goodSlave1.FakeMysqlDaemon.ReadOnly = true
-	goodSlave1.FakeMysqlDaemon.ResetReplicationResult = []string{"reset rep 1"}
-	goodSlave1.FakeMysqlDaemon.SetSlavePositionCommandsPos = master.FakeMysqlDaemon.CurrentMasterPosition
-	goodSlave1.FakeMysqlDaemon.SetSlavePositionCommandsResult = []string{"cmd1"}
-	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", master.Tablet.Hostname, master.Tablet.PortMap["mysql"])
-	goodSlave1.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
+	goodSlave1.FakeMysqlDaemon.SetSlavePositionPos = master.FakeMysqlDaemon.CurrentMasterPosition
+	goodSlave1.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
 	goodSlave1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"reset rep 1",
-		"cmd1",
-		"set master cmd 1",
+		"FAKE RESET ALL REPLICATION",
+		"FAKE SET SLAVE POSITION",
+		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	goodSlave1.StartActionLoop(t, wr)
@@ -85,16 +91,12 @@ func TestInitMasterShard(t *testing.T) {
 
 	// Slave2: expect to be re-parented
 	goodSlave2.FakeMysqlDaemon.ReadOnly = true
-	goodSlave2.FakeMysqlDaemon.ResetReplicationResult = []string{"reset rep 2"}
-	goodSlave2.FakeMysqlDaemon.SetSlavePositionCommandsPos = master.FakeMysqlDaemon.CurrentMasterPosition
-	goodSlave2.FakeMysqlDaemon.SetSlavePositionCommandsResult = []string{"cmd1", "cmd2"}
-	goodSlave2.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", master.Tablet.Hostname, master.Tablet.PortMap["mysql"])
-	goodSlave2.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
+	goodSlave2.FakeMysqlDaemon.SetSlavePositionPos = master.FakeMysqlDaemon.CurrentMasterPosition
+	goodSlave2.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
 	goodSlave2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"reset rep 2",
-		"cmd1",
-		"cmd2",
-		"set master cmd 1",
+		"FAKE RESET ALL REPLICATION",
+		"FAKE SET SLAVE POSITION",
+		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	goodSlave2.StartActionLoop(t, wr)
@@ -183,8 +185,8 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 
 	// Master: set a plausible ReplicationPosition to return,
 	// and expect to add entry in _vt.reparent_journal
-	master.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
-		GTIDSet: replication.MariadbGTID{
+	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+		GTIDSet: mysql.MariadbGTID{
 			Domain:   5,
 			Server:   456,
 			Sequence: 890,
@@ -192,6 +194,7 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	}
 	master.FakeMysqlDaemon.ReadOnly = true
 	master.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"FAKE RESET ALL REPLICATION",
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
 		"CREATE DATABASE IF NOT EXISTS _vt",
@@ -203,13 +206,12 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 
 	// goodSlave: expect to be re-parented
 	goodSlave.FakeMysqlDaemon.ReadOnly = true
-	goodSlave.FakeMysqlDaemon.SetSlavePositionCommandsPos = master.FakeMysqlDaemon.CurrentMasterPosition
-	goodSlave.FakeMysqlDaemon.SetSlavePositionCommandsResult = []string{"cmd1"}
-	goodSlave.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", master.Tablet.Hostname, master.Tablet.PortMap["mysql"])
-	goodSlave.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
+	goodSlave.FakeMysqlDaemon.SetSlavePositionPos = master.FakeMysqlDaemon.CurrentMasterPosition
+	goodSlave.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
 	goodSlave.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"cmd1",
-		"set master cmd 1",
+		"FAKE RESET ALL REPLICATION",
+		"FAKE SET SLAVE POSITION",
+		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	goodSlave.StartActionLoop(t, wr)
@@ -218,8 +220,12 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	// badSlave: insert an error by failing the master hostname input
 	// on purpose
 	badSlave.FakeMysqlDaemon.ReadOnly = true
-	badSlave.FakeMysqlDaemon.SetSlavePositionCommandsPos = master.FakeMysqlDaemon.CurrentMasterPosition
-	badSlave.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", "", master.Tablet.PortMap["mysql"])
+	badSlave.FakeMysqlDaemon.SetSlavePositionPos = master.FakeMysqlDaemon.CurrentMasterPosition
+	badSlave.FakeMysqlDaemon.SetMasterInput = fmt.Sprintf("%v:%v", "", topoproto.MysqlPort(master.Tablet))
+	badSlave.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"FAKE RESET ALL REPLICATION",
+		"FAKE SET SLAVE POSITION",
+	}
 	badSlave.StartActionLoop(t, wr)
 	defer badSlave.StopActionLoop(t)
 

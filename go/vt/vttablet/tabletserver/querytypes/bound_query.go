@@ -1,6 +1,18 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 // Package querytypes defines internal types used in the APIs to deal
 // with queries.
@@ -9,6 +21,9 @@ package querytypes
 import (
 	"bytes"
 	"fmt"
+
+	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 // This file defines the BoundQuery type.
@@ -34,24 +49,39 @@ type BoundQuery struct {
 // and also truncates data if it's too long
 func QueryAsString(sql string, bindVariables map[string]interface{}) string {
 	buf := &bytes.Buffer{}
-	fmt.Fprintf(buf, "Sql: %q, BindVars: {", slimit(sql, 5000))
+	fmt.Fprintf(buf, "Sql: %q, BindVars: {", sqlparser.TruncateForLog(sql))
 	for k, v := range bindVariables {
+		var valString string
 		switch val := v.(type) {
 		case []byte:
-			fmt.Fprintf(buf, "%s: %q, ", k, slimit(string(val), 256))
+			valString = string(val)
 		case string:
-			fmt.Fprintf(buf, "%s: %q, ", k, slimit(val, 256))
+			valString = val
 		default:
-			fmt.Fprintf(buf, "%s: %v, ", k, v)
+			valString = fmt.Sprintf("%v", v)
 		}
+
+		fmt.Fprintf(buf, "%s: %q", k, sqlparser.TruncateForLog(valString))
 	}
 	fmt.Fprintf(buf, "}")
 	return string(buf.Bytes())
 }
 
-func slimit(s string, max int) string {
-	if l := len(s); l > max {
-		return s[:max]
+// BoundQueriesEqual compares two slices of BoundQuery objects.
+func BoundQueriesEqual(x, y []BoundQuery) bool {
+	if len(x) != len(y) {
+		return false
 	}
-	return s
+	for i := range x {
+		if !BoundQueryEqual(&x[i], &y[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// BoundQueryEqual compares two BoundQuery objects.
+func BoundQueryEqual(x, y *BoundQuery) bool {
+	return x.Sql == y.Sql &&
+		sqltypes.BindVariablesEqual(x.BindVariables, y.BindVariables)
 }

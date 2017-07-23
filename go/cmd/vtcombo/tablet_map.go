@@ -1,3 +1,19 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreedto in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package main
 
 import (
@@ -65,7 +81,7 @@ func createTablet(ctx context.Context, ts topo.Server, cell string, uid uint32, 
 	log.Infof("Creating %v tablet %v for %v/%v", tabletType, topoproto.TabletAliasString(alias), keyspace, shard)
 	flag.Set("debug-url-prefix", fmt.Sprintf("/debug-%d", uid))
 
-	controller := tabletserver.NewServer(ts)
+	controller := tabletserver.NewServer(ts, *alias)
 	initTabletType := tabletType
 	if tabletType == topodatapb.TabletType_MASTER {
 		initTabletType = topodatapb.TabletType_REPLICA
@@ -276,7 +292,7 @@ func (itc *internalTabletConn) Execute(ctx context.Context, target *querypb.Targ
 	if err != nil {
 		return nil, err
 	}
-	bindVars, err = querytypes.Proto3ToBindVariables(bv)
+	bindVars, err = querytypes.Proto3ToBindVariables(bv, false /* enforceSafety */)
 	if err != nil {
 		return nil, err
 	}
@@ -296,7 +312,7 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, target *querypb
 		if err != nil {
 			return nil, err
 		}
-		bindVars, err := querytypes.Proto3ToBindVariables(bv)
+		bindVars, err := querytypes.Proto3ToBindVariables(bv, false /* enforceSafety */)
 		if err != nil {
 			return nil, err
 		}
@@ -317,7 +333,7 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, target *queryp
 	if err != nil {
 		return err
 	}
-	bindVars, err = querytypes.Proto3ToBindVariables(bv)
+	bindVars, err = querytypes.Proto3ToBindVariables(bv, false /* enforceSafety */)
 	if err != nil {
 		return err
 	}
@@ -327,8 +343,8 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, target *queryp
 }
 
 // Begin is part of queryservice.QueryService
-func (itc *internalTabletConn) Begin(ctx context.Context, target *querypb.Target) (int64, error) {
-	transactionID, err := itc.tablet.qsc.QueryService().Begin(ctx, target)
+func (itc *internalTabletConn) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, error) {
+	transactionID, err := itc.tablet.qsc.QueryService().Begin(ctx, target, options)
 	if err != nil {
 		return 0, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 	}
@@ -397,7 +413,7 @@ func (itc *internalTabletConn) ReadTransaction(ctx context.Context, target *quer
 
 // BeginExecute is part of queryservice.QueryService
 func (itc *internalTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
-	transactionID, err := itc.Begin(ctx, target)
+	transactionID, err := itc.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -407,7 +423,7 @@ func (itc *internalTabletConn) BeginExecute(ctx context.Context, target *querypb
 
 // BeginExecuteBatch is part of queryservice.QueryService
 func (itc *internalTabletConn) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
-	transactionID, err := itc.Begin(ctx, target)
+	transactionID, err := itc.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, err
 	}

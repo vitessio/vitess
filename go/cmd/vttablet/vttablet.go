@@ -1,15 +1,27 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 // vt tablet server: Serves queries and performs housekeeping jobs.
 package main
 
 import (
 	"flag"
+	"os"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -36,36 +48,40 @@ func init() {
 }
 
 func main() {
-	defer exit.Recover()
-
 	dbconfigFlags := dbconfigs.AppConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
 		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
 	dbconfigs.RegisterFlags(dbconfigFlags)
 	mysqlctl.RegisterFlags()
 	flag.Parse()
-	tabletenv.Init()
+
+	if *servenv.Version {
+		servenv.AppVersion.Print()
+		os.Exit(0)
+	}
+
 	if len(flag.Args()) > 0 {
 		flag.Usage()
-		log.Errorf("vttablet doesn't take any positional arguments")
-		exit.Return(1)
+		log.Exit("vttablet doesn't take any positional arguments")
 	}
+	if err := tabletenv.VerifyConfig(); err != nil {
+		log.Exitf("invalid config: %v", err)
+	}
+
+	tabletenv.Init()
 
 	servenv.Init()
 
 	if *tabletPath == "" {
-		log.Errorf("tabletPath required")
-		exit.Return(1)
+		log.Exit("tabletPath required")
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(*tabletPath)
 	if err != nil {
-		log.Error(err)
-		exit.Return(1)
+		log.Exitf("failed to parse -tablet-path: %v", err)
 	}
 
 	mycnf, err := mysqlctl.NewMycnfFromFlags(tabletAlias.Uid)
 	if err != nil {
-		log.Errorf("mycnf read failed: %v", err)
-		exit.Return(1)
+		log.Exitf("mycnf read failed: %v", err)
 	}
 
 	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, dbconfigFlags)
@@ -75,7 +91,7 @@ func main() {
 
 	// creates and registers the query service
 	ts := topo.Open()
-	qsc := tabletserver.NewServer(ts)
+	qsc := tabletserver.NewServer(ts, *tabletAlias)
 	servenv.OnRun(func() {
 		qsc.Register()
 		addStatusParts(qsc)
@@ -90,8 +106,7 @@ func main() {
 		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
 	} else if *enforceTableACLConfig {
-		log.Error("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
-		exit.Return(1)
+		log.Exit("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
 	}
 	// tabletacl.Init loads ACL from file if *tableACLConfig is not empty
 	err = tableacl.Init(
@@ -103,8 +118,7 @@ func main() {
 	if err != nil {
 		log.Errorf("Fail to initialize Table ACL: %v", err)
 		if *enforceTableACLConfig {
-			log.Error("Need a valid initial Table ACL when enforce-tableacl-config is set, exiting.")
-			exit.Return(1)
+			log.Exit("Need a valid initial Table ACL when enforce-tableacl-config is set, exiting.")
 		}
 	}
 
@@ -121,8 +135,7 @@ func main() {
 	}
 	agent, err = tabletmanager.NewActionAgent(context.Background(), ts, mysqld, qsc, tabletAlias, *dbcfgs, mycnf, int32(*servenv.Port), gRPCPort)
 	if err != nil {
-		log.Error(err)
-		exit.Return(1)
+		log.Exitf("NewActionAgent() failed: %v", err)
 	}
 
 	servenv.OnClose(func() {

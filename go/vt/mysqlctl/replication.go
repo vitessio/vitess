@@ -1,6 +1,18 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 /*
 Handle creating replicas and setting up the replication streams.
@@ -18,9 +30,8 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysqlconn/replication"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/hook"
 )
@@ -32,48 +43,6 @@ const (
 	// SQLStopSlave is the SQl command issued to stop MySQL replication
 	SQLStopSlave = "STOP SLAVE"
 )
-
-func changeMasterArgs(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) []string {
-	var args []string
-	args = append(args, fmt.Sprintf("MASTER_HOST = '%s'", masterHost))
-	args = append(args, fmt.Sprintf("MASTER_PORT = %d", masterPort))
-	args = append(args, fmt.Sprintf("MASTER_USER = '%s'", params.Uname))
-	args = append(args, fmt.Sprintf("MASTER_PASSWORD = '%s'", params.Pass))
-	args = append(args, fmt.Sprintf("MASTER_CONNECT_RETRY = %d", masterConnectRetry))
-
-	if params.SslEnabled() {
-		args = append(args, "MASTER_SSL = 1")
-	}
-	if params.SslCa != "" {
-		args = append(args, fmt.Sprintf("MASTER_SSL_CA = '%s'", params.SslCa))
-	}
-	if params.SslCaPath != "" {
-		args = append(args, fmt.Sprintf("MASTER_SSL_CAPATH = '%s'", params.SslCaPath))
-	}
-	if params.SslCert != "" {
-		args = append(args, fmt.Sprintf("MASTER_SSL_CERT = '%s'", params.SslCert))
-	}
-	if params.SslKey != "" {
-		args = append(args, fmt.Sprintf("MASTER_SSL_KEY = '%s'", params.SslKey))
-	}
-	return args
-}
-
-// parseSlaveStatus parses the common fields of SHOW SLAVE STATUS.
-func parseSlaveStatus(fields map[string]string) Status {
-	status := Status{
-		MasterHost:      fields["Master_Host"],
-		SlaveIORunning:  fields["Slave_IO_Running"] == "Yes",
-		SlaveSQLRunning: fields["Slave_SQL_Running"] == "Yes",
-	}
-	parseInt, _ := strconv.ParseInt(fields["Master_Port"], 10, 0)
-	status.MasterPort = int(parseInt)
-	parseInt, _ = strconv.ParseInt(fields["Connect_Retry"], 10, 0)
-	status.MasterConnectRetry = int(parseInt)
-	parseUint, _ := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
-	status.SecondsBehindMaster = uint(parseUint)
-	return status
-}
 
 // WaitForSlaveStart waits until the deadline for replication to start.
 // This validates the current master is correct and can be connected to.
@@ -169,72 +138,111 @@ func (mysqld *Mysqld) SetReadOnly(on bool) error {
 }
 
 var (
-	// ErrNotSlave means there is no slave status
-	ErrNotSlave = errors.New("no slave status")
 	// ErrNotMaster means there is no master status
 	ErrNotMaster = errors.New("no master status")
 )
 
 // WaitMasterPos lets slaves wait to given replication position
-func (mysqld *Mysqld) WaitMasterPos(ctx context.Context, targetPos replication.Position) error {
-	flavor, err := mysqld.flavor()
+func (mysqld *Mysqld) WaitMasterPos(ctx context.Context, targetPos mysql.Position) error {
+	// Get a connection.
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
-		return fmt.Errorf("WaitMasterPos needs flavor: %v", err)
+		return err
 	}
-	return flavor.WaitMasterPos(ctx, mysqld, targetPos)
+	defer conn.Recycle()
+
+	// Find the query to run, run it.
+	query, err := conn.WaitUntilPositionCommand(ctx, targetPos)
+	if err != nil {
+		return err
+	}
+	qr, err := mysqld.FetchSuperQuery(ctx, query)
+	if err != nil {
+		return fmt.Errorf("WaitUntilPositionCommand(%v) failed: %v", query, err)
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return fmt.Errorf("unexpected result format from WaitUntilPositionCommand(%v): %#v", query, qr)
+	}
+	result := qr.Rows[0][0]
+	if result.IsNull() {
+		return fmt.Errorf("WaitUntilPositionCommand(%v) failed: gtid_mode is OFF", query)
+	}
+	if result.String() == "-1" {
+		return fmt.Errorf("timed out waiting for position %v", targetPos)
+	}
+	return nil
 }
 
 // SlaveStatus returns the slave replication statuses
-func (mysqld *Mysqld) SlaveStatus() (Status, error) {
-	flavor, err := mysqld.flavor()
+func (mysqld *Mysqld) SlaveStatus() (mysql.SlaveStatus, error) {
+	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
 	if err != nil {
-		return Status{}, fmt.Errorf("SlaveStatus needs flavor: %v", err)
+		return mysql.SlaveStatus{}, err
 	}
-	return flavor.SlaveStatus(mysqld)
+	defer conn.Recycle()
+
+	return conn.ShowSlaveStatus()
 }
 
-// MasterPosition returns master replication position
-func (mysqld *Mysqld) MasterPosition() (rp replication.Position, err error) {
-	flavor, err := mysqld.flavor()
+// MasterPosition returns the master replication position.
+func (mysqld *Mysqld) MasterPosition() (mysql.Position, error) {
+	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
 	if err != nil {
-		return rp, fmt.Errorf("MasterPosition needs flavor: %v", err)
+		return mysql.Position{}, err
 	}
-	return flavor.MasterPosition(mysqld)
+	defer conn.Recycle()
+
+	return conn.MasterPosition()
 }
 
-// SetSlavePositionCommands returns the commands to set the
-// replication position at which the slave will resume
-// when it is later reparented with SetMasterCommands.
-func (mysqld *Mysqld) SetSlavePositionCommands(pos replication.Position) ([]string, error) {
-	flavor, err := mysqld.flavor()
+// SetSlavePosition sets the replication position at which the slave will resume
+// when its replication is started.
+func (mysqld *Mysqld) SetSlavePosition(ctx context.Context, pos mysql.Position) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
-		return nil, fmt.Errorf("SetSlavePositionCommands needs flavor: %v", err)
+		return err
 	}
-	return flavor.SetSlavePositionCommands(pos)
+	defer conn.Recycle()
+
+	cmds := conn.SetSlavePositionCommands(pos)
+	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 
-// SetMasterCommands returns the commands to run to make the provided
-// host / port the master.
-func (mysqld *Mysqld) SetMasterCommands(masterHost string, masterPort int) ([]string, error) {
-	flavor, err := mysqld.flavor()
-	if err != nil {
-		return nil, fmt.Errorf("SetMasterCommands needs flavor: %v", err)
-	}
+// SetMaster makes the provided host / port the master. It optionally
+// stops replication before, and starts it after.
+func (mysqld *Mysqld) SetMaster(ctx context.Context, masterHost string, masterPort int, slaveStopBefore bool, slaveStartAfter bool) error {
 	params, err := dbconfigs.WithCredentials(&mysqld.dbcfgs.Repl)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return flavor.SetMasterCommands(&params, masterHost, masterPort, int(masterConnectRetry.Seconds()))
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	cmds := []string{}
+	if slaveStopBefore {
+		cmds = append(cmds, SQLStopSlave)
+	}
+	smc := conn.SetMasterCommand(&params, masterHost, masterPort, int(masterConnectRetry.Seconds()))
+	cmds = append(cmds, smc)
+	if slaveStartAfter {
+		cmds = append(cmds, SQLStartSlave)
+	}
+	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 
-// ResetReplicationCommands returns the commands to run to reset all
-// replication for this host.
-func (mysqld *Mysqld) ResetReplicationCommands() ([]string, error) {
-	flavor, err := mysqld.flavor()
-	if err != nil {
-		return nil, fmt.Errorf("ResetReplicationCommands needs flavor: %v", err)
+// ResetReplication resets all replication for this host.
+func (mysqld *Mysqld) ResetReplication(ctx context.Context) error {
+	conn, connErr := getPoolReconnect(ctx, mysqld.dbaPool)
+	if connErr != nil {
+		return connErr
 	}
-	return flavor.ResetReplicationCommands(), nil
+	defer conn.Recycle()
+
+	cmds := conn.ResetReplicationCommands()
+	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 
 // +------+---------+---------------------+------+-------------+------+----------------------------------------------------------------+------------------+
@@ -290,7 +298,7 @@ func FindSlaves(mysqld MysqlDaemon) ([]string, error) {
 // WaitBlpPosition will wait for the filtered replication to reach at least
 // the provided position.
 func WaitBlpPosition(ctx context.Context, mysqld MysqlDaemon, sql string, replicationPosition string) error {
-	position, err := replication.DecodePosition(replicationPosition)
+	position, err := mysql.DecodePosition(replicationPosition)
 	if err != nil {
 		return err
 	}
@@ -308,9 +316,9 @@ func WaitBlpPosition(ctx context.Context, mysqld MysqlDaemon, sql string, replic
 		if len(qr.Rows) != 1 {
 			return fmt.Errorf("QueryBlpCheckpoint(%v) returned unexpected row count: %v", sql, len(qr.Rows))
 		}
-		var pos replication.Position
+		var pos mysql.Position
 		if !qr.Rows[0][0].IsNull() {
-			pos, err = replication.DecodePosition(qr.Rows[0][0].String())
+			pos, err = mysql.DecodePosition(qr.Rows[0][0].String())
 			if err != nil {
 				return err
 			}
@@ -327,21 +335,49 @@ func WaitBlpPosition(ctx context.Context, mysqld MysqlDaemon, sql string, replic
 // EnableBinlogPlayback prepares the server to play back events from a binlog stream.
 // Whatever it does for a given flavor, it must be idempotent.
 func (mysqld *Mysqld) EnableBinlogPlayback() error {
-	flavor, err := mysqld.flavor()
+	// Get a connection.
+	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
 	if err != nil {
-		return fmt.Errorf("EnableBinlogPlayback needs flavor: %v", err)
+		return err
 	}
-	return flavor.EnableBinlogPlayback(mysqld)
+	defer conn.Recycle()
+
+	// See if we have a command to run, and run it.
+	cmd := conn.EnableBinlogPlaybackCommand()
+	if cmd == "" {
+		return nil
+	}
+	if err := mysqld.ExecuteSuperQuery(context.TODO(), cmd); err != nil {
+		log.Errorf("EnableBinlogPlayback: cannot run query '%v': %v", cmd, err)
+		return fmt.Errorf("EnableBinlogPlayback: cannot run query '%v': %v", cmd, err)
+	}
+
+	log.Info("EnableBinlogPlayback: successfully ran %v", cmd)
+	return nil
 }
 
 // DisableBinlogPlayback returns the server to the normal state after streaming.
 // Whatever it does for a given flavor, it must be idempotent.
 func (mysqld *Mysqld) DisableBinlogPlayback() error {
-	flavor, err := mysqld.flavor()
+	// Get a connection.
+	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
 	if err != nil {
-		return fmt.Errorf("DisableBinlogPlayback needs flavor: %v", err)
+		return err
 	}
-	return flavor.DisableBinlogPlayback(mysqld)
+	defer conn.Recycle()
+
+	// See if we have a command to run, and run it.
+	cmd := conn.DisableBinlogPlaybackCommand()
+	if cmd == "" {
+		return nil
+	}
+	if err := mysqld.ExecuteSuperQuery(context.TODO(), cmd); err != nil {
+		log.Errorf("DisableBinlogPlayback: cannot run query '%v': %v", cmd, err)
+		return fmt.Errorf("DisableBinlogPlayback: cannot run query '%v': %v", cmd, err)
+	}
+
+	log.Info("DisableBinlogPlayback: successfully ran '%v'", cmd)
+	return nil
 }
 
 // SetSemiSyncEnabled enables or disables semi-sync replication for

@@ -1,6 +1,18 @@
-// Copyright 2016, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package planbuilder
 
@@ -10,7 +22,6 @@ import (
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
 // buildSelectPlan is the new function to build a Select plan.
@@ -43,7 +54,11 @@ func processSelect(sel *sqlparser.Select, vschema VSchema, outer builder) (build
 			return nil, err
 		}
 	}
-	err = pushSelectExprs(sel, bldr)
+	bldr, err = checkAggregates(sel, bldr)
+	if err != nil {
+		return nil, err
+	}
+	bldr, err = pushSelectExprs(sel, bldr)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +72,7 @@ func processSelect(sel *sqlparser.Select, vschema VSchema, outer builder) (build
 	if err != nil {
 		return nil, err
 	}
-	err = pushLimit(sel.Limit, bldr)
+	bldr, err = pushLimit(sel.Limit, bldr)
 	if err != nil {
 		return nil, err
 	}
@@ -72,12 +87,11 @@ func pushFilter(boolExpr sqlparser.Expr, bldr builder, whereType string) error {
 	filters := splitAndExpression(nil, boolExpr)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
-		rb, err := findRoute(filter, bldr)
+		origin, err := findOrigin(filter, bldr)
 		if err != nil {
 			return err
 		}
-		err = rb.PushFilter(filter, whereType)
-		if err != nil {
+		if err := bldr.PushFilter(filter, whereType, origin); err != nil {
 			return err
 		}
 	}
@@ -106,88 +120,32 @@ func reorderBySubquery(filters []sqlparser.Expr) {
 
 // pushSelectExprs identifies the target route for the
 // select expressions and pushes them down.
-func pushSelectExprs(sel *sqlparser.Select, bldr builder) error {
-	err := checkAggregates(sel, bldr)
+func pushSelectExprs(sel *sqlparser.Select, bldr builder) (builder, error) {
+	resultColumns, err := pushSelectRoutes(sel.SelectExprs, bldr)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if sel.Distinct != "" {
-		// We know it's a route, but this may change
-		// in the distant future.
-		bldr.(*route).MakeDistinct()
-	}
-	colsyms, err := pushSelectRoutes(sel.SelectExprs, bldr)
-	if err != nil {
-		return err
-	}
-	bldr.Symtab().Colsyms = colsyms
-	err = pushGroupBy(sel.GroupBy, bldr)
-	if err != nil {
-		return err
-	}
-	return nil
-}
+	bldr.Symtab().ResultColumns = resultColumns
 
-// checkAggregates returns an error if the select statement
-// has aggregates that cannot be pushed down due to a complex
-// plan.
-func checkAggregates(sel *sqlparser.Select, bldr builder) error {
-	hasAggregates := false
-	if sel.Distinct != "" {
-		hasAggregates = true
-	} else {
-		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			switch node := node.(type) {
-			case *sqlparser.FuncExpr:
-				if node.IsAggregate() {
-					hasAggregates = true
-					return false, errors.New("dummy")
-				}
-			case *sqlparser.GroupConcatExpr:
-				hasAggregates = true
-				return false, errors.New("dummy")
-			}
-			return true, nil
-		}, sel.SelectExprs)
+	bldr, err = pushGroupBy(sel, bldr)
+	if err != nil {
+		return nil, err
 	}
-	if !hasAggregates {
-		return nil
-	}
-
-	// Check if we can allow aggregates.
-	rb, ok := bldr.(*route)
-	if !ok {
-		return errors.New("unsupported: complex join with aggregates")
-	}
-	if rb.IsSingle() {
-		return nil
-	}
-	// It's a scatter rb. We can allow aggregates if there is a unique
-	// vindex in the select list.
-	for _, selectExpr := range sel.SelectExprs {
-		switch selectExpr := selectExpr.(type) {
-		case *sqlparser.NonStarExpr:
-			vindex := bldr.Symtab().Vindex(selectExpr.Expr, rb, true)
-			if vindex != nil && vindexes.IsUnique(vindex) {
-				return nil
-			}
-		}
-	}
-	return errors.New("unsupported: scatter with aggregates")
+	return bldr, nil
 }
 
 // pusheSelectRoutes is a convenience function that pushes all the select
-// expressions and returns the list of colsyms generated for it.
-func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*colsym, error) {
-	colsyms := make([]*colsym, len(selectExprs))
+// expressions and returns the list of resultColumns generated for it.
+func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*resultColumn, error) {
+	resultColumns := make([]*resultColumn, len(selectExprs))
 	for i, node := range selectExprs {
 		switch node := node.(type) {
-		case *sqlparser.NonStarExpr:
-			rb, err := findRoute(node.Expr, bldr)
+		case *sqlparser.AliasedExpr:
+			origin, err := findOrigin(node.Expr, bldr)
 			if err != nil {
 				return nil, err
 			}
-			colsyms[i], _, err = bldr.PushSelect(node, rb)
+			resultColumns[i], _, err = bldr.PushSelect(node, origin)
 			if err != nil {
 				return nil, err
 			}
@@ -195,7 +153,7 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*colsy
 			// We'll allow select * for simple routes.
 			rb, ok := bldr.(*route)
 			if !ok {
-				return nil, errors.New("unsupported: '*' expression in complex join")
+				return nil, errors.New("unsupported: '*' expression in cross-shard query")
 			}
 			// Validate keyspace reference if any.
 			if !node.TableName.IsEmpty() {
@@ -205,14 +163,20 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*colsy
 					}
 				}
 			}
-			// We can push without validating the reference because
-			// MySQL will fail if it's invalid.
-			colsyms[i] = rb.PushStar(node)
+			resultColumns[i] = rb.PushAnonymous(node)
 		case sqlparser.Nextval:
-			// For now, this is only supported as an implicit feature
-			// for auto_inc in inserts.
-			return nil, errors.New("unsupported: NEXT VALUES construct")
+			rb, ok := bldr.(*route)
+			if !ok {
+				// This code is unreachable because the parser doesn't allow joins for next val statements.
+				return nil, errors.New("unsupported: SELECT NEXT query in cross-shard query")
+			}
+			if err := rb.SetOpcode(engine.SelectNext); err != nil {
+				return nil, err
+			}
+			resultColumns[i] = rb.PushAnonymous(node)
+		default:
+			panic(fmt.Sprintf("BUG: unexpceted select expression type: %T", node))
 		}
 	}
-	return colsyms, nil
+	return resultColumns, nil
 }

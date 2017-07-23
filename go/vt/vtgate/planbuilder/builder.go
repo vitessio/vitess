@@ -1,81 +1,122 @@
-// Copyright 2014, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package planbuilder
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
-// A builder is used to build a primitive. The top-level
-// builder will be a tree that points to other builders.
-// Each builder builds an engine.Primitive.
-// The primitives themselves will mirror the same tree.
+// builder defines the interface that a primitive must
+// satisfy.
 type builder interface {
 	// Symtab returns the associated symtab.
 	Symtab() *symtab
-	// SetSymtab sets the symtab for the current node and
-	// its non-subquery children.
-	SetSymtab(*symtab)
-	// Order is a number that signifies execution order.
-	// A lower Order number Route is executed before a
-	// higher one. For a node that contains other nodes,
-	// the Order represents the highest order of the leaf
-	// nodes. This function is used to travel from a root
-	// node to a target node.
-	Order() int
-	// SetOrder sets the order for the underlying routes.
+
+	// MaxOrder must return the order number of the
+	// highest columnOriginator within the current sub-tree.
+	// The originators are numbered by their execution order.
+	// When two trees are brought together into a join,
+	// the MaxOrder from the left is used as starting point
+	// to renumber the originators on the right. Execution order
+	// always goes from left to right. A node that contains
+	// sub-nodes (like a join), can cache these values
+	// and use them for efficient b-tree style traversal.
+	MaxOrder() int
+
+	// SetOrder reassigns order for the primitive and its sub-primitives.
+	// The input is the max order of the previous primitive that should
+	// execute before this one.
 	SetOrder(int)
+
 	// Primitve returns the underlying primitive.
 	Primitive() engine.Primitive
-	// Leftmost returns the leftmost route.
-	Leftmost() *route
-	// Join joins the two builder objects. The outcome
-	// can be a new builder or a modified one.
-	Join(rhs builder, ajoin *sqlparser.JoinTableExpr) (builder, error)
-	// SetRHS marks all routes under this node as RHS due
-	// to a left join. Such nodes have restrictions on what
-	// can be pushed into them. This should not propagate
-	// to subqueries.
-	SetRHS()
-	// PushSelect pushes the select expression through the tree
-	// all the way to the route that colsym points to.
-	// PushSelect is similar to SupplyCol except that it always
-	// adds a new column, whereas SupplyCol can reuse an existing
-	// column. The function must return a colsym for the expression
-	// and the column number of the result.
-	PushSelect(expr *sqlparser.NonStarExpr, rb *route) (colsym *colsym, colnum int, err error)
+
+	// Leftmost returns the leftmost columnOriginator.
+	Leftmost() columnOriginator
+
+	// ResultColumns returns the list of result columns the
+	// primitive returns.
+	ResultColumns() []*resultColumn
+
+	// PushFilter pushes a WHERE or HAVING clause expression
+	// to the specified origin.
+	PushFilter(filter sqlparser.Expr, whereType string, origin columnOriginator) error
+
+	// PushSelect pushes the select expression to the specified
+	// originator. If successful, the originator must create
+	// a resultColumn entry and return it. The top level caller
+	// must accumulate these result columns and set the symtab
+	// after analysis.
+	PushSelect(expr *sqlparser.AliasedExpr, origin columnOriginator) (rc *resultColumn, colnum int, err error)
+
 	// PushOrderByNull pushes the special case ORDER By NULL to
-	// all routes. It's safe to push down this clause because it's
+	// all primitives. It's safe to push down this clause because it's
 	// just on optimization hint.
 	PushOrderByNull()
-	// PushMisc pushes miscelleaneous constructs to all the routes.
-	// This should not propagate to subqueries.
+
+	// SetUpperLimit is an optimization hint that tells that primitive
+	// that it it does not need to return more than the specified number of rows.
+	// A primitive that cannot perform this can ignore the request.
+	// The count is similar to a plan Value. In this case, it can be
+	// a string (bindvar name), or an int64.
+	SetUpperLimit(count interface{})
+
+	// PushMisc pushes miscelleaneous constructs to all the primitives.
 	PushMisc(sel *sqlparser.Select)
+
 	// Wireup performs the wire-up work. Nodes should be traversed
 	// from right to left because the rhs nodes can request vars from
 	// the lhs nodes.
 	Wireup(bldr builder, jt *jointab) error
+
 	// SupplyVar finds the common root between from and to. If it's
 	// the common root, it supplies the requested var to the rhs tree.
+	// If the primitive already has the column in its list, it should
+	// just supply it to the 'to' node. Otherwise, it should request
+	// for it by calling SupplyCol on the 'from' sub-tree to request the
+	// column, and then supply it to the 'to' node.
 	SupplyVar(from, to int, col *sqlparser.ColName, varname string)
-	// SupplyCol will be used for the wire-up process. This function
-	// takes a column reference as input, changes the primitive
-	// to supply the requested column and returns the column number of
-	// the result for it. The request is passed down recursively
-	// as needed.
-	SupplyCol(ref colref) int
+
+	// SupplyCol is meant to be used for the wire-up process. This function
+	// changes the primitive to supply the requested column and returns
+	// the resultColumn and column number of the result. SupplyCol
+	// is different from PushSelect because it may reuse an existing
+	// resultColumn, whereas PushSelect guarantees the addition of a new
+	// result column and returns a distinct symbol for it.
+	SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int)
+}
+
+// columnOriginator is a builder that originates
+// column symbols.
+type columnOriginator interface {
+	builder
+	Order() int
 }
 
 // VSchema defines the interface for this package to fetch
 // info about tables.
 type VSchema interface {
-	Find(keyspace, tablename sqlparser.TableIdent) (table *vindexes.Table, err error)
+	Find(tablename sqlparser.TableName) (table *vindexes.Table, err error)
+	DefaultKeyspace() (*vindexes.Keyspace, error)
 }
 
 // Build builds a plan for a query based on the specified vschema.
@@ -106,10 +147,20 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema VSchema) (*en
 		plan.Instructions, err = buildUpdatePlan(stmt, vschema)
 	case *sqlparser.Delete:
 		plan.Instructions, err = buildDeletePlan(stmt, vschema)
-	case *sqlparser.Union, *sqlparser.Set, *sqlparser.DDL, *sqlparser.Other:
-		return nil, errors.New("unsupported construct")
+	case *sqlparser.Union:
+		plan.Instructions, err = buildUnionPlan(stmt, vschema)
+	case *sqlparser.Set:
+		return nil, errors.New("unsupported construct: set")
+	case *sqlparser.Show:
+		return nil, errors.New("unsupported construct: show")
+	case *sqlparser.DDL:
+		return nil, errors.New("unsupported construct: ddl")
+	case *sqlparser.OtherRead:
+		return nil, errors.New("unsupported construct: other read")
+	case *sqlparser.OtherAdmin:
+		return nil, errors.New("unsupported construct: other admin")
 	default:
-		panic("unexpected statement type")
+		panic(fmt.Sprintf("BUG: unexpected statement type: %T", stmt))
 	}
 	if err != nil {
 		return nil, err

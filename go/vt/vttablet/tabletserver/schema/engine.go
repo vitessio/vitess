@@ -1,6 +1,18 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package schema
 
@@ -17,16 +29,15 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/acl"
-	"github.com/youtube/vitess/go/mysqlconn"
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"github.com/youtube/vitess/go/vt/vterrors"
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -55,7 +66,7 @@ type Engine struct {
 var schemaOnce sync.Once
 
 // NewEngine creates a new Engine.
-func NewEngine(checker tabletenv.MySQLChecker, config tabletenv.TabletConfig) *Engine {
+func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *Engine {
 	reloadTime := time.Duration(config.SchemaReloadTime * 1e9)
 	idleTimeout := time.Duration(config.IdleTimeout * 1e9)
 	se := &Engine{
@@ -81,7 +92,7 @@ func NewEngine(checker tabletenv.MySQLChecker, config tabletenv.TabletConfig) *E
 
 // Open initializes the Engine. Calling Open on an already
 // open engine is a no-op.
-func (se *Engine) Open(dbaParams *sqldb.ConnParams) error {
+func (se *Engine) Open(dbaParams *mysql.ConnParams) error {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	if se.isOpen {
@@ -103,7 +114,7 @@ func (se *Engine) Open(dbaParams *sqldb.ConnParams) error {
 		return err
 	}
 
-	tableData, err := conn.Exec(ctx, mysqlconn.BaseShowTables, maxTableCount, false)
+	tableData, err := conn.Exec(ctx, mysql.BaseShowTables, maxTableCount, false)
 	if err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get table list: %v", err)
 	}
@@ -200,7 +211,7 @@ func (se *Engine) Reload(ctx context.Context) error {
 		if err != nil {
 			return 0, nil, err
 		}
-		tableData, err := conn.Exec(ctx, mysqlconn.BaseShowTables, maxTableCount, false)
+		tableData, err := conn.Exec(ctx, mysql.BaseShowTables, maxTableCount, false)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -284,7 +295,7 @@ func (se *Engine) TableWasCreatedOrAltered(ctx context.Context, tableName string
 		return err
 	}
 	defer conn.Recycle()
-	tableData, err := conn.Exec(ctx, mysqlconn.BaseShowTablesForTable(tableName), 1, false)
+	tableData, err := conn.Exec(ctx, mysql.BaseShowTablesForTable(tableName), 1, false)
 	if err != nil {
 		tabletenv.InternalErrors.Add("Schema", 1)
 		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "TableWasCreatedOrAltered: information_schema query failed for table %s: %v", tableName, err)

@@ -1,6 +1,18 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package connpool
 
@@ -8,14 +20,16 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/pools"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"golang.org/x/net/context"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // ErrConnPoolClosed is returned when the connection pool is closed.
@@ -28,7 +42,9 @@ var ErrConnPoolClosed = vterrors.New(vtrpcpb.Code_INTERNAL, "internal error: une
 // through non-test code.
 var usedNames = make(map[string]bool)
 
-type mysqlChecker interface {
+// MySQLChecker defines the CheckMySQL interface that lower
+// level objects can use to call back into TabletServer.
+type MySQLChecker interface {
 	CheckMySQL()
 }
 
@@ -44,7 +60,7 @@ type Pool struct {
 	capacity    int
 	idleTimeout time.Duration
 	dbaPool     *dbconnpool.ConnectionPool
-	checker     mysqlChecker
+	checker     MySQLChecker
 }
 
 // New creates a new Pool. The name is used
@@ -53,7 +69,7 @@ func New(
 	name string,
 	capacity int,
 	idleTimeout time.Duration,
-	checker mysqlChecker) *Pool {
+	checker MySQLChecker) *Pool {
 	cp := &Pool{
 		capacity:    capacity,
 		idleTimeout: idleTimeout,
@@ -81,7 +97,7 @@ func (cp *Pool) pool() (p *pools.ResourcePool) {
 }
 
 // Open must be called before starting to use the pool.
-func (cp *Pool) Open(appParams, dbaParams *sqldb.ConnParams) {
+func (cp *Pool) Open(appParams, dbaParams *mysql.ConnParams) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 
@@ -89,7 +105,7 @@ func (cp *Pool) Open(appParams, dbaParams *sqldb.ConnParams) {
 		return NewDBConn(cp, appParams, dbaParams)
 	}
 	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
-	cp.dbaPool.Open(dbconnpool.DBConnectionCreator(dbaParams, tabletenv.MySQLStats))
+	cp.dbaPool.Open(dbaParams, tabletenv.MySQLStats)
 }
 
 // Close will close the pool and wait for connections to be returned before

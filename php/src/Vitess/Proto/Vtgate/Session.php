@@ -15,6 +15,15 @@ namespace Vitess\Proto\Vtgate {
     /**  @var boolean */
     public $single_db = null;
     
+    /**  @var boolean */
+    public $autocommit = null;
+    
+    /**  @var string */
+    public $target_string = null;
+    
+    /**  @var \Vitess\Proto\Query\ExecuteOptions */
+    public $options = null;
+    
 
     /** @var \Closure[] */
     protected static $__extensions = array();
@@ -46,6 +55,31 @@ namespace Vitess\Proto\Vtgate {
       $f->name      = "single_db";
       $f->type      = \DrSlump\Protobuf::TYPE_BOOL;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $descriptor->addField($f);
+
+      // OPTIONAL BOOL autocommit = 4
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 4;
+      $f->name      = "autocommit";
+      $f->type      = \DrSlump\Protobuf::TYPE_BOOL;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $descriptor->addField($f);
+
+      // OPTIONAL STRING target_string = 5
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 5;
+      $f->name      = "target_string";
+      $f->type      = \DrSlump\Protobuf::TYPE_STRING;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $descriptor->addField($f);
+
+      // OPTIONAL MESSAGE options = 6
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 6;
+      $f->name      = "options";
+      $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $f->reference = '\Vitess\Proto\Query\ExecuteOptions';
       $descriptor->addField($f);
 
       foreach (self::$__extensions as $cb) {
@@ -184,6 +218,117 @@ namespace Vitess\Proto\Vtgate {
      */
     public function setSingleDb( $value){
       return $this->_set(3, $value);
+    }
+    
+    /**
+     * Check if <autocommit> has a value
+     *
+     * @return boolean
+     */
+    public function hasAutocommit(){
+      return $this->_has(4);
+    }
+    
+    /**
+     * Clear <autocommit> value
+     *
+     * @return \Vitess\Proto\Vtgate\Session
+     */
+    public function clearAutocommit(){
+      return $this->_clear(4);
+    }
+    
+    /**
+     * Get <autocommit> value
+     *
+     * @return boolean
+     */
+    public function getAutocommit(){
+      return $this->_get(4);
+    }
+    
+    /**
+     * Set <autocommit> value
+     *
+     * @param boolean $value
+     * @return \Vitess\Proto\Vtgate\Session
+     */
+    public function setAutocommit( $value){
+      return $this->_set(4, $value);
+    }
+    
+    /**
+     * Check if <target_string> has a value
+     *
+     * @return boolean
+     */
+    public function hasTargetString(){
+      return $this->_has(5);
+    }
+    
+    /**
+     * Clear <target_string> value
+     *
+     * @return \Vitess\Proto\Vtgate\Session
+     */
+    public function clearTargetString(){
+      return $this->_clear(5);
+    }
+    
+    /**
+     * Get <target_string> value
+     *
+     * @return string
+     */
+    public function getTargetString(){
+      return $this->_get(5);
+    }
+    
+    /**
+     * Set <target_string> value
+     *
+     * @param string $value
+     * @return \Vitess\Proto\Vtgate\Session
+     */
+    public function setTargetString( $value){
+      return $this->_set(5, $value);
+    }
+    
+    /**
+     * Check if <options> has a value
+     *
+     * @return boolean
+     */
+    public function hasOptions(){
+      return $this->_has(6);
+    }
+    
+    /**
+     * Clear <options> value
+     *
+     * @return \Vitess\Proto\Vtgate\Session
+     */
+    public function clearOptions(){
+      return $this->_clear(6);
+    }
+    
+    /**
+     * Get <options> value
+     *
+     * @return \Vitess\Proto\Query\ExecuteOptions
+     */
+    public function getOptions(){
+      return $this->_get(6);
+    }
+    
+    /**
+     * Set <options> value
+     *
+     * @param \Vitess\Proto\Query\ExecuteOptions $value
+     * @return \Vitess\Proto\Vtgate\Session
+     */
+    public function setOptions(\Vitess\Proto\Query\ExecuteOptions $value){
+      return $this->_set(6, $value);
     }
   }
 }

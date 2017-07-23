@@ -1,23 +1,42 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
-	"strings"
+	"sort"
+	"sync"
 	"time"
 
 	log "github.com/golang/glog"
 	"github.com/olekukonko/tablewriter"
-	"github.com/youtube/vitess/go/exit"
+	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vitessdriver"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
+
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -27,14 +46,22 @@ Version 3 of the API is used, we do not send any hint to the server.
 
 For query bound variables, we assume place-holders in the query string
 in the form of :v1, :v2, etc.
+
+Examples:
+
+  $ vtclient -server vtgate:15991 "SELECT * FROM messages"
+
+  $ vtclient -server vtgate:15991 -target '@master' -bind_variables '[ 12345, 1, "msg 12345" ]' "INSERT INTO messages (page,time_created_ns,message) VALUES (:v1, :v2, :v3)"
+
 `
 	server        = flag.String("server", "", "vtgate server to connect to")
-	tabletType    = flag.String("tablet_type", "rdonly", "tablet type to direct queries to")
 	timeout       = flag.Duration("timeout", 30*time.Second, "timeout for queries")
 	streaming     = flag.Bool("streaming", false, "use a streaming query")
 	bindVariables = newBindvars("bind_variables", "bind variables as a json list")
-	keyspace      = flag.String("keyspace", "", "Keyspace of a specific keyspace/shard to target. If shard is also specified, disables v3. Otherwise it's the default keyspace to use.")
+	targetString  = flag.String("target", "", "keyspace:shard@tablet_type")
 	jsonOutput    = flag.Bool("json", false, "Output JSON instead of human-readable table")
+	parallel      = flag.Int("parallel", 1, "DMLs only: Number of threads executing the same query in parallel. Useful for simple load testing.")
+	count         = flag.Int("count", 1, "DMLs only: Number of times each thread executes the query. Useful for simple, sustained load testing.")
 )
 
 func init() {
@@ -86,130 +113,247 @@ func newBindvars(name, usage string) *bindvars {
 	return &bv
 }
 
-// FIXME(alainjobart) this is a cheap trick. Should probably use the
-// query parser if we needed this to be 100% reliable.
-func isDml(sql string) bool {
-	lower := strings.TrimSpace(strings.ToLower(sql))
-	return strings.HasPrefix(lower, "insert") || strings.HasPrefix(lower, "update") || strings.HasPrefix(lower, "delete")
-}
-
 func main() {
-	defer exit.Recover()
 	defer logutil.Flush()
 
+	qr, err := run()
+	if *jsonOutput && qr != nil {
+		data, err := json.MarshalIndent(qr, "", "  ")
+		if err != nil {
+			log.Exitf("cannot marshal data: %v", err)
+		}
+		fmt.Print(string(data))
+		return
+	}
+
+	qr.print()
+
+	if err != nil {
+		log.Exit(err)
+	}
+}
+
+func run() (*results, error) {
 	flag.Parse()
 	args := flag.Args()
 
 	if len(args) == 0 {
 		flag.Usage()
-		exit.Return(1)
+		return nil, errors.New("no arguments provided. See usage above")
+	}
+	if len(args) > 1 {
+		return nil, errors.New("no additional arguments after the query allowed")
 	}
 
 	c := vitessdriver.Configuration{
-		Protocol:   *vtgateconn.VtgateProtocol,
-		Address:    *server,
-		Keyspace:   *keyspace,
-		TabletType: *tabletType,
-		Timeout:    *timeout,
-		Streaming:  *streaming,
+		Protocol:  *vtgateconn.VtgateProtocol,
+		Address:   *server,
+		Target:    *targetString,
+		Timeout:   *timeout,
+		Streaming: *streaming,
 	}
 	db, err := vitessdriver.OpenWithConfiguration(c)
 	if err != nil {
-		log.Errorf("client error: %v", err)
-		exit.Return(1)
+		return nil, fmt.Errorf("client error: %v", err)
 	}
 
 	log.Infof("Sending the query...")
-	startTime := time.Now()
 
-	// handle dml
-	if isDml(args[0]) {
-		tx, err := db.Begin()
-		if err != nil {
-			log.Errorf("begin failed: %v", err)
-			exit.Return(1)
-		}
-
-		result, err := db.Exec(args[0], []interface{}(*bindVariables)...)
-		if err != nil {
-			log.Errorf("exec failed: %v", err)
-			exit.Return(1)
-		}
-
-		err = tx.Commit()
-		if err != nil {
-			log.Errorf("commit failed: %v", err)
-			exit.Return(1)
-		}
-
-		rowsAffected, err := result.RowsAffected()
-		lastInsertID, err := result.LastInsertId()
-		log.Infof("Total time: %v / Row affected: %v / Last Insert Id: %v", time.Since(startTime), rowsAffected, lastInsertID)
-	} else {
-		// launch the query
-		rows, err := db.Query(args[0], []interface{}(*bindVariables)...)
-		if err != nil {
-			log.Errorf("client error: %v", err)
-			exit.Return(1)
-		}
-		defer rows.Close()
-
-		// get the headers
-		var qr results
-		cols, err := rows.Columns()
-		if err != nil {
-			log.Errorf("client error: %v", err)
-			exit.Return(1)
-		}
-		qr.Fields = cols
-
-		// get the rows
-		for rows.Next() {
-			row := make([]interface{}, len(cols))
-			for i := range row {
-				var col string
-				row[i] = &col
-			}
-			if err := rows.Scan(row...); err != nil {
-				log.Errorf("client error: %v", err)
-				exit.Return(1)
-			}
-
-			// unpack []*string into []string
-			vals := make([]string, 0, len(row))
-			for _, value := range row {
-				vals = append(vals, *(value.(*string)))
-			}
-			qr.Rows = append(qr.Rows, vals)
-		}
-		if err := rows.Err(); err != nil {
-			log.Errorf("Error %v\n", err)
-			exit.Return(1)
-		}
-
-		if *jsonOutput {
-			data, err := json.MarshalIndent(qr, "", "  ")
-			if err != nil {
-				log.Errorf("cannot marshal data: %v", err)
-				exit.Return(1)
-			}
-			fmt.Print(string(data))
-		} else {
-			printTable(qr, time.Since(startTime))
-		}
+	if sqlparser.IsDML(args[0]) {
+		return execMultiDml(db, args[0])
 	}
+
+	return execNonDml(db, args[0])
+}
+
+func execMultiDml(db *sql.DB, sql string) (*results, error) {
+	all := newResults()
+	ec := concurrency.FirstErrorRecorder{}
+	wg := sync.WaitGroup{}
+
+	start := time.Now()
+	for i := 0; i < *parallel; i++ {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			for j := 0; j < *count; j++ {
+				qr, err := execDml(db, sql)
+				all.merge(qr)
+				if err != nil {
+					ec.RecordError(err)
+					all.recordError(err)
+					// We keep going and do not return early purpose.
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	all.duration = time.Since(start)
+
+	return all, ec.Error()
+}
+
+func execDml(db *sql.DB, sql string) (*results, error) {
+	start := time.Now()
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, vterrors.Errorf(vterrors.Code(err), "BEGIN failed: %v", err)
+	}
+
+	result, err := tx.Exec(sql, []interface{}(*bindVariables)...)
+	if err != nil {
+		return nil, vterrors.Errorf(vterrors.Code(err), "failed to execute DML: %v", err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, vterrors.Errorf(vterrors.Code(err), "COMMIT failed: %v", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	lastInsertID, err := result.LastInsertId()
+	return &results{
+		rowsAffected: rowsAffected,
+		lastInsertID: lastInsertID,
+		duration:     time.Since(start),
+	}, nil
+}
+
+func execNonDml(db *sql.DB, sql string) (*results, error) {
+	start := time.Now()
+	rows, err := db.Query(sql, []interface{}(*bindVariables)...)
+	if err != nil {
+		return nil, vterrors.Errorf(vterrors.Code(err), "client error: %v", err)
+	}
+	defer rows.Close()
+
+	// get the headers
+	var qr results
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, fmt.Errorf("client error: %v", err)
+	}
+	qr.Fields = cols
+
+	// get the rows
+	for rows.Next() {
+		row := make([]interface{}, len(cols))
+		for i := range row {
+			var col string
+			row[i] = &col
+		}
+		if err := rows.Scan(row...); err != nil {
+			return nil, fmt.Errorf("client error: %v", err)
+		}
+
+		// unpack []*string into []string
+		vals := make([]string, 0, len(row))
+		for _, value := range row {
+			vals = append(vals, *(value.(*string)))
+		}
+		qr.Rows = append(qr.Rows, vals)
+	}
+	qr.rowsAffected = int64(len(qr.Rows))
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("Vitess returned an error: %v", err)
+	}
+
+	qr.duration = time.Since(start)
+	return &qr, nil
 }
 
 type results struct {
-	Fields []string   `json:"fields"`
-	Rows   [][]string `json:"rows"`
+	mu                 sync.Mutex
+	Fields             []string   `json:"fields"`
+	Rows               [][]string `json:"rows"`
+	rowsAffected       int64
+	lastInsertID       int64
+	duration           time.Duration
+	cumulativeDuration time.Duration
+
+	// Multi DML mode: Track total error count, error count per code and the first error.
+	totalErrorCount int
+	errorCount      map[vtrpcpb.Code]int
+	firstError      map[vtrpcpb.Code]error
 }
 
-func printTable(qr results, dur time.Duration) {
+func newResults() *results {
+	return &results{
+		errorCount: make(map[vtrpcpb.Code]int),
+		firstError: make(map[vtrpcpb.Code]error),
+	}
+}
+
+// merge aggregates "other" into "r".
+// This is only used for executing DMLs concurrently and repeatedly.
+// Therefore, "Fields" and "Rows" are not merged.
+func (r *results) merge(other *results) {
+	if other == nil {
+		return
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.rowsAffected += other.rowsAffected
+	if other.lastInsertID > r.lastInsertID {
+		r.lastInsertID = other.lastInsertID
+	}
+	r.cumulativeDuration += other.duration
+}
+
+func (r *results) recordError(err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.totalErrorCount++
+	code := vterrors.Code(err)
+	r.errorCount[code]++
+
+	if r.errorCount[code] == 1 {
+		r.firstError[code] = err
+	}
+}
+
+func (r *results) print() {
+	if r == nil {
+		return
+	}
+
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader(qr.Fields)
+	table.SetHeader(r.Fields)
 	table.SetAutoFormatHeaders(false)
-	table.AppendBulk(qr.Rows)
+	table.AppendBulk(r.Rows)
 	table.Render()
-	fmt.Printf("%v rows in set (%v)\n", len(qr.Rows), dur)
+	fmt.Printf("%v row(s) affected (%v, cum: %v)\n", r.rowsAffected, r.duration, r.cumulativeDuration)
+	if r.lastInsertID != 0 {
+		fmt.Printf("Last insert ID: %v\n", r.lastInsertID)
+	}
+
+	if r.totalErrorCount == 0 {
+		return
+	}
+
+	fmt.Printf("%d error(s) were returned. Number of errors by error code:\n\n", r.totalErrorCount)
+	// Sort different error codes by count (descending).
+	type errorCounts struct {
+		code  vtrpcpb.Code
+		count int
+	}
+	var counts []errorCounts
+	for code, count := range r.errorCount {
+		counts = append(counts, errorCounts{code, count})
+	}
+	sort.Slice(counts, func(i, j int) bool { return counts[i].count >= counts[j].count })
+	for _, c := range counts {
+		fmt.Printf("%- 30v= % 5d\n", c.code, c.count)
+	}
+
+	fmt.Printf("\nFirst error per code:\n\n")
+	for code, err := range r.firstError {
+		fmt.Printf("Code:  %v\nError: %v\n\n", code, err)
+	}
 }

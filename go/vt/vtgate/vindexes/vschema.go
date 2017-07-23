@@ -1,6 +1,18 @@
-// Copyright 2014, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package vindexes
 
@@ -31,6 +43,7 @@ type Table struct {
 	Ordered        []*ColumnVindex      `json:"ordered,omitempty"`
 	Owned          []*ColumnVindex      `json:"owned,omitempty"`
 	AutoIncrement  *AutoIncrement       `json:"auto_increment,omitempty"`
+	Pinned         []byte               `json:"pinned,omitempty"`
 }
 
 // Keyspace contains the keyspcae info for each Table.
@@ -89,6 +102,7 @@ func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema, err error) {
 	if err != nil {
 		return nil, err
 	}
+	addDual(vschema)
 	return vschema, nil
 }
 
@@ -229,6 +243,30 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) error 
 		}
 	}
 	return nil
+}
+
+// addDual adds dual as a valid table to all keyspaces.
+// For unsharded keyspaces, it gets pinned against keyspace id '0x00'.
+func addDual(vschema *VSchema) {
+	first := ""
+	for ksname, ks := range vschema.Keyspaces {
+		t := &Table{
+			Name:     sqlparser.NewTableIdent("dual"),
+			Keyspace: ks.Keyspace,
+		}
+		if ks.Keyspace.Sharded {
+			t.Pinned = []byte{0}
+		}
+		ks.Tables["dual"] = t
+		if first == "" || first > ksname {
+			// In case of a reference to dual that's not qualified
+			// by keyspace, we still want to resolve it to one of
+			// the keyspaces. For consistency, we'll always use the
+			// first keyspace by lexical ordering.
+			first = ksname
+			vschema.tables["dual"] = t
+		}
+	}
 }
 
 // findQualified finds a table t or k.t.

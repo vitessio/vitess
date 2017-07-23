@@ -1,3 +1,19 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreedto in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vtctld
 
 import (
@@ -41,10 +57,6 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 		testlib.TabletKeyspaceShard(t, keyspace, shard))
 	t2 := testlib.NewFakeTablet(t, wr, "cell2", 1, topodatapb.TabletType_REPLICA, nil,
 		testlib.TabletKeyspaceShard(t, keyspace, shard))
-	for _, ft := range []*(testlib.FakeTablet){t1, t2} {
-		ft.StartActionLoop(t, wr)
-		defer ft.StopActionLoop(t)
-	}
 
 	target := querypb.Target{
 		Keyspace:   keyspace,
@@ -55,6 +67,11 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 	fqs2 := fakes.NewStreamHealthQueryService(target)
 	grpcqueryservice.Register(t1.RPCServer, fqs1)
 	grpcqueryservice.Register(t2.RPCServer, fqs2)
+
+	for _, ft := range []*(testlib.FakeTablet){t1, t2} {
+		ft.StartActionLoop(t, wr)
+		defer ft.StopActionLoop(t)
+	}
 
 	fqs1.AddDefaultHealthResponse()
 

@@ -1,6 +1,18 @@
-// Copyright 2014, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package planbuilder
 
@@ -56,8 +68,10 @@ const (
 	PlanDDL
 	// PlanSelectStream is used for streaming queries
 	PlanSelectStream
-	// PlanOther is for SHOW, DESCRIBE & EXPLAIN statements
-	PlanOther
+	// PlanOtherRead is for SHOW, DESCRIBE & EXPLAIN statements
+	PlanOtherRead
+	// PlanOtherAdmin is for REPAIR, OPTIMIZE and TRUNCATE statements
+	PlanOtherAdmin
 	// NumPlans stores the total number of plans
 	NumPlans
 )
@@ -77,7 +91,8 @@ var planName = []string{
 	"SET",
 	"DDL",
 	"SELECT_STREAM",
-	"OTHER",
+	"OTHER_READ",
+	"OTHER_ADMIN",
 }
 
 func (pt PlanType) String() string {
@@ -125,7 +140,8 @@ var tableACLRoles = map[PlanType]tableacl.Role{
 	PlanInsertSubquery: tableacl.WRITER,
 	PlanDDL:            tableacl.ADMIN,
 	PlanSelectStream:   tableacl.READER,
-	PlanOther:          tableacl.ADMIN,
+	PlanOtherRead:      tableacl.READER,
+	PlanOtherAdmin:     tableacl.ADMIN,
 	PlanUpsertPK:       tableacl.WRITER,
 	PlanNextval:        tableacl.WRITER,
 }
@@ -144,6 +160,8 @@ const (
 	ReasonComplexExpr
 	ReasonUpsert
 	ReasonUpsertColMismatch
+	ReasonReplace
+	ReasonMultiTable
 )
 
 // Must exactly match order of reason constants.
@@ -155,6 +173,8 @@ var reasonName = []string{
 	"COMPLEX_EXPR",
 	"UPSERT",
 	"UPSERT_COL_MISMATCH",
+	"REPLACE",
+	"MULTI_TABLE",
 }
 
 // String returns a string representation of a ReasonType.
@@ -181,9 +201,10 @@ type MessageRowValues struct {
 
 // Plan is built for selects and DMLs.
 type Plan struct {
-	PlanID PlanType
-	Reason ReasonType
-	Table  *schema.Table
+	PlanID  PlanType
+	Reason  ReasonType
+	Table   *schema.Table
+	NewName sqlparser.TableIdent
 
 	// FieldQuery is used to fetch field info
 	FieldQuery *sqlparser.ParsedQuery
@@ -211,11 +232,12 @@ type Plan struct {
 	// For update: set clause if pk is changing.
 	SecondaryPKValues []interface{}
 
+	// WhereClause is set for DMLs. It is used by the hot row protection
+	// to serialize e.g. UPDATEs going to the same row.
+	WhereClause *sqlparser.ParsedQuery
+
 	// For PlanInsertSubquery: pk columns in the subquery result.
 	SubqueryPKColumns []int
-
-	// For PlanInsertMessage. Query used to reload inserted messages.
-	MessageReloaderQuery *sqlparser.ParsedQuery
 }
 
 // TableName returns the table name for the plan.
@@ -245,7 +267,7 @@ func Build(sql string, tables map[string]*schema.Table) (plan *Plan, err error) 
 		return &Plan{
 			PlanID:     PlanPassSelect,
 			FieldQuery: GenerateFieldQuery(stmt),
-			FullQuery:  GenerateFullQuery(stmt),
+			FullQuery:  GenerateLimitQuery(stmt),
 		}, nil
 	case *sqlparser.Select:
 		return analyzeSelect(stmt, tables)
@@ -259,8 +281,12 @@ func Build(sql string, tables map[string]*schema.Table) (plan *Plan, err error) 
 		return analyzeSet(stmt), nil
 	case *sqlparser.DDL:
 		return analyzeDDL(stmt, tables), nil
-	case *sqlparser.Other:
-		return &Plan{PlanID: PlanOther}, nil
+	case *sqlparser.Show:
+		return &Plan{PlanID: PlanOtherRead}, nil
+	case *sqlparser.OtherRead:
+		return &Plan{PlanID: PlanOtherRead}, nil
+	case *sqlparser.OtherAdmin:
+		return &Plan{PlanID: PlanOtherAdmin}, nil
 	}
 	return nil, errors.New("invalid SQL")
 }
@@ -285,7 +311,7 @@ func BuildStreaming(sql string, tables map[string]*schema.Table) (plan *Plan, er
 		if tableName := analyzeFrom(stmt.From); !tableName.IsEmpty() {
 			plan.setTable(tableName, tables)
 		}
-	case *sqlparser.Union:
+	case *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Union:
 		// pass
 	default:
 		return nil, fmt.Errorf("'%v' not allowed for streaming", sqlparser.String(stmt))

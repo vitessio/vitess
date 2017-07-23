@@ -1,3 +1,4 @@
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/io.vitess/vitess-jdbc/badge.svg)](https://maven-badges.herokuapp.com/maven-central/io.vitess/vitess-jdbc)
 [![Build Status](https://travis-ci.org/youtube/vitess.svg?branch=master)](https://travis-ci.org/youtube/vitess/builds)
 [![codebeat badge](https://codebeat.co/badges/51c9a056-1103-4522-9a9c-dc623821ea87)](https://codebeat.co/projects/github-com-youtube-vitess)
 [![Go Report Card](https://goreportcard.com/badge/github.com/youtube/vitess)](https://goreportcard.com/report/github.com/youtube/vitess)
@@ -17,11 +18,14 @@ since 2011, and has grown to encompass tens of thousands of MySQL nodes.
 
 For more about Vitess, please visit [vitess.io](http://vitess.io).
 
+Vitess has a growing community. You can view the list of adopters
+[here](https://github.com/youtube/vitess/blob/master/ADOPTERS.md).
+
 ## Contact
 
 Ask questions in the
 [vitess@googlegroups.com](https://groups.google.com/forum/#!forum/vitess)
-discussion forum or on [Gitter](https://gitter.im/youtube/vitess).
+discussion forum. You may also request access to the Vitess Slack channel.
 
 Subscribe to
 [vitess-announce@googlegroups.com](https://groups.google.com/forum/#!forum/vitess-announce)
@@ -31,4 +35,4 @@ for low-frequency updates like new features and releases.
 ## License
 
 Unless otherwise noted, the Vitess source files are distributed
-under the BSD-style license found in the LICENSE file.
+under the Apache Version 2.0 license found in the LICENSE file.

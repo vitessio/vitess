@@ -1,27 +1,32 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreedto in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package test
 
 import (
-	"encoding/json"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
-
-func tabletEqual(left, right *topodatapb.Tablet) (bool, error) {
-	lj, err := json.Marshal(left)
-	if err != nil {
-		return false, err
-	}
-	rj, err := json.Marshal(right)
-	if err != nil {
-		return false, err
-	}
-	return string(lj) == string(rj), nil
-}
 
 // checkTablet verifies the topo server API is correct for managing tablets.
 func checkTablet(t *testing.T, ts topo.Impl) {
@@ -30,12 +35,11 @@ func checkTablet(t *testing.T, ts topo.Impl) {
 
 	cell := getLocalCell(ctx, t, ts)
 	tablet := &topodatapb.Tablet{
-		Alias:    &topodatapb.TabletAlias{Cell: cell, Uid: 1},
-		Hostname: "localhost",
-		Ip:       "10.11.12.13",
+		Alias:         &topodatapb.TabletAlias{Cell: cell, Uid: 1},
+		Hostname:      "localhost",
+		MysqlHostname: "localhost",
 		PortMap: map[string]int32{
-			"vt":    3333,
-			"mysql": 3334,
+			"vt": 3333,
 		},
 
 		Tags:     map[string]string{"tag": "value"},
@@ -43,6 +47,7 @@ func checkTablet(t *testing.T, ts topo.Impl) {
 		Type:     topodatapb.TabletType_MASTER,
 		KeyRange: newKeyRange("-10"),
 	}
+	topoproto.SetMysqlPort(tablet, 3334)
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
 		t.Fatalf("CreateTablet: %v", err)
 	}
@@ -58,9 +63,7 @@ func checkTablet(t *testing.T, ts topo.Impl) {
 	if err != nil {
 		t.Fatalf("GetTablet %v: %v", tablet.Alias, err)
 	}
-	if eq, err := tabletEqual(nt, tablet); err != nil {
-		t.Errorf("cannot compare tablets: %v", err)
-	} else if !eq {
+	if !proto.Equal(nt, tablet) {
 		t.Errorf("put and got tablets are not identical:\n%#v\n%#v", tablet, t)
 	}
 
@@ -72,7 +75,7 @@ func checkTablet(t *testing.T, ts topo.Impl) {
 	if err != nil {
 		t.Fatalf("GetTabletsByCell: %v", err)
 	}
-	if len(inCell) != 1 || *inCell[0] != *tablet.Alias {
+	if len(inCell) != 1 || !proto.Equal(inCell[0], tablet.Alias) {
 		t.Errorf("GetTabletsByCell: want [%v], got %v", tablet.Alias, inCell)
 	}
 

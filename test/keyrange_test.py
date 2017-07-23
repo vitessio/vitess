@@ -1,5 +1,20 @@
 #!/usr/bin/env python
 
+# Copyright 2017 Google Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
 import struct
 import unittest
 
@@ -90,7 +105,7 @@ class TestKeyRange(unittest.TestCase):
   # against a few sample values where keyspace_id is an int column.
   def test_bind_values_for_int_keyspace(self):
     stm = vtrouting.create_parallel_task_keyrange_map(16, 16)
-    for _, kr in enumerate(stm.keyrange_list):
+    for kr in stm.keyrange_list:
       kr_parts = kr.split('-')
       where_clause, bind_vars = vtrouting._create_where_clause_for_keyrange(kr)
       if len(bind_vars.keys()) == 1:
@@ -120,7 +135,7 @@ class TestKeyRange(unittest.TestCase):
   # the test emulates that by using keyspace_id.encode('hex').
   def test_bind_values_for_str_keyspace(self):
     stm = vtrouting.create_parallel_task_keyrange_map(16, 16)
-    for _, kr in enumerate(stm.keyrange_list):
+    for kr in stm.keyrange_list:
       kr_parts = kr.split('-')
       where_clause, bind_vars = vtrouting._create_where_clause_for_keyrange(
           kr, keyspace_col_type=keyrange_constants.KIT_BYTES)

@@ -1,6 +1,18 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 // Package tabletconntest provides the test methods to make sure a
 // tabletconn/queryservice pair over RPC works correctly.
@@ -8,17 +20,19 @@ package tabletconntest
 
 import (
 	"io"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletconn"
-	"github.com/youtube/vitess/go/vt/vterrors"
-	"golang.org/x/net/context"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -83,7 +97,7 @@ func testBegin(t *testing.T, conn queryservice.QueryService, f *FakeQueryService
 	t.Log("testBegin")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	transactionID, err := conn.Begin(ctx, TestTarget)
+	transactionID, err := conn.Begin(ctx, TestTarget, TestExecuteOptions)
 	if err != nil {
 		t.Fatalf("Begin failed: %v", err)
 	}
@@ -96,7 +110,7 @@ func testBeginError(t *testing.T, conn queryservice.QueryService, f *FakeQuerySe
 	t.Log("testBeginError")
 	f.HasBeginError = true
 	testErrorHelper(t, f, "Begin", func(ctx context.Context) error {
-		_, err := conn.Begin(ctx, TestTarget)
+		_, err := conn.Begin(ctx, TestTarget, nil)
 		return err
 	})
 	f.HasBeginError = false
@@ -105,7 +119,7 @@ func testBeginError(t *testing.T, conn queryservice.QueryService, f *FakeQuerySe
 func testBeginPanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testBeginPanics")
 	testPanicHelper(t, f, "Begin", func(ctx context.Context) error {
-		_, err := conn.Begin(ctx, TestTarget)
+		_, err := conn.Begin(ctx, TestTarget, nil)
 		return err
 	})
 }
@@ -352,7 +366,7 @@ func testReadTransaction(t *testing.T, conn queryservice.QueryService, f *FakeQu
 	if err != nil {
 		t.Fatalf("ReadTransaction failed: %v", err)
 	}
-	if !reflect.DeepEqual(metadata, Metadata) {
+	if !proto.Equal(metadata, Metadata) {
 		t.Errorf("Unexpected result from Execute: got %v wanted %v", metadata, Metadata)
 	}
 }
@@ -384,7 +398,7 @@ func testExecute(t *testing.T, conn queryservice.QueryService, f *FakeQueryServi
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
-	if !reflect.DeepEqual(*qr, ExecuteQueryResult) {
+	if !qr.Equal(&ExecuteQueryResult) {
 		t.Errorf("Unexpected result from Execute: got %v wanted %v", qr, ExecuteQueryResult)
 	}
 }
@@ -419,7 +433,7 @@ func testBeginExecute(t *testing.T, conn queryservice.QueryService, f *FakeQuery
 	if transactionID != BeginTransactionID {
 		t.Errorf("Unexpected result from BeginExecute: got %v wanted %v", transactionID, BeginTransactionID)
 	}
-	if !reflect.DeepEqual(*qr, ExecuteQueryResult) {
+	if !qr.Equal(&ExecuteQueryResult) {
 		t.Errorf("Unexpected result from BeginExecute: got %v wanted %v", qr, ExecuteQueryResult)
 	}
 }
@@ -470,14 +484,14 @@ func testStreamExecute(t *testing.T, conn queryservice.QueryService, f *FakeQuer
 			if len(qr.Rows) == 0 {
 				qr.Rows = nil
 			}
-			if !reflect.DeepEqual(*qr, StreamExecuteQueryResult1) {
+			if !qr.Equal(&StreamExecuteQueryResult1) {
 				t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, StreamExecuteQueryResult1)
 			}
 		case 1:
 			if len(qr.Fields) == 0 {
 				qr.Fields = nil
 			}
-			if !reflect.DeepEqual(*qr, StreamExecuteQueryResult2) {
+			if !qr.Equal(&StreamExecuteQueryResult2) {
 				t.Errorf("Unexpected result2 from StreamExecute: got %v wanted %v", qr, StreamExecuteQueryResult2)
 			}
 		default:
@@ -510,7 +524,7 @@ func testStreamExecuteError(t *testing.T, conn queryservice.QueryService, f *Fak
 			if len(qr.Rows) == 0 {
 				qr.Rows = nil
 			}
-			if !reflect.DeepEqual(*qr, StreamExecuteQueryResult1) {
+			if !qr.Equal(&StreamExecuteQueryResult1) {
 				t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, StreamExecuteQueryResult1)
 			}
 			// signal to the server that the first result has been received
@@ -549,7 +563,7 @@ func testStreamExecutePanics(t *testing.T, conn queryservice.QueryService, f *Fa
 			if len(qr.Rows) == 0 {
 				qr.Rows = nil
 			}
-			if !reflect.DeepEqual(*qr, StreamExecuteQueryResult1) {
+			if !qr.Equal(&StreamExecuteQueryResult1) {
 				t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, StreamExecuteQueryResult1)
 			}
 			// signal to the server that the first result has been received
@@ -568,7 +582,7 @@ func testExecuteBatch(t *testing.T, conn queryservice.QueryService, f *FakeQuery
 	if err != nil {
 		t.Fatalf("ExecuteBatch failed: %v", err)
 	}
-	if !reflect.DeepEqual(qrl, ExecuteBatchQueryResultList) {
+	if !sqltypes.ResultsEqual(qrl, ExecuteBatchQueryResultList) {
 		t.Errorf("Unexpected result from ExecuteBatch: got %v wanted %v", qrl, ExecuteBatchQueryResultList)
 	}
 }
@@ -603,7 +617,7 @@ func testBeginExecuteBatch(t *testing.T, conn queryservice.QueryService, f *Fake
 	if transactionID != BeginTransactionID {
 		t.Errorf("Unexpected result from BeginExecuteBatch: got %v wanted %v", transactionID, BeginTransactionID)
 	}
-	if !reflect.DeepEqual(qrl, ExecuteBatchQueryResultList) {
+	if !sqltypes.ResultsEqual(qrl, ExecuteBatchQueryResultList) {
 		t.Errorf("Unexpected result from ExecuteBatch: got %v wanted %v", qrl, ExecuteBatchQueryResultList)
 	}
 }
@@ -655,7 +669,7 @@ func testMessageStream(t *testing.T, conn queryservice.QueryService, f *FakeQuer
 	if err != nil {
 		t.Fatalf("MessageStream failed: %v", err)
 	}
-	if !reflect.DeepEqual(got, MessageStreamResult) {
+	if !got.Equal(MessageStreamResult) {
 		t.Errorf("Unexpected result from MessageStream: got %v wanted %v", got, MessageStreamResult)
 	}
 }
@@ -726,7 +740,7 @@ func testSplitQuery(t *testing.T, conn queryservice.QueryService, f *FakeQuerySe
 	if err != nil {
 		t.Fatalf("SplitQuery failed: %v", err)
 	}
-	if !reflect.DeepEqual(qsl, SplitQueryQuerySplitList) {
+	if !querytypes.QuerySplitsEqual(qsl, SplitQueryQuerySplitList) {
 		t.Errorf("Unexpected result from SplitQuery: got %v wanted %v", qsl, SplitQueryQuerySplitList)
 	}
 }
@@ -781,7 +795,7 @@ func testStreamHealth(t *testing.T, conn queryservice.QueryService, f *FakeQuery
 	if err != nil {
 		t.Fatalf("StreamHealth failed: %v", err)
 	}
-	if !reflect.DeepEqual(*health, *TestStreamHealthStreamHealthResponse) {
+	if !proto.Equal(health, TestStreamHealthStreamHealthResponse) {
 		t.Errorf("invalid StreamHealthResponse: got %v expected %v", *health, *TestStreamHealthStreamHealthResponse)
 	}
 }
@@ -818,11 +832,11 @@ func testUpdateStream(t *testing.T, conn queryservice.QueryService, f *FakeQuery
 	err := conn.UpdateStream(ctx, TestTarget, UpdateStreamPosition, UpdateStreamTimestamp, func(qr *querypb.StreamEvent) error {
 		switch i {
 		case 0:
-			if !reflect.DeepEqual(*qr, UpdateStreamStreamEvent1) {
+			if !proto.Equal(qr, &UpdateStreamStreamEvent1) {
 				t.Errorf("Unexpected result1 from UpdateStream: got %v wanted %v", qr, UpdateStreamStreamEvent1)
 			}
 		case 1:
-			if !reflect.DeepEqual(*qr, UpdateStreamStreamEvent2) {
+			if !proto.Equal(qr, &UpdateStreamStreamEvent2) {
 				t.Errorf("Unexpected result2 from UpdateStream: got %v wanted %v", qr, UpdateStreamStreamEvent2)
 			}
 		default:
@@ -849,7 +863,7 @@ func testUpdateStreamError(t *testing.T, conn queryservice.QueryService, f *Fake
 				return nil
 			default:
 			}
-			if !reflect.DeepEqual(*qr, UpdateStreamStreamEvent1) {
+			if !proto.Equal(qr, &UpdateStreamStreamEvent1) {
 				t.Errorf("Unexpected result1 from UpdateStream: got %v wanted %v", qr, UpdateStreamStreamEvent1)
 			}
 			// signal to the server that the first result has been received
@@ -888,7 +902,7 @@ func testUpdateStreamPanics(t *testing.T, conn queryservice.QueryService, f *Fak
 			}
 			switch i {
 			case 0:
-				if !reflect.DeepEqual(*qr, UpdateStreamStreamEvent1) {
+				if !proto.Equal(qr, &UpdateStreamStreamEvent1) {
 					t.Errorf("Unexpected result1 from UpdateStream: got %v wanted %v", qr, UpdateStreamStreamEvent1)
 				}
 				close(f.PanicWait)

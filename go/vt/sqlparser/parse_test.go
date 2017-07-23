@@ -1,6 +1,18 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package sqlparser
 
@@ -80,6 +92,30 @@ func TestValid(t *testing.T) {
 		input: "select /* union all */ 1 from t union all select 1 from t",
 	}, {
 		input: "select /* union distinct */ 1 from t union distinct select 1 from t",
+	}, {
+		input:  "(select /* union parenthesized select */ 1 from t order by a) union select 1 from t",
+		output: "(select /* union parenthesized select */ 1 from t order by a asc) union select 1 from t",
+	}, {
+		input: "select /* union parenthesized select 2 */ 1 from t union (select 1 from t)",
+	}, {
+		input:  "select /* union order by */ 1 from t union select 1 from t order by a",
+		output: "select /* union order by */ 1 from t union select 1 from t order by a asc",
+	}, {
+		input:  "select /* union order by limit lock */ 1 from t union select 1 from t order by a limit 1 for update",
+		output: "select /* union order by limit lock */ 1 from t union select 1 from t order by a asc limit 1 for update",
+	}, {
+		input: "select /* union with limit on lhs */ 1 from t limit 1 union select 1 from t",
+	}, {
+		input:  "(select id, a from t order by id limit 1) union (select id, b as a from s order by id limit 1) order by a limit 1",
+		output: "(select id, a from t order by id asc limit 1) union (select id, b as a from s order by id asc limit 1) order by a asc limit 1",
+	}, {
+		input: "select a from (select 1 as a from tbl1 union select 2 from tbl2) as t",
+	}, {
+		input: "select * from t1 join (select * from t2 union select * from t3) as t",
+	}, {
+		input: "select * from t1 where col in (select 1 from dual union select 2 from dual)",
+	}, {
+		input: "select * from t1 where exists (select a from t2 union select b from t3)",
 	}, {
 		input: "select /* distinct */ distinct 1 from t",
 	}, {
@@ -511,6 +547,14 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "insert /* select */ into a select b, c from d",
 	}, {
+		input:  "insert /* no cols & paren select */ into a(select * from t)",
+		output: "insert /* no cols & paren select */ into a select * from t",
+	}, {
+		input:  "insert /* cols & paren select */ into a(a,b,c) (select * from t)",
+		output: "insert /* cols & paren select */ into a(a, b, c) select * from t",
+	}, {
+		input: "insert /* cols & union with paren select */ into a(b, c) (select d, e from f) union (select g from h)",
+	}, {
 		input: "insert /* on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = d",
 	}, {
 		input: "insert /* bool in insert value */ into a values (1, true, false)",
@@ -546,6 +590,15 @@ func TestValid(t *testing.T) {
 		input:  "update /* table alias */ tt aa set aa.cc = 3",
 		output: "update /* table alias */ tt as aa set aa.cc = 3",
 	}, {
+		input:  "update (select id from foo) subqalias set id = 4",
+		output: "update (select id from foo) as subqalias set id = 4",
+	}, {
+		input:  "update foo f, bar b set f.id = b.id where b.name = 'test'",
+		output: "update foo as f, bar as b set f.id = b.id where b.name = 'test'",
+	}, {
+		input:  "update foo f join bar b on f.name = b.name set f.id = b.id where b.name = 'test'",
+		output: "update foo as f join bar as b on f.name = b.name set f.id = b.id where b.name = 'test'",
+	}, {
 		input: "delete /* simple */ from a",
 	}, {
 		input: "delete /* a.b */ from a.b",
@@ -555,6 +608,10 @@ func TestValid(t *testing.T) {
 		input: "delete /* order */ from a order by b desc",
 	}, {
 		input: "delete /* limit */ from a limit b",
+	}, {
+		input: "delete a from a join b on a.id = b.id where b.name = 'test'",
+	}, {
+		input: "delete a, b from a, b where a.id = b.id and b.name = 'test'",
 	}, {
 		input: "set /* simple */ a = 3",
 	}, {
@@ -608,6 +665,15 @@ func TestValid(t *testing.T) {
 		input:  "alter table a rename to b",
 		output: "rename table a b",
 	}, {
+		input:  "alter table a rename as b",
+		output: "rename table a b",
+	}, {
+		input:  "alter table a rename index foo to bar",
+		output: "alter table a",
+	}, {
+		input:  "alter table a rename key foo to bar",
+		output: "alter table a",
+	}, {
 		input: "create table a",
 	}, {
 		input: "create table `by`",
@@ -624,7 +690,16 @@ func TestValid(t *testing.T) {
 		input:  "create unique index a using foo on b",
 		output: "alter table b",
 	}, {
+		input:  "create fulltext index a using foo on b",
+		output: "alter table b",
+	}, {
+		input:  "create spatial index a using foo on b",
+		output: "alter table b",
+	}, {
 		input:  "create view a",
+		output: "create table a",
+	}, {
+		input:  "create or replace view a",
 		output: "create table a",
 	}, {
 		input:  "alter view a",
@@ -648,14 +723,53 @@ func TestValid(t *testing.T) {
 		input:  "analyze table a",
 		output: "alter table a",
 	}, {
+		input:  "show databases",
+		output: "show databases",
+	}, {
+		input:  "show tables",
+		output: "show tables",
+	}, {
+		input:  "show vitess_keyspaces",
+		output: "show vitess_keyspaces",
+	}, {
+		input:  "show vitess_shards",
+		output: "show vitess_shards",
+	}, {
+		input:  "show vschema_tables",
+		output: "show vschema_tables",
+	}, {
+		input:  "show create database",
+		output: "show unsupported",
+	}, {
 		input:  "show foobar",
-		output: "other",
+		output: "show unsupported",
+	}, {
+		input:  "use db",
+		output: "use db",
+	}, {
+		input:  "use duplicate",
+		output: "use `duplicate`",
+	}, {
+		input:  "use `ks:-80@master`",
+		output: "use `ks:-80@master`",
 	}, {
 		input:  "describe foobar",
-		output: "other",
+		output: "otherread",
+	}, {
+		input:  "desc foobar",
+		output: "otherread",
 	}, {
 		input:  "explain foobar",
-		output: "other",
+		output: "otherread",
+	}, {
+		input:  "truncate foo",
+		output: "otheradmin",
+	}, {
+		input:  "repair foo",
+		output: "otheradmin",
+	}, {
+		input:  "optimize foo",
+		output: "otheradmin",
 	}, {
 		input: "select /* EQ true */ 1 from t where a = true",
 	}, {
@@ -714,6 +828,8 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select match(a1, a2) against ('foo' in natural language mode with query expansion) from t",
 	}, {
+		input: "select title from video as v where match(v.title, v.tag) against ('DEMO' in boolean mode)",
+	}, {
 		input: "select name, group_concat(score) from t group by name",
 	}, {
 		input: "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
@@ -753,6 +869,9 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "alter table A",
 	}, {
 		input:  "alter table A foo",
+		output: "alter table A",
+	}, {
+		input:  "alter table A convert",
 		output: "alter table A",
 	}, {
 		// View names get lower-cased.
@@ -973,6 +1092,8 @@ func TestConvert(t *testing.T) {
 		input: "select convert('abc', datetime) from t",
 	}, {
 		input: "select convert('abc', json) from t",
+	}, {
+		input: "select convert('abc' using ascii) from t",
 	}}
 
 	for _, tcase := range validSQL {
@@ -1059,9 +1180,6 @@ func TestErrors(t *testing.T) {
 		input:  "update a set c = values(1)",
 		output: "syntax error at position 26 near '1'",
 	}, {
-		input:  "update a set c = last_insert_id(1)",
-		output: "syntax error at position 32 near 'last_insert_id'",
-	}, {
 		input: "select(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
 			"(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(" +
 			"F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
@@ -1116,9 +1234,6 @@ func TestErrors(t *testing.T) {
 		input:  "select 1 from t where binary",
 		output: "syntax error at position 30",
 	}, {
-		input:  "update (select id from foo) subqalias set id = 4",
-		output: "syntax error at position 9",
-	}, {
 		input:  "select match(a1, a2) against ('foo' in boolean mode with query expansion) from t",
 		output: "syntax error at position 57 near 'with'",
 	}, {
@@ -1127,6 +1242,12 @@ func TestErrors(t *testing.T) {
 	}, {
 		input:  "select /* vitess-reserved keyword as unqualified column */ * from t where escape = 'test'",
 		output: "syntax error at position 81 near 'escape'",
+	}, {
+		input:  "(select /* parenthesized select */ * from t)",
+		output: "syntax error at position 46",
+	}, {
+		input:  "select * from t where id = ((select a from t1 union select b from t2) order by a limit 1)",
+		output: "syntax error at position 76 near 'order'",
 	}}
 	for _, tcase := range invalidSQL {
 		if tcase.output == "" {
@@ -1138,6 +1259,10 @@ func TestErrors(t *testing.T) {
 		}
 	}
 }
+
+// Benchmark run on 6/23/17, prior to improvements:
+// BenchmarkParse1-4         100000             16334 ns/op
+// BenchmarkParse2-4          30000             44121 ns/op
 
 func BenchmarkParse1(b *testing.B) {
 	sql := "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"

@@ -1,49 +1,51 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreedto in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vtgate
 
 import (
 	"flag"
 	"fmt"
 	"net"
-	"strings"
 
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysqlconn"
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/servenv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
 )
 
 var (
-	mysqlServerPort               = flag.Int("mysql_server_port", 0, "If set, also listen for MySQL binary protocol connections on this port.")
-	mysqlAuthServerImpl           = flag.String("mysql_auth_server_impl", "config", "Which auth server implementation to use.")
-	mysqlAuthServerConfigFile     = flag.String("mysql_auth_server_config_file", "", "JSON File to read the users/passwords from.")
-	mysqlAuthServerConfigString   = flag.String("mysql_auth_server_config_string", "", "JSON representation of the users/passwords config.")
+	mysqlServerPort               = flag.Int("mysql_server_port", -1, "If set, also listen for MySQL binary protocol connections on this port.")
+	mysqlServerBindAddress        = flag.String("mysql_server_bind_address", "", "Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.")
+	mysqlAuthServerImpl           = flag.String("mysql_auth_server_impl", "static", "Which auth server implementation to use.")
 	mysqlAllowClearTextWithoutTLS = flag.Bool("mysql_allow_clear_text_without_tls", false, "If set, the server will allow the use of a clear text password over non-SSL connections.")
+
+	mysqlSslCert = flag.String("mysql_server_ssl_cert", "", "Path to the ssl cert for mysql server plugin SSL")
+	mysqlSslKey  = flag.String("mysql_server_ssl_key", "", "Path to ssl key for mysql server plugin SSL")
+	mysqlSslCa   = flag.String("mysql_server_ssl_ca", "", "Path to ssl CA for mysql server plugin SSL. If specified, server will require and validate client certs.")
+
+	mysqlSlowConnectWarnThreshold = flag.Duration("mysql_slow_connect_warn_threshold", 0, "Warn if it takes more than the given threshold for a mysql connection to establish")
 )
-
-// Handles initializing the AuthServerConfig if necessary.
-func initAuthServerConfig() {
-	// Check parameters.
-	if *mysqlAuthServerConfigFile == "" && *mysqlAuthServerConfigString == "" {
-		// Not configured, nothing to do.
-		log.Infof("Not configuring AuthServerConfig, as mysql_auth_server_config_file and mysql_auth_server_config_string are empty")
-		return
-	}
-	if *mysqlAuthServerConfigFile != "" && *mysqlAuthServerConfigString != "" {
-		// Both parameters specified, can only use on.
-		log.Fatalf("Both mysql_auth_server_config_file and mysql_auth_server_config_string specified, can only use one.")
-	}
-
-	// Create and register auth server.
-	mysqlconn.RegisterAuthServerConfigFromParams(*mysqlAuthServerConfigFile, *mysqlAuthServerConfigString)
-}
 
 // vtgateHandler implements the Listener interface.
 // It stores the Session in the ClientData of a Connection, if a transaction
@@ -58,73 +60,19 @@ func newVtgateHandler(vtg *VTGate) *vtgateHandler {
 	}
 }
 
-func (vh *vtgateHandler) NewConnection(c *mysqlconn.Conn) {
+func (vh *vtgateHandler) NewConnection(c *mysql.Conn) {
 }
 
-func (vh *vtgateHandler) ConnectionClosed(c *mysqlconn.Conn) {
+func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	// Rollback if there is an ongoing transaction. Ignore error.
 	ctx := context.Background()
-	vh.rollback(ctx, c)
+	session, _ := c.ClientData.(*vtgatepb.Session)
+	if session != nil {
+		_, _, _ = vh.vtg.Execute(ctx, session, "rollback", make(map[string]interface{}))
+	}
 }
 
-func (vh *vtgateHandler) begin(ctx context.Context, c *mysqlconn.Conn) (*sqltypes.Result, error) {
-	// Check we're not inside a transaction already.
-	if c.ClientData != nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERCantDoThisDuringAnTransaction, mysqlconn.SSCantDoThisDuringAnTransaction, "already in a transaction")
-	}
-
-	// Do the begin.
-	session, err := vh.vtg.Begin(ctx, false /* singledb */)
-	if err != nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSUnknownSQLState, "vtgate.Begin failed: %v", err)
-	}
-
-	// Save the session.
-	c.ClientData = session
-	return &sqltypes.Result{}, nil
-}
-
-func (vh *vtgateHandler) commit(ctx context.Context, c *mysqlconn.Conn) (*sqltypes.Result, error) {
-	// Check we're inside a transaction already.
-	if c.ClientData == nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSUnknownSQLState, "not in a transaction")
-	}
-	session, ok := c.ClientData.(*vtgatepb.Session)
-	if !ok || session == nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSUnknownSQLState, "internal error: got a weird ClientData of type %T: %v %v", c.ClientData, session, ok)
-	}
-
-	// Commit using vtgate's transaction mode.
-	if err := vh.vtg.Commit(ctx, vh.vtg.transactionMode == TxTwoPC, session); err != nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSUnknownSQLState, "vtgate.Commit failed: %v", err)
-	}
-
-	// Clear the Session.
-	c.ClientData = nil
-	return &sqltypes.Result{}, nil
-}
-
-func (vh *vtgateHandler) rollback(ctx context.Context, c *mysqlconn.Conn) (*sqltypes.Result, error) {
-	// Check we're inside a transaction already.
-	if c.ClientData == nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSUnknownSQLState, "not in a transaction")
-	}
-	session, ok := c.ClientData.(*vtgatepb.Session)
-	if !ok || session == nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSUnknownSQLState, "internal error: got a weird ClientData of type %T: %v %v", c.ClientData, session, ok)
-	}
-
-	// Rollback.
-	if err := vh.vtg.Rollback(ctx, session); err != nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSUnknownSQLState, "vtgate.Rollback failed: %v", err)
-	}
-
-	// Clear the Session.
-	c.ClientData = nil
-	return &sqltypes.Result{}, nil
-}
-
-func (vh *vtgateHandler) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Result, error) {
+func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query []byte, callback func(*sqltypes.Result) error) error {
 	// FIXME(alainjobart): Add some kind of timeout to the context.
 	ctx := context.Background()
 
@@ -133,78 +81,103 @@ func (vh *vtgateHandler) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Re
 	// returned, use the User. This lets the plugin map a MySQL
 	// user used for authentication to a Vitess User used for
 	// Table ACLs and Vitess authentication in general.
-	im := callerid.NewImmediateCallerID(c.UserData)
-	if c.UserData == "" {
-		im.Username = c.User
-	}
+	im := c.UserData.Get()
 	ef := callerid.NewEffectiveCallerID(
 		c.User,                  /* principal: who */
 		c.RemoteAddr().String(), /* component: running client process */
 		"VTGate MySQL Connector" /* subcomponent: part of the client */)
 	ctx = callerid.NewContext(ctx, ef, im)
 
-	// FIXME(alainjobart) would be good to have the parser understand this.
-	switch {
-	case strings.EqualFold(query, "begin"):
-		return vh.begin(ctx, c)
-	case strings.EqualFold(query, "commit"):
-		return vh.commit(ctx, c)
-	case strings.EqualFold(query, "rollback"):
-		return vh.rollback(ctx, c)
-	case strings.EqualFold(query, "set autocommit=0"):
-		// This is done by the python MySQL connector, we ignore it.
-		return &sqltypes.Result{}, nil
-	default:
-		// Grab the current session, if any.
-		var session *vtgatepb.Session
-		if c.ClientData != nil {
-			session, _ = c.ClientData.(*vtgatepb.Session)
+	session, _ := c.ClientData.(*vtgatepb.Session)
+	if session == nil {
+		session = &vtgatepb.Session{
+			Options: &querypb.ExecuteOptions{
+				IncludedFields: querypb.ExecuteOptions_ALL,
+			},
 		}
-
-		// And just go to v3.
-		result, err := vh.vtg.Execute(ctx, query, make(map[string]interface{}), c.SchemaName, topodatapb.TabletType_MASTER, session, false /* notInTransaction */, &querypb.ExecuteOptions{
-			IncludedFields: querypb.ExecuteOptions_ALL,
-		})
-		return result, sqldb.NewSQLErrorFromError(err)
+		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
+			session.Options.ClientFoundRows = true
+		}
 	}
+	if c.SchemaName != "" {
+		session.TargetString = c.SchemaName
+	}
+	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
+		err := vh.vtg.StreamExecute(ctx, session, string(query), make(map[string]interface{}), callback)
+		return mysql.NewSQLErrorFromError(err)
+	}
+	session, result, err := vh.vtg.Execute(ctx, session, string(query), make(map[string]interface{}))
+	c.ClientData = session
+	err = mysql.NewSQLErrorFromError(err)
+	if err != nil {
+		return err
+	}
+	return callback(result)
+}
+
+var mysqlListener *mysql.Listener
+
+// initiMySQLProtocol starts the mysql protocol.
+// It should be called only once in a process.
+func initMySQLProtocol() {
+	// Flag is not set, just return.
+	if *mysqlServerPort < 0 {
+		return
+	}
+
+	// If no VTGate was created, just return.
+	if rpcVTGate == nil {
+		return
+	}
+
+	// Initialize registered AuthServer implementations (or other plugins)
+	for _, initFn := range pluginInitializers {
+		initFn()
+	}
+	authServer := mysql.GetAuthServer(*mysqlAuthServerImpl)
+
+	// Create a Listener.
+	var err error
+	vh := newVtgateHandler(rpcVTGate)
+	mysqlListener, err = mysql.NewListener("tcp", net.JoinHostPort(*mysqlServerBindAddress, fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh)
+	if err != nil {
+		log.Fatalf("mysql.NewListener failed: %v", err)
+	}
+	if *mysqlSslCert != "" && *mysqlSslKey != "" {
+		mysqlListener.TLSConfig, err = grpcutils.TLSServerConfig(*mysqlSslCert, *mysqlSslKey, *mysqlSslCa)
+		if err != nil {
+			log.Fatalf("grpcutils.TLSServerConfig failed: %v", err)
+			return
+		}
+	}
+	mysqlListener.AllowClearTextWithoutTLS = *mysqlAllowClearTextWithoutTLS
+
+	// Check for the connection threshold
+	if *mysqlSlowConnectWarnThreshold != 0 {
+		log.Infof("setting mysql slow connection threshold to %v", mysqlSlowConnectWarnThreshold)
+		mysqlListener.SlowConnectWarnThreshold = *mysqlSlowConnectWarnThreshold
+	}
+
+	// And starts listening.
+	go func() {
+		mysqlListener.Accept()
+	}()
 }
 
 func init() {
-	var listener *mysqlconn.Listener
-
-	servenv.OnRun(func() {
-		// Flag is not set, just return.
-		if *mysqlServerPort == 0 {
-			return
-		}
-
-		// If no VTGate was created, just return.
-		if rpcVTGate == nil {
-			return
-		}
-
-		// Initialize the config AuthServer if necessary.
-		initAuthServerConfig()
-		authServer := mysqlconn.GetAuthServer(*mysqlAuthServerImpl)
-
-		// Create a Listener.
-		var err error
-		vh := newVtgateHandler(rpcVTGate)
-		listener, err = mysqlconn.NewListener("tcp", net.JoinHostPort("", fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh)
-		if err != nil {
-			log.Fatalf("mysqlconn.NewListener failed: %v", err)
-		}
-		listener.AllowClearTextWithoutTLS = *mysqlAllowClearTextWithoutTLS
-
-		// And starts listening.
-		go func() {
-			listener.Accept()
-		}()
-	})
+	servenv.OnRun(initMySQLProtocol)
 
 	servenv.OnTerm(func() {
-		if listener != nil {
-			listener.Close()
+		if mysqlListener != nil {
+			mysqlListener.Close()
+			mysqlListener = nil
 		}
 	})
+}
+
+var pluginInitializers []func()
+
+// RegisterPluginInitializer lets plugins register themselves to be init'ed at servenv.OnRun-time
+func RegisterPluginInitializer(initializer func()) {
+	pluginInitializers = append(pluginInitializers, initializer)
 }

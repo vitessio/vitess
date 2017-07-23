@@ -1,6 +1,18 @@
-// Copyright 2016, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 // Package sandboxconn provides a fake QueryService implementation for tests.
 // It can return real results, and simulate error cases.
@@ -11,9 +23,9 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -160,7 +172,7 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 }
 
 // Begin is part of the QueryService interface.
-func (sbc *SandboxConn) Begin(ctx context.Context, target *querypb.Target) (int64, error) {
+func (sbc *SandboxConn) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, error) {
 	sbc.BeginCount.Add(1)
 	err := sbc.getError()
 	if err != nil {
@@ -270,7 +282,7 @@ func (sbc *SandboxConn) ReadTransaction(ctx context.Context, target *querypb.Tar
 
 // BeginExecute is part of the QueryService interface.
 func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
-	transactionID, err := sbc.Begin(ctx, target)
+	transactionID, err := sbc.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -280,7 +292,7 @@ func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target
 
 // BeginExecuteBatch is part of the QueryService interface.
 func (sbc *SandboxConn) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
-	transactionID, err := sbc.Begin(ctx, target)
+	transactionID, err := sbc.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -368,6 +380,20 @@ var SingleRowResult = &sqltypes.Result{
 		{Name: "value", Type: sqltypes.VarChar},
 	},
 	RowsAffected: 1,
+	InsertID:     0,
+	Rows: [][]sqltypes.Value{{
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+		sqltypes.MakeTrusted(sqltypes.VarChar, []byte("foo")),
+	}},
+}
+
+// StreamRowResult is SingleRowResult with RowsAffected set to 0.
+var StreamRowResult = &sqltypes.Result{
+	Fields: []*querypb.Field{
+		{Name: "id", Type: sqltypes.Int32},
+		{Name: "value", Type: sqltypes.VarChar},
+	},
+	RowsAffected: 0,
 	InsertID:     0,
 	Rows: [][]sqltypes.Value{{
 		sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),

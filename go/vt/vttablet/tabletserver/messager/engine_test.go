@@ -1,6 +1,18 @@
-// Copyright 2017, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package messager
 
@@ -12,10 +24,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
+	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
@@ -96,8 +109,8 @@ func TestSubscribe(t *testing.T) {
 	<-ch1
 	engine.Subscribe("t2", f2)
 	<-ch2
-	engine.managers["t1"].Add(&MessageRow{ID: sqltypes.MakeString([]byte("1"))})
-	engine.managers["t2"].Add(&MessageRow{ID: sqltypes.MakeString([]byte("2"))})
+	engine.managers["t1"].Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("1"))}})
+	engine.managers["t2"].Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("2"))}})
 	<-ch1
 	<-ch2
 
@@ -124,11 +137,11 @@ func TestLockDB(t *testing.T) {
 	<-ch1
 
 	row1 := &MessageRow{
-		ID: sqltypes.MakeString([]byte("1")),
+		Row: []sqltypes.Value{sqltypes.MakeString([]byte("1"))},
 	}
 	row2 := &MessageRow{
 		TimeNext: time.Now().UnixNano() + int64(10*time.Minute),
-		ID:       sqltypes.MakeString([]byte("2")),
+		Row:      []sqltypes.Value{sqltypes.MakeString([]byte("2"))},
 	}
 	newMessages := map[string][]*MessageRow{"t1": {row1, row2}, "t3": {row1}}
 	unlock := engine.LockDB(newMessages, nil)
@@ -152,7 +165,7 @@ func TestLockDB(t *testing.T) {
 	})
 	<-ch2
 	mm := engine.managers["t2"]
-	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("1"))})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("1"))}})
 	// Make sure the message is enqueued.
 	for {
 		runtime.Gosched()
@@ -162,7 +175,7 @@ func TestLockDB(t *testing.T) {
 		}
 	}
 	// "2" will be in the cache.
-	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("2"))})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("2"))}})
 	changedMessages := map[string][]string{"t2": {"2"}, "t3": {"2"}}
 	unlock = engine.LockDB(nil, changedMessages)
 	// This should delete "2".
@@ -175,6 +188,28 @@ func TestLockDB(t *testing.T) {
 	case mr := <-ch2:
 		t.Errorf("Unexpected message: %v", mr)
 	default:
+	}
+}
+
+func TestGenerateLoadMessagesQuery(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	engine := newTestEngine(db)
+	defer engine.Close()
+
+	table := *meTable
+	table.Name = sqlparser.NewTableIdent("t1")
+	engine.schemaChanged(map[string]*schema.Table{
+		"t1": &table,
+	}, []string{"t1"}, nil, nil)
+
+	q, err := engine.GenerateLoadMessagesQuery("t1")
+	if err != nil {
+		t.Error(err)
+	}
+	want := "select time_next, epoch, id, time_scheduled, message from t1 where :#pk"
+	if q.Query != want {
+		t.Errorf("GenerateLoadMessagesQuery: %s, want %s", q.Query, want)
 	}
 }
 

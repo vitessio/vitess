@@ -1,9 +1,28 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreedto in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vindexes
 
 import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var binOnlyVindex Vindex
@@ -99,5 +118,42 @@ func TestBinaryReverseMap(t *testing.T) {
 	want := "Binary.ReverseMap: keyspaceId is nil"
 	if err.Error() != want {
 		t.Error(err)
+	}
+}
+
+func TestGetBytes(t *testing.T) {
+	tcases := []struct {
+		in  interface{}
+		out string
+	}{{
+		in:  []byte{'1', '2', '3'},
+		out: "123",
+	}, {
+		in:  "1234",
+		out: "1234",
+	}, {
+		in:  sqltypes.MakeTrusted(querypb.Type_UINT64, []byte{'1', '2', '3'}),
+		out: "123",
+	}, {
+		in: &querypb.BindVariable{
+			Type:  querypb.Type_VARBINARY,
+			Value: []byte{'1', '2', '3'},
+		},
+		out: "123",
+	}, {
+		in:  65,
+		out: "unexpected data type for getBytes: int",
+	}}
+	for _, tcase := range tcases {
+		b, err := getBytes(tcase.in)
+		got := ""
+		if err != nil {
+			got = err.Error()
+		} else {
+			got = string(b)
+		}
+		if got != tcase.out {
+			t.Errorf("getBytes(%v) got %v %v expected %v", tcase.in, b, err, tcase.out)
+		}
 	}
 }

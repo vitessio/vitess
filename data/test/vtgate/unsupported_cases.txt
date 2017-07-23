@@ -1,43 +1,43 @@
 # Unions
 "select * from user union select * from user_extra"
-"unsupported construct"
+"unsupported: UNION on multi-shard queries"
 
 # SET
 "set a=1"
-"unsupported construct"
+"unsupported construct: set"
+
+# SHOW
+"show create database"
+"unsupported construct: show"
 
 # DDL
 "create table a(id int)"
-"unsupported construct"
+"unsupported construct: ddl"
 
 "create table a.b(id int)"
-"unsupported construct"
+"unsupported construct: ddl"
 
 "alter table a ADD id int"
-"unsupported construct"
+"unsupported construct: ddl"
 
 "alter table a.b ADD id int"
-"unsupported construct"
+"unsupported construct: ddl"
 
 # DBA statements
 "explain select * from user"
-"unsupported construct"
+"unsupported construct: other read"
 
 # union operations in subqueries (FROM)
-"select * from (select * from user union select * from user_extra) as t"
-"unsupported: union operator in subqueries"
+"select * from (select * from user union all select * from user_extra) as t"
+"unsupported: UNION on multi-shard queries"
 
 # union operations in subqueries (expressions)
 "select * from user where id in (select * from user union select * from user_extra)"
-"unsupported: union operator in subqueries"
-
-# subquery with join primitive (FROM)
-"select * from (select user.id from user join user_extra) as t"
-"unsupported: complex join in subqueries"
+"unsupported: UNION on multi-shard queries"
 
 # subquery with join primitive (expressions)
 "select * from user where id in (select user.id from user join user_extra)"
-"unsupported: complex join in subqueries"
+"unsupported: cross-shard query in subqueries"
 
 # subquery keyspace different from outer query
 "select * from user where id in (select m from unsharded)"
@@ -55,9 +55,41 @@
 "select id from user where id in (select user_id from user_extra where user_extra.user_id = 4)"
 "unsupported: subquery does not depend on scatter outer query"
 
+# subquery depends on a cross-shard subquery
+"select id from (select user.id, user.col from user join user_extra) as t where id in (select t.col from user)"
+"unsupported: subquery cannot be merged with cross-shard subquery"
+
+# order by on a cross-shard subquery
+"select id from (select user.id, user.col from user join user_extra) as t order by id"
+"unsupported: cannot order by on a cross-shard subquery"
+
+# scatter order by with * expression
+"select * from user order by id"
+"unsupported: scatter order by with a '*' in select expression"
+
+# filtering on a cross-shard subquery
+"select id from (select user.id, user.col from user join user_extra) as t where id=5"
+"unsupported: filtering on results of cross-shard subquery"
+
+# expression on a cross-shard subquery
+"select id+1 from (select user.id, user.col from user join user_extra) as t"
+"unsupported: expression on results of a cross-shard subquery"
+
 # subquery and outer query route to different shards
 "select id from user where id = 5 and id in (select user_id from user_extra where user_extra.user_id = 4)"
 "unsupported: subquery and parent route to different shards"
+
+# last_insert_id for sharded keyspace
+"select last_insert_id() from user"
+"unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces"
+
+# join of information_schema with normal table
+"select foo from information_schema.a join unsharded"
+"unsupported: intermixing of information_schema and regular tables"
+
+# join of normal table with information_schema
+"select foo from unsharded join information_schema.a"
+"unsupported: intermixing of information_schema and regular tables"
 
 # scatter subquery in select
 "select id, (select id from user) from user"
@@ -77,75 +109,111 @@
 
 # left join with expressions
 "select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col"
-"unsupported: complex left join and column expressions"
+"unsupported: cross-shard left join and column expressions"
 
 # left join with expressions, with three-way join (different code path)
 "select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col join user_extra e"
-"unsupported: complex left join and column expressions"
+"unsupported: cross-shard left join and column expressions"
 
 # left join where clauses
 "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.col = 5"
-"unsupported: complex left join and where claused"
+"unsupported: cross-shard left join and where clause"
 
-# * expresson not allowed for complex joins
+# * expresson not allowed for cross-shard joins
 "select * from user join user_extra"
-"unsupported: '*' expression in complex join"
+"unsupported: '*' expression in cross-shard query"
+
+# Filtering on scatter aggregates
+"select count(*) a from user having a >10"
+"unsupported: filtering on results of aggregates"
+
+# distinct and aggregate functions
+"select distinct a, count(*) from user"
+"unsupported: distinct cannot be combined with aggregate functions"
+
+# group by must reference select list
+"select a from user group by b"
+"unsupported: in scatter query: group by column must reference column in SELECT list"
+
+# complex group by expression
+"select a from user group by a+1"
+"unsupported: in scatter query: only simple references allowed"
+
+# Complex aggregate expression on scatter
+"select 1+count(*) from user"
+"unsupported: in scatter query: complex aggregate expression"
+
+# scatter aggregate group by doesn't reference select list
+"select id from user group by col"
+"unsupported: in scatter query: group by column must reference column in SELECT list"
+
+# scatter aggregate symtab lookup error
+"select id, b as id, count(*) from user order by id"
+"invalid order by: ambiguous symbol reference: id"
+
+# scatter aggregate complex order by
+"select id from user group by id order by id+1"
+"unsupported: in scatter query: complex order by expression: id + 1"
+
+# scatter aggregate order by does not reference group by
+"select a, b, count(*) from user group by a order by b"
+"unsupported: in scatter query: order by column must reference group by expression: b asc"
 
 # Aggregates and joins
 "select count(*) from user join user_extra"
-"unsupported: complex join with aggregates"
-
-# Aggregates and scatter
-"select count(*) from user"
-"unsupported: scatter with aggregates"
+"unsupported: cross-shard query with aggregates"
 
 # group by and joins
 "select user.id from user join user_extra group by id"
-"unsupported: complex join and group by"
+"unsupported: cross-shard query with aggregates"
 
 # group by and ',' joins
 "select user.id from user, user_extra group by id"
-"unsupported: complex join and group by"
-
-# Group by and scatter
-"select col from user group by col"
-"unsupported: scatter and group by"
+"unsupported: cross-shard query with aggregates"
 
 # subqueries not supported in group by
-"select id from user group by (select id from user_extra)"
-"unsupported: subqueries in group by expression"
+"select id from user group by id, (select id from user_extra)"
+"unsupported: in group by: subqueries disallowed"
 
-# Order by uses complex expression
+# subquery of information_schema with normal table
+"select (select * from unsharded) from information_schema.a"
+"unsupported: intermixing of information_schema and regular tables"
+
+# subquery of normal table with information_schema
+"select (select * from information_schema.a) from unsharded"
+"unsupported: intermixing of information_schema and regular tables"
+
+# Order by uses cross-shard expression
 "select id from user order by id+1"
-"unsupported: scatter and order by"
+"unsupported: in scatter query: complex order by expression: id + 1"
 
-# Order by for join, but sequce is too complex
+# Order by for join, but sequence is too cross-shard
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 3 desc, 2 asc"
-"unsupported: complex join and out of sequence order by"
-
-# Order by for scatter routes
-"select col from user order by col"
-"unsupported: scatter and order by"
+"unsupported: order by spans across shards"
 
 # Order by and left join
 "select user.col1 as a, user_extra.col2 as b from user left join user_extra on user_extra.user_id = 5 where user.id = 5 order by 1, 2"
-"unsupported: complex left join and order by"
+"unsupported: order by spans across shards"
 
 # Order by column number with collate
 "select user.col1 as a from user order by 1 collate utf8_general_ci"
-"unsupported: complex order by"
+"unsupported: in scatter query: complex order by expression: 1 collate utf8_general_ci"
 
-#Order by for join, but order by is complex
+# Order by for join, but order by is cross-shard
 "select user.col1 as a, user_extra.col2 as b from user join user_extra on user_extra.user_id = 5 where user.id = 5 order by a+b"
-"unsupported: complex join and complex order by"
+"unsupported: order by spans across shards"
 
-# limit for joins
-"select user.col from user join user_extra limit 1"
-"unsupported: limits with complex joins"
+# Order by has subqueries
+"select id from unsharded order by (select id from unsharded)"
+"unsupported: order by has subquery"
 
-# limit for scatter
-"select col from user limit 1"
-"unsupported: limits with scatter"
+# limit with offset for scatter query
+"select id from user limit 10, 20"
+"unsupported: offset limit for cross-shard queries"
+
+# sequence in subquery
+"select col from unsharded where id in (select next value from seq)"
+"unsupported: use of sequence in subquery"
 
 # subqueries in update
 "update user set col = (select id from unsharded)"
@@ -203,21 +271,37 @@
 "delete from music where id in (1, 2)"
 "unsupported: multi-shard where clause in DML"
 
+# delete with multi-table targets
+"delete music from music where id = 1"
+"unsupported: multi-table delete statement in sharded keyspace"
+
+# multi delete multi table
+"delete user from user join user_extra on user.id = user_extra.id where user.name = 'foo'"
+"unsupported: multi-table delete statement in sharded keyspace"
+
 # update changes index column
 "update music set id = 1 where id = 1"
 "unsupported: DML cannot change vindex column"
+
+# cross-shard update tables
+"update (select id from user) as u set id = 4"
+"unsupported: subqueries in DML"
+
+# join in update tables
+"update user join user_extra on user.id = user_extra.id set user.name = 'foo'"
+"unsupported: multi-table update statement in sharded keyspace"
+
+# multiple tables in update
+"update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id"
+"unsupported: multi-table update statement in sharded keyspace"
 
 # unsharded insert from union
 "insert into unsharded select 1 from dual union select 1 from dual"
 "unsupported: union in insert"
 
-# unsharded insert with complex select
-"insert into unsharded select col from user limit 1"
-"unsupported: limits with scatter"
-
-# unsharded insert with complex join"
+# unsharded insert with cross-shard join"
 "insert into unsharded select u.col from user u join user u1"
-"unsupported: complex join in insert"
+"unsupported: cross-shard join in insert"
 
 # unsharded insert with mismatched keyspaces"
 "insert into unsharded select col from user where id=1"
@@ -235,7 +319,7 @@
 "insert into unsharded_auto values(1,1)"
 "column list required for tables with auto-inc columns"
 
-# unsharded insert, col list doesn't match values
+# unsharded insert, col list does not match values
 "insert into unsharded_auto(id, val) values(1)"
 "column list doesn't match values"
 
@@ -247,14 +331,76 @@
 "insert into user(id, val) values((select 1), 1)"
 "unsupported: subquery in insert values"
 
-# nextval not supported yet
-"select next value from user"
-"unsupported: NEXT VALUES construct"
+# sharded replace no vindex
+"replace into user(val) values(1, 'foo')"
+"unsupported: REPLACE INTO with sharded schema"
 
-# complex expression in parenthesis with limit not supported yet
-"select * from user where (id = 4 AND name ='abc') limit 5"
-"unsupported: limits with scatter"
+# sharded replace with vindex
+"replace into user(id, name) values(1, 'foo')"
+"unsupported: REPLACE INTO with sharded schema"
 
-# complex expression in parenthesis with order by not supported yet
-"select * from user where (id = 4 AND name ='abc') order by id"
-"unsupported: scatter and order by"
+# replace no column list
+"replace into user values(1, 2, 3)"
+"unsupported: REPLACE INTO with sharded schema"
+
+# replace with mimatched column list
+"replace into user(id) values (1, 2)"
+"unsupported: REPLACE INTO with sharded schema"
+
+# replace with one vindex
+"replace into user(id) values (1)"
+"unsupported: REPLACE INTO with sharded schema"
+
+# replace with non vindex on vindex-enabled table
+"replace into user(nonid) values (2)"
+"unsupported: REPLACE INTO with sharded schema"
+
+# replace with all vindexes supplied
+"replace into user(nonid, name, id) values (2, 'foo', 1)"
+"unsupported: REPLACE INTO with sharded schema"
+
+# replace for non-vindex autoinc
+"replace into user_extra(nonid) values (2)"
+"unsupported: REPLACE INTO with sharded schema"
+
+# replace with multiple rows
+"replace into user(id) values (1), (2)"
+"unsupported: REPLACE INTO with sharded schema"
+
+# union of information_schema with normal table
+"select * from information_schema.a union select * from unsharded"
+"unsupported: intermixing of information_schema and regular tables"
+
+# union of information_schema with normal table
+"select * from unsharded union select * from information_schema.a"
+"unsupported: intermixing of information_schema and regular tables"
+
+# multi-shard union
+"(select id from user union select id from music) union select 1 from dual"
+"unsupported: UNION on multi-shard queries"
+
+# multi-shard union
+"select 1 from music union (select id from user union all select name from unsharded)"
+"unsupported: UNION on different keyspaces"
+
+# multi-shard union
+"select 1 from music union (select id from user union select name from unsharded)"
+"unsupported: UNION on different keyspaces"
+
+# multi-shard union
+"select id from user union all select id from music"
+"unsupported: UNION on multi-shard queries"
+
+# union with different target shards
+"select 1 from music where id = 1 union select 1 from music where id = 2"
+"unsupported: UNION queries with different target shards"
+
+# Union all
+"select col1, col2 from user union all select col1, col2 from user_extra"
+"unsupported: UNION on multi-shard queries"
+
+"(select user.id, user.name from user join user_extra where user_extra.extra = 'asdf') union select 'b','c' from user"
+"unsupported construct: SELECT of UNION is non-trivial"
+
+"select 'b','c' from user union (select user.id, user.name from user join user_extra where user_extra.extra = 'asdf')"
+"unsupported construct: SELECT of UNION is non-trivial"

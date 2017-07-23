@@ -73,7 +73,7 @@ OS X 10.11 (El Capitan) should work as well, the installation instructions are b
 
 In addition, Vitess requires the software and libraries listed below.
 
-1.  [Install Go 1.7+](http://golang.org/doc/install).
+1.  [Install Go 1.8+](http://golang.org/doc/install).
 
 2.  Install [MariaDB 10.0](https://downloads.mariadb.org/) or
     [MySQL 5.6](http://dev.mysql.com/downloads/mysql). You can use any
@@ -115,7 +115,6 @@ sql_mode=NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES
     - python-mysqldb
     - libssl-dev
     - g++
-    - mercurial
     - git
     - pkg-config
     - bison
@@ -125,7 +124,7 @@ sql_mode=NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES
     These can be installed with the following apt-get command:
 
     ``` sh
-    $ sudo apt-get install make automake libtool python-dev python-virtualenv python-mysqldb libssl-dev g++ mercurial git pkg-config bison curl unzip
+    $ sudo apt-get install make automake libtool python-dev python-virtualenv python-mysqldb libssl-dev g++ git pkg-config bison curl unzip
     ```
 
 5.  If you decided to use ZooKeeper in step 3, you also need to install a
@@ -161,7 +160,7 @@ sql_mode=NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES
 5.  Run the following commands:
 
     ``` sh
-    brew install go automake libtool python mercurial git bison curl wget homebrew/versions/mysql56
+    brew install go automake libtool python git bison curl wget homebrew/versions/mysql56
     pip install --upgrade pip setuptools
     pip install virtualenv
     pip install MySQL-python
@@ -608,8 +607,9 @@ See the comments at the top of each sample file for usage instructions.
 ### Try Vitess resharding
 
 Now that you have a full Vitess stack running, you may want to go on to the
-[Horizontal Sharding](http://vitess.io/user-guide/horizontal-sharding.html)
-guide to try out
+[Horizontal Sharding workflow guide](http://vitess.io/user-guide/horizontal-sharding-workflow.html)
+or [Horizontal Sharding codelab](http://vitess.io/user-guide/horizontal-sharding.html)
+(if you prefer to run each step manually through commands) to try out
 [dynamic resharding](http://vitess.io/user-guide/sharding.html#resharding).
 
 If so, you can skip the tear-down since the sharding guide picks up right here.

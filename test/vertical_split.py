@@ -1,8 +1,18 @@
 #!/usr/bin/env python
 #
-# Copyright 2013, Google Inc. All rights reserved.
-# Use of this source code is governed by a BSD-style license that can
-# be found in the LICENSE file.
+# Copyright 2017 Google Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import logging
 import time
@@ -207,6 +217,12 @@ primary key (id),
 index by_msg (msg)
 ) Engine=InnoDB'''
     create_view_template = 'create view %s(id, msg) as select id, msg from %s'
+    # RBR only because Vitess requires the primary key for query rewrites if
+    # it is running with statement based replication.
+    create_moving3_no_pk_table = '''create table moving3_no_pk (
+id bigint not null,
+msg varchar(64)
+) Engine=InnoDB'''
 
     for t in [source_master, source_replica, source_rdonly1, source_rdonly2]:
       t.create_db('vt_source_keyspace')
@@ -214,6 +230,8 @@ index by_msg (msg)
         t.mquery(source_master.dbname, create_table_template % (n))
       t.mquery(source_master.dbname,
                create_view_template % ('view1', 'moving1'))
+      if base_sharding.use_rbr:
+        t.mquery(source_master.dbname, create_moving3_no_pk_table)
 
     for t in [destination_master, destination_replica, destination_rdonly1,
               destination_rdonly2]:
@@ -235,6 +253,11 @@ index by_msg (msg)
                        staying2_first, 100)
     self._check_values(source_master, 'vt_source_keyspace', 'view1',
                        self.moving1_first, 100)
+
+    if base_sharding.use_rbr:
+      self.moving3_no_pk_first = self._insert_values('moving3_no_pk', 100)
+      self._check_values(source_master, 'vt_source_keyspace', 'moving3_no_pk',
+                         self.moving3_no_pk_first, 100)
 
     # Insert data directly because vtgate would redirect us.
     destination_master.mquery(
@@ -315,10 +338,10 @@ index by_msg (msg)
         'Mismatch in srv keyspace for cell %s keyspace %s, expected:\n'
         '%s\ngot:\n%s' % (
             cell, keyspace, expected, result))
-    self.assertNotIn('sharding_column_name', ks,
+    self.assertEqual('', ks.get('sharding_column_name', ''),
                      'Got a sharding_column_name in SrvKeyspace: %s' %
                      str(ks))
-    self.assertNotIn('sharding_column_type', ks,
+    self.assertEqual(0, ks.get('sharding_column_type', 0),
                      'Got a sharding_column_type in SrvKeyspace: %s' %
                      str(ks))
 
@@ -407,6 +430,9 @@ index by_msg (msg)
                        self.moving2_first, 100)
     self._check_values(destination_master, 'vt_destination_keyspace', 'view1',
                        self.moving1_first, 100)
+    if base_sharding.use_rbr:
+      self._check_values(destination_master, 'vt_destination_keyspace',
+                         'moving3_no_pk', self.moving3_no_pk_first, 100)
 
     # check the binlog player is running and exporting vars
     self.check_destination_master(destination_master, ['source_keyspace/0'])
@@ -490,7 +516,7 @@ index by_msg (msg)
     for ksf in keyspace_json['served_froms']:
       if ksf['tablet_type'] == topodata_pb2.RDONLY:
         found = True
-        self.assertNotIn('cells', ksf)
+        self.assertTrue('cells' not in ksf or not ksf['cells'])
     self.assertTrue(found)
 
     # now serve rdonly from the destination shards
@@ -600,7 +626,8 @@ index by_msg (msg)
     utils.run_vtctl(['SetShardTabletControl', '--remove', 'source_keyspace/0',
                      'master'], auto_log=True)
     shard_json = utils.run_vtctl_json(['GetShard', 'source_keyspace/0'])
-    self.assertNotIn('tablet_controls', shard_json)
+    self.assertTrue('tablet_controls' not in shard_json or
+                    not shard_json['tablet_controls'])
 
   def _assert_tablet_controls(self, expected_dbtypes):
     shard_json = utils.run_vtctl_json(['GetShard', 'source_keyspace/0'])

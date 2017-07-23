@@ -1,3 +1,19 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreedto in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package discovery
 
 import (
@@ -28,12 +44,23 @@ type keyspaceShard struct {
 // It will return ctx.Err() if the context is canceled.
 func (tc *TabletStatsCache) WaitForTablets(ctx context.Context, cell, keyspace, shard string, types []topodatapb.TabletType) error {
 	keyspaceShards := map[keyspaceShard]bool{
-		keyspaceShard{
+		{
 			keyspace: keyspace,
 			shard:    shard,
 		}: true,
 	}
 	return tc.waitForTablets(ctx, keyspaceShards, types, false)
+}
+
+// WaitForAnyTablet waits for a single tablet of any of the types
+func (tc *TabletStatsCache) WaitForAnyTablet(ctx context.Context, cell, keyspace, shard string, types []topodatapb.TabletType) error {
+	keyspaceShards := map[keyspaceShard]bool{
+		{
+			keyspace: keyspace,
+			shard:    shard,
+		}: true,
+	}
+	return tc.waitForAnyTablet(ctx, keyspaceShards, types, false)
 }
 
 // WaitForAllServingTablets waits for at least one healthy serving tablet in
@@ -111,6 +138,45 @@ func (tc *TabletStatsCache) waitForTablets(ctx context.Context, keyspaceShards m
 			}
 
 			if allPresent {
+				delete(keyspaceShards, ks)
+			}
+		}
+
+		if len(keyspaceShards) == 0 {
+			// we found everything we needed
+			return nil
+		}
+
+		// Unblock after the sleep or when the context has expired.
+		timer := time.NewTimer(waitAvailableTabletInterval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
+
+// waitForAnyTablet is the internal method that polls for any tablet of required type
+func (tc *TabletStatsCache) waitForAnyTablet(ctx context.Context, keyspaceShards map[keyspaceShard]bool, types []topodatapb.TabletType, requireServing bool) error {
+	for {
+		for ks := range keyspaceShards {
+			anyPresent := false
+			for _, tt := range types {
+				var stats []TabletStats
+				if requireServing {
+					stats = tc.GetHealthyTabletStats(ks.keyspace, ks.shard, tt)
+				} else {
+					stats = tc.GetTabletStats(ks.keyspace, ks.shard, tt)
+				}
+				if len(stats) > 0 {
+					anyPresent = true
+					break
+				}
+			}
+
+			if anyPresent {
 				delete(keyspaceShards, ks)
 			}
 		}

@@ -1,3 +1,19 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreedto in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 // Package discovery provides a way to discover all tablets e.g. within a
 // specific shard and monitor their current health.
 //
@@ -367,10 +383,11 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 
 	// Read stream health responses.
 	for {
-		_ = hcc.stream(hc, func(shr *querypb.StreamHealthResponse) error {
+		hcc.stream(hc, func(shr *querypb.StreamHealthResponse) error {
 			return hcc.processResponse(hc, shr)
 		})
 
+		// Streaming RPC failed e.g. because vttablet was restarted.
 		// Sleep until the next retry is up or the context is done/canceled.
 		select {
 		case <-hcc.ctx.Done():
@@ -381,18 +398,21 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 }
 
 // stream streams healthcheck responses to callback.
-func (hcc *healthCheckConn) stream(hc *HealthCheckImpl, callback func(*querypb.StreamHealthResponse) error) error {
+func (hcc *healthCheckConn) stream(hc *HealthCheckImpl, callback func(*querypb.StreamHealthResponse) error) {
 	hcc.mu.Lock()
 	conn := hcc.conn
 	hcc.mu.Unlock()
+
 	if conn == nil {
 		var err error
-		// Keyspace, shard and tabletType are the ones from the tablet
-		// record, but they won't be used just yet.
 		conn, err = tabletconn.GetDialer()(hcc.tabletStats.Tablet, hc.connTimeout)
 		if err != nil {
-			return err
+			hcc.mu.Lock()
+			hcc.tabletStats.LastError = err
+			hcc.mu.Unlock()
+			return
 		}
+
 		hcc.mu.Lock()
 		hcc.conn = conn
 		hcc.tabletStats.LastError = nil
@@ -407,9 +427,9 @@ func (hcc *healthCheckConn) stream(hc *HealthCheckImpl, callback func(*querypb.S
 		hcc.tabletStats.Serving = false
 		hcc.tabletStats.LastError = err
 		hcc.mu.Unlock()
-		return err
+		return
 	}
-	return nil
+	return
 }
 
 // processResponse reads one health check response, and notifies HealthCheckStatsListener.

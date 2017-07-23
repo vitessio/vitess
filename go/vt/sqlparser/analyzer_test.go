@@ -1,6 +1,18 @@
-// Copyright 2016, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package sqlparser
 
@@ -11,6 +23,84 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 )
+
+func TestPreview(t *testing.T) {
+	testcases := []struct {
+		sql  string
+		want int
+	}{
+		{"select ...", StmtSelect},
+		{"    select ...", StmtSelect},
+		{"insert ...", StmtInsert},
+		{"replace ....", StmtReplace},
+		{"   update ...", StmtUpdate},
+		{"Update", StmtUpdate},
+		{"UPDATE ...", StmtUpdate},
+		{"\n\t    delete ...", StmtDelete},
+		{"", StmtUnknown},
+		{" ", StmtUnknown},
+		{"begin", StmtBegin},
+		{" begin", StmtBegin},
+		{" begin ", StmtBegin},
+		{"\n\t begin ", StmtBegin},
+		{"... begin ", StmtUnknown},
+		{"begin ...", StmtUnknown},
+		{"start transaction", StmtBegin},
+		{"commit", StmtCommit},
+		{"rollback", StmtRollback},
+		{"create", StmtDDL},
+		{"alter", StmtDDL},
+		{"rename", StmtDDL},
+		{"drop", StmtDDL},
+		{"set", StmtSet},
+		{"show", StmtShow},
+		{"use", StmtUse},
+		{"analyze", StmtOther},
+		{"describe", StmtOther},
+		{"desc", StmtOther},
+		{"explain", StmtOther},
+		{"repair", StmtOther},
+		{"optimize", StmtOther},
+		{"truncate", StmtOther},
+		{"unknown", StmtUnknown},
+
+		{"/* leading comment */ select ...", StmtSelect},
+		{"/* leading comment */ /* leading comment 2 */ select ...", StmtSelect},
+		{"-- leading single line comment \n select ...", StmtSelect},
+		{"-- leading single line comment \n -- leading single line comment 2\n select ...", StmtSelect},
+
+		{"/* leading comment no end select ...", StmtUnknown},
+		{"-- leading single line comment no end select ...", StmtUnknown},
+	}
+	for _, tcase := range testcases {
+		if got := Preview(tcase.sql); got != tcase.want {
+			t.Errorf("Preview(%s): %v, want %v", tcase.sql, got, tcase.want)
+		}
+	}
+}
+
+func TestIsDML(t *testing.T) {
+	testcases := []struct {
+		sql  string
+		want bool
+	}{
+		{"   update ...", true},
+		{"Update", true},
+		{"UPDATE ...", true},
+		{"\n\t    delete ...", true},
+		{"insert ...", true},
+		{"replace ...", true},
+		{"select ...", false},
+		{"    select ...", false},
+		{"", false},
+		{" ", false},
+	}
+	for _, tcase := range testcases {
+		if got := IsDML(tcase.sql); got != tcase.want {
+			t.Errorf("IsDML(%s): %v, want %v", tcase.sql, got, tcase.want)
+		}
+	}
+}
 
 func TestGetTableName(t *testing.T) {
 	testcases := []struct {
@@ -194,6 +284,54 @@ func TestStringIn(t *testing.T) {
 		out := StringIn(tc.in1, tc.in2...)
 		if out != tc.out {
 			t.Errorf("StringIn(%v,%v): %#v, want %#v", tc.in1, tc.in2, out, tc.out)
+		}
+	}
+}
+
+func TestExtractSetValues(t *testing.T) {
+	testcases := []struct {
+		sql string
+		out map[string]interface{}
+		err string
+	}{{
+		sql: "invalid",
+		err: "syntax error at position 8 near 'invalid'",
+	}, {
+		sql: "select * from t",
+		err: "ast did not yield *sqlparser.Set: *sqlparser.Select",
+	}, {
+		sql: "set a.autocommit=1",
+		err: "invalid syntax: a.autocommit",
+	}, {
+		sql: "set autocommit=1+1",
+		err: "invalid syntax: 1 + 1",
+	}, {
+		sql: "set transaction_mode='single'",
+		out: map[string]interface{}{"transaction_mode": "single"},
+	}, {
+		sql: "set autocommit=1",
+		out: map[string]interface{}{"autocommit": int64(1)},
+	}, {
+		sql: "set AUTOCOMMIT=1",
+		out: map[string]interface{}{"autocommit": int64(1)},
+	}, {
+		sql: "SET character_set_results = NULL",
+		out: map[string]interface{}{"character_set_results": nil},
+	}, {
+		sql: "SET foo = 0x1234",
+		err: "invalid value type: 0x1234",
+	}}
+	for _, tcase := range testcases {
+		out, err := ExtractSetValues(tcase.sql)
+		if tcase.err != "" {
+			if err == nil || err.Error() != tcase.err {
+				t.Errorf("ExtractSetNums(%s): %v, want '%s'", tcase.sql, err, tcase.err)
+			}
+		} else if err != nil {
+			t.Errorf("ExtractSetNums(%s): %v, want no error", tcase.sql, err)
+		}
+		if !reflect.DeepEqual(out, tcase.out) {
+			t.Errorf("ExtractSetNums(%s): %v, want '%v'", tcase.sql, out, tcase.out)
 		}
 	}
 }

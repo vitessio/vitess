@@ -1,3 +1,19 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreedto in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package health
 
 import (
@@ -118,8 +134,7 @@ func (ag *Aggregator) Report(isSlaveType, shouldQueryServiceBeRunning bool) (tim
 	return result, err
 }
 
-// Register registers rep with ag. Only keys specified in keys will be
-// aggregated from this particular Reporter.
+// Register registers rep with ag.
 func (ag *Aggregator) Register(name string, rep Reporter) {
 	ag.mu.Lock()
 	defer ag.mu.Unlock()
@@ -127,7 +142,11 @@ func (ag *Aggregator) Register(name string, rep Reporter) {
 		panic("reporter named " + name + " is already registered")
 	}
 	ag.reporters[name] = rep
+}
 
+// RegisterSimpleCheck registers a simple health check function.
+func (ag *Aggregator) RegisterSimpleCheck(name string, check func() error) {
+	ag.Register(name, simpleReporter{html: template.HTML(name), check: check})
 }
 
 // HTMLName returns an aggregate name for all the reporters
@@ -140,4 +159,17 @@ func (ag *Aggregator) HTMLName() template.HTML {
 	}
 	sort.Strings(result)
 	return template.HTML(strings.Join(result, "&nbsp; + &nbsp;"))
+}
+
+type simpleReporter struct {
+	html  template.HTML
+	check func() error
+}
+
+func (s simpleReporter) HTMLName() template.HTML {
+	return s.html
+}
+
+func (s simpleReporter) Report(bool, bool) (time.Duration, error) {
+	return 0, s.check()
 }

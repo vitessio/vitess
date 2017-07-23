@@ -1,10 +1,27 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package sqltypes
 
-import querypb "github.com/youtube/vitess/go/vt/proto/query"
+import (
+	"reflect"
+
+	"github.com/golang/protobuf/proto"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+)
 
 // Result represents a query result.
 type Result struct {
@@ -52,21 +69,10 @@ func (result *Result) Copy() *Result {
 		out.Fields = fieldsp
 	}
 	if result.Rows != nil {
-		rows := make([][]Value, len(result.Rows))
-		for i, r := range result.Rows {
-			rows[i] = make([]Value, len(r))
-			totalLen := 0
-			for _, c := range r {
-				totalLen += len(c.val)
-			}
-			arena := make([]byte, 0, totalLen)
-			for j, c := range r {
-				start := len(arena)
-				arena = append(arena, c.val...)
-				rows[i][j] = MakeTrusted(c.typ, arena[start:start+len(c.val)])
-			}
+		out.Rows = make([][]Value, 0, len(result.Rows))
+		for _, r := range result.Rows {
+			out.Rows = append(out.Rows, CopyRow(r))
 		}
-		out.Rows = rows
 	}
 	if result.Extras != nil {
 		out.Extras = &querypb.ResultExtras{
@@ -81,6 +87,62 @@ func (result *Result) Copy() *Result {
 		}
 	}
 	return out
+}
+
+// CopyRow makes a copy of the row.
+func CopyRow(r []Value) []Value {
+	// The raw bytes of the values are supposed to be treated as read-only.
+	// So, there's no need to copy them.
+	out := make([]Value, len(r))
+	copy(out, r)
+	return out
+}
+
+// FieldsEqual compares two arrays of fields.
+// reflect.DeepEqual shouldn't be used because of the protos.
+func FieldsEqual(f1, f2 []*querypb.Field) bool {
+	if len(f1) != len(f2) {
+		return false
+	}
+	for i, f := range f1 {
+		if !proto.Equal(f, f2[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// Equal compares the Result with another one.
+// reflect.DeepEqual shouldn't be used because of the protos.
+func (result *Result) Equal(other *Result) bool {
+	// Check for nil cases
+	if result == nil {
+		return other == nil
+	}
+	if other == nil {
+		return false
+	}
+
+	// Compare Fields, RowsAffected, InsertID, Rows, Extras.
+	return FieldsEqual(result.Fields, other.Fields) &&
+		result.RowsAffected == other.RowsAffected &&
+		result.InsertID == other.InsertID &&
+		reflect.DeepEqual(result.Rows, other.Rows) &&
+		proto.Equal(result.Extras, other.Extras)
+}
+
+// ResultsEqual compares two arrays of Result.
+// reflect.DeepEqual shouldn't be used because of the protos.
+func ResultsEqual(r1, r2 []Result) bool {
+	if len(r1) != len(r2) {
+		return false
+	}
+	for i, r := range r1 {
+		if !r.Equal(&r2[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // MakeRowTrusted converts a *querypb.Row to []Value based on the types

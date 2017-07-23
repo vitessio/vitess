@@ -1,6 +1,18 @@
-// Copyright 2014, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 // mysqlctld is a daemon that starts or initializes mysqld and provides an RPC
 // interface for vttablet to stop and start mysqld from a different container
@@ -48,6 +60,11 @@ func main() {
 	dbconfigs.RegisterFlags(dbconfigFlags)
 	flag.Parse()
 
+	if *servenv.Version {
+		servenv.AppVersion.Print()
+		os.Exit(0)
+	}
+
 	// We'll register this OnTerm handler before mysqld starts, so we get notified
 	// if mysqld dies on its own without us (or our RPC client) telling it to.
 	mysqldTerminated := make(chan struct{})
@@ -57,10 +74,10 @@ func main() {
 
 	// Start or Init mysqld as needed.
 	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
-	tabletDir := mysqlctl.TabletDir(uint32(*tabletUID))
-	if _, statErr := os.Stat(tabletDir); os.IsNotExist(statErr) {
+	mycnfFile := mysqlctl.MycnfFile(uint32(*tabletUID))
+	if _, statErr := os.Stat(mycnfFile); os.IsNotExist(statErr) {
 		// Generate my.cnf from scratch and use it to find mysqld.
-		log.Infof("tablet dir (%s) doesn't exist, initializing", tabletDir)
+		log.Infof("mycnf file (%s) doesn't exist, initializing", mycnfFile)
 
 		var err error
 		mysqld, err = mysqlctl.CreateMysqld(uint32(*tabletUID), *mysqlSocket, int32(*mysqlPort), dbconfigFlags)
@@ -76,7 +93,7 @@ func main() {
 		}
 	} else {
 		// There ought to be an existing my.cnf, so use it to find mysqld.
-		log.Infof("tablet dir (%s) already exists, starting without init", tabletDir)
+		log.Infof("mycnf file (%s) already exists, starting without init", mycnfFile)
 
 		var err error
 		mysqld, err = mysqlctl.OpenMysqld(uint32(*tabletUID), dbconfigFlags)
@@ -85,6 +102,12 @@ func main() {
 			exit.Return(1)
 		}
 		mysqld.OnTerm(onTermFunc)
+
+		err = mysqld.RefreshConfig()
+		if err != nil {
+			log.Errorf("failed to refresh config: %v", err)
+			exit.Return(1)
+		}
 
 		if err := mysqld.Start(ctx); err != nil {
 			log.Errorf("failed to start mysqld: %v", err)

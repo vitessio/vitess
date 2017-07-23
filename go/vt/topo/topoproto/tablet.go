@@ -1,6 +1,18 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 // Package topoproto contains utility functions to deal with the proto3
 // structures defined in proto/topodata.
@@ -8,11 +20,12 @@ package topoproto
 
 import (
 	"fmt"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/youtube/vitess/go/netutil"
+	"github.com/golang/protobuf/proto"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -41,13 +54,7 @@ func TabletAliasIsZero(ta *topodatapb.TabletAlias) bool {
 
 // TabletAliasEqual returns true if two TabletAlias match
 func TabletAliasEqual(left, right *topodatapb.TabletAlias) bool {
-	if left == nil {
-		return right == nil
-	}
-	if right == nil {
-		return false
-	}
-	return *left == *right
+	return proto.Equal(left, right)
 }
 
 // TabletAliasString formats a TabletAlias
@@ -138,13 +145,26 @@ var SlaveTabletTypes = []topodatapb.TabletType{
 	topodatapb.TabletType_DRAINED,
 }
 
-// ParseTabletType parses the tablet type into the enum
+// ParseTabletType parses the tablet type into the enum.
 func ParseTabletType(param string) (topodatapb.TabletType, error) {
 	value, ok := topodatapb.TabletType_value[strings.ToUpper(param)]
 	if !ok {
 		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("unknown TabletType %v", param)
 	}
 	return topodatapb.TabletType(value), nil
+}
+
+// ParseTabletTypes parses a comma separated list of tablet types and returns a slice with the respective enums.
+func ParseTabletTypes(param string) ([]topodatapb.TabletType, error) {
+	var tabletTypes []topodatapb.TabletType
+	for _, typeStr := range strings.Split(param, ",") {
+		t, err := ParseTabletType(typeStr)
+		if err != nil {
+			return nil, err
+		}
+		tabletTypes = append(tabletTypes, t)
+	}
+	return tabletTypes, nil
 }
 
 // TabletTypeLString returns a lower case version of the tablet type,
@@ -178,9 +198,54 @@ func MakeStringTypeList(types []topodatapb.TabletType) []string {
 	return strs
 }
 
-// TabletAddr returns hostname:vt port associated with a tablet
-func TabletAddr(tablet *topodatapb.Tablet) string {
-	return netutil.JoinHostPort(tablet.Hostname, tablet.PortMap["vt"])
+// SetMysqlPort sets the mysql port for tablet. This function
+// also handles legacy by setting the port in PortMap.
+// TODO(sougou); deprecate this function after 3.0.
+func SetMysqlPort(tablet *topodatapb.Tablet, port int32) {
+	if tablet.MysqlHostname == "" || tablet.MysqlHostname == tablet.Hostname {
+		tablet.PortMap["mysql"] = port
+	}
+	// If it's the legacy form, preserve old behavior to prevent
+	// confusion between new and old code.
+	if tablet.MysqlHostname != "" {
+		tablet.MysqlPort = port
+	}
+}
+
+// MysqlAddr returns the host:port of the mysql server.
+func MysqlAddr(tablet *topodatapb.Tablet) string {
+	return fmt.Sprintf("%v:%v", MysqlHostname(tablet), MysqlPort(tablet))
+}
+
+// MysqlHostname returns the mysql host name. This function
+// also handles legacy behavior: it uses the tablet's hostname
+// if MysqlHostname is not specified.
+// TODO(sougou); deprecate this function after 3.0.
+func MysqlHostname(tablet *topodatapb.Tablet) string {
+	if tablet.MysqlHostname == "" {
+		return tablet.Hostname
+	}
+	return tablet.MysqlHostname
+}
+
+// MysqlPort returns the mysql port. This function
+// also handles legacy behavior: it uses the tablet's port map
+// if MysqlHostname is not specified.
+// TODO(sougou); deprecate this function after 3.0.
+func MysqlPort(tablet *topodatapb.Tablet) int32 {
+	if tablet.MysqlHostname == "" {
+		return tablet.PortMap["mysql"]
+	}
+	return tablet.MysqlPort
+}
+
+// MySQLIP returns the MySQL server's IP by resolvign the host name.
+func MySQLIP(tablet *topodatapb.Tablet) (string, error) {
+	ipAddrs, err := net.LookupHost(MysqlHostname(tablet))
+	if err != nil {
+		return "", err
+	}
+	return ipAddrs[0], nil
 }
 
 // TabletDbName is usually implied by keyspace. Having the shard

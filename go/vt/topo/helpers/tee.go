@@ -1,6 +1,18 @@
-// Copyright 2013, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package helpers
 
@@ -10,6 +22,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -42,7 +55,7 @@ type Tee struct {
 
 	keyspaceVersionMapping map[string]versionMapping
 	shardVersionMapping    map[string]versionMapping
-	tabletVersionMapping   map[topodatapb.TabletAlias]versionMapping
+	tabletVersionMapping   map[string]versionMapping
 
 	keyspaceLockPaths map[string]string
 	shardLockPaths    map[string]string
@@ -74,7 +87,7 @@ func NewTee(primary, secondary topo.Impl, reverseLockOrder bool) *Tee {
 		lockSecond:             lockSecond,
 		keyspaceVersionMapping: make(map[string]versionMapping),
 		shardVersionMapping:    make(map[string]versionMapping),
-		tabletVersionMapping:   make(map[topodatapb.TabletAlias]versionMapping),
+		tabletVersionMapping:   make(map[string]versionMapping),
 		keyspaceLockPaths:      make(map[string]string),
 		shardLockPaths:         make(map[string]string),
 	}
@@ -419,11 +432,12 @@ func (tee *Tee) UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet, exi
 	// if we have a mapping between tablet version in first topo
 	// and tablet version in second topo, replace the version number.
 	// if not, this will probably fail and log.
+	tabletAliasStr := topoproto.TabletAliasString(tablet.Alias)
 	tee.mu.Lock()
-	tvm, ok := tee.tabletVersionMapping[*tablet.Alias]
+	tvm, ok := tee.tabletVersionMapping[tabletAliasStr]
 	if ok && tvm.readFromVersion == existingVersion {
 		existingVersion = tvm.readFromSecondVersion
-		delete(tee.tabletVersionMapping, *tablet.Alias)
+		delete(tee.tabletVersionMapping, tabletAliasStr)
 	}
 	tee.mu.Unlock()
 	if newVersion2, serr := tee.secondary.UpdateTablet(ctx, tablet, existingVersion); serr != nil {
@@ -440,7 +454,7 @@ func (tee *Tee) UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet, exi
 					log.Warningf("Failed to re-read tablet(%v) after creating it on secondary: %v", tablet.Alias, gerr)
 				} else {
 					tee.mu.Lock()
-					tee.tabletVersionMapping[*tablet.Alias] = versionMapping{
+					tee.tabletVersionMapping[tabletAliasStr] = versionMapping{
 						readFromVersion:       newVersion,
 						readFromSecondVersion: v,
 					}
@@ -452,7 +466,7 @@ func (tee *Tee) UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet, exi
 		}
 	} else {
 		tee.mu.Lock()
-		tee.tabletVersionMapping[*tablet.Alias] = versionMapping{
+		tee.tabletVersionMapping[tabletAliasStr] = versionMapping{
 			readFromVersion:       newVersion,
 			readFromSecondVersion: newVersion2,
 		}
@@ -488,7 +502,7 @@ func (tee *Tee) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*
 	}
 
 	tee.mu.Lock()
-	tee.tabletVersionMapping[*alias] = versionMapping{
+	tee.tabletVersionMapping[topoproto.TabletAliasString(alias)] = versionMapping{
 		readFromVersion:       v,
 		readFromSecondVersion: v2,
 	}

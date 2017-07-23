@@ -1,6 +1,18 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package servenv
 
@@ -83,14 +95,16 @@ func createGRPCServer() {
 		creds := credentials.NewTLS(config)
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}
-	// Override the default max message size (which is 4 MiB in gRPC 1.0.0).
-	// Large messages can occur when users try to insert very big rows. If they
-	// hit the limit, they'll see the following error:
+	// Override the default max message size for both send and receive
+	// (which is 4 MiB in gRPC 1.0.0).
+	// Large messages can occur when users try to insert or fetch very big
+	// rows. If they hit the limit, they'll see the following error:
 	// grpc: received message length XXXXXXX exceeding the max size 4194304
 	// Note: For gRPC 1.0.0 it's sufficient to set the limit on the server only
 	// because it's not enforced on the client side.
 	if GRPCMaxMessageSize != nil {
-		opts = append(opts, grpc.MaxMsgSize(*GRPCMaxMessageSize))
+		opts = append(opts, grpc.MaxRecvMsgSize(*GRPCMaxMessageSize))
+		opts = append(opts, grpc.MaxSendMsgSize(*GRPCMaxMessageSize))
 	}
 
 	GRPCServer = grpc.NewServer(opts...)

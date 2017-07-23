@@ -1,6 +1,18 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 // The following comment section contains definitions for command arguments.
 /*
@@ -76,13 +88,13 @@ COMMAND ARGUMENT DEFINITIONS
 package vtctl
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -90,10 +102,12 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/jsonpb"
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/flagutil"
-	"github.com/youtube/vitess/go/mysqlconn/replication"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	hk "github.com/youtube/vitess/go/vt/hook"
@@ -265,7 +279,7 @@ var commands = []commandGroup{
 				"Deletes the specified keyspace. In recursive mode, it also recursively deletes all shards in the keyspace. Otherwise, there must be no shards left in the keyspace."},
 			{"RemoveKeyspaceCell", commandRemoveKeyspaceCell,
 				"[-force] [-recursive] <keyspace> <cell>",
-				"Removes the cell from the Cells list for all shards in the keyspace."},
+				"Removes the cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell."},
 			{"GetKeyspace", commandGetKeyspace,
 				"<keyspace>",
 				"Outputs a JSON structure that contains information about the Keyspace."},
@@ -470,7 +484,7 @@ func dumpTablets(ctx context.Context, wr *wrangler.Wrangler, tabletAliases []*to
 		return err
 	}
 	for _, tabletAlias := range tabletAliases {
-		ti, ok := tabletMap[*tabletAlias]
+		ti, ok := tabletMap[topoproto.TabletAliasString(tabletAlias)]
 		if !ok {
 			log.Warningf("failed to load tablet %v", tabletAlias)
 		} else {
@@ -602,7 +616,8 @@ func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	allowMasterOverride := subFlags.Bool("allow_master_override", false, "Use this flag to force initialization if a tablet is created as master, and a master for the keyspace/shard already exists. Use with caution.")
 	createShardAndKeyspace := subFlags.Bool("parent", false, "Creates the parent shard and keyspace if they don't yet exist")
 	hostname := subFlags.String("hostname", "", "The server on which the tablet is running")
-	mysqlPort := subFlags.Int("mysql_port", 0, "The mysql port for the mysql daemon")
+	mysqlHost := subFlags.String("mysql_host", "", "The mysql host for the mysql server")
+	mysqlPort := subFlags.Int("mysql_port", 0, "The mysql port for the mysql server")
 	port := subFlags.Int("port", 0, "The main port for the vttablet process")
 	grpcPort := subFlags.Int("grpc_port", 0, "The gRPC port for the vttablet process")
 	keyspace := subFlags.String("keyspace", "", "The keyspace to which this tablet belongs")
@@ -630,6 +645,7 @@ func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	tablet := &topodatapb.Tablet{
 		Alias:          tabletAlias,
 		Hostname:       *hostname,
+		MysqlHostname:  *mysqlHost,
 		PortMap:        make(map[string]int32),
 		Keyspace:       *keyspace,
 		Shard:          *shard,
@@ -641,7 +657,7 @@ func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		tablet.PortMap["vt"] = int32(*port)
 	}
 	if *mysqlPort != 0 {
-		tablet.PortMap["mysql"] = int32(*mysqlPort)
+		topoproto.SetMysqlPort(tablet, int32(*mysqlPort))
 	}
 	if *grpcPort != 0 {
 		tablet.PortMap["grpc"] = int32(*grpcPort)
@@ -666,12 +682,13 @@ func commandGetTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 	if err != nil {
 		return err
 	}
-	return printJSON(wr.Logger(), tabletInfo)
+	// Pass the embedded proto directly or jsonpb will panic.
+	return printJSON(wr.Logger(), tabletInfo.Tablet)
 }
 
 func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	hostname := subFlags.String("hostname", "", "The fully qualified host name of the server on which the tablet is running.")
-	ipAddr := subFlags.String("ip-addr", "", "IP address")
+	mysqlHost := subFlags.String("mysql_host", "", "The mysql host for the mysql server")
 	mysqlPort := subFlags.Int("mysql-port", 0, "The mysql port for the mysql daemon")
 	vtPort := subFlags.Int("vt-port", 0, "The main port for the vttablet process")
 	grpcPort := subFlags.Int("grpc-port", 0, "The gRPC port for the vttablet process")
@@ -682,20 +699,18 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("the <tablet alias> argument is required for the UpdateTabletAddrs command")
 	}
-	if *ipAddr != "" && net.ParseIP(*ipAddr) == nil {
-		return fmt.Errorf("malformed address: %v", *ipAddr)
-	}
 
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
+
 	_, err = wr.TopoServer().UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
 		if *hostname != "" {
 			tablet.Hostname = *hostname
 		}
-		if *ipAddr != "" {
-			tablet.Ip = *ipAddr
+		if *mysqlHost != "" {
+			tablet.MysqlHostname = *mysqlHost
 		}
 		if *vtPort != 0 || *grpcPort != 0 || *mysqlPort != 0 {
 			if tablet.PortMap == nil {
@@ -708,7 +723,7 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 				tablet.PortMap["grpc"] = int32(*grpcPort)
 			}
 			if *mysqlPort != 0 {
-				tablet.PortMap["mysql"] = int32(*mysqlPort)
+				topoproto.SetMysqlPort(tablet, int32(*mysqlPort))
 			}
 		}
 		return nil
@@ -1127,7 +1142,8 @@ func commandGetShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	if err != nil {
 		return err
 	}
-	return printJSON(wr.Logger(), shardInfo)
+	// Pass the embedded proto directly or jsonpb will panic.
+	return printJSON(wr.Logger(), shardInfo.Shard)
 }
 
 func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1519,7 +1535,8 @@ func commandGetKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-	return printJSON(wr.Logger(), keyspaceInfo)
+	// Pass the embedded proto directly or jsonpb will panic.
+	return printJSON(wr.Logger(), keyspaceInfo.Keyspace)
 }
 
 func commandGetKeyspaces(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2148,7 +2165,8 @@ func commandGetShardReplication(ctx context.Context, wr *wrangler.Wrangler, subF
 	if err != nil {
 		return err
 	}
-	return printJSON(wr.Logger(), shardReplication)
+	// Pass the embedded proto directly or jsonpb will panic.
+	return printJSON(wr.Logger(), shardReplication.ShardReplication)
 }
 
 func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2205,11 +2223,11 @@ func (rts rTablets) Less(i, j int) bool {
 		return false
 	}
 	// then compare replication positions
-	lpos, err := replication.DecodePosition(l.Position)
+	lpos, err := mysql.DecodePosition(l.Position)
 	if err != nil {
 		return true
 	}
-	rpos, err := replication.DecodePosition(r.Position)
+	rpos, err := mysql.DecodePosition(r.Position)
 	if err != nil {
 		return false
 	}
@@ -2230,12 +2248,57 @@ func sortReplicatingTablets(tablets []*topo.TabletInfo, stats []*replicationdata
 
 // printJSON will print the JSON version of the structure to the logger.
 func printJSON(logger logutil.Logger, val interface{}) error {
-	data, err := json.MarshalIndent(val, "", "  ")
+	data, err := MarshalJSON(val)
 	if err != nil {
 		return fmt.Errorf("cannot marshal data: %v", err)
 	}
 	logger.Printf("%v\n", string(data))
 	return nil
+}
+
+// MarshalJSON marshals "obj" to a JSON string. It uses the "jsonpb" marshaler
+// or Go's standard one.
+//
+// We use jsonpb for protobuf messages because it is the only supported
+// way to marshal protobuf messages to JSON.
+// In addition to that, it's the only way to emit zero values in the JSON
+// output.
+// Unfortunately, jsonpb works only for protobuf messages. Therefore, we use
+// the default marshaler for the remaining structs (which are possibly
+// mixed protobuf and non-protobuf).
+//
+// TODO(mberlin): Switch "EnumAsInts" to "false" once the frontend is
+//                updated and mixed types will use jsonpb as well.
+func MarshalJSON(obj interface{}) (data []byte, err error) {
+	switch obj := obj.(type) {
+	case proto.Message:
+		// Note: We also end up in this case if "obj" is NOT a proto.Message but
+		// has an anonymous (embedded) field of the type "proto.Message".
+		// In that case jsonpb may panic if the "obj" has non-exported fields.
+
+		// Marshal the protobuf message.
+		var b bytes.Buffer
+		m := jsonpb.Marshaler{EnumsAsInts: true, EmitDefaults: true, Indent: "  ", OrigName: true}
+		if err := m.Marshal(&b, obj); err != nil {
+			return nil, fmt.Errorf("jsonpb error: %v", err)
+		}
+		data = b.Bytes()
+	case []string:
+		if len(obj) == 0 {
+			return []byte{'[', ']'}, nil
+		}
+		data, err = json.MarshalIndent(obj, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("json error: %v", err)
+		}
+	default:
+		data, err = json.MarshalIndent(obj, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("json error: %v", err)
+		}
+	}
+
+	return data, nil
 }
 
 // RunCommand will execute the command using the provided wrangler.

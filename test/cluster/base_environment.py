@@ -1,3 +1,17 @@
+# Copyright 2017 Google Inc.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """Base environment for full cluster tests.
 
 Contains functions that all environments should implement along with functions
@@ -384,7 +398,12 @@ class BaseEnvironment(object):
     """
     tablet_info = json.loads(self.vtctl_helper.execute_vtctl_command(
         ['GetTablet', tablet_name]))
-    return '%s:%s' % (tablet_info['ip'], tablet_info['port_map']['vt'])
+    host = tablet_info['hostname']
+    if ':' in host:
+      # If host is an IPv6 address we need to put it into square brackets to
+      # form a correct "host:port" value.
+      host = '[%s]' % host
+    return '%s:%s' % (host, tablet_info['port_map']['vt'])
 
   def get_tablet_types_for_shard(self, keyspace, shard_name):
     """Get the types for all tablets in a shard.

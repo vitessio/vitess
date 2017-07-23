@@ -1,6 +1,18 @@
-// Copyright 2014, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package planbuilder
 
@@ -15,7 +27,7 @@ import (
 // dmlFormatter strips out keyspace name from dmls.
 func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 	switch node := node.(type) {
-	case *sqlparser.TableName:
+	case sqlparser.TableName:
 		node.Name.Format(buf)
 		return
 	}
@@ -24,34 +36,45 @@ func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 
 // buildUpdatePlan builds the instructions for an UPDATE statement.
 func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, error) {
-	route := &engine.Route{
+	er := &engine.Route{
 		Query: generateQuery(upd),
 	}
-	updateTable, _ := upd.Table.Expr.(*sqlparser.TableName)
-
-	var err error
-	route.Table, err = vschema.Find(updateTable.Qualifier, updateTable.Name)
+	bldr, err := processTableExprs(upd.TableExprs, vschema)
 	if err != nil {
 		return nil, err
 	}
-	route.Keyspace = route.Table.Keyspace
+	rb, ok := bldr.(*route)
+	if !ok {
+		return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
+	}
 	if hasSubquery(upd) {
 		return nil, errors.New("unsupported: subqueries in DML")
 	}
-	if !route.Keyspace.Sharded {
-		route.Opcode = engine.UpdateUnsharded
-		return route, nil
+	er.Keyspace = rb.ERoute.Keyspace
+	if !er.Keyspace.Sharded {
+		er.Opcode = engine.UpdateUnsharded
+		return er, nil
 	}
-
-	err = getDMLRouting(upd.Where, route)
+	if len(rb.Symtab().tables) != 1 {
+		return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
+	}
+	var tableName sqlparser.TableName
+	for t := range rb.Symtab().tables {
+		tableName = t
+	}
+	er.Table, err = vschema.Find(tableName)
 	if err != nil {
 		return nil, err
 	}
-	route.Opcode = engine.UpdateEqual
-	if isIndexChanging(upd.Exprs, route.Table.ColumnVindexes) {
+	err = getDMLRouting(upd.Where, er)
+	if err != nil {
+		return nil, err
+	}
+	er.Opcode = engine.UpdateEqual
+	if isIndexChanging(upd.Exprs, er.Table.ColumnVindexes) {
 		return nil, errors.New("unsupported: DML cannot change vindex column")
 	}
-	return route, nil
+	return er, nil
 }
 
 func generateQuery(statement sqlparser.Statement) string {
@@ -75,30 +98,43 @@ func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.C
 
 // buildUpdatePlan builds the instructions for a DELETE statement.
 func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Route, error) {
-	route := &engine.Route{
+	er := &engine.Route{
 		Query: generateQuery(del),
 	}
-	var err error
-	route.Table, err = vschema.Find(del.Table.Qualifier, del.Table.Name)
+	bldr, err := processTableExprs(del.TableExprs, vschema)
 	if err != nil {
 		return nil, err
 	}
-	route.Keyspace = route.Table.Keyspace
+	rb, ok := bldr.(*route)
+	if !ok {
+		return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
+	}
 	if hasSubquery(del) {
 		return nil, errors.New("unsupported: subqueries in DML")
 	}
-	if !route.Keyspace.Sharded {
-		route.Opcode = engine.DeleteUnsharded
-		return route, nil
+	er.Keyspace = rb.ERoute.Keyspace
+	if !er.Keyspace.Sharded {
+		er.Opcode = engine.DeleteUnsharded
+		return er, nil
 	}
-
-	err = getDMLRouting(del.Where, route)
+	if del.Targets != nil || len(rb.Symtab().tables) != 1 {
+		return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
+	}
+	var tableName sqlparser.TableName
+	for t := range rb.Symtab().tables {
+		tableName = t
+	}
+	er.Table, err = vschema.Find(tableName)
 	if err != nil {
 		return nil, err
 	}
-	route.Opcode = engine.DeleteEqual
-	route.Subquery = generateDeleteSubquery(del, route.Table)
-	return route, nil
+	err = getDMLRouting(del.Where, er)
+	if err != nil {
+		return nil, err
+	}
+	er.Opcode = engine.DeleteEqual
+	er.Subquery = generateDeleteSubquery(del, er.Table)
+	return er, nil
 }
 
 // generateDeleteSubquery generates the query to fetch the rows

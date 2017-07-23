@@ -1,354 +1,467 @@
-// Copyright 2016, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package planbuilder
 
 import (
+	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
-// symtab contains the symbols for a SELECT statement.
-// In the case of a subquery, the symtab points to the
-// symtab of the outer query. The symtab evolves over time,
-// and its behavior changes accordingly. When it starts out,
-// it contains only table aliases. The Find function looks
-// for symbols there. After the select expressions are analyzed,
-// Colsyms are set. From that point onwards, only Colsyms are
-// searched by the Find function. This means that post-processing
-// constructs like GROUP BY, etc. can only reference the select
-// expressions. Note that the outer symtab may still be in the
-// "table alias phase", in which case, only those symbols will
-// be searched for that symtab.
-// For any column reference that was successfully resolved, the
-// information is persisted as Metadata in the sqlparser.ColName
-// structure. This ensures that the changing state of the symtab
-// does not change the meaning of a previously resolved column
-// reference.
-// If a searched symbol was found in an outer symtab, then the
-// reference is added to the Externs field. This information will
-// be used by the outer query to compute the correct target route
-// that a subquery can be merged with, if possible.
-// In the case of a subquery, a symtab exists only while it's
-// analyzed. Although it's discarded after the analysis, column
-// references continue to point to the symbols created by the
-// symtab. These symbols, in turn, point to the route that they're part of.
-// If a decision is made to merge a subquery with an outer query's
-// route, then the associated route is redirected to the outer route.
-// Effectively, this makes the inner route the same as the outer
-// route. Consequently, this makes other routes that point to
-// the inner route to be the same as the outermost route also.
-// This method of redirection allows us to handle multiple levels
-// of nested subqueries. Without this redirection, we'd have to
-// keep track of every symtab created, and recursively chase them
-// down every time a subquery merges with an outer query.
+// symtab represents the symbol table for a SELECT statement
+// or a subquery. The symtab evolves over time.
+// As a query is analyzed, multiple independent
+// symtabs are created, and they are later merged as each
+// sub-expression of a FROM clause is merged.
+//
+// A symtab maintains uniqueColumns, which is a list of unique
+// vindex column names. These names can be resolved without the
+// need to qualify them by their table names. If there are
+// duplicates during a merge, those columns are removed from
+// the unique list, thereby disallowing unqualifed references
+// to such columns.
+//
+// After a select expression is analyzed, the
+// ResultColumns field is set. In the case of a subquery, the
+// Outer field points to the outer symtab. Any symbols that
+// are not resolved locally are added to the Externs field,
+// which is later used to determine if the subquery can be
+// merged with an outer route.
 type symtab struct {
-	tables  []*tabsym
-	Colsyms []*colsym
-	Externs []*sqlparser.ColName
-	Outer   *symtab
-	VSchema VSchema
+	// if the symtab was merged with another one. The
+	// redirect is set to point to the merged symtab.
+	// Resolve is used to find the target.
+	redirect *symtab
+
+	tables map[sqlparser.TableName]*table
+
+	// uniqueColumns has the column name as key
+	// and points at the columns that tables contains.
+	uniqueColumns map[string]*column
+
+	// singleRoute is set only if all the symbols in
+	// the symbol table are part of the same route.
+	// The route is set at creation time to be the
+	// the same as the route it was built for. As
+	// symbols are added through Merge, the route
+	// is validated against the newer symbols. If any
+	// of them have a different route, the value is
+	// set to nil.
+	singleRoute *route
+
+	ResultColumns []*resultColumn
+	Outer         *symtab
+	Externs       []*sqlparser.ColName
+	VSchema       VSchema
+}
+
+// newSymtab creates a new symtab.
+func newSymtab(vschema VSchema) *symtab {
+	return &symtab{
+		tables:        make(map[sqlparser.TableName]*table),
+		uniqueColumns: make(map[string]*column),
+		VSchema:       vschema,
+	}
 }
 
 // newSymtab creates a new symtab initialized
-// to contain the provided table alias.
-func newSymtab(vschema VSchema) *symtab {
+// to contain just one route.
+func newSymtabWithRoute(vschema VSchema, rb *route) *symtab {
 	return &symtab{
-		VSchema: vschema,
+		tables:        make(map[sqlparser.TableName]*table),
+		uniqueColumns: make(map[string]*column),
+		VSchema:       vschema,
+		singleRoute:   rb,
 	}
 }
 
-// AddAlias adds a table alias to symtab.
-func (st *symtab) AddAlias(alias *sqlparser.TableName, astName sqlparser.TableIdent, table *vindexes.Table, rb *route) {
-	st.tables = append(st.tables, &tabsym{
-		Alias:          alias,
-		ASTName:        astName,
-		route:          rb,
-		symtab:         st,
-		Keyspace:       table.Keyspace,
-		ColumnVindexes: table.ColumnVindexes,
-	})
+func (st *symtab) Resolve() *symtab {
+	if st.redirect != nil {
+		return st.redirect.Resolve()
+	}
+	return st
+}
+
+// AddVindexTable creates a table from a vindex table
+// and adds it to symtab.
+func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexes.Table, rb *route) error {
+	t := &table{
+		alias:   alias,
+		columns: make(map[string]*column),
+		origin:  rb,
+	}
+
+	// Pre-create vindex columns
+	for _, cv := range vindexTable.ColumnVindexes {
+		c := &column{
+			origin: rb,
+			Vindex: cv.Vindex,
+			name:   cv.Column,
+			table:  t,
+		}
+		t.columns[cv.Column.Lowered()] = c
+	}
+	return st.AddTable(t)
 }
 
 // Merge merges the new symtab into the current one.
-// Duplicate aliases return an error.
-// The routes of the table aliases are not affected.
-// Merge is only allowed in the early stages of symtab.
-// The function panics if Colsyms or Externs contain values.
+// Duplicate table aliases return an error.
+// uniqueColumns is updated, but duplicates are removed.
+// The function panics if ResultColumns or Externs contain values.
+// This is because symbol tables are allowed to merge only during
+// analysis for the FROM clause. At that time, there should be
+// no ResultColumns or Externs.
 func (st *symtab) Merge(newsyms *symtab) error {
-	if st.Colsyms != nil || newsyms.Colsyms != nil {
-		panic("unexpected colsyms")
-	}
-	if st.Externs != nil || newsyms.Externs != nil {
-		panic("unexpected Externs")
-	}
 	for _, t := range newsyms.tables {
-		if found := st.findTable(t.Alias); found != nil {
-			return fmt.Errorf("duplicate symbol: %s", sqlparser.String(t.Alias))
+		if err := st.AddTable(t); err != nil {
+			return err
 		}
-		t.symtab = st
-		st.tables = append(st.tables, t)
+	}
+	newsyms.redirect = st
+	return nil
+}
+
+// AddTable adds a table to symtab.
+func (st *symtab) AddTable(t *table) error {
+	if rb, ok := t.origin.(*route); !ok || rb.Resolve() != st.singleRoute {
+		st.singleRoute = nil
+	}
+	if _, ok := st.tables[t.alias]; ok {
+		return fmt.Errorf("duplicate symbol: %s", sqlparser.String(t.alias))
+	}
+	st.tables[t.alias] = t
+
+	// update the uniqueColumns list, and eliminate
+	// duplicate symbols if found.
+	for colname, c := range t.columns {
+		if c.Vindex == nil {
+			continue
+		}
+		if _, ok := st.uniqueColumns[colname]; ok {
+			delete(st.uniqueColumns, colname)
+			continue
+		}
+		st.uniqueColumns[colname] = c
 	}
 	return nil
 }
 
-func (st *symtab) findTable(alias *sqlparser.TableName) *tabsym {
-	for i, t := range st.tables {
-		if t.Alias.Equal(alias) {
-			return st.tables[i]
-		}
-	}
-	return nil
-}
-
-// SetRHS removes the ColumnVindexes from the aliases signifying
-// that they cannot be used to make routing decisions. This is
-// called if the table is in the RHS of a LEFT JOIN.
-func (st *symtab) SetRHS() {
+// ClearVindexes removes the Column Vindexes from the aliases signifying
+// that they cannot be used to make routing improvements. This is
+// called if a primitive is in the RHS of a LEFT JOIN.
+func (st *symtab) ClearVindexes() {
 	for _, t := range st.tables {
-		t.ColumnVindexes = nil
+		for _, c := range t.columns {
+			c.Vindex = nil
+		}
 	}
 }
 
-// Find returns the route for the symbol referenced by col.
-// If a reference is found, the column's Metadata is set to point
-// it. Subsequent searches will reuse this meatadata.
-// If autoResolve is true, and there is only one table in the symbol table,
-// then an unqualified reference is assumed to be implicitly against
-// that table. The table info doesn't contain the full list of columns.
-// So, any column reference is presumed valid. If a Colsyms scope is
-// present, then the table scope is not searched. If a symbol is found
-// in the current symtab, then isLocal is set to true. Otherwise, the
-// search is continued in the outer symtab. If so, isLocal will be set
-// to false. If the symbol was not found, an error is returned.
-// isLocal must be checked before you can push-down (or pull-out)
-// a construct.
-// If a symbol was found in an outer scope, then the column reference
-// is added to the Externs field.
-func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (rb *route, isLocal bool, err error) {
-	if m, ok := col.Metadata.(sym); ok {
-		return m.Route(), m.Symtab() == st, nil
-	}
-	if len(st.Colsyms) != 0 {
-		if col.Qualifier.IsEmpty() {
-			rb, err = st.searchColsyms(col)
-			switch {
-			case err != nil:
-				return nil, false, err
-			case rb != nil:
-				return rb, true, nil
-			}
-		}
-		if rb = st.searchTables(col, autoResolve); rb != nil {
-			return rb, true, nil
-		}
-		return nil, false, fmt.Errorf("symbol %s not found", sqlparser.String(col))
+// Find returns the columnOriginator for the symbol referenced by col.
+// If a reference is found, col.Metadata is set to point
+// to it. Subsequent searches will reuse this metadata.
+//
+// Unqualified columns are searched in the following order:
+// 1. ResultColumns
+// 2. uniqueColumns
+// 3. symtab has only one table. The column is presumed to
+// belong to that table.
+// 4. symtab has more than one table, but all tables belong
+// to the same route. An anonymous column is created against
+// the current route.
+// If all the above fail, an error is returned. This means
+// that an unqualified reference can only be locally resolved.
+//
+// For qualified columns, we first look for the table. If one
+// is found, we look for a column in the pre-existing list.
+// If one is not found, we optimistically create an entry
+// presuming that the table has such a column. If this is
+// not the case, the query will fail when sent to vttablet.
+// If the table is not found in the local scope, the search
+// is continued in the outer scope, but only if ResultColumns
+// is not set (this is MySQL behavior).
+//
+// For symbols that were found locally, isLocal is returned
+// as true. Otherwise, it's returned as false and the symbol
+// gets added to the Externs list, which can later be used
+// to decide where to push-down the subquery.
+func (st *symtab) Find(col *sqlparser.ColName) (origin columnOriginator, isLocal bool, err error) {
+	// Return previously cached info if present.
+	if column, ok := col.Metadata.(*column); ok {
+		return column.Origin(), column.Origin().Symtab() == st, nil
 	}
 
-	if rb = st.searchTables(col, autoResolve); rb != nil {
-		return rb, true, nil
+	// Unqualified column case.
+	if col.Qualifier.IsEmpty() {
+		// Step 1. Search ResultColumns.
+		c, err := st.searchResultColumn(col)
+		if err != nil {
+			return nil, false, err
+		}
+		if c != nil {
+			col.Metadata = c
+			return c.Origin(), true, nil
+		}
 	}
+
+	// Steps 2-4 performed by searchTables.
+	c, err := st.searchTables(col)
+	if err != nil {
+		return nil, false, err
+	}
+	if c != nil {
+		col.Metadata = c
+		return c.Origin(), true, nil
+	}
+
 	if st.Outer == nil {
 		return nil, false, fmt.Errorf("symbol %s not found", sqlparser.String(col))
 	}
-	// autoResolve only allowed for innermost scope.
-	if rb, _, err = st.Outer.Find(col, false); err != nil {
+	// Search is not continued if ResultColumns already has values:
+	// select a ... having ... (select b ... having a...). In this case,
+	// a (in having) should not match the outer-most 'a'. This is to
+	// match MySQL's behavior.
+	if len(st.ResultColumns) != 0 {
+		return nil, false, fmt.Errorf("symbol %s not found in subquery", sqlparser.String(col))
+	}
+
+	if origin, _, err = st.Outer.Find(col); err != nil {
 		return nil, false, err
 	}
 	st.Externs = append(st.Externs, col)
-	return rb, false, nil
+	return origin, false, nil
 }
 
-func (st *symtab) searchColsyms(col *sqlparser.ColName) (rb *route, err error) {
-	var cursym *colsym
-	for _, colsym := range st.Colsyms {
-		if colsym.Alias.Equal(col.Name) {
+// searchResultColumn looks for col in the results columns.
+func (st *symtab) searchResultColumn(col *sqlparser.ColName) (c *column, err error) {
+	var cursym *resultColumn
+	for _, rc := range st.ResultColumns {
+		if rc.alias.Equal(col.Name) {
 			if cursym != nil {
 				return nil, fmt.Errorf("ambiguous symbol reference: %v", sqlparser.String(col))
 			}
-			cursym = colsym
-			col.Metadata = colsym
+			cursym = rc
 		}
 	}
 	if cursym != nil {
-		return cursym.Route(), nil
+		return cursym.column, nil
 	}
 	return nil, nil
 }
 
-func (st *symtab) searchTables(col *sqlparser.ColName, autoResolve bool) *route {
-	if col.Qualifier.IsEmpty() {
-		if autoResolve && len(st.tables) == 1 {
-			col.Metadata = st.tables[0]
-			return st.tables[0].Route()
+// searchTables looks for the column in the tables. The search order
+// is as described in Find.
+func (st *symtab) searchTables(col *sqlparser.ColName) (*column, error) {
+	var t *table
+	// @@ syntax is only allowed for dual tables, in which case there should be
+	// only one in the symtab. So, such expressions will be implicitly matched.
+	if col.Qualifier.IsEmpty() || strings.HasPrefix(col.Qualifier.Name.String(), "@@") {
+		// Search uniqueColumns first. If found, our job is done.
+		if c, ok := st.uniqueColumns[col.Name.Lowered()]; ok {
+			return c, nil
 		}
-		return nil
+
+		switch {
+		case len(st.tables) == 1:
+			// If there's only one table match against it.
+			// Loop executes once to match the only table.
+			for _, v := range st.tables {
+				t = v
+			}
+			// No return: break out.
+		case st.singleRoute != nil:
+			// If there's only one route, create an anonymous symbol.
+			return &column{origin: st.singleRoute}, nil
+		default:
+			// If none of the above, the symbol is unresolvable.
+			return nil, fmt.Errorf("symbol %s not found", sqlparser.String(col))
+		}
+	} else {
+		var ok bool
+		t, ok = st.tables[col.Qualifier]
+		if !ok {
+			return nil, nil
+		}
 	}
-	// TODO(sougou): this search should ideally match the search
-	// style provided by VSchema, where the default keyspace must be
-	// used if one is not provided.
-	alias := st.findTable(col.Qualifier)
-	if alias == nil {
-		return nil
+
+	// At this point, t should be set.
+	c, ok := t.columns[col.Name.Lowered()]
+	if !ok {
+		// We know all the column names of a subquery. Might as well return an error if it's not found.
+		if _, ok := t.origin.(*subquery); ok {
+			return nil, fmt.Errorf("symbol %s is referencing a non-existent column of the subquery", sqlparser.String(col))
+		}
+		c = &column{
+			origin: t.origin,
+			name:   col.Name,
+			table:  t,
+		}
+		t.columns[col.Name.Lowered()] = c
 	}
-	col.Metadata = alias
-	return alias.Route()
+	return c, nil
+}
+
+// NewResultColumn creates a new resultColumn based on the supplied expression.
+// The created symbol is not remembered until it is later set as ResultColumns
+// after all select expressions are analyzed.
+func (st *symtab) NewResultColumn(expr *sqlparser.AliasedExpr, origin columnOriginator) *resultColumn {
+	rc := &resultColumn{
+		alias: expr.As,
+	}
+	if col, ok := expr.Expr.(*sqlparser.ColName); ok {
+		// If no alias was specified, then the base name
+		// of the column becomes the alias.
+		if rc.alias.IsEmpty() {
+			rc.alias = col.Name
+		}
+		// If it's a col it should already have metadata.
+		rc.column = col.Metadata.(*column)
+	} else {
+		// We don't generate an alias if the expression is non-trivial.
+		// Just to be safe, generate an anonymous column for the expression.
+		rc.column = &column{
+			origin: origin,
+		}
+	}
+	return rc
+}
+
+// ResultFromNumber returns the result column index based on the column
+// order expression.
+func ResultFromNumber(resultColumns []*resultColumn, val *sqlparser.SQLVal) (int, error) {
+	if val.Type != sqlparser.IntVal {
+		return 0, errors.New("column number is not an int")
+	}
+	num, err := strconv.ParseInt(string(val.Val), 0, 64)
+	if err != nil {
+		return 0, fmt.Errorf("error parsing column number: %s", sqlparser.String(val))
+	}
+	if num < 1 || num > int64(len(resultColumns)) {
+		return 0, fmt.Errorf("column number out of range: %d", num)
+	}
+	return int(num - 1), nil
 }
 
 // Vindex returns the vindex if the expression is a plain column reference
 // that is part of the specified route, and has an associated vindex.
-func (st *symtab) Vindex(expr sqlparser.Expr, scope *route, autoResolve bool) vindexes.Vindex {
+func (st *symtab) Vindex(expr sqlparser.Expr, scope *route) vindexes.Vindex {
 	col, ok := expr.(*sqlparser.ColName)
 	if !ok {
 		return nil
 	}
 	if col.Metadata == nil {
-		_, _, err := st.Find(col, autoResolve)
-		if err != nil {
+		// Find will set the Metadata.
+		if _, _, err := st.Find(col); err != nil {
 			return nil
 		}
 	}
-	switch meta := col.Metadata.(type) {
-	case *colsym:
-		if scope != meta.Route() {
-			return nil
-		}
-		return meta.Vindex
-	case *tabsym:
-		if scope != meta.Route() {
-			return nil
-		}
-		return meta.FindVindex(col.Name)
+	c := col.Metadata.(*column)
+	if c.Origin() != scope {
+		return nil
 	}
-	panic("unreachable")
+	return c.Vindex
 }
 
-// sym defines the interface that must be satisfied by
-// all symbols in symtab
-type sym interface {
-	newColRef(col *sqlparser.ColName) colref
-	Route() *route
-	Symtab() *symtab
-}
-
-// tabsym is part of symtab.
-// It represnts a table alias in a FROM clause.
-// The tabsym points to a route into which we'll try to
-// push the rest of the surrounding clauses.
-// A table alias could also represent a sbquery. But
-// there's no difference in how it's treated compared to a normal
-// table. Consequently, ubqueries that cannot be executed
-// as a route are currently not supported.
-// While the Alias is used for resolving column references, the
-// ASTName is used for code generation. The difference between
-// the two is that the ASTName strips out the keyspace qualifier
-// from the table name, which is something that VTTablet and MySQL
-// can't recognize.
-type tabsym struct {
-	Alias          *sqlparser.TableName
-	ASTName        sqlparser.TableIdent
-	route          *route
-	symtab         *symtab
-	Keyspace       *vindexes.Keyspace
-	ColumnVindexes []*vindexes.ColumnVindex
-}
-
-func (t *tabsym) newColRef(col *sqlparser.ColName) colref {
-	return colref{
-		Meta: t,
-		name: col.Name.Lowered(),
-	}
-}
-
-func (t *tabsym) Route() *route {
-	return t.route.Resolve()
-}
-
-func (t *tabsym) Symtab() *symtab {
-	return t.symtab
-}
-
-// FindVindex returns the vindex if one was found for the column.
-func (t *tabsym) FindVindex(name sqlparser.ColIdent) vindexes.Vindex {
-	for _, colVindex := range t.ColumnVindexes {
-		if colVindex.Column.Equal(name) {
-			return colVindex.Vindex
+// ResolveSymbols resolves all column references against symtab.
+// This makes sure that they all have their Metadata initialized.
+// If a symbol cannot be resolved or if the expression contains
+// a subquery, an error is returned.
+func (st *symtab) ResolveSymbols(node sqlparser.SQLNode) error {
+	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.ColName:
+			if _, _, err := st.Find(node); err != nil {
+				return false, err
+			}
+		case *sqlparser.Subquery:
+			return false, errors.New("subqueries disallowed")
 		}
-	}
-	return nil
+		return true, nil
+	}, node)
 }
 
-// colsym contains symbol info about a select expression. Just like
-// a tabsym, colsym also contains a backpointer to the symtab,
-// and a pointer to the route that would compute or fetch this value.
-// In the future, it could point to primitives other than a route.
-// If the expression is a plain column reference, then the 'Underlying' field
-// is set to the column it refers. If the referenced column has a Vindex,
-// the Vindex field is also accordingly set.
-type colsym struct {
-	// Alias will represent the unqualified symbol name for that expression.
+// table is part of symtab.
+// It represents a table alias in a FROM clause. It points
+// to the columnOriginator that represents it.
+type table struct {
+	alias   sqlparser.TableName
+	columns map[string]*column
+	origin  columnOriginator
+}
+
+// column represents a unique symbol in the query that other
+// parts can refer to. A column can be a table column or
+// a result column (select expression). Every column
+// contains the columnOriginator it originates from.
+// Columns for table columns are created or reused by
+// symtab through the Find function.
+//
+// Columns are created by columnOriginator objects.
+//
+// Anonymous columns can be created by symtab to represent
+// ambiguous column references, but whose route can still be
+// identified. For example, in the case of 'select a from t1, t2',
+// if t1 and t2 are from the same unsharded keyspace, 'a' will
+// be created as an anonymous column because we don't know
+// which table it's coming from. Consequently, anonymous columns
+// can only be created for single-route plans, and they're
+// used only for push-down decisions.
+//
+// For a column whose table is known, the column name and
+// pointer to the table are stored. This information is
+// used to construct a select expression if the column is
+// requested during the wire-up phase.
+// If the table column has a vindex, then that information
+// is also stored and used to make routing decisions.
+// Two columns are equal only if their pointer values match,
+// and not their content.
+type column struct {
+	origin columnOriginator
+	Vindex vindexes.Vindex
+	name   sqlparser.ColIdent
+	table  *table
+
+	// colnum is set only if it originates from a subquery.
+	colnum int
+}
+
+// Origin returns the route that originates the column.
+func (c *column) Origin() columnOriginator {
+	// If it's a route, we have to resolve it.
+	if rb, ok := c.origin.(*route); ok {
+		return rb.Resolve()
+	}
+	return c.origin
+}
+
+// resultColumn contains symbol info about a select expression. If the
+// expression represents an underlying column, then it points to it.
+// Otherwise, an anonymous column is created as place-holder.
+type resultColumn struct {
+	// alias will represent the unqualified symbol name for that expression.
 	// If the statement provides an explicit alias, that name will be used.
-	// Otherwise, one will be generated. If the expression is a simple
-	// column, then the base name of the column will be used as the alias.
-	Alias sqlparser.ColIdent
-
-	route      *route
-	symtab     *symtab
-	Underlying colref
-	Vindex     vindexes.Vindex
-}
-
-// newColsym builds a colsym for the specified route and symtab.
-// Other parameters are optionally set based on additional metadata
-// gathered.
-func newColsym(rb *route, st *symtab) *colsym {
-	return &colsym{
-		route:  rb,
-		symtab: st,
-	}
-}
-
-func (cs *colsym) newColRef(col *sqlparser.ColName) colref {
-	return colref{
-		Meta: cs,
-	}
-}
-
-func (cs *colsym) Route() *route {
-	return cs.route.Resolve()
-}
-
-func (cs *colsym) Symtab() *symtab {
-	return cs.symtab
-}
-
-// colref uniquely identifies a column reference. For a column
-// reference like 'a.b', the qualifier 'a' could be ambiguous due
-// to scoping rules. Effectively, colref changes such references
-// to 'symbol.a', where symbol physically points to a tabsym
-// or colsym. This representation makes a colref unambiguous.
-// The name field must be relied upon only for comparison. Use
-// the Name method for generating SQL.
-type colref struct {
-	Meta sym
-	name string
-}
-
-// newColref builds a colref from a sqlparser.ColName that was
-// previously resolved. Otherwise, it panics.
-func newColref(col *sqlparser.ColName) colref {
-	return col.Metadata.(sym).newColRef(col)
-}
-
-// Route returns the route for the colref.
-func (cr colref) Route() *route {
-	return cr.Meta.Route()
-}
-
-// Name returns the name of the colref.
-func (cr colref) Name() sqlparser.ColIdent {
-	return sqlparser.NewColIdent(cr.name)
+	// If the expression is a simple column, then the base name of the
+	// column will be used as the alias. If the expression is non-trivial,
+	// alias will be empty, and cannot be referenced from other parts of
+	// the query.
+	alias  sqlparser.ColIdent
+	column *column
 }

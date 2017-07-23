@@ -113,12 +113,15 @@
             <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
               <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
               </ul>
             <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
               <ul style="display: block">
-                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
-                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
             <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
@@ -161,6 +164,14 @@
             <li><a href="/contributing/">Contributing to Vitess</a>
             <li><a href="/contributing/github-workflow.html">GitHub Workflow</a>
             <li><a href="/contributing/code-reviews.html">Code Reviews</a>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Internal</h4>
+          <ul style="display: none">
+            <li><a href="/internal/">Overview</a>
+            <li><a href="/internal/release-instructions.html">Release Instructions</a>
+            <li><a href="/internal/publish-website.html">Publish Website</a>
           </ul>
         </li>
 
@@ -220,12 +231,15 @@
             <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
               <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
               </ul>
             <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
               <ul style="display: block">
-                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
-                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
             <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
@@ -268,6 +282,14 @@
             <li><a href="/contributing/">Contributing to Vitess</a>
             <li><a href="/contributing/github-workflow.html">GitHub Workflow</a>
             <li><a href="/contributing/code-reviews.html">Code Reviews</a>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Internal</h4>
+          <ul style="display: none">
+            <li><a href="/internal/">Overview</a>
+            <li><a href="/internal/release-instructions.html">Release Instructions</a>
+            <li><a href="/internal/publish-website.html">Publish Website</a>
           </ul>
         </li>
 
@@ -490,7 +512,7 @@ which are just regular SQL statements at this point.</li>
 <li>The <a href="/reference/vtctl.html">vtctl</a> command-line tool supports
 functions for managing keyspaces, shards, tablets, and more.</li>
 <li>Client APIs account for sharding operations.</li>
-<li>The <a href="https://github.com/youtube/vitess/blob/master/java/vtgate-client/src/main/java/com/youtube/vitess/vtgate/hadoop/README.md">MapReduce framework</a>
+<li>The <a href="https://github.com/youtube/vitess/tree/master/java/hadoop/src/main/java/io/vitess/hadoop">MapReduce framework</a>
 fully utilizes key ranges to read data as quickly as possible,
 concurrently from all shards and all replicas.</li>
 </ul>
@@ -519,7 +541,7 @@ a custom sharding scheme. Vitess&#39; tools and processes for automated
 resharding also do not support custom sharding schemes.</p>
 
 <p>If you use a custom sharding scheme, you can still use the
-<a href="https://github.com/youtube/vitess/blob/master/java/vtgate-client/src/main/java/com/youtube/vitess/vtgate/hadoop/README.md">MapReduce framework</a>
+<a href="https://github.com/youtube/vitess/tree/master/java/hadoop/src/main/java/io/vitess/hadoop">MapReduce framework</a>
 to iterate over the data on multiple shards.</p>
 
       </div>

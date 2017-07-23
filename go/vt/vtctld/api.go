@@ -1,20 +1,32 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreedto in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vtctld
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"reflect"
 	"strings"
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/acl"
@@ -75,41 +87,10 @@ func handleCollection(collection string, getFunc func(*http.Request) (interface{
 			return fmt.Errorf("can't get %v: %v", collection, err)
 		}
 
-		// JSON marshals a nil slice as "null", but we prefer "[]".
-		if val := reflect.ValueOf(obj); val.Kind() == reflect.Slice && val.IsNil() {
-			w.Header().Set("Content-Type", jsonContentType)
-			w.Write([]byte("[]"))
-			return nil
-		}
-
 		// JSON encode response.
-		var data []byte
-		switch obj := obj.(type) {
-		case proto.Message:
-			// We use jsonpb for protobuf messages because it is the only supported
-			// way to marshal protobuf messages to JSON.
-			// In addition to that, it's the only way to emit zero values in the JSON
-			// output.
-			// Unfortunately, it works only for protobuf messages. Therefore, we use
-			// the default marshaler for the remaining structs (which are possibly
-			// mixed protobuf and non-protobuf).
-			// TODO(mberlin): Switch "EnumAsInts" to "false" once the frontend is
-			//                updated and mixed types will use jsonpb as well.
-			// Note: jsonpb may panic if the "proto.Message" is an embedded field
-			// of "obj" and "obj" has non-exported fields.
-
-			// Marshal the protobuf message.
-			var b bytes.Buffer
-			m := jsonpb.Marshaler{EnumsAsInts: true, EmitDefaults: true, Indent: "  ", OrigName: true}
-			if err := m.Marshal(&b, obj); err != nil {
-				return fmt.Errorf("jsonpb error: %v", err)
-			}
-			data = b.Bytes()
-		default:
-			data, err = json.MarshalIndent(obj, "", "  ")
-			if err != nil {
-				return fmt.Errorf("json error: %v", err)
-			}
+		data, err := vtctl.MarshalJSON(obj)
+		if err != nil {
+			return fmt.Errorf("cannot marshal data: %v", err)
 		}
 		w.Header().Set("Content-Type", jsonContentType)
 		w.Write(data)
