@@ -20,14 +20,13 @@ import (
 	"encoding/hex"
 	"sort"
 
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -111,22 +110,18 @@ func getShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []
 	return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "KeyspaceId %v didn't match any shards %+v", hex.EncodeToString(keyspaceID), allShards)
 }
 
-func mapEntityIdsToShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, keyspace string, entityIds []*vtgatepb.ExecuteEntityIdsRequest_EntityId, tabletType topodatapb.TabletType) (string, map[string][]interface{}, error) {
+func mapEntityIdsToShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, keyspace string, entityIds []*vtgatepb.ExecuteEntityIdsRequest_EntityId, tabletType topodatapb.TabletType) (string, map[string][]*querypb.Value, error) {
 	keyspace, _, allShards, err := getKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
 	if err != nil {
 		return "", nil, err
 	}
-	var shards = make(map[string][]interface{})
+	var shards = make(map[string][]*querypb.Value)
 	for _, eid := range entityIds {
 		shard, err := getShardForKeyspaceID(allShards, eid.KeyspaceId)
 		if err != nil {
 			return "", nil, err
 		}
-		v, err := sqltypes.ValueFromBytes(eid.Type, eid.Value)
-		if err != nil {
-			return "", nil, err
-		}
-		shards[shard] = append(shards[shard], v.ToNative())
+		shards[shard] = append(shards[shard], &querypb.Value{Type: eid.Type, Value: eid.Value})
 	}
 	return keyspace, shards, nil
 }
@@ -205,11 +200,7 @@ func boundShardQueriesToScatterBatchRequest(boundQueries []*vtgatepb.BoundShardQ
 				}
 				requests.Requests[key] = request
 			}
-			bq, err := querytypes.Proto3ToBoundQuery(boundQuery.Query, true /* enforceSafety */)
-			if err != nil {
-				return nil, err
-			}
-			request.Queries = append(request.Queries, *bq)
+			request.Queries = append(request.Queries, boundQuery.Query)
 			request.ResultIndexes = append(request.ResultIndexes, i)
 		}
 	}

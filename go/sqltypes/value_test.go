@@ -101,7 +101,7 @@ func TestBuildValue(t *testing.T) {
 		in:  testVal(VarBinary, "a"),
 		out: testVal(VarBinary, "a"),
 	}, {
-		in:  &querypb.BindVariable{Type: VarBinary, Value: []byte("a")},
+		in:  BytesBindVariable([]byte("a")),
 		out: testVal(VarBinary, "a"),
 	}}
 	for _, tcase := range testcases {
@@ -153,10 +153,7 @@ func TestBuildConverted(t *testing.T) {
 		out: testVal(Float32, "123"),
 	}, {
 		typ: Int64,
-		val: &querypb.BindVariable{
-			Type:  querypb.Type_VARCHAR,
-			Value: []byte("123"),
-		},
+		val: StringBindVariable("123"),
 		out: testVal(Int64, "123"),
 	}}
 	for _, tcase := range testcases {
@@ -170,13 +167,6 @@ func TestBuildConverted(t *testing.T) {
 		}
 	}
 }
-
-const (
-	InvalidNeg = "-9223372036854775809"
-	MinNeg     = "-9223372036854775808"
-	MinPos     = "18446744073709551615"
-	InvalidPos = "18446744073709551616"
-)
 
 func TestValueFromBytes(t *testing.T) {
 	testcases := []struct {

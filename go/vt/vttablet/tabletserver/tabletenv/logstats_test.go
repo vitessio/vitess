@@ -28,6 +28,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/callinfo/fakecallinfo"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 func TestLogStats(t *testing.T) {
@@ -54,9 +55,10 @@ func TestLogStats(t *testing.T) {
 
 func TestLogStatsFormatBindVariables(t *testing.T) {
 	logStats := NewLogStats(context.Background(), "test")
-	logStats.BindVariables = make(map[string]interface{})
-	logStats.BindVariables["key_1"] = "val_1"
-	logStats.BindVariables["key_2"] = 789
+	logStats.BindVariables = map[string]*querypb.BindVariable{
+		"key_1": sqltypes.StringBindVariable("val_1"),
+		"key_2": sqltypes.Int64BindVariable(789),
+	}
 
 	formattedStr := logStats.FmtBindVariables(true)
 	if !strings.Contains(formattedStr, "key_1") ||
@@ -68,7 +70,7 @@ func TestLogStatsFormatBindVariables(t *testing.T) {
 		t.Fatalf("bind variable 'key_2': '789' is not formatted")
 	}
 
-	logStats.BindVariables["key_3"] = []byte("val_3")
+	logStats.BindVariables["key_3"] = sqltypes.BytesBindVariable([]byte("val_3"))
 	formattedStr = logStats.FmtBindVariables(false)
 	if !strings.Contains(formattedStr, "key_1") {
 		t.Fatalf("bind variable 'key_1' is not formatted")

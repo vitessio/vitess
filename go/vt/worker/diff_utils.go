@@ -72,7 +72,7 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAl
 		Keyspace:   tablet.Tablet.Keyspace,
 		Shard:      tablet.Tablet.Shard,
 		TabletType: tablet.Tablet.Type,
-	}, sql, make(map[string]interface{}), nil)
+	}, sql, make(map[string]*querypb.BindVariable), nil)
 
 	// read the columns, or grab the error
 	cols, err := stream.Recv()

@@ -21,8 +21,8 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -39,10 +39,10 @@ const ListVarName = "__vals"
 type VCursor interface {
 	// Context returns the context of the current request.
 	Context() context.Context
-	Execute(query string, bindvars map[string]interface{}, isDML bool) (*sqltypes.Result, error)
-	ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery, isDML bool) (*sqltypes.Result, error)
-	ExecuteStandalone(query string, bindvars map[string]interface{}, keyspace, shard string) (*sqltypes.Result, error)
-	StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]interface{}, callback func(reply *sqltypes.Result) error) error
+	Execute(query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
+	ExecuteMultiShard(keyspace string, shardQueries map[string]*querypb.BoundQuery, isDML bool) (*sqltypes.Result, error)
+	ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, keyspace, shard string) (*sqltypes.Result, error)
+	StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error
 	GetKeyspaceShards(vkeyspace *vindexes.Keyspace) (string, []*topodatapb.ShardReference, error)
 	GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error)
 }
@@ -70,7 +70,7 @@ func (pln *Plan) Size() int {
 // Primitive is the interface that needs to be satisfied by
 // all primitives of a plan.
 type Primitive interface {
-	Execute(vcursor VCursor, bindVars, joinvars map[string]interface{}, wantfields bool) (*sqltypes.Result, error)
-	StreamExecute(vcursor VCursor, bindVars, joinvars map[string]interface{}, wantields bool, callback func(*sqltypes.Result) error) error
-	GetFields(vcursor VCursor, bindVars, joinvars map[string]interface{}) (*sqltypes.Result, error)
+	Execute(vcursor VCursor, bindVars, joinvars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
+	StreamExecute(vcursor VCursor, bindVars, joinvars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
+	GetFields(vcursor VCursor, bindVars, joinvars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 }

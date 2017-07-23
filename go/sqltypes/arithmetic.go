@@ -171,13 +171,19 @@ func ConvertToUint64(v interface{}) (uint64, error) {
 	case Value:
 		num, err = newIntegralNumeric(v)
 	case *querypb.BindVariable:
-		num, err = newIntegralNumeric(MakeTrusted(v.Type, v.Value))
+		var sv Value
+		sv, err = BindVariableToValue(v)
+		if err != nil {
+			return 0, err
+		}
+		num, err = newIntegralNumeric(sv)
 	default:
 		return 0, fmt.Errorf("getNumber: unexpected type for %v: %T", v, v)
 	}
 	if err != nil {
 		return 0, err
 	}
+
 	switch num.typ {
 	case Int64:
 		if num.ival < 0 {

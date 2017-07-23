@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
@@ -153,7 +155,10 @@ func TestQueryCache(t *testing.T) {
 	defer framework.Server.SetQueryCacheCap(framework.Server.QueryCacheCap())
 	framework.Server.SetQueryCacheCap(1)
 
-	bindVars := map[string]interface{}{"ival1": 1, "ival2": 1}
+	bindVars := map[string]*querypb.BindVariable{
+		"ival1": sqltypes.Int64BindVariable(1),
+		"ival2": sqltypes.Int64BindVariable(1),
+	}
 	client := framework.NewClient()
 	_, _ = client.Execute("select * from vitess_test where intval=:ival1", bindVars)
 	_, _ = client.Execute("select * from vitess_test where intval=:ival2", bindVars)

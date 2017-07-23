@@ -18,7 +18,6 @@ package heartbeat
 
 import (
 	"fmt"
-	"strconv"
 	"sync"
 	"time"
 
@@ -38,6 +37,8 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 const (
@@ -178,13 +179,13 @@ func (w *Writer) initializeTables(cp *mysql.ConnParams) error {
 // adds the necessary fields to the query as bind vars. This is done
 // to protect ourselves against a badly formed keyspace or shard name.
 func (w *Writer) bindHeartbeatVars(query string) (string, error) {
-	bindVars := map[string]interface{}{
-		"ks":  sqltypes.MakeString([]byte(w.keyspaceShard)),
-		"ts":  sqltypes.MakeTrusted(sqltypes.Uint64, strconv.AppendUint(nil, uint64(w.now().UnixNano()), 10)),
-		"uid": sqltypes.MakeTrusted(sqltypes.Uint32, strconv.AppendUint(nil, uint64(w.tabletAlias.Uid), 10)),
+	bindVars := map[string]*querypb.BindVariable{
+		"ks":  sqltypes.StringBindVariable(w.keyspaceShard),
+		"ts":  sqltypes.Int64BindVariable(w.now().UnixNano()),
+		"uid": sqltypes.Int64BindVariable(int64(w.tabletAlias.Uid)),
 	}
 	parsed := sqlparser.BuildParsedQuery(query, w.dbName, ":ts", ":uid", ":ks")
-	bound, err := parsed.GenerateQuery(bindVars)
+	bound, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return "", err
 	}

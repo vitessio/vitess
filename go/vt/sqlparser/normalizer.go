@@ -28,7 +28,7 @@ import (
 // updates the bind vars to those values. The supplied prefix
 // is used to generate the bind var names. The function ensures
 // that there are no collisions with existing bind vars.
-func Normalize(stmt Statement, bindVars map[string]interface{}, prefix string) {
+func Normalize(stmt Statement, bindVars map[string]*querypb.BindVariable, prefix string) {
 	reserved := GetBindvars(stmt)
 	// vals allows us to reuse bindvars for
 	// identical values.

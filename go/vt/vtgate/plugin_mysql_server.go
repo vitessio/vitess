@@ -68,7 +68,7 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	ctx := context.Background()
 	session, _ := c.ClientData.(*vtgatepb.Session)
 	if session != nil {
-		_, _, _ = vh.vtg.Execute(ctx, session, "rollback", make(map[string]interface{}))
+		_, _, _ = vh.vtg.Execute(ctx, session, "rollback", make(map[string]*querypb.BindVariable))
 	}
 }
 
@@ -103,10 +103,10 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query []byte, callback func(*sq
 		session.TargetString = c.SchemaName
 	}
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-		err := vh.vtg.StreamExecute(ctx, session, string(query), make(map[string]interface{}), callback)
+		err := vh.vtg.StreamExecute(ctx, session, string(query), make(map[string]*querypb.BindVariable), callback)
 		return mysql.NewSQLErrorFromError(err)
 	}
-	session, result, err := vh.vtg.Execute(ctx, session, string(query), make(map[string]interface{}))
+	session, result, err := vh.vtg.Execute(ctx, session, string(query), make(map[string]*querypb.BindVariable))
 	c.ClientData = session
 	err = mysql.NewSQLErrorFromError(err)
 	if err != nil {
