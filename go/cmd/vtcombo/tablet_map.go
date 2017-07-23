@@ -300,8 +300,10 @@ func (itc *internalTabletConn) Execute(ctx context.Context, target *querypb.Targ
 func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	q := make([]*querypb.BoundQuery, len(queries))
 	for i, query := range queries {
-		q[i].Sql = query.Sql
-		q[i].BindVariables = sqltypes.CopyBindVariables(query.BindVariables)
+		q[i] = &querypb.BoundQuery{
+			Sql:           query.Sql,
+			BindVariables: sqltypes.CopyBindVariables(query.BindVariables),
+		}
 	}
 	results, err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, target, q, asTransaction, transactionID, options)
 	if err != nil {
