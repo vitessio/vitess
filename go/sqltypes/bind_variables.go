@@ -227,7 +227,7 @@ func ValidateBindVariable(bv *querypb.BindVariable) error {
 		return errors.New("bind variable is nil")
 	}
 
-	if bv.Type == Tuple {
+	if bv.Type == querypb.Type_TUPLE {
 		if len(bv.Values) == 0 {
 			return errors.New("empty tuple is not allowed")
 		}
@@ -243,8 +243,7 @@ func ValidateBindVariable(bv *querypb.BindVariable) error {
 	}
 
 	// Only values convertible to mysql types are allowed.
-	// Additionally NULL is also not allowed.
-	if _, ok := typeToMySQL[bv.Type]; !ok || bv.Type == Null {
+	if _, ok := typeToMySQL[bv.Type]; !ok {
 		return fmt.Errorf("type: %v is invalid", bv.Type)
 	}
 	switch {
@@ -256,7 +255,7 @@ func ValidateBindVariable(bv *querypb.BindVariable) error {
 		if _, err := strconv.ParseUint(string(bv.Value), 0, 64); err != nil {
 			return err
 		}
-	case IsFloat(bv.Type) || bv.Type == Decimal:
+	case IsFloat(bv.Type) || bv.Type == querypb.Type_DECIMAL:
 		if _, err := strconv.ParseFloat(string(bv.Value), 64); err != nil {
 			return err
 		}

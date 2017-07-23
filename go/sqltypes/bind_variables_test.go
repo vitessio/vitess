@@ -291,9 +291,6 @@ func TestValidateBindVariable(t *testing.T) {
 		in  *querypb.BindVariable
 		err string
 	}{{
-		in:  NullBindVariable,
-		err: "NULL_TYPE is invalid",
-	}, {
 		in: &querypb.BindVariable{
 			Type:  querypb.Type_INT8,
 			Value: []byte("1"),
@@ -492,7 +489,6 @@ func TestValidateBindVariable(t *testing.T) {
 				Type: querypb.Type_NULL_TYPE,
 			}},
 		},
-		err: "type: NULL_TYPE is invalid",
 	}}
 	for _, tcase := range testcases {
 		err := ValidateBindVariable(tcase.in)
