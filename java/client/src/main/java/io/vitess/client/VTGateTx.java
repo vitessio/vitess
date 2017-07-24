@@ -79,6 +79,7 @@ import javax.annotation.Nullable;
  * <p>If you prefer a synchronous API, you can use {@link VTGateBlockingConn#begin(Context)}, which
  * returns a {@link VTGateBlockingTx} instead.
  */
+@Deprecated
 public class VTGateTx {
   private final RpcClient client;
   private final String keyspace;
