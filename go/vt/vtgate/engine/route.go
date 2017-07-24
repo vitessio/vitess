@@ -599,14 +599,14 @@ func (route *Route) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*
 	}
 
 	inputs := route.Values.([]interface{})
-	allKeys := make([][]interface{}, len(inputs[0].([]interface{})))
-	for _, input := range inputs {
+	allKeys := make([][]interface{}, len(inputs))
+	for colNum, input := range inputs {
 		keys, err := route.resolveKeys(input.([]interface{}), bindVars)
 		if err != nil {
 			return "", nil, fmt.Errorf("getInsertShardedRoute: %v", err)
 		}
-		for colNum := 0; colNum < len(keys); colNum++ {
-			allKeys[colNum] = append(allKeys[colNum], keys[colNum])
+		for _, key := range keys {
+			allKeys[colNum] = append(allKeys[colNum], key)
 		}
 	}
 

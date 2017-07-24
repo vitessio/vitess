@@ -436,7 +436,7 @@ func TestInsertGeneratorSharded(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into user(v, name, Id) values (2, :_name0, :_Id0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql: "insert into user(v, name, id) values (2, :_name0, :_Id0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id0":   sqltypes.Int64BindVariable(1),
 			"__seq0": sqltypes.Int64BindVariable(1),
