@@ -93,6 +93,24 @@ public class ConnectionProperties {
         null);
 
     // Vitess-specific configs
+    private StringConnectionProperty keyspace = new StringConnectionProperty(
+        Constants.Property.KEYSPACE,
+        "Targeted keyspace to execute queries on",
+        Constants.DEFAULT_KEYSPACE,
+        null);
+    private StringConnectionProperty shard = new StringConnectionProperty(
+        Constants.Property.SHARD,
+        "Targested shard in a given keyspace",
+        Constants.DEFAULT_SHARD,
+        null);
+    private EnumConnectionProperty<Topodata.TabletType> tabletType = new EnumConnectionProperty<>(
+        Constants.Property.TABLET_TYPE,
+        "Tablet Type to which Vitess will connect(master, replica, rdonly)",
+        Constants.DEFAULT_TABLET_TYPE);
+    private EnumConnectionProperty<Topodata.TabletType> oldTabletType = new EnumConnectionProperty<>(
+            Constants.Property.OLD_TABLET_TYPE,
+            "Deprecated Tablet Type to which Vitess will connect(master, replica, rdonly)",
+            Constants.DEFAULT_TABLET_TYPE);
     private EnumConnectionProperty<Constants.QueryExecuteType> executeType = new EnumConnectionProperty<>(
         Constants.Property.EXECUTE_TYPE,
         "Query execution type: simple or stream",
@@ -105,11 +123,6 @@ public class ConnectionProperties {
         Constants.Property.INCLUDED_FIELDS,
         "What fields to return from MySQL to the Driver. Limiting the fields returned can improve performance, but ALL is required for maximum JDBC API support",
         Constants.DEFAULT_INCLUDED_FIELDS);
-    private EnumConnectionProperty<Topodata.TabletType> tabletType = new EnumConnectionProperty<>(
-        Constants.Property.TABLET_TYPE,
-        "Tablet Type to which Vitess will connect(master, replica, rdonly)",
-        Constants.DEFAULT_TABLET_TYPE);
-
     private BooleanConnectionProperty grpcRetriesEnabled = new BooleanConnectionProperty(
         "grpcRetriesEnabled",
         "If enabled, a gRPC interceptor will ensure retries happen in the case of TRANSIENT gRPC errors.",

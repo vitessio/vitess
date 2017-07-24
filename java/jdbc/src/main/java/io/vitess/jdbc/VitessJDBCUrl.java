@@ -158,11 +158,22 @@ public class VitessJDBCUrl {
             throw new SQLException(Constants.SQLExceptionMessages.MALFORMED_URL);
         }
 
-        this.keyspace = StringUtils.isNullOrEmptyWithoutWS(m.group(8)) ? null : m.group(8);
+        this.keyspace = StringUtils.isNullOrEmptyWithoutWS(m.group(8)) ? info.getProperty(Constants.Property.KEYSPACE) : m.group(8);
         this.catalog =
             StringUtils.isNullOrEmptyWithoutWS(m.group(10)) ? this.keyspace : m.group(10);
         this.hostInfos = getURLHostInfos(postUrl);
         this.url = url;
+
+        // For Backward Compatibity of tablet type.
+        String oldTabletType = info.getProperty(Constants.Property.OLD_TABLET_TYPE);
+        String tabletType = info.getProperty(Constants.Property.TABLET_TYPE);
+        if (null != tabletType) {
+            info.setProperty(Constants.Property.OLD_TABLET_TYPE, tabletType);
+        }
+        else if (null != oldTabletType) {
+            info.setProperty(Constants.Property.TABLET_TYPE, oldTabletType);
+        }
+
         this.info = info;
     }
 

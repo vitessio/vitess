@@ -31,7 +31,7 @@ import io.vitess.util.Constants;
 
 public class ConnectionPropertiesTest {
 
-    private static final int NUM_PROPS = 25;
+    private static final int NUM_PROPS = 28;
 
     @Test
     public void testReflection() throws Exception {
@@ -126,7 +126,7 @@ public class ConnectionPropertiesTest {
         Assert.assertEquals(NUM_PROPS, infos.length);
 
         // Test the expected fields for just 1
-        int indexForFullTest = 8;
+        int indexForFullTest = 12;
         Assert.assertEquals("executeType", infos[indexForFullTest].name);
         Assert.assertEquals("Query execution type: simple or stream",
             infos[indexForFullTest].description);
@@ -146,9 +146,9 @@ public class ConnectionPropertiesTest {
         Assert.assertEquals("utf8OutsideBmpIncludedColumnNamePattern", infos[5].name);
         Assert.assertEquals("utf8OutsideBmpExcludedColumnNamePattern", infos[6].name);
         Assert.assertEquals("characterEncoding", infos[7].name);
-        Assert.assertEquals(Constants.Property.TWOPC_ENABLED, infos[9].name);
-        Assert.assertEquals(Constants.Property.INCLUDED_FIELDS, infos[10].name);
-        Assert.assertEquals(Constants.Property.TABLET_TYPE, infos[11].name);
+        Assert.assertEquals(Constants.Property.TWOPC_ENABLED, infos[13].name);
+        Assert.assertEquals(Constants.Property.INCLUDED_FIELDS, infos[14].name);
+        Assert.assertEquals(Constants.Property.TABLET_TYPE, infos[10].name);
     }
 
     @Test

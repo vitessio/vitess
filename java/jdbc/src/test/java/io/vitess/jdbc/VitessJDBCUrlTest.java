@@ -189,4 +189,31 @@ public class VitessJDBCUrlTest {
         Assert.assertEquals("val3", vitessJDBCUrl.getProperties().getProperty("prop3"));
     }
 
+    @Test public void testJDBCURlURLwithLegacyTabletType() throws Exception {
+        VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(
+                "jdbc:vitess://host:12345?TABLET_TYPE=replica", null);
+        Assert.assertEquals("host", vitessJDBCUrl.getHostInfos().get(0).getHostname());
+        Assert.assertEquals(12345, vitessJDBCUrl.getHostInfos().get(0).getPort());
+        Assert.assertEquals(Topodata.TabletType.REPLICA.name(), vitessJDBCUrl.getProperties().getProperty(Constants.Property.TABLET_TYPE).toUpperCase());
+        Assert.assertEquals(Topodata.TabletType.REPLICA.name(), vitessJDBCUrl.getProperties().getProperty(Constants.Property.OLD_TABLET_TYPE).toUpperCase());
+    }
+
+    @Test public void testJDBCURlURLwithNewTabletType() throws Exception {
+        VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(
+                "jdbc:vitess://host:12345?tabletType=replica", null);
+        Assert.assertEquals("host", vitessJDBCUrl.getHostInfos().get(0).getHostname());
+        Assert.assertEquals(12345, vitessJDBCUrl.getHostInfos().get(0).getPort());
+        Assert.assertEquals(Topodata.TabletType.REPLICA.name(), vitessJDBCUrl.getProperties().getProperty(Constants.Property.TABLET_TYPE).toUpperCase());
+        Assert.assertEquals(Topodata.TabletType.REPLICA.name(), vitessJDBCUrl.getProperties().getProperty(Constants.Property.OLD_TABLET_TYPE).toUpperCase());
+    }
+
+    @Test public void testJDBCURlURLwithBothTabletType() throws Exception {
+        //new tablet type should supersede old tablet type.
+        VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(
+                "jdbc:vitess://host:12345?TABLET_TYPE=rdonly&tabletType=replica", null);
+        Assert.assertEquals("host", vitessJDBCUrl.getHostInfos().get(0).getHostname());
+        Assert.assertEquals(12345, vitessJDBCUrl.getHostInfos().get(0).getPort());
+        Assert.assertEquals(Topodata.TabletType.REPLICA.name(), vitessJDBCUrl.getProperties().getProperty(Constants.Property.TABLET_TYPE).toUpperCase());
+        Assert.assertEquals(Topodata.TabletType.REPLICA.name(), vitessJDBCUrl.getProperties().getProperty(Constants.Property.OLD_TABLET_TYPE).toUpperCase());
+    }
 }
