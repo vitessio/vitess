@@ -19,6 +19,7 @@ package sqlparser
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -211,6 +212,123 @@ func TestIsSimpleTuple(t *testing.T) {
 		out := IsSimpleTuple(tc.in)
 		if out != tc.out {
 			t.Errorf("IsSimpleTuple(%T): %v, want %v", tc.in, out, tc.out)
+		}
+	}
+}
+
+func TestNewPlanValue(t *testing.T) {
+	tcases := []struct {
+		in  Expr
+		out sqltypes.PlanValue
+		err string
+	}{{
+		in: &SQLVal{
+			Type: ValArg,
+			Val:  []byte(":valarg"),
+		},
+		out: sqltypes.PlanValue{Key: "valarg"},
+	}, {
+		in: &SQLVal{
+			Type: IntVal,
+			Val:  []byte("10"),
+		},
+		out: sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.Int64, []byte("10"))},
+	}, {
+		in: &SQLVal{
+			Type: IntVal,
+			Val:  []byte("1111111111111111111111111111111111111111"),
+		},
+		err: "value out of range",
+	}, {
+		in: &SQLVal{
+			Type: StrVal,
+			Val:  []byte("strval"),
+		},
+		out: sqltypes.PlanValue{Value: sqltypes.MakeString([]byte("strval"))},
+	}, {
+		in: &SQLVal{
+			Type: HexVal,
+			Val:  []byte("3131"),
+		},
+		out: sqltypes.PlanValue{Value: sqltypes.MakeString([]byte("11"))},
+	}, {
+		in: &SQLVal{
+			Type: HexVal,
+			Val:  []byte("313"),
+		},
+		err: "odd length hex string",
+	}, {
+		in:  ListArg("::list"),
+		out: sqltypes.PlanValue{ListKey: "list"},
+	}, {
+		in: ValTuple{
+			&SQLVal{
+				Type: ValArg,
+				Val:  []byte(":valarg"),
+			},
+			&SQLVal{
+				Type: StrVal,
+				Val:  []byte("strval"),
+			},
+		},
+		out: sqltypes.PlanValue{
+			Values: []sqltypes.PlanValue{{
+				Key: "valarg",
+			}, {
+				Value: sqltypes.MakeString([]byte("strval")),
+			}},
+		},
+	}, {
+		in: ValTuple{
+			&ParenExpr{Expr: &SQLVal{
+				Type: ValArg,
+				Val:  []byte(":valarg"),
+			}},
+		},
+		err: "expression is too complex",
+	}, {
+		in: ValTuple{
+			ListArg("::list"),
+		},
+		err: "unsupported: nested lists",
+	}, {
+		in: &ValuesFuncExpr{
+			Name: NewColIdent("valfunc"),
+			Resolved: &SQLVal{
+				Type: ValArg,
+				Val:  []byte(":vf"),
+			},
+		},
+		out: sqltypes.PlanValue{Key: "vf"},
+	}, {
+		in: &ValuesFuncExpr{
+			Name: NewColIdent("valfunc"),
+		},
+		err: "expression is too complex",
+	}, {
+		in:  &NullVal{},
+		out: sqltypes.PlanValue{},
+	}, {
+		in: &ParenExpr{Expr: &SQLVal{
+			Type: ValArg,
+			Val:  []byte(":valarg"),
+		}},
+		err: "expression is too complex",
+	}}
+	for _, tc := range tcases {
+		got, err := NewPlanValue(tc.in)
+		if err != nil {
+			if !strings.Contains(err.Error(), tc.err) {
+				t.Errorf("NewPlanValue(%s) error: %v, want '%s'", String(tc.in), err, tc.err)
+			}
+			continue
+		}
+		if tc.err != "" {
+			t.Errorf("NewPlanValue(%s) error: nil, want '%s'", String(tc.in), tc.err)
+			continue
+		}
+		if !reflect.DeepEqual(got, tc.out) {
+			t.Errorf("NewPlanValue(%s): %v, want %v", String(tc.in), got, tc.out)
 		}
 	}
 }
