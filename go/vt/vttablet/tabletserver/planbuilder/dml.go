@@ -321,7 +321,7 @@ func analyzeInsertNoType(ins *sqlparser.Insert, plan *Plan, table *schema.Table)
 		if ins.OnDup != nil {
 			// Upserts not allowed for subqueries.
 			// http://bugs.mysql.com/bug.php?id=58637
-			plan.Reason = ReasonUpsert
+			plan.Reason = ReasonUpsertSubquery
 			return plan, nil
 		}
 		plan.PlanID = PlanInsertSubquery
@@ -361,11 +361,23 @@ func analyzeInsertNoType(ins *sqlparser.Insert, plan *Plan, table *schema.Table)
 		plan.OuterQuery = sqlparser.GenerateParsedQuery(ins)
 		return plan, nil
 	}
-	if len(rowList) > 1 {
-		// Upsert supported only for single row inserts.
-		plan.Reason = ReasonUpsert
+
+	// If the table only has one unique key then it is safe to pass through
+	// a simple upsert unmodified even if there are multiple rows in the
+	// statement.
+	if table.UniqueIndexes() <= 1 {
+		plan.PlanID = PlanUpsertPK
+		plan.Reason = ReasonUpsertSafePassthrough
+		plan.OuterQuery = sqlparser.GenerateParsedQuery(ins)
 		return plan, nil
 	}
+
+	// Otherwise multiple rows are unsupported
+	if len(rowList) > 1 {
+		plan.Reason = ReasonUpsertMultiRow
+		return plan, nil
+	}
+
 	updateExprs, err := resolveUpsertUpdateValues(rowList[0], ins.Columns, ins.OnDup)
 	if err != nil {
 		plan.Reason = ReasonUpsertColMismatch
