@@ -479,7 +479,7 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, shr *querypb.St
 		serving = false
 	}
 
-	if shr.TabletAlias != nil && shr.TabletAlias != oldTs.Tablet.Alias {
+	if shr.TabletAlias != nil && *shr.TabletAlias != *oldTs.Tablet.Alias {
 		return fmt.Errorf("health stats mismatch, tablet %+v alias not match response alias %v", oldTs.Tablet, shr.TabletAlias)
 	}
 
