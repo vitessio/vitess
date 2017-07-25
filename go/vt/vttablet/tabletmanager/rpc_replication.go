@@ -194,7 +194,7 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
 		return "", err
 	}
-	agent.setLastReparentedTime(startTime)
+	agent.setExternallyReparentedTime(startTime)
 
 	// Change our type to master if not already
 	if _, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
@@ -351,7 +351,7 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
 		return "", err
 	}
-	agent.setLastReparentedTime(startTime)
+	agent.setExternallyReparentedTime(startTime)
 
 	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER); err != nil {
 		return "", err
@@ -538,7 +538,7 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
 	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
 		return "", err
 	}
-	agent.setLastReparentedTime(startTime)
+	agent.setExternallyReparentedTime(startTime)
 
 	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER); err != nil {
 		return "", err

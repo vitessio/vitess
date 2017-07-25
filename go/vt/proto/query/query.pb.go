@@ -2443,11 +2443,25 @@ type StreamHealthResponse struct {
 	// if filtered replication is enabled on a master for instance,
 	// or if a replica should not be used because the keyspace is being resharded.
 	Serving bool `protobuf:"varint,2,opt,name=serving" json:"serving,omitempty"`
-	// tablet_externally_reparented_timestamp contains the last time
-	// tabletmanager.TabletExternallyReparented was called on this tablet,
-	// or 0 if it was never called. This is meant to differentiate two tablets
-	// that report a target.TabletType of MASTER, only the one with the latest
-	// timestamp should be trusted.
+	// tablet_externally_reparented_timestamp can be interpreted as the last time
+	// we knew that this tablet was the MASTER of this shard.
+	//
+	// It is used by vtgate when determining the current MASTER of a shard.
+	// If vtgate sees more than one MASTER tablet, this timestamp is used
+	// as tiebreaker where the MASTER with the highest timestamp wins.
+	// Another usage of this timestamp is in go/vt/vtgate/buffer to detect the end
+	// of a reparent (failover) and stop buffering.
+	//
+	// In practice, this field is set to:
+	// a) the last time the RPC tabletmanager.TabletExternallyReparented was
+	//    called on this tablet (usually done by an external failover tool e.g.
+	//    Orchestrator). The failover tool can call this as long as we are the
+	//    master i.e. even ages after the last reparent occurred.
+	// OR
+	// b) the last time an active reparent was executed through a vtctl command
+	//    (InitShardMaster, PlannedReparentShard, EmergencyReparentShard)
+	// OR
+	// c) 0 if it was never called.
 	TabletExternallyReparentedTimestamp int64 `protobuf:"varint,3,opt,name=tablet_externally_reparented_timestamp,json=tabletExternallyReparentedTimestamp" json:"tablet_externally_reparented_timestamp,omitempty"`
 	// realtime_stats contains information about the tablet status
 	RealtimeStats *RealtimeStats `protobuf:"bytes,4,opt,name=realtime_stats,json=realtimeStats" json:"realtime_stats,omitempty"`

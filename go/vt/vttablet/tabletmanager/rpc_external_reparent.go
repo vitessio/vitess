@@ -76,14 +76,17 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 		log.Warningf("fastTabletExternallyReparented: failed to read global shard record for %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
 		return err
 	}
+
+	// The external failover tool told us that we are still the MASTER. Update the
+	// timestamp to the current time.
+	agent.setExternallyReparentedTime(startTime)
+
 	if topoproto.TabletAliasEqual(si.MasterAlias, tablet.Alias) {
 		// We may get called on the current master even when nothing has changed.
 		// If the global shard record is already updated, it means we successfully
 		// finished a previous reparent to this tablet.
 		return nil
 	}
-
-	agent.setLastReparentedTime(startTime)
 
 	// Create a reusable Reparent event with available info.
 	ev := &events.Reparent{
@@ -243,10 +246,11 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	return nil
 }
 
-// setLastReparentedTime remembers when we were first told we're the master.
+// setExternallyReparentedTime remembers the last time when we were told we're
+// the master.
 // If another tablet claims to be master and offers a more recent time,
 // that tablet will be trusted over us.
-func (agent *ActionAgent) setLastReparentedTime(t time.Time) {
+func (agent *ActionAgent) setExternallyReparentedTime(t time.Time) {
 	agent.mutex.Lock()
 	defer agent.mutex.Unlock()
 
