@@ -51,15 +51,11 @@ func (lkp *lookup) Init(lookupQueryParams map[string]string, isHashed bool) {
 }
 
 // MapUniqueLookup is for a Unique Vindex.
-func (lkp *lookup) MapUniqueLookup(vcursor VCursor, ids []interface{}) ([][]byte, error) {
+func (lkp *lookup) MapUniqueLookup(vcursor VCursor, ids []sqltypes.Value) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
-		bv, err := sqltypes.BuildBindVariable(id)
-		if err != nil {
-			return nil, err
-		}
 		result, err := vcursor.Execute(lkp.sel, map[string]*querypb.BindVariable{
-			lkp.From: bv,
+			lkp.From: sqltypes.ValueBindVariable(id),
 		}, false /* isDML */)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
@@ -72,7 +68,7 @@ func (lkp *lookup) MapUniqueLookup(vcursor VCursor, ids []interface{}) ([][]byte
 			return nil, fmt.Errorf("lookup.Map: unexpected multiple results from vindex %s: %v", lkp.Table, id)
 		}
 		if lkp.isHashedIndex {
-			num, err := sqltypes.ConvertToUint64(result.Rows[0][0].ToNative())
+			num, err := sqltypes.ConvertToUint64(result.Rows[0][0])
 			if err != nil {
 				return nil, fmt.Errorf("lookup.Map: %v", err)
 			}
@@ -85,15 +81,11 @@ func (lkp *lookup) MapUniqueLookup(vcursor VCursor, ids []interface{}) ([][]byte
 }
 
 // MapNonUniqueLookup is for a Non-Unique Vindex.
-func (lkp *lookup) MapNonUniqueLookup(vcursor VCursor, ids []interface{}) ([][][]byte, error) {
+func (lkp *lookup) MapNonUniqueLookup(vcursor VCursor, ids []sqltypes.Value) ([][][]byte, error) {
 	out := make([][][]byte, 0, len(ids))
 	for _, id := range ids {
-		bv, err := sqltypes.BuildBindVariable(id)
-		if err != nil {
-			return nil, err
-		}
 		result, err := vcursor.Execute(lkp.sel, map[string]*querypb.BindVariable{
-			lkp.From: bv,
+			lkp.From: sqltypes.ValueBindVariable(id),
 		}, false /* isDML */)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
@@ -101,7 +93,7 @@ func (lkp *lookup) MapNonUniqueLookup(vcursor VCursor, ids []interface{}) ([][][
 		var ksids [][]byte
 		if lkp.isHashedIndex {
 			for _, row := range result.Rows {
-				num, err := sqltypes.ConvertToUint64(row[0].ToNative())
+				num, err := sqltypes.ConvertToUint64(row[0])
 				if err != nil {
 					return nil, fmt.Errorf("lookup.Map: %v", err)
 				}
@@ -118,7 +110,7 @@ func (lkp *lookup) MapNonUniqueLookup(vcursor VCursor, ids []interface{}) ([][][
 }
 
 // Verify returns true if ids maps to ksids.
-func (lkp *lookup) Verify(vcursor VCursor, ids []interface{}, ksids [][]byte) (bool, error) {
+func (lkp *lookup) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
 	var colBuff bytes.Buffer
 	var err error
 	if len(ids) != len(ksids) {
@@ -127,7 +119,6 @@ func (lkp *lookup) Verify(vcursor VCursor, ids []interface{}, ksids [][]byte) (b
 	bindVars := make(map[string]*querypb.BindVariable, 2*len(ids))
 	colBuff.WriteString("(")
 	for rowNum, keyspaceID := range ksids {
-		var val *querypb.BindVariable
 		fromStr := lkp.From + strconv.Itoa(rowNum)
 		toStr := lkp.To + strconv.Itoa(rowNum)
 		colBuff.WriteString("(")
@@ -144,16 +135,11 @@ func (lkp *lookup) Verify(vcursor VCursor, ids []interface{}, ksids [][]byte) (b
 			if err != nil {
 				return false, fmt.Errorf("lookup.Verify: %v", err)
 			}
-			val, _ = sqltypes.BuildBindVariable(v)
+			bindVars[toStr] = sqltypes.Uint64BindVariable(v)
 		} else {
-			val, _ = sqltypes.BuildBindVariable(keyspaceID)
+			bindVars[toStr] = sqltypes.BytesBindVariable(keyspaceID)
 		}
-		idval, err := sqltypes.BuildBindVariable(ids[rowNum])
-		if err != nil {
-			return false, err
-		}
-		bindVars[fromStr] = idval
-		bindVars[toStr] = val
+		bindVars[fromStr] = sqltypes.ValueBindVariable(ids[rowNum])
 	}
 	lkp.ver = fmt.Sprintf("select %s from %s where %s", lkp.From, lkp.Table, strings.Trim(colBuff.String(), "or")+")")
 	result, err := vcursor.Execute(lkp.ver, bindVars, false /* isDML */)
@@ -167,7 +153,7 @@ func (lkp *lookup) Verify(vcursor VCursor, ids []interface{}, ksids [][]byte) (b
 }
 
 // Create creates an association between ids and ksids by inserting a row in the vindex table.
-func (lkp *lookup) Create(vcursor VCursor, ids []interface{}, ksids [][]byte) error {
+func (lkp *lookup) Create(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) error {
 	var insBuffer bytes.Buffer
 	if len(ids) != len(ksids) {
 		return fmt.Errorf("lookup.Create:length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
@@ -181,7 +167,6 @@ func (lkp *lookup) Create(vcursor VCursor, ids []interface{}, ksids [][]byte) er
 	insBuffer.WriteString(") values")
 	bindVars := make(map[string]*querypb.BindVariable, 2*len(ids))
 	for rowNum, keyspaceID := range ksids {
-		var val *querypb.BindVariable
 		fromStr := lkp.From + strconv.Itoa(rowNum)
 		toStr := lkp.To + strconv.Itoa(rowNum)
 		insBuffer.WriteString("(:")
@@ -192,16 +177,11 @@ func (lkp *lookup) Create(vcursor VCursor, ids []interface{}, ksids [][]byte) er
 			if err != nil {
 				return fmt.Errorf("lookup.Create: %v", err)
 			}
-			val, _ = sqltypes.BuildBindVariable(v)
+			bindVars[toStr] = sqltypes.Uint64BindVariable(v)
 		} else {
-			val, _ = sqltypes.BuildBindVariable(keyspaceID)
+			bindVars[toStr] = sqltypes.BytesBindVariable(keyspaceID)
 		}
-		idval, err := sqltypes.BuildBindVariable(ids[rowNum])
-		if err != nil {
-			return fmt.Errorf("lookup.Create: %v", err)
-		}
-		bindVars[fromStr] = idval
-		bindVars[toStr] = val
+		bindVars[fromStr] = sqltypes.ValueBindVariable(ids[rowNum])
 	}
 	lkp.ins = strings.Trim(insBuffer.String(), ",")
 	if _, err := vcursor.Execute(lkp.ins, bindVars, true /* isDML */); err != nil {
@@ -211,16 +191,16 @@ func (lkp *lookup) Create(vcursor VCursor, ids []interface{}, ksids [][]byte) er
 }
 
 // Delete deletes the association between ids and ksid.
-func (lkp *lookup) Delete(vcursor VCursor, ids []interface{}, ksid []byte) error {
+func (lkp *lookup) Delete(vcursor VCursor, ids []sqltypes.Value, ksid []byte) error {
 	var val *querypb.BindVariable
 	if lkp.isHashedIndex {
 		v, err := vunhash(ksid)
 		if err != nil {
 			return fmt.Errorf("lookup.Delete: %v", err)
 		}
-		val, _ = sqltypes.BuildBindVariable(v)
+		val = sqltypes.Uint64BindVariable(v)
 	} else {
-		val, _ = sqltypes.BuildBindVariable(ksid)
+		val = sqltypes.BytesBindVariable(ksid)
 	}
 	bindvars := map[string]*querypb.BindVariable{
 		lkp.To: val,

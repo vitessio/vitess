@@ -168,7 +168,7 @@ type keyspaceIDResolverFactoryV3 struct {
 }
 
 func (r *keyspaceIDResolverFactoryV3) keyspaceID(v sqltypes.Value) ([]byte, error) {
-	ids := []interface{}{v}
+	ids := []sqltypes.Value{v}
 	ksids, err := r.vindex.Map(nil, ids)
 	if err != nil {
 		return nil, err

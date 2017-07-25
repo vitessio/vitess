@@ -18,6 +18,8 @@ package vindexes
 
 import (
 	"encoding/json"
+
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 func init() {
@@ -50,22 +52,22 @@ func (vindex *LookupNonUnique) Cost() int {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (vindex *LookupNonUnique) Map(vcursor VCursor, ids []interface{}) ([][][]byte, error) {
+func (vindex *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][][]byte, error) {
 	return vindex.lkp.MapNonUniqueLookup(vcursor, ids)
 }
 
 // Verify returns true if ids maps to ksids.
-func (vindex *LookupNonUnique) Verify(vcursor VCursor, ids []interface{}, ksids [][]byte) (bool, error) {
+func (vindex *LookupNonUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
 	return vindex.lkp.Verify(vcursor, ids, ksids)
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (vindex *LookupNonUnique) Create(vcursor VCursor, id []interface{}, ksids [][]byte) error {
+func (vindex *LookupNonUnique) Create(vcursor VCursor, id []sqltypes.Value, ksids [][]byte) error {
 	return vindex.lkp.Create(vcursor, id, ksids)
 }
 
 // Delete deletes the entry from the vindex table.
-func (vindex *LookupNonUnique) Delete(vcursor VCursor, ids []interface{}, ksid []byte) error {
+func (vindex *LookupNonUnique) Delete(vcursor VCursor, ids []sqltypes.Value, ksid []byte) error {
 	return vindex.lkp.Delete(vcursor, ids, ksid)
 }
 
@@ -100,22 +102,22 @@ func (vindex *LookupUnique) Cost() int {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (vindex *LookupUnique) Map(vcursor VCursor, ids []interface{}) ([][]byte, error) {
+func (vindex *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][]byte, error) {
 	return vindex.lkp.MapUniqueLookup(vcursor, ids)
 }
 
 // Verify returns true if ids maps to ksids.
-func (vindex *LookupUnique) Verify(vcursor VCursor, ids []interface{}, ksids [][]byte) (bool, error) {
+func (vindex *LookupUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
 	return vindex.lkp.Verify(vcursor, ids, ksids)
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (vindex *LookupUnique) Create(vcursor VCursor, id []interface{}, ksids [][]byte) error {
+func (vindex *LookupUnique) Create(vcursor VCursor, id []sqltypes.Value, ksids [][]byte) error {
 	return vindex.lkp.Create(vcursor, id, ksids)
 }
 
 // Delete deletes the entry from the vindex table.
-func (vindex *LookupUnique) Delete(vcursor VCursor, ids []interface{}, ksid []byte) error {
+func (vindex *LookupUnique) Delete(vcursor VCursor, ids []sqltypes.Value, ksid []byte) error {
 	return vindex.lkp.Delete(vcursor, ids, ksid)
 }
 

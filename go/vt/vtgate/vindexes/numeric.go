@@ -46,7 +46,7 @@ func (*Numeric) Cost() int {
 }
 
 // Verify returns true if ids and ksids match.
-func (*Numeric) Verify(_ VCursor, ids []interface{}, ksids [][]byte) (bool, error) {
+func (*Numeric) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
 	if len(ids) != len(ksids) {
 		return false, fmt.Errorf("Numeric.Verify: length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
 	}
@@ -65,7 +65,7 @@ func (*Numeric) Verify(_ VCursor, ids []interface{}, ksids [][]byte) (bool, erro
 }
 
 // Map returns the associated keyspace ids for the given ids.
-func (*Numeric) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
+func (*Numeric) Map(_ VCursor, ids []sqltypes.Value) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
 		num, err := sqltypes.ConvertToUint64(id)
@@ -80,13 +80,16 @@ func (*Numeric) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
 }
 
 // ReverseMap returns the associated ids for the ksids.
-func (*Numeric) ReverseMap(_ VCursor, ksids [][]byte) ([]interface{}, error) {
-	var reverseIds = make([]interface{}, len(ksids))
+func (*Numeric) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error) {
+	var reverseIds = make([]sqltypes.Value, len(ksids))
 	for rownum, keyspaceID := range ksids {
 		if len(keyspaceID) != 8 {
 			return nil, fmt.Errorf("Numeric.ReverseMap: length of keyspaceId is not 8: %d", len(keyspaceID))
 		}
-		reverseIds[rownum] = binary.BigEndian.Uint64([]byte(keyspaceID))
+		val := binary.BigEndian.Uint64([]byte(keyspaceID))
+		// BuildValue will not fail for uint64.
+		v, _ := sqltypes.BuildValue(val)
+		reverseIds[rownum] = v
 	}
 	return reverseIds, nil
 }

@@ -211,53 +211,6 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 	return sqltypes.PlanValue{}, fmt.Errorf("expression is too complex '%v'", String(node))
 }
 
-// AsInterface converts the Expr to an interface. It converts
-// ValTuple to []interface{}, ValArg to string, StrVal to sqltypes.String,
-// IntVal to sqltypes.Numeric, NullVal to nil.
-// Otherwise, it returns an error.
-func AsInterface(node Expr) (interface{}, error) {
-	switch node := node.(type) {
-	case *ValuesFuncExpr:
-		if node.Resolved != nil {
-			return AsInterface(node.Resolved)
-		}
-	case ValTuple:
-		vals := make([]interface{}, 0, len(node))
-		for _, val := range node {
-			v, err := AsInterface(val)
-			if err != nil {
-				return nil, err
-			}
-			vals = append(vals, v)
-		}
-		return vals, nil
-	case *SQLVal:
-		switch node.Type {
-		case ValArg:
-			return string(node.Val), nil
-		case StrVal:
-			return sqltypes.MakeString(node.Val), nil
-		case HexVal:
-			v, err := node.HexDecode()
-			if err != nil {
-				return nil, err
-			}
-			return sqltypes.MakeString(v), nil
-		case IntVal:
-			n, err := sqltypes.BuildIntegral(string(node.Val))
-			if err != nil {
-				return nil, fmt.Errorf("type mismatch: %s", err)
-			}
-			return n, nil
-		}
-	case ListArg:
-		return string(node), nil
-	case *NullVal:
-		return nil, nil
-	}
-	return nil, fmt.Errorf("expression is too complex '%v'", String(node))
-}
-
 // StringIn is a convenience function that returns
 // true if str matches any of the values.
 func StringIn(str string, values ...string) bool {
