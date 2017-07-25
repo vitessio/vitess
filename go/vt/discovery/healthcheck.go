@@ -393,8 +393,6 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 			return hcc.processResponse(hc, shr)
 		})
 
-		cancel()
-
 		// Streaming RPC failed e.g. because vttablet was restarted or took too long.
 		// Sleep until the next retry is up or the context is done/canceled.
 		select {
