@@ -241,6 +241,7 @@ type healthCheckConn struct {
 	// Note tabletStats.Tablet and tabletStats.Name are immutable.
 	mu                    sync.RWMutex
 	conn                  queryservice.QueryService
+	streamCancelFunc      context.CancelFunc
 	tabletStats           TabletStats
 	lastResponseTimestamp time.Time // timestamp of the last healthcheck response
 }
@@ -383,27 +384,12 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 
 	for {
 		ctx, cancel := context.WithCancel(hcc.ctx)
-		receipt := make(chan time.Time, 2)
-
-		go func() {
-			defer cancel()
-			var lastReceived time.Time
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case lastReceived = <-receipt:
-					continue
-				case <-time.After(hc.healthCheckTimeout):
-					log.Warningf("Canceling StreamHealth for %+v, last response received at %v", ts.Tablet, lastReceived)
-					return
-				}
-			}
-		}()
+		hcc.mu.Lock()
+		hcc.streamCancelFunc = cancel
+		hcc.mu.Unlock()
 
 		// Read stream health responses.
 		hcc.stream(ctx, hc, func(shr *querypb.StreamHealthResponse) error {
-			receipt <- time.Now()
 			return hcc.processResponse(hc, shr)
 		})
 
@@ -556,6 +542,7 @@ func (hc *HealthCheckImpl) checkHealthCheckTimeout() {
 			hcc.mu.Unlock()
 			continue
 		}
+		hcc.streamCancelFunc()
 		hcc.tabletStats.Serving = false
 		hcc.tabletStats.LastError = fmt.Errorf("healthcheck timed out (latest %v)", hcc.lastResponseTimestamp)
 		ts := hcc.tabletStats
