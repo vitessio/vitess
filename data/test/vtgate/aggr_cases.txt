@@ -28,7 +28,7 @@
     "Query": "select count(*), col from user where id = 1",
     "FieldQuery": "select count(*), col from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": 1
+    "Values": [1]
   }
 }
 
@@ -285,7 +285,7 @@
     "Query": "select id, count(*) as c from user group by id having id = 1 and c = 10",
     "FieldQuery": "select id, count(*) as c from user where 1 != 1 group by id",
     "Vindex": "user_index",
-    "Values": 1
+    "Values": [1]
   }
 }
 
@@ -823,6 +823,6 @@
       "Query":"select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
       "FieldQuery":"select user.col1 as a from user where 1 != 1 group by a collate utf8_general_ci",
       "Vindex":"user_index",
-      "Values":5
+      "Values":[5]
    }
 }

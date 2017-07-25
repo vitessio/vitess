@@ -153,24 +153,42 @@ func TestIsValue(t *testing.T) {
 		in  Expr
 		out bool
 	}{{
-		in:  newStrVal(""),
+		in:  newStrVal("aa"),
 		out: true,
 	}, {
-		in:  newHexVal(""),
+		in:  newHexVal("3131"),
 		out: true,
 	}, {
-		in:  newIntVal(""),
+		in:  newIntVal("1"),
 		out: true,
 	}, {
-		in:  newValArg(""),
+		in:  newValArg(":a"),
 		out: true,
 	}, {
-		in: &NullVal{},
+		in: &ValuesFuncExpr{
+			Name:     NewColIdent("foo"),
+			Resolved: newStrVal(""),
+		},
+		out: true,
+	}, {
+		in: &ValuesFuncExpr{
+			Name: NewColIdent("foo"),
+		},
+		out: false,
+	}, {
+		in:  &NullVal{},
+		out: false,
 	}}
 	for _, tc := range testcases {
 		out := IsValue(tc.in)
 		if out != tc.out {
 			t.Errorf("IsValue(%T): %v, want %v", tc.in, out, tc.out)
+		}
+		if tc.out {
+			// NewPlanValue should not fail for valid values.
+			if _, err := NewPlanValue(tc.in); err != nil {
+				t.Error(err)
+			}
 		}
 	}
 }
@@ -198,12 +216,12 @@ func TestIsSimpleTuple(t *testing.T) {
 		in  Expr
 		out bool
 	}{{
-		in:  ValTuple{newStrVal("")},
+		in:  ValTuple{newStrVal("aa")},
 		out: true,
 	}, {
 		in: ValTuple{&ColName{}},
 	}, {
-		in:  ListArg(""),
+		in:  ListArg("::a"),
 		out: true,
 	}, {
 		in: &ColName{},
@@ -212,6 +230,12 @@ func TestIsSimpleTuple(t *testing.T) {
 		out := IsSimpleTuple(tc.in)
 		if out != tc.out {
 			t.Errorf("IsSimpleTuple(%T): %v, want %v", tc.in, out, tc.out)
+		}
+		if tc.out {
+			// NewPlanValue should not fail for valid tuples.
+			if _, err := NewPlanValue(tc.in); err != nil {
+				t.Error(err)
+			}
 		}
 	}
 }

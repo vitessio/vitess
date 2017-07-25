@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
@@ -130,16 +131,14 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 		}
 	}
 
-	routeValues := make([]interface{}, 0, len(rows))
 	for _, colVindex := range eRoute.Table.ColumnVindexes {
 		pos := findOrAddColumn(ins, colVindex.Column)
 		swappedValues, err := swapBindVariables(rows, pos, ":_"+colVindex.Column.CompliantName())
 		if err != nil {
 			return nil, err
 		}
-		routeValues = append(routeValues, swappedValues)
+		eRoute.Values = append(eRoute.Values, swappedValues)
 	}
-	eRoute.Values = routeValues
 
 	eRoute.Query = generateQuery(ins)
 	generateInsertShardedQuery(ins, eRoute, rows)
@@ -184,17 +183,17 @@ func modifyForAutoinc(ins *sqlparser.Insert, eRoute *engine.Route) error {
 // swapBindVariables swaps in bind variable names at the the specified
 // column position in the AST values and returns the converted values back.
 // Bind variable names are generated using baseName.
-func swapBindVariables(rows sqlparser.Values, colNum int, baseName string) ([]interface{}, error) {
-	vals := make([]interface{}, len(rows))
+func swapBindVariables(rows sqlparser.Values, colNum int, baseName string) (sqltypes.PlanValue, error) {
+	pv := sqltypes.PlanValue{}
 	for rowNum, row := range rows {
-		val, err := valConvert(row[colNum])
+		innerpv, err := sqlparser.NewPlanValue(row[colNum])
 		if err != nil {
-			return nil, fmt.Errorf("unsupported: complex expression '%s' for vindex or auto-inc column: %v", sqlparser.String(row[colNum]), err)
+			return pv, fmt.Errorf("could not compute value for vindex or auto-inc column: %v", err)
 		}
-		vals[rowNum] = val
+		pv.Values = append(pv.Values, innerpv)
 		row[colNum] = sqlparser.NewValArg([]byte(baseName + strconv.Itoa(rowNum)))
 	}
-	return vals, nil
+	return pv, nil
 }
 
 // findOrAddColumn finds the position of a column in the insert. If it's

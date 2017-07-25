@@ -52,6 +52,34 @@ func TestPlanValueIsNull(t *testing.T) {
 	}
 }
 
+func TestPlanValueIsList(t *testing.T) {
+	tcases := []struct {
+		in  PlanValue
+		out bool
+	}{{
+		in:  PlanValue{},
+		out: false,
+	}, {
+		in:  PlanValue{Key: "aa"},
+		out: false,
+	}, {
+		in:  PlanValue{Value: MakeString([]byte("aa"))},
+		out: false,
+	}, {
+		in:  PlanValue{ListKey: "aa"},
+		out: true,
+	}, {
+		in:  PlanValue{Values: []PlanValue{}},
+		out: true,
+	}}
+	for _, tc := range tcases {
+		got := tc.in.IsList()
+		if got != tc.out {
+			t.Errorf("IsList(%v): %v, want %v", tc.in, got, tc.out)
+		}
+	}
+}
+
 func TestResolveRows(t *testing.T) {
 	testBindVars := map[string]*querypb.BindVariable{
 		"int":    Int64BindVariable(10),

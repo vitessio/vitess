@@ -75,7 +75,7 @@ func TestNumericMap(t *testing.T) {
 
 func TestNumericMapBadData(t *testing.T) {
 	_, err := numeric.(Unique).Map(nil, []interface{}{1.1})
-	want := `Numeric.Map: getNumber: unexpected type for 1.1: float64`
+	want := `Numeric.Map: ConvertToUint64: unexpected type for 1.1: float64`
 	if err == nil || err.Error() != want {
 		t.Errorf("numeric.Map: %v, want %v", err, want)
 	}
@@ -99,7 +99,7 @@ func TestNumericVerifyNeg(t *testing.T) {
 	}
 
 	_, err = numeric.Verify(nil, []interface{}{1.1}, [][]byte{[]byte("test1")})
-	want = "Numeric.Verify: getNumber: unexpected type for 1.1: float64"
+	want = "Numeric.Verify: ConvertToUint64: unexpected type for 1.1: float64"
 	if err.Error() != want {
 		t.Error(err)
 	}

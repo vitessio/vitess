@@ -68,6 +68,11 @@ func (pv PlanValue) IsNull() bool {
 	return pv.Key == "" && pv.Value.IsNull() && pv.ListKey == "" && pv.Values == nil
 }
 
+// IsList returns true if the PlanValue is a list.
+func (pv PlanValue) IsList() bool {
+	return pv.ListKey != "" || pv.Values != nil
+}
+
 // ResolveValue resolves a PlanValue as a single value based on the supplied bindvars.
 func (pv PlanValue) ResolveValue(bindVars map[string]*querypb.BindVariable) (Value, error) {
 	switch {
@@ -149,7 +154,7 @@ func (pv PlanValue) MarshalJSON() ([]byte, error) {
 		}
 		return json.Marshal(pv.Value.String())
 	case pv.ListKey != "":
-		return json.Marshal("::" + pv.Key)
+		return json.Marshal("::" + pv.ListKey)
 	case pv.Values != nil:
 		return json.Marshal(pv.Values)
 	}

@@ -19,8 +19,8 @@ package planbuilder
 import (
 	"errors"
 	"fmt"
-	"strconv"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
@@ -52,15 +52,20 @@ type route struct {
 	// resultColumns represent the columns returned by this route.
 	resultColumns []*resultColumn
 
+	// condition stores the AST condition that will be used
+	// to resolve the ERoute Values field.
+	condition sqlparser.Expr
+
 	// ERoute is the primitive being built.
 	ERoute *engine.Route
 }
 
-func newRoute(stmt sqlparser.SelectStatement, eroute *engine.Route, vschema VSchema) *route {
+func newRoute(stmt sqlparser.SelectStatement, eroute *engine.Route, condition sqlparser.Expr, vschema VSchema) *route {
 	rb := &route{
-		Select: stmt,
-		order:  1,
-		ERoute: eroute,
+		Select:    stmt,
+		order:     1,
+		condition: condition,
+		ERoute:    eroute,
 	}
 	rb.symtab = newSymtabWithRoute(vschema, rb)
 	return rb
@@ -150,7 +155,7 @@ func (rb *route) Join(rRoute *route, ajoin *sqlparser.JoinTableExpr) (builder, e
 
 	// Both l & r routes point to the same shard.
 	if rb.ERoute.Opcode == engine.SelectEqualUnique && rRoute.ERoute.Opcode == engine.SelectEqualUnique {
-		if valEqual(rb.ERoute.Values, rRoute.ERoute.Values) {
+		if valEqual(rb.condition, rRoute.condition) {
 			return rb.merge(rRoute, ajoin)
 		}
 	}
@@ -282,14 +287,14 @@ func (rb *route) UpdatePlan(filter sqlparser.Expr) {
 	}
 }
 
-func (rb *route) updateRoute(opcode engine.RouteOpcode, vindex vindexes.Vindex, values interface{}) {
+func (rb *route) updateRoute(opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
 	rb.ERoute.Opcode = opcode
 	rb.ERoute.Vindex = vindex
-	rb.ERoute.Values = values
+	rb.condition = condition
 }
 
 // computePlan computes the plan for the specified filter.
-func (rb *route) computePlan(filter sqlparser.Expr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, values interface{}) {
+func (rb *route) computePlan(filter sqlparser.Expr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
 	switch node := filter.(type) {
 	case *sqlparser.ComparisonExpr:
 		switch node.Operator {
@@ -305,7 +310,7 @@ func (rb *route) computePlan(filter sqlparser.Expr) (opcode engine.RouteOpcode, 
 }
 
 // computeEqualPlan computes the plan for an equality constraint.
-func (rb *route) computeEqualPlan(comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, values interface{}) {
+func (rb *route) computeEqualPlan(comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
 	left := comparison.Left
 	right := comparison.Right
 	vindex = rb.Symtab().Vindex(left, rb)
@@ -326,7 +331,7 @@ func (rb *route) computeEqualPlan(comparison *sqlparser.ComparisonExpr) (opcode 
 }
 
 // computeINPlan computes the plan for an IN constraint.
-func (rb *route) computeINPlan(comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, values interface{}) {
+func (rb *route) computeINPlan(comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
 	vindex = rb.Symtab().Vindex(comparison.Left, rb)
 	if vindex == nil {
 		return engine.SelectScatter, nil, nil
@@ -448,15 +453,8 @@ func (rb *route) SetLimit(limit *sqlparser.Limit) {
 // If it's a scatter query, the rows returned will be
 // more than the upper limit, but enough for the limit
 // primitive to chop off where needed.
-func (rb *route) SetUpperLimit(count interface{}) {
-	limit := &sqlparser.Limit{}
-	switch count := count.(type) {
-	case string:
-		limit.Rowcount = sqlparser.NewValArg([]byte(count))
-	default:
-		limit.Rowcount = sqlparser.NewIntVal(strconv.AppendInt(nil, count.(int64), 10))
-	}
-	rb.Select.SetLimit(limit)
+func (rb *route) SetUpperLimit(count *sqlparser.SQLVal) {
+	rb.Select.SetLimit(&sqlparser.Limit{Rowcount: count})
 }
 
 // PushMisc satisfies the builder interface.
@@ -467,21 +465,25 @@ func (rb *route) PushMisc(sel *sqlparser.Select) {
 
 // Wireup satisfies the builder interface.
 func (rb *route) Wireup(bldr builder, jt *jointab) error {
-	// Resolve values stored in the builder.
-	var err error
-	switch vals := rb.ERoute.Values.(type) {
-	case *sqlparser.ComparisonExpr:
-		// A comparison expression is stored only if it was an IN clause.
-		// We have to convert it to use a list argutment and resolve values.
-		rb.ERoute.Values, err = rb.procureValues(bldr, jt, vals.Right)
-		if err != nil {
-			return err
-		}
-		vals.Right = sqlparser.ListArg("::" + engine.ListVarName)
-	default:
-		rb.ERoute.Values, err = rb.procureValues(bldr, jt, vals)
-		if err != nil {
-			return err
+	// Precaution: update ERoute.Values only if it's not set already.
+	if rb.ERoute.Values == nil {
+		// Resolve values stored in the builder.
+		switch vals := rb.condition.(type) {
+		case *sqlparser.ComparisonExpr:
+			pv, err := rb.procureValues(bldr, jt, vals.Right)
+			if err != nil {
+				return err
+			}
+			rb.ERoute.Values = []sqltypes.PlanValue{pv}
+			vals.Right = sqlparser.ListArg("::" + engine.ListVarName)
+		case nil:
+			// no-op.
+		default:
+			pv, err := rb.procureValues(bldr, jt, vals)
+			if err != nil {
+				return err
+			}
+			rb.ERoute.Values = []sqltypes.PlanValue{pv}
 		}
 	}
 
@@ -533,30 +535,25 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 
 // procureValues procures and converts the input into
 // the expected types for rb.Values.
-func (rb *route) procureValues(bldr builder, jt *jointab, val interface{}) (interface{}, error) {
+func (rb *route) procureValues(bldr builder, jt *jointab, val sqlparser.Expr) (sqltypes.PlanValue, error) {
 	switch val := val.(type) {
-	case nil:
-		return nil, nil
 	case sqlparser.ValTuple:
-		vals := make([]interface{}, 0, len(val))
+		pv := sqltypes.PlanValue{}
 		for _, val := range val {
 			v, err := rb.procureValues(bldr, jt, val)
 			if err != nil {
-				return nil, err
+				return pv, err
 			}
-			vals = append(vals, v)
+			pv.Values = append(pv.Values, v)
 		}
-		return vals, nil
+		return pv, nil
 	case *sqlparser.ColName:
 		joinVar := jt.Procure(bldr, val, rb.Order())
 		rb.ERoute.JoinVars[joinVar] = struct{}{}
-		return ":" + joinVar, nil
-	case sqlparser.ListArg:
-		return string(val), nil
-	case sqlparser.Expr:
-		return valConvert(val)
+		return sqltypes.PlanValue{Key: joinVar}, nil
+	default:
+		return sqlparser.NewPlanValue(val)
 	}
-	panic(fmt.Sprintf("BUG: unrecognized symbol: %T", val))
 }
 
 func (rb *route) isLocal(col *sqlparser.ColName) bool {
@@ -670,7 +667,7 @@ func (rb *route) SubqueryCanMerge(inner *route) error {
 		// select ... from a where a.id = 5 ... (select ... from b where b.id = a.id).
 		// If b.id and a.id have the same vindex, it becomes a single-shard
 		// query: the subquery can merge with the outer query.
-		switch vals := inner.ERoute.Values.(type) {
+		switch vals := inner.condition.(type) {
 		case *sqlparser.ColName:
 			if rb.Symtab().Vindex(vals, rb) == inner.ERoute.Vindex {
 				return nil
@@ -683,7 +680,7 @@ func (rb *route) SubqueryCanMerge(inner *route) error {
 	if rb.ERoute.Opcode != engine.SelectEqualUnique {
 		return errors.New("unsupported: subquery does not depend on scatter outer query")
 	}
-	if !valEqual(rb.ERoute.Values, inner.ERoute.Values) {
+	if !valEqual(rb.condition, inner.condition) {
 		return errors.New("unsupported: subquery and parent route to different shards")
 	}
 	return nil
@@ -715,7 +712,7 @@ func (rb *route) UnionCanMerge(right *route) error {
 	if rb.ERoute.Opcode != engine.SelectEqualUnique || right.ERoute.Opcode != engine.SelectEqualUnique {
 		return errors.New("unsupported: UNION on multi-shard queries")
 	}
-	if !valEqual(rb.ERoute.Values, right.ERoute.Values) {
+	if !valEqual(rb.condition, right.condition) {
 		return errors.New("unsupported: UNION queries with different target shards")
 	}
 	return nil

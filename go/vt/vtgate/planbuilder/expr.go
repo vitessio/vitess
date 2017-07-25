@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
@@ -190,33 +189,4 @@ func hexEqual(a, b *sqlparser.SQLVal) bool {
 		return bytes.Equal(v, v2)
 	}
 	return false
-}
-
-// valConvert converts an AST value to the Value field in the route.
-func valConvert(node sqlparser.Expr) (interface{}, error) {
-	switch node := node.(type) {
-	case *sqlparser.SQLVal:
-		switch node.Type {
-		case sqlparser.ValArg:
-			return string(node.Val), nil
-		case sqlparser.StrVal:
-			return []byte(node.Val), nil
-		case sqlparser.HexVal:
-			return node.HexDecode()
-		case sqlparser.IntVal:
-			val := string(node.Val)
-			signed, err := strconv.ParseInt(val, 0, 64)
-			if err == nil {
-				return signed, nil
-			}
-			unsigned, err := strconv.ParseUint(val, 0, 64)
-			if err == nil {
-				return unsigned, nil
-			}
-			return nil, err
-		}
-	case *sqlparser.NullVal:
-		return nil, nil
-	}
-	return nil, fmt.Errorf("%v is not a value", sqlparser.String(node))
 }

@@ -60,7 +60,7 @@
     },
     "Query": "update user set val = 1 where id = 1",
     "Vindex": "user_index",
-    "Values": 1,
+    "Values": [1],
     "Table": "user"
   }
 }
@@ -77,7 +77,7 @@
     },
     "Query": "update user set val = 1 where id = id2 and id = 1",
     "Vindex": "user_index",
-    "Values": 1,
+    "Values": [1],
     "Table": "user"
   }
 }
@@ -94,7 +94,7 @@
     },
     "Query": "update user set val = 1 where id = 18446744073709551616 and id = 1",
     "Vindex": "user_index",
-    "Values": 1,
+    "Values": [1],
     "Table": "user"
   }
 }
@@ -111,7 +111,7 @@
     },
     "Query": "delete from user where id = 1",
     "Vindex": "user_index",
-    "Values": 1,
+    "Values": [1],
     "Table": "user",
     "Subquery": "select Name, Costly from user where id = 1 for update"
   }
@@ -157,7 +157,7 @@
     },
     "Query": "update music set val = 1 where id = 1",
     "Vindex": "music_user_map",
-    "Values": 1,
+    "Values": [1],
     "Table": "music"
   }
 }
@@ -202,7 +202,7 @@
     },
     "Query": "delete from music where id = 1",
     "Vindex": "music_user_map",
-    "Values": 1,
+    "Values": [1],
     "Table": "music",
     "Subquery": "select id from music where id = 1 for update"
   }
@@ -220,7 +220,7 @@
     },
     "Query": "delete from music_extra where user_id = 1",
     "Vindex": "user_index",
-    "Values": 1,
+    "Values": [1],
     "Table": "music_extra"
   }
 }
@@ -272,7 +272,7 @@
 
 # insert unsharded, invalid value for auto-inc
 "insert into unsharded_auto(id, val) values(18446744073709551616, 'aa')"
-"unsupported: complex expression '18446744073709551616' for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
+"could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
 
 # insert unsharded, column present
 "insert into unsharded_auto(id, val) values(1, 'aa')"
@@ -414,6 +414,40 @@
     },
     "Prefix": "insert into user(id, Name, Costly) values ",
     "Mid":["(:_Id0, :_Name0, :_Costly0)"]
+  }
+}
+
+# insert with one vindex and bind var
+"insert into user(id) values (:aa)"
+{
+  "Original": "insert into user(id) values (:aa)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
+    "Values": [
+      [":__seq0"],
+      [null],
+      [null]
+    ],
+    "Table": "user",
+    "Generate": {
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from seq",
+      "Values": [
+        ":aa"
+      ]
+    },
+    "Prefix": "insert into user(id, Name, Costly) values ",
+    "Mid": [
+      "(:_Id0, :_Name0, :_Costly0)"
+    ]
   }
 }
 
@@ -561,15 +595,15 @@
 
 # insert for non-vindex autoinc, invalid value
 "insert into user_extra(nonid, extra_id) values (2, 18446744073709551616)"
-"unsupported: complex expression '18446744073709551616' for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
+"could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
 
 # insert invalid index value
 "insert into music_extra(music_id, user_id) values(1, 18446744073709551616)"
-"unsupported: complex expression '18446744073709551616' for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
+"could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
 
 # insert invalid index value
 "insert into music_extra(music_id, user_id) values(1, id)"
-"unsupported: complex expression 'id' for vindex or auto-inc column: id is not a value"
+"could not compute value for vindex or auto-inc column: expression is too complex 'id'"
 
 # insert invalid table
 "insert into noexist(music_id, user_id) values(1, 18446744073709551616)"
@@ -646,7 +680,7 @@
 
 # replace unsharded, invalid value for auto-inc
 "replace into unsharded_auto(id, val) values(18446744073709551616, 'aa')"
-"unsupported: complex expression '18446744073709551616' for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
+"could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
 
 # replace unsharded, column present
 "replace into unsharded_auto(id, val) values(1, 'aa')"
