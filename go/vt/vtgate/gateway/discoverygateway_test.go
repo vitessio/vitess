@@ -32,6 +32,10 @@ import (
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
+func tabletIdent(tablet *topodatapb.Tablet) string {
+	return fmt.Sprintf("%s-%d (%s)", tablet.Alias.Cell, tablet.Alias.Uid, tablet.Hostname)
+}
+
 func TestDiscoveryGatewayExecute(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, target *querypb.Target) error {
 		_, err := dg.Execute(context.Background(), target, "query", nil, 0, nil)
@@ -171,8 +175,8 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	ep1 = sc1.Tablet()
 	ep2 := sc2.Tablet()
 	wants := map[string]int{
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep1): 0,
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep2): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: %s, FAILED_PRECONDITION error`, tabletIdent(ep1)): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: %s, FAILED_PRECONDITION error`, tabletIdent(ep2)): 0,
 	}
 	err = f(dg, target)
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
@@ -189,8 +193,8 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	ep1 = sc1.Tablet()
 	ep2 = sc2.Tablet()
 	wants = map[string]int{
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep1): 0,
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep2): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: %s, FAILED_PRECONDITION error`, tabletIdent(ep1)): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: %s, FAILED_PRECONDITION error`, tabletIdent(ep2)): 0,
 	}
 	err = f(dg, target)
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
@@ -203,7 +207,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	ep1 = sc1.Tablet()
-	want = fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), INVALID_ARGUMENT error`, ep1)
+	want = fmt.Sprintf(`target: ks.0.replica, used tablet: %s, INVALID_ARGUMENT error`, tabletIdent(ep1))
 	err = f(dg, target)
 	verifyShardError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
 
@@ -239,8 +243,8 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 	ep1 := sc1.Tablet()
 	ep2 := sc2.Tablet()
 	wants := map[string]int{
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep1): 0,
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep2): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: %s, FAILED_PRECONDITION error`, tabletIdent(ep1)): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: %s, FAILED_PRECONDITION error`, tabletIdent(ep2)): 0,
 	}
 	err := f(dg, target)
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
@@ -253,7 +257,7 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	ep1 = sc1.Tablet()
-	want := fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), INVALID_ARGUMENT error`, ep1)
+	want := fmt.Sprintf(`target: ks.0.replica, used tablet: %s, INVALID_ARGUMENT error`, tabletIdent(ep1))
 	err = f(dg, target)
 	verifyShardError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
 }

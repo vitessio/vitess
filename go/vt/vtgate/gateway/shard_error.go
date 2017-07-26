@@ -30,7 +30,7 @@ func NewShardError(in error, target *querypb.Target, tablet *topodatapb.Tablet, 
 		return nil
 	}
 	if tablet != nil {
-		return vterrors.Errorf(vterrors.Code(in), "target: %s.%s.%s, used tablet: (%+v), %v", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType), tablet, in)
+		return vterrors.Errorf(vterrors.Code(in), "target: %s.%s.%s, used tablet: %s-%d (%s), %v", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType), tablet.Alias.Cell, tablet.Alias.Uid, tablet.Hostname, in)
 	}
 	return vterrors.Errorf(vterrors.Code(in), "target: %s.%s.%s, %v", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType), in)
 }
