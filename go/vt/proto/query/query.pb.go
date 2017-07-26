@@ -2461,7 +2461,11 @@ type StreamHealthResponse struct {
 	// b) the last time an active reparent was executed through a vtctl command
 	//    (InitShardMaster, PlannedReparentShard, EmergencyReparentShard)
 	// OR
-	// c) 0 if it was never called.
+	// c) the last time vttablet was started and it initialized its tablet type
+	//    as MASTER because it was recorded as the shard's current master in the
+	//    topology (see go/vt/vttablet/tabletmanager/init_tablet.go)
+	// OR
+	// d) 0 if the vttablet was never a MASTER.
 	TabletExternallyReparentedTimestamp int64 `protobuf:"varint,3,opt,name=tablet_externally_reparented_timestamp,json=tabletExternallyReparentedTimestamp" json:"tablet_externally_reparented_timestamp,omitempty"`
 	// realtime_stats contains information about the tablet status
 	RealtimeStats *RealtimeStats `protobuf:"bytes,4,opt,name=realtime_stats,json=realtimeStats" json:"realtime_stats,omitempty"`

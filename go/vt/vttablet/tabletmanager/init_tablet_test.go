@@ -94,6 +94,9 @@ func TestInitTablet(t *testing.T) {
 	if ti.PortMap["grpc"] != gRPCPort {
 		t.Errorf("wrong gRPC port for tablet: %v", ti.PortMap["grpc"])
 	}
+	if got := agent._tabletExternallyReparentedTime; !got.IsZero() {
+		t.Fatalf("REPLICA tablet should not have an ExternallyReparentedTimestamp set: %v", got)
+	}
 
 	// 2. Update shard's master to our alias, then try to init again.
 	// (This simulates the case where the MasterAlias in the shard record says
@@ -117,6 +120,9 @@ func TestInitTablet(t *testing.T) {
 	if ti.Type != topodatapb.TabletType_REPLICA {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
+	if got := agent._tabletExternallyReparentedTime; !got.IsZero() {
+		t.Fatalf("REPLICA tablet should not have an ExternallyReparentedTimestamp set: %v", got)
+	}
 
 	// 3. Delete the tablet record. The shard record still says that we are the
 	// MASTER. Since it is the only source, we assume that its information is
@@ -133,6 +139,10 @@ func TestInitTablet(t *testing.T) {
 	}
 	if ti.Type != topodatapb.TabletType_MASTER {
 		t.Errorf("wrong tablet type: %v", ti.Type)
+	}
+	ter1 := agent._tabletExternallyReparentedTime
+	if ter1.IsZero() {
+		t.Fatalf("MASTER tablet should have an ExternallyReparentedTimestamp set")
 	}
 
 	// 4. Fix the tablet record to agree that we're master.
@@ -151,6 +161,10 @@ func TestInitTablet(t *testing.T) {
 	}
 	if ti.Type != topodatapb.TabletType_MASTER {
 		t.Errorf("wrong tablet type: %v", ti.Type)
+	}
+	ter2 := agent._tabletExternallyReparentedTime
+	if ter2.IsZero() || !ter2.After(ter1) {
+		t.Fatalf("After a restart, ExternallyReparentedTimestamp must be set to the current time. Previous timestamp: %v current timestamp: %v", ter1, ter2)
 	}
 
 	// 5. Subsequent inits will still start the vttablet as MASTER.
@@ -172,5 +186,9 @@ func TestInitTablet(t *testing.T) {
 	}
 	if len(ti.Tags) != 1 || ti.Tags["aaa"] != "bbb" {
 		t.Errorf("wrong tablet tags: %v", ti.Tags)
+	}
+	ter3 := agent._tabletExternallyReparentedTime
+	if ter3.IsZero() || !ter3.After(ter2) {
+		t.Fatalf("After a restart, ExternallyReparentedTimestamp must be set to the current time. Previous timestamp: %v current timestamp: %v", ter2, ter3)
 	}
 }
