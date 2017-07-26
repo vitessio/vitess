@@ -741,7 +741,11 @@ message StreamHealthResponse {
   // b) the last time an active reparent was executed through a vtctl command
   //    (InitShardMaster, PlannedReparentShard, EmergencyReparentShard)
   // OR
-  // c) 0 if it was never called.
+  // c) the last time vttablet was started and it initialized its tablet type
+  //    as MASTER because it was recorded as the shard's current master in the
+  //    topology (see go/vt/vttablet/tabletmanager/init_tablet.go)
+  // OR
+  // d) 0 if the vttablet was never a MASTER.
   int64 tablet_externally_reparented_timestamp = 3;
 
   // realtime_stats contains information about the tablet status
