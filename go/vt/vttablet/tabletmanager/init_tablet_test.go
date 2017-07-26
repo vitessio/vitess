@@ -57,8 +57,8 @@ func TestInitTablet(t *testing.T) {
 		_healthy:        fmt.Errorf("healthcheck not run yet"),
 	}
 
-	// let's use a real tablet in a shard, that will create
-	// the keyspace and shard.
+	// 1. Initialize the tablet as REPLICA.
+	// This will create the respective topology records.
 	*tabletHostname = "localhost"
 	*initKeyspace = "test_keyspace"
 	*initShard = "-80"
@@ -95,7 +95,10 @@ func TestInitTablet(t *testing.T) {
 		t.Errorf("wrong gRPC port for tablet: %v", ti.PortMap["grpc"])
 	}
 
-	// update shard's master to our alias, then try to init again
+	// 2. Update shard's master to our alias, then try to init again.
+	// (This simulates the case where the MasterAlias in the shard record says
+	// that we are the master but the tablet record says otherwise. In that case,
+	// we assume we are not the MASTER.)
 	si, err = agent.TopoServer.UpdateShardFields(ctx, "test_keyspace", "-80", func(si *topo.ShardInfo) error {
 		si.MasterAlias = tabletAlias
 		return nil
@@ -115,7 +118,26 @@ func TestInitTablet(t *testing.T) {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
 
-	// Fix the tablet record to agree that we're master.
+	// 3. Delete the tablet record. The shard record still says that we are the
+	// MASTER. Since it is the only source, we assume that its information is
+	// correct and start as MASTER.
+	if err := ts.DeleteTablet(ctx, tabletAlias); err != nil {
+		t.Fatalf("DeleteTablet failed: %v", err)
+	}
+	if err := agent.InitTablet(port, gRPCPort); err != nil {
+		t.Fatalf("InitTablet(type, healthcheck) failed: %v", err)
+	}
+	ti, err = ts.GetTablet(ctx, tabletAlias)
+	if err != nil {
+		t.Fatalf("GetTablet failed: %v", err)
+	}
+	if ti.Type != topodatapb.TabletType_MASTER {
+		t.Errorf("wrong tablet type: %v", ti.Type)
+	}
+
+	// 4. Fix the tablet record to agree that we're master.
+	// Shard and tablet record are in sync now and we assume that we are actually
+	// the MASTER.
 	ti.Type = topodatapb.TabletType_MASTER
 	if err := ts.UpdateTablet(ctx, ti); err != nil {
 		t.Fatalf("UpdateTablet failed: %v", err)
@@ -131,9 +153,8 @@ func TestInitTablet(t *testing.T) {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
 
-	// init again with the tablet_type set, using init_tablet_type
-	// (also check db name override and tags here)
-	*initTabletType = "replica"
+	// 5. Subsequent inits will still start the vttablet as MASTER.
+	// (Also check db name override and tags here.)
 	*initDbNameOverride = "DBNAME"
 	initTags.Set("aaa:bbb")
 	if err := agent.InitTablet(port, gRPCPort); err != nil {
