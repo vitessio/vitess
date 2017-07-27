@@ -732,7 +732,10 @@ message StreamHealthResponse {
   // realtime_stats contains information about the tablet status
   RealtimeStats realtime_stats = 4;
 
-  // the alias as understood by the sending tablet
+  // tablet_alias is the alias of the sending tablet. The discovery/healthcheck.go
+  // code uses it to verify that it's talking to the correct tablet and that it
+  // hasn't changed in the meantime e.g. due to tablet restarts where ports or
+  // ips have been reused but assigned differently.
   topodata.TabletAlias tablet_alias = 5;
 }
 

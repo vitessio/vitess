@@ -2450,7 +2450,10 @@ type StreamHealthResponse struct {
 	TabletExternallyReparentedTimestamp int64 `protobuf:"varint,3,opt,name=tablet_externally_reparented_timestamp,json=tabletExternallyReparentedTimestamp" json:"tablet_externally_reparented_timestamp,omitempty"`
 	// realtime_stats contains information about the tablet status
 	RealtimeStats *RealtimeStats `protobuf:"bytes,4,opt,name=realtime_stats,json=realtimeStats" json:"realtime_stats,omitempty"`
-	// the alias as understood by the sending tablet
+	// tablet_alias is the alias of the sending tablet. The discovery/healthcheck.go
+	// code uses it to verify that it's talking to the correct tablet and that it
+	// hasn't changed in the meantime e.g. due to tablet restarts where ports or
+	// ips have been reused but assigned differently.
 	TabletAlias *topodata.TabletAlias `protobuf:"bytes,5,opt,name=tablet_alias,json=tabletAlias" json:"tablet_alias,omitempty"`
 }
 

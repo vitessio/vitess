@@ -438,8 +438,8 @@ func TestHealthCheckTimeout(t *testing.T) {
 		t.Errorf(`<-l.output: %+v; want not serving`, res)
 	}
 
-	if !fc.isCancelled() {
-		t.Errorf("StreamHealth should be cancelled after timeout, but is not")
+	if !fc.isCanceled() {
+		t.Errorf("StreamHealth should be canceled after timeout, but is not")
 	}
 
 	// send a healthcheck response, it should be serving again
@@ -518,8 +518,8 @@ type fakeConn struct {
 	hcChan chan *querypb.StreamHealthResponse
 	errCh  chan error
 
-	mu        sync.Mutex
-	cancelled bool
+	mu       sync.Mutex
+	canceled bool
 }
 
 // StreamHealth implements queryservice.QueryService.
@@ -530,7 +530,7 @@ func (fc *fakeConn) StreamHealth(ctx context.Context, callback func(shr *querypb
 		case shr = <-fc.hcChan:
 		case <-ctx.Done():
 			fc.mu.Lock()
-			fc.cancelled = true
+			fc.canceled = true
 			fc.mu.Unlock()
 			return nil
 		}
@@ -544,8 +544,8 @@ func (fc *fakeConn) StreamHealth(ctx context.Context, callback func(shr *querypb
 	}
 }
 
-func (fc *fakeConn) isCancelled() bool {
+func (fc *fakeConn) isCanceled() bool {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
-	return fc.cancelled
+	return fc.canceled
 }

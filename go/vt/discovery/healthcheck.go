@@ -464,7 +464,7 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, shr *querypb.St
 	}
 
 	if shr.TabletAlias != nil && *shr.TabletAlias != *oldTs.Tablet.Alias {
-		return fmt.Errorf("health stats mismatch, tablet %+v alias not match response alias %v", oldTs.Tablet, shr.TabletAlias)
+		return fmt.Errorf("health stats mismatch, tablet %+v alias does not match response alias %v", oldTs.Tablet, shr.TabletAlias)
 	}
 
 	// In the case where a tablet changes type (but not for the
@@ -540,6 +540,8 @@ func (hc *HealthCheckImpl) checkHealthCheckTimeout() {
 			hcc.mu.Unlock()
 			continue
 		}
+
+		//Timeout detected. Cancel the current streaming RPC and let checkConn() restart it.
 		hcc.streamCancelFunc()
 		hcc.tabletStats.Serving = false
 		hcc.tabletStats.LastError = fmt.Errorf("healthcheck timed out (latest %v)", hcc.lastResponseTimestamp)
