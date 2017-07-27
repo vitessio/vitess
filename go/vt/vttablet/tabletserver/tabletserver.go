@@ -153,6 +153,9 @@ type TabletServer struct {
 	// history records changes in state for display on the status page.
 	// It has its own internal mutex.
 	history *history.History
+
+	// alias is used for identifying this tabletserver in healthcheck responses.
+	alias topodatapb.TabletAlias
 }
 
 // RegisterFunction is a callback type to be called when we
@@ -189,6 +192,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer topo.Server, alia
 		streamHealthMap:        make(map[int]chan<- *querypb.StreamHealthResponse),
 		history:                history.New(10),
 		topoServer:             topoServer,
+		alias:                  alias,
 	}
 	tsv.se = schema.NewEngine(tsv, config)
 	tsv.qe = NewQueryEngine(tsv, tsv.se, config)
@@ -1521,6 +1525,7 @@ func (tsv *TabletServer) StreamHealth(ctx context.Context, callback func(*queryp
 	// Broadcast periodic updates.
 	id, ch := tsv.streamHealthRegister()
 	defer tsv.streamHealthUnregister(id)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -1559,8 +1564,9 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.Real
 	target := tsv.target
 	tsv.mu.Unlock()
 	shr := &querypb.StreamHealthResponse{
-		Target:  &target,
-		Serving: tsv.IsServing(),
+		Target:      &target,
+		TabletAlias: &tsv.alias,
+		Serving:     tsv.IsServing(),
 		TabletExternallyReparentedTimestamp: terTimestamp,
 		RealtimeStats:                       stats,
 	}

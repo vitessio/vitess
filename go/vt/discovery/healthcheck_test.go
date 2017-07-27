@@ -33,6 +33,9 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/tabletconn"
 	"golang.org/x/net/context"
 
+	"strings"
+	"sync"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -215,6 +218,71 @@ func TestHealthCheck(t *testing.T) {
 	hc.Close()
 }
 
+func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
+	t.Logf("starting")
+	tablet := topo.NewTablet(1, "cell", "a")
+	tablet.PortMap["vt"] = 1
+	input := make(chan *querypb.StreamHealthResponse, 1)
+	fc := createFakeConn(tablet, input)
+
+	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
+
+	l := newListener()
+	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, time.Hour).(*HealthCheckImpl)
+	hc.SetListener(l, false)
+	hc.AddTablet(tablet, "")
+	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
+
+	// Immediately after AddTablet() there will be the first notification.
+	want := &TabletStats{
+		Key:     "a,vt:1",
+		Tablet:  tablet,
+		Target:  &querypb.Target{},
+		Up:      true,
+		Serving: false,
+	}
+	res := <-l.output
+	if !reflect.DeepEqual(res, want) {
+		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
+	}
+
+	input <- &querypb.StreamHealthResponse{
+		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		TabletAlias: &topodatapb.TabletAlias{Uid: 20, Cell: "cellb"},
+		Serving:     true,
+		TabletExternallyReparentedTimestamp: 10,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+
+	select {
+	case err := <-fc.errCh:
+		t.Logf("<-fc.errCh: %v", err)
+		if prefix := "health stats mismatch"; !strings.HasPrefix(err.Error(), prefix) {
+			t.Fatalf("wrong error, got %v; want prefix %v", err, prefix)
+		}
+	case <-l.output:
+		t.Fatalf("StreamHealth should have returned a health stats mismatch error")
+	}
+
+	input <- &querypb.StreamHealthResponse{
+		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		TabletAlias: &topodatapb.TabletAlias{Uid: 1, Cell: "cell"},
+		Serving:     true,
+		TabletExternallyReparentedTimestamp: 10,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+
+	select {
+	case err := <-fc.errCh:
+		t.Fatalf("wanted listener output, got error: %v", err)
+	case res := <-l.output:
+		t.Logf("<-l.output: %+v", res)
+	}
+
+	// close healthcheck
+	hc.Close()
+}
+
 // TestHealthCheckCloseWaitsForGoRoutines tests that Close() waits for all Go
 // routines to finish and the listener won't be called anymore.
 func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
@@ -318,7 +386,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 	tablet := topo.NewTablet(0, "cell", "a")
 	tablet.PortMap["vt"] = 1
 	input := make(chan *querypb.StreamHealthResponse)
-	createFakeConn(tablet, input)
+	fc := createFakeConn(tablet, input)
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	l := newListener()
 	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, timeout).(*HealthCheckImpl)
@@ -368,6 +436,10 @@ func TestHealthCheckTimeout(t *testing.T) {
 	res = <-l.output
 	if res.Serving {
 		t.Errorf(`<-l.output: %+v; want not serving`, res)
+	}
+
+	if !fc.isCanceled() {
+		t.Errorf("StreamHealth should be canceled after timeout, but is not")
 	}
 
 	// send a healthcheck response, it should be serving again
@@ -429,6 +501,7 @@ func createFakeConn(tablet *topodatapb.Tablet, c chan *querypb.StreamHealthRespo
 		QueryService: fakes.ErrorQueryService,
 		tablet:       tablet,
 		hcChan:       c,
+		errCh:        make(chan error, 1),
 	}
 	connMap[key] = conn
 	return conn
@@ -443,6 +516,10 @@ type fakeConn struct {
 	queryservice.QueryService
 	tablet *topodatapb.Tablet
 	hcChan chan *querypb.StreamHealthResponse
+	errCh  chan error
+
+	mu       sync.Mutex
+	canceled bool
 }
 
 // StreamHealth implements queryservice.QueryService.
@@ -452,13 +529,23 @@ func (fc *fakeConn) StreamHealth(ctx context.Context, callback func(shr *querypb
 		select {
 		case shr = <-fc.hcChan:
 		case <-ctx.Done():
+			fc.mu.Lock()
+			fc.canceled = true
+			fc.mu.Unlock()
 			return nil
 		}
 		if err := callback(shr); err != nil {
 			if err == io.EOF {
 				return nil
 			}
+			fc.errCh <- err
 			return err
 		}
 	}
+}
+
+func (fc *fakeConn) isCanceled() bool {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	return fc.canceled
 }
