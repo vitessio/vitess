@@ -114,7 +114,7 @@ func TestUpdateEqualFail(t *testing.T) {
 	s := getSandbox("TestExecutor")
 
 	_, err := executorExec(executor, "update user set a=2 where id = :aa", nil)
-	want := "execUpdateEqual: could not find bind var :aa"
+	want := "execUpdateEqual: missing bind var aa"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}
@@ -291,7 +291,7 @@ func TestDeleteEqualFail(t *testing.T) {
 	s := getSandbox("TestExecutor")
 
 	_, err := executorExec(executor, "delete from user where id = :aa", nil)
-	want := "execDeleteEqual: could not find bind var :aa"
+	want := "execDeleteEqual: missing bind var aa"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}
@@ -436,7 +436,7 @@ func TestInsertGeneratorSharded(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into user(v, name, Id) values (2, :_name0, :_Id0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql: "insert into user(v, name, id) values (2, :_name0, :_Id0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id0":   sqltypes.Int64BindVariable(1),
 			"__seq0": sqltypes.Int64BindVariable(1),
@@ -687,13 +687,13 @@ func TestInsertFail(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
 
 	_, err := executorExec(executor, "insert into user(id, v, name) values (:aa, 2, 'myname')", nil)
-	want := "execInsertSharded: handleGenerate: could not find bind var :aa"
+	want := "execInsertSharded: handleGenerate: missing bind var aa"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}
 
 	_, err = executorExec(executor, "insert into main1(id, v, name) values (:aa, 2, 'myname')", nil)
-	want = "execInsertUnsharded: handleGenerate: could not find bind var :aa"
+	want = "execInsertUnsharded: handleGenerate: missing bind var aa"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}

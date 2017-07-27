@@ -93,7 +93,7 @@
     "Query": "select col from user where id = 5 order by aa asc",
     "FieldQuery": "select col from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": 5
+    "Values": [5]
   }
 }
 
@@ -110,7 +110,7 @@
     "Query": "select col from user where id = 1 order by 1 asc",
     "FieldQuery": "select col from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": 1
+    "Values": [1]
   }
 }
 
@@ -169,7 +169,7 @@
       "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by null",
       "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
       "Vindex": "user_index",
-      "Values": 1
+      "Values": [1]
     },
     "Right": {
       "Opcode": "SelectEqualUnique",
@@ -180,7 +180,7 @@
       "Query": "select music.col3 from music where music.id = :user_id order by null",
       "FieldQuery": "select music.col3 from music where 1 != 1",
       "Vindex": "music_user_map",
-      "Values": ":user_id",
+      "Values": [":user_id"],
       "JoinVars": {
         "user_id": {}
       }
@@ -209,7 +209,7 @@
     "Query": "select * from user where id = 5 order by col asc",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": 5
+    "Values": [5]
   }
 }
 
@@ -226,7 +226,7 @@
     "Query": "select user.* from user where id = 5 order by user.col asc",
     "FieldQuery": "select user.* from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": 5
+    "Values": [5]
   }
 }
 
@@ -243,7 +243,7 @@
     "Query": "select * from user where id = 5 order by user.col asc",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": 5
+    "Values": [5]
   }
 }
 
@@ -313,7 +313,7 @@
     "Query": "select * from user where id = 5 order by user.col collate utf8_general_ci asc",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": 5
+    "Values": [5]
   }
 }
 
@@ -330,7 +330,7 @@
       "Query":"select * from user where id = 5 order by -col1 asc",
       "FieldQuery":"select * from user where 1 != 1",
       "Vindex":"user_index",
-      "Values":5
+      "Values":[5]
    }
 }
 
@@ -347,7 +347,7 @@
       "Query":"select * from user where id = 5 order by concat(col, col1) collate utf8_general_ci desc",
       "FieldQuery":"select * from user where 1 != 1",
       "Vindex":"user_index",
-      "Values":5
+      "Values":[5]
    }
 }
 
@@ -364,7 +364,7 @@
       "Query":"select * from user where id = 5 order by id + col collate utf8_general_ci desc",
       "FieldQuery":"select * from user where 1 != 1",
       "Vindex":"user_index",
-      "Values":5
+      "Values":[5]
    }
 }
 
@@ -381,7 +381,7 @@
       "Query":"select * from user as u join (select user_id from user_extra where user_id = 5) as eu on u.id = eu.user_id where u.id = 5 order by eu.user_id asc",
       "FieldQuery":"select * from user as u join (select user_id from user_extra where 1 != 1) as eu on u.id = eu.user_id where 1 != 1",
       "Vindex":"user_index",
-      "Values":5
+      "Values":[5]
    }
 }
 
@@ -398,7 +398,7 @@
     "Query": "select col1 from user where id = 1 limit 1",
     "FieldQuery": "select col1 from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": 1
+    "Values": [1]
   }
 }
 
@@ -497,7 +497,3 @@
 # invalid limit expression
 "select id from user limit 1+1"
 "unexpected expression in LIMIT:  limit 1 + 1"
-
-# invalid value in limit
-"select id from user limit 'a'"
-"unexpected expression in LIMIT:  limit 'a'"

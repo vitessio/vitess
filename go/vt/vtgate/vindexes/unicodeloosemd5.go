@@ -22,6 +22,8 @@ import (
 	"sync"
 	"unicode/utf8"
 
+	"github.com/youtube/vitess/go/sqltypes"
+
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
 )
@@ -51,7 +53,7 @@ func (vind *UnicodeLooseMD5) Cost() int {
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *UnicodeLooseMD5) Verify(_ VCursor, ids []interface{}, ksids [][]byte) (bool, error) {
+func (vind *UnicodeLooseMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
 	if len(ids) != len(ksids) {
 		return false, fmt.Errorf("UnicodeLooseMD5.Verify: length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
 	}
@@ -68,7 +70,7 @@ func (vind *UnicodeLooseMD5) Verify(_ VCursor, ids []interface{}, ksids [][]byte
 }
 
 // Map returns the corresponding keyspace id values for the given ids.
-func (vind *UnicodeLooseMD5) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
+func (vind *UnicodeLooseMD5) Map(_ VCursor, ids []sqltypes.Value) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
 		data, err := unicodeHash(id)
@@ -80,16 +82,11 @@ func (vind *UnicodeLooseMD5) Map(_ VCursor, ids []interface{}) ([][]byte, error)
 	return out, nil
 }
 
-func unicodeHash(key interface{}) ([]byte, error) {
-	source, err := getBytes(key)
-	if err != nil {
-		return nil, err
-	}
-
+func unicodeHash(key sqltypes.Value) ([]byte, error) {
 	collator := collatorPool.Get().(pooledCollator)
 	defer collatorPool.Put(collator)
 
-	norm, err := normalize(collator.col, collator.buf, source)
+	norm, err := normalize(collator.col, collator.buf, key.Bytes())
 	if err != nil {
 		return nil, err
 	}

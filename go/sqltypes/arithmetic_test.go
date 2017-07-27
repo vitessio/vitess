@@ -284,7 +284,7 @@ func TestConvertToUint64(t *testing.T) {
 		out: 1,
 	}, {
 		v:   int64(-1),
-		err: "getNumber: negative number cannot be converted to unsigned: -1",
+		err: "ConvertToUint64: negative number cannot be converted to unsigned: -1",
 	}, {
 		v:   uint(1),
 		out: 1,
@@ -317,13 +317,13 @@ func TestConvertToUint64(t *testing.T) {
 		err: "cannot convert a TUPLE bind var into a value",
 	}, {
 		v:   nil,
-		err: "getNumber: unexpected type for <nil>: <nil>",
+		err: "ConvertToUint64: unexpected type for <nil>: <nil>",
 	}, {
 		v:   makeAny(VarChar, "abcd"),
 		err: "could not parse value: abcd",
 	}, {
 		v:   makeInt(-1),
-		err: "getNumber: negative number cannot be converted to unsigned: -1",
+		err: "ConvertToUint64: negative number cannot be converted to unsigned: -1",
 	}, {
 		v:   makeUint(1),
 		out: 1,

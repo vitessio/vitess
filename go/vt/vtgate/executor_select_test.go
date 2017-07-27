@@ -534,7 +534,7 @@ func TestSelectEqualFail(t *testing.T) {
 	}
 
 	_, err = executorExec(executor, "select id from user where id = :aa", nil)
-	want = "paramsSelectEqual: could not find bind var :aa"
+	want = "paramsSelectEqual: missing bind var aa"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}
@@ -736,13 +736,13 @@ func TestSelectINFail(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 
 	_, err := executorExec(executor, "select id from user where id in (:aa)", nil)
-	want := "paramsSelectIN: could not find bind var :aa"
+	want := "paramsSelectIN: missing bind var aa"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}
 
 	_, err = executorExec(executor, "select id from user where id in ::aa", nil)
-	want = "paramsSelectIN: could not find bind var ::aa"
+	want = "paramsSelectIN: missing bind var aa"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}
@@ -750,7 +750,7 @@ func TestSelectINFail(t *testing.T) {
 	_, err = executorExec(executor, "select id from user where id in ::aa", map[string]*querypb.BindVariable{
 		"aa": sqltypes.Int64BindVariable(1),
 	})
-	want = `paramsSelectIN: expecting list for bind var ::aa: type:INT64 value:"1" `
+	want = `paramsSelectIN: single value was supplied for TUPLE bind var aa`
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec:\n%v, want\n%v", err, want)
 	}

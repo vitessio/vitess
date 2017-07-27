@@ -17,7 +17,6 @@ limitations under the License.
 package sqlparser
 
 import (
-	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -153,24 +152,42 @@ func TestIsValue(t *testing.T) {
 		in  Expr
 		out bool
 	}{{
-		in:  newStrVal(""),
+		in:  newStrVal("aa"),
 		out: true,
 	}, {
-		in:  newHexVal(""),
+		in:  newHexVal("3131"),
 		out: true,
 	}, {
-		in:  newIntVal(""),
+		in:  newIntVal("1"),
 		out: true,
 	}, {
-		in:  newValArg(""),
+		in:  newValArg(":a"),
 		out: true,
 	}, {
-		in: &NullVal{},
+		in: &ValuesFuncExpr{
+			Name:     NewColIdent("foo"),
+			Resolved: newStrVal(""),
+		},
+		out: true,
+	}, {
+		in: &ValuesFuncExpr{
+			Name: NewColIdent("foo"),
+		},
+		out: false,
+	}, {
+		in:  &NullVal{},
+		out: false,
 	}}
 	for _, tc := range testcases {
 		out := IsValue(tc.in)
 		if out != tc.out {
 			t.Errorf("IsValue(%T): %v, want %v", tc.in, out, tc.out)
+		}
+		if tc.out {
+			// NewPlanValue should not fail for valid values.
+			if _, err := NewPlanValue(tc.in); err != nil {
+				t.Error(err)
+			}
 		}
 	}
 }
@@ -198,12 +215,12 @@ func TestIsSimpleTuple(t *testing.T) {
 		in  Expr
 		out bool
 	}{{
-		in:  ValTuple{newStrVal("")},
+		in:  ValTuple{newStrVal("aa")},
 		out: true,
 	}, {
 		in: ValTuple{&ColName{}},
 	}, {
-		in:  ListArg(""),
+		in:  ListArg("::a"),
 		out: true,
 	}, {
 		in: &ColName{},
@@ -212,6 +229,12 @@ func TestIsSimpleTuple(t *testing.T) {
 		out := IsSimpleTuple(tc.in)
 		if out != tc.out {
 			t.Errorf("IsSimpleTuple(%T): %v, want %v", tc.in, out, tc.out)
+		}
+		if tc.out {
+			// NewPlanValue should not fail for valid tuples.
+			if _, err := NewPlanValue(tc.in); err != nil {
+				t.Error(err)
+			}
 		}
 	}
 }
@@ -333,58 +356,6 @@ func TestNewPlanValue(t *testing.T) {
 	}
 }
 
-func TestAsInterface(t *testing.T) {
-	testcases := []struct {
-		in  Expr
-		out interface{}
-	}{{
-		in:  ValTuple{newStrVal("aa")},
-		out: []interface{}{sqltypes.MakeString([]byte("aa"))},
-	}, {
-		in:  ValTuple{&ColName{}},
-		out: errors.New("expression is too complex ''"),
-	}, {
-		in:  newValArg(":aa"),
-		out: ":aa",
-	}, {
-		in:  ListArg("::aa"),
-		out: "::aa",
-	}, {
-		in:  newStrVal("aa"),
-		out: sqltypes.MakeString([]byte("aa")),
-	}, {
-		in:  newHexVal("3131"),
-		out: sqltypes.MakeString([]byte("11")),
-	}, {
-		in:  newHexVal("313"),
-		out: errors.New("encoding/hex: odd length hex string"),
-	}, {
-		in:  newIntVal("313"),
-		out: sqltypes.MakeTrusted(sqltypes.Int64, []byte("313")),
-	}, {
-		in:  newIntVal("18446744073709551616"),
-		out: errors.New("type mismatch: strconv.ParseUint: parsing \"18446744073709551616\": value out of range"),
-	}, {
-		in:  newFloatVal("1.2"),
-		out: errors.New("expression is too complex '1.2'"),
-	}, {
-		in:  &NullVal{},
-		out: nil,
-	}, {
-		in:  &ColName{},
-		out: errors.New("expression is too complex ''"),
-	}}
-	for _, tc := range testcases {
-		out, err := AsInterface(tc.in)
-		if err != nil {
-			out = err
-		}
-		if !reflect.DeepEqual(out, tc.out) {
-			t.Errorf("AsInterface(%#v): %#v, want %#v", tc.in, out, tc.out)
-		}
-	}
-}
-
 func TestStringIn(t *testing.T) {
 	testcases := []struct {
 		in1 string
@@ -460,10 +431,6 @@ func newStrVal(in string) *SQLVal {
 
 func newIntVal(in string) *SQLVal {
 	return NewIntVal([]byte(in))
-}
-
-func newFloatVal(in string) *SQLVal {
-	return NewFloatVal([]byte(in))
 }
 
 func newHexVal(in string) *SQLVal {

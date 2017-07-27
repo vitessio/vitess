@@ -31,7 +31,7 @@ var _ Primitive = (*Limit)(nil)
 // Limit is a primitive that performs the LIMIT operation.
 // For now, it only supports count without offset.
 type Limit struct {
-	Count interface{}
+	Count sqltypes.PlanValue
 	Input Primitive
 }
 
@@ -40,11 +40,11 @@ type Limit struct {
 func (l *Limit) MarshalJSON() ([]byte, error) {
 	marshalLimit := struct {
 		Opcode string
-		Count  interface{}
+		Count  sqltypes.PlanValue
 		Input  Primitive
 	}{
 		Opcode: "Limit",
-		Count:  prettyValue(l.Count),
+		Count:  l.Count,
 		Input:  l.Input,
 	}
 	return json.Marshal(marshalLimit)
@@ -126,7 +126,7 @@ func (l *Limit) fetchCount(bindVars, joinVars map[string]*querypb.BindVariable) 
 	// by the supplier of joinVars instead.
 	bindVars = combineVars(bindVars, joinVars)
 
-	resolved, err := resolveBindvar(l.Count, bindVars)
+	resolved, err := l.Count.ResolveValue(bindVars)
 	if err != nil {
 		return 0, err
 	}
@@ -139,20 +139,4 @@ func (l *Limit) fetchCount(bindVars, joinVars map[string]*querypb.BindVariable) 
 		return 0, fmt.Errorf("requested limit is out of range: %v", num)
 	}
 	return count, nil
-}
-
-// resolveBindvar resolves "var" if it's a bind variable.
-// Otherwise, it's an integer literal and returned as is.
-// TODO(sougou): move this to a more reusable location.
-func resolveBindvar(val interface{}, bindVars map[string]*querypb.BindVariable) (interface{}, error) {
-	// If it's a bindvar, it will be a string.
-	v, ok := val.(string)
-	if !ok {
-		return val, nil
-	}
-	val, ok = bindVars[v[1:]]
-	if !ok {
-		return nil, fmt.Errorf("could not find bind var %s", v)
-	}
-	return val, nil
 }

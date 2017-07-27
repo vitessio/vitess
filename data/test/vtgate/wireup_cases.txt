@@ -285,7 +285,7 @@
         "Query": "select 1 from user as u3 where u3.id = :u1_col",
         "FieldQuery": "select 1 from user as u3 where 1 != 1",
         "Vindex": "user_index",
-        "Values": ":u1_col",
+        "Values": [":u1_col"],
         "JoinVars": {
           "u1_col": {}
         }
@@ -345,7 +345,7 @@
         "Query": "select 1 from user as u2 where u2.id = :u1_col",
         "FieldQuery": "select 1 from user as u2 where 1 != 1",
         "Vindex": "user_index",
-        "Values": ":u1_col",
+        "Values": [":u1_col"],
         "JoinVars": {
           "u1_col": {}
         }
@@ -359,7 +359,7 @@
         "Query": "select 1 from user as u3 where u3.id = :u1_col",
         "FieldQuery": "select 1 from user as u3 where 1 != 1",
         "Vindex": "user_index",
-        "Values": ":u1_col",
+        "Values": [":u1_col"],
         "JoinVars": {
           "u1_col": {}
         }

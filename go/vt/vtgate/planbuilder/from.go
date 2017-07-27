@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"fmt"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
@@ -84,6 +85,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 		rb := newRoute(
 			&sqlparser.Select{From: sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr})},
 			eroute,
+			nil,
 			vschema,
 		)
 		if table != nil {
@@ -142,6 +144,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 		rb := newRoute(
 			&sqlparser.Select{From: sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr})},
 			subroute.ERoute,
+			subroute.condition,
 			vschema,
 		)
 		// AddVindexTable can never fail because symtab is empty.
@@ -179,7 +182,7 @@ func buildERoute(tableName sqlparser.TableName, vschema VSchema) (*engine.Route,
 	// for keyspace id. Currently only dual tables are pinned.
 	route := engine.NewRoute(engine.SelectEqualUnique, table.Keyspace)
 	route.Vindex, _ = vindexes.NewBinary("binary", nil)
-	route.Values = sqlparser.NewStrVal(table.Pinned)
+	route.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, table.Pinned)}}
 	return route, table, nil
 }
 

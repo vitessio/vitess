@@ -225,7 +225,7 @@ func ConvertToUint64(v interface{}) (uint64, error) {
 		}
 		num, err = newIntegralNumeric(sv)
 	default:
-		return 0, fmt.Errorf("getNumber: unexpected type for %v: %T", v, v)
+		return 0, fmt.Errorf("ConvertToUint64: unexpected type for %v: %T", v, v)
 	}
 	if err != nil {
 		return 0, err
@@ -234,7 +234,7 @@ func ConvertToUint64(v interface{}) (uint64, error) {
 	switch num.typ {
 	case Int64:
 		if num.ival < 0 {
-			return 0, fmt.Errorf("getNumber: negative number cannot be converted to unsigned: %d", num.ival)
+			return 0, fmt.Errorf("ConvertToUint64: negative number cannot be converted to unsigned: %d", num.ival)
 		}
 		return uint64(num.ival), nil
 	case Uint64:
@@ -245,7 +245,7 @@ func ConvertToUint64(v interface{}) (uint64, error) {
 
 func int64ToUint64(n int64) (uint64, error) {
 	if n < 0 {
-		return 0, fmt.Errorf("getNumber: negative number cannot be converted to unsigned: %d", n)
+		return 0, fmt.Errorf("ConvertToUint64: negative number cannot be converted to unsigned: %d", n)
 	}
 	return uint64(n), nil
 }

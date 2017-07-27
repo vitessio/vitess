@@ -71,7 +71,7 @@ func (*NumericStaticMap) Cost() int {
 }
 
 // Verify returns true if ids and ksids match.
-func (vind *NumericStaticMap) Verify(_ VCursor, ids []interface{}, ksids [][]byte) (bool, error) {
+func (vind *NumericStaticMap) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
 	if len(ids) != len(ksids) {
 		return false, fmt.Errorf("NumericStaticMap.Verify: length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
 	}
@@ -94,7 +94,7 @@ func (vind *NumericStaticMap) Verify(_ VCursor, ids []interface{}, ksids [][]byt
 }
 
 // Map returns the associated keyspace ids for the given ids.
-func (vind *NumericStaticMap) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
+func (vind *NumericStaticMap) Map(_ VCursor, ids []sqltypes.Value) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
 		num, err := sqltypes.ConvertToUint64(id)

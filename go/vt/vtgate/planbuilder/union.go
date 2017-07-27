@@ -99,6 +99,7 @@ func unionRouteMerge(union *sqlparser.Union, left, right builder, vschema VSchem
 	rb := newRoute(
 		&sqlparser.Union{Type: union.Type, Left: union.Left, Right: union.Right, Lock: union.Lock},
 		lroute.ERoute,
+		lroute.condition,
 		vschema,
 	)
 	lroute.Redirect = rb

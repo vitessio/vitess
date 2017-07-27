@@ -70,7 +70,7 @@ func TestLookupNonUniqueString(t *testing.T) {
 
 func TestLookupUniqueVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	_, err := lookupUnique.Verify(vc, []interface{}{1}, [][]byte{[]byte("test")})
+	_, err := lookupUnique.Verify(vc, []sqltypes.Value{testVal(1)}, [][]byte{[]byte("test")})
 	wantQuery := &querypb.BoundQuery{
 		Sql: "select fromc from t where ((fromc=:fromc0 and toc=:toc0))",
 		BindVariables: map[string]*querypb.BindVariable{
@@ -87,12 +87,12 @@ func TestLookupUniqueVerify(t *testing.T) {
 
 	//Negative test
 	want := "lookup.Verify:length of ids 2 doesn't match length of ksids 1"
-	_, err = lookupUnique.Verify(vc, []interface{}{1, 2}, [][]byte{[]byte("test")})
+	_, err = lookupUnique.Verify(vc, []sqltypes.Value{testVal(1), testVal(2)}, [][]byte{[]byte("test")})
 	if err.Error() != want {
 		t.Error(err.Error())
 	}
 
-	_, err = lookuphashunique.Verify(nil, []interface{}{1}, [][]byte{[]byte("test1test23")})
+	_, err = lookuphashunique.Verify(nil, []sqltypes.Value{testVal(1)}, [][]byte{[]byte("test1test23")})
 	want = "lookup.Verify: invalid keyspace id: 7465737431746573743233"
 	if err.Error() != want {
 		t.Error(err)
@@ -101,7 +101,7 @@ func TestLookupUniqueVerify(t *testing.T) {
 
 func TestLookupUniqueMap(t *testing.T) {
 	vc := &vcursor{}
-	_, err := lookupUnique.(Unique).Map(vc, []interface{}{2})
+	_, err := lookupUnique.(Unique).Map(vc, []sqltypes.Value{testVal(2)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -118,7 +118,7 @@ func TestLookupUniqueMap(t *testing.T) {
 
 func TestLookupUniqueCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := lookupUnique.(Lookup).Create(vc, []interface{}{1}, [][]byte{[]byte("test")})
+	err := lookupUnique.(Lookup).Create(vc, []sqltypes.Value{testVal(1)}, [][]byte{[]byte("test")})
 	if err != nil {
 		t.Error(err)
 	}
@@ -135,12 +135,12 @@ func TestLookupUniqueCreate(t *testing.T) {
 
 	//Negative test
 	want := "lookup.Create:length of ids 2 doesn't match length of ksids 1"
-	err = lookupUnique.(Lookup).Create(vc, []interface{}{1, 2}, [][]byte{[]byte("test")})
+	err = lookupUnique.(Lookup).Create(vc, []sqltypes.Value{testVal(1), testVal(2)}, [][]byte{[]byte("test")})
 	if err.Error() != want {
 		t.Error(err.Error())
 	}
 
-	err = lookuphashunique.(Lookup).Create(nil, []interface{}{1}, [][]byte{[]byte("test1test23")})
+	err = lookuphashunique.(Lookup).Create(nil, []sqltypes.Value{testVal(1)}, [][]byte{[]byte("test1test23")})
 	want = "lookup.Create: invalid keyspace id: 7465737431746573743233"
 	if err.Error() != want {
 		t.Error(err)
@@ -156,7 +156,7 @@ func TestLookupUniqueReverse(t *testing.T) {
 
 func TestLookupUniqueDelete(t *testing.T) {
 	vc := &vcursor{}
-	err := lookupUnique.(Lookup).Delete(vc, []interface{}{1}, []byte("test"))
+	err := lookupUnique.(Lookup).Delete(vc, []sqltypes.Value{testVal(1)}, []byte("test"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -172,7 +172,7 @@ func TestLookupUniqueDelete(t *testing.T) {
 	}
 
 	//Negative Test
-	err = lookuphashunique.(Lookup).Delete(vc, []interface{}{1}, []byte("test1test23"))
+	err = lookuphashunique.(Lookup).Delete(vc, []sqltypes.Value{testVal(1)}, []byte("test1test23"))
 	want := "lookup.Delete: invalid keyspace id: 7465737431746573743233"
 	if err.Error() != want {
 		t.Error(err)
@@ -181,7 +181,7 @@ func TestLookupUniqueDelete(t *testing.T) {
 
 func TestLookupNonUniqueVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	_, err := lookupNonUnique.Verify(vc, []interface{}{1}, [][]byte{[]byte("test")})
+	_, err := lookupNonUnique.Verify(vc, []sqltypes.Value{testVal(1)}, [][]byte{[]byte("test")})
 	wantQuery := &querypb.BoundQuery{
 		Sql: "select fromc from t where ((fromc=:fromc0 and toc=:toc0))",
 		BindVariables: map[string]*querypb.BindVariable{
@@ -199,7 +199,7 @@ func TestLookupNonUniqueVerify(t *testing.T) {
 
 func TestLookupNonUniqueMap(t *testing.T) {
 	vc := &vcursor{}
-	_, err := lookupNonUnique.(NonUnique).Map(vc, []interface{}{2})
+	_, err := lookupNonUnique.(NonUnique).Map(vc, []sqltypes.Value{testVal(2)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -216,7 +216,7 @@ func TestLookupNonUniqueMap(t *testing.T) {
 
 func TestLookupNonUniqueCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := lookupNonUnique.(Lookup).Create(vc, []interface{}{1}, [][]byte{[]byte("test")})
+	err := lookupNonUnique.(Lookup).Create(vc, []sqltypes.Value{testVal(1)}, [][]byte{[]byte("test")})
 	if err != nil {
 		t.Error(err)
 	}
@@ -241,7 +241,7 @@ func TestLookupNonUniqueReverse(t *testing.T) {
 
 func TestLookupNonUniqueDelete(t *testing.T) {
 	vc := &vcursor{}
-	err := lookupNonUnique.(Lookup).Delete(vc, []interface{}{1}, []byte("test"))
+	err := lookupNonUnique.(Lookup).Delete(vc, []sqltypes.Value{testVal(1)}, []byte("test"))
 	if err != nil {
 		t.Error(err)
 	}

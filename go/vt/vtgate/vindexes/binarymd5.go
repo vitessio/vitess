@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"crypto/md5"
 	"fmt"
+
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 // BinaryMD5 is a vindex that hashes binary bits to a keyspace id.
@@ -43,16 +45,12 @@ func (vind *BinaryMD5) Cost() int {
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *BinaryMD5) Verify(_ VCursor, ids []interface{}, ksids [][]byte) (bool, error) {
+func (vind *BinaryMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
 	if len(ids) != len(ksids) {
 		return false, fmt.Errorf("BinaryMD5_hash.Verify: length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
 	}
-	for rowNum := range ids {
-		data, err := binHashKey(ids[rowNum])
-		if err != nil {
-			return false, fmt.Errorf("BinaryMD5_hash.Verify: %v", err)
-		}
-		if bytes.Compare(data, ksids[rowNum]) != 0 {
+	for i := range ids {
+		if bytes.Compare(binHash(ids[i].Bytes()), ksids[i]) != 0 {
 			return false, nil
 		}
 	}
@@ -60,24 +58,12 @@ func (vind *BinaryMD5) Verify(_ VCursor, ids []interface{}, ksids [][]byte) (boo
 }
 
 // Map returns the corresponding keyspace id values for the given ids.
-func (vind *BinaryMD5) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
+func (vind *BinaryMD5) Map(_ VCursor, ids []sqltypes.Value) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
-		data, err := binHashKey(id)
-		if err != nil {
-			return nil, fmt.Errorf("BinaryMd5.Map :%v", err)
-		}
-		out = append(out, data)
+		out = append(out, binHash(id.Bytes()))
 	}
 	return out, nil
-}
-
-func binHashKey(key interface{}) ([]byte, error) {
-	source, err := getBytes(key)
-	if err != nil {
-		return nil, err
-	}
-	return binHash(source), nil
 }
 
 func binHash(source []byte) []byte {

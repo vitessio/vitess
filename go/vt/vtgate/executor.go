@@ -470,15 +470,12 @@ func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []
 		// We always use the (unique) primary vindex. The ID must be the
 		// primary vindex for message tables.
 		mapper := table.ColumnVindexes[0].Vindex.(vindexes.Unique)
-		// convert []*querypb.Value to []interface{} for calling Map.
-		asInterface := make([]interface{}, 0, len(ids))
+		// convert []*querypb.Value to []sqltypes.Value for calling Map.
+		values := make([]sqltypes.Value, 0, len(ids))
 		for _, id := range ids {
-			asInterface = append(asInterface, &querypb.BindVariable{
-				Type:  id.Type,
-				Value: id.Value,
-			})
+			values = append(values, sqltypes.MakeTrusted(id.Type, id.Value))
 		}
-		ksids, err := mapper.Map(vcursor, asInterface)
+		ksids, err := mapper.Map(vcursor, values)
 		if err != nil {
 			return 0, err
 		}
