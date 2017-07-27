@@ -623,7 +623,7 @@ func (route *Route) resolveShards(vcursor VCursor, bindVars map[string]*querypb.
 			if err != nil {
 				return "", nil, err
 			}
-			routing.Add(shard, &querypb.Value{Type: vindexKeys[i].Type(), Value: vindexKeys[i].Raw()})
+			routing.Add(shard, vindexKeys[i].ToProtoValue())
 		}
 	case vindexes.NonUnique:
 		ksidss, err := mapper.Map(vcursor, vindexKeys)
@@ -636,7 +636,7 @@ func (route *Route) resolveShards(vcursor VCursor, bindVars map[string]*querypb.
 				if err != nil {
 					return "", nil, err
 				}
-				routing.Add(shard, &querypb.Value{Type: vindexKeys[i].Type(), Value: vindexKeys[i].Raw()})
+				routing.Add(shard, vindexKeys[i].ToProtoValue())
 			}
 		}
 	default:

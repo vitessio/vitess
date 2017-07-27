@@ -1096,11 +1096,7 @@ func (tsv *TabletServer) MessageStream(ctx context.Context, target *querypb.Targ
 func (tsv *TabletServer) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (count int64, err error) {
 	sids := make([]string, 0, len(ids))
 	for _, val := range ids {
-		v, err := sqltypes.ValueFromBytes(val.Type, val.Value)
-		if err != nil {
-			return 0, tsv.convertAndLogError(ctx, "message_ack", nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid type: %v", err), nil)
-		}
-		sids = append(sids, v.String())
+		sids = append(sids, sqltypes.MakeTrusted(val.Type, val.Value).String())
 	}
 	return tsv.execDML(ctx, target, func() (string, map[string]*querypb.BindVariable, error) {
 		return tsv.messager.GenerateAckQuery(name, sids)

@@ -48,50 +48,32 @@ func BuildBindVariables(in map[string]interface{}) (map[string]*querypb.BindVari
 
 // Int64BindVariable converts an int64 to a bind var.
 func Int64BindVariable(v int64) *querypb.BindVariable {
-	return &querypb.BindVariable{
-		Type:  querypb.Type_INT64,
-		Value: strconv.AppendInt(nil, v, 10),
-	}
+	return ValueBindVariable(NewInt64(v))
 }
 
 // Uint64BindVariable converts a uint64 to a bind var.
 func Uint64BindVariable(v uint64) *querypb.BindVariable {
-	return &querypb.BindVariable{
-		Type:  querypb.Type_UINT64,
-		Value: strconv.AppendUint(nil, v, 10),
-	}
+	return ValueBindVariable(NewUint64(v))
 }
 
 // Float64BindVariable converts a float64 to a bind var.
 func Float64BindVariable(v float64) *querypb.BindVariable {
-	return &querypb.BindVariable{
-		Type:  querypb.Type_FLOAT64,
-		Value: strconv.AppendFloat(nil, v, 'g', -1, 64),
-	}
+	return ValueBindVariable(NewFloat64(v))
 }
 
 // StringBindVariable converts a string to a bind var.
 func StringBindVariable(v string) *querypb.BindVariable {
-	return &querypb.BindVariable{
-		Type:  querypb.Type_VARCHAR,
-		Value: []byte(v),
-	}
+	return ValueBindVariable(NewVarChar(v))
 }
 
 // BytesBindVariable converts a []byte to a bind var.
 func BytesBindVariable(v []byte) *querypb.BindVariable {
-	return &querypb.BindVariable{
-		Type:  querypb.Type_VARBINARY,
-		Value: v,
-	}
+	return ValueBindVariable(NewVarBinary(v))
 }
 
 // ValueBindVariable converts a Value to a bind var.
 func ValueBindVariable(v Value) *querypb.BindVariable {
-	return &querypb.BindVariable{
-		Type:  v.typ,
-		Value: v.val,
-	}
+	return &querypb.BindVariable{Type: v.typ, Value: v.val}
 }
 
 // BuildBindVariable builds a *querypb.BindVariable from a valid input type.
@@ -242,25 +224,14 @@ func ValidateBindVariable(bv *querypb.BindVariable) error {
 		return nil
 	}
 
-	// Only values convertible to mysql types are allowed.
-	if _, ok := typeToMySQL[bv.Type]; !ok {
+	// EXPRESSION is unsafe.
+	if bv.Type == querypb.Type_EXPRESSION {
 		return fmt.Errorf("type: %v is invalid", bv.Type)
 	}
-	switch {
-	case IsSigned(bv.Type):
-		if _, err := strconv.ParseInt(string(bv.Value), 0, 64); err != nil {
-			return err
-		}
-	case IsUnsigned(bv.Type):
-		if _, err := strconv.ParseUint(string(bv.Value), 0, 64); err != nil {
-			return err
-		}
-	case IsFloat(bv.Type) || bv.Type == querypb.Type_DECIMAL:
-		if _, err := strconv.ParseFloat(string(bv.Value), 64); err != nil {
-			return err
-		}
-	}
-	return nil
+
+	// If NewValue succeeds, the value is valid.
+	_, err := NewValue(bv.Type, bv.Value)
+	return err
 }
 
 // BindVariableToValue converts a bind var into a Value.

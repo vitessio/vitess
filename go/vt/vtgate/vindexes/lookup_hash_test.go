@@ -104,7 +104,7 @@ func TestLookupHashString(t *testing.T) {
 
 func TestLookupHashMap(t *testing.T) {
 	vc := &vcursor{numRows: 2}
-	got, err := lookuphash.(NonUnique).Map(vc, []sqltypes.Value{testVal(1), testVal(2)})
+	got, err := lookuphash.(NonUnique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -122,7 +122,7 @@ func TestLookupHashMap(t *testing.T) {
 
 func TestLookupHashVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	success, err := lookuphash.Verify(vc, []sqltypes.Value{testVal(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	success, err := lookuphash.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	if err != nil {
 		t.Error(err)
 	}
@@ -133,7 +133,7 @@ func TestLookupHashVerify(t *testing.T) {
 
 func TestLookupHashCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := lookuphash.(Lookup).Create(vc, []sqltypes.Value{testVal(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	err := lookuphash.(Lookup).Create(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	if err != nil {
 		t.Error(err)
 	}
@@ -158,7 +158,7 @@ func TestLookupHashReverse(t *testing.T) {
 
 func TestLookupHashDelete(t *testing.T) {
 	vc := &vcursor{}
-	err := lookuphash.(Lookup).Delete(vc, []sqltypes.Value{testVal(1)}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err := lookuphash.(Lookup).Delete(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}

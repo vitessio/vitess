@@ -177,11 +177,11 @@ func TestCodexBuildStreamComment(t *testing.T) {
 
 	// set pk2 = 'xyz' where pk1=1 and pk2 = 'abc'
 	bindVars := map[string]*querypb.BindVariable{}
-	pk1Val, _ := sqltypes.BuildValue(1)
-	pk2Val, _ := sqltypes.BuildValue("abc")
+	pk1Val := sqltypes.NewInt64(1)
+	pk2Val := sqltypes.NewVarChar("abc")
 	pkValues := []sqltypes.PlanValue{{Value: pk1Val}, {Value: pk2Val}}
 	pkList, _ := buildValueList(table, pkValues, bindVars)
-	pk2SecVal, _ := sqltypes.BuildValue("xyz")
+	pk2SecVal := sqltypes.NewVarChar("xyz")
 	secondaryPKValues := []sqltypes.PlanValue{{}, {Value: pk2SecVal}}
 	secondaryList, _ := buildSecondaryList(table, pkList, secondaryPKValues, bindVars)
 	want := []byte(" /* _stream `Table` (pk1 pk2 ) (1 'YWJj' ) (1 'eHl6' ); */")

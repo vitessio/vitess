@@ -87,9 +87,7 @@ func (*Numeric) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error) 
 			return nil, fmt.Errorf("Numeric.ReverseMap: length of keyspaceId is not 8: %d", len(keyspaceID))
 		}
 		val := binary.BigEndian.Uint64([]byte(keyspaceID))
-		// BuildValue will not fail for uint64.
-		v, _ := sqltypes.BuildValue(val)
-		reverseIds[rownum] = v
+		reverseIds[rownum] = sqltypes.NewUint64(val)
 	}
 	return reverseIds, nil
 }

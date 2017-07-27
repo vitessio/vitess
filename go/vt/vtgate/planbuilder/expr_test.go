@@ -26,7 +26,7 @@ func TestValEqual(t *testing.T) {
 	c1 := &column{}
 	c2 := &column{}
 	testcases := []struct {
-		in1, in2 interface{}
+		in1, in2 sqlparser.Expr
 		out      bool
 	}{{
 		in1: &sqlparser.ColName{Metadata: c1, Name: sqlparser.NewColIdent("c1")},

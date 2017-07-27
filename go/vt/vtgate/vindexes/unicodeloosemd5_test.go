@@ -96,13 +96,13 @@ func TestUnicodeLooseMD5(t *testing.T) {
 }
 
 func TestUnicodeLooseMD5Neg(t *testing.T) {
-	_, err := charVindex.Verify(nil, []sqltypes.Value{testVal([]byte("test1")), testVal([]byte("test2"))}, [][]byte{[]byte("test1")})
+	_, err := charVindex.Verify(nil, []sqltypes.Value{sqltypes.NewVarChar("test1"), sqltypes.NewVarChar("test2")}, [][]byte{[]byte("test1")})
 	want := "UnicodeLooseMD5.Verify: length of ids 2 doesn't match length of ksids 1"
 	if err.Error() != want {
 		t.Error(err.Error())
 	}
 
-	ok, err := charVindex.Verify(nil, []sqltypes.Value{testVal([]byte("test2"))}, [][]byte{[]byte("test1")})
+	ok, err := charVindex.Verify(nil, []sqltypes.Value{sqltypes.NewVarChar("test2")}, [][]byte{[]byte("test1")})
 	if err != nil {
 		t.Error(err)
 	}

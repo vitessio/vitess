@@ -21,154 +21,13 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/golang/protobuf/proto"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
-func TestMake(t *testing.T) {
-	v := MakeTrusted(Null, []byte("abcd"))
-	if !reflect.DeepEqual(v, NULL) {
-		t.Errorf("MakeTrusted(Null...) = %v, want null", makePretty(v))
-	}
-	v = MakeTrusted(Int64, []byte("1"))
-	want := testVal(Int64, "1")
-	if !reflect.DeepEqual(v, want) {
-		t.Errorf("MakeTrusted(Int64, \"1\") = %v, want %v", makePretty(v), makePretty(want))
-	}
-	v = MakeString([]byte("a"))
-	want = testVal(VarBinary, "a")
-	if !reflect.DeepEqual(v, want) {
-		t.Errorf("MakeString(\"a\") = %v, want %v", makePretty(v), makePretty(want))
-	}
-}
-
-func TestBuildValue(t *testing.T) {
-	testcases := []struct {
-		in  interface{}
-		out Value
-	}{{
-		in:  nil,
-		out: NULL,
-	}, {
-		in:  []byte("a"),
-		out: testVal(VarBinary, "a"),
-	}, {
-		in:  int64(1),
-		out: testVal(Int64, "1"),
-	}, {
-		in:  uint64(1),
-		out: testVal(Uint64, "1"),
-	}, {
-		in:  float64(1.2),
-		out: testVal(Float64, "1.2"),
-	}, {
-		in:  int(1),
-		out: testVal(Int64, "1"),
-	}, {
-		in:  int8(1),
-		out: testVal(Int8, "1"),
-	}, {
-		in:  int16(1),
-		out: testVal(Int16, "1"),
-	}, {
-		in:  int32(1),
-		out: testVal(Int32, "1"),
-	}, {
-		in:  uint(1),
-		out: testVal(Uint64, "1"),
-	}, {
-		in:  uint8(1),
-		out: testVal(Uint8, "1"),
-	}, {
-		in:  uint16(1),
-		out: testVal(Uint16, "1"),
-	}, {
-		in:  uint32(1),
-		out: testVal(Uint32, "1"),
-	}, {
-		in:  float32(1),
-		out: testVal(Float32, "1"),
-	}, {
-		in:  "a",
-		out: testVal(VarBinary, "a"),
-	}, {
-		in:  time.Date(2012, time.February, 24, 23, 19, 43, 10, time.UTC),
-		out: testVal(Datetime, "2012-02-24 23:19:43"),
-	}, {
-		in:  testVal(VarBinary, "a"),
-		out: testVal(VarBinary, "a"),
-	}, {
-		in:  BytesBindVariable([]byte("a")),
-		out: testVal(VarBinary, "a"),
-	}}
-	for _, tcase := range testcases {
-		v, err := BuildValue(tcase.in)
-		if err != nil {
-			t.Errorf("BuildValue(%#v) error: %v", tcase.in, err)
-			continue
-		}
-		if !reflect.DeepEqual(v, tcase.out) {
-			t.Errorf("BuildValue(%#v) = %v, want %v", tcase.in, makePretty(v), makePretty(tcase.out))
-		}
-	}
-
-	_, err := BuildValue(make(chan bool))
-	want := "unexpected"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("BuildValue(chan): %v, want %v", err, want)
-	}
-}
-
-func TestBuildConverted(t *testing.T) {
-	testcases := []struct {
-		typ querypb.Type
-		val interface{}
-		out Value
-	}{{
-		typ: Int64,
-		val: 123,
-		out: testVal(Int64, "123"),
-	}, {
-		typ: Int64,
-		val: "123",
-		out: testVal(Int64, "123"),
-	}, {
-		typ: Uint64,
-		val: "123",
-		out: testVal(Uint64, "123"),
-	}, {
-		typ: Int64,
-		val: []byte("123"),
-		out: testVal(Int64, "123"),
-	}, {
-		typ: Int64,
-		val: testVal(VarBinary, "123"),
-		out: testVal(Int64, "123"),
-	}, {
-		typ: Int64,
-		val: testVal(Float32, "123"),
-		out: testVal(Float32, "123"),
-	}, {
-		typ: Int64,
-		val: StringBindVariable("123"),
-		out: testVal(Int64, "123"),
-	}}
-	for _, tcase := range testcases {
-		v, err := BuildConverted(tcase.typ, tcase.val)
-		if err != nil {
-			t.Errorf("BuildValue(%v, %#v) error: %v", tcase.typ, tcase.val, err)
-			continue
-		}
-		if !reflect.DeepEqual(v, tcase.out) {
-			t.Errorf("BuildValue(%v, %#v) = %v, want %v", tcase.typ, tcase.val, makePretty(v), makePretty(tcase.out))
-		}
-	}
-}
-
-func TestValueFromBytes(t *testing.T) {
+func TestNewValue(t *testing.T) {
 	testcases := []struct {
 		inType querypb.Type
 		inVal  string
@@ -316,7 +175,7 @@ func TestValueFromBytes(t *testing.T) {
 		outErr: "type: TUPLE is invalid",
 	}}
 	for _, tcase := range testcases {
-		v, err := ValueFromBytes(tcase.inType, []byte(tcase.inVal))
+		v, err := NewValue(tcase.inType, []byte(tcase.inVal))
 		if tcase.outErr != "" {
 			if err == nil || !strings.Contains(err.Error(), tcase.outErr) {
 				t.Errorf("ValueFromBytes(%v, %v) error: %v, must contain %v", tcase.inType, tcase.inVal, err, tcase.outErr)
@@ -333,7 +192,24 @@ func TestValueFromBytes(t *testing.T) {
 	}
 }
 
-func TestBuildIntegral(t *testing.T) {
+func TestMakeTrusted(t *testing.T) {
+	v := MakeTrusted(Null, []byte("abcd"))
+	if !reflect.DeepEqual(v, NULL) {
+		t.Errorf("MakeTrusted(Null...) = %v, want null", makePretty(v))
+	}
+	v = MakeTrusted(Int64, []byte("1"))
+	want := testVal(Int64, "1")
+	if !reflect.DeepEqual(v, want) {
+		t.Errorf("MakeTrusted(Int64, \"1\") = %v, want %v", makePretty(v), makePretty(want))
+	}
+	v = MakeString([]byte("a"))
+	want = testVal(VarBinary, "a")
+	if !reflect.DeepEqual(v, want) {
+		t.Errorf("MakeString(\"a\") = %v, want %v", makePretty(v), makePretty(want))
+	}
+}
+
+func TestIntegralValue(t *testing.T) {
 	testcases := []struct {
 		in     string
 		outVal Value
@@ -352,7 +228,7 @@ func TestBuildIntegral(t *testing.T) {
 		outErr: "out of range",
 	}}
 	for _, tcase := range testcases {
-		v, err := BuildIntegral(tcase.in)
+		v, err := NewIntegral(tcase.in)
 		if tcase.outErr != "" {
 			if err == nil || !strings.Contains(err.Error(), tcase.outErr) {
 				t.Errorf("BuildIntegral(%v) error: %v, must contain %v", tcase.in, err, tcase.outErr)
@@ -366,6 +242,47 @@ func TestBuildIntegral(t *testing.T) {
 		if !reflect.DeepEqual(v, tcase.outVal) {
 			t.Errorf("BuildIntegral(%v) = %v, want %v", tcase.in, makePretty(v), makePretty(tcase.outVal))
 		}
+	}
+}
+
+func TestInerfaceValue(t *testing.T) {
+	testcases := []struct {
+		in  interface{}
+		out Value
+	}{{
+		in:  nil,
+		out: NULL,
+	}, {
+		in:  []byte("a"),
+		out: testVal(VarBinary, "a"),
+	}, {
+		in:  int64(1),
+		out: testVal(Int64, "1"),
+	}, {
+		in:  uint64(1),
+		out: testVal(Uint64, "1"),
+	}, {
+		in:  float64(1.2),
+		out: testVal(Float64, "1.2"),
+	}, {
+		in:  "a",
+		out: testVal(VarChar, "a"),
+	}}
+	for _, tcase := range testcases {
+		v, err := InterfaceToValue(tcase.in)
+		if err != nil {
+			t.Errorf("BuildValue(%#v) error: %v", tcase.in, err)
+			continue
+		}
+		if !reflect.DeepEqual(v, tcase.out) {
+			t.Errorf("BuildValue(%#v) = %v, want %v", tcase.in, makePretty(v), makePretty(tcase.out))
+		}
+	}
+
+	_, err := InterfaceToValue(make(chan bool))
+	want := "unexpected"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("BuildValue(chan): %v, want %v", err, want)
 	}
 }
 
@@ -526,82 +443,6 @@ func TestToProtoValue(t *testing.T) {
 	}
 	if !proto.Equal(got, want) {
 		t.Errorf("bindvar: %v, want %v", got, want)
-	}
-}
-
-func TestPanics(t *testing.T) {
-	testcases := []struct {
-		in  Value
-		out string
-	}{{
-		in:  testVal(Int64, InvalidNeg),
-		out: "out of range",
-	}, {
-		in:  testVal(Uint64, InvalidPos),
-		out: "out of range",
-	}, {
-		in:  testVal(Uint64, "-1"),
-		out: "invalid syntax",
-	}, {
-		in:  testVal(Float64, "a"),
-		out: "invalid syntax",
-	}, {
-		in:  testVal(Tuple, "a"),
-		out: "unexpected",
-	}}
-	for _, tcase := range testcases {
-		func() {
-			defer func() {
-				x := recover()
-				if x == nil {
-					t.Errorf("%v.ToNative did not panic", makePretty(tcase.in))
-				}
-				err, ok := x.(error)
-				if !ok {
-					t.Errorf("%v.ToNative did not panic with an error", makePretty(tcase.in))
-				}
-				if !strings.Contains(err.Error(), tcase.out) {
-					t.Errorf("%v.ToNative error: %v, must contain; %v ", makePretty(tcase.in), err, tcase.out)
-				}
-			}()
-			_ = tcase.in.ToNative()
-		}()
-	}
-	for _, tcase := range testcases {
-		func() {
-			defer func() {
-				x := recover()
-				if x == nil {
-					t.Errorf("%v.EncodeSQL did not panic", makePretty(tcase.in))
-				}
-				err, ok := x.(error)
-				if !ok {
-					t.Errorf("%v.EncodeSQL did not panic with an error", makePretty(tcase.in))
-				}
-				if !strings.Contains(err.Error(), tcase.out) {
-					t.Errorf("%v.EncodeSQL error: %v, must contain; %v ", makePretty(tcase.in), err, tcase.out)
-				}
-			}()
-			tcase.in.EncodeSQL(&bytes.Buffer{})
-		}()
-	}
-	for _, tcase := range testcases {
-		func() {
-			defer func() {
-				x := recover()
-				if x == nil {
-					t.Errorf("%v.EncodeASCII did not panic", makePretty(tcase.in))
-				}
-				err, ok := x.(error)
-				if !ok {
-					t.Errorf("%v.EncodeASCII did not panic with an error", makePretty(tcase.in))
-				}
-				if !strings.Contains(err.Error(), tcase.out) {
-					t.Errorf("%v.EncodeASCII error: %v, must contain; %v ", makePretty(tcase.in), err, tcase.out)
-				}
-			}()
-			tcase.in.EncodeASCII(&bytes.Buffer{})
-		}()
 	}
 }
 

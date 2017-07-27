@@ -642,10 +642,7 @@ func (shardSwap *shardSchemaSwap) writeStartedSwap() error {
 	queryBuf.WriteString("INSERT INTO _vt.shard_metadata (name, value) VALUES ('")
 	queryBuf.WriteString(currentSQLMetadataName)
 	queryBuf.WriteString("',")
-	sqlValue, err := sqltypes.BuildValue(shardSwap.parent.sql)
-	if err != nil {
-		return err
-	}
+	sqlValue := sqltypes.NewVarChar(shardSwap.parent.sql)
 	sqlValue.EncodeSQL(&queryBuf)
 	queryBuf.WriteString(") ON DUPLICATE KEY UPDATE value = ")
 	sqlValue.EncodeSQL(&queryBuf)

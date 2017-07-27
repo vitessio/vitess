@@ -170,7 +170,7 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 		case ValArg:
 			return sqltypes.PlanValue{Key: string(node.Val[1:])}, nil
 		case IntVal:
-			n, err := sqltypes.BuildIntegral(string(node.Val))
+			n, err := sqltypes.NewIntegral(string(node.Val))
 			if err != nil {
 				return sqltypes.PlanValue{}, err
 			}

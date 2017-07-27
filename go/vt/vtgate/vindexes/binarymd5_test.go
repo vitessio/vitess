@@ -75,13 +75,13 @@ func TestBinaryMD5(t *testing.T) {
 }
 
 func TestBinaryMD5VerifyNeg(t *testing.T) {
-	_, err := binVindex.Verify(nil, []sqltypes.Value{testVal("test1"), testVal("test2")}, [][]byte{[]byte("test1")})
+	_, err := binVindex.Verify(nil, []sqltypes.Value{sqltypes.NewVarChar("test1"), sqltypes.NewVarChar("test2")}, [][]byte{[]byte("test1")})
 	want := "BinaryMD5_hash.Verify: length of ids 2 doesn't match length of ksids 1"
 	if err.Error() != want {
 		t.Error(err.Error())
 	}
 
-	ok, err := binVindex.Verify(nil, []sqltypes.Value{testVal("test2")}, [][]byte{[]byte("test1")})
+	ok, err := binVindex.Verify(nil, []sqltypes.Value{sqltypes.NewVarChar("test2")}, [][]byte{[]byte("test1")})
 	if err != nil {
 		t.Error(err)
 	}

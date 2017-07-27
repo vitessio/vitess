@@ -219,7 +219,7 @@ func bigRatToValue(number *big.Rat, valueType querypb.Type) sqltypes.Value {
 	default:
 		panic(fmt.Sprintf("Unsupported type: %v", valueType))
 	}
-	result, err := sqltypes.ValueFromBytes(valueType, numberAsBytes)
+	result, err := sqltypes.NewValue(valueType, numberAsBytes)
 	if err != nil {
 		panic(fmt.Sprintf("sqltypes.ValueFromBytes failed with: %v", err))
 	}

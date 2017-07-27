@@ -32,7 +32,7 @@ func getTestSchema() map[string]*schema.Table {
 	table := schema.Table{
 		Name: sqlparser.NewTableIdent("test_table"),
 	}
-	zero, _ := sqltypes.BuildValue(0)
+	zero := sqltypes.NewInt64(0)
 	table.AddColumn("id", sqltypes.Int64, zero, "")
 	table.AddColumn("int32_col", sqltypes.Int32, zero, "")
 	table.AddColumn("uint32_col", sqltypes.Uint32, zero, "")

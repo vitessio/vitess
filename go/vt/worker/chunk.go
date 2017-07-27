@@ -182,11 +182,11 @@ func add(start, interval interface{}) interface{} {
 }
 
 func toChunk(start, end interface{}, number, total int) (chunk, error) {
-	startValue, err := sqltypes.BuildValue(start)
+	startValue, err := sqltypes.InterfaceToValue(start)
 	if err != nil {
 		return chunk{}, fmt.Errorf("Failed to convert calculated start value (%v) into internal sqltypes.Value: %v", start, err)
 	}
-	endValue, err := sqltypes.BuildValue(end)
+	endValue, err := sqltypes.InterfaceToValue(end)
 	if err != nil {
 		return chunk{}, fmt.Errorf("Failed to convert calculated end value (%v) into internal sqltypes.Value: %v", end, err)
 	}

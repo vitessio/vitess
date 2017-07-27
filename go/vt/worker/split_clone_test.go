@@ -412,7 +412,7 @@ func (sq *testQueryService) addGeneratedRows(from, to int) {
 		// Only return the rows which are covered by this shard.
 		shardIndex := id % 2
 		if sq.shardCount == 1 || shardIndex == sq.shardIndex {
-			idValue, _ := sqltypes.BuildValue(int64(id))
+			idValue := sqltypes.NewInt64(int64(id))
 
 			row := []sqltypes.Value{
 				idValue,

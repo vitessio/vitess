@@ -87,9 +87,7 @@ func (vind *Hash) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error
 		if err != nil {
 			return reverseIds, err
 		}
-		// BuildValue will not fail for uint64.
-		v, _ := sqltypes.BuildValue(val)
-		reverseIds = append(reverseIds, v)
+		reverseIds = append(reverseIds, sqltypes.NewUint64(val))
 	}
 	return reverseIds, nil
 }
