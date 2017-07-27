@@ -148,7 +148,7 @@ func TestResolveNumber(t *testing.T) {
 		err: "missing bind var nokey",
 	}, {
 		pv:  sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarChar, []byte("aa"))},
-		err: `strconv.ParseInt: parsing "aa": invalid syntax`,
+		err: "could not parse value: aa",
 	}}
 	for _, tc := range tcases {
 		got, err := resolveNumber(tc.pv, bindVars)
@@ -218,7 +218,7 @@ func TestCodexApplyFilterWithPKDefaults(t *testing.T) {
 	if len(output) != 1 {
 		t.Fatalf("expect to only one output but got: %v", output)
 	}
-	val, err := output[0].ParseInt64()
+	val, err := sqltypes.ToInt64(output[0])
 	if err != nil {
 		t.Fatalf("should not get an error, but got err: %v", err)
 	}

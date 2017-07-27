@@ -81,7 +81,7 @@ func resolveNumber(pv sqltypes.PlanValue, bindVars map[string]*querypb.BindVaria
 	if err != nil {
 		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 	}
-	ret, err := v.ParseInt64()
+	ret, err := sqltypes.ToInt64(v)
 	if err != nil {
 		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 	}

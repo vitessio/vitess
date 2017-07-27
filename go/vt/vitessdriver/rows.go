@@ -62,6 +62,6 @@ func (ri *rows) Next(dest []driver.Value) error {
 // and in addition the type "uint64" for unsigned BIGINT MySQL records.
 func populateRow(dest []driver.Value, row []sqltypes.Value) {
 	for i := range dest {
-		dest[i] = row[i].ToNative()
+		dest[i], _ = sqltypes.ToNative(row[i])
 	}
 }

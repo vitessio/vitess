@@ -146,10 +146,6 @@ func TestNewValue(t *testing.T) {
 		inVal:  "a",
 		outVal: testVal(VarBinary, "a"),
 	}, {
-		inType: Expression,
-		inVal:  "a",
-		outVal: testVal(Expression, "a"),
-	}, {
 		inType: Int64,
 		inVal:  InvalidNeg,
 		outErr: "out of range",
@@ -170,9 +166,13 @@ func TestNewValue(t *testing.T) {
 		inVal:  "a",
 		outErr: "invalid syntax",
 	}, {
+		inType: Expression,
+		inVal:  "a",
+		outErr: "invalid type specified for MakeValue: EXPRESSION",
+	}, {
 		inType: Tuple,
 		inVal:  "a",
-		outErr: "type: TUPLE is invalid",
+		outErr: "invalid type specified for MakeValue: TUPLE",
 	}}
 	for _, tcase := range testcases {
 		v, err := NewValue(tcase.inType, []byte(tcase.inVal))
@@ -338,103 +338,6 @@ func TestBytes(t *testing.T) {
 	}
 }
 
-func TestToNative(t *testing.T) {
-	testcases := []struct {
-		in  Value
-		out interface{}
-	}{{
-		in:  NULL,
-		out: nil,
-	}, {
-		in:  testVal(Int8, "1"),
-		out: int64(1),
-	}, {
-		in:  testVal(Int16, "1"),
-		out: int64(1),
-	}, {
-		in:  testVal(Int24, "1"),
-		out: int64(1),
-	}, {
-		in:  testVal(Int32, "1"),
-		out: int64(1),
-	}, {
-		in:  testVal(Int64, "1"),
-		out: int64(1),
-	}, {
-		in:  testVal(Uint8, "1"),
-		out: uint64(1),
-	}, {
-		in:  testVal(Uint16, "1"),
-		out: uint64(1),
-	}, {
-		in:  testVal(Uint24, "1"),
-		out: uint64(1),
-	}, {
-		in:  testVal(Uint32, "1"),
-		out: uint64(1),
-	}, {
-		in:  testVal(Uint64, "1"),
-		out: uint64(1),
-	}, {
-		in:  testVal(Float32, "1"),
-		out: float64(1),
-	}, {
-		in:  testVal(Float64, "1"),
-		out: float64(1),
-	}, {
-		in:  testVal(Timestamp, "2012-02-24 23:19:43"),
-		out: []byte("2012-02-24 23:19:43"),
-	}, {
-		in:  testVal(Date, "2012-02-24"),
-		out: []byte("2012-02-24"),
-	}, {
-		in:  testVal(Time, "23:19:43"),
-		out: []byte("23:19:43"),
-	}, {
-		in:  testVal(Datetime, "2012-02-24 23:19:43"),
-		out: []byte("2012-02-24 23:19:43"),
-	}, {
-		in:  testVal(Year, "1"),
-		out: uint64(1),
-	}, {
-		in:  testVal(Decimal, "1"),
-		out: []byte("1"),
-	}, {
-		in:  testVal(Text, "a"),
-		out: []byte("a"),
-	}, {
-		in:  testVal(Blob, "a"),
-		out: []byte("a"),
-	}, {
-		in:  testVal(VarChar, "a"),
-		out: []byte("a"),
-	}, {
-		in:  testVal(VarBinary, "a"),
-		out: []byte("a"),
-	}, {
-		in:  testVal(Char, "a"),
-		out: []byte("a"),
-	}, {
-		in:  testVal(Binary, "a"),
-		out: []byte("a"),
-	}, {
-		in:  testVal(Bit, "1"),
-		out: []byte("1"),
-	}, {
-		in:  testVal(Enum, "a"),
-		out: []byte("a"),
-	}, {
-		in:  testVal(Set, "a"),
-		out: []byte("a"),
-	}}
-	for _, tcase := range testcases {
-		v := tcase.in.ToNative()
-		if !reflect.DeepEqual(v, tcase.out) {
-			t.Errorf("%v.ToNative = %#v, want %#v", makePretty(tcase.in), v, tcase.out)
-		}
-	}
-}
-
 func TestToProtoValue(t *testing.T) {
 	got := testVal(Int64, "1").ToProtoValue()
 	want := &querypb.Value{
@@ -443,31 +346,6 @@ func TestToProtoValue(t *testing.T) {
 	}
 	if !proto.Equal(got, want) {
 		t.Errorf("bindvar: %v, want %v", got, want)
-	}
-}
-
-func TestParseNumbers(t *testing.T) {
-	v := testVal(VarChar, "1")
-	sval, err := v.ParseInt64()
-	if err != nil {
-		t.Error(err)
-	}
-	if sval != 1 {
-		t.Errorf("v.ParseInt64 = %d, want 1", sval)
-	}
-	uval, err := v.ParseUint64()
-	if err != nil {
-		t.Error(err)
-	}
-	if uval != 1 {
-		t.Errorf("v.ParseUint64 = %d, want 1", uval)
-	}
-	fval, err := v.ParseFloat64()
-	if err != nil {
-		t.Error(err)
-	}
-	if fval != 1 {
-		t.Errorf("v.ParseFloat64 = %f, want 1", fval)
 	}
 }
 

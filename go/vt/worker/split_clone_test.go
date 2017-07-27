@@ -376,7 +376,8 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 	// Send the values.
 	rowsAffected := 0
 	for _, row := range sq.rows {
-		primaryKey := row[0].ToNative().(int64)
+		v, _ := sqltypes.ToNative(row[0])
+		primaryKey := v.(int64)
 
 		if primaryKey >= int64(min) && primaryKey < int64(max) {
 			if sq.forceErrorOnce(primaryKey) {

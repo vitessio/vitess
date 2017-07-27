@@ -229,7 +229,7 @@ func (se *Engine) Reload(ctx context.Context) error {
 	for _, row := range tableData.Rows {
 		tableName := row[0].String()
 		curTables[tableName] = true
-		createTime, _ := row[2].ParseInt64()
+		createTime, _ := sqltypes.ToInt64(row[2])
 		// Check if we know about the table or it has been recreated.
 		if _, ok := se.tables[tableName]; !ok || createTime >= se.lastChange {
 			func() {

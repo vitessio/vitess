@@ -224,11 +224,6 @@ func ValidateBindVariable(bv *querypb.BindVariable) error {
 		return nil
 	}
 
-	// EXPRESSION is unsafe.
-	if bv.Type == querypb.Type_EXPRESSION {
-		return fmt.Errorf("type: %v is invalid", bv.Type)
-	}
-
 	// If NewValue succeeds, the value is valid.
 	_, err := NewValue(bv.Type, bv.Value)
 	return err

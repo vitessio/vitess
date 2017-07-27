@@ -420,7 +420,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 		return result, nil
 	}
 	result.Dtid = qr.Rows[0][0].String()
-	st, err := qr.Rows[0][1].ParseInt64()
+	st, err := sqltypes.ToInt64(qr.Rows[0][1])
 	if err != nil {
 		return nil, fmt.Errorf("Error parsing state for dtid %s: %v", dtid, err)
 	}
@@ -430,7 +430,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 	}
 	// A failure in time parsing will show up as a very old time,
 	// which is harmless.
-	tm, _ := qr.Rows[0][2].ParseInt64()
+	tm, _ := sqltypes.ToInt64(qr.Rows[0][2])
 	result.TimeCreated = tm
 
 	qr, err = tpc.read(ctx, conn, tpc.readParticipants, bindVars)

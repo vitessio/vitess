@@ -721,7 +721,7 @@ func (route *Route) handleGenerate(vcursor VCursor, bindVars map[string]*querypb
 		}
 		// If no rows are returned, it's an internal error, and the code
 		// must panic, which will be caught and reported.
-		insertID, err = qr.Rows[0][0].ParseInt64()
+		insertID, err = sqltypes.ToInt64(qr.Rows[0][0])
 		if err != nil {
 			return 0, err
 		}

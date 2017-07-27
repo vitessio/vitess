@@ -519,11 +519,11 @@ func (mm *messageManager) GeneratePurgeQuery(timeCutoff int64) (string, map[stri
 
 // BuildMessageRow builds a MessageRow for a db row.
 func BuildMessageRow(row []sqltypes.Value) (*MessageRow, error) {
-	timeNext, err := row[0].ParseInt64()
+	timeNext, err := sqltypes.ToInt64(row[0])
 	if err != nil {
 		return nil, err
 	}
-	epoch, err := row[1].ParseInt64()
+	epoch, err := sqltypes.ToInt64(row[1])
 	if err != nil {
 		return nil, err
 	}

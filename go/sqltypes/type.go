@@ -81,6 +81,13 @@ func isNumber(t querypb.Type) bool {
 
 // Vitess data types. These are idiomatically
 // named synonyms for the querypb.Type values.
+// The following conditions are non-everlapping
+// and cover all types: IsSigned(), IsUnsigned(),
+// IsFloat(), IsQuoted(), Null, Decimal, Expression,
+// Tuple. However, Tuple Values are invalid.
+// Also, IsIntegral() == (IsSigned()||IsUnsigned()).
+// TestCategory needs to be updated accordingly if
+// you add a new type.
 const (
 	Null       = querypb.Type_NULL_TYPE
 	Int8       = querypb.Type_INT8
@@ -259,14 +266,4 @@ var typeToMySQL = map[querypb.Type]struct {
 func TypeToMySQL(typ querypb.Type) (mysqlType, flags int64) {
 	val := typeToMySQL[typ]
 	return val.typ, val.flags
-}
-
-// IsTypeValid returns true if the type is valid.
-func IsTypeValid(typ querypb.Type) bool {
-	if _, ok := typeToMySQL[typ]; ok {
-		return true
-	}
-
-	// Expression is an exception.
-	return typ == Expression
 }

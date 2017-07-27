@@ -78,7 +78,7 @@ func (r *v2Resolver) keyspaceID(row []sqltypes.Value) ([]byte, error) {
 	case topodatapb.KeyspaceIdType_BYTES:
 		return v.Raw(), nil
 	case topodatapb.KeyspaceIdType_UINT64:
-		i, err := v.ParseUint64()
+		i, err := sqltypes.ToUint64(v)
 		if err != nil {
 			return nil, fmt.Errorf("Non numerical value: %v", err)
 		}

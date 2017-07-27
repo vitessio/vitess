@@ -56,24 +56,27 @@ type Value struct {
 // NewValue builds a Value using typ and val. If the value and typ
 // don't match, it returns an error.
 func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
-	if !IsTypeValid(typ) {
-		return NULL, fmt.Errorf("type: %v is invalid", typ)
-	}
 	switch {
 	case IsSigned(typ):
 		if _, err := strconv.ParseInt(string(val), 0, 64); err != nil {
 			return NULL, err
 		}
+		return MakeTrusted(typ, val), nil
 	case IsUnsigned(typ):
 		if _, err := strconv.ParseUint(string(val), 0, 64); err != nil {
 			return NULL, err
 		}
+		return MakeTrusted(typ, val), nil
 	case IsFloat(typ) || typ == Decimal:
 		if _, err := strconv.ParseFloat(string(val), 64); err != nil {
 			return NULL, err
 		}
+		return MakeTrusted(typ, val), nil
+	case IsQuoted(typ) || typ == Null:
+		return MakeTrusted(typ, val), nil
 	}
-	return MakeTrusted(typ, val), nil
+	// All other types are unsafe or invalid.
+	return NULL, fmt.Errorf("invalid type specified for MakeValue: %v", typ)
 }
 
 // MakeTrusted makes a new Value based on the type.
@@ -187,54 +190,12 @@ func (v Value) String() string {
 	return hack.String(v.val)
 }
 
-// ToNative converts Value to a native go type.
-func (v Value) ToNative() interface{} {
-	var out interface{}
-	switch {
-	case v.typ == Null:
-		// no-op
-	case IsSigned(v.typ):
-		out, _ = v.ParseInt64()
-	case IsUnsigned(v.typ):
-		out, _ = v.ParseUint64()
-	case IsFloat(v.typ):
-		out, _ = v.ParseFloat64()
-	default:
-		out = v.val
-	}
-	return out
-}
-
 // ToProtoValue converts Value to a querypb.Value.
 func (v Value) ToProtoValue() *querypb.Value {
 	return &querypb.Value{
 		Type:  v.typ,
 		Value: v.val,
 	}
-}
-
-// ParseInt64 will parse a Value into an int64. It does
-// not check the type.
-// TODO(sougou): deprecate this function in favor of a
-// more type-aware implemention in arithmetic.
-func (v Value) ParseInt64() (val int64, err error) {
-	return strconv.ParseInt(v.String(), 10, 64)
-}
-
-// ParseUint64 will parse a Value into a uint64. It does
-// not check the type.
-// TODO(sougou): deprecate this function in favor of a
-// more type-aware implemention in arithmetic.
-func (v Value) ParseUint64() (val uint64, err error) {
-	return strconv.ParseUint(v.String(), 10, 64)
-}
-
-// ParseFloat64 will parse a Value into an float64. It does
-// not check the type.
-// TODO(sougou): deprecate this function in favor of a
-// more type-aware implemention in arithmetic.
-func (v Value) ParseFloat64() (val float64, err error) {
-	return strconv.ParseFloat(v.String(), 64)
 }
 
 // EncodeSQL encodes the value into an SQL statement. Can be binary.

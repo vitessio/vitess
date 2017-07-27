@@ -371,7 +371,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if len(qr.Rows) != 1 {
 				return nil, fmt.Errorf("unexpected rows from reading sequence %s (possible mis-route): %d", tableName, len(qr.Rows))
 			}
-			nextID, err := qr.Rows[0][0].ParseInt64()
+			nextID, err := sqltypes.ToInt64(qr.Rows[0][0])
 			if err != nil {
 				return nil, fmt.Errorf("error loading sequence %s: %v", tableName, err)
 			}
@@ -379,7 +379,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if t.SequenceInfo.NextVal == 0 {
 				t.SequenceInfo.NextVal = nextID
 			}
-			cache, err := qr.Rows[0][1].ParseInt64()
+			cache, err := sqltypes.ToInt64(qr.Rows[0][1])
 			if err != nil {
 				return nil, fmt.Errorf("error loading sequence %s: %v", tableName, err)
 			}

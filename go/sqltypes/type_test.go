@@ -130,6 +130,84 @@ func TestTypeValues(t *testing.T) {
 	}
 }
 
+// TestCategory verifies that the type categorizations
+// are non-overlapping and complete.
+func TestCategory(t *testing.T) {
+	alltypes := []querypb.Type{
+		Null,
+		Int8,
+		Uint8,
+		Int16,
+		Uint16,
+		Int24,
+		Uint24,
+		Int32,
+		Uint32,
+		Int64,
+		Uint64,
+		Float32,
+		Float64,
+		Timestamp,
+		Date,
+		Time,
+		Datetime,
+		Year,
+		Decimal,
+		Text,
+		Blob,
+		VarChar,
+		VarBinary,
+		Char,
+		Binary,
+		Bit,
+		Enum,
+		Set,
+		Tuple,
+		Geometry,
+		TypeJSON,
+		Expression,
+	}
+	for _, typ := range alltypes {
+		matched := false
+		if IsSigned(typ) {
+			if !IsIntegral(typ) {
+				t.Errorf("Signed type %v is not an integral", typ)
+			}
+			matched = true
+		}
+		if IsUnsigned(typ) {
+			if !IsIntegral(typ) {
+				t.Errorf("Unsigned type %v is not an integral", typ)
+			}
+			if matched {
+				t.Errorf("%v matched more than one category", typ)
+			}
+			matched = true
+		}
+		if IsFloat(typ) {
+			if matched {
+				t.Errorf("%v matched more than one category", typ)
+			}
+			matched = true
+		}
+		if IsQuoted(typ) {
+			if matched {
+				t.Errorf("%v matched more than one category", typ)
+			}
+			matched = true
+		}
+		if typ == Null || typ == Decimal || typ == Expression || typ == Tuple {
+			if matched {
+				t.Errorf("%v matched more than one category", typ)
+			}
+			matched = true
+		}
+		if !matched {
+			t.Errorf("%v matched no category", typ)
+		}
+	}
+}
+
 func TestIsFunctions(t *testing.T) {
 	if IsIntegral(Null) {
 		t.Error("Null: IsIntegral, must be false")
@@ -336,17 +414,5 @@ func TestTypeError(t *testing.T) {
 	want := "unsupported type: 15"
 	if err == nil || err.Error() != want {
 		t.Errorf("MySQLToType: %v, want %s", err, want)
-	}
-}
-
-func TestIsTypeValid(t *testing.T) {
-	if !IsTypeValid(Int64) {
-		t.Errorf("IsTypeValid(%v): false, want true", Int64)
-	}
-	if !IsTypeValid(Expression) {
-		t.Errorf("IsTypeValid(%v): false, want true", Expression)
-	}
-	if IsTypeValid(querypb.Type(1)) {
-		t.Errorf("IsTypeValid(%v): true, want false", querypb.Type(1))
 	}
 }

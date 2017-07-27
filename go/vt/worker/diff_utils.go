@@ -398,8 +398,8 @@ func RowsEqual(left, right []sqltypes.Value) int {
 // TODO: This can panic if types for left and right don't match.
 func CompareRows(fields []*querypb.Field, compareCount int, left, right []sqltypes.Value) (int, error) {
 	for i := 0; i < compareCount; i++ {
-		lv := left[i].ToNative()
-		rv := right[i].ToNative()
+		lv, _ := sqltypes.ToNative(left[i])
+		rv, _ := sqltypes.ToNative(right[i])
 		switch l := lv.(type) {
 		case int64:
 			r := rv.(int64)

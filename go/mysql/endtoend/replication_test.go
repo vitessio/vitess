@@ -68,7 +68,7 @@ func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, mysql.BinlogFor
 		t.Fatalf("SHOW MASTER STATUS returned unexpected result: %v", result)
 	}
 	file := result.Rows[0][0].String()
-	position, err := result.Rows[0][1].ParseUint64()
+	position, err := sqltypes.ToUint64(result.Rows[0][1])
 	if err != nil {
 		t.Fatalf("SHOW MASTER STATUS returned invalid position: %v", result.Rows[0][1])
 	}

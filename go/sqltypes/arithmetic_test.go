@@ -240,7 +240,7 @@ func TestCast(t *testing.T) {
 	}, {
 		typ: VarChar,
 		v:   testVal(Expression, "bad string"),
-		err: "cannot convert val: 'bad string' of type EXPRESSION to VARCHAR",
+		err: "EXPRESSION value cannot be cast to VARCHAR",
 	}}
 	for _, tcase := range tcases {
 		got, err := Cast(tcase.v, tcase.typ)
@@ -259,87 +259,209 @@ func TestCast(t *testing.T) {
 	}
 }
 
-func TestConvertToUint64(t *testing.T) {
+func TestToUint64(t *testing.T) {
 	tcases := []struct {
-		v   interface{}
+		v   Value
 		out uint64
 		err string
 	}{{
-		v:   int(1),
-		out: 1,
-	}, {
-		v:   int8(1),
-		out: 1,
-	}, {
-		v:   int16(1),
-		out: 1,
-	}, {
-		v:   int32(1),
-		out: 1,
-	}, {
-		v:   int64(1),
-		out: 1,
-	}, {
-		v:   int64(1),
-		out: 1,
-	}, {
-		v:   int64(-1),
-		err: "ConvertToUint64: negative number cannot be converted to unsigned: -1",
-	}, {
-		v:   uint(1),
-		out: 1,
-	}, {
-		v:   uint8(1),
-		out: 1,
-	}, {
-		v:   uint16(1),
-		out: 1,
-	}, {
-		v:   uint32(1),
-		out: 1,
-	}, {
-		v:   uint64(1),
-		out: 1,
-	}, {
-		v:   []byte("1"),
-		out: 1,
-	}, {
-		v:   "1",
-		out: 1,
-	}, {
-		v:   makeInt(1),
-		out: 1,
-	}, {
-		v:   Int64BindVariable(1),
-		out: 1,
-	}, {
-		v:   MakeTestBindVar([]interface{}{}),
-		err: "cannot convert a TUPLE bind var into a value",
-	}, {
-		v:   nil,
-		err: "ConvertToUint64: unexpected type for <nil>: <nil>",
-	}, {
 		v:   makeAny(VarChar, "abcd"),
 		err: "could not parse value: abcd",
 	}, {
 		v:   makeInt(-1),
-		err: "ConvertToUint64: negative number cannot be converted to unsigned: -1",
+		err: "negative number cannot be converted to unsigned: -1",
+	}, {
+		v:   makeInt(1),
+		out: 1,
 	}, {
 		v:   makeUint(1),
 		out: 1,
 	}}
 	for _, tcase := range tcases {
-		got, err := ConvertToUint64(tcase.v)
+		got, err := ToUint64(tcase.v)
 		errstr := ""
 		if err != nil {
 			errstr = err.Error()
 		}
 		if errstr != tcase.err {
-			t.Errorf("ConvertToUint64(%v) error: %v, want %v", tcase.v, err, tcase.err)
+			t.Errorf("ToUint64(%v) error: %v, want %v", tcase.v, err, tcase.err)
 		}
 		if got != tcase.out {
-			t.Errorf("ConvertToUint64(%v): %v, want %v", tcase.v, got, tcase.out)
+			t.Errorf("ToUint64(%v): %v, want %v", tcase.v, got, tcase.out)
 		}
+	}
+}
+
+func TestToInt64(t *testing.T) {
+	tcases := []struct {
+		v   Value
+		out int64
+		err string
+	}{{
+		v:   makeAny(VarChar, "abcd"),
+		err: "could not parse value: abcd",
+	}, {
+		v:   makeUint(18446744073709551615),
+		err: "unsigned number overflows int64 value: 18446744073709551615",
+	}, {
+		v:   makeInt(1),
+		out: 1,
+	}, {
+		v:   makeUint(1),
+		out: 1,
+	}}
+	for _, tcase := range tcases {
+		got, err := ToInt64(tcase.v)
+		errstr := ""
+		if err != nil {
+			errstr = err.Error()
+		}
+		if errstr != tcase.err {
+			t.Errorf("ToInt64(%v) error: %v, want %s", tcase.v, err, tcase.err)
+		}
+		if got != tcase.out {
+			t.Errorf("ToInt64(%v): %v, want %v", tcase.v, got, tcase.out)
+		}
+	}
+}
+
+func TestToFloat64(t *testing.T) {
+	tcases := []struct {
+		v   Value
+		out float64
+		err string
+	}{{
+		v:   makeAny(VarChar, "abcd"),
+		err: "could not parse value: abcd",
+	}, {
+		v:   makeInt(1),
+		out: 1,
+	}, {
+		v:   makeUint(1),
+		out: 1,
+	}, {
+		v:   makeFloat(1.2),
+		out: 1.2,
+	}}
+	for _, tcase := range tcases {
+		got, err := ToFloat64(tcase.v)
+		errstr := ""
+		if err != nil {
+			errstr = err.Error()
+		}
+		if errstr != tcase.err {
+			t.Errorf("ToFloat64(%v) error: %v, want %s", tcase.v, err, tcase.err)
+		}
+		if got != tcase.out {
+			t.Errorf("ToFloat64(%v): %v, want %v", tcase.v, got, tcase.out)
+		}
+	}
+}
+
+func TestToNative(t *testing.T) {
+	testcases := []struct {
+		in  Value
+		out interface{}
+	}{{
+		in:  NULL,
+		out: nil,
+	}, {
+		in:  testVal(Int8, "1"),
+		out: int64(1),
+	}, {
+		in:  testVal(Int16, "1"),
+		out: int64(1),
+	}, {
+		in:  testVal(Int24, "1"),
+		out: int64(1),
+	}, {
+		in:  testVal(Int32, "1"),
+		out: int64(1),
+	}, {
+		in:  testVal(Int64, "1"),
+		out: int64(1),
+	}, {
+		in:  testVal(Uint8, "1"),
+		out: uint64(1),
+	}, {
+		in:  testVal(Uint16, "1"),
+		out: uint64(1),
+	}, {
+		in:  testVal(Uint24, "1"),
+		out: uint64(1),
+	}, {
+		in:  testVal(Uint32, "1"),
+		out: uint64(1),
+	}, {
+		in:  testVal(Uint64, "1"),
+		out: uint64(1),
+	}, {
+		in:  testVal(Float32, "1"),
+		out: float64(1),
+	}, {
+		in:  testVal(Float64, "1"),
+		out: float64(1),
+	}, {
+		in:  testVal(Timestamp, "2012-02-24 23:19:43"),
+		out: []byte("2012-02-24 23:19:43"),
+	}, {
+		in:  testVal(Date, "2012-02-24"),
+		out: []byte("2012-02-24"),
+	}, {
+		in:  testVal(Time, "23:19:43"),
+		out: []byte("23:19:43"),
+	}, {
+		in:  testVal(Datetime, "2012-02-24 23:19:43"),
+		out: []byte("2012-02-24 23:19:43"),
+	}, {
+		in:  testVal(Year, "1"),
+		out: uint64(1),
+	}, {
+		in:  testVal(Decimal, "1"),
+		out: []byte("1"),
+	}, {
+		in:  testVal(Text, "a"),
+		out: []byte("a"),
+	}, {
+		in:  testVal(Blob, "a"),
+		out: []byte("a"),
+	}, {
+		in:  testVal(VarChar, "a"),
+		out: []byte("a"),
+	}, {
+		in:  testVal(VarBinary, "a"),
+		out: []byte("a"),
+	}, {
+		in:  testVal(Char, "a"),
+		out: []byte("a"),
+	}, {
+		in:  testVal(Binary, "a"),
+		out: []byte("a"),
+	}, {
+		in:  testVal(Bit, "1"),
+		out: []byte("1"),
+	}, {
+		in:  testVal(Enum, "a"),
+		out: []byte("a"),
+	}, {
+		in:  testVal(Set, "a"),
+		out: []byte("a"),
+	}}
+	for _, tcase := range testcases {
+		v, err := ToNative(tcase.in)
+		if err != nil {
+			t.Error(err)
+		}
+		if !reflect.DeepEqual(v, tcase.out) {
+			t.Errorf("%v.ToNative = %#v, want %#v", makePretty(tcase.in), v, tcase.out)
+		}
+	}
+
+	// Test Expression failure.
+	_, err := ToNative(testVal(Expression, "aa"))
+	want := "EXPRESSION cannot be converted to a go type"
+	if err == nil || err.Error() != want {
+		t.Errorf("ToNative(EXPRESSION): %v, want %s", err, want)
 	}
 }
 
@@ -909,8 +1031,8 @@ func BenchmarkAddNoNative(b *testing.B) {
 	v1 := MakeTrusted(Int64, []byte("1"))
 	v2 := MakeTrusted(Int64, []byte("12"))
 	for i := 0; i < b.N; i++ {
-		iv1, _ := v1.ParseInt64()
-		iv2, _ := v2.ParseInt64()
+		iv1, _ := ToInt64(v1)
+		iv2, _ := ToInt64(v2)
 		v1 = MakeTrusted(Int64, strconv.AppendInt(nil, iv1+iv2, 10))
 	}
 }

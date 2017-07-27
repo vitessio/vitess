@@ -130,7 +130,7 @@ func (l *Limit) fetchCount(bindVars, joinVars map[string]*querypb.BindVariable) 
 	if err != nil {
 		return 0, err
 	}
-	num, err := sqltypes.ConvertToUint64(resolved)
+	num, err := sqltypes.ToUint64(resolved)
 	if err != nil {
 		return 0, err
 	}

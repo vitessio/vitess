@@ -1369,7 +1369,7 @@ func TestVTGateBindVarError(t *testing.T) {
 			Value: []byte("1"),
 		},
 	}
-	want := "v: type: EXPRESSION is invalid"
+	want := "v: invalid type specified for MakeValue: EXPRESSION"
 
 	tcases := []struct {
 		name string

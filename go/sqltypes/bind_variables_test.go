@@ -460,7 +460,7 @@ func TestValidateBindVariable(t *testing.T) {
 			Type:  querypb.Type_EXPRESSION,
 			Value: []byte("a"),
 		},
-		err: "type: EXPRESSION is invalid",
+		err: "invalid type specified for MakeValue: EXPRESSION",
 	}, {
 		in: &querypb.BindVariable{
 			Type: Tuple,
@@ -482,13 +482,6 @@ func TestValidateBindVariable(t *testing.T) {
 			}},
 		},
 		err: "tuple not allowed inside another tuple",
-	}, {
-		in: &querypb.BindVariable{
-			Type: querypb.Type_TUPLE,
-			Values: []*querypb.Value{{
-				Type: querypb.Type_NULL_TYPE,
-			}},
-		},
 	}}
 	for _, tcase := range testcases {
 		err := ValidateBindVariable(tcase.in)

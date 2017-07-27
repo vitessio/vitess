@@ -116,7 +116,7 @@ func TestMessage(t *testing.T) {
 	start := time.Now().UnixNano()
 	got = <-ch
 	// Check time_scheduled separately.
-	scheduled, err := got.Rows[0][1].ParseInt64()
+	scheduled, err := sqltypes.ToInt64(got.Rows[0][1])
 	if err != nil {
 		t.Error(err)
 	}

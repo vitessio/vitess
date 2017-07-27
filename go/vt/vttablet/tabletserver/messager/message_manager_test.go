@@ -546,7 +546,7 @@ func TestMMGenerate(t *testing.T) {
 		t.Errorf("GenerateAckQuery query: %s, want %s", query, wantQuery)
 	}
 	bvv, _ := sqltypes.BindVariableToValue(bv["time_acked"])
-	gotAcked, _ := bvv.ParseInt64()
+	gotAcked, _ := sqltypes.ToInt64(bvv)
 	wantAcked := time.Now().UnixNano()
 	if wantAcked-gotAcked > 10e9 {
 		t.Errorf("gotAcked: %d, should be with 10s of %d", gotAcked, wantAcked)

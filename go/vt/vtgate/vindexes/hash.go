@@ -53,7 +53,7 @@ func (vind *Hash) Cost() int {
 func (vind *Hash) Map(_ VCursor, ids []sqltypes.Value) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
-		num, err := sqltypes.ConvertToUint64(id)
+		num, err := sqltypes.ToUint64(id)
 		if err != nil {
 			return nil, fmt.Errorf("hash.Map: %v", err)
 		}
@@ -68,7 +68,7 @@ func (vind *Hash) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) (bool,
 		return false, fmt.Errorf("hash.Verify: length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
 	}
 	for rowNum := range ids {
-		num, err := sqltypes.ConvertToUint64(ids[rowNum])
+		num, err := sqltypes.ToUint64(ids[rowNum])
 		if err != nil {
 			return false, fmt.Errorf("hash.Verify: %v", err)
 		}
