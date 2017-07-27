@@ -2153,10 +2153,12 @@ func TestHandleExecUnknownError(t *testing.T) {
 }
 
 func TestHandleExecTabletError(t *testing.T) {
+	ctx := context.Background()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServerWithNilTopoServer(config)
 	err := tsv.convertError(
+		ctx,
 		"select * from test_table",
 		nil,
 		vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tablet error"),
@@ -2168,11 +2170,13 @@ func TestHandleExecTabletError(t *testing.T) {
 }
 
 func TestTerseErrorsNonSQLError(t *testing.T) {
+	ctx := context.Background()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServerWithNilTopoServer(config)
 	err := tsv.convertError(
+		ctx,
 		"select * from test_table",
 		nil,
 		vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tablet error"),
@@ -2184,11 +2188,13 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 }
 
 func TestTerseErrorsBindVars(t *testing.T) {
+	ctx := context.Background()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServerWithNilTopoServer(config)
 	err := tsv.convertError(
+		ctx,
 		"select * from test_table",
 		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(1)},
 		mysql.NewSQLError(10, "HY000", "msg"),
@@ -2200,11 +2206,12 @@ func TestTerseErrorsBindVars(t *testing.T) {
 }
 
 func TestTerseErrorsNoBindVars(t *testing.T) {
+	ctx := context.Background()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServerWithNilTopoServer(config)
-	err := tsv.convertError("", nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "msg"))
+	err := tsv.convertError(ctx, "", nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "msg"))
 	want := "msg"
 	if err == nil || err.Error() != want {
 		t.Errorf("%v, want '%s'", err, want)
@@ -2212,12 +2219,13 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 }
 
 func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
+	ctx := context.Background()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServerWithNilTopoServer(config)
 
-	err := tsv.convertError("select * from test_table where id = :a",
+	err := tsv.convertError(ctx, "select * from test_table where id = :a",
 		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(1)},
 		mysql.NewSQLError(1227, "42000", "failover in progress"),
 	)

@@ -37,6 +37,7 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/binlog"
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -930,7 +931,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	if asTransaction {
 		transactionID, err = tsv.Begin(ctx, target, options)
 		if err != nil {
-			return nil, tsv.convertAndLogError("batch", nil, err, nil)
+			return nil, tsv.convertAndLogError(ctx, "batch", nil, err, nil)
 		}
 		// If transaction was not committed by the end, it means
 		// that there was an error, roll it back.
@@ -944,14 +945,14 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	for _, bound := range queries {
 		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, transactionID, options)
 		if err != nil {
-			return nil, tsv.convertAndLogError("batch", nil, err, nil)
+			return nil, tsv.convertAndLogError(ctx, "batch", nil, err, nil)
 		}
 		results = append(results, *localReply)
 	}
 	if asTransaction {
 		if err = tsv.Commit(ctx, target, transactionID); err != nil {
 			transactionID = 0
-			return nil, tsv.convertAndLogError("batch", nil, err, nil)
+			return nil, tsv.convertAndLogError(ctx, "batch", nil, err, nil)
 		}
 		transactionID = 0
 	}
@@ -1095,7 +1096,7 @@ func (tsv *TabletServer) MessageAck(ctx context.Context, target *querypb.Target,
 	for _, val := range ids {
 		v, err := sqltypes.ValueFromBytes(val.Type, val.Value)
 		if err != nil {
-			return 0, tsv.convertAndLogError("message_ack", nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid type: %v", err), nil)
+			return 0, tsv.convertAndLogError(ctx, "message_ack", nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid type: %v", err), nil)
 		}
 		sids = append(sids, v.String())
 	}
@@ -1243,7 +1244,7 @@ func (tsv *TabletServer) execRequest(
 
 	err = exec(ctx, logStats)
 	if err != nil {
-		return tsv.convertAndLogError(sql, bindVariables, err, logStats)
+		return tsv.convertAndLogError(ctx, sql, bindVariables, err, logStats)
 	}
 	return nil
 }
@@ -1276,11 +1277,11 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 	}
 }
 
-func (tsv *TabletServer) convertAndLogError(sql string, bindVariables map[string]*querypb.BindVariable, err error, logStats *tabletenv.LogStats) error {
+func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, err error, logStats *tabletenv.LogStats) error {
 	if err == nil {
 		return nil
 	}
-	err = tsv.convertError(sql, bindVariables, err)
+	err = tsv.convertError(ctx, sql, bindVariables, err)
 
 	if logStats != nil {
 		logStats.Error = err
@@ -1304,12 +1305,13 @@ func (tsv *TabletServer) convertAndLogError(sql string, bindVariables map[string
 	return err
 }
 
-func (tsv *TabletServer) convertError(sql string, bindVariables map[string]*querypb.BindVariable, err error) error {
+func (tsv *TabletServer) convertError(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, err error) error {
 	sqlErr, ok := err.(*mysql.SQLError)
 	if !ok {
 		return err
 	}
 
+	callerID := callerid.ImmediateCallerIDFromContext(ctx)
 	errCode := vterrors.Code(err)
 	errstr := err.Error()
 	errnum := sqlErr.Number()
@@ -1355,7 +1357,7 @@ func (tsv *TabletServer) convertError(sql string, bindVariables map[string]*quer
 	if tsv.TerseErrors && len(bindVariables) != 0 && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
 		errstr = fmt.Sprintf("(errno %d) (sqlstate %s) during query: %s", errnum, sqlState, sqlparser.TruncateForLog(sql))
 	}
-	return vterrors.New(errCode, errstr)
+	return vterrors.New(errCode, fmt.Sprintf("(callerid %s) %s", callerID.Username, errstr))
 }
 
 // validateSplitQueryParameters perform some validations on the SplitQuery parameters
