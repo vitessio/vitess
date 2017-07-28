@@ -100,13 +100,6 @@ func Append(buf *bytes.Buffer, node SQLNode) {
 	node.Format(tbuf)
 }
 
-// GenerateParsedQuery returns a ParsedQuery of the ast.
-func GenerateParsedQuery(node SQLNode) *ParsedQuery {
-	buf := NewTrackedBuffer(nil)
-	buf.Myprintf("%v", node)
-	return buf.ParsedQuery()
-}
-
 // Statement represents a statement.
 type Statement interface {
 	iStatement()

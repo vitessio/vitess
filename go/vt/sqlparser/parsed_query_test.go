@@ -25,7 +25,23 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
-func TestParsedQuery(t *testing.T) {
+func TestNewParsedQuery(t *testing.T) {
+	stmt, err := Parse("select * from a where id =:id")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	pq := NewParsedQuery(stmt)
+	want := &ParsedQuery{
+		Query:         "select * from a where id = :id",
+		bindLocations: []bindLocation{{offset: 27, length: 3}},
+	}
+	if !reflect.DeepEqual(pq, want) {
+		t.Errorf("GenerateParsedQuery: %+v, want %+v", pq, want)
+	}
+}
+
+func TestGenerateQuery(t *testing.T) {
 	tcases := []struct {
 		desc     string
 		query    string
@@ -137,48 +153,5 @@ func TestParsedQuery(t *testing.T) {
 		if got != tcase.output {
 			t.Errorf("for test case: %s, got: '%s', want '%s'", tcase.desc, got, tcase.output)
 		}
-	}
-}
-
-func TestGenerateParsedQuery(t *testing.T) {
-	stmt, err := Parse("select * from a where id =:id")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	pq := GenerateParsedQuery(stmt)
-	want := &ParsedQuery{
-		Query:         "select * from a where id = :id",
-		bindLocations: []bindLocation{{offset: 27, length: 3}},
-	}
-	if !reflect.DeepEqual(pq, want) {
-		t.Errorf("GenerateParsedQuery: %+v, want %+v", pq, want)
-	}
-}
-
-// TestUnorthodox is for testing syntactically invalid constructs
-// that we use internally for efficient SQL generation.
-func TestUnorthodox(t *testing.T) {
-	query := "insert into `%s` values %a"
-	extras := map[string]Encodable{
-		"vals": InsertValues{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-			sqltypes.MakeString([]byte("foo('a')")),
-		}, {
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
-			sqltypes.MakeString([]byte("bar(`b`)")),
-		}},
-	}
-	buf := NewTrackedBuffer(nil)
-	buf.Myprintf(query, "t", ":vals")
-	pq := buf.ParsedQuery()
-	bytes, err := pq.GenerateQuery(nil, extras)
-	if err != nil {
-		t.Error(err)
-	}
-	got := string(bytes)
-	want := "insert into `t` values (1, 'foo(\\'a\\')'), (2, 'bar(`b`)')"
-	if got != want {
-		t.Errorf("GenerateQuery: %s, want %s", got, want)
 	}
 }

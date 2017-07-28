@@ -1488,7 +1488,7 @@ func (se *splitQuerySQLExecuter) SQLExecute(
 	if err != nil {
 		return nil, fmt.Errorf("splitQuerySQLExecuter: parsing sql failed with: %v", err)
 	}
-	parsedQuery := sqlparser.GenerateParsedQuery(ast)
+	parsedQuery := sqlparser.NewParsedQuery(ast)
 
 	// We clone "bindVariables" since fullFetch() changes it.
 	return se.queryExecutor.dbConnFetch(

@@ -37,6 +37,13 @@ type bindLocation struct {
 	offset, length int
 }
 
+// NewParsedQuery returns a ParsedQuery of the ast.
+func NewParsedQuery(node SQLNode) *ParsedQuery {
+	buf := NewTrackedBuffer(nil)
+	buf.Myprintf("%v", node)
+	return buf.ParsedQuery()
+}
+
 // GenerateQuery generates a query by substituting the specified
 // bindVariables. The extras parameter specifies special parameters
 // that can perform custom encoding.
