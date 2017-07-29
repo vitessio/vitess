@@ -91,7 +91,7 @@ func TestBinary(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(binaryData)),
+				sqltypes.NewVarBinary(binaryData),
 			},
 		},
 	}
@@ -125,7 +125,7 @@ func TestNocacheListArgs(t *testing.T) {
 	qr, err := client.Execute(
 		query,
 		map[string]*querypb.BindVariable{
-			"list": sqltypes.MakeTestBindVar([]interface{}{2, 3, 4}),
+			"list": sqltypes.TestBindVariable([]interface{}{2, 3, 4}),
 		},
 	)
 	if err != nil {
@@ -139,7 +139,7 @@ func TestNocacheListArgs(t *testing.T) {
 	qr, err = client.Execute(
 		query,
 		map[string]*querypb.BindVariable{
-			"list": sqltypes.MakeTestBindVar([]interface{}{3, 4}),
+			"list": sqltypes.TestBindVariable([]interface{}{3, 4}),
 		},
 	)
 	if err != nil {
@@ -153,7 +153,7 @@ func TestNocacheListArgs(t *testing.T) {
 	qr, err = client.Execute(
 		query,
 		map[string]*querypb.BindVariable{
-			"list": sqltypes.MakeTestBindVar([]interface{}{3}),
+			"list": sqltypes.TestBindVariable([]interface{}{3}),
 		},
 	)
 	if err != nil {
@@ -168,7 +168,7 @@ func TestNocacheListArgs(t *testing.T) {
 	_, err = client.Execute(
 		query,
 		map[string]*querypb.BindVariable{
-			"list": sqltypes.MakeTestBindVar([]interface{}{}),
+			"list": sqltypes.TestBindVariable([]interface{}{}),
 		},
 	)
 	want := "empty list supplied for list, CallerID: dev"
@@ -355,7 +355,7 @@ func TestBindInSelect(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+				sqltypes.NewInt64(1),
 			},
 		},
 	}
@@ -384,7 +384,7 @@ func TestBindInSelect(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("abcd")),
+				sqltypes.NewVarChar("abcd"),
 			},
 		},
 	}
@@ -413,7 +413,7 @@ func TestBindInSelect(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("\x00\xff")),
+				sqltypes.NewVarChar("\x00\xff"),
 			},
 		},
 	}
@@ -538,7 +538,7 @@ func TestDBAStatements(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	wantCol := sqltypes.MakeTrusted(sqltypes.VarChar, []byte("version"))
+	wantCol := sqltypes.NewVarChar("version")
 	if !reflect.DeepEqual(qr.Rows[0][0], wantCol) {
 		t.Errorf("Execute: \n%#v, want \n%#v", qr.Rows[0][0], wantCol)
 	}

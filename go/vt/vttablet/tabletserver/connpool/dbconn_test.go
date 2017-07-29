@@ -43,7 +43,7 @@ func TestDBConnExec(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeTrusted(sqltypes.VarChar, []byte("123"))},
+			{sqltypes.NewVarChar("123")},
 		},
 	}
 	db.AddQuery(sql, expectedResult)
@@ -127,7 +127,7 @@ func TestDBConnStream(t *testing.T) {
 			{Type: sqltypes.VarChar},
 		},
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeTrusted(sqltypes.VarChar, []byte("123"))},
+			{sqltypes.NewVarChar("123")},
 		},
 	}
 	db.AddQuery(sql, expectedResult)

@@ -44,10 +44,10 @@ func TestCodexBuildValuesList(t *testing.T) {
 		pkValues: []sqltypes.PlanValue{{
 			Key: "key",
 		}, {
-			Value: sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("aa")),
+			Value: sqltypes.NewVarBinary("aa"),
 		}},
 		out: [][]sqltypes.Value{
-			{sqltypes.MakeTrusted(sqltypes.Int64, []byte("10")), sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("aa"))},
+			{sqltypes.NewInt64(10), sqltypes.NewVarBinary("aa")},
 		},
 	}, {
 		pkValues: []sqltypes.PlanValue{{
@@ -56,7 +56,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 		err: "missing bind var nokey",
 	}, {
 		pkValues: []sqltypes.PlanValue{{
-			Value: sqltypes.MakeTrusted(sqltypes.VarChar, []byte("aa")),
+			Value: sqltypes.NewVarChar("aa"),
 		}},
 		err: `strconv.ParseInt: parsing "aa": invalid syntax`,
 	}}
@@ -103,11 +103,11 @@ func TestBuildSecondaryList(t *testing.T) {
 		out:           nil,
 	}, {
 		secondaryList: []sqltypes.PlanValue{{}, {
-			Value: sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("cc")),
+			Value: sqltypes.NewVarBinary("cc"),
 		}},
 		out: [][]sqltypes.Value{
-			{sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")), sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("cc"))},
-			{sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")), sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("cc"))},
+			{sqltypes.NewInt64(1), sqltypes.NewVarBinary("cc")},
+			{sqltypes.NewInt64(2), sqltypes.NewVarBinary("cc")},
 		},
 	}, {
 		secondaryList: []sqltypes.PlanValue{{
@@ -147,7 +147,7 @@ func TestResolveNumber(t *testing.T) {
 		pv:  sqltypes.PlanValue{Key: "nokey"},
 		err: "missing bind var nokey",
 	}, {
-		pv:  sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarChar, []byte("aa"))},
+		pv:  sqltypes.PlanValue{Value: sqltypes.NewVarChar("aa")},
 		err: "could not parse value: aa",
 	}}
 	for _, tc := range tcases {
@@ -241,7 +241,7 @@ func createTable(name string, colNames []string, colTypes []querypb.Type, pKeys 
 		colType := colTypes[i]
 		defaultVal := sqltypes.Value{}
 		if sqltypes.IsIntegral(colType) {
-			defaultVal = sqltypes.MakeTrusted(sqltypes.Int64, []byte("0"))
+			defaultVal = sqltypes.NewInt64(0)
 		} else if colType == sqltypes.VarBinary {
 			defaultVal = sqltypes.MakeString([]byte(""))
 		}

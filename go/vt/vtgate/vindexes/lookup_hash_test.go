@@ -18,7 +18,6 @@ package vindexes
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -56,7 +55,7 @@ func (vc *vcursor) Execute(query string, bindvars map[string]*querypb.BindVariab
 		}
 		for i := 0; i < vc.numRows; i++ {
 			result.Rows = append(result.Rows, []sqltypes.Value{
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", i+1))),
+				sqltypes.NewInt64(int64(i + 1)),
 			})
 		}
 		return result, nil

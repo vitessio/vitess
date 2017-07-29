@@ -26,6 +26,19 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
+func TestProtoConversions(t *testing.T) {
+	v := TestValue(Int64, "1")
+	got := ValueToProto(v)
+	want := &querypb.Value{Type: Int64, Value: []byte("1")}
+	if !proto.Equal(got, want) {
+		t.Errorf("ValueToProto: %v, want %v", got, want)
+	}
+	gotback := ProtoToValue(got)
+	if !reflect.DeepEqual(gotback, v) {
+		t.Errorf("ProtoToValue: %v, want %v", gotback, v)
+	}
+}
+
 func TestBuildBindVariables(t *testing.T) {
 	tcases := []struct {
 		in  map[string]interface{}

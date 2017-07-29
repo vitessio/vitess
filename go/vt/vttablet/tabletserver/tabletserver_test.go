@@ -2016,8 +2016,8 @@ func TestTabletServerSplitQuery(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("100")),
+				sqltypes.NewInt32(1),
+				sqltypes.NewInt32(100),
 			},
 		},
 	})

@@ -19,7 +19,6 @@ package vtgate
 import (
 	"fmt"
 	"reflect"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -212,14 +211,14 @@ func TestStreamBuffering(t *testing.T) {
 	sbclookup.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
-			{Name: "col", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.VarChar},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("01234567890123456789")),
+			sqltypes.NewInt32(1),
+			sqltypes.NewVarChar("01234567890123456789"),
 		}, {
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("12345678901234567890")),
+			sqltypes.NewInt32(2),
+			sqltypes.NewVarChar("12345678901234567890"),
 		}},
 	}})
 
@@ -244,17 +243,17 @@ func TestStreamBuffering(t *testing.T) {
 	wantResults := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
-			{Name: "col", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.VarChar},
 		},
 	}, {
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("01234567890123456789")),
+			sqltypes.NewInt32(1),
+			sqltypes.NewVarChar("01234567890123456789"),
 		}},
 	}, {
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("12345678901234567890")),
+			sqltypes.NewInt32(2),
+			sqltypes.NewVarChar("12345678901234567890"),
 		}},
 	}}
 	var gotResults []*sqltypes.Result
@@ -314,7 +313,7 @@ func TestSelectBindvars(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{
 			"name1":  sqltypes.StringBindVariable("foo1"),
 			"name2":  sqltypes.StringBindVariable("foo2"),
-			"__vals": sqltypes.MakeTestBindVar([]interface{}{"foo1", "foo2"}),
+			"__vals": sqltypes.TestBindVariable([]interface{}{"foo1", "foo2"}),
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -334,7 +333,7 @@ func TestSelectBindvars(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{
 			"name1":  sqltypes.BytesBindVariable([]byte("foo1")),
 			"name2":  sqltypes.BytesBindVariable([]byte("foo2")),
-			"__vals": sqltypes.MakeTestBindVar([]interface{}{[]byte("foo1"), []byte("foo2")}),
+			"__vals": sqltypes.TestBindVariable([]interface{}{[]byte("foo1"), []byte("foo2")}),
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -588,7 +587,7 @@ func TestSelectIN(t *testing.T) {
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "select id from user where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
-			"__vals": sqltypes.MakeTestBindVar([]interface{}{int64(1)}),
+			"__vals": sqltypes.TestBindVariable([]interface{}{int64(1)}),
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -609,7 +608,7 @@ func TestSelectIN(t *testing.T) {
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select id from user where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
-			"__vals": sqltypes.MakeTestBindVar([]interface{}{int64(1)}),
+			"__vals": sqltypes.TestBindVariable([]interface{}{int64(1)}),
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -618,7 +617,7 @@ func TestSelectIN(t *testing.T) {
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select id from user where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
-			"__vals": sqltypes.MakeTestBindVar([]interface{}{int64(3)}),
+			"__vals": sqltypes.TestBindVariable([]interface{}{int64(3)}),
 		},
 	}}
 	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
@@ -630,7 +629,7 @@ func TestSelectIN(t *testing.T) {
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 	_, err = executorExec(executor, "select id from user where id in ::vals", map[string]*querypb.BindVariable{
-		"vals": sqltypes.MakeTestBindVar([]interface{}{int64(1), int64(3)}),
+		"vals": sqltypes.TestBindVariable([]interface{}{int64(1), int64(3)}),
 	})
 	if err != nil {
 		t.Error(err)
@@ -638,8 +637,8 @@ func TestSelectIN(t *testing.T) {
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select id from user where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
-			"__vals": sqltypes.MakeTestBindVar([]interface{}{int64(1)}),
-			"vals":   sqltypes.MakeTestBindVar([]interface{}{int64(1), int64(3)}),
+			"__vals": sqltypes.TestBindVariable([]interface{}{int64(1)}),
+			"vals":   sqltypes.TestBindVariable([]interface{}{int64(1), int64(3)}),
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -648,8 +647,8 @@ func TestSelectIN(t *testing.T) {
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select id from user where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
-			"__vals": sqltypes.MakeTestBindVar([]interface{}{int64(3)}),
-			"vals":   sqltypes.MakeTestBindVar([]interface{}{int64(1), int64(3)}),
+			"__vals": sqltypes.TestBindVariable([]interface{}{int64(3)}),
+			"vals":   sqltypes.TestBindVariable([]interface{}{int64(1), int64(3)}),
 		},
 	}}
 	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
@@ -882,11 +881,11 @@ func TestSelectScatterOrderBy(t *testing.T) {
 			RowsAffected: 1,
 			InsertID:     0,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+				sqltypes.NewInt32(1),
 				// i%4 ensures that there are duplicates across shards.
 				// This will allow us to test that cross-shard ordering
 				// still works correctly.
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(i%4))),
+				sqltypes.NewInt32(int32(i % 4)),
 			}},
 		}})
 		conns = append(conns, sbc)
@@ -921,8 +920,8 @@ func TestSelectScatterOrderBy(t *testing.T) {
 		// There should be a duplicate for each row returned.
 		for j := 0; j < 2; j++ {
 			row := []sqltypes.Value{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(3-i))),
+				sqltypes.NewInt32(1),
+				sqltypes.NewInt32(int32(3 - i)),
 			}
 			wantResult.Rows = append(wantResult.Rows, row)
 		}
@@ -953,8 +952,8 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 			RowsAffected: 1,
 			InsertID:     0,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(i%4))),
+				sqltypes.NewInt32(1),
+				sqltypes.NewInt32(int32(i % 4)),
 			}},
 		}})
 		conns = append(conns, sbc)
@@ -985,8 +984,8 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 	}
 	for i := 0; i < 4; i++ {
 		row := []sqltypes.Value{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(3-i))),
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(int32(3 - i)),
 		}
 		wantResult.Rows = append(wantResult.Rows, row, row)
 	}
@@ -1017,8 +1016,8 @@ func TestSelectScatterOrderByFail(t *testing.T) {
 			RowsAffected: 1,
 			InsertID:     0,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("aaa")),
+				sqltypes.NewInt32(1),
+				sqltypes.NewVarChar("aaa"),
 			}},
 		}})
 	}
@@ -1053,8 +1052,8 @@ func TestSelectScatterAggregate(t *testing.T) {
 			RowsAffected: 1,
 			InsertID:     0,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(i%4))),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(i))),
+				sqltypes.NewInt32(int32(i % 4)),
+				sqltypes.NewInt32(int32(i)),
 			}},
 		}})
 		conns = append(conns, sbc)
@@ -1087,8 +1086,8 @@ func TestSelectScatterAggregate(t *testing.T) {
 	}
 	for i := 0; i < 4; i++ {
 		row := []sqltypes.Value{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(i))),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(i*2+4))),
+			sqltypes.NewInt32(int32(i)),
+			sqltypes.NewInt32(int32(i*2 + 4)),
 		}
 		wantResult.Rows = append(wantResult.Rows, row)
 	}
@@ -1118,8 +1117,8 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 			RowsAffected: 1,
 			InsertID:     0,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(i%4))),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(i))),
+				sqltypes.NewInt32(int32(i % 4)),
+				sqltypes.NewInt32(int32(i)),
 			}},
 		}})
 		conns = append(conns, sbc)
@@ -1150,8 +1149,8 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 	}
 	for i := 0; i < 4; i++ {
 		row := []sqltypes.Value{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(i))),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(i*2+4))),
+			sqltypes.NewInt32(int32(i)),
+			sqltypes.NewInt32(int32(i*2 + 4)),
 		}
 		wantResult.Rows = append(wantResult.Rows, row)
 	}
@@ -1183,8 +1182,8 @@ func TestSelectScatterLimit(t *testing.T) {
 			RowsAffected: 1,
 			InsertID:     0,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(i%4))),
+				sqltypes.NewInt32(1),
+				sqltypes.NewInt32(int32(i % 4)),
 			}},
 		}})
 		conns = append(conns, sbc)
@@ -1217,16 +1216,16 @@ func TestSelectScatterLimit(t *testing.T) {
 	}
 	wantResult.Rows = append(wantResult.Rows,
 		[]sqltypes.Value{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
 		},
 		[]sqltypes.Value{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
 		},
 		[]sqltypes.Value{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(2),
 		})
 
 	if !reflect.DeepEqual(gotResult, wantResult) {
@@ -1257,8 +1256,8 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 			RowsAffected: 1,
 			InsertID:     0,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte(strconv.Itoa(i%4))),
+				sqltypes.NewInt32(1),
+				sqltypes.NewInt32(int32(i % 4)),
 			}},
 		}})
 		conns = append(conns, sbc)
@@ -1289,16 +1288,16 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 	}
 	wantResult.Rows = append(wantResult.Rows,
 		[]sqltypes.Value{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
 		},
 		[]sqltypes.Value{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
 		},
 		[]sqltypes.Value{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(2),
 		})
 
 	if !reflect.DeepEqual(gotResult, wantResult) {
@@ -1416,8 +1415,8 @@ func TestVarJoin(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
 		}},
 	}}
 	sbc1.SetResults(result1)
@@ -1450,8 +1449,8 @@ func TestVarJoinStream(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
 		}},
 	}}
 	sbc1.SetResults(result1)
@@ -1488,8 +1487,8 @@ func TestLeftJoin(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
 		}},
 	}}
 	emptyResult := []*sqltypes.Result{{
@@ -1531,8 +1530,8 @@ func TestLeftJoinStream(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
 		}},
 	}}
 	emptyResult := []*sqltypes.Result{{
@@ -1771,8 +1770,8 @@ func TestJoinErrors(t *testing.T) {
 			{Name: "col", Type: sqltypes.Int32},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
 		}},
 	}})
 	sbc2.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
@@ -1816,8 +1815,8 @@ func TestJoinErrors(t *testing.T) {
 			{Name: "col", Type: sqltypes.Int32},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
 		}},
 	}})
 	sbc2.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
@@ -1838,8 +1837,8 @@ func TestCrossShardSubquery(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
 		}},
 	}}
 	sbc1.SetResults(result1)
@@ -1867,7 +1866,7 @@ func TestCrossShardSubquery(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.NewInt32(1),
 		}},
 	}
 	if !result.Equal(wantResult) {
@@ -1885,8 +1884,8 @@ func TestCrossShardSubqueryStream(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
 		}},
 	}}
 	sbc1.SetResults(result1)
@@ -1913,7 +1912,7 @@ func TestCrossShardSubqueryStream(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.NewInt32(1),
 		}},
 	}
 	if !result.Equal(wantResult) {

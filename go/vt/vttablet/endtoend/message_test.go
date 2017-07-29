@@ -125,9 +125,9 @@ func TestMessage(t *testing.T) {
 	}
 	want = &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+			sqltypes.NewInt64(1),
 			got.Rows[0][1],
-			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("hello world")),
+			sqltypes.NewVarChar("hello world"),
 		}},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -291,10 +291,10 @@ func TestThreeColMessage(t *testing.T) {
 	got = <-ch
 	want = &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+			sqltypes.NewInt64(1),
 			got.Rows[0][1],
-			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("hello world")),
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
+			sqltypes.NewVarChar("hello world"),
+			sqltypes.NewInt64(3),
 		}},
 	}
 	if !reflect.DeepEqual(got, want) {

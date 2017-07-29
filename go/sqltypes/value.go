@@ -32,9 +32,11 @@ import (
 var (
 	// NULL represents the NULL value.
 	NULL = Value{}
+
 	// DontEscape tells you if a character should not be escaped.
 	DontEscape = byte(255)
-	nullstr    = []byte("null")
+
+	nullstr = []byte("null")
 )
 
 // BinWriter interface is used for encoding values.
@@ -83,6 +85,7 @@ func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 // This function should only be used if you know the value
 // and type conform to the rules. Every place this function is
 // called, a comment is needed that explains why it's justified.
+// Packages exempt from this rule are the current one and mysql.
 func MakeTrusted(typ querypb.Type, val []byte) Value {
 	if typ == Null {
 		return NULL
@@ -101,6 +104,11 @@ func NewInt64(v int64) Value {
 	return MakeTrusted(Int64, strconv.AppendInt(nil, v, 10))
 }
 
+// NewInt32 builds an Int64 Value.
+func NewInt32(v int32) Value {
+	return MakeTrusted(Int32, strconv.AppendInt(nil, int64(v), 10))
+}
+
 // NewUint64 builds an Uint64 Value.
 func NewUint64(v uint64) Value {
 	return MakeTrusted(Uint64, strconv.AppendUint(nil, v, 10))
@@ -117,8 +125,9 @@ func NewVarChar(v string) Value {
 }
 
 // NewVarBinary builds a VarBinary Value.
-func NewVarBinary(v []byte) Value {
-	return MakeTrusted(VarBinary, v)
+// The input is a string because it's the most common use case.
+func NewVarBinary(v string) Value {
+	return MakeTrusted(VarBinary, []byte(v))
 }
 
 // NewIntegral builds an integral type from a string representaion.
@@ -145,7 +154,7 @@ func InterfaceToValue(goval interface{}) (Value, error) {
 	case nil:
 		return NULL, nil
 	case []byte:
-		return NewVarBinary(goval), nil
+		return MakeTrusted(VarBinary, goval), nil
 	case int64:
 		return NewInt64(goval), nil
 	case uint64:
@@ -188,14 +197,6 @@ func (v Value) Len() int {
 // String returns the raw value as a string.
 func (v Value) String() string {
 	return hack.String(v.val)
-}
-
-// ToProtoValue converts Value to a querypb.Value.
-func (v Value) ToProtoValue() *querypb.Value {
-	return &querypb.Value{
-		Type:  v.typ,
-		Value: v.val,
-	}
 }
 
 // EncodeSQL encodes the value into an SQL statement. Can be binary.

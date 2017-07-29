@@ -35,7 +35,7 @@ func TestSchamazHandler(t *testing.T) {
 	tableC := NewTable("c")
 	tableD := NewTable("c")
 
-	tableA.AddColumn("column1", sqltypes.Int64, sqltypes.MakeTrusted(sqltypes.Int32, []byte("0")), "auto_increment")
+	tableA.AddColumn("column1", sqltypes.Int64, sqltypes.NewInt32(0), "auto_increment")
 	tableA.AddIndex("index1").AddColumn("index_column", 1000)
 	tableA.Type = NoType
 

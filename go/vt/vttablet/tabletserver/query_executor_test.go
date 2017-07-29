@@ -207,7 +207,7 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 				sqltypes.MakeString([]byte("0")),
 				sqltypes.MakeString([]byte("1")),
 				sqltypes.MakeString([]byte("10")),
-				sqltypes.MakeString([]byte("01")),
+				sqltypes.MakeString([]byte("2")),
 			}},
 		},
 	)
@@ -239,9 +239,9 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 	mr := <-ch1
 	wantqr := &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("10")),
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("01")),
+			sqltypes.NewInt64(1),
+			sqltypes.NewInt64(10),
+			sqltypes.NewInt64(2),
 		}},
 	}
 	if !reflect.DeepEqual(mr, wantqr) {
@@ -274,7 +274,7 @@ func TestQueryExecutorPlanInsertSubQueryAutoCommmit(t *testing.T) {
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeTrusted(sqltypes.Int32, []byte("2"))},
+			{sqltypes.NewInt32(2)},
 		},
 	})
 
@@ -309,7 +309,7 @@ func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeTrusted(sqltypes.Int32, []byte("2"))},
+			{sqltypes.NewInt32(2)},
 		},
 	})
 
@@ -354,7 +354,7 @@ func TestQueryExecutorPlanInsertSubQueryRBR(t *testing.T) {
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeTrusted(sqltypes.Int32, []byte("2"))},
+			{sqltypes.NewInt32(2)},
 		},
 	})
 
@@ -684,7 +684,7 @@ func TestQueryExecutorPlanDmlSubQuery(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeTrusted(sqltypes.Int32, []byte("2"))},
+			{sqltypes.NewInt32(2)},
 		},
 	})
 	updateQuery := "update test_table set addr = 3 where pk in (2) /* _stream test_table (pk ) (2 ); */"
@@ -725,7 +725,7 @@ func TestQueryExecutorPlanDmlSubQueryRBR(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeTrusted(sqltypes.Int32, []byte("2"))},
+			{sqltypes.NewInt32(2)},
 		},
 	})
 	updateQuery := "update test_table set addr = 3 where pk in (2)"
@@ -812,7 +812,7 @@ func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
 		Fields:       fields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeTrusted(sqltypes.Int32, []byte("123"))},
+			{sqltypes.NewInt32(123)},
 		},
 	}
 	db.AddQuery(query, want)
@@ -959,8 +959,8 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
+			sqltypes.NewInt64(1),
+			sqltypes.NewInt64(3),
 		}},
 	})
 	updateQuery := "update seq set next_id = 4 where id = 0"
@@ -981,7 +981,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+			sqltypes.NewInt64(1),
 		}},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -1003,7 +1003,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
+			sqltypes.NewInt64(2),
 		}},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -1019,8 +1019,8 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("4")),
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
+			sqltypes.NewInt64(4),
+			sqltypes.NewInt64(3),
 		}},
 	})
 	updateQuery = "update seq set next_id = 7 where id = 0"
@@ -1037,7 +1037,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
+			sqltypes.NewInt64(3),
 		}},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -1053,8 +1053,8 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("7")),
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
+			sqltypes.NewInt64(7),
+			sqltypes.NewInt64(3),
 		}},
 	})
 	updateQuery = "update seq set next_id = 13 where id = 0"
@@ -1071,7 +1071,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("5")),
+			sqltypes.NewInt64(5),
 		}},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -1552,7 +1552,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875"))},
+				{sqltypes.NewInt32(1427325875)},
 			},
 		},
 		"select @@global.sql_mode": {

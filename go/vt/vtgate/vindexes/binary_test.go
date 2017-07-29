@@ -94,7 +94,7 @@ func TestBinaryReverseMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := []sqltypes.Value{sqltypes.NewVarBinary([]byte("\x00\x00\x00\x00\x00\x00\x00\x01"))}
+	want := []sqltypes.Value{sqltypes.NewVarBinary("\x00\x00\x00\x00\x00\x00\x00\x01")}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ReverseMap(): %+v, want %+v", got, want)
 	}

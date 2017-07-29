@@ -378,12 +378,12 @@ var ExecuteQueryResult = sqltypes.Result{
 	InsertID:     72,
 	Rows: [][]sqltypes.Value{
 		{
-			sqltypes.MakeTrusted(sqltypes.Int8, []byte("1")),
+			sqltypes.TestValue(sqltypes.Int8, "1"),
 			sqltypes.NULL,
 		},
 		{
-			sqltypes.MakeTrusted(sqltypes.Int8, []byte("2")),
-			sqltypes.MakeTrusted(sqltypes.Char, []byte("row2 value2")),
+			sqltypes.TestValue(sqltypes.Int8, "2"),
+			sqltypes.TestValue(sqltypes.Char, "row2 value2"),
 		},
 	},
 	Extras: &querypb.ResultExtras{
@@ -446,12 +446,12 @@ var StreamExecuteQueryResult1 = sqltypes.Result{
 var StreamExecuteQueryResult2 = sqltypes.Result{
 	Rows: [][]sqltypes.Value{
 		{
-			sqltypes.MakeTrusted(sqltypes.Int8, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Char, []byte("row1 value2")),
+			sqltypes.TestValue(sqltypes.Int8, "1"),
+			sqltypes.TestValue(sqltypes.Char, "row1 value2"),
 		},
 		{
-			sqltypes.MakeTrusted(sqltypes.Int8, []byte("2")),
-			sqltypes.MakeTrusted(sqltypes.Char, []byte("row2 value2")),
+			sqltypes.TestValue(sqltypes.Int8, "2"),
+			sqltypes.TestValue(sqltypes.Char, "row2 value2"),
 		},
 	},
 }
@@ -524,10 +524,10 @@ var ExecuteBatchQueryResultList = []sqltypes.Result{
 		InsertID:     712,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int8, []byte("1")),
+				sqltypes.TestValue(sqltypes.Int8, "1"),
 			},
 			{
-				sqltypes.MakeTrusted(sqltypes.Int8, []byte("2")),
+				sqltypes.TestValue(sqltypes.Int8, "2"),
 			},
 		},
 		Extras: &querypb.ResultExtras{
@@ -656,11 +656,11 @@ var (
 			Type: sqltypes.VarBinary,
 		}},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("row1 value2")),
+			sqltypes.NewVarBinary("1"),
+			sqltypes.NewVarBinary("row1 value2"),
 		}, {
-			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("2")),
-			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("row2 value2")),
+			sqltypes.NewVarBinary("2"),
+			sqltypes.NewVarBinary("row2 value2"),
 		}},
 	}
 

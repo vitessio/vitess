@@ -327,22 +327,22 @@ func TestMessageManagerPoller(t *testing.T) {
 				{Type: sqltypes.VarBinary},
 			},
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("0")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("10")),
+				sqltypes.NewInt64(1),
+				sqltypes.NewInt64(0),
+				sqltypes.NewInt64(1),
+				sqltypes.NewInt64(10),
 				sqltypes.MakeString([]byte("01")),
 			}, {
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("0")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("20")),
+				sqltypes.NewInt64(2),
+				sqltypes.NewInt64(0),
+				sqltypes.NewInt64(2),
+				sqltypes.NewInt64(20),
 				sqltypes.MakeString([]byte("02")),
 			}, {
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("30")),
+				sqltypes.NewInt64(1),
+				sqltypes.NewInt64(1),
+				sqltypes.NewInt64(3),
+				sqltypes.NewInt64(30),
 				sqltypes.MakeString([]byte("11")),
 			}},
 		},
@@ -358,16 +358,16 @@ func TestMessageManagerPoller(t *testing.T) {
 	<-r1.ch
 	mm.pollerTicks.Trigger()
 	want := [][]sqltypes.Value{{
-		sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
-		sqltypes.MakeTrusted(sqltypes.Int64, []byte("20")),
+		sqltypes.NewInt64(2),
+		sqltypes.NewInt64(20),
 		sqltypes.MakeString([]byte("02")),
 	}, {
-		sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-		sqltypes.MakeTrusted(sqltypes.Int64, []byte("10")),
+		sqltypes.NewInt64(1),
+		sqltypes.NewInt64(10),
 		sqltypes.MakeString([]byte("01")),
 	}, {
-		sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
-		sqltypes.MakeTrusted(sqltypes.Int64, []byte("30")),
+		sqltypes.NewInt64(3),
+		sqltypes.NewInt64(30),
 		sqltypes.MakeString([]byte("11")),
 	}}
 	var got [][]sqltypes.Value
@@ -408,10 +408,10 @@ func TestMessagesPending1(t *testing.T) {
 				{Type: sqltypes.VarBinary},
 			},
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("0")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("a")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("10")),
+				sqltypes.NewInt64(1),
+				sqltypes.NewInt64(0),
+				sqltypes.NewInt64(2),
+				sqltypes.NewInt64(10),
 				sqltypes.MakeString([]byte("a")),
 			}},
 		},
@@ -475,10 +475,10 @@ func TestMessagesPending2(t *testing.T) {
 				{Type: sqltypes.VarBinary},
 			},
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("0")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("a")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("10")),
+				sqltypes.NewInt64(1),
+				sqltypes.NewInt64(0),
+				sqltypes.NewInt64(2),
+				sqltypes.NewInt64(10),
 				sqltypes.MakeString([]byte("a")),
 			}},
 		},
@@ -552,7 +552,7 @@ func TestMMGenerate(t *testing.T) {
 		t.Errorf("gotAcked: %d, should be with 10s of %d", gotAcked, wantAcked)
 	}
 	gotids := bv["ids"]
-	wantids := sqltypes.MakeTestBindVar([]interface{}{"1", "2"})
+	wantids := sqltypes.TestBindVariable([]interface{}{"1", "2"})
 	if !reflect.DeepEqual(gotids, wantids) {
 		t.Errorf("gotid: %v, want %v", gotids, wantids)
 	}

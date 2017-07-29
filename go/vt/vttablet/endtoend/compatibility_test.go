@@ -81,10 +81,10 @@ func TestCharaterSet(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Float32, []byte("1.12345")),
-				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("\xc2\xa2")),
-				sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("\x00\xff")),
+				sqltypes.TestValue(sqltypes.Int32, "1"),
+				sqltypes.TestValue(sqltypes.Float32, "1.12345"),
+				sqltypes.TestValue(sqltypes.VarChar, "\xc2\xa2"),
+				sqltypes.TestValue(sqltypes.VarBinary, "\x00\xff"),
 			},
 		},
 	}
@@ -238,17 +238,17 @@ func TestInts(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int8, []byte("-128")),
-				sqltypes.MakeTrusted(sqltypes.Uint8, []byte("255")),
-				sqltypes.MakeTrusted(sqltypes.Int16, []byte("-32768")),
-				sqltypes.MakeTrusted(sqltypes.Uint16, []byte("65535")),
-				sqltypes.MakeTrusted(sqltypes.Int24, []byte("-8388608")),
-				sqltypes.MakeTrusted(sqltypes.Uint24, []byte("16777215")),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("-2147483648")),
-				sqltypes.MakeTrusted(sqltypes.Uint32, []byte("4294967295")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("-9223372036854775808")),
-				sqltypes.MakeTrusted(sqltypes.Uint64, []byte("18446744073709551615")),
-				sqltypes.MakeTrusted(sqltypes.Year, []byte("2012")),
+				sqltypes.TestValue(sqltypes.Int8, "-128"),
+				sqltypes.TestValue(sqltypes.Uint8, "255"),
+				sqltypes.TestValue(sqltypes.Int16, "-32768"),
+				sqltypes.TestValue(sqltypes.Uint16, "65535"),
+				sqltypes.TestValue(sqltypes.Int24, "-8388608"),
+				sqltypes.TestValue(sqltypes.Uint24, "16777215"),
+				sqltypes.TestValue(sqltypes.Int32, "-2147483648"),
+				sqltypes.TestValue(sqltypes.Uint32, "4294967295"),
+				sqltypes.TestValue(sqltypes.Int64, "-9223372036854775808"),
+				sqltypes.TestValue(sqltypes.Uint64, "18446744073709551615"),
+				sqltypes.TestValue(sqltypes.Year, "2012"),
 			},
 		},
 	}
@@ -275,7 +275,7 @@ func TestInts(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Uint64, []byte("18446744073709551615")),
+				sqltypes.TestValue(sqltypes.Uint64, "18446744073709551615"),
 			},
 		},
 	}
@@ -366,11 +366,11 @@ func TestFractionals(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Decimal, []byte("1.99")),
-				sqltypes.MakeTrusted(sqltypes.Decimal, []byte("2.99")),
-				sqltypes.MakeTrusted(sqltypes.Float32, []byte("3.99")),
-				sqltypes.MakeTrusted(sqltypes.Float64, []byte("4.99")),
+				sqltypes.TestValue(sqltypes.Int32, "1"),
+				sqltypes.TestValue(sqltypes.Decimal, "1.99"),
+				sqltypes.TestValue(sqltypes.Decimal, "2.99"),
+				sqltypes.TestValue(sqltypes.Float32, "3.99"),
+				sqltypes.TestValue(sqltypes.Float64, "4.99"),
 			},
 		},
 	}
@@ -511,16 +511,16 @@ func TestStrings(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("a")),
-				sqltypes.MakeTrusted(sqltypes.Char, []byte("b")),
-				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("c")),
-				sqltypes.MakeTrusted(sqltypes.Binary, []byte("d\x00\x00\x00")),
-				sqltypes.MakeTrusted(sqltypes.Blob, []byte("e")),
-				sqltypes.MakeTrusted(sqltypes.Blob, []byte("f")),
-				sqltypes.MakeTrusted(sqltypes.Text, []byte("g")),
-				sqltypes.MakeTrusted(sqltypes.Text, []byte("h")),
-				sqltypes.MakeTrusted(sqltypes.Enum, []byte("a")),
-				sqltypes.MakeTrusted(sqltypes.Set, []byte("a,b")),
+				sqltypes.TestValue(sqltypes.VarBinary, "a"),
+				sqltypes.TestValue(sqltypes.Char, "b"),
+				sqltypes.TestValue(sqltypes.VarChar, "c"),
+				sqltypes.TestValue(sqltypes.Binary, "d\x00\x00\x00"),
+				sqltypes.TestValue(sqltypes.Blob, "e"),
+				sqltypes.TestValue(sqltypes.Blob, "f"),
+				sqltypes.TestValue(sqltypes.Text, "g"),
+				sqltypes.TestValue(sqltypes.Text, "h"),
+				sqltypes.TestValue(sqltypes.Enum, "a"),
+				sqltypes.TestValue(sqltypes.Set, "a,b"),
 			},
 		},
 	}
@@ -618,12 +618,12 @@ func TestMiscTypes(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Bit, []byte("\x01")),
-				sqltypes.MakeTrusted(sqltypes.Date, []byte("2012-01-01")),
-				sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2012-01-01 15:45:45")),
-				sqltypes.MakeTrusted(sqltypes.Time, []byte("15:45:45")),
-				sqltypes.MakeTrusted(sqltypes.Geometry, []byte(point12)),
+				sqltypes.TestValue(sqltypes.Int32, "1"),
+				sqltypes.TestValue(sqltypes.Bit, "\x01"),
+				sqltypes.TestValue(sqltypes.Date, "2012-01-01"),
+				sqltypes.TestValue(sqltypes.Datetime, "2012-01-01 15:45:45"),
+				sqltypes.TestValue(sqltypes.Time, "15:45:45"),
+				sqltypes.TestValue(sqltypes.Geometry, point12),
 			},
 		},
 	}
@@ -790,8 +790,8 @@ func TestJSONType(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte("{\"foo\": \"bar\"}")),
+				sqltypes.TestValue(sqltypes.Int32, "1"),
+				sqltypes.TestValue(sqltypes.TypeJSON, "{\"foo\": \"bar\"}"),
 			},
 		},
 	}

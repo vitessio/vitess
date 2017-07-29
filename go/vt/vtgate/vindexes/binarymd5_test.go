@@ -56,7 +56,7 @@ func TestBinaryMD5(t *testing.T) {
 		out: "\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za[",
 	}}
 	for _, tcase := range tcases {
-		got, err := binVindex.(Unique).Map(nil, []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(tcase.in))})
+		got, err := binVindex.(Unique).Map(nil, []sqltypes.Value{sqltypes.NewVarBinary(tcase.in)})
 		if err != nil {
 			t.Error(err)
 		}
@@ -64,7 +64,7 @@ func TestBinaryMD5(t *testing.T) {
 		if out != tcase.out {
 			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 		}
-		ok, err := binVindex.Verify(nil, []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(tcase.in))}, [][]byte{[]byte(tcase.out)})
+		ok, err := binVindex.Verify(nil, []sqltypes.Value{sqltypes.NewVarBinary(tcase.in)}, [][]byte{[]byte(tcase.out)})
 		if err != nil {
 			t.Error(err)
 		}
@@ -91,7 +91,7 @@ func TestBinaryMD5VerifyNeg(t *testing.T) {
 }
 
 func TestSQLValue(t *testing.T) {
-	val := sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("Test"))
+	val := sqltypes.NewVarBinary("Test")
 	got, err := binVindex.(Unique).Map(nil, []sqltypes.Value{val})
 	if err != nil {
 		t.Error(err)

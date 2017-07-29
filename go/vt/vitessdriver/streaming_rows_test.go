@@ -48,9 +48,9 @@ var packet1 = sqltypes.Result{
 var packet2 = sqltypes.Result{
 	Rows: [][]sqltypes.Value{
 		{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Float32, []byte("1.1")),
-			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("value1")),
+			sqltypes.NewInt32(1),
+			sqltypes.TestValue(sqltypes.Float32, "1.1"),
+			sqltypes.NewVarChar("value1"),
 		},
 	},
 }
@@ -58,9 +58,9 @@ var packet2 = sqltypes.Result{
 var packet3 = sqltypes.Result{
 	Rows: [][]sqltypes.Value{
 		{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
-			sqltypes.MakeTrusted(sqltypes.Float32, []byte("2.2")),
-			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("value2")),
+			sqltypes.NewInt32(2),
+			sqltypes.TestValue(sqltypes.Float32, "2.2"),
+			sqltypes.NewVarChar("value2"),
 		},
 	},
 }

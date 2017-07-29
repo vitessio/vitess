@@ -29,10 +29,10 @@ func TestEncodable(t *testing.T) {
 		out string
 	}{{
 		in: InsertValues{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+			sqltypes.NewInt64(1),
 			sqltypes.MakeString([]byte("foo('a')")),
 		}, {
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
+			sqltypes.NewInt64(2),
 			sqltypes.MakeString([]byte("bar(`b`)")),
 		}},
 		out: "(1, 'foo(\\'a\\')'), (2, 'bar(`b`)')",
@@ -41,7 +41,7 @@ func TestEncodable(t *testing.T) {
 		in: &TupleEqualityList{
 			Columns: []ColIdent{NewColIdent("pk")},
 			Rows: [][]sqltypes.Value{
-				{sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))},
+				{sqltypes.NewInt64(1)},
 				{sqltypes.MakeString([]byte("aa"))},
 			},
 		},
@@ -52,11 +52,11 @@ func TestEncodable(t *testing.T) {
 			Columns: []ColIdent{NewColIdent("pk1"), NewColIdent("pk2")},
 			Rows: [][]sqltypes.Value{
 				{
-					sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+					sqltypes.NewInt64(1),
 					sqltypes.MakeString([]byte("aa")),
 				},
 				{
-					sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
+					sqltypes.NewInt64(2),
 					sqltypes.MakeString([]byte("bb")),
 				},
 			},

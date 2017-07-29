@@ -225,9 +225,9 @@ func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *TxConnection, dtid string,
 	rows := make([][]sqltypes.Value, len(queries))
 	for i, query := range queries {
 		rows[i] = []sqltypes.Value{
-			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(dtid)),
-			sqltypes.MakeTrusted(sqltypes.Int64, strconv.AppendInt(nil, int64(i+1), 10)),
-			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(query)),
+			sqltypes.NewVarBinary(dtid),
+			sqltypes.NewInt64(int64(i + 1)),
+			sqltypes.NewVarBinary(query),
 		}
 	}
 	extras := map[string]sqlparser.Encodable{
@@ -352,10 +352,10 @@ func (tpc *TwoPC) CreateTransaction(ctx context.Context, conn *TxConnection, dti
 	rows := make([][]sqltypes.Value, len(participants))
 	for i, participant := range participants {
 		rows[i] = []sqltypes.Value{
-			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(dtid)),
-			sqltypes.MakeTrusted(sqltypes.Int64, strconv.AppendInt(nil, int64(i+1), 10)),
-			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(participant.Keyspace)),
-			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(participant.Shard)),
+			sqltypes.NewVarBinary(dtid),
+			sqltypes.NewInt64(int64(i + 1)),
+			sqltypes.NewVarBinary(participant.Keyspace),
+			sqltypes.NewVarBinary(participant.Shard),
 		}
 	}
 	extras := map[string]sqlparser.Encodable{

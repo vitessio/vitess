@@ -22,8 +22,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
-
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
@@ -40,111 +38,111 @@ func TestNewValue(t *testing.T) {
 	}, {
 		inType: Int8,
 		inVal:  "1",
-		outVal: testVal(Int8, "1"),
+		outVal: TestValue(Int8, "1"),
 	}, {
 		inType: Int16,
 		inVal:  "1",
-		outVal: testVal(Int16, "1"),
+		outVal: TestValue(Int16, "1"),
 	}, {
 		inType: Int24,
 		inVal:  "1",
-		outVal: testVal(Int24, "1"),
+		outVal: TestValue(Int24, "1"),
 	}, {
 		inType: Int32,
 		inVal:  "1",
-		outVal: testVal(Int32, "1"),
+		outVal: TestValue(Int32, "1"),
 	}, {
 		inType: Int64,
 		inVal:  "1",
-		outVal: testVal(Int64, "1"),
+		outVal: TestValue(Int64, "1"),
 	}, {
 		inType: Uint8,
 		inVal:  "1",
-		outVal: testVal(Uint8, "1"),
+		outVal: TestValue(Uint8, "1"),
 	}, {
 		inType: Uint16,
 		inVal:  "1",
-		outVal: testVal(Uint16, "1"),
+		outVal: TestValue(Uint16, "1"),
 	}, {
 		inType: Uint24,
 		inVal:  "1",
-		outVal: testVal(Uint24, "1"),
+		outVal: TestValue(Uint24, "1"),
 	}, {
 		inType: Uint32,
 		inVal:  "1",
-		outVal: testVal(Uint32, "1"),
+		outVal: TestValue(Uint32, "1"),
 	}, {
 		inType: Uint64,
 		inVal:  "1",
-		outVal: testVal(Uint64, "1"),
+		outVal: TestValue(Uint64, "1"),
 	}, {
 		inType: Float32,
 		inVal:  "1.00",
-		outVal: testVal(Float32, "1.00"),
+		outVal: TestValue(Float32, "1.00"),
 	}, {
 		inType: Float64,
 		inVal:  "1.00",
-		outVal: testVal(Float64, "1.00"),
+		outVal: TestValue(Float64, "1.00"),
 	}, {
 		inType: Decimal,
 		inVal:  "1.00",
-		outVal: testVal(Decimal, "1.00"),
+		outVal: TestValue(Decimal, "1.00"),
 	}, {
 		inType: Timestamp,
 		inVal:  "2012-02-24 23:19:43",
-		outVal: testVal(Timestamp, "2012-02-24 23:19:43"),
+		outVal: TestValue(Timestamp, "2012-02-24 23:19:43"),
 	}, {
 		inType: Date,
 		inVal:  "2012-02-24",
-		outVal: testVal(Date, "2012-02-24"),
+		outVal: TestValue(Date, "2012-02-24"),
 	}, {
 		inType: Time,
 		inVal:  "23:19:43",
-		outVal: testVal(Time, "23:19:43"),
+		outVal: TestValue(Time, "23:19:43"),
 	}, {
 		inType: Datetime,
 		inVal:  "2012-02-24 23:19:43",
-		outVal: testVal(Datetime, "2012-02-24 23:19:43"),
+		outVal: TestValue(Datetime, "2012-02-24 23:19:43"),
 	}, {
 		inType: Year,
 		inVal:  "1",
-		outVal: testVal(Year, "1"),
+		outVal: TestValue(Year, "1"),
 	}, {
 		inType: Text,
 		inVal:  "a",
-		outVal: testVal(Text, "a"),
+		outVal: TestValue(Text, "a"),
 	}, {
 		inType: Blob,
 		inVal:  "a",
-		outVal: testVal(Blob, "a"),
+		outVal: TestValue(Blob, "a"),
 	}, {
 		inType: VarChar,
 		inVal:  "a",
-		outVal: testVal(VarChar, "a"),
+		outVal: TestValue(VarChar, "a"),
 	}, {
 		inType: Binary,
 		inVal:  "a",
-		outVal: testVal(Binary, "a"),
+		outVal: TestValue(Binary, "a"),
 	}, {
 		inType: Char,
 		inVal:  "a",
-		outVal: testVal(Char, "a"),
+		outVal: TestValue(Char, "a"),
 	}, {
 		inType: Bit,
 		inVal:  "1",
-		outVal: testVal(Bit, "1"),
+		outVal: TestValue(Bit, "1"),
 	}, {
 		inType: Enum,
 		inVal:  "a",
-		outVal: testVal(Enum, "a"),
+		outVal: TestValue(Enum, "a"),
 	}, {
 		inType: Set,
 		inVal:  "a",
-		outVal: testVal(Set, "a"),
+		outVal: TestValue(Set, "a"),
 	}, {
 		inType: VarBinary,
 		inVal:  "a",
-		outVal: testVal(VarBinary, "a"),
+		outVal: TestValue(VarBinary, "a"),
 	}, {
 		inType: Int64,
 		inVal:  InvalidNeg,
@@ -192,13 +190,29 @@ func TestNewValue(t *testing.T) {
 	}
 }
 
+// TestNew tests 'New' functions that are not tested
+// through other code paths.
+func TestNew(t *testing.T) {
+	got := NewInt32(1)
+	want := MakeTrusted(Int32, []byte("1"))
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("NewInt32(aa): %v, want %v", got, want)
+	}
+
+	got = NewVarBinary("aa")
+	want = MakeTrusted(VarBinary, []byte("aa"))
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("NewVarBinary(aa): %v, want %v", got, want)
+	}
+}
+
 func TestMakeTrusted(t *testing.T) {
 	v := MakeTrusted(Null, []byte("abcd"))
 	if !reflect.DeepEqual(v, NULL) {
 		t.Errorf("MakeTrusted(Null...) = %v, want null", makePretty(v))
 	}
 	v = MakeTrusted(Int64, []byte("1"))
-	want := testVal(Int64, "1")
+	want := TestValue(Int64, "1")
 	if !reflect.DeepEqual(v, want) {
 		t.Errorf("MakeTrusted(Int64, \"1\") = %v, want %v", makePretty(v), makePretty(want))
 	}
@@ -216,13 +230,13 @@ func TestIntegralValue(t *testing.T) {
 		outErr string
 	}{{
 		in:     MinNeg,
-		outVal: testVal(Int64, MinNeg),
+		outVal: TestValue(Int64, MinNeg),
 	}, {
 		in:     "1",
-		outVal: testVal(Int64, "1"),
+		outVal: TestValue(Int64, "1"),
 	}, {
 		in:     MinPos,
-		outVal: testVal(Uint64, MinPos),
+		outVal: TestValue(Uint64, MinPos),
 	}, {
 		in:     InvalidPos,
 		outErr: "out of range",
@@ -254,19 +268,19 @@ func TestInerfaceValue(t *testing.T) {
 		out: NULL,
 	}, {
 		in:  []byte("a"),
-		out: testVal(VarBinary, "a"),
+		out: TestValue(VarBinary, "a"),
 	}, {
 		in:  int64(1),
-		out: testVal(Int64, "1"),
+		out: TestValue(Int64, "1"),
 	}, {
 		in:  uint64(1),
-		out: testVal(Uint64, "1"),
+		out: TestValue(Uint64, "1"),
 	}, {
 		in:  float64(1.2),
-		out: testVal(Float64, "1.2"),
+		out: TestValue(Float64, "1.2"),
 	}, {
 		in:  "a",
-		out: testVal(VarChar, "a"),
+		out: TestValue(VarChar, "a"),
 	}}
 	for _, tcase := range testcases {
 		v, err := InterfaceToValue(tcase.in)
@@ -287,7 +301,7 @@ func TestInerfaceValue(t *testing.T) {
 }
 
 func TestAccessors(t *testing.T) {
-	v := testVal(Int64, "1")
+	v := TestValue(Int64, "1")
 	if v.Type() != Int64 {
 		t.Errorf("v.Type=%v, want Int64", v.Type())
 	}
@@ -329,23 +343,12 @@ func TestAccessors(t *testing.T) {
 func TestBytes(t *testing.T) {
 	for _, v := range []Value{
 		NULL,
-		testVal(Int64, "1"),
-		testVal(Int64, "12"),
+		TestValue(Int64, "1"),
+		TestValue(Int64, "12"),
 	} {
 		if b := v.Bytes(); bytes.Compare(b, v.Raw()) != 0 {
 			t.Errorf("v1.Bytes: %s, want %s", b, v.Raw())
 		}
-	}
-}
-
-func TestToProtoValue(t *testing.T) {
-	got := testVal(Int64, "1").ToProtoValue()
-	want := &querypb.Value{
-		Type:  Int64,
-		Value: []byte("1"),
-	}
-	if !proto.Equal(got, want) {
-		t.Errorf("bindvar: %v, want %v", got, want)
 	}
 }
 
@@ -359,15 +362,15 @@ func TestEncode(t *testing.T) {
 		outSQL:   "null",
 		outASCII: "null",
 	}, {
-		in:       testVal(Int64, "1"),
+		in:       TestValue(Int64, "1"),
 		outSQL:   "1",
 		outASCII: "1",
 	}, {
-		in:       testVal(VarChar, "foo"),
+		in:       TestValue(VarChar, "foo"),
 		outSQL:   "'foo'",
 		outASCII: "'Zm9v'",
 	}, {
-		in:       testVal(VarChar, "\x00'\"\b\n\r\t\x1A\\"),
+		in:       TestValue(VarChar, "\x00'\"\b\n\r\t\x1A\\"),
 		outSQL:   "'\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\'",
 		outASCII: "'ACciCAoNCRpc'",
 	}}
@@ -393,11 +396,6 @@ func TestEncodeMap(t *testing.T) {
 	if SQLDecodeMap[DontEscape] != DontEscape {
 		t.Errorf("SQLDecodeMap[DontEscape] = %v, want %v", SQLEncodeMap[DontEscape], DontEscape)
 	}
-}
-
-// testVal makes it easy to build a Value for testing.
-func testVal(typ querypb.Type, val string) Value {
-	return Value{typ: typ, val: []byte(val)}
 }
 
 type prettyVal struct {

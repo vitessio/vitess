@@ -473,7 +473,7 @@ func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []
 		// convert []*querypb.Value to []sqltypes.Value for calling Map.
 		values := make([]sqltypes.Value, 0, len(ids))
 		for _, id := range ids {
-			values = append(values, sqltypes.MakeTrusted(id.Type, id.Value))
+			values = append(values, sqltypes.ProtoToValue(id))
 		}
 		ksids, err := mapper.Map(vcursor, values)
 		if err != nil {
@@ -763,7 +763,7 @@ func buildVarCharFields(names ...string) []*querypb.Field {
 func buildVarCharRow(values ...string) []sqltypes.Value {
 	row := make([]sqltypes.Value, len(values))
 	for i, v := range values {
-		row[i] = sqltypes.MakeTrusted(sqltypes.VarChar, []byte(v))
+		row[i] = sqltypes.NewVarChar(v)
 	}
 	return row
 }

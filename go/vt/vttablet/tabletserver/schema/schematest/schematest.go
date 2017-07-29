@@ -36,7 +36,7 @@ func Queries() map[string]*sqltypes.Result {
 			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875"))},
+				{sqltypes.NewInt32(1427325875)},
 			},
 		},
 		"select @@global.sql_mode": {

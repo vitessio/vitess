@@ -46,23 +46,23 @@ func TestGreaterThanTupleWhereClause(t *testing.T) {
 	}{
 		{
 			columns: []string{"a"},
-			row:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))},
+			row:     []sqltypes.Value{sqltypes.NewInt64(1)},
 			want:    []string{"`a`>1"},
 		},
 		{
 			columns: []string{"a", "b"},
 			row: []sqltypes.Value{
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Float32, []byte("2.1")),
+				sqltypes.NewInt64(1),
+				sqltypes.TestValue(sqltypes.Float32, "2.1"),
 			},
 			want: []string{"`a`>=1", "(`a`,`b`)>(1,2.1)"},
 		},
 		{
 			columns: []string{"a", "b", "c"},
 			row: []sqltypes.Value{
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Float32, []byte("2.1")),
-				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("Bär")),
+				sqltypes.NewInt64(1),
+				sqltypes.TestValue(sqltypes.Float32, "2.1"),
+				sqltypes.NewVarChar("Bär"),
 			},
 			want: []string{"`a`>=1", "(`a`,`b`,`c`)>(1,2.1,'Bär')"},
 		},
@@ -89,8 +89,8 @@ func TestGenerateQuery(t *testing.T) {
 	}{
 		{
 			desc:              "start and end defined",
-			start:             sqltypes.MakeTrusted(sqltypes.Int64, []byte("11")),
-			end:               sqltypes.MakeTrusted(sqltypes.Int64, []byte("26")),
+			start:             sqltypes.NewInt64(11),
+			end:               sqltypes.NewInt64(26),
 			table:             "t1",
 			columns:           []string{"a", "msg1", "msg2"},
 			primaryKeyColumns: []string{"a"},
@@ -98,7 +98,7 @@ func TestGenerateQuery(t *testing.T) {
 		},
 		{
 			desc:              "only end defined",
-			end:               sqltypes.MakeTrusted(sqltypes.Int64, []byte("26")),
+			end:               sqltypes.NewInt64(26),
 			table:             "t1",
 			columns:           []string{"a", "msg1", "msg2"},
 			primaryKeyColumns: []string{"a"},
@@ -106,7 +106,7 @@ func TestGenerateQuery(t *testing.T) {
 		},
 		{
 			desc:              "only start defined",
-			start:             sqltypes.MakeTrusted(sqltypes.Int64, []byte("11")),
+			start:             sqltypes.NewInt64(11),
 			table:             "t1",
 			columns:           []string{"a", "msg1", "msg2"},
 			primaryKeyColumns: []string{"a"},
@@ -128,8 +128,8 @@ func TestGenerateQuery(t *testing.T) {
 		},
 		{
 			desc:              "start and end defined (multi-column primary key)",
-			start:             sqltypes.MakeTrusted(sqltypes.Int64, []byte("11")),
-			end:               sqltypes.MakeTrusted(sqltypes.Int64, []byte("26")),
+			start:             sqltypes.NewInt64(11),
+			end:               sqltypes.NewInt64(26),
 			table:             "t1",
 			columns:           []string{"a", "b", "msg1", "msg2"},
 			primaryKeyColumns: []string{"a", "b"},
@@ -137,14 +137,14 @@ func TestGenerateQuery(t *testing.T) {
 		},
 		{
 			desc:              "start overriden by last row (multi-column primary key)",
-			start:             sqltypes.MakeTrusted(sqltypes.Int64, []byte("11")),
-			end:               sqltypes.MakeTrusted(sqltypes.Int64, []byte("26")),
+			start:             sqltypes.NewInt64(11),
+			end:               sqltypes.NewInt64(26),
 			table:             "t1",
 			columns:           []string{"a", "b", "msg1", "msg2"},
 			primaryKeyColumns: []string{"a", "b"},
 			lastRow: []sqltypes.Value{
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
+				sqltypes.NewInt64(1),
+				sqltypes.NewInt64(2),
 			},
 			want: "SELECT `a`,`b`,`msg1`,`msg2` FROM `t1` WHERE `a`>=1 AND (`a`,`b`)>(1,2) AND `a`<26 ORDER BY `a`,`b`",
 		},
@@ -154,8 +154,8 @@ func TestGenerateQuery(t *testing.T) {
 			columns:           []string{"a", "b", "msg1", "msg2"},
 			primaryKeyColumns: []string{"a", "b"},
 			lastRow: []sqltypes.Value{
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
+				sqltypes.NewInt64(1),
+				sqltypes.NewInt64(2),
 			},
 			want: "SELECT `a`,`b`,`msg1`,`msg2` FROM `t1` WHERE `a`>=1 AND (`a`,`b`)>(1,2) ORDER BY `a`,`b`",
 		},

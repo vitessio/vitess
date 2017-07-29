@@ -171,75 +171,75 @@ func TestCast(t *testing.T) {
 		out: NULL,
 	}, {
 		typ: VarChar,
-		v:   testVal(VarChar, "exact types"),
-		out: testVal(VarChar, "exact types"),
+		v:   TestValue(VarChar, "exact types"),
+		out: TestValue(VarChar, "exact types"),
 	}, {
 		typ: Int64,
-		v:   testVal(Int32, "32"),
-		out: testVal(Int64, "32"),
+		v:   TestValue(Int32, "32"),
+		out: TestValue(Int64, "32"),
 	}, {
 		typ: Int24,
-		v:   testVal(Uint64, "64"),
-		out: testVal(Int24, "64"),
+		v:   TestValue(Uint64, "64"),
+		out: TestValue(Int24, "64"),
 	}, {
 		typ: Int24,
-		v:   testVal(VarChar, "bad int"),
+		v:   TestValue(VarChar, "bad int"),
 		err: "invalid syntax",
 	}, {
 		typ: Uint64,
-		v:   testVal(Uint32, "32"),
-		out: testVal(Uint64, "32"),
+		v:   TestValue(Uint32, "32"),
+		out: TestValue(Uint64, "32"),
 	}, {
 		typ: Uint24,
-		v:   testVal(Int64, "64"),
-		out: testVal(Uint24, "64"),
+		v:   TestValue(Int64, "64"),
+		out: TestValue(Uint24, "64"),
 	}, {
 		typ: Uint24,
-		v:   testVal(Int64, "-1"),
+		v:   TestValue(Int64, "-1"),
 		err: "invalid syntax",
 	}, {
 		typ: Float64,
-		v:   testVal(Int64, "64"),
-		out: testVal(Float64, "64"),
+		v:   TestValue(Int64, "64"),
+		out: TestValue(Float64, "64"),
 	}, {
 		typ: Float32,
-		v:   testVal(Float64, "64"),
-		out: testVal(Float32, "64"),
+		v:   TestValue(Float64, "64"),
+		out: TestValue(Float32, "64"),
 	}, {
 		typ: Float32,
-		v:   testVal(Decimal, "1.24"),
-		out: testVal(Float32, "1.24"),
+		v:   TestValue(Decimal, "1.24"),
+		out: TestValue(Float32, "1.24"),
 	}, {
 		typ: Float64,
-		v:   testVal(VarChar, "1.25"),
-		out: testVal(Float64, "1.25"),
+		v:   TestValue(VarChar, "1.25"),
+		out: TestValue(Float64, "1.25"),
 	}, {
 		typ: Float64,
-		v:   testVal(VarChar, "bad float"),
+		v:   TestValue(VarChar, "bad float"),
 		err: "invalid syntax",
 	}, {
 		typ: VarChar,
-		v:   testVal(Int64, "64"),
-		out: testVal(VarChar, "64"),
+		v:   TestValue(Int64, "64"),
+		out: TestValue(VarChar, "64"),
 	}, {
 		typ: VarBinary,
-		v:   testVal(Float64, "64"),
-		out: testVal(VarBinary, "64"),
+		v:   TestValue(Float64, "64"),
+		out: TestValue(VarBinary, "64"),
 	}, {
 		typ: VarBinary,
-		v:   testVal(Decimal, "1.24"),
-		out: testVal(VarBinary, "1.24"),
+		v:   TestValue(Decimal, "1.24"),
+		out: TestValue(VarBinary, "1.24"),
 	}, {
 		typ: VarBinary,
-		v:   testVal(VarChar, "1.25"),
-		out: testVal(VarBinary, "1.25"),
+		v:   TestValue(VarChar, "1.25"),
+		out: TestValue(VarBinary, "1.25"),
 	}, {
 		typ: VarChar,
-		v:   testVal(VarBinary, "valid string"),
-		out: testVal(VarChar, "valid string"),
+		v:   TestValue(VarBinary, "valid string"),
+		out: TestValue(VarChar, "valid string"),
 	}, {
 		typ: VarChar,
-		v:   testVal(Expression, "bad string"),
+		v:   TestValue(Expression, "bad string"),
 		err: "EXPRESSION value cannot be cast to VARCHAR",
 	}}
 	for _, tcase := range tcases {
@@ -366,85 +366,85 @@ func TestToNative(t *testing.T) {
 		in:  NULL,
 		out: nil,
 	}, {
-		in:  testVal(Int8, "1"),
+		in:  TestValue(Int8, "1"),
 		out: int64(1),
 	}, {
-		in:  testVal(Int16, "1"),
+		in:  TestValue(Int16, "1"),
 		out: int64(1),
 	}, {
-		in:  testVal(Int24, "1"),
+		in:  TestValue(Int24, "1"),
 		out: int64(1),
 	}, {
-		in:  testVal(Int32, "1"),
+		in:  TestValue(Int32, "1"),
 		out: int64(1),
 	}, {
-		in:  testVal(Int64, "1"),
+		in:  TestValue(Int64, "1"),
 		out: int64(1),
 	}, {
-		in:  testVal(Uint8, "1"),
+		in:  TestValue(Uint8, "1"),
 		out: uint64(1),
 	}, {
-		in:  testVal(Uint16, "1"),
+		in:  TestValue(Uint16, "1"),
 		out: uint64(1),
 	}, {
-		in:  testVal(Uint24, "1"),
+		in:  TestValue(Uint24, "1"),
 		out: uint64(1),
 	}, {
-		in:  testVal(Uint32, "1"),
+		in:  TestValue(Uint32, "1"),
 		out: uint64(1),
 	}, {
-		in:  testVal(Uint64, "1"),
+		in:  TestValue(Uint64, "1"),
 		out: uint64(1),
 	}, {
-		in:  testVal(Float32, "1"),
+		in:  TestValue(Float32, "1"),
 		out: float64(1),
 	}, {
-		in:  testVal(Float64, "1"),
+		in:  TestValue(Float64, "1"),
 		out: float64(1),
 	}, {
-		in:  testVal(Timestamp, "2012-02-24 23:19:43"),
+		in:  TestValue(Timestamp, "2012-02-24 23:19:43"),
 		out: []byte("2012-02-24 23:19:43"),
 	}, {
-		in:  testVal(Date, "2012-02-24"),
+		in:  TestValue(Date, "2012-02-24"),
 		out: []byte("2012-02-24"),
 	}, {
-		in:  testVal(Time, "23:19:43"),
+		in:  TestValue(Time, "23:19:43"),
 		out: []byte("23:19:43"),
 	}, {
-		in:  testVal(Datetime, "2012-02-24 23:19:43"),
+		in:  TestValue(Datetime, "2012-02-24 23:19:43"),
 		out: []byte("2012-02-24 23:19:43"),
 	}, {
-		in:  testVal(Year, "1"),
+		in:  TestValue(Year, "1"),
 		out: uint64(1),
 	}, {
-		in:  testVal(Decimal, "1"),
+		in:  TestValue(Decimal, "1"),
 		out: []byte("1"),
 	}, {
-		in:  testVal(Text, "a"),
+		in:  TestValue(Text, "a"),
 		out: []byte("a"),
 	}, {
-		in:  testVal(Blob, "a"),
+		in:  TestValue(Blob, "a"),
 		out: []byte("a"),
 	}, {
-		in:  testVal(VarChar, "a"),
+		in:  TestValue(VarChar, "a"),
 		out: []byte("a"),
 	}, {
-		in:  testVal(VarBinary, "a"),
+		in:  TestValue(VarBinary, "a"),
 		out: []byte("a"),
 	}, {
-		in:  testVal(Char, "a"),
+		in:  TestValue(Char, "a"),
 		out: []byte("a"),
 	}, {
-		in:  testVal(Binary, "a"),
+		in:  TestValue(Binary, "a"),
 		out: []byte("a"),
 	}, {
-		in:  testVal(Bit, "1"),
+		in:  TestValue(Bit, "1"),
 		out: []byte("1"),
 	}, {
-		in:  testVal(Enum, "a"),
+		in:  TestValue(Enum, "a"),
 		out: []byte("a"),
 	}, {
-		in:  testVal(Set, "a"),
+		in:  TestValue(Set, "a"),
 		out: []byte("a"),
 	}}
 	for _, tcase := range testcases {
@@ -458,7 +458,7 @@ func TestToNative(t *testing.T) {
 	}
 
 	// Test Expression failure.
-	_, err := ToNative(testVal(Expression, "aa"))
+	_, err := ToNative(TestValue(Expression, "aa"))
 	want := "EXPRESSION cannot be converted to a go type"
 	if err == nil || err.Error() != want {
 		t.Errorf("ToNative(EXPRESSION): %v, want %s", err, want)

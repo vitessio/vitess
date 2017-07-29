@@ -83,7 +83,7 @@ func TestPlanValueIsList(t *testing.T) {
 func TestResolveRows(t *testing.T) {
 	testBindVars := map[string]*querypb.BindVariable{
 		"int":    Int64BindVariable(10),
-		"intstr": MakeTestBindVar([]interface{}{10, "aa"}),
+		"intstr": TestBindVariable([]interface{}{10, "aa"}),
 	}
 	intValue := MakeTrusted(Int64, []byte("10"))
 	strValue := MakeTrusted(VarChar, []byte("aa"))
@@ -221,7 +221,7 @@ func TestResolveRows(t *testing.T) {
 func TestResolveList(t *testing.T) {
 	testBindVars := map[string]*querypb.BindVariable{
 		"int":    Int64BindVariable(10),
-		"intstr": MakeTestBindVar([]interface{}{10, "aa"}),
+		"intstr": TestBindVariable([]interface{}{10, "aa"}),
 	}
 	intValue := MakeTrusted(Int64, []byte("10"))
 	strValue := MakeTrusted(VarChar, []byte("aa"))
@@ -273,7 +273,7 @@ func TestResolveList(t *testing.T) {
 func TestResolveValue(t *testing.T) {
 	testBindVars := map[string]*querypb.BindVariable{
 		"int":    Int64BindVariable(10),
-		"intstr": MakeTestBindVar([]interface{}{10, "aa"}),
+		"intstr": TestBindVariable([]interface{}{10, "aa"}),
 	}
 	intValue := MakeTrusted(Int64, []byte("10"))
 	tcases := []struct {

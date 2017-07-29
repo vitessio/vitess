@@ -18,7 +18,6 @@ package tabletserver
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -408,7 +407,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	return &sqltypes.Result{
 		Fields: sequenceFields,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, strconv.AppendInt(nil, ret, 10)),
+			sqltypes.NewInt64(ret),
 		}},
 		RowsAffected: 1,
 	}, nil

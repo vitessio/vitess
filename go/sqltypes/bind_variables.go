@@ -29,6 +29,16 @@ import (
 // NullBindVariable is a bindvar with NULL value.
 var NullBindVariable = &querypb.BindVariable{Type: querypb.Type_NULL_TYPE}
 
+// ValueToProto converts Value to a *querypb.Value.
+func ValueToProto(v Value) *querypb.Value {
+	return &querypb.Value{Type: v.typ, Value: v.val}
+}
+
+// ProtoToValue converts a *querypb.Value to a Value.
+func ProtoToValue(v *querypb.Value) Value {
+	return MakeTrusted(v.Type, v.Value)
+}
+
 // BuildBindVariables builds a map[string]*querypb.BindVariable from a map[string]interface{}.
 func BuildBindVariables(in map[string]interface{}) (map[string]*querypb.BindVariable, error) {
 	if len(in) == 0 {
@@ -68,7 +78,7 @@ func StringBindVariable(v string) *querypb.BindVariable {
 
 // BytesBindVariable converts a []byte to a bind var.
 func BytesBindVariable(v []byte) *querypb.BindVariable {
-	return ValueBindVariable(NewVarBinary(v))
+	return &querypb.BindVariable{Type: VarBinary, Value: v}
 }
 
 // ValueBindVariable converts a Value to a bind var.

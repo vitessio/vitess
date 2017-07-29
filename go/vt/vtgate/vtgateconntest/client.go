@@ -2595,12 +2595,12 @@ var result1 = sqltypes.Result{
 	InsertID:     72,
 	Rows: [][]sqltypes.Value{
 		{
-			sqltypes.MakeTrusted(sqltypes.Int16, []byte("1")),
+			sqltypes.TestValue(sqltypes.Int16, "1"),
 			sqltypes.NULL,
 		},
 		{
-			sqltypes.MakeTrusted(sqltypes.Int16, []byte("2")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+			sqltypes.TestValue(sqltypes.Int16, "2"),
+			sqltypes.NewInt32(3),
 		},
 	},
 	Extras: &extras,
@@ -2706,17 +2706,17 @@ var messageStreamResult = &sqltypes.Result{
 		Type: sqltypes.VarBinary,
 	}},
 	Rows: [][]sqltypes.Value{{
-		sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("2")),
-		sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("3")),
+		sqltypes.NewVarBinary("2"),
+		sqltypes.NewVarBinary("3"),
 	}},
 }
 var messageids = []*querypb.Value{
-	sqltypes.MakeString([]byte("1")).ToProtoValue(),
-	sqltypes.MakeString([]byte("3")).ToProtoValue(),
+	sqltypes.ValueToProto(sqltypes.MakeString([]byte("1"))),
+	sqltypes.ValueToProto(sqltypes.MakeString([]byte("3"))),
 }
 var messageAckRowsAffected = int64(1)
 
 var testIDKeyspaceIDs = []*vtgatepb.IdKeyspaceId{{
-	Id:         sqltypes.MakeString([]byte("1")).ToProtoValue(),
+	Id:         sqltypes.ValueToProto(sqltypes.MakeString([]byte("1"))),
 	KeyspaceId: []byte{0x6B},
 }}
