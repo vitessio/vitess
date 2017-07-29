@@ -101,14 +101,22 @@ func Normalize(stmt Statement, bindVars map[string]*querypb.BindVariable, prefix
 
 func sqlToBindvar(node SQLNode) *querypb.BindVariable {
 	if node, ok := node.(*SQLVal); ok {
+		var v sqltypes.Value
+		var err error
 		switch node.Type {
 		case StrVal:
-			return &querypb.BindVariable{Type: sqltypes.VarBinary, Value: node.Val}
+			v, err = sqltypes.NewValue(sqltypes.VarBinary, node.Val)
 		case IntVal:
-			return &querypb.BindVariable{Type: sqltypes.Int64, Value: node.Val}
+			v, err = sqltypes.NewValue(sqltypes.Int64, node.Val)
 		case FloatVal:
-			return &querypb.BindVariable{Type: sqltypes.Float64, Value: node.Val}
+			v, err = sqltypes.NewValue(sqltypes.Float64, node.Val)
+		default:
+			return nil
 		}
+		if err != nil {
+			return nil
+		}
+		return sqltypes.ValueBindVariable(v)
 	}
 	return nil
 }

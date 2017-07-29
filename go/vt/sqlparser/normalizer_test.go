@@ -82,6 +82,11 @@ func TestNormalize(t *testing.T) {
 			"bv2": sqltypes.BytesBindVariable([]byte("1")),
 		},
 	}, {
+		// bad int
+		in:      "select * from t where v1 = 12345678901234567890",
+		outstmt: "select * from t where v1 = 12345678901234567890",
+		outbv:   map[string]*querypb.BindVariable{},
+	}, {
 		// comparison with no vals
 		in:      "select * from t where v1 = v2",
 		outstmt: "select * from t where v1 = v2",

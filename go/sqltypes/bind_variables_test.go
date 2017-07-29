@@ -292,13 +292,6 @@ func TestValidateBindVarables(t *testing.T) {
 	}
 }
 
-const (
-	InvalidNeg = "-9223372036854775809"
-	MinNeg     = "-9223372036854775808"
-	MinPos     = "18446744073709551615"
-	InvalidPos = "18446744073709551616"
-)
-
 func TestValidateBindVariable(t *testing.T) {
 	testcases := []struct {
 		in  *querypb.BindVariable
