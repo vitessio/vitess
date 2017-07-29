@@ -72,7 +72,6 @@ func (*Binary) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error) {
 		if keyspaceID == nil {
 			return nil, fmt.Errorf("Binary.ReverseMap: keyspaceId is nil")
 		}
-		// VarBinary is safe to build with MakeTrusted.
 		reverseIds[rownum] = sqltypes.MakeTrusted(sqltypes.VarBinary, keyspaceID)
 	}
 	return reverseIds, nil

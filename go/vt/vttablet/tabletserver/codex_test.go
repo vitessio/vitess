@@ -202,7 +202,7 @@ func TestCodexValidateRow(t *testing.T) {
 		t.Errorf("validateRow: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
 	}
 	// column 0 is int type but row is in string type
-	err = validateRow(table, []int{0}, []sqltypes.Value{sqltypes.MakeString([]byte("str"))})
+	err = validateRow(table, []int{0}, []sqltypes.Value{sqltypes.NewVarBinary("str")})
 	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
 		t.Errorf("validateRow: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
 	}
@@ -243,7 +243,7 @@ func createTable(name string, colNames []string, colTypes []querypb.Type, pKeys 
 		if sqltypes.IsIntegral(colType) {
 			defaultVal = sqltypes.NewInt64(0)
 		} else if colType == sqltypes.VarBinary {
-			defaultVal = sqltypes.MakeString([]byte(""))
+			defaultVal = sqltypes.NewVarBinary("")
 		}
 		table.AddColumn(colName, colType, defaultVal, "")
 	}

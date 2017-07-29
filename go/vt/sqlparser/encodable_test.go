@@ -30,10 +30,10 @@ func TestEncodable(t *testing.T) {
 	}{{
 		in: InsertValues{{
 			sqltypes.NewInt64(1),
-			sqltypes.MakeString([]byte("foo('a')")),
+			sqltypes.NewVarBinary("foo('a')"),
 		}, {
 			sqltypes.NewInt64(2),
-			sqltypes.MakeString([]byte("bar(`b`)")),
+			sqltypes.NewVarBinary("bar(`b`)"),
 		}},
 		out: "(1, 'foo(\\'a\\')'), (2, 'bar(`b`)')",
 	}, {
@@ -42,7 +42,7 @@ func TestEncodable(t *testing.T) {
 			Columns: []ColIdent{NewColIdent("pk")},
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewInt64(1)},
-				{sqltypes.MakeString([]byte("aa"))},
+				{sqltypes.NewVarBinary("aa")},
 			},
 		},
 		out: "pk in (1, 'aa')",
@@ -53,11 +53,11 @@ func TestEncodable(t *testing.T) {
 			Rows: [][]sqltypes.Value{
 				{
 					sqltypes.NewInt64(1),
-					sqltypes.MakeString([]byte("aa")),
+					sqltypes.NewVarBinary("aa"),
 				},
 				{
 					sqltypes.NewInt64(2),
-					sqltypes.MakeString([]byte("bb")),
+					sqltypes.NewVarBinary("bb"),
 				},
 			},
 		},

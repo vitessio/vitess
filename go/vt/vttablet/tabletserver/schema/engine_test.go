@@ -47,8 +47,8 @@ func TestOpenFailedDueToMissMySQLTime(t *testing.T) {
 			{Type: sqltypes.Uint64},
 		},
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeString([]byte("1427325875"))},
-			{sqltypes.MakeString([]byte("1427325875"))},
+			{sqltypes.NewVarBinary("1427325875")},
+			{sqltypes.NewVarBinary("1427325875")},
 		},
 	})
 	se := newEngine(10, 1*time.Second, 1*time.Second, false)
@@ -88,7 +88,7 @@ func TestOpenFailedDueToInvalidTimeFormat(t *testing.T) {
 		}},
 		Rows: [][]sqltypes.Value{
 			// make safety check fail, invalid time format
-			{sqltypes.MakeString([]byte("invalid_time"))},
+			{sqltypes.NewVarBinary("invalid_time")},
 		},
 	})
 	se := newEngine(10, 1*time.Second, 1*time.Second, false)
@@ -135,7 +135,7 @@ func TestOpenFailedDueToTableErr(t *testing.T) {
 			},
 		},
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeString([]byte(""))},
+			{sqltypes.NewVarBinary("")},
 		},
 	})
 	se := newEngine(10, 1*time.Second, 1*time.Second, false)

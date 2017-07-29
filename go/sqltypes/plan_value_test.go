@@ -35,7 +35,7 @@ func TestPlanValueIsNull(t *testing.T) {
 		in:  PlanValue{Key: "aa"},
 		out: false,
 	}, {
-		in:  PlanValue{Value: MakeString([]byte("aa"))},
+		in:  PlanValue{Value: NewVarBinary("aa")},
 		out: false,
 	}, {
 		in:  PlanValue{ListKey: "aa"},
@@ -63,7 +63,7 @@ func TestPlanValueIsList(t *testing.T) {
 		in:  PlanValue{Key: "aa"},
 		out: false,
 	}, {
-		in:  PlanValue{Value: MakeString([]byte("aa"))},
+		in:  PlanValue{Value: NewVarBinary("aa")},
 		out: false,
 	}, {
 		in:  PlanValue{ListKey: "aa"},

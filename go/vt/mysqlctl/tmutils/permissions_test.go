@@ -31,7 +31,7 @@ func mapToSQLResults(row map[string]string) ([]*querypb.Field, []sqltypes.Value)
 	index := 0
 	for key, value := range row {
 		fields[index] = &querypb.Field{Name: key}
-		values[index] = sqltypes.MakeString(([]byte)(value))
+		values[index] = sqltypes.NewVarBinary(value)
 		index++
 	}
 	return fields, values

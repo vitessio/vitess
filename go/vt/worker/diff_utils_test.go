@@ -115,14 +115,14 @@ func TestCompareRows(t *testing.T) {
 		},
 		{
 			fields: []*querypb.Field{{Name: "a", Type: sqltypes.Char}},
-			left:   []sqltypes.Value{sqltypes.MakeString([]byte("abc"))},
-			right:  []sqltypes.Value{sqltypes.MakeString([]byte("abb"))},
+			left:   []sqltypes.Value{sqltypes.NewVarBinary("abc")},
+			right:  []sqltypes.Value{sqltypes.NewVarBinary("abb")},
 			want:   1,
 		},
 		{
 			fields: []*querypb.Field{{Name: "a", Type: sqltypes.Char}},
-			left:   []sqltypes.Value{sqltypes.MakeString([]byte("abc"))},
-			right:  []sqltypes.Value{sqltypes.MakeString([]byte("abd"))},
+			left:   []sqltypes.Value{sqltypes.NewVarBinary("abc")},
+			right:  []sqltypes.Value{sqltypes.NewVarBinary("abd")},
 			want:   -1,
 		},
 	}

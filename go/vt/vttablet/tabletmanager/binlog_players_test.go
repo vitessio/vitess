@@ -195,8 +195,8 @@ func checkBlpPositionList(t *testing.T, bpm *BinlogPlayerMap, vtClientSyncChanne
 			InsertID:     0,
 			Rows: [][]sqltypes.Value{
 				{
-					sqltypes.MakeString([]byte("MariaDB/0-1-1235")),
-					sqltypes.MakeString([]byte("")),
+					sqltypes.NewVarBinary("MariaDB/0-1-1235"),
+					sqltypes.NewVarBinary(""),
 				},
 			},
 		})
@@ -222,8 +222,8 @@ var mockedThrottlerSettings = &sqltypes.Result{
 	InsertID:     0,
 	Rows: [][]sqltypes.Value{
 		{
-			sqltypes.MakeString([]byte("9223372036854775807")), // max_tps
-			sqltypes.MakeString([]byte("9223372036854775807")), // max_replication_lag
+			sqltypes.NewVarBinary("9223372036854775807"), // max_tps
+			sqltypes.NewVarBinary("9223372036854775807"), // max_replication_lag
 		},
 	},
 }
@@ -328,8 +328,8 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeString([]byte("MariaDB/0-1-1234")),
-				sqltypes.MakeString([]byte("")),
+				sqltypes.NewVarBinary("MariaDB/0-1-1234"),
+				sqltypes.NewVarBinary(""),
 			},
 		},
 	})
@@ -498,8 +498,8 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeString([]byte("MariaDB/0-1-1234")),
-				sqltypes.MakeString([]byte("")),
+				sqltypes.NewVarBinary("MariaDB/0-1-1234"),
+				sqltypes.NewVarBinary(""),
 			},
 		},
 	}
@@ -715,8 +715,8 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeString([]byte("MariaDB/0-1-1234")),
-				sqltypes.MakeString([]byte("")),
+				sqltypes.NewVarBinary("MariaDB/0-1-1234"),
+				sqltypes.NewVarBinary(""),
 			},
 		},
 	})

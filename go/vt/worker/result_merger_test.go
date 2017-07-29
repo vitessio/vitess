@@ -150,7 +150,7 @@ func createRowSinglePk(id int) []sqltypes.Value {
 	idValue := sqltypes.NewInt64(int64(id))
 	return []sqltypes.Value{
 		idValue,
-		sqltypes.MakeString([]byte(fmt.Sprintf("msg %d", id))),
+		sqltypes.NewVarBinary(fmt.Sprintf("msg %d", id)),
 	}
 }
 
@@ -162,7 +162,7 @@ func createRowMultiPk(id int) []sqltypes.Value {
 	return []sqltypes.Value{
 		sqltypes.NewInt64(int64(newID)),
 		sqltypes.NewInt64(int64(subID)),
-		sqltypes.MakeString([]byte(fmt.Sprintf("msg %d", id))),
+		sqltypes.NewVarBinary(fmt.Sprintf("msg %d", id)),
 	}
 }
 

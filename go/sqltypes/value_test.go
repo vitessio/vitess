@@ -216,11 +216,6 @@ func TestMakeTrusted(t *testing.T) {
 	if !reflect.DeepEqual(v, want) {
 		t.Errorf("MakeTrusted(Int64, \"1\") = %v, want %v", makePretty(v), makePretty(want))
 	}
-	v = MakeString([]byte("a"))
-	want = testVal(VarBinary, "a")
-	if !reflect.DeepEqual(v, want) {
-		t.Errorf("MakeString(\"a\") = %v, want %v", makePretty(v), makePretty(want))
-	}
 }
 
 func TestIntegralValue(t *testing.T) {

@@ -85,18 +85,14 @@ func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 // This function should only be used if you know the value
 // and type conform to the rules. Every place this function is
 // called, a comment is needed that explains why it's justified.
-// Packages exempt from this rule are the current one and mysql.
+// Exceptions: The current package and mysql package do not need
+// comments. Other packages can also use the function to create
+// VarBinary or VarChar values.
 func MakeTrusted(typ querypb.Type, val []byte) Value {
 	if typ == Null {
 		return NULL
 	}
 	return Value{typ: typ, val: val}
-}
-
-// MakeString makes a VarBinary Value.
-// This function is deprecated.
-func MakeString(val []byte) Value {
-	return MakeTrusted(VarBinary, val)
 }
 
 // NewInt64 builds an Int64 Value.

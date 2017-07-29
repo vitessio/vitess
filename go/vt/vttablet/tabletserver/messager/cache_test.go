@@ -28,35 +28,35 @@ func TestMessagerCacheOrder(t *testing.T) {
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		Row:      []sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
+		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
 	}) {
 		t.Fatal("Add returned false")
 	}
 	if !mc.Add(&MessageRow{
 		TimeNext: 2,
 		Epoch:    0,
-		Row:      []sqltypes.Value{sqltypes.MakeString([]byte("row02"))},
+		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row02")},
 	}) {
 		t.Fatal("Add returned false")
 	}
 	if !mc.Add(&MessageRow{
 		TimeNext: 2,
 		Epoch:    1,
-		Row:      []sqltypes.Value{sqltypes.MakeString([]byte("row12"))},
+		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row12")},
 	}) {
 		t.Fatal("Add returned false")
 	}
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    1,
-		Row:      []sqltypes.Value{sqltypes.MakeString([]byte("row11"))},
+		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row11")},
 	}) {
 		t.Fatal("Add returned false")
 	}
 	if !mc.Add(&MessageRow{
 		TimeNext: 3,
 		Epoch:    0,
-		Row:      []sqltypes.Value{sqltypes.MakeString([]byte("row03"))},
+		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row03")},
 	}) {
 		t.Fatal("Add returned false")
 	}
@@ -81,14 +81,14 @@ func TestMessagerCacheDupKey(t *testing.T) {
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		Row:      []sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
+		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
 	}) {
 		t.Fatal("Add returned false")
 	}
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		Row:      []sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
+		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
 	}) {
 		t.Error("Add(dup): returned false, want true")
 	}
@@ -96,7 +96,7 @@ func TestMessagerCacheDupKey(t *testing.T) {
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		Row:      []sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
+		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
 	}) {
 		t.Error("Add(dup): returned false, want true")
 	}
@@ -104,7 +104,7 @@ func TestMessagerCacheDupKey(t *testing.T) {
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		Row:      []sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
+		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
 	}) {
 		t.Fatal("Add returned false")
 	}
@@ -115,7 +115,7 @@ func TestMessagerCacheDiscard(t *testing.T) {
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		Row:      []sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
+		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
 	}) {
 		t.Fatal("Add returned false")
 	}
@@ -126,7 +126,7 @@ func TestMessagerCacheDiscard(t *testing.T) {
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		Row:      []sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
+		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
 	}) {
 		t.Fatal("Add returned false")
 	}
@@ -138,7 +138,7 @@ func TestMessagerCacheDiscard(t *testing.T) {
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		Row:      []sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
+		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
 	}) {
 		t.Fatal("Add returned false")
 	}
@@ -151,7 +151,7 @@ func TestMessagerCacheDiscard(t *testing.T) {
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		Row:      []sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
+		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
 	}) {
 		t.Fatal("Add returned false")
 	}
@@ -165,21 +165,21 @@ func TestMessagerCacheFull(t *testing.T) {
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		Row:      []sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
+		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
 	}) {
 		t.Fatal("Add returned false")
 	}
 	if !mc.Add(&MessageRow{
 		TimeNext: 2,
 		Epoch:    0,
-		Row:      []sqltypes.Value{sqltypes.MakeString([]byte("row02"))},
+		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row02")},
 	}) {
 		t.Fatal("Add returned false")
 	}
 	if mc.Add(&MessageRow{
 		TimeNext: 2,
 		Epoch:    1,
-		Row:      []sqltypes.Value{sqltypes.MakeString([]byte("row12"))},
+		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row12")},
 	}) {
 		t.Error("Add(full): returned true, want false")
 	}
@@ -190,7 +190,7 @@ func TestMessagerCacheEmpty(t *testing.T) {
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		Row:      []sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
+		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
 	}) {
 		t.Fatal("Add returned false")
 	}
@@ -201,7 +201,7 @@ func TestMessagerCacheEmpty(t *testing.T) {
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		Row:      []sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
+		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
 	}) {
 		t.Fatal("Add returned false")
 	}

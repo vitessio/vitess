@@ -2711,12 +2711,12 @@ var messageStreamResult = &sqltypes.Result{
 	}},
 }
 var messageids = []*querypb.Value{
-	sqltypes.ValueToProto(sqltypes.MakeString([]byte("1"))),
-	sqltypes.ValueToProto(sqltypes.MakeString([]byte("3"))),
+	sqltypes.ValueToProto(sqltypes.NewVarBinary("1")),
+	sqltypes.ValueToProto(sqltypes.NewVarBinary("3")),
 }
 var messageAckRowsAffected = int64(1)
 
 var testIDKeyspaceIDs = []*vtgatepb.IdKeyspaceId{{
-	Id:         sqltypes.ValueToProto(sqltypes.MakeString([]byte("1"))),
+	Id:         sqltypes.ValueToProto(sqltypes.NewVarBinary("1")),
 	KeyspaceId: []byte{0x6B},
 }}

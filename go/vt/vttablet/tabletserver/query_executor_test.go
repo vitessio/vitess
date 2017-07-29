@@ -203,11 +203,11 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 			},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeString([]byte("1")),
-				sqltypes.MakeString([]byte("0")),
-				sqltypes.MakeString([]byte("1")),
-				sqltypes.MakeString([]byte("10")),
-				sqltypes.MakeString([]byte("2")),
+				sqltypes.NewVarBinary("1"),
+				sqltypes.NewVarBinary("0"),
+				sqltypes.NewVarBinary("1"),
+				sqltypes.NewVarBinary("10"),
+				sqltypes.NewVarBinary("2"),
 			}},
 		},
 	)
@@ -624,8 +624,8 @@ func TestQueryExecutorPlanDmlMessage(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("12")),
-			sqltypes.MakeString([]byte("1")),
+			sqltypes.NewVarBinary("12"),
+			sqltypes.NewVarBinary("1"),
 		}},
 	})
 	db.AddQuery("update msg set time_acked = 2, time_next = null where (time_scheduled = 12 and id = 1) /* _stream msg (time_scheduled id ) (12 1 ); */", want)
@@ -1561,7 +1561,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
+				{sqltypes.NewVarBinary("STRICT_TRANS_TABLES")},
 			},
 		},
 		"select @@autocommit": {
@@ -1570,7 +1570,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{sqltypes.MakeString([]byte("1"))},
+				{sqltypes.NewVarBinary("1")},
 			},
 		},
 		"show variables like 'binlog_format'": {
@@ -1581,8 +1581,8 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeString([]byte("binlog_format")),
-				sqltypes.MakeString([]byte("STATEMENT")),
+				sqltypes.NewVarBinary("binlog_format"),
+				sqltypes.NewVarBinary("STATEMENT"),
 			}},
 		},
 		mysql.BaseShowTables: {

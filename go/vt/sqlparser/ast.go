@@ -1356,8 +1356,7 @@ func NewValArg(in []byte) *SQLVal {
 func (node *SQLVal) Format(buf *TrackedBuffer) {
 	switch node.Type {
 	case StrVal:
-		s := sqltypes.MakeString([]byte(node.Val))
-		s.EncodeSQL(buf)
+		sqltypes.MakeTrusted(sqltypes.VarBinary, node.Val).EncodeSQL(buf)
 	case IntVal, FloatVal, HexNum:
 		buf.Myprintf("%s", []byte(node.Val))
 	case HexVal:

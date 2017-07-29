@@ -794,8 +794,8 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeString([]byte("MariaDB/0-1-1234")),
-				sqltypes.MakeString([]byte("DontStart")),
+				sqltypes.NewVarBinary("MariaDB/0-1-1234"),
+				sqltypes.NewVarBinary("DontStart"),
 			},
 		},
 	})

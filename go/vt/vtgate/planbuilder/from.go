@@ -182,8 +182,6 @@ func buildERoute(tableName sqlparser.TableName, vschema VSchema) (*engine.Route,
 	// for keyspace id. Currently only dual tables are pinned.
 	route := engine.NewRoute(engine.SelectEqualUnique, table.Keyspace)
 	route.Vindex, _ = vindexes.NewBinary("binary", nil)
-
-	// VarBinary is safe to build with MakeTrusted.
 	route.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, table.Pinned)}}
 	return route, table, nil
 }

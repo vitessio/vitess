@@ -45,7 +45,7 @@ func Queries() map[string]*sqltypes.Result {
 			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
+				{sqltypes.NewVarBinary("STRICT_TRANS_TABLES")},
 			},
 		},
 		"select @@autocommit": {
@@ -54,7 +54,7 @@ func Queries() map[string]*sqltypes.Result {
 			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{sqltypes.MakeString([]byte("1"))},
+				{sqltypes.NewVarBinary("1")},
 			},
 		},
 		"show variables like 'binlog_format'": {
@@ -65,8 +65,8 @@ func Queries() map[string]*sqltypes.Result {
 			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeString([]byte("binlog_format")),
-				sqltypes.MakeString([]byte("STATEMENT")),
+				sqltypes.NewVarBinary("binlog_format"),
+				sqltypes.NewVarBinary("STATEMENT"),
 			}},
 		},
 		mysql.BaseShowTables: {

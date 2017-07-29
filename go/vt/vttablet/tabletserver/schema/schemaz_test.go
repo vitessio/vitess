@@ -39,7 +39,7 @@ func TestSchamazHandler(t *testing.T) {
 	tableA.AddIndex("index1").AddColumn("index_column", 1000)
 	tableA.Type = NoType
 
-	tableB.AddColumn("column2", sqltypes.VarChar, sqltypes.MakeString([]byte("NULL")), "")
+	tableB.AddColumn("column2", sqltypes.VarChar, sqltypes.NewVarBinary("NULL"), "")
 	tableB.AddIndex("index2").AddColumn("index_column2", 200)
 	tableB.Type = Sequence
 

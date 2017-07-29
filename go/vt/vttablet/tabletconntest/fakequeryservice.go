@@ -550,10 +550,10 @@ var ExecuteBatchQueryResultList = []sqltypes.Result{
 		InsertID:     74442,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeString([]byte("row1 value1")),
+				sqltypes.NewVarBinary("row1 value1"),
 			},
 			{
-				sqltypes.MakeString([]byte("row1 value2")),
+				sqltypes.NewVarBinary("row1 value2"),
 			},
 		},
 	},

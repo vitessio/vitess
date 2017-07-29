@@ -107,7 +107,7 @@ func TestGenerateQuery(t *testing.T) {
 					Columns: []ColIdent{NewColIdent("pk")},
 					Rows: [][]sqltypes.Value{
 						{sqltypes.NewInt64(1)},
-						{sqltypes.MakeString([]byte("aa"))},
+						{sqltypes.NewVarBinary("aa")},
 					},
 				},
 			},
@@ -121,11 +121,11 @@ func TestGenerateQuery(t *testing.T) {
 					Rows: [][]sqltypes.Value{
 						{
 							sqltypes.NewInt64(1),
-							sqltypes.MakeString([]byte("aa")),
+							sqltypes.NewVarBinary("aa"),
 						},
 						{
 							sqltypes.NewInt64(2),
-							sqltypes.MakeString([]byte("bb")),
+							sqltypes.NewVarBinary("bb"),
 						},
 					},
 				},
