@@ -1357,7 +1357,7 @@ func (tsv *TabletServer) convertError(ctx context.Context, sql string, bindVaria
 	if tsv.TerseErrors && len(bindVariables) != 0 && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
 		errstr = fmt.Sprintf("(errno %d) (sqlstate %s) during query: %s", errnum, sqlState, sqlparser.TruncateForLog(sql))
 	}
-	return vterrors.New(errCode, fmt.Sprintf("(callerid %s) %s", callerID.Username, errstr))
+	return vterrors.New(errCode, fmt.Sprintf("%s [CallerID %s]", errstr, callerID.Username))
 }
 
 // validateSplitQueryParameters perform some validations on the SplitQuery parameters
