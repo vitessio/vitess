@@ -171,7 +171,7 @@ func TestNocacheListArgs(t *testing.T) {
 			"list": sqltypes.MakeTestBindVar([]interface{}{}),
 		},
 	)
-	want := "empty list supplied for list"
+	want := "empty list supplied for list [CallerID dev]"
 	if err == nil || err.Error() != want {
 		t.Errorf("Error: %v, want %s", err, want)
 		return

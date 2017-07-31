@@ -1306,12 +1306,13 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 }
 
 func (tsv *TabletServer) convertError(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, err error) error {
+	callerID := callerid.ImmediateCallerIDFromContext(ctx)
 	sqlErr, ok := err.(*mysql.SQLError)
 	if !ok {
+		vterrors.Suffix(err, fmt.Sprintf(" [CallerID %s]", callerID.Username))
 		return err
 	}
 
-	callerID := callerid.ImmediateCallerIDFromContext(ctx)
 	errCode := vterrors.Code(err)
 	errstr := err.Error()
 	errnum := sqlErr.Number()
