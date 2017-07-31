@@ -75,8 +75,9 @@ func Code(err error) vtrpcpb.Code {
 }
 
 // Suffix adds a suffix to a vtError
-func Suffix(err error, suffix string) {
+func Suffix(err error, suffix string) error {
 	if err, ok := err.(*vtError); ok {
 		err.err = fmt.Sprintf("%s%s", err.err, suffix)
 	}
+	return err
 }
