@@ -72,6 +72,9 @@ func TestConfigVars(t *testing.T) {
 		tag: "MaxResultSize",
 		val: tabletenv.Config.MaxResultSize,
 	}, {
+		tag: "WarnResultSize",
+		val: tabletenv.Config.WarnResultSize,
+	}, {
 		tag: "QueryCacheCapacity",
 		val: tabletenv.Config.QueryCacheSize,
 	}, {
@@ -193,7 +196,7 @@ func TestQueryCache(t *testing.T) {
 	}
 }
 
-func TestMexResultSize(t *testing.T) {
+func TestMaxResultSize(t *testing.T) {
 	defer framework.Server.SetMaxResultSize(framework.Server.MaxResultSize())
 	framework.Server.SetMaxResultSize(2)
 
