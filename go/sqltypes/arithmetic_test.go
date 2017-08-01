@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -158,6 +159,106 @@ func TestNullsafeCompare(t *testing.T) {
 	}
 }
 
+func TestCast(t *testing.T) {
+	tcases := []struct {
+		typ querypb.Type
+		v   Value
+		out Value
+		err string
+	}{{
+		typ: VarChar,
+		v:   NULL,
+		out: NULL,
+	}, {
+		typ: VarChar,
+		v:   testVal(VarChar, "exact types"),
+		out: testVal(VarChar, "exact types"),
+	}, {
+		typ: Int64,
+		v:   testVal(Int32, "32"),
+		out: testVal(Int64, "32"),
+	}, {
+		typ: Int24,
+		v:   testVal(Uint64, "64"),
+		out: testVal(Int24, "64"),
+	}, {
+		typ: Int24,
+		v:   testVal(VarChar, "bad int"),
+		err: "invalid syntax",
+	}, {
+		typ: Uint64,
+		v:   testVal(Uint32, "32"),
+		out: testVal(Uint64, "32"),
+	}, {
+		typ: Uint24,
+		v:   testVal(Int64, "64"),
+		out: testVal(Uint24, "64"),
+	}, {
+		typ: Uint24,
+		v:   testVal(Int64, "-1"),
+		err: "invalid syntax",
+	}, {
+		typ: Float64,
+		v:   testVal(Int64, "64"),
+		out: testVal(Float64, "64"),
+	}, {
+		typ: Float32,
+		v:   testVal(Float64, "64"),
+		out: testVal(Float32, "64"),
+	}, {
+		typ: Float32,
+		v:   testVal(Decimal, "1.24"),
+		out: testVal(Float32, "1.24"),
+	}, {
+		typ: Float64,
+		v:   testVal(VarChar, "1.25"),
+		out: testVal(Float64, "1.25"),
+	}, {
+		typ: Float64,
+		v:   testVal(VarChar, "bad float"),
+		err: "invalid syntax",
+	}, {
+		typ: VarChar,
+		v:   testVal(Int64, "64"),
+		out: testVal(VarChar, "64"),
+	}, {
+		typ: VarBinary,
+		v:   testVal(Float64, "64"),
+		out: testVal(VarBinary, "64"),
+	}, {
+		typ: VarBinary,
+		v:   testVal(Decimal, "1.24"),
+		out: testVal(VarBinary, "1.24"),
+	}, {
+		typ: VarBinary,
+		v:   testVal(VarChar, "1.25"),
+		out: testVal(VarBinary, "1.25"),
+	}, {
+		typ: VarChar,
+		v:   testVal(VarBinary, "valid string"),
+		out: testVal(VarChar, "valid string"),
+	}, {
+		typ: VarChar,
+		v:   testVal(Expression, "bad string"),
+		err: "cannot convert val: 'bad string' of type EXPRESSION to VARCHAR",
+	}}
+	for _, tcase := range tcases {
+		got, err := Cast(tcase.v, tcase.typ)
+		if tcase.err != "" {
+			if err == nil || !strings.Contains(err.Error(), tcase.err) {
+				t.Errorf("Cast(%v, %v) error: %v, must contain %s", tcase.v, tcase.typ, err, tcase.err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("Cast(%v, %v) error: %v", tcase.v, tcase.typ, err)
+		}
+		if !reflect.DeepEqual(got, tcase.out) {
+			t.Errorf("Cast(%v, %v): %v, want %v", tcase.v, tcase.typ, got, tcase.out)
+		}
+	}
+}
+
 func TestConvertToUint64(t *testing.T) {
 	tcases := []struct {
 		v   interface{}
@@ -183,7 +284,7 @@ func TestConvertToUint64(t *testing.T) {
 		out: 1,
 	}, {
 		v:   int64(-1),
-		err: "getNumber: negative number cannot be converted to unsigned: -1",
+		err: "ConvertToUint64: negative number cannot be converted to unsigned: -1",
 	}, {
 		v:   uint(1),
 		out: 1,
@@ -209,17 +310,20 @@ func TestConvertToUint64(t *testing.T) {
 		v:   makeInt(1),
 		out: 1,
 	}, {
-		v:   &querypb.BindVariable{Type: Int64, Value: []byte("1")},
+		v:   Int64BindVariable(1),
 		out: 1,
 	}, {
+		v:   MakeTestBindVar([]interface{}{}),
+		err: "cannot convert a TUPLE bind var into a value",
+	}, {
 		v:   nil,
-		err: "getNumber: unexpected type for <nil>: <nil>",
+		err: "ConvertToUint64: unexpected type for <nil>: <nil>",
 	}, {
 		v:   makeAny(VarChar, "abcd"),
 		err: "could not parse value: abcd",
 	}, {
 		v:   makeInt(-1),
-		err: "getNumber: negative number cannot be converted to unsigned: -1",
+		err: "ConvertToUint64: negative number cannot be converted to unsigned: -1",
 	}, {
 		v:   makeUint(1),
 		out: 1,

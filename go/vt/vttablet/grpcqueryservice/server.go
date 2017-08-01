@@ -24,7 +24,6 @@ import (
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -44,11 +43,7 @@ func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (r
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, false /* enforceSafety */)
-	if err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
-	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, bv, request.TransactionId, request.Options)
+	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -64,11 +59,7 @@ func (q *query) ExecuteBatch(ctx context.Context, request *querypb.ExecuteBatchR
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	bql, err := querytypes.Proto3ToBoundQueryList(request.Queries, false /* enforceSafety */)
-	if err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
-	results, err := q.server.ExecuteBatch(ctx, request.Target, bql, request.AsTransaction, request.TransactionId, request.Options)
+	results, err := q.server.ExecuteBatch(ctx, request.Target, request.Queries, request.AsTransaction, request.TransactionId, request.Options)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -84,11 +75,7 @@ func (q *query) StreamExecute(request *querypb.StreamExecuteRequest, stream quer
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, false /* enforceSafety */)
-	if err != nil {
-		return vterrors.ToGRPC(err)
-	}
-	if err := q.server.StreamExecute(ctx, request.Target, request.Query.Sql, bv, request.Options, func(reply *sqltypes.Result) error {
+	if err := q.server.StreamExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.StreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})
@@ -262,12 +249,8 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables, false /* enforceSafety */)
-	if err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
 
-	result, transactionID, err := q.server.BeginExecute(ctx, request.Target, request.Query.Sql, bv, request.Options)
+	result, transactionID, err := q.server.BeginExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.Options)
 	if err != nil {
 		// if we have a valid transactionID, return the error in-band
 		if transactionID != 0 {
@@ -291,12 +274,8 @@ func (q *query) BeginExecuteBatch(ctx context.Context, request *querypb.BeginExe
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	bql, err := querytypes.Proto3ToBoundQueryList(request.Queries, false /* enforceSafety */)
-	if err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
 
-	results, transactionID, err := q.server.BeginExecuteBatch(ctx, request.Target, bql, request.AsTransaction, request.Options)
+	results, transactionID, err := q.server.BeginExecuteBatch(ctx, request.Target, request.Queries, request.AsTransaction, request.Options)
 	if err != nil {
 		// if we have a valid transactionID, return the error in-band
 		if transactionID != 0 {
@@ -355,16 +334,11 @@ func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryReque
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-
-	bq, err := querytypes.Proto3ToBoundQuery(request.Query, false /* enforceSafety */)
-	if err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
-	splits := []querytypes.QuerySplit{}
+	splits := []*querypb.QuerySplit{}
 	splits, err = q.server.SplitQuery(
 		ctx,
 		request.Target,
-		*bq,
+		request.Query,
 		request.SplitColumn,
 		request.SplitCount,
 		request.NumRowsPerQueryPart,
@@ -372,11 +346,7 @@ func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryReque
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
-	qs, err := querytypes.QuerySplitsToProto3(splits)
-	if err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
-	return &querypb.SplitQueryResponse{Queries: qs}, nil
+	return &querypb.SplitQueryResponse{Queries: splits}, nil
 }
 
 // StreamHealth is part of the queryservice.QueryServer interface

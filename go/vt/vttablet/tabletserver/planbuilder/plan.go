@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
@@ -189,16 +190,6 @@ func (rt ReasonType) MarshalJSON() ([]byte, error) {
 
 //_______________________________________________
 
-// MessageRowValues is used to store the values
-// of a message row in a plan.
-type MessageRowValues struct {
-	TimeNext interface{}
-	ID       interface{}
-	Message  interface{}
-}
-
-//_______________________________________________
-
 // Plan is built for selects and DMLs.
 type Plan struct {
 	PlanID  PlanType
@@ -227,10 +218,10 @@ type Plan struct {
 	// PlanDMLPK: where clause values.
 	// PlanInsertPK: values clause.
 	// PlanNextVal: increment.
-	PKValues []interface{}
+	PKValues []sqltypes.PlanValue
 
 	// For update: set clause if pk is changing.
-	SecondaryPKValues []interface{}
+	SecondaryPKValues []sqltypes.PlanValue
 
 	// WhereClause is set for DMLs. It is used by the hot row protection
 	// to serialize e.g. UPDATEs going to the same row.

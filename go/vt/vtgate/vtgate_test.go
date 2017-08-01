@@ -33,7 +33,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/sandboxconn"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -1094,7 +1093,7 @@ func TestVTGateSplitQuerySharded(t *testing.T) {
 		port++
 	}
 	sql := "select col1, col2 from table"
-	bindVars := map[string]interface{}{"bv1": nil}
+	bindVars := map[string]*querypb.BindVariable{}
 	splitColumns := []string{"sc1", "sc2"}
 	algorithm := querypb.SplitQueryRequest_FULL_SCAN
 	type testCaseType struct {
@@ -1145,7 +1144,7 @@ func TestVTGateSplitQuerySharded(t *testing.T) {
 				fmt.Sprintf(
 					"query:%v, splitColumns:%v, splitCount:%v,"+
 						" numRowsPerQueryPart:%v, algorithm:%v, shard:%v",
-					querytypes.BoundQuery{Sql: sql, BindVariables: bindVars},
+					&querypb.BoundQuery{Sql: sql, BindVariables: map[string]*querypb.BindVariable{}},
 					splitColumns,
 					perShardSplitCount,
 					testCase.numRowsPerQueryPart,
@@ -1296,7 +1295,7 @@ func TestVTGateSplitQueryUnsharded(t *testing.T) {
 	hcVTGateTest.Reset()
 	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, keyspace, "0", topodatapb.TabletType_RDONLY, true, 1, nil)
 	sql := "select col1, col2 from table"
-	bindVars := map[string]interface{}{"bv1": nil}
+	bindVars := map[string]*querypb.BindVariable{}
 	splitColumns := []string{"sc1", "sc2"}
 	algorithm := querypb.SplitQueryRequest_FULL_SCAN
 	type testCaseType struct {
@@ -1344,7 +1343,7 @@ func TestVTGateSplitQueryUnsharded(t *testing.T) {
 		expectedSQL := fmt.Sprintf(
 			"query:%v, splitColumns:%v, splitCount:%v,"+
 				" numRowsPerQueryPart:%v, algorithm:%v, shard:%v",
-			querytypes.BoundQuery{Sql: sql, BindVariables: bindVars},
+			&querypb.BoundQuery{Sql: sql, BindVariables: map[string]*querypb.BindVariable{}},
 			splitColumns,
 			testCase.splitCount,
 			testCase.numRowsPerQueryPart,
@@ -1354,6 +1353,117 @@ func TestVTGateSplitQueryUnsharded(t *testing.T) {
 		if split.Query.Sql != expectedSQL {
 			t.Errorf("got:\n%v\n, want:\n%v\n, testCase:\n%+v",
 				split.Query.Sql, expectedSQL, testCase)
+		}
+	}
+}
+
+func TestVTGateBindVarError(t *testing.T) {
+	ks := KsTestUnsharded
+	createSandbox(ks)
+	hcVTGateTest.Reset()
+	ctx := context.Background()
+	session := &vtgatepb.Session{}
+	bindVars := map[string]*querypb.BindVariable{
+		"v": {
+			Type:  querypb.Type_EXPRESSION,
+			Value: []byte("1"),
+		},
+	}
+	want := "v: type: EXPRESSION is invalid"
+
+	tcases := []struct {
+		name string
+		f    func() error
+	}{{
+		name: "Execute",
+		f: func() error {
+			_, _, err := rpcVTGate.Execute(ctx, session, "", bindVars)
+			return err
+		},
+	}, {
+		name: "ExecuteBatch",
+		f: func() error {
+			_, _, err := rpcVTGate.ExecuteBatch(ctx, session, []string{""}, []map[string]*querypb.BindVariable{bindVars})
+			return err
+		},
+	}, {
+		name: "StreamExecute",
+		f: func() error {
+			return rpcVTGate.StreamExecute(ctx, session, "", bindVars, func(_ *sqltypes.Result) error { return nil })
+		},
+	}, {
+		name: "ExecuteShards",
+		f: func() error {
+			_, err := rpcVTGate.ExecuteShards(ctx, "", bindVars, "", []string{""}, topodatapb.TabletType_MASTER, session, false, nil)
+			return err
+		},
+	}, {
+		name: "ExecuteKeyspaceIds",
+		f: func() error {
+			_, err := rpcVTGate.ExecuteKeyspaceIds(ctx, "", bindVars, "", [][]byte{}, topodatapb.TabletType_MASTER, session, false, nil)
+			return err
+		},
+	}, {
+		name: "ExecuteKeyRanges",
+		f: func() error {
+			_, err := rpcVTGate.ExecuteKeyRanges(ctx, "", bindVars, "", []*topodatapb.KeyRange{}, topodatapb.TabletType_MASTER, session, false, nil)
+			return err
+		},
+	}, {
+		name: "ExecuteEntityIds",
+		f: func() error {
+			_, err := rpcVTGate.ExecuteEntityIds(ctx, "", bindVars, "", "", []*vtgatepb.ExecuteEntityIdsRequest_EntityId{}, topodatapb.TabletType_MASTER, session, false, nil)
+			return err
+		},
+	}, {
+		name: "ExecuteBatchShards",
+		f: func() error {
+			_, err := rpcVTGate.ExecuteBatchShards(ctx,
+				[]*vtgatepb.BoundShardQuery{{
+					Query: &querypb.BoundQuery{
+						BindVariables: bindVars,
+					},
+				}},
+				topodatapb.TabletType_MASTER, false, session, nil)
+			return err
+		},
+	}, {
+		name: "ExecuteBatchKeyspaceIds",
+		f: func() error {
+			_, err := rpcVTGate.ExecuteBatchKeyspaceIds(ctx,
+				[]*vtgatepb.BoundKeyspaceIdQuery{{
+					Query: &querypb.BoundQuery{
+						BindVariables: bindVars,
+					},
+				}},
+				topodatapb.TabletType_MASTER, false, session, nil)
+			return err
+		},
+	}, {
+		name: "StreamExecuteKeyspaceIds",
+		f: func() error {
+			return rpcVTGate.StreamExecuteKeyspaceIds(ctx, "", bindVars, "", [][]byte{}, topodatapb.TabletType_MASTER, nil, func(_ *sqltypes.Result) error { return nil })
+		},
+	}, {
+		name: "StreamExecuteKeyRanges",
+		f: func() error {
+			return rpcVTGate.StreamExecuteKeyRanges(ctx, "", bindVars, "", []*topodatapb.KeyRange{}, topodatapb.TabletType_MASTER, nil, func(_ *sqltypes.Result) error { return nil })
+		},
+	}, {
+		name: "StreamExecuteShards",
+		f: func() error {
+			return rpcVTGate.StreamExecuteShards(ctx, "", bindVars, "", []string{}, topodatapb.TabletType_MASTER, nil, func(_ *sqltypes.Result) error { return nil })
+		},
+	}, {
+		name: "SplitQuery",
+		f: func() error {
+			_, err := rpcVTGate.SplitQuery(ctx, "", "", bindVars, []string{}, 0, 0, querypb.SplitQueryRequest_FULL_SCAN)
+			return err
+		},
+	}}
+	for _, tcase := range tcases {
+		if err := tcase.f(); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%v error: %v, must contain %s", tcase.name, err, want)
 		}
 	}
 }
@@ -1632,7 +1742,7 @@ func verifyQueryAnnotatedWithKeyspaceID(t *testing.T, expectedKeyspaceID []byte,
 	if !verifyNumQueries(t, 1, shard.Queries) {
 		return
 	}
-	verifyBoundQueryAnnotatedWithKeyspaceID(t, expectedKeyspaceID, &shard.Queries[0])
+	verifyBoundQueryAnnotatedWithKeyspaceID(t, expectedKeyspaceID, shard.Queries[0])
 }
 
 // Verifies that 'shard' was sent exactly one query and that it
@@ -1641,12 +1751,12 @@ func verifyQueryAnnotatedAsUnfriendly(t *testing.T, shard *sandboxconn.SandboxCo
 	if !verifyNumQueries(t, 1, shard.Queries) {
 		return
 	}
-	verifyBoundQueryAnnotatedAsUnfriendly(t, &shard.Queries[0])
+	verifyBoundQueryAnnotatedAsUnfriendly(t, shard.Queries[0])
 }
 
 // Verifies 'queries' has exactly 'expectedNumQueries' elements.
 // Returns true if verification succeeds.
-func verifyNumQueries(t *testing.T, expectedNumQueries int, queries []querytypes.BoundQuery) bool {
+func verifyNumQueries(t *testing.T, expectedNumQueries int, queries []*querypb.BoundQuery) bool {
 	numElements := len(queries)
 	if numElements != expectedNumQueries {
 		t.Errorf("want %v queries, got: %v (queries: %v)", expectedNumQueries, numElements, queries)
@@ -1657,7 +1767,7 @@ func verifyNumQueries(t *testing.T, expectedNumQueries int, queries []querytypes
 
 // Verifies 'batchQueries' has exactly 'expectedNumQueries' elements.
 // Returns true if verification succeeds.
-func verifyNumBatchQueries(t *testing.T, expectedNumQueries int, batchQueries [][]querytypes.BoundQuery) bool {
+func verifyNumBatchQueries(t *testing.T, expectedNumQueries int, batchQueries [][]*querypb.BoundQuery) bool {
 	numElements := len(batchQueries)
 	if numElements != expectedNumQueries {
 		t.Errorf("want %v batch queries, got: %v (batch queries: %v)", expectedNumQueries, numElements, batchQueries)
@@ -1666,21 +1776,21 @@ func verifyNumBatchQueries(t *testing.T, expectedNumQueries int, batchQueries []
 	return true
 }
 
-func verifyBoundQueryAnnotatedWithKeyspaceID(t *testing.T, expectedKeyspaceID []byte, query *querytypes.BoundQuery) {
+func verifyBoundQueryAnnotatedWithKeyspaceID(t *testing.T, expectedKeyspaceID []byte, query *querypb.BoundQuery) {
 	verifyBoundQueryAnnotatedWithComment(
 		t,
 		"/* vtgate:: keyspace_id:"+hex.EncodeToString(expectedKeyspaceID)+" */",
 		query)
 }
 
-func verifyBoundQueryAnnotatedAsUnfriendly(t *testing.T, query *querytypes.BoundQuery) {
+func verifyBoundQueryAnnotatedAsUnfriendly(t *testing.T, query *querypb.BoundQuery) {
 	verifyBoundQueryAnnotatedWithComment(
 		t,
 		"/* vtgate:: filtered_replication_unfriendly */",
 		query)
 }
 
-func verifyBoundQueryAnnotatedWithComment(t *testing.T, expectedComment string, query *querytypes.BoundQuery) {
+func verifyBoundQueryAnnotatedWithComment(t *testing.T, expectedComment string, query *querypb.BoundQuery) {
 	if !strings.Contains(query.Sql, expectedComment) {
 		t.Errorf("want query '%v' to be annotated with '%v'", query.Sql, expectedComment)
 	}
@@ -1705,21 +1815,21 @@ func verifyBatchQueryAnnotatedAsUnfriendly(t *testing.T, expectedNumQueries int,
 	verifyBoundQueriesAnnotatedAsUnfriendly(t, expectedNumQueries, shard.BatchQueries[0])
 }
 
-func verifyBoundQueriesAnnotatedWithKeyspaceIds(t *testing.T, expectedKeyspaceIDs [][]byte, queries []querytypes.BoundQuery) {
+func verifyBoundQueriesAnnotatedWithKeyspaceIds(t *testing.T, expectedKeyspaceIDs [][]byte, queries []*querypb.BoundQuery) {
 	if !verifyNumQueries(t, len(expectedKeyspaceIDs), queries) {
 		return
 	}
 	for i := range queries {
-		verifyBoundQueryAnnotatedWithKeyspaceID(t, expectedKeyspaceIDs[i], &queries[i])
+		verifyBoundQueryAnnotatedWithKeyspaceID(t, expectedKeyspaceIDs[i], queries[i])
 	}
 }
 
-func verifyBoundQueriesAnnotatedAsUnfriendly(t *testing.T, expectedNumQueries int, queries []querytypes.BoundQuery) {
+func verifyBoundQueriesAnnotatedAsUnfriendly(t *testing.T, expectedNumQueries int, queries []*querypb.BoundQuery) {
 	if !verifyNumQueries(t, expectedNumQueries, queries) {
 		return
 	}
 	for i := range queries {
-		verifyBoundQueryAnnotatedAsUnfriendly(t, &queries[i])
+		verifyBoundQueryAnnotatedAsUnfriendly(t, queries[i])
 	}
 }
 

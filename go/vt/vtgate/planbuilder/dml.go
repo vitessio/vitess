@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"errors"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
@@ -165,9 +166,9 @@ func getDMLRouting(where *sqlparser.Where, route *engine.Route) error {
 		if !vindexes.IsUnique(index.Vindex) {
 			continue
 		}
-		if values := getMatch(where.Expr, index.Column); values != nil {
+		if pv, ok := getMatch(where.Expr, index.Column); ok {
 			route.Vindex = index.Vindex
-			route.Values = values
+			route.Values = []sqltypes.PlanValue{pv}
 			return nil
 		}
 	}
@@ -177,7 +178,7 @@ func getDMLRouting(where *sqlparser.Where, route *engine.Route) error {
 // getMatch returns the matched value if there is an equality
 // constraint on the specified column that can be used to
 // decide on a route.
-func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) interface{} {
+func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) (pv sqltypes.PlanValue, ok bool) {
 	filters := splitAndExpression(nil, node)
 	for _, filter := range filters {
 		comparison, ok := filter.(*sqlparser.ComparisonExpr)
@@ -193,13 +194,13 @@ func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) interface{} {
 		if !sqlparser.IsValue(comparison.Right) {
 			continue
 		}
-		val, err := valConvert(comparison.Right)
+		pv, err := sqlparser.NewPlanValue(comparison.Right)
 		if err != nil {
 			continue
 		}
-		return val
+		return pv, true
 	}
-	return nil
+	return sqltypes.PlanValue{}, false
 }
 
 func nameMatch(node sqlparser.Expr, col sqlparser.ColIdent) bool {

@@ -48,7 +48,7 @@ func resetFlagsForTesting() {
 	flag.Set("buffer_window", "10s")
 	flag.Set("buffer_keyspace_shards", "")
 	flag.Set("buffer_max_failover_duration", "20s")
-	flag.Set("buffer_min_time_between_failovers", "5m")
+	flag.Set("buffer_min_time_between_failovers", "1m")
 }
 
 func verifyFlags() error {

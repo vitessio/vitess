@@ -106,8 +106,8 @@ func TestMultiCountersDot(t *testing.T) {
 	c.Add([]string{"c1.a", "c1b"}, 1)
 	c.Add([]string{"c2a", "c2.b"}, 1)
 	c.Add([]string{"c2a", "c2.b"}, 1)
-	want1 := `{"c1\.a.c1b": 1, "c2a.c2\.b": 2}`
-	want2 := `{"c2a.c2\.b": 2, "c1\.a.c1b": 1}`
+	want1 := `{"c1\\.a.c1b": 1, "c2a.c2\\.b": 2}`
+	want2 := `{"c2a.c2\\.b": 2, "c1\\.a.c1b": 1}`
 	if s := c.String(); s != want1 && s != want2 {
 		t.Errorf("want %s or %s, got %s", want1, want2, s)
 	}
@@ -148,6 +148,21 @@ func BenchmarkCounters(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			benchCounter.Add("c1", 1)
+		}
+	})
+}
+
+var benchMultiCounter = NewMultiCounters("benchMulti", []string{"call", "keyspace", "dbtype"})
+
+func BenchmarkMultiCounters(b *testing.B) {
+	clear()
+	key := []string{"execute-key-ranges", "keyspacename", "replica"}
+	benchMultiCounter.Add(key, 1)
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			benchMultiCounter.Add(key, 1)
 		}
 	})
 }

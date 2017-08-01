@@ -91,9 +91,9 @@ func NewExecutor(ctx context.Context, serv topo.SrvTopoServer, cell, statsName s
 }
 
 // Execute executes a non-streaming query.
-func (e *Executor) Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
+func (e *Executor) Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	if bindVars == nil {
-		bindVars = make(map[string]interface{})
+		bindVars = make(map[string]*querypb.BindVariable)
 	}
 
 	switch sqlparser.Preview(sql) {
@@ -144,7 +144,7 @@ func (e *Executor) Execute(ctx context.Context, session *vtgatepb.Session, sql s
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
 
-func (e *Executor) handleExec(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
+func (e *Executor) handleExec(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	target := e.ParseTarget(session.TargetString)
 	if target.Shard != "" {
 		// V1 mode.
@@ -159,7 +159,7 @@ func (e *Executor) handleExec(ctx context.Context, session *vtgatepb.Session, sq
 	if err != nil {
 		return nil, err
 	}
-	qr, err := plan.Instructions.Execute(vcursor, bindVars, make(map[string]interface{}), true)
+	qr, err := plan.Instructions.Execute(vcursor, bindVars, make(map[string]*querypb.BindVariable), true)
 	// Check if there was partial DML execution. If so, rollback the transaction.
 	if err != nil && session.InTransaction && vcursor.hasPartialDML {
 		_ = e.txConn.Rollback(ctx, NewSafeSession(session))
@@ -168,14 +168,14 @@ func (e *Executor) handleExec(ctx context.Context, session *vtgatepb.Session, sq
 	return qr, err
 }
 
-func (e *Executor) shardExec(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}, target querypb.Target) (*sqltypes.Result, error) {
+func (e *Executor) shardExec(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target) (*sqltypes.Result, error) {
 	f := func(keyspace string) (string, []string, error) {
 		return keyspace, []string{target.Shard}, nil
 	}
 	return e.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, session, f, false /* notInTransaction */, session.Options)
 }
 
-func (e *Executor) handleDDL(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
+func (e *Executor) handleDDL(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	target := e.ParseTarget(session.TargetString)
 	if target.Keyspace == "" {
 		return nil, errNoKeyspace
@@ -203,7 +203,7 @@ func (e *Executor) handleDDL(ctx context.Context, session *vtgatepb.Session, sql
 	return e.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, session, f, false /* notInTransaction */, session.Options)
 }
 
-func (e *Executor) handleSet(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
+func (e *Executor) handleSet(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	vals, err := sqlparser.ExtractSetValues(sql)
 	if err != nil {
 		return &sqltypes.Result{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
@@ -274,7 +274,7 @@ func (e *Executor) handleSet(ctx context.Context, session *vtgatepb.Session, sql
 	return &sqltypes.Result{}, nil
 }
 
-func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
+func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
@@ -357,7 +357,7 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 	return e.handleOther(ctx, session, sql, bindVars)
 }
 
-func (e *Executor) handleUse(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
+func (e *Executor) handleUse(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
@@ -371,7 +371,7 @@ func (e *Executor) handleUse(ctx context.Context, session *vtgatepb.Session, sql
 	return &sqltypes.Result{}, nil
 }
 
-func (e *Executor) handleOther(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
+func (e *Executor) handleOther(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	target := e.ParseTarget(session.TargetString)
 	if target.Keyspace == "" {
 		return nil, errNoKeyspace
@@ -387,9 +387,9 @@ func (e *Executor) handleOther(ctx context.Context, session *vtgatepb.Session, s
 }
 
 // StreamExecute executes a streaming query.
-func (e *Executor) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}, target querypb.Target, callback func(*sqltypes.Result) error) error {
+func (e *Executor) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, callback func(*sqltypes.Result) error) error {
 	if bindVars == nil {
-		bindVars = make(map[string]interface{})
+		bindVars = make(map[string]*querypb.BindVariable)
 	}
 	query, comments := sqlparser.SplitTrailingComments(sql)
 	vcursor := newVCursorImpl(ctx, session, target, comments, e)
@@ -404,7 +404,7 @@ func (e *Executor) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 	// dictated by stream_buffer_size.
 	result := &sqltypes.Result{}
 	byteCount := 0
-	err = plan.Instructions.StreamExecute(vcursor, bindVars, make(map[string]interface{}), true, func(qr *sqltypes.Result) error {
+	err = plan.Instructions.StreamExecute(vcursor, bindVars, make(map[string]*querypb.BindVariable), true, func(qr *sqltypes.Result) error {
 		// If the row has field info, send it separately.
 		// TODO(sougou): this behavior is for handling tests because
 		// the framework currently sends all results as one packet.
@@ -470,15 +470,12 @@ func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []
 		// We always use the (unique) primary vindex. The ID must be the
 		// primary vindex for message tables.
 		mapper := table.ColumnVindexes[0].Vindex.(vindexes.Unique)
-		// convert []*querypb.Value to []interface{} for calling Map.
-		asInterface := make([]interface{}, 0, len(ids))
+		// convert []*querypb.Value to []sqltypes.Value for calling Map.
+		values := make([]sqltypes.Value, 0, len(ids))
 		for _, id := range ids {
-			asInterface = append(asInterface, &querypb.BindVariable{
-				Type:  id.Type,
-				Value: id.Value,
-			})
+			values = append(values, sqltypes.MakeTrusted(id.Type, id.Value))
 		}
-		ksids, err := mapper.Map(vcursor, asInterface)
+		ksids, err := mapper.Map(vcursor, values)
 		if err != nil {
 			return 0, err
 		}
@@ -665,7 +662,7 @@ func (e *Executor) ParseTarget(targetString string) querypb.Target {
 
 // getPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
-func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, bindVars map[string]interface{}) (*engine.Plan, error) {
+func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, bindVars map[string]*querypb.BindVariable) (*engine.Plan, error) {
 	if e.VSchema() == nil {
 		return nil, errors.New("vschema not initialized")
 	}

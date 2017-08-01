@@ -20,7 +20,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/sqltypes"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var lhu Vindex
@@ -41,7 +43,7 @@ func TestLookupHashUniqueCost(t *testing.T) {
 
 func TestLookupHashUniqueMap(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	got, err := lhu.(Unique).Map(vc, []interface{}{1, int32(2)})
+	got, err := lhu.(Unique).Map(vc, []sqltypes.Value{testVal(1), testVal(2)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -56,7 +58,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 
 func TestLookupHashUniqueVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	success, err := lhu.Verify(vc, []interface{}{1}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	success, err := lhu.Verify(vc, []sqltypes.Value{testVal(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	if err != nil {
 		t.Error(err)
 	}
@@ -67,15 +69,15 @@ func TestLookupHashUniqueVerify(t *testing.T) {
 
 func TestLookupHashUniqueCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := lhu.(Lookup).Create(vc, []interface{}{1}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	err := lhu.(Lookup).Create(vc, []sqltypes.Value{testVal(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &querytypes.BoundQuery{
+	wantQuery := &querypb.BoundQuery{
 		Sql: "insert into t(fromc,toc) values(:fromc0,:toc0)",
-		BindVariables: map[string]interface{}{
-			"fromc0": 1,
-			"toc0":   uint64(1),
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc0": sqltypes.Int64BindVariable(1),
+			"toc0":   sqltypes.Uint64BindVariable(1),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
@@ -92,15 +94,15 @@ func TestLookupHashUniqueReverse(t *testing.T) {
 
 func TestLookupHashUniqueDelete(t *testing.T) {
 	vc := &vcursor{}
-	err := lhu.(Lookup).Delete(vc, []interface{}{1}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err := lhu.(Lookup).Delete(vc, []sqltypes.Value{testVal(1)}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &querytypes.BoundQuery{
+	wantQuery := &querypb.BoundQuery{
 		Sql: "delete from t where fromc = :fromc and toc = :toc",
-		BindVariables: map[string]interface{}{
-			"fromc": 1,
-			"toc":   uint64(1),
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc": sqltypes.Int64BindVariable(1),
+			"toc":   sqltypes.Uint64BindVariable(1),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {

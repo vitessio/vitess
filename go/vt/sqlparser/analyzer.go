@@ -19,6 +19,7 @@ package sqlparser
 // analyzer.go contains utility analysis functions.
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -161,51 +162,53 @@ func IsSimpleTuple(node Expr) bool {
 	return false
 }
 
-// AsInterface converts the Expr to an interface. It converts
-// ValTuple to []interface{}, ValArg to string, StrVal to sqltypes.String,
-// IntVal to sqltypes.Numeric, NullVal to nil.
-// Otherwise, it returns an error.
-func AsInterface(node Expr) (interface{}, error) {
+// NewPlanValue builds a sqltypes.PlanValue from an Expr.
+func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 	switch node := node.(type) {
-	case *ValuesFuncExpr:
-		if node.Resolved != nil {
-			return AsInterface(node.Resolved)
-		}
-	case ValTuple:
-		vals := make([]interface{}, 0, len(node))
-		for _, val := range node {
-			v, err := AsInterface(val)
-			if err != nil {
-				return nil, err
-			}
-			vals = append(vals, v)
-		}
-		return vals, nil
 	case *SQLVal:
 		switch node.Type {
 		case ValArg:
-			return string(node.Val), nil
-		case StrVal:
-			return sqltypes.MakeString(node.Val), nil
-		case HexVal:
-			v, err := node.HexDecode()
-			if err != nil {
-				return nil, err
-			}
-			return sqltypes.MakeString(v), nil
+			return sqltypes.PlanValue{Key: string(node.Val[1:])}, nil
 		case IntVal:
 			n, err := sqltypes.BuildIntegral(string(node.Val))
 			if err != nil {
-				return nil, fmt.Errorf("type mismatch: %s", err)
+				return sqltypes.PlanValue{}, err
 			}
-			return n, nil
+			return sqltypes.PlanValue{Value: n}, nil
+		case StrVal:
+			return sqltypes.PlanValue{Value: sqltypes.MakeString(node.Val)}, nil
+		case HexVal:
+			v, err := node.HexDecode()
+			if err != nil {
+				return sqltypes.PlanValue{}, err
+			}
+			return sqltypes.PlanValue{Value: sqltypes.MakeString(v)}, nil
 		}
 	case ListArg:
-		return string(node), nil
+		return sqltypes.PlanValue{ListKey: string(node[2:])}, nil
+	case ValTuple:
+		pv := sqltypes.PlanValue{
+			Values: make([]sqltypes.PlanValue, 0, len(node)),
+		}
+		for _, val := range node {
+			innerpv, err := NewPlanValue(val)
+			if err != nil {
+				return sqltypes.PlanValue{}, err
+			}
+			if innerpv.ListKey != "" || innerpv.Values != nil {
+				return sqltypes.PlanValue{}, errors.New("unsupported: nested lists")
+			}
+			pv.Values = append(pv.Values, innerpv)
+		}
+		return pv, nil
+	case *ValuesFuncExpr:
+		if node.Resolved != nil {
+			return NewPlanValue(node.Resolved)
+		}
 	case *NullVal:
-		return nil, nil
+		return sqltypes.PlanValue{}, nil
 	}
-	return nil, fmt.Errorf("expression is too complex '%v'", String(node))
+	return sqltypes.PlanValue{}, fmt.Errorf("expression is too complex '%v'", String(node))
 }
 
 // StringIn is a convenience function that returns

@@ -24,19 +24,19 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 )
 
 type vcursor struct {
 	mustFail bool
 	numRows  int
 	result   *sqltypes.Result
-	bq       *querytypes.BoundQuery
+	bq       *querypb.BoundQuery
 }
 
-func (vc *vcursor) Execute(query string, bindvars map[string]interface{}, isDML bool) (*sqltypes.Result, error) {
-	vc.bq = &querytypes.BoundQuery{
+func (vc *vcursor) Execute(query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+	vc.bq = &querypb.BoundQuery{
 		Sql:           query,
 		BindVariables: bindvars,
 	}
@@ -104,7 +104,7 @@ func TestLookupHashString(t *testing.T) {
 
 func TestLookupHashMap(t *testing.T) {
 	vc := &vcursor{numRows: 2}
-	got, err := lookuphash.(NonUnique).Map(vc, []interface{}{1, int32(2)})
+	got, err := lookuphash.(NonUnique).Map(vc, []sqltypes.Value{testVal(1), testVal(2)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -122,7 +122,7 @@ func TestLookupHashMap(t *testing.T) {
 
 func TestLookupHashVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	success, err := lookuphash.Verify(vc, []interface{}{1}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	success, err := lookuphash.Verify(vc, []sqltypes.Value{testVal(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	if err != nil {
 		t.Error(err)
 	}
@@ -133,15 +133,15 @@ func TestLookupHashVerify(t *testing.T) {
 
 func TestLookupHashCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := lookuphash.(Lookup).Create(vc, []interface{}{1}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	err := lookuphash.(Lookup).Create(vc, []sqltypes.Value{testVal(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &querytypes.BoundQuery{
+	wantQuery := &querypb.BoundQuery{
 		Sql: "insert into t(fromc,toc) values(:fromc0,:toc0)",
-		BindVariables: map[string]interface{}{
-			"fromc0": 1,
-			"toc0":   uint64(1),
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc0": sqltypes.Int64BindVariable(1),
+			"toc0":   sqltypes.Uint64BindVariable(1),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
@@ -158,15 +158,15 @@ func TestLookupHashReverse(t *testing.T) {
 
 func TestLookupHashDelete(t *testing.T) {
 	vc := &vcursor{}
-	err := lookuphash.(Lookup).Delete(vc, []interface{}{1}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err := lookuphash.(Lookup).Delete(vc, []sqltypes.Value{testVal(1)}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &querytypes.BoundQuery{
+	wantQuery := &querypb.BoundQuery{
 		Sql: "delete from t where fromc = :fromc and toc = :toc",
-		BindVariables: map[string]interface{}{
-			"fromc": 1,
-			"toc":   uint64(1),
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc": sqltypes.Int64BindVariable(1),
+			"toc":   sqltypes.Uint64BindVariable(1),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {

@@ -25,8 +25,8 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -60,7 +60,7 @@ func TestMergeSortNormal(t *testing.T) {
 		Col: 0,
 	}}
 	params := &scatterParams{
-		shardVars: map[string]map[string]interface{}{
+		shardVars: map[string]map[string]*querypb.BindVariable{
 			"0": nil,
 			"1": nil,
 			"2": nil,
@@ -131,7 +131,7 @@ func TestMergeSortDescending(t *testing.T) {
 		Desc: true,
 	}}
 	params := &scatterParams{
-		shardVars: map[string]map[string]interface{}{
+		shardVars: map[string]map[string]*querypb.BindVariable{
 			"0": nil,
 			"1": nil,
 			"2": nil,
@@ -191,7 +191,7 @@ func TestMergeSortEmptyResults(t *testing.T) {
 		Col: 0,
 	}}
 	params := &scatterParams{
-		shardVars: map[string]map[string]interface{}{
+		shardVars: map[string]map[string]*querypb.BindVariable{
 			"0": nil,
 			"1": nil,
 			"2": nil,
@@ -233,7 +233,7 @@ func TestMergeSortResultFailures(t *testing.T) {
 		Col: 0,
 	}}
 	params := &scatterParams{
-		shardVars: map[string]map[string]interface{}{
+		shardVars: map[string]map[string]*querypb.BindVariable{
 			"0": nil,
 		},
 	}
@@ -290,7 +290,7 @@ func TestMergeSortDataFailures(t *testing.T) {
 		Col: 0,
 	}}
 	params := &scatterParams{
-		shardVars: map[string]map[string]interface{}{
+		shardVars: map[string]map[string]*querypb.BindVariable{
 			"0": nil,
 			"1": nil,
 		},
@@ -338,22 +338,22 @@ func (t *fakeVcursor) Context() context.Context {
 	return context.Background()
 }
 
-func (t *fakeVcursor) Execute(query string, bindvars map[string]interface{}, isDML bool) (*sqltypes.Result, error) {
+func (t *fakeVcursor) Execute(query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
 
-func (t *fakeVcursor) ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery, isDML bool) (*sqltypes.Result, error) {
+func (t *fakeVcursor) ExecuteMultiShard(keyspace string, shardQueries map[string]*querypb.BoundQuery, isDML bool) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
 
-func (t *fakeVcursor) ExecuteStandalone(query string, bindvars map[string]interface{}, keyspace, shard string) (*sqltypes.Result, error) {
+func (t *fakeVcursor) ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, keyspace, shard string) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
 
 // StreamExecuteMulti streams a result from the specified shard.
 // The shard is specifed by the only entry in shardVars. At the
 // end of a stream, if sendErr is set, that error is returned.
-func (t *fakeVcursor) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]interface{}, callback func(reply *sqltypes.Result) error) error {
+func (t *fakeVcursor) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
 	var shard string
 	for k := range shardVars {
 		shard = k

@@ -382,7 +382,7 @@ func (oa *orderedAggregate) PushOrderByNull() {
 }
 
 // SetUpperLimit satisfies the builder interface.
-func (oa *orderedAggregate) SetUpperLimit(count interface{}) {
+func (oa *orderedAggregate) SetUpperLimit(count *sqlparser.SQLVal) {
 	oa.input.SetUpperLimit(count)
 }
 

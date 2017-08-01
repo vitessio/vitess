@@ -106,6 +106,20 @@ func MakeTestStreamingResults(fields []*querypb.Field, rows ...string) []*Result
 	return results
 }
 
+// MakeTestBindVar makes a *querypb.BindVariable from
+// an interface{}.It panics on invalid input.
+// This function should only be used for testing.
+func MakeTestBindVar(v interface{}) *querypb.BindVariable {
+	if v == nil {
+		return NullBindVariable
+	}
+	bv, err := BuildBindVariable(v)
+	if err != nil {
+		panic(err)
+	}
+	return bv
+}
+
 // PrintResults prints []*Results into a string.
 // This function should only be used for testing.
 func PrintResults(results []*Result) string {

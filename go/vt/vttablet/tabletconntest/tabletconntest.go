@@ -32,7 +32,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletconn"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -740,7 +739,10 @@ func testSplitQuery(t *testing.T, conn queryservice.QueryService, f *FakeQuerySe
 	if err != nil {
 		t.Fatalf("SplitQuery failed: %v", err)
 	}
-	if !querytypes.QuerySplitsEqual(qsl, SplitQueryQuerySplitList) {
+	if !proto.Equal(
+		&querypb.SplitQueryResponse{Queries: qsl},
+		&querypb.SplitQueryResponse{Queries: SplitQueryQuerySplitList},
+	) {
 		t.Errorf("Unexpected result from SplitQuery: got %v wanted %v", qsl, SplitQueryQuerySplitList)
 	}
 }

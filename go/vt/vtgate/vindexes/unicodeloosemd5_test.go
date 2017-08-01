@@ -20,6 +20,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 var charVindex Vindex
@@ -75,7 +77,7 @@ func TestUnicodeLooseMD5(t *testing.T) {
 		out: "\xac\x0f\x91y\xf5\x1d\xb8\u007f\xe8\xec\xc0\xcf@ʹz",
 	}}
 	for _, tcase := range tcases {
-		got, err := charVindex.(Unique).Map(nil, []interface{}{[]byte(tcase.in)})
+		got, err := charVindex.(Unique).Map(nil, []sqltypes.Value{sqltypes.MakeString([]byte(tcase.in))})
 		if err != nil {
 			t.Error(err)
 		}
@@ -83,7 +85,7 @@ func TestUnicodeLooseMD5(t *testing.T) {
 		if out != tcase.out {
 			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 		}
-		ok, err := charVindex.Verify(nil, []interface{}{tcase.in}, [][]byte{[]byte(tcase.out)})
+		ok, err := charVindex.Verify(nil, []sqltypes.Value{sqltypes.MakeString([]byte(tcase.in))}, [][]byte{[]byte(tcase.out)})
 		if err != nil {
 			t.Error(err)
 		}
@@ -91,35 +93,21 @@ func TestUnicodeLooseMD5(t *testing.T) {
 			t.Errorf("Verify(%#v): false, want true", tcase.in)
 		}
 	}
-
-	//Negative test case
-	_, err := charVindex.(Unique).Map(nil, []interface{}{1})
-	want := "UnicodeLooseMD5.Map: unexpected data type for getBytes: int"
-	if err.Error() != want {
-		t.Error(err)
-	}
-
 }
 
 func TestUnicodeLooseMD5Neg(t *testing.T) {
-	_, err := charVindex.Verify(nil, []interface{}{[]byte("test1"), []byte("test2")}, [][]byte{[]byte("test1")})
+	_, err := charVindex.Verify(nil, []sqltypes.Value{testVal([]byte("test1")), testVal([]byte("test2"))}, [][]byte{[]byte("test1")})
 	want := "UnicodeLooseMD5.Verify: length of ids 2 doesn't match length of ksids 1"
 	if err.Error() != want {
 		t.Error(err.Error())
 	}
 
-	ok, err := charVindex.Verify(nil, []interface{}{[]byte("test2")}, [][]byte{[]byte("test1")})
+	ok, err := charVindex.Verify(nil, []sqltypes.Value{testVal([]byte("test2"))}, [][]byte{[]byte("test1")})
 	if err != nil {
 		t.Error(err)
 	}
 	if ok {
 		t.Errorf("Verify(%#v): true, want false", []byte("test2"))
-	}
-
-	_, err = charVindex.Verify(nil, []interface{}{1}, [][]byte{[]byte("test1")})
-	want = "UnicodeLooseMD5.Verify: unexpected data type for getBytes: int"
-	if err.Error() != want {
-		t.Error(err)
 	}
 }
 

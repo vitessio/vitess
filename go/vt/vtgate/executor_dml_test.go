@@ -26,7 +26,6 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/vttablet/sandboxconn"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
@@ -40,9 +39,9 @@ func TestUpdateEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []querytypes.BoundQuery{{
+	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "update user set a = 2 where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
-		BindVariables: map[string]interface{}{},
+		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
@@ -56,9 +55,9 @@ func TestUpdateEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []querytypes.BoundQuery{{
+	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "update user set a = 2 where id = 3 /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
-		BindVariables: map[string]interface{}{},
+		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
 		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
@@ -74,10 +73,10 @@ func TestUpdateEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []querytypes.BoundQuery{{
+	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select user_id from music_user_map where music_id = :music_id",
-		BindVariables: map[string]interface{}{
-			"music_id": int64(2),
+		BindVariables: map[string]*querypb.BindVariable{
+			"music_id": sqltypes.Int64BindVariable(2),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -98,9 +97,9 @@ func TestUpdateComments(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []querytypes.BoundQuery{{
+	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "update user set a = 2 where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */ /* trailing */",
-		BindVariables: map[string]interface{}{},
+		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
@@ -115,22 +114,22 @@ func TestUpdateEqualFail(t *testing.T) {
 	s := getSandbox("TestExecutor")
 
 	_, err := executorExec(executor, "update user set a=2 where id = :aa", nil)
-	want := "execUpdateEqual: could not find bind var :aa"
+	want := "execUpdateEqual: missing bind var aa"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}
 
 	s.SrvKeyspaceMustFail = 1
-	_, err = executorExec(executor, "update user set a=2 where id = :id", map[string]interface{}{
-		"id": 1,
+	_, err = executorExec(executor, "update user set a=2 where id = :id", map[string]*querypb.BindVariable{
+		"id": sqltypes.Int64BindVariable(1),
 	})
 	want = "execUpdateEqual: keyspace TestExecutor fetch error: topo error GetSrvKeyspace"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}
 
-	_, err = executorExec(executor, "update user set a=2 where id = :id", map[string]interface{}{
-		"id": "aa",
+	_, err = executorExec(executor, "update user set a=2 where id = :id", map[string]*querypb.BindVariable{
+		"id": sqltypes.StringBindVariable("aa"),
 	})
 	want = `execUpdateEqual: hash.Map: could not parse value: aa`
 	if err == nil || err.Error() != want {
@@ -138,8 +137,8 @@ func TestUpdateEqualFail(t *testing.T) {
 	}
 
 	s.ShardSpec = "80-"
-	_, err = executorExec(executor, "update user set a=2 where id = :id", map[string]interface{}{
-		"id": 1,
+	_, err = executorExec(executor, "update user set a=2 where id = :id", map[string]*querypb.BindVariable{
+		"id": sqltypes.Int64BindVariable(1),
 	})
 	want = "execUpdateEqual: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
@@ -165,22 +164,22 @@ func TestDeleteEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []querytypes.BoundQuery{{
+	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select name from user where id = 1 for update",
-		BindVariables: map[string]interface{}{},
+		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
 		Sql:           "delete from user where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
-		BindVariables: map[string]interface{}{},
+		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
 		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
 	}
 
-	wantQueries = []querytypes.BoundQuery{{
+	wantQueries = []*querypb.BoundQuery{{
 		Sql: "delete from name_user_map where name = :name and user_id = :user_id",
-		BindVariables: map[string]interface{}{
-			"user_id": uint64(1),
-			"name":    "myname",
+		BindVariables: map[string]*querypb.BindVariable{
+			"user_id": sqltypes.Uint64BindVariable(1),
+			"name":    sqltypes.StringBindVariable("myname"),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -194,12 +193,12 @@ func TestDeleteEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []querytypes.BoundQuery{{
+	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "select name from user where id = 1 for update",
-		BindVariables: map[string]interface{}{},
+		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
 		Sql:           "delete from user where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
-		BindVariables: map[string]interface{}{},
+		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
 		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
@@ -215,10 +214,10 @@ func TestDeleteEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []querytypes.BoundQuery{{
+	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select user_id from music_user_map where music_id = :music_id",
-		BindVariables: map[string]interface{}{
-			"music_id": int64(1),
+		BindVariables: map[string]*querypb.BindVariable{
+			"music_id": sqltypes.Int64BindVariable(1),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -235,9 +234,9 @@ func TestDeleteEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []querytypes.BoundQuery{{
+	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "delete from user_extra where user_id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
-		BindVariables: map[string]interface{}{},
+		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
 		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
@@ -264,22 +263,22 @@ func TestDeleteComments(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []querytypes.BoundQuery{{
+	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select name from user where id = 1 for update /* trailing */",
-		BindVariables: map[string]interface{}{},
+		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
 		Sql:           "delete from user where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */ /* trailing */",
-		BindVariables: map[string]interface{}{},
+		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
 		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
 	}
 
-	wantQueries = []querytypes.BoundQuery{{
+	wantQueries = []*querypb.BoundQuery{{
 		Sql: "delete from name_user_map where name = :name and user_id = :user_id /* trailing */",
-		BindVariables: map[string]interface{}{
-			"user_id": uint64(1),
-			"name":    "myname",
+		BindVariables: map[string]*querypb.BindVariable{
+			"user_id": sqltypes.Uint64BindVariable(1),
+			"name":    sqltypes.StringBindVariable("myname"),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -292,22 +291,22 @@ func TestDeleteEqualFail(t *testing.T) {
 	s := getSandbox("TestExecutor")
 
 	_, err := executorExec(executor, "delete from user where id = :aa", nil)
-	want := "execDeleteEqual: could not find bind var :aa"
+	want := "execDeleteEqual: missing bind var aa"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}
 
 	s.SrvKeyspaceMustFail = 1
-	_, err = executorExec(executor, "delete from user where id = :id", map[string]interface{}{
-		"id": 1,
+	_, err = executorExec(executor, "delete from user where id = :id", map[string]*querypb.BindVariable{
+		"id": sqltypes.Int64BindVariable(1),
 	})
 	want = "execDeleteEqual: keyspace TestExecutor fetch error: topo error GetSrvKeyspace"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}
 
-	_, err = executorExec(executor, "delete from user where id = :id", map[string]interface{}{
-		"id": "aa",
+	_, err = executorExec(executor, "delete from user where id = :id", map[string]*querypb.BindVariable{
+		"id": sqltypes.StringBindVariable("aa"),
 	})
 	want = `execDeleteEqual: hash.Map: could not parse value: aa`
 	if err == nil || err.Error() != want {
@@ -315,8 +314,8 @@ func TestDeleteEqualFail(t *testing.T) {
 	}
 
 	s.ShardSpec = "80-"
-	_, err = executorExec(executor, "delete from user where id = :id", map[string]interface{}{
-		"id": 1,
+	_, err = executorExec(executor, "delete from user where id = :id", map[string]*querypb.BindVariable{
+		"id": sqltypes.Int64BindVariable(1),
 	})
 	want = "execDeleteEqual: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
@@ -332,12 +331,12 @@ func TestInsertSharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []querytypes.BoundQuery{{
+	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into user(id, v, name) values (:_Id0, 2, :_name0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
-		BindVariables: map[string]interface{}{
-			"_Id0":   int64(1),
-			"_name0": []byte("myname"),
-			"__seq0": int64(1),
+		BindVariables: map[string]*querypb.BindVariable{
+			"_Id0":   sqltypes.Int64BindVariable(1),
+			"_name0": sqltypes.BytesBindVariable([]byte("myname")),
+			"__seq0": sqltypes.Int64BindVariable(1),
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -346,11 +345,11 @@ func TestInsertSharded(t *testing.T) {
 	if sbc2.Queries != nil {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
-	wantQueries = []querytypes.BoundQuery{{
+	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into name_user_map(name, user_id) values (:name0, :user_id0)",
-		BindVariables: map[string]interface{}{
-			"name0":    []byte("myname"),
-			"user_id0": uint64(1),
+		BindVariables: map[string]*querypb.BindVariable{
+			"name0":    sqltypes.BytesBindVariable([]byte("myname")),
+			"user_id0": sqltypes.Uint64BindVariable(1),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -363,12 +362,12 @@ func TestInsertSharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []querytypes.BoundQuery{{
+	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into user(id, v, name) values (:_Id0, 2, :_name0) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
-		BindVariables: map[string]interface{}{
-			"_Id0":   int64(3),
-			"__seq0": int64(3),
-			"_name0": []byte("myname2"),
+		BindVariables: map[string]*querypb.BindVariable{
+			"_Id0":   sqltypes.Int64BindVariable(3),
+			"__seq0": sqltypes.Int64BindVariable(3),
+			"_name0": sqltypes.BytesBindVariable([]byte("myname2")),
 		},
 	}}
 	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
@@ -377,11 +376,11 @@ func TestInsertSharded(t *testing.T) {
 	if sbc1.Queries != nil {
 		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
 	}
-	wantQueries = []querytypes.BoundQuery{{
+	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into name_user_map(name, user_id) values (:name0, :user_id0)",
-		BindVariables: map[string]interface{}{
-			"name0":    []byte("myname2"),
-			"user_id0": uint64(3),
+		BindVariables: map[string]*querypb.BindVariable{
+			"name0":    sqltypes.BytesBindVariable([]byte("myname2")),
+			"user_id0": sqltypes.Uint64BindVariable(3),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -396,12 +395,12 @@ func TestInsertComments(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []querytypes.BoundQuery{{
+	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into user(id, v, name) values (:_Id0, 2, :_name0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */ /* trailing */",
-		BindVariables: map[string]interface{}{
-			"_Id0":   int64(1),
-			"_name0": []byte("myname"),
-			"__seq0": int64(1),
+		BindVariables: map[string]*querypb.BindVariable{
+			"_Id0":   sqltypes.Int64BindVariable(1),
+			"_name0": sqltypes.BytesBindVariable([]byte("myname")),
+			"__seq0": sqltypes.Int64BindVariable(1),
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -410,11 +409,11 @@ func TestInsertComments(t *testing.T) {
 	if sbc2.Queries != nil {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
-	wantQueries = []querytypes.BoundQuery{{
+	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into name_user_map(name, user_id) values (:name0, :user_id0) /* trailing */",
-		BindVariables: map[string]interface{}{
-			"name0":    []byte("myname"),
-			"user_id0": uint64(1),
+		BindVariables: map[string]*querypb.BindVariable{
+			"name0":    sqltypes.BytesBindVariable([]byte("myname")),
+			"user_id0": sqltypes.Uint64BindVariable(1),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -436,25 +435,25 @@ func TestInsertGeneratorSharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into user(v, name, Id) values (2, :_name0, :_Id0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
-		BindVariables: map[string]interface{}{
-			"_Id0":   int64(1),
-			"__seq0": int64(1),
-			"_name0": []byte("myname"),
+	wantQueries := []*querypb.BoundQuery{{
+		Sql: "insert into user(v, name, id) values (2, :_name0, :_Id0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		BindVariables: map[string]*querypb.BindVariable{
+			"_Id0":   sqltypes.Int64BindVariable(1),
+			"__seq0": sqltypes.Int64BindVariable(1),
+			"_name0": sqltypes.BytesBindVariable([]byte("myname")),
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
 		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
-	wantQueries = []querytypes.BoundQuery{{
+	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "select next :n values from user_seq",
-		BindVariables: map[string]interface{}{"n": int64(1)},
+		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(1)},
 	}, {
 		Sql: "insert into name_user_map(name, user_id) values (:name0, :user_id0)",
-		BindVariables: map[string]interface{}{
-			"name0":    []byte("myname"),
-			"user_id0": uint64(1),
+		BindVariables: map[string]*querypb.BindVariable{
+			"name0":    sqltypes.BytesBindVariable([]byte("myname")),
+			"user_id0": sqltypes.Uint64BindVariable(1),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -483,10 +482,10 @@ func TestInsertAutoincSharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []querytypes.BoundQuery{{
+	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into user_extra(user_id) values (:_user_id0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
-		BindVariables: map[string]interface{}{
-			"_user_id0": int64(2),
+		BindVariables: map[string]*querypb.BindVariable{
+			"_user_id0": sqltypes.Int64BindVariable(2),
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
@@ -503,13 +502,13 @@ func TestInsertGeneratorUnsharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []querytypes.BoundQuery{{
+	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select next :n values from user_seq",
-		BindVariables: map[string]interface{}{"n": int64(1)},
+		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(1)},
 	}, {
 		Sql: "insert into main1(id, name) values (:__seq0, 'myname')",
-		BindVariables: map[string]interface{}{
-			"__seq0": int64(1),
+		BindVariables: map[string]*querypb.BindVariable{
+			"__seq0": sqltypes.Int64BindVariable(1),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -540,9 +539,9 @@ func TestInsertAutoincUnsharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []querytypes.BoundQuery{{
+	wantQueries := []*querypb.BoundQuery{{
 		Sql:           query,
-		BindVariables: map[string]interface{}{},
+		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: \n%#v, want \n%#v\n", sbclookup.Queries, wantQueries)
@@ -559,22 +558,22 @@ func TestInsertLookupOwned(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []querytypes.BoundQuery{{
+	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into music(user_id, id) values (:_user_id0, :_id0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
-		BindVariables: map[string]interface{}{
-			"_user_id0": int64(2),
-			"_id0":      int64(3),
-			"__seq0":    int64(3),
+		BindVariables: map[string]*querypb.BindVariable{
+			"_user_id0": sqltypes.Int64BindVariable(2),
+			"_id0":      sqltypes.Int64BindVariable(3),
+			"__seq0":    sqltypes.Int64BindVariable(3),
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
 		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
 	}
-	wantQueries = []querytypes.BoundQuery{{
+	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into music_user_map(music_id, user_id) values (:music_id0, :user_id0)",
-		BindVariables: map[string]interface{}{
-			"music_id0": int64(3),
-			"user_id0":  uint64(2),
+		BindVariables: map[string]*querypb.BindVariable{
+			"music_id0": sqltypes.Int64BindVariable(3),
+			"user_id0":  sqltypes.Uint64BindVariable(2),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -596,25 +595,25 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []querytypes.BoundQuery{{
+	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into music(user_id, id) values (:_user_id0, :_id0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
-		BindVariables: map[string]interface{}{
-			"_user_id0": int64(2),
-			"_id0":      int64(4),
-			"__seq0":    int64(4),
+		BindVariables: map[string]*querypb.BindVariable{
+			"_user_id0": sqltypes.Int64BindVariable(2),
+			"_id0":      sqltypes.Int64BindVariable(4),
+			"__seq0":    sqltypes.Int64BindVariable(4),
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
 		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
 	}
-	wantQueries = []querytypes.BoundQuery{{
+	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "select next :n values from user_seq",
-		BindVariables: map[string]interface{}{"n": int64(1)},
+		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(1)},
 	}, {
 		Sql: "insert into music_user_map(music_id, user_id) values (:music_id0, :user_id0)",
-		BindVariables: map[string]interface{}{
-			"music_id0": int64(4),
-			"user_id0":  uint64(2),
+		BindVariables: map[string]*querypb.BindVariable{
+			"music_id0": sqltypes.Int64BindVariable(4),
+			"user_id0":  sqltypes.Uint64BindVariable(2),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -634,21 +633,21 @@ func TestInsertLookupUnowned(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []querytypes.BoundQuery{{
+	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into music_extra(user_id, music_id) values (:_user_id0, :_music_id0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
-		BindVariables: map[string]interface{}{
-			"_user_id0":  int64(2),
-			"_music_id0": int64(3),
+		BindVariables: map[string]*querypb.BindVariable{
+			"_user_id0":  sqltypes.Int64BindVariable(2),
+			"_music_id0": sqltypes.Int64BindVariable(3),
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
 		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
-	wantQueries = []querytypes.BoundQuery{{
+	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select music_id from music_user_map where ((music_id = :music_id0 and user_id = :user_id0))",
-		BindVariables: map[string]interface{}{
-			"music_id0": int64(3),
-			"user_id0":  uint64(2),
+		BindVariables: map[string]*querypb.BindVariable{
+			"music_id0": sqltypes.Int64BindVariable(3),
+			"user_id0":  sqltypes.Uint64BindVariable(2),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -663,20 +662,20 @@ func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []querytypes.BoundQuery{{
+	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into music_extra_reversed(music_id, user_id) values (:_music_id0, :_user_id0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
-		BindVariables: map[string]interface{}{
-			"_user_id0":  uint64(1),
-			"_music_id0": int64(3),
+		BindVariables: map[string]*querypb.BindVariable{
+			"_user_id0":  sqltypes.Uint64BindVariable(1),
+			"_music_id0": sqltypes.Int64BindVariable(3),
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
 		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
 	}
-	wantQueries = []querytypes.BoundQuery{{
+	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select user_id from music_user_map where music_id = :music_id",
-		BindVariables: map[string]interface{}{
-			"music_id": int64(3),
+		BindVariables: map[string]*querypb.BindVariable{
+			"music_id": sqltypes.Int64BindVariable(3),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -688,13 +687,13 @@ func TestInsertFail(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
 
 	_, err := executorExec(executor, "insert into user(id, v, name) values (:aa, 2, 'myname')", nil)
-	want := "execInsertSharded: handleGenerate: could not find bind var :aa"
+	want := "execInsertSharded: handleGenerate: missing bind var aa"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}
 
 	_, err = executorExec(executor, "insert into main1(id, v, name) values (:aa, 2, 'myname')", nil)
-	want = "execInsertUnsharded: handleGenerate: could not find bind var :aa"
+	want = "execInsertUnsharded: handleGenerate: missing bind var aa"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}
@@ -848,27 +847,27 @@ func TestMultiInsertSharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries1 := []querytypes.BoundQuery{{
+	wantQueries1 := []*querypb.BoundQuery{{
 		Sql: "insert into user(id, v, name) values (:_Id0, 1, :_name0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
-		BindVariables: map[string]interface{}{
-			"_Id0":   int64(1),
-			"_name0": []byte("myname1"),
-			"__seq0": int64(1),
-			"_Id1":   int64(3),
-			"_name1": []byte("myname3"),
-			"__seq1": int64(3),
+		BindVariables: map[string]*querypb.BindVariable{
+			"_Id0":   sqltypes.Int64BindVariable(1),
+			"_name0": sqltypes.BytesBindVariable([]byte("myname1")),
+			"__seq0": sqltypes.Int64BindVariable(1),
+			"_Id1":   sqltypes.Int64BindVariable(3),
+			"_name1": sqltypes.BytesBindVariable([]byte("myname3")),
+			"__seq1": sqltypes.Int64BindVariable(3),
 		},
 	}}
 
-	wantQueries2 := []querytypes.BoundQuery{{
+	wantQueries2 := []*querypb.BoundQuery{{
 		Sql: "insert into user(id, v, name) values (:_Id1, 3, :_name1) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
-		BindVariables: map[string]interface{}{
-			"_Id0":   int64(1),
-			"_name0": []byte("myname1"),
-			"__seq0": int64(1),
-			"_Id1":   int64(3),
-			"_name1": []byte("myname3"),
-			"__seq1": int64(3),
+		BindVariables: map[string]*querypb.BindVariable{
+			"_Id0":   sqltypes.Int64BindVariable(1),
+			"_name0": sqltypes.BytesBindVariable([]byte("myname1")),
+			"__seq0": sqltypes.Int64BindVariable(1),
+			"_Id1":   sqltypes.Int64BindVariable(3),
+			"_name1": sqltypes.BytesBindVariable([]byte("myname3")),
+			"__seq1": sqltypes.Int64BindVariable(3),
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries1) {
@@ -879,13 +878,13 @@ func TestMultiInsertSharded(t *testing.T) {
 		t.Errorf("sbc2.Queries:\n%+v, want\n%+v\n", sbc2.Queries, wantQueries2)
 	}
 
-	wantQueries1 = []querytypes.BoundQuery{{
+	wantQueries1 = []*querypb.BoundQuery{{
 		Sql: "insert into name_user_map(name, user_id) values (:name0, :user_id0), (:name1, :user_id1)",
-		BindVariables: map[string]interface{}{
-			"name0":    []byte("myname1"),
-			"user_id0": uint64(1),
-			"name1":    []byte("myname3"),
-			"user_id1": uint64(3),
+		BindVariables: map[string]*querypb.BindVariable{
+			"name0":    sqltypes.BytesBindVariable([]byte("myname1")),
+			"user_id0": sqltypes.Uint64BindVariable(1),
+			"name1":    sqltypes.BytesBindVariable([]byte("myname3")),
+			"user_id1": sqltypes.Uint64BindVariable(3),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries1) {
@@ -899,15 +898,15 @@ func TestMultiInsertSharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []querytypes.BoundQuery{{
+	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into user(id, v, name) values (:_Id0, 1, :_name0),(:_Id1, 2, :_name1) /* vtgate:: keyspace_id:166b40b44aba4bd6,06e7ea22ce92708f */",
-		BindVariables: map[string]interface{}{
-			"_Id0":   int64(1),
-			"__seq0": int64(1),
-			"_name0": []byte("myname1"),
-			"_Id1":   int64(2),
-			"__seq1": int64(2),
-			"_name1": []byte("myname2"),
+		BindVariables: map[string]*querypb.BindVariable{
+			"_Id0":   sqltypes.Int64BindVariable(1),
+			"__seq0": sqltypes.Int64BindVariable(1),
+			"_name0": sqltypes.BytesBindVariable([]byte("myname1")),
+			"_Id1":   sqltypes.Int64BindVariable(2),
+			"__seq1": sqltypes.Int64BindVariable(2),
+			"_name1": sqltypes.BytesBindVariable([]byte("myname2")),
 		},
 	}}
 
@@ -917,13 +916,13 @@ func TestMultiInsertSharded(t *testing.T) {
 	if sbc2.Queries != nil {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
-	wantQueries = []querytypes.BoundQuery{{
+	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into name_user_map(name, user_id) values (:name0, :user_id0), (:name1, :user_id1)",
-		BindVariables: map[string]interface{}{
-			"name0":    []byte("myname1"),
-			"user_id0": uint64(1),
-			"name1":    []byte("myname2"),
-			"user_id1": uint64(2),
+		BindVariables: map[string]*querypb.BindVariable{
+			"name0":    sqltypes.BytesBindVariable([]byte("myname1")),
+			"user_id0": sqltypes.Uint64BindVariable(1),
+			"name1":    sqltypes.BytesBindVariable([]byte("myname2")),
+			"user_id1": sqltypes.Uint64BindVariable(2),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -941,35 +940,35 @@ func TestMultiInsertGenerator(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     1,
 	}})
-	result, err := executorExec(executor, "insert into music(user_id, name) values (:u, 'myname1'),(:u, 'myname2')", map[string]interface{}{"u": int64(2)})
+	result, err := executorExec(executor, "insert into music(user_id, name) values (:u, 'myname1'),(:u, 'myname2')", map[string]*querypb.BindVariable{"u": sqltypes.Int64BindVariable(2)})
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []querytypes.BoundQuery{{
+	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into music(user_id, name, id) values (:_user_id0, 'myname1', :_id0),(:_user_id1, 'myname2', :_id1) /* vtgate:: keyspace_id:06e7ea22ce92708f,06e7ea22ce92708f */",
-		BindVariables: map[string]interface{}{
-			"u":         int64(2),
-			"_id0":      int64(1),
-			"__seq0":    int64(1),
-			"_user_id0": int64(2),
-			"_id1":      int64(2),
-			"__seq1":    int64(2),
-			"_user_id1": int64(2),
+		BindVariables: map[string]*querypb.BindVariable{
+			"u":         sqltypes.Int64BindVariable(2),
+			"_id0":      sqltypes.Int64BindVariable(1),
+			"__seq0":    sqltypes.Int64BindVariable(1),
+			"_user_id0": sqltypes.Int64BindVariable(2),
+			"_id1":      sqltypes.Int64BindVariable(2),
+			"__seq1":    sqltypes.Int64BindVariable(2),
+			"_user_id1": sqltypes.Int64BindVariable(2),
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
 		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
 	}
-	wantQueries = []querytypes.BoundQuery{{
+	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "select next :n values from user_seq",
-		BindVariables: map[string]interface{}{"n": int64(2)},
+		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)},
 	}, {
 		Sql: "insert into music_user_map(music_id, user_id) values (:music_id0, :user_id0), (:music_id1, :user_id1)",
-		BindVariables: map[string]interface{}{
-			"user_id0":  uint64(2),
-			"music_id0": int64(1),
-			"user_id1":  uint64(2),
-			"music_id1": int64(2),
+		BindVariables: map[string]*querypb.BindVariable{
+			"user_id0":  sqltypes.Uint64BindVariable(2),
+			"music_id0": sqltypes.Int64BindVariable(1),
+			"user_id1":  sqltypes.Uint64BindVariable(2),
+			"music_id1": sqltypes.Int64BindVariable(2),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -992,40 +991,40 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     1,
 	}})
-	result, err := executorExec(executor, "insert into music(id, user_id, name) values (NULL, :u, 'myname1'),(2, :u, 'myname2'), (NULL, :u, 'myname3')", map[string]interface{}{"u": int64(2)})
+	result, err := executorExec(executor, "insert into music(id, user_id, name) values (NULL, :u, 'myname1'),(2, :u, 'myname2'), (NULL, :u, 'myname3')", map[string]*querypb.BindVariable{"u": sqltypes.Int64BindVariable(2)})
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []querytypes.BoundQuery{{
+	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into music(id, user_id, name) values (:_id0, :_user_id0, 'myname1'),(:_id1, :_user_id1, 'myname2'),(:_id2, :_user_id2, 'myname3') /* vtgate:: keyspace_id:06e7ea22ce92708f,06e7ea22ce92708f,06e7ea22ce92708f */",
-		BindVariables: map[string]interface{}{
-			"u":         int64(2),
-			"_id0":      int64(1),
-			"__seq0":    int64(1),
-			"_user_id0": int64(2),
-			"_id1":      int64(2),
-			"__seq1":    int64(2),
-			"_user_id1": int64(2),
-			"_id2":      int64(2),
-			"__seq2":    int64(2),
-			"_user_id2": int64(2),
+		BindVariables: map[string]*querypb.BindVariable{
+			"u":         sqltypes.Int64BindVariable(2),
+			"_id0":      sqltypes.Int64BindVariable(1),
+			"__seq0":    sqltypes.Int64BindVariable(1),
+			"_user_id0": sqltypes.Int64BindVariable(2),
+			"_id1":      sqltypes.Int64BindVariable(2),
+			"__seq1":    sqltypes.Int64BindVariable(2),
+			"_user_id1": sqltypes.Int64BindVariable(2),
+			"_id2":      sqltypes.Int64BindVariable(2),
+			"__seq2":    sqltypes.Int64BindVariable(2),
+			"_user_id2": sqltypes.Int64BindVariable(2),
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
 		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
 	}
-	wantQueries = []querytypes.BoundQuery{{
+	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "select next :n values from user_seq",
-		BindVariables: map[string]interface{}{"n": int64(2)},
+		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)},
 	}, {
 		Sql: "insert into music_user_map(music_id, user_id) values (:music_id0, :user_id0), (:music_id1, :user_id1), (:music_id2, :user_id2)",
-		BindVariables: map[string]interface{}{
-			"user_id0":  uint64(2),
-			"music_id0": int64(1),
-			"user_id1":  uint64(2),
-			"music_id1": int64(2),
-			"user_id2":  uint64(2),
-			"music_id2": int64(2),
+		BindVariables: map[string]*querypb.BindVariable{
+			"user_id0":  sqltypes.Uint64BindVariable(2),
+			"music_id0": sqltypes.Int64BindVariable(1),
+			"user_id1":  sqltypes.Uint64BindVariable(2),
+			"music_id1": sqltypes.Int64BindVariable(2),
+			"user_id2":  sqltypes.Uint64BindVariable(2),
+			"music_id2": sqltypes.Int64BindVariable(2),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {

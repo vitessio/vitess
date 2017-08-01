@@ -30,6 +30,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 type messageReceiver struct {
@@ -405,9 +407,9 @@ func (mm *messageManager) runPoller() {
 		defer mm.DBLock.Unlock()
 
 		size := mm.cache.Size()
-		bindVars := map[string]interface{}{
-			"time_next": int64(time.Now().UnixNano()),
-			"max":       int64(size),
+		bindVars := map[string]*querypb.BindVariable{
+			"time_next": sqltypes.Int64BindVariable(time.Now().UnixNano()),
+			"max":       sqltypes.Int64BindVariable(int64(size)),
 		}
 		qr, err := mm.read(ctx, conn, mm.readByTimeNext, bindVars)
 		if err != nil {
@@ -472,34 +474,46 @@ func purge(tsv TabletService, name string, purgeAfter, purgeInterval time.Durati
 }
 
 // GenerateAckQuery returns the query and bind vars for acking a message.
-func (mm *messageManager) GenerateAckQuery(ids []string) (string, map[string]interface{}) {
-	idbvs := make([]interface{}, len(ids))
-	for i, id := range ids {
-		idbvs[i] = id
+func (mm *messageManager) GenerateAckQuery(ids []string) (string, map[string]*querypb.BindVariable) {
+	idbvs := &querypb.BindVariable{
+		Type:   querypb.Type_TUPLE,
+		Values: make([]*querypb.Value, 0, len(ids)),
 	}
-	return mm.ackQuery.Query, map[string]interface{}{
-		"time_acked": int64(time.Now().UnixNano()),
+	for _, id := range ids {
+		idbvs.Values = append(idbvs.Values, &querypb.Value{
+			Type:  querypb.Type_VARCHAR,
+			Value: []byte(id),
+		})
+	}
+	return mm.ackQuery.Query, map[string]*querypb.BindVariable{
+		"time_acked": sqltypes.Int64BindVariable(time.Now().UnixNano()),
 		"ids":        idbvs,
 	}
 }
 
 // GeneratePostponeQuery returns the query and bind vars for postponing a message.
-func (mm *messageManager) GeneratePostponeQuery(ids []string) (string, map[string]interface{}) {
-	idbvs := make([]interface{}, len(ids))
-	for i, id := range ids {
-		idbvs[i] = id
+func (mm *messageManager) GeneratePostponeQuery(ids []string) (string, map[string]*querypb.BindVariable) {
+	idbvs := &querypb.BindVariable{
+		Type:   querypb.Type_TUPLE,
+		Values: make([]*querypb.Value, 0, len(ids)),
 	}
-	return mm.postponeQuery.Query, map[string]interface{}{
-		"time_now":  int64(time.Now().UnixNano()),
-		"wait_time": int64(mm.ackWaitTime),
+	for _, id := range ids {
+		idbvs.Values = append(idbvs.Values, &querypb.Value{
+			Type:  querypb.Type_VARCHAR,
+			Value: []byte(id),
+		})
+	}
+	return mm.postponeQuery.Query, map[string]*querypb.BindVariable{
+		"time_now":  sqltypes.Int64BindVariable(time.Now().UnixNano()),
+		"wait_time": sqltypes.Int64BindVariable(int64(mm.ackWaitTime)),
 		"ids":       idbvs,
 	}
 }
 
 // GeneratePurgeQuery returns the query and bind vars for purging messages.
-func (mm *messageManager) GeneratePurgeQuery(timeCutoff int64) (string, map[string]interface{}) {
-	return mm.purgeQuery.Query, map[string]interface{}{
-		"time_scheduled": timeCutoff,
+func (mm *messageManager) GeneratePurgeQuery(timeCutoff int64) (string, map[string]*querypb.BindVariable) {
+	return mm.purgeQuery.Query, map[string]*querypb.BindVariable{
+		"time_scheduled": sqltypes.Int64BindVariable(timeCutoff),
 	}
 }
 
@@ -526,8 +540,8 @@ func (mm *messageManager) receiverCount() int {
 	return len(mm.receivers)
 }
 
-func (mm *messageManager) read(ctx context.Context, conn *connpool.DBConn, pq *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {
-	b, err := pq.GenerateQuery(bindVars)
+func (mm *messageManager) read(ctx context.Context, conn *connpool.DBConn, pq *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	b, err := pq.GenerateQuery(bindVars, nil)
 	if err != nil {
 		// TODO(sougou): increment internal error.
 		log.Errorf("Error reading rows from message table: %v", err)

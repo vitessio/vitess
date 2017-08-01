@@ -26,7 +26,6 @@ import (
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -46,12 +45,12 @@ func TestDiscoveryGatewayExecute(t *testing.T) {
 
 func TestDiscoveryGatewayExecuteBatch(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, target *querypb.Target) error {
-		queries := []querytypes.BoundQuery{{Sql: "query", BindVariables: nil}}
+		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
 		_, err := dg.ExecuteBatch(context.Background(), target, queries, false, 0, nil)
 		return err
 	})
 	testDiscoveryGatewayTransact(t, false, func(dg Gateway, target *querypb.Target) error {
-		queries := []querytypes.BoundQuery{{Sql: "query", BindVariables: nil}}
+		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
 		_, err := dg.ExecuteBatch(context.Background(), target, queries, false, 1, nil)
 		return err
 	})
@@ -94,7 +93,7 @@ func TestDiscoveryGatewayBeginExecute(t *testing.T) {
 
 func TestDiscoveryGatewayBeginExecuteBatch(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, target *querypb.Target) error {
-		queries := []querytypes.BoundQuery{{Sql: "query", BindVariables: nil}}
+		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
 		_, _, err := dg.BeginExecuteBatch(context.Background(), target, queries, false, nil)
 		return err
 	})

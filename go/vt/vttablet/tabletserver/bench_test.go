@@ -59,11 +59,11 @@ func BenchmarkExecuteVarBinary(b *testing.B) {
 	defer db.Close()
 	testUtils := newTestUtils()
 	// sql that will be executed in this test
-	bv := map[string]interface{}{
-		"vtg1": sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+	bv := map[string]*querypb.BindVariable{
+		"vtg1": sqltypes.Int64BindVariable(1),
 	}
 	for i := 2; i <= 11; i++ {
-		bv[fmt.Sprintf("vtg%d", i)] = sqltypes.MakeTrusted(sqltypes.VarBinary, benchVarValue)
+		bv[fmt.Sprintf("vtg%d", i)] = sqltypes.BytesBindVariable(benchVarValue)
 	}
 
 	config := testUtils.newQueryServiceConfig()
@@ -88,11 +88,14 @@ func BenchmarkExecuteExpression(b *testing.B) {
 	defer db.Close()
 	testUtils := newTestUtils()
 	// sql that will be executed in this test
-	bv := map[string]interface{}{
-		"vtg1": sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+	bv := map[string]*querypb.BindVariable{
+		"vtg1": sqltypes.Int64BindVariable(1),
 	}
 	for i := 2; i <= 11; i++ {
-		bv[fmt.Sprintf("vtg%d", i)] = sqltypes.MakeTrusted(sqltypes.Expression, benchVarValue)
+		bv[fmt.Sprintf("vtg%d", i)] = &querypb.BindVariable{
+			Type:  querypb.Type_EXPRESSION,
+			Value: benchVarValue,
+		}
 	}
 
 	config := testUtils.newQueryServiceConfig()

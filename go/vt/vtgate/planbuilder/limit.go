@@ -19,7 +19,6 @@ package planbuilder
 import (
 	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
@@ -113,31 +112,23 @@ func (l *limit) SetLimit(limit *sqlparser.Limit) error {
 	if limit.Offset != nil {
 		return errors.New("unsupported: offset limit for cross-shard queries")
 	}
-	sqlVal, ok := limit.Rowcount.(*sqlparser.SQLVal)
+	count, ok := limit.Rowcount.(*sqlparser.SQLVal)
 	if !ok {
 		return fmt.Errorf("unexpected expression in LIMIT: %v", sqlparser.String(limit))
 	}
-	var count interface{}
-	switch sqlVal.Type {
-	case sqlparser.ValArg:
-		count = string(sqlVal.Val)
-	case sqlparser.IntVal:
-		var err error
-		count, err = strconv.ParseInt(string(sqlVal.Val), 10, 64)
-		if err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("unexpected expression in LIMIT: %v", sqlparser.String(limit))
+	pv, err := sqlparser.NewPlanValue(count)
+	if err != nil {
+		return err
 	}
-	l.SetUpperLimit(count)
+	l.elimit.Count = pv
+	l.input.SetUpperLimit(count)
 	return nil
 }
 
 // SetUpperLimit satisfies the builder interface.
-func (l *limit) SetUpperLimit(count interface{}) {
-	l.elimit.Count = count
-	l.input.SetUpperLimit(count)
+// This is a no-op because we actually call SetLimit for this primitive.
+// In the future, we may have to honor this call for subqueries.
+func (l *limit) SetUpperLimit(count *sqlparser.SQLVal) {
 }
 
 // PushMisc satisfies the builder interface.

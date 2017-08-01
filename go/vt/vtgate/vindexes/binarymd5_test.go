@@ -56,7 +56,7 @@ func TestBinaryMD5(t *testing.T) {
 		out: "\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za[",
 	}}
 	for _, tcase := range tcases {
-		got, err := binVindex.(Unique).Map(nil, []interface{}{[]byte(tcase.in)})
+		got, err := binVindex.(Unique).Map(nil, []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(tcase.in))})
 		if err != nil {
 			t.Error(err)
 		}
@@ -64,7 +64,7 @@ func TestBinaryMD5(t *testing.T) {
 		if out != tcase.out {
 			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 		}
-		ok, err := binVindex.Verify(nil, []interface{}{[]byte(tcase.in)}, [][]byte{[]byte(tcase.out)})
+		ok, err := binVindex.Verify(nil, []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(tcase.in))}, [][]byte{[]byte(tcase.out)})
 		if err != nil {
 			t.Error(err)
 		}
@@ -72,40 +72,27 @@ func TestBinaryMD5(t *testing.T) {
 			t.Errorf("Verify(%#v): false, want true", tcase.in)
 		}
 	}
-
-	//Negative Test Case
-	_, err := binVindex.(Unique).Map(nil, []interface{}{1})
-	want := "BinaryMd5.Map :unexpected data type for getBytes: int"
-	if err.Error() != want {
-		t.Error(err)
-	}
 }
 
 func TestBinaryMD5VerifyNeg(t *testing.T) {
-	_, err := binVindex.Verify(nil, []interface{}{[]byte("test1"), []byte("test2")}, [][]byte{[]byte("test1")})
+	_, err := binVindex.Verify(nil, []sqltypes.Value{testVal("test1"), testVal("test2")}, [][]byte{[]byte("test1")})
 	want := "BinaryMD5_hash.Verify: length of ids 2 doesn't match length of ksids 1"
 	if err.Error() != want {
 		t.Error(err.Error())
 	}
 
-	ok, err := binVindex.Verify(nil, []interface{}{[]byte("test2")}, [][]byte{[]byte("test1")})
+	ok, err := binVindex.Verify(nil, []sqltypes.Value{testVal("test2")}, [][]byte{[]byte("test1")})
 	if err != nil {
 		t.Error(err)
 	}
 	if ok {
 		t.Errorf("Verify(%#v): true, want false", []byte("test2"))
 	}
-
-	_, err = binVindex.Verify(nil, []interface{}{1}, [][]byte{[]byte("test1")})
-	want = "BinaryMD5_hash.Verify: unexpected data type for getBytes: int"
-	if err.Error() != want {
-		t.Error(err)
-	}
 }
 
 func TestSQLValue(t *testing.T) {
 	val := sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("Test"))
-	got, err := binVindex.(Unique).Map(nil, []interface{}{val})
+	got, err := binVindex.(Unique).Map(nil, []sqltypes.Value{val})
 	if err != nil {
 		t.Error(err)
 	}

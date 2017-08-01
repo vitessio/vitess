@@ -146,7 +146,7 @@ func (sq *subquery) PushOrderByNull() {
 // into a subquery have not been studied yet.
 // We can consider doing it in the future.
 // TODO(sougou): this could be improved.
-func (sq *subquery) SetUpperLimit(_ interface{}) {
+func (sq *subquery) SetUpperLimit(_ *sqlparser.SQLVal) {
 }
 
 // PushMisc satisfies the builder interface.

@@ -26,6 +26,8 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 )
 
@@ -206,8 +208,12 @@ func (c *conn) Exec(query string, args []driver.Value) (driver.Result, error) {
 	if c.Streaming {
 		return nil, errors.New("Exec not allowed for streaming connections")
 	}
+	bindVars, err := buildBindVars(args)
+	if err != nil {
+		return nil, err
+	}
 
-	qr, err := c.session.Execute(ctx, query, bindVarsFromValues(args))
+	qr, err := c.session.Execute(ctx, query, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +222,10 @@ func (c *conn) Exec(query string, args []driver.Value) (driver.Result, error) {
 
 func (c *conn) Query(query string, args []driver.Value) (driver.Rows, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
-	bindVars := bindVarsFromValues(args)
+	bindVars, err := buildBindVars(args)
+	if err != nil {
+		return nil, err
+	}
 
 	if c.Streaming {
 		stream, err := c.session.StreamExecute(ctx, query, bindVars)
@@ -259,12 +268,16 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 	return s.c.Query(s.query, args)
 }
 
-func bindVarsFromValues(args []driver.Value) map[string]interface{} {
-	bv := make(map[string]interface{}, len(args))
+func buildBindVars(args []driver.Value) (map[string]*querypb.BindVariable, error) {
+	bindVars := make(map[string]*querypb.BindVariable, len(args))
 	for i, v := range args {
-		bv[fmt.Sprintf("v%d", i+1)] = v
+		bv, err := sqltypes.BuildBindVariable(v)
+		if err != nil {
+			return nil, err
+		}
+		bindVars[fmt.Sprintf("v%d", i+1)] = bv
 	}
-	return bv
+	return bindVars, nil
 }
 
 type result struct {

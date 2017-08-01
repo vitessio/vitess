@@ -29,7 +29,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -104,7 +103,7 @@ func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.Al
 func (stc *ScatterConn) Execute(
 	ctx context.Context,
 	query string,
-	bindVars map[string]interface{},
+	bindVars map[string]*querypb.BindVariable,
 	keyspace string,
 	shards []string,
 	tabletType topodatapb.TabletType,
@@ -154,7 +153,7 @@ func (stc *ScatterConn) Execute(
 func (stc *ScatterConn) ExecuteMultiShard(
 	ctx context.Context,
 	keyspace string,
-	shardQueries map[string]querytypes.BoundQuery,
+	shardQueries map[string]*querypb.BoundQuery,
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
@@ -206,7 +205,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 	ctx context.Context,
 	shards []string,
 	sqls map[string]string,
-	bindVars map[string]map[string]interface{},
+	bindVars map[string]map[string]*querypb.BindVariable,
 	keyspace string,
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
@@ -228,18 +227,17 @@ func (stc *ScatterConn) ExecuteEntityIds(
 		notInTransaction,
 		func(target *querypb.Target, shouldBegin bool, transactionID int64) (int64, error) {
 			sql := sqls[target.Shard]
-			bindVar := bindVars[target.Shard]
 			var innerqr *sqltypes.Result
 
 			if shouldBegin {
 				var err error
-				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, sql, bindVar, options)
+				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, sql, bindVars[target.Shard], options)
 				if err != nil {
 					return transactionID, err
 				}
 			} else {
 				var err error
-				innerqr, err = stc.gateway.Execute(ctx, target, sql, bindVar, transactionID, options)
+				innerqr, err = stc.gateway.Execute(ctx, target, sql, bindVars[target.Shard], transactionID, options)
 				if err != nil {
 					return transactionID, err
 				}
@@ -265,7 +263,7 @@ type scatterBatchRequest struct {
 }
 
 type shardBatchRequest struct {
-	Queries         []querytypes.BoundQuery
+	Queries         []*querypb.BoundQuery
 	Keyspace, Shard string
 	ResultIndexes   []int
 }
@@ -361,7 +359,7 @@ func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *boo
 func (stc *ScatterConn) StreamExecute(
 	ctx context.Context,
 	query string,
-	bindVars map[string]interface{},
+	bindVars map[string]*querypb.BindVariable,
 	keyspace string,
 	shards []string,
 	tabletType topodatapb.TabletType,
@@ -388,7 +386,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	ctx context.Context,
 	query string,
 	keyspace string,
-	shardVars map[string]map[string]interface{},
+	shardVars map[string]map[string]*querypb.BindVariable,
 	tabletType topodatapb.TabletType,
 	options *querypb.ExecuteOptions,
 	callback func(reply *sqltypes.Result) error,
@@ -446,21 +444,21 @@ func (stc *ScatterConn) UpdateStream(ctx context.Context, target *querypb.Target
 }
 
 // SplitQuery scatters a SplitQuery request to the shards whose names are given in 'shards'.
-// For every set of querytypes.QuerySplit's received from a shard, it applies the given
-// 'querySplitToPartFunc' function to convert each querytypes.QuerySplit into a
+// For every set of *querypb.QuerySplit's received from a shard, it applies the given
+// 'querySplitToPartFunc' function to convert each *querypb.QuerySplit into a
 // 'SplitQueryResponse_Part' message. Finally, it aggregates the obtained
 // SplitQueryResponse_Parts across all shards and returns the resulting slice.
 func (stc *ScatterConn) SplitQuery(
 	ctx context.Context,
 	sql string,
-	bindVariables map[string]interface{},
+	bindVariables map[string]*querypb.BindVariable,
 	splitColumns []string,
 	perShardSplitCount int64,
 	numRowsPerQueryPart int64,
 	algorithm querypb.SplitQueryRequest_Algorithm,
 	shards []string,
 	querySplitToQueryPartFunc func(
-		querySplit *querytypes.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error),
+		querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error),
 	keyspace string) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 
 	tabletType := topodatapb.TabletType_RDONLY
@@ -477,7 +475,7 @@ func (stc *ScatterConn) SplitQuery(
 		tabletType,
 		func(target *querypb.Target) error {
 			// Get all splits from this shard
-			query := querytypes.BoundQuery{
+			query := &querypb.BoundQuery{
 				Sql:           sql,
 				BindVariables: bindVariables,
 			}
@@ -494,7 +492,7 @@ func (stc *ScatterConn) SplitQuery(
 			}
 			parts := make([]*vtgatepb.SplitQueryResponse_Part, len(querySplits))
 			for i, querySplit := range querySplits {
-				parts[i], err = querySplitToQueryPartFunc(&querySplit, target.Shard)
+				parts[i], err = querySplitToQueryPartFunc(querySplit, target.Shard)
 				if err != nil {
 					return err
 				}
@@ -716,7 +714,7 @@ func transactionInfo(
 	return true, 0
 }
 
-func getShards(shardVars map[string]map[string]interface{}) []string {
+func getShards(shardVars map[string]map[string]*querypb.BindVariable) []string {
 	shards := make([]string, 0, len(shardVars))
 	for k := range shardVars {
 		shards = append(shards, k)

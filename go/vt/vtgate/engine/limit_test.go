@@ -19,9 +19,11 @@ package engine
 import (
 	"errors"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 func TestLimitExecute(t *testing.T) {
@@ -40,7 +42,7 @@ func TestLimitExecute(t *testing.T) {
 	}
 
 	l := &Limit{
-		Count: 2,
+		Count: int64PlanValue(2),
 		Input: tp,
 	}
 
@@ -60,7 +62,7 @@ func TestLimitExecute(t *testing.T) {
 
 	// Test with limit equal to input.
 	tp.rewind()
-	l.Count = 3
+	l.Count = int64PlanValue(3)
 	result, err = l.Execute(nil, nil, nil, false)
 	if err != nil {
 		t.Error(err)
@@ -71,7 +73,7 @@ func TestLimitExecute(t *testing.T) {
 
 	// Test with limit higher than input.
 	tp.rewind()
-	l.Count = 4
+	l.Count = int64PlanValue(4)
 	result, err = l.Execute(nil, nil, nil, false)
 	if err != nil {
 		t.Error(err)
@@ -82,8 +84,8 @@ func TestLimitExecute(t *testing.T) {
 
 	// Test with bind vars.
 	tp.rewind()
-	l.Count = ":l"
-	result, err = l.Execute(nil, map[string]interface{}{"l": 2}, nil, false)
+	l.Count = sqltypes.PlanValue{Key: "l"}
+	result, err = l.Execute(nil, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(2)}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -108,7 +110,7 @@ func TestLimitStreamExecute(t *testing.T) {
 	}
 
 	l := &Limit{
-		Count: 2,
+		Count: int64PlanValue(2),
 		Input: tp,
 	}
 
@@ -132,9 +134,9 @@ func TestLimitStreamExecute(t *testing.T) {
 
 	// Test with bind vars.
 	tp.rewind()
-	l.Count = ":l"
+	l.Count = sqltypes.PlanValue{Key: "l"}
 	results = nil
-	err = l.StreamExecute(nil, map[string]interface{}{"l": 2}, nil, false, func(qr *sqltypes.Result) error {
+	err = l.StreamExecute(nil, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(2)}, nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -147,7 +149,7 @@ func TestLimitStreamExecute(t *testing.T) {
 
 	// Test with limit equal to input
 	tp.rewind()
-	l.Count = 3
+	l.Count = int64PlanValue(3)
 	results = nil
 	err = l.StreamExecute(nil, nil, nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
@@ -169,7 +171,7 @@ func TestLimitStreamExecute(t *testing.T) {
 
 	// Test with limit higher than input.
 	tp.rewind()
-	l.Count = 4
+	l.Count = int64PlanValue(4)
 	results = nil
 	err = l.StreamExecute(nil, nil, nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
@@ -207,7 +209,7 @@ func TestLimitGetFields(t *testing.T) {
 func TestLimitInputFail(t *testing.T) {
 	tp := &fakePrimitive{sendErr: errors.New("input fail")}
 
-	l := &Limit{Count: 1, Input: tp}
+	l := &Limit{Count: int64PlanValue(1), Input: tp}
 
 	want := "input fail"
 	if _, err := l.Execute(nil, nil, nil, false); err == nil || err.Error() != want {
@@ -228,22 +230,22 @@ func TestLimitInputFail(t *testing.T) {
 
 func TestLimitInvalidCount(t *testing.T) {
 	l := &Limit{
-		Count: "l",
+		Count: sqltypes.PlanValue{Key: "l"},
 	}
 	_, err := l.fetchCount(nil, nil)
-	want := "could not find bind var l"
+	want := "missing bind var l"
 	if err == nil || err.Error() != want {
 		t.Errorf("fetchCount: %v, want %s", err, want)
 	}
 
-	l.Count = 1.2
+	l.Count = sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.Float64, []byte("1.2"))}
 	_, err = l.fetchCount(nil, nil)
-	want = "getNumber: unexpected type for 1.2: float64"
+	want = "could not parse value: 1.2"
 	if err == nil || err.Error() != want {
 		t.Errorf("fetchCount: %v, want %s", err, want)
 	}
 
-	l.Count = uint64(18446744073709551615)
+	l.Count = sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.Uint64, []byte("18446744073709551615"))}
 	_, err = l.fetchCount(nil, nil)
 	want = "requested limit is out of range: 18446744073709551615"
 	if err == nil || err.Error() != want {
@@ -260,4 +262,8 @@ func TestLimitInvalidCount(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("l.Execute: %v, want %s", err, want)
 	}
+}
+
+func int64PlanValue(v int64) sqltypes.PlanValue {
+	return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.Int64, strconv.AppendInt(nil, v, 10))}
 }
