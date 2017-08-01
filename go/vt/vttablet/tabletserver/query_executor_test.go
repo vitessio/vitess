@@ -21,8 +21,10 @@ import (
 	"io"
 	"math/rand"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -36,6 +38,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/messager"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/rules"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -257,6 +260,42 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
+	}
+}
+
+func TestQueryExecutorInsertMessageACL(t *testing.T) {
+	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
+	tableacl.Register(aclName, &simpleacl.Factory{})
+	tableacl.SetDefaultACL(aclName)
+	config := &tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{{
+			Name:                 "group02",
+			TableNamesOrPrefixes: []string{"msg"},
+			Readers:              []string{"u2"},
+		}},
+	}
+	if err := tableacl.InitFromProto(config); err != nil {
+		t.Fatalf("unable to load tableacl config, error: %v", err)
+	}
+
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "insert into msg(time_scheduled, id, message) values(1, 2, 3)"
+
+	callerID := &querypb.VTGateCallerID{
+		Username: "u2",
+	}
+	ctx := callerid.NewContext(context.Background(), nil, callerID)
+
+	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
+	qre := newTestQueryExecutor(ctx, tsv, query, 0)
+	defer tsv.StopService()
+
+	_, err := qre.Execute()
+	want := `table acl error: "u2" [] cannot run INSERT_MESSAGE on table "msg"`
+	if err == nil || err.Error() != want {
+		t.Errorf("qre.Execute(insert into msg) error: %v, want %s", err, want)
 	}
 }
 
@@ -1076,6 +1115,147 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
+	}
+}
+
+func TestQueryExecutorMessageStream(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutor")
+
+	plan, err := tsv.qe.GetMessageStreamPlan("msg")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// We can't call newTestQueryExecutor because there's no
+	// SQL syntax for message streaming yet.
+	qre := &QueryExecutor{
+		ctx:      ctx,
+		query:    "stream from msg",
+		plan:     plan,
+		logStats: logStats,
+		tsv:      tsv,
+	}
+	checkPlanID(t, planbuilder.PlanMessageStream, qre.plan.PlanID)
+
+	ch := make(chan *sqltypes.Result, 1)
+	done := make(chan struct{})
+	skippedField := false
+	go func() {
+		if err := qre.MessageStream(func(qr *sqltypes.Result) error {
+			// Skip first result (field info).
+			if !skippedField {
+				skippedField = true
+				return nil
+			}
+			ch <- qr
+			return io.EOF
+		}); err != nil {
+			t.Error(err)
+		}
+		close(done)
+	}()
+
+	newMessages := map[string][]*messager.MessageRow{
+		"msg": {
+			&messager.MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("1")), sqltypes.NULL}},
+		},
+	}
+	// We hack-push a new message into the cache, which will cause
+	// the message manager to send it.
+	// We may have to iterate a few times before the stream kicks in.
+	for {
+		runtime.Gosched()
+		time.Sleep(10 * time.Millisecond)
+		unlock := tsv.messager.LockDB(newMessages, nil)
+		tsv.messager.UpdateCaches(newMessages, nil)
+		unlock()
+		want := &sqltypes.Result{
+			Rows: [][]sqltypes.Value{{
+				sqltypes.MakeString([]byte("1")),
+				sqltypes.NULL,
+			}},
+		}
+		select {
+		case got := <-ch:
+			if !want.Equal(got) {
+				t.Errorf("Stream:\n%v, want\n%v", got, want)
+			}
+		default:
+			continue
+		}
+		break
+	}
+	// This should not hang.
+	<-done
+}
+
+func TestQueryExecutorMessageStreamACL(t *testing.T) {
+	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
+	tableacl.Register(aclName, &simpleacl.Factory{})
+	tableacl.SetDefaultACL(aclName)
+	config := &tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{{
+			Name:                 "group02",
+			TableNamesOrPrefixes: []string{"msg"},
+			Readers:              []string{"u2"},
+			Writers:              []string{"u1"},
+		}},
+	}
+	if err := tableacl.InitFromProto(config); err != nil {
+		t.Fatalf("unable to load tableacl config, error: %v", err)
+	}
+
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	tsv := newTestTabletServer(context.Background(), enableStrictTableACL, db)
+	defer tsv.StopService()
+
+	plan, err := tsv.qe.GetMessageStreamPlan("msg")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	callerID := &querypb.VTGateCallerID{
+		Username: "u1",
+	}
+	ctx := callerid.NewContext(context.Background(), nil, callerID)
+	qre := &QueryExecutor{
+		ctx:      ctx,
+		query:    "stream from msg",
+		plan:     plan,
+		logStats: tabletenv.NewLogStats(ctx, "TestQueryExecutor"),
+		tsv:      tsv,
+	}
+
+	// Should not fail because u1 has permission.
+	err = qre.MessageStream(func(qr *sqltypes.Result) error {
+		return io.EOF
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	callerID = &querypb.VTGateCallerID{
+		Username: "u2",
+	}
+	qre.ctx = callerid.NewContext(context.Background(), nil, callerID)
+	// Should fail because u2 does not have permission.
+	err = qre.MessageStream(func(qr *sqltypes.Result) error {
+		return io.EOF
+	})
+
+	want := `table acl error: "u2" [] cannot run MESSAGE_STREAM on table "msg"`
+	if err == nil || err.Error() != want {
+		t.Errorf("qre.MessageStream(msg) error: %v, want %s", err, want)
+	}
+	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
+		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_PERMISSION_DENIED)
 	}
 }
 

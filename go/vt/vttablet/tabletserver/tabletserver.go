@@ -1073,20 +1073,18 @@ func (tsv *TabletServer) MessageStream(ctx context.Context, target *querypb.Targ
 		"MessageStream", "stream", nil,
 		target, false, false,
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			// TODO(sougou): perform ACL checks.
-			done, err := tsv.messager.Subscribe(name, func(r *sqltypes.Result) error {
-				select {
-				case <-ctx.Done():
-					return io.EOF
-				default:
-				}
-				return callback(r)
-			})
+			plan, err := tsv.qe.GetMessageStreamPlan(name)
 			if err != nil {
 				return err
 			}
-			<-done
-			return nil
+			qre := &QueryExecutor{
+				query:    "stream from msg",
+				plan:     plan,
+				ctx:      ctx,
+				logStats: logStats,
+				tsv:      tsv,
+			}
+			return qre.MessageStream(callback)
 		},
 	)
 }
