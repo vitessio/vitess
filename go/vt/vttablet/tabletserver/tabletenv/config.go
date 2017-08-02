@@ -152,7 +152,7 @@ var DefaultQsConfig = TabletConfig{
 	TransactionTimeout:      30,
 	TxShutDownGracePeriod:   0,
 	MaxResultSize:           10000,
-	WarnResultSize:          10000,
+	WarnResultSize:          0,
 	MaxDMLRows:              500,
 	QueryCacheSize:          5000,
 	SchemaReloadTime:        30 * 60,
