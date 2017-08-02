@@ -750,8 +750,9 @@ type poolConn interface {
 func (qre *QueryExecutor) execSQL(conn poolConn, sql string, wantfields bool) (*sqltypes.Result, error) {
 	defer qre.logStats.AddRewrittenSQL(sql, time.Now())
 	res, err := conn.Exec(qre.ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
-	if res != nil && qre.tsv.qe.warnResultSize.Get() > 0 && int64(len(res.Rows)) > qre.tsv.qe.warnResultSize.Get() {
-		log.Warningf("Results returned exceeds warning threshold: %q", sql)
+	warnThreshold := qre.tsv.qe.warnResultSize.Get()
+	if res != nil && warnThreshold > 0 && int64(len(res.Rows)) > warnThreshold {
+		log.Warningf("Results returned (%v) exceeds warning threshold (%v): %q", len(res.Rows), warnThreshold, sql)
 	}
 	return res, err
 }
