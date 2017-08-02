@@ -97,3 +97,45 @@ func TestCheckOwnership(t *testing.T) {
 		}
 	}
 }
+
+type identTestCase struct {
+	tablet *topodatapb.Tablet
+	ident  string
+}
+
+func TestIdent(t *testing.T) {
+	tests := []identTestCase{
+		{
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks1",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "cell",
+					Uid:  1,
+				},
+				Hostname: "host1",
+			},
+			ident: "cell-1 (host1)",
+		},
+		{
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks1",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "cell",
+					Uid:  1,
+				},
+				Hostname: "host1",
+				Tags: map[string]string{
+					"tag1": "val1",
+				},
+			},
+			ident: "cell-1 (host1 tag1=val1)",
+		},
+	}
+
+	for _, test := range tests {
+		got := TabletIdent(test.tablet)
+		if got != test.ident {
+			t.Errorf("TableIdent mismatch: got %s want %s", got, test.ident)
+		}
+	}
+}
