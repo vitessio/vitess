@@ -1096,7 +1096,7 @@ func (tsv *TabletServer) MessageStream(ctx context.Context, target *querypb.Targ
 func (tsv *TabletServer) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (count int64, err error) {
 	sids := make([]string, 0, len(ids))
 	for _, val := range ids {
-		sids = append(sids, sqltypes.ProtoToValue(val).String())
+		sids = append(sids, sqltypes.ProtoToValue(val).ToString())
 	}
 	return tsv.execDML(ctx, target, func() (string, map[string]*querypb.BindVariable, error) {
 		return tsv.messager.GenerateAckQuery(name, sids)

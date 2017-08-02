@@ -361,7 +361,7 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 	}
 	ids := make([]string, len(qr.Rows))
 	for i, row := range qr.Rows {
-		ids[i] = row[0].String()
+		ids[i] = row[0].ToString()
 	}
 	// postpone should discard, but this is a safety measure
 	// in case it fails.

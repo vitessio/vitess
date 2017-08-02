@@ -191,7 +191,7 @@ func (mysqld *Mysqld) fetchVariables(ctx context.Context, pattern string) (map[s
 	}
 	varMap := make(map[string]string, len(qr.Rows))
 	for _, row := range qr.Rows {
-		varMap[row[0].String()] = row[1].String()
+		varMap[row[0].ToString()] = row[1].ToString()
 	}
 	return varMap, nil
 }

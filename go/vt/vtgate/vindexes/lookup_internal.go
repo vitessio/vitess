@@ -74,7 +74,7 @@ func (lkp *lookup) MapUniqueLookup(vcursor VCursor, ids []sqltypes.Value) ([][]b
 			}
 			out = append(out, vhash(num))
 		} else {
-			out = append(out, result.Rows[0][0].Bytes())
+			out = append(out, result.Rows[0][0].ToBytes())
 		}
 	}
 	return out, nil
@@ -101,7 +101,7 @@ func (lkp *lookup) MapNonUniqueLookup(vcursor VCursor, ids []sqltypes.Value) ([]
 			}
 		} else {
 			for _, row := range result.Rows {
-				ksids = append(ksids, row[0].Bytes())
+				ksids = append(ksids, row[0].ToBytes())
 			}
 		}
 		out = append(out, ksids)

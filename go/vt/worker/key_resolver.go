@@ -76,7 +76,7 @@ func (r *v2Resolver) keyspaceID(row []sqltypes.Value) ([]byte, error) {
 	v := row[r.shardingColumnIndex]
 	switch r.keyspaceInfo.ShardingColumnType {
 	case topodatapb.KeyspaceIdType_BYTES:
-		return v.Raw(), nil
+		return v.ToBytes(), nil
 	case topodatapb.KeyspaceIdType_UINT64:
 		i, err := sqltypes.ToUint64(v)
 		if err != nil {

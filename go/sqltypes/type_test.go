@@ -111,9 +111,6 @@ func TestTypeValues(t *testing.T) {
 		defined:  Set,
 		expected: 27 | flagIsQuoted,
 	}, {
-		defined:  Tuple,
-		expected: 28,
-	}, {
 		defined:  Geometry,
 		expected: 29 | flagIsQuoted,
 	}, {
@@ -162,7 +159,6 @@ func TestCategory(t *testing.T) {
 		Bit,
 		Enum,
 		Set,
-		Tuple,
 		Geometry,
 		TypeJSON,
 		Expression,
@@ -196,7 +192,7 @@ func TestCategory(t *testing.T) {
 			}
 			matched = true
 		}
-		if typ == Null || typ == Decimal || typ == Expression || typ == Tuple {
+		if typ == Null || typ == Decimal || typ == Expression {
 			if matched {
 				t.Errorf("%v matched more than one category", typ)
 			}

@@ -437,7 +437,7 @@ func (sq *testQueryService) modifyFirstRows(count int) {
 	// Modify the text of the first "count" rows.
 	for i := 0; i < count; i++ {
 		row := sq.rows[i]
-		row[1] = sqltypes.NewVarBinary(fmt.Sprintf("OUTDATED ROW: %v", row[1].String()))
+		row[1] = sqltypes.NewVarBinary(fmt.Sprintf("OUTDATED ROW: %v", row[1]))
 	}
 }
 

@@ -174,10 +174,6 @@ func TestNewValue(t *testing.T) {
 		inType: Expression,
 		inVal:  "a",
 		outErr: "invalid type specified for MakeValue: EXPRESSION",
-	}, {
-		inType: Tuple,
-		inVal:  "a",
-		outErr: "invalid type specified for MakeValue: TUPLE",
 	}}
 	for _, tcase := range testcases {
 		v, err := NewValue(tcase.inType, []byte(tcase.inVal))
@@ -192,7 +188,7 @@ func TestNewValue(t *testing.T) {
 			continue
 		}
 		if !reflect.DeepEqual(v, tcase.outVal) {
-			t.Errorf("ValueFromBytes(%v, %v) = %v, want %v", tcase.inType, tcase.inVal, makePretty(v), makePretty(tcase.outVal))
+			t.Errorf("ValueFromBytes(%v, %v) = %v, want %v", tcase.inType, tcase.inVal, v, tcase.outVal)
 		}
 	}
 }
@@ -216,12 +212,12 @@ func TestNew(t *testing.T) {
 func TestMakeTrusted(t *testing.T) {
 	v := MakeTrusted(Null, []byte("abcd"))
 	if !reflect.DeepEqual(v, NULL) {
-		t.Errorf("MakeTrusted(Null...) = %v, want null", makePretty(v))
+		t.Errorf("MakeTrusted(Null...) = %v, want null", v)
 	}
 	v = MakeTrusted(Int64, []byte("1"))
 	want := TestValue(Int64, "1")
 	if !reflect.DeepEqual(v, want) {
-		t.Errorf("MakeTrusted(Int64, \"1\") = %v, want %v", makePretty(v), makePretty(want))
+		t.Errorf("MakeTrusted(Int64, \"1\") = %v, want %v", v, want)
 	}
 }
 
@@ -256,7 +252,7 @@ func TestIntegralValue(t *testing.T) {
 			continue
 		}
 		if !reflect.DeepEqual(v, tcase.outVal) {
-			t.Errorf("BuildIntegral(%v) = %v, want %v", tcase.in, makePretty(v), makePretty(tcase.outVal))
+			t.Errorf("BuildIntegral(%v) = %v, want %v", tcase.in, v, tcase.outVal)
 		}
 	}
 }
@@ -291,7 +287,7 @@ func TestInerfaceValue(t *testing.T) {
 			continue
 		}
 		if !reflect.DeepEqual(v, tcase.out) {
-			t.Errorf("BuildValue(%#v) = %v, want %v", tcase.in, makePretty(v), makePretty(tcase.out))
+			t.Errorf("BuildValue(%#v) = %v, want %v", tcase.in, v, tcase.out)
 		}
 	}
 
@@ -313,8 +309,8 @@ func TestAccessors(t *testing.T) {
 	if v.Len() != 1 {
 		t.Errorf("v.Len=%d, want 1", v.Len())
 	}
-	if v.String() != "1" {
-		t.Errorf("v.String=%s, want 1", v.String())
+	if v.ToString() != "1" {
+		t.Errorf("v.String=%s, want 1", v.ToString())
 	}
 	if v.IsNull() {
 		t.Error("v.IsNull: true, want false")
@@ -342,15 +338,26 @@ func TestAccessors(t *testing.T) {
 	}
 }
 
-func TestBytes(t *testing.T) {
+func TestToBytesAndString(t *testing.T) {
 	for _, v := range []Value{
 		NULL,
 		TestValue(Int64, "1"),
 		TestValue(Int64, "12"),
 	} {
-		if b := v.Bytes(); bytes.Compare(b, v.Raw()) != 0 {
-			t.Errorf("v1.Bytes: %s, want %s", b, v.Raw())
+		if b := v.ToBytes(); bytes.Compare(b, v.Raw()) != 0 {
+			t.Errorf("%v.ToBytes: %s, want %s", v, b, v.Raw())
 		}
+		if s := v.ToString(); s != string(v.Raw()) {
+			t.Errorf("%v.ToString: %s, want %s", v, s, v.Raw())
+		}
+	}
+
+	tv := TestValue(Expression, "aa")
+	if b := tv.ToBytes(); b != nil {
+		t.Errorf("%v.ToBytes: %s, want nil", tv, b)
+	}
+	if s := tv.ToString(); s != "" {
+		t.Errorf("%v.ToString: %s, want \"\"", tv, s)
 	}
 }
 
@@ -380,12 +387,12 @@ func TestEncode(t *testing.T) {
 		buf := &bytes.Buffer{}
 		tcase.in.EncodeSQL(buf)
 		if tcase.outSQL != buf.String() {
-			t.Errorf("%v.EncodeSQL = %q, want %q", makePretty(tcase.in), buf.String(), tcase.outSQL)
+			t.Errorf("%v.EncodeSQL = %q, want %q", tcase.in, buf.String(), tcase.outSQL)
 		}
 		buf = &bytes.Buffer{}
 		tcase.in.EncodeASCII(buf)
 		if tcase.outASCII != buf.String() {
-			t.Errorf("%v.EncodeASCII = %q, want %q", makePretty(tcase.in), buf.String(), tcase.outASCII)
+			t.Errorf("%v.EncodeASCII = %q, want %q", tcase.in, buf.String(), tcase.outASCII)
 		}
 	}
 }
@@ -398,14 +405,4 @@ func TestEncodeMap(t *testing.T) {
 	if SQLDecodeMap[DontEscape] != DontEscape {
 		t.Errorf("SQLDecodeMap[DontEscape] = %v, want %v", SQLEncodeMap[DontEscape], DontEscape)
 	}
-}
-
-type prettyVal struct {
-	Type  querypb.Type
-	Value string
-}
-
-// makePretty converts Value to a struct that's readable when printed.
-func makePretty(v Value) prettyVal {
-	return prettyVal{v.typ, string(v.val)}
 }

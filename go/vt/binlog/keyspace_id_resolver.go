@@ -100,7 +100,7 @@ type keyspaceIDResolverFactoryV2 struct {
 func (r *keyspaceIDResolverFactoryV2) keyspaceID(v sqltypes.Value) ([]byte, error) {
 	switch r.shardingColumnType {
 	case topodatapb.KeyspaceIdType_BYTES:
-		return v.Raw(), nil
+		return v.ToBytes(), nil
 	case topodatapb.KeyspaceIdType_UINT64:
 		i, err := sqltypes.ToUint64(v)
 		if err != nil {

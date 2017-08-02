@@ -20,7 +20,6 @@ import (
 	"io"
 	"reflect"
 	"runtime"
-	"strconv"
 	"testing"
 	"time"
 
@@ -315,7 +314,7 @@ func getTimeEpoch(qr *sqltypes.Result) (int64, int64) {
 	if len(qr.Rows) != 1 {
 		return 0, 0
 	}
-	t, _ := strconv.Atoi(qr.Rows[0][0].String())
-	e, _ := strconv.Atoi(qr.Rows[0][1].String())
-	return int64(t), int64(e)
+	t, _ := sqltypes.ToInt64(qr.Rows[0][0])
+	e, _ := sqltypes.ToInt64(qr.Rows[0][1])
+	return t, e
 }

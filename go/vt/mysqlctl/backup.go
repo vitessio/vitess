@@ -535,7 +535,7 @@ func checkNoDB(ctx context.Context, mysqld MysqlDaemon, dbName string) (bool, er
 	}
 
 	for _, row := range qr.Rows {
-		if row[0].String() == dbName {
+		if row[0].ToString() == dbName {
 			tableQr, err := mysqld.FetchSuperQuery(ctx, "SHOW TABLES FROM "+dbName)
 			if err != nil {
 				return false, fmt.Errorf("checkNoDB failed: %v", err)

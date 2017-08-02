@@ -610,23 +610,23 @@ func (shardSwap *shardSchemaSwap) readShardMetadata(metadata *shardSwapMetadata,
 		return
 	}
 	for _, row := range queryResult.Rows {
-		switch row[0].String() {
+		switch row[0].ToString() {
 		case lastStartedMetadataName:
 			swapID, err := sqltypes.ToUint64(row[1])
 			if err != nil {
-				log.Warningf("Could not parse value of last started schema swap id ('%s'), ignoring the value: %v", row[1].String(), err)
+				log.Warningf("Could not parse value of last started schema swap id %v, ignoring the value: %v", row[1], err)
 			} else {
 				metadata.lastStartedSwap = swapID
 			}
 		case lastFinishedMetadataName:
 			swapID, err := sqltypes.ToUint64(row[1])
 			if err != nil {
-				log.Warningf("Could not parse value of last finished schema swap id ('%s'), ignoring the value: %v", row[1].String(), err)
+				log.Warningf("Could not parse value of last finished schema swap id %v, ignoring the value: %v", row[1], err)
 			} else {
 				metadata.lastFinishedSwap = swapID
 			}
 		case currentSQLMetadataName:
-			metadata.currentSQL = row[1].String()
+			metadata.currentSQL = row[1].ToString()
 		}
 	}
 }

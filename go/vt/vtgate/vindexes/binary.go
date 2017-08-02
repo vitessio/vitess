@@ -49,7 +49,7 @@ func (vind *Binary) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) (boo
 		return false, fmt.Errorf("Binary.Verify: length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
 	}
 	for i := range ids {
-		if bytes.Compare(ids[i].Bytes(), ksids[i]) != 0 {
+		if bytes.Compare(ids[i].ToBytes(), ksids[i]) != 0 {
 			return false, nil
 		}
 	}
@@ -60,7 +60,7 @@ func (vind *Binary) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) (boo
 func (vind *Binary) Map(_ VCursor, ids []sqltypes.Value) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
-		out = append(out, id.Bytes())
+		out = append(out, id.ToBytes())
 	}
 	return out, nil
 }

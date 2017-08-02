@@ -695,7 +695,7 @@ func printQueryResult(writer io.Writer, qr *sqltypes.Result) {
 	for _, row := range qr.Rows {
 		vals := make([]string, 0, len(row))
 		for _, val := range row {
-			vals = append(vals, val.String())
+			vals = append(vals, val.ToString())
 		}
 		table.Append(vals)
 	}

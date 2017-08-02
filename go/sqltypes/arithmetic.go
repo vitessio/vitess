@@ -18,7 +18,6 @@ package sqltypes
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"strconv"
 
@@ -72,8 +71,12 @@ func NullsafeAdd(v1, v2 Value, resultType querypb.Type) (Value, error) {
 // NULL is the lowest value. If any value is
 // numeric, then a numeric comparison is performed after
 // necessary conversions. If none are numeric, then it's
-// a simple binary comparison. Text values return an error.
+// a simple binary comparison. Uncomparable values return an error.
 func NullsafeCompare(v1, v2 Value) (int, error) {
+	// Based on the categorization defined for the types,
+	// we're going to allow comparison of the following:
+	// Null, isNumber, IsBinary. This will exclude IsQuoted
+	// types that are not Binary, and Expression.
 	if v1.IsNull() {
 		if v2.IsNull() {
 			return 0, nil
@@ -82,9 +85,6 @@ func NullsafeCompare(v1, v2 Value) (int, error) {
 	}
 	if v2.IsNull() {
 		return 1, nil
-	}
-	if v1.IsText() || v2.IsText() {
-		return 0, errors.New("text fields cannot be compared")
 	}
 	if isNumber(v1.Type()) || isNumber(v2.Type()) {
 		lv1, err := newNumeric(v1)
@@ -97,8 +97,10 @@ func NullsafeCompare(v1, v2 Value) (int, error) {
 		}
 		return compareNumeric(lv1, lv2), nil
 	}
-	// TODO(sougou): perform a more type-aware comparison instead.
-	return bytes.Compare(v1.Raw(), v2.Raw()), nil
+	if v1.IsBinary() && v2.IsBinary() {
+		return bytes.Compare(v1.ToBytes(), v2.ToBytes()), nil
+	}
+	return 0, fmt.Errorf("types are not comparable: %v vs %v", v1.Type(), v2.Type())
 }
 
 // Min returns the minimum of v1 and v2. If one of the
@@ -142,26 +144,26 @@ func Cast(v Value, typ querypb.Type) (Value, error) {
 		return v, nil
 	}
 	if IsSigned(typ) && v.IsSigned() {
-		return MakeTrusted(typ, v.Raw()), nil
+		return MakeTrusted(typ, v.ToBytes()), nil
 	}
 	if IsUnsigned(typ) && v.IsUnsigned() {
-		return MakeTrusted(typ, v.Raw()), nil
+		return MakeTrusted(typ, v.ToBytes()), nil
 	}
 	if (IsFloat(typ) || typ == Decimal) && (v.IsIntegral() || v.IsFloat() || v.Type() == Decimal) {
-		return MakeTrusted(typ, v.Raw()), nil
+		return MakeTrusted(typ, v.ToBytes()), nil
 	}
 	if IsQuoted(typ) && (v.IsIntegral() || v.IsFloat() || v.Type() == Decimal || v.IsQuoted()) {
-		return MakeTrusted(typ, v.Raw()), nil
+		return MakeTrusted(typ, v.ToBytes()), nil
 	}
 
 	// Explicitly disallow Expression.
 	if v.Type() == Expression {
-		return NULL, fmt.Errorf("%v value cannot be cast to %v", v.Type(), typ)
+		return NULL, fmt.Errorf("%v cannot be cast to %v", v, typ)
 	}
 
 	// If the above fast-paths were not possible,
 	// go through full validation.
-	return NewValue(typ, v.Raw())
+	return NewValue(typ, v.ToBytes())
 }
 
 // ToUint64 converts Value to uint64.
@@ -226,23 +228,23 @@ func ToNative(v Value) (interface{}, error) {
 	switch {
 	case v.Type() == Null:
 		// no-op
-	case IsSigned(v.Type()):
+	case v.IsSigned():
 		return ToInt64(v)
-	case IsUnsigned(v.Type()):
+	case v.IsUnsigned():
 		return ToUint64(v)
-	case IsFloat(v.Type()):
+	case v.IsFloat():
 		return ToFloat64(v)
-	case IsQuoted(v.Type()) || v.Type() == Decimal:
+	case v.IsQuoted() || v.Type() == Decimal:
 		out = v.val
 	case v.Type() == Expression:
-		err = errors.New("EXPRESSION cannot be converted to a go type")
+		err = fmt.Errorf("%v cannot be converted to a go type", v)
 	}
 	return out, err
 }
 
 // newNumeric parses a value and produces an Int64, Uint64 or Float64.
 func newNumeric(v Value) (result numeric, err error) {
-	str := v.String()
+	str := v.ToString()
 	switch {
 	case v.IsSigned():
 		result.ival, err = strconv.ParseInt(str, 10, 64)
@@ -275,7 +277,7 @@ func newNumeric(v Value) (result numeric, err error) {
 
 // newIntegralNumeric parses a value and produces an Int64 or Uint64.
 func newIntegralNumeric(v Value) (result numeric, err error) {
-	str := v.String()
+	str := v.ToString()
 	switch {
 	case v.IsSigned():
 		result.ival, err = strconv.ParseInt(str, 10, 64)

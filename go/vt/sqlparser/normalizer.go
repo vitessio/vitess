@@ -77,7 +77,7 @@ func Normalize(stmt Statement, bindVars map[string]*querypb.BindVariable, prefix
 			// The RHS is a tuple of values.
 			// Make a list bindvar.
 			bvals := &querypb.BindVariable{
-				Type: sqltypes.Tuple,
+				Type: querypb.Type_TUPLE,
 			}
 			for _, val := range tupleVals {
 				bval := sqlToBindvar(val)

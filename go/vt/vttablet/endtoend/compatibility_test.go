@@ -17,7 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -550,7 +549,6 @@ func TestMiscTypes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Printf("val: %q\n", qr.Rows[0][5].String())
 	want := sqltypes.Result{
 		Fields: []*querypb.Field{
 			{

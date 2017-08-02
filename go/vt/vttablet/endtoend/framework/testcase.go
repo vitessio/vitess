@@ -177,7 +177,7 @@ func RowsToStrings(qr *sqltypes.Result) [][]string {
 	for _, row := range qr.Rows {
 		var srow []string
 		for _, cell := range row {
-			srow = append(srow, cell.String())
+			srow = append(srow, cell.ToString())
 		}
 		result = append(result, srow)
 	}

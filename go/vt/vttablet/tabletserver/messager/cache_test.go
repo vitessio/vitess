@@ -62,7 +62,7 @@ func TestMessagerCacheOrder(t *testing.T) {
 	}
 	var rows []string
 	for i := 0; i < 5; i++ {
-		rows = append(rows, mc.Pop().Row[0].String())
+		rows = append(rows, mc.Pop().Row[0].ToString())
 	}
 	want := []string{
 		"row03",
@@ -121,7 +121,7 @@ func TestMessagerCacheDiscard(t *testing.T) {
 	}
 	mc.Discard([]string{"row01"})
 	if row := mc.Pop(); row != nil {
-		t.Errorf("Pop: want nil, got %s", row.Row[0].String())
+		t.Errorf("Pop: want nil, got %v", row.Row[0])
 	}
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
@@ -130,7 +130,7 @@ func TestMessagerCacheDiscard(t *testing.T) {
 	}) {
 		t.Fatal("Add returned false")
 	}
-	if row := mc.Pop(); row == nil || row.Row[0].String() != "row01" {
+	if row := mc.Pop(); row == nil || row.Row[0].ToString() != "row01" {
 		t.Errorf("Pop: want row01, got %v", row)
 	}
 
@@ -143,7 +143,7 @@ func TestMessagerCacheDiscard(t *testing.T) {
 		t.Fatal("Add returned false")
 	}
 	if row := mc.Pop(); row != nil {
-		t.Errorf("Pop: want nil, got %s", row.Row[0].String())
+		t.Errorf("Pop: want nil, got %v", row.Row[0])
 	}
 	mc.Discard([]string{"row01"})
 
@@ -155,7 +155,7 @@ func TestMessagerCacheDiscard(t *testing.T) {
 	}) {
 		t.Fatal("Add returned false")
 	}
-	if row := mc.Pop(); row == nil || row.Row[0].String() != "row01" {
+	if row := mc.Pop(); row == nil || row.Row[0].ToString() != "row01" {
 		t.Errorf("Pop: want row01, got %v", row)
 	}
 }

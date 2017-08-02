@@ -24,6 +24,7 @@ import (
 
 	log "github.com/golang/glog"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -69,13 +70,13 @@ func fetchColumns(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
 		return err
 	}
 	for _, row := range columns.Rows {
-		name := row[0].String()
+		name := row[0].ToString()
 		columnType, ok := fieldTypes[name]
 		if !ok {
 			log.Warningf("Table: %s, column %s not found in select list, skipping.", ta.Name, name)
 			continue
 		}
-		ta.AddColumn(name, columnType, row[4], row[5].String())
+		ta.AddColumn(name, columnType, row[4], row[5].ToString())
 	}
 	return nil
 }
@@ -88,19 +89,19 @@ func fetchIndexes(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
 	var currentIndex *Index
 	currentName := ""
 	for _, row := range indexes.Rows {
-		indexName := row[2].String()
+		indexName := row[2].ToString()
 		if currentName != indexName {
 			currentIndex = ta.AddIndex(indexName)
 			currentName = indexName
 		}
 		var cardinality uint64
 		if !row[6].IsNull() {
-			cardinality, err = strconv.ParseUint(row[6].String(), 0, 64)
+			cardinality, err = sqltypes.ToUint64(row[6])
 			if err != nil {
 				log.Warningf("%s", err)
 			}
 		}
-		currentIndex.AddColumn(row[4].String(), cardinality)
+		currentIndex.AddColumn(row[4].ToString(), cardinality)
 	}
 	ta.Done()
 	return nil

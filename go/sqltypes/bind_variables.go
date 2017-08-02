@@ -224,7 +224,7 @@ func ValidateBindVariable(bv *querypb.BindVariable) error {
 			return errors.New("empty tuple is not allowed")
 		}
 		for _, val := range bv.Values {
-			if val.Type == Tuple {
+			if val.Type == querypb.Type_TUPLE {
 				return errors.New("tuple not allowed inside another tuple")
 			}
 			if err := ValidateBindVariable(&querypb.BindVariable{Type: val.Type, Value: val.Value}); err != nil {

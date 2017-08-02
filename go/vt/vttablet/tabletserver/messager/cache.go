@@ -97,7 +97,7 @@ func (mc *cache) Add(mr *MessageRow) bool {
 	if len(mc.sendQueue) >= mc.size {
 		return false
 	}
-	id := mr.Row[0].String()
+	id := mr.Row[0].ToString()
 	// Don't check for nil. Messages that are popped for
 	// send are nilled out.
 	if _, ok := mc.messages[id]; ok {
@@ -122,7 +122,7 @@ func (mc *cache) Pop() *MessageRow {
 			return nil
 		}
 		mr := heap.Pop(&mc.sendQueue).(*MessageRow)
-		id := mr.Row[0].String()
+		id := mr.Row[0].ToString()
 		// If message was previously marked as defunct, drop
 		// it and continue.
 		if id == "" {

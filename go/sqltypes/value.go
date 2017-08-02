@@ -169,20 +169,21 @@ func (v Value) Type() querypb.Type {
 	return v.typ
 }
 
-// Raw returns the raw bytes. All types are currently implemented as []byte.
-// You should avoid using this function. If you do, you should treat the
-// bytes as read-only.
+// Raw returns the internal represenation of the value. For newer types,
+// this may not match MySQL's representation.
 func (v Value) Raw() []byte {
 	return v.val
 }
 
-// Bytes returns a copy of the raw data. All types are currently implemented as []byte.
-// Use this function instead of Raw if you can't be sure about maintaining the read-only
-// requirements of the bytes.
-func (v Value) Bytes() []byte {
-	out := make([]byte, len(v.val))
-	copy(out, v.val)
-	return out
+// ToBytes returns the value as MySQL would return it as []byte.
+// In contrast, Raw returns the internal representation of the Value, which may not
+// match MySQL's representation for newer types.
+// If the value is not convertible like in the case of Expression, it returns nil.
+func (v Value) ToBytes() []byte {
+	if v.typ == Expression {
+		return nil
+	}
+	return v.val
 }
 
 // Len returns the length.
@@ -190,9 +191,24 @@ func (v Value) Len() int {
 	return len(v.val)
 }
 
-// String returns the raw value as a string.
-func (v Value) String() string {
+// ToString returns the value as MySQL would return it as string.
+// If the value is not convertible like in the case of Expression, it returns nil.
+func (v Value) ToString() string {
+	if v.typ == Expression {
+		return ""
+	}
 	return hack.String(v.val)
+}
+
+// String returns a printable version of the value.
+func (v Value) String() string {
+	if v.typ == Null {
+		return "NULL"
+	}
+	if v.IsQuoted() {
+		return fmt.Sprintf("%v(%q)", v.typ, v.val)
+	}
+	return fmt.Sprintf("%v(%s)", v.typ, v.val)
 }
 
 // EncodeSQL encodes the value into an SQL statement. Can be binary.
@@ -200,7 +216,7 @@ func (v Value) EncodeSQL(b BinWriter) {
 	switch {
 	case v.typ == Null:
 		b.Write(nullstr)
-	case IsQuoted(v.typ):
+	case v.IsQuoted():
 		encodeBytesSQL(v.val, b)
 	default:
 		b.Write(v.val)
@@ -212,7 +228,7 @@ func (v Value) EncodeASCII(b BinWriter) {
 	switch {
 	case v.typ == Null:
 		b.Write(nullstr)
-	case IsQuoted(v.typ):
+	case v.IsQuoted():
 		encodeBytesASCII(v.val, b)
 	default:
 		b.Write(v.val)
@@ -264,7 +280,7 @@ func (v Value) IsBinary() bool {
 func (v Value) MarshalJSON() ([]byte, error) {
 	switch {
 	case v.IsQuoted():
-		return json.Marshal(v.String())
+		return json.Marshal(v.ToString())
 	case v.typ == Null:
 		return nullstr, nil
 	}

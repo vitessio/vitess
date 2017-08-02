@@ -216,7 +216,7 @@ func ReadStartPosition(dbClient VtClient, uid uint32) (string, string, error) {
 	if qr.RowsAffected != 1 {
 		return "", "", fmt.Errorf("checkpoint information not available in db for %v", uid)
 	}
-	return qr.Rows[0][0].String(), qr.Rows[0][1].String(), nil
+	return qr.Rows[0][0].ToString(), qr.Rows[0][1].ToString(), nil
 }
 
 // readThrottlerSettings will retrieve the throttler settings for filtered

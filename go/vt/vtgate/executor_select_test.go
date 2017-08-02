@@ -1024,7 +1024,7 @@ func TestSelectScatterOrderByFail(t *testing.T) {
 	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize)
 
 	_, err := executorExec(executor, "select id, col from user order by col asc", nil)
-	want := "text fields cannot be compared"
+	want := "types are not comparable: VARCHAR vs VARCHAR"
 	if err == nil || err.Error() != want {
 		t.Errorf("scatter order by error: %v, want %s", err, want)
 	}

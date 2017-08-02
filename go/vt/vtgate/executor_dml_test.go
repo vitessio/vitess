@@ -727,7 +727,7 @@ func TestInsertFail(t *testing.T) {
 
 	sbclookup.SetResults([]*sqltypes.Result{{}})
 	_, err = executorExec(executor, "insert into music_extra_reversed(music_id, user_id) values (1, 1)", nil)
-	want = "execInsertSharded: getInsertShardedRoute: could not map 1 to a keyspace id"
+	want = "execInsertSharded: getInsertShardedRoute: could not map INT64(1) to a keyspace id"
 	if err == nil || err.Error() != want {
 		t.Errorf("paramsSelectEqual: executorExec: %v, want %v", err, want)
 	}
@@ -774,7 +774,7 @@ func TestInsertFail(t *testing.T) {
 	}
 
 	_, err = executorExec(executor, "insert into music_extra_reversed(music_id, user_id) values (1, 3)", nil)
-	want = "execInsertSharded: getInsertShardedRoute: values [3] for column user_id does not map to keyspaceids"
+	want = "execInsertSharded: getInsertShardedRoute: values [INT64(3)] for column user_id does not map to keyspaceids"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}

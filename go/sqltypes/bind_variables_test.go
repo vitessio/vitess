@@ -269,7 +269,7 @@ func TestValidateBindVarables(t *testing.T) {
 	}, {
 		in: map[string]*querypb.BindVariable{
 			"v": {
-				Type: Tuple,
+				Type: querypb.Type_TUPLE,
 				Values: []*querypb.Value{{
 					Type:  Int64,
 					Value: []byte("a"),
@@ -469,7 +469,7 @@ func TestValidateBindVariable(t *testing.T) {
 		err: "invalid type specified for MakeValue: EXPRESSION",
 	}, {
 		in: &querypb.BindVariable{
-			Type: Tuple,
+			Type: querypb.Type_TUPLE,
 			Values: []*querypb.Value{{
 				Type:  querypb.Type_INT64,
 				Value: []byte("1"),

@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 
@@ -131,7 +130,7 @@ func (se *Engine) Open(dbaParams *mysql.ConnParams) error {
 				wg.Done()
 			}()
 
-			tableName := row[0].String()
+			tableName := row[0].ToString()
 			conn, err := se.conns.Get(ctx)
 			if err != nil {
 				log.Errorf("Engine.Open: connection error while reading table %s: %v", tableName, err)
@@ -142,8 +141,8 @@ func (se *Engine) Open(dbaParams *mysql.ConnParams) error {
 			table, err := LoadTable(
 				conn,
 				tableName,
-				row[1].String(), // table_type
-				row[3].String(), // table_comment
+				row[1].ToString(), // table_type
+				row[3].ToString(), // table_comment
 			)
 			if err != nil {
 				tabletenv.InternalErrors.Add("Schema", 1)
@@ -227,7 +226,7 @@ func (se *Engine) Reload(ctx context.Context) error {
 	rec := concurrency.AllErrorRecorder{}
 	curTables := map[string]bool{"dual": true}
 	for _, row := range tableData.Rows {
-		tableName := row[0].String()
+		tableName := row[0].ToString()
 		curTables[tableName] = true
 		createTime, _ := sqltypes.ToInt64(row[2])
 		// Check if we know about the table or it has been recreated.
@@ -275,9 +274,9 @@ func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, 
 	if len(tm.Rows) != 1 || len(tm.Rows[0]) != 1 || tm.Rows[0][0].IsNull() {
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unexpected result for MySQL time: %+v", tm.Rows)
 	}
-	t, err := strconv.ParseInt(tm.Rows[0][0].String(), 10, 64)
+	t, err := sqltypes.ToInt64(tm.Rows[0][0])
 	if err != nil {
-		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse time %+v: %v", tm, err)
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse time %v: %v", tm, err)
 	}
 	return t, nil
 }
@@ -308,8 +307,8 @@ func (se *Engine) TableWasCreatedOrAltered(ctx context.Context, tableName string
 	table, err := LoadTable(
 		conn,
 		tableName,
-		row[1].String(), // table_type
-		row[3].String(), // table_comment
+		row[1].ToString(), // table_type
+		row[3].ToString(), // table_comment
 	)
 	if err != nil {
 		tabletenv.InternalErrors.Add("Schema", 1)

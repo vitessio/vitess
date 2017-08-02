@@ -18,7 +18,6 @@ package tabletserver
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 
 	log "github.com/golang/glog"
@@ -286,17 +285,17 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*Prepared
 
 	var curTx *PreparedTx
 	for _, row := range qr.Rows {
-		dtid := row[0].String()
+		dtid := row[0].ToString()
 		if curTx == nil || dtid != curTx.Dtid {
 			// Initialize the new element.
 			// A failure in time parsing will show up as a very old time,
 			// which is harmless.
-			tm, _ := strconv.ParseInt(row[2].String(), 10, 64)
+			tm, _ := sqltypes.ToInt64(row[2])
 			curTx = &PreparedTx{
 				Dtid: dtid,
 				Time: time.Unix(0, tm),
 			}
-			st, err := strconv.ParseInt(row[1].String(), 10, 64)
+			st, err := sqltypes.ToInt64(row[1])
 			if err != nil {
 				log.Errorf("Error parsing state for dtid %s: %v.", dtid, err)
 			}
@@ -310,7 +309,7 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*Prepared
 				failed = append(failed, curTx)
 			}
 		}
-		curTx.Queries = append(curTx.Queries, row[3].String())
+		curTx.Queries = append(curTx.Queries, row[3].ToString())
 	}
 	return prepared, failed, nil
 }
@@ -333,7 +332,7 @@ func (tpc *TwoPC) CountUnresolvedRedo(ctx context.Context, unresolvedTime time.T
 	if len(qr.Rows) < 1 {
 		return 0, nil
 	}
-	v, _ := strconv.ParseInt(qr.Rows[0][0].String(), 10, 64)
+	v, _ := sqltypes.ToInt64(qr.Rows[0][0])
 	return v, nil
 }
 
@@ -419,7 +418,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 	if len(qr.Rows) == 0 {
 		return result, nil
 	}
-	result.Dtid = qr.Rows[0][0].String()
+	result.Dtid = qr.Rows[0][0].ToString()
 	st, err := sqltypes.ToInt64(qr.Rows[0][1])
 	if err != nil {
 		return nil, fmt.Errorf("Error parsing state for dtid %s: %v", dtid, err)
@@ -440,8 +439,8 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 	participants := make([]*querypb.Target, 0, len(qr.Rows))
 	for _, row := range qr.Rows {
 		participants = append(participants, &querypb.Target{
-			Keyspace:   row[0].String(),
-			Shard:      row[1].String(),
+			Keyspace:   row[0].ToString(),
+			Shard:      row[1].ToString(),
 			TabletType: topodatapb.TabletType_MASTER,
 		})
 	}
@@ -467,11 +466,11 @@ func (tpc *TwoPC) ReadAbandoned(ctx context.Context, abandonTime time.Time) (map
 	}
 	txs := make(map[string]time.Time, len(qr.Rows))
 	for _, row := range qr.Rows {
-		t, err := strconv.ParseInt(row[1].String(), 10, 64)
+		t, err := sqltypes.ToInt64(row[1])
 		if err != nil {
 			return nil, err
 		}
-		txs[row[0].String()] = time.Unix(0, t)
+		txs[row[0].ToString()] = time.Unix(0, t)
 	}
 	return txs, nil
 }
@@ -501,13 +500,13 @@ func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*DistributedTx, er
 	var curTx *DistributedTx
 	var distributed []*DistributedTx
 	for _, row := range qr.Rows {
-		dtid := row[0].String()
+		dtid := row[0].ToString()
 		if curTx == nil || dtid != curTx.Dtid {
 			// Initialize the new element.
 			// A failure in time parsing will show up as a very old time,
 			// which is harmless.
-			tm, _ := strconv.ParseInt(row[2].String(), 10, 64)
-			st, err := strconv.ParseInt(row[1].String(), 10, 64)
+			tm, _ := sqltypes.ToInt64(row[2])
+			st, err := sqltypes.ToInt64(row[1])
 			// Just log on error and continue. The state will show up as UNKNOWN
 			// on the display.
 			if err != nil {
@@ -525,8 +524,8 @@ func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*DistributedTx, er
 			distributed = append(distributed, curTx)
 		}
 		curTx.Participants = append(curTx.Participants, querypb.Target{
-			Keyspace: row[3].String(),
-			Shard:    row[4].String(),
+			Keyspace: row[3].ToString(),
+			Shard:    row[4].ToString(),
 		})
 	}
 	return distributed, nil

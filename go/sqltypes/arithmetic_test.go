@@ -39,38 +39,38 @@ func TestAdd(t *testing.T) {
 		out: NULL,
 	}, {
 		// First value null.
-		v1:  makeInt(1),
+		v1:  NewInt64(1),
 		v2:  NULL,
-		out: makeInt(1),
+		out: NewInt64(1),
 	}, {
 		// Second value null.
 		v1:  NULL,
-		v2:  makeInt(1),
-		out: makeInt(1),
+		v2:  NewInt64(1),
+		out: NewInt64(1),
 	}, {
 		// Normal case.
-		v1:  makeInt(1),
-		v2:  makeInt(2),
-		out: makeInt(3),
+		v1:  NewInt64(1),
+		v2:  NewInt64(2),
+		out: NewInt64(3),
 	}, {
 		// Make sure underlying error is returned for LHS.
-		v1:  makeAny(Int64, "1.2"),
-		v2:  makeInt(2),
+		v1:  TestValue(Int64, "1.2"),
+		v2:  NewInt64(2),
 		err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
 	}, {
 		// Make sure underlying error is returned for RHS.
-		v1:  makeInt(2),
-		v2:  makeAny(Int64, "1.2"),
+		v1:  NewInt64(2),
+		v2:  TestValue(Int64, "1.2"),
 		err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
 	}, {
 		// Make sure underlying error is returned while adding.
-		v1:  makeInt(-1),
-		v2:  makeUint(2),
+		v1:  NewInt64(-1),
+		v2:  NewUint64(2),
 		err: "cannot add a negative number to an unsigned integer: 2, -1",
 	}, {
 		// Make sure underlying error is returned while converting.
-		v1:  makeFloat(1),
-		v2:  makeFloat(2),
+		v1:  NewFloat64(1),
+		v2:  NewFloat64(2),
 		err: "unexpected type conversion: FLOAT64 to INT64",
 	}}
 	for _, tcase := range tcases {
@@ -101,47 +101,47 @@ func TestNullsafeCompare(t *testing.T) {
 	}, {
 		// LHS null.
 		v1:  NULL,
-		v2:  makeInt(1),
+		v2:  NewInt64(1),
 		out: -1,
 	}, {
 		// RHS null.
-		v1:  makeInt(1),
+		v1:  NewInt64(1),
 		v2:  NULL,
 		out: 1,
 	}, {
 		// LHS Text
-		v1:  makeAny(VarChar, "abcd"),
-		v2:  makeInt(1),
-		err: "text fields cannot be compared",
+		v1:  TestValue(VarChar, "abcd"),
+		v2:  TestValue(VarChar, "abcd"),
+		err: "types are not comparable: VARCHAR vs VARCHAR",
 	}, {
 		// Make sure underlying error is returned for LHS.
-		v1:  makeAny(Int64, "1.2"),
-		v2:  makeInt(2),
+		v1:  TestValue(Int64, "1.2"),
+		v2:  NewInt64(2),
 		err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
 	}, {
 		// Make sure underlying error is returned for RHS.
-		v1:  makeInt(2),
-		v2:  makeAny(Int64, "1.2"),
+		v1:  NewInt64(2),
+		v2:  TestValue(Int64, "1.2"),
 		err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
 	}, {
 		// Numeric equal.
-		v1:  makeInt(1),
-		v2:  makeUint(1),
+		v1:  NewInt64(1),
+		v2:  NewUint64(1),
 		out: 0,
 	}, {
 		// Numeric unequal.
-		v1:  makeInt(1),
-		v2:  makeUint(2),
+		v1:  NewInt64(1),
+		v2:  NewUint64(2),
 		out: -1,
 	}, {
 		// Non-numeric equal
-		v1:  makeAny(VarBinary, "abcd"),
-		v2:  makeAny(Binary, "abcd"),
+		v1:  TestValue(VarBinary, "abcd"),
+		v2:  TestValue(Binary, "abcd"),
 		out: 0,
 	}, {
 		// Non-numeric unequal
-		v1:  makeAny(VarBinary, "abcd"),
-		v2:  makeAny(Binary, "bcde"),
+		v1:  TestValue(VarBinary, "abcd"),
+		v2:  TestValue(Binary, "bcde"),
 		out: -1,
 	}}
 	for _, tcase := range tcases {
@@ -240,21 +240,21 @@ func TestCast(t *testing.T) {
 	}, {
 		typ: VarChar,
 		v:   TestValue(Expression, "bad string"),
-		err: "EXPRESSION value cannot be cast to VARCHAR",
+		err: "EXPRESSION(bad string) cannot be cast to VARCHAR",
 	}}
 	for _, tcase := range tcases {
 		got, err := Cast(tcase.v, tcase.typ)
 		if tcase.err != "" {
 			if err == nil || !strings.Contains(err.Error(), tcase.err) {
-				t.Errorf("Cast(%v, %v) error: %v, must contain %s", tcase.v, tcase.typ, err, tcase.err)
+				t.Errorf("Cast(%v) error: %v, must contain %s", tcase.v, err, tcase.err)
 			}
 			continue
 		}
 		if err != nil {
-			t.Errorf("Cast(%v, %v) error: %v", tcase.v, tcase.typ, err)
+			t.Errorf("Cast(%v) error: %v", tcase.v, err)
 		}
 		if !reflect.DeepEqual(got, tcase.out) {
-			t.Errorf("Cast(%v, %v): %v, want %v", tcase.v, tcase.typ, got, tcase.out)
+			t.Errorf("Cast(%v): %v, want %v", tcase.v, got, tcase.out)
 		}
 	}
 }
@@ -265,16 +265,16 @@ func TestToUint64(t *testing.T) {
 		out uint64
 		err string
 	}{{
-		v:   makeAny(VarChar, "abcd"),
+		v:   TestValue(VarChar, "abcd"),
 		err: "could not parse value: abcd",
 	}, {
-		v:   makeInt(-1),
+		v:   NewInt64(-1),
 		err: "negative number cannot be converted to unsigned: -1",
 	}, {
-		v:   makeInt(1),
+		v:   NewInt64(1),
 		out: 1,
 	}, {
-		v:   makeUint(1),
+		v:   NewUint64(1),
 		out: 1,
 	}}
 	for _, tcase := range tcases {
@@ -298,16 +298,16 @@ func TestToInt64(t *testing.T) {
 		out int64
 		err string
 	}{{
-		v:   makeAny(VarChar, "abcd"),
+		v:   TestValue(VarChar, "abcd"),
 		err: "could not parse value: abcd",
 	}, {
-		v:   makeUint(18446744073709551615),
+		v:   NewUint64(18446744073709551615),
 		err: "unsigned number overflows int64 value: 18446744073709551615",
 	}, {
-		v:   makeInt(1),
+		v:   NewInt64(1),
 		out: 1,
 	}, {
-		v:   makeUint(1),
+		v:   NewUint64(1),
 		out: 1,
 	}}
 	for _, tcase := range tcases {
@@ -331,16 +331,16 @@ func TestToFloat64(t *testing.T) {
 		out float64
 		err string
 	}{{
-		v:   makeAny(VarChar, "abcd"),
+		v:   TestValue(VarChar, "abcd"),
 		err: "could not parse value: abcd",
 	}, {
-		v:   makeInt(1),
+		v:   NewInt64(1),
 		out: 1,
 	}, {
-		v:   makeUint(1),
+		v:   NewUint64(1),
 		out: 1,
 	}, {
-		v:   makeFloat(1.2),
+		v:   NewFloat64(1.2),
 		out: 1.2,
 	}}
 	for _, tcase := range tcases {
@@ -453,13 +453,13 @@ func TestToNative(t *testing.T) {
 			t.Error(err)
 		}
 		if !reflect.DeepEqual(v, tcase.out) {
-			t.Errorf("%v.ToNative = %#v, want %#v", makePretty(tcase.in), v, tcase.out)
+			t.Errorf("%v.ToNative = %#v, want %#v", tcase.in, v, tcase.out)
 		}
 	}
 
 	// Test Expression failure.
 	_, err := ToNative(TestValue(Expression, "aa"))
-	want := "EXPRESSION cannot be converted to a go type"
+	want := "EXPRESSION(aa) cannot be converted to a go type"
 	if err == nil || err.Error() != want {
 		t.Errorf("ToNative(EXPRESSION): %v, want %s", err, want)
 	}
@@ -471,36 +471,36 @@ func TestNewNumeric(t *testing.T) {
 		out numeric
 		err string
 	}{{
-		v:   makeInt(1),
+		v:   NewInt64(1),
 		out: numeric{typ: Int64, ival: 1},
 	}, {
-		v:   makeUint(1),
+		v:   NewUint64(1),
 		out: numeric{typ: Uint64, uval: 1},
 	}, {
-		v:   makeFloat(1),
+		v:   NewFloat64(1),
 		out: numeric{typ: Float64, fval: 1},
 	}, {
 		// For non-number type, Int64 is the default.
-		v:   makeAny(VarChar, "1"),
+		v:   TestValue(VarChar, "1"),
 		out: numeric{typ: Int64, ival: 1},
 	}, {
 		// If Int64 can't work, we use Float64.
-		v:   makeAny(VarChar, "1.2"),
+		v:   TestValue(VarChar, "1.2"),
 		out: numeric{typ: Float64, fval: 1.2},
 	}, {
 		// Only valid Int64 allowed if type is Int64.
-		v:   makeAny(Int64, "1.2"),
+		v:   TestValue(Int64, "1.2"),
 		err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
 	}, {
 		// Only valid Uint64 allowed if type is Uint64.
-		v:   makeAny(Uint64, "1.2"),
+		v:   TestValue(Uint64, "1.2"),
 		err: "strconv.ParseUint: parsing \"1.2\": invalid syntax",
 	}, {
 		// Only valid Float64 allowed if type is Float64.
-		v:   makeAny(Float64, "abcd"),
+		v:   TestValue(Float64, "abcd"),
 		err: "strconv.ParseFloat: parsing \"abcd\": invalid syntax",
 	}, {
-		v:   makeAny(VarChar, "abcd"),
+		v:   TestValue(VarChar, "abcd"),
 		err: "could not parse value: abcd",
 	}}
 	for _, tcase := range tcases {
@@ -524,32 +524,32 @@ func TestNewIntegralNumeric(t *testing.T) {
 		out numeric
 		err string
 	}{{
-		v:   makeInt(1),
+		v:   NewInt64(1),
 		out: numeric{typ: Int64, ival: 1},
 	}, {
-		v:   makeUint(1),
+		v:   NewUint64(1),
 		out: numeric{typ: Uint64, uval: 1},
 	}, {
-		v:   makeFloat(1),
+		v:   NewFloat64(1),
 		out: numeric{typ: Int64, ival: 1},
 	}, {
 		// For non-number type, Int64 is the default.
-		v:   makeAny(VarChar, "1"),
+		v:   TestValue(VarChar, "1"),
 		out: numeric{typ: Int64, ival: 1},
 	}, {
 		// If Int64 can't work, we use Uint64.
-		v:   makeAny(VarChar, "18446744073709551615"),
+		v:   TestValue(VarChar, "18446744073709551615"),
 		out: numeric{typ: Uint64, uval: 18446744073709551615},
 	}, {
 		// Only valid Int64 allowed if type is Int64.
-		v:   makeAny(Int64, "1.2"),
+		v:   TestValue(Int64, "1.2"),
 		err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
 	}, {
 		// Only valid Uint64 allowed if type is Uint64.
-		v:   makeAny(Uint64, "1.2"),
+		v:   TestValue(Uint64, "1.2"),
 		err: "strconv.ParseUint: parsing \"1.2\": invalid syntax",
 	}, {
-		v:   makeAny(VarChar, "abcd"),
+		v:   TestValue(VarChar, "abcd"),
 		err: "could not parse value: abcd",
 	}}
 	for _, tcase := range tcases {
@@ -687,7 +687,7 @@ func TestCastFromNumeric(t *testing.T) {
 	}{{
 		typ: Int64,
 		v:   numeric{typ: Int64, ival: 1},
-		out: makeInt(1),
+		out: NewInt64(1),
 	}, {
 		typ: Int64,
 		v:   numeric{typ: Uint64, uval: 1},
@@ -703,7 +703,7 @@ func TestCastFromNumeric(t *testing.T) {
 	}, {
 		typ: Uint64,
 		v:   numeric{typ: Uint64, uval: 1},
-		out: makeUint(1),
+		out: NewUint64(1),
 	}, {
 		typ: Uint64,
 		v:   numeric{typ: Float64, fval: 1.2e-16},
@@ -711,28 +711,28 @@ func TestCastFromNumeric(t *testing.T) {
 	}, {
 		typ: Float64,
 		v:   numeric{typ: Int64, ival: 1},
-		out: makeAny(Float64, "1"),
+		out: TestValue(Float64, "1"),
 	}, {
 		typ: Float64,
 		v:   numeric{typ: Uint64, uval: 1},
-		out: makeAny(Float64, "1"),
+		out: TestValue(Float64, "1"),
 	}, {
 		typ: Float64,
 		v:   numeric{typ: Float64, fval: 1.2e-16},
-		out: makeAny(Float64, "1.2e-16"),
+		out: TestValue(Float64, "1.2e-16"),
 	}, {
 		typ: Decimal,
 		v:   numeric{typ: Int64, ival: 1},
-		out: makeAny(Decimal, "1"),
+		out: TestValue(Decimal, "1"),
 	}, {
 		typ: Decimal,
 		v:   numeric{typ: Uint64, uval: 1},
-		out: makeAny(Decimal, "1"),
+		out: TestValue(Decimal, "1"),
 	}, {
 		// For float, we should not use scientific notation.
 		typ: Decimal,
 		v:   numeric{typ: Float64, fval: 1.2e-16},
-		out: makeAny(Decimal, "0.00000000000000012"),
+		out: TestValue(Decimal, "0.00000000000000012"),
 	}, {
 		typ: VarBinary,
 		v:   numeric{typ: Int64, ival: 1},
@@ -894,29 +894,29 @@ func TestMin(t *testing.T) {
 		v2:  NULL,
 		min: NULL,
 	}, {
-		v1:  makeInt(1),
+		v1:  NewInt64(1),
 		v2:  NULL,
-		min: makeInt(1),
+		min: NewInt64(1),
 	}, {
 		v1:  NULL,
-		v2:  makeInt(1),
-		min: makeInt(1),
+		v2:  NewInt64(1),
+		min: NewInt64(1),
 	}, {
-		v1:  makeInt(1),
-		v2:  makeInt(2),
-		min: makeInt(1),
+		v1:  NewInt64(1),
+		v2:  NewInt64(2),
+		min: NewInt64(1),
 	}, {
-		v1:  makeInt(2),
-		v2:  makeInt(1),
-		min: makeInt(1),
+		v1:  NewInt64(2),
+		v2:  NewInt64(1),
+		min: NewInt64(1),
 	}, {
-		v1:  makeInt(1),
-		v2:  makeInt(1),
-		min: makeInt(1),
+		v1:  NewInt64(1),
+		v2:  NewInt64(1),
+		min: NewInt64(1),
 	}, {
-		v1:  makeAny(VarChar, "aa"),
-		v2:  makeInt(1),
-		err: "text fields cannot be compared",
+		v1:  TestValue(VarChar, "aa"),
+		v2:  TestValue(VarChar, "aa"),
+		err: "types are not comparable: VARCHAR vs VARCHAR",
 	}}
 	for _, tcase := range tcases {
 		v, err := Min(tcase.v1, tcase.v2)
@@ -943,29 +943,29 @@ func TestMax(t *testing.T) {
 		v2:  NULL,
 		max: NULL,
 	}, {
-		v1:  makeInt(1),
+		v1:  NewInt64(1),
 		v2:  NULL,
-		max: makeInt(1),
+		max: NewInt64(1),
 	}, {
 		v1:  NULL,
-		v2:  makeInt(1),
-		max: makeInt(1),
+		v2:  NewInt64(1),
+		max: NewInt64(1),
 	}, {
-		v1:  makeInt(1),
-		v2:  makeInt(2),
-		max: makeInt(2),
+		v1:  NewInt64(1),
+		v2:  NewInt64(2),
+		max: NewInt64(2),
 	}, {
-		v1:  makeInt(2),
-		v2:  makeInt(1),
-		max: makeInt(2),
+		v1:  NewInt64(2),
+		v2:  NewInt64(1),
+		max: NewInt64(2),
 	}, {
-		v1:  makeInt(1),
-		v2:  makeInt(1),
-		max: makeInt(1),
+		v1:  NewInt64(1),
+		v2:  NewInt64(1),
+		max: NewInt64(1),
 	}, {
-		v1:  makeAny(VarChar, "aa"),
-		v2:  makeInt(1),
-		err: "text fields cannot be compared",
+		v1:  TestValue(VarChar, "aa"),
+		v2:  TestValue(VarChar, "aa"),
+		err: "types are not comparable: VARCHAR vs VARCHAR",
 	}}
 	for _, tcase := range tcases {
 		v, err := Max(tcase.v1, tcase.v2)
@@ -980,22 +980,6 @@ func TestMax(t *testing.T) {
 			t.Errorf("Max(%v, %v): %v, want %v", tcase.v1, tcase.v2, v, tcase.max)
 		}
 	}
-}
-
-func makeInt(v int64) Value {
-	return MakeTrusted(Int64, strconv.AppendInt(nil, v, 10))
-}
-
-func makeUint(v uint64) Value {
-	return MakeTrusted(Uint64, strconv.AppendUint(nil, v, 10))
-}
-
-func makeFloat(v float64) Value {
-	return MakeTrusted(Float64, strconv.AppendFloat(nil, v, 'g', -1, 64))
-}
-
-func makeAny(typ querypb.Type, v string) Value {
-	return MakeTrusted(typ, []byte(v))
 }
 
 func printValue(v Value) string {
