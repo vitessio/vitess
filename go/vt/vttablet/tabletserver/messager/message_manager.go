@@ -25,6 +25,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -33,6 +34,9 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
+
+// MessageStats tracks stats for messages.
+var MessageStats = stats.NewMultiCounters("Messages", []string{"TableName", "Metric"})
 
 type messageReceiver struct {
 	mu   sync.Mutex
@@ -114,6 +118,7 @@ type messageManager struct {
 	// The goroutine must in turn defer on Done.
 	wg sync.WaitGroup
 
+	readCounts        *sqlparser.ParsedQuery
 	readByTimeNext    *sqlparser.ParsedQuery
 	loadMessagesQuery *sqlparser.ParsedQuery
 	ackQuery          *sqlparser.ParsedQuery
@@ -141,6 +146,7 @@ func newMessageManager(tsv TabletService, table *schema.Table, conns *connpool.P
 	}
 	mm.cond.L = &mm.mu
 
+	mm.readCounts = sqlparser.BuildParsedQuery("select count(*), count(time_acked) from %v", mm.name)
 	columnList := buildSelectColumnList(table)
 	mm.readByTimeNext = sqlparser.BuildParsedQuery(
 		"select time_next, epoch, %s from %v where time_next < %a order by time_next desc limit %a",
@@ -185,6 +191,9 @@ func (mm *messageManager) Open() {
 	mm.isOpen = true
 	mm.wg.Add(1)
 	mm.curReceiver = -1
+
+	mm.loadCounts()
+
 	go mm.runSend()
 	// TODO(sougou): improve ticks to add randomness.
 	mm.pollerTicks.Start(mm.runPoller)
@@ -304,13 +313,18 @@ func (mm *messageManager) runSend() {
 				mm.cond.Wait()
 				continue
 			}
+			lateCount := int64(0)
 			for i := 0; i < mm.batchSize; i++ {
 				if mr := mm.cache.Pop(); mr != nil {
+					if mr.Epoch >= 1 {
+						lateCount++
+					}
 					rows = append(rows, mr.Row)
 					continue
 				}
 				break
 			}
+			MessageStats.Add([]string{mm.name.String(), "Delayed"}, lateCount)
 			if rows != nil {
 				break
 			}
@@ -379,7 +393,7 @@ func postpone(tsv TabletService, name string, ackWaitTime time.Duration, ids []s
 	}()
 	_, err := tsv.PostponeMessages(ctx, nil, name, ids)
 	if err != nil {
-		// TODO(sougou): increment internal error.
+		tabletenv.InternalErrors.Add("Messages", 1)
 		log.Errorf("Unable to postpone messages %v: %v", ids, err)
 	}
 }
@@ -392,7 +406,7 @@ func (mm *messageManager) runPoller() {
 	}()
 	conn, err := mm.conns.Get(ctx)
 	if err != nil {
-		// TODO(sougou): increment internal error.
+		tabletenv.InternalErrors.Add("Messages", 1)
 		log.Errorf("Error getting connection: %v", err)
 		return
 	}
@@ -436,7 +450,7 @@ func (mm *messageManager) runPoller() {
 		for _, row := range qr.Rows {
 			mr, err := BuildMessageRow(row)
 			if err != nil {
-				// TODO(sougou): increment internal error.
+				tabletenv.InternalErrors.Add("Messages", 1)
 				log.Errorf("Error reading message row: %v", err)
 				continue
 			}
@@ -463,9 +477,10 @@ func purge(tsv TabletService, name string, purgeAfter, purgeInterval time.Durati
 	for {
 		count, err := tsv.PurgeMessages(ctx, nil, name, time.Now().Add(-purgeAfter).UnixNano())
 		if err != nil {
-			// TODO(sougou): increment internal error.
+			tabletenv.InternalErrors.Add("Messages", 1)
 			log.Errorf("Unable to delete messages: %v", err)
 		}
+		MessageStats.Add([]string{name, "Purged"}, count)
 		// If deleted 500 or more, we should continue.
 		if count < 500 {
 			return
@@ -534,6 +549,50 @@ func BuildMessageRow(row []sqltypes.Value) (*MessageRow, error) {
 	}, nil
 }
 
+func (mm *messageManager) loadCounts() {
+	// Heuristically, use half of ackWaitTime for timeout.
+	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), mm.ackWaitTime/2)
+	defer cancel()
+	conn, err := mm.conns.Get(ctx)
+	if err != nil {
+		tabletenv.InternalErrors.Add("Messages", 1)
+		log.Errorf("Error getting connection: %v", err)
+		return
+	}
+	defer conn.Recycle()
+	qr, err := mm.read(ctx, conn, mm.readCounts, nil)
+	if err != nil {
+		log.Errorf("Error reading counts for %s: %v", mm.name, err)
+		return
+	}
+	if len(qr.Rows) != 1 {
+		// This is unreachable. MySQL will always return one row for a count query.
+		tabletenv.InternalErrors.Add("Messages", 1)
+		log.Errorf("Unexpected result length: %d", len(qr.Rows))
+		return
+	}
+	if len(qr.Rows[0]) != 2 {
+		// This is also unreachable.
+		tabletenv.InternalErrors.Add("Messages", 1)
+		log.Errorf("Unexpected number of columns: %d", len(qr.Rows[0]))
+		return
+	}
+	total, err := qr.Rows[0][0].ParseInt64()
+	if err != nil {
+		tabletenv.InternalErrors.Add("Messages", 1)
+		log.Errorf("Failed to read total count: %v", err)
+		return
+	}
+	acked, err := qr.Rows[0][1].ParseInt64()
+	if err != nil {
+		tabletenv.InternalErrors.Add("Messages", 1)
+		log.Errorf("Failed to read total count: %v", err)
+		return
+	}
+	MessageStats.Set([]string{mm.name.String(), "Queued"}, total)
+	MessageStats.Set([]string{mm.name.String(), "Acked"}, acked)
+}
+
 func (mm *messageManager) receiverCount() int {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
@@ -543,7 +602,7 @@ func (mm *messageManager) receiverCount() int {
 func (mm *messageManager) read(ctx context.Context, conn *connpool.DBConn, pq *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	b, err := pq.GenerateQuery(bindVars, nil)
 	if err != nil {
-		// TODO(sougou): increment internal error.
+		tabletenv.InternalErrors.Add("Messages", 1)
 		log.Errorf("Error reading rows from message table: %v", err)
 		return nil, err
 	}

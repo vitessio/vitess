@@ -1100,9 +1100,14 @@ func (tsv *TabletServer) MessageAck(ctx context.Context, target *querypb.Target,
 		}
 		sids = append(sids, v.String())
 	}
-	return tsv.execDML(ctx, target, func() (string, map[string]*querypb.BindVariable, error) {
+	count, err = tsv.execDML(ctx, target, func() (string, map[string]*querypb.BindVariable, error) {
 		return tsv.messager.GenerateAckQuery(name, sids)
 	})
+	if err != nil {
+		return 0, err
+	}
+	messager.MessageStats.Add([]string{name, "Acked"}, count)
+	return count, nil
 }
 
 // PostponeMessages postpones the list of messages for a given message table.
