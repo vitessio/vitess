@@ -1310,7 +1310,7 @@ func (tsv *TabletServer) convertError(ctx context.Context, sql string, bindVaria
 	callerFmt := " [CallerID %s]"
 	sqlErr, ok := err.(*mysql.SQLError)
 	if !ok {
-		return vterrors.Suffix(err, fmt.Sprintf(callerFmt, callerID.Username))
+		return vterrors.Errorf(vterrors.Code(err), "%v, CallerID: %s", err, callerID.Username)
 	}
 
 	errCode := vterrors.Code(err)
