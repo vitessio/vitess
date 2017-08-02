@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# By default diff against cached files for commit, but also support diff
+# against another base (e.g. origin/master)
+: ${GIT_BASE:="--cached"}
+
 # git unused pre-commit hook
 
 if [ -z "$GOPATH" ]; then
@@ -14,7 +18,7 @@ fi
 
 # This script does not handle file names that contain spaces.
 # Exclude auto-generated files (from proto or yacc compile).
-gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$' | grep -v '^go/vt/proto/' | grep -v 'go/vt/sqlparser/sql.go')
+gofiles=$(git diff $GIT_BASE --name-only --diff-filter=ACM | grep '^go/.*\.go$' | grep -v '^go/vt/proto/' | grep -v 'go/vt/sqlparser/sql.go')
 if [ "$gofiles" = "" ]; then
   exit 0
 fi

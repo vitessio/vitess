@@ -16,6 +16,10 @@
 # This file is based on the Go linter precommit hook
 # "golint". Therefore, both files are very similar.
 
+# By default diff against cached files for commit, but also support diff
+# against another base (e.g. origin/master)
+: ${GIT_BASE:="--cached"}
+
 # misc/git/hooks/pylint
 #
 # To use, store as .git/hooks/pre-commit inside your repository and make sure
@@ -29,9 +33,8 @@ PYLINT=/usr/bin/gpylint
 pylint_script=$VTTOP/tools/pylint.sh
 
 # This script does not handle file names that contain spaces.
-pyfiles=$(git diff --cached --name-only --diff-filter=ACM | grep '.*\.py$' | grep -v '^py/vtproto/')
+pyfiles=$(git diff $GIT_BASE --name-only --diff-filter=ACM | grep '.*\.py$' | grep -v '^py/vtproto/')
 if [ -z "$pyfiles" ] ; then
-  msg "No python files changed."
   exit 0
 fi
 

@@ -113,6 +113,7 @@ install:
   - ./bootstrap.sh
 before_script:
   - source dev.env
+  - tools/check-lint.sh
   # Travis only tests. Run only on the first shard.
   # Part of "before_script" because in "script" the job would not fail immediately if a command fails.
   - |
