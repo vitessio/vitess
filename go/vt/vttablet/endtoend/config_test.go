@@ -219,6 +219,33 @@ func TestMaxResultSize(t *testing.T) {
 	}
 }
 
+func TestWarnResultSize(t *testing.T) {
+	defer framework.Server.SetWarnResultSize(framework.Server.WarnResultSize())
+	framework.Server.SetWarnResultSize(2)
+	client := framework.NewClient()
+
+	originalWarningsResultsExceededCount := tabletenv.Warnings.Counts()["ResultsExceeded"]
+	query := "select * from vitess_test"
+	_, _ = client.Execute(query, nil)
+	newWarningsResultsExceededCount := tabletenv.Warnings.Counts()["ResultsExceeded"]
+	exceededCountDiff := newWarningsResultsExceededCount - originalWarningsResultsExceededCount
+	if exceededCountDiff != 1 {
+		t.Errorf("Warnings.ResultsExceeded counter should have increased by 1, instead got %v", exceededCountDiff)
+	}
+
+	if err := verifyIntValue(framework.DebugVars(), "WarnResultSize", 2); err != nil {
+		t.Error(err)
+	}
+
+	framework.Server.SetWarnResultSize(10)
+	_, _ = client.Execute(query, nil)
+	newerWarningsResultsExceededCount := tabletenv.Warnings.Counts()["ResultsExceeded"]
+	exceededCountDiff = newerWarningsResultsExceededCount - newWarningsResultsExceededCount
+	if exceededCountDiff != 0 {
+		t.Errorf("Warnings.ResultsExceeded counter should not have increased, instead got %v", exceededCountDiff)
+	}
+}
+
 func TestMaxDMLRows(t *testing.T) {
 	client := framework.NewClient()
 	_, err := client.Execute(
