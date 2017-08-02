@@ -752,7 +752,8 @@ func (qre *QueryExecutor) execSQL(conn poolConn, sql string, wantfields bool) (*
 	res, err := conn.Exec(qre.ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
 	warnThreshold := qre.tsv.qe.warnResultSize.Get()
 	if res != nil && warnThreshold > 0 && int64(len(res.Rows)) > warnThreshold {
-		log.Warningf("Results returned (%v) exceeds warning threshold (%v): %q", len(res.Rows), warnThreshold, sql)
+		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
+		log.Warningf("CallerID: %s Results returned (%v) exceeds warning threshold (%v): %q", callerID.Username, len(res.Rows), warnThreshold, sql)
 	}
 	return res, err
 }
