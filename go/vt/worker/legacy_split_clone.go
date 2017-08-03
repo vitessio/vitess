@@ -567,7 +567,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 
 			for _, c := range chunks {
 				sourceWaitGroup.Add(1)
-				go func(td *tabletmanagerdatapb.TableDefinition, shardIdx, tableIndex int, chunk chunk) {
+				go func(td *tabletmanagerdatapb.TableDefinition, shardIndex, tableIndex int, chunk chunk) {
 					defer sourceWaitGroup.Done()
 
 					sema.Acquire()
@@ -576,7 +576,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 					scw.tableStatusList.threadStarted(tableIndex)
 
 					// Start streaming from the source tablets.
-					tp := newSingleTabletProvider(ctx, scw.wr.TopoServer(), scw.sourceAliases[shardIdx])
+					tp := newSingleTabletProvider(ctx, scw.wr.TopoServer(), scw.sourceAliases[shardIndex])
 					rr, err := NewRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk, false /* allowMultipleRetries */)
 					if err != nil {
 						processError("NewRestartableResultReader failed: %v", err)
