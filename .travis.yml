@@ -8,6 +8,7 @@ sudo: false
 language: go
 go:
   - 1.8
+go_import_path: github.com/youtube/vitess
 addons:
   apt:
     sources:
