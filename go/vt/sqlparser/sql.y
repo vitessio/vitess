@@ -830,6 +830,10 @@ expression:
   {
     $$ = $1
   }
+| DEFAULT
+  {
+    $$ = &Default{}
+  }
 
 boolean_value:
   TRUE
