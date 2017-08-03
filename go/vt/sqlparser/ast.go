@@ -1064,6 +1064,7 @@ func (*ConvertExpr) iExpr()      {}
 func (*ConvertUsingExpr) iExpr() {}
 func (*MatchExpr) iExpr()        {}
 func (*GroupConcatExpr) iExpr()  {}
+func (*Default) iExpr()          {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.
@@ -1902,6 +1903,19 @@ func (node *CaseExpr) WalkSubtree(visit Visit) error {
 	if err := Walk(visit, node.Else); err != nil {
 		return err
 	}
+	return nil
+}
+
+// Default represents a DEFAULT expression.
+type Default struct{}
+
+// Format formats the node.
+func (node *Default) Format(buf *TrackedBuffer) {
+	buf.Myprintf("default")
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *Default) WalkSubtree(visit Visit) error {
 	return nil
 }
 

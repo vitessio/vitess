@@ -536,7 +536,12 @@ func TestValid(t *testing.T) {
 		input:  "insert /* set */ into a set a = 1, b = 2",
 		output: "insert /* set */ into a(a, b) values (1, 2)",
 	}, {
+		input:  "insert /* set default */ into a set a = default, b = 2",
+		output: "insert /* set default */ into a(a, b) values (default, 2)",
+	}, {
 		input: "insert /* value expression list */ into a values (a + 1, 2 * 3)",
+	}, {
+		input: "insert /* default */ into a values (default, 2 * 3)",
 	}, {
 		input: "insert /* column list */ into a(a, b) values (1, 2)",
 	}, {
