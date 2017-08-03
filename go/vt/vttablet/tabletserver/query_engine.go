@@ -134,6 +134,7 @@ type QueryEngine struct {
 	binlogFormat     connpool.BinlogFormat
 	autoCommit       sync2.AtomicBool
 	maxResultSize    sync2.AtomicInt64
+	warnResultSize   sync2.AtomicInt64
 	maxDMLRows       sync2.AtomicInt64
 	streamBufferSize sync2.AtomicInt64
 	// tableaclExemptCount count the number of accesses allowed
@@ -203,6 +204,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 	}
 
 	qe.maxResultSize = sync2.NewAtomicInt64(int64(config.MaxResultSize))
+	qe.warnResultSize = sync2.NewAtomicInt64(int64(config.WarnResultSize))
 	qe.maxDMLRows = sync2.NewAtomicInt64(int64(config.MaxDMLRows))
 	qe.streamBufferSize = sync2.NewAtomicInt64(int64(config.StreamBufferSize))
 
@@ -210,6 +212,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 
 	qeOnce.Do(func() {
 		stats.Publish("MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
+		stats.Publish("WarnResultSize", stats.IntFunc(qe.warnResultSize.Get))
 		stats.Publish("MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
 		stats.Publish("StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
 		stats.Publish("TableACLExemptCount", stats.IntFunc(qe.tableaclExemptCount.Get))

@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/hack"
@@ -748,7 +749,14 @@ type poolConn interface {
 
 func (qre *QueryExecutor) execSQL(conn poolConn, sql string, wantfields bool) (*sqltypes.Result, error) {
 	defer qre.logStats.AddRewrittenSQL(sql, time.Now())
-	return conn.Exec(qre.ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
+	res, err := conn.Exec(qre.ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
+	warnThreshold := qre.tsv.qe.warnResultSize.Get()
+	if res != nil && warnThreshold > 0 && int64(len(res.Rows)) > warnThreshold {
+		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
+		tabletenv.Warnings.Add("ResultsExceeded", 1)
+		log.Warningf("CallerID: %s Results returned (%v) exceeds warning threshold (%v): %q", callerID.Username, len(res.Rows), warnThreshold, sql)
+	}
+	return res, err
 }
 
 func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callback func(*sqltypes.Result) error) error {

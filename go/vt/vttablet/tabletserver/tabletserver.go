@@ -1816,6 +1816,17 @@ func (tsv *TabletServer) MaxResultSize() int {
 	return int(tsv.qe.maxResultSize.Get())
 }
 
+// SetWarnResultSize changes the warn result size to the specified value.
+// This function should only be used for testing.
+func (tsv *TabletServer) SetWarnResultSize(val int) {
+	tsv.qe.warnResultSize.Set(int64(val))
+}
+
+// WarnResultSize returns the warn result size.
+func (tsv *TabletServer) WarnResultSize() int {
+	return int(tsv.qe.warnResultSize.Get())
+}
+
 // SetMaxDMLRows changes the max result size to the specified value.
 // This function should only be used for testing.
 func (tsv *TabletServer) SetMaxDMLRows(val int) {
