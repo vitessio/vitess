@@ -224,10 +224,10 @@ func TestWarnResultSize(t *testing.T) {
 	framework.Server.SetWarnResultSize(2)
 	client := framework.NewClient()
 
-	originalWarningsResultsExceededCount := tabletenv.Warnings.Counts()["ResultsExceeded"]
+	originalWarningsResultsExceededCount := framework.FetchInt(framework.DebugVars(), "Warnings/ResultsExceeded")
 	query := "select * from vitess_test"
 	_, _ = client.Execute(query, nil)
-	newWarningsResultsExceededCount := tabletenv.Warnings.Counts()["ResultsExceeded"]
+	newWarningsResultsExceededCount := framework.FetchInt(framework.DebugVars(), "Warnings/ResultsExceeded")
 	exceededCountDiff := newWarningsResultsExceededCount - originalWarningsResultsExceededCount
 	if exceededCountDiff != 1 {
 		t.Errorf("Warnings.ResultsExceeded counter should have increased by 1, instead got %v", exceededCountDiff)
@@ -239,7 +239,7 @@ func TestWarnResultSize(t *testing.T) {
 
 	framework.Server.SetWarnResultSize(10)
 	_, _ = client.Execute(query, nil)
-	newerWarningsResultsExceededCount := tabletenv.Warnings.Counts()["ResultsExceeded"]
+	newerWarningsResultsExceededCount := framework.FetchInt(framework.DebugVars(), "Warnings/ResultsExceeded")
 	exceededCountDiff = newerWarningsResultsExceededCount - newWarningsResultsExceededCount
 	if exceededCountDiff != 0 {
 		t.Errorf("Warnings.ResultsExceeded counter should not have increased, instead got %v", exceededCountDiff)
