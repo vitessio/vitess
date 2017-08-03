@@ -1307,7 +1307,6 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 
 func (tsv *TabletServer) convertError(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, err error) error {
 	callerID := callerid.ImmediateCallerIDFromContext(ctx)
-	callerFmt := " [CallerID %s]"
 	sqlErr, ok := err.(*mysql.SQLError)
 	if !ok {
 		return vterrors.Errorf(vterrors.Code(err), "%v, CallerID: %s", err, callerID.Username)
@@ -1358,8 +1357,7 @@ func (tsv *TabletServer) convertError(ctx context.Context, sql string, bindVaria
 	if tsv.TerseErrors && len(bindVariables) != 0 && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
 		errstr = fmt.Sprintf("(errno %d) (sqlstate %s) during query: %s", errnum, sqlState, sqlparser.TruncateForLog(sql))
 	}
-	err = vterrors.New(errCode, errstr)
-	return vterrors.Suffix(err, fmt.Sprintf(callerFmt, callerID.Username))
+	return vterrors.Errorf(errCode, "%v, CallerID: %s", errstr, callerID.Username)
 }
 
 // validateSplitQueryParameters perform some validations on the SplitQuery parameters
