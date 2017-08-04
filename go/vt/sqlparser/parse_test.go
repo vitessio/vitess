@@ -274,6 +274,8 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* false */ 1 from t where false",
 	}, {
+		input: "select /* false on left */ 1 from t where false = 0",
+	}, {
 		input: "select /* exists */ 1 from t where exists (select 1 from t)",
 	}, {
 		input: "select /* (boolean) */ 1 from t where not (a = b)",
