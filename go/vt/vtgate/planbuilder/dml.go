@@ -48,17 +48,23 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, err
 	if !ok {
 		return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
 	}
-	if hasSubquery(upd) {
-		return nil, errors.New("unsupported: subqueries in DML")
-	}
+
 	er.Keyspace = rb.ERoute.Keyspace
 	if !er.Keyspace.Sharded {
+		if !validateSubquerySamePlan(upd, rb.ERoute, vschema) {
+			return nil, errors.New("unsupported: sharded subqueries in DML")
+		}
 		er.Opcode = engine.UpdateUnsharded
 		return er, nil
+	}
+
+	if hasSubquery(upd) {
+		return nil, errors.New("unsupported: subqueries in sharded DML")
 	}
 	if len(rb.Symtab().tables) != 1 {
 		return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
 	}
+
 	var tableName sqlparser.TableName
 	for t := range rb.Symtab().tables {
 		tableName = t
@@ -110,16 +116,19 @@ func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Route, err
 	if !ok {
 		return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
 	}
-	if hasSubquery(del) {
-		return nil, errors.New("unsupported: subqueries in DML")
-	}
 	er.Keyspace = rb.ERoute.Keyspace
 	if !er.Keyspace.Sharded {
+		if !validateSubquerySamePlan(del, rb.ERoute, vschema) {
+			return nil, errors.New("unsupported: sharded subqueries in DML")
+		}
 		er.Opcode = engine.DeleteUnsharded
 		return er, nil
 	}
 	if del.Targets != nil || len(rb.Symtab().tables) != 1 {
 		return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
+	}
+	if hasSubquery(del) {
+		return nil, errors.New("unsupported: subqueries in sharded DML")
 	}
 	var tableName sqlparser.TableName
 	for t := range rb.Symtab().tables {

@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vtgate/engine"
 )
 
 // splitAndExpression breaks up the Expr into AND-separated conditions
@@ -137,6 +138,59 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 		return true, nil
 	}, node)
 	return has
+}
+
+func validateSubquerySamePlan(node sqlparser.SQLNode, outer *engine.Route, vschema VSchema) bool {
+	samePlan := true
+	inSubQuery := false
+
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		if _, ok := node.(*sqlparser.Subquery); ok {
+			inSubQuery = true
+			return true, nil
+		}
+
+		if !inSubQuery {
+			return true, nil
+		}
+
+		switch nodeType := node.(type) {
+		case *sqlparser.Select:
+			bldr, err := processSelect(nodeType, vschema, nil)
+			if err != nil {
+				samePlan = false
+				return false, err
+			}
+			innerRoute, ok := bldr.(*route)
+			if !ok {
+				samePlan = false
+				return false, errors.New("dummy")
+			}
+			if innerRoute.ERoute.Keyspace.Name != outer.Keyspace.Name {
+				samePlan = false
+				return false, errors.New("dummy")
+			}
+		case *sqlparser.Union:
+			bldr, err := processUnion(nodeType, vschema, nil)
+			if err != nil {
+				samePlan = false
+				return false, err
+			}
+			innerRoute, ok := bldr.(*route)
+			if !ok {
+				samePlan = false
+				return false, errors.New("dummy")
+			}
+			if innerRoute.ERoute.Keyspace.Name != outer.Keyspace.Name {
+				samePlan = false
+				return false, errors.New("dummy")
+			}
+		}
+
+		return true, nil
+	}, node)
+
+	return samePlan
 }
 
 func valEqual(a, b interface{}) bool {

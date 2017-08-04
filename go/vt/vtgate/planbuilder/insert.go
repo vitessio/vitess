@@ -71,8 +71,8 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vsch
 		return eRoute, nil
 	case sqlparser.Values:
 		rows = insertValues
-		if hasSubquery(rows) {
-			return nil, errors.New("unsupported: subquery in insert values")
+		if !validateSubquerySamePlan(rows, eRoute, vschema) {
+			return nil, errors.New("unsupported: sharded subquery in insert values")
 		}
 	default:
 		panic(fmt.Sprintf("BUG: unexpected construct in insert: %T", insertValues))
