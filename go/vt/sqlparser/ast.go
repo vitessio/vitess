@@ -481,11 +481,11 @@ func (node *Set) WalkSubtree(visit Visit) error {
 // Table is set for AlterStr, DropStr, RenameStr.
 // NewName is set for AlterStr, CreateStr, RenameStr.
 type DDL struct {
-	Action   string
-	Table    TableName
-	NewName  TableName
-	IfExists bool
-	Columns  *TableColumns
+	Action    string
+	Table     TableName
+	NewName   TableName
+	IfExists  bool
+	TableSpec *TableSpec
 }
 
 // DDL strings.
@@ -500,10 +500,10 @@ const (
 func (node *DDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case CreateStr:
-		if node.Columns == nil {
+		if node.TableSpec == nil {
 			buf.Myprintf("%s table %v", node.Action, node.NewName)
 		} else {
-			buf.Myprintf("%s table %v %v", node.Action, node.NewName, node.Columns)
+			buf.Myprintf("%s table %v %v", node.Action, node.NewName, node.TableSpec)
 		}
 	case DropStr:
 		exists := ""
@@ -530,14 +530,14 @@ func (node *DDL) WalkSubtree(visit Visit) error {
 	)
 }
 
-// TableColumns describes the column structure of a table from a CREATE TABLE
-// statement
-type TableColumns struct {
+// TableSpec describes the structure of a table from a CREATE TABLE statement
+type TableSpec struct {
 	Columns []*ColumnDefinition
 	Indexes []*IndexDefinition
+	Options string
 }
 
-func (tc *TableColumns) Format(buf *TrackedBuffer) {
+func (tc *TableSpec) Format(buf *TrackedBuffer) {
 	buf.Myprintf("(\n")
 	first := true
 	for _, col := range tc.Columns {
@@ -552,19 +552,19 @@ func (tc *TableColumns) Format(buf *TrackedBuffer) {
 		buf.Myprintf(",\n\t%v", idx)
 	}
 
-	buf.Myprintf("\n)")
+	buf.Myprintf("\n)%s", strings.Replace(tc.Options, ", ", ",\n  ", -1))
 }
 
-func (tc *TableColumns) AddColumn(cd *ColumnDefinition) {
+func (tc *TableSpec) AddColumn(cd *ColumnDefinition) {
 	tc.Columns = append(tc.Columns, cd)
 }
 
-func (tc *TableColumns) AddIndex(id *IndexDefinition) {
+func (tc *TableSpec) AddIndex(id *IndexDefinition) {
 	tc.Indexes = append(tc.Indexes, id)
 }
 
 // WalkSubtree walks the nodes of the subtree.
-func (node *TableColumns) WalkSubtree(visit Visit) error {
+func (node *TableSpec) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}

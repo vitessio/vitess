@@ -80,7 +80,7 @@ func forceEOF(yylex interface{}) {
   tableIdent    TableIdent
   convertType   *ConvertType
   aliasedTableName *AliasedTableExpr
-  tableColumns  *TableColumns
+  TableSpec  *TableSpec
   columnType    ColumnType
   colKeyOpt     ColumnKeyOption
   optVal        *SQLVal
@@ -234,7 +234,8 @@ func forceEOF(yylex interface{}) {
 %type <colKeyOpt> column_key_opt
 %type <columnDefinition> column_definition
 %type <indexDefinition> index_definition
-%type <tableColumns> table_column_list
+%type <TableSpec> table_spec table_column_list
+%type <str> table_option_list table_option table_opt_value
 %type <indexInfo> index_info
 %type <columns> index_column_list
 
@@ -724,10 +725,17 @@ index_column_list:
     $$ = append($$, $3)
   }
 
+table_spec:
+  '(' table_column_list ')' table_option_list
+  {
+    $$ = $2
+    $$.Options = $4
+  }
+
 table_column_list:
   column_definition
   {
-    $$ = &TableColumns{}
+    $$ = &TableSpec{}
     $$.AddColumn($1)
   }
 | table_column_list ',' column_definition
@@ -739,10 +747,53 @@ table_column_list:
     $$.AddIndex($3)
   }
 
-create_statement:
-  CREATE TABLE not_exists_opt table_name '(' table_column_list ')' ddl_force_eof
+table_option_list:
   {
-    $$ = &DDL{Action: CreateStr, NewName: $4, Columns: $6}
+    $$ = ""
+  }
+| table_option
+  {
+    $$ = " " + string($1)
+  }
+| table_option_list ',' table_option
+  {
+    $$ = string($1) + ", " + string($3)
+  }
+
+// rather than explicitly parsing the various keywords for table options,
+// just accept any number of keywords, IDs, strings, numbers, and '='
+table_option:
+  table_opt_value
+  {
+    $$ = $1
+  }
+| table_option table_opt_value
+  {
+    $$ = $1 + " " + $2
+  }
+| table_option '=' table_opt_value
+  {
+    $$ = $1 + "=" + $3
+  }
+
+table_opt_value:
+  reserved_sql_id
+  {
+    $$ = $1.String()
+  }
+| STRING
+  {
+    $$ = "'" + string($1) + "'"
+  }
+| INTEGRAL
+  {
+    $$ = string($1)
+  }
+
+create_statement:
+  CREATE TABLE not_exists_opt table_name table_spec
+  {
+    $$ = &DDL{Action: CreateStr, NewName: $4, TableSpec: $5}
   }
 | CREATE TABLE not_exists_opt table_name ddl_force_eof
   {
@@ -2137,10 +2188,12 @@ reserved_keyword:
   AND
 | AS
 | ASC
+| AUTO_INCREMENT
 | BETWEEN
 | BINARY
 | BY
 | CASE
+| CHARACTER
 | COLLATE
 | CONVERT
 | CREATE

@@ -16,6 +16,7 @@ limitations under the License.
 
 package sqlparser
 
+import "strings"
 import "testing"
 
 func TestValid(t *testing.T) {
@@ -1152,7 +1153,8 @@ func TestCreateTable(t *testing.T) {
 	validSQL := []string{
 
 		// test all the data types
-		`create table t (
+		`
+create table t (
 	col_bit bit,
 	col_tinyint tinyint,
 	col_tinyint3 tinyint(3) unsigned,
@@ -1204,7 +1206,8 @@ func TestCreateTable(t *testing.T) {
 )`,
 
 		// test key field options
-		`create table t (
+		`
+create table t (
 	id int auto_increment primary key,
 	username varchar unique key,
 	email varchar,
@@ -1212,7 +1215,8 @@ func TestCreateTable(t *testing.T) {
 )`,
 
 		// test defining indexes separately
-		`create table t (
+		`
+create table t (
 	id int auto_increment,
 	username varchar,
 	email varchar,
@@ -1223,7 +1227,8 @@ func TestCreateTable(t *testing.T) {
 )`,
 
 		// multi-column indexes
-		`create table t (
+		`
+create table t (
 	id int auto_increment,
 	username varchar,
 	email varchar,
@@ -1234,10 +1239,42 @@ func TestCreateTable(t *testing.T) {
 	primary key (id, username),
 	unique key by_abc (a, b, c)
 )`,
-	}
 
+		// table options
+		`
+create table t (
+	id int auto_increment
+) engine InnoDB,
+  auto_increment 123,
+  avg_row_length 1,
+  default character set utf8mb4,
+  character set latin1,
+  checksum 0,
+  default collate binary,
+  collate ascii_bin,
+  comment 'this is a comment',
+  compression 'zlib',
+  connection 'connect_string',
+  data directory 'absolute path to directory',
+  delay_key_write 1,
+  encryption 'n',
+  index directory 'absolute path to directory',
+  insert_method no,
+  key_block_size 1024,
+  max_rows 100,
+  min_rows 10,
+  pack_keys 0,
+  password 'sekret',
+  row_format default,
+  stats_auto_recalc default,
+  stats_persistent 0,
+  stats_sample_pages 1,
+  tablespace tablespace_name storage disk,
+  tablespace tablespace_name
+`,
+	}
 	for _, sql := range validSQL {
-		t.Logf("XXX %s\n", sql)
+		sql = strings.TrimSpace(sql)
 		tree, err := Parse(sql)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", sql, err)
