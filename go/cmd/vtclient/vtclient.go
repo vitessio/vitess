@@ -321,6 +321,8 @@ func (r *results) recordError(err error) {
 func (r *results) print() {
 	if r == nil {
 		return
+	} else {
+		fmt.Println("DO NOT SUBMIT")
 	}
 
 	table := tablewriter.NewWriter(os.Stdout)
