@@ -651,6 +651,21 @@
   }
 }
 
+# unsharded insert from union
+"insert into unsharded select 1 from dual union select 1 from dual"
+{
+  "Original": "insert into unsharded select 1 from dual union select 1 from dual",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into unsharded select 1 from dual union select 1 from dual",
+    "Table": "unsharded"
+  }
+}
+
 # insert for non-vindex autoinc, invalid value
 "insert into user_extra(nonid, extra_id) values (2, 18446744073709551616)"
 "could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"

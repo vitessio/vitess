@@ -145,17 +145,14 @@ func validateSubquerySamePlan(node sqlparser.SQLNode, outer *engine.Route, vsche
 	inSubQuery := false
 
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		if _, ok := node.(*sqlparser.Subquery); ok {
+		switch nodeType := node.(type) {
+		case *sqlparser.Subquery, *sqlparser.Insert:
 			inSubQuery = true
 			return true, nil
-		}
-
-		if !inSubQuery {
-			return true, nil
-		}
-
-		switch nodeType := node.(type) {
 		case *sqlparser.Select:
+			if !inSubQuery {
+				return true, nil
+			}
 			bldr, err := processSelect(nodeType, vschema, nil)
 			if err != nil {
 				samePlan = false
@@ -171,6 +168,9 @@ func validateSubquerySamePlan(node sqlparser.SQLNode, outer *engine.Route, vsche
 				return false, errors.New("dummy")
 			}
 		case *sqlparser.Union:
+			if !inSubQuery {
+				return true, nil
+			}
 			bldr, err := processUnion(nodeType, vschema, nil)
 			if err != nil {
 				samePlan = false

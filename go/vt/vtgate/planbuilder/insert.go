@@ -48,22 +48,12 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vsch
 		Table:    table,
 		Keyspace: table.Keyspace,
 	}
+	if !validateSubquerySamePlan(ins, eRoute, vschema) {
+		return nil, errors.New("unsupported: sharded subquery in insert values")
+	}
 	var rows sqlparser.Values
 	switch insertValues := ins.Rows.(type) {
-	case *sqlparser.Union:
-		return nil, errors.New("unsupported: union in insert")
-	case *sqlparser.Select:
-		bldr, err := processSelect(insertValues, vschema, nil)
-		if err != nil {
-			return nil, err
-		}
-		innerRoute, ok := bldr.(*route)
-		if !ok {
-			return nil, errors.New("unsupported: cross-shard join in insert")
-		}
-		if innerRoute.ERoute.Keyspace.Name != eRoute.Keyspace.Name {
-			return nil, errors.New("unsupported: cross-keyspace select in insert")
-		}
+	case *sqlparser.Select, *sqlparser.Union:
 		if eRoute.Table.AutoIncrement != nil {
 			return nil, errors.New("unsupported: auto-inc and select in insert")
 		}
@@ -71,9 +61,6 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vsch
 		return eRoute, nil
 	case sqlparser.Values:
 		rows = insertValues
-		if !validateSubquerySamePlan(rows, eRoute, vschema) {
-			return nil, errors.New("unsupported: sharded subquery in insert values")
-		}
 	default:
 		panic(fmt.Sprintf("BUG: unexpected construct in insert: %T", insertValues))
 	}

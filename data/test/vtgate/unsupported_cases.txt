@@ -315,17 +315,13 @@
 "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id"
 "unsupported: multi-table update statement in sharded keyspace"
 
-# unsharded insert from union
-"insert into unsharded select 1 from dual union select 1 from dual"
-"unsupported: union in insert"
-
 # unsharded insert with cross-shard join"
 "insert into unsharded select u.col from user u join user u1"
-"unsupported: cross-shard join in insert"
+"unsupported: sharded subquery in insert values"
 
 # unsharded insert with mismatched keyspaces"
 "insert into unsharded select col from user where id=1"
-"unsupported: cross-keyspace select in insert"
+"unsupported: sharded subquery in insert values"
 
 # unsharded insert, unqualified names and auto-inc combined
 "insert into unsharded_auto select col from unsharded"
