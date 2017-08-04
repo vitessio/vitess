@@ -846,15 +846,7 @@ boolean_value:
   }
 
 condition:
-  boolean_value
-  {
-    $$ = $1
-  }
-| value_expression compare boolean_value
-  {
-    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
-  }
-| value_expression compare value_expression
+  value_expression compare value_expression
   {
     $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
   }
@@ -1010,6 +1002,10 @@ charset:
 
 value_expression:
   value
+  {
+    $$ = $1
+  }
+| boolean_value
   {
     $$ = $1
   }
