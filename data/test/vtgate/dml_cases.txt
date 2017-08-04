@@ -34,6 +34,48 @@
   }
 }
 
+# subqueries in unsharded update
+"update unsharded set col = (select col from unsharded limit 1)"
+{
+  "Original": "update unsharded set col = (select col from unsharded limit 1)",
+  "Instructions": {
+    "Opcode": "UpdateUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "update unsharded set col = (select col from unsharded limit 1)"
+  }
+}
+
+# unsharded union in subquery of unsharded update
+"update unsharded set col = (select id from unsharded union select id from unsharded)"
+{
+  "Original": "update unsharded set col = (select id from unsharded union select id from unsharded)",
+  "Instructions": {
+    "Opcode": "UpdateUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "update unsharded set col = (select id from unsharded union select id from unsharded)"
+  }
+}
+
+# unsharded join in subquery of unsharded update
+"update unsharded set col = (select id from unsharded a join unsharded b on a.id = b.id)"
+{
+  "Original": "update unsharded set col = (select id from unsharded a join unsharded b on a.id = b.id)",
+  "Instructions": {
+    "Opcode": "UpdateUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "update unsharded set col = (select id from unsharded as a join unsharded as b on a.id = b.id)"
+  }
+}
+
 # delete unsharded
 "delete from unsharded"
 {
@@ -375,6 +417,22 @@
   }
 }
 
+
+# unsharded insert subquery in insert value
+"insert into unsharded values((select 1 from dual), 1)"
+{
+  "Original": "insert into unsharded values((select 1 from dual), 1)",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into unsharded values ((select 1 from dual), 1)",
+    "Table": "unsharded"
+  }
+}
+
 # insert no column list
 "insert into user values(1, 2, 3)"
 "no column list"
@@ -590,6 +648,21 @@
     "Mid": [
       "(:_a_b_c0, 2)"
     ]
+  }
+}
+
+# unsharded insert from union
+"insert into unsharded select 1 from dual union select 1 from dual"
+{
+  "Original": "insert into unsharded select 1 from dual union select 1 from dual",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into unsharded select 1 from dual union select 1 from dual",
+    "Table": "unsharded"
   }
 }
 
