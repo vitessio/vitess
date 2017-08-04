@@ -463,6 +463,8 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, shr *querypb.St
 		serving = false
 	}
 
+	// oldTs.Tablet.Alias.Uid may be 0 because the youtube internal mechanism uses a different
+	// code path to initialize this value. If so, we should skip this check.
 	if shr.TabletAlias != nil && oldTs.Tablet.Alias.Uid != 0 && !proto.Equal(shr.TabletAlias, oldTs.Tablet.Alias) {
 		return fmt.Errorf("health stats mismatch, tablet %+v alias does not match response alias %v", oldTs.Tablet, shr.TabletAlias)
 	}
