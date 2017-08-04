@@ -1205,6 +1205,17 @@ create table t (
 	col_text text character set ascii collate ascii_bin
 )`,
 
+		// test defaults
+		`
+create table t (
+	i1 int default 1,
+	i2 int default null,
+	f1 float default 1.23,
+	s1 varchar default 'c',
+	s2 varchar default 'this is a string',
+	s3 varchar default null
+)`,
+
 		// test key field options
 		`
 create table t (

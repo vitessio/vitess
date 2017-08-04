@@ -632,6 +632,10 @@ column_default_opt:
   {
     $$ = NewFloatVal($2)
   }
+| DEFAULT NULL
+  {
+    $$ = NewValArg($2)
+  }
 
 auto_increment_opt:
   {
