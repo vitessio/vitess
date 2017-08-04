@@ -171,7 +171,7 @@ func TestNocacheListArgs(t *testing.T) {
 			"list": sqltypes.MakeTestBindVar([]interface{}{}),
 		},
 	)
-	want := "empty list supplied for list"
+	want := "empty list supplied for list, CallerID: dev"
 	if err == nil || err.Error() != want {
 		t.Errorf("Error: %v, want %s", err, want)
 		return
@@ -551,7 +551,7 @@ func TestLogTruncation(t *testing.T) {
 		"insert into vitess_test values(123, :data, null, null)",
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
-	want := "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess_test values (123, 'THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED', null, null) /* _stream vitess_test (intval ) (123 ); */"
+	want := "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess_test values (123, 'THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED', null, null) /* _stream vitess_test (intval ) (123 ); */, CallerID: dev"
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
 	}
@@ -565,7 +565,7 @@ func TestLogTruncation(t *testing.T) {
 		"insert into vitess_test values(123, :data, null, null)",
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
-	want = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess [TRUNCATED] /* _stream vitess_test (intval ) (123 ); */"
+	want = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess [TRUNCATED] /* _stream vitess_test (intval ) (123 ); */, CallerID: dev"
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
 	}
@@ -579,7 +579,7 @@ func TestLogTruncation(t *testing.T) {
 		"insert into vitess_test values(123, :data, null, null) /* KEEP ME */",
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
-	want = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess [TRUNCATED] /* _stream vitess_test (intval ) (123 ); */ /* KEEP ME */"
+	want = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess [TRUNCATED] /* _stream vitess_test (intval ) (123 ); */ /* KEEP ME */, CallerID: dev"
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
 	}
