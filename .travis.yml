@@ -91,8 +91,7 @@ env:
     - TEST_FLAGS="-docker=false -timeout=8m -print-log -remote-stats=http://enisoc.com:15123/travis/stats"
     - CC=gcc-4.8
     - CXX=g++-4.8
-    # TODO: uncomment when php crashing is fixed
-    # - INSTALL_GRPC_PHP="$HOME/.phpenv/lib"
+    - INSTALL_GRPC_PHP="$HOME/.phpenv/lib"
     - SAUCE_USERNAME=vitess
   matrix:
     # NOTE: Travis CI schedules up to 5 tests simultaneously.
@@ -106,11 +105,9 @@ env:
     - TEST_MATRIX="-shard 4"
 before_install:
   - travis/download_mariadb.sh
-  # TODO: uncomment when php crashing is fixed
-  # - travis/php_init.sh
+  - travis/php_init.sh
 install:
-  # TODO: uncomment when php crashing is fixed
-  # - eval "$(phpenv init -)"
+  - eval "$(phpenv init -)"
   - ./bootstrap.sh
 before_script:
   - source dev.env

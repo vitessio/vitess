@@ -235,10 +235,10 @@
 				"make",
 				"php_test"
 			],
-			"Manual": true,
+			"Manual": false,
 			"Shard": 4,
 			"RetryMax": 0,
-				"Tags": []
+			"Tags": []
 		},
 		"python_client": {
 			"File": "python_client_test.py",
