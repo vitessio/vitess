@@ -1148,6 +1148,109 @@ func TestConvert(t *testing.T) {
 	}
 }
 
+func TestCreateTable(t *testing.T) {
+	validSQL := []string{
+
+		// test all the data types
+		`create table t (
+	col_bit bit,
+	col_tinyint tinyint,
+	col_tinyint3 tinyint(3) unsigned,
+	col_smallint smallint,
+	col_smallint4 smallint(4) zerofill,
+	col_mediumint mediumint,
+	col_mediumint5 mediumint(5) unsigned not null,
+	col_int int,
+	col_int10 int(10) not null,
+	col_integer integer,
+	col_bigint bigint,
+	col_bigint10 bigint(10) zerofill not null default 10,
+	col_real real,
+	col_real2 real(1,2) not null default 1.23,
+	col_double double,
+	col_double2 double(3,4) not null default 1.23,
+	col_float float,
+	col_float2 float(3,4) not null default 1.23,
+	col_decimal decimal,
+	col_decimal2 decimal(2),
+	col_decimal3 decimal(2,3),
+	col_numeric numeric,
+	col_numeric2 numeric(2),
+	col_numeric3 numeric(2,3),
+	col_date date,
+	col_time time,
+	col_timestamp timestamp,
+	col_datetime datetime,
+	col_year year,
+	col_char char,
+	col_char2 char(2),
+	col_char3 char(3) character set ascii,
+	col_char4 char(4) character set ascii collate ascii_bin,
+	col_varchar varchar,
+	col_varchar2 varchar(2),
+	col_varchar3 varchar(3) character set ascii,
+	col_varchar4 varchar(4) character set ascii collate ascii_bin,
+	col_binary binary,
+	col_varbinary varbinary(10),
+	col_tinyblob tinyblob,
+	col_blob blob,
+	col_mediumblob mediumblob,
+	col_longblob longblob,
+	col_tinytext tinytext,
+	col_text text,
+	col_mediumtext mediumtext,
+	col_longtext longtext,
+	col_text text character set ascii collate ascii_bin
+)`,
+
+		// test key field options
+		`create table t (
+	id int auto_increment primary key,
+	username varchar unique key,
+	email varchar,
+	full_name varchar key
+)`,
+
+		// test defining indexes separately
+		`create table t (
+	id int auto_increment,
+	username varchar,
+	email varchar,
+	full_name varchar,
+	primary key (id),
+	unique key by_username (username),
+	key by_full_name (full_name)
+)`,
+
+		// multi-column indexes
+		`create table t (
+	id int auto_increment,
+	username varchar,
+	email varchar,
+	full_name varchar,
+	a int,
+	b int,
+	c int,
+	primary key (id, username),
+	unique key by_abc (a, b, c)
+)`,
+	}
+
+	for _, sql := range validSQL {
+		t.Logf("XXX %s\n", sql)
+		tree, err := Parse(sql)
+		if err != nil {
+			t.Errorf("input: %s, err: %v", sql, err)
+			continue
+		}
+		got := String(tree.(*DDL))
+
+		if sql != got {
+			t.Errorf("want:\n%s\ngot:\n%s", sql, got)
+		}
+	}
+}
+
 func TestErrors(t *testing.T) {
 	invalidSQL := []struct {
 		input  string

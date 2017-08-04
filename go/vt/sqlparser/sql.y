@@ -80,6 +80,15 @@ func forceEOF(yylex interface{}) {
   tableIdent    TableIdent
   convertType   *ConvertType
   aliasedTableName *AliasedTableExpr
+  tableColumns  *TableColumns
+  columnType    ColumnType
+  colKeyOpt     ColumnKeyOption
+  optVal        *SQLVal
+  LengthScaleOption LengthScaleOption
+  columnDefinition *ColumnDefinition
+  columnDefinitions []*ColumnDefinition
+  indexDefinition *IndexDefinition
+  indexInfo     *IndexInfo
 }
 
 %token LEX_ERROR
@@ -123,14 +132,22 @@ func forceEOF(yylex interface{}) {
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE
-%token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING
+%token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING PRIMARY
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
+
+// Type Tokens
+%token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
+%token <bytes> REAL DOUBLE FLOAT_TYPE DECIMAL NUMERIC
+%token <bytes> TIME TIMESTAMP DATETIME YEAR
+%token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR
+%token <bytes> TEXT TINYTEXT MEDIUMTEXT LONGTEXT
+%token <bytes> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON
+
+// Type Modifiers
+%token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
 %token <bytes> DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VSCHEMA_TABLES
-
-// Convert Type Tokens
-%token <bytes> INTEGER CHARACTER
 
 // Functions
 %token <bytes> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
@@ -207,6 +224,20 @@ func forceEOF(yylex interface{}) {
 %type <str> charset
 %type <convertType> convert_type
 %type <str> show_statement_type
+%type <columnType> column_type
+%type <columnType> int_type decimal_type numeric_type time_type char_type
+%type <optVal> length_opt column_default_opt
+%type <str> charset_opt collate_opt
+%type <boolVal> unsigned_opt zero_fill_opt
+%type <LengthScaleOption> float_length_opt decimal_length_opt
+%type <boolVal> null_opt auto_increment_opt
+%type <colKeyOpt> column_key_opt
+%type <columnDefinition> column_definition
+%type <indexDefinition> index_definition
+%type <tableColumns> table_column_list
+%type <indexInfo> index_info
+%type <columns> index_column_list
+
 %start any_command
 
 %%
@@ -354,8 +385,366 @@ set_statement:
     $$ = &Set{Comments: Comments($2), Exprs: $3}
   }
 
+column_type:
+  numeric_type unsigned_opt zero_fill_opt
+  {
+    $$ = $1
+    $$.Unsigned = $2
+    $$.Zerofill = $3
+  }
+| char_type
+| time_type
+
+numeric_type:
+  int_type length_opt
+  {
+    $$ = $1
+    $$.Length = $2
+  }
+| decimal_type
+  {
+    $$ = $1
+  }
+
+int_type:
+  BIT
+  {
+    $$ = ColumnType{Type: string($1)}
+  }
+| TINYINT
+  {
+    $$ = ColumnType{Type: string($1)}
+  }
+| SMALLINT
+  {
+    $$ = ColumnType{Type: string($1)}
+  }
+| MEDIUMINT
+  {
+    $$ = ColumnType{Type: string($1)}
+  }
+| INT
+  {
+    $$ = ColumnType{Type: string($1)}
+  }
+| INTEGER
+  {
+    $$ = ColumnType{Type: string($1)}
+  }
+| BIGINT
+  {
+    $$ = ColumnType{Type: string($1)}
+  }
+
+decimal_type:
+REAL float_length_opt
+  {
+    $$ = ColumnType{Type: string($1)}
+    $$.Length = $2.Length
+    $$.Scale = $2.Scale
+  }
+| DOUBLE float_length_opt
+  {
+    $$ = ColumnType{Type: string($1)}
+    $$.Length = $2.Length
+    $$.Scale = $2.Scale
+  }
+| FLOAT_TYPE float_length_opt
+  {
+    $$ = ColumnType{Type: string($1)}
+    $$.Length = $2.Length
+    $$.Scale = $2.Scale
+  }
+| DECIMAL decimal_length_opt
+  {
+    $$ = ColumnType{Type: string($1)}
+    $$.Length = $2.Length
+    $$.Scale = $2.Scale
+  }
+| NUMERIC decimal_length_opt
+  {
+    $$ = ColumnType{Type: string($1)}
+    $$.Length = $2.Length
+    $$.Scale = $2.Scale
+  }
+
+time_type:
+  DATE
+  {
+    $$ = ColumnType{Type: string($1)}
+  }
+| TIME length_opt
+  {
+    $$ = ColumnType{Type: string($1), Length: $2}
+  }
+| TIMESTAMP length_opt
+  {
+    $$ = ColumnType{Type: string($1), Length: $2}
+  }
+| DATETIME length_opt
+  {
+    $$ = ColumnType{Type: string($1), Length: $2}
+  }
+| YEAR
+  {
+    $$ = ColumnType{Type: string($1)}
+  }
+
+char_type:
+  CHAR length_opt charset_opt collate_opt
+  {
+    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, Collate: $4}
+  }
+| VARCHAR length_opt charset_opt collate_opt
+  {
+    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, Collate: $4}
+  }
+| BINARY length_opt
+  {
+    $$ = ColumnType{Type: string($1), Length: $2}
+  }
+| VARBINARY length_opt
+  {
+    $$ = ColumnType{Type: string($1), Length: $2}
+  }
+| TEXT charset_opt collate_opt
+  {
+    $$ = ColumnType{Type: string($1), Charset: $2, Collate: $3}
+  }
+| TINYTEXT charset_opt collate_opt
+  {
+    $$ = ColumnType{Type: string($1), Charset: $2, Collate: $3}
+  }
+| MEDIUMTEXT charset_opt collate_opt
+  {
+    $$ = ColumnType{Type: string($1), Charset: $2, Collate: $3}
+  }
+| LONGTEXT charset_opt collate_opt
+  {
+    $$ = ColumnType{Type: string($1), Charset: $2, Collate: $3}
+  }
+| BLOB
+  {
+    $$ = ColumnType{Type: string($1)}
+  }
+| TINYBLOB
+  {
+    $$ = ColumnType{Type: string($1)}
+  }
+| MEDIUMBLOB
+  {
+    $$ = ColumnType{Type: string($1)}
+  }
+| LONGBLOB
+  {
+    $$ = ColumnType{Type: string($1)}
+  }
+| JSON
+  {
+    $$ = ColumnType{Type: string($1)}
+  }
+
+length_opt:
+  {
+    $$ = nil
+  }
+| '(' INTEGRAL ')'
+  {
+    $$ = NewIntVal($2)
+  }
+
+float_length_opt:
+  {
+    $$ = LengthScaleOption{}
+  }
+| '(' INTEGRAL ',' INTEGRAL ')'
+  {
+    $$ = LengthScaleOption{
+        Length: NewIntVal($2),
+        Scale: NewIntVal($4),
+    }
+  }
+
+decimal_length_opt:
+  {
+    $$ = LengthScaleOption{}
+  }
+| '(' INTEGRAL ')'
+  {
+    $$ = LengthScaleOption{
+        Length: NewIntVal($2),
+    }
+  }
+| '(' INTEGRAL ',' INTEGRAL ')'
+  {
+    $$ = LengthScaleOption{
+        Length: NewIntVal($2),
+        Scale: NewIntVal($4),
+    }
+  }
+
+unsigned_opt:
+  {
+    $$ = BoolVal(false)
+  }
+| UNSIGNED
+  {
+    $$ = BoolVal(true)
+  }
+
+zero_fill_opt:
+  {
+    $$ = BoolVal(false)
+  }
+| ZEROFILL
+  {
+    $$ = BoolVal(true)
+  }
+
+// Null opt returns false to mean NULL (i.e. the default) and true for NOT NULL
+null_opt:
+  {
+    $$ = BoolVal(false)
+  }
+| NULL
+  {
+    $$ = BoolVal(false)
+  }
+| NOT NULL
+  {
+    $$ = BoolVal(true)
+  }
+
+column_default_opt:
+  {
+    $$ = nil
+  }
+| DEFAULT STRING
+  {
+    $$ = NewStrVal($2)
+  }
+| DEFAULT INTEGRAL
+  {
+    $$ = NewIntVal($2)
+  }
+| DEFAULT FLOAT
+  {
+    $$ = NewFloatVal($2)
+  }
+
+auto_increment_opt:
+  {
+    $$ = BoolVal(false)
+  }
+| AUTO_INCREMENT
+  {
+    $$ = BoolVal(true)
+  }
+
+charset_opt:
+  {
+    $$ = ""
+  }
+| CHARACTER SET ID
+  {
+    $$ = string($3)
+  }
+| CHARACTER SET BINARY
+  {
+    $$ = string($3)
+  }
+
+collate_opt:
+  {
+    $$ = ""
+  }
+| COLLATE ID
+  {
+    $$ = string($2)
+  }
+
+column_key_opt:
+  {
+    $$ = ColKeyNone
+  }
+| PRIMARY KEY
+  {
+    $$ = ColKeyPrimary
+  }
+| KEY
+  {
+    $$ = ColKey
+  }
+| UNIQUE KEY
+  {
+    $$ = ColKeyUnique
+  }
+| UNIQUE
+  {
+    $$ = ColKeyUnique
+  }
+
+column_definition:
+  ID column_type null_opt column_default_opt auto_increment_opt column_key_opt
+  {
+    $2.NotNull = $3
+    $2.Default = $4
+    $2.Autoincrement = $5
+    $2.KeyOpt = $6
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+  }
+
+index_definition:
+  index_info '(' index_column_list ')'
+  {
+    $$ = &IndexDefinition{Info: $1, Columns: $3}
+  }
+
+index_info:
+  PRIMARY KEY
+  {
+    $$ = &IndexInfo{Primary: true}
+  }
+| UNIQUE KEY ID
+  {
+    $$ = &IndexInfo{Name: NewColIdent(string($3)), Unique: true}
+  }
+| KEY ID
+  {
+    $$ = &IndexInfo{Name: NewColIdent(string($2)), Unique: false}
+  }
+
+index_column_list:
+  sql_id
+  {
+    $$ = Columns{$1}
+  }
+| index_column_list ',' sql_id
+  {
+    $$ = append($$, $3)
+  }
+
+table_column_list:
+  column_definition
+  {
+    $$ = &TableColumns{}
+    $$.AddColumn($1)
+  }
+| table_column_list ',' column_definition
+  {
+    $$.AddColumn($3)
+  }
+| table_column_list ',' index_definition
+  {
+    $$.AddIndex($3)
+  }
+
 create_statement:
-  CREATE TABLE not_exists_opt table_name ddl_force_eof
+  CREATE TABLE not_exists_opt table_name '(' table_column_list ')' ddl_force_eof
+  {
+    $$ = &DDL{Action: CreateStr, NewName: $4, Columns: $6}
+  }
+| CREATE TABLE not_exists_opt table_name ddl_force_eof
   {
     $$ = &DDL{Action: CreateStr, NewName: $4}
   }
@@ -992,24 +1381,6 @@ expression_list:
     $$ = append($1, $3)
   }
 
-charset:
-  ID
-  {
-    $$ = string($1)
-  }
-| STRING
-  {
-    $$ = string($1)
-  }
-| BINARY
-  {
-    $$ = string($1)
-  }
-| DATE
-  {
-    $$ = string($1)
-  }
-
 value_expression:
   value
   {
@@ -1288,39 +1659,70 @@ match_option:
     $$ = QueryExpansionStr
  }
 
+charset:
+  ID
+{
+    $$ = string($1)
+}
+| STRING
+{
+    $$ = string($1)
+}
 
 convert_type:
-  charset
+  BINARY length_opt
   {
-    $$ = &ConvertType{Type: $1}
+    $$ = &ConvertType{Type: string($1), Length: $2}
   }
-|  charset INTEGER
+| CHAR length_opt charset_opt
   {
-    $$ = &ConvertType{Type: $1}
+    $$ = &ConvertType{Type: string($1), Length: $2, Charset: $3, Operator: CharacterSetStr}
   }
-| charset openb INTEGRAL closeb
+| CHAR length_opt ID
   {
-    $$ = &ConvertType{Type: $1, Length: NewIntVal($3)}
+    $$ = &ConvertType{Type: string($1), Length: $2, Charset: string($3)}
   }
-| charset openb INTEGRAL closeb charset
+| DATE
   {
-    $$ = &ConvertType{Type: $1, Length: NewIntVal($3), Charset: $5}
+    $$ = &ConvertType{Type: string($1)}
   }
-| charset openb INTEGRAL closeb CHARACTER SET charset
+| DATETIME length_opt
   {
-    $$ = &ConvertType{Type: $1, Length: NewIntVal($3), Charset: $7, Operator: CharacterSetStr}
+    $$ = &ConvertType{Type: string($1), Length: $2}
   }
-| charset charset
+| DECIMAL decimal_length_opt
   {
-    $$ = &ConvertType{Type: $1, Charset: $2}
+    $$ = &ConvertType{Type: string($1)}
+    $$.Length = $2.Length
+    $$.Scale = $2.Scale
   }
-| charset CHARACTER SET charset
+| JSON
   {
-    $$ = &ConvertType{Type: $1, Charset: $4, Operator: CharacterSetStr}
+    $$ = &ConvertType{Type: string($1)}
   }
-| charset openb INTEGRAL ',' INTEGRAL closeb
+| NCHAR length_opt
   {
-    $$ = &ConvertType{Type: $1, Length: NewIntVal($3), Scale: NewIntVal($5)}
+    $$ = &ConvertType{Type: string($1), Length: $2}
+  }
+| SIGNED
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| SIGNED INTEGER
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| TIME length_opt
+  {
+    $$ = &ConvertType{Type: string($1), Length: $2}
+  }
+| UNSIGNED
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| UNSIGNED INTEGER
+  {
+    $$ = &ConvertType{Type: string($1)}
   }
 
 expression_opt:

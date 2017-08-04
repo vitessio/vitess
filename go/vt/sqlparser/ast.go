@@ -485,6 +485,7 @@ type DDL struct {
 	Table    TableName
 	NewName  TableName
 	IfExists bool
+	Columns  *TableColumns
 }
 
 // DDL strings.
@@ -499,7 +500,11 @@ const (
 func (node *DDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case CreateStr:
-		buf.Myprintf("%s table %v", node.Action, node.NewName)
+		if node.Columns == nil {
+			buf.Myprintf("%s table %v", node.Action, node.NewName)
+		} else {
+			buf.Myprintf("%s table %v %v", node.Action, node.NewName, node.Columns)
+		}
 	case DropStr:
 		exists := ""
 		if node.IfExists {
@@ -524,6 +529,220 @@ func (node *DDL) WalkSubtree(visit Visit) error {
 		node.NewName,
 	)
 }
+
+// TableColumns describes the column structure of a table from a CREATE TABLE
+// statement
+type TableColumns struct {
+	Columns []*ColumnDefinition
+	Indexes []*IndexDefinition
+}
+
+func (tc *TableColumns) Format(buf *TrackedBuffer) {
+	buf.Myprintf("(\n")
+	first := true
+	for _, col := range tc.Columns {
+		if first {
+			first = false
+			buf.Myprintf("\t%s %v", col.Name.String(), &col.Type)
+		} else {
+			buf.Myprintf(",\n\t%s %v", col.Name.String(), &col.Type)
+		}
+	}
+	for _, idx := range tc.Indexes {
+		buf.Myprintf(",\n\t%v", idx)
+	}
+
+	buf.Myprintf("\n)")
+}
+
+func (tc *TableColumns) AddColumn(cd *ColumnDefinition) {
+	tc.Columns = append(tc.Columns, cd)
+}
+
+func (tc *TableColumns) AddIndex(id *IndexDefinition) {
+	tc.Indexes = append(tc.Indexes, id)
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *TableColumns) WalkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+
+	for _, n := range node.Columns {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+
+	for _, n := range node.Indexes {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ColumnDefinition describes a column in a CREATE TABLE statement
+type ColumnDefinition struct {
+	Name ColIdent
+	Type ColumnType
+}
+
+func (col *ColumnDefinition) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%s %v", col.Name, col.Type)
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *ColumnDefinition) WalkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Name,
+		&node.Type,
+	)
+}
+
+// ColumnType represents a sql type in a CREATE TABLE statement
+// All optional fields are nil if not specified
+type ColumnType struct {
+	// The base type string
+	Type string
+
+	// Generic field options.
+	NotNull       BoolVal
+	Autoincrement BoolVal
+	Default       *SQLVal
+
+	// Numeric field options
+	Length   *SQLVal
+	Unsigned BoolVal
+	Zerofill BoolVal
+	Scale    *SQLVal
+
+	// Text field options
+	Charset string
+	Collate string
+
+	// Key specification
+	KeyOpt ColumnKeyOption
+}
+
+// Format returns a canonical string representation of the type and all relevant options
+func (ct *ColumnType) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%s", ct.Type)
+
+	if ct.Length != nil && ct.Scale != nil {
+		buf.Myprintf("(%v,%v)", ct.Length, ct.Scale)
+
+	} else if ct.Length != nil {
+		buf.Myprintf("(%v)", ct.Length)
+	}
+
+	opts := make([]string, 0, 16)
+	if ct.Unsigned {
+		opts = append(opts, keywordStrings[UNSIGNED])
+	}
+	if ct.Zerofill {
+		opts = append(opts, keywordStrings[ZEROFILL])
+	}
+	if ct.Charset != "" {
+		opts = append(opts, keywordStrings[CHARACTER], keywordStrings[SET], ct.Charset)
+	}
+	if ct.Collate != "" {
+		opts = append(opts, keywordStrings[COLLATE], ct.Collate)
+	}
+	if ct.NotNull {
+		opts = append(opts, keywordStrings[NOT], keywordStrings[NULL])
+	}
+	if ct.Default != nil {
+		opts = append(opts, keywordStrings[DEFAULT], String(ct.Default))
+	}
+	if ct.Autoincrement {
+		opts = append(opts, keywordStrings[AUTO_INCREMENT])
+	}
+	if ct.KeyOpt == ColKeyPrimary {
+		opts = append(opts, keywordStrings[PRIMARY], keywordStrings[KEY])
+	}
+	if ct.KeyOpt == ColKeyUnique {
+		opts = append(opts, keywordStrings[UNIQUE], keywordStrings[KEY])
+	}
+	if ct.KeyOpt == ColKey {
+		opts = append(opts, keywordStrings[KEY])
+	}
+
+	if len(opts) != 0 {
+		buf.Myprintf(" %s", strings.Join(opts, " "))
+	}
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *ColumnType) WalkSubtree(visit Visit) error {
+	return nil
+}
+
+// IndexDefinition describes an index in a CREATE TABLE statement
+type IndexDefinition struct {
+	Info    *IndexInfo
+	Columns Columns
+}
+
+// IndexInfo describes the name and type of an index in a CREATE TABLE statement
+type IndexInfo struct {
+	Primary bool
+	Name    ColIdent
+	Unique  bool
+}
+
+func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
+	cols := make([]string, 0, 4)
+	for _, col := range idx.Columns {
+		cols = append(cols, col.String())
+	}
+
+	if idx.Info.Primary {
+		buf.Myprintf("%s %s", keywordStrings[PRIMARY], keywordStrings[KEY])
+	} else if idx.Info.Unique {
+		buf.Myprintf("%s %s %v", keywordStrings[UNIQUE], keywordStrings[KEY], idx.Info.Name)
+	} else {
+		buf.Myprintf("%s %v", keywordStrings[KEY], idx.Info.Name)
+	}
+	buf.Myprintf(" (%s)", strings.Join(cols, ", "))
+}
+
+func (node *IndexDefinition) WalkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+
+	for _, n := range node.Columns {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// LengthScaleOption is used for types that have an optional length
+// and scale
+type LengthScaleOption struct {
+	Length *SQLVal
+	Scale  *SQLVal
+}
+
+// KeyOption indicates whether or not the given column is defined as an index element
+type ColumnKeyOption int
+
+const (
+	ColKeyNone ColumnKeyOption = iota
+	ColKeyPrimary
+	ColKeyUnique
+	ColKey
+)
 
 // Show represents a show statement.
 type Show struct {
