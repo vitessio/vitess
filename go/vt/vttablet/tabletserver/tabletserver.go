@@ -1025,6 +1025,8 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 // It returns an empty string as key if the row (range) cannot be parsed from
 // the query and bind variables or the table name is empty.
 func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *tabletenv.LogStats, sql string, bindVariables map[string]*querypb.BindVariable) (string, string) {
+	// Strip trailing comments so we don't pollute the query cache.
+	sql, _ = sqlparser.SplitTrailingComments(sql)
 	plan, err := tsv.qe.GetPlan(ctx, logStats, sql)
 	if err != nil {
 		logComputeRowSerializerKey.Errorf("failed to get plan for query: %v err: %v", sql, err)

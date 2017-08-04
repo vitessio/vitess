@@ -135,6 +135,25 @@ func (client *QueryClient) Execute(query string, bindvars map[string]*querypb.Bi
 	return client.ExecuteWithOptions(query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 }
 
+// BeginExecute performs a BeginExecute.
+func (client *QueryClient) BeginExecute(query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	if client.transactionID != 0 {
+		return nil, errors.New("already in transaction")
+	}
+	qr, transactionID, err := client.server.BeginExecute(
+		client.ctx,
+		&client.target,
+		query,
+		bindvars,
+		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
+	)
+	if err != nil {
+		return nil, err
+	}
+	client.transactionID = transactionID
+	return qr, nil
+}
+
 // ExecuteWithOptions executes a query using 'options'.
 func (client *QueryClient) ExecuteWithOptions(query string, bindvars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	return client.server.Execute(

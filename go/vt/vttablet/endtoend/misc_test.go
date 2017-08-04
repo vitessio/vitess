@@ -460,7 +460,9 @@ func TestQueryStats(t *testing.T) {
 	start := time.Now()
 	query := "select /* query_stats */ eid from vitess_a where eid = :eid"
 	bv := map[string]*querypb.BindVariable{"eid": sqltypes.Int64BindVariable(1)}
-	_, _ = client.Execute(query, bv)
+	if _, err := client.Execute(query, bv); err != nil {
+		t.Fatal(err)
+	}
 	stat := framework.QueryStats()[query]
 	duration := int(time.Now().Sub(start))
 	if stat.Time <= 0 || stat.Time > duration {
@@ -483,6 +485,7 @@ func TestQueryStats(t *testing.T) {
 		t.Errorf("stat: %+v, want %+v", stat, want)
 	}
 
+	// Query cache should be updated for errors that happen at MySQL level also.
 	query = "select /* query_stats */ eid from vitess_a where dontexist(eid) = :eid"
 	_, _ = client.Execute(query, bv)
 	stat = framework.QueryStats()[query]
@@ -508,6 +511,22 @@ func TestQueryStats(t *testing.T) {
 	}
 	if err := compareIntDiff(vend, "QueryErrorCounts/vitess_a.PASS_SELECT", vstart, 1); err != nil {
 		t.Error(err)
+	}
+
+	// Ensure BeginExecute also updates the stats and strips comments.
+	query = "select /* begin_execute */ 1 /* trailing comment */"
+	if _, err := client.BeginExecute(query, bv); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := framework.QueryStats()[query]; ok {
+		t.Errorf("query stats included trailing comments for BeginExecute: %v", framework.QueryStats())
+	}
+	stripped := "select /* begin_execute */ 1"
+	if _, ok := framework.QueryStats()[stripped]; !ok {
+		t.Errorf("query stats did not get updated for BeginExecute: %v", framework.QueryStats())
 	}
 }
 
