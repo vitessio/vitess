@@ -17,6 +17,7 @@
 package io.vitess.jdbc;
 
 import io.vitess.util.Constants;
+
 import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.DriverManager;
@@ -95,7 +96,7 @@ public class VitessDriver implements Driver {
             info = new Properties();
         }
 
-        DriverPropertyInfo[] dpi = ConnectionProperties.exposeAsDriverPropertyInfo(info, 5);
+        DriverPropertyInfo[] dpi = ConnectionProperties.exposeAsDriverPropertyInfo(info, 2);
         if (acceptsURL(url)) {
             VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(url, info);
 
@@ -109,19 +110,6 @@ public class VitessDriver implements Driver {
             dpi[1].required = false;
             dpi[1].description = Constants.VITESS_PORT;
 
-            dpi[2] =
-                new DriverPropertyInfo(Constants.Property.KEYSPACE, vitessJDBCUrl.getKeyspace());
-            dpi[2].required = true;
-            dpi[2].description = Constants.VITESS_KEYSPACE;
-
-            dpi[3] = new DriverPropertyInfo(Constants.Property.DBNAME, vitessJDBCUrl.getCatalog());
-            dpi[3].required = false;
-            dpi[3].description = Constants.VITESS_DB_NAME;
-
-            dpi[4] =
-                new DriverPropertyInfo(Constants.Property.USERNAME, vitessJDBCUrl.getUsername());
-            dpi[4].required = false;
-            dpi[4].description = Constants.USERNAME_DESC;
         } else {
             throw new SQLException(Constants.SQLExceptionMessages.INVALID_CONN_URL + " : " + url);
         }

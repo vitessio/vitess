@@ -51,6 +51,9 @@ public class Constants {
     public static final Query.ExecuteOptions.IncludedFields DEFAULT_INCLUDED_FIELDS = Query.ExecuteOptions.IncludedFields.ALL;
     public static final String DEFAULT_KEYSPACE = "";
     public static final String DEFAULT_SHARD = "";
+    public static final String DEFAULT_USERNAME = null;
+    public static final String DEFAULT_TARGET = "";
+    public static final String DEFAULT_CATALOG = DEFAULT_KEYSPACE;
 
     private Constants() {
     }
@@ -143,6 +146,7 @@ public class Constants {
         public static final String TRUSTSTORE_PASSWORD_FULL = "javax.net.ssl.trustStorePassword";
         public static final String TRUST_ALIAS_FULL = "javax.net.ssl.trustAlias";
         public static final String INCLUDED_FIELDS = "includedFields";
+        public static final String TARGET = "target";
     }
 
 
