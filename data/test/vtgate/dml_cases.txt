@@ -297,6 +297,21 @@
   }
 }
 
+# simple upsert unsharded
+"insert into unsharded values(1, 2) on duplicate key update x = 3"
+{
+  "Original": "insert into unsharded values(1, 2) on duplicate key update x = 3",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into unsharded values (1, 2) on duplicate key update x = 3",
+    "Table": "unsharded"
+  }
+}
+
 # insert unsharded with select
 "insert into unsharded select id from unsharded_auto"
 {

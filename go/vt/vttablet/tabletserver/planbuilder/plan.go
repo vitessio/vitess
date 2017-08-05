@@ -159,8 +159,10 @@ const (
 	ReasonTableNoIndex
 	ReasonPKChange
 	ReasonComplexExpr
-	ReasonUpsert
+	ReasonUpsertSubquery
+	ReasonUpsertSafePassthrough
 	ReasonUpsertColMismatch
+	ReasonUpsertMultiRow
 	ReasonReplace
 	ReasonMultiTable
 )
@@ -172,8 +174,10 @@ var reasonName = []string{
 	"TABLE_NOINDEX",
 	"PK_CHANGE",
 	"COMPLEX_EXPR",
-	"UPSERT",
+	"UPSERT_SUBQUERY",
+	"UPSERT_SAFE_PASSTHROUGH",
 	"UPSERT_COL_MISMATCH",
+	"UPSERT_MULTI_ROW",
 	"REPLACE",
 	"MULTI_TABLE",
 }

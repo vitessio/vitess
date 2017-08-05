@@ -36,11 +36,11 @@ func TestSchamazHandler(t *testing.T) {
 	tableD := NewTable("c")
 
 	tableA.AddColumn("column1", sqltypes.Int64, sqltypes.NewInt32(0), "auto_increment")
-	tableA.AddIndex("index1").AddColumn("index_column", 1000)
+	tableA.AddIndex("index1", true).AddColumn("index_column", 1000)
 	tableA.Type = NoType
 
 	tableB.AddColumn("column2", sqltypes.VarChar, sqltypes.NewVarBinary("NULL"), "")
-	tableB.AddIndex("index2").AddColumn("index_column2", 200)
+	tableB.AddIndex("index2", true).AddColumn("index_column2", 200)
 	tableB.Type = Sequence
 
 	tableC.Type = Message
