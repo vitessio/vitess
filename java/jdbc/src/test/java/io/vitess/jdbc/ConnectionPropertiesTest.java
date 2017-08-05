@@ -262,5 +262,21 @@ public class ConnectionPropertiesTest {
         props.initializeProperties(info);
         Assert.assertEquals("target", "@replica", props.getTarget());
 
+        // Setting keyspace, shard and tablet type.
+        info = new Properties();
+        info.setProperty(Constants.Property.KEYSPACE, "test_keyspace");
+        info.setProperty(Constants.Property.SHARD, "80-c0");
+        info.setProperty(Constants.Property.TABLET_TYPE, "rdonly");
+        props.initializeProperties(info);
+        Assert.assertEquals("target", "test_keyspace:80-c0@rdonly", props.getTarget());
+
+        // Setting keyspace, shard, tablet type and target. Target supersede others.
+        info = new Properties();
+        info.setProperty(Constants.Property.KEYSPACE, "test_keyspace");
+        info.setProperty(Constants.Property.SHARD, "80-c0");
+        info.setProperty(Constants.Property.TABLET_TYPE, "rdonly");
+        info.setProperty(Constants.Property.TARGET, "dummy");
+        props.initializeProperties(info);
+        Assert.assertEquals("target", "dummy", props.getTarget());
     }
 }
