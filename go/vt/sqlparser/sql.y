@@ -237,6 +237,7 @@ func forceEOF(yylex interface{}) {
 %type <TableSpec> table_spec table_column_list
 %type <str> table_option_list table_option table_opt_value
 %type <indexInfo> index_info
+%type <colIdent> index_column
 %type <columns> index_column_list
 
 %start any_command
@@ -708,7 +709,7 @@ index_definition:
 index_info:
   PRIMARY KEY
   {
-    $$ = &IndexInfo{Primary: true}
+    $$ = &IndexInfo{Primary: true, Name: NewColIdent("PRIMARY"), Unique: true}
   }
 | UNIQUE KEY ID
   {
@@ -720,13 +721,19 @@ index_info:
   }
 
 index_column_list:
-  sql_id
+  index_column
   {
     $$ = Columns{$1}
   }
-| index_column_list ',' sql_id
+| index_column_list ',' index_column
   {
     $$ = append($$, $3)
+  }
+
+index_column:
+  sql_id length_opt
+  {
+      $$ = $1
   }
 
 table_spec:
