@@ -310,8 +310,7 @@
 # on dup single unique index
 "insert into b (eid, id) values (1, 2) on duplicate key update name = func(a)"
 {
-  "PlanID": "UPSERT_PK",
-  "Reason": "UPSERT_SAFE_PASSTHROUGH",
+  "PlanID": "INSERT_PK",
   "TableName": "b",
   "FullQuery": "insert into b(eid, id) values (1, 2) on duplicate key update name = func(a)",
   "OuterQuery": "insert into b(eid, id) values (1, 2) on duplicate key update name = func(a)",
@@ -453,12 +452,22 @@
 # on dup multi-row with 0-1 unique indexes
 "insert into b (id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)"
 {
-  "PlanID": "UPSERT_PK",
-  "Reason": "UPSERT_SAFE_PASSTHROUGH",
+  "PlanID": "INSERT_PK",
   "TableName": "b",
   "FullQuery": "insert into b(id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)",
   "OuterQuery": "insert into b(id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)",
   "PKValues": [[2,3],[1,2]]
+}
+
+# on dup multi-row with 0-1 unique indexes and pk change
+"insert into b (id, eid) values (1, 2), (2, 3) on duplicate key update id = 1"
+{
+  "PlanID": "INSERT_PK",
+  "TableName": "b",
+  "FullQuery": "insert into b(id, eid) values (1, 2), (2, 3) on duplicate key update id = 1",
+  "OuterQuery": "insert into b(id, eid) values (1, 2), (2, 3) on duplicate key update id = 1",
+  "PKValues": [[2,3],[1,2]],
+  "SecondaryPKValues": [null, 1]
 }
 
 # on dup subquery

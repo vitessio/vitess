@@ -467,6 +467,34 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	if !reflect.DeepEqual(gotqueries, wantqueries) {
 		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
 	}
+
+	// Test pk change.
+	db.AddRejectedQuery(
+		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
+		mysql.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
+	)
+	db.AddQuery(
+		"update test_table set pk = 2 where pk in (1) /* _stream test_table (pk ) (1 ) (2 ); */",
+		&sqltypes.Result{RowsAffected: 1},
+	)
+	txid = newTransaction(tsv)
+	qre = newTestQueryExecutor(ctx, tsv, "insert into test_table values (1) on duplicate key update pk=2", txid)
+	defer testCommitHelper(t, tsv, qre)
+	got, err = qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	want = &sqltypes.Result{
+		RowsAffected: 2,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got: %v, want: %v", got, want)
+	}
+	wantqueries = []string{"update test_table set pk = 2 where pk in (1) /* _stream test_table (pk ) (1 ) (2 ); */"}
+	gotqueries = fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	}
 }
 
 func TestQueryExecutorPlanUpsertPkSingleUnique(t *testing.T) {
@@ -482,7 +510,7 @@ func TestQueryExecutorPlanUpsertPkSingleUnique(t *testing.T) {
 	qre := newTestQueryExecutor(ctx, tsv, query[0:strings.Index(query, " /*")], txid)
 	defer tsv.StopService()
 	defer testCommitHelper(t, tsv, qre)
-	checkPlanID(t, planbuilder.PlanUpsertPK, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanInsertPK, qre.plan.PlanID)
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
@@ -496,6 +524,29 @@ func TestQueryExecutorPlanUpsertPkSingleUnique(t *testing.T) {
 		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
 	}
 
+	// PK changed by upsert.
+	query = "insert into test_table values (1), (2), (3) on duplicate key update pk = 5 /* _stream test_table (pk ) (1 ) (2 ) (3 ) (5 ) (5 ) (5 ); */"
+	db.AddQuery(query, &sqltypes.Result{})
+	want = &sqltypes.Result{}
+	ctx = context.Background()
+	tsv = newTestTabletServer(ctx, noFlags, db)
+	txid = newTransaction(tsv)
+	qre = newTestQueryExecutor(ctx, tsv, query[0:strings.Index(query, " /*")], txid)
+	defer testCommitHelper(t, tsv, qre)
+	checkPlanID(t, planbuilder.PlanInsertPK, qre.plan.PlanID)
+	got, err = qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+	wantqueries = []string{query}
+	gotqueries = fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	}
+
 	query = "insert into test_table values (1), (2), (3) on duplicate key update val = 5 /* _stream test_table (pk ) (1 ) (2 ) (3 ); */"
 	db.AddQuery(query, &sqltypes.Result{})
 	want = &sqltypes.Result{}
@@ -504,7 +555,7 @@ func TestQueryExecutorPlanUpsertPkSingleUnique(t *testing.T) {
 	txid = newTransaction(tsv)
 	qre = newTestQueryExecutor(ctx, tsv, query[0:strings.Index(query, " /*")], txid)
 	defer testCommitHelper(t, tsv, qre)
-	checkPlanID(t, planbuilder.PlanUpsertPK, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanInsertPK, qre.plan.PlanID)
 	got, err = qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)

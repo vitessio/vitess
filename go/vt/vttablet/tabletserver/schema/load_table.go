@@ -91,11 +91,7 @@ func fetchIndexes(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
 	for _, row := range indexes.Rows {
 		indexName := row[2].ToString()
 		if currentName != indexName {
-			nonUnique, err := sqltypes.ToUint64(row[1])
-			if err != nil {
-				log.Errorf("Table: %s, index Non_unique column is not integral type", ta.Name)
-			}
-			currentIndex = ta.AddIndex(indexName, nonUnique == 0)
+			currentIndex = ta.AddIndex(indexName, row[1].ToString() == "0")
 			currentName = indexName
 		}
 		var cardinality uint64

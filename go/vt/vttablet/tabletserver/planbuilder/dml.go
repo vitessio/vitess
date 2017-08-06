@@ -364,22 +364,7 @@ func analyzeInsertNoType(ins *sqlparser.Insert, plan *Plan, table *schema.Table)
 		return plan, nil
 	}
 
-	// If the table only has one unique key then it is safe to pass through
-	// a simple upsert unmodified even if there are multiple rows in the
-	// statement.
-	if table.UniqueIndexes() <= 1 {
-		plan.PlanID = PlanUpsertPK
-		plan.Reason = ReasonUpsertSafePassthrough
-		plan.OuterQuery = sqlparser.NewParsedQuery(ins)
-		return plan, nil
-	}
-
-	// Otherwise multiple rows are unsupported
-	if len(rowList) > 1 {
-		plan.Reason = ReasonUpsertMultiRow
-		return plan, nil
-	}
-
+	// Compute secondary pk values if OnDup changes them.
 	updateExprs, err := resolveUpsertUpdateValues(rowList[0], ins.Columns, ins.OnDup)
 	if err != nil {
 		plan.Reason = ReasonUpsertColMismatch
@@ -388,6 +373,23 @@ func analyzeInsertNoType(ins *sqlparser.Insert, plan *Plan, table *schema.Table)
 	plan.SecondaryPKValues, err = analyzeUpdateExpressions(updateExprs, table.Indexes[0])
 	if err != nil {
 		plan.Reason = ReasonPKChange
+		return plan, nil
+	}
+
+	// If the table only has one unique key then it is safe to pass through
+	// a simple upsert unmodified even if there are multiple rows in the
+	// statement. The action is same as a regular insert except that we
+	// may have to publish possible PK changes by OnDup, which would be
+	// recorded in SecondaryPKValues.
+	if table.UniqueIndexes() <= 1 {
+		plan.PlanID = PlanInsertPK
+		plan.OuterQuery = sqlparser.NewParsedQuery(ins)
+		return plan, nil
+	}
+
+	// Otherwise multiple rows are unsupported
+	if len(rowList) > 1 {
+		plan.Reason = ReasonUpsertMultiRow
 		return plan, nil
 	}
 	plan.PlanID = PlanUpsertPK
