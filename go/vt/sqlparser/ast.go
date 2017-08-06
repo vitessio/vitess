@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // Instructions for creating new types: If a type
@@ -677,6 +678,79 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if len(opts) != 0 {
 		buf.Myprintf(" %s", strings.Join(opts, " "))
 	}
+}
+
+// Get the abbreviated type information as returned by describe table
+func (ct *ColumnType) DescribeType() string {
+	buf := NewTrackedBuffer(nil)
+	buf.Myprintf("%s", ct.Type)
+	if ct.Length != nil && ct.Scale != nil {
+		buf.Myprintf("(%v,%v)", ct.Length, ct.Scale)
+	} else if ct.Length != nil {
+		buf.Myprintf("(%v)", ct.Length)
+	}
+
+	opts := make([]string, 0, 16)
+	if ct.Unsigned {
+		opts = append(opts, keywordStrings[UNSIGNED])
+	}
+	if ct.Zerofill {
+		opts = append(opts, keywordStrings[ZEROFILL])
+	}
+	if len(opts) != 0 {
+		buf.Myprintf(" %s", strings.Join(opts, " "))
+	}
+	return buf.String()
+}
+
+// SqlType returns the sqltypes type code for the given column
+func (ct *ColumnType) SqlType() querypb.Type {
+	switch ct.Type {
+	case keywordStrings[TINYINT]:
+		if ct.Unsigned {
+			return sqltypes.Uint8
+		} else {
+			return sqltypes.Int8
+		}
+	case keywordStrings[SMALLINT]:
+		if ct.Unsigned {
+			return sqltypes.Uint16
+		} else {
+			return sqltypes.Int16
+		}
+	case keywordStrings[MEDIUMINT]:
+		if ct.Unsigned {
+			return sqltypes.Uint24
+		} else {
+			return sqltypes.Int24
+		}
+	case keywordStrings[INT]:
+		fallthrough
+	case keywordStrings[INTEGER]:
+		if ct.Unsigned {
+			return sqltypes.Uint32
+		} else {
+			return sqltypes.Int32
+		}
+	case keywordStrings[BIGINT]:
+		if ct.Unsigned {
+			return sqltypes.Uint64
+		} else {
+			return sqltypes.Int64
+		}
+	case keywordStrings[TEXT]:
+		return sqltypes.Text
+	case keywordStrings[TINYTEXT]:
+		return sqltypes.Text
+	case keywordStrings[MEDIUMTEXT]:
+		return sqltypes.Text
+	case keywordStrings[LONGTEXT]:
+		return sqltypes.Text
+	case keywordStrings[VARCHAR]:
+		return sqltypes.VarChar
+	}
+
+	panic("unimplemented type " + ct.Type)
 }
 
 // WalkSubtree walks the nodes of the subtree.
