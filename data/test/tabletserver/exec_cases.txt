@@ -304,14 +304,14 @@
   "FullQuery": "insert into a(eid, id) values (1, 2) on duplicate key update name = func(a)",
   "OuterQuery": "insert into a(eid, id) values (1, 2)",
   "UpsertQuery": "update a set name = func(a) where :#pk",
-  "PKValues": [1, 2]
+  "PKValues": [[1], [2]]
 }
 
 # on dup single unique index
 "insert into b (eid, id) values (1, 2) on duplicate key update name = func(a)"
 {
   "PlanID": "UPSERT_PK",
-  "Reason": "UPSERT_SINGLE_INDEX",
+  "Reason": "UPSERT_SAFE_PASSTHROUGH",
   "TableName": "b",
   "FullQuery": "insert into b(eid, id) values (1, 2) on duplicate key update name = func(a)",
   "OuterQuery": "insert into b(eid, id) values (1, 2) on duplicate key update name = func(a)",
@@ -454,7 +454,7 @@
 "insert into b (id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)"
 {
   "PlanID": "UPSERT_PK",
-  "Reason": "UPSERT_SINGLE_INDEX",
+  "Reason": "UPSERT_SAFE_PASSTHROUGH",
   "TableName": "b",
   "FullQuery": "insert into b(id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)",
   "OuterQuery": "insert into b(id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)",

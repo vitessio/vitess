@@ -1693,8 +1693,7 @@ func TestNocacheCases(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into vitess_bool(auto, bval, sval, ival) values (1, false, 'test2', 191) on duplicate key update bval = false",
 					Rewritten: []string{
-						"insert into vitess_bool(auto, bval, sval, ival) values (1, false, 'test2', 191) /* _stream vitess_bool (auto ) (1 )",
-						"update vitess_bool set bval = false where auto in (1) /* _stream vitess_bool (auto ) (1 )",
+						"insert into vitess_bool(auto, bval, sval, ival) values (1, false, 'test2', 191) on duplicate key update bval = false /* _stream vitess_bool (auto ) (1 )",
 					},
 					RowsAffected: 2,
 				},
