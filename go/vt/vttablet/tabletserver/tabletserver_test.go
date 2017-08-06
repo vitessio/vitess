@@ -1186,9 +1186,9 @@ func TestTabletServerExecuteBatch(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
 	testUtils := newTestUtils()
-	sql := "insert into test_table values (1, 2)"
+	sql := "insert into test_table values (1, 2, 'addr', 'name')"
 	sqlResult := &sqltypes.Result{}
-	expanedSQL := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
+	expanedSQL := "insert into test_table(pk, name, addr, name_string) values (1, 2, 'addr', 'name') /* _stream test_table (pk ) (1 ); */"
 
 	db.AddQuery(sql, sqlResult)
 	db.AddQuery(expanedSQL, sqlResult)
@@ -1208,8 +1208,7 @@ func TestTabletServerExecuteBatch(t *testing.T) {
 			BindVariables: nil,
 		},
 	}, true, 0, nil); err != nil {
-		t.Fatalf("TabletServer.ExecuteBatch should success: %v, but get error: %v",
-			sql, err)
+		t.Fatal(err)
 	}
 }
 
@@ -1363,9 +1362,9 @@ func TestTabletServerExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
 	testUtils := newTestUtils()
-	sql := "insert into test_table values (1, 2)"
+	sql := "insert into test_table values (1, 2, 'addr', 'name')"
 	sqlResult := &sqltypes.Result{}
-	expanedSQL := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
+	expanedSQL := "insert into test_table(pk, name, addr, name_string) values (1, 2, 'addr', 'name') /* _stream test_table (pk ) (1 ); */"
 
 	db.AddQuery(sql, sqlResult)
 	db.AddQuery(expanedSQL, sqlResult)

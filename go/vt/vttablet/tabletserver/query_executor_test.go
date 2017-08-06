@@ -170,9 +170,9 @@ func TestQueryExecutorPlanPassDmlReplaceInto(t *testing.T) {
 func TestQueryExecutorPlanInsertPk(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
-	db.AddQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
+	db.AddQuery("insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
 	want := &sqltypes.Result{}
-	query := "insert into test_table values(1)"
+	query := "insert into test_table(pk) values(1)"
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
@@ -387,9 +387,9 @@ func TestQueryExecutorPlanInsertSubQueryRBR(t *testing.T) {
 func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
-	db.AddQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
+	db.AddQuery("insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
 	want := &sqltypes.Result{}
-	query := "insert into test_table values(1) on duplicate key update val=1"
+	query := "insert into test_table(pk) values(1) on duplicate key update val=1"
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	txid := newTransaction(tsv)
@@ -404,13 +404,13 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
 	}
-	wantqueries := []string{"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */"}
+	wantqueries := []string{"insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */"}
 	gotqueries := fetchRecordedQueries(qre)
 	if !reflect.DeepEqual(gotqueries, wantqueries) {
 		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
 	}
 
-	db.AddRejectedQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", errRejected)
+	db.AddRejectedQuery("insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */", errRejected)
 	txid = newTransaction(tsv)
 	qre = newTestQueryExecutor(ctx, tsv, query, txid)
 	defer testCommitHelper(t, tsv, qre)
@@ -424,10 +424,10 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	}
 
 	db.AddRejectedQuery(
-		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
+		"insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */",
 		mysql.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "err"),
 	)
-	db.AddQuery("update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
+	db.AddQuery("update test_table(pk) set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
 	txid = newTransaction(tsv)
 	qre = newTestQueryExecutor(ctx, tsv, query, txid)
 	defer testCommitHelper(t, tsv, qre)
@@ -442,7 +442,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	}
 
 	db.AddRejectedQuery(
-		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
+		"insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */",
 		mysql.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
 	)
 	db.AddQuery(
@@ -470,7 +470,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 
 	// Test pk change.
 	db.AddRejectedQuery(
-		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
+		"insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */",
 		mysql.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
 	)
 	db.AddQuery(
@@ -478,7 +478,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 		&sqltypes.Result{RowsAffected: 1},
 	)
 	txid = newTransaction(tsv)
-	qre = newTestQueryExecutor(ctx, tsv, "insert into test_table values (1) on duplicate key update pk=2", txid)
+	qre = newTestQueryExecutor(ctx, tsv, "insert into test_table(pk) values (1) on duplicate key update pk=2", txid)
 	defer testCommitHelper(t, tsv, qre)
 	got, err = qre.Execute()
 	if err != nil {
@@ -500,9 +500,9 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 func TestQueryExecutorPlanUpsertPkSingleUnique(t *testing.T) {
 	db := setUpQueryExecutorTestWithOneUniqueKey(t)
 	defer db.Close()
-	query := "insert into test_table values (1) on duplicate key update val = 1 /* _stream test_table (pk ) (1 ); */"
+	query := "insert into test_table(pk) values (1) on duplicate key update val = 1 /* _stream test_table (pk ) (1 ); */"
 	db.AddQuery(query, &sqltypes.Result{})
-	db.AddRejectedQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", errRejected)
+	db.AddRejectedQuery("insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */", errRejected)
 	want := &sqltypes.Result{}
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, noFlags, db)
@@ -525,7 +525,7 @@ func TestQueryExecutorPlanUpsertPkSingleUnique(t *testing.T) {
 	}
 
 	// PK changed by upsert.
-	query = "insert into test_table values (1), (2), (3) on duplicate key update pk = 5 /* _stream test_table (pk ) (1 ) (2 ) (3 ) (5 ) (5 ) (5 ); */"
+	query = "insert into test_table(pk) values (1), (2), (3) on duplicate key update pk = 5 /* _stream test_table (pk ) (1 ) (2 ) (3 ) (5 ) (5 ) (5 ); */"
 	db.AddQuery(query, &sqltypes.Result{})
 	want = &sqltypes.Result{}
 	ctx = context.Background()
@@ -547,7 +547,30 @@ func TestQueryExecutorPlanUpsertPkSingleUnique(t *testing.T) {
 		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
 	}
 
-	query = "insert into test_table values (1), (2), (3) on duplicate key update val = 5 /* _stream test_table (pk ) (1 ) (2 ) (3 ); */"
+	// PK changed by using values.
+	query = "insert into test_table(pk, name) values (1, 4), (2, 5), (3, 6) on duplicate key update pk = values(name) /* _stream test_table (pk ) (1 ) (2 ) (3 ) (4 ) (5 ) (6 ); */"
+	db.AddQuery(query, &sqltypes.Result{})
+	want = &sqltypes.Result{}
+	ctx = context.Background()
+	tsv = newTestTabletServer(ctx, noFlags, db)
+	txid = newTransaction(tsv)
+	qre = newTestQueryExecutor(ctx, tsv, query[0:strings.Index(query, " /*")], txid)
+	defer testCommitHelper(t, tsv, qre)
+	checkPlanID(t, planbuilder.PlanInsertPK, qre.plan.PlanID)
+	got, err = qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+	wantqueries = []string{query}
+	gotqueries = fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	}
+
+	query = "insert into test_table(pk) values (1), (2), (3) on duplicate key update val = 5 /* _stream test_table (pk ) (1 ) (2 ) (3 ); */"
 	db.AddQuery(query, &sqltypes.Result{})
 	want = &sqltypes.Result{}
 	ctx = context.Background()
@@ -574,7 +597,7 @@ func TestQueryExecutorPlanUpsertPkRBR(t *testing.T) {
 	// For UPSERT, the query just becomes a pass-through in RBR mode.
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
-	query := "insert into test_table values (1) on duplicate key update val = 1"
+	query := "insert into test_table(pk) values (1) on duplicate key update val = 1"
 	db.AddQuery(query, &sqltypes.Result{})
 	want := &sqltypes.Result{}
 	ctx := context.Background()
@@ -602,9 +625,9 @@ func TestQueryExecutorPlanUpsertPkRBR(t *testing.T) {
 func TestQueryExecutorPlanUpsertPkAutoCommit(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
-	db.AddQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
+	db.AddQuery("insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
 	want := &sqltypes.Result{}
-	query := "insert into test_table values(1) on duplicate key update val=1"
+	query := "insert into test_table(pk) values(1) on duplicate key update val=1"
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
@@ -618,7 +641,7 @@ func TestQueryExecutorPlanUpsertPkAutoCommit(t *testing.T) {
 		t.Fatalf("got: %v, want: %v", got, want)
 	}
 
-	db.AddRejectedQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", errRejected)
+	db.AddRejectedQuery("insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */", errRejected)
 	_, err = qre.Execute()
 	wantErr := "rejected"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
@@ -626,7 +649,7 @@ func TestQueryExecutorPlanUpsertPkAutoCommit(t *testing.T) {
 	}
 
 	db.AddRejectedQuery(
-		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
+		"insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */",
 		mysql.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "err"),
 	)
 	db.AddQuery("update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
@@ -637,7 +660,7 @@ func TestQueryExecutorPlanUpsertPkAutoCommit(t *testing.T) {
 	}
 
 	db.AddRejectedQuery(
-		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
+		"insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */",
 		mysql.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
 	)
 	db.AddQuery(

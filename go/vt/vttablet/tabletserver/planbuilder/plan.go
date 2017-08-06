@@ -160,7 +160,6 @@ const (
 	ReasonPKChange
 	ReasonComplexExpr
 	ReasonUpsertSubquery
-	ReasonUpsertColMismatch
 	ReasonUpsertMultiRow
 	ReasonReplace
 	ReasonMultiTable
@@ -175,7 +174,6 @@ var reasonName = [NumReasons]string{
 	"PK_CHANGE",
 	"COMPLEX_EXPR",
 	"UPSERT_SUBQUERY",
-	"UPSERT_COL_MISMATCH",
 	"UPSERT_MULTI_ROW",
 	"REPLACE",
 	"MULTI_TABLE",
