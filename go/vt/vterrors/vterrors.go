@@ -53,7 +53,7 @@ func Wrap(err error, message string) error {
 
 // Wrapf wraps the given error, returning a new error with the given format string as a prefix but with the same error code (if err was a vterror) and message of the passed error.
 func Wrapf(err error, format string, args ...interface{}) error {
-	return Wrap(err, fmt.Sprintf(format, args))
+	return Wrap(err, fmt.Sprintf(format, args...))
 }
 
 // Errorf returns a new error built using Printf style arguments.
