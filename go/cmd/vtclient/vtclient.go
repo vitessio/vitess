@@ -22,6 +22,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math/rand"
 	"os"
 	"sort"
 	"sync"
@@ -62,6 +63,8 @@ Examples:
 	jsonOutput    = flag.Bool("json", false, "Output JSON instead of human-readable table")
 	parallel      = flag.Int("parallel", 1, "DMLs only: Number of threads executing the same query in parallel. Useful for simple load testing.")
 	count         = flag.Int("count", 1, "DMLs only: Number of times each thread executes the query. Useful for simple, sustained load testing.")
+	minRandomID   = flag.Int("min_random_id", 0, "min random ID to generate. When max_random_id > min_random_id, for each query, a random number is generated in [min_random_id, max_random_id) and attached to the end of the bind variables.")
+	maxRandomID   = flag.Int("max_random_id", 0, "max random ID.")
 )
 
 func init() {
@@ -162,6 +165,14 @@ func run() (*results, error) {
 	return execMulti(db, args[0])
 }
 
+func prepareBindVariables() []interface{} {
+	bv := *bindVariables
+	if *maxRandomID > *minRandomID {
+		bv = append(bv, rand.Intn(*maxRandomID-*minRandomID)+*minRandomID)
+	}
+	return bv
+}
+
 func execMulti(db *sql.DB, sql string) (*results, error) {
 	all := newResults()
 	ec := concurrency.FirstErrorRecorder{}
@@ -209,7 +220,7 @@ func execDml(db *sql.DB, sql string) (*results, error) {
 		return nil, vterrors.Wrap(err, "BEGIN failed")
 	}
 
-	result, err := tx.Exec(sql, []interface{}(*bindVariables)...)
+	result, err := tx.Exec(sql, []interface{}(prepareBindVariables())...)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "failed to execute DML")
 	}
@@ -230,7 +241,7 @@ func execDml(db *sql.DB, sql string) (*results, error) {
 
 func execNonDml(db *sql.DB, sql string) (*results, error) {
 	start := time.Now()
-	rows, err := db.Query(sql, []interface{}(*bindVariables)...)
+	rows, err := db.Query(sql, []interface{}(prepareBindVariables())...)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "client error")
 	}
