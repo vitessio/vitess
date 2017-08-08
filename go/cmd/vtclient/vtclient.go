@@ -159,17 +159,14 @@ func run() (*results, error) {
 
 	log.Infof("Sending the query...")
 
-	if sqlparser.IsDML(args[0]) {
-		return execMultiDml(db, args[0])
-	}
-
-	return execNonDml(db, args[0])
+	return execMulti(db, args[0])
 }
 
-func execMultiDml(db *sql.DB, sql string) (*results, error) {
+func execMulti(db *sql.DB, sql string) (*results, error) {
 	all := newResults()
 	ec := concurrency.FirstErrorRecorder{}
 	wg := sync.WaitGroup{}
+	isDML := sqlparser.IsDML(sql)
 
 	start := time.Now()
 	for i := 0; i < *parallel; i++ {
@@ -179,8 +176,18 @@ func execMultiDml(db *sql.DB, sql string) (*results, error) {
 			defer wg.Done()
 
 			for j := 0; j < *count; j++ {
-				qr, err := execDml(db, sql)
-				all.merge(qr)
+				var qr *results
+				var err error
+				if isDML {
+					qr, err = execDml(db, sql)
+				} else {
+					qr, err = execNonDml(db, sql)
+				}
+				if *count == 1 {
+					all = qr
+				} else {
+					all.merge(qr)
+				}
 				if err != nil {
 					ec.RecordError(err)
 					all.recordError(err)
