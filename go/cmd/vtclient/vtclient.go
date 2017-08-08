@@ -199,17 +199,17 @@ func execDml(db *sql.DB, sql string) (*results, error) {
 	start := time.Now()
 	tx, err := db.Begin()
 	if err != nil {
-		return nil, vterrors.Errorf(vterrors.Code(err), "BEGIN failed: %v", err)
+		return nil, vterrors.Wrap(err, "BEGIN failed")
 	}
 
 	result, err := tx.Exec(sql, []interface{}(*bindVariables)...)
 	if err != nil {
-		return nil, vterrors.Errorf(vterrors.Code(err), "failed to execute DML: %v", err)
+		return nil, vterrors.Wrap(err, "failed to execute DML")
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		return nil, vterrors.Errorf(vterrors.Code(err), "COMMIT failed: %v", err)
+		return nil, vterrors.Wrap(err, "COMMIT failed")
 	}
 
 	rowsAffected, err := result.RowsAffected()
@@ -225,7 +225,7 @@ func execNonDml(db *sql.DB, sql string) (*results, error) {
 	start := time.Now()
 	rows, err := db.Query(sql, []interface{}(*bindVariables)...)
 	if err != nil {
-		return nil, vterrors.Errorf(vterrors.Code(err), "client error: %v", err)
+		return nil, vterrors.Wrap(err, "client error")
 	}
 	defer rows.Close()
 
