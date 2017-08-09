@@ -118,7 +118,6 @@ type messageManager struct {
 	// The goroutine must in turn defer on Done.
 	wg sync.WaitGroup
 
-	readCounts        *sqlparser.ParsedQuery
 	readByTimeNext    *sqlparser.ParsedQuery
 	loadMessagesQuery *sqlparser.ParsedQuery
 	ackQuery          *sqlparser.ParsedQuery
@@ -146,7 +145,6 @@ func newMessageManager(tsv TabletService, table *schema.Table, conns *connpool.P
 	}
 	mm.cond.L = &mm.mu
 
-	mm.readCounts = sqlparser.BuildParsedQuery("select count(*), count(time_acked) from %v", mm.name)
 	columnList := buildSelectColumnList(table)
 	mm.readByTimeNext = sqlparser.BuildParsedQuery(
 		"select time_next, epoch, %s from %v where time_next < %a order by time_next desc limit %a",
@@ -191,8 +189,6 @@ func (mm *messageManager) Open() {
 	mm.isOpen = true
 	mm.wg.Add(1)
 	mm.curReceiver = -1
-
-	mm.loadCounts()
 
 	go mm.runSend()
 	// TODO(sougou): improve ticks to add randomness.
@@ -547,50 +543,6 @@ func BuildMessageRow(row []sqltypes.Value) (*MessageRow, error) {
 		Epoch:    epoch,
 		Row:      row[2:],
 	}, nil
-}
-
-func (mm *messageManager) loadCounts() {
-	// Heuristically, use half of ackWaitTime for timeout.
-	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), mm.ackWaitTime/2)
-	defer cancel()
-	conn, err := mm.conns.Get(ctx)
-	if err != nil {
-		tabletenv.InternalErrors.Add("Messages", 1)
-		log.Errorf("Error getting connection: %v", err)
-		return
-	}
-	defer conn.Recycle()
-	qr, err := mm.read(ctx, conn, mm.readCounts, nil)
-	if err != nil {
-		log.Errorf("Error reading counts for %s: %v", mm.name, err)
-		return
-	}
-	if len(qr.Rows) != 1 {
-		// This is unreachable. MySQL will always return one row for a count query.
-		tabletenv.InternalErrors.Add("Messages", 1)
-		log.Errorf("Unexpected result length: %d", len(qr.Rows))
-		return
-	}
-	if len(qr.Rows[0]) != 2 {
-		// This is also unreachable.
-		tabletenv.InternalErrors.Add("Messages", 1)
-		log.Errorf("Unexpected number of columns: %d", len(qr.Rows[0]))
-		return
-	}
-	total, err := qr.Rows[0][0].ParseInt64()
-	if err != nil {
-		tabletenv.InternalErrors.Add("Messages", 1)
-		log.Errorf("Failed to read total count: %v", err)
-		return
-	}
-	acked, err := qr.Rows[0][1].ParseInt64()
-	if err != nil {
-		tabletenv.InternalErrors.Add("Messages", 1)
-		log.Errorf("Failed to read total count: %v", err)
-		return
-	}
-	MessageStats.Set([]string{mm.name.String(), "Queued"}, total)
-	MessageStats.Set([]string{mm.name.String(), "Acked"}, acked)
 }
 
 func (mm *messageManager) receiverCount() int {

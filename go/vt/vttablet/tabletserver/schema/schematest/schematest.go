@@ -185,19 +185,6 @@ func Queries() map[string]*sqltypes.Result {
 				mysql.ShowIndexFromTableRow("msg", true, "PRIMARY", 2, "id", false),
 			},
 		},
-		"select count(*), count(time_acked) from msg": {
-			Fields: []*querypb.Field{{
-				Name: "count(*)",
-				Type: sqltypes.Decimal,
-			}, {
-				Name: "count(time_acked)",
-				Type: sqltypes.Decimal,
-			}},
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				{sqltypes.MakeTrusted(sqltypes.Decimal, []byte("2")), sqltypes.MakeTrusted(sqltypes.Decimal, []byte("1"))},
-			},
-		},
 		mysql.BaseShowTablesForTable("msg"): {
 			Fields:       mysql.BaseShowTablesFields,
 			RowsAffected: 1,

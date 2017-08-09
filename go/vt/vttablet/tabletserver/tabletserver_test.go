@@ -2485,19 +2485,6 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 			},
 		},
-		"select count(*), count(time_acked) from msg": {
-			Fields: []*querypb.Field{{
-				Name: "count(*)",
-				Type: sqltypes.Decimal,
-			}, {
-				Name: "count(time_acked)",
-				Type: sqltypes.Decimal,
-			}},
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				{sqltypes.MakeTrusted(sqltypes.Decimal, []byte("2")), sqltypes.MakeTrusted(sqltypes.Decimal, []byte("1"))},
-			},
-		},
 		"begin":    {},
 		"commit":   {},
 		"rollback": {},
