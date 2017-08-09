@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
 )
@@ -34,49 +35,90 @@ func init() {
 // NonUnique and a Lookup.
 type LookupHash struct {
 	name string
-	lkp  lookup
+	lkp  lookupInternal
 }
 
 // NewLookupHash creates a LookupHash vindex.
 func NewLookupHash(name string, m map[string]string) (Vindex, error) {
-	lhu := &LookupHash{name: name}
-	lhu.lkp.Init(m, true)
-	return lhu, nil
+	lh := &LookupHash{name: name}
+	lh.lkp.Init(m)
+	return lh, nil
 }
 
 // String returns the name of the vindex.
-func (vind *LookupHash) String() string {
-	return vind.name
+func (lh *LookupHash) String() string {
+	return lh.name
 }
 
 // Cost returns the cost of this vindex as 20.
-func (vind *LookupHash) Cost() int {
+func (lh *LookupHash) Cost() int {
 	return 20
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (vind *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([][][]byte, error) {
-	return vind.lkp.MapNonUniqueLookup(vcursor, ids)
+func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([][][]byte, error) {
+	out := make([][][]byte, 0, len(ids))
+	results, err := lh.lkp.Lookup(vcursor, ids)
+	if err != nil {
+		return nil, err
+	}
+	for _, result := range results {
+		ksids := make([][]byte, 0, len(result.Rows))
+		for _, row := range result.Rows {
+			num, err := sqltypes.ToUint64(row[0])
+			if err != nil {
+				return nil, fmt.Errorf("lookupHash.Map.ToUint64: %v", err)
+			}
+			ksids = append(ksids, vhash(num))
+		}
+		out = append(out, ksids)
+	}
+	return out, nil
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *LookupHash) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
-	return vind.lkp.Verify(vcursor, ids, ksids)
+func (lh *LookupHash) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
+	values, err := unhashList(ksids)
+	if err != nil {
+		return false, fmt.Errorf("lookup.Verify.vunhash: %v", err)
+	}
+	return lh.lkp.Verify(vcursor, ids, values)
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (vind *LookupHash) Create(vcursor VCursor, id []sqltypes.Value, ksids [][]byte) error {
-	return vind.lkp.Create(vcursor, id, ksids)
+func (lh *LookupHash) Create(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) error {
+	values, err := unhashList(ksids)
+	if err != nil {
+		return fmt.Errorf("lookup.Create.vunhash: %v", err)
+	}
+	return lh.lkp.Create(vcursor, ids, values)
 }
 
 // Delete deletes the entry from the vindex table.
-func (vind *LookupHash) Delete(vcursor VCursor, ids []sqltypes.Value, ksid []byte) error {
-	return vind.lkp.Delete(vcursor, ids, ksid)
+func (lh *LookupHash) Delete(vcursor VCursor, ids []sqltypes.Value, ksid []byte) error {
+	v, err := vunhash(ksid)
+	if err != nil {
+		return fmt.Errorf("lookup.Delete.vunhash: %v", err)
+	}
+	return lh.lkp.Delete(vcursor, ids, sqltypes.NewUint64(v))
 }
 
 // MarshalJSON returns a JSON representation of LookupHash.
-func (vind *LookupHash) MarshalJSON() ([]byte, error) {
-	return json.Marshal(vind.lkp)
+func (lh *LookupHash) MarshalJSON() ([]byte, error) {
+	return json.Marshal(lh.lkp)
+}
+
+// unhashList unhashes a list of keyspace ids into []sqltypes.Value.
+func unhashList(ksids [][]byte) ([]sqltypes.Value, error) {
+	values := make([]sqltypes.Value, 0, len(ksids))
+	for _, ksid := range ksids {
+		v, err := vunhash(ksid)
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, sqltypes.NewUint64(v))
+	}
+	return values, nil
 }
 
 //====================================================================
@@ -86,47 +128,78 @@ func (vind *LookupHash) MarshalJSON() ([]byte, error) {
 // Unique and a Lookup.
 type LookupHashUnique struct {
 	name string
-	lkp  lookup
+	lkp  lookupInternal
 }
 
 // NewLookupHashUnique creates a LookupHashUnique vindex.
 func NewLookupHashUnique(name string, m map[string]string) (Vindex, error) {
 	lhu := &LookupHashUnique{name: name}
-	lhu.lkp.Init(m, true)
+	lhu.lkp.Init(m)
 	return lhu, nil
 }
 
 // String returns the name of the vindex.
-func (vind *LookupHashUnique) String() string {
-	return vind.name
+func (lhu *LookupHashUnique) String() string {
+	return lhu.name
 }
 
 // Cost returns the cost of this vindex as 10.
-func (vind *LookupHashUnique) Cost() int {
+func (lhu *LookupHashUnique) Cost() int {
 	return 10
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (vind *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][]byte, error) {
-	return vind.lkp.MapUniqueLookup(vcursor, ids)
+func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][]byte, error) {
+	out := make([][]byte, 0, len(ids))
+	results, err := lhu.lkp.Lookup(vcursor, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i, result := range results {
+		switch len(result.Rows) {
+		case 0:
+			out = append(out, nil)
+		case 1:
+			num, err := sqltypes.ToUint64(result.Rows[0][0])
+			if err != nil {
+				return nil, fmt.Errorf("LookupHash.Map: %v", err)
+			}
+			out = append(out, vhash(num))
+		default:
+			return nil, fmt.Errorf("LookupHash.Map: unexpected multiple results from vindex %s: %v", lhu.lkp.Table, ids[i])
+		}
+	}
+	return out, nil
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *LookupHashUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
-	return vind.lkp.Verify(vcursor, ids, ksids)
+func (lhu *LookupHashUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
+	values, err := unhashList(ksids)
+	if err != nil {
+		return false, fmt.Errorf("lookup.Verify.vunhash: %v", err)
+	}
+	return lhu.lkp.Verify(vcursor, ids, values)
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (vind *LookupHashUnique) Create(vcursor VCursor, id []sqltypes.Value, ksids [][]byte) error {
-	return vind.lkp.Create(vcursor, id, ksids)
+func (lhu *LookupHashUnique) Create(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) error {
+	values, err := unhashList(ksids)
+	if err != nil {
+		return fmt.Errorf("lookup.Create.vunhash: %v", err)
+	}
+	return lhu.lkp.Create(vcursor, ids, values)
 }
 
 // Delete deletes the entry from the vindex table.
-func (vind *LookupHashUnique) Delete(vcursor VCursor, ids []sqltypes.Value, ksid []byte) error {
-	return vind.lkp.Delete(vcursor, ids, ksid)
+func (lhu *LookupHashUnique) Delete(vcursor VCursor, ids []sqltypes.Value, ksid []byte) error {
+	v, err := vunhash(ksid)
+	if err != nil {
+		return fmt.Errorf("lookup.Delete.vunhash: %v", err)
+	}
+	return lhu.lkp.Delete(vcursor, ids, sqltypes.NewUint64(v))
 }
 
 // MarshalJSON returns a JSON representation of LookupHashUnique.
-func (vind *LookupHashUnique) MarshalJSON() ([]byte, error) {
-	return json.Marshal(vind.lkp)
+func (lhu *LookupHashUnique) MarshalJSON() ([]byte, error) {
+	return json.Marshal(lhu.lkp)
 }

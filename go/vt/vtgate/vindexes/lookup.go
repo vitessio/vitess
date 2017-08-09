@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
 )
@@ -31,97 +32,134 @@ func init() {
 //It's NonUnique and a Lookup.
 type LookupNonUnique struct {
 	name string
-	lkp  lookup
+	lkp  lookupInternal
 }
 
 // NewLookup creates a LookupNonUnique vindex.
 func NewLookup(name string, m map[string]string) (Vindex, error) {
 	lookup := &LookupNonUnique{name: name}
-	lookup.lkp.Init(m, false)
+	lookup.lkp.Init(m)
 	return lookup, nil
 }
 
 // String returns the name of the vindex.
-func (vindex *LookupNonUnique) String() string {
-	return vindex.name
+func (ln *LookupNonUnique) String() string {
+	return ln.name
 }
 
 // Cost returns the cost of this vindex as 20.
-func (vindex *LookupNonUnique) Cost() int {
+func (ln *LookupNonUnique) Cost() int {
 	return 20
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (vindex *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][][]byte, error) {
-	return vindex.lkp.MapNonUniqueLookup(vcursor, ids)
+func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][][]byte, error) {
+	out := make([][][]byte, 0, len(ids))
+	results, err := ln.lkp.Lookup(vcursor, ids)
+	if err != nil {
+		return nil, err
+	}
+	for _, result := range results {
+		ksids := make([][]byte, 0, len(result.Rows))
+		for _, row := range result.Rows {
+			ksids = append(ksids, row[0].ToBytes())
+		}
+		out = append(out, ksids)
+	}
+	return out, nil
 }
 
 // Verify returns true if ids maps to ksids.
-func (vindex *LookupNonUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
-	return vindex.lkp.Verify(vcursor, ids, ksids)
+func (ln *LookupNonUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
+	return ln.lkp.Verify(vcursor, ids, ksidsToValues(ksids))
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (vindex *LookupNonUnique) Create(vcursor VCursor, id []sqltypes.Value, ksids [][]byte) error {
-	return vindex.lkp.Create(vcursor, id, ksids)
+func (ln *LookupNonUnique) Create(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) error {
+	return ln.lkp.Create(vcursor, ids, ksidsToValues(ksids))
 }
 
 // Delete deletes the entry from the vindex table.
-func (vindex *LookupNonUnique) Delete(vcursor VCursor, ids []sqltypes.Value, ksid []byte) error {
-	return vindex.lkp.Delete(vcursor, ids, ksid)
+func (ln *LookupNonUnique) Delete(vcursor VCursor, ids []sqltypes.Value, ksid []byte) error {
+	return ln.lkp.Delete(vcursor, ids, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid))
 }
 
 // MarshalJSON returns a JSON representation of LookupHash.
-func (vindex *LookupNonUnique) MarshalJSON() ([]byte, error) {
-	return json.Marshal(vindex.lkp)
+func (ln *LookupNonUnique) MarshalJSON() ([]byte, error) {
+	return json.Marshal(ln.lkp)
 }
+
+func ksidsToValues(ksids [][]byte) []sqltypes.Value {
+	values := make([]sqltypes.Value, 0, len(ksids))
+	for _, ksid := range ksids {
+		values = append(values, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid))
+	}
+	return values
+}
+
+//====================================================================
 
 // LookupUnique defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
 // Unique and a Lookup.
 type LookupUnique struct {
 	name string
-	lkp  lookup
+	lkp  lookupInternal
 }
 
 // NewLookupUnique creates a LookupHashUnique vindex.
 func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 	lu := &LookupUnique{name: name}
-	lu.lkp.Init(m, false)
+	lu.lkp.Init(m)
 	return lu, nil
 }
 
 // String returns the name of the vindex.
-func (vindex *LookupUnique) String() string {
-	return vindex.name
+func (lu *LookupUnique) String() string {
+	return lu.name
 }
 
 // Cost returns the cost of this vindex as 10.
-func (vindex *LookupUnique) Cost() int {
+func (lu *LookupUnique) Cost() int {
 	return 10
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (vindex *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][]byte, error) {
-	return vindex.lkp.MapUniqueLookup(vcursor, ids)
+func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][]byte, error) {
+	out := make([][]byte, 0, len(ids))
+	results, err := lu.lkp.Lookup(vcursor, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i, result := range results {
+		switch len(result.Rows) {
+		case 0:
+			out = append(out, nil)
+		case 1:
+			out = append(out, result.Rows[0][0].ToBytes())
+		default:
+			return nil, fmt.Errorf("LookupHash.Map: unexpected multiple results from vindex %s: %v", lu.lkp.Table, ids[i])
+		}
+	}
+	return out, nil
 }
 
 // Verify returns true if ids maps to ksids.
-func (vindex *LookupUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
-	return vindex.lkp.Verify(vcursor, ids, ksids)
+func (lu *LookupUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
+	return lu.lkp.Verify(vcursor, ids, ksidsToValues(ksids))
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (vindex *LookupUnique) Create(vcursor VCursor, id []sqltypes.Value, ksids [][]byte) error {
-	return vindex.lkp.Create(vcursor, id, ksids)
+func (lu *LookupUnique) Create(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) error {
+	return lu.lkp.Create(vcursor, ids, ksidsToValues(ksids))
 }
 
 // Delete deletes the entry from the vindex table.
-func (vindex *LookupUnique) Delete(vcursor VCursor, ids []sqltypes.Value, ksid []byte) error {
-	return vindex.lkp.Delete(vcursor, ids, ksid)
+func (lu *LookupUnique) Delete(vcursor VCursor, ids []sqltypes.Value, ksid []byte) error {
+	return lu.lkp.Delete(vcursor, ids, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid))
 }
 
 // MarshalJSON returns a JSON representation of LookupHashUnique.
-func (vindex *LookupUnique) MarshalJSON() ([]byte, error) {
-	return json.Marshal(vindex.lkp)
+func (lu *LookupUnique) MarshalJSON() ([]byte, error) {
+	return json.Marshal(lu.lkp)
 }

@@ -644,14 +644,14 @@ func TestInsertLookupUnowned(t *testing.T) {
 		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select music_id from music_user_map where ((music_id = :music_id0 and user_id = :user_id0))",
+		Sql: "select music_id from music_user_map where music_id = :music_id and user_id = :user_id",
 		BindVariables: map[string]*querypb.BindVariable{
-			"music_id0": sqltypes.Int64BindVariable(3),
-			"user_id0":  sqltypes.Uint64BindVariable(2),
+			"music_id": sqltypes.Int64BindVariable(3),
+			"user_id":  sqltypes.Uint64BindVariable(2),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
-		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
+		t.Errorf("sbclookup.Queries:\n%v, want\n%v\n", sbclookup.Queries, wantQueries)
 	}
 }
 
