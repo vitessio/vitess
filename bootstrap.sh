@@ -268,7 +268,7 @@ selenium_dist=$VTROOT/dist/selenium
 mkdir -p $selenium_dist
 $VIRTUALENV $selenium_dist
 PIP=$selenium_dist/bin/pip
-$PIP install selenium
+PYTHONPATH= $PIP install selenium
 mkdir -p $VTROOT/dist/chromedriver
 curl -sL http://chromedriver.storage.googleapis.com/2.25/chromedriver_linux64.zip > chromedriver_linux64.zip
 unzip -o -q chromedriver_linux64.zip -d $VTROOT/dist/chromedriver
