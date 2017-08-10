@@ -547,6 +547,8 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "insert /* column list */ into a(a, b) values (1, 2)",
 	}, {
+		input: "insert into a(a, b) values (1, ifnull(null, default(b)))",
+	}, {
 		input: "insert /* qualified column list */ into a(a, b) values (1, 2)",
 	}, {
 		input:  "insert /* qualified columns */ into t (t.a, t.b) values (1, 2)",
