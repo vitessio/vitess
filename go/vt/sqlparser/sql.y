@@ -196,7 +196,7 @@ func forceEOF(yylex interface{}) {
 %type <updateExprs> update_list
 %type <updateExpr> update_expression
 %type <bytes> for_from
-%type <str> ignore_opt
+%type <str> ignore_opt default_opt
 %type <byt> exists_opt
 %type <empty> not_exists_opt non_rename_operation to_opt index_opt constraint_opt using_opt
 %type <bytes> reserved_keyword non_reserved_keyword
@@ -830,9 +830,19 @@ expression:
   {
     $$ = $1
   }
-| DEFAULT
+| DEFAULT default_opt
   {
-    $$ = &Default{}
+    $$ = &Default{ColName: $2}
+  }
+
+default_opt:
+  /* empty */
+  {
+    $$ = ""
+  }
+| openb ID closeb
+  {
+    $$ = string($2)
   }
 
 boolean_value:
