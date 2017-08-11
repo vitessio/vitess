@@ -771,7 +771,7 @@ func (route *Route) handleNonPrimary(vcursor VCursor, vindexKeys []sqltypes.Valu
 			}
 			bv["_"+colVindex.Column.CompliantName()+strconv.Itoa(rowNum)] = sqltypes.ValueBindVariable(vindexKey)
 		}
-		err := colVindex.Vindex.(vindexes.Lookup).Create(vcursor, vindexKeys, ksids)
+		err := colVindex.Vindex.(vindexes.Lookup).Create(vcursor, vindexKeys, ksids, false /* ignoreMode */)
 		if err != nil {
 			return err
 		}

@@ -24,6 +24,11 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
+var (
+	_ Functional = (*Numeric)(nil)
+	_ Reversible = (*Numeric)(nil)
+)
+
 // Numeric defines a bit-pattern mapping of a uint64 to the KeyspaceId.
 // It's Unique and Reversible.
 type Numeric struct {

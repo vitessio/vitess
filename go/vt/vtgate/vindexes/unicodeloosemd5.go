@@ -28,6 +28,10 @@ import (
 	"golang.org/x/text/language"
 )
 
+var (
+	_ Functional = (*UnicodeLooseMD5)(nil)
+)
+
 // UnicodeLooseMD5 is a vindex that normalizes and hashes unicode strings
 // to a keyspace id. It conservatively converts the string to its base
 // characters before hashing. This is also known as UCA level 1.

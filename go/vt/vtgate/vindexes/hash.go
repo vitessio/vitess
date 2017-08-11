@@ -27,6 +27,11 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
+var (
+	_ Functional = (*Hash)(nil)
+	_ Reversible = (*Hash)(nil)
+)
+
 // Hash defines vindex that hashes an int64 to a KeyspaceId
 // by using null-key 3DES hash. It's Unique, Reversible and
 // Functional.

@@ -23,6 +23,11 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
+var (
+	_ Functional = (*Binary)(nil)
+	_ Reversible = (*Binary)(nil)
+)
+
 // Binary is a vindex that converts binary bits to a keyspace id.
 type Binary struct {
 	name string

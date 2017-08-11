@@ -23,6 +23,10 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
+var (
+	_ Functional = (*BinaryMD5)(nil)
+)
+
 // BinaryMD5 is a vindex that hashes binary bits to a keyspace id.
 type BinaryMD5 struct {
 	name string

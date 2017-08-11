@@ -69,7 +69,7 @@ func (v *stLN) String() string                                           { retur
 func (*stLN) Cost() int                                                  { return 0 }
 func (*stLN) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error) { return []bool{}, nil }
 func (*stLN) Map(VCursor, []sqltypes.Value) ([][][]byte, error)          { return nil, nil }
-func (*stLN) Create(VCursor, []sqltypes.Value, [][]byte) error           { return nil }
+func (*stLN) Create(VCursor, []sqltypes.Value, [][]byte, bool) error     { return nil }
 func (*stLN) Delete(VCursor, []sqltypes.Value, []byte) error             { return nil }
 
 func NewSTLN(name string, params map[string]string) (Vindex, error) {
@@ -86,7 +86,7 @@ func (v *stLU) String() string                                           { retur
 func (*stLU) Cost() int                                                  { return 2 }
 func (*stLU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error) { return []bool{}, nil }
 func (*stLU) Map(VCursor, []sqltypes.Value) ([][]byte, error)            { return nil, nil }
-func (*stLU) Create(VCursor, []sqltypes.Value, [][]byte) error           { return nil }
+func (*stLU) Create(VCursor, []sqltypes.Value, [][]byte, bool) error     { return nil }
 func (*stLU) Delete(VCursor, []sqltypes.Value, []byte) error             { return nil }
 
 func NewSTLU(name string, params map[string]string) (Vindex, error) {

@@ -96,7 +96,7 @@ func TestLookupUniqueVerify(t *testing.T) {
 
 func TestLookupUniqueCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := lookupUnique.(Lookup).Create(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("test")})
+	err := lookupUnique.(Lookup).Create(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("test")}, false /* ignoreMode */)
 	if err != nil {
 		t.Error(err)
 	}
@@ -104,7 +104,7 @@ func TestLookupUniqueCreate(t *testing.T) {
 		t.Errorf("vc.queries length: %v, want %v", got, want)
 	}
 
-	err = lookuphashunique.(Lookup).Create(nil, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("test1test23")})
+	err = lookuphashunique.(Lookup).Create(nil, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("test1test23")}, false /* ignoreMode */)
 	want := "lookup.Create.vunhash: invalid keyspace id: 7465737431746573743233"
 	if err.Error() != want {
 		t.Error(err)

@@ -28,6 +28,10 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
+var (
+	_ Functional = (*NumericStaticMap)(nil)
+)
+
 // NumericLookupTable stores the mapping of keys.
 type NumericLookupTable map[uint64]uint64
 

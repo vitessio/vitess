@@ -23,6 +23,13 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
+var (
+	_ NonUnique = (*LookupNonUnique)(nil)
+	_ Lookup    = (*LookupNonUnique)(nil)
+	_ Unique    = (*LookupUnique)(nil)
+	_ Lookup    = (*LookupUnique)(nil)
+)
+
 func init() {
 	Register("lookup", NewLookup)
 	Register("lookup_unique", NewLookupUnique)
@@ -75,8 +82,8 @@ func (ln *LookupNonUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (ln *LookupNonUnique) Create(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) error {
-	return ln.lkp.Create(vcursor, ids, ksidsToValues(ksids))
+func (ln *LookupNonUnique) Create(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
+	return ln.lkp.Create(vcursor, ids, ksidsToValues(ksids), ignoreMode)
 }
 
 // Delete deletes the entry from the vindex table.
@@ -150,8 +157,8 @@ func (lu *LookupUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (lu *LookupUnique) Create(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) error {
-	return lu.lkp.Create(vcursor, ids, ksidsToValues(ksids))
+func (lu *LookupUnique) Create(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
+	return lu.lkp.Create(vcursor, ids, ksidsToValues(ksids), ignoreMode)
 }
 
 // Delete deletes the entry from the vindex table.
