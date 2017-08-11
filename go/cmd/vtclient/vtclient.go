@@ -194,21 +194,25 @@ func execMulti(db *sql.DB, sql string) (*results, error) {
 				} else {
 					qr, err = execNonDml(db, sql)
 				}
-				if *count == 1 {
+				if *count == 1 && *parallel == 1 {
 					all = qr
 				} else {
 					all.merge(qr)
+					if err != nil {
+						all.recordError(err)
+					}
 				}
 				if err != nil {
 					ec.RecordError(err)
-					all.recordError(err)
 					// We keep going and do not return early purpose.
 				}
 			}
 		}()
 	}
 	wg.Wait()
-	all.duration = time.Since(start)
+	if all != nil {
+		all.duration = time.Since(start)
+	}
 
 	return all, ec.Error()
 }
