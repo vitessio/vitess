@@ -98,27 +98,33 @@ func TestLookupHashMap(t *testing.T) {
 
 func TestLookupHashVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	success, err := lookuphash.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	// The check doesn't actually happen. But we give correct values
+	// to avoid confusion.
+	got, err := lookuphash.Verify(vc,
+		[]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
+		[][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x06\xe7\xea\"Βp\x8f")})
 	if err != nil {
 		t.Error(err)
 	}
-	if !success {
-		t.Errorf("Verify(): %+v, want true", success)
+	want := []bool{true, true}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("lookuphash.Verify(match): %v, want %v", got, want)
 	}
 
 	vc.numRows = 0
-	success, err = lookuphash.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	got, err = lookuphash.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	if err != nil {
 		t.Error(err)
 	}
-	if success {
-		t.Errorf("Verify(): %+v, want false", success)
+	want = []bool{false}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("lookuphash.Verify(mismatch): %v, want %v", got, want)
 	}
 
 	_, err = lookuphash.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("bogus")})
-	want := "lookup.Verify.vunhash: invalid keyspace id: 626f677573"
-	if err == nil || err.Error() != want {
-		t.Errorf("lookuphash.Verify(bogus) err: %v, want %s", err, want)
+	wantErr := "lookup.Verify.vunhash: invalid keyspace id: 626f677573"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("lookuphash.Verify(bogus) err: %v, want %s", err, wantErr)
 	}
 }
 

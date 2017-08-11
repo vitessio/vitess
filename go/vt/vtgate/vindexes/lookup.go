@@ -70,7 +70,7 @@ func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][][]byt
 }
 
 // Verify returns true if ids maps to ksids.
-func (ln *LookupNonUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
+func (ln *LookupNonUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	return ln.lkp.Verify(vcursor, ids, ksidsToValues(ksids))
 }
 
@@ -145,7 +145,7 @@ func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][]byte, er
 }
 
 // Verify returns true if ids maps to ksids.
-func (lu *LookupUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
+func (lu *LookupUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	return lu.lkp.Verify(vcursor, ids, ksidsToValues(ksids))
 }
 

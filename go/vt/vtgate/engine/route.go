@@ -752,7 +752,7 @@ func (route *Route) handlePrimary(vcursor VCursor, vindexKeys []sqltypes.Value, 
 		return nil, err
 	}
 	if len(keyspaceIDs) != len(vindexKeys) {
-		return nil, fmt.Errorf("could not map %v to a keyspaceids", vindexKeys)
+		return nil, fmt.Errorf("BUG: Map returned an unexpected number of values for: %v", vindexKeys)
 	}
 	for rowNum, vindexKey := range vindexKeys {
 		if len(keyspaceIDs[rowNum]) == 0 {
@@ -810,12 +810,14 @@ func (route *Route) handleNonPrimary(vcursor VCursor, vindexKeys []sqltypes.Valu
 		}
 
 		if verifyKsids != nil {
-			ok, err := colVindex.Vindex.Verify(vcursor, vindexKeys, verifyKsids)
+			verified, err := colVindex.Vindex.Verify(vcursor, vindexKeys, verifyKsids)
 			if err != nil {
 				return err
 			}
-			if !ok {
-				return fmt.Errorf("values %v for column %v does not map to keyspaceids", vindexKeys, colVindex.Column)
+			for _, v := range verified {
+				if !v {
+					return fmt.Errorf("values %v for column %v does not map to keyspaceids", vindexKeys, colVindex.Column)
+				}
 			}
 		}
 	}

@@ -77,10 +77,10 @@ func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([][][]byte, er
 }
 
 // Verify returns true if ids maps to ksids.
-func (lh *LookupHash) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
+func (lh *LookupHash) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	values, err := unhashList(ksids)
 	if err != nil {
-		return false, fmt.Errorf("lookup.Verify.vunhash: %v", err)
+		return nil, fmt.Errorf("lookup.Verify.vunhash: %v", err)
 	}
 	return lh.lkp.Verify(vcursor, ids, values)
 }
@@ -173,10 +173,10 @@ func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][]byt
 }
 
 // Verify returns true if ids maps to ksids.
-func (lhu *LookupHashUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
+func (lhu *LookupHashUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	values, err := unhashList(ksids)
 	if err != nil {
-		return false, fmt.Errorf("lookup.Verify.vunhash: %v", err)
+		return nil, fmt.Errorf("lookup.Verify.vunhash: %v", err)
 	}
 	return lhu.lkp.Verify(vcursor, ids, values)
 }

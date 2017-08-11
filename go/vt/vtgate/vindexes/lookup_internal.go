@@ -62,7 +62,8 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sql
 }
 
 // Verify returns true if ids map to values.
-func (lkp *lookupInternal) Verify(vcursor VCursor, ids, values []sqltypes.Value) (bool, error) {
+func (lkp *lookupInternal) Verify(vcursor VCursor, ids, values []sqltypes.Value) ([]bool, error) {
+	out := make([]bool, len(ids))
 	for i, id := range ids {
 		bindVars := map[string]*querypb.BindVariable{
 			lkp.From: sqltypes.ValueBindVariable(id),
@@ -70,13 +71,11 @@ func (lkp *lookupInternal) Verify(vcursor VCursor, ids, values []sqltypes.Value)
 		}
 		result, err := vcursor.Execute(lkp.ver, bindVars, true /* isDML */)
 		if err != nil {
-			return false, fmt.Errorf("lookup.Verify: %v", err)
+			return nil, fmt.Errorf("lookup.Verify: %v", err)
 		}
-		if len(result.Rows) == 0 {
-			return false, nil
-		}
+		out[i] = (len(result.Rows) != 0)
 	}
-	return true, nil
+	return out, nil
 }
 
 // Create creates an association between ids and values by inserting rows in the vindex table.

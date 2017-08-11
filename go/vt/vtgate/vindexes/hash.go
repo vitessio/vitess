@@ -63,20 +63,16 @@ func (vind *Hash) Map(_ VCursor, ids []sqltypes.Value) ([][]byte, error) {
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *Hash) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
-	if len(ids) != len(ksids) {
-		return false, fmt.Errorf("hash.Verify: length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
-	}
-	for rowNum := range ids {
-		num, err := sqltypes.ToUint64(ids[rowNum])
+func (vind *Hash) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	out := make([]bool, len(ids))
+	for i := range ids {
+		num, err := sqltypes.ToUint64(ids[i])
 		if err != nil {
-			return false, fmt.Errorf("hash.Verify: %v", err)
+			return nil, fmt.Errorf("hash.Verify: %v", err)
 		}
-		if bytes.Compare(vhash(num), ksids[rowNum]) != 0 {
-			return false, nil
-		}
+		out[i] = (bytes.Compare(vhash(num), ksids[i]) == 0)
 	}
-	return true, nil
+	return out, nil
 }
 
 // ReverseMap returns the ids from ksids.

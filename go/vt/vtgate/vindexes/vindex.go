@@ -52,7 +52,7 @@ type Vindex interface {
 
 	// Verify must be implented by all vindexes. It should return
 	// true if the ids can be mapped to the keyspace ids.
-	Verify(cursor VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error)
+	Verify(cursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error)
 }
 
 // Unique defines the interface for a unique vindex.
