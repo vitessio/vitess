@@ -16,11 +16,6 @@
 
 package io.vitess.jdbc;
 
-import io.vitess.proto.Query;
-import io.vitess.proto.Topodata;
-import io.vitess.util.Constants;
-import io.vitess.util.StringUtils;
-
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Field;
 import java.sql.DriverPropertyInfo;
@@ -29,6 +24,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+
+import io.vitess.proto.Query;
+import io.vitess.proto.Topodata;
+import io.vitess.util.Constants;
+import io.vitess.util.StringUtils;
 
 public class ConnectionProperties {
 
@@ -206,6 +206,24 @@ public class ConnectionProperties {
         "treatUtilDateAsTimestamp",
         "Should the driver treat java.util.Date as a TIMESTAMP for the purposes of PreparedStatement.setObject()",
         true);
+
+    private LongConnectionProperty queryTimeoutMillis = new LongConnectionProperty(
+        "queryTimeoutMillis",
+        "The default query timeout, in millis, to use for queries which do not explicitly setQueryTimeout",
+        Constants.DEFAULT_TIMEOUT
+    );
+
+    private LongConnectionProperty connectionTimeoutMillis = new LongConnectionProperty(
+        "connectionTimeoutMillis",
+        "The timeout, in millis, to use when creating new gRPC connections",
+        Constants.CONNECTION_TIMEOUT
+    );
+
+    private LongConnectionProperty transactionTimeoutMillis = new LongConnectionProperty(
+        "transactionTimeoutMillis",
+        "The timeout, in millis, to use when committing or rolling back transactions",
+        Constants.DEFAULT_TIMEOUT
+    );
 
     // Caching of some hot properties to avoid casting over and over
     private Topodata.TabletType tabletTypeCache;
@@ -460,6 +478,30 @@ public class ConnectionProperties {
 
     public void setTreatUtilDateAsTimestamp(boolean treatUtilDateAsTimestamp) {
         this.treatUtilDateAsTimestamp.setValue(treatUtilDateAsTimestamp);
+    }
+
+    public long getQueryTimeoutMillis() {
+        return queryTimeoutMillis.getValueAsLong();
+    }
+
+    public void setQueryTimeoutMillis(long queryTimeoutMillis) {
+        this.queryTimeoutMillis.setValue(queryTimeoutMillis);
+    }
+
+    public long getConnectionTimeoutMillis() {
+        return connectionTimeoutMillis.getValueAsLong();
+    }
+
+    public void setConnectionTimeoutMillis(long connectionTimeoutMillis) {
+        this.connectionTimeoutMillis.setValue(connectionTimeoutMillis);
+    }
+
+    public long getTransactionTimeoutMillis() {
+        return transactionTimeoutMillis.getValueAsLong();
+    }
+
+    public void setTransactionTimeoutMillis(long transactionTimeoutMillis) {
+        this.transactionTimeoutMillis.setValue(transactionTimeoutMillis);
     }
 
     public String getTarget() {
