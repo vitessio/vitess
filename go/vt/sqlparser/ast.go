@@ -478,6 +478,7 @@ func (node *Delete) WalkSubtree(visit Visit) error {
 type Set struct {
 	Comments Comments
 	Exprs    UpdateExprs
+	Charset  ColIdent
 }
 
 // Format formats the node.

@@ -625,6 +625,17 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "set /* simple */ a = 3",
 	}, {
+		input: "set character_set_results = utf8",
+	}, {
+		input:  "set names utf8 collate foo",
+		output: "set ",
+	}, {
+		input:  "set character set utf8",
+		output: "set ",
+	}, {
+		input:  "set charset default",
+		output: "set ",
+	}, {
 		input: "set /* list */ a = 3, b = 4",
 	}, {
 		input:  "alter ignore table a add foo",

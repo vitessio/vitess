@@ -211,10 +211,21 @@ func (e *Executor) handleDDL(ctx context.Context, session *vtgatepb.Session, sql
 }
 
 func (e *Executor) handleSet(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	vals, err := sqlparser.ExtractSetValues(sql)
+	vals, charset, err := sqlparser.ExtractSetValues(sql)
 	if err != nil {
 		return &sqltypes.Result{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
 	}
+	if len(vals) > 0 && charset != "" {
+		return &sqltypes.Result{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected key values and charset, must specify one")
+	}
+
+	switch charset {
+	case "", "utf8", "utf8mb4", "latin1", "default":
+		break
+	default:
+		return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for charset: %v", charset)
+	}
+
 	for k, v := range vals {
 		switch k {
 		case "autocommit":
@@ -269,11 +280,34 @@ func (e *Executor) handleSet(ctx context.Context, session *vtgatepb.Session, sql
 				session.Options = &querypb.ExecuteOptions{}
 			}
 			session.Options.Workload = querypb.ExecuteOptions_Workload(out)
+		case "sql_select_limit":
+			var val int64
+
+			switch cast := v.(type) {
+			case int64:
+				val = cast
+			case string:
+				if !strings.EqualFold(cast, "default") {
+					return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected string value for sql_select_limit: %v", v)
+				}
+			default:
+				return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for sql_select_limit: %T", v)
+			}
+
+			if session.Options == nil {
+				session.Options = &querypb.ExecuteOptions{}
+			}
+			session.Options.SqlSelectLimit = val
 		case "character_set_results":
 			// This is a statement that mysql-connector-j sends at the beginning. We return a canned response for it.
-			if v != nil {
-				return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "only NULL is allowed for character_set_results: %v", v)
+			switch v {
+			case nil, "utf8", "utf8mb4", "latin1":
+			default:
+				return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed value for character_set_results: %v", v)
 			}
+		case "net_write_timeout":
+			log.Warningf("Ignored inapplicable SET %v = %v", k, v)
+			warnings.Add("IgnoredSet", 1)
 		default:
 			return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported construct: %s", sql)
 		}

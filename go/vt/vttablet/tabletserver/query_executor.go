@@ -759,7 +759,7 @@ func (qre *QueryExecutor) streamFetch(conn *connpool.DBConn, parsedQuery *sqlpar
 }
 
 func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable, extras map[string]sqlparser.Encodable, buildStreamComment []byte) (string, error) {
-	bindVars["#maxLimit"] = sqltypes.Int64BindVariable(qre.tsv.qe.maxResultSize.Get() + 1)
+	bindVars["#maxLimit"] = sqltypes.Int64BindVariable(qre.getLimit(parsedQuery))
 	sql, err := parsedQuery.GenerateQuery(bindVars, extras)
 	if err != nil {
 		return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)
@@ -769,6 +769,15 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	}
 	sql = append(sql, qre.trailingComments...)
 	return hack.String(sql), nil
+}
+
+func (qre *QueryExecutor) getLimit(query *sqlparser.ParsedQuery) int64 {
+	maxRows := qre.tsv.qe.maxResultSize.Get()
+	sqlLimit := qre.options.GetSqlSelectLimit()
+	if sqlLimit > 0 && sqlLimit < maxRows && strings.HasPrefix(sqlparser.StripLeadingComments(query.Query), "select") {
+		return sqlLimit
+	}
+	return maxRows + 1
 }
 
 // poolConn is an abstraction for reusing code in execSQL.
