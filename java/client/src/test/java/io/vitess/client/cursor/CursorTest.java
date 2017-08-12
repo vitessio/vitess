@@ -16,11 +16,6 @@
 
 package io.vitess.client.cursor;
 
-import com.google.common.primitives.UnsignedLong;
-import com.google.protobuf.ByteString;
-import io.vitess.proto.Query;
-import io.vitess.proto.Query.Field;
-import io.vitess.proto.Query.QueryResult;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Date;
@@ -30,10 +25,18 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
 import java.util.TimeZone;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import com.google.common.primitives.UnsignedLong;
+import com.google.protobuf.ByteString;
+
+import io.vitess.proto.Query;
+import io.vitess.proto.Query.Field;
+import io.vitess.proto.Query.QueryResult;
 
 @RunWith(JUnit4.class)
 public class CursorTest {
@@ -90,6 +93,24 @@ public class CursorTest {
       Assert.assertEquals(UnsignedLong.fromLongBits(-1), row.getULong("col1"));
       Assert.assertFalse(row.wasNull());
       Assert.assertEquals(null, row.getULong("null"));
+      Assert.assertTrue(row.wasNull());
+    }
+  }
+
+  @Test
+  public void testGetBigInteger() throws Exception {
+    try (Cursor cursor = new SimpleCursor(QueryResult.newBuilder()
+        .addFields(Field.newBuilder().setName("col1").setType(Query.Type.UINT64).build())
+        .addFields(Field.newBuilder().setName("null").setType(Query.Type.UINT64).build())
+        .addRows(Query.Row.newBuilder().addLengths("18446744073709551615".length()).addLengths(-1) // SQL
+            // NULL
+            .setValues(ByteString.copyFromUtf8("18446744073709551615")))
+        .build())) {
+      Row row = cursor.next();
+      Assert.assertNotNull(row);
+      Assert.assertEquals(new BigInteger("18446744073709551615"), row.getObject("col1"));
+      Assert.assertFalse(row.wasNull());
+      Assert.assertEquals(null, row.getObject("null", BigInteger.class));
       Assert.assertTrue(row.wasNull());
     }
   }
