@@ -520,6 +520,47 @@
   }
 }
 
+# insert on duplicate key
+"insert into user(id) values(1) on duplicate key update col = 2"
+{
+  "Original": "insert into user(id) values(1) on duplicate key update col = 2",
+  "Instructions": {
+    "Opcode": "InsertShardedIgnore",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0) on duplicate key update col = 2",
+    "Values": [
+      [
+        ":__seq0"
+      ],
+      [
+        null
+      ],
+      [
+        null
+      ]
+    ],
+    "Table": "user",
+    "Generate": {
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from seq",
+      "Values": [
+        1
+      ]
+    },
+    "Prefix": "insert into user(id, Name, Costly) values ",
+    "Mid": [
+      "(:_Id0, :_Name0, :_Costly0)"
+    ],
+    "Suffix": " on duplicate key update col = 2"
+  }
+}
+
 # insert with one vindex and bind var
 "insert into user(id) values (:aa)"
 {

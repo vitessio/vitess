@@ -94,6 +94,12 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 	if ins.Ignore != "" {
 		eRoute.Opcode = engine.InsertShardedIgnore
 	}
+	if ins.OnDup != nil {
+		if isIndexChanging(sqlparser.UpdateExprs(ins.OnDup), eRoute.Table.ColumnVindexes) {
+			return nil, errors.New("unsupported: DML cannot change vindex column")
+		}
+		eRoute.Opcode = engine.InsertShardedIgnore
+	}
 	if len(ins.Columns) == 0 {
 		return nil, errors.New("no column list")
 	}

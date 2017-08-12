@@ -584,6 +584,52 @@ func TestInsertShardedIgnore(t *testing.T) {
 	}
 }
 
+func TestInsertOnDupKey(t *testing.T) {
+	// This test just sanity checks that the statement is getting passed through
+	// correctly. The full set of use cases are covered by TestInsertShardedIgnore.
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	query := "insert into insert_ignore_test(pv, owned, verify) values (1, 1, 1) on duplicate key update col = 2"
+	_, err := executorExec(executor, query, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql: "insert into insert_ignore_test(pv, owned, verify) values (:_pv0, :_owned0, :_verify0) on duplicate key update col = 2 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		BindVariables: map[string]*querypb.BindVariable{
+			"_pv0":     sqltypes.Int64BindVariable(1),
+			"_owned0":  sqltypes.Int64BindVariable(1),
+			"_verify0": sqltypes.Int64BindVariable(1),
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
+	}
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+	}
+	wantQueries = []*querypb.BoundQuery{{
+		Sql: "select user_id from music_user_map where music_id = :music_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"music_id": sqltypes.Int64BindVariable(1),
+		},
+	}, {
+		Sql: "insert ignore into ins_lookup(fromcol, tocol) values (:fromcol0, :tocol0)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromcol0": sqltypes.Int64BindVariable(1),
+			"tocol0":   sqltypes.Uint64BindVariable(1),
+		},
+	}, {
+		Sql: "select fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromcol": sqltypes.Int64BindVariable(1),
+			"tocol":   sqltypes.Uint64BindVariable(1),
+		},
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: \n%+v, want \n%+v", sbclookup.Queries, wantQueries)
+	}
+}
+
 func TestInsertComments(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
