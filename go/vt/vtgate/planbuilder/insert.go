@@ -91,6 +91,9 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 		Table:    table,
 		Keyspace: table.Keyspace,
 	}
+	if ins.Ignore != "" {
+		eRoute.Opcode = engine.InsertShardedIgnore
+	}
 	if len(ins.Columns) == 0 {
 		return nil, errors.New("no column list")
 	}
