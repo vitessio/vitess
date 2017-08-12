@@ -156,6 +156,9 @@ func forceEOF(yylex interface{}) {
 // Supported SHOW tokens
 %token <bytes> DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VSCHEMA_TABLES
 
+// SET tokens
+%token <bytes> NAMES CHARSET
+
 // Functions
 %token <bytes> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
 %token <bytes> CURRENT_TIME LOCALTIME LOCALTIMESTAMP
@@ -219,6 +222,7 @@ func forceEOF(yylex interface{}) {
 %type <columns> ins_column_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
+%type <bytes> charset_or_character_set
 %type <updateExpr> update_expression
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
@@ -392,10 +396,20 @@ table_name_list:
   }
 
 set_statement:
-  SET comment_opt update_list
+  SET comment_opt charset_or_character_set reserved_sql_id force_eof
+  {
+    $$ = &Set{Comments: Comments($2), Charset: $4}
+  }
+| SET comment_opt update_list
   {
     $$ = &Set{Comments: Comments($2), Exprs: $3}
-  }
+   }
+
+charset_or_character_set:
+  CHARSET
+| CHARACTER SET
+| NAMES
+
 
 create_statement:
   create_table_prefix table_spec
@@ -2268,7 +2282,6 @@ reserved_keyword:
 | BINARY
 | BY
 | CASE
-| CHARACTER
 | COLLATE
 | CONVERT
 | CREATE
@@ -2363,6 +2376,8 @@ non_reserved_keyword:
 | BLOB
 | BOOL
 | CHAR
+| CHARACTER
+| CHARSET
 | COMMENT_KEYWORD
 | DATE
 | DATETIME
@@ -2383,6 +2398,7 @@ non_reserved_keyword:
 | MEDIUMINT
 | MEDIUMTEXT
 | MODE
+| NAMES
 | NCHAR
 | NUMERIC
 | OFFSET
