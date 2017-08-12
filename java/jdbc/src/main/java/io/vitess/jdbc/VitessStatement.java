@@ -57,7 +57,7 @@ public class VitessStatement implements Statement {
     protected VitessConnection vitessConnection;
     protected boolean closed;
     protected long resultCount;
-    protected long queryTimeoutInMillis = Constants.DEFAULT_TIMEOUT;
+    protected long queryTimeoutInMillis;
     protected int maxFieldSize = Constants.MAX_BUFFER_SIZE;
     protected int maxRows = 0;
     protected int fetchSize = 0;
@@ -78,6 +78,7 @@ public class VitessStatement implements Statement {
     public VitessStatement(VitessConnection vitessConnection, int resultSetType,
         int resultSetConcurrency) {
         this.vitessConnection = vitessConnection;
+        this.queryTimeoutInMillis = vitessConnection.getQueryTimeoutMillis();
         this.vitessResultSet = null;
         this.resultSetType = resultSetType;
         this.resultSetConcurrency = resultSetConcurrency;
@@ -267,7 +268,7 @@ public class VitessStatement implements Statement {
                 Constants.SQLExceptionMessages.ILLEGAL_VALUE_FOR + "query timeout");
         }
         this.queryTimeoutInMillis =
-            (0 == seconds) ? Constants.DEFAULT_TIMEOUT : (long) seconds * 1000;
+            (0 == seconds) ? vitessConnection.getQueryTimeoutMillis() : (long) seconds * 1000;
     }
 
     /**
