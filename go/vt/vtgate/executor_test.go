@@ -196,6 +196,9 @@ func TestExecutorSet(t *testing.T) {
 	}, {
 		in:  "set net_write_timeout = 600",
 		out: &vtgatepb.Session{},
+	}, {
+		in:  "set net_read_timeout = 600",
+		out: &vtgatepb.Session{},
 	}}
 	for _, tcase := range testcases {
 		session := &vtgatepb.Session{}
