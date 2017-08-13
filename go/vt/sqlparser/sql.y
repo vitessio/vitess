@@ -52,6 +52,7 @@ func forceEOF(yylex interface{}) {
   bytes         []byte
   bytes2        [][]byte
   str           string
+  strs          []string
   selectExprs   SelectExprs
   selectExpr    SelectExpr
   columns       Columns
@@ -89,6 +90,8 @@ func forceEOF(yylex interface{}) {
   columnDefinitions []*ColumnDefinition
   indexDefinition *IndexDefinition
   indexInfo     *IndexInfo
+  indexColumn   *IndexColumn
+  indexColumns  []*IndexColumn
 }
 
 %token LEX_ERROR
@@ -101,7 +104,7 @@ func forceEOF(yylex interface{}) {
 %left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <bytes> ON
 %token <empty> '(' ',' ')'
-%token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT
+%token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD
 %token <bytes> NULL TRUE FALSE
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
@@ -141,7 +144,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> TIME TIMESTAMP DATETIME YEAR
 %token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR
 %token <bytes> TEXT TINYTEXT MEDIUMTEXT LONGTEXT
-%token <bytes> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON
+%token <bytes> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON ENUM
 
 // Type Modifiers
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
@@ -226,19 +229,20 @@ func forceEOF(yylex interface{}) {
 %type <str> show_statement_type
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type
-%type <optVal> length_opt column_default_opt
+%type <optVal> length_opt column_default_opt column_comment_opt
 %type <str> charset_opt collate_opt
 %type <boolVal> unsigned_opt zero_fill_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
 %type <boolVal> null_opt auto_increment_opt
 %type <colKeyOpt> column_key_opt
+%type <strs> enum_values
 %type <columnDefinition> column_definition
 %type <indexDefinition> index_definition
 %type <TableSpec> table_spec table_column_list
 %type <str> table_option_list table_option table_opt_value
 %type <indexInfo> index_info
-%type <colIdent> index_column
-%type <columns> index_column_list
+%type <indexColumn> index_column
+%type <indexColumns> index_column_list
 
 %start any_command
 
@@ -545,6 +549,10 @@ char_type:
   {
     $$ = ColumnType{Type: string($1)}
   }
+| ENUM '(' enum_values ')'
+  {
+    $$ = ColumnType{Type: string($1), EnumValues: $3}
+  }
 
 length_opt:
   {
@@ -690,13 +698,34 @@ column_key_opt:
     $$ = ColKeyUnique
   }
 
+column_comment_opt:
+  {
+    $$ = nil
+  }
+| COMMENT_KEYWORD STRING
+  {
+    $$ = NewStrVal($2)
+  }
+
+enum_values:
+  STRING
+  {
+    $$ = make([]string, 0, 4)
+    $$ = append($$, "'" + string($1) + "'")
+  }
+| enum_values ',' STRING
+  {
+    $$ = append($1, "'" + string($3) + "'")
+  }
+
 column_definition:
-  ID column_type null_opt column_default_opt auto_increment_opt column_key_opt
+  ID column_type null_opt column_default_opt auto_increment_opt column_key_opt column_comment_opt
   {
     $2.NotNull = $3
     $2.Default = $4
     $2.Autoincrement = $5
     $2.KeyOpt = $6
+    $2.Comment = $7
     $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
   }
 
@@ -723,7 +752,7 @@ index_info:
 index_column_list:
   index_column
   {
-    $$ = Columns{$1}
+    $$ = []*IndexColumn{$1}
   }
 | index_column_list ',' index_column
   {
@@ -733,7 +762,7 @@ index_column_list:
 index_column:
   sql_id length_opt
   {
-      $$ = $1
+      $$ = &IndexColumn{Column: $1, Length: $2}
   }
 
 table_spec:
@@ -2206,6 +2235,7 @@ reserved_keyword:
 | CASE
 | CHARACTER
 | COLLATE
+| COMMENT_KEYWORD
 | CONVERT
 | CREATE
 | CROSS

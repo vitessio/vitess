@@ -1152,11 +1152,11 @@ func TestConvert(t *testing.T) {
 func TestCreateTable(t *testing.T) {
 	validSQL := []string{
 
-		// test all the data types
+		// test all the data types and options
 		`
 create table t (
 	col_bit bit,
-	col_tinyint tinyint,
+	col_tinyint tinyint auto_increment,
 	col_tinyint3 tinyint(3) unsigned,
 	col_smallint smallint,
 	col_smallint4 smallint(4) zerofill,
@@ -1164,7 +1164,7 @@ create table t (
 	col_mediumint5 mediumint(5) unsigned not null,
 	col_int int,
 	col_int10 int(10) not null,
-	col_integer integer,
+	col_integer integer comment 'this is an integer',
 	col_bigint bigint,
 	col_bigint10 bigint(10) zerofill not null default 10,
 	col_real real,
@@ -1202,7 +1202,9 @@ create table t (
 	col_text text,
 	col_mediumtext mediumtext,
 	col_longtext longtext,
-	col_text text character set ascii collate ascii_bin
+	col_text text character set ascii collate ascii_bin,
+	col_json json,
+	col_enum enum('a', 'b', 'c', 'd')
 )`,
 
 		// test defaults
@@ -1248,7 +1250,8 @@ create table t (
 	b int,
 	c int,
 	primary key (id, username),
-	unique key by_abc (a, b, c)
+	unique key by_abc (a, b, c),
+	key by_email (email(10), username)
 )`,
 
 		// table options
