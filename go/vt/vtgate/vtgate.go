@@ -1037,14 +1037,14 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]int
 	case vtrpcpb.Code_UNAVAILABLE:
 		logger.Infof("%v, request: %+v", err, request)
 	}
-	return vterrors.Errorf(vterrors.Code(err), "vtgate: %s: %v", servenv.ListeningURL.String(), err)
+	return vterrors.Wrapf(err, "vtgate: %s", servenv.ListeningURL.String())
 }
 
 func formatError(err error) error {
 	if err == nil {
 		return nil
 	}
-	return vterrors.Errorf(vterrors.Code(err), "vtgate: %s: %v", servenv.ListeningURL.String(), err)
+	return vterrors.Wrapf(err, "vtgate: %s", servenv.ListeningURL.String())
 }
 
 // HandlePanic recovers from panics, and logs / increment counters

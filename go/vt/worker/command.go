@@ -138,7 +138,7 @@ func (wi *Instance) RunCommand(ctx context.Context, args []string, wr *wrangler.
 	}
 	done, err := wi.setAndStartWorker(ctx, wrk, wr)
 	if err != nil {
-		return nil, nil, vterrors.Errorf(vterrors.Code(err), "cannot set worker: %v", err)
+		return nil, nil, vterrors.Wrap(err, "cannot set worker")
 	}
 	return wrk, done, nil
 }

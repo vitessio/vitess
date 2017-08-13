@@ -1890,11 +1890,16 @@ func (node *CaseExpr) WalkSubtree(visit Visit) error {
 }
 
 // Default represents a DEFAULT expression.
-type Default struct{}
+type Default struct {
+	ColName string
+}
 
 // Format formats the node.
 func (node *Default) Format(buf *TrackedBuffer) {
 	buf.Myprintf("default")
+	if node.ColName != "" {
+		buf.Myprintf("(%s)", node.ColName)
+	}
 }
 
 // WalkSubtree walks the nodes of the subtree.
