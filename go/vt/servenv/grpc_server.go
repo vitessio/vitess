@@ -67,8 +67,6 @@ var (
 	// GRPCMaxConnectionAge is the maximum age of a client connection, before GoAway is sent.
 	// This is useful for L4 loadbalancing to ensure rebalancing after scaling.
 	GRPCMaxConnectionAge *time.Duration
-
-	grpcGracefulStop *bool
 )
 
 // isGRPCEnabled returns true if gRPC server is set
@@ -142,13 +140,11 @@ func serveGRPC() {
 	// and serve on it
 	go GRPCServer.Serve(listener)
 
-	if *grpcGracefulStop {
-		OnTermSync(func() {
-			log.Info("Initiated graceful stop of gRPC server")
-			GRPCServer.GracefulStop()
-			log.Info("gRPC server stopped")
-		})
-	}
+	OnTermSync(func() {
+		log.Info("Initiated graceful stop of gRPC server")
+		GRPCServer.GracefulStop()
+		log.Info("gRPC server stopped")
+	})
 }
 
 // RegisterGRPCFlags registers the right command line flag to enable gRPC
@@ -162,8 +158,6 @@ func RegisterGRPCFlags() {
 	GRPCMaxMessageSize = flag.Int("grpc_max_message_size", 4*1024*1024, "Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'.")
 	// Default is effectively infinity, as defined in grpc.
 	GRPCMaxConnectionAge = flag.Duration("grpc_max_connection_age", time.Duration(math.MaxInt64), "Maximum age of a client connection before GoAway is sent.")
-
-	grpcGracefulStop = flag.Bool("grpc_graceful_stop", false, "If specified, enable lameduck stopping of grpc server on sigterm")
 }
 
 // GRPCCheckServiceMap returns if we should register a gRPC service
