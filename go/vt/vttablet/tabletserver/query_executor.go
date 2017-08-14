@@ -19,7 +19,6 @@ package tabletserver
 import (
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 	"time"
 
@@ -401,7 +400,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if len(qr.Rows) != 1 {
 				return nil, fmt.Errorf("unexpected rows from reading sequence %s (possible mis-route): %d", tableName, len(qr.Rows))
 			}
-			nextID, err := qr.Rows[0][0].ParseInt64()
+			nextID, err := sqltypes.ToInt64(qr.Rows[0][0])
 			if err != nil {
 				return nil, fmt.Errorf("error loading sequence %s: %v", tableName, err)
 			}
@@ -409,7 +408,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if t.SequenceInfo.NextVal == 0 {
 				t.SequenceInfo.NextVal = nextID
 			}
-			cache, err := qr.Rows[0][1].ParseInt64()
+			cache, err := sqltypes.ToInt64(qr.Rows[0][1])
 			if err != nil {
 				return nil, fmt.Errorf("error loading sequence %s: %v", tableName, err)
 			}
@@ -438,7 +437,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	return &sqltypes.Result{
 		Fields: sequenceFields,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, strconv.AppendInt(nil, ret, 10)),
+			sqltypes.NewInt64(ret),
 		}},
 		RowsAffected: 1,
 	}, nil
@@ -662,7 +661,7 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 	if qre.plan.Table.Type == schema.Message {
 		ids := conn.ChangedMessages[qre.plan.Table.Name.String()]
 		for _, pkrow := range pkRows {
-			ids = append(ids, pkrow[qre.plan.Table.MessageInfo.IDPKIndex].String())
+			ids = append(ids, pkrow[qre.plan.Table.MessageInfo.IDPKIndex].ToString())
 		}
 		conn.ChangedMessages[qre.plan.Table.Name.String()] = ids
 	}

@@ -157,7 +157,7 @@ func TestDeleteEqual(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("myname")),
+			sqltypes.NewVarChar("myname"),
 		}},
 	}})
 	_, err := executorExec(executor, "delete from user where id = 1", nil)
@@ -256,7 +256,7 @@ func TestDeleteComments(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("myname")),
+			sqltypes.NewVarChar("myname"),
 		}},
 	}})
 	_, err := executorExec(executor, "delete from user where id = 1 /* trailing */", nil)
@@ -426,7 +426,7 @@ func TestInsertGeneratorSharded(t *testing.T) {
 
 	sbclookup.SetResults([]*sqltypes.Result{{
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+			sqltypes.NewInt64(1),
 		}},
 		RowsAffected: 1,
 		InsertID:     1,
@@ -472,7 +472,7 @@ func TestInsertAutoincSharded(t *testing.T) {
 	// Fake a mysql auto-inc response.
 	wantResult := &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+			sqltypes.NewInt64(1),
 		}},
 		RowsAffected: 1,
 		InsertID:     2,
@@ -528,7 +528,7 @@ func TestInsertAutoincUnsharded(t *testing.T) {
 	query := "insert into simple(val) values ('val')"
 	wantResult := &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+			sqltypes.NewInt64(1),
 		}},
 		RowsAffected: 1,
 		InsertID:     2,
@@ -586,7 +586,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 
 	sbclookup.SetResults([]*sqltypes.Result{{
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("4")),
+			sqltypes.NewInt64(4),
 		}},
 		RowsAffected: 1,
 		InsertID:     1,
@@ -727,7 +727,7 @@ func TestInsertFail(t *testing.T) {
 
 	sbclookup.SetResults([]*sqltypes.Result{{}})
 	_, err = executorExec(executor, "insert into music_extra_reversed(music_id, user_id) values (1, 1)", nil)
-	want = "execInsertSharded: getInsertShardedRoute: could not map 1 to a keyspace id"
+	want = "execInsertSharded: getInsertShardedRoute: could not map INT64(1) to a keyspace id"
 	if err == nil || err.Error() != want {
 		t.Errorf("paramsSelectEqual: executorExec: %v, want %v", err, want)
 	}
@@ -774,7 +774,7 @@ func TestInsertFail(t *testing.T) {
 	}
 
 	_, err = executorExec(executor, "insert into music_extra_reversed(music_id, user_id) values (1, 3)", nil)
-	want = "execInsertSharded: getInsertShardedRoute: values [3] for column user_id does not map to keyspaceids"
+	want = "execInsertSharded: getInsertShardedRoute: values [INT64(3)] for column user_id does not map to keyspaceids"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}
@@ -935,7 +935,7 @@ func TestMultiInsertGenerator(t *testing.T) {
 
 	sbclookup.SetResults([]*sqltypes.Result{{
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+			sqltypes.NewInt64(1),
 		}},
 		RowsAffected: 1,
 		InsertID:     1,
@@ -986,7 +986,7 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 
 	sbclookup.SetResults([]*sqltypes.Result{{
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+			sqltypes.NewInt64(1),
 		}},
 		RowsAffected: 1,
 		InsertID:     1,

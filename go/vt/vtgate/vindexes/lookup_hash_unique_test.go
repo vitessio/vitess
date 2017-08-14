@@ -43,7 +43,7 @@ func TestLookupHashUniqueCost(t *testing.T) {
 
 func TestLookupHashUniqueMap(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	got, err := lhu.(Unique).Map(vc, []sqltypes.Value{testVal(1), testVal(2)})
+	got, err := lhu.(Unique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -58,7 +58,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 
 func TestLookupHashUniqueVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	success, err := lhu.Verify(vc, []sqltypes.Value{testVal(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	success, err := lhu.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	if err != nil {
 		t.Error(err)
 	}
@@ -69,7 +69,7 @@ func TestLookupHashUniqueVerify(t *testing.T) {
 
 func TestLookupHashUniqueCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := lhu.(Lookup).Create(vc, []sqltypes.Value{testVal(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	err := lhu.(Lookup).Create(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	if err != nil {
 		t.Error(err)
 	}
@@ -94,7 +94,7 @@ func TestLookupHashUniqueReverse(t *testing.T) {
 
 func TestLookupHashUniqueDelete(t *testing.T) {
 	vc := &vcursor{}
-	err := lhu.(Lookup).Delete(vc, []sqltypes.Value{testVal(1)}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err := lhu.(Lookup).Delete(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}

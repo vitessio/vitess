@@ -64,16 +64,16 @@ func NewUserPermission(fields []*querypb.Field, values []sqltypes.Value) *tablet
 	for i, field := range fields {
 		switch strings.ToLower(field.Name) {
 		case "host":
-			up.Host = values[i].String()
+			up.Host = values[i].ToString()
 		case "user":
-			up.User = values[i].String()
+			up.User = values[i].ToString()
 		case "password":
-			up.PasswordChecksum = crc64.Checksum(([]byte)(values[i].String()), hashTable)
+			up.PasswordChecksum = crc64.Checksum(values[i].ToBytes(), hashTable)
 		case "password_last_changed":
 			// we skip this one, as the value may be
 			// different on master and slaves.
 		default:
-			up.Privileges[field.Name] = values[i].String()
+			up.Privileges[field.Name] = values[i].ToString()
 		}
 	}
 	return up
@@ -113,13 +113,13 @@ func NewDbPermission(fields []*querypb.Field, values []sqltypes.Value) *tabletma
 	for i, field := range fields {
 		switch field.Name {
 		case "Host":
-			up.Host = values[i].String()
+			up.Host = values[i].ToString()
 		case "Db":
-			up.Db = values[i].String()
+			up.Db = values[i].ToString()
 		case "User":
-			up.User = values[i].String()
+			up.User = values[i].ToString()
 		default:
-			up.Privileges[field.Name] = values[i].String()
+			up.Privileges[field.Name] = values[i].ToString()
 		}
 	}
 	return up

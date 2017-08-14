@@ -44,7 +44,7 @@ func TestReaderReadHeartbeat(t *testing.T) {
 			{Name: "ts", Type: sqltypes.Int64},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", now.Add(-10*time.Second).UnixNano()))),
+			sqltypes.NewInt64(now.Add(-10 * time.Second).UnixNano()),
 		}},
 	})
 

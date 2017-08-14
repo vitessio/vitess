@@ -360,7 +360,7 @@ func analyzeInsertNoType(ins *sqlparser.Insert, plan *Plan, table *schema.Table)
 	plan.PKValues = pkValues
 	if ins.OnDup == nil {
 		plan.PlanID = PlanInsertPK
-		plan.OuterQuery = sqlparser.GenerateParsedQuery(ins)
+		plan.OuterQuery = sqlparser.NewParsedQuery(ins)
 		return plan, nil
 	}
 	if len(rowList) > 1 {
@@ -382,7 +382,7 @@ func analyzeInsertNoType(ins *sqlparser.Insert, plan *Plan, table *schema.Table)
 	newins := *ins
 	newins.Ignore = ""
 	newins.OnDup = nil
-	plan.OuterQuery = sqlparser.GenerateParsedQuery(&newins)
+	plan.OuterQuery = sqlparser.NewParsedQuery(&newins)
 	upd := &sqlparser.Update{
 		Comments:   ins.Comments,
 		TableExprs: sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}},
@@ -485,7 +485,7 @@ func analyzeInsertMessage(ins *sqlparser.Insert, plan *Plan, table *schema.Table
 	}
 	plan.PKValues = pkValues
 	plan.PlanID = PlanInsertMessage
-	plan.OuterQuery = sqlparser.GenerateParsedQuery(ins)
+	plan.OuterQuery = sqlparser.NewParsedQuery(ins)
 	return plan, nil
 }
 

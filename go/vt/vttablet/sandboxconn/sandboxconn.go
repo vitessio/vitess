@@ -383,8 +383,8 @@ var SingleRowResult = &sqltypes.Result{
 	RowsAffected: 1,
 	InsertID:     0,
 	Rows: [][]sqltypes.Value{{
-		sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-		sqltypes.MakeTrusted(sqltypes.VarChar, []byte("foo")),
+		sqltypes.NewInt32(1),
+		sqltypes.NewVarChar("foo"),
 	}},
 }
 
@@ -397,7 +397,7 @@ var StreamRowResult = &sqltypes.Result{
 	RowsAffected: 0,
 	InsertID:     0,
 	Rows: [][]sqltypes.Value{{
-		sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-		sqltypes.MakeTrusted(sqltypes.VarChar, []byte("foo")),
+		sqltypes.NewInt32(1),
+		sqltypes.NewVarChar("foo"),
 	}},
 }

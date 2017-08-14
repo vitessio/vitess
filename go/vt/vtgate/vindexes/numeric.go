@@ -52,7 +52,7 @@ func (*Numeric) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, e
 	}
 	for rowNum := range ids {
 		var keybytes [8]byte
-		num, err := sqltypes.ConvertToUint64(ids[rowNum])
+		num, err := sqltypes.ToUint64(ids[rowNum])
 		if err != nil {
 			return false, fmt.Errorf("Numeric.Verify: %v", err)
 		}
@@ -68,7 +68,7 @@ func (*Numeric) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, e
 func (*Numeric) Map(_ VCursor, ids []sqltypes.Value) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
-		num, err := sqltypes.ConvertToUint64(id)
+		num, err := sqltypes.ToUint64(id)
 		if err != nil {
 			return nil, fmt.Errorf("Numeric.Map: %v", err)
 		}
@@ -87,9 +87,7 @@ func (*Numeric) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error) 
 			return nil, fmt.Errorf("Numeric.ReverseMap: length of keyspaceId is not 8: %d", len(keyspaceID))
 		}
 		val := binary.BigEndian.Uint64([]byte(keyspaceID))
-		// BuildValue will not fail for uint64.
-		v, _ := sqltypes.BuildValue(val)
-		reverseIds[rownum] = v
+		reverseIds[rownum] = sqltypes.NewUint64(val)
 	}
 	return reverseIds, nil
 }

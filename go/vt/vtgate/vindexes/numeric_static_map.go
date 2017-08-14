@@ -77,7 +77,7 @@ func (vind *NumericStaticMap) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]
 	}
 	for rowNum := range ids {
 		var keybytes [8]byte
-		num, err := sqltypes.ConvertToUint64(ids[rowNum])
+		num, err := sqltypes.ToUint64(ids[rowNum])
 		if err != nil {
 			return false, fmt.Errorf("NumericStaticMap.Verify: %v", err)
 		}
@@ -97,7 +97,7 @@ func (vind *NumericStaticMap) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]
 func (vind *NumericStaticMap) Map(_ VCursor, ids []sqltypes.Value) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
-		num, err := sqltypes.ConvertToUint64(id)
+		num, err := sqltypes.ToUint64(id)
 		if err != nil {
 			return nil, fmt.Errorf("NumericStaticMap.Map: %v", err)
 		}

@@ -702,10 +702,10 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 			{Type: sqltypes.VarBinary},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("dtid0")),
-			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
-			sqltypes.MakeString([]byte("")),
-			sqltypes.MakeString([]byte("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */")),
+			sqltypes.NewVarBinary("dtid0"),
+			sqltypes.NewInt64(RedoStatePrepared),
+			sqltypes.NewVarBinary(""),
+			sqltypes.NewVarBinary("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"),
 		}},
 	})
 	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
@@ -729,20 +729,20 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 			{Type: sqltypes.VarBinary},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("bogus")),
-			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
-			sqltypes.MakeString([]byte("")),
-			sqltypes.MakeString([]byte("bogus")),
+			sqltypes.NewVarBinary("bogus"),
+			sqltypes.NewInt64(RedoStatePrepared),
+			sqltypes.NewVarBinary(""),
+			sqltypes.NewVarBinary("bogus"),
 		}, {
-			sqltypes.MakeString([]byte("a:b:10")),
-			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
-			sqltypes.MakeString([]byte("")),
-			sqltypes.MakeString([]byte("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */")),
+			sqltypes.NewVarBinary("a:b:10"),
+			sqltypes.NewInt64(RedoStatePrepared),
+			sqltypes.NewVarBinary(""),
+			sqltypes.NewVarBinary("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"),
 		}, {
-			sqltypes.MakeString([]byte("a:b:20")),
-			sqltypes.MakeString([]byte(strconv.Itoa(RedoStateFailed))),
-			sqltypes.MakeString([]byte("")),
-			sqltypes.MakeString([]byte("unused")),
+			sqltypes.NewVarBinary("a:b:20"),
+			sqltypes.NewInt64(RedoStateFailed),
+			sqltypes.NewVarBinary(""),
+			sqltypes.NewVarBinary("unused"),
 		}},
 	})
 	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
@@ -855,9 +855,9 @@ func TestTabletServerReadTransaction(t *testing.T) {
 			{Type: sqltypes.Uint64},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("aa")),
-			sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_PREPARE)))),
-			sqltypes.MakeString([]byte("1")),
+			sqltypes.NewVarBinary("aa"),
+			sqltypes.NewInt64(int64(querypb.TransactionState_PREPARE)),
+			sqltypes.NewVarBinary("1"),
 		}},
 	}
 	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
@@ -867,11 +867,11 @@ func TestTabletServerReadTransaction(t *testing.T) {
 			{Type: sqltypes.VarBinary},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("test1")),
-			sqltypes.MakeString([]byte("0")),
+			sqltypes.NewVarBinary("test1"),
+			sqltypes.NewVarBinary("0"),
 		}, {
-			sqltypes.MakeString([]byte("test2")),
-			sqltypes.MakeString([]byte("1")),
+			sqltypes.NewVarBinary("test2"),
+			sqltypes.NewVarBinary("1"),
 		}},
 	})
 	got, err = tsv.ReadTransaction(ctx, &target, "aa")
@@ -903,9 +903,9 @@ func TestTabletServerReadTransaction(t *testing.T) {
 			{Type: sqltypes.Uint64},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("aa")),
-			sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_COMMIT)))),
-			sqltypes.MakeString([]byte("1")),
+			sqltypes.NewVarBinary("aa"),
+			sqltypes.NewInt64(int64(querypb.TransactionState_COMMIT)),
+			sqltypes.NewVarBinary("1"),
 		}},
 	}
 	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
@@ -925,9 +925,9 @@ func TestTabletServerReadTransaction(t *testing.T) {
 			{Type: sqltypes.Uint64},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("aa")),
-			sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_ROLLBACK)))),
-			sqltypes.MakeString([]byte("1")),
+			sqltypes.NewVarBinary("aa"),
+			sqltypes.NewInt64(int64(querypb.TransactionState_ROLLBACK)),
+			sqltypes.NewVarBinary("1"),
 		}},
 	}
 	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
@@ -992,7 +992,7 @@ func TestTabletServerCommitTransaction(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeString([]byte("row01"))},
+			{sqltypes.NewVarBinary("row01")},
 		},
 	}
 	db.AddQuery(executeSQL, executeSQLResult)
@@ -1055,7 +1055,7 @@ func TestTabletServerRollback(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeString([]byte("row01"))},
+			{sqltypes.NewVarBinary("row01")},
 		},
 	}
 	db.AddQuery(executeSQL, executeSQLResult)
@@ -1158,7 +1158,7 @@ func TestTabletServerStreamExecute(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeString([]byte("row01"))},
+			{sqltypes.NewVarBinary("row01")},
 		},
 	}
 	db.AddQuery(executeSQL, executeSQLResult)
@@ -1869,8 +1869,8 @@ func TestMessageAck(t *testing.T) {
 			},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeString([]byte("1")),
-				sqltypes.MakeString([]byte("1")),
+				sqltypes.NewVarBinary("1"),
+				sqltypes.NewVarBinary("1"),
 			}},
 		},
 	)
@@ -1912,8 +1912,8 @@ func TestRescheduleMessages(t *testing.T) {
 			},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeString([]byte("1")),
-				sqltypes.MakeString([]byte("1")),
+				sqltypes.NewVarBinary("1"),
+				sqltypes.NewVarBinary("1"),
 			}},
 		},
 	)
@@ -1955,8 +1955,8 @@ func TestPurgeMessages(t *testing.T) {
 			},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeString([]byte("1")),
-				sqltypes.MakeString([]byte("1")),
+				sqltypes.NewVarBinary("1"),
+				sqltypes.NewVarBinary("1"),
 			}},
 		},
 	)
@@ -1981,8 +1981,8 @@ func TestTabletServerSplitQuery(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("100")),
+				sqltypes.NewInt32(1),
+				sqltypes.NewInt32(100),
 			},
 		},
 	})
@@ -2326,7 +2326,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeString([]byte("1")),
+				sqltypes.NewVarBinary("1"),
 			}},
 		},
 		// Complex WHERE clause requires SELECT of primary key first.
@@ -2336,7 +2336,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeString([]byte("2")),
+				sqltypes.NewVarBinary("2"),
 			}},
 		},
 		// queries for twopc
@@ -2357,7 +2357,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{sqltypes.MakeString([]byte("1427325875"))},
+				{sqltypes.NewVarBinary("1427325875")},
 			},
 		},
 		"select @@global.sql_mode": {
@@ -2366,7 +2366,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
+				{sqltypes.NewVarBinary("STRICT_TRANS_TABLES")},
 			},
 		},
 		"select @@autocommit": {
@@ -2375,7 +2375,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{sqltypes.MakeString([]byte("1"))},
+				{sqltypes.NewVarBinary("1")},
 			},
 		},
 		"show variables like 'binlog_format'": {
@@ -2386,8 +2386,8 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeString([]byte("binlog_format")),
-				sqltypes.MakeString([]byte("STATEMENT")),
+				sqltypes.NewVarBinary("binlog_format"),
+				sqltypes.NewVarBinary("STATEMENT"),
 			}},
 		},
 		"select * from test_table where 1 != 1": {

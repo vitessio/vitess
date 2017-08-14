@@ -53,7 +53,7 @@ func TestMultipleBoundaries(t *testing.T) {
 	expectedCall1.Return(
 		&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
-				{int64Value(1), int64Value(1)}},
+				{sqltypes.NewInt64(1), sqltypes.NewInt64(1)}},
 		},
 		nil)
 	expectedCall2 := mockSQLExecuter.EXPECT().SQLExecute(
@@ -70,7 +70,7 @@ func TestMultipleBoundaries(t *testing.T) {
 	expectedCall2.Return(
 		&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
-				{int64Value(2), int64Value(10)}},
+				{sqltypes.NewInt64(2), sqltypes.NewInt64(10)}},
 		},
 		nil)
 	expectedCall2.After(expectedCall1)
@@ -98,8 +98,8 @@ func TestMultipleBoundaries(t *testing.T) {
 		t.Fatalf("FullScanAlgorithm.generateBoundaries() failed with: %v", err)
 	}
 	expectedBoundaries := []tuple{
-		{int64Value(1), int64Value(1)},
-		{int64Value(2), int64Value(10)},
+		{sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
+		{sqltypes.NewInt64(2), sqltypes.NewInt64(10)},
 	}
 	if !reflect.DeepEqual(expectedBoundaries, boundaries) {
 		t.Fatalf("expected: %v, got: %v", expectedBoundaries, boundaries)
@@ -168,7 +168,7 @@ func TestSQLExecuterReturnsError(t *testing.T) {
 	expectedCall1.Return(
 		&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
-				{int64Value(1), int64Value(1)}},
+				{sqltypes.NewInt64(1), sqltypes.NewInt64(1)}},
 		},
 		nil)
 	expectedCall2 := mockSQLExecuter.EXPECT().SQLExecute(

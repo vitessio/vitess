@@ -20,7 +20,6 @@ import (
 	"io"
 	"reflect"
 	"runtime"
-	"strconv"
 	"testing"
 	"time"
 
@@ -126,7 +125,7 @@ func TestMessage(t *testing.T) {
 	start := time.Now().UnixNano()
 	got = <-ch
 	// Check time_scheduled separately.
-	scheduled, err := got.Rows[0][1].ParseInt64()
+	scheduled, err := sqltypes.ToInt64(got.Rows[0][1])
 	if err != nil {
 		t.Error(err)
 	}
@@ -135,9 +134,9 @@ func TestMessage(t *testing.T) {
 	}
 	want = &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+			sqltypes.NewInt64(1),
 			got.Rows[0][1],
-			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("hello world")),
+			sqltypes.NewVarChar("hello world"),
 		}},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -324,10 +323,10 @@ func TestThreeColMessage(t *testing.T) {
 	got = <-ch
 	want = &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+			sqltypes.NewInt64(1),
 			got.Rows[0][1],
-			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("hello world")),
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
+			sqltypes.NewVarChar("hello world"),
+			sqltypes.NewInt64(3),
 		}},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -348,7 +347,7 @@ func getTimeEpoch(qr *sqltypes.Result) (int64, int64) {
 	if len(qr.Rows) != 1 {
 		return 0, 0
 	}
-	t, _ := strconv.Atoi(qr.Rows[0][0].String())
-	e, _ := strconv.Atoi(qr.Rows[0][1].String())
-	return int64(t), int64(e)
+	t, _ := sqltypes.ToInt64(qr.Rows[0][0])
+	e, _ := sqltypes.ToInt64(qr.Rows[0][1])
+	return t, e
 }

@@ -80,17 +80,17 @@ func echoQueryResult(vals map[string]interface{}) *sqltypes.Result {
 	qr.Fields = append(qr.Fields, &querypb.Field{Name: "null", Type: sqltypes.VarBinary})
 	row = append(row, sqltypes.NULL)
 	qr.Fields = append(qr.Fields, &querypb.Field{Name: "emptyString", Type: sqltypes.VarBinary})
-	row = append(row, sqltypes.MakeString([]byte("")))
+	row = append(row, sqltypes.NewVarBinary(""))
 
 	for k, v := range vals {
 		qr.Fields = append(qr.Fields, &querypb.Field{Name: k, Type: sqltypes.VarBinary})
 
 		val := reflect.ValueOf(v)
 		if val.Kind() == reflect.Map {
-			row = append(row, sqltypes.MakeString(printSortedMap(val)))
+			row = append(row, sqltypes.MakeTrusted(sqltypes.VarBinary, printSortedMap(val)))
 			continue
 		}
-		row = append(row, sqltypes.MakeString([]byte(fmt.Sprintf("%v", v))))
+		row = append(row, sqltypes.NewVarBinary(fmt.Sprintf("%v", v)))
 	}
 	qr.Rows = [][]sqltypes.Value{row}
 

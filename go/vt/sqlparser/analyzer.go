@@ -170,19 +170,19 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 		case ValArg:
 			return sqltypes.PlanValue{Key: string(node.Val[1:])}, nil
 		case IntVal:
-			n, err := sqltypes.BuildIntegral(string(node.Val))
+			n, err := sqltypes.NewIntegral(string(node.Val))
 			if err != nil {
 				return sqltypes.PlanValue{}, err
 			}
 			return sqltypes.PlanValue{Value: n}, nil
 		case StrVal:
-			return sqltypes.PlanValue{Value: sqltypes.MakeString(node.Val)}, nil
+			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, node.Val)}, nil
 		case HexVal:
 			v, err := node.HexDecode()
 			if err != nil {
 				return sqltypes.PlanValue{}, err
 			}
-			return sqltypes.PlanValue{Value: sqltypes.MakeString(v)}, nil
+			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, v)}, nil
 		}
 	case ListArg:
 		return sqltypes.PlanValue{ListKey: string(node[2:])}, nil

@@ -68,13 +68,13 @@ func (lkp *lookup) MapUniqueLookup(vcursor VCursor, ids []sqltypes.Value) ([][]b
 			return nil, fmt.Errorf("lookup.Map: unexpected multiple results from vindex %s: %v", lkp.Table, id)
 		}
 		if lkp.isHashedIndex {
-			num, err := sqltypes.ConvertToUint64(result.Rows[0][0])
+			num, err := sqltypes.ToUint64(result.Rows[0][0])
 			if err != nil {
 				return nil, fmt.Errorf("lookup.Map: %v", err)
 			}
 			out = append(out, vhash(num))
 		} else {
-			out = append(out, result.Rows[0][0].Bytes())
+			out = append(out, result.Rows[0][0].ToBytes())
 		}
 	}
 	return out, nil
@@ -93,7 +93,7 @@ func (lkp *lookup) MapNonUniqueLookup(vcursor VCursor, ids []sqltypes.Value) ([]
 		var ksids [][]byte
 		if lkp.isHashedIndex {
 			for _, row := range result.Rows {
-				num, err := sqltypes.ConvertToUint64(row[0])
+				num, err := sqltypes.ToUint64(row[0])
 				if err != nil {
 					return nil, fmt.Errorf("lookup.Map: %v", err)
 				}
@@ -101,7 +101,7 @@ func (lkp *lookup) MapNonUniqueLookup(vcursor VCursor, ids []sqltypes.Value) ([]
 			}
 		} else {
 			for _, row := range result.Rows {
-				ksids = append(ksids, row[0].Bytes())
+				ksids = append(ksids, row[0].ToBytes())
 			}
 		}
 		out = append(out, ksids)

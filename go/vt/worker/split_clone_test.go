@@ -376,7 +376,8 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 	// Send the values.
 	rowsAffected := 0
 	for _, row := range sq.rows {
-		primaryKey := row[0].ToNative().(int64)
+		v, _ := sqltypes.ToNative(row[0])
+		primaryKey := v.(int64)
 
 		if primaryKey >= int64(min) && primaryKey < int64(max) {
 			if sq.forceErrorOnce(primaryKey) {
@@ -412,14 +413,14 @@ func (sq *testQueryService) addGeneratedRows(from, to int) {
 		// Only return the rows which are covered by this shard.
 		shardIndex := id % 2
 		if sq.shardCount == 1 || shardIndex == sq.shardIndex {
-			idValue, _ := sqltypes.BuildValue(int64(id))
+			idValue := sqltypes.NewInt64(int64(id))
 
 			row := []sqltypes.Value{
 				idValue,
-				sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", id))),
+				sqltypes.NewVarBinary(fmt.Sprintf("Text for %v", id)),
 			}
 			if !sq.omitKeyspaceID {
-				row = append(row, sqltypes.MakeString([]byte(fmt.Sprintf("%v", ksids[shardIndex]))))
+				row = append(row, sqltypes.NewVarBinary(fmt.Sprintf("%v", ksids[shardIndex])))
 			}
 			rows = append(rows, row)
 		}
@@ -436,7 +437,7 @@ func (sq *testQueryService) modifyFirstRows(count int) {
 	// Modify the text of the first "count" rows.
 	for i := 0; i < count; i++ {
 		row := sq.rows[i]
-		row[1] = sqltypes.MakeString([]byte(fmt.Sprintf("OUTDATED ROW: %v", row[1].String())))
+		row[1] = sqltypes.NewVarBinary(fmt.Sprintf("OUTDATED ROW: %v", row[1]))
 	}
 }
 

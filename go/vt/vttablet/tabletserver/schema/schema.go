@@ -156,7 +156,7 @@ func (ta *Table) AddColumn(name string, columnType querypb.Type, defval sqltypes
 		return
 	}
 	// Schema values are trusted.
-	ta.Columns[index].Default = sqltypes.MakeTrusted(ta.Columns[index].Type, defval.Bytes())
+	ta.Columns[index].Default = sqltypes.MakeTrusted(ta.Columns[index].Type, defval.Raw())
 }
 
 // FindColumn finds a column in the table. It returns the index if found.
@@ -184,15 +184,15 @@ func (ta *Table) AddIndex(name string) (index *Index) {
 
 // SetMysqlStats receives the values found in the mysql information_schema.tables table
 func (ta *Table) SetMysqlStats(tr, dl, il, df, mdl sqltypes.Value) {
-	v, _ := tr.ParseInt64()
+	v, _ := sqltypes.ToInt64(tr)
 	ta.TableRows.Set(v)
-	v, _ = dl.ParseInt64()
+	v, _ = sqltypes.ToInt64(dl)
 	ta.DataLength.Set(v)
-	v, _ = il.ParseInt64()
+	v, _ = sqltypes.ToInt64(il)
 	ta.IndexLength.Set(v)
-	v, _ = df.ParseInt64()
+	v, _ = sqltypes.ToInt64(df)
 	ta.DataFree.Set(v)
-	v, _ = mdl.ParseInt64()
+	v, _ = sqltypes.ToInt64(mdl)
 	ta.MaxDataLength.Set(v)
 }
 

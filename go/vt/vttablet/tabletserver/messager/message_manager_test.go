@@ -182,7 +182,7 @@ func TestMessageManagerAdd(t *testing.T) {
 	defer mm.Close()
 
 	row1 := &MessageRow{
-		Row: []sqltypes.Value{sqltypes.MakeString([]byte("1"))},
+		Row: []sqltypes.Value{sqltypes.NewVarBinary("1")},
 	}
 	if mm.Add(row1) {
 		t.Error("Add(no receivers): true, want false")
@@ -197,10 +197,10 @@ func TestMessageManagerAdd(t *testing.T) {
 	// Make sure message is enqueued.
 	r1.WaitForCount(2)
 	// This will fill up the cache.
-	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("2"))}})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("2")}})
 
 	// The third add has to fail.
-	if mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("3"))}}) {
+	if mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("3")}}) {
 		t.Error("Add(cache full): true, want false")
 	}
 	// Drain the receiver to prevent hangs.
@@ -229,10 +229,10 @@ func TestMessageManagerSend(t *testing.T) {
 	// Make it buffered so the thread doesn't block on repeated calls.
 	ch := make(chan string, 20)
 	tsv.SetChannel(ch)
-	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("1")), sqltypes.NULL}})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NULL}})
 	want = &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("1")),
+			sqltypes.NewVarBinary("1"),
 			sqltypes.NULL,
 		}},
 	}
@@ -253,8 +253,8 @@ func TestMessageManagerSend(t *testing.T) {
 	r2 := newTestReceiver(1)
 	mm.Subscribe(r2.rcv)
 	<-r2.ch
-	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("2"))}})
-	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("3"))}})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("2")}})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("3")}})
 	// Send should be round-robin.
 	<-r1.ch
 	<-r2.ch
@@ -262,9 +262,9 @@ func TestMessageManagerSend(t *testing.T) {
 	r2.WaitForDone()
 	// One of these messages will fail to send
 	// because r1 will return EOF.
-	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("4"))}})
-	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("5"))}})
-	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("6"))}})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("4")}})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("5")}})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("6")}})
 	// Only r1 should be receiving.
 	<-r1.ch
 	<-r1.ch
@@ -282,12 +282,12 @@ func TestMessageManagerBatchSend(t *testing.T) {
 	mm.Subscribe(r1.rcv)
 	<-r1.ch
 	row1 := &MessageRow{
-		Row: []sqltypes.Value{sqltypes.MakeString([]byte("1")), sqltypes.NULL},
+		Row: []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NULL},
 	}
 	mm.Add(row1)
 	want := &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("1")),
+			sqltypes.NewVarBinary("1"),
 			sqltypes.NULL,
 		}},
 	}
@@ -295,16 +295,16 @@ func TestMessageManagerBatchSend(t *testing.T) {
 		t.Errorf("Received: %v, want %v", got, row1)
 	}
 	mm.mu.Lock()
-	mm.cache.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("2")), sqltypes.NULL}})
-	mm.cache.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("3")), sqltypes.NULL}})
+	mm.cache.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("2"), sqltypes.NULL}})
+	mm.cache.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("3"), sqltypes.NULL}})
 	mm.cond.Broadcast()
 	mm.mu.Unlock()
 	want = &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("2")),
+			sqltypes.NewVarBinary("2"),
 			sqltypes.NULL,
 		}, {
-			sqltypes.MakeString([]byte("3")),
+			sqltypes.NewVarBinary("3"),
 			sqltypes.NULL,
 		}},
 	}
@@ -327,23 +327,23 @@ func TestMessageManagerPoller(t *testing.T) {
 				{Type: sqltypes.VarBinary},
 			},
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("0")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("10")),
-				sqltypes.MakeString([]byte("01")),
+				sqltypes.NewInt64(1),
+				sqltypes.NewInt64(0),
+				sqltypes.NewInt64(1),
+				sqltypes.NewInt64(10),
+				sqltypes.NewVarBinary("01"),
 			}, {
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("0")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("20")),
-				sqltypes.MakeString([]byte("02")),
+				sqltypes.NewInt64(2),
+				sqltypes.NewInt64(0),
+				sqltypes.NewInt64(2),
+				sqltypes.NewInt64(20),
+				sqltypes.NewVarBinary("02"),
 			}, {
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("30")),
-				sqltypes.MakeString([]byte("11")),
+				sqltypes.NewInt64(1),
+				sqltypes.NewInt64(1),
+				sqltypes.NewInt64(3),
+				sqltypes.NewInt64(30),
+				sqltypes.NewVarBinary("11"),
 			}},
 		},
 	)
@@ -358,17 +358,17 @@ func TestMessageManagerPoller(t *testing.T) {
 	<-r1.ch
 	mm.pollerTicks.Trigger()
 	want := [][]sqltypes.Value{{
-		sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
-		sqltypes.MakeTrusted(sqltypes.Int64, []byte("20")),
-		sqltypes.MakeString([]byte("02")),
+		sqltypes.NewInt64(2),
+		sqltypes.NewInt64(20),
+		sqltypes.NewVarBinary("02"),
 	}, {
-		sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-		sqltypes.MakeTrusted(sqltypes.Int64, []byte("10")),
-		sqltypes.MakeString([]byte("01")),
+		sqltypes.NewInt64(1),
+		sqltypes.NewInt64(10),
+		sqltypes.NewVarBinary("01"),
 	}, {
-		sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
-		sqltypes.MakeTrusted(sqltypes.Int64, []byte("30")),
-		sqltypes.MakeString([]byte("11")),
+		sqltypes.NewInt64(3),
+		sqltypes.NewInt64(30),
+		sqltypes.NewVarBinary("11"),
 	}}
 	var got [][]sqltypes.Value
 	// We should get it in 2 iterations.
@@ -408,11 +408,11 @@ func TestMessagesPending1(t *testing.T) {
 				{Type: sqltypes.VarBinary},
 			},
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("0")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("a")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("10")),
-				sqltypes.MakeString([]byte("a")),
+				sqltypes.NewInt64(1),
+				sqltypes.NewInt64(0),
+				sqltypes.NewInt64(2),
+				sqltypes.NewInt64(10),
+				sqltypes.NewVarBinary("a"),
 			}},
 		},
 	)
@@ -427,12 +427,12 @@ func TestMessagesPending1(t *testing.T) {
 	mm.Subscribe(r1.rcv)
 	<-r1.ch
 
-	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("1"))}})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("1")}})
 	// Make sure the first message is enqueued.
 	r1.WaitForCount(2)
 	// This will fill up the cache.
-	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("2"))}})
-	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("3"))}})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("2")}})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("3")}})
 
 	// Trigger the poller. It should do nothing.
 	mm.pollerTicks.Trigger()
@@ -475,11 +475,11 @@ func TestMessagesPending2(t *testing.T) {
 				{Type: sqltypes.VarBinary},
 			},
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("0")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("a")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("10")),
-				sqltypes.MakeString([]byte("a")),
+				sqltypes.NewInt64(1),
+				sqltypes.NewInt64(0),
+				sqltypes.NewInt64(2),
+				sqltypes.NewInt64(10),
+				sqltypes.NewVarBinary("a"),
 			}},
 		},
 	)
@@ -546,13 +546,13 @@ func TestMMGenerate(t *testing.T) {
 		t.Errorf("GenerateAckQuery query: %s, want %s", query, wantQuery)
 	}
 	bvv, _ := sqltypes.BindVariableToValue(bv["time_acked"])
-	gotAcked, _ := bvv.ParseInt64()
+	gotAcked, _ := sqltypes.ToInt64(bvv)
 	wantAcked := time.Now().UnixNano()
 	if wantAcked-gotAcked > 10e9 {
 		t.Errorf("gotAcked: %d, should be with 10s of %d", gotAcked, wantAcked)
 	}
 	gotids := bv["ids"]
-	wantids := sqltypes.MakeTestBindVar([]interface{}{"1", "2"})
+	wantids := sqltypes.TestBindVariable([]interface{}{"1", "2"})
 	if !reflect.DeepEqual(gotids, wantids) {
 		t.Errorf("gotid: %v, want %v", gotids, wantids)
 	}

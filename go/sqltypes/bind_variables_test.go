@@ -26,6 +26,19 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
+func TestProtoConversions(t *testing.T) {
+	v := TestValue(Int64, "1")
+	got := ValueToProto(v)
+	want := &querypb.Value{Type: Int64, Value: []byte("1")}
+	if !proto.Equal(got, want) {
+		t.Errorf("ValueToProto: %v, want %v", got, want)
+	}
+	gotback := ProtoToValue(got)
+	if !reflect.DeepEqual(gotback, v) {
+		t.Errorf("ProtoToValue: %v, want %v", gotback, v)
+	}
+}
+
 func TestBuildBindVariables(t *testing.T) {
 	tcases := []struct {
 		in  map[string]interface{}
@@ -256,7 +269,7 @@ func TestValidateBindVarables(t *testing.T) {
 	}, {
 		in: map[string]*querypb.BindVariable{
 			"v": {
-				Type: Tuple,
+				Type: querypb.Type_TUPLE,
 				Values: []*querypb.Value{{
 					Type:  Int64,
 					Value: []byte("a"),
@@ -278,13 +291,6 @@ func TestValidateBindVarables(t *testing.T) {
 		}
 	}
 }
-
-const (
-	InvalidNeg = "-9223372036854775809"
-	MinNeg     = "-9223372036854775808"
-	MinPos     = "18446744073709551615"
-	InvalidPos = "18446744073709551616"
-)
 
 func TestValidateBindVariable(t *testing.T) {
 	testcases := []struct {
@@ -460,10 +466,10 @@ func TestValidateBindVariable(t *testing.T) {
 			Type:  querypb.Type_EXPRESSION,
 			Value: []byte("a"),
 		},
-		err: "type: EXPRESSION is invalid",
+		err: "invalid type specified for MakeValue: EXPRESSION",
 	}, {
 		in: &querypb.BindVariable{
-			Type: Tuple,
+			Type: querypb.Type_TUPLE,
 			Values: []*querypb.Value{{
 				Type:  querypb.Type_INT64,
 				Value: []byte("1"),
@@ -482,13 +488,6 @@ func TestValidateBindVariable(t *testing.T) {
 			}},
 		},
 		err: "tuple not allowed inside another tuple",
-	}, {
-		in: &querypb.BindVariable{
-			Type: querypb.Type_TUPLE,
-			Values: []*querypb.Value{{
-				Type: querypb.Type_NULL_TYPE,
-			}},
-		},
 	}}
 	for _, tcase := range testcases {
 		err := ValidateBindVariable(tcase.in)

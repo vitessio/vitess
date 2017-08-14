@@ -173,7 +173,7 @@ func testSSLConnectionClearText(t *testing.T, params *ConnParams) {
 	if err != nil {
 		t.Fatalf("ExecuteFetch failed: %v", err)
 	}
-	if result.Rows[0][0].String() != "ON" {
+	if result.Rows[0][0].ToString() != "ON" {
 		t.Errorf("Got wrong result from ExecuteFetch(ssl echo): %v", result)
 	}
 
@@ -207,7 +207,7 @@ func testSSLConnectionBasics(t *testing.T, params *ConnParams) {
 	if err != nil {
 		t.Fatalf("ExecuteFetch failed: %v", err)
 	}
-	if result.Rows[0][0].String() != "ON" {
+	if result.Rows[0][0].ToString() != "ON" {
 		t.Errorf("Got wrong result from ExecuteFetch(ssl echo): %v", result)
 	}
 

@@ -86,7 +86,7 @@ func unicodeHash(key sqltypes.Value) ([]byte, error) {
 	collator := collatorPool.Get().(pooledCollator)
 	defer collatorPool.Put(collator)
 
-	norm, err := normalize(collator.col, collator.buf, key.Bytes())
+	norm, err := normalize(collator.col, collator.buf, key.ToBytes())
 	if err != nil {
 		return nil, err
 	}

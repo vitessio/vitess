@@ -624,7 +624,7 @@ func (route *Route) resolveShards(vcursor VCursor, bindVars map[string]*querypb.
 			if err != nil {
 				return "", nil, err
 			}
-			routing.Add(shard, &querypb.Value{Type: vindexKeys[i].Type(), Value: vindexKeys[i].Raw()})
+			routing.Add(shard, sqltypes.ValueToProto(vindexKeys[i]))
 		}
 	case vindexes.NonUnique:
 		ksidss, err := mapper.Map(vcursor, vindexKeys)
@@ -637,7 +637,7 @@ func (route *Route) resolveShards(vcursor VCursor, bindVars map[string]*querypb.
 				if err != nil {
 					return "", nil, err
 				}
-				routing.Add(shard, &querypb.Value{Type: vindexKeys[i].Type(), Value: vindexKeys[i].Raw()})
+				routing.Add(shard, sqltypes.ValueToProto(vindexKeys[i]))
 			}
 		}
 	default:
@@ -722,7 +722,7 @@ func (route *Route) handleGenerate(vcursor VCursor, bindVars map[string]*querypb
 		}
 		// If no rows are returned, it's an internal error, and the code
 		// must panic, which will be caught and reported.
-		insertID, err = qr.Rows[0][0].ParseInt64()
+		insertID, err = sqltypes.ToInt64(qr.Rows[0][0])
 		if err != nil {
 			return 0, err
 		}

@@ -77,7 +77,7 @@ func TestUnicodeLooseMD5(t *testing.T) {
 		out: "\xac\x0f\x91y\xf5\x1d\xb8\u007f\xe8\xec\xc0\xcf@ʹz",
 	}}
 	for _, tcase := range tcases {
-		got, err := charVindex.(Unique).Map(nil, []sqltypes.Value{sqltypes.MakeString([]byte(tcase.in))})
+		got, err := charVindex.(Unique).Map(nil, []sqltypes.Value{sqltypes.NewVarBinary(tcase.in)})
 		if err != nil {
 			t.Error(err)
 		}
@@ -85,7 +85,7 @@ func TestUnicodeLooseMD5(t *testing.T) {
 		if out != tcase.out {
 			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 		}
-		ok, err := charVindex.Verify(nil, []sqltypes.Value{sqltypes.MakeString([]byte(tcase.in))}, [][]byte{[]byte(tcase.out)})
+		ok, err := charVindex.Verify(nil, []sqltypes.Value{sqltypes.NewVarBinary(tcase.in)}, [][]byte{[]byte(tcase.out)})
 		if err != nil {
 			t.Error(err)
 		}
@@ -96,13 +96,13 @@ func TestUnicodeLooseMD5(t *testing.T) {
 }
 
 func TestUnicodeLooseMD5Neg(t *testing.T) {
-	_, err := charVindex.Verify(nil, []sqltypes.Value{testVal([]byte("test1")), testVal([]byte("test2"))}, [][]byte{[]byte("test1")})
+	_, err := charVindex.Verify(nil, []sqltypes.Value{sqltypes.NewVarChar("test1"), sqltypes.NewVarChar("test2")}, [][]byte{[]byte("test1")})
 	want := "UnicodeLooseMD5.Verify: length of ids 2 doesn't match length of ksids 1"
 	if err.Error() != want {
 		t.Error(err.Error())
 	}
 
-	ok, err := charVindex.Verify(nil, []sqltypes.Value{testVal([]byte("test2"))}, [][]byte{[]byte("test1")})
+	ok, err := charVindex.Verify(nil, []sqltypes.Value{sqltypes.NewVarChar("test2")}, [][]byte{[]byte("test1")})
 	if err != nil {
 		t.Error(err)
 	}

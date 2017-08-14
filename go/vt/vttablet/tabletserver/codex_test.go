@@ -44,10 +44,10 @@ func TestCodexBuildValuesList(t *testing.T) {
 		pkValues: []sqltypes.PlanValue{{
 			Key: "key",
 		}, {
-			Value: sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("aa")),
+			Value: sqltypes.NewVarBinary("aa"),
 		}},
 		out: [][]sqltypes.Value{
-			{sqltypes.MakeTrusted(sqltypes.Int64, []byte("10")), sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("aa"))},
+			{sqltypes.NewInt64(10), sqltypes.NewVarBinary("aa")},
 		},
 	}, {
 		pkValues: []sqltypes.PlanValue{{
@@ -56,7 +56,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 		err: "missing bind var nokey",
 	}, {
 		pkValues: []sqltypes.PlanValue{{
-			Value: sqltypes.MakeTrusted(sqltypes.VarChar, []byte("aa")),
+			Value: sqltypes.NewVarChar("aa"),
 		}},
 		err: `strconv.ParseInt: parsing "aa": invalid syntax`,
 	}}
@@ -103,11 +103,11 @@ func TestBuildSecondaryList(t *testing.T) {
 		out:           nil,
 	}, {
 		secondaryList: []sqltypes.PlanValue{{}, {
-			Value: sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("cc")),
+			Value: sqltypes.NewVarBinary("cc"),
 		}},
 		out: [][]sqltypes.Value{
-			{sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")), sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("cc"))},
-			{sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")), sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("cc"))},
+			{sqltypes.NewInt64(1), sqltypes.NewVarBinary("cc")},
+			{sqltypes.NewInt64(2), sqltypes.NewVarBinary("cc")},
 		},
 	}, {
 		secondaryList: []sqltypes.PlanValue{{
@@ -147,8 +147,8 @@ func TestResolveNumber(t *testing.T) {
 		pv:  sqltypes.PlanValue{Key: "nokey"},
 		err: "missing bind var nokey",
 	}, {
-		pv:  sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarChar, []byte("aa"))},
-		err: `strconv.ParseInt: parsing "aa": invalid syntax`,
+		pv:  sqltypes.PlanValue{Value: sqltypes.NewVarChar("aa")},
+		err: "could not parse value: aa",
 	}}
 	for _, tc := range tcases {
 		got, err := resolveNumber(tc.pv, bindVars)
@@ -177,11 +177,11 @@ func TestCodexBuildStreamComment(t *testing.T) {
 
 	// set pk2 = 'xyz' where pk1=1 and pk2 = 'abc'
 	bindVars := map[string]*querypb.BindVariable{}
-	pk1Val, _ := sqltypes.BuildValue(1)
-	pk2Val, _ := sqltypes.BuildValue("abc")
+	pk1Val := sqltypes.NewInt64(1)
+	pk2Val := sqltypes.NewVarChar("abc")
 	pkValues := []sqltypes.PlanValue{{Value: pk1Val}, {Value: pk2Val}}
 	pkList, _ := buildValueList(table, pkValues, bindVars)
-	pk2SecVal, _ := sqltypes.BuildValue("xyz")
+	pk2SecVal := sqltypes.NewVarChar("xyz")
 	secondaryPKValues := []sqltypes.PlanValue{{}, {Value: pk2SecVal}}
 	secondaryList, _ := buildSecondaryList(table, pkList, secondaryPKValues, bindVars)
 	want := []byte(" /* _stream `Table` (pk1 pk2 ) (1 'YWJj' ) (1 'eHl6' ); */")
@@ -202,7 +202,7 @@ func TestCodexValidateRow(t *testing.T) {
 		t.Errorf("validateRow: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
 	}
 	// column 0 is int type but row is in string type
-	err = validateRow(table, []int{0}, []sqltypes.Value{sqltypes.MakeString([]byte("str"))})
+	err = validateRow(table, []int{0}, []sqltypes.Value{sqltypes.NewVarBinary("str")})
 	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
 		t.Errorf("validateRow: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
 	}
@@ -218,7 +218,7 @@ func TestCodexApplyFilterWithPKDefaults(t *testing.T) {
 	if len(output) != 1 {
 		t.Fatalf("expect to only one output but got: %v", output)
 	}
-	val, err := output[0].ParseInt64()
+	val, err := sqltypes.ToInt64(output[0])
 	if err != nil {
 		t.Fatalf("should not get an error, but got err: %v", err)
 	}
@@ -241,9 +241,9 @@ func createTable(name string, colNames []string, colTypes []querypb.Type, pKeys 
 		colType := colTypes[i]
 		defaultVal := sqltypes.Value{}
 		if sqltypes.IsIntegral(colType) {
-			defaultVal = sqltypes.MakeTrusted(sqltypes.Int64, []byte("0"))
+			defaultVal = sqltypes.NewInt64(0)
 		} else if colType == sqltypes.VarBinary {
-			defaultVal = sqltypes.MakeString([]byte(""))
+			defaultVal = sqltypes.NewVarBinary("")
 		}
 		table.AddColumn(colName, colType, defaultVal, "")
 	}

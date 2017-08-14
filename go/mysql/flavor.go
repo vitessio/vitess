@@ -203,7 +203,7 @@ func resultToMap(qr *sqltypes.Result) (map[string]string, error) {
 
 	result := make(map[string]string, len(qr.Fields))
 	for i, field := range qr.Fields {
-		result[field.Name] = qr.Rows[0][i].String()
+		result[field.Name] = qr.Rows[0][i].ToString()
 	}
 	return result, nil
 }

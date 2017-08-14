@@ -89,9 +89,9 @@ func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *qu
 		if err := callback(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
 				{
-					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
-					sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", i))),
-					sqltypes.MakeString([]byte(fmt.Sprintf("%v", ksids[i%2]))),
+					sqltypes.NewVarBinary(fmt.Sprintf("%v", i)),
+					sqltypes.NewVarBinary(fmt.Sprintf("Text for %v", i)),
+					sqltypes.NewVarBinary(fmt.Sprintf("%v", ksids[i%2])),
 				},
 			},
 		}); err != nil {
@@ -154,9 +154,9 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb
 		if err := callback(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
 				{
-					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
-					sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", i))),
-					sqltypes.MakeString([]byte(fmt.Sprintf("%v", ksids[i%2]))),
+					sqltypes.NewVarBinary(fmt.Sprintf("%v", i)),
+					sqltypes.NewVarBinary(fmt.Sprintf("Text for %v", i)),
+					sqltypes.NewVarBinary(fmt.Sprintf("%v", ksids[i%2])),
 				},
 			},
 		}); err != nil {

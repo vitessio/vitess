@@ -18,7 +18,6 @@ package sqltypes
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"strconv"
 
@@ -72,8 +71,12 @@ func NullsafeAdd(v1, v2 Value, resultType querypb.Type) (Value, error) {
 // NULL is the lowest value. If any value is
 // numeric, then a numeric comparison is performed after
 // necessary conversions. If none are numeric, then it's
-// a simple binary comparison. Text values return an error.
+// a simple binary comparison. Uncomparable values return an error.
 func NullsafeCompare(v1, v2 Value) (int, error) {
+	// Based on the categorization defined for the types,
+	// we're going to allow comparison of the following:
+	// Null, isNumber, IsBinary. This will exclude IsQuoted
+	// types that are not Binary, and Expression.
 	if v1.IsNull() {
 		if v2.IsNull() {
 			return 0, nil
@@ -82,9 +85,6 @@ func NullsafeCompare(v1, v2 Value) (int, error) {
 	}
 	if v2.IsNull() {
 		return 1, nil
-	}
-	if v1.IsText() || v2.IsText() {
-		return 0, errors.New("text fields cannot be compared")
 	}
 	if isNumber(v1.Type()) || isNumber(v2.Type()) {
 		lv1, err := newNumeric(v1)
@@ -97,8 +97,10 @@ func NullsafeCompare(v1, v2 Value) (int, error) {
 		}
 		return compareNumeric(lv1, lv2), nil
 	}
-	// TODO(sougou): perform a more type-aware comparison instead.
-	return bytes.Compare(v1.Raw(), v2.Raw()), nil
+	if v1.IsBinary() && v2.IsBinary() {
+		return bytes.Compare(v1.ToBytes(), v2.ToBytes()), nil
+	}
+	return 0, fmt.Errorf("types are not comparable: %v vs %v", v1.Type(), v2.Type())
 }
 
 // Min returns the minimum of v1 and v2. If one of the
@@ -138,103 +140,42 @@ func minmax(v1, v2 Value, min bool) (Value, error) {
 
 // Cast converts a Value to the target type.
 func Cast(v Value, typ querypb.Type) (Value, error) {
-	// Fast paths.
 	if v.Type() == typ || v.IsNull() {
 		return v, nil
 	}
-
-	if IsSigned(typ) {
-		if v.IsSigned() {
-			return MakeTrusted(typ, v.Raw()), nil
-		}
-		if _, err := strconv.ParseInt(v.String(), 10, 64); err != nil {
-			return NULL, err
-		}
-		return MakeTrusted(typ, v.Raw()), nil
+	if IsSigned(typ) && v.IsSigned() {
+		return MakeTrusted(typ, v.ToBytes()), nil
+	}
+	if IsUnsigned(typ) && v.IsUnsigned() {
+		return MakeTrusted(typ, v.ToBytes()), nil
+	}
+	if (IsFloat(typ) || typ == Decimal) && (v.IsIntegral() || v.IsFloat() || v.Type() == Decimal) {
+		return MakeTrusted(typ, v.ToBytes()), nil
+	}
+	if IsQuoted(typ) && (v.IsIntegral() || v.IsFloat() || v.Type() == Decimal || v.IsQuoted()) {
+		return MakeTrusted(typ, v.ToBytes()), nil
 	}
 
-	if IsUnsigned(typ) {
-		if v.IsUnsigned() {
-			return MakeTrusted(typ, v.Raw()), nil
-		}
-		if _, err := strconv.ParseUint(v.String(), 10, 64); err != nil {
-			return NULL, err
-		}
-		return MakeTrusted(typ, v.Raw()), nil
+	// Explicitly disallow Expression.
+	if v.Type() == Expression {
+		return NULL, fmt.Errorf("%v cannot be cast to %v", v, typ)
 	}
 
-	if IsFloat(typ) || typ == Decimal {
-		if v.IsIntegral() || v.IsFloat() || v.Type() == Decimal {
-			return MakeTrusted(typ, v.Raw()), nil
-		}
-		if _, err := strconv.ParseFloat(v.String(), 64); err != nil {
-			return NULL, err
-		}
-		return MakeTrusted(typ, v.Raw()), nil
-	}
-
-	if IsQuoted(typ) {
-		if v.IsIntegral() || v.IsFloat() || v.Type() == Decimal || v.IsQuoted() {
-			return MakeTrusted(typ, v.Raw()), nil
-		}
-	}
-
-	return NULL, fmt.Errorf("cannot convert val: '%v' of type %v to %v", v, v.Type(), typ)
+	// If the above fast-paths were not possible,
+	// go through full validation.
+	return NewValue(typ, v.ToBytes())
 }
 
-// ConvertToUint64 converts any go, sqltypes, or querypb
-// value to uint64. It returns an error if the conversion
-// fails.
-// TODO(sougou): deprecate support for go values after
-// bind vars are cleaned up to not carry go values.
-func ConvertToUint64(v interface{}) (uint64, error) {
-	var num numeric
-	var err error
-	switch v := v.(type) {
-	case int:
-		return int64ToUint64(int64(v))
-	case int8:
-		return int64ToUint64(int64(v))
-	case int16:
-		return int64ToUint64(int64(v))
-	case int32:
-		return int64ToUint64(int64(v))
-	case int64:
-		return int64ToUint64(int64(v))
-	case uint:
-		return uint64(v), nil
-	case uint8:
-		return uint64(v), nil
-	case uint16:
-		return uint64(v), nil
-	case uint32:
-		return uint64(v), nil
-	case uint64:
-		return uint64(v), nil
-	case []byte:
-		num, err = newIntegralNumeric(MakeTrusted(VarChar, v))
-	case string:
-		num, err = newIntegralNumeric(MakeTrusted(VarChar, []byte(v)))
-	case Value:
-		num, err = newIntegralNumeric(v)
-	case *querypb.BindVariable:
-		var sv Value
-		sv, err = BindVariableToValue(v)
-		if err != nil {
-			return 0, err
-		}
-		num, err = newIntegralNumeric(sv)
-	default:
-		return 0, fmt.Errorf("ConvertToUint64: unexpected type for %v: %T", v, v)
-	}
+// ToUint64 converts Value to uint64.
+func ToUint64(v Value) (uint64, error) {
+	num, err := newIntegralNumeric(v)
 	if err != nil {
 		return 0, err
 	}
-
 	switch num.typ {
 	case Int64:
 		if num.ival < 0 {
-			return 0, fmt.Errorf("ConvertToUint64: negative number cannot be converted to unsigned: %d", num.ival)
+			return 0, fmt.Errorf("negative number cannot be converted to unsigned: %d", num.ival)
 		}
 		return uint64(num.ival), nil
 	case Uint64:
@@ -243,16 +184,67 @@ func ConvertToUint64(v interface{}) (uint64, error) {
 	panic("unreachable")
 }
 
-func int64ToUint64(n int64) (uint64, error) {
-	if n < 0 {
-		return 0, fmt.Errorf("ConvertToUint64: negative number cannot be converted to unsigned: %d", n)
+// ToInt64 converts Value to uint64.
+func ToInt64(v Value) (int64, error) {
+	num, err := newIntegralNumeric(v)
+	if err != nil {
+		return 0, err
 	}
-	return uint64(n), nil
+	switch num.typ {
+	case Int64:
+		return num.ival, nil
+	case Uint64:
+		ival := int64(num.uval)
+		if ival < 0 {
+			return 0, fmt.Errorf("unsigned number overflows int64 value: %d", num.uval)
+		}
+		return ival, nil
+	}
+	panic("unreachable")
+}
+
+// ToFloat64 converts Value to float64.
+func ToFloat64(v Value) (float64, error) {
+	num, err := newNumeric(v)
+	if err != nil {
+		return 0, err
+	}
+	switch num.typ {
+	case Int64:
+		return float64(num.ival), nil
+	case Uint64:
+		return float64(num.uval), nil
+	case Float64:
+		return num.fval, nil
+	}
+	panic("unreachable")
+}
+
+// ToNative converts Value to a native go type.
+// Decimal is returned as []byte.
+func ToNative(v Value) (interface{}, error) {
+	var out interface{}
+	var err error
+	switch {
+	case v.Type() == Null:
+		// no-op
+	case v.IsSigned():
+		return ToInt64(v)
+	case v.IsUnsigned():
+		return ToUint64(v)
+	case v.IsFloat():
+		return ToFloat64(v)
+	case v.IsQuoted() || v.Type() == Decimal:
+		out = v.val
+	case v.Type() == Expression:
+		err = fmt.Errorf("%v cannot be converted to a go type", v)
+	}
+	return out, err
 }
 
 // newNumeric parses a value and produces an Int64, Uint64 or Float64.
 func newNumeric(v Value) (result numeric, err error) {
-	str := v.String()
+	str := v.ToString()
 	switch {
 	case v.IsSigned():
 		result.ival, err = strconv.ParseInt(str, 10, 64)
@@ -285,7 +277,7 @@ func newNumeric(v Value) (result numeric, err error) {
 
 // newIntegralNumeric parses a value and produces an Int64 or Uint64.
 func newIntegralNumeric(v Value) (result numeric, err error) {
-	str := v.String()
+	str := v.ToString()
 	switch {
 	case v.IsSigned():
 		result.ival, err = strconv.ParseInt(str, 10, 64)

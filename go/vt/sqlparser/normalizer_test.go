@@ -82,6 +82,11 @@ func TestNormalize(t *testing.T) {
 			"bv2": sqltypes.BytesBindVariable([]byte("1")),
 		},
 	}, {
+		// bad int
+		in:      "select * from t where v1 = 12345678901234567890",
+		outstmt: "select * from t where v1 = 12345678901234567890",
+		outbv:   map[string]*querypb.BindVariable{},
+	}, {
 		// comparison with no vals
 		in:      "select * from t where v1 = v2",
 		outstmt: "select * from t where v1 = v2",
@@ -103,14 +108,14 @@ func TestNormalize(t *testing.T) {
 		in:      "select * from t where v1 in (1, '2')",
 		outstmt: "select * from t where v1 in ::bv1",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.MakeTestBindVar([]interface{}{1, []byte("2")}),
+			"bv1": sqltypes.TestBindVariable([]interface{}{1, []byte("2")}),
 		},
 	}, {
 		// NOT IN clause
 		in:      "select * from t where v1 not in (1, '2')",
 		outstmt: "select * from t where v1 not in ::bv1",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.MakeTestBindVar([]interface{}{1, []byte("2")}),
+			"bv1": sqltypes.TestBindVariable([]interface{}{1, []byte("2")}),
 		},
 	}}
 	for _, tc := range testcases {
