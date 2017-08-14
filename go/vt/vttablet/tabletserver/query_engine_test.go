@@ -20,6 +20,7 @@ import (
 	"expvar"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema/schematest"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -97,6 +99,35 @@ func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	want := "syntax error"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("qe.GetPlan: %v, want %s", err, want)
+	}
+}
+
+func TestGetMessageStreamPlan(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	for query, result := range schematest.Queries() {
+		db.AddQuery(query, result)
+	}
+	qe := newTestQueryEngine(10, 10*time.Second, true)
+	testUtils := newTestUtils()
+	dbconfigs := testUtils.newDBConfigs(db)
+	qe.se.Open(db.ConnParams())
+	qe.Open(dbconfigs)
+	defer qe.Close()
+
+	plan, err := qe.GetMessageStreamPlan("msg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantPlan := &planbuilder.Plan{
+		PlanID: planbuilder.PlanMessageStream,
+		Table:  qe.tables["msg"],
+	}
+	if !reflect.DeepEqual(plan.Plan, wantPlan) {
+		t.Errorf("GetMessageStreamPlan(msg): %v, want %v", plan.Plan, wantPlan)
+	}
+	if plan.Rules == nil || plan.Authorized == nil {
+		t.Errorf("GetMessageStreamPlan(msg): Rules or ACLResult are nil. Rules: %v, Authorized: %v", plan.Rules, plan.Authorized)
 	}
 }
 

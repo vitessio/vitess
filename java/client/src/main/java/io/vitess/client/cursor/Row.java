@@ -18,15 +18,9 @@ package io.vitess.client.cursor;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.primitives.UnsignedLong;
-import com.google.protobuf.ByteString;
-import io.vitess.mysql.DateTime;
-import io.vitess.proto.Query;
-import io.vitess.proto.Query.Field;
-import io.vitess.proto.Query.Type;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.sql.Date;
 import java.sql.SQLDataException;
 import java.sql.SQLException;
@@ -36,7 +30,17 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+
 import javax.annotation.concurrent.NotThreadSafe;
+
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.primitives.UnsignedLong;
+import com.google.protobuf.ByteString;
+
+import io.vitess.mysql.DateTime;
+import io.vitess.proto.Query;
+import io.vitess.proto.Query.Field;
+import io.vitess.proto.Query.Type;
 
 /**
  * Type-converting wrapper around raw {@link io.vitess.proto.Query.Row} proto.
@@ -244,7 +248,8 @@ public class Row {
    * @param columnIndex 1-based column number (0 is invalid)
    */
   public UnsignedLong getULong(int columnIndex) throws SQLException {
-    return getObject(columnIndex, UnsignedLong.class);
+    BigInteger l = getObject(columnIndex, BigInteger.class);
+    return l == null ? null : UnsignedLong.fromLongBits(l.longValue());
   }
 
   /**
@@ -648,7 +653,7 @@ public class Row {
       case INT64:
         return Long.valueOf(value.toStringUtf8());
       case UINT64:
-        return UnsignedLong.valueOf(value.toStringUtf8());
+        return new BigInteger(value.toStringUtf8());
       case FLOAT32:
         return Float.valueOf(value.toStringUtf8());
       case FLOAT64:

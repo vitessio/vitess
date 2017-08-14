@@ -22,6 +22,7 @@ import io.vitess.client.VTGateTx;
 import io.vitess.util.CommonUtils;
 import io.vitess.util.Constants;
 import io.vitess.util.MysqlDefs;
+
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.CallableStatement;
@@ -281,7 +282,7 @@ public class VitessConnection extends ConnectionProperties implements Connection
      */
     public String getCatalog() throws SQLException {
         checkOpen();
-        return this.vitessJDBCUrl.getCatalog();
+        return super.getCatalog();
     }
 
     /**
@@ -292,7 +293,7 @@ public class VitessConnection extends ConnectionProperties implements Connection
      */
     public void setCatalog(String catalog) throws SQLException {
         checkOpen();
-        this.vitessJDBCUrl.setCatalog(catalog); //Ignoring any affect
+        super.setCatalog(catalog); //Ignoring any affect
     }
 
     /**
@@ -653,13 +654,6 @@ public class VitessConnection extends ConnectionProperties implements Connection
 
     }
 
-    /**
-     * @return keyspace name
-     */
-    public String getKeyspace() {
-        return this.vitessJDBCUrl.getKeyspace();
-    }
-
     // UnSupported Feature List
 
     /**
@@ -857,10 +851,7 @@ public class VitessConnection extends ConnectionProperties implements Connection
     }
 
     public Context createContext(long deadlineAfter) {
-        return CommonUtils.createContext(this.vitessJDBCUrl.getUsername(), deadlineAfter);
+        return CommonUtils.createContext(getUsername(), deadlineAfter);
     }
 
-    public String getUsername() {
-        return this.vitessJDBCUrl.getUsername();
-    }
 }

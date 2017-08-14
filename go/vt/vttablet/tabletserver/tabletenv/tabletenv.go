@@ -27,8 +27,9 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/callerid"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -64,7 +65,7 @@ var (
 		vtrpcpb.Code_DATA_LOSS.String(),
 	)
 	// InternalErrors shows number of errors from internal components.
-	InternalErrors = stats.NewCounters("InternalErrors", "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection", "WatchdogFail")
+	InternalErrors = stats.NewCounters("InternalErrors", "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection", "WatchdogFail", "Messages")
 	// Warnings shows number of warnings
 	Warnings = stats.NewCounters("Warnings", "ResultsExceeded")
 	// Unresolved tracks unresolved items. For now it's just Prepares.

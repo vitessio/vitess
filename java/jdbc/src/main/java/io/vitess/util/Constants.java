@@ -49,6 +49,11 @@ public class Constants {
     public static final String EXECUTE_TYPE_DESC = "Query execution type: simple or stream \n";
     public static final String USERNAME_DESC = "Username used for ACL validation \n";
     public static final Query.ExecuteOptions.IncludedFields DEFAULT_INCLUDED_FIELDS = Query.ExecuteOptions.IncludedFields.ALL;
+    public static final String DEFAULT_KEYSPACE = "";
+    public static final String DEFAULT_SHARD = "";
+    public static final String DEFAULT_USERNAME = null;
+    public static final String DEFAULT_TARGET = "";
+    public static final String DEFAULT_CATALOG = DEFAULT_KEYSPACE;
 
     private Constants() {
     }
@@ -112,14 +117,17 @@ public class Constants {
 
 
     public static final class Property {
-        public static final String TABLET_TYPE = "TABLET_TYPE";
-        public static final String HOST = "HOST";
-        public static final String PORT = "PORT";
-        public static final String DBNAME = "DBNAME";
-        public static final String KEYSPACE = "KEYSPACE";
+        @Deprecated
+        public static final String OLD_TABLET_TYPE = "TABLET_TYPE";
+        public static final String TABLET_TYPE = "tabletType";
+        public static final String HOST = "host";
+        public static final String PORT = "port";
+        public static final String DBNAME = "dbName";
+        public static final String KEYSPACE = "keyspace";
         public static final String USERNAME = "userName";
         public static final String EXECUTE_TYPE = "executeType";
         public static final String TWOPC_ENABLED = "twopcEnabled";
+        public static final String SHARD = "shard";
 
         public static final String USE_SSL = "useSSL";
         public static final String KEYSTORE = "keyStore";
@@ -138,6 +146,7 @@ public class Constants {
         public static final String TRUSTSTORE_PASSWORD_FULL = "javax.net.ssl.trustStorePassword";
         public static final String TRUST_ALIAS_FULL = "javax.net.ssl.trustAlias";
         public static final String INCLUDED_FIELDS = "includedFields";
+        public static final String TARGET = "target";
     }
 
 

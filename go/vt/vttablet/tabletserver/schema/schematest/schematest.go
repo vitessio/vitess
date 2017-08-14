@@ -76,6 +76,7 @@ func Queries() map[string]*sqltypes.Result {
 				mysql.BaseShowTablesRow("test_table_01", false, ""),
 				mysql.BaseShowTablesRow("test_table_02", false, ""),
 				mysql.BaseShowTablesRow("test_table_03", false, ""),
+				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 			},
 		},
 		"select * from test_table_01 where 1 != 1": {
@@ -137,6 +138,58 @@ func Queries() map[string]*sqltypes.Result {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				mysql.ShowIndexFromTableRow("test_table_03", true, "PRIMARY", 1, "pk", false),
+			},
+		},
+		"select * from msg where 1 != 1": {
+			Fields: []*querypb.Field{{
+				Name: "time_scheduled",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "id",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "time_next",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "epoch",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "time_created",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "time_acked",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "message",
+				Type: sqltypes.Int64,
+			}},
+		},
+		"describe msg": {
+			Fields:       mysql.DescribeTableFields,
+			RowsAffected: 7,
+			Rows: [][]sqltypes.Value{
+				mysql.DescribeTableRow("time_scheduled", "int(11)", false, "PRI", "0"),
+				mysql.DescribeTableRow("id", "bigint(20)", false, "PRI", "0"),
+				mysql.DescribeTableRow("time_next", "bigint(20)", false, "", "0"),
+				mysql.DescribeTableRow("epoch", "bigint(20)", false, "", "0"),
+				mysql.DescribeTableRow("time_created", "bigint(20)", false, "", "0"),
+				mysql.DescribeTableRow("time_acked", "bigint(20)", false, "", "0"),
+				mysql.DescribeTableRow("message", "bigint(20)", false, "", "0"),
+			},
+		},
+		"show index from msg": {
+			Fields:       mysql.ShowIndexFromTableFields,
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				mysql.ShowIndexFromTableRow("msg", true, "PRIMARY", 1, "time_scheduled", false),
+				mysql.ShowIndexFromTableRow("msg", true, "PRIMARY", 2, "id", false),
+			},
+		},
+		mysql.BaseShowTablesForTable("msg"): {
+			Fields:       mysql.BaseShowTablesFields,
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				mysql.BaseShowTablesRow("test_table", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 			},
 		},
 		"begin":  {},
