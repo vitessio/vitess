@@ -139,6 +139,12 @@ func serveGRPC() {
 
 	// and serve on it
 	go GRPCServer.Serve(listener)
+
+	OnTermSync(func() {
+		log.Info("Initiated graceful stop of gRPC server")
+		GRPCServer.GracefulStop()
+		log.Info("gRPC server stopped")
+	})
 }
 
 // RegisterGRPCFlags registers the right command line flag to enable gRPC
