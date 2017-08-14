@@ -51,6 +51,15 @@ var executorVSchema = `
 				"to": "user_id"
 			}
 		},
+		"insert_ignore_idx": {
+			"type": "lookup_hash",
+			"owner": "insert_ignore_test",
+			"params": {
+				"table": "ins_lookup",
+				"from": "fromcol",
+				"to": "tocol"
+			}
+		},
 		"idx1": {
 			"type": "hash"
 		},
@@ -127,6 +136,22 @@ var executorVSchema = `
 				}
 			]
 		},
+		"insert_ignore_test": {
+			"column_vindexes": [
+				{
+					"column": "pv",
+					"name": "music_user_map"
+				},
+				{
+					"column": "owned",
+					"name": "insert_ignore_idx"
+				},
+				{
+					"column": "verify",
+					"name": "user_index"
+				}
+			]
+		},
 		"noauto_table": {
 			"column_vindexes": [
 				{
@@ -164,6 +189,7 @@ var unshardedVSchema = `
 		},
 		"music_user_map": {},
 		"name_user_map": {},
+		"ins_lookup": {},
 		"main1": {
 			"auto_increment": {
 				"column": "id",

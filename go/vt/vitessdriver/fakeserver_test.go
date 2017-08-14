@@ -329,12 +329,12 @@ var result1 = sqltypes.Result{
 	InsertID:     72,
 	Rows: [][]sqltypes.Value{
 		{
-			sqltypes.MakeString([]byte("1")),
-			sqltypes.MakeString([]byte("value1")),
+			sqltypes.NewVarBinary("1"),
+			sqltypes.NewVarBinary("value1"),
 		},
 		{
-			sqltypes.MakeString([]byte("2")),
-			sqltypes.MakeString([]byte("value2")),
+			sqltypes.NewVarBinary("2"),
+			sqltypes.NewVarBinary("value2"),
 		},
 	},
 }

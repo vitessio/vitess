@@ -106,10 +106,10 @@ func MakeTestStreamingResults(fields []*querypb.Field, rows ...string) []*Result
 	return results
 }
 
-// MakeTestBindVar makes a *querypb.BindVariable from
+// TestBindVariable makes a *querypb.BindVariable from
 // an interface{}.It panics on invalid input.
 // This function should only be used for testing.
-func MakeTestBindVar(v interface{}) *querypb.BindVariable {
+func TestBindVariable(v interface{}) *querypb.BindVariable {
 	if v == nil {
 		return NullBindVariable
 	}
@@ -118,6 +118,12 @@ func MakeTestBindVar(v interface{}) *querypb.BindVariable {
 		panic(err)
 	}
 	return bv
+}
+
+// TestValue builds a Value from typ and val.
+// This function should only be used for testing.
+func TestValue(typ querypb.Type, val string) Value {
+	return MakeTrusted(typ, []byte(val))
 }
 
 // PrintResults prints []*Results into a string.

@@ -19,7 +19,6 @@ package engine
 import (
 	"errors"
 	"reflect"
-	"strconv"
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -238,14 +237,14 @@ func TestLimitInvalidCount(t *testing.T) {
 		t.Errorf("fetchCount: %v, want %s", err, want)
 	}
 
-	l.Count = sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.Float64, []byte("1.2"))}
+	l.Count = sqltypes.PlanValue{Value: sqltypes.NewFloat64(1.2)}
 	_, err = l.fetchCount(nil, nil)
 	want = "could not parse value: 1.2"
 	if err == nil || err.Error() != want {
 		t.Errorf("fetchCount: %v, want %s", err, want)
 	}
 
-	l.Count = sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.Uint64, []byte("18446744073709551615"))}
+	l.Count = sqltypes.PlanValue{Value: sqltypes.NewUint64(18446744073709551615)}
 	_, err = l.fetchCount(nil, nil)
 	want = "requested limit is out of range: 18446744073709551615"
 	if err == nil || err.Error() != want {
@@ -265,5 +264,5 @@ func TestLimitInvalidCount(t *testing.T) {
 }
 
 func int64PlanValue(v int64) sqltypes.PlanValue {
-	return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.Int64, strconv.AppendInt(nil, v, 10))}
+	return sqltypes.PlanValue{Value: sqltypes.NewInt64(v)}
 }

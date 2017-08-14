@@ -58,7 +58,7 @@ func TestStrictTransTables(t *testing.T) {
 		"select @@global.sql_mode",
 		&sqltypes.Result{
 			Fields: []*querypb.Field{{Type: sqltypes.VarChar}},
-			Rows:   [][]sqltypes.Value{{sqltypes.MakeString([]byte(""))}},
+			Rows:   [][]sqltypes.Value{{sqltypes.NewVarBinary("")}},
 		},
 	)
 	qe = NewQueryEngine(DummyChecker, schema.NewEngine(DummyChecker, config), config)

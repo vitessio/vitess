@@ -18,7 +18,6 @@ package tabletserver
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -371,7 +370,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if len(qr.Rows) != 1 {
 				return nil, fmt.Errorf("unexpected rows from reading sequence %s (possible mis-route): %d", tableName, len(qr.Rows))
 			}
-			nextID, err := qr.Rows[0][0].ParseInt64()
+			nextID, err := sqltypes.ToInt64(qr.Rows[0][0])
 			if err != nil {
 				return nil, fmt.Errorf("error loading sequence %s: %v", tableName, err)
 			}
@@ -379,7 +378,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if t.SequenceInfo.NextVal == 0 {
 				t.SequenceInfo.NextVal = nextID
 			}
-			cache, err := qr.Rows[0][1].ParseInt64()
+			cache, err := sqltypes.ToInt64(qr.Rows[0][1])
 			if err != nil {
 				return nil, fmt.Errorf("error loading sequence %s: %v", tableName, err)
 			}
@@ -408,7 +407,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	return &sqltypes.Result{
 		Fields: sequenceFields,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, strconv.AppendInt(nil, ret, 10)),
+			sqltypes.NewInt64(ret),
 		}},
 		RowsAffected: 1,
 	}, nil
@@ -527,9 +526,13 @@ func (qre *QueryExecutor) execInsertSubquery(conn *TxConnection) (*sqltypes.Resu
 
 func (qre *QueryExecutor) execInsertPKRows(conn *TxConnection, extras map[string]sqlparser.Encodable, pkRows [][]sqltypes.Value) (*sqltypes.Result, error) {
 	var bsc []byte
-	// don't build comment for RBR.
+	// Build comments only if we're not in RBR mode.
 	if qre.tsv.qe.binlogFormat != connpool.BinlogFormatRow {
-		bsc = buildStreamComment(qre.plan.Table, pkRows, nil)
+		secondaryList, err := buildSecondaryList(qre.plan.Table, pkRows, qre.plan.SecondaryPKValues, qre.bindVars)
+		if err != nil {
+			return nil, err
+		}
+		bsc = buildStreamComment(qre.plan.Table, pkRows, secondaryList)
 	}
 	return qre.txFetch(conn, qre.plan.OuterQuery, qre.bindVars, extras, bsc, false, true)
 }
@@ -545,6 +548,9 @@ func (qre *QueryExecutor) execUpsertPK(conn *TxConnection) (*sqltypes.Result, er
 	if err != nil {
 		return nil, err
 	}
+	// We do not need to build the secondary list for the insert part.
+	// But the part that updates will build it if it gets executed,
+	// because it's the one that can change the primary keys.
 	bsc := buildStreamComment(qre.plan.Table, pkRows, nil)
 	result, err := qre.txFetch(conn, qre.plan.OuterQuery, qre.bindVars, nil, bsc, false, true)
 	if err == nil {
@@ -612,7 +618,7 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 			secondaryList = secondaryList[i:end]
 		}
 		var bsc []byte
-		// Don't build comment for RBR.
+		// Build comments only if we're not in RBR mode.
 		if qre.tsv.qe.binlogFormat != connpool.BinlogFormatRow {
 			bsc = buildStreamComment(qre.plan.Table, pkRows, secondaryList)
 		}
@@ -632,7 +638,7 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 	if qre.plan.Table.Type == schema.Message {
 		ids := conn.ChangedMessages[qre.plan.Table.Name.String()]
 		for _, pkrow := range pkRows {
-			ids = append(ids, pkrow[qre.plan.Table.MessageInfo.IDPKIndex].String())
+			ids = append(ids, pkrow[qre.plan.Table.MessageInfo.IDPKIndex].ToString())
 		}
 		conn.ChangedMessages[qre.plan.Table.Name.String()] = ids
 	}

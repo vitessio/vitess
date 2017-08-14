@@ -19,9 +19,12 @@ package vindexes
 import (
 	"bytes"
 	"crypto/md5"
-	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
+)
+
+var (
+	_ Functional = (*BinaryMD5)(nil)
 )
 
 // BinaryMD5 is a vindex that hashes binary bits to a keyspace id.
@@ -45,23 +48,19 @@ func (vind *BinaryMD5) Cost() int {
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *BinaryMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
-	if len(ids) != len(ksids) {
-		return false, fmt.Errorf("BinaryMD5_hash.Verify: length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
-	}
+func (vind *BinaryMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	out := make([]bool, len(ids))
 	for i := range ids {
-		if bytes.Compare(binHash(ids[i].Bytes()), ksids[i]) != 0 {
-			return false, nil
-		}
+		out[i] = (bytes.Compare(binHash(ids[i].ToBytes()), ksids[i]) == 0)
 	}
-	return true, nil
+	return out, nil
 }
 
 // Map returns the corresponding keyspace id values for the given ids.
 func (vind *BinaryMD5) Map(_ VCursor, ids []sqltypes.Value) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
-		out = append(out, binHash(id.Bytes()))
+		out = append(out, binHash(id.ToBytes()))
 	}
 	return out, nil
 }

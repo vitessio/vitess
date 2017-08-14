@@ -68,6 +68,14 @@ artist varchar(64),
 primary key (music_id)
 ) Engine=InnoDB'''
 
+create_upsert = '''create table upsert (
+pk bigint,
+owned bigint,
+user_id bigint,
+col bigint,
+primary key (pk)
+) Engine=InnoDB'''
+
 create_join_user = '''create table join_user (
 id bigint,
 name varchar(64),
@@ -131,6 +139,18 @@ user_id bigint,
 primary key (music_id)
 ) Engine=InnoDB'''
 
+create_upsert_primary = '''create table upsert_primary (
+id bigint,
+ksnum_id bigint,
+primary key (id)
+) Engine=InnoDB'''
+
+create_upsert_owned = '''create table upsert_owned (
+owned bigint,
+ksnum_id bigint,
+primary key (owned)
+) Engine=InnoDB'''
+
 create_main = '''create table main (
 id bigint,
 val varchar(128),
@@ -170,6 +190,23 @@ vschema = {
             "to": "user_id"
           },
           "owner": "vt_music"
+        },
+        "upsert_primary": {
+          "type": "lookup_hash_unique",
+          "params": {
+            "table": "upsert_primary",
+            "from": "id",
+            "to": "ksnum_id"
+          }
+        },
+        "upsert_owned": {
+          "type": "lookup_hash_unique",
+          "params": {
+            "table": "upsert_owned",
+            "from": "owned",
+            "to": "ksnum_id"
+          },
+          "owner": "upsert"
         }
       },
       "tables": {
@@ -233,6 +270,22 @@ vschema = {
             }
           ]
         },
+        "upsert": {
+          "column_vindexes": [
+            {
+              "column": "pk",
+              "name": "upsert_primary"
+            },
+            {
+              "column": "owned",
+              "name": "upsert_owned"
+            },
+            {
+              "column": "user_id",
+              "name": "user_index"
+            }
+          ]
+        },
         "join_user": {
           "column_vindexes": [
             {
@@ -281,6 +334,8 @@ vschema = {
         },
         "music_user_map": {},
         "name_user2_map": {},
+        "upsert_primary": {},
+        "upsert_owned": {},
         "main": {
           "auto_increment": {
             "column": "id",
@@ -313,6 +368,7 @@ def setUpModule():
             create_vt_user_extra,
             create_vt_music,
             create_vt_music_extra,
+            create_upsert,
             create_join_user,
             create_join_user_extra,
             create_join_name_info,
@@ -329,6 +385,8 @@ def setUpModule():
             create_vt_main_seq,
             create_music_user_map,
             create_name_user2_map,
+            create_upsert_primary,
+            create_upsert_owned,
             create_main,
             create_twopc_lookup,
             ],
@@ -918,7 +976,6 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(result, ())
 
   def test_main_seq(self):
-    # music is for testing owned lookup index
     vtgate_conn = get_connection()
 
     # Initialize the sequence.
@@ -948,11 +1005,54 @@ class TestVTGateFunctions(unittest.TestCase):
     
     # Now test direct calls to sequence.
     result = self.execute_on_master(
-        vtgate_conn, "select next 1 values from vt_main_seq", {})
+        vtgate_conn, 'select next 1 values from vt_main_seq', {})
     self.assertEqual(
         result,
         ([(5,)], 1, 0,
          [('nextval', self.int_type)]))
+
+  def test_upsert(self):
+    vtgate_conn = get_connection()
+
+    # Create lookup entries for primary vindexx:
+    # No entry for 2.
+    vtgate_conn.begin()
+    self.execute_on_master(
+        vtgate_conn,
+        'insert into upsert_primary(id, ksnum_id) values'
+        '(1, 1), (3, 3), (4, 4), (5, 5), (6, 6)',
+        {})
+    vtgate_conn.commit()
+
+    # Create rows on the main table.
+    vtgate_conn.begin()
+    self.execute_on_master(
+        vtgate_conn,
+        'insert into upsert(pk, owned, user_id, col) values'
+        '(1, 1, 1, 0), (3, 3, 3, 0), (4, 4, 4, 0), (5, 5, 5, 0), (6, 6, 6, 0)',
+        {})
+    vtgate_conn.commit()
+
+    # Now upsert: 1, 5 and 6 should succeed.
+    vtgate_conn.begin()
+    self.execute_on_master(
+        vtgate_conn,
+        'insert into upsert(pk, owned, user_id, col) values'
+        '(1, 1, 1, 1), (2, 2, 2, 2), (3, 1, 1, 3), (4, 4, 1, 4), '
+        '(5, 5, 5, 5), (6, 6, 6, 6) '
+        'on duplicate key update col = values(col)',
+        {})
+    vtgate_conn.commit()
+
+    result = self.execute_on_master(
+        vtgate_conn,
+        'select pk, owned, user_id, col from upsert order by pk',
+        {})
+    self.assertEqual(
+        result[0],
+        [(1, 1, 1, 1), (3, 3, 3, 0), (4, 4, 4, 0),
+          (5, 5, 5, 5), (6, 6, 6, 6)])
+
 
   def test_joins(self):
     vtgate_conn = get_connection()

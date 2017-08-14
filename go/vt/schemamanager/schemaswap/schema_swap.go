@@ -610,23 +610,23 @@ func (shardSwap *shardSchemaSwap) readShardMetadata(metadata *shardSwapMetadata,
 		return
 	}
 	for _, row := range queryResult.Rows {
-		switch row[0].String() {
+		switch row[0].ToString() {
 		case lastStartedMetadataName:
-			swapID, err := row[1].ParseUint64()
+			swapID, err := sqltypes.ToUint64(row[1])
 			if err != nil {
-				log.Warningf("Could not parse value of last started schema swap id ('%s'), ignoring the value: %v", row[1].String(), err)
+				log.Warningf("Could not parse value of last started schema swap id %v, ignoring the value: %v", row[1], err)
 			} else {
 				metadata.lastStartedSwap = swapID
 			}
 		case lastFinishedMetadataName:
-			swapID, err := row[1].ParseUint64()
+			swapID, err := sqltypes.ToUint64(row[1])
 			if err != nil {
-				log.Warningf("Could not parse value of last finished schema swap id ('%s'), ignoring the value: %v", row[1].String(), err)
+				log.Warningf("Could not parse value of last finished schema swap id %v, ignoring the value: %v", row[1], err)
 			} else {
 				metadata.lastFinishedSwap = swapID
 			}
 		case currentSQLMetadataName:
-			metadata.currentSQL = row[1].String()
+			metadata.currentSQL = row[1].ToString()
 		}
 	}
 }
@@ -642,10 +642,7 @@ func (shardSwap *shardSchemaSwap) writeStartedSwap() error {
 	queryBuf.WriteString("INSERT INTO _vt.shard_metadata (name, value) VALUES ('")
 	queryBuf.WriteString(currentSQLMetadataName)
 	queryBuf.WriteString("',")
-	sqlValue, err := sqltypes.BuildValue(shardSwap.parent.sql)
-	if err != nil {
-		return err
-	}
+	sqlValue := sqltypes.NewVarChar(shardSwap.parent.sql)
 	sqlValue.EncodeSQL(&queryBuf)
 	queryBuf.WriteString(") ON DUPLICATE KEY UPDATE value = ")
 	sqlValue.EncodeSQL(&queryBuf)
@@ -908,7 +905,7 @@ func (shardSwap *shardSchemaSwap) isSwapApplied(tablet *topodatapb.Tablet) (bool
 		// No such row means we need to apply the swap.
 		return false, nil
 	}
-	swapID, err := swapIDResult.Rows[0][0].ParseUint64()
+	swapID, err := sqltypes.ToUint64(swapIDResult.Rows[0][0])
 	if err != nil {
 		return false, err
 	}

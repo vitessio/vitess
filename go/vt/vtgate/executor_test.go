@@ -298,13 +298,14 @@ func TestExecutorShow(t *testing.T) {
 		Fields: buildVarCharFields("Tables"),
 		Rows: [][]sqltypes.Value{
 			buildVarCharRow("dual"),
+			buildVarCharRow("ins_lookup"),
 			buildVarCharRow("main1"),
 			buildVarCharRow("music_user_map"),
 			buildVarCharRow("name_user_map"),
 			buildVarCharRow("simple"),
 			buildVarCharRow("user_seq"),
 		},
-		RowsAffected: 6,
+		RowsAffected: 7,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
 		t.Errorf("show vschema_tables:\n%+v, want\n%+v", qr, wantqr)

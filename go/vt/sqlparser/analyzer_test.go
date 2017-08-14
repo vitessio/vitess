@@ -164,17 +164,6 @@ func TestIsValue(t *testing.T) {
 		in:  newValArg(":a"),
 		out: true,
 	}, {
-		in: &ValuesFuncExpr{
-			Name:     NewColIdent("foo"),
-			Resolved: newStrVal(""),
-		},
-		out: true,
-	}, {
-		in: &ValuesFuncExpr{
-			Name: NewColIdent("foo"),
-		},
-		out: false,
-	}, {
 		in:  &NullVal{},
 		out: false,
 	}}
@@ -255,7 +244,7 @@ func TestNewPlanValue(t *testing.T) {
 			Type: IntVal,
 			Val:  []byte("10"),
 		},
-		out: sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.Int64, []byte("10"))},
+		out: sqltypes.PlanValue{Value: sqltypes.NewInt64(10)},
 	}, {
 		in: &SQLVal{
 			Type: IntVal,
@@ -267,13 +256,13 @@ func TestNewPlanValue(t *testing.T) {
 			Type: StrVal,
 			Val:  []byte("strval"),
 		},
-		out: sqltypes.PlanValue{Value: sqltypes.MakeString([]byte("strval"))},
+		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
 	}, {
 		in: &SQLVal{
 			Type: HexVal,
 			Val:  []byte("3131"),
 		},
-		out: sqltypes.PlanValue{Value: sqltypes.MakeString([]byte("11"))},
+		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("11")},
 	}, {
 		in: &SQLVal{
 			Type: HexVal,
@@ -298,7 +287,7 @@ func TestNewPlanValue(t *testing.T) {
 			Values: []sqltypes.PlanValue{{
 				Key: "valarg",
 			}, {
-				Value: sqltypes.MakeString([]byte("strval")),
+				Value: sqltypes.NewVarBinary("strval"),
 			}},
 		},
 	}, {
@@ -314,20 +303,6 @@ func TestNewPlanValue(t *testing.T) {
 			ListArg("::list"),
 		},
 		err: "unsupported: nested lists",
-	}, {
-		in: &ValuesFuncExpr{
-			Name: NewColIdent("valfunc"),
-			Resolved: &SQLVal{
-				Type: ValArg,
-				Val:  []byte(":vf"),
-			},
-		},
-		out: sqltypes.PlanValue{Key: "vf"},
-	}, {
-		in: &ValuesFuncExpr{
-			Name: NewColIdent("valfunc"),
-		},
-		err: "expression is too complex",
 	}, {
 		in:  &NullVal{},
 		out: sqltypes.PlanValue{},

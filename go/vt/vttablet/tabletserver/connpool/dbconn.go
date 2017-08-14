@@ -197,8 +197,8 @@ func (dbc *DBConn) VerifyMode(strictTransTables bool) (BinlogFormat, error) {
 		if len(qr.Rows) != 1 {
 			return 0, fmt.Errorf("incorrect rowcount received for %s: %d", getModeSQL, len(qr.Rows))
 		}
-		if !strings.Contains(qr.Rows[0][0].String(), "STRICT_TRANS_TABLES") {
-			return 0, fmt.Errorf("require sql_mode to be STRICT_TRANS_TABLES: got '%s'", qr.Rows[0][0].String())
+		if !strings.Contains(qr.Rows[0][0].ToString(), "STRICT_TRANS_TABLES") {
+			return 0, fmt.Errorf("require sql_mode to be STRICT_TRANS_TABLES: got '%s'", qr.Rows[0][0].ToString())
 		}
 	}
 	qr, err := dbc.conn.ExecuteFetch(getAutocommit, 2, false)
@@ -208,8 +208,8 @@ func (dbc *DBConn) VerifyMode(strictTransTables bool) (BinlogFormat, error) {
 	if len(qr.Rows) != 1 {
 		return 0, fmt.Errorf("incorrect rowcount received for %s: %d", getAutocommit, len(qr.Rows))
 	}
-	if !strings.Contains(qr.Rows[0][0].String(), "1") {
-		return 0, fmt.Errorf("require autocommit to be 1: got %s", qr.Rows[0][0].String())
+	if !strings.Contains(qr.Rows[0][0].ToString(), "1") {
+		return 0, fmt.Errorf("require autocommit to be 1: got %s", qr.Rows[0][0].ToString())
 	}
 	qr, err = dbc.conn.ExecuteFetch(showBinlog, 10, false)
 	if err != nil {
@@ -221,7 +221,7 @@ func (dbc *DBConn) VerifyMode(strictTransTables bool) (BinlogFormat, error) {
 	if len(qr.Rows[0]) != 2 {
 		return 0, fmt.Errorf("incorrect column count received for %s: %d", showBinlog, len(qr.Rows[0]))
 	}
-	switch qr.Rows[0][1].String() {
+	switch qr.Rows[0][1].ToString() {
 	case "STATEMENT":
 		return BinlogFormatStatement, nil
 	case "ROW":
@@ -229,7 +229,7 @@ func (dbc *DBConn) VerifyMode(strictTransTables bool) (BinlogFormat, error) {
 	case "MIXED":
 		return BinlogFormatMixed, nil
 	}
-	return 0, fmt.Errorf("unexpected binlog format for %s: %s", showBinlog, qr.Rows[0][1].String())
+	return 0, fmt.Errorf("unexpected binlog format for %s: %s", showBinlog, qr.Rows[0][1].ToString())
 }
 
 // Close closes the DBConn.

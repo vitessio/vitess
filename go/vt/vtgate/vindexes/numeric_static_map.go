@@ -28,6 +28,10 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
+var (
+	_ Functional = (*NumericStaticMap)(nil)
+)
+
 // NumericLookupTable stores the mapping of keys.
 type NumericLookupTable map[uint64]uint64
 
@@ -71,33 +75,29 @@ func (*NumericStaticMap) Cost() int {
 }
 
 // Verify returns true if ids and ksids match.
-func (vind *NumericStaticMap) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
-	if len(ids) != len(ksids) {
-		return false, fmt.Errorf("NumericStaticMap.Verify: length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
-	}
-	for rowNum := range ids {
+func (vind *NumericStaticMap) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	out := make([]bool, len(ids))
+	for i := range ids {
 		var keybytes [8]byte
-		num, err := sqltypes.ConvertToUint64(ids[rowNum])
+		num, err := sqltypes.ToUint64(ids[i])
 		if err != nil {
-			return false, fmt.Errorf("NumericStaticMap.Verify: %v", err)
+			return nil, fmt.Errorf("NumericStaticMap.Verify: %v", err)
 		}
 		lookupNum, ok := vind.lookup[num]
 		if ok {
 			num = lookupNum
 		}
 		binary.BigEndian.PutUint64(keybytes[:], num)
-		if bytes.Compare(keybytes[:], ksids[rowNum]) != 0 {
-			return false, nil
-		}
+		out[i] = (bytes.Compare(keybytes[:], ksids[i]) == 0)
 	}
-	return true, nil
+	return out, nil
 }
 
 // Map returns the associated keyspace ids for the given ids.
 func (vind *NumericStaticMap) Map(_ VCursor, ids []sqltypes.Value) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
-		num, err := sqltypes.ConvertToUint64(id)
+		num, err := sqltypes.ToUint64(id)
 		if err != nil {
 			return nil, fmt.Errorf("NumericStaticMap.Map: %v", err)
 		}

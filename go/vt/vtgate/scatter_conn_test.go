@@ -484,7 +484,7 @@ func TestAppendResult(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     1,
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeString([]byte("abcd"))},
+			{sqltypes.NewVarBinary("abcd")},
 		},
 	}
 	// test one empty result

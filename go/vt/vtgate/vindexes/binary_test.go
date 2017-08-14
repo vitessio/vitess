@@ -43,15 +43,15 @@ func TestBinaryString(t *testing.T) {
 	}
 }
 
-func TestBinary(t *testing.T) {
+func TestBinaryMap(t *testing.T) {
 	tcases := []struct {
 		in  sqltypes.Value
 		out []byte
 	}{{
-		in:  testVal("test1"),
+		in:  sqltypes.NewVarChar("test1"),
 		out: []byte("test1"),
 	}, {
-		in:  testVal("test2"),
+		in:  sqltypes.NewVarChar("test2"),
 		out: []byte("test2"),
 	}}
 	for _, tcase := range tcases {
@@ -63,29 +63,19 @@ func TestBinary(t *testing.T) {
 		if bytes.Compare(tcase.out, out) != 0 {
 			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 		}
-		ok, err := binOnlyVindex.Verify(nil, []sqltypes.Value{tcase.in}, [][]byte{tcase.out})
-		if err != nil {
-			t.Error(err)
-		}
-		if !ok {
-			t.Errorf("Verify(%#v): false, want true", tcase.in)
-		}
 	}
 }
 
-func TestBinaryVerifyNeg(t *testing.T) {
-	_, err := binOnlyVindex.Verify(nil, []sqltypes.Value{testVal("test1"), testVal("test2")}, [][]byte{[]byte("test1")})
-	want := "Binary.Verify: length of ids 2 doesn't match length of ksids 1"
-	if err.Error() != want {
-		t.Error(err.Error())
-	}
-
-	ok, err := binOnlyVindex.Verify(nil, []sqltypes.Value{testVal("test2")}, [][]byte{[]byte("test1")})
+func TestBinaryVerify(t *testing.T) {
+	ids := []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NewVarBinary("2")}
+	ksids := [][]byte{[]byte("1"), []byte("1")}
+	got, err := binOnlyVindex.Verify(nil, ids, ksids)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
-	if ok {
-		t.Errorf("Verify(%v): true, want false", []byte("test2"))
+	want := []bool{true, false}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("binary.Verify: %v, want %v", got, want)
 	}
 }
 
@@ -94,7 +84,7 @@ func TestBinaryReverseMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := []sqltypes.Value{testVal([]byte("\x00\x00\x00\x00\x00\x00\x00\x01"))}
+	want := []sqltypes.Value{sqltypes.NewVarBinary("\x00\x00\x00\x00\x00\x00\x00\x01")}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ReverseMap(): %+v, want %+v", got, want)
 	}

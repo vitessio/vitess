@@ -47,8 +47,8 @@ func TestOpenFailedDueToMissMySQLTime(t *testing.T) {
 			{Type: sqltypes.Uint64},
 		},
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeString([]byte("1427325875"))},
-			{sqltypes.MakeString([]byte("1427325875"))},
+			{sqltypes.NewVarBinary("1427325875")},
+			{sqltypes.NewVarBinary("1427325875")},
 		},
 	})
 	se := newEngine(10, 1*time.Second, 1*time.Second, false)
@@ -88,7 +88,7 @@ func TestOpenFailedDueToInvalidTimeFormat(t *testing.T) {
 		}},
 		Rows: [][]sqltypes.Value{
 			// make safety check fail, invalid time format
-			{sqltypes.MakeString([]byte("invalid_time"))},
+			{sqltypes.NewVarBinary("invalid_time")},
 		},
 	})
 	se := newEngine(10, 1*time.Second, 1*time.Second, false)
@@ -135,7 +135,7 @@ func TestOpenFailedDueToTableErr(t *testing.T) {
 			},
 		},
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeString([]byte(""))},
+			{sqltypes.NewVarBinary("")},
 		},
 	})
 	se := newEngine(10, 1*time.Second, 1*time.Second, false)
@@ -372,12 +372,12 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	mdl1 := table.MaxDataLength
 	// Update existing table with new stats.
 	row := mysql.BaseShowTablesRow(tableName.String(), false, "")
-	row[2] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0")) // smaller timestamp
-	row[4] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("2")) // table_rows
-	row[5] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("3")) // data_length
-	row[6] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("4")) // index_length
-	row[7] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("5")) // data_free
-	row[8] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("6")) // max_data_length
+	row[2] = sqltypes.NewUint64(0) // smaller timestamp
+	row[4] = sqltypes.NewUint64(2) // table_rows
+	row[5] = sqltypes.NewUint64(3) // data_length
+	row[6] = sqltypes.NewUint64(4) // index_length
+	row[7] = sqltypes.NewUint64(5) // data_free
+	row[8] = sqltypes.NewUint64(6) // max_data_length
 	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
 		Fields:       mysql.BaseShowTablesFields,
 		RowsAffected: 1,

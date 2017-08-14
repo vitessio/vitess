@@ -55,18 +55,18 @@ var rowsResult1 = sqltypes.Result{
 	InsertID:     0,
 	Rows: [][]sqltypes.Value{
 		{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Float32, []byte("1.1")),
-			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("value1")),
-			sqltypes.MakeTrusted(sqltypes.Uint32, []byte("2147483647")),          // 2^31-1, NOT out of range for int32 => should become int64
-			sqltypes.MakeTrusted(sqltypes.Uint64, []byte("9223372036854775807")), // 2^63-1, NOT out of range for int64
+			sqltypes.NewInt32(1),
+			sqltypes.TestValue(sqltypes.Float32, "1.1"),
+			sqltypes.NewVarChar("value1"),
+			sqltypes.TestValue(sqltypes.Uint32, "2147483647"), // 2^31-1, NOT out of range for int32 => should become int64
+			sqltypes.NewUint64(9223372036854775807),           // 2^63-1, NOT out of range for int64
 		},
 		{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
-			sqltypes.MakeTrusted(sqltypes.Float32, []byte("2.2")),
-			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("value2")),
-			sqltypes.MakeTrusted(sqltypes.Uint32, []byte("4294967295")),           // 2^32, out of range for int32 => should become int64
-			sqltypes.MakeTrusted(sqltypes.Uint64, []byte("18446744073709551615")), // 2^64, out of range for int64
+			sqltypes.NewInt32(2),
+			sqltypes.TestValue(sqltypes.Float32, "2.2"),
+			sqltypes.NewVarChar("value2"),
+			sqltypes.TestValue(sqltypes.Uint32, "4294967295"), // 2^32-1, out of range for int32 => should become int64
+			sqltypes.NewUint64(18446744073709551615),          // 2^64-1, out of range for int64
 		},
 	},
 }

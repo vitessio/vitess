@@ -100,13 +100,6 @@ func Append(buf *bytes.Buffer, node SQLNode) {
 	node.Format(tbuf)
 }
 
-// GenerateParsedQuery returns a ParsedQuery of the ast.
-func GenerateParsedQuery(node SQLNode) *ParsedQuery {
-	buf := NewTrackedBuffer(nil)
-	buf.Myprintf("%v", node)
-	return buf.ParsedQuery()
-}
-
 // Statement represents a statement.
 type Statement interface {
 	iStatement()
@@ -1363,8 +1356,7 @@ func NewValArg(in []byte) *SQLVal {
 func (node *SQLVal) Format(buf *TrackedBuffer) {
 	switch node.Type {
 	case StrVal:
-		s := sqltypes.MakeString([]byte(node.Val))
-		s.EncodeSQL(buf)
+		sqltypes.MakeTrusted(sqltypes.VarBinary, node.Val).EncodeSQL(buf)
 	case IntVal, FloatVal, HexNum:
 		buf.Myprintf("%s", []byte(node.Val))
 	case HexVal:
@@ -1725,20 +1717,12 @@ func (node *GroupConcatExpr) WalkSubtree(visit Visit) error {
 
 // ValuesFuncExpr represents a function call.
 type ValuesFuncExpr struct {
-	Name     ColIdent
-	Resolved Expr
+	Name ColIdent
 }
 
 // Format formats the node.
 func (node *ValuesFuncExpr) Format(buf *TrackedBuffer) {
-	// Function names should not be back-quoted even
-	// if they match a reserved word. So, print the
-	// name as is.
-	if node.Resolved != nil {
-		buf.Myprintf("%v", node.Resolved)
-	} else {
-		buf.Myprintf("values(%s)", node.Name.String())
-	}
+	buf.Myprintf("values(%s)", node.Name.String())
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -1749,7 +1733,6 @@ func (node *ValuesFuncExpr) WalkSubtree(visit Visit) error {
 	return Walk(
 		visit,
 		node.Name,
-		node.Resolved,
 	)
 }
 

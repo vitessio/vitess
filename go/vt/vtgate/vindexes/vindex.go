@@ -52,7 +52,7 @@ type Vindex interface {
 
 	// Verify must be implented by all vindexes. It should return
 	// true if the ids can be mapped to the keyspace ids.
-	Verify(cursor VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error)
+	Verify(cursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error)
 }
 
 // Unique defines the interface for a unique vindex.
@@ -100,7 +100,9 @@ type Functional interface {
 // keyspace_id, which must be supplied, can be used
 // to determine the target shard for an insert operation.
 type Lookup interface {
-	Create(VCursor, []sqltypes.Value, [][]byte) error
+	// Create creates an association between ids and ksids. If ignoreMode
+	// is true, then the Create should ignore dup key errors.
+	Create(vc VCursor, ids []sqltypes.Value, ksids [][]byte, ignoreMode bool) error
 	Delete(VCursor, []sqltypes.Value, []byte) error
 }
 

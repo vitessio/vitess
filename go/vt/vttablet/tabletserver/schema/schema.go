@@ -156,7 +156,7 @@ func (ta *Table) AddColumn(name string, columnType querypb.Type, defval sqltypes
 		return
 	}
 	// Schema values are trusted.
-	ta.Columns[index].Default = sqltypes.MakeTrusted(ta.Columns[index].Type, defval.Bytes())
+	ta.Columns[index].Default = sqltypes.MakeTrusted(ta.Columns[index].Type, defval.Raw())
 }
 
 // FindColumn finds a column in the table. It returns the index if found.
@@ -176,23 +176,23 @@ func (ta *Table) GetPKColumn(index int) *TableColumn {
 }
 
 // AddIndex adds an index to the table.
-func (ta *Table) AddIndex(name string) (index *Index) {
-	index = NewIndex(name)
+func (ta *Table) AddIndex(name string, unique bool) (index *Index) {
+	index = NewIndex(name, unique)
 	ta.Indexes = append(ta.Indexes, index)
 	return index
 }
 
 // SetMysqlStats receives the values found in the mysql information_schema.tables table
 func (ta *Table) SetMysqlStats(tr, dl, il, df, mdl sqltypes.Value) {
-	v, _ := tr.ParseInt64()
+	v, _ := sqltypes.ToInt64(tr)
 	ta.TableRows.Set(v)
-	v, _ = dl.ParseInt64()
+	v, _ = sqltypes.ToInt64(dl)
 	ta.DataLength.Set(v)
-	v, _ = il.ParseInt64()
+	v, _ = sqltypes.ToInt64(il)
 	ta.IndexLength.Set(v)
-	v, _ = df.ParseInt64()
+	v, _ = sqltypes.ToInt64(df)
 	ta.DataFree.Set(v)
-	v, _ = mdl.ParseInt64()
+	v, _ = sqltypes.ToInt64(mdl)
 	ta.MaxDataLength.Set(v)
 }
 
@@ -201,9 +201,21 @@ func (ta *Table) HasPrimary() bool {
 	return len(ta.Indexes) != 0 && ta.Indexes[0].Name.EqualString("primary")
 }
 
+// UniqueIndexes returns the number of unique indexes on the table
+func (ta *Table) UniqueIndexes() int {
+	unique := 0
+	for _, idx := range ta.Indexes {
+		if idx.Unique {
+			unique++
+		}
+	}
+	return unique
+}
+
 // Index contains info about a table index.
 type Index struct {
-	Name sqlparser.ColIdent
+	Name   sqlparser.ColIdent
+	Unique bool
 	// Columns are the columns comprising the index.
 	Columns []sqlparser.ColIdent
 	// Cardinality[i] is the number of distinct values of Columns[i] in the
@@ -212,8 +224,8 @@ type Index struct {
 }
 
 // NewIndex creates a new Index.
-func NewIndex(name string) *Index {
-	return &Index{Name: sqlparser.NewColIdent(name)}
+func NewIndex(name string, unique bool) *Index {
+	return &Index{Name: sqlparser.NewColIdent(name), Unique: unique}
 }
 
 // AddColumn adds a column to the index.

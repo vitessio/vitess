@@ -35,7 +35,7 @@ func (mysqlFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
 		return nil, fmt.Errorf("unexpected result format for gtid_executed: %#v", qr)
 	}
-	return parseMysql56GTIDSet(qr.Rows[0][0].String())
+	return parseMysql56GTIDSet(qr.Rows[0][0].ToString())
 }
 
 // sendBinlogDumpCommand is part of the Flavor interface.

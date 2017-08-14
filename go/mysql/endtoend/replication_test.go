@@ -67,8 +67,8 @@ func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, mysql.BinlogFor
 		len(result.Rows) != 1 {
 		t.Fatalf("SHOW MASTER STATUS returned unexpected result: %v", result)
 	}
-	file := result.Rows[0][0].String()
-	position, err := result.Rows[0][1].ParseUint64()
+	file := result.Rows[0][0].ToString()
+	position, err := sqltypes.ToUint64(result.Rows[0][1])
 	if err != nil {
 		t.Fatalf("SHOW MASTER STATUS returned invalid position: %v", result.Rows[0][1])
 	}
@@ -1167,7 +1167,7 @@ func TestRowReplicationTypes(t *testing.T) {
 		sql.WriteString(", ")
 		sql.WriteString(tcase.name)
 		sql.WriteString(" = ")
-		if values[i+1].Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(values[i+1].Raw(), mysql.ZeroTimestamp) {
+		if values[i+1].Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(values[i+1].ToBytes(), mysql.ZeroTimestamp) {
 			// Values in the binary log are UTC. Let's convert them
 			// to whatever timezone the connection is using,
 			// so MySQL properly converts them back to UTC.
@@ -1202,7 +1202,7 @@ func TestRowReplicationTypes(t *testing.T) {
 	}
 	for i, tcase := range testcases {
 		if !reflect.DeepEqual(result.Rows[0][i+1], result.Rows[1][i+1]) {
-			t.Errorf("Field %v is not the same, got %v(%v) and %v(%v)", tcase.name, result.Rows[0][i+1], result.Rows[0][i+1].Type(), result.Rows[1][i+1], result.Rows[1][i+1].Type())
+			t.Errorf("Field %v is not the same, got %v and %v", tcase.name, result.Rows[0][i+1], result.Rows[1][i+1])
 		}
 	}
 

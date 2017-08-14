@@ -434,11 +434,7 @@ func RowString(row []sqltypes.Value) string {
 	l := len(row)
 	result := fmt.Sprintf("%v values:", l)
 	for _, val := range row {
-		if val.IsNull() {
-			result += " NULL"
-		} else {
-			result += fmt.Sprintf(" (%v)%v", val.Type(), val.String())
-		}
+		result += fmt.Sprintf(" %v", val)
 	}
 	return result
 }

@@ -229,7 +229,7 @@ func (sc *SlaveConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context.
 		// Start dumping the logs. The position is '4' to skip the
 		// Binlog File Header. See this page for more info:
 		// https://dev.mysql.com/doc/internals/en/binlog-file.html
-		binlog := binlogs.Rows[binlogIndex][0].String()
+		binlog := binlogs.Rows[binlogIndex][0].ToString()
 		if err := sc.Conn.WriteComBinlogDump(sc.slaveID, binlog, 4, 0); err != nil {
 			return nil, fmt.Errorf("failed to send the ComBinlogDump command: %v", err)
 		}

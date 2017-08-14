@@ -193,7 +193,7 @@ func validateSubquerySamePlan(node sqlparser.SQLNode, outer *engine.Route, vsche
 	return samePlan
 }
 
-func valEqual(a, b interface{}) bool {
+func valEqual(a, b sqlparser.Expr) bool {
 	switch a := a.(type) {
 	case *sqlparser.ColName:
 		if b, ok := b.(*sqlparser.ColName); ok {
