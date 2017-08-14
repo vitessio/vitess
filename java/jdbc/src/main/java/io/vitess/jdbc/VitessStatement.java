@@ -581,7 +581,7 @@ public class VitessStatement implements Statement {
                 throw new SQLException(Constants.SQLExceptionMessages.DML_NOT_ON_MASTER);
             }
 
-            this.retrieveGeneratedKeys = true;
+            this.retrieveGeneratedKeys = true;// mimicking mysql-connector-j
             if (this.vitessConnection.getAutoCommit()) {
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
                 cursorWithErrorList =

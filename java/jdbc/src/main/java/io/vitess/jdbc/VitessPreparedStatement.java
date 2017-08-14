@@ -444,7 +444,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
                 throw new SQLException(Constants.SQLExceptionMessages.DML_NOT_ON_MASTER);
             }
 
-            this.retrieveGeneratedKeys = true;
+            this.retrieveGeneratedKeys = true; // mimicking mysql-connector-j
             /**
              * Current api does not support single query and multiple bindVariables list.
              * So, List of the query is created to match the bindVariables list.
