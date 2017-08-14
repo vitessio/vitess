@@ -158,6 +158,7 @@ func (me *Engine) UpdateCaches(newMessages map[string][]*MessageRow, changedMess
 		if mm == nil {
 			continue
 		}
+		MessageStats.Add([]string{name, "Queued"}, int64(len(mrs)))
 		for _, mr := range mrs {
 			if mr.TimeNext > now {
 				// We don't handle future messages yet.
@@ -232,7 +233,7 @@ func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altere
 			continue
 		}
 		if me.managers[name] != nil {
-			// TODO(sougou): Increment internal error counter.
+			tabletenv.InternalErrors.Add("Messages", 1)
 			log.Errorf("Newly created table alread exists in messages: %s", name)
 			continue
 		}

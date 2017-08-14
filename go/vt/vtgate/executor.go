@@ -49,7 +49,14 @@ import (
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
-var errNoKeyspace = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspace in database name specified. Supported database name format: keyspace[:shard][@type]")
+var (
+	errNoKeyspace     = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspace in database name specified. Supported database name format: keyspace[:shard][@type]")
+	defaultTabletType topodatapb.TabletType
+)
+
+func init() {
+	topoproto.TabletTypeVar(&defaultTabletType, "default_tablet_type", topodatapb.TabletType_MASTER, "The default tablet type to set for queries, when one is not explicitly selected")
+}
 
 // Executor is the engine that executes queries by utilizing
 // the abilities of the underlying vttablets.
@@ -636,7 +643,7 @@ func (e *Executor) VSchema() *vindexes.VSchema {
 func (e *Executor) ParseTarget(targetString string) querypb.Target {
 	// Default tablet type is master.
 	target := querypb.Target{
-		TabletType: topodatapb.TabletType_MASTER,
+		TabletType: defaultTabletType,
 	}
 	last := strings.LastIndexAny(targetString, "@")
 	if last != -1 {

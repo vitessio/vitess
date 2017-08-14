@@ -1117,6 +1117,27 @@
   "TableName": ""
 }
 
+# repair
+"repair a"
+{
+  "PlanID": "OTHER_ADMIN",
+  "TableName": ""
+}
+
+# optimize
+"optimize a"
+{
+  "PlanID": "OTHER_ADMIN",
+  "TableName": ""
+}
+
+# truncate
+"truncate a"
+{
+  "PlanID": "OTHER_ADMIN",
+  "TableName": ""
+}
+
 # table not found select
 "select * from aaaa"
 "table aaaa not found in schema"

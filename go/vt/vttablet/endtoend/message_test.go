@@ -51,6 +51,13 @@ func TestMessage(t *testing.T) {
 	}
 	defer client.Execute("drop table vitess_message", nil)
 
+	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Acked"), 0; got != want {
+		t.Errorf("Messages/vitess_message.Acked: %d, want %d", got, want)
+	}
+	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Queued"), 0; got != want {
+		t.Errorf("Messages/vitess_message.Queued: %d, want %d", got, want)
+	}
+
 	// Start goroutine to consume message stream.
 	go func() {
 		if err := client.MessageStream("vitess_message", func(qr *sqltypes.Result) error {
@@ -110,6 +117,9 @@ func TestMessage(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Queued"), 1; got != want {
+		t.Errorf("Messages/vitess_message.Queued: %d, want %d", got, want)
+	}
 
 	// Consume first message.
 	start := time.Now().UnixNano()
@@ -150,6 +160,9 @@ func TestMessage(t *testing.T) {
 	default:
 		t.Errorf("epoch: %d, must be 0 or 1", epoch)
 	}
+	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Delayed"), 0; got != want {
+		t.Errorf("Messages/vitess_message.Delayed: %d, want %d", got, want)
+	}
 
 	// Consume the resend.
 	<-ch
@@ -171,6 +184,9 @@ func TestMessage(t *testing.T) {
 	default:
 		t.Errorf("epoch: %d, must be 1 or 2", epoch)
 	}
+	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Delayed"), 1; got != want {
+		t.Errorf("Messages/vitess_message.Delayed: %d, want %d", got, want)
+	}
 
 	// Ack the message.
 	count, err := client.MessageAck("vitess_message", []string{"1"})
@@ -189,6 +205,9 @@ func TestMessage(t *testing.T) {
 	if !(end-1e9 < ack && ack < end) {
 		t.Errorf("ack: %d. must be within 1s of end: %d", ack/1e9, end/1e9)
 	}
+	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Acked"), 1; got != want {
+		t.Errorf("Messages/vitess_message.Acked: %d, want %d", got, want)
+	}
 
 	// Within 3+1 seconds, the row should be deleted.
 	time.Sleep(4 * time.Second)
@@ -198,6 +217,20 @@ func TestMessage(t *testing.T) {
 	}
 	if qr.RowsAffected != 0 {
 		t.Error("The row has not been purged yet")
+	}
+	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Purged"), 1; got != want {
+		t.Errorf("Messages/vitess_message.Purged: %d, want %d", got, want)
+	}
+
+	// Verify final counts.
+	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Queued"), 1; got != want {
+		t.Errorf("Messages/vitess_message.Queued: %d, want %d", got, want)
+	}
+	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Acked"), 1; got != want {
+		t.Errorf("Messages/vitess_message.Acked: %d, want %d", got, want)
+	}
+	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Delayed"), 1; got != want {
+		t.Errorf("Messages/vitess_message.Delayed: %d, want %d", got, want)
 	}
 }
 

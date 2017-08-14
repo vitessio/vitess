@@ -22,7 +22,6 @@ import (
 	"io"
 	"math/rand"
 	"reflect"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -36,7 +35,6 @@ import (
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/messager"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -1813,59 +1811,26 @@ func TestMessageStream(t *testing.T) {
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
-	wanterr := "message table nomsg not found"
-	if err := tsv.MessageStream(ctx, &target, "nomsg", func(qr *sqltypes.Result) error {
+	err := tsv.MessageStream(ctx, &target, "nomsg", func(qr *sqltypes.Result) error {
 		return nil
-	}); err == nil || err.Error() != wanterr {
-		t.Errorf("tsv.MessageStream: %v, want %s", err, wanterr)
+	})
+	wantErr := "table nomsg not found in schema"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("tsv.MessageStream: %v, want %s", err, wantErr)
 	}
-	ch := make(chan *sqltypes.Result, 1)
-	done := make(chan struct{})
-	skippedField := false
-	go func() {
-		if err := tsv.MessageStream(ctx, &target, "msg", func(qr *sqltypes.Result) error {
-			if !skippedField {
-				skippedField = true
-				return nil
-			}
-			ch <- qr
-			return io.EOF
-		}); err != nil {
-			t.Error(err)
-		}
-		close(done)
-	}()
-	// Skip first result (field info).
-	newMessages := map[string][]*messager.MessageRow{
-		"msg": {
-			&messager.MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NULL}},
-		},
+
+	// Check that the streaming mechanism works.
+	called := false
+	err = tsv.MessageStream(ctx, &target, "msg", func(qr *sqltypes.Result) error {
+		called = true
+		return io.EOF
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-	// We may have to iterate a few times before the stream kicks in.
-	for {
-		runtime.Gosched()
-		time.Sleep(10 * time.Millisecond)
-		unlock := tsv.messager.LockDB(newMessages, nil)
-		tsv.messager.UpdateCaches(newMessages, nil)
-		unlock()
-		want := &sqltypes.Result{
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewVarBinary("1"),
-				sqltypes.NULL,
-			}},
-		}
-		select {
-		case got := <-ch:
-			if !want.Equal(got) {
-				t.Errorf("Stream:\n%v, want\n%v", got, want)
-			}
-		default:
-			continue
-		}
-		break
+	if !called {
+		t.Fatal("callback was not called for MessageStream")
 	}
-	// This should not hang.
-	<-done
 }
 
 func TestMessageAck(t *testing.T) {

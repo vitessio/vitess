@@ -44,41 +44,43 @@ const (
 	PlanPassSelect PlanType = iota
 	// PlanSelectLock is for a select that locks.
 	PlanSelectLock
-	// PlanNextval is for NEXTVAL
+	// PlanNextval is for NEXTVAL.
 	PlanNextval
 	// PlanPassDML is pass through update & delete statements. This is
 	// the default plan for update and delete statements.
 	PlanPassDML
 	// PlanDMLPK is an update or delete with an equality where clause(s)
-	// on primary key(s)
+	// on primary key(s).
 	PlanDMLPK
 	// PlanDMLSubquery is an update or delete with a subselect statement
 	PlanDMLSubquery
 	// PlanInsertPK is insert statement where the PK value is
-	// supplied with the query
+	// supplied with the query.
 	PlanInsertPK
-	// PlanInsertSubquery is same as PlanDMLSubquery but for inserts
+	// PlanInsertSubquery is same as PlanDMLSubquery but for inserts.
 	PlanInsertSubquery
-	// PlanUpsertPK is for insert ... on duplicate key constructs
+	// PlanUpsertPK is for insert ... on duplicate key constructs.
 	PlanUpsertPK
-	// PlanInsertMessage is for inserting into message tables
+	// PlanInsertMessage is for inserting into message tables.
 	PlanInsertMessage
-	// PlanSet is for SET statements
+	// PlanSet is for SET statements.
 	PlanSet
-	// PlanDDL is for DDL statements
+	// PlanDDL is for DDL statements.
 	PlanDDL
-	// PlanSelectStream is used for streaming queries
+	// PlanSelectStream is used for streaming queries.
 	PlanSelectStream
-	// PlanOtherRead is for SHOW, DESCRIBE & EXPLAIN statements
+	// PlanOtherRead is for SHOW, DESCRIBE & EXPLAIN statements.
 	PlanOtherRead
-	// PlanOtherAdmin is for REPAIR, OPTIMIZE and TRUNCATE statements
+	// PlanOtherAdmin is for REPAIR, OPTIMIZE and TRUNCATE statements.
 	PlanOtherAdmin
+	// PlanMessageStream is used for streaming messages.
+	PlanMessageStream
 	// NumPlans stores the total number of plans
 	NumPlans
 )
 
 // Must exactly match order of plan constants.
-var planName = []string{
+var planName = [NumPlans]string{
 	"PASS_SELECT",
 	"SELECT_LOCK",
 	"NEXTVAL",
@@ -94,6 +96,7 @@ var planName = []string{
 	"SELECT_STREAM",
 	"OTHER_READ",
 	"OTHER_ADMIN",
+	"MESSAGE_STREAM",
 }
 
 func (pt PlanType) String() string {
@@ -139,12 +142,14 @@ var tableACLRoles = map[PlanType]tableacl.Role{
 	PlanDMLSubquery:    tableacl.WRITER,
 	PlanInsertPK:       tableacl.WRITER,
 	PlanInsertSubquery: tableacl.WRITER,
+	PlanInsertMessage:  tableacl.WRITER,
 	PlanDDL:            tableacl.ADMIN,
 	PlanSelectStream:   tableacl.READER,
 	PlanOtherRead:      tableacl.READER,
 	PlanOtherAdmin:     tableacl.ADMIN,
 	PlanUpsertPK:       tableacl.WRITER,
 	PlanNextval:        tableacl.WRITER,
+	PlanMessageStream:  tableacl.WRITER,
 }
 
 //_______________________________________________
@@ -249,7 +254,7 @@ func (plan *Plan) setTable(tableName sqlparser.TableIdent, tables map[string]*sc
 }
 
 // Build builds a plan based on the schema.
-func Build(sql string, tables map[string]*schema.Table) (plan *Plan, err error) {
+func Build(sql string, tables map[string]*schema.Table) (*Plan, error) {
 	statement, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
@@ -284,13 +289,13 @@ func Build(sql string, tables map[string]*schema.Table) (plan *Plan, err error) 
 }
 
 // BuildStreaming builds a streaming plan based on the schema.
-func BuildStreaming(sql string, tables map[string]*schema.Table) (plan *Plan, err error) {
+func BuildStreaming(sql string, tables map[string]*schema.Table) (*Plan, error) {
 	statement, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
 	}
 
-	plan = &Plan{
+	plan := &Plan{
 		PlanID:    PlanSelectStream,
 		FullQuery: GenerateFullQuery(statement),
 	}
@@ -309,5 +314,20 @@ func BuildStreaming(sql string, tables map[string]*schema.Table) (plan *Plan, er
 		return nil, fmt.Errorf("'%v' not allowed for streaming", sqlparser.String(stmt))
 	}
 
+	return plan, nil
+}
+
+// BuildMessageStreaming builds a plan for message streaming.
+func BuildMessageStreaming(name string, tables map[string]*schema.Table) (*Plan, error) {
+	plan := &Plan{
+		PlanID: PlanMessageStream,
+		Table:  tables[name],
+	}
+	if plan.Table == nil {
+		return nil, fmt.Errorf("table %s not found in schema", name)
+	}
+	if plan.Table.Type != schema.Message {
+		return nil, fmt.Errorf("'%s' is not a message table", name)
+	}
 	return plan, nil
 }

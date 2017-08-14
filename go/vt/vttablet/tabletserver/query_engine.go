@@ -347,6 +347,21 @@ func (qe *QueryEngine) GetStreamPlan(sql string) (*TabletPlan, error) {
 	return plan, nil
 }
 
+// GetMessageStreamPlan builds a plan for Message streaming.
+func (qe *QueryEngine) GetMessageStreamPlan(name string) (*TabletPlan, error) {
+	qe.mu.RLock()
+	defer qe.mu.RUnlock()
+	splan, err := planbuilder.BuildMessageStreaming(name, qe.tables)
+	if err != nil {
+		// TODO(sougou): Inspect to see if BuildMessageStreaming can return coded error.
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
+	}
+	plan := &TabletPlan{Plan: splan}
+	plan.Rules = qe.queryRuleSources.FilterByPlan("stream from "+name, plan.PlanID, plan.TableName().String())
+	plan.Authorized = tableacl.Authorized(plan.TableName().String(), plan.PlanID.MinRole())
+	return plan, nil
+}
+
 // ClearQueryPlanCache should be called if query plan cache is potentially obsolete
 func (qe *QueryEngine) ClearQueryPlanCache() {
 	qe.queries.Clear()

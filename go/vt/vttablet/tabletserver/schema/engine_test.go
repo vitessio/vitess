@@ -270,8 +270,8 @@ func TestCreateOrUpdateTable(t *testing.T) {
 	se.RegisterNotifier("test", func(schema map[string]*Table, created, altered, dropped []string) {
 		switch i {
 		case 0:
-			if len(created) != 4 {
-				t.Errorf("callback 0: %v, want len of 4\n", created)
+			if len(created) != 5 {
+				t.Errorf("callback 0: %v, want len of 5\n", created)
 			}
 		case 1:
 			want := []string{"test_table_01"}
