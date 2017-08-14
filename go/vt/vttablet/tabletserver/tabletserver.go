@@ -1073,20 +1073,18 @@ func (tsv *TabletServer) MessageStream(ctx context.Context, target *querypb.Targ
 		"MessageStream", "stream", nil,
 		target, false, false,
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			// TODO(sougou): perform ACL checks.
-			done, err := tsv.messager.Subscribe(name, func(r *sqltypes.Result) error {
-				select {
-				case <-ctx.Done():
-					return io.EOF
-				default:
-				}
-				return callback(r)
-			})
+			plan, err := tsv.qe.GetMessageStreamPlan(name)
 			if err != nil {
 				return err
 			}
-			<-done
-			return nil
+			qre := &QueryExecutor{
+				query:    "stream from msg",
+				plan:     plan,
+				ctx:      ctx,
+				logStats: logStats,
+				tsv:      tsv,
+			}
+			return qre.MessageStream(callback)
 		},
 	)
 }
@@ -1102,9 +1100,14 @@ func (tsv *TabletServer) MessageAck(ctx context.Context, target *querypb.Target,
 		}
 		sids = append(sids, v.String())
 	}
-	return tsv.execDML(ctx, target, func() (string, map[string]*querypb.BindVariable, error) {
+	count, err = tsv.execDML(ctx, target, func() (string, map[string]*querypb.BindVariable, error) {
 		return tsv.messager.GenerateAckQuery(name, sids)
 	})
+	if err != nil {
+		return 0, err
+	}
+	messager.MessageStats.Add([]string{name, "Acked"}, count)
+	return count, nil
 }
 
 // PostponeMessages postpones the list of messages for a given message table.

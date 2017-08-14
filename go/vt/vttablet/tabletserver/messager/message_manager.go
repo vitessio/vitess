@@ -25,6 +25,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -33,6 +34,9 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
+
+// MessageStats tracks stats for messages.
+var MessageStats = stats.NewMultiCounters("Messages", []string{"TableName", "Metric"})
 
 type messageReceiver struct {
 	mu   sync.Mutex
@@ -185,6 +189,7 @@ func (mm *messageManager) Open() {
 	mm.isOpen = true
 	mm.wg.Add(1)
 	mm.curReceiver = -1
+
 	go mm.runSend()
 	// TODO(sougou): improve ticks to add randomness.
 	mm.pollerTicks.Start(mm.runPoller)
@@ -304,13 +309,18 @@ func (mm *messageManager) runSend() {
 				mm.cond.Wait()
 				continue
 			}
+			lateCount := int64(0)
 			for i := 0; i < mm.batchSize; i++ {
 				if mr := mm.cache.Pop(); mr != nil {
+					if mr.Epoch >= 1 {
+						lateCount++
+					}
 					rows = append(rows, mr.Row)
 					continue
 				}
 				break
 			}
+			MessageStats.Add([]string{mm.name.String(), "Delayed"}, lateCount)
 			if rows != nil {
 				break
 			}
@@ -379,7 +389,7 @@ func postpone(tsv TabletService, name string, ackWaitTime time.Duration, ids []s
 	}()
 	_, err := tsv.PostponeMessages(ctx, nil, name, ids)
 	if err != nil {
-		// TODO(sougou): increment internal error.
+		tabletenv.InternalErrors.Add("Messages", 1)
 		log.Errorf("Unable to postpone messages %v: %v", ids, err)
 	}
 }
@@ -392,7 +402,7 @@ func (mm *messageManager) runPoller() {
 	}()
 	conn, err := mm.conns.Get(ctx)
 	if err != nil {
-		// TODO(sougou): increment internal error.
+		tabletenv.InternalErrors.Add("Messages", 1)
 		log.Errorf("Error getting connection: %v", err)
 		return
 	}
@@ -436,7 +446,7 @@ func (mm *messageManager) runPoller() {
 		for _, row := range qr.Rows {
 			mr, err := BuildMessageRow(row)
 			if err != nil {
-				// TODO(sougou): increment internal error.
+				tabletenv.InternalErrors.Add("Messages", 1)
 				log.Errorf("Error reading message row: %v", err)
 				continue
 			}
@@ -463,9 +473,10 @@ func purge(tsv TabletService, name string, purgeAfter, purgeInterval time.Durati
 	for {
 		count, err := tsv.PurgeMessages(ctx, nil, name, time.Now().Add(-purgeAfter).UnixNano())
 		if err != nil {
-			// TODO(sougou): increment internal error.
+			tabletenv.InternalErrors.Add("Messages", 1)
 			log.Errorf("Unable to delete messages: %v", err)
 		}
+		MessageStats.Add([]string{name, "Purged"}, count)
 		// If deleted 500 or more, we should continue.
 		if count < 500 {
 			return
@@ -543,7 +554,7 @@ func (mm *messageManager) receiverCount() int {
 func (mm *messageManager) read(ctx context.Context, conn *connpool.DBConn, pq *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	b, err := pq.GenerateQuery(bindVars, nil)
 	if err != nil {
-		// TODO(sougou): increment internal error.
+		tabletenv.InternalErrors.Add("Messages", 1)
 		log.Errorf("Error reading rows from message table: %v", err)
 		return nil, err
 	}
