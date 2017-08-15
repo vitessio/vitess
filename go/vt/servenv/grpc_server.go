@@ -67,6 +67,10 @@ var (
 	// GRPCMaxConnectionAge is the maximum age of a client connection, before GoAway is sent.
 	// This is useful for L4 loadbalancing to ensure rebalancing after scaling.
 	GRPCMaxConnectionAge *time.Duration
+
+	// GRPCMaxConnectionAgeGrace is an additional grace period after GRPCMaxConnectionAge, after which
+	// connections are forcibly closed.
+	GRPCMaxConnectionAgeGrace *time.Duration
 )
 
 // isGRPCEnabled returns true if gRPC server is set
@@ -116,9 +120,13 @@ func createGRPCServer() {
 	}
 
 	if GRPCMaxConnectionAge != nil {
-		opts = append(opts, grpc.KeepaliveParams(keepalive.ServerParameters{
+		ka := keepalive.ServerParameters{
 			MaxConnectionAge: *GRPCMaxConnectionAge,
-		}))
+		}
+		if GRPCMaxConnectionAgeGrace != nil {
+			ka.MaxConnectionAgeGrace = *GRPCMaxConnectionAgeGrace
+		}
+		opts = append(opts, grpc.KeepaliveParams(ka))
 	}
 
 	GRPCServer = grpc.NewServer(opts...)
@@ -158,6 +166,7 @@ func RegisterGRPCFlags() {
 	GRPCMaxMessageSize = flag.Int("grpc_max_message_size", 4*1024*1024, "Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'.")
 	// Default is effectively infinity, as defined in grpc.
 	GRPCMaxConnectionAge = flag.Duration("grpc_max_connection_age", time.Duration(math.MaxInt64), "Maximum age of a client connection before GoAway is sent.")
+	GRPCMaxConnectionAgeGrace = flag.Duration("grpc_max_connection_age_grace", time.Duration(math.MaxInt64), "Additional grace period after grpc_max_connection_age, after which connections are forcibly closed.")
 }
 
 // GRPCCheckServiceMap returns if we should register a gRPC service
