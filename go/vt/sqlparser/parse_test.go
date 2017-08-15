@@ -684,12 +684,12 @@ func TestValid(t *testing.T) {
 		input:  "alter table a rename key foo to bar",
 		output: "alter table a",
 	}, {
-		input: "create table a",
+		input: "create table a (\n\t`a` int\n)",
 	}, {
-		input: "create table `by`",
+		input: "create table `by` (\n\t`by` char\n)",
 	}, {
-		input:  "create table if not exists a",
-		output: "create table a",
+		input:  "create table if not exists a (\n\t`a` int\n)",
+		output: "create table a (\n\t`a` int\n)",
 	}, {
 		input:  "create index a on b",
 		output: "alter table b",
@@ -873,7 +873,7 @@ func TestCaseSensitivity(t *testing.T) {
 		input  string
 		output string
 	}{{
-		input: "create table A",
+		input: "create table A (\n\t`B` int\n)",
 	}, {
 		input:  "create index b on A",
 		output: "alter table A",
@@ -933,8 +933,8 @@ func TestCaseSensitivity(t *testing.T) {
 	}, {
 		input: "insert into A(A, B) values (1, 2)",
 	}, {
-		input:  "CREATE TABLE A",
-		output: "create table A",
+		input:  "CREATE TABLE A (\n\t`A` int\n)",
+		output: "create table A (\n\t`A` int\n)",
 	}, {
 		input:  "create view A",
 		output: "create table a",
@@ -1151,141 +1151,133 @@ func TestConvert(t *testing.T) {
 
 func TestCreateTable(t *testing.T) {
 	validSQL := []string{
-
 		// test all the data types and options
-		`
-create table t (
-	col_bit bit,
-	col_tinyint tinyint auto_increment,
-	col_tinyint3 tinyint(3) unsigned,
-	col_smallint smallint,
-	col_smallint4 smallint(4) zerofill,
-	col_mediumint mediumint,
-	col_mediumint5 mediumint(5) unsigned not null,
-	col_int int,
-	col_int10 int(10) not null,
-	col_integer integer comment 'this is an integer',
-	col_bigint bigint,
-	col_bigint10 bigint(10) zerofill not null default 10,
-	col_real real,
-	col_real2 real(1,2) not null default 1.23,
-	col_double double,
-	col_double2 double(3,4) not null default 1.23,
-	col_float float,
-	col_float2 float(3,4) not null default 1.23,
-	col_decimal decimal,
-	col_decimal2 decimal(2),
-	col_decimal3 decimal(2,3),
-	col_numeric numeric,
-	col_numeric2 numeric(2),
-	col_numeric3 numeric(2,3),
-	col_date date,
-	col_time time,
-	col_timestamp timestamp,
-	col_datetime datetime,
-	col_year year,
-	col_char char,
-	col_char2 char(2),
-	col_char3 char(3) character set ascii,
-	col_char4 char(4) character set ascii collate ascii_bin,
-	col_varchar varchar,
-	col_varchar2 varchar(2),
-	col_varchar3 varchar(3) character set ascii,
-	col_varchar4 varchar(4) character set ascii collate ascii_bin,
-	col_binary binary,
-	col_varbinary varbinary(10),
-	col_tinyblob tinyblob,
-	col_blob blob,
-	col_mediumblob mediumblob,
-	col_longblob longblob,
-	col_tinytext tinytext,
-	col_text text,
-	col_mediumtext mediumtext,
-	col_longtext longtext,
-	col_text text character set ascii collate ascii_bin,
-	col_json json,
-	col_enum enum('a', 'b', 'c', 'd')
-)`,
+		"create table t (\n" +
+			"	`col_bit` bit,\n" +
+			"	`col_tinyint` tinyint auto_increment,\n" +
+			"	`col_tinyint3` tinyint(3) unsigned,\n" +
+			"	`col_smallint` smallint,\n" +
+			"	`col_smallint4` smallint(4) zerofill,\n" +
+			"	`col_mediumint` mediumint,\n" +
+			"	`col_mediumint5` mediumint(5) unsigned not null,\n" +
+			"	`col_int` int,\n" +
+			"	`col_int10` int(10) not null,\n" +
+			"	`col_integer` integer comment 'this is an integer',\n" +
+			"	`col_bigint` bigint,\n" +
+			"	`col_bigint10` bigint(10) zerofill not null default 10,\n" +
+			"	`col_real` real,\n" +
+			"	`col_real2` real(1,2) not null default 1.23,\n" +
+			"	`col_double` double,\n" +
+			"	`col_double2` double(3,4) not null default 1.23,\n" +
+			"	`col_float` float,\n" +
+			"	`col_float2` float(3,4) not null default 1.23,\n" +
+			"	`col_decimal` decimal,\n" +
+			"	`col_decimal2` decimal(2),\n" +
+			"	`col_decimal3` decimal(2,3),\n" +
+			"	`col_numeric` numeric,\n" +
+			"	`col_numeric2` numeric(2),\n" +
+			"	`col_numeric3` numeric(2,3),\n" +
+			"	`col_date` date,\n" +
+			"	`col_time` time,\n" +
+			"	`col_timestamp` timestamp,\n" +
+			"	`col_datetime` datetime,\n" +
+			"	`col_year` year,\n" +
+			"	`col_char` char,\n" +
+			"	`col_char2` char(2),\n" +
+			"	`col_char3` char(3) character set ascii,\n" +
+			"	`col_char4` char(4) character set ascii collate ascii_bin,\n" +
+			"	`col_varchar` varchar,\n" +
+			"	`col_varchar2` varchar(2),\n" +
+			"	`col_varchar3` varchar(3) character set ascii,\n" +
+			"	`col_varchar4` varchar(4) character set ascii collate ascii_bin,\n" +
+			"	`col_binary` binary,\n" +
+			"	`col_varbinary` varbinary(10),\n" +
+			"	`col_tinyblob` tinyblob,\n" +
+			"	`col_blob` blob,\n" +
+			"	`col_mediumblob` mediumblob,\n" +
+			"	`col_longblob` longblob,\n" +
+			"	`col_tinytext` tinytext,\n" +
+			"	`col_text` text,\n" +
+			"	`col_mediumtext` mediumtext,\n" +
+			"	`col_longtext` longtext,\n" +
+			"	`col_text` text character set ascii collate ascii_bin,\n" +
+			"	`col_json` json,\n" +
+			"	`col_enum` enum('a', 'b', 'c', 'd')\n" +
+			")",
 
 		// test defaults
-		`
-create table t (
-	i1 int default 1,
-	i2 int default null,
-	f1 float default 1.23,
-	s1 varchar default 'c',
-	s2 varchar default 'this is a string',
-	s3 varchar default null
-)`,
+		"create table t (\n"+
+			"	`i1` int default 1,\n"+
+			"	`i2` int default null,\n"+
+			"	`f1` float default 1.23,\n"+
+			"	`s1` varchar default 'c',\n"+
+			"	`s2` varchar default 'this is a string',\n"+
+			"	`s3` varchar default null\n"+
+			")",
 
 		// test key field options
-		`
-create table t (
-	id int auto_increment primary key,
-	username varchar unique key,
-	email varchar,
-	full_name varchar key
-)`,
+		"create table t (\n"+
+			"	`id` int auto_increment primary key,\n"+
+			"	`username` varchar unique key,\n"+
+			"	`email` varchar,\n"+
+			"	`full_name` varchar key\n"+
+			")",
 
 		// test defining indexes separately
-		`
-create table t (
-	id int auto_increment,
-	username varchar,
-	email varchar,
-	full_name varchar,
-	primary key (id),
-	unique key by_username (username),
-	key by_full_name (full_name)
-)`,
+		"create table t (\n"+
+			"	`id` int auto_increment,\n"+
+			"	`username` varchar,\n"+
+			"	`email` varchar,\n"+
+			"	`full_name` varchar,\n"+
+			"	primary key (id),\n"+
+			"	unique key by_username (username),\n"+
+			"	key by_full_name (full_name)\n"+
+			")",
 
 		// multi-column indexes
-		`
-create table t (
-	id int auto_increment,
-	username varchar,
-	email varchar,
-	full_name varchar,
-	a int,
-	b int,
-	c int,
-	primary key (id, username),
-	unique key by_abc (a, b, c),
-	key by_email (email(10), username)
-)`,
+		"create table t (\n"+
+			"	`id` int auto_increment,\n"+
+			"	`username` varchar,\n"+
+			"	`email` varchar,\n"+
+			"	`full_name` varchar,\n"+
+			"	`a` int,\n"+
+			"	`b` int,\n"+
+			"	`c` int,\n"+
+			"	primary key (id, username),\n"+
+			"	unique key by_abc (a, b, c),\n"+
+			"	key by_email (email(10), username)\n"+
+			")",
 
 		// table options
-		`
-create table t (
-	id int auto_increment
-) engine InnoDB,
-  auto_increment 123,
-  avg_row_length 1,
-  default character set utf8mb4,
-  character set latin1,
-  checksum 0,
-  default collate binary,
-  collate ascii_bin,
-  comment 'this is a comment',
-  compression 'zlib',
-  connection 'connect_string',
-  data directory 'absolute path to directory',
-  delay_key_write 1,
-  encryption 'n',
-  index directory 'absolute path to directory',
-  insert_method no,
-  key_block_size 1024,
-  max_rows 100,
-  min_rows 10,
-  pack_keys 0,
-  password 'sekret',
-  row_format default,
-  stats_auto_recalc default,
-  stats_persistent 0,
-  stats_sample_pages 1,
-  tablespace tablespace_name storage disk,
-  tablespace tablespace_name
-`,
+		"create table t (\n"+
+			"	`id` int auto_increment\n"+
+			") engine InnoDB,\n"+
+  			"  auto_increment 123,\n"+
+  			"  avg_row_length 1,\n"+
+  			"  default character set utf8mb4,\n"+
+  			"  character set latin1,\n"+
+  			"  checksum 0,\n"+
+  			"  default collate binary,\n"+
+  			"  collate ascii_bin,\n"+
+  			"  comment 'this is a comment',\n"+
+  			"  compression 'zlib',\n"+
+  			"  connection 'connect_string',\n"+
+  			"  data directory 'absolute path to directory',\n"+
+  			"  delay_key_write 1,\n"+
+  			"  encryption 'n',\n"+
+  			"  index directory 'absolute path to directory',\n"+
+  			"  insert_method no,\n"+
+  			"  key_block_size 1024,\n"+
+  			"  max_rows 100,\n"+
+  			"  min_rows 10,\n"+
+  			"  pack_keys 0,\n"+
+  			"  password 'sekret',\n"+
+  			"  row_format default,\n"+
+  			"  stats_auto_recalc default,\n"+
+  			"  stats_persistent 0,\n"+
+  			"  stats_sample_pages 1,\n"+
+  			"  tablespace tablespace_name storage disk,\n"+
+  			"  tablespace tablespace_name\n",
 	}
 	for _, sql := range validSQL {
 		sql = strings.TrimSpace(sql)

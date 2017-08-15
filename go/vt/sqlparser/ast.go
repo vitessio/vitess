@@ -544,9 +544,9 @@ func (tc *TableSpec) Format(buf *TrackedBuffer) {
 	for _, col := range tc.Columns {
 		if first {
 			first = false
-			buf.Myprintf("\t%s %v", col.Name.String(), &col.Type)
+			buf.Myprintf("\t%v", col)
 		} else {
-			buf.Myprintf(",\n\t%s %v", col.Name.String(), &col.Type)
+			buf.Myprintf(",\n\t%v", col)
 		}
 	}
 	for _, idx := range tc.Indexes {
@@ -592,7 +592,7 @@ type ColumnDefinition struct {
 }
 
 func (col *ColumnDefinition) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s %v", col.Name, col.Type)
+	buf.Myprintf("`%s` %v", col.Name.String(), &col.Type)
 }
 
 // WalkSubtree walks the nodes of the subtree.

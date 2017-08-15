@@ -835,10 +835,6 @@ create_statement:
   {
     $$ = &DDL{Action: CreateStr, NewName: $4, TableSpec: $5}
   }
-| CREATE TABLE not_exists_opt table_name ddl_force_eof
-  {
-    $$ = &DDL{Action: CreateStr, NewName: $4}
-  }
 | CREATE constraint_opt INDEX ID using_opt ON table_name ddl_force_eof
   {
     // Change this to an alter statement
