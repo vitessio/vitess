@@ -210,6 +210,7 @@ public class ConnectionProperties {
     // Caching of some hot properties to avoid casting over and over
     private Topodata.TabletType tabletTypeCache;
     private Query.ExecuteOptions.IncludedFields includedFieldsCache;
+    private Query.ExecuteOptions executeOptionsCache;
     private boolean includeAllFieldsCache = true;
     private boolean twopcEnabledCache = false;
     private boolean simpleExecuteTypeCache = true;
@@ -238,6 +239,7 @@ public class ConnectionProperties {
         this.simpleExecuteTypeCache = this.executeType.getValueAsEnum() == Constants.QueryExecuteType.SIMPLE;
         this.characterEncodingAsString = this.characterEncoding.getValueAsString();
         this.userNameCache = this.userName.getValueAsString();
+        this.executeOptionsCache = Query.ExecuteOptions.newBuilder().setIncludedFields(this.includedFieldsCache).build();
     }
 
     /**
@@ -357,6 +359,15 @@ public class ConnectionProperties {
         this.includedFields.setValue(includedFields);
         this.includedFieldsCache = includedFields;
         this.includeAllFieldsCache = includedFields == Query.ExecuteOptions.IncludedFields.ALL;
+        this.setExecuteOptions();
+    }
+
+    private void setExecuteOptions() {
+        this.executeOptionsCache = Query.ExecuteOptions.newBuilder().setIncludedFields(this.includedFieldsCache).build();
+    }
+
+    public Query.ExecuteOptions getExecuteOptions() {
+        return this.executeOptionsCache;
     }
 
     public boolean getTwopcEnabled() {

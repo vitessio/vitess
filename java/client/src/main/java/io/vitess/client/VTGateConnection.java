@@ -63,7 +63,8 @@ import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
  */
 public final class VTGateConnection implements Closeable {
     private final RpcClient client;
-    private Session session;
+    // This will be used if Session is not provided on any query execution.
+    private final VTSession globalSession;
     private SQLFuture<?> lastCall;
 
     /**
@@ -118,14 +119,11 @@ public final class VTGateConnection implements Closeable {
      */
     public VTGateConnection(RpcClient client, String targetString, Query.ExecuteOptions options) {
         this.client = checkNotNull(client);
-        this.session = Session.newBuilder()
-                .setTargetString(null == targetString ? "" : targetString)
-                .setOptions(null == options ? Query.ExecuteOptions.newBuilder().build() : options)
-                .build();
+        this.globalSession = new VTSession(targetString, options);
     }
 
     /**
-     * This method calls the VTGate to execute the query.
+     * This method calls the VTGate to execute the query with internal session.
      *
      * @param ctx      Context on user and execution deadline if any.
      * @param query    Sql Query to be executed.
@@ -134,11 +132,25 @@ public final class VTGateConnection implements Closeable {
      * @throws SQLException If anything fails on query execution.
      */
     public SQLFuture<Cursor> execute(Context ctx, String query, @Nullable Map<String, ?> bindVars) throws SQLException {
+        return executeWithSession(ctx, query, bindVars, this.globalSession);
+    }
+
+    /**
+     * This method calls the VTGate to execute the query.
+     *
+     * @param ctx       Context on user and execution deadline if any.
+     * @param query     Sql Query to be executed.
+     * @param bindVars  Parameters to bind with sql.
+     * @param vtSession Session to be used with the call.
+     * @return SQL Future Cursor
+     * @throws SQLException If anything fails on query execution.
+     */
+    public SQLFuture<Cursor> executeWithSession(Context ctx, String query, @Nullable Map<String, ?> bindVars, final VTSession vtSession) throws SQLException {
         synchronized (this) {
             checkCallIsAllowed("execute");
             ExecuteRequest.Builder requestBuilder = ExecuteRequest.newBuilder()
                     .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
-                    .setSession(session);
+                    .setSession(vtSession.getSession());
 
             if (ctx.getCallerId() != null) {
                 requestBuilder.setCallerId(ctx.getCallerId());
@@ -149,7 +161,7 @@ public final class VTGateConnection implements Closeable {
                             new AsyncFunction<ExecuteResponse, Cursor>() {
                                 @Override
                                 public ListenableFuture<Cursor> apply(ExecuteResponse response) throws Exception {
-                                    setSession(response.getSession());
+                                    vtSession.setSession(response.getSession());
                                     Proto.checkError(response.getError());
                                     return Futures.<Cursor>immediateFuture(new SimpleCursor(response.getResult()));
                                 }
@@ -160,7 +172,7 @@ public final class VTGateConnection implements Closeable {
     }
 
     /**
-     * This method calls the VTGate to execute list of queries as a batch.
+     * This method calls the VTGate to execute list of queries as a batch with internal session.
      *
      * @param ctx          Context on user and execution deadline if any.
      * @param queryList    List of sql queries to be executed.
@@ -175,6 +187,21 @@ public final class VTGateConnection implements Closeable {
 
     /**
      * This method calls the VTGate to execute list of queries as a batch.
+     *
+     * @param ctx          Context on user and execution deadline if any.
+     * @param queryList    List of sql queries to be executed.
+     * @param bindVarsList <p>For each sql query it will provide a list of parameters to bind with.
+     *                     If provided, should match the number of sql queries.</p>
+     * @param vtSession    Session to be used with the call.
+     * @return SQL Future with List of Cursors
+     * @throws SQLException If anything fails on query execution.
+     */
+    public SQLFuture<List<CursorWithError>> executeBatchWithSession(Context ctx, List<String> queryList, @Nullable List<Map<String, ?>> bindVarsList, final VTSession vtSession) throws SQLException {
+        return executeBatchWithSession(ctx, queryList, bindVarsList, false, vtSession);
+    }
+
+    /**
+     * This method calls the VTGate to execute list of queries as a batch with internal session.
      * <p>
      * <p>If asTransaction is set to <code>true</code> then query execution will not change the session cookie.
      * Otherwise, query execution will become part of the session.</p>
@@ -188,6 +215,25 @@ public final class VTGateConnection implements Closeable {
      * @throws SQLException If anything fails on query execution.
      */
     public SQLFuture<List<CursorWithError>> executeBatch(Context ctx, List<String> queryList, @Nullable List<Map<String, ?>> bindVarsList, boolean asTransaction) throws SQLException {
+        return this.executeBatchWithSession(ctx, queryList, bindVarsList, asTransaction, this.globalSession);
+    }
+
+    /**
+     * This method calls the VTGate to execute list of queries as a batch.
+     * <p>
+     * <p>If asTransaction is set to <code>true</code> then query execution will not change the session cookie.
+     * Otherwise, query execution will become part of the session.</p>
+     *
+     * @param ctx           Context on user and execution deadline if any.
+     * @param queryList     List of sql queries to be executed.
+     * @param bindVarsList  <p>For each sql query it will provide a list of parameters to bind with.
+     *                      If provided, should match the number of sql queries.</p>
+     * @param asTransaction To execute query without impacting session cookie.
+     * @param vtSession     Session to be used with the call.
+     * @return SQL Future with List of Cursors
+     * @throws SQLException If anything fails on query execution.
+     */
+    public SQLFuture<List<CursorWithError>> executeBatchWithSession(Context ctx, List<String> queryList, @Nullable List<Map<String, ?>> bindVarsList, boolean asTransaction, final VTSession vtSession) throws SQLException {
         synchronized (this) {
             checkCallIsAllowed("executeBatch");
             List<Query.BoundQuery> queries = new ArrayList<>();
@@ -205,7 +251,7 @@ public final class VTGateConnection implements Closeable {
             Vtgate.ExecuteBatchRequest.Builder requestBuilder =
                     Vtgate.ExecuteBatchRequest.newBuilder()
                             .addAllQueries(checkNotNull(queries))
-                            .setSession(session)
+                            .setSession(vtSession.getSession())
                             .setAsTransaction(asTransaction);
 
             if (ctx.getCallerId() != null) {
@@ -217,7 +263,7 @@ public final class VTGateConnection implements Closeable {
                             new AsyncFunction<Vtgate.ExecuteBatchResponse, List<CursorWithError>>() {
                                 @Override
                                 public ListenableFuture<List<CursorWithError>> apply(Vtgate.ExecuteBatchResponse response) throws Exception {
-                                    setSession(response.getSession());
+                                    vtSession.setSession(response.getSession());
                                     Proto.checkError(response.getError());
                                     return Futures.immediateFuture(
                                             Proto.fromQueryResponsesToCursorList(response.getResultsList()));
@@ -238,10 +284,23 @@ public final class VTGateConnection implements Closeable {
      * @throws SQLException Returns SQLException if there is any failure on VTGate.
      */
     public Cursor streamExecute(Context ctx, String query, @Nullable Map<String, ?> bindVars) throws SQLException {
+        return this.streamExecuteWithSession(ctx, query, bindVars, this.globalSession);
+    }
+
+    /**
+     *
+     * @param ctx      Context on user and execution deadline if any.
+     * @param query    Sql Query to be executed.
+     * @param bindVars Parameters to bind with sql.
+     * @param vtSession
+     * @return
+     * @throws SQLException
+     */
+    public Cursor streamExecuteWithSession(Context ctx, String query, @Nullable Map<String, ?> bindVars, VTSession vtSession) throws SQLException {
         StreamExecuteRequest.Builder requestBuilder =
                 StreamExecuteRequest.newBuilder()
                         .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
-                        .setSession(session);
+                        .setSession(vtSession.getSession());
 
         if (ctx.getCallerId() != null) {
             requestBuilder.setCallerId(ctx.getCallerId());
@@ -249,7 +308,6 @@ public final class VTGateConnection implements Closeable {
 
         return new StreamCursor(client.streamExecute(ctx, requestBuilder.build()));
     }
-
     /**
      * This method splits the query into small parts based on the splitColumn and Algorithm type provided.
      *
@@ -313,17 +371,6 @@ public final class VTGateConnection implements Closeable {
             throw new IllegalStateException("Can't call " + call
                     + "() on a VTGateTx instance until the last asynchronous call is done.");
         }
-    }
-
-    /**
-     * This method set the session cookie returned from VTGate.
-     * <p>
-     * <p>This method is not synchronized as the callee function is synchronized.</p>
-     *
-     * @param session Updated session to be set.
-     */
-    private void setSession(Session session) {
-        this.session = session;
     }
 
 }

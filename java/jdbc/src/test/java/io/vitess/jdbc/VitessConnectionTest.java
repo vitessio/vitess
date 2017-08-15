@@ -174,10 +174,6 @@ public class VitessConnectionTest extends BaseTest {
     @Test public void testClosed() throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
         vitessConnection.setAutoCommit(false);
-        VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
-        vitessConnection.setVtGateTx(mockVtGateTx);
-        SQLFuture<Void> v = new SQLFuture<>(Futures.<Void>immediateFuture(null));
-        PowerMockito.when(mockVtGateTx.rollback(Matchers.any(Context.class))).thenReturn(v);
         vitessConnection.close();
         Assert.assertEquals(true, vitessConnection.isClosed());
     }
@@ -185,10 +181,6 @@ public class VitessConnectionTest extends BaseTest {
     @Test(expected = SQLException.class) public void testClosedForException() throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
         vitessConnection.setAutoCommit(false);
-        VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
-        vitessConnection.setVtGateTx(mockVtGateTx);
-        PowerMockito.when(mockVtGateTx.rollback(Matchers.any(Context.class)))
-            .thenThrow(new SQLException());
         try {
             vitessConnection.rollback();
         } catch (SQLException e) {

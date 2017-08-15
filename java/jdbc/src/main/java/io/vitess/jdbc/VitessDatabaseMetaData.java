@@ -76,7 +76,7 @@ public abstract class VitessDatabaseMetaData implements DatabaseMetaData {
     }
 
     public String getDatabaseProductVersion() throws SQLException {
-        return this.connection.getDbProperties().getProductversion();
+        return this.connection.getDbProperties().getProductVersion();
     }
 
     public String getDriverVersion() throws SQLException {
