@@ -50,6 +50,9 @@ func main() {
 	// Init the vtctld core
 	vtctld.InitVtctld(ts)
 
+	// Register http debug/health
+	vtctld.RegisterDebugHealthHandler(ts)
+
 	// Start schema manager service.
 	initSchema()
 
