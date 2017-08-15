@@ -89,6 +89,13 @@ func main() {
 		log.Warning(err)
 	}
 
+	if *tableACLConfig != "" {
+		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
+		tableacl.Register("simpleacl", &simpleacl.Factory{})
+	} else if *enforceTableACLConfig {
+		log.Exit("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
+	}
+
 	// creates and registers the query service
 	ts := topo.Open()
 	qsc := tabletserver.NewServer(ts, *tabletAlias)
@@ -102,12 +109,6 @@ func main() {
 		qsc.StopService()
 	})
 
-	if *tableACLConfig != "" {
-		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
-		tableacl.Register("simpleacl", &simpleacl.Factory{})
-	} else if *enforceTableACLConfig {
-		log.Exit("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
-	}
 	// tabletacl.Init loads ACL from file if *tableACLConfig is not empty
 	err = tableacl.Init(
 		*tableACLConfig,
