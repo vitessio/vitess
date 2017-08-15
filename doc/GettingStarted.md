@@ -289,6 +289,12 @@ simulate a small Vitess cluster by launching many servers on the local
 machine. To do so, they require a lot of resources; a minimum of 8GB RAM
 and SSD is recommended to run the tests.
 
+Some tests require extra packages. For example, on Ubuntu:
+
+``` sh
+$ sudo apt-get install chromium-browser mvn xvfb
+```
+
 If you want only to check that Vitess is working in your environment,
 you can run a lighter set of tests:
 
