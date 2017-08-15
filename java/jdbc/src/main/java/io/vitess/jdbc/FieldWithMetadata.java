@@ -349,7 +349,7 @@ public class FieldWithMetadata {
 
         // Detect CHAR(n) CHARACTER SET BINARY which is a synonym for fixed-length binary types
         if (this.collationIndex == CharsetMapping.MYSQL_COLLATION_INDEX_binary && isBinary()
-            && (this.javaType == Types.CHAR || this.javaType == Types.VARCHAR)) {
+            && (this.vitessType == Query.Type.CHAR || this.vitessType == Query.Type.VARCHAR)) {
             // Okay, queries resolved by temp tables also have this 'signature', check for that
             return !isImplicitTemporaryTable();
         }
