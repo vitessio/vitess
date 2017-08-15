@@ -23,7 +23,6 @@ package mysqlctl
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -32,6 +31,7 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/netutil"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/hook"
 )
@@ -104,7 +104,7 @@ func (mysqld *Mysqld) GetMysqlPort() (int32, error) {
 	if len(qr.Rows) != 1 {
 		return 0, errors.New("no port variable in mysql")
 	}
-	utemp, err := strconv.ParseUint(qr.Rows[0][1].String(), 10, 16)
+	utemp, err := sqltypes.ToUint64(qr.Rows[0][1])
 	if err != nil {
 		return 0, err
 	}
@@ -120,7 +120,7 @@ func (mysqld *Mysqld) IsReadOnly() (bool, error) {
 	if len(qr.Rows) != 1 {
 		return true, errors.New("no read_only variable in mysql")
 	}
-	if qr.Rows[0][1].String() == "ON" {
+	if qr.Rows[0][1].ToString() == "ON" {
 		return true, nil
 	}
 	return false, nil
@@ -167,7 +167,7 @@ func (mysqld *Mysqld) WaitMasterPos(ctx context.Context, targetPos mysql.Positio
 	if result.IsNull() {
 		return fmt.Errorf("WaitUntilPositionCommand(%v) failed: gtid_mode is OFF", query)
 	}
-	if result.String() == "-1" {
+	if result.ToString() == "-1" {
 		return fmt.Errorf("timed out waiting for position %v", targetPos)
 	}
 	return nil
@@ -275,8 +275,8 @@ func FindSlaves(mysqld MysqlDaemon) ([]string, error) {
 	addrs := make([]string, 0, 32)
 	for _, row := range qr.Rows {
 		// Check for prefix, since it could be "Binlog Dump GTID".
-		if strings.HasPrefix(row[colCommand].String(), binlogDumpCommand) {
-			host := row[colClientAddr].String()
+		if strings.HasPrefix(row[colCommand].ToString(), binlogDumpCommand) {
+			host := row[colClientAddr].ToString()
 			if host == "localhost" {
 				// If we have a local binlog streamer, it will
 				// show up as being connected
@@ -318,7 +318,7 @@ func WaitBlpPosition(ctx context.Context, mysqld MysqlDaemon, sql string, replic
 		}
 		var pos mysql.Position
 		if !qr.Rows[0][0].IsNull() {
-			pos, err = mysql.DecodePosition(qr.Rows[0][0].String())
+			pos, err = mysql.DecodePosition(qr.Rows[0][0].ToString())
 			if err != nil {
 				return err
 			}
@@ -424,7 +424,7 @@ func (mysqld *Mysqld) SemiSyncSlaveStatus() (bool, error) {
 	if len(qr.Rows) != 1 {
 		return false, errors.New("no rpl_semi_sync_slave_status variable in mysql")
 	}
-	if qr.Rows[0][1].String() == "ON" {
+	if qr.Rows[0][1].ToString() == "ON" {
 		return true, nil
 	}
 	return false, nil

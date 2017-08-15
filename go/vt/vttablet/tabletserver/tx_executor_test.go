@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -342,9 +341,9 @@ func TestExecutorReadTransaction(t *testing.T) {
 			{Type: sqltypes.Int64},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("aa")),
-			sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_PREPARE)))),
-			sqltypes.MakeString([]byte("1")),
+			sqltypes.NewVarBinary("aa"),
+			sqltypes.NewInt64(int64(querypb.TransactionState_PREPARE)),
+			sqltypes.NewVarBinary("1"),
 		}},
 	}
 	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
@@ -354,11 +353,11 @@ func TestExecutorReadTransaction(t *testing.T) {
 			{Type: sqltypes.VarChar},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("test1")),
-			sqltypes.MakeString([]byte("0")),
+			sqltypes.NewVarBinary("test1"),
+			sqltypes.NewVarBinary("0"),
 		}, {
-			sqltypes.MakeString([]byte("test2")),
-			sqltypes.MakeString([]byte("1")),
+			sqltypes.NewVarBinary("test2"),
+			sqltypes.NewVarBinary("1"),
 		}},
 	})
 	got, err = txe.ReadTransaction("aa")
@@ -390,9 +389,9 @@ func TestExecutorReadTransaction(t *testing.T) {
 			{Type: sqltypes.Int64},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("aa")),
-			sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_COMMIT)))),
-			sqltypes.MakeString([]byte("1")),
+			sqltypes.NewVarBinary("aa"),
+			sqltypes.NewInt64(int64(querypb.TransactionState_COMMIT)),
+			sqltypes.NewVarBinary("1"),
 		}},
 	}
 	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
@@ -412,9 +411,9 @@ func TestExecutorReadTransaction(t *testing.T) {
 			{Type: sqltypes.Int64},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("aa")),
-			sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_ROLLBACK)))),
-			sqltypes.MakeString([]byte("1")),
+			sqltypes.NewVarBinary("aa"),
+			sqltypes.NewInt64(int64(querypb.TransactionState_ROLLBACK)),
+			sqltypes.NewVarBinary("1"),
 		}},
 	}
 	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
@@ -442,11 +441,11 @@ func TestExecutorReadAllTransactions(t *testing.T) {
 			{Type: sqltypes.VarChar},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("dtid0")),
-			sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_PREPARE)))),
-			sqltypes.MakeString([]byte("1")),
-			sqltypes.MakeString([]byte("ks01")),
-			sqltypes.MakeString([]byte("shard01")),
+			sqltypes.NewVarBinary("dtid0"),
+			sqltypes.NewInt64(int64(querypb.TransactionState_PREPARE)),
+			sqltypes.NewVarBinary("1"),
+			sqltypes.NewVarBinary("ks01"),
+			sqltypes.NewVarBinary("shard01"),
 		}},
 	})
 	got, _, _, err := txe.ReadTwopcInflight()
@@ -502,8 +501,8 @@ func TestExecutorResolveTransaction(t *testing.T) {
 				{Type: sqltypes.Int64},
 			},
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeString([]byte(want)),
-				sqltypes.MakeString([]byte("1")),
+				sqltypes.NewVarBinary(want),
+				sqltypes.NewVarBinary("1"),
 			}},
 		})
 	got := <-dtidCh

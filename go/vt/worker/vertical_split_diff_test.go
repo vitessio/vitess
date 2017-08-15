@@ -78,8 +78,8 @@ func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *q
 		if err := callback(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
 				{
-					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
-					sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", i))),
+					sqltypes.NewInt64(int64(i)),
+					sqltypes.NewVarBinary(fmt.Sprintf("Text for %v", i)),
 				},
 			},
 		}); err != nil {

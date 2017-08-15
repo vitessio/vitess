@@ -50,10 +50,10 @@ func (vind *Hash) Cost() int {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (vind *Hash) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
+func (vind *Hash) Map(_ VCursor, ids []sqltypes.Value) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
-		num, err := sqltypes.ConvertToUint64(id)
+		num, err := sqltypes.ToUint64(id)
 		if err != nil {
 			return nil, fmt.Errorf("hash.Map: %v", err)
 		}
@@ -63,12 +63,12 @@ func (vind *Hash) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *Hash) Verify(_ VCursor, ids []interface{}, ksids [][]byte) (bool, error) {
+func (vind *Hash) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
 	if len(ids) != len(ksids) {
 		return false, fmt.Errorf("hash.Verify: length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
 	}
 	for rowNum := range ids {
-		num, err := sqltypes.ConvertToUint64(ids[rowNum])
+		num, err := sqltypes.ToUint64(ids[rowNum])
 		if err != nil {
 			return false, fmt.Errorf("hash.Verify: %v", err)
 		}
@@ -80,14 +80,14 @@ func (vind *Hash) Verify(_ VCursor, ids []interface{}, ksids [][]byte) (bool, er
 }
 
 // ReverseMap returns the ids from ksids.
-func (vind *Hash) ReverseMap(_ VCursor, ksids [][]byte) ([]interface{}, error) {
-	reverseIds := make([]interface{}, len(ksids))
-	var err error
-	for rownum, keyspaceID := range ksids {
-		reverseIds[rownum], err = vunhash(keyspaceID)
+func (vind *Hash) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error) {
+	reverseIds := make([]sqltypes.Value, 0, len(ksids))
+	for _, keyspaceID := range ksids {
+		val, err := vunhash(keyspaceID)
 		if err != nil {
 			return reverseIds, err
 		}
+		reverseIds = append(reverseIds, sqltypes.NewUint64(val))
 	}
 	return reverseIds, nil
 }

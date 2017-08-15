@@ -567,7 +567,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 
 			for _, c := range chunks {
 				sourceWaitGroup.Add(1)
-				go func(td *tabletmanagerdatapb.TableDefinition, tableIndex int, chunk chunk) {
+				go func(td *tabletmanagerdatapb.TableDefinition, shardIndex, tableIndex int, chunk chunk) {
 					defer sourceWaitGroup.Done()
 
 					sema.Acquire()
@@ -594,7 +594,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 						processError("processData failed: %v", err)
 					}
 					scw.tableStatusList.threadDone(tableIndex)
-				}(td, tableIndex, c)
+				}(td, shardIndex, tableIndex, c)
 			}
 		}
 	}

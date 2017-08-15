@@ -39,6 +39,7 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 )
 
 var (
@@ -46,6 +47,7 @@ var (
 	tabletFilters       flagutil.StringListValue
 	refreshInterval     = flag.Duration("tablet_refresh_interval", 1*time.Minute, "tablet refresh interval")
 	topoReadConcurrency = flag.Int("topo_read_concurrency", 32, "concurrent topo reads")
+	allowedTabletTypes  []topodatapb.TabletType
 )
 
 const (
@@ -54,6 +56,7 @@ const (
 
 func init() {
 	flag.Var(&tabletFilters, "tablet_filters", "Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch")
+	topoproto.TabletTypeListVar(&allowedTabletTypes, "allowed_tablet_types", "Specifies the tablet types this vtgate is allowed to route queries to")
 	RegisterCreator(gatewayImplementationDiscovery, createDiscoveryGateway)
 }
 
@@ -177,6 +180,19 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 	var tabletLastUsed *topodatapb.Tablet
 	var err error
 	invalidTablets := make(map[string]bool)
+
+	if len(allowedTabletTypes) > 0 {
+		var match bool
+		for _, allowed := range allowedTabletTypes {
+			if allowed == target.TabletType {
+				match = true
+				break
+			}
+		}
+		if !match {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requested tablet type %v is not part of the allowed tablet types for this vtgate: %+v", target.TabletType.String(), allowedTabletTypes)
+		}
+	}
 
 	bufferedOnce := false
 	for i := 0; i < dg.retryCount+1; i++ {

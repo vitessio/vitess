@@ -18,10 +18,11 @@ package tabletserver
 
 import (
 	"fmt"
-	"strconv"
+	"io"
 	"strings"
 	"time"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/hack"
@@ -176,6 +177,35 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 	defer qre.tsv.qe.streamQList.Remove(qd)
 
 	return qre.streamFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, callback)
+}
+
+// MessageStream streams messages from a message table.
+func (qre *QueryExecutor) MessageStream(callback func(*sqltypes.Result) error) error {
+	qre.logStats.OriginalSQL = qre.query
+	qre.logStats.PlanType = qre.plan.PlanID.String()
+
+	defer func(start time.Time) {
+		tabletenv.QueryStats.Record(qre.plan.PlanID.String(), start)
+		tabletenv.RecordUserQuery(qre.ctx, qre.plan.TableName(), "MessageStream", int64(time.Now().Sub(start)))
+	}(time.Now())
+
+	if err := qre.checkPermissions(); err != nil {
+		return err
+	}
+
+	done, err := qre.tsv.messager.Subscribe(qre.plan.TableName().String(), func(r *sqltypes.Result) error {
+		select {
+		case <-qre.ctx.Done():
+			return io.EOF
+		default:
+		}
+		return callback(r)
+	})
+	if err != nil {
+		return err
+	}
+	<-done
+	return nil
 }
 
 func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error) {
@@ -370,7 +400,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if len(qr.Rows) != 1 {
 				return nil, fmt.Errorf("unexpected rows from reading sequence %s (possible mis-route): %d", tableName, len(qr.Rows))
 			}
-			nextID, err := qr.Rows[0][0].ParseInt64()
+			nextID, err := sqltypes.ToInt64(qr.Rows[0][0])
 			if err != nil {
 				return nil, fmt.Errorf("error loading sequence %s: %v", tableName, err)
 			}
@@ -378,7 +408,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if t.SequenceInfo.NextVal == 0 {
 				t.SequenceInfo.NextVal = nextID
 			}
-			cache, err := qr.Rows[0][1].ParseInt64()
+			cache, err := sqltypes.ToInt64(qr.Rows[0][1])
 			if err != nil {
 				return nil, fmt.Errorf("error loading sequence %s: %v", tableName, err)
 			}
@@ -407,7 +437,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	return &sqltypes.Result{
 		Fields: sequenceFields,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, strconv.AppendInt(nil, ret, 10)),
+			sqltypes.NewInt64(ret),
 		}},
 		RowsAffected: 1,
 	}, nil
@@ -631,7 +661,7 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 	if qre.plan.Table.Type == schema.Message {
 		ids := conn.ChangedMessages[qre.plan.Table.Name.String()]
 		for _, pkrow := range pkRows {
-			ids = append(ids, pkrow[qre.plan.Table.MessageInfo.IDPKIndex].String())
+			ids = append(ids, pkrow[qre.plan.Table.MessageInfo.IDPKIndex].ToString())
 		}
 		conn.ChangedMessages[qre.plan.Table.Name.String()] = ids
 	}
@@ -748,7 +778,14 @@ type poolConn interface {
 
 func (qre *QueryExecutor) execSQL(conn poolConn, sql string, wantfields bool) (*sqltypes.Result, error) {
 	defer qre.logStats.AddRewrittenSQL(sql, time.Now())
-	return conn.Exec(qre.ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
+	res, err := conn.Exec(qre.ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
+	warnThreshold := qre.tsv.qe.warnResultSize.Get()
+	if res != nil && warnThreshold > 0 && int64(len(res.Rows)) > warnThreshold {
+		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
+		tabletenv.Warnings.Add("ResultsExceeded", 1)
+		log.Warningf("CallerID: %s Results returned (%v) exceeds warning threshold (%v): %q", callerID.Username, len(res.Rows), warnThreshold, sql)
+	}
+	return res, err
 }
 
 func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callback func(*sqltypes.Result) error) error {

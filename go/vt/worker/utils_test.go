@@ -18,7 +18,6 @@ package worker
 
 import (
 	"fmt"
-	"strconv"
 	"testing"
 
 	"golang.org/x/net/context"
@@ -93,8 +92,8 @@ func sourceRdonlyFakeDB(t *testing.T, dbName, tableName string, min, max int) *f
 			},
 			Rows: [][]sqltypes.Value{
 				{
-					sqltypes.MakeString([]byte(strconv.Itoa(min))),
-					sqltypes.MakeString([]byte(strconv.Itoa(max))),
+					sqltypes.NewInt64(int64(min)),
+					sqltypes.NewInt64(int64(max)),
 				},
 			},
 		},

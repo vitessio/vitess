@@ -217,11 +217,31 @@
 
 # subqueries in update
 "update user set col = (select id from unsharded)"
-"unsupported: subqueries in DML"
+"unsupported: subqueries in sharded DML"
+
+# sharded subqueries in unsharded update
+"update unsharded set col = (select id from user)"
+"unsupported: sharded subqueries in DML"
+
+# sharded join unsharded subqueries in unsharded update
+"update unsharded set col = (select id from unsharded join user on unsharded.id = user.id)"
+"unsupported: sharded subqueries in DML"
 
 # subqueries in delete
 "delete from user where col = (select id from unsharded)"
-"unsupported: subqueries in DML"
+"unsupported: subqueries in sharded DML"
+
+# sharded subqueries in unsharded delete
+"delete from unsharded where col = (select id from user)"
+"unsupported: sharded subqueries in DML"
+
+# sharded subquery in unsharded subquery in unsharded delete
+"delete from unsharded where col = (select id from unsharded where id = (select id from user))"
+"unsupported: sharded subqueries in DML"
+
+# sharded join unsharded subqueries in unsharded delete
+"delete from unsharded where col = (select id from unsharded join user on unsharded.id = user.id)"
+"unsupported: sharded subqueries in DML"
 
 # update with no where clause
 "update user set val = 1"
@@ -285,7 +305,7 @@
 
 # cross-shard update tables
 "update (select id from user) as u set id = 4"
-"unsupported: subqueries in DML"
+"unsupported: subqueries in sharded DML"
 
 # join in update tables
 "update user join user_extra on user.id = user_extra.id set user.name = 'foo'"
@@ -295,25 +315,21 @@
 "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id"
 "unsupported: multi-table update statement in sharded keyspace"
 
-# unsharded insert from union
-"insert into unsharded select 1 from dual union select 1 from dual"
-"unsupported: union in insert"
-
 # unsharded insert with cross-shard join"
 "insert into unsharded select u.col from user u join user u1"
-"unsupported: cross-shard join in insert"
+"unsupported: sharded subquery in insert values"
 
 # unsharded insert with mismatched keyspaces"
 "insert into unsharded select col from user where id=1"
-"unsupported: cross-keyspace select in insert"
+"unsupported: sharded subquery in insert values"
 
 # unsharded insert, unqualified names and auto-inc combined
 "insert into unsharded_auto select col from unsharded"
 "unsupported: auto-inc and select in insert"
 
-# unsharded inssert subquery in insert value
-"insert into unsharded values((select 1 from dual), 1)"
-"unsupported: subquery in insert values"
+# unsharded insert, with sharded subquery in insert value
+"insert into unsharded values((select 1 from user), 1)"
+"unsupported: sharded subquery in insert values"
 
 # unsharded insert, no col list with auto-inc
 "insert into unsharded_auto values(1,1)"

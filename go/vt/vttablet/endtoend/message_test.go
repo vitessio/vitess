@@ -20,7 +20,6 @@ import (
 	"io"
 	"reflect"
 	"runtime"
-	"strconv"
 	"testing"
 	"time"
 
@@ -51,6 +50,13 @@ func TestMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.Execute("drop table vitess_message", nil)
+
+	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Acked"), 0; got != want {
+		t.Errorf("Messages/vitess_message.Acked: %d, want %d", got, want)
+	}
+	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Queued"), 0; got != want {
+		t.Errorf("Messages/vitess_message.Queued: %d, want %d", got, want)
+	}
 
 	// Start goroutine to consume message stream.
 	go func() {
@@ -111,12 +117,15 @@ func TestMessage(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Queued"), 1; got != want {
+		t.Errorf("Messages/vitess_message.Queued: %d, want %d", got, want)
+	}
 
 	// Consume first message.
 	start := time.Now().UnixNano()
 	got = <-ch
 	// Check time_scheduled separately.
-	scheduled, err := got.Rows[0][1].ParseInt64()
+	scheduled, err := sqltypes.ToInt64(got.Rows[0][1])
 	if err != nil {
 		t.Error(err)
 	}
@@ -125,9 +134,9 @@ func TestMessage(t *testing.T) {
 	}
 	want = &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+			sqltypes.NewInt64(1),
 			got.Rows[0][1],
-			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("hello world")),
+			sqltypes.NewVarChar("hello world"),
 		}},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -151,6 +160,9 @@ func TestMessage(t *testing.T) {
 	default:
 		t.Errorf("epoch: %d, must be 0 or 1", epoch)
 	}
+	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Delayed"), 0; got != want {
+		t.Errorf("Messages/vitess_message.Delayed: %d, want %d", got, want)
+	}
 
 	// Consume the resend.
 	<-ch
@@ -172,6 +184,9 @@ func TestMessage(t *testing.T) {
 	default:
 		t.Errorf("epoch: %d, must be 1 or 2", epoch)
 	}
+	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Delayed"), 1; got != want {
+		t.Errorf("Messages/vitess_message.Delayed: %d, want %d", got, want)
+	}
 
 	// Ack the message.
 	count, err := client.MessageAck("vitess_message", []string{"1"})
@@ -190,6 +205,9 @@ func TestMessage(t *testing.T) {
 	if !(end-1e9 < ack && ack < end) {
 		t.Errorf("ack: %d. must be within 1s of end: %d", ack/1e9, end/1e9)
 	}
+	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Acked"), 1; got != want {
+		t.Errorf("Messages/vitess_message.Acked: %d, want %d", got, want)
+	}
 
 	// Within 3+1 seconds, the row should be deleted.
 	time.Sleep(4 * time.Second)
@@ -199,6 +217,20 @@ func TestMessage(t *testing.T) {
 	}
 	if qr.RowsAffected != 0 {
 		t.Error("The row has not been purged yet")
+	}
+	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Purged"), 1; got != want {
+		t.Errorf("Messages/vitess_message.Purged: %d, want %d", got, want)
+	}
+
+	// Verify final counts.
+	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Queued"), 1; got != want {
+		t.Errorf("Messages/vitess_message.Queued: %d, want %d", got, want)
+	}
+	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Acked"), 1; got != want {
+		t.Errorf("Messages/vitess_message.Acked: %d, want %d", got, want)
+	}
+	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Delayed"), 1; got != want {
+		t.Errorf("Messages/vitess_message.Delayed: %d, want %d", got, want)
 	}
 }
 
@@ -291,10 +323,10 @@ func TestThreeColMessage(t *testing.T) {
 	got = <-ch
 	want = &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+			sqltypes.NewInt64(1),
 			got.Rows[0][1],
-			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("hello world")),
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
+			sqltypes.NewVarChar("hello world"),
+			sqltypes.NewInt64(3),
 		}},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -315,7 +347,7 @@ func getTimeEpoch(qr *sqltypes.Result) (int64, int64) {
 	if len(qr.Rows) != 1 {
 		return 0, 0
 	}
-	t, _ := strconv.Atoi(qr.Rows[0][0].String())
-	e, _ := strconv.Atoi(qr.Rows[0][1].String())
-	return int64(t), int64(e)
+	t, _ := sqltypes.ToInt64(qr.Rows[0][0])
+	e, _ := sqltypes.ToInt64(qr.Rows[0][1])
+	return t, e
 }

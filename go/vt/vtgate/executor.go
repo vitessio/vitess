@@ -49,7 +49,14 @@ import (
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
-var errNoKeyspace = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspace in database name specified. Supported database name format: keyspace[:shard][@type]")
+var (
+	errNoKeyspace     = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspace in database name specified. Supported database name format: keyspace[:shard][@type]")
+	defaultTabletType topodatapb.TabletType
+)
+
+func init() {
+	topoproto.TabletTypeVar(&defaultTabletType, "default_tablet_type", topodatapb.TabletType_MASTER, "The default tablet type to set for queries, when one is not explicitly selected")
+}
 
 // Executor is the engine that executes queries by utilizing
 // the abilities of the underlying vttablets.
@@ -470,15 +477,12 @@ func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []
 		// We always use the (unique) primary vindex. The ID must be the
 		// primary vindex for message tables.
 		mapper := table.ColumnVindexes[0].Vindex.(vindexes.Unique)
-		// convert []*querypb.Value to []interface{} for calling Map.
-		asInterface := make([]interface{}, 0, len(ids))
+		// convert []*querypb.Value to []sqltypes.Value for calling Map.
+		values := make([]sqltypes.Value, 0, len(ids))
 		for _, id := range ids {
-			asInterface = append(asInterface, &querypb.BindVariable{
-				Type:  id.Type,
-				Value: id.Value,
-			})
+			values = append(values, sqltypes.ProtoToValue(id))
 		}
-		ksids, err := mapper.Map(vcursor, asInterface)
+		ksids, err := mapper.Map(vcursor, values)
 		if err != nil {
 			return 0, err
 		}
@@ -639,7 +643,7 @@ func (e *Executor) VSchema() *vindexes.VSchema {
 func (e *Executor) ParseTarget(targetString string) querypb.Target {
 	// Default tablet type is master.
 	target := querypb.Target{
-		TabletType: topodatapb.TabletType_MASTER,
+		TabletType: defaultTabletType,
 	}
 	last := strings.LastIndexAny(targetString, "@")
 	if last != -1 {
@@ -766,7 +770,7 @@ func buildVarCharFields(names ...string) []*querypb.Field {
 func buildVarCharRow(values ...string) []sqltypes.Value {
 	row := make([]sqltypes.Value, len(values))
 	for i, v := range values {
-		row[i] = sqltypes.MakeTrusted(sqltypes.VarChar, []byte(v))
+		row[i] = sqltypes.NewVarChar(v)
 	}
 	return row
 }

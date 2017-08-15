@@ -18,6 +18,8 @@ package vindexes
 
 import (
 	"encoding/json"
+
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 func init() {
@@ -53,22 +55,22 @@ func (vind *LookupHash) Cost() int {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (vind *LookupHash) Map(vcursor VCursor, ids []interface{}) ([][][]byte, error) {
+func (vind *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([][][]byte, error) {
 	return vind.lkp.MapNonUniqueLookup(vcursor, ids)
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *LookupHash) Verify(vcursor VCursor, ids []interface{}, ksids [][]byte) (bool, error) {
+func (vind *LookupHash) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
 	return vind.lkp.Verify(vcursor, ids, ksids)
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (vind *LookupHash) Create(vcursor VCursor, id []interface{}, ksids [][]byte) error {
+func (vind *LookupHash) Create(vcursor VCursor, id []sqltypes.Value, ksids [][]byte) error {
 	return vind.lkp.Create(vcursor, id, ksids)
 }
 
 // Delete deletes the entry from the vindex table.
-func (vind *LookupHash) Delete(vcursor VCursor, ids []interface{}, ksid []byte) error {
+func (vind *LookupHash) Delete(vcursor VCursor, ids []sqltypes.Value, ksid []byte) error {
 	return vind.lkp.Delete(vcursor, ids, ksid)
 }
 
@@ -105,22 +107,22 @@ func (vind *LookupHashUnique) Cost() int {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (vind *LookupHashUnique) Map(vcursor VCursor, ids []interface{}) ([][]byte, error) {
+func (vind *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][]byte, error) {
 	return vind.lkp.MapUniqueLookup(vcursor, ids)
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *LookupHashUnique) Verify(vcursor VCursor, ids []interface{}, ksids [][]byte) (bool, error) {
+func (vind *LookupHashUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
 	return vind.lkp.Verify(vcursor, ids, ksids)
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (vind *LookupHashUnique) Create(vcursor VCursor, id []interface{}, ksids [][]byte) error {
+func (vind *LookupHashUnique) Create(vcursor VCursor, id []sqltypes.Value, ksids [][]byte) error {
 	return vind.lkp.Create(vcursor, id, ksids)
 }
 
 // Delete deletes the entry from the vindex table.
-func (vind *LookupHashUnique) Delete(vcursor VCursor, ids []interface{}, ksid []byte) error {
+func (vind *LookupHashUnique) Delete(vcursor VCursor, ids []sqltypes.Value, ksid []byte) error {
 	return vind.lkp.Delete(vcursor, ids, ksid)
 }
 

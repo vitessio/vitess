@@ -100,13 +100,6 @@ func Append(buf *bytes.Buffer, node SQLNode) {
 	node.Format(tbuf)
 }
 
-// GenerateParsedQuery returns a ParsedQuery of the ast.
-func GenerateParsedQuery(node SQLNode) *ParsedQuery {
-	buf := NewTrackedBuffer(nil)
-	buf.Myprintf("%v", node)
-	return buf.ParsedQuery()
-}
-
 // Statement represents a statement.
 type Statement interface {
 	iStatement()
@@ -1064,6 +1057,7 @@ func (*ConvertExpr) iExpr()      {}
 func (*ConvertUsingExpr) iExpr() {}
 func (*MatchExpr) iExpr()        {}
 func (*GroupConcatExpr) iExpr()  {}
+func (*Default) iExpr()          {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.
@@ -1362,8 +1356,7 @@ func NewValArg(in []byte) *SQLVal {
 func (node *SQLVal) Format(buf *TrackedBuffer) {
 	switch node.Type {
 	case StrVal:
-		s := sqltypes.MakeString([]byte(node.Val))
-		s.EncodeSQL(buf)
+		sqltypes.MakeTrusted(sqltypes.VarBinary, node.Val).EncodeSQL(buf)
 	case IntVal, FloatVal, HexNum:
 		buf.Myprintf("%s", []byte(node.Val))
 	case HexVal:
@@ -1902,6 +1895,24 @@ func (node *CaseExpr) WalkSubtree(visit Visit) error {
 	if err := Walk(visit, node.Else); err != nil {
 		return err
 	}
+	return nil
+}
+
+// Default represents a DEFAULT expression.
+type Default struct {
+	ColName string
+}
+
+// Format formats the node.
+func (node *Default) Format(buf *TrackedBuffer) {
+	buf.Myprintf("default")
+	if node.ColName != "" {
+		buf.Myprintf("(%s)", node.ColName)
+	}
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *Default) WalkSubtree(visit Visit) error {
 	return nil
 }
 

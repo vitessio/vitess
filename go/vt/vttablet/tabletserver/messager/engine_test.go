@@ -109,8 +109,8 @@ func TestSubscribe(t *testing.T) {
 	<-ch1
 	engine.Subscribe("t2", f2)
 	<-ch2
-	engine.managers["t1"].Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("1"))}})
-	engine.managers["t2"].Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("2"))}})
+	engine.managers["t1"].Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("1")}})
+	engine.managers["t2"].Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("2")}})
 	<-ch1
 	<-ch2
 
@@ -137,11 +137,11 @@ func TestLockDB(t *testing.T) {
 	<-ch1
 
 	row1 := &MessageRow{
-		Row: []sqltypes.Value{sqltypes.MakeString([]byte("1"))},
+		Row: []sqltypes.Value{sqltypes.NewVarBinary("1")},
 	}
 	row2 := &MessageRow{
 		TimeNext: time.Now().UnixNano() + int64(10*time.Minute),
-		Row:      []sqltypes.Value{sqltypes.MakeString([]byte("2"))},
+		Row:      []sqltypes.Value{sqltypes.NewVarBinary("2")},
 	}
 	newMessages := map[string][]*MessageRow{"t1": {row1, row2}, "t3": {row1}}
 	unlock := engine.LockDB(newMessages, nil)
@@ -165,7 +165,7 @@ func TestLockDB(t *testing.T) {
 	})
 	<-ch2
 	mm := engine.managers["t2"]
-	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("1"))}})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("1")}})
 	// Make sure the message is enqueued.
 	for {
 		runtime.Gosched()
@@ -175,7 +175,7 @@ func TestLockDB(t *testing.T) {
 		}
 	}
 	// "2" will be in the cache.
-	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("2"))}})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("2")}})
 	changedMessages := map[string][]string{"t2": {"2"}, "t3": {"2"}}
 	unlock = engine.LockDB(nil, changedMessages)
 	// This should delete "2".

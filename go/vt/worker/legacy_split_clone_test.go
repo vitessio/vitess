@@ -284,9 +284,9 @@ func (sq *legacyTestQueryService) StreamExecute(ctx context.Context, target *que
 		if err := callback(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
 				{
-					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
-					sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", i))),
-					sqltypes.MakeString([]byte(fmt.Sprintf("%v", ksids[i%2]))),
+					sqltypes.NewVarBinary(fmt.Sprintf("%v", i)),
+					sqltypes.NewVarBinary(fmt.Sprintf("Text for %v", i)),
+					sqltypes.NewVarBinary(fmt.Sprintf("%v", ksids[i%2])),
 				},
 			},
 		}); err != nil {

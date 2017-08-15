@@ -321,6 +321,11 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 	usable := backupErr == nil
 
 	// Try to restart mysqld
+	err = mysqld.RefreshConfig()
+	if err != nil {
+		return usable, fmt.Errorf("can't refresh mysqld config: %v", err)
+	}
+
 	err = mysqld.Start(ctx)
 	if err != nil {
 		return usable, fmt.Errorf("can't restart mysqld: %v", err)
@@ -535,7 +540,7 @@ func checkNoDB(ctx context.Context, mysqld MysqlDaemon, dbName string) (bool, er
 	}
 
 	for _, row := range qr.Rows {
-		if row[0].String() == dbName {
+		if row[0].ToString() == dbName {
 			tableQr, err := mysqld.FetchSuperQuery(ctx, "SHOW TABLES FROM "+dbName)
 			if err != nil {
 				return false, fmt.Errorf("checkNoDB failed: %v", err)

@@ -274,6 +274,8 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* false */ 1 from t where false",
 	}, {
+		input: "select /* false on left */ 1 from t where false = 0",
+	}, {
 		input: "select /* exists */ 1 from t where exists (select 1 from t)",
 	}, {
 		input: "select /* (boolean) */ 1 from t where not (a = b)",
@@ -536,9 +538,16 @@ func TestValid(t *testing.T) {
 		input:  "insert /* set */ into a set a = 1, b = 2",
 		output: "insert /* set */ into a(a, b) values (1, 2)",
 	}, {
+		input:  "insert /* set default */ into a set a = default, b = 2",
+		output: "insert /* set default */ into a(a, b) values (default, 2)",
+	}, {
 		input: "insert /* value expression list */ into a values (a + 1, 2 * 3)",
 	}, {
+		input: "insert /* default */ into a values (default, 2 * 3)",
+	}, {
 		input: "insert /* column list */ into a(a, b) values (1, 2)",
+	}, {
+		input: "insert into a(a, b) values (1, ifnull(null, default(b)))",
 	}, {
 		input: "insert /* qualified column list */ into a(a, b) values (1, 2)",
 	}, {

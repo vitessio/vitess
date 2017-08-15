@@ -101,3 +101,15 @@ func DeleteTablet(ctx context.Context, ts topo.Server, tablet *topodatapb.Tablet
 	// then delete the tablet record
 	return ts.DeleteTablet(ctx, tablet.Alias)
 }
+
+// TabletIdent returns a concise string representation of this tablet.
+func TabletIdent(tablet *topodatapb.Tablet) string {
+	tagStr := ""
+	if tablet.Tags != nil {
+		for key, val := range tablet.Tags {
+			tagStr = tagStr + fmt.Sprintf(" %s=%s", key, val)
+		}
+	}
+
+	return fmt.Sprintf("%s-%d (%s%s)", tablet.Alias.Cell, tablet.Alias.Uid, tablet.Hostname, tagStr)
+}

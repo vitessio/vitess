@@ -934,6 +934,13 @@ func (vtg *VTGate) MessageAck(ctx context.Context, keyspace string, name string,
 	ltt := topoproto.TabletTypeLString(topodatapb.TabletType_MASTER)
 	statsKey := []string{"MessageAck", keyspace, ltt}
 	defer vtg.timings.Record(statsKey, startTime)
+
+	for _, id := range ids {
+		if _, err := sqltypes.NewValue(id.Type, id.Value); err != nil {
+			return 0, formatError(err)
+		}
+	}
+
 	count, err := vtg.executor.MessageAck(ctx, keyspace, name, ids)
 	return count, formatError(err)
 }
@@ -945,6 +952,13 @@ func (vtg *VTGate) MessageAckKeyspaceIds(ctx context.Context, keyspace string, n
 	ltt := topoproto.TabletTypeLString(topodatapb.TabletType_MASTER)
 	statsKey := []string{"MessageAckKeyspaceIds", keyspace, ltt}
 	defer vtg.timings.Record(statsKey, startTime)
+
+	for _, idKeyspaceID := range idKeyspaceIDs {
+		if _, err := sqltypes.NewValue(idKeyspaceID.Id.Type, idKeyspaceID.Id.Value); err != nil {
+			return 0, formatError(err)
+		}
+	}
+
 	count, err := vtg.resolver.MessageAckKeyspaceIds(ctx, keyspace, name, idKeyspaceIDs)
 	return count, formatError(err)
 }
@@ -1023,14 +1037,14 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]int
 	case vtrpcpb.Code_UNAVAILABLE:
 		logger.Infof("%v, request: %+v", err, request)
 	}
-	return vterrors.Errorf(vterrors.Code(err), "vtgate: %s: %v", servenv.ListeningURL.String(), err)
+	return vterrors.Wrapf(err, "vtgate: %s", servenv.ListeningURL.String())
 }
 
 func formatError(err error) error {
 	if err == nil {
 		return nil
 	}
-	return vterrors.Errorf(vterrors.Code(err), "vtgate: %s: %v", servenv.ListeningURL.String(), err)
+	return vterrors.Wrapf(err, "vtgate: %s", servenv.ListeningURL.String())
 }
 
 // HandlePanic recovers from panics, and logs / increment counters

@@ -542,7 +542,13 @@ func TestTLSServer(t *testing.T) {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	host := l.Addr().(*net.TCPAddr).IP.String()
+
+	// Make sure hostname is added as an entry to /etc/hosts, otherwise ssl handshake will fail
+	host, err := os.Hostname()
+	if err != nil {
+		t.Fatalf("Failed to get os Hostname: %v", err)
+	}
+
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.

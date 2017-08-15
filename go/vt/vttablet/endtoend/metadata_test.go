@@ -94,8 +94,8 @@ func TestMetadataSpecificExecOptions(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("-9223372036854775808")),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("-2147483648")),
+				sqltypes.NewInt64(-9223372036854775808),
+				sqltypes.NewInt32(-2147483648),
 			},
 		},
 	}
@@ -135,8 +135,8 @@ func TestMetadataDefaultExecOptions(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("-9223372036854775808")),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("-2147483648")),
+				sqltypes.NewInt64(-9223372036854775808),
+				sqltypes.NewInt32(-2147483648),
 			},
 		},
 	}
@@ -176,8 +176,8 @@ func TestMetadataNoExecOptions(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("-9223372036854775808")),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("-2147483648")),
+				sqltypes.NewInt64(-9223372036854775808),
+				sqltypes.NewInt32(-2147483648),
 			},
 		},
 	}

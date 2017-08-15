@@ -216,7 +216,7 @@ func ReadStartPosition(dbClient VtClient, uid uint32) (string, string, error) {
 	if qr.RowsAffected != 1 {
 		return "", "", fmt.Errorf("checkpoint information not available in db for %v", uid)
 	}
-	return qr.Rows[0][0].String(), qr.Rows[0][1].String(), nil
+	return qr.Rows[0][0].ToString(), qr.Rows[0][1].ToString(), nil
 }
 
 // readThrottlerSettings will retrieve the throttler settings for filtered
@@ -232,11 +232,11 @@ func (blp *BinlogPlayer) readThrottlerSettings() (int64, int64, error) {
 		return throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("checkpoint information not available in db for %v", blp.uid)
 	}
 
-	maxTPS, err := qr.Rows[0][0].ParseInt64()
+	maxTPS, err := sqltypes.ToInt64(qr.Rows[0][0])
 	if err != nil {
 		return throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("failed to parse max_tps column: %v", err)
 	}
-	maxReplicationLag, err := qr.Rows[0][1].ParseInt64()
+	maxReplicationLag, err := sqltypes.ToInt64(qr.Rows[0][1])
 	if err != nil {
 		return throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("failed to parse max_replication_lag column: %v", err)
 	}

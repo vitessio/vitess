@@ -43,7 +43,7 @@ func TestLogStats(t *testing.T) {
 		t.Fatalf("there is no rows in log stats, estimated size should be 0 bytes")
 	}
 
-	logStats.Rows = [][]sqltypes.Value{{sqltypes.MakeString([]byte("a"))}}
+	logStats.Rows = [][]sqltypes.Value{{sqltypes.NewVarBinary("a")}}
 	if logStats.SizeOfResponse() <= 0 {
 		t.Fatalf("log stats has some rows, should have positive response size")
 	}

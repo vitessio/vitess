@@ -83,9 +83,9 @@ func TestSplit1SplitColumn(t *testing.T) {
 	splitter := NewSplitter(splitParams,
 		&FakeSplitAlgorithm{
 			boundaries: []tuple{
-				{int64Value(1)},
-				{int64Value(10)},
-				{int64Value(50)},
+				{sqltypes.NewInt64(1)},
+				{sqltypes.NewInt64(10)},
+				{sqltypes.NewInt64(50)},
 			},
 			splitColumns: splitParams.splitColumns,
 		})
@@ -158,9 +158,9 @@ func TestSplit2SplitColumns(t *testing.T) {
 	splitter := NewSplitter(splitParams,
 		&FakeSplitAlgorithm{
 			boundaries: []tuple{
-				{int64Value(1), int64Value(2)},
-				{int64Value(1), int64Value(3)},
-				{int64Value(5), int64Value(1)},
+				{sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
+				{sqltypes.NewInt64(1), sqltypes.NewInt64(3)},
+				{sqltypes.NewInt64(5), sqltypes.NewInt64(1)},
 			},
 			splitColumns: splitParams.splitColumns,
 		})
@@ -248,14 +248,14 @@ func TestSplit3SplitColumns(t *testing.T) {
 		&FakeSplitAlgorithm{
 			boundaries: []tuple{
 				{
-					int64Value(1),
-					int64Value(2),
-					int64Value(2),
+					sqltypes.NewInt64(1),
+					sqltypes.NewInt64(2),
+					sqltypes.NewInt64(2),
 				},
 				{
-					int64Value(2),
-					int64Value(1),
-					int64Value(1),
+					sqltypes.NewInt64(2),
+					sqltypes.NewInt64(1),
+					sqltypes.NewInt64(1),
 				},
 			},
 			splitColumns: splitParams.splitColumns,
@@ -338,9 +338,9 @@ func TestSplitWithWhereClause(t *testing.T) {
 	splitter := NewSplitter(splitParams,
 		&FakeSplitAlgorithm{
 			boundaries: []tuple{
-				{int64Value(1), int64Value(2)},
-				{int64Value(1), int64Value(3)},
-				{int64Value(5), int64Value(1)},
+				{sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
+				{sqltypes.NewInt64(1), sqltypes.NewInt64(3)},
+				{sqltypes.NewInt64(5), sqltypes.NewInt64(1)},
 			},
 			splitColumns: splitParams.splitColumns,
 		})
@@ -426,9 +426,9 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 	splitter := NewSplitter(splitParams,
 		&FakeSplitAlgorithm{
 			boundaries: []tuple{
-				{int64Value(1), int64Value(2)},
-				{int64Value(1), int64Value(3)},
-				{int64Value(5), int64Value(1)},
+				{sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
+				{sqltypes.NewInt64(1), sqltypes.NewInt64(3)},
+				{sqltypes.NewInt64(5), sqltypes.NewInt64(1)},
 			},
 			splitColumns: splitParams.splitColumns,
 		})
@@ -559,7 +559,7 @@ func TestWithRealEqualSplits(t *testing.T) {
 	expectedCall1.Return(
 		&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
-				{int64Value(10), int64Value(3010)},
+				{sqltypes.NewInt64(10), sqltypes.NewInt64(3010)},
 			},
 		},
 		nil)

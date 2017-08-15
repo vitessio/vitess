@@ -20,9 +20,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vtgate/engine"
 )
 
 // splitAndExpression breaks up the Expr into AND-separated conditions
@@ -140,7 +140,60 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 	return has
 }
 
-func valEqual(a, b interface{}) bool {
+func validateSubquerySamePlan(node sqlparser.SQLNode, outer *engine.Route, vschema VSchema) bool {
+	samePlan := true
+	inSubQuery := false
+
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch nodeType := node.(type) {
+		case *sqlparser.Subquery, *sqlparser.Insert:
+			inSubQuery = true
+			return true, nil
+		case *sqlparser.Select:
+			if !inSubQuery {
+				return true, nil
+			}
+			bldr, err := processSelect(nodeType, vschema, nil)
+			if err != nil {
+				samePlan = false
+				return false, err
+			}
+			innerRoute, ok := bldr.(*route)
+			if !ok {
+				samePlan = false
+				return false, errors.New("dummy")
+			}
+			if innerRoute.ERoute.Keyspace.Name != outer.Keyspace.Name {
+				samePlan = false
+				return false, errors.New("dummy")
+			}
+		case *sqlparser.Union:
+			if !inSubQuery {
+				return true, nil
+			}
+			bldr, err := processUnion(nodeType, vschema, nil)
+			if err != nil {
+				samePlan = false
+				return false, err
+			}
+			innerRoute, ok := bldr.(*route)
+			if !ok {
+				samePlan = false
+				return false, errors.New("dummy")
+			}
+			if innerRoute.ERoute.Keyspace.Name != outer.Keyspace.Name {
+				samePlan = false
+				return false, errors.New("dummy")
+			}
+		}
+
+		return true, nil
+	}, node)
+
+	return samePlan
+}
+
+func valEqual(a, b sqlparser.Expr) bool {
 	switch a := a.(type) {
 	case *sqlparser.ColName:
 		if b, ok := b.(*sqlparser.ColName); ok {
@@ -190,33 +243,4 @@ func hexEqual(a, b *sqlparser.SQLVal) bool {
 		return bytes.Equal(v, v2)
 	}
 	return false
-}
-
-// valConvert converts an AST value to the Value field in the route.
-func valConvert(node sqlparser.Expr) (interface{}, error) {
-	switch node := node.(type) {
-	case *sqlparser.SQLVal:
-		switch node.Type {
-		case sqlparser.ValArg:
-			return string(node.Val), nil
-		case sqlparser.StrVal:
-			return []byte(node.Val), nil
-		case sqlparser.HexVal:
-			return node.HexDecode()
-		case sqlparser.IntVal:
-			val := string(node.Val)
-			signed, err := strconv.ParseInt(val, 0, 64)
-			if err == nil {
-				return signed, nil
-			}
-			unsigned, err := strconv.ParseUint(val, 0, 64)
-			if err == nil {
-				return unsigned, nil
-			}
-			return nil, err
-		}
-	case *sqlparser.NullVal:
-		return nil, nil
-	}
-	return nil, fmt.Errorf("%v is not a value", sqlparser.String(node))
 }

@@ -62,7 +62,7 @@ func init() {
 }
 `
 	hcVTGateTest = discovery.NewFakeHealthCheck()
-	*transactionMode = "multi"
+	*transactionMode = "MULTI"
 	Init(context.Background(), hcVTGateTest, topo.Server{}, new(sandboxTopo), "aa", 10, nil)
 
 	*mysqlServerPort = 0
@@ -1369,7 +1369,7 @@ func TestVTGateBindVarError(t *testing.T) {
 			Value: []byte("1"),
 		},
 	}
-	want := "v: type: EXPRESSION is invalid"
+	want := "v: invalid type specified for MakeValue: EXPRESSION"
 
 	tcases := []struct {
 		name string

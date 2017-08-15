@@ -18,7 +18,6 @@ package vindexes
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -56,7 +55,7 @@ func (vc *vcursor) Execute(query string, bindvars map[string]*querypb.BindVariab
 		}
 		for i := 0; i < vc.numRows; i++ {
 			result.Rows = append(result.Rows, []sqltypes.Value{
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", i+1))),
+				sqltypes.NewInt64(int64(i + 1)),
 			})
 		}
 		return result, nil
@@ -104,7 +103,7 @@ func TestLookupHashString(t *testing.T) {
 
 func TestLookupHashMap(t *testing.T) {
 	vc := &vcursor{numRows: 2}
-	got, err := lookuphash.(NonUnique).Map(vc, []interface{}{1, int64(2)})
+	got, err := lookuphash.(NonUnique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -122,7 +121,7 @@ func TestLookupHashMap(t *testing.T) {
 
 func TestLookupHashVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	success, err := lookuphash.Verify(vc, []interface{}{1}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	success, err := lookuphash.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	if err != nil {
 		t.Error(err)
 	}
@@ -133,7 +132,7 @@ func TestLookupHashVerify(t *testing.T) {
 
 func TestLookupHashCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := lookuphash.(Lookup).Create(vc, []interface{}{1}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	err := lookuphash.(Lookup).Create(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	if err != nil {
 		t.Error(err)
 	}
@@ -158,7 +157,7 @@ func TestLookupHashReverse(t *testing.T) {
 
 func TestLookupHashDelete(t *testing.T) {
 	vc := &vcursor{}
-	err := lookuphash.(Lookup).Delete(vc, []interface{}{1}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err := lookuphash.(Lookup).Delete(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}

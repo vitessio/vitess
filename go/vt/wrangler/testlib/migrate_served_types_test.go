@@ -137,8 +137,8 @@ func TestMigrateServedTypes(t *testing.T) {
 		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": {
 			Rows: [][]sqltypes.Value{
 				{
-					sqltypes.MakeString([]byte(mysql.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition))),
-					sqltypes.MakeString([]byte("")),
+					sqltypes.NewVarBinary(mysql.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition)),
+					sqltypes.NewVarBinary(""),
 				},
 			},
 		},
@@ -160,8 +160,8 @@ func TestMigrateServedTypes(t *testing.T) {
 		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": {
 			Rows: [][]sqltypes.Value{
 				{
-					sqltypes.MakeString([]byte(mysql.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition))),
-					sqltypes.MakeString([]byte("")),
+					sqltypes.NewVarBinary(mysql.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition)),
+					sqltypes.NewVarBinary(""),
 				},
 			},
 		},

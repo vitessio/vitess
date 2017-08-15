@@ -696,7 +696,7 @@ func getuint64(val *querypb.BindVariable) (uv uint64, status int) {
 	if err != nil {
 		return 0, QROutOfRange
 	}
-	v, err := bv.ParseUint64()
+	v, err := sqltypes.ToUint64(bv)
 	if err != nil {
 		return 0, QROutOfRange
 	}
@@ -709,7 +709,7 @@ func getint64(val *querypb.BindVariable) (iv int64, status int) {
 	if err != nil {
 		return 0, QROutOfRange
 	}
-	v, err := bv.ParseInt64()
+	v, err := sqltypes.ToInt64(bv)
 	if err != nil {
 		return 0, QROutOfRange
 	}

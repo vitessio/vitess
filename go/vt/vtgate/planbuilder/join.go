@@ -201,7 +201,7 @@ func (jb *join) PushOrderByNull() {
 // The call is ignored because results get multiplied
 // as they join with others. So, it's hard to reliably
 // predict if a limit push down will work correctly.
-func (jb *join) SetUpperLimit(_ interface{}) {
+func (jb *join) SetUpperLimit(_ *sqlparser.SQLVal) {
 }
 
 // PushMisc satisfies the builder interface.

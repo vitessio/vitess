@@ -94,6 +94,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query []byte, callback func(*sq
 			Options: &querypb.ExecuteOptions{
 				IncludedFields: querypb.ExecuteOptions_ALL,
 			},
+			Autocommit: true,
 		}
 		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
 			session.Options.ClientFoundRows = true

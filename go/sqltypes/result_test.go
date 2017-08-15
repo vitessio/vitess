@@ -31,14 +31,14 @@ func TestRepair(t *testing.T) {
 	}}
 	in := Result{
 		Rows: [][]Value{
-			{testVal(VarBinary, "1"), testVal(VarBinary, "aa")},
-			{testVal(VarBinary, "2"), testVal(VarBinary, "bb")},
+			{TestValue(VarBinary, "1"), TestValue(VarBinary, "aa")},
+			{TestValue(VarBinary, "2"), TestValue(VarBinary, "bb")},
 		},
 	}
 	want := Result{
 		Rows: [][]Value{
-			{testVal(Int64, "1"), testVal(VarChar, "aa")},
-			{testVal(Int64, "2"), testVal(VarChar, "bb")},
+			{TestValue(Int64, "1"), TestValue(VarChar, "aa")},
+			{TestValue(Int64, "2"), TestValue(VarChar, "bb")},
 		},
 	}
 	in.Repair(fields)
@@ -57,9 +57,9 @@ func TestCopy(t *testing.T) {
 		InsertID:     1,
 		RowsAffected: 2,
 		Rows: [][]Value{
-			{testVal(Int64, "1"), MakeTrusted(Null, nil)},
-			{testVal(Int64, "2"), MakeTrusted(VarChar, nil)},
-			{testVal(Int64, "3"), testVal(VarChar, "")},
+			{TestValue(Int64, "1"), MakeTrusted(Null, nil)},
+			{TestValue(Int64, "2"), MakeTrusted(VarChar, nil)},
+			{TestValue(Int64, "3"), TestValue(VarChar, "")},
 		},
 		Extras: &querypb.ResultExtras{
 			EventToken: &querypb.EventToken{

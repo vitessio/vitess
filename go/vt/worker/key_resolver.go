@@ -76,9 +76,9 @@ func (r *v2Resolver) keyspaceID(row []sqltypes.Value) ([]byte, error) {
 	v := row[r.shardingColumnIndex]
 	switch r.keyspaceInfo.ShardingColumnType {
 	case topodatapb.KeyspaceIdType_BYTES:
-		return v.Raw(), nil
+		return v.ToBytes(), nil
 	case topodatapb.KeyspaceIdType_UINT64:
-		i, err := v.ParseUint64()
+		i, err := sqltypes.ToUint64(v)
 		if err != nil {
 			return nil, fmt.Errorf("Non numerical value: %v", err)
 		}
@@ -172,7 +172,7 @@ func newV3ResolverFromColumnList(keyspaceSchema *vindexes.KeyspaceSchema, name s
 // keyspaceID implements the keyspaceIDResolver interface.
 func (r *v3Resolver) keyspaceID(row []sqltypes.Value) ([]byte, error) {
 	v := row[r.shardingColumnIndex]
-	ids := []interface{}{v}
+	ids := []sqltypes.Value{v}
 	ksids, err := r.vindex.Map(nil, ids)
 	if err != nil {
 		return nil, err

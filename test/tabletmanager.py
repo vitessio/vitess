@@ -690,5 +690,62 @@ class TestTabletManager(unittest.TestCase):
 
     tablet_62344.kill_vttablet()
 
+  def test_master_restart_sets_ter_timestamp(self):
+    """Test that TER timestamp is set when we restart the MASTER vttablet.
+
+    TER = TabletExternallyReparented.
+    See StreamHealthResponse.tablet_externally_reparented_timestamp for details.
+    """
+    master, replica = tablet_62344, tablet_62044
+    tablets = [master, replica]
+    # Start vttablets. Our future master is initially a REPLICA.
+    for t in tablets:
+      t.create_db('vt_test_keyspace')
+    for t in tablets:
+      t.start_vttablet(wait_for_state='NOT_SERVING',
+                       init_tablet_type='replica',
+                       init_keyspace='test_keyspace',
+                       init_shard='0')
+
+    # Initialize tablet as MASTER.
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
+                     master.tablet_alias])
+    master.wait_for_vttablet_state('SERVING')
+
+    # Capture the current TER.
+    health = utils.run_vtctl_json(['VtTabletStreamHealth',
+                                   '-count', '1',
+                                   master.tablet_alias])
+    self.assertEqual(topodata_pb2.MASTER, health['target']['tablet_type'])
+    self.assertIn('tablet_externally_reparented_timestamp', health)
+    self.assertGreater(health['tablet_externally_reparented_timestamp'], 0,
+                       'TER on MASTER must be set after InitShardMaster')
+
+    # Restart the MASTER vttablet.
+    master.kill_vttablet()
+    master.start_vttablet(wait_for_state='SERVING',
+                          init_tablet_type='replica',
+                          init_keyspace='test_keyspace',
+                          init_shard='0')
+
+    # Make sure that the TER increased i.e. it was set to the current time.
+    health_after_restart = utils.run_vtctl_json(['VtTabletStreamHealth',
+                                                 '-count', '1',
+                                                 master.tablet_alias])
+    self.assertEqual(topodata_pb2.MASTER,
+                     health_after_restart['target']['tablet_type'])
+    self.assertIn('tablet_externally_reparented_timestamp',
+                  health_after_restart)
+    self.assertGreater(
+        health_after_restart['tablet_externally_reparented_timestamp'],
+        health['tablet_externally_reparented_timestamp'],
+        'When the MASTER vttablet was restarted, the TER timestamp must be set'
+        ' to the current time.')
+
+    # Shutdown.
+    for t in tablets:
+      t.kill_vttablet()
+
+
 if __name__ == '__main__':
   utils.main()

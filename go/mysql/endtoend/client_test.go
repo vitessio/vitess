@@ -149,8 +149,8 @@ func TestTLS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SHOW STATUS LIKE 'Ssl_cipher' failed: %v", err)
 	}
-	if len(result.Rows) != 1 || result.Rows[0][0].String() != "Ssl_cipher" ||
-		result.Rows[0][1].String() == "" {
+	if len(result.Rows) != 1 || result.Rows[0][0].ToString() != "Ssl_cipher" ||
+		result.Rows[0][1].ToString() == "" {
 		t.Fatalf("SHOW STATUS LIKE 'Ssl_cipher' returned unexpected result: %v", result)
 	}
 }

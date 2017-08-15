@@ -37,7 +37,7 @@ func (mariadbFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
 		return nil, fmt.Errorf("unexpected result format for gtid_binlog_pos: %#v", qr)
 	}
 
-	return parseMariadbGTIDSet(qr.Rows[0][0].String())
+	return parseMariadbGTIDSet(qr.Rows[0][0].ToString())
 }
 
 // sendBinlogDumpCommand is part of the Flavor interface.

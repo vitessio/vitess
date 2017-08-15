@@ -723,15 +723,39 @@ message StreamHealthResponse {
   // or if a replica should not be used because the keyspace is being resharded.
   bool serving = 2;
 
-  // tablet_externally_reparented_timestamp contains the last time
-  // tabletmanager.TabletExternallyReparented was called on this tablet,
-  // or 0 if it was never called. This is meant to differentiate two tablets
-  // that report a target.TabletType of MASTER, only the one with the latest
-  // timestamp should be trusted.
+  // tablet_externally_reparented_timestamp can be interpreted as the last time
+  // we knew that this tablet was the MASTER of this shard.
+  //
+  // It is used by vtgate when determining the current MASTER of a shard.
+  // If vtgate sees more than one MASTER tablet, this timestamp is used
+  // as tiebreaker where the MASTER with the highest timestamp wins.
+  // Another usage of this timestamp is in go/vt/vtgate/buffer to detect the end
+  // of a reparent (failover) and stop buffering.
+  //
+  // In practice, this field is set to:
+  // a) the last time the RPC tabletmanager.TabletExternallyReparented was
+  //    called on this tablet (usually done by an external failover tool e.g.
+  //    Orchestrator). The failover tool can call this as long as we are the
+  //    master i.e. even ages after the last reparent occurred.
+  // OR
+  // b) the last time an active reparent was executed through a vtctl command
+  //    (InitShardMaster, PlannedReparentShard, EmergencyReparentShard)
+  // OR
+  // c) the last time vttablet was started and it initialized its tablet type
+  //    as MASTER because it was recorded as the shard's current master in the
+  //    topology (see go/vt/vttablet/tabletmanager/init_tablet.go)
+  // OR
+  // d) 0 if the vttablet was never a MASTER.
   int64 tablet_externally_reparented_timestamp = 3;
 
   // realtime_stats contains information about the tablet status
   RealtimeStats realtime_stats = 4;
+
+  // tablet_alias is the alias of the sending tablet. The discovery/healthcheck.go
+  // code uses it to verify that it's talking to the correct tablet and that it
+  // hasn't changed in the meantime e.g. due to tablet restarts where ports or
+  // ips have been reused but assigned differently.
+  topodata.TabletAlias tablet_alias = 5;
 }
 
 // UpdateStreamRequest is the payload for UpdateStream. At most one of

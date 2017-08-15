@@ -175,7 +175,7 @@ func TestOrderedAggregateKeysFail(t *testing.T) {
 		Input: tp,
 	}
 
-	want := "text fields cannot be compared"
+	want := "types are not comparable: VARCHAR vs VARCHAR"
 	if _, err := oa.Execute(nil, nil, nil, false); err == nil || err.Error() != want {
 		t.Errorf("oa.Execute(): %v, want %s", err, want)
 	}

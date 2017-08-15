@@ -25,7 +25,23 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
-func TestParsedQuery(t *testing.T) {
+func TestNewParsedQuery(t *testing.T) {
+	stmt, err := Parse("select * from a where id =:id")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	pq := NewParsedQuery(stmt)
+	want := &ParsedQuery{
+		Query:         "select * from a where id = :id",
+		bindLocations: []bindLocation{{offset: 27, length: 3}},
+	}
+	if !reflect.DeepEqual(pq, want) {
+		t.Errorf("GenerateParsedQuery: %+v, want %+v", pq, want)
+	}
+}
+
+func TestGenerateQuery(t *testing.T) {
 	tcases := []struct {
 		desc     string
 		query    string
@@ -59,14 +75,14 @@ func TestParsedQuery(t *testing.T) {
 			desc:  "tuple *querypb.BindVariable",
 			query: "select * from a where id in ::vals",
 			bindVars: map[string]*querypb.BindVariable{
-				"vals": sqltypes.MakeTestBindVar([]interface{}{1, "aa"}),
+				"vals": sqltypes.TestBindVariable([]interface{}{1, "aa"}),
 			},
 			output: "select * from a where id in (1, 'aa')",
 		}, {
 			desc:  "list bind vars 0 arguments",
 			query: "select * from a where id in ::vals",
 			bindVars: map[string]*querypb.BindVariable{
-				"vals": sqltypes.MakeTestBindVar([]interface{}{}),
+				"vals": sqltypes.TestBindVariable([]interface{}{}),
 			},
 			output: "empty list supplied for vals",
 		}, {
@@ -80,7 +96,7 @@ func TestParsedQuery(t *testing.T) {
 			desc:  "list bind var for non-list",
 			query: "select * from a where id = :vals",
 			bindVars: map[string]*querypb.BindVariable{
-				"vals": sqltypes.MakeTestBindVar([]interface{}{1}),
+				"vals": sqltypes.TestBindVariable([]interface{}{1}),
 			},
 			output: "unexpected arg type (TUPLE) for non-list key vals",
 		}, {
@@ -90,8 +106,8 @@ func TestParsedQuery(t *testing.T) {
 				"equality": &TupleEqualityList{
 					Columns: []ColIdent{NewColIdent("pk")},
 					Rows: [][]sqltypes.Value{
-						{sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))},
-						{sqltypes.MakeString([]byte("aa"))},
+						{sqltypes.NewInt64(1)},
+						{sqltypes.NewVarBinary("aa")},
 					},
 				},
 			},
@@ -104,12 +120,12 @@ func TestParsedQuery(t *testing.T) {
 					Columns: []ColIdent{NewColIdent("pk1"), NewColIdent("pk2")},
 					Rows: [][]sqltypes.Value{
 						{
-							sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-							sqltypes.MakeString([]byte("aa")),
+							sqltypes.NewInt64(1),
+							sqltypes.NewVarBinary("aa"),
 						},
 						{
-							sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
-							sqltypes.MakeString([]byte("bb")),
+							sqltypes.NewInt64(2),
+							sqltypes.NewVarBinary("bb"),
 						},
 					},
 				},
@@ -137,48 +153,5 @@ func TestParsedQuery(t *testing.T) {
 		if got != tcase.output {
 			t.Errorf("for test case: %s, got: '%s', want '%s'", tcase.desc, got, tcase.output)
 		}
-	}
-}
-
-func TestGenerateParsedQuery(t *testing.T) {
-	stmt, err := Parse("select * from a where id =:id")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	pq := GenerateParsedQuery(stmt)
-	want := &ParsedQuery{
-		Query:         "select * from a where id = :id",
-		bindLocations: []bindLocation{{offset: 27, length: 3}},
-	}
-	if !reflect.DeepEqual(pq, want) {
-		t.Errorf("GenerateParsedQuery: %+v, want %+v", pq, want)
-	}
-}
-
-// TestUnorthodox is for testing syntactically invalid constructs
-// that we use internally for efficient SQL generation.
-func TestUnorthodox(t *testing.T) {
-	query := "insert into `%s` values %a"
-	extras := map[string]Encodable{
-		"vals": InsertValues{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-			sqltypes.MakeString([]byte("foo('a')")),
-		}, {
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
-			sqltypes.MakeString([]byte("bar(`b`)")),
-		}},
-	}
-	buf := NewTrackedBuffer(nil)
-	buf.Myprintf(query, "t", ":vals")
-	pq := buf.ParsedQuery()
-	bytes, err := pq.GenerateQuery(nil, extras)
-	if err != nil {
-		t.Error(err)
-	}
-	got := string(bytes)
-	want := "insert into `t` values (1, 'foo(\\'a\\')'), (2, 'bar(`b`)')"
-	if got != want {
-		t.Errorf("GenerateQuery: %s, want %s", got, want)
 	}
 }
