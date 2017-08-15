@@ -163,6 +163,10 @@ public class FieldWithMetadata {
                 }
             }
         } else {
+            // MySQL always encodes JSON data with utf8mb4. Discard whatever else we've found, if the type is JSON
+            if (vitessType == Query.Type.JSON) {
+                this.encoding = "UTF-8";
+            }
             // Defaults to appease final variables when not including all fields
             this.isImplicitTempTable = false;
             this.isSingleBit = false;
