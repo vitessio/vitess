@@ -83,14 +83,14 @@ func GenerateInsertOuterQuery(ins *sqlparser.Insert) *sqlparser.ParsedQuery {
 // GenerateUpdateOuterQuery generates the outer query for updates.
 func GenerateUpdateOuterQuery(upd *sqlparser.Update) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("update %v%v set %v where %a", upd.Comments, upd.TableExprs, upd.Exprs, ":#pk")
+	buf.Myprintf("update %v%v set %v where %a%v", upd.Comments, upd.TableExprs, upd.Exprs, ":#pk", upd.OrderBy)
 	return buf.ParsedQuery()
 }
 
 // GenerateDeleteOuterQuery generates the outer query for deletes.
 func GenerateDeleteOuterQuery(del *sqlparser.Delete) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("delete %vfrom %v where %a", del.Comments, del.TableExprs, ":#pk")
+	buf.Myprintf("delete %vfrom %v where %a%v", del.Comments, del.TableExprs, ":#pk", del.OrderBy)
 	return buf.ParsedQuery()
 }
 
