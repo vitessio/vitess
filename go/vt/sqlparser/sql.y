@@ -392,6 +392,57 @@ set_statement:
     $$ = &Set{Comments: Comments($2), Exprs: $3}
   }
 
+create_statement:
+  CREATE TABLE not_exists_opt table_name table_spec
+  {
+    $$ = &DDL{Action: CreateStr, NewName: $4, TableSpec: $5}
+  }
+| CREATE constraint_opt INDEX ID using_opt ON table_name ddl_force_eof
+  {
+    // Change this to an alter statement
+    $$ = &DDL{Action: AlterStr, Table: $7, NewName:$7}
+  }
+| CREATE VIEW table_name ddl_force_eof
+  {
+    $$ = &DDL{Action: CreateStr, NewName: $3.ToViewName()}
+  }
+| CREATE OR REPLACE VIEW table_name ddl_force_eof
+  {
+    $$ = &DDL{Action: CreateStr, NewName: $5.ToViewName()}
+  }
+
+table_spec:
+  '(' table_column_list ')' table_option_list
+  {
+    $$ = $2
+    $$.Options = $4
+  }
+
+table_column_list:
+  column_definition
+  {
+    $$ = &TableSpec{}
+    $$.AddColumn($1)
+  }
+| table_column_list ',' column_definition
+  {
+    $$.AddColumn($3)
+  }
+| table_column_list ',' index_definition
+  {
+    $$.AddIndex($3)
+  }
+
+column_definition:
+  ID column_type null_opt column_default_opt auto_increment_opt column_key_opt column_comment_opt
+  {
+    $2.NotNull = $3
+    $2.Default = $4
+    $2.Autoincrement = $5
+    $2.KeyOpt = $6
+    $2.Comment = $7
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+  }
 column_type:
   numeric_type unsigned_opt zero_fill_opt
   {
@@ -555,6 +606,17 @@ char_type:
     $$ = ColumnType{Type: string($1), EnumValues: $3}
   }
 
+enum_values:
+  STRING
+  {
+    $$ = make([]string, 0, 4)
+    $$ = append($$, "'" + string($1) + "'")
+  }
+| enum_values ',' STRING
+  {
+    $$ = append($1, "'" + string($3) + "'")
+  }
+
 length_opt:
   {
     $$ = nil
@@ -708,28 +770,6 @@ column_comment_opt:
     $$ = NewStrVal($2)
   }
 
-enum_values:
-  STRING
-  {
-    $$ = make([]string, 0, 4)
-    $$ = append($$, "'" + string($1) + "'")
-  }
-| enum_values ',' STRING
-  {
-    $$ = append($1, "'" + string($3) + "'")
-  }
-
-column_definition:
-  ID column_type null_opt column_default_opt auto_increment_opt column_key_opt column_comment_opt
-  {
-    $2.NotNull = $3
-    $2.Default = $4
-    $2.Autoincrement = $5
-    $2.KeyOpt = $6
-    $2.Comment = $7
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
-  }
-
 index_definition:
   index_info '(' index_column_list ')'
   {
@@ -780,28 +820,6 @@ index_column:
       $$ = &IndexColumn{Column: $1, Length: $2}
   }
 
-table_spec:
-  '(' table_column_list ')' table_option_list
-  {
-    $$ = $2
-    $$.Options = $4
-  }
-
-table_column_list:
-  column_definition
-  {
-    $$ = &TableSpec{}
-    $$.AddColumn($1)
-  }
-| table_column_list ',' column_definition
-  {
-    $$.AddColumn($3)
-  }
-| table_column_list ',' index_definition
-  {
-    $$.AddIndex($3)
-  }
-
 table_option_list:
   {
     $$ = ""
@@ -843,25 +861,6 @@ table_opt_value:
 | INTEGRAL
   {
     $$ = string($1)
-  }
-
-create_statement:
-  CREATE TABLE not_exists_opt table_name table_spec
-  {
-    $$ = &DDL{Action: CreateStr, NewName: $4, TableSpec: $5}
-  }
-| CREATE constraint_opt INDEX ID using_opt ON table_name ddl_force_eof
-  {
-    // Change this to an alter statement
-    $$ = &DDL{Action: AlterStr, Table: $7, NewName:$7}
-  }
-| CREATE VIEW table_name ddl_force_eof
-  {
-    $$ = &DDL{Action: CreateStr, NewName: $3.ToViewName()}
-  }
-| CREATE OR REPLACE VIEW table_name ddl_force_eof
-  {
-    $$ = &DDL{Action: CreateStr, NewName: $5.ToViewName()}
   }
 
 alter_statement:
