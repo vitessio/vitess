@@ -156,6 +156,5 @@ func newPool() *Pool {
 		100,
 		10*time.Second,
 		checker,
-		"appDebug",
 	)
 }

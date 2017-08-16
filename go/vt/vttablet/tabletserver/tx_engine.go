@@ -57,7 +57,6 @@ func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *
 		time.Duration(config.TransactionTimeout*1e9),
 		time.Duration(config.IdleTimeout*1e9),
 		checker,
-		config.AppDebugUsername,
 	)
 	te.twopcEnabled = config.TwoPCEnable
 	if te.twopcEnabled {
@@ -85,7 +84,6 @@ func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *
 		3,
 		time.Duration(config.IdleTimeout*1e9),
 		checker,
-		config.AppDebugUsername,
 	)
 	te.twoPC = NewTwoPC(readPool)
 	return te

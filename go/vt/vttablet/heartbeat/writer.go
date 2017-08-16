@@ -82,7 +82,7 @@ func NewWriter(checker connpool.MySQLChecker, alias topodata.TabletAlias, config
 		interval:    config.HeartbeatInterval,
 		ticks:       timer.NewTimer(config.HeartbeatInterval),
 		errorLog:    logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
-		pool:        connpool.New(config.PoolNamePrefix+"HeartbeatWritePool", 1, time.Duration(config.IdleTimeout*1e9), checker, config.AppDebugUsername),
+		pool:        connpool.New(config.PoolNamePrefix+"HeartbeatWritePool", 1, time.Duration(config.IdleTimeout*1e9), checker),
 	}
 }
 

@@ -171,14 +171,12 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		config.PoolSize,
 		time.Duration(config.IdleTimeout*1e9),
 		checker,
-		config.AppDebugUsername,
 	)
 	qe.streamConns = connpool.New(
 		config.PoolNamePrefix+"StreamConnPool",
 		config.StreamPoolSize,
 		time.Duration(config.IdleTimeout*1e9),
 		checker,
-		config.AppDebugUsername,
 	)
 
 	qe.consolidator = sync2.NewConsolidator()

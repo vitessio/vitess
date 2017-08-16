@@ -56,14 +56,13 @@ type MySQLChecker interface {
 // Other than the connection type, ConnPool maintains an additional
 // pool of dba connections that are used to kill connections.
 type Pool struct {
-	mu               sync.Mutex
-	connections      *pools.ResourcePool
-	capacity         int
-	idleTimeout      time.Duration
-	dbaPool          *dbconnpool.ConnectionPool
-	checker          MySQLChecker
-	appDebugParams   *mysql.ConnParams
-	appDebugUsername string
+	mu             sync.Mutex
+	connections    *pools.ResourcePool
+	capacity       int
+	idleTimeout    time.Duration
+	dbaPool        *dbconnpool.ConnectionPool
+	checker        MySQLChecker
+	appDebugParams *mysql.ConnParams
 }
 
 // New creates a new Pool. The name is used
@@ -72,14 +71,12 @@ func New(
 	name string,
 	capacity int,
 	idleTimeout time.Duration,
-	checker MySQLChecker,
-	appDebugUsername string) *Pool {
+	checker MySQLChecker) *Pool {
 	cp := &Pool{
-		capacity:         capacity,
-		idleTimeout:      idleTimeout,
-		dbaPool:          dbconnpool.NewConnectionPool("", 1, idleTimeout),
-		checker:          checker,
-		appDebugUsername: appDebugUsername,
+		capacity:    capacity,
+		idleTimeout: idleTimeout,
+		dbaPool:     dbconnpool.NewConnectionPool("", 1, idleTimeout),
+		checker:     checker,
 	}
 	if name == "" || usedNames[name] {
 		return cp
@@ -251,5 +248,9 @@ func (cp *Pool) IdleTimeout() time.Duration {
 
 func (cp *Pool) isCallerIDAppDebug(ctx context.Context) bool {
 	callerID := callerid.ImmediateCallerIDFromContext(ctx)
-	return callerID != nil && callerID.Username == cp.appDebugUsername
+	if cp.appDebugParams == nil {
+		return false
+	} else {
+		return callerID != nil && callerID.Username == cp.appDebugParams.Uname
+	}
 }

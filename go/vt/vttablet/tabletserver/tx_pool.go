@@ -85,11 +85,10 @@ func NewTxPool(
 	foundRowsCapacity int,
 	timeout time.Duration,
 	idleTimeout time.Duration,
-	checker connpool.MySQLChecker,
-	appDebugUsername string) *TxPool {
+	checker connpool.MySQLChecker) *TxPool {
 	axp := &TxPool{
-		conns:         connpool.New(prefix+"TransactionPool", capacity, idleTimeout, checker, appDebugUsername),
-		foundRowsPool: connpool.New(prefix+"FoundRowsPool", foundRowsCapacity, idleTimeout, checker, appDebugUsername),
+		conns:         connpool.New(prefix+"TransactionPool", capacity, idleTimeout, checker),
+		foundRowsPool: connpool.New(prefix+"FoundRowsPool", foundRowsCapacity, idleTimeout, checker),
 		activePool:    pools.NewNumbered(),
 		lastID:        sync2.NewAtomicInt64(time.Now().UnixNano()),
 		timeout:       sync2.NewAtomicDuration(timeout),

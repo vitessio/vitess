@@ -119,7 +119,6 @@ for uid_index in $uids; do
     -log_dir $VTDATAROOT/tmp \
     -tablet-path $alias \
     -tablet_hostname "$tablet_hostname" \
-    -client-appdebug-username 'appDebug' \
     -init_keyspace $keyspace \
     -init_shard $shard \
     -init_tablet_type $tablet_type \

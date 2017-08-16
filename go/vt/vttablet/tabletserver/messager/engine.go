@@ -65,7 +65,6 @@ func NewEngine(tsv TabletService, se *schema.Engine, config tabletenv.TabletConf
 			config.MessagePoolSize,
 			time.Duration(config.IdleTimeout*1e9),
 			tsv,
-			config.AppDebugUsername,
 		),
 		managers: make(map[string]*messageManager),
 	}

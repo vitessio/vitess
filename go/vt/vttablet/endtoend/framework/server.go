@@ -79,7 +79,6 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams) error {
 	config.TwoPCAbandonAge = 1
 	config.TwoPCCoordinatorAddress = "fake"
 	config.EnableHotRowProtection = true
-	config.AppDebugUsername = "vt_appdebug"
 
 	Target = querypb.Target{
 		Keyspace:   "vttest",

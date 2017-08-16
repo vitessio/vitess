@@ -468,6 +468,5 @@ func newTxPool() *TxPool {
 		transactionTimeout,
 		idleTimeout,
 		DummyChecker,
-		"appDebug",
 	)
 }
