@@ -540,10 +540,8 @@ type TableSpec struct {
 
 func (tc *TableSpec) Format(buf *TrackedBuffer) {
 	buf.Myprintf("(\n")
-	first := true
-	for _, col := range tc.Columns {
-		if first {
-			first = false
+	for i, col := range tc.Columns {
+		if i == 0 {
 			buf.Myprintf("\t%v", col)
 		} else {
 			buf.Myprintf(",\n\t%v", col)
