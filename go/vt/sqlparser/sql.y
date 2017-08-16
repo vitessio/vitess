@@ -2154,6 +2154,8 @@ ignore_opt:
 non_rename_operation:
   ALTER
   { $$ = struct{}{} }
+| AUTO_INCREMENT
+  { $$ = struct{}{} }
 | DEFAULT
   { $$ = struct{}{} }
 | DROP

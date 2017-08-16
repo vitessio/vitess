@@ -684,6 +684,9 @@ func TestValid(t *testing.T) {
 		input:  "alter table a rename key foo to bar",
 		output: "alter table a",
 	}, {
+		input:  "alter table e auto_increment = 20",
+		output: "alter table e",
+	}, {
 		input: "create table a (\n\t`a` int\n)",
 	}, {
 		input: "create table `by` (\n\t`by` char\n)",
