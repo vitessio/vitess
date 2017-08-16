@@ -23,6 +23,8 @@ import (
 	"errors"
 	"strings"
 
+	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
@@ -47,6 +49,7 @@ func Parse(sql string) (Statement, error) {
 	tokenizer := NewStringTokenizer(sql)
 	if yyParse(tokenizer) != 0 {
 		if tokenizer.partialDDL != nil {
+			log.Warningf("ignoring error parsing DDL '%s': %v", sql, tokenizer.LastError)
 			tokenizer.ParseTree = tokenizer.partialDDL
 			return tokenizer.ParseTree, nil
 		}
