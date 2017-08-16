@@ -65,6 +65,7 @@ func NewEngine(tsv TabletService, se *schema.Engine, config tabletenv.TabletConf
 			config.MessagePoolSize,
 			time.Duration(config.IdleTimeout*1e9),
 			tsv,
+			config.AppDebugUsername,
 		),
 		managers: make(map[string]*messageManager),
 	}
@@ -75,7 +76,7 @@ func (me *Engine) Open(dbconfigs dbconfigs.DBConfigs) error {
 	if me.isOpen {
 		return nil
 	}
-	me.conns.Open(&dbconfigs.App, &dbconfigs.Dba)
+	me.conns.Open(&dbconfigs.App, &dbconfigs.Dba, &dbconfigs.AppDebug)
 	me.se.RegisterNotifier("messages", me.schemaChanged)
 	me.isOpen = true
 	return nil

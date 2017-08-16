@@ -82,7 +82,7 @@ func NewWriter(checker connpool.MySQLChecker, alias topodata.TabletAlias, config
 		interval:    config.HeartbeatInterval,
 		ticks:       timer.NewTimer(config.HeartbeatInterval),
 		errorLog:    logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
-		pool:        connpool.New(config.PoolNamePrefix+"HeartbeatWritePool", 1, time.Duration(config.IdleTimeout*1e9), checker),
+		pool:        connpool.New(config.PoolNamePrefix+"HeartbeatWritePool", 1, time.Duration(config.IdleTimeout*1e9), checker, config.AppDebugUsername),
 	}
 }
 
@@ -120,7 +120,7 @@ func (w *Writer) Open(dbc dbconfigs.DBConfigs) {
 		return
 	}
 	log.Info("Beginning heartbeat writes")
-	w.pool.Open(&dbc.App, &dbc.Dba)
+	w.pool.Open(&dbc.App, &dbc.Dba, &dbc.AppDebug)
 	w.ticks.Start(func() { w.writeHeartbeat() })
 	w.isOpen = true
 }

@@ -85,10 +85,11 @@ func NewTxPool(
 	foundRowsCapacity int,
 	timeout time.Duration,
 	idleTimeout time.Duration,
-	checker connpool.MySQLChecker) *TxPool {
+	checker connpool.MySQLChecker,
+	appDebugUsername string) *TxPool {
 	axp := &TxPool{
-		conns:         connpool.New(prefix+"TransactionPool", capacity, idleTimeout, checker),
-		foundRowsPool: connpool.New(prefix+"FoundRowsPool", foundRowsCapacity, idleTimeout, checker),
+		conns:         connpool.New(prefix+"TransactionPool", capacity, idleTimeout, checker, appDebugUsername),
+		foundRowsPool: connpool.New(prefix+"FoundRowsPool", foundRowsCapacity, idleTimeout, checker, appDebugUsername),
 		activePool:    pools.NewNumbered(),
 		lastID:        sync2.NewAtomicInt64(time.Now().UnixNano()),
 		timeout:       sync2.NewAtomicDuration(timeout),
@@ -105,12 +106,12 @@ func NewTxPool(
 
 // Open makes the TxPool operational. This also starts the transaction killer
 // that will kill long-running transactions.
-func (axp *TxPool) Open(appParams, dbaParams *mysql.ConnParams) {
+func (axp *TxPool) Open(appParams, dbaParams, appDebugParams *mysql.ConnParams) {
 	log.Infof("Starting transaction id: %d", axp.lastID)
-	axp.conns.Open(appParams, dbaParams)
+	axp.conns.Open(appParams, dbaParams, appDebugParams)
 	foundRowsParam := *appParams
 	foundRowsParam.EnableClientFoundRows()
-	axp.foundRowsPool.Open(&foundRowsParam, dbaParams)
+	axp.foundRowsPool.Open(&foundRowsParam, dbaParams, appDebugParams)
 	axp.ticks.Start(func() { axp.transactionKiller() })
 }
 

@@ -19,6 +19,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	log "github.com/golang/glog"
@@ -48,7 +49,7 @@ func init() {
 }
 
 func main() {
-	dbconfigFlags := dbconfigs.AppConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
+	dbconfigFlags := dbconfigs.AppConfig | dbconfigs.AppDebugConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
 		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
 	dbconfigs.RegisterFlags(dbconfigFlags)
 	mysqlctl.RegisterFlags()
@@ -87,6 +88,11 @@ func main() {
 	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, dbconfigFlags)
 	if err != nil {
 		log.Warning(err)
+	}
+
+	if appDebugUsername := tabletenv.Config.AppDebugUsername; appDebugUsername != "" && !dbcfgs.HasAppDebugUname() {
+		err := fmt.Errorf("app debug username is present (%v), however there is no config for this user. Make sure db-config-appdebug is set", appDebugUsername)
+		log.Exitf("invalid config: %v", err)
 	}
 
 	// creates and registers the query service

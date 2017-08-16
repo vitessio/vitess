@@ -72,6 +72,19 @@ func NewDBConn(
 	}, nil
 }
 
+// NewDBConnNoPool creates a new DBConn without a pool.
+func NewDBConnNoPool(params *mysql.ConnParams) (*DBConn, error) {
+	c, err := dbconnpool.NewDBConnection(params, tabletenv.MySQLStats)
+	if err != nil {
+		return nil, err
+	}
+	return &DBConn{
+		conn: c,
+		info: params,
+		pool: nil,
+	}, nil
+}
+
 // Exec executes the specified query. If there is a connection error, it will reconnect
 // and retry. A failed reconnect will trigger a CheckMySQL.
 func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
@@ -244,7 +257,9 @@ func (dbc *DBConn) IsClosed() bool {
 
 // Recycle returns the DBConn to the pool.
 func (dbc *DBConn) Recycle() {
-	if dbc.conn.IsClosed() {
+	if dbc.pool == nil {
+		dbc.Close()
+	} else if dbc.conn.IsClosed() {
 		dbc.pool.Put(nil)
 	} else {
 		dbc.pool.Put(dbc)
