@@ -1206,83 +1206,82 @@ func TestCreateTable(t *testing.T) {
 			")",
 
 		// test defaults
-		"create table t (\n"+
-			"	`i1` int default 1,\n"+
-			"	`i2` int default null,\n"+
-			"	`f1` float default 1.23,\n"+
-			"	`s1` varchar default 'c',\n"+
-			"	`s2` varchar default 'this is a string',\n"+
-			"	`s3` varchar default null\n"+
+		"create table t (\n" +
+			"	`i1` int default 1,\n" +
+			"	`i2` int default null,\n" +
+			"	`f1` float default 1.23,\n" +
+			"	`s1` varchar default 'c',\n" +
+			"	`s2` varchar default 'this is a string',\n" +
+			"	`s3` varchar default null\n" +
 			")",
 
 		// test key field options
-		"create table t (\n"+
-			"	`id` int auto_increment primary key,\n"+
-			"	`username` varchar unique key,\n"+
-			"	`email` varchar unique,\n"+
-			"	`full_name` varchar key\n"+
+		"create table t (\n" +
+			"	`id` int auto_increment primary key,\n" +
+			"	`username` varchar unique key,\n" +
+			"	`email` varchar unique,\n" +
+			"	`full_name` varchar key\n" +
 			")",
 
 		// test defining indexes separately
-		"create table t (\n"+
-			"	`id` int auto_increment,\n"+
-			"	`username` varchar,\n"+
-			"	`email` varchar,\n"+
-			"	`full_name` varchar,\n"+
-			"	`status` varchar,\n"+
-			"	primary key (`id`),\n"+
-			"	unique key `by_username` (`username`),\n"+
-			"	unique `by_username2` (`username`),\n"+
-			"	unique index `by_username3` (`username`),\n"+
-			"	index `by_status` (`status`),\n"+
-			"	key `by_full_name` (`full_name`)\n"+
+		"create table t (\n" +
+			"	`id` int auto_increment,\n" +
+			"	`username` varchar,\n" +
+			"	`email` varchar,\n" +
+			"	`full_name` varchar,\n" +
+			"	`status` varchar,\n" +
+			"	primary key (`id`),\n" +
+			"	unique key `by_username` (`username`),\n" +
+			"	unique `by_username2` (`username`),\n" +
+			"	unique index `by_username3` (`username`),\n" +
+			"	index `by_status` (`status`),\n" +
+			"	key `by_full_name` (`full_name`)\n" +
 			")",
 
 		// multi-column indexes
-		"create table t (\n"+
-			"	`id` int auto_increment,\n"+
-			"	`username` varchar,\n"+
-			"	`email` varchar,\n"+
-			"	`full_name` varchar,\n"+
-			"	`a` int,\n"+
-			"	`b` int,\n"+
-			"	`c` int,\n"+
-			"	primary key (`id`, `username`),\n"+
-			"	unique key `by_abc` (`a`, `b`, `c`),\n"+
-			"	key `by_email` (`email`(10), `username`)\n"+
+		"create table t (\n" +
+			"	`id` int auto_increment,\n" +
+			"	`username` varchar,\n" +
+			"	`email` varchar,\n" +
+			"	`full_name` varchar,\n" +
+			"	`a` int,\n" +
+			"	`b` int,\n" +
+			"	`c` int,\n" +
+			"	primary key (`id`, `username`),\n" +
+			"	unique key `by_abc` (`a`, `b`, `c`),\n" +
+			"	key `by_email` (`email`(10), `username`)\n" +
 			")",
 
 		// table options
-		"create table t (\n"+
-			"	`id` int auto_increment\n"+
-			") engine InnoDB,\n"+
-  			"  auto_increment 123,\n"+
-  			"  avg_row_length 1,\n"+
-  			"  default character set utf8mb4,\n"+
-  			"  character set latin1,\n"+
-  			"  checksum 0,\n"+
-  			"  default collate binary,\n"+
-  			"  collate ascii_bin,\n"+
-  			"  comment 'this is a comment',\n"+
-  			"  compression 'zlib',\n"+
-  			"  connection 'connect_string',\n"+
-  			"  data directory 'absolute path to directory',\n"+
-  			"  delay_key_write 1,\n"+
-  			"  encryption 'n',\n"+
-  			"  index directory 'absolute path to directory',\n"+
-  			"  insert_method no,\n"+
-  			"  key_block_size 1024,\n"+
-  			"  max_rows 100,\n"+
-  			"  min_rows 10,\n"+
-  			"  pack_keys 0,\n"+
-  			"  password 'sekret',\n"+
-  			"  row_format default,\n"+
-  			"  stats_auto_recalc default,\n"+
-  			"  stats_persistent 0,\n"+
-  			"  stats_sample_pages 1,\n"+
-  			"  tablespace tablespace_name storage disk,\n"+
-  			"  tablespace tablespace_name\n",
-
+		"create table t (\n" +
+			"	`id` int auto_increment\n" +
+			") engine InnoDB,\n" +
+			"  auto_increment 123,\n" +
+			"  avg_row_length 1,\n" +
+			"  default character set utf8mb4,\n" +
+			"  character set latin1,\n" +
+			"  checksum 0,\n" +
+			"  default collate binary,\n" +
+			"  collate ascii_bin,\n" +
+			"  comment 'this is a comment',\n" +
+			"  compression 'zlib',\n" +
+			"  connection 'connect_string',\n" +
+			"  data directory 'absolute path to directory',\n" +
+			"  delay_key_write 1,\n" +
+			"  encryption 'n',\n" +
+			"  index directory 'absolute path to directory',\n" +
+			"  insert_method no,\n" +
+			"  key_block_size 1024,\n" +
+			"  max_rows 100,\n" +
+			"  min_rows 10,\n" +
+			"  pack_keys 0,\n" +
+			"  password 'sekret',\n" +
+			"  row_format default,\n" +
+			"  stats_auto_recalc default,\n" +
+			"  stats_persistent 0,\n" +
+			"  stats_sample_pages 1,\n" +
+			"  tablespace tablespace_name storage disk,\n" +
+			"  tablespace tablespace_name\n",
 	}
 	for _, sql := range validSQL {
 		sql = strings.TrimSpace(sql)

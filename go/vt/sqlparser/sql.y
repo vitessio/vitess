@@ -742,23 +742,23 @@ collate_opt:
 
 column_key_opt:
   {
-    $$ = ColKeyNone
+    $$ = colKeyNone
   }
 | PRIMARY KEY
   {
-    $$ = ColKeyPrimary
+    $$ = colKeyPrimary
   }
 | KEY
   {
-    $$ = ColKey
+    $$ = colKey
   }
 | UNIQUE KEY
   {
-    $$ = ColKeyUniqueKey
+    $$ = colKeyUniqueKey
   }
 | UNIQUE
   {
-    $$ = ColKeyUnique
+    $$ = colKeyUnique
   }
 
 column_comment_opt:

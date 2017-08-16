@@ -538,43 +538,46 @@ type TableSpec struct {
 	Options string
 }
 
-func (tc *TableSpec) Format(buf *TrackedBuffer) {
+// Format formats the node.
+func (ts *TableSpec) Format(buf *TrackedBuffer) {
 	buf.Myprintf("(\n")
-	for i, col := range tc.Columns {
+	for i, col := range ts.Columns {
 		if i == 0 {
 			buf.Myprintf("\t%v", col)
 		} else {
 			buf.Myprintf(",\n\t%v", col)
 		}
 	}
-	for _, idx := range tc.Indexes {
+	for _, idx := range ts.Indexes {
 		buf.Myprintf(",\n\t%v", idx)
 	}
 
-	buf.Myprintf("\n)%s", strings.Replace(tc.Options, ", ", ",\n  ", -1))
+	buf.Myprintf("\n)%s", strings.Replace(ts.Options, ", ", ",\n  ", -1))
 }
 
-func (tc *TableSpec) AddColumn(cd *ColumnDefinition) {
-	tc.Columns = append(tc.Columns, cd)
+// AddColumn appends the given column to the list in the spec
+func (ts *TableSpec) AddColumn(cd *ColumnDefinition) {
+	ts.Columns = append(ts.Columns, cd)
 }
 
-func (tc *TableSpec) AddIndex(id *IndexDefinition) {
-	tc.Indexes = append(tc.Indexes, id)
+// AddIndex appends the given index to the list in the spec
+func (ts *TableSpec) AddIndex(id *IndexDefinition) {
+	ts.Indexes = append(ts.Indexes, id)
 }
 
 // WalkSubtree walks the nodes of the subtree.
-func (node *TableSpec) WalkSubtree(visit Visit) error {
-	if node == nil {
+func (ts *TableSpec) WalkSubtree(visit Visit) error {
+	if ts == nil {
 		return nil
 	}
 
-	for _, n := range node.Columns {
+	for _, n := range ts.Columns {
 		if err := Walk(visit, n); err != nil {
 			return err
 		}
 	}
 
-	for _, n := range node.Indexes {
+	for _, n := range ts.Indexes {
 		if err := Walk(visit, n); err != nil {
 			return err
 		}
@@ -589,19 +592,20 @@ type ColumnDefinition struct {
 	Type ColumnType
 }
 
+// Format formats the node.
 func (col *ColumnDefinition) Format(buf *TrackedBuffer) {
 	buf.Myprintf("`%s` %v", col.Name.String(), &col.Type)
 }
 
 // WalkSubtree walks the nodes of the subtree.
-func (node *ColumnDefinition) WalkSubtree(visit Visit) error {
-	if node == nil {
+func (col *ColumnDefinition) WalkSubtree(visit Visit) error {
+	if col == nil {
 		return nil
 	}
 	return Walk(
 		visit,
-		node.Name,
-		&node.Type,
+		col.Name,
+		&col.Type,
 	)
 }
 
@@ -674,16 +678,16 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.Comment != nil {
 		opts = append(opts, keywordStrings[COMMENT_KEYWORD], String(ct.Comment))
 	}
-	if ct.KeyOpt == ColKeyPrimary {
+	if ct.KeyOpt == colKeyPrimary {
 		opts = append(opts, keywordStrings[PRIMARY], keywordStrings[KEY])
 	}
-	if ct.KeyOpt == ColKeyUnique {
+	if ct.KeyOpt == colKeyUnique {
 		opts = append(opts, keywordStrings[UNIQUE])
 	}
-	if ct.KeyOpt == ColKeyUniqueKey {
+	if ct.KeyOpt == colKeyUniqueKey {
 		opts = append(opts, keywordStrings[UNIQUE], keywordStrings[KEY])
 	}
-	if ct.KeyOpt == ColKey {
+	if ct.KeyOpt == colKey {
 		opts = append(opts, keywordStrings[KEY])
 	}
 
@@ -692,7 +696,8 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	}
 }
 
-// Get the abbreviated type information as returned by describe table
+// DescribeType returns the abbreviated type information as required for
+// describe table
 func (ct *ColumnType) DescribeType() string {
 	buf := NewTrackedBuffer(nil)
 	buf.Myprintf("%s", ct.Type)
@@ -716,40 +721,35 @@ func (ct *ColumnType) DescribeType() string {
 }
 
 // SqlType returns the sqltypes type code for the given column
-func (ct *ColumnType) SqlType() querypb.Type {
+func (ct *ColumnType) SQLType() querypb.Type {
 	switch ct.Type {
 	case keywordStrings[TINYINT]:
 		if ct.Unsigned {
 			return sqltypes.Uint8
-		} else {
-			return sqltypes.Int8
 		}
+		return sqltypes.Int8
 	case keywordStrings[SMALLINT]:
 		if ct.Unsigned {
 			return sqltypes.Uint16
-		} else {
-			return sqltypes.Int16
 		}
+		return sqltypes.Int16
 	case keywordStrings[MEDIUMINT]:
 		if ct.Unsigned {
 			return sqltypes.Uint24
-		} else {
-			return sqltypes.Int24
 		}
+		return sqltypes.Int24
 	case keywordStrings[INT]:
 		fallthrough
 	case keywordStrings[INTEGER]:
 		if ct.Unsigned {
 			return sqltypes.Uint32
-		} else {
-			return sqltypes.Int32
 		}
+		return sqltypes.Int32
 	case keywordStrings[BIGINT]:
 		if ct.Unsigned {
 			return sqltypes.Uint64
-		} else {
-			return sqltypes.Int64
 		}
+		return sqltypes.Int64
 	case keywordStrings[TEXT]:
 		return sqltypes.Text
 	case keywordStrings[TINYTEXT]:
@@ -801,7 +801,7 @@ func (ct *ColumnType) SqlType() querypb.Type {
 }
 
 // WalkSubtree walks the nodes of the subtree.
-func (node *ColumnType) WalkSubtree(visit Visit) error {
+func (ct *ColumnType) WalkSubtree(visit Visit) error {
 	return nil
 }
 
@@ -811,36 +811,7 @@ type IndexDefinition struct {
 	Columns []*IndexColumn
 }
 
-// IndexInfo describes the name and type of an index in a CREATE TABLE statement
-type IndexInfo struct {
-	Type    string
-	Name    ColIdent
-	Primary bool
-	Unique  bool
-}
-
-func (ii *IndexInfo) Format(buf *TrackedBuffer) {
-	if ii.Primary {
-		buf.Myprintf("%s", ii.Type)
-	} else {
-		buf.Myprintf("%s `%v`", ii.Type, ii.Name)
-	}
-}
-
-func (ii *IndexInfo) WalkSubtree(visit Visit) error {
-	if err := Walk(visit, ii.Name); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// IndexColumn describes a column in an index definition with optional length
-type IndexColumn struct {
-	Column ColIdent
-	Length *SQLVal
-}
-
+// Format formats the node.
 func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v (", idx.Info)
 	for i, col := range idx.Columns {
@@ -856,18 +827,51 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 	buf.Myprintf(")")
 }
 
-func (node *IndexDefinition) WalkSubtree(visit Visit) error {
-	if node == nil {
+// WalkSubtree walks the nodes of the subtree.
+func (idx *IndexDefinition) WalkSubtree(visit Visit) error {
+	if idx == nil {
 		return nil
 	}
 
-	for _, n := range node.Columns {
+	for _, n := range idx.Columns {
 		if err := Walk(visit, n.Column); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+// IndexInfo describes the name and type of an index in a CREATE TABLE statement
+type IndexInfo struct {
+	Type    string
+	Name    ColIdent
+	Primary bool
+	Unique  bool
+}
+
+// Format formats the node.
+func (ii *IndexInfo) Format(buf *TrackedBuffer) {
+	if ii.Primary {
+		buf.Myprintf("%s", ii.Type)
+	} else {
+		buf.Myprintf("%s `%v`", ii.Type, ii.Name)
+	}
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (ii *IndexInfo) WalkSubtree(visit Visit) error {
+	if err := Walk(visit, ii.Name); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// IndexColumn describes a column in an index definition with optional length
+type IndexColumn struct {
+	Column ColIdent
+	Length *SQLVal
 }
 
 // LengthScaleOption is used for types that have an optional length
@@ -877,15 +881,16 @@ type LengthScaleOption struct {
 	Scale  *SQLVal
 }
 
-// KeyOption indicates whether or not the given column is defined as an index element
+// ColumnKeyOption indicates whether or not the given column is defined as an
+// index element and contains the type of the option
 type ColumnKeyOption int
 
 const (
-	ColKeyNone ColumnKeyOption = iota
-	ColKeyPrimary
-	ColKeyUnique
-	ColKeyUniqueKey
-	ColKey
+	colKeyNone ColumnKeyOption = iota
+	colKeyPrimary
+	colKeyUnique
+	colKeyUniqueKey
+	colKey
 )
 
 // Show represents a show statement.
