@@ -1354,6 +1354,8 @@ func (tsv *TabletServer) convertError(ctx context.Context, sql string, bindVaria
 		errCode = vtrpcpb.Code_UNAVAILABLE
 	case mysql.ERBadFieldError:
 		errCode = vtrpcpb.Code_NOT_FOUND
+	case mysql.ERNoReferencedRow, mysql.ErNoReferencedRow2, mysql.ERRowIsReferenced, mysql.ERRowIsReferenced2:
+		errCode = vtrpcpb.Code_FAILED_PRECONDITION
 	}
 
 	// If TerseErrors is on, strip the error message returned by MySQL and only
