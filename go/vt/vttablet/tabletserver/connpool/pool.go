@@ -250,7 +250,6 @@ func (cp *Pool) isCallerIDAppDebug(ctx context.Context) bool {
 	callerID := callerid.ImmediateCallerIDFromContext(ctx)
 	if cp.appDebugParams == nil {
 		return false
-	} else {
-		return callerID != nil && callerID.Username == cp.appDebugParams.Uname
 	}
+	return callerID != nil && callerID.Username == cp.appDebugParams.Uname
 }

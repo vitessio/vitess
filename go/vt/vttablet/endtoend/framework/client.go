@@ -75,7 +75,7 @@ func (client *QueryClient) Commit() error {
 	return client.server.Commit(client.ctx, &client.target, client.transactionID)
 }
 
-// Set context for the client
+// SetCtx context for the client
 func (client *QueryClient) SetCtx(ctx context.Context) {
 	client.ctx = ctx
 }
