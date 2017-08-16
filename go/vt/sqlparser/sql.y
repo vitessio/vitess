@@ -2170,6 +2170,10 @@ non_rename_operation:
   { $$ = struct{}{} }
 | AUTO_INCREMENT
   { $$ = struct{}{} }
+| CHARACTER
+  { $$ = struct{}{} }
+| COMMENT_KEYWORD
+  { $$ = struct{}{} }
 | DEFAULT
   { $$ = struct{}{} }
 | DROP

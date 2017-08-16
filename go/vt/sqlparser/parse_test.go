@@ -687,6 +687,15 @@ func TestValid(t *testing.T) {
 		input:  "alter table e auto_increment = 20",
 		output: "alter table e",
 	}, {
+		input:  "alter table e character set = 'ascii'",
+		output: "alter table e",
+	}, {
+		input:  "alter table e default character set = 'ascii'",
+		output: "alter table e",
+	}, {
+		input:  "alter table e comment = 'hello'",
+		output: "alter table e",
+	}, {
 		input: "create table a",
 	}, {
 		input: "create table a (\n\t`a` int\n)",
