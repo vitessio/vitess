@@ -1219,7 +1219,7 @@ func TestCreateTable(t *testing.T) {
 		"create table t (\n"+
 			"	`id` int auto_increment primary key,\n"+
 			"	`username` varchar unique key,\n"+
-			"	`email` varchar,\n"+
+			"	`email` varchar unique,\n"+
 			"	`full_name` varchar key\n"+
 			")",
 
@@ -1229,9 +1229,13 @@ func TestCreateTable(t *testing.T) {
 			"	`username` varchar,\n"+
 			"	`email` varchar,\n"+
 			"	`full_name` varchar,\n"+
-			"	primary key (id),\n"+
-			"	unique key by_username (username),\n"+
-			"	key by_full_name (full_name)\n"+
+			"	`status` varchar,\n"+
+			"	primary key (`id`),\n"+
+			"	unique key `by_username` (`username`),\n"+
+			"	unique `by_username2` (`username`),\n"+
+			"	unique index `by_username3` (`username`),\n"+
+			"	index `by_status` (`status`),\n"+
+			"	key `by_full_name` (`full_name`)\n"+
 			")",
 
 		// multi-column indexes
@@ -1243,9 +1247,9 @@ func TestCreateTable(t *testing.T) {
 			"	`a` int,\n"+
 			"	`b` int,\n"+
 			"	`c` int,\n"+
-			"	primary key (id, username),\n"+
-			"	unique key by_abc (a, b, c),\n"+
-			"	key by_email (email(10), username)\n"+
+			"	primary key (`id`, `username`),\n"+
+			"	unique key `by_abc` (`a`, `b`, `c`),\n"+
+			"	key `by_email` (`email`(10), `username`)\n"+
 			")",
 
 		// table options
@@ -1278,6 +1282,7 @@ func TestCreateTable(t *testing.T) {
   			"  stats_sample_pages 1,\n"+
   			"  tablespace tablespace_name storage disk,\n"+
   			"  tablespace tablespace_name\n",
+
 	}
 	for _, sql := range validSQL {
 		sql = strings.TrimSpace(sql)

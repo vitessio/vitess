@@ -680,6 +680,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		opts = append(opts, keywordStrings[PRIMARY], keywordStrings[KEY])
 	}
 	if ct.KeyOpt == ColKeyUnique {
+		opts = append(opts, keywordStrings[UNIQUE])
+	}
+	if ct.KeyOpt == ColKeyUniqueKey {
 		opts = append(opts, keywordStrings[UNIQUE], keywordStrings[KEY])
 	}
 	if ct.KeyOpt == ColKey {
@@ -812,9 +815,26 @@ type IndexDefinition struct {
 
 // IndexInfo describes the name and type of an index in a CREATE TABLE statement
 type IndexInfo struct {
-	Primary bool
+	Type    string
 	Name    ColIdent
+	Primary bool
 	Unique  bool
+}
+
+func (ii *IndexInfo) Format(buf *TrackedBuffer) {
+	if ii.Primary {
+		buf.Myprintf("%s", ii.Type)
+	} else {
+		buf.Myprintf("%s `%v`", ii.Type, ii.Name)
+	}
+}
+
+func (ii *IndexInfo) WalkSubtree(visit Visit) error {
+	if err := Walk(visit, ii.Name); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // IndexColumn describes a column in an index definition with optional length
@@ -824,20 +844,12 @@ type IndexColumn struct {
 }
 
 func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
-	if idx.Info.Primary {
-		buf.Myprintf("%s %s", keywordStrings[PRIMARY], keywordStrings[KEY])
-	} else if idx.Info.Unique {
-		buf.Myprintf("%s %s %v", keywordStrings[UNIQUE], keywordStrings[KEY], idx.Info.Name)
-	} else {
-		buf.Myprintf("%s %v", keywordStrings[KEY], idx.Info.Name)
-	}
-
-	buf.Myprintf(" (")
+	buf.Myprintf("%v (", idx.Info)
 	for i, col := range idx.Columns {
 		if i != 0 {
-			buf.Myprintf(", %s", col.Column.String())
+			buf.Myprintf(", `%s`", col.Column.String())
 		} else {
-			buf.Myprintf("%s", col.Column.String())
+			buf.Myprintf("`%s`", col.Column.String())
 		}
 		if col.Length != nil {
 			buf.Myprintf("(%v)", col.Length)
@@ -874,6 +886,7 @@ const (
 	ColKeyNone ColumnKeyOption = iota
 	ColKeyPrimary
 	ColKeyUnique
+	ColKeyUniqueKey
 	ColKey
 )
 

@@ -238,6 +238,7 @@ func forceEOF(yylex interface{}) {
 %type <strs> enum_values
 %type <columnDefinition> column_definition
 %type <indexDefinition> index_definition
+%type <str> index_or_key
 %type <TableSpec> table_spec table_column_list
 %type <str> table_option_list table_option table_opt_value
 %type <indexInfo> index_info
@@ -691,7 +692,7 @@ column_key_opt:
   }
 | UNIQUE KEY
   {
-    $$ = ColKeyUnique
+    $$ = ColKeyUniqueKey
   }
 | UNIQUE
   {
@@ -738,15 +739,29 @@ index_definition:
 index_info:
   PRIMARY KEY
   {
-    $$ = &IndexInfo{Primary: true, Name: NewColIdent("PRIMARY"), Unique: true}
+    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
   }
-| UNIQUE KEY ID
+| UNIQUE index_or_key ID
   {
-    $$ = &IndexInfo{Name: NewColIdent(string($3)), Unique: true}
+    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent(string($3)), Unique: true}
   }
-| KEY ID
+| UNIQUE ID
   {
-    $$ = &IndexInfo{Name: NewColIdent(string($2)), Unique: false}
+    $$ = &IndexInfo{Type: string($1), Name: NewColIdent(string($2)), Unique: true}
+  }
+| index_or_key ID
+  {
+    $$ = &IndexInfo{Type: string($1), Name: NewColIdent(string($2)), Unique: false}
+  }
+
+index_or_key:
+    INDEX
+  {
+    $$ = string($1)
+  }
+  | KEY
+  {
+    $$ = string($1)
   }
 
 index_column_list:
