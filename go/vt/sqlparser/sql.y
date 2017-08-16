@@ -92,7 +92,6 @@ func forceEOF(yylex interface{}) {
   optVal        *SQLVal
   LengthScaleOption LengthScaleOption
   columnDefinition *ColumnDefinition
-  columnDefinitions []*ColumnDefinition
   indexDefinition *IndexDefinition
   indexInfo     *IndexInfo
   indexColumn   *IndexColumn
