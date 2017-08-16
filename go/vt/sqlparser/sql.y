@@ -940,7 +940,7 @@ show_statement_type:
 | reserved_keyword
   {
     switch v := string($1); v {
-    case ShowDatabasesStr, ShowTablesStr, ShowKeyspacesStr, ShowShardsStr, ShowVSchemaTablesStr:
+    case ShowDatabasesStr, ShowTablesStr:
       $$ = v
     default:
       $$ = ShowUnsupportedStr
@@ -948,7 +948,12 @@ show_statement_type:
   }
 | non_reserved_keyword
 {
-  $$ = ShowUnsupportedStr
+    switch v := string($1); v {
+    case ShowKeyspacesStr, ShowShardsStr, ShowVSchemaTablesStr:
+      $$ = v
+    default:
+      $$ = ShowUnsupportedStr
+    }
 }
 
 show_statement:
@@ -2342,9 +2347,6 @@ reserved_keyword:
 | UTC_TIME
 | UTC_TIMESTAMP
 | VALUES
-| VITESS_KEYSPACES
-| VITESS_SHARDS
-| VSCHEMA_TABLES
 | WHEN
 | WHERE
 
@@ -2405,6 +2407,9 @@ non_reserved_keyword:
 | VARBINARY
 | VARCHAR
 | VIEW
+| VITESS_KEYSPACES
+| VITESS_SHARDS
+| VSCHEMA_TABLES
 | WITH
 | YEAR
 | ZEROFILL
