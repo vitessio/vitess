@@ -40,8 +40,24 @@ import (
 // This will help avoid name collisions.
 
 // Parse parses the sql and returns a Statement, which
-// is the AST representation of the query.
+// is the AST representation of the query. If a DDL statement
+// is partially parsed but still contains a syntax error, the
+// error is ignored and the DDL is returned anyway.
 func Parse(sql string) (Statement, error) {
+	tokenizer := NewStringTokenizer(sql)
+	if yyParse(tokenizer) != 0 {
+		if tokenizer.partialDDL != nil {
+			tokenizer.ParseTree = tokenizer.partialDDL
+			return tokenizer.ParseTree, nil
+		}
+		return nil, errors.New(tokenizer.LastError)
+	}
+	return tokenizer.ParseTree, nil
+}
+
+// ParseStrictDDL is the same as Parse except it errors on
+// partially parsed DDL statements.
+func ParseStrictDDL(sql string) (Statement, error) {
 	tokenizer := NewStringTokenizer(sql)
 	if yyParse(tokenizer) != 0 {
 		return nil, errors.New(tokenizer.LastError)

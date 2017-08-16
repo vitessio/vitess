@@ -25,6 +25,10 @@ func setAllowComments(yylex interface{}, allow bool) {
   yylex.(*Tokenizer).AllowComments = allow
 }
 
+func setDDL(yylex interface{}, ddl *DDL) {
+  yylex.(*Tokenizer).partialDDL = ddl
+}
+
 func incNesting(yylex interface{}) bool {
   yylex.(*Tokenizer).nesting++
   if yylex.(*Tokenizer).nesting == 200 {
@@ -47,6 +51,7 @@ func forceEOF(yylex interface{}) {
   empty         struct{}
   statement     Statement
   selStmt       SelectStatement
+  ddl           *DDL
   ins           *Insert
   byt           byte
   bytes         []byte
@@ -170,6 +175,7 @@ func forceEOF(yylex interface{}) {
 %type <selStmt> select_statement base_select union_lhs union_rhs
 %type <statement> insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement
+%type <ddl> create_table_prefix
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <bytes2> comment_opt comment_list
 %type <str> union_op insert_or_replace
@@ -393,9 +399,10 @@ set_statement:
   }
 
 create_statement:
-  CREATE TABLE not_exists_opt table_name table_spec
+  create_table_prefix table_spec
   {
-    $$ = &DDL{Action: CreateStr, NewName: $4, TableSpec: $5}
+    $1.TableSpec = $2
+    $$ = $1
   }
 | CREATE constraint_opt INDEX ID using_opt ON table_name ddl_force_eof
   {
@@ -409,6 +416,13 @@ create_statement:
 | CREATE OR REPLACE VIEW table_name ddl_force_eof
   {
     $$ = &DDL{Action: CreateStr, NewName: $5.ToViewName()}
+  }
+
+create_table_prefix:
+  CREATE TABLE not_exists_opt table_name
+  {
+    $$ = &DDL{Action: CreateStr, NewName: $4}
+    setDDL(yylex, $$)
   }
 
 table_spec:

@@ -687,12 +687,20 @@ func TestValid(t *testing.T) {
 		input:  "alter table e auto_increment = 20",
 		output: "alter table e",
 	}, {
+		input: "create table a",
+	}, {
 		input: "create table a (\n\t`a` int\n)",
 	}, {
 		input: "create table `by` (\n\t`by` char\n)",
 	}, {
 		input:  "create table if not exists a (\n\t`a` int\n)",
 		output: "create table a (\n\t`a` int\n)",
+	}, {
+		input:  "create table a ignore me this is garbage",
+		output: "create table a",
+	}, {
+		input:  "create table a (a int, b char, c garbage)",
+		output: "create table a",
 	}, {
 		input:  "create index a on b",
 		output: "alter table b",
@@ -1288,7 +1296,7 @@ func TestCreateTable(t *testing.T) {
 	}
 	for _, sql := range validSQL {
 		sql = strings.TrimSpace(sql)
-		tree, err := Parse(sql)
+		tree, err := ParseStrictDDL(sql)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", sql, err)
 			continue
@@ -1298,6 +1306,17 @@ func TestCreateTable(t *testing.T) {
 		if sql != got {
 			t.Errorf("want:\n%s\ngot:\n%s", sql, got)
 		}
+	}
+
+	sql := "create table t garbage"
+	tree, err := Parse(sql)
+	if err != nil {
+		t.Errorf("input: %s, err: %v", sql, err)
+	}
+
+	tree, err = ParseStrictDDL(sql)
+	if tree != nil || err == nil {
+		t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
 	}
 }
 

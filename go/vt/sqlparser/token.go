@@ -39,6 +39,7 @@ type Tokenizer struct {
 	LastError     string
 	posVarIndex   int
 	ParseTree     Statement
+	partialDDL    *DDL
 	nesting       int
 }
 
