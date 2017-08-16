@@ -30,7 +30,7 @@ func TestConnPoolGet(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams())
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	dbConn, err := connPool.Get(context.Background())
 	if err != nil {
@@ -56,7 +56,7 @@ func TestConnPoolSetCapacity(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams())
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	err := connPool.SetCapacity(-10)
 	if err == nil {
@@ -78,7 +78,7 @@ func TestConnPoolStatJSON(t *testing.T) {
 	if connPool.StatsJSON() != "{}" {
 		t.Fatalf("pool is closed, stats json should be empty: {}")
 	}
-	connPool.Open(db.ConnParams(), db.ConnParams())
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	statsJSON := connPool.StatsJSON()
 	if statsJSON == "" || statsJSON == "{}" {
@@ -113,7 +113,7 @@ func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
 	defer db.Close()
 	idleTimeout := 10 * time.Second
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams())
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	if connPool.Capacity() != 100 {
 		t.Fatalf("pool capacity should be 100")
@@ -156,5 +156,6 @@ func newPool() *Pool {
 		100,
 		10*time.Second,
 		checker,
+		"appDebug",
 	)
 }

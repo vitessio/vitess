@@ -43,7 +43,7 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 	db.AddQuery("rollback", &sqltypes.Result{})
 
 	txPool := newTxPool()
-	txPool.Open(db.ConnParams(), db.ConnParams())
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
 	transactionID, err := txPool.Begin(ctx, false)
@@ -70,7 +70,7 @@ func TestTxPoolRollbackNonBusy(t *testing.T) {
 	db.AddQuery("rollback", &sqltypes.Result{})
 
 	txPool := newTxPool()
-	txPool.Open(db.ConnParams(), db.ConnParams())
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
 	txid1, err := txPool.Begin(ctx, false)
@@ -108,7 +108,7 @@ func TestTxPoolTransactionKiller(t *testing.T) {
 	txPool := newTxPool()
 	// make sure transaction killer will run frequent enough
 	txPool.SetTimeout(1 * time.Millisecond)
-	txPool.Open(db.ConnParams(), db.ConnParams())
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
 	killCount := tabletenv.KillStats.Counts()["Transactions"]
@@ -135,7 +135,7 @@ func TestTxPoolClientRowsFound(t *testing.T) {
 	defer db.Close()
 	db.AddQuery("begin", &sqltypes.Result{})
 	txPool := newTxPool()
-	txPool.Open(db.ConnParams(), db.ConnParams())
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	ctx := context.Background()
 
 	startNormalSize := txPool.conns.Available()
@@ -280,7 +280,7 @@ func primeTxPoolWithConnection(t *testing.T) (*fakesqldb.DB, *TxPool, error) {
 	txPool := newTxPool()
 	// Set the capacity to 1 to ensure that the db connection is reused.
 	txPool.conns.SetCapacity(1)
-	txPool.Open(db.ConnParams(), db.ConnParams())
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 
 	// Run a query to trigger a database connection. That connection will be
 	// reused by subsequent transactions.
@@ -301,7 +301,7 @@ func TestTxPoolBeginWithError(t *testing.T) {
 	defer db.Close()
 	db.AddRejectedQuery("begin", errRejected)
 	txPool := newTxPool()
-	txPool.Open(db.ConnParams(), db.ConnParams())
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
 	_, err := txPool.Begin(ctx, false)
@@ -323,7 +323,7 @@ func TestTxPoolRollbackFail(t *testing.T) {
 	db.AddRejectedQuery("rollback", errRejected)
 
 	txPool := newTxPool()
-	txPool.Open(db.ConnParams(), db.ConnParams())
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
 	transactionID, err := txPool.Begin(ctx, false)
@@ -351,7 +351,7 @@ func TestTxPoolGetConnNonExistentTransaction(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	txPool := newTxPool()
-	txPool.Open(db.ConnParams(), db.ConnParams())
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	_, err := txPool.Get(12345, "for query")
 	want := "transaction 12345: not found"
@@ -366,7 +366,7 @@ func TestTxPoolExecFailDueToConnFail_Errno2006(t *testing.T) {
 	db.AddQuery("begin", &sqltypes.Result{})
 
 	txPool := newTxPool()
-	txPool.Open(db.ConnParams(), db.ConnParams())
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
 
@@ -404,7 +404,7 @@ func TestTxPoolExecFailDueToConnFail_Errno2013(t *testing.T) {
 	db.AddQuery("begin", &sqltypes.Result{})
 
 	txPool := newTxPool()
-	txPool.Open(db.ConnParams(), db.ConnParams())
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
 
@@ -437,7 +437,7 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 	db.AddQuery("begin", &sqltypes.Result{})
 
 	txPool := newTxPool()
-	txPool.Open(db.ConnParams(), db.ConnParams())
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 
 	// Start stray transaction.
 	_, err := txPool.Begin(context.Background(), false)
@@ -468,5 +468,6 @@ func newTxPool() *TxPool {
 		transactionTimeout,
 		idleTimeout,
 		DummyChecker,
+		"appDebug",
 	)
 }

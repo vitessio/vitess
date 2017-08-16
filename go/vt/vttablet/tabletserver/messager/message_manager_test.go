@@ -616,11 +616,11 @@ func (fts *fakeTabletServer) PurgeMessages(ctx context.Context, target *querypb.
 }
 
 func newMMConnPool(db *fakesqldb.DB) *connpool.Pool {
-	pool := connpool.New("", 20, time.Duration(10*time.Minute), newFakeTabletServer())
+	pool := connpool.New("", 20, time.Duration(10*time.Minute), newFakeTabletServer(), "appDebug")
 	dbconfigs := dbconfigs.DBConfigs{
 		App:           *db.ConnParams(),
 		SidecarDBName: "_vt",
 	}
-	pool.Open(&dbconfigs.App, &dbconfigs.Dba)
+	pool.Open(&dbconfigs.App, &dbconfigs.Dba, &dbconfigs.AppDebug)
 	return pool
 }
