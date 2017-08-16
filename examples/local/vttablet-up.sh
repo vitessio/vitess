@@ -43,6 +43,9 @@ dbconfig_flags="$dbconfig_dba_flags \
     -db-config-app-uname vt_app \
     -db-config-app-dbname vt_$keyspace \
     -db-config-app-charset utf8 \
+    -db-config-appdebug-uname vt_appdebug \
+    -db-config-appdebug-dbname vt_$keyspace \
+    -db-config-appdebug-charset utf8 \
     -db-config-allprivs-uname vt_allprivs \
     -db-config-allprivs-dbname vt_$keyspace \
     -db-config-allprivs-charset utf8 \
@@ -116,6 +119,7 @@ for uid_index in $uids; do
     -log_dir $VTDATAROOT/tmp \
     -tablet-path $alias \
     -tablet_hostname "$tablet_hostname" \
+    -client-appdebug-username 'appDebug' \
     -init_keyspace $keyspace \
     -init_shard $shard \
     -init_tablet_type $tablet_type \
