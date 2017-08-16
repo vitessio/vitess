@@ -247,6 +247,21 @@ const (
 	// ERUnknownError is ER_UNKNOWN_ERROR
 	ERUnknownError = 1105
 
+	// ERBadFieldError is ER_BAD_FIELD_ERROR
+	ERBadFieldError = 1054
+
+	// ERRowIsReferenced is ER_ROW_IS_REFERENCED
+	ERRowIsReferenced = 1217
+
+	// ERRowIsReferenced2 is ER_ROW_IS_REFERENCED_2
+	ERRowIsReferenced2 = 1451
+
+	// ERNoReferencedRow is ER_NO_REFERENCED_ROW
+	ERNoReferencedRow = 1216
+
+	// ErNoReferencedRow2 is ER_NO_REFERENCED_ROW_2
+	ErNoReferencedRow2 = 1452
+
 	// ERCantDoThisDuringAnTransaction is
 	// ER_CANT_DO_THIS_DURING_AN_TRANSACTION
 	ERCantDoThisDuringAnTransaction = 1179
@@ -290,6 +305,9 @@ const (
 
 	// SSBadNullError is ER_BAD_NULL_ERROR
 	SSBadNullError = "23000"
+
+	// SSBadFieldError is ER_BAD_FIELD_ERROR
+	SSBadFieldError = "42S22"
 
 	// SSDupKey is ER_DUP_KEY
 	SSDupKey = "23000"
