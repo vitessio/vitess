@@ -2258,14 +2258,15 @@ reserved_keyword:
   AND
 | AS
 | ASC
-| AUTO_INCREMENT
 | BETWEEN
+| BIGINT
 | BINARY
+| BLOB
 | BY
 | CASE
+| CHAR
 | CHARACTER
 | COLLATE
-| COMMENT_KEYWORD
 | CONVERT
 | CREATE
 | CROSS
@@ -2274,12 +2275,14 @@ reserved_keyword:
 | CURRENT_TIMESTAMP
 | DATABASE
 | DATABASES
+| DECIMAL
 | DEFAULT
 | DELETE
 | DESC
 | DESCRIBE
 | DISTINCT
 | DIV
+| DOUBLE
 | DROP
 | ELSE
 | END
@@ -2287,6 +2290,7 @@ reserved_keyword:
 | EXISTS
 | EXPLAIN
 | FALSE
+| FLOAT_TYPE
 | FOR
 | FORCE
 | FROM
@@ -2298,6 +2302,8 @@ reserved_keyword:
 | INDEX
 | INNER
 | INSERT
+| INT
+| INTEGER
 | INTERVAL
 | INTO
 | IS
@@ -2306,19 +2312,27 @@ reserved_keyword:
 | LEFT
 | LIKE
 | LIMIT
+| LONGBLOB
+| LONGTEXT
 | LOCALTIME
 | LOCALTIMESTAMP
 | LOCK
 | MATCH
+| MEDIUMBLOB
+| MEDIUMINT
+| MEDIUMTEXT
 | MOD
 | NATURAL
 | NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
 | NOT
 | NULL
+| NUMERIC
 | ON
 | OR
 | ORDER
 | OUTER
+| PRIMARY
+| REAL
 | REGEXP
 | RENAME
 | REPLACE
@@ -2326,18 +2340,20 @@ reserved_keyword:
 | SELECT
 | SEPARATOR
 | SET
-| VITESS_KEYSPACES
-| VITESS_SHARDS
-| VSCHEMA_TABLES
 | SHOW
+| SMALLINT
 | STRAIGHT_JOIN
 | TABLE
 | TABLES
 | THEN
+| TINYBLOB
+| TINYINT
+| TINYTEXT
 | TO
 | TRUE
 | UNION
 | UNIQUE
+| UNSIGNED
 | UPDATE
 | USE
 | USING
@@ -2345,8 +2361,14 @@ reserved_keyword:
 | UTC_TIME
 | UTC_TIMESTAMP
 | VALUES
+| VARBINARY
+| VARCHAR
+| VITESS_KEYSPACES
+| VITESS_SHARDS
+| VSCHEMA_TABLES
 | WHEN
 | WHERE
+| ZEROFILL
 
 /*
   These are non-reserved Vitess, because they don't cause conflicts in the grammar.
@@ -2357,22 +2379,34 @@ reserved_keyword:
 */
 non_reserved_keyword:
   AGAINST
+| AUTO_INCREMENT
+| BIT
+| BOOL
+| COMMENT_KEYWORD
 | DATE
+| DATETIME
 | DUPLICATE
+| ENUM
 | EXPANSION
-| INTEGER
+| JSON
 | LANGUAGE
+| LAST_INSERT_ID
 | MODE
+| NCHAR
 | OFFSET
 | OPTIMIZE
 | QUERY
 | REPAIR
 | SHARE
+| SIGNED
+| TEXT
+| TIME
+| TIMESTAMP
 | TRUNCATE
 | UNUSED
 | VIEW
 | WITH
-| LAST_INSERT_ID
+| YEAR
 
 openb:
   '('
