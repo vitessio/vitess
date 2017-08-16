@@ -33,7 +33,8 @@ import (
 )
 
 var (
-	connParams mysql.ConnParams
+	connParams         mysql.ConnParams
+	connAppDebugParams mysql.ConnParams
 )
 
 func TestMain(m *testing.M) {
@@ -53,7 +54,13 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		err = framework.StartServer(connParams)
+		connAppDebugParams, err = hdl.MySQLAppDebugConnParams()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "could not fetch mysql params: %v\n", err)
+			return 1
+		}
+
+		err = framework.StartServer(connParams, connAppDebugParams)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
@@ -92,6 +99,9 @@ func initTableACL() error {
 }
 
 var testSchema = `create table vitess_test(intval int default 0, floatval float default null, charval varchar(256) default null, binval varbinary(256) default null, primary key(intval));
+create table vitess_test_debuguser(intval int default 0, floatval float default null, charval varchar(256) default null, binval varbinary(256) default null, primary key(intval));
+revoke select on *.* from 'vt_appdebug'@'localhost';
+insert into vitess_test_debuguser values(1, 1.12345, 0xC2A2, 0x00FF), (2, null, '', null), (3, null, null, null);
 insert into vitess_test values(1, 1.12345, 0xC2A2, 0x00FF), (2, null, '', null), (3, null, null, null);
 
 create table vitess_a(eid bigint default 0, id int default 1, name varchar(128) default null, foo varbinary(128) default null, primary key(eid, id));
@@ -225,6 +235,12 @@ var tableACLConfig = `{
       "name": "vitess_acl_all_user_read_only",
       "table_names_or_prefixes": ["vitess_acl_all_user_read_only"],
       "readers": ["dev"]
+    },
+    {
+      "name": "vitess_acl_appdebug",
+      "table_names_or_prefixes": ["vitess_test_debuguser"],
+      "readers": ["dev", "vt_appdebug"],
+      "writers": ["dev", "vt_appdebug"]
     }
   ]
 }`

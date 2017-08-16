@@ -381,6 +381,56 @@ func (hdl *Handle) MySQLConnParams() (mysql.ConnParams, error) {
 	return params, nil
 }
 
+// MySQLAppDebugConnParams builds the MySQL connection params for debug user.
+// It's valid only if you used MySQLOnly option.
+func (hdl *Handle) MySQLAppDebugConnParams() (mysql.ConnParams, error) {
+	params := mysql.ConnParams{
+		Charset: "utf8",
+		DbName:  hdl.dbname,
+	}
+	if hdl.Data == nil {
+		return params, errors.New("no data")
+	}
+	iuser, ok := hdl.Data["appdebug_username"]
+	if !ok {
+		return params, errors.New("no username")
+	}
+	user, ok := iuser.(string)
+	if !ok {
+		return params, fmt.Errorf("invalid user type: %T", iuser)
+	}
+	params.Uname = user
+	if ipassword, ok := hdl.Data["password"]; ok {
+		password, ok := ipassword.(string)
+		if !ok {
+			return params, fmt.Errorf("invalid password type: %T", ipassword)
+		}
+		params.Pass = password
+	}
+	if ihost, ok := hdl.Data["host"]; ok {
+		host, ok := ihost.(string)
+		if !ok {
+			return params, fmt.Errorf("invalid host type: %T", ihost)
+		}
+		params.Host = host
+	}
+	if iport, ok := hdl.Data["port"]; ok {
+		port, ok := iport.(float64)
+		if !ok {
+			return params, fmt.Errorf("invalid port type: %T", iport)
+		}
+		params.Port = int(port)
+	}
+	if isocket, ok := hdl.Data["socket"]; ok {
+		socket, ok := isocket.(string)
+		if !ok {
+			return params, fmt.Errorf("invalid socket type: %T", isocket)
+		}
+		params.UnixSocket = socket
+	}
+	return params, nil
+}
+
 func (hdl *Handle) run(
 	options ...VitessOption,
 ) error {

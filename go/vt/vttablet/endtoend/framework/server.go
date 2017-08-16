@@ -50,7 +50,7 @@ var (
 // StartServer starts the server and initializes
 // all the global variables. This function should only be called
 // once at the beginning of the test.
-func StartServer(connParams mysql.ConnParams) error {
+func StartServer(connParams, connAppDebugParams mysql.ConnParams) error {
 	// Setup a fake vtgate server.
 	protocol := "resolveTest"
 	*vtgateconn.VtgateProtocol = protocol
@@ -62,6 +62,7 @@ func StartServer(connParams mysql.ConnParams) error {
 
 	dbcfgs := dbconfigs.DBConfigs{
 		App:           connParams,
+		AppDebug:      connAppDebugParams,
 		SidecarDBName: "_vt",
 	}
 
@@ -78,6 +79,7 @@ func StartServer(connParams mysql.ConnParams) error {
 	config.TwoPCAbandonAge = 1
 	config.TwoPCCoordinatorAddress = "fake"
 	config.EnableHotRowProtection = true
+	config.AppDebugUsername = "vt_appdebug"
 
 	Target = querypb.Target{
 		Keyspace:   "vttest",

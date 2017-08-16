@@ -76,6 +76,9 @@ class MySqlDBMysqlctl(mysql_db.MySqlDB):
   def username(self):
     return 'vt_dba'
 
+  def appdebug_username(self):
+    return 'vt_appdebug'
+
   def password(self):
     return ''
 
@@ -91,6 +94,7 @@ class MySqlDBMysqlctl(mysql_db.MySqlDB):
   def config(self):
     return {
         'username': self.username(),
+        'appdebug_username': self.appdebug_username(),
         'password': self.password(),
         'socket': self.unix_socket(),
     }

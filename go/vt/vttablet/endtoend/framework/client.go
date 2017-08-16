@@ -75,6 +75,11 @@ func (client *QueryClient) Commit() error {
 	return client.server.Commit(client.ctx, &client.target, client.transactionID)
 }
 
+// Set context for the client
+func (client *QueryClient) SetCtx(ctx context.Context) {
+	client.ctx = ctx
+}
+
 // Rollback rolls back the current transaction.
 func (client *QueryClient) Rollback() error {
 	defer func() { client.transactionID = 0 }()
