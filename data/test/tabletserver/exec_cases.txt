@@ -788,6 +788,17 @@
   "WhereClause": " where eid = 1 and eid = 2"
 }
 
+# partial pk with order by
+"update a set name = 'foo' where eid=1 order by id desc"
+{
+  "PlanID": "DML_SUBQUERY",
+  "TableName": "a",
+  "FullQuery": "update a set name = 'foo' where eid = 1 order by id desc",
+  "OuterQuery": "update a set name = 'foo' where :#pk order by id desc",
+  "Subquery": "select eid, id from a where eid = 1 order by id desc limit :#maxLimit for update",
+  "WhereClause": " where eid = 1"
+}
+
 # delete cross-db
 "delete from b.a where eid=1 and id=1"
 {
@@ -838,6 +849,17 @@
   "FullQuery": "delete from a where eid = 1",
   "OuterQuery": "delete from a where :#pk",
   "Subquery": "select eid, id from a where eid = 1 limit :#maxLimit for update",
+  "WhereClause": " where eid = 1"
+}
+
+# partial pk with order by
+"delete from a where eid=1 order by id desc"
+{
+  "PlanID": "DML_SUBQUERY",
+  "TableName": "a",
+  "FullQuery": "delete from a where eid = 1 order by id desc",
+  "OuterQuery": "delete from a where :#pk order by id desc",
+  "Subquery": "select eid, id from a where eid = 1 order by id desc limit :#maxLimit for update",
   "WhereClause": " where eid = 1"
 }
 
