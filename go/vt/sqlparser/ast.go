@@ -736,7 +736,7 @@ func (ct *ColumnType) DescribeType() string {
 	return buf.String()
 }
 
-// SqlType returns the sqltypes type code for the given column
+// SQLType returns the sqltypes type code for the given column
 func (ct *ColumnType) SQLType() querypb.Type {
 	switch ct.Type {
 	case keywordStrings[TINYINT]:
