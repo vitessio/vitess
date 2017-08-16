@@ -1352,6 +1352,8 @@ func (tsv *TabletServer) convertError(ctx context.Context, sql string, bindVaria
 		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
 	case mysql.CRServerGone, mysql.ERServerShutdown:
 		errCode = vtrpcpb.Code_UNAVAILABLE
+	case mysql.ERBadFieldError:
+		errCode = vtrpcpb.Code_NOT_FOUND
 	}
 
 	// If TerseErrors is on, strip the error message returned by MySQL and only
