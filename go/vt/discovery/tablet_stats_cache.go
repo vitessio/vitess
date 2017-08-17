@@ -193,9 +193,13 @@ func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 
 			// We already have one up server, see if we
 			// need to replace it.
-			if e.healthy[0].TabletExternallyReparentedTimestamp > ts.TabletExternallyReparentedTimestamp {
-				// The notification we just got is older than
-				// the one we had before, discard it.
+			if ts.TabletExternallyReparentedTimestamp < e.healthy[0].TabletExternallyReparentedTimestamp {
+				log.Warningf("not marking healthy master as Up because its externally reparented timestamt is smaller than the highest known timestamp from previous MASTERs: %d < %d ",
+					ts.TabletExternallyReparentedTimestamp,
+					e.healthy[0].TabletExternallyReparentedTimestamp,
+					topoproto.KeyspaceShardString(eps.Target.Keyspace, eps.Target.Shard),
+					topoproto.TabletAliasString(eps.Tablet.Alias),
+					topoproto.TabletAliasString(e.healthy[0].Tablet.Alias))
 				return
 			}
 
