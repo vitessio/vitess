@@ -78,6 +78,9 @@ type DB struct {
 	// for all queries. This flag is used for benchmarking.
 	AllowAll bool
 
+	// QueryLogger: if non-nil, will be called for each ComQuery call
+	QueryLogger func(string, *sqltypes.Result, error)
+
 	// This next set of fields is used when ordering of the queries doesn't
 	// matter.
 
@@ -290,6 +293,20 @@ func (db *DB) ConnectionClosed(c *mysql.Conn) {
 
 // ComQuery is part of the mysql.Handler interface.
 func (db *DB) ComQuery(c *mysql.Conn, q []byte, callback func(*sqltypes.Result) error) error {
+	err := db.comQueryImpl(c, q, func(qr *sqltypes.Result) error {
+		if db.QueryLogger != nil {
+			db.QueryLogger(string(q), qr, nil)
+		}
+		return callback(qr)
+	})
+
+	if err != nil && db.QueryLogger != nil {
+		db.QueryLogger(string(q), nil, err)
+	}
+	return err
+}
+
+func (db *DB) comQueryImpl(c *mysql.Conn, q []byte, callback func(*sqltypes.Result) error) error {
 	if db.AllowAll {
 		return callback(&sqltypes.Result{})
 	}

@@ -58,6 +58,20 @@ type QueryExecutor struct {
 	tsv              *TabletServer
 }
 
+// NewQueryExecutor creates a new executor.
+func NewQueryExecutor(ctx context.Context, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, plan *TabletPlan, logStats *tabletenv.LogStats, tsv *TabletServer) *QueryExecutor {
+	return &QueryExecutor{
+		query:         query,
+		bindVars:      bindVars,
+		transactionID: transactionID,
+		options:       options,
+		plan:          plan,
+		ctx:           ctx,
+		logStats:      logStats,
+		tsv:           tsv,
+	}
+}
+
 var sequenceFields = []*querypb.Field{
 	{
 		Name: "nextval",
