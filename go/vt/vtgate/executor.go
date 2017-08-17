@@ -749,8 +749,6 @@ func (e *Executor) ServeHTTP(response http.ResponseWriter, request *http.Request
 
 // Plans returns the LRU plan cache
 func (e *Executor) Plans() *cache.LRUCache {
-	e.mu.Lock()
-	defer e.mu.Unlock()
 	return e.plans
 }
 
