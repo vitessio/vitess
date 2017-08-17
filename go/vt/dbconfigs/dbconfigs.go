@@ -39,9 +39,9 @@ type DBConfigFlag int
 
 // config flags
 const (
-	EmptyConfig    DBConfigFlag = 0
-	AppConfig      DBConfigFlag = 1
-	AppDebugConfig DBConfigFlag = 2 << iota
+	EmptyConfig DBConfigFlag = 0
+	AppConfig   DBConfigFlag = 1 << iota
+	AppDebugConfig
 	// AllPrivs user should have more privileges than App (should include possibility to do
 	// schema changes and write to internal Vitess tables), but it shouldn't have SUPER
 	// privilege like Dba has.

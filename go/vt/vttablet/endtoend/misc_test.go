@@ -658,20 +658,15 @@ func TestAppDebugRequest(t *testing.T) {
 
 	defer client.Execute("delete from vitess_test where intval= 124", nil)
 
-	ctx := callerid.NewContext(
-		context.Background(),
-		&vtrpcpb.CallerID{},
-		&querypb.VTGateCallerID{Username: "dev"})
-
 	// Set vt_appdebug
-	ctx = callerid.NewContext(
+	ctx := callerid.NewContext(
 		context.Background(),
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "vt_appdebug"})
 
 	want := "Access denied for user 'vt_appdebug'@'localhost'"
 
-	client.SetCtx(ctx)
+	client = framework.NewClientWithContext(ctx)
 
 	// Start a transaction. This test the other flow that a client can use to insert a value.
 	client.Begin(false)

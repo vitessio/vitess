@@ -257,11 +257,12 @@ func (dbc *DBConn) IsClosed() bool {
 
 // Recycle returns the DBConn to the pool.
 func (dbc *DBConn) Recycle() {
-	if dbc.pool == nil {
+	switch {
+	case dbc.pool == nil:
 		dbc.Close()
-	} else if dbc.conn.IsClosed() {
+	case dbc.conn.IsClosed():
 		dbc.pool.Put(nil)
-	} else {
+	default:
 		dbc.pool.Put(dbc)
 	}
 }

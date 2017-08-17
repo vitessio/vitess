@@ -56,7 +56,7 @@ func TestMain(m *testing.M) {
 
 		connAppDebugParams, err = hdl.MySQLAppDebugConnParams()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "could not fetch mysql params: %v\n", err)
+			fmt.Fprintf(os.Stderr, "could not fetch mysql appdebug params: %v\n", err)
 			return 1
 		}
 

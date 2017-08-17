@@ -52,6 +52,15 @@ func NewClient() *QueryClient {
 	}
 }
 
+// NewClientWithContext creates a new client for Server with the provided context.
+func NewClientWithContext(ctx context.Context) *QueryClient {
+	return &QueryClient{
+		ctx:    ctx,
+		target: Target,
+		server: Server,
+	}
+}
+
 // Begin begins a transaction.
 func (client *QueryClient) Begin(clientFoundRows bool) error {
 	if client.transactionID != 0 {
@@ -73,11 +82,6 @@ func (client *QueryClient) Begin(clientFoundRows bool) error {
 func (client *QueryClient) Commit() error {
 	defer func() { client.transactionID = 0 }()
 	return client.server.Commit(client.ctx, &client.target, client.transactionID)
-}
-
-// SetCtx context for the client
-func (client *QueryClient) SetCtx(ctx context.Context) {
-	client.ctx = ctx
 }
 
 // Rollback rolls back the current transaction.
