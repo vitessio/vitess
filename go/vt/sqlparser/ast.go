@@ -23,7 +23,10 @@ import (
 	"errors"
 	"strings"
 
+	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // Instructions for creating new types: If a type
@@ -39,8 +42,25 @@ import (
 // This will help avoid name collisions.
 
 // Parse parses the sql and returns a Statement, which
-// is the AST representation of the query.
+// is the AST representation of the query. If a DDL statement
+// is partially parsed but still contains a syntax error, the
+// error is ignored and the DDL is returned anyway.
 func Parse(sql string) (Statement, error) {
+	tokenizer := NewStringTokenizer(sql)
+	if yyParse(tokenizer) != 0 {
+		if tokenizer.partialDDL != nil {
+			log.Warningf("ignoring error parsing DDL '%s': %v", sql, tokenizer.LastError)
+			tokenizer.ParseTree = tokenizer.partialDDL
+			return tokenizer.ParseTree, nil
+		}
+		return nil, errors.New(tokenizer.LastError)
+	}
+	return tokenizer.ParseTree, nil
+}
+
+// ParseStrictDDL is the same as Parse except it errors on
+// partially parsed DDL statements.
+func ParseStrictDDL(sql string) (Statement, error) {
 	tokenizer := NewStringTokenizer(sql)
 	if yyParse(tokenizer) != 0 {
 		return nil, errors.New(tokenizer.LastError)
@@ -481,10 +501,11 @@ func (node *Set) WalkSubtree(visit Visit) error {
 // Table is set for AlterStr, DropStr, RenameStr.
 // NewName is set for AlterStr, CreateStr, RenameStr.
 type DDL struct {
-	Action   string
-	Table    TableName
-	NewName  TableName
-	IfExists bool
+	Action    string
+	Table     TableName
+	NewName   TableName
+	IfExists  bool
+	TableSpec *TableSpec
 }
 
 // DDL strings.
@@ -499,7 +520,11 @@ const (
 func (node *DDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case CreateStr:
-		buf.Myprintf("%s table %v", node.Action, node.NewName)
+		if node.TableSpec == nil {
+			buf.Myprintf("%s table %v", node.Action, node.NewName)
+		} else {
+			buf.Myprintf("%s table %v %v", node.Action, node.NewName, node.TableSpec)
+		}
 	case DropStr:
 		exists := ""
 		if node.IfExists {
@@ -524,6 +549,368 @@ func (node *DDL) WalkSubtree(visit Visit) error {
 		node.NewName,
 	)
 }
+
+// TableSpec describes the structure of a table from a CREATE TABLE statement
+type TableSpec struct {
+	Columns []*ColumnDefinition
+	Indexes []*IndexDefinition
+	Options string
+}
+
+// Format formats the node.
+func (ts *TableSpec) Format(buf *TrackedBuffer) {
+	buf.Myprintf("(\n")
+	for i, col := range ts.Columns {
+		if i == 0 {
+			buf.Myprintf("\t%v", col)
+		} else {
+			buf.Myprintf(",\n\t%v", col)
+		}
+	}
+	for _, idx := range ts.Indexes {
+		buf.Myprintf(",\n\t%v", idx)
+	}
+
+	buf.Myprintf("\n)%s", strings.Replace(ts.Options, ", ", ",\n  ", -1))
+}
+
+// AddColumn appends the given column to the list in the spec
+func (ts *TableSpec) AddColumn(cd *ColumnDefinition) {
+	ts.Columns = append(ts.Columns, cd)
+}
+
+// AddIndex appends the given index to the list in the spec
+func (ts *TableSpec) AddIndex(id *IndexDefinition) {
+	ts.Indexes = append(ts.Indexes, id)
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (ts *TableSpec) WalkSubtree(visit Visit) error {
+	if ts == nil {
+		return nil
+	}
+
+	for _, n := range ts.Columns {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+
+	for _, n := range ts.Indexes {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ColumnDefinition describes a column in a CREATE TABLE statement
+type ColumnDefinition struct {
+	Name ColIdent
+	Type ColumnType
+}
+
+// Format formats the node.
+func (col *ColumnDefinition) Format(buf *TrackedBuffer) {
+	buf.Myprintf("`%s` %v", col.Name.String(), &col.Type)
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (col *ColumnDefinition) WalkSubtree(visit Visit) error {
+	if col == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		col.Name,
+		&col.Type,
+	)
+}
+
+// ColumnType represents a sql type in a CREATE TABLE statement
+// All optional fields are nil if not specified
+type ColumnType struct {
+	// The base type string
+	Type string
+
+	// Generic field options.
+	NotNull       BoolVal
+	Autoincrement BoolVal
+	Default       *SQLVal
+	Comment       *SQLVal
+
+	// Numeric field options
+	Length   *SQLVal
+	Unsigned BoolVal
+	Zerofill BoolVal
+	Scale    *SQLVal
+
+	// Text field options
+	Charset string
+	Collate string
+
+	// Enum values
+	EnumValues []string
+
+	// Key specification
+	KeyOpt ColumnKeyOption
+}
+
+// Format returns a canonical string representation of the type and all relevant options
+func (ct *ColumnType) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%s", ct.Type)
+
+	if ct.Length != nil && ct.Scale != nil {
+		buf.Myprintf("(%v,%v)", ct.Length, ct.Scale)
+
+	} else if ct.Length != nil {
+		buf.Myprintf("(%v)", ct.Length)
+	}
+
+	if ct.EnumValues != nil {
+		buf.Myprintf("(%s)", strings.Join(ct.EnumValues, ", "))
+	}
+
+	opts := make([]string, 0, 16)
+	if ct.Unsigned {
+		opts = append(opts, keywordStrings[UNSIGNED])
+	}
+	if ct.Zerofill {
+		opts = append(opts, keywordStrings[ZEROFILL])
+	}
+	if ct.Charset != "" {
+		opts = append(opts, keywordStrings[CHARACTER], keywordStrings[SET], ct.Charset)
+	}
+	if ct.Collate != "" {
+		opts = append(opts, keywordStrings[COLLATE], ct.Collate)
+	}
+	if ct.NotNull {
+		opts = append(opts, keywordStrings[NOT], keywordStrings[NULL])
+	}
+	if ct.Default != nil {
+		opts = append(opts, keywordStrings[DEFAULT], String(ct.Default))
+	}
+	if ct.Autoincrement {
+		opts = append(opts, keywordStrings[AUTO_INCREMENT])
+	}
+	if ct.Comment != nil {
+		opts = append(opts, keywordStrings[COMMENT_KEYWORD], String(ct.Comment))
+	}
+	if ct.KeyOpt == colKeyPrimary {
+		opts = append(opts, keywordStrings[PRIMARY], keywordStrings[KEY])
+	}
+	if ct.KeyOpt == colKeyUnique {
+		opts = append(opts, keywordStrings[UNIQUE])
+	}
+	if ct.KeyOpt == colKeyUniqueKey {
+		opts = append(opts, keywordStrings[UNIQUE], keywordStrings[KEY])
+	}
+	if ct.KeyOpt == colKey {
+		opts = append(opts, keywordStrings[KEY])
+	}
+
+	if len(opts) != 0 {
+		buf.Myprintf(" %s", strings.Join(opts, " "))
+	}
+}
+
+// DescribeType returns the abbreviated type information as required for
+// describe table
+func (ct *ColumnType) DescribeType() string {
+	buf := NewTrackedBuffer(nil)
+	buf.Myprintf("%s", ct.Type)
+	if ct.Length != nil && ct.Scale != nil {
+		buf.Myprintf("(%v,%v)", ct.Length, ct.Scale)
+	} else if ct.Length != nil {
+		buf.Myprintf("(%v)", ct.Length)
+	}
+
+	opts := make([]string, 0, 16)
+	if ct.Unsigned {
+		opts = append(opts, keywordStrings[UNSIGNED])
+	}
+	if ct.Zerofill {
+		opts = append(opts, keywordStrings[ZEROFILL])
+	}
+	if len(opts) != 0 {
+		buf.Myprintf(" %s", strings.Join(opts, " "))
+	}
+	return buf.String()
+}
+
+// SQLType returns the sqltypes type code for the given column
+func (ct *ColumnType) SQLType() querypb.Type {
+	switch ct.Type {
+	case keywordStrings[TINYINT]:
+		if ct.Unsigned {
+			return sqltypes.Uint8
+		}
+		return sqltypes.Int8
+	case keywordStrings[SMALLINT]:
+		if ct.Unsigned {
+			return sqltypes.Uint16
+		}
+		return sqltypes.Int16
+	case keywordStrings[MEDIUMINT]:
+		if ct.Unsigned {
+			return sqltypes.Uint24
+		}
+		return sqltypes.Int24
+	case keywordStrings[INT]:
+		fallthrough
+	case keywordStrings[INTEGER]:
+		if ct.Unsigned {
+			return sqltypes.Uint32
+		}
+		return sqltypes.Int32
+	case keywordStrings[BIGINT]:
+		if ct.Unsigned {
+			return sqltypes.Uint64
+		}
+		return sqltypes.Int64
+	case keywordStrings[TEXT]:
+		return sqltypes.Text
+	case keywordStrings[TINYTEXT]:
+		return sqltypes.Text
+	case keywordStrings[MEDIUMTEXT]:
+		return sqltypes.Text
+	case keywordStrings[LONGTEXT]:
+		return sqltypes.Text
+	case keywordStrings[BLOB]:
+		return sqltypes.Blob
+	case keywordStrings[TINYBLOB]:
+		return sqltypes.Blob
+	case keywordStrings[MEDIUMBLOB]:
+		return sqltypes.Blob
+	case keywordStrings[LONGBLOB]:
+		return sqltypes.Blob
+	case keywordStrings[CHAR]:
+		return sqltypes.Char
+	case keywordStrings[VARCHAR]:
+		return sqltypes.VarChar
+	case keywordStrings[BINARY]:
+		return sqltypes.Binary
+	case keywordStrings[VARBINARY]:
+		return sqltypes.VarBinary
+	case keywordStrings[DATE]:
+		return sqltypes.Date
+	case keywordStrings[TIME]:
+		return sqltypes.Time
+	case keywordStrings[DATETIME]:
+		return sqltypes.Datetime
+	case keywordStrings[TIMESTAMP]:
+		return sqltypes.Timestamp
+	case keywordStrings[YEAR]:
+		return sqltypes.Year
+	case keywordStrings[FLOAT]:
+		return sqltypes.Float32
+	case keywordStrings[DOUBLE]:
+		return sqltypes.Float64
+	case keywordStrings[DECIMAL]:
+		return sqltypes.Decimal
+	case keywordStrings[BIT]:
+		return sqltypes.Bit
+	case keywordStrings[ENUM]:
+		return sqltypes.Enum
+	case keywordStrings[JSON]:
+		return sqltypes.TypeJSON
+	}
+	panic("unimplemented type " + ct.Type)
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (ct *ColumnType) WalkSubtree(visit Visit) error {
+	return nil
+}
+
+// IndexDefinition describes an index in a CREATE TABLE statement
+type IndexDefinition struct {
+	Info    *IndexInfo
+	Columns []*IndexColumn
+}
+
+// Format formats the node.
+func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%v (", idx.Info)
+	for i, col := range idx.Columns {
+		if i != 0 {
+			buf.Myprintf(", `%s`", col.Column.String())
+		} else {
+			buf.Myprintf("`%s`", col.Column.String())
+		}
+		if col.Length != nil {
+			buf.Myprintf("(%v)", col.Length)
+		}
+	}
+	buf.Myprintf(")")
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (idx *IndexDefinition) WalkSubtree(visit Visit) error {
+	if idx == nil {
+		return nil
+	}
+
+	for _, n := range idx.Columns {
+		if err := Walk(visit, n.Column); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// IndexInfo describes the name and type of an index in a CREATE TABLE statement
+type IndexInfo struct {
+	Type    string
+	Name    ColIdent
+	Primary bool
+	Unique  bool
+}
+
+// Format formats the node.
+func (ii *IndexInfo) Format(buf *TrackedBuffer) {
+	if ii.Primary {
+		buf.Myprintf("%s", ii.Type)
+	} else {
+		buf.Myprintf("%s `%v`", ii.Type, ii.Name)
+	}
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (ii *IndexInfo) WalkSubtree(visit Visit) error {
+	if err := Walk(visit, ii.Name); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// IndexColumn describes a column in an index definition with optional length
+type IndexColumn struct {
+	Column ColIdent
+	Length *SQLVal
+}
+
+// LengthScaleOption is used for types that have an optional length
+// and scale
+type LengthScaleOption struct {
+	Length *SQLVal
+	Scale  *SQLVal
+}
+
+// ColumnKeyOption indicates whether or not the given column is defined as an
+// index element and contains the type of the option
+type ColumnKeyOption int
+
+const (
+	colKeyNone ColumnKeyOption = iota
+	colKeyPrimary
+	colKeyUnique
+	colKeyUniqueKey
+	colKey
+)
 
 // Show represents a show statement.
 type Show struct {
