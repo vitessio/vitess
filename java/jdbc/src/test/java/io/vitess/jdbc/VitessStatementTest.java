@@ -771,8 +771,7 @@ import io.vitess.util.Constants;
                           Matchers.anyList(),
                           Matchers.anyList(),
                           Matchers.any(Topodata.TabletType.class),
-                          Matchers.any(Query.ExecuteOptions.IncludedFields.class),
-                          Matchers.any(Vtgate.Session.class)))
+                          Matchers.any(Query.ExecuteOptions.IncludedFields.class)))
             .thenReturn(mockSqlFutureCursor);
         List<CursorWithError> mockCursorWithErrorList = new ArrayList<>();
         PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursorWithErrorList);
