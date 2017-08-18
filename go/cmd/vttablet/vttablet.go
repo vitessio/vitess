@@ -48,7 +48,7 @@ func init() {
 }
 
 func main() {
-	dbconfigFlags := dbconfigs.AppConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
+	dbconfigFlags := dbconfigs.AppConfig | dbconfigs.AppDebugConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
 		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
 	dbconfigs.RegisterFlags(dbconfigFlags)
 	mysqlctl.RegisterFlags()

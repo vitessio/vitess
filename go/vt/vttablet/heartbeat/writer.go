@@ -120,7 +120,7 @@ func (w *Writer) Open(dbc dbconfigs.DBConfigs) {
 		return
 	}
 	log.Info("Beginning heartbeat writes")
-	w.pool.Open(&dbc.App, &dbc.Dba)
+	w.pool.Open(&dbc.App, &dbc.Dba, &dbc.AppDebug)
 	w.ticks.Start(func() { w.writeHeartbeat() })
 	w.isOpen = true
 }

@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
+	"github.com/youtube/vitess/go/vt/callerid"
+
 	"golang.org/x/net/context"
 )
 
@@ -30,16 +32,43 @@ func TestConnPoolGet(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams())
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	dbConn, err := connPool.Get(context.Background())
 	if err != nil {
-		t.Fatalf("should get an error, but got: %v", err)
+		t.Fatalf("should not get an error, but got: %v", err)
 	}
 	if dbConn == nil {
 		t.Fatalf("db conn should not be nil")
 	}
 	dbConn.Recycle()
+}
+
+func TestConnPoolGetAppDebug(t *testing.T) {
+	db := fakesqldb.New(t)
+	debugConn := db.ConnParamsWithUname("debugUsername")
+	ctx := context.Background()
+	im := callerid.NewImmediateCallerID("debugUsername")
+	ecid := callerid.NewEffectiveCallerID("p", "c", "sc")
+	ctx = callerid.NewContext(ctx, ecid, im)
+	defer db.Close()
+	connPool := newPool()
+	connPool.Open(db.ConnParams(), db.ConnParams(), debugConn)
+	defer connPool.Close()
+	dbConn, err := connPool.Get(ctx)
+	if err != nil {
+		t.Fatalf("should not get an error, but got: %v", err)
+	}
+	if dbConn == nil {
+		t.Fatalf("db conn should not be nil")
+	}
+	if dbConn.pool != nil {
+		t.Fatalf("db conn pool should be nil for appDebug")
+	}
+	dbConn.Recycle()
+	if !dbConn.IsClosed() {
+		t.Fatalf("db conn should be closed after recycle")
+	}
 }
 
 func TestConnPoolPutWhilePoolIsClosed(t *testing.T) {
@@ -56,7 +85,7 @@ func TestConnPoolSetCapacity(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams())
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	err := connPool.SetCapacity(-10)
 	if err == nil {
@@ -78,7 +107,7 @@ func TestConnPoolStatJSON(t *testing.T) {
 	if connPool.StatsJSON() != "{}" {
 		t.Fatalf("pool is closed, stats json should be empty: {}")
 	}
-	connPool.Open(db.ConnParams(), db.ConnParams())
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	statsJSON := connPool.StatsJSON()
 	if statsJSON == "" || statsJSON == "{}" {
@@ -113,7 +142,7 @@ func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
 	defer db.Close()
 	idleTimeout := 10 * time.Second
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams())
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	if connPool.Capacity() != 100 {
 		t.Fatalf("pool capacity should be 100")

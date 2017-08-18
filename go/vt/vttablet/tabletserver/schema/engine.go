@@ -100,7 +100,7 @@ func (se *Engine) Open(dbaParams *mysql.ConnParams) error {
 	start := time.Now()
 	defer log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
 	ctx := tabletenv.LocalContext()
-	se.conns.Open(dbaParams, dbaParams)
+	se.conns.Open(dbaParams, dbaParams, dbaParams)
 
 	conn, err := se.conns.Get(ctx)
 	if err != nil {

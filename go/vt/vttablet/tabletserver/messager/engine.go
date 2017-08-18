@@ -74,7 +74,7 @@ func (me *Engine) Open(dbconfigs dbconfigs.DBConfigs) error {
 	if me.isOpen {
 		return nil
 	}
-	me.conns.Open(&dbconfigs.App, &dbconfigs.Dba)
+	me.conns.Open(&dbconfigs.App, &dbconfigs.Dba, &dbconfigs.AppDebug)
 	me.se.RegisterNotifier("messages", me.schemaChanged)
 	me.isOpen = true
 	return nil

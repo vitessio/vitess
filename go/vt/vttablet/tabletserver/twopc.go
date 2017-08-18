@@ -201,7 +201,7 @@ func (tpc *TwoPC) Init(sidecarDBName string, dbaparams *mysql.ConnParams) error 
 
 // Open starts the TwoPC service.
 func (tpc *TwoPC) Open(dbconfigs dbconfigs.DBConfigs) {
-	tpc.readPool.Open(&dbconfigs.App, &dbconfigs.Dba)
+	tpc.readPool.Open(&dbconfigs.App, &dbconfigs.Dba, &dbconfigs.AppDebug)
 }
 
 // Close closes the TwoPC service.

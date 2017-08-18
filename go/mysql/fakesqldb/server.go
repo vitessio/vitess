@@ -250,6 +250,16 @@ func (db *DB) ConnParams() *mysql.ConnParams {
 	}
 }
 
+// ConnParamsWithUname returns  ConnParams to connect to the DB with the Uname set to the provided value.
+func (db *DB) ConnParamsWithUname(uname string) *mysql.ConnParams {
+	return &mysql.ConnParams{
+		UnixSocket: db.socketFile,
+		Uname:      uname,
+		Pass:       "password1",
+		Charset:    "utf8",
+	}
+}
+
 //
 // mysql.Handler interface
 //
