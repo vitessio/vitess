@@ -271,6 +271,9 @@ message ExecuteOptions {
   // can be as high as desired.
   Workload workload = 6;
 
+  // sql_select_limit sets an implicit limit on all select statements. Since
+  // vitess also sets a rowcount limit on queries, the smallest value wins.
+  int64 sql_select_limit = 8;
 }
 
 // Field describes a single column returned by a query

@@ -158,6 +158,15 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set transaction_mode = 'twopc', autocommit=1",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
 	}, {
+		in:  "set sql_select_limit = 5",
+		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{SqlSelectLimit: 5}},
+	}, {
+		in:  "set sql_select_limit = DEFAULT",
+		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{SqlSelectLimit: 0}},
+	}, {
+		in:  "set sql_select_limit = 'asdfasfd'",
+		err: "unexpected string value for sql_select_limit: asdfasfd",
+	}, {
 		in:  "set autocommit=1+1",
 		err: "invalid syntax: 1 + 1",
 	}, {
@@ -165,10 +174,31 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{},
 	}, {
 		in:  "set character_set_results='abcd'",
-		err: "only NULL is allowed for character_set_results: abcd",
+		err: "disallowed value for character_set_results: abcd",
 	}, {
 		in:  "set foo=1",
 		err: "unsupported construct: set foo=1",
+	}, {
+		in:  "set names utf8",
+		out: &vtgatepb.Session{},
+	}, {
+		in:  "set names ascii",
+		err: "unexpected value for charset: ascii",
+	}, {
+		in:  "set charset utf8",
+		out: &vtgatepb.Session{},
+	}, {
+		in:  "set character set default",
+		out: &vtgatepb.Session{},
+	}, {
+		in:  "set character set ascii",
+		err: "unexpected value for charset: ascii",
+	}, {
+		in:  "set net_write_timeout = 600",
+		out: &vtgatepb.Session{},
+	}, {
+		in:  "set net_read_timeout = 600",
+		out: &vtgatepb.Session{},
 	}}
 	for _, tcase := range testcases {
 		session := &vtgatepb.Session{}

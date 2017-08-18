@@ -925,6 +925,33 @@ func TestQueryExecutorPlanPassSelect(t *testing.T) {
 	}
 }
 
+func TestQueryExecutorPlanPassSelectSqlSelectLimit(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	query := "select * from test_table"
+	expandedQuery := "select * from test_table limit 20"
+	want := &sqltypes.Result{
+		Fields: getTestTableFields(),
+	}
+	db.AddQuery(query, want)
+	db.AddQuery(expandedQuery, want)
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	qre := newTestQueryExecutor(ctx, tsv, query, 0)
+	qre.options = &querypb.ExecuteOptions{
+		SqlSelectLimit: 20,
+	}
+	defer tsv.StopService()
+	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+}
+
 func TestQueryExecutorPlanSet(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
