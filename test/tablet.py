@@ -69,32 +69,33 @@ class Tablet(object):
   default_uid = 62344
   seq = 0
   tablets_running = 0
+
   default_db_dba_config = {
+      'global': {
+        'charset': 'utf8',
+      },
       'dba': {
           'uname': 'vt_dba',
-          'charset': 'utf8'
       },
   }
   default_db_config = {
+      'global': {
+        'charset': 'utf8',
+      },
       'app': {
           'uname': 'vt_app',
-          'charset': 'utf8'
       },
       'allprivs': {
           'uname': 'vt_allprivs',
-          'charset': 'utf8'
       },
       'dba': {
           'uname': 'vt_dba',
-          'charset': 'utf8'
       },
       'filtered': {
           'uname': 'vt_filtered',
-          'charset': 'utf8'
       },
       'repl': {
           'uname': 'vt_repl',
-          'charset': 'utf8'
       }
   }
 
@@ -685,15 +686,17 @@ class Tablet(object):
       repl_extra_flags = {}
     config = dict(cfg)
     if self.keyspace:
-      if 'app' in config:
-        config['app']['dbname'] = self.dbname
-      if 'repl' in config:
-        config['repl']['dbname'] = self.dbname
+      config['global']['dbname'] = self.dbname
     if 'repl' in config:
       config['repl'].update(repl_extra_flags)
-    for key1 in config:
-      for key2 in config[key1]:
-        args.extend(['-db-config-' + key1 + '-' + key2, config[key1][key2]])
+
+    for category in config:
+      for param in config[category]:
+        if category == 'global':
+          flag = '-db-config-%s' % param
+        else:
+          flag = '-db-config-%s-%s' % (category, param)
+        args.extend([flag, config[category][param]])
 
   def get_status(self):
     return utils.get_status(self.port)

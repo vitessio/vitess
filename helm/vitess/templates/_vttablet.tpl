@@ -62,17 +62,11 @@ containers:
           -health_check_interval "5s"
           -mysqlctl_socket "$VTDATAROOT/mysqlctl.sock"
           -db-config-app-uname "vt_app"
-          -db-config-app-dbname "vt_{{$keyspace.name}}"
-          -db-config-app-charset "utf8"
+          -db-config-dbname "vt_{{$keyspace.name}}"
+          -db-config-charset "utf8"
           -db-config-dba-uname "vt_dba"
-          -db-config-dba-dbname "vt_{{$keyspace.name}}"
-          -db-config-dba-charset "utf8"
           -db-config-repl-uname "vt_repl"
-          -db-config-repl-dbname "vt_{{$keyspace.name}}"
-          -db-config-repl-charset "utf8"
           -db-config-filtered-uname "vt_filtered"
-          -db-config-filtered-dbname "vt_{{$keyspace.name}}"
-          -db-config-filtered-charset "utf8"
           -enable_semi_sync
           -enable_replication_reporter
           -orc_api_url "http://orchestrator/api"
@@ -103,7 +97,7 @@ containers:
           -tablet_uid "{{$uid}}"
           -socket_file "$VTDATAROOT/mysqlctl.sock"
           -db-config-dba-uname "vt_dba"
-          -db-config-dba-charset "utf8"
+          -db-config-charset "utf8"
           -init_db_sql_file "$VTROOT/config/init_db.sql"
 {{ include "format-flags-all" (tuple $0.mysqlctlExtraFlags .mysqlctlExtraFlags) | indent 10 }}
         END_OF_COMMAND

@@ -38,7 +38,7 @@ class MySqlDBMysqlctl(mysql_db.MySqlDB):
         '-alsologtostderr',
         '-tablet_uid', '1',
         '-mysql_port', str(self._port),
-        '-db-config-dba-charset', 'utf8',
+        '-db-config-charset', 'utf8',
         '-db-config-dba-uname', 'vt_dba',
         'init',
         '-init_db_sql_file',
@@ -60,7 +60,7 @@ class MySqlDBMysqlctl(mysql_db.MySqlDB):
         '-alsologtostderr',
         '-tablet_uid', '1',
         '-mysql_port', str(self._port),
-        '-db-config-dba-charset', 'utf8',
+        '-db-config-charset', 'utf8',
         '-db-config-dba-uname', 'vt_dba',
         'shutdown',
     ]
