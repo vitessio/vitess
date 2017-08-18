@@ -564,15 +564,13 @@ class Tablet(object):
     if supports_backups:
       args.extend(['-restore_from_backup'] + get_backup_storage_flags())
 
-      # When vttablet restores from backup, and if not using
-      # mysqlctld, it will re-generate the .cnf file.  So we need to
+      # When vttablet restores from backup, it will re-generate the .cnf file.  So we need to
       # have EXTRA_MY_CNF set properly.
-      if not self.use_mysqlctld:
-        all_extra_my_cnf = get_all_extra_my_cnf(None)
-        if all_extra_my_cnf:
-          if not extra_env:
-            extra_env = {}
-          extra_env['EXTRA_MY_CNF'] = ':'.join(all_extra_my_cnf)
+      all_extra_my_cnf = get_all_extra_my_cnf(None)
+      if all_extra_my_cnf:
+        if not extra_env:
+          extra_env = {}
+        extra_env['EXTRA_MY_CNF'] = ':'.join(all_extra_my_cnf)
 
     if extra_args:
       args.extend(extra_args)

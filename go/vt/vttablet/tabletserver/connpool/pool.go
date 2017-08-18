@@ -25,6 +25,7 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -55,12 +56,13 @@ type MySQLChecker interface {
 // Other than the connection type, ConnPool maintains an additional
 // pool of dba connections that are used to kill connections.
 type Pool struct {
-	mu          sync.Mutex
-	connections *pools.ResourcePool
-	capacity    int
-	idleTimeout time.Duration
-	dbaPool     *dbconnpool.ConnectionPool
-	checker     MySQLChecker
+	mu             sync.Mutex
+	connections    *pools.ResourcePool
+	capacity       int
+	idleTimeout    time.Duration
+	dbaPool        *dbconnpool.ConnectionPool
+	checker        MySQLChecker
+	appDebugParams *mysql.ConnParams
 }
 
 // New creates a new Pool. The name is used
@@ -97,7 +99,7 @@ func (cp *Pool) pool() (p *pools.ResourcePool) {
 }
 
 // Open must be called before starting to use the pool.
-func (cp *Pool) Open(appParams, dbaParams *mysql.ConnParams) {
+func (cp *Pool) Open(appParams, dbaParams, appDebugParams *mysql.ConnParams) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 
@@ -105,6 +107,8 @@ func (cp *Pool) Open(appParams, dbaParams *mysql.ConnParams) {
 		return NewDBConn(cp, appParams, dbaParams)
 	}
 	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
+	cp.appDebugParams = appDebugParams
+
 	cp.dbaPool.Open(dbaParams, tabletenv.MySQLStats)
 }
 
@@ -127,6 +131,9 @@ func (cp *Pool) Close() {
 // Get returns a connection.
 // You must call Recycle on DBConn once done.
 func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
+	if cp.isCallerIDAppDebug(ctx) {
+		return NewDBConnNoPool(cp.appDebugParams)
+	}
 	p := cp.pool()
 	if p == nil {
 		return nil, ErrConnPoolClosed
@@ -237,4 +244,12 @@ func (cp *Pool) IdleTimeout() time.Duration {
 		return 0
 	}
 	return p.IdleTimeout()
+}
+
+func (cp *Pool) isCallerIDAppDebug(ctx context.Context) bool {
+	callerID := callerid.ImmediateCallerIDFromContext(ctx)
+	if cp.appDebugParams == nil {
+		return false
+	}
+	return callerID != nil && callerID.Username == cp.appDebugParams.Uname
 }
