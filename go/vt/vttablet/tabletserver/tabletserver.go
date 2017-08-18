@@ -1340,7 +1340,9 @@ func (tsv *TabletServer) convertError(ctx context.Context, sql string, bindVaria
 		}
 	case mysql.ERDupEntry:
 		errCode = vtrpcpb.Code_ALREADY_EXISTS
-	case mysql.ERDataTooLong, mysql.ERDataOutOfRange, mysql.ERBadNullError:
+	case mysql.ERDataTooLong, mysql.ERDataOutOfRange, mysql.ERBadNullError, mysql.ERSyntaxError, mysql.ERUpdateTableUsed, mysql.ERTooBigSet,
+		mysql.ERWrongDbName, mysql.ERWrongTableName, mysql.ERInvalidGroupFuncUse, mysql.ERTooManyFields, mysql.ERTooManyTables,
+		mysql.ERTableNameNotAllowedHere, mysql.ERDerivedMustHaveAlias, mysql.ERIllegalReference, mysql.ERCyclicReference:
 		errCode = vtrpcpb.Code_INVALID_ARGUMENT
 	case mysql.ERLockWaitTimeout:
 		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
@@ -1352,9 +1354,10 @@ func (tsv *TabletServer) convertError(ctx context.Context, sql string, bindVaria
 		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
 	case mysql.CRServerGone, mysql.ERServerShutdown:
 		errCode = vtrpcpb.Code_UNAVAILABLE
-	case mysql.ERBadFieldError:
+	case mysql.ERBadFieldError, mysql.ERUnknownTable, mysql.ERNoSuchTable:
 		errCode = vtrpcpb.Code_NOT_FOUND
-	case mysql.ERNoReferencedRow, mysql.ErNoReferencedRow2, mysql.ERRowIsReferenced, mysql.ERRowIsReferenced2:
+	case mysql.ERNoReferencedRow, mysql.ErNoReferencedRow2, mysql.ERRowIsReferenced, mysql.ERRowIsReferenced2, mysql.ERTableNotLockedForWrite,
+		mysql.ERSubqueryNo1Row, mysql.EROperandColumns, mysql.ERCantDoThisDuringAnTransaction:
 		errCode = vtrpcpb.Code_FAILED_PRECONDITION
 	}
 
