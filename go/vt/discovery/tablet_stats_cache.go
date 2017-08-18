@@ -19,8 +19,10 @@ package discovery
 import (
 	"sync"
 
+	log "github.com/golang/glog"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 )
 
 // TabletStatsCache is a HealthCheckStatsListener that keeps both the
@@ -193,9 +195,13 @@ func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 
 			// We already have one up server, see if we
 			// need to replace it.
-			if e.healthy[0].TabletExternallyReparentedTimestamp > ts.TabletExternallyReparentedTimestamp {
-				// The notification we just got is older than
-				// the one we had before, discard it.
+			if ts.TabletExternallyReparentedTimestamp < e.healthy[0].TabletExternallyReparentedTimestamp {
+				log.Warningf("not marking healthy master as Up because its externally reparented timestamp is smaller than the highest known timestamp from previous MASTERs: %d < %d ",
+					ts.TabletExternallyReparentedTimestamp,
+					e.healthy[0].TabletExternallyReparentedTimestamp,
+					topoproto.KeyspaceShardString(ts.Target.Keyspace, ts.Target.Shard),
+					topoproto.TabletAliasString(ts.Tablet.Alias),
+					topoproto.TabletAliasString(e.healthy[0].Tablet.Alias))
 				return
 			}
 

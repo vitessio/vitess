@@ -115,7 +115,7 @@ func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {
 	tr.dbName = sqlparser.Backtick(dbc.SidecarDBName)
 	tr.keyspaceShard = "test:0"
 	tr.now = nowFunc
-	tr.pool.Open(&dbc.App, &dbc.Dba)
+	tr.pool.Open(&dbc.App, &dbc.Dba, &dbc.AppDebug)
 
 	return tr
 }

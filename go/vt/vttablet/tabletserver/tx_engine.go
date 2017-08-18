@@ -104,7 +104,7 @@ func (te *TxEngine) Open(dbconfigs dbconfigs.DBConfigs) {
 	if te.isOpen {
 		return
 	}
-	te.txPool.Open(&dbconfigs.App, &dbconfigs.Dba)
+	te.txPool.Open(&dbconfigs.App, &dbconfigs.Dba, &dbconfigs.AppDebug)
 	if !te.twopcEnabled {
 		te.isOpen = true
 		return

@@ -1153,7 +1153,7 @@ func TestNocacheCases(t *testing.T) {
 					Query: "update /* pk */ vitess_a set foo='bar' where eid = 1 order by id desc limit 1",
 					Rewritten: []string{
 						"select eid, id from vitess_a where eid = 1 order by id desc limit 1 for update",
-						"update /* pk */ vitess_a set foo = 'bar' where (eid = 1 and id = 2) /* _stream vitess_a (eid id ) (1 2 )",
+						"update /* pk */ vitess_a set foo = 'bar' where (eid = 1 and id = 2) order by id desc /* _stream vitess_a (eid id ) (1 2 )",
 					},
 					RowsAffected: 1,
 				},
@@ -1427,6 +1427,26 @@ func TestNocacheCases(t *testing.T) {
 						"delete from vitess_a where (eid = 2 and id = 1) /* _stream vitess_a (eid id ) (2 1 )",
 					},
 					RowsAffected: 1,
+				},
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select * from vitess_a where eid=2",
+				},
+			},
+		},
+		&framework.MultiCase{
+			Name: "order by delete",
+			Cases: []framework.Testable{
+				framework.TestQuery("begin"),
+				framework.TestQuery("insert into vitess_a(eid, id, name, foo) values (2, 1, '', '')"),
+				framework.TestQuery("insert into vitess_a(eid, id, name, foo) values (2, 2, '', '')"),
+				&framework.TestCase{
+					Query: "delete from vitess_a where eid = 2 order by id desc",
+					Rewritten: []string{
+						"select eid, id from vitess_a where eid = 2 order by id desc limit 10001 for update",
+						"delete from vitess_a where (eid = 2 and id = 2) or (eid = 2 and id = 1) order by id desc /* _stream vitess_a (eid id ) (2 2 ) (2 1 )",
+					},
+					RowsAffected: 2,
 				},
 				framework.TestQuery("commit"),
 				&framework.TestCase{
