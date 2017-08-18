@@ -233,6 +233,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		// ValidateHash() method.
 		userData, err := l.authServer.ValidateHash(salt, user, authResponse)
 		if err != nil {
+			log.Warningf("Error authenticating user using MySQL native password: %v", err)
 			c.writeErrorPacketFromError(err)
 			return
 		}
