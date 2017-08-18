@@ -192,7 +192,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 	errorsByDbType = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(errorCounts, "DbType"), 15, 1*time.Minute)
 	errorsByCode = stats.NewRates("ErrorsByCode", stats.CounterForDimension(errorCounts, "Code"), 15, 1*time.Minute)
 
-	warnings = stats.NewCounters("Warnings", "IgnoredSet")
+	warnings = stats.NewCounters("VTGateWarnings", "IgnoredSet")
 
 	servenv.OnRun(func() {
 		for _, f := range RegisterVTGates {
