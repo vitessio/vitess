@@ -54,6 +54,7 @@ class VtProcess(object):
           self.binary,
           '-port', '%u' % self.port,
           '-log_dir', logs_subdirectory,
+          '-alsologtostderr',
           ]
       if environment.get_protocol() == 'grpc':
         cmd.extend(['-grpc_port', '%u' % self.grpc_port])
@@ -63,8 +64,7 @@ class VtProcess(object):
                             (self.name, self.port))
       self.stdout = open(stdout, 'w')
       self.process = subprocess.Popen(cmd,
-                                      stdout=self.stdout,
-                                      stderr=subprocess.STDOUT)
+                                      stdout=self.stdout)
       timeout = time.time() + 60.0
       while time.time() < timeout:
         if environment.process_is_healthy(
