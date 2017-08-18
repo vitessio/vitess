@@ -69,7 +69,7 @@ func fakeTabletExecute(sql string, bindVars map[string]*querypb.BindVariable) ([
 		return nil, err
 	}
 	txID := int64(0)
-	qre := tabletserver.NewQueryExecutor(sql, bindVars, txID, nil, plan, ctx, logStats, tsv)
+	qre := tabletserver.NewQueryExecutor(ctx, sql, bindVars, txID, nil, plan, logStats, tsv)
 
 	queries := make([]string, 0, 4)
 
