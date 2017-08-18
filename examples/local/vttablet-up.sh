@@ -43,6 +43,9 @@ dbconfig_flags="$dbconfig_dba_flags \
     -db-config-app-uname vt_app \
     -db-config-app-dbname vt_$keyspace \
     -db-config-app-charset utf8 \
+    -db-config-appdebug-uname vt_appdebug \
+    -db-config-appdebug-dbname vt_$keyspace \
+    -db-config-appdebug-charset utf8 \
     -db-config-allprivs-uname vt_allprivs \
     -db-config-allprivs-dbname vt_$keyspace \
     -db-config-allprivs-charset utf8 \

@@ -32,10 +32,12 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestSimpleRead(t *testing.T) {
@@ -642,5 +644,48 @@ func TestClientFoundRows(t *testing.T) {
 	}
 	if err := client.Rollback(); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestAppDebugRequest(t *testing.T) {
+	client := framework.NewClient()
+
+	// Insert with normal user works
+
+	if _, err := client.Execute("insert into vitess_test_debuguser(intval, charval) values(124, 'aa')", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	defer client.Execute("delete from vitess_test where intval= 124", nil)
+
+	// Set vt_appdebug
+	ctx := callerid.NewContext(
+		context.Background(),
+		&vtrpcpb.CallerID{},
+		&querypb.VTGateCallerID{Username: "vt_appdebug"})
+
+	want := "Access denied for user 'vt_appdebug'@'localhost'"
+
+	client = framework.NewClientWithContext(ctx)
+
+	// Start a transaction. This test the other flow that a client can use to insert a value.
+	client.Begin(false)
+	_, err := client.Execute("insert into vitess_test_debuguser(intval, charval) values(124, 'aa')", nil)
+
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("Error: %v, want prefix %s", err, want)
+	}
+
+	// Normal flow, when a client is trying to insert a value and the insert is not in the
+	// context of another transaction.
+	_, err = client.Execute("insert into vitess_test_debuguser(intval, charval) values(124, 'aa')", nil)
+
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("Error: %v, want prefix %s", err, want)
+	}
+
+	_, err = client.Execute("select * from vitess_test_debuguser where intval=1", nil)
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("Error: %v, want prefix %s", err, want)
 	}
 }
