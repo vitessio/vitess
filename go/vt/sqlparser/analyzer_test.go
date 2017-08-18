@@ -379,9 +379,10 @@ func TestStringIn(t *testing.T) {
 
 func TestExtractSetValues(t *testing.T) {
 	testcases := []struct {
-		sql string
-		out map[string]interface{}
-		err string
+		sql     string
+		out     map[string]interface{}
+		charset string
+		err     string
 	}{{
 		sql: "invalid",
 		err: "syntax error at position 8 near 'invalid'",
@@ -409,18 +410,37 @@ func TestExtractSetValues(t *testing.T) {
 	}, {
 		sql: "SET foo = 0x1234",
 		err: "invalid value type: 0x1234",
+	}, {
+		sql:     "SET names utf8",
+		out:     map[string]interface{}{},
+		charset: "utf8",
+	}, {
+		sql:     "SET names ascii collation ascii_bin",
+		out:     map[string]interface{}{},
+		charset: "ascii",
+	}, {
+		sql:     "SET charset default",
+		out:     map[string]interface{}{},
+		charset: "default",
+	}, {
+		sql:     "SET character set ascii",
+		out:     map[string]interface{}{},
+		charset: "ascii",
 	}}
 	for _, tcase := range testcases {
-		out, err := ExtractSetValues(tcase.sql)
+		out, charset, err := ExtractSetValues(tcase.sql)
 		if tcase.err != "" {
 			if err == nil || err.Error() != tcase.err {
-				t.Errorf("ExtractSetNums(%s): %v, want '%s'", tcase.sql, err, tcase.err)
+				t.Errorf("ExtractSetValues(%s): %v, want '%s'", tcase.sql, err, tcase.err)
 			}
 		} else if err != nil {
-			t.Errorf("ExtractSetNums(%s): %v, want no error", tcase.sql, err)
+			t.Errorf("ExtractSetValues(%s): %v, want no error", tcase.sql, err)
 		}
 		if !reflect.DeepEqual(out, tcase.out) {
-			t.Errorf("ExtractSetNums(%s): %v, want '%v'", tcase.sql, out, tcase.out)
+			t.Errorf("ExtractSetValues(%s): %v, want '%v'", tcase.sql, out, tcase.out)
+		}
+		if charset != tcase.charset {
+			t.Errorf("ExtractSetValues(%s): %v, want '%v'", tcase.sql, charset, tcase.charset)
 		}
 	}
 }
