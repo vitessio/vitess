@@ -181,14 +181,14 @@ func parseAndRun() error {
 		return err
 	}
 
-	planJSON, err := json.MarshalIndent(plans, "", "    ")
-	if err != nil {
-		return err
-	}
-
 	if *outputMode == "text" {
 		printPlans(plans)
 	} else {
+		planJSON, err := json.MarshalIndent(plans, "", "    ")
+		if err != nil {
+			return err
+		}
+
 		fmt.Printf(string(planJSON))
 	}
 
