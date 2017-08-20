@@ -205,7 +205,7 @@ insert into t1 (id,val) values (1,2) on duplicate key update val=3;
                 {
                     "SQL": "select * from t1",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" "
+                        "#maxLimit": "10001"
                     },
                     "MysqlQueries": [
                         "select * from t1 limit 10001"
@@ -235,7 +235,7 @@ insert into t1 (id,val) values (1,2) on duplicate key update val=3;
                 {
                     "SQL": "insert into t1(id, val) values (1, 2)",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" "
+                        "#maxLimit": "10001"
                     },
                     "MysqlQueries": [
                         "begin",
@@ -266,7 +266,7 @@ insert into t1 (id,val) values (1,2) on duplicate key update val=3;
                 {
                     "SQL": "update t1 set val = 10",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" "
+                        "#maxLimit": "10001"
                     },
                     "MysqlQueries": [
                         "begin",
@@ -297,7 +297,7 @@ insert into t1 (id,val) values (1,2) on duplicate key update val=3;
                 {
                     "SQL": "delete from t1 where id = 100",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" "
+                        "#maxLimit": "10001"
                     },
                     "MysqlQueries": [
                         "begin",
@@ -329,7 +329,7 @@ insert into t1 (id,val) values (1,2) on duplicate key update val=3;
                 {
                     "SQL": "insert into t1(id, val) values (1, 2) on duplicate key update val = 3",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" "
+                        "#maxLimit": "10001"
                     },
                     "MysqlQueries": [
                         "begin",
@@ -348,7 +348,7 @@ func TestSelectSharded(t *testing.T) {
 	sqlStr := `
 select * from user /* scatter */;
 select * from user where id = 1 /* equal unique */;
-select * from user where name = 'bob' /* vindex lookup */;
+select * from user where name = 'bob'/* vindex lookup */;
 `
 	expected := `
 [
@@ -373,7 +373,7 @@ select * from user where name = 'bob' /* vindex lookup */;
                 {
                     "SQL": "select * from user /* scatter */",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" "
+                        "#maxLimit": "10001"
                     },
                     "MysqlQueries": [
                         "select * from user limit 10001"
@@ -384,7 +384,7 @@ select * from user where name = 'bob' /* vindex lookup */;
                 {
                     "SQL": "select * from user /* scatter */",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" "
+                        "#maxLimit": "10001"
                     },
                     "MysqlQueries": [
                         "select * from user limit 10001"
@@ -418,7 +418,7 @@ select * from user where name = 'bob' /* vindex lookup */;
                 {
                     "SQL": "select * from user where id = 1 /* equal unique */",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" "
+                        "#maxLimit": "10001"
                     },
                     "MysqlQueries": [
                         "select * from user where id = 1 limit 10001"
@@ -428,7 +428,7 @@ select * from user where name = 'bob' /* vindex lookup */;
         }
     },
     {
-        "SQL": "select * from user where name = 'bob' /* vindex lookup */",
+        "SQL": "select * from user where name = 'bob'/* vindex lookup */",
         "Plans": [
             {
                 "Original": "select user_id from name_user_map where name = :name",
@@ -466,9 +466,9 @@ select * from user where name = 'bob' /* vindex lookup */;
         "TabletQueries": {
             "ks_sharded/-80": [
                 {
-                    "SQL": "select * from user where name = 'bob' /* vindex lookup */",
+                    "SQL": "select * from user where name = 'bob'/* vindex lookup */",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" "
+                        "#maxLimit": "10001"
                     },
                     "MysqlQueries": [
                         "select * from user where name = 'bob' limit 10001"
@@ -477,10 +477,10 @@ select * from user where name = 'bob' /* vindex lookup */;
             ],
             "ks_sharded/80-": [
                 {
-                    "SQL": "select user_id from name_user_map where name = :name /* vindex lookup */",
+                    "SQL": "select user_id from name_user_map where name = :name/* vindex lookup */",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" ",
-                        "name": "type:VARBINARY value:\"bob\" "
+                        "#maxLimit": "10001",
+                        "name": "'bob'"
                     },
                     "MysqlQueries": [
                         "select user_id from name_user_map where name = 'bob' limit 10001"
@@ -558,10 +558,10 @@ insert ignore into user (id, name) values(2, "bob");
                 {
                     "SQL": "insert into name_user_map(name, user_id) values (:_name0, :user_id0) /* vtgate:: keyspace_id:475e26c086f437f36bd72ecd883504a7 */",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" ",
-                        "_name0": "type:VARBINARY value:\"alice\" ",
-                        "name0": "type:VARBINARY value:\"alice\" ",
-                        "user_id0": "type:UINT64 value:\"1\" "
+                        "#maxLimit": "10001",
+                        "_name0": "'alice'",
+                        "name0": "'alice'",
+                        "user_id0": "1"
                     },
                     "MysqlQueries": [
                         "begin",
@@ -572,9 +572,9 @@ insert ignore into user (id, name) values(2, "bob");
                 {
                     "SQL": "insert into user(id, name) values (:_id0, :_name0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" ",
-                        "_id0": "type:INT64 value:\"1\" ",
-                        "_name0": "type:VARBINARY value:\"alice\" "
+                        "#maxLimit": "10001",
+                        "_id0": "1",
+                        "_name0": "'alice'"
                     },
                     "MysqlQueries": [
                         "begin",
@@ -639,9 +639,9 @@ insert ignore into user (id, name) values(2, "bob");
                 {
                     "SQL": "insert into user(id, name) values (:_id0, :_name0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" ",
-                        "_id0": "type:INT64 value:\"2\" ",
-                        "_name0": "type:VARBINARY value:\"bob\" "
+                        "#maxLimit": "10001",
+                        "_id0": "2",
+                        "_name0": "'bob'"
                     },
                     "MysqlQueries": [
                         "begin",
@@ -654,10 +654,10 @@ insert ignore into user (id, name) values(2, "bob");
                 {
                     "SQL": "insert into name_user_map(name, user_id) values (:_name0, :user_id0) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" ",
-                        "_name0": "type:VARBINARY value:\"bob\" ",
-                        "name0": "type:VARBINARY value:\"bob\" ",
-                        "user_id0": "type:UINT64 value:\"2\" "
+                        "#maxLimit": "10001",
+                        "_name0": "'bob'",
+                        "name0": "'bob'",
+                        "user_id0": "2"
                     },
                     "MysqlQueries": [
                         "begin",
@@ -722,9 +722,9 @@ insert ignore into user (id, name) values(2, "bob");
                 {
                     "SQL": "insert ignore into user(id, name) values (:_id0, :_name0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" ",
-                        "_id0": "type:INT64 value:\"2\" ",
-                        "_name0": "type:VARBINARY value:\"bob\" "
+                        "#maxLimit": "10001",
+                        "_id0": "2",
+                        "_name0": "'bob'"
                     },
                     "MysqlQueries": [
                         "begin",
@@ -737,10 +737,10 @@ insert ignore into user (id, name) values(2, "bob");
                 {
                     "SQL": "insert into name_user_map(name, user_id) values (:_name0, :user_id0) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" ",
-                        "_name0": "type:VARBINARY value:\"bob\" ",
-                        "name0": "type:VARBINARY value:\"bob\" ",
-                        "user_id0": "type:UINT64 value:\"2\" "
+                        "#maxLimit": "10001",
+                        "_name0": "'bob'",
+                        "name0": "'bob'",
+                        "user_id0": "2"
                     },
                     "MysqlQueries": [
                         "begin",
@@ -759,6 +759,7 @@ insert ignore into user (id, name) values(2, "bob");
 func TestOptions(t *testing.T) {
 	sqlStr := `
 select * from user where email="null@void.com";
+select * from user where id in (1,2,3,4,5,6,7,8);
 insert into user (id, name) values(2, "bob") on duplicate key update name="bob";
 `
 
@@ -785,8 +786,8 @@ insert into user (id, name) values(2, "bob") on duplicate key update name="bob";
                 {
                     "SQL": "select * from user where email = :vtg1",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" ",
-                        "vtg1": "type:VARBINARY value:\"null@void.com\" "
+                        "#maxLimit": "10001",
+                        "vtg1": "'null@void.com'"
                     },
                     "MysqlQueries": [
                         "select * from user where email = 'null@void.com' limit 10001"
@@ -797,8 +798,8 @@ insert into user (id, name) values(2, "bob") on duplicate key update name="bob";
                 {
                     "SQL": "select * from user where email = :vtg1",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" ",
-                        "vtg1": "type:VARBINARY value:\"null@void.com\" "
+                        "#maxLimit": "10001",
+                        "vtg1": "'null@void.com'"
                     },
                     "MysqlQueries": [
                         "select * from user where email = 'null@void.com' limit 10001"
@@ -809,8 +810,8 @@ insert into user (id, name) values(2, "bob") on duplicate key update name="bob";
                 {
                     "SQL": "select * from user where email = :vtg1",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" ",
-                        "vtg1": "type:VARBINARY value:\"null@void.com\" "
+                        "#maxLimit": "10001",
+                        "vtg1": "'null@void.com'"
                     },
                     "MysqlQueries": [
                         "select * from user where email = 'null@void.com' limit 10001"
@@ -821,11 +822,73 @@ insert into user (id, name) values(2, "bob") on duplicate key update name="bob";
                 {
                     "SQL": "select * from user where email = :vtg1",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" ",
-                        "vtg1": "type:VARBINARY value:\"null@void.com\" "
+                        "#maxLimit": "10001",
+                        "vtg1": "'null@void.com'"
                     },
                     "MysqlQueries": [
                         "select * from user where email = 'null@void.com' limit 10001"
+                    ]
+                }
+            ]
+        }
+    },
+    {
+        "SQL": "select * from user where id in (1,2,3,4,5,6,7,8)",
+        "Plans": [
+            {
+                "Original": "select * from user where id in ::vtg1",
+                "Instructions": {
+                    "Opcode": "SelectIN",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "select * from user where id in ::__vals",
+                    "FieldQuery": "select * from user where 1 != 1",
+                    "Vindex": "hash",
+                    "Values": [
+                        "::vtg1"
+                    ]
+                }
+            }
+        ],
+        "TabletQueries": {
+            "ks_sharded/-40": [
+                {
+                    "SQL": "select * from user where id in ::__vals",
+                    "BindVars": {
+                        "#maxLimit": "10001",
+                        "__vals": "(1, 2)",
+                        "vtg1": "(1, 2, 3, 4, 5, 6, 7, 8)"
+                    },
+                    "MysqlQueries": [
+                        "select * from user where id in (1, 2) limit 10001"
+                    ]
+                }
+            ],
+            "ks_sharded/40-80": [
+                {
+                    "SQL": "select * from user where id in ::__vals",
+                    "BindVars": {
+                        "#maxLimit": "10001",
+                        "__vals": "(3, 5)",
+                        "vtg1": "(1, 2, 3, 4, 5, 6, 7, 8)"
+                    },
+                    "MysqlQueries": [
+                        "select * from user where id in (3, 5) limit 10001"
+                    ]
+                }
+            ],
+            "ks_sharded/c0-": [
+                {
+                    "SQL": "select * from user where id in ::__vals",
+                    "BindVars": {
+                        "#maxLimit": "10001",
+                        "__vals": "(4, 6, 7, 8)",
+                        "vtg1": "(1, 2, 3, 4, 5, 6, 7, 8)"
+                    },
+                    "MysqlQueries": [
+                        "select * from user where id in (4, 6, 7, 8) limit 10001"
                     ]
                 }
             ]
@@ -886,11 +949,11 @@ insert into user (id, name) values(2, "bob") on duplicate key update name="bob";
                 {
                     "SQL": "insert into user(id, name) values (:_id0, :_name0) on duplicate key update name = :vtg2 /* vtgate:: keyspace_id:06e7ea22ce92708f */",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" ",
-                        "_id0": "type:INT64 value:\"2\" ",
-                        "_name0": "type:VARBINARY value:\"bob\" ",
-                        "vtg1": "type:INT64 value:\"2\" ",
-                        "vtg2": "type:VARBINARY value:\"bob\" "
+                        "#maxLimit": "10001",
+                        "_id0": "2",
+                        "_name0": "'bob'",
+                        "vtg1": "2",
+                        "vtg2": "'bob'"
                     },
                     "MysqlQueries": [
                         "begin",
@@ -903,10 +966,10 @@ insert into user (id, name) values(2, "bob") on duplicate key update name="bob";
                 {
                     "SQL": "insert into name_user_map(name, user_id) values (:_name0, :user_id0) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */",
                     "BindVars": {
-                        "#maxLimit": "type:INT64 value:\"10001\" ",
-                        "_name0": "type:VARBINARY value:\"bob\" ",
-                        "name0": "type:VARBINARY value:\"bob\" ",
-                        "user_id0": "type:UINT64 value:\"2\" "
+                        "#maxLimit": "10001",
+                        "_name0": "'bob'",
+                        "name0": "'bob'",
+                        "user_id0": "2"
                     },
                     "MysqlQueries": [
                         "begin",
