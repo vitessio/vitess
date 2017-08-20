@@ -19,14 +19,6 @@ limitations under the License.
 // on the given statements
 package vtexplain
 
-// XXX TODO:
-//
-// Add full grammar support for CREATE TABLE
-//   - reserved vs non-reserved keywords
-// For DML queries handle comments to indicate whether rows exist or not
-// Human-friendly and json output modes
-// Fix TabletQuery to pre-render BindVariables
-
 import (
 	"encoding/json"
 	"fmt"
