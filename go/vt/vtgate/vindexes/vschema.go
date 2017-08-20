@@ -24,8 +24,9 @@ import (
 	"strings"
 
 	"github.com/youtube/vitess/go/json2"
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
 // VSchema represents the denormalized version of SrvVSchema,
