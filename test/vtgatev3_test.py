@@ -494,6 +494,7 @@ class TestVTGateFunctions(unittest.TestCase):
 
   int_type = 265
   string_type = 6165
+  varbinary_type = 10262
 
   def setUp(self):
     self.master_tablet = shard_1_master
@@ -1408,6 +1409,20 @@ class TestVTGateFunctions(unittest.TestCase):
             {'email': 'test 10'})
     finally:
       vtgate_conn.rollback()
+
+  def test_vindex_func(self):
+    vtgate_conn = get_connection()
+    result = self.execute_on_master(
+        vtgate_conn,
+        'select id, keyspace_id from user_index where id = :id',
+        {'id': 1})
+    self.assertEqual(
+        result,
+        ([('1', '\x16k@\xb4J\xbaK\xd6')],
+         1,
+         0,
+         [('id', self.varbinary_type),
+          ('keyspace_id', self.varbinary_type)]))
 
   def test_transaction_modes(self):
     vtgate_conn = get_connection()
