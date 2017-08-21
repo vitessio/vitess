@@ -36,11 +36,8 @@ var (
 	schemaQueries map[string]*sqltypes.Result
 )
 
-func fakeTabletExecute(sql string, bindVars map[string]*querypb.BindVariable) ([]string, error) {
+func startFakeTablet() (*fakesqldb.DB, *tabletserver.TabletServer) {
 	db := newFakeDB()
-	defer db.Close()
-
-	ctx := context.Background()
 
 	// XXX much of this is cloned from the tabletserver tests
 	config := tabletenv.DefaultQsConfig
@@ -61,8 +58,16 @@ func fakeTabletExecute(sql string, bindVars map[string]*querypb.BindVariable) ([
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	tsv.StartService(target, dbcfgs, mysqld)
+
+	return db, tsv
+}
+
+func fakeTabletExecute(sql string, bindVars map[string]*querypb.BindVariable) ([]string, error) {
+	db, tsv := startFakeTablet()
+	defer db.Close()
 	defer tsv.StopService()
 
+	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "FakeQueryExecutor")
 	plan, err := tsv.GetPlan(ctx, logStats, sql)
 	if err != nil {
