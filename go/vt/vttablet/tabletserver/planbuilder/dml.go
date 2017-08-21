@@ -317,7 +317,7 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 }
 
 func analyzeInsertNoType(ins *sqlparser.Insert, plan *Plan, table *schema.Table) (*Plan, error) {
-	// Populate column list from schema if it wasn't sepcified.
+	// Populate column list from schema if it wasn't specified.
 	if len(ins.Columns) == 0 {
 		for _, col := range table.Columns {
 			ins.Columns = append(ins.Columns, col.Name)
