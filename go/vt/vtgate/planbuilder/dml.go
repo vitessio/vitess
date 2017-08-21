@@ -74,7 +74,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, err
 	for t := range rb.Symtab().tables {
 		tableName = t
 	}
-	er.Table, err = vschema.Find(tableName)
+	er.Table, err = vschema.FindTable(tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Route, err
 	for t := range rb.Symtab().tables {
 		tableName = t
 	}
-	er.Table, err = vschema.Find(tableName)
+	er.Table, err = vschema.FindTable(tableName)
 	if err != nil {
 		return nil, err
 	}

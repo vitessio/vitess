@@ -60,34 +60,26 @@ func (v *nvindex) Map(vindexes.VCursor, []sqltypes.Value) ([][][]byte, error) {
 
 func TestVindexFuncMap(t *testing.T) {
 	// Unique Vindex returning 0 rows.
-	vf := &VindexFunc{
-		Opcode: VindexMap,
-		Vindex: &uvindex{},
-		Value:  int64PlanValue(1),
-	}
+	vf := testVindexFunc(&uvindex{})
 	got, err := vf.Execute(nil, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := &sqltypes.Result{
-		Fields: sqltypes.MakeTestFields("id|keyspace_id", "int64|varbinary"),
+		Fields: sqltypes.MakeTestFields("id|keyspace_id", "varbinary|varbinary"),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Execute(Map, uvindex(none)):\n%v, want\n%v", got, want)
 	}
 
 	// Unique Vindex returning 1 row.
-	vf = &VindexFunc{
-		Opcode: VindexMap,
-		Vindex: &uvindex{match: true},
-		Value:  int64PlanValue(1),
-	}
+	vf = testVindexFunc(&uvindex{match: true})
 	got, err = vf.Execute(nil, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want = sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|keyspace_id", "int64|varbinary"),
+		sqltypes.MakeTestFields("id|keyspace_id", "varbinary|varbinary"),
 		"1|foo",
 	)
 	if !reflect.DeepEqual(got, want) {
@@ -95,34 +87,26 @@ func TestVindexFuncMap(t *testing.T) {
 	}
 
 	// NonUnique Vindex returning 0 rows.
-	vf = &VindexFunc{
-		Opcode: VindexMap,
-		Vindex: &nvindex{},
-		Value:  int64PlanValue(1),
-	}
+	vf = testVindexFunc(&nvindex{})
 	got, err = vf.Execute(nil, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want = &sqltypes.Result{
-		Fields: sqltypes.MakeTestFields("id|keyspace_id", "int64|varbinary"),
+		Fields: sqltypes.MakeTestFields("id|keyspace_id", "varbinary|varbinary"),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Execute(Map, uvindex(none)):\n%v, want\n%v", got, want)
 	}
 
 	// NonUnique Vindex returning 2 rows.
-	vf = &VindexFunc{
-		Opcode: VindexMap,
-		Vindex: &nvindex{match: true},
-		Value:  int64PlanValue(1),
-	}
+	vf = testVindexFunc(&nvindex{match: true})
 	got, err = vf.Execute(nil, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want = sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|keyspace_id", "int64|varbinary"),
+		sqltypes.MakeTestFields("id|keyspace_id", "varbinary|varbinary"),
 		"1|foo",
 		"1|bar",
 	)
@@ -132,18 +116,14 @@ func TestVindexFuncMap(t *testing.T) {
 }
 
 func TestVindexFuncStreamExecute(t *testing.T) {
-	vf := &VindexFunc{
-		Opcode: VindexMap,
-		Vindex: &nvindex{match: true},
-		Value:  int64PlanValue(1),
-	}
+	vf := testVindexFunc(&nvindex{match: true})
 	want := []*sqltypes.Result{{
-		Fields: sqltypes.MakeTestFields("id|keyspace_id", "int64|varbinary"),
+		Fields: sqltypes.MakeTestFields("id|keyspace_id", "varbinary|varbinary"),
 	}, {
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt64(1), sqltypes.NewVarBinary("foo"),
+			sqltypes.NewVarBinary("1"), sqltypes.NewVarBinary("foo"),
 		}, {
-			sqltypes.NewInt64(1), sqltypes.NewVarBinary("bar"),
+			sqltypes.NewVarBinary("1"), sqltypes.NewVarBinary("bar"),
 		}},
 	}}
 	i := 0
@@ -160,19 +140,43 @@ func TestVindexFuncStreamExecute(t *testing.T) {
 }
 
 func TestVindexFuncGetFields(t *testing.T) {
-	vf := &VindexFunc{
-		Opcode: VindexMap,
-		Vindex: &uvindex{match: true},
-		Value:  int64PlanValue(1),
-	}
+	vf := testVindexFunc(&uvindex{match: true})
 	got, err := vf.GetFields(nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := &sqltypes.Result{
-		Fields: sqltypes.MakeTestFields("id|keyspace_id", "int64|varbinary"),
+		Fields: sqltypes.MakeTestFields("id|keyspace_id", "varbinary|varbinary"),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Execute(Map, uvindex(none)):\n%v, want\n%v", got, want)
+	}
+}
+
+func TestFieldOrder(t *testing.T) {
+	vf := testVindexFunc(&nvindex{match: true})
+	vf.Fields = sqltypes.MakeTestFields("keyspace_id|id|keyspace_id", "varbinary|varbinary|varbinary")
+	vf.Cols = []int{1, 0, 1}
+	got, err := vf.Execute(nil, nil, nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := sqltypes.MakeTestResult(
+		vf.Fields,
+		"foo|1|foo",
+		"bar|1|bar",
+	)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Execute(Map, uvindex(none)):\n%v, want\n%v", got, want)
+	}
+}
+
+func testVindexFunc(v vindexes.Vindex) *VindexFunc {
+	return &VindexFunc{
+		Fields: sqltypes.MakeTestFields("id|keyspace_id", "varbinary|varbinary"),
+		Cols:   []int{0, 1},
+		Opcode: VindexMap,
+		Vindex: v,
+		Value:  int64PlanValue(1),
 	}
 }

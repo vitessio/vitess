@@ -118,6 +118,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "postprocess_cases.txt", vschema)
 	testFile(t, "wireup_cases.txt", vschema)
 	testFile(t, "dml_cases.txt", vschema)
+	testFile(t, "vindex_func_cases.txt", vschema)
 	testFile(t, "unsupported_cases.txt", vschema)
 }
 
@@ -142,8 +143,12 @@ type vschemaWrapper struct {
 	v *vindexes.VSchema
 }
 
-func (vw *vschemaWrapper) Find(tab sqlparser.TableName) (*vindexes.Table, error) {
+func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, error) {
 	return vw.v.FindTable(tab.Qualifier.String(), tab.Name.String())
+}
+
+func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, error) {
+	return vw.v.FindTableOrVindex(tab.Qualifier.String(), tab.Name.String())
 }
 
 func (vw *vschemaWrapper) DefaultKeyspace() (*vindexes.Keyspace, error) {
