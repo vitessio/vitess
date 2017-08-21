@@ -544,7 +544,7 @@ func (e *Executor) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 
 // MessageAck acks messages.
 func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []*querypb.Value) (int64, error) {
-	table, err := e.VSchema().Find(keyspace, name)
+	table, err := e.VSchema().FindTable(keyspace, name)
 	if err != nil {
 		return 0, err
 	}

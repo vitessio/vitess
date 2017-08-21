@@ -70,7 +70,7 @@ func (vc *vcursorImpl) Find(name sqlparser.TableName) (table *vindexes.Table, er
 	if ks == "" {
 		ks = vc.target.Keyspace
 	}
-	return vc.executor.VSchema().Find(ks, name.Name.String())
+	return vc.executor.VSchema().FindTable(ks, name.Name.String())
 }
 
 // DefaultKeyspace returns the default keyspace of the current request
