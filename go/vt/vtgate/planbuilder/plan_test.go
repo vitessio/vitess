@@ -143,7 +143,7 @@ type vschemaWrapper struct {
 }
 
 func (vw *vschemaWrapper) Find(tab sqlparser.TableName) (*vindexes.Table, error) {
-	return vw.v.Find(tab.Qualifier.String(), tab.Name.String())
+	return vw.v.FindTable(tab.Qualifier.String(), tab.Name.String())
 }
 
 func (vw *vschemaWrapper) DefaultKeyspace() (*vindexes.Keyspace, error) {
