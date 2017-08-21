@@ -116,7 +116,7 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string][]*TabletQuery, error
 	// use the plan cache to get the set of plans used for this query, then
 	// clear afterwards for the next run
 	planCache := vtgateExecutor.Plans()
-	plans := make([]*engine.Plan, 0, 4)
+	var plans []*engine.Plan
 	for _, item := range planCache.Items() {
 		plans = append(plans, item.Value.(*engine.Plan))
 	}
@@ -128,7 +128,7 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string][]*TabletQuery, error
 			continue
 		}
 
-		queries := make([]*TabletQuery, 0, 16)
+		queries := make([]*TabletQuery, 0, len(tc.Queries))
 		for _, bq := range tc.Queries {
 			tq := &TabletQuery{SQL: bq.Sql, BindVars: bq.BindVariables}
 			queries = append(queries, tq)
