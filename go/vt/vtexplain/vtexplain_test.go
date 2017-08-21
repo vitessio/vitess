@@ -78,7 +78,8 @@ var testVSchemaStr = `
 	"ks_unsharded": {
 		"Sharded": false,
 		"Tables": {
-			"t1": {}
+			"t1": {},
+			"table_not_in_schema": {}
 		}
 	},
 	"ks_sharded": {
@@ -172,6 +173,11 @@ create table music (
 	id bigint,
 	song varchar(64),
 	primary key (user_id, id)
+) Engine=InnoDB;
+
+create table table_not_in_vschema (
+	id bigint,
+	primary key (id)
 ) Engine=InnoDB;
 `
 
@@ -990,4 +996,43 @@ insert into user (id, name) values(2, "bob") on duplicate key update name="bob";
 	}
 
 	testExplain(sqlStr, expected, opts, t)
+}
+
+func TestErrors(t *testing.T) {
+	err := Init(testVSchemaStr, testSchemaStr, defaultTestOpts())
+	if err != nil {
+		t.Fatalf("vtexplain Init error: %v", err)
+	}
+
+	tests := []struct {
+		SQL string
+		Err string
+	}{
+		{
+			SQL: "INVALID SQL",
+			Err: "vtgate Execute: unrecognized statement: INVALID SQL",
+		},
+
+		{
+			SQL: "SELECT * FROM THIS IS NOT SQL",
+			Err: "vtgate Execute: syntax error at position 22 near 'is'",
+		},
+
+		{
+			SQL: "SELECT * FROM table_not_in_vschema",
+			Err: "vtgate Execute: table table_not_in_vschema not found",
+		},
+
+		{
+			SQL: "SELECT * FROM table_not_in_schema",
+			Err: "fakeTabletExecute: table table_not_in_schema not found in schema",
+		},
+	}
+
+	for _, test := range tests {
+		_, err = Run(test.SQL)
+		if err == nil || err.Error() != test.Err {
+			t.Errorf("Run(%s): %v, want %s", test.SQL, err, test.Err)
+		}
+	}
 }

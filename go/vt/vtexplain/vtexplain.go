@@ -174,20 +174,15 @@ func Run(sqlStr string) ([]*Plan, error) {
 }
 
 func getPlan(sql string) (*Plan, error) {
-	_, err := sqlparser.Parse(sql)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing sql: %v", err)
-	}
-
 	plans, tabletQueries, err := vtgateExecute(sql)
 	if err != nil {
-		return nil, fmt.Errorf("vtgateExecute: %v", err)
+		return nil, err
 	}
 	for _, tqs := range tabletQueries {
 		for _, tq := range tqs {
 			mqs, err := fakeTabletExecute(tq.SQL, tq.BindVars)
 			if err != nil {
-				return nil, fmt.Errorf("error in fakeTabletExecute: %v", err)
+				return nil, fmt.Errorf("fakeTabletExecute: %v", err)
 			}
 			tq.MysqlQueries = mqs
 		}
