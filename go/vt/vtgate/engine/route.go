@@ -26,10 +26,11 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/vterrors"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 var _ Primitive = (*Route)(nil)
@@ -677,12 +678,15 @@ func (route *Route) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*
 		colVindex := route.Table.ColumnVindexes[colNum]
 		var err error
 		if colVindex.Owned {
-			if route.Opcode == InsertSharded {
+			switch route.Opcode {
+			case InsertSharded:
 				err = route.processOwned(vcursor, allKeys[colNum], colVindex, bindVars, keyspaceIDs)
-			} else {
+			case InsertShardedIgnore:
 				// For InsertShardedIgnore, the work is substantially different.
 				// So,, we use a separate function.
 				err = route.processOwnedIgnore(vcursor, allKeys[colNum], colVindex, bindVars, keyspaceIDs)
+			default:
+				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected opcode: %v", route.Opcode)
 			}
 		} else {
 			err = route.processUnowned(vcursor, allKeys[colNum], colVindex, bindVars, keyspaceIDs)
@@ -734,7 +738,7 @@ func (route *Route) processPrimary(vcursor VCursor, vindexKeys []sqltypes.Value,
 
 	for rowNum, vindexKey := range vindexKeys {
 		if keyspaceIDs[rowNum] == nil {
-			if route.Opcode == InsertSharded {
+			if route.Opcode != InsertShardedIgnore {
 				return nil, fmt.Errorf("could not map %v to a keyspace id", vindexKey)
 			}
 			// InsertShardedIgnore: skip the row.
@@ -845,7 +849,7 @@ func (route *Route) processUnowned(vcursor VCursor, vindexKeys []sqltypes.Value,
 		for i, v := range verified {
 			rowNum := verifyIndexes[i]
 			if !v {
-				if route.Opcode == InsertSharded {
+				if route.Opcode != InsertShardedIgnore {
 					return fmt.Errorf("values %v for column %v does not map to keyspaceids", vindexKeys, colVindex.Column)
 				}
 				// InsertShardedIgnore: skip the row.

@@ -1014,8 +1014,11 @@ class TestVTGateFunctions(unittest.TestCase):
   def test_upsert(self):
     vtgate_conn = get_connection()
 
-    # Create lookup entries for primary vindexx:
-    # No entry for 2.
+    # Create lookup entries for primary vindex:
+    # No entry for 2. upsert_primary is not owned.
+    # So, we need to pre-create entries that the
+    # subsequent will insert will use to compute the
+    # keyspace id.
     vtgate_conn.begin()
     self.execute_on_master(
         vtgate_conn,
@@ -1051,7 +1054,34 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(
         result[0],
         [(1, 1, 1, 1), (3, 3, 3, 0), (4, 4, 4, 0),
-          (5, 5, 5, 5), (6, 6, 6, 6)])
+         (5, 5, 5, 5), (6, 6, 6, 6)])
+
+    # insert ignore
+    vtgate_conn.begin()
+    self.execute_on_master(
+        vtgate_conn,
+        'insert into upsert_primary(id, ksnum_id) values(7, 7)',
+        {})
+    vtgate_conn.commit()
+    # 1 will be sent but will not change existing row.
+    # 2 will not be sent because there is no keyspace id for it.
+    # 7 will be sent and will create a row.
+    vtgate_conn.begin()
+    self.execute_on_master(
+        vtgate_conn,
+        'insert ignore into upsert(pk, owned, user_id, col) values'
+        '(1, 1, 1, 2), (2, 2, 2, 2), (7, 7, 7, 7)',
+        {})
+    vtgate_conn.commit()
+
+    result = self.execute_on_master(
+        vtgate_conn,
+        'select pk, owned, user_id, col from upsert order by pk',
+        {})
+    self.assertEqual(
+        result[0],
+        [(1, 1, 1, 1), (3, 3, 3, 0), (4, 4, 4, 0),
+         (5, 5, 5, 5), (6, 6, 6, 6), (7, 7, 7, 7)])
 
 
   def test_joins(self):
