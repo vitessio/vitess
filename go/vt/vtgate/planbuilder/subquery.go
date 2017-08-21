@@ -175,9 +175,6 @@ func (sq *subquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum 
 	// columns that reference subqueries will have their colnum set.
 	// Let's use it here.
 	sq.esubquery.Cols = append(sq.esubquery.Cols, c.colnum)
-	sq.resultColumns = append(sq.resultColumns, &resultColumn{
-		alias:  col.Name,
-		column: c,
-	})
+	sq.resultColumns = append(sq.resultColumns, &resultColumn{column: c})
 	return rc, len(sq.resultColumns) - 1
 }

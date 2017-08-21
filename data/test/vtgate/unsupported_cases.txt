@@ -444,3 +444,27 @@
 
 "select 'b','c' from user union (select user.id, user.name from user join user_extra where user_extra.extra = 'asdf')"
 "unsupported construct: SELECT of UNION is non-trivial"
+
+"select keyspace_id from user_index where id = 1 and id = 2"
+"unsupported: where clause for vindex function must be of the form id = <val> (multiple filters)"
+
+"select keyspace_id from user_index where func(id)"
+"unsupported: where clause for vindex function must be of the form id = <val> (not a comparison)"
+
+"select keyspace_id from user_index where id > 1"
+"unsupported: where clause for vindex function must be of the form id = <val> (not equality)"
+
+"select keyspace_id from user_index where 1 = id"
+"unsupported: where clause for vindex function must be of the form id = <val> (lhs is not a column)"
+
+"select keyspace_id from user_index where none = 1"
+"unsupported: where clause for vindex function must be of the form id = <val> (lhs is not id)"
+
+"select keyspace_id from user_index where id = a"
+"unsupported: where clause for vindex function must be of the form id = <val> (rhs is not a value)"
+
+"select keyspace_id from user_index"
+"unsupported: where clause for vindex function must be of the form id = <val> (where clause missing)"
+
+"select func(keyspace_id) from user_index where id = :id"
+"unsupported: expression on results of a vindex function"

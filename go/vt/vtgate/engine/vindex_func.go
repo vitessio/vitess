@@ -30,6 +30,10 @@ var _ Primitive = (*VindexFunc)(nil)
 // VindexFunc is a primitive that performs vindex functions.
 type VindexFunc struct {
 	Opcode VindexOpcode
+	// Fields is the field info for the result.
+	Fields []*querypb.Field
+	// Cols contains source column numbers: 0 for id, 1 for keyspace_id.
+	Cols   []int
 	Vindex vindexes.Vindex
 	Value  sqltypes.PlanValue
 }
@@ -39,10 +43,14 @@ type VindexFunc struct {
 func (vf *VindexFunc) MarshalJSON() ([]byte, error) {
 	v := struct {
 		Opcode VindexOpcode
+		Fields []*querypb.Field
+		Cols   []int
 		Vindex string
 		Value  sqltypes.PlanValue
 	}{
 		Opcode: vf.Opcode,
+		Fields: vf.Fields,
+		Cols:   vf.Cols,
 		Vindex: vf.Vindex.String(),
 		Value:  vf.Value,
 	}
@@ -54,7 +62,8 @@ type VindexOpcode int
 
 // These are opcode values for VindexFunc.
 const (
-	VindexMap = VindexOpcode(iota)
+	VindexNone = VindexOpcode(iota)
+	VindexMap
 	NumVindexCodes
 )
 
@@ -87,11 +96,7 @@ func (vf *VindexFunc) StreamExecute(vcursor VCursor, bindVars, joinVars map[stri
 
 // GetFields fetches the field info.
 func (vf *VindexFunc) GetFields(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	r, err := vf.mapVindex(vcursor, bindVars, joinVars)
-	if err != nil {
-		return nil, err
-	}
-	return &sqltypes.Result{Fields: r.Fields}, nil
+	return &sqltypes.Result{Fields: vf.Fields}, nil
 }
 
 func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
@@ -100,14 +105,12 @@ func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars, joinVars map[string]*
 	if err != nil {
 		return nil, err
 	}
+	vkey, err := sqltypes.Cast(key, sqltypes.VarBinary)
+	if err != nil {
+		return nil, err
+	}
 	result := &sqltypes.Result{
-		Fields: []*querypb.Field{{
-			Name: "id",
-			Type: key.Type(),
-		}, {
-			Name: "keyspace_id",
-			Type: querypb.Type_VARBINARY,
-		}},
+		Fields: vf.Fields,
 	}
 
 	switch mapper := vf.Vindex.(type) {
@@ -119,9 +122,9 @@ func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars, joinVars map[string]*
 		// TODO(sougou): change this to nil check after upsert code is
 		// merged to master.
 		if len(ksids[0]) != 0 {
-			result.Rows = [][]sqltypes.Value{{
-				key, sqltypes.MakeTrusted(sqltypes.VarBinary, ksids[0]),
-			}}
+			result.Rows = [][]sqltypes.Value{
+				vf.buildRow(vkey, ksids[0]),
+			}
 			result.RowsAffected = 1
 		}
 	case vindexes.NonUnique:
@@ -130,11 +133,24 @@ func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars, joinVars map[string]*
 			return nil, err
 		}
 		for _, ksid := range ksidss[0] {
-			result.Rows = append(result.Rows, []sqltypes.Value{key, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid)})
+			result.Rows = append(result.Rows, vf.buildRow(vkey, ksid))
 		}
 		result.RowsAffected = uint64(len(ksidss[0]))
 	default:
 		panic("unexpected")
 	}
 	return result, nil
+}
+
+func (vf *VindexFunc) buildRow(id sqltypes.Value, ksid []byte) []sqltypes.Value {
+	row := make([]sqltypes.Value, 0, len(vf.Fields))
+	keyspaceID := sqltypes.MakeTrusted(sqltypes.VarBinary, ksid)
+	for _, col := range vf.Cols {
+		if col == 0 {
+			row = append(row, id)
+		} else {
+			row = append(row, keyspaceID)
+		}
+	}
+	return row
 }
