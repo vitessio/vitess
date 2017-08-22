@@ -30,8 +30,9 @@ type uvindex struct{ match bool }
 func (*uvindex) String() string { return "uvindex" }
 func (*uvindex) Cost() int      { return 1 }
 func (*uvindex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
-	return []bool{}, nil
+	panic("unimplemented")
 }
+
 func (v *uvindex) Map(vindexes.VCursor, []sqltypes.Value) ([][]byte, error) {
 	if v.match {
 		return [][]byte{
@@ -47,8 +48,9 @@ type nvindex struct{ match bool }
 func (*nvindex) String() string { return "nvindex" }
 func (*nvindex) Cost() int      { return 1 }
 func (*nvindex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
-	return []bool{}, nil
+	panic("unimplemented")
 }
+
 func (v *nvindex) Map(vindexes.VCursor, []sqltypes.Value) ([][][]byte, error) {
 	if v.match {
 		return [][][]byte{{
