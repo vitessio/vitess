@@ -248,7 +248,7 @@ func (cp *Pool) IdleTimeout() time.Duration {
 
 func (cp *Pool) isCallerIDAppDebug(ctx context.Context) bool {
 	callerID := callerid.ImmediateCallerIDFromContext(ctx)
-	if cp.appDebugParams == nil {
+	if cp.appDebugParams.Uname == "" {
 		return false
 	}
 	return callerID != nil && callerID.Username == cp.appDebugParams.Uname
