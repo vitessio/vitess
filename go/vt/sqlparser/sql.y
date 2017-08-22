@@ -96,6 +96,8 @@ func forceEOF(yylex interface{}) {
   indexInfo     *IndexInfo
   indexColumn   *IndexColumn
   indexColumns  []*IndexColumn
+  partDefs      []*PartitionDefinition
+  partDef       *PartitionDefinition
 }
 
 %token LEX_ERROR
@@ -141,6 +143,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE
 %token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING PRIMARY
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
+%token <bytes> MAXVALUE PARTITION REORGANIZE
 
 // Type Tokens
 %token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
@@ -253,6 +256,8 @@ func forceEOF(yylex interface{}) {
 %type <indexInfo> index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
+%type <partDefs> partition_definitions
+%type <partDef> partition_definition
 
 %start any_command
 
@@ -908,6 +913,38 @@ alter_statement:
 | ALTER VIEW table_name ddl_force_eof
   {
     $$ = &DDL{Action: AlterStr, Table: $3.ToViewName(), NewName: $3.ToViewName()}
+  }
+| ALTER ignore_opt TABLE table_name REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb
+  {
+    $$ = &DDL{Action: ReorganizeStr, Table: $4, PartitionName: $7, PartitionDefinitions: $10}
+  }
+
+partition_definitions:
+  partition_definition
+  {
+    $$ = []*PartitionDefinition{$1}
+  }
+| partition_definitions ',' partition_definition
+  {
+    $$ = append($1, $3)
+  }
+
+partition_definition:
+  PARTITION sql_id VALUES sql_id sql_id openb value_expression closeb
+  {
+    if $4.Lowered() != "less" || $5.Lowered() != "than" {
+        yylex.Error("expecting less than after values")
+        return 1
+    }
+    $$ = &PartitionDefinition{Name: $2, Limit: $7}
+  }
+| PARTITION sql_id VALUES sql_id sql_id openb MAXVALUE closeb
+  {
+    if $4.Lowered() != "less" || $5.Lowered() != "than" {
+        yylex.Error("expecting less than after values")
+        return 1
+    }
+    $$ = &PartitionDefinition{Name: $2, Maxvalue: true}
   }
 
 rename_statement:
@@ -2204,6 +2241,8 @@ non_rename_operation:
   { $$ = struct{}{} }
 | CONVERT
   { $$ = struct{}{} }
+| PARTITION
+  { $$ = struct{}{} }
 | UNUSED
   { $$ = struct{}{} }
 | ID
@@ -2331,6 +2370,7 @@ reserved_keyword:
 | LOCALTIMESTAMP
 | LOCK
 | MATCH
+| MAXVALUE
 | MOD
 | NATURAL
 | NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
@@ -2340,6 +2380,7 @@ reserved_keyword:
 | OR
 | ORDER
 | OUTER
+| PARTITION
 | REGEXP
 | RENAME
 | REPLACE
@@ -2410,6 +2451,7 @@ non_reserved_keyword:
 | PRIMARY
 | QUERY
 | REAL
+| REORGANIZE
 | REPAIR
 | SHARE
 | SIGNED
