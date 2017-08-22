@@ -2113,20 +2113,12 @@ func (node *GroupConcatExpr) WalkSubtree(visit Visit) error {
 
 // ValuesFuncExpr represents a function call.
 type ValuesFuncExpr struct {
-	Name     ColIdent
-	Resolved Expr
+	Name ColIdent
 }
 
 // Format formats the node.
 func (node *ValuesFuncExpr) Format(buf *TrackedBuffer) {
-	// Function names should not be back-quoted even
-	// if they match a reserved word. So, print the
-	// name as is.
-	if node.Resolved != nil {
-		buf.Myprintf("%v", node.Resolved)
-	} else {
-		buf.Myprintf("values(%s)", node.Name.String())
-	}
+	buf.Myprintf("values(%s)", node.Name.String())
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -2137,7 +2129,6 @@ func (node *ValuesFuncExpr) WalkSubtree(visit Visit) error {
 	return Walk(
 		visit,
 		node.Name,
-		node.Resolved,
 	)
 }
 

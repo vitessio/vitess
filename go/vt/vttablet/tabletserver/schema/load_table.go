@@ -91,7 +91,7 @@ func fetchIndexes(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
 	for _, row := range indexes.Rows {
 		indexName := row[2].ToString()
 		if currentName != indexName {
-			currentIndex = ta.AddIndex(indexName)
+			currentIndex = ta.AddIndex(indexName, row[1].ToString() == "0")
 			currentName = indexName
 		}
 		var cardinality uint64

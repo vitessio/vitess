@@ -81,34 +81,22 @@ func TestNumericMapBadData(t *testing.T) {
 }
 
 func TestNumericVerify(t *testing.T) {
-	success, err := numeric.Verify(nil, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
+	got, err := numeric.Verify(nil,
+		[]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
+		[][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01"), []byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
 	if err != nil {
 		t.Error(err)
 	}
-	if !success {
-		t.Errorf("Verify(): %+v, want true", success)
-	}
-}
-
-func TestNumericVerifyNeg(t *testing.T) {
-	_, err := numeric.Verify(nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
-	want := "Numeric.Verify: length of ids 2 doesn't match length of ksids 1"
-	if err.Error() != want {
-		t.Error(err.Error())
+	want := []bool{true, false}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("lhu.Verify(match): %v, want %v", got, want)
 	}
 
-	_, err = numeric.Verify(nil, []sqltypes.Value{sqltypes.NewFloat64(1.1)}, [][]byte{[]byte("test1")})
-	want = "Numeric.Verify: could not parse value: 1.1"
-	if err.Error() != want {
-		t.Error(err)
-	}
-
-	success, err := numeric.Verify(nil, []sqltypes.Value{sqltypes.NewInt64(4)}, [][]byte{[]byte("\x06\xe7\xea\"Βp\x8f")})
-	if err != nil {
-		t.Error(err)
-	}
-	if success {
-		t.Errorf("Numeric.Verify(): %+v, want false", success)
+	// Failure test
+	_, err = numeric.Verify(nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
+	wantErr := "Numeric.Verify: could not parse value: aa"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("hash.Verify err: %v, want %s", err, wantErr)
 	}
 }
 

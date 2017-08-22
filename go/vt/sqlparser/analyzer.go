@@ -127,10 +127,6 @@ func IsValue(node Expr) bool {
 		case StrVal, HexVal, IntVal, ValArg:
 			return true
 		}
-	case *ValuesFuncExpr:
-		if v.Resolved != nil {
-			return IsValue(v.Resolved)
-		}
 	}
 	return false
 }
@@ -201,10 +197,6 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 			pv.Values = append(pv.Values, innerpv)
 		}
 		return pv, nil
-	case *ValuesFuncExpr:
-		if node.Resolved != nil {
-			return NewPlanValue(node.Resolved)
-		}
 	case *NullVal:
 		return sqltypes.PlanValue{}, nil
 	}
