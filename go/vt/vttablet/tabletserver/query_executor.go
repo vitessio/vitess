@@ -358,7 +358,15 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 }
 
 func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
-	ddlPlan := planbuilder.DDLParse(qre.query)
+	sql := qre.query
+	var err error
+	if qre.plan.FullQuery != nil {
+		sql, err = qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars, nil, nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+	ddlPlan := planbuilder.DDLParse(sql)
 	if ddlPlan.Action == "" {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "DDL is not understood")
 	}
@@ -371,7 +379,7 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 			return nil, err
 		}
 		defer conn.Recycle()
-		result, err := qre.execSQL(conn, qre.query, false)
+		result, err := qre.execSQL(conn, sql, false)
 		if err != nil {
 			return nil, err
 		}
@@ -383,7 +391,7 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 	}
 
 	result, err := qre.execAsTransaction(func(conn *TxConnection) (*sqltypes.Result, error) {
-		return qre.execSQL(conn, qre.query, false)
+		return qre.execSQL(conn, sql, false)
 	})
 
 	if err != nil {

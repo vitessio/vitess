@@ -712,6 +712,12 @@ func TestValid(t *testing.T) {
 		input:  "alter table e comment = 'hello'",
 		output: "alter table e",
 	}, {
+		input:  "alter table a reorganize partition b into (partition c values less than (?), partition d values less than (maxvalue))",
+		output: "alter table a reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue))",
+	}, {
+		input:  "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
+		output: "alter table a",
+	}, {
 		input: "create table a",
 	}, {
 		input: "create table a (\n\t`a` int\n)",

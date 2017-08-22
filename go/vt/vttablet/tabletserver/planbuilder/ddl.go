@@ -47,9 +47,14 @@ func DDLParse(sql string) (plan *DDLPlan) {
 
 func analyzeDDL(ddl *sqlparser.DDL, tables map[string]*schema.Table) *Plan {
 	// TODO(sougou): Add support for sequences.
-	return &Plan{
+	plan := &Plan{
 		PlanID:  PlanDDL,
 		Table:   tables[ddl.Table.Name.String()],
 		NewName: ddl.NewName.Name,
 	}
+	// this can become a whitelist of fully supported ddl actions as support grows
+	if ddl.Action == "reorganize" {
+		plan.FullQuery = GenerateFullQuery(ddl)
+	}
+	return plan
 }

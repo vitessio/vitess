@@ -499,22 +499,25 @@ func (node *Set) WalkSubtree(visit Visit) error {
 }
 
 // DDL represents a CREATE, ALTER, DROP or RENAME statement.
-// Table is set for AlterStr, DropStr, RenameStr.
+// Table is set for AlterStr, DropStr, RenameStr, ReorganizeStr
 // NewName is set for AlterStr, CreateStr, RenameStr.
 type DDL struct {
-	Action    string
-	Table     TableName
-	NewName   TableName
-	IfExists  bool
-	TableSpec *TableSpec
+	Action               string
+	Table                TableName
+	NewName              TableName
+	IfExists             bool
+	TableSpec            *TableSpec
+	PartitionName        ColIdent
+	PartitionDefinitions []*PartitionDefinition
 }
 
 // DDL strings.
 const (
-	CreateStr = "create"
-	AlterStr  = "alter"
-	DropStr   = "drop"
-	RenameStr = "rename"
+	CreateStr     = "create"
+	AlterStr      = "alter"
+	DropStr       = "drop"
+	RenameStr     = "rename"
+	ReorganizeStr = "reorganize"
 )
 
 // Format formats the node.
@@ -534,6 +537,14 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		buf.Myprintf("%s table%s %v", node.Action, exists, node.Table)
 	case RenameStr:
 		buf.Myprintf("%s table %v %v", node.Action, node.Table, node.NewName)
+	case ReorganizeStr:
+		buf.Myprintf("alter table %v reorganize partition %v into (", node.Table, node.PartitionName)
+		var prefix string
+		for _, pd := range node.PartitionDefinitions {
+			buf.Myprintf("%s%v", prefix, pd)
+			prefix = ", "
+		}
+		buf.Myprintf(")")
 	default:
 		buf.Myprintf("%s table %v", node.Action, node.Table)
 	}
@@ -548,6 +559,34 @@ func (node *DDL) WalkSubtree(visit Visit) error {
 		visit,
 		node.Table,
 		node.NewName,
+	)
+}
+
+// PartitionDefinition describes a very minimal partition definition
+type PartitionDefinition struct {
+	Name     ColIdent
+	Limit    Expr
+	Maxvalue bool
+}
+
+// Format formats the node
+func (node *PartitionDefinition) Format(buf *TrackedBuffer) {
+	if !node.Maxvalue {
+		buf.Myprintf("partition %v values less than (%v)", node.Name, node.Limit)
+	} else {
+		buf.Myprintf("partition %v values less than (maxvalue)", node.Name)
+	}
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *PartitionDefinition) WalkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Name,
+		node.Limit,
 	)
 }
 
