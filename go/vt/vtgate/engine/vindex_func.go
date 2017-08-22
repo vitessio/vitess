@@ -119,9 +119,7 @@ func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars, joinVars map[string]*
 		if err != nil {
 			return nil, err
 		}
-		// TODO(sougou): change this to nil check after upsert code is
-		// merged to master.
-		if len(ksids[0]) != 0 {
+		if ksids[0] != nil {
 			result.Rows = [][]sqltypes.Value{
 				vf.buildRow(vkey, ksids[0]),
 			}
