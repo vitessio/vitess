@@ -615,6 +615,12 @@
 			"revisionTime": "2016-07-13T18:03:06Z"
 		},
 		{
+			"checksumSHA1": "v7C+aJ1D/z3MEeCte6bxvpoGjM4=",
+			"path": "github.com/sergi/go-diff/diffmatchpatch",
+			"revision": "feef008d51ad2b3778f85d387ccf91735543008d",
+			"revisionTime": "2017-04-09T07:17:39Z"
+		},
+		{
 			"checksumSHA1": "6AYg4fjEvFuAVN3wHakGApjhZAM=",
 			"path": "github.com/smartystreets/assertions",
 			"revision": "40711f7748186bbf9c99977cd89f21ce1a229447",
@@ -697,6 +703,24 @@
 			"path": "github.com/tchap/go-patricia/patricia",
 			"revision": "dd168db6051b704a01881df7e003cb7ec9a7a440",
 			"revisionTime": "2016-07-29T07:16:56Z"
+		},
+		{
+			"checksumSHA1": "8Kj0VH496b0exuyv4wAF4CXa7Y4=",
+			"path": "github.com/yudai/gojsondiff",
+			"revision": "081cda2ee95045a2c26da52c2ba80860838549de",
+			"revisionTime": "2017-06-26T13:12:58Z"
+		},
+		{
+			"checksumSHA1": "50gdo5Kq0/gEKG1A4agCPOZ26JA=",
+			"path": "github.com/yudai/gojsondiff/formatter",
+			"revision": "081cda2ee95045a2c26da52c2ba80860838549de",
+			"revisionTime": "2017-06-26T13:12:58Z"
+		},
+		{
+			"checksumSHA1": "5xoBoioS8LWHn9FC0pL+vo7wDjs=",
+			"path": "github.com/yudai/golcs",
+			"revision": "ecda9a501e8220fae3b4b600c3db4b0ba22cfc68",
+			"revisionTime": "2017-03-16T03:48:04Z"
 		},
 		{
 			"checksumSHA1": "N5fb5y92DFIP+wUhi1rSwPp9vyk=",

@@ -795,6 +795,11 @@ func (e *Executor) ServeHTTP(response http.ResponseWriter, request *http.Request
 	}
 }
 
+// Plans returns the LRU plan cache
+func (e *Executor) Plans() *cache.LRUCache {
+	return e.plans
+}
+
 // VSchemaStats returns the loaded vschema stats.
 func (e *Executor) VSchemaStats() *VSchemaStats {
 	e.mu.Lock()
