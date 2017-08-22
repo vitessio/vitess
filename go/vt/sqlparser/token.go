@@ -391,6 +391,12 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 				return tkn.scanHex()
 			}
 		}
+		if ch == 'B' || ch == 'b' {
+			if tkn.lastChar == '\'' {
+				tkn.next()
+				return tkn.scanBitLiteral()
+			}
+		}
 		return tkn.scanIdentifier(byte(ch))
 	case isDigit(ch):
 		return tkn.scanNumber(false)
@@ -538,6 +544,16 @@ func (tkn *Tokenizer) scanHex() (int, []byte) {
 		return LEX_ERROR, buffer.Bytes()
 	}
 	return HEX, buffer.Bytes()
+}
+
+func (tkn *Tokenizer) scanBitLiteral() (int, []byte) {
+	buffer := &bytes2.Buffer{}
+	tkn.scanMantissa(2, buffer)
+	if tkn.lastChar != '\'' {
+		return LEX_ERROR, buffer.Bytes()
+	}
+	tkn.next()
+	return BIT_LITERAL, buffer.Bytes()
 }
 
 func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
