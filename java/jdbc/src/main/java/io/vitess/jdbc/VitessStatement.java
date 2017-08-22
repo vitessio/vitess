@@ -395,19 +395,21 @@ public class VitessStatement implements Statement {
                 data[i][0] = String.valueOf(this.generatedId + i);
             }
         } else if (this.batchGeneratedKeys != null) {
-            ArrayList<ArrayList<String>> keys = new ArrayList<ArrayList<String>>();
+            long totalAffected = 0;
+            for (int i = 0; i < this.batchGeneratedKeys.length; i++) {
+                long rowsAffected = this.batchGeneratedKeys[i][1];
+                totalAffected += rowsAffected;
+            }
+            data = new String[(int) totalAffected][1];
+            int idx = 0;
             for (int i = 0; i < this.batchGeneratedKeys.length; i++) {
                 long insertId = this.batchGeneratedKeys[i][0];
                 long rowsAffected = this.batchGeneratedKeys[i][1];
                 for (int j = 0; j < rowsAffected; j++) {
-                    ArrayList<String> row = new ArrayList<String>(1);
-                    row.add(String.valueOf(insertId + j));
-                    keys.add(row);
+                    data[idx++][0] = String.valueOf(insertId + j);
                 }
             }
-            return new VitessResultSet(columnNames, columnTypes, keys, this.vitessConnection);
         }
-
         return new VitessResultSet(columnNames, columnTypes, data, this.vitessConnection);
     }
 
@@ -663,10 +665,16 @@ public class VitessStatement implements Statement {
         for (CursorWithError cursorWithError : cursorWithErrorList) {
             if (null == cursorWithError.getError()) {
                 try {
-                    int rowsAffected = (int) cursorWithError.getCursor().getRowsAffected();
-                    updateCounts[i] = rowsAffected;
+                    long rowsAffected = cursorWithError.getCursor().getRowsAffected();
+                    int truncatedUpdateCount;
+                    if (rowsAffected > Integer.MAX_VALUE) {
+                        truncatedUpdateCount = Integer.MAX_VALUE;
+                    } else {
+                        truncatedUpdateCount = (int) rowsAffected;
+                    }
+                    updateCounts[i] = truncatedUpdateCount;
                     if (this.retrieveGeneratedKeys) {
-                        generatedKeys[i] = new long[]{cursorWithError.getCursor().getInsertId(), rowsAffected};
+                        generatedKeys[i] = new long[]{cursorWithError.getCursor().getInsertId(), truncatedUpdateCount};
                     }
                 } catch (SQLException ex) {
                         /* This case should not happen as API has returned cursor and not error.
