@@ -556,9 +556,13 @@ func (qre *QueryExecutor) execInsertSubquery(conn *TxConnection) (*sqltypes.Resu
 
 func (qre *QueryExecutor) execInsertPKRows(conn *TxConnection, extras map[string]sqlparser.Encodable, pkRows [][]sqltypes.Value) (*sqltypes.Result, error) {
 	var bsc []byte
-	// don't build comment for RBR.
+	// Build comments only if we're not in RBR mode.
 	if qre.tsv.qe.binlogFormat != connpool.BinlogFormatRow {
-		bsc = buildStreamComment(qre.plan.Table, pkRows, nil)
+		secondaryList, err := buildSecondaryList(qre.plan.Table, pkRows, qre.plan.SecondaryPKValues, qre.bindVars)
+		if err != nil {
+			return nil, err
+		}
+		bsc = buildStreamComment(qre.plan.Table, pkRows, secondaryList)
 	}
 	return qre.txFetch(conn, qre.plan.OuterQuery, qre.bindVars, extras, bsc, false, true)
 }
@@ -574,6 +578,9 @@ func (qre *QueryExecutor) execUpsertPK(conn *TxConnection) (*sqltypes.Result, er
 	if err != nil {
 		return nil, err
 	}
+	// We do not need to build the secondary list for the insert part.
+	// But the part that updates will build it if it gets executed,
+	// because it's the one that can change the primary keys.
 	bsc := buildStreamComment(qre.plan.Table, pkRows, nil)
 	result, err := qre.txFetch(conn, qre.plan.OuterQuery, qre.bindVars, nil, bsc, false, true)
 	if err == nil {
@@ -641,7 +648,7 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 			secondaryList = secondaryList[i:end]
 		}
 		var bsc []byte
-		// Don't build comment for RBR.
+		// Build comments only if we're not in RBR mode.
 		if qre.tsv.qe.binlogFormat != connpool.BinlogFormatRow {
 			bsc = buildStreamComment(qre.plan.Table, pkRows, secondaryList)
 		}

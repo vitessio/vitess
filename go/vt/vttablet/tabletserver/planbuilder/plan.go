@@ -166,21 +166,22 @@ const (
 	ReasonTableNoIndex
 	ReasonPKChange
 	ReasonComplexExpr
-	ReasonUpsert
-	ReasonUpsertColMismatch
+	ReasonUpsertSubquery
+	ReasonUpsertMultiRow
 	ReasonReplace
 	ReasonMultiTable
+	NumReasons
 )
 
 // Must exactly match order of reason constants.
-var reasonName = []string{
+var reasonName = [NumReasons]string{
 	"DEFAULT",
 	"TABLE",
 	"TABLE_NOINDEX",
 	"PK_CHANGE",
 	"COMPLEX_EXPR",
-	"UPSERT",
-	"UPSERT_COL_MISMATCH",
+	"UPSERT_SUBQUERY",
+	"UPSERT_MULTI_ROW",
 	"REPLACE",
 	"MULTI_TABLE",
 }

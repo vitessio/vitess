@@ -49,6 +49,12 @@ func TestLoadTable(t *testing.T) {
 	if len(table.PKColumns) != 1 {
 		t.Fatalf("table should have one PK column although the cardinality is invalid")
 	}
+	if len(table.Indexes) != 3 {
+		t.Fatalf("table should have three indexes")
+	}
+	if count := table.UniqueIndexes(); count != 2 {
+		t.Errorf("table.UniqueIndexes(): %d expected 2", count)
+	}
 	if idx := table.Indexes[0].FindColumn(sqlparser.NewColIdent("pk")); idx != 0 {
 		t.Errorf("table.Indexes[0].FindColumn(pk): %d, want 0", idx)
 	}
@@ -57,6 +63,27 @@ func TestLoadTable(t *testing.T) {
 	}
 	if name := table.GetPKColumn(0).Name.String(); name != "pk" {
 		t.Errorf("table.GetPKColumn(0): %s, want pk", name)
+	}
+	if unique := table.Indexes[0].Unique; unique != true {
+		t.Errorf("table.Indexes[0].Unique: expected true")
+	}
+	if idx := table.Indexes[1].FindColumn(sqlparser.NewColIdent("pk")); idx != 0 {
+		t.Errorf("table.Indexes[1].FindColumn(pk): %d, want 0", idx)
+	}
+	if idx := table.Indexes[1].FindColumn(sqlparser.NewColIdent("name")); idx != 1 {
+		t.Errorf("table.Indexes[1].FindColumn(name): %d, want 1", idx)
+	}
+	if idx := table.Indexes[1].FindColumn(sqlparser.NewColIdent("addr")); idx != -1 {
+		t.Errorf("table.Indexes[1].FindColumn(pk): %d, want -1", idx)
+	}
+	if unique := table.Indexes[1].Unique; unique != true {
+		t.Errorf("table.Indexes[1].Unique: expected true")
+	}
+	if idx := table.Indexes[2].FindColumn(sqlparser.NewColIdent("addr")); idx != 0 {
+		t.Errorf("table.Indexes[1].FindColumn(addr): %d, want 0", idx)
+	}
+	if unique := table.Indexes[2].Unique; unique != false {
+		t.Errorf("table.Indexes[2].Unique: expected false")
 	}
 }
 
@@ -219,6 +246,7 @@ func getTestLoadTableQueries() map[string]*sqltypes.Result {
 				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false),
 				mysql.ShowIndexFromTableRow("test_table", true, "index", 1, "pk", false),
 				mysql.ShowIndexFromTableRow("test_table", true, "index", 2, "name", false),
+				mysql.ShowIndexFromTableRow("test_table", false, "index2", 1, "addr", false),
 			},
 		},
 	}

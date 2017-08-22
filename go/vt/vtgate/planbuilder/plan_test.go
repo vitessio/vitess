@@ -38,12 +38,10 @@ type hashIndex struct{ name string }
 
 func (v *hashIndex) String() string { return v.name }
 func (*hashIndex) Cost() int        { return 1 }
-func (*hashIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) (bool, error) {
-	return false, nil
+func (*hashIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+	return []bool{}, nil
 }
 func (*hashIndex) Map(vindexes.VCursor, []sqltypes.Value) ([][]byte, error) { return nil, nil }
-func (*hashIndex) Create(vindexes.VCursor, []sqltypes.Value) error          { return nil }
-func (*hashIndex) Delete(vindexes.VCursor, []sqltypes.Value, []byte) error  { return nil }
 
 func newHashIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &hashIndex{name: name}, nil
@@ -54,12 +52,12 @@ type lookupIndex struct{ name string }
 
 func (v *lookupIndex) String() string { return v.name }
 func (*lookupIndex) Cost() int        { return 2 }
-func (*lookupIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) (bool, error) {
-	return false, nil
+func (*lookupIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+	return []bool{}, nil
 }
-func (*lookupIndex) Map(vindexes.VCursor, []sqltypes.Value) ([][]byte, error)  { return nil, nil }
-func (*lookupIndex) Create(vindexes.VCursor, []sqltypes.Value, [][]byte) error { return nil }
-func (*lookupIndex) Delete(vindexes.VCursor, []sqltypes.Value, []byte) error   { return nil }
+func (*lookupIndex) Map(vindexes.VCursor, []sqltypes.Value) ([][]byte, error)        { return nil, nil }
+func (*lookupIndex) Create(vindexes.VCursor, []sqltypes.Value, [][]byte, bool) error { return nil }
+func (*lookupIndex) Delete(vindexes.VCursor, []sqltypes.Value, []byte) error         { return nil }
 
 func newLookupIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &lookupIndex{name: name}, nil
@@ -70,12 +68,12 @@ type multiIndex struct{ name string }
 
 func (v *multiIndex) String() string { return v.name }
 func (*multiIndex) Cost() int        { return 3 }
-func (*multiIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) (bool, error) {
-	return false, nil
+func (*multiIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+	return []bool{}, nil
 }
-func (*multiIndex) Map(vindexes.VCursor, []sqltypes.Value) ([][][]byte, error) { return nil, nil }
-func (*multiIndex) Create(vindexes.VCursor, []sqltypes.Value, [][]byte) error  { return nil }
-func (*multiIndex) Delete(vindexes.VCursor, []sqltypes.Value, []byte) error    { return nil }
+func (*multiIndex) Map(vindexes.VCursor, []sqltypes.Value) ([][][]byte, error)      { return nil, nil }
+func (*multiIndex) Create(vindexes.VCursor, []sqltypes.Value, [][]byte, bool) error { return nil }
+func (*multiIndex) Delete(vindexes.VCursor, []sqltypes.Value, []byte) error         { return nil }
 
 func newMultiIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &multiIndex{name: name}, nil
@@ -86,12 +84,12 @@ type costlyIndex struct{ name string }
 
 func (v *costlyIndex) String() string { return v.name }
 func (*costlyIndex) Cost() int        { return 10 }
-func (*costlyIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) (bool, error) {
-	return false, nil
+func (*costlyIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+	return []bool{}, nil
 }
-func (*costlyIndex) Map(vindexes.VCursor, []sqltypes.Value) ([][][]byte, error) { return nil, nil }
-func (*costlyIndex) Create(vindexes.VCursor, []sqltypes.Value, [][]byte) error  { return nil }
-func (*costlyIndex) Delete(vindexes.VCursor, []sqltypes.Value, []byte) error    { return nil }
+func (*costlyIndex) Map(vindexes.VCursor, []sqltypes.Value) ([][][]byte, error)      { return nil, nil }
+func (*costlyIndex) Create(vindexes.VCursor, []sqltypes.Value, [][]byte, bool) error { return nil }
+func (*costlyIndex) Delete(vindexes.VCursor, []sqltypes.Value, []byte) error         { return nil }
 
 func newCostlyIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &costlyIndex{name: name}, nil

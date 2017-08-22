@@ -164,17 +164,6 @@ func TestIsValue(t *testing.T) {
 		in:  newValArg(":a"),
 		out: true,
 	}, {
-		in: &ValuesFuncExpr{
-			Name:     NewColIdent("foo"),
-			Resolved: newStrVal(""),
-		},
-		out: true,
-	}, {
-		in: &ValuesFuncExpr{
-			Name: NewColIdent("foo"),
-		},
-		out: false,
-	}, {
 		in:  &NullVal{},
 		out: false,
 	}}
@@ -314,20 +303,6 @@ func TestNewPlanValue(t *testing.T) {
 			ListArg("::list"),
 		},
 		err: "unsupported: nested lists",
-	}, {
-		in: &ValuesFuncExpr{
-			Name: NewColIdent("valfunc"),
-			Resolved: &SQLVal{
-				Type: ValArg,
-				Val:  []byte(":vf"),
-			},
-		},
-		out: sqltypes.PlanValue{Key: "vf"},
-	}, {
-		in: &ValuesFuncExpr{
-			Name: NewColIdent("valfunc"),
-		},
-		err: "expression is too complex",
 	}, {
 		in:  &NullVal{},
 		out: sqltypes.PlanValue{},

@@ -44,13 +44,13 @@ func getTestSchema() map[string]*schema.Table {
 	table.AddColumn("id2", sqltypes.Int64, zero, "")
 	table.AddColumn("count", sqltypes.Int64, zero, "")
 	table.PKColumns = []int{0, 7}
-	addIndexToTable(&table, "PRIMARY", "id", "user_id")
-	addIndexToTable(&table, "idx_id2", "id2")
-	addIndexToTable(&table, "idx_int64_col", "int64_col")
-	addIndexToTable(&table, "idx_uint64_col", "uint64_col")
-	addIndexToTable(&table, "idx_float64_col", "float64_col")
-	addIndexToTable(&table, "idx_id_user_id", "id", "user_id")
-	addIndexToTable(&table, "idx_id_user_id_user_id_2", "id", "user_id", "user_id2")
+	addIndexToTable(&table, "PRIMARY", true, "id", "user_id")
+	addIndexToTable(&table, "idx_id2", false, "id2")
+	addIndexToTable(&table, "idx_int64_col", false, "int64_col")
+	addIndexToTable(&table, "idx_uint64_col", false, "uint64_col")
+	addIndexToTable(&table, "idx_float64_col", false, "float64_col")
+	addIndexToTable(&table, "idx_id_user_id", false, "id", "user_id")
+	addIndexToTable(&table, "idx_id_user_id_user_id_2", false, "id", "user_id", "user_id2")
 
 	table.SetMysqlStats(
 		sqltypes.NewInt64(1000), /* TableRows */
@@ -88,8 +88,8 @@ func getTestSchemaColumn(tableName, columnName string) *schema.TableColumn {
 // addIndexToTable adds an index named 'indexName' to 'table' with the given 'indexCols'.
 // It uses 12345 as the cardinality.
 // It returns the new index.
-func addIndexToTable(table *schema.Table, indexName string, indexCols ...string) *schema.Index {
-	index := table.AddIndex(indexName)
+func addIndexToTable(table *schema.Table, indexName string, unique bool, indexCols ...string) *schema.Index {
+	index := table.AddIndex(indexName, unique)
 	for _, indexCol := range indexCols {
 		index.AddColumn(indexCol, 12345)
 	}

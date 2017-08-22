@@ -81,8 +81,9 @@ func GenerateInsertOuterQuery(ins *sqlparser.Insert) *sqlparser.ParsedQuery {
 }
 
 // GenerateUpdateOuterQuery generates the outer query for updates.
-func GenerateUpdateOuterQuery(upd *sqlparser.Update) *sqlparser.ParsedQuery {
-	buf := sqlparser.NewTrackedBuffer(nil)
+// If there is no custom formatting needed, formatter can be nil.
+func GenerateUpdateOuterQuery(upd *sqlparser.Update, formatter sqlparser.NodeFormatter) *sqlparser.ParsedQuery {
+	buf := sqlparser.NewTrackedBuffer(formatter)
 	buf.Myprintf("update %v%v set %v where %a%v", upd.Comments, upd.TableExprs, upd.Exprs, ":#pk", upd.OrderBy)
 	return buf.ParsedQuery()
 }
