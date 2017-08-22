@@ -100,6 +100,7 @@ func initTableACL() error {
 
 var testSchema = `create table vitess_test(intval int default 0, floatval float default null, charval varchar(256) default null, binval varbinary(256) default null, primary key(intval));
 create table vitess_test_debuguser(intval int default 0, floatval float default null, charval varchar(256) default null, binval varbinary(256) default null, primary key(intval));
+grant select, show databases, process on *.* to 'vt_appdebug'@'localhost';
 revoke select on *.* from 'vt_appdebug'@'localhost';
 insert into vitess_test_debuguser values(1, 1.12345, 0xC2A2, 0x00FF), (2, null, '', null), (3, null, null, null);
 insert into vitess_test values(1, 1.12345, 0xC2A2, 0x00FF), (2, null, '', null), (3, null, null, null);
