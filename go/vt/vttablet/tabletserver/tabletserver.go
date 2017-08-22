@@ -1342,7 +1342,7 @@ func (tsv *TabletServer) convertError(ctx context.Context, sql string, bindVaria
 		errCode = vtrpcpb.Code_ALREADY_EXISTS
 	case mysql.ERDataTooLong, mysql.ERDataOutOfRange, mysql.ERBadNullError, mysql.ERSyntaxError, mysql.ERUpdateTableUsed, mysql.ERTooBigSet,
 		mysql.ERWrongDbName, mysql.ERWrongTableName, mysql.ERInvalidGroupFuncUse, mysql.ERTooManyFields, mysql.ERTooManyTables,
-		mysql.ERTableNameNotAllowedHere, mysql.ERDerivedMustHaveAlias, mysql.ERIllegalReference, mysql.ERCyclicReference:
+		mysql.ERTableNameNotAllowedHere, mysql.ERDerivedMustHaveAlias, mysql.ERIllegalReference, mysql.ERCyclicReference, mysql.ERTruncatedWrongValueForField:
 		errCode = vtrpcpb.Code_INVALID_ARGUMENT
 	case mysql.ERLockWaitTimeout:
 		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
