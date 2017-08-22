@@ -331,6 +331,9 @@ const (
 
 	// ERDataOutOfRange is ER_DATA_OUT_OF_RANGE
 	ERDataOutOfRange = 1690
+
+	// ERTruncatedWrongValueForField is ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+	ERTruncatedWrongValueForField = 1366
 )
 
 // Sql states for errors.
