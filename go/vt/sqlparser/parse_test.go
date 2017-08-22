@@ -464,6 +464,11 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* hex caps */ X'F0a1' from t",
 	}, {
+		input:  "select /* bit literal */ b'0101' from t",
+		output: "select /* bit literal */ B'0101' from t",
+	}, {
+		input: "select /* bit literal caps */ B'010011011010' from t",
+	}, {
 		input: "select /* 0x */ 0xf0 from t",
 	}, {
 		input: "select /* float */ 0.1 from t",
