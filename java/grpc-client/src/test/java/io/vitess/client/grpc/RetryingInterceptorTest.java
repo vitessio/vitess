@@ -14,11 +14,11 @@ import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
+import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.inprocess.InProcessChannelBuilder;
-import io.grpc.internal.ManagedChannelImpl;
 import io.vitess.proto.Vtgate;
 import io.vitess.proto.grpc.VitessGrpc;
 
@@ -28,7 +28,7 @@ public class RetryingInterceptorTest {
   public void testNoopConfigPassesThrough() throws ExecutionException, InterruptedException {
     ForceRetryNTimesInterceptor forceRetryNTimesInterceptor = new ForceRetryNTimesInterceptor(3);
 
-    ManagedChannelImpl channel = InProcessChannelBuilder.forName("foo").intercept(new RetryingInterceptor(RetryingInterceptorConfig.noOpConfig()), forceRetryNTimesInterceptor).build();
+    ManagedChannel channel = InProcessChannelBuilder.forName("foo").intercept(new RetryingInterceptor(RetryingInterceptorConfig.noOpConfig()), forceRetryNTimesInterceptor).build();
     VitessGrpc.VitessFutureStub stub = VitessGrpc.newFutureStub(channel);
     ListenableFuture<Vtgate.ExecuteResponse> resp = stub.execute(Vtgate.ExecuteRequest.getDefaultInstance());
     try {
@@ -43,7 +43,7 @@ public class RetryingInterceptorTest {
   public void testRetryAfterBackoff() throws ExecutionException, InterruptedException {
     ForceRetryNTimesInterceptor forceRetryNTimesInterceptor = new ForceRetryNTimesInterceptor(3);
     RetryingInterceptorConfig retryingInterceptorConfig = RetryingInterceptorConfig.exponentialConfig(5, 60, 2);
-    ManagedChannelImpl channel = InProcessChannelBuilder.forName("foo").intercept(forceRetryNTimesInterceptor, new RetryingInterceptor(retryingInterceptorConfig)).build();
+    ManagedChannel channel = InProcessChannelBuilder.forName("foo").intercept(forceRetryNTimesInterceptor, new RetryingInterceptor(retryingInterceptorConfig)).build();
     VitessGrpc.VitessFutureStub stub = VitessGrpc.newFutureStub(channel);
     ListenableFuture<Vtgate.ExecuteResponse> resp = stub.execute(Vtgate.ExecuteRequest.getDefaultInstance());
     try {
@@ -59,7 +59,7 @@ public class RetryingInterceptorTest {
   public void testRetryDeadlineExceeded() throws ExecutionException, InterruptedException {
     ForceRetryNTimesInterceptor forceRetryNTimesInterceptor = new ForceRetryNTimesInterceptor(3);
     RetryingInterceptorConfig retryingInterceptorConfig = RetryingInterceptorConfig.exponentialConfig(5, 60, 2);
-    ManagedChannelImpl channel = InProcessChannelBuilder.forName("foo").intercept(forceRetryNTimesInterceptor, new RetryingInterceptor(retryingInterceptorConfig)).build();
+    ManagedChannel channel = InProcessChannelBuilder.forName("foo").intercept(forceRetryNTimesInterceptor, new RetryingInterceptor(retryingInterceptorConfig)).build();
     VitessGrpc.VitessFutureStub stub = VitessGrpc.newFutureStub(channel).withDeadlineAfter(1, TimeUnit.MILLISECONDS);
     ListenableFuture<Vtgate.ExecuteResponse> resp = stub.execute(Vtgate.ExecuteRequest.getDefaultInstance());
     try {
