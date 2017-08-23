@@ -584,10 +584,13 @@ func discoveryDialer(tablet *topodatapb.Tablet, timeout time.Duration) (queryser
 
 type fakeConn struct {
 	queryservice.QueryService
-	tablet  *topodatapb.Tablet
-	hcChan  chan *querypb.StreamHealthResponse // next health response from the tablet
-	errCh   chan error                         // next stream error to return
-	cbErrCh chan error                         // records errors returned from the callback
+	tablet *topodatapb.Tablet
+	// hcChan should be an unbuffered channel which holds the tablet's next health response.
+	hcChan chan *querypb.StreamHealthResponse
+	// errCh is either an unbuffered channel which holds the stream error to return, or nil.
+	errCh chan error
+	// cbErrCh is a channel which receives errors returned from the supplied callback.
+	cbErrCh chan error
 
 	mu       sync.Mutex
 	canceled bool
