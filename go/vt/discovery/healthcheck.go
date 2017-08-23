@@ -429,10 +429,14 @@ func (hcc *healthCheckConn) stream(ctx context.Context, hc *HealthCheckImpl, cal
 		hcc.mu.Lock()
 		hcc.conn.Close(ctx)
 		hcc.conn = nil
-		hcc.tabletStats.Target = &querypb.Target{}
 		hcc.tabletStats.Serving = false
 		hcc.tabletStats.LastError = err
+		ts := hcc.tabletStats
 		hcc.mu.Unlock()
+		// notify downstream for serving status change
+		if hc.listener != nil {
+			hc.listener.StatsUpdate(&ts)
+		}
 		return
 	}
 	return
