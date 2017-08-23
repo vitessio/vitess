@@ -41,6 +41,35 @@ func TestConnPoolGet(t *testing.T) {
 	if dbConn == nil {
 		t.Fatalf("db conn should not be nil")
 	}
+	// There is no context, it should not use appdebug connection
+	if dbConn.pool == nil {
+		t.Fatalf("db conn pool should not be nil")
+	}
+	dbConn.Recycle()
+}
+
+func TestConnPoolGetEmptyDebugConfig(t *testing.T) {
+	db := fakesqldb.New(t)
+	debugConn := db.ConnParamsWithUname("")
+	defer db.Close()
+	connPool := newPool()
+	connPool.Open(db.ConnParams(), db.ConnParams(), debugConn)
+	im := callerid.NewImmediateCallerID("")
+	ecid := callerid.NewEffectiveCallerID("p", "c", "sc")
+	ctx := context.Background()
+	ctx = callerid.NewContext(ctx, ecid, im)
+	defer connPool.Close()
+	dbConn, err := connPool.Get(ctx)
+	if err != nil {
+		t.Fatalf("should not get an error, but got: %v", err)
+	}
+	if dbConn == nil {
+		t.Fatalf("db conn should not be nil")
+	}
+	// Context is empty, it should not use appdebug connection
+	if dbConn.pool == nil {
+		t.Fatalf("db conn pool should not be nil")
+	}
 	dbConn.Recycle()
 }
 
