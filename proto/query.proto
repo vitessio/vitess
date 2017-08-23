@@ -277,6 +277,16 @@ message ExecuteOptions {
   // sql_select_limit sets an implicit limit on all select statements. Since
   // vitess also sets a rowcount limit on queries, the smallest value wins.
   int64 sql_select_limit = 8;
+
+  enum TransactionIsolation {
+    DEFAULT = 0;
+    REPEATABLE_READ = 1;
+    READ_COMMITTED = 2;
+    READ_UNCOMMITTED = 3;
+    SERIALIZABLE = 4;
+  }
+
+  TransactionIsolation transaction_isolation = 9;
 }
 
 // Field describes a single column returned by a query
