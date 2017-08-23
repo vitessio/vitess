@@ -514,7 +514,7 @@ insert ignore into user (id, name) values(2, "bob");
         "SQL": "insert into user (id, name) values(1, \"alice\")",
         "Plans": [
             {
-                "Original": "insert into name_user_map(name,user_id) values(:name0,:user_id0)",
+                "Original": "insert into name_user_map(name, user_id) values(:name0, :user_id0)",
                 "Instructions": {
                     "Opcode": "InsertSharded",
                     "Keyspace": {
@@ -595,7 +595,7 @@ insert ignore into user (id, name) values(2, "bob");
         "SQL": "insert into user (id, name) values(2, \"bob\")",
         "Plans": [
             {
-                "Original": "insert into name_user_map(name,user_id) values(:name0,:user_id0)",
+                "Original": "insert into name_user_map(name, user_id) values(:name0, :user_id0)",
                 "Instructions": {
                     "Opcode": "InsertSharded",
                     "Keyspace": {
@@ -678,21 +678,37 @@ insert ignore into user (id, name) values(2, "bob");
         "SQL": "insert ignore into user (id, name) values(2, \"bob\")",
         "Plans": [
             {
-                "Original": "insert into name_user_map(name,user_id) values(:name0,:user_id0)",
+                "Original": "select name from name_user_map where name = :name and user_id = :user_id",
                 "Instructions": {
-                    "Opcode": "InsertSharded",
+                    "Opcode": "SelectEqualUnique",
                     "Keyspace": {
                         "Name": "ks_sharded",
                         "Sharded": true
                     },
-                    "Query": "insert into name_user_map(name, user_id) values (:_name0, :user_id0)",
+                    "Query": "select name from name_user_map where name = :name and user_id = :user_id",
+                    "FieldQuery": "select name from name_user_map where 1 != 1",
+                    "Vindex": "md5",
+                    "Values": [
+                        ":name"
+                    ]
+                }
+            },
+            {
+                "Original": "insert ignore into name_user_map(name, user_id) values(:name0, :user_id0)",
+                "Instructions": {
+                    "Opcode": "InsertShardedIgnore",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0)",
                     "Values": [
                         [
                             ":name0"
                         ]
                     ],
                     "Table": "name_user_map",
-                    "Prefix": "insert into name_user_map(name, user_id) values ",
+                    "Prefix": "insert ignore into name_user_map(name, user_id) values ",
                     "Mid": [
                         "(:_name0, :user_id0)"
                     ]
@@ -701,7 +717,7 @@ insert ignore into user (id, name) values(2, "bob");
             {
                 "Original": "insert ignore into user (id, name) values(2, \"bob\")",
                 "Instructions": {
-                    "Opcode": "InsertSharded",
+                    "Opcode": "InsertShardedIgnore",
                     "Keyspace": {
                         "Name": "ks_sharded",
                         "Sharded": true
@@ -741,7 +757,7 @@ insert ignore into user (id, name) values(2, "bob");
             ],
             "ks_sharded/80-": [
                 {
-                    "SQL": "insert into name_user_map(name, user_id) values (:_name0, :user_id0) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */",
+                    "SQL": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */",
                     "BindVars": {
                         "#maxLimit": "10001",
                         "_name0": "'bob'",
@@ -750,8 +766,19 @@ insert ignore into user (id, name) values(2, "bob");
                     },
                     "MysqlQueries": [
                         "begin",
-                        "insert into name_user_map(name, user_id) values ('bob', 2)",
+                        "insert ignore into name_user_map(name, user_id) values ('bob', 2)",
                         "commit"
+                    ]
+                },
+                {
+                    "SQL": "select name from name_user_map where name = :name and user_id = :user_id",
+                    "BindVars": {
+                        "#maxLimit": "10001",
+                        "name": "'bob'",
+                        "user_id": "2"
+                    },
+                    "MysqlQueries": [
+                        "select name from name_user_map where name = 'bob' and user_id = 2 limit 10001"
                     ]
                 }
             ]
@@ -766,7 +793,7 @@ func TestOptions(t *testing.T) {
 	sqlStr := `
 select * from user where email="null@void.com";
 select * from user where id in (1,2,3,4,5,6,7,8);
-insert into user (id, name) values(2, "bob") on duplicate key update name="bob";
+insert into user (id, name) values(2, "bob");
 `
 
 	expected := `
@@ -901,7 +928,7 @@ insert into user (id, name) values(2, "bob") on duplicate key update name="bob";
         }
     },
     {
-        "SQL": "insert into user (id, name) values(2, \"bob\") on duplicate key update name=\"bob\"",
+        "SQL": "insert into user (id, name) values(2, \"bob\")",
         "Plans": [
             {
                 "Original": "insert into name_user_map(name, user_id) values (:name0, :user_id0)",
@@ -925,14 +952,14 @@ insert into user (id, name) values(2, "bob") on duplicate key update name="bob";
                 }
             },
             {
-                "Original": "insert into user(id, name) values (:vtg1, :vtg2) on duplicate key update name = :vtg2",
+                "Original": "insert into user(id, name) values (:vtg1, :vtg2)",
                 "Instructions": {
                     "Opcode": "InsertSharded",
                     "Keyspace": {
                         "Name": "ks_sharded",
                         "Sharded": true
                     },
-                    "Query": "insert into user(id, name) values (:_id0, :_name0) on duplicate key update name = :vtg2",
+                    "Query": "insert into user(id, name) values (:_id0, :_name0)",
                     "Values": [
                         [
                             ":vtg1"
@@ -945,15 +972,14 @@ insert into user (id, name) values(2, "bob") on duplicate key update name="bob";
                     "Prefix": "insert into user(id, name) values ",
                     "Mid": [
                         "(:_id0, :_name0)"
-                    ],
-                    "Suffix": " on duplicate key update name = :vtg2"
+                    ]
                 }
             }
         ],
         "TabletQueries": {
             "ks_sharded/-40": [
                 {
-                    "SQL": "insert into user(id, name) values (:_id0, :_name0) on duplicate key update name = :vtg2 /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+                    "SQL": "insert into user(id, name) values (:_id0, :_name0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
                     "BindVars": {
                         "#maxLimit": "10001",
                         "_id0": "2",
