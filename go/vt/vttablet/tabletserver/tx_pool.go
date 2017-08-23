@@ -56,6 +56,13 @@ const txLogInterval = time.Duration(1 * time.Minute)
 var (
 	txOnce  sync.Once
 	txStats = stats.NewTimings("Transactions")
+
+	txIsolations = map[querypb.ExecuteOptions_TransactionIsolation]string{
+		querypb.ExecuteOptions_REPEATABLE_READ:  "set transaction isolation level REPEATABLE READ",
+		querypb.ExecuteOptions_READ_COMMITTED:   "set transaction isolation level READ COMMITTED",
+		querypb.ExecuteOptions_READ_UNCOMMITTED: "set transaction isolation level READ UNCOMMITTED",
+		querypb.ExecuteOptions_SERIALIZABLE:     "set transaction isolation level SERIALIZABLE",
+	}
 )
 
 // TxPool is the transaction pool for the query service.
@@ -183,17 +190,11 @@ func (axp *TxPool) Begin(ctx context.Context, useFoundRows bool, txIsolation que
 		return 0, err
 	}
 
-	switch txIsolation {
-	case querypb.ExecuteOptions_DEFAULT:
-		break
-	case querypb.ExecuteOptions_REPEATABLE_READ, querypb.ExecuteOptions_READ_COMMITTED, querypb.ExecuteOptions_READ_UNCOMMITTED, querypb.ExecuteOptions_SERIALIZABLE:
-		query := fmt.Sprintf("set transaction isolation level %v", strings.Replace(txIsolation.String(), "_", " ", 1))
+	if query, ok := txIsolations[txIsolation]; ok {
 		if _, err := conn.Exec(ctx, query, 1, false); err != nil {
 			conn.Recycle()
 			return 0, err
 		}
-	default:
-		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown transaction isolation %v", txIsolation.String())
 	}
 
 	if _, err := conn.Exec(ctx, "begin", 1, false); err != nil {
