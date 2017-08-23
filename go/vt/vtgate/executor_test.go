@@ -228,6 +228,9 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set workload = 'olap'",
 		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLAP}},
 	}, {
+		in:  "set workload = 'dba'",
+		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_DBA}},
+	}, {
 		in:  "set workload = 'aa'",
 		err: "invalid workload: aa",
 	}, {
