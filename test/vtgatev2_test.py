@@ -53,6 +53,9 @@ shard_1_master = tablet.Tablet()
 shard_1_replica1 = tablet.Tablet()
 shard_1_replica2 = tablet.Tablet()
 
+all_tablets = [shard_0_master, shard_0_replica1, shard_0_replica2,
+               shard_1_master, shard_1_replica1, shard_1_replica2]
+
 KEYSPACE_NAME = 'test_keyspace'
 SHARD_NAMES = ['-80', '80-']
 SHARD_KID_MAP = {
@@ -263,18 +266,7 @@ def setup_tablets():
                          [shard_0_master, shard_0_replica1, shard_0_replica2,
                           shard_1_master, shard_1_replica1, shard_1_replica2])
 
-  wait_for_endpoints(
-      '%s.%s.master' % (KEYSPACE_NAME, SHARD_NAMES[0]),
-      1)
-  wait_for_endpoints(
-      '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[0]),
-      2)
-  wait_for_endpoints(
-      '%s.%s.master' % (KEYSPACE_NAME, SHARD_NAMES[1]),
-      1)
-  wait_for_endpoints(
-      '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[1]),
-      2)
+  wait_for_all_tablets()
 
 
 def restart_vtgate(port):
@@ -291,6 +283,13 @@ def wait_for_endpoints(name, count):
     l2vtgate.wait_for_endpoints(name, count)
   else:
     utils.vtgate.wait_for_endpoints(name, count)
+
+
+def wait_for_all_tablets():
+  wait_for_endpoints('%s.%s.master' % (KEYSPACE_NAME, SHARD_NAMES[0]), 1)
+  wait_for_endpoints('%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[0]), 2)
+  wait_for_endpoints('%s.%s.master' % (KEYSPACE_NAME, SHARD_NAMES[1]), 1)
+  wait_for_endpoints('%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[1]), 2)
 
 
 def get_connection(timeout=10.0):
