@@ -127,6 +127,14 @@ class TestVtctld(unittest.TestCase):
     self.assertIn('test_nj', result['Children'])
     self.assertIn('test_ny', result['Children'])
 
+  def test_health_check(self):
+    url = 'http://localhost:%d/debug/health' % utils.vtctld.port
+    f = urllib2.urlopen(url)
+    body = f.read()
+    f.close()
+    # test body response for health check is ok
+    self.assertEqual(body, 'ok')
+
   def _check_all_tablets(self, result):
     lines = result.splitlines()
     self.assertEqual(len(lines), len(tablets), 'got lines:\n%s' % lines)
