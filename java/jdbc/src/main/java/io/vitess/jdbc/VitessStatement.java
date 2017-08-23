@@ -78,7 +78,7 @@ public class VitessStatement implements Statement {
     public VitessStatement(VitessConnection vitessConnection, int resultSetType,
         int resultSetConcurrency) {
         this.vitessConnection = vitessConnection;
-        this.queryTimeoutInMillis = vitessConnection.getQueryTimeoutMillis();
+        this.queryTimeoutInMillis = vitessConnection.getQueryTimeout();
         this.vitessResultSet = null;
         this.resultSetType = resultSetType;
         this.resultSetConcurrency = resultSetConcurrency;
@@ -268,7 +268,7 @@ public class VitessStatement implements Statement {
                 Constants.SQLExceptionMessages.ILLEGAL_VALUE_FOR + "query timeout");
         }
         this.queryTimeoutInMillis =
-            (0 == seconds) ? vitessConnection.getQueryTimeoutMillis() : (long) seconds * 1000;
+            (0 == seconds) ? vitessConnection.getQueryTimeout() : (long) seconds * 1000;
     }
 
     /**

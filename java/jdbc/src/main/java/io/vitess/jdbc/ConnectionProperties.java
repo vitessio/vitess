@@ -207,20 +207,20 @@ public class ConnectionProperties {
         "Should the driver treat java.util.Date as a TIMESTAMP for the purposes of PreparedStatement.setObject()",
         true);
 
-    private LongConnectionProperty queryTimeoutMillis = new LongConnectionProperty(
-        "queryTimeoutMillis",
+    private LongConnectionProperty queryTimeout = new LongConnectionProperty(
+        "queryTimeout",
         "The default query timeout, in millis, to use for queries which do not explicitly setQueryTimeout",
         Constants.DEFAULT_TIMEOUT
     );
 
-    private LongConnectionProperty connectionTimeoutMillis = new LongConnectionProperty(
-        "connectionTimeoutMillis",
+    private LongConnectionProperty connectionTimeout = new LongConnectionProperty(
+        "connectionTimeout",
         "The timeout, in millis, to use when creating new gRPC connections",
         Constants.CONNECTION_TIMEOUT
     );
 
-    private LongConnectionProperty transactionTimeoutMillis = new LongConnectionProperty(
-        "transactionTimeoutMillis",
+    private LongConnectionProperty transactionTimeout = new LongConnectionProperty(
+        "transactionTimeout",
         "The timeout, in millis, to use when committing or rolling back transactions",
         Constants.DEFAULT_TIMEOUT
     );
@@ -480,28 +480,28 @@ public class ConnectionProperties {
         this.treatUtilDateAsTimestamp.setValue(treatUtilDateAsTimestamp);
     }
 
-    public long getQueryTimeoutMillis() {
-        return queryTimeoutMillis.getValueAsLong();
+    public long getQueryTimeout() {
+        return queryTimeout.getValueAsLong();
     }
 
-    public void setQueryTimeoutMillis(long queryTimeoutMillis) {
-        this.queryTimeoutMillis.setValue(queryTimeoutMillis);
+    public void setQueryTimeout(long queryTimeout) {
+        this.queryTimeout.setValue(queryTimeout);
     }
 
-    public long getConnectionTimeoutMillis() {
-        return connectionTimeoutMillis.getValueAsLong();
+    public long getConnectionTimeout() {
+        return connectionTimeout.getValueAsLong();
     }
 
-    public void setConnectionTimeoutMillis(long connectionTimeoutMillis) {
-        this.connectionTimeoutMillis.setValue(connectionTimeoutMillis);
+    public void setConnectionTimeout(long connectionTimeout) {
+        this.connectionTimeout.setValue(connectionTimeout);
     }
 
-    public long getTransactionTimeoutMillis() {
-        return transactionTimeoutMillis.getValueAsLong();
+    public long getTransactionTimeout() {
+        return transactionTimeout.getValueAsLong();
     }
 
-    public void setTransactionTimeoutMillis(long transactionTimeoutMillis) {
-        this.transactionTimeoutMillis.setValue(transactionTimeoutMillis);
+    public void setTransactionTimeout(long transactionTimeout) {
+        this.transactionTimeout.setValue(transactionTimeout);
     }
 
     public String getTarget() {
