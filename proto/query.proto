@@ -262,6 +262,7 @@ message ExecuteOptions {
     UNSPECIFIED = 0;
     OLTP = 1;
     OLAP = 2;
+    DBA = 3;
   }
 
   // workload specifies the type of workload:
@@ -269,6 +270,8 @@ message ExecuteOptions {
   // query timeouts are shorter.
   // OLAP: DMLS not allowed, no limit on row count, timeouts
   // can be as high as desired.
+  // DBA: no limit on rowcount or timeout, all queries allowed 
+  // but intended for long DMLs and DDLs.
   Workload workload = 6;
 
   // sql_select_limit sets an implicit limit on all select statements. Since
