@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"sync"
 	"time"
 
@@ -94,12 +95,12 @@ func (asl *AuthServerLdap) Salt() ([]byte, error) {
 }
 
 // ValidateHash is unimplemented for AuthServerLdap.
-func (asl *AuthServerLdap) ValidateHash(salt []byte, user string, authResponse []byte) (mysql.Getter, error) {
+func (asl *AuthServerLdap) ValidateHash(salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (mysql.Getter, error) {
 	panic("unimplemented")
 }
 
 // Negotiate is part of the AuthServer interface.
-func (asl *AuthServerLdap) Negotiate(c *mysql.Conn, user string) (mysql.Getter, error) {
+func (asl *AuthServerLdap) Negotiate(c *mysql.Conn, user string, remoteAddr net.Addr) (mysql.Getter, error) {
 	// Finish the negotiation.
 	password, err := mysql.AuthServerNegotiateClearOrDialog(c, asl.Method)
 	if err != nil {
