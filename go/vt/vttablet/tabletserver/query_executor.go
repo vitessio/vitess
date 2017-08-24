@@ -678,7 +678,12 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 		if err != nil {
 			return nil, err
 		}
-		// DMLs should only return RowsAffected.
+
+		// UPDATEs can return InsertID when LAST_INSERT_ID(expr) is used. In
+		// this case it should be the same for all rows.
+		result.InsertID = r.InsertID
+
+		// DMLs should all return RowsAffected.
 		result.RowsAffected += r.RowsAffected
 	}
 	if qre.plan.Table.Type == schema.Message {

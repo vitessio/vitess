@@ -647,6 +647,46 @@ func TestClientFoundRows(t *testing.T) {
 	}
 }
 
+func TestLastInsertId(t *testing.T) {
+	client := framework.NewClient()
+	res, err := client.Execute("insert ignore into vitess_autoinc_seq SET name = 'foo', sequence = 0", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Execute("delete from vitess_autoinc_seq where name = 'foo'", nil)
+
+	if err := client.Begin(true); err != nil {
+		t.Fatal(err)
+	}
+	defer client.Rollback()
+
+	res, err = client.Execute("insert ignore into vitess_autoinc_seq SET name = 'foo', sequence = 0", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	qr, err := client.Execute("update vitess_autoinc_seq set sequence=last_insert_id(sequence + 1) where name='foo'", nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	insID := res.InsertID
+
+	if want, got := insID+1, qr.InsertID; want != got {
+		t.Errorf("insertId mismatch; got %v, want %v", got, want)
+	}
+
+	qr, err = client.Execute("select sequence from vitess_autoinc_seq where name = 'foo'", nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantCol := sqltypes.NewUint64(insID + uint64(1))
+	if !reflect.DeepEqual(qr.Rows[0][0], wantCol) {
+		t.Errorf("Execute: \n%#v, want \n%#v", qr.Rows[0][0], wantCol)
+	}
+}
+
 func TestAppDebugRequest(t *testing.T) {
 	client := framework.NewClient()
 
