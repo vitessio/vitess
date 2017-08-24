@@ -654,6 +654,7 @@ public class VitessResultSetTest extends BaseTest {
         String varcharStr = "i have a variable length!";
         String masqueradingBlobStr = "look at me, im a blob";
         String textStr = "an enthralling string of TEXT in some foreign language";
+        String jsonStr = "{\"status\": \"ok\"}";
 
         int paddedCharColLength = 20;
         byte[] trimmedChar = StringUtils.getBytes(trimmedCharStr, "UTF-16");
@@ -661,12 +662,14 @@ public class VitessResultSetTest extends BaseTest {
         byte[] masqueradingBlob = StringUtils.getBytes(masqueradingBlobStr, "US-ASCII");
         byte[] text = StringUtils.getBytes(textStr, "ISO8859_8");
         byte[] opaqueBinary = new byte[] { 1,2,3,4,5,6,7,8,9};
+        byte[] json = StringUtils.getBytes(jsonStr, "UTF-8");
 
         value.write(trimmedChar);
         value.write(varchar);
         value.write(opaqueBinary);
         value.write(masqueradingBlob);
         value.write(text);
+        value.write(json);
 
         Query.QueryResult result = Query.QueryResult.newBuilder()
             // This tests CHAR
@@ -695,12 +698,17 @@ public class VitessResultSetTest extends BaseTest {
                 .setColumnLength(text.length)
                 .setCharset(/* corresponds to greek, from CharsetMapping */25)
                 .setType(Query.Type.TEXT))
+            .addFields(Query.Field.newBuilder().setName("col5")
+                .setColumnLength(json.length)
+                .setCharset(CharsetMapping.MYSQL_COLLATION_INDEX_utf8)
+                .setType(Query.Type.JSON))
             .addRows(Query.Row.newBuilder()
                 .addLengths(trimmedChar.length)
                 .addLengths(varchar.length)
                 .addLengths(opaqueBinary.length)
                 .addLengths(masqueradingBlob.length)
                 .addLengths(text.length)
+                .addLengths(json.length)
                 .setValues(value.toByteString()))
             .build();
 
@@ -713,8 +721,9 @@ public class VitessResultSetTest extends BaseTest {
         Assert.assertArrayEquals(opaqueBinary, (byte[]) vitessResultSet.getObject(3));
         Assert.assertEquals(masqueradingBlobStr, vitessResultSet.getObject(4));
         Assert.assertEquals(textStr, vitessResultSet.getObject(5));
+        Assert.assertEquals(jsonStr, vitessResultSet.getObject(6));
 
-        PowerMockito.verifyPrivate(vitessResultSet, VerificationModeFactory.times(5)).invoke("convertBytesIfPossible", Matchers.any(byte[].class), Matchers.any(FieldWithMetadata.class));
+        PowerMockito.verifyPrivate(vitessResultSet, VerificationModeFactory.times(6)).invoke("convertBytesIfPossible", Matchers.any(byte[].class), Matchers.any(FieldWithMetadata.class));
 
         conn.setIncludedFields(Query.ExecuteOptions.IncludedFields.TYPE_AND_NAME);
         vitessResultSet = PowerMockito.spy(new VitessResultSet(new SimpleCursor(result), new VitessStatement(conn)));
@@ -725,6 +734,7 @@ public class VitessResultSetTest extends BaseTest {
         Assert.assertArrayEquals(opaqueBinary, (byte[]) vitessResultSet.getObject(3));
         Assert.assertArrayEquals(masqueradingBlob, (byte[]) vitessResultSet.getObject(4));
         Assert.assertArrayEquals(text, (byte[]) vitessResultSet.getObject(5));
+        Assert.assertArrayEquals(json, (byte[]) vitessResultSet.getObject(6));
 
         PowerMockito.verifyPrivate(vitessResultSet, VerificationModeFactory.times(0)).invoke("convertBytesIfPossible", Matchers.any(byte[].class), Matchers.any(FieldWithMetadata.class));
     }

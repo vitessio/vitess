@@ -163,6 +163,10 @@ public class FieldWithMetadata {
                 }
             }
         } else {
+            // MySQL always encodes JSON data with utf8mb4. Discard whatever else we've found, if the type is JSON
+            if (vitessType == Query.Type.JSON) {
+                this.encoding = "UTF-8";
+            }
             // Defaults to appease final variables when not including all fields
             this.isImplicitTempTable = false;
             this.isSingleBit = false;
@@ -349,7 +353,7 @@ public class FieldWithMetadata {
 
         // Detect CHAR(n) CHARACTER SET BINARY which is a synonym for fixed-length binary types
         if (this.collationIndex == CharsetMapping.MYSQL_COLLATION_INDEX_binary && isBinary()
-            && (this.javaType == Types.CHAR || this.javaType == Types.VARCHAR)) {
+            && (this.vitessType == Query.Type.CHAR || this.vitessType == Query.Type.VARCHAR)) {
             // Okay, queries resolved by temp tables also have this 'signature', check for that
             return !isImplicitTemporaryTable();
         }

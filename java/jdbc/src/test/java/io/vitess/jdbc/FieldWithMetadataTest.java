@@ -194,7 +194,7 @@ public class FieldWithMetadataTest extends BaseTest {
 
         conn.setIncludedFields(Query.ExecuteOptions.IncludedFields.TYPE_AND_NAME);
         fieldWithMetadata = new FieldWithMetadata(conn, raw);
-        Assert.assertEquals(Types.BINARY, fieldWithMetadata.getJavaType());
+        Assert.assertEquals(Types.CHAR, fieldWithMetadata.getJavaType());
         Assert.assertEquals(null, fieldWithMetadata.getEncoding());
         Assert.assertEquals(false, fieldWithMetadata.isSingleBit());
 
