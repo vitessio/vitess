@@ -2380,7 +2380,6 @@ reserved_keyword:
 | OR
 | ORDER
 | OUTER
-| PARTITION
 | REGEXP
 | RENAME
 | REPLACE
@@ -2448,6 +2447,7 @@ non_reserved_keyword:
 | NUMERIC
 | OFFSET
 | OPTIMIZE
+| PARTITION
 | PRIMARY
 | QUERY
 | REAL
