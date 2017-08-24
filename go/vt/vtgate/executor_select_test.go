@@ -135,7 +135,7 @@ func TestUnsharded(t *testing.T) {
 func TestUnshardedComments(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 
-	_, err := executorExec(executor, "select id from music_user_map where id = 1 /* trailing */", nil)
+	_, err := executorExec(executor, "/* leading */ select id from music_user_map where id = 1 /* trailing */", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -447,7 +447,7 @@ func TestSelectDual(t *testing.T) {
 func TestSelectComments(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 
-	_, err := executorExec(executor, "select id from user where id = 1 /* trailing */", nil)
+	_, err := executorExec(executor, "/* leading */ select id from user where id = 1 /* trailing */", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -462,6 +462,50 @@ func TestSelectComments(t *testing.T) {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 	sbc1.Queries = nil
+}
+
+func TestSelectNormalize(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor.normalize = true
+
+	_, err := executorExec(executor, "/* leading */ select id from user where id = 1 /* trailing */", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql: "select id from user where id = :vtg1 /* trailing */",
+		BindVariables: map[string]*querypb.BindVariable{
+			"vtg1": sqltypes.TestBindVariable(int64(1)),
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+	}
+	sbc1.Queries = nil
+
+	// Force the query to go to the "wrong" shard and ensure that normalization still happens
+	masterSession.TargetString = "TestExecutor/40-60"
+	_, err = executorExec(executor, "/* leading */ select id from user where id = 1 /* trailing */", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []*querypb.BoundQuery{{
+		Sql: "select id from user where id = :vtg1 /* trailing */",
+		BindVariables: map[string]*querypb.BindVariable{
+			"vtg1": sqltypes.TestBindVariable(int64(1)),
+		},
+	}}
+	if sbc1.Queries != nil {
+		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
+	}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
+	}
+	sbc2.Queries = nil
+	masterSession.TargetString = ""
 }
 
 func TestSelectCaseSensitivity(t *testing.T) {

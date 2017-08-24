@@ -109,6 +109,52 @@ func TestUpdateComments(t *testing.T) {
 	}
 }
 
+func TestUpdateNormalize(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+
+	executor.normalize = true
+	_, err := executorExec(executor, "/* leading */ update user set a=2 where id = 1 /* trailing */", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql: "update user set a = :vtg1 where id = :vtg2 /* vtgate:: keyspace_id:166b40b44aba4bd6 */ /* trailing */",
+		BindVariables: map[string]*querypb.BindVariable{
+			"vtg1": sqltypes.TestBindVariable(int64(2)),
+			"vtg2": sqltypes.TestBindVariable(int64(1)),
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+	}
+	sbc1.Queries = nil
+
+	// Force the query to go to the "wrong" shard and ensure that normalization still happens
+	masterSession.TargetString = "TestExecutor/40-60"
+	_, err = executorExec(executor, "/* leading */ update user set a=2 where id = 1 /* trailing */", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []*querypb.BoundQuery{{
+		Sql: "update user set a = :vtg1 where id = :vtg2 /* trailing *//* vtgate:: filtered_replication_unfriendly */",
+		BindVariables: map[string]*querypb.BindVariable{
+			"vtg1": sqltypes.TestBindVariable(int64(2)),
+			"vtg2": sqltypes.TestBindVariable(int64(1)),
+		},
+	}}
+	if sbc1.Queries != nil {
+		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
+	}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
+	}
+	sbc2.Queries = nil
+	masterSession.TargetString = ""
+}
+
 func TestUpdateEqualFail(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 	s := getSandbox("TestExecutor")
