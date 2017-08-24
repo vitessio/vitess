@@ -90,7 +90,7 @@
 
 "alter table a reorganize partition b into (partition c values less than (1000), partition d values less than (maxvalue))"
 {
-  "Action": "reorganize"
+  "Action": "alter"
 }
 
 "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))"

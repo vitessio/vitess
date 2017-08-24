@@ -98,6 +98,7 @@ func forceEOF(yylex interface{}) {
   indexColumns  []*IndexColumn
   partDefs      []*PartitionDefinition
   partDef       *PartitionDefinition
+  partSpec      *PartitionSpec
 }
 
 %token LEX_ERROR
@@ -143,7 +144,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE
 %token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING PRIMARY
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
-%token <bytes> MAXVALUE PARTITION REORGANIZE
+%token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN
 
 // Type Tokens
 %token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
@@ -258,6 +259,7 @@ func forceEOF(yylex interface{}) {
 %type <indexColumns> index_column_list
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
+%type <partSpec> partition_operation
 
 %start any_command
 
@@ -914,9 +916,15 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $3.ToViewName(), NewName: $3.ToViewName()}
   }
-| ALTER ignore_opt TABLE table_name REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb
+| ALTER ignore_opt TABLE table_name partition_operation
   {
-    $$ = &DDL{Action: ReorganizeStr, Table: $4, PartitionName: $7, PartitionDefinitions: $10}
+    $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
+  }
+
+partition_operation:
+  REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb
+  {
+    $$ = &PartitionSpec{Action: ReorganizeStr, Name: $3, Definitions: $6}
   }
 
 partition_definitions:
@@ -930,20 +938,12 @@ partition_definitions:
   }
 
 partition_definition:
-  PARTITION sql_id VALUES sql_id sql_id openb value_expression closeb
+  PARTITION sql_id VALUES LESS THAN openb value_expression closeb
   {
-    if $4.Lowered() != "less" || $5.Lowered() != "than" {
-        yylex.Error("expecting less than after values")
-        return 1
-    }
     $$ = &PartitionDefinition{Name: $2, Limit: $7}
   }
-| PARTITION sql_id VALUES sql_id sql_id openb MAXVALUE closeb
+| PARTITION sql_id VALUES LESS THAN openb MAXVALUE closeb
   {
-    if $4.Lowered() != "less" || $5.Lowered() != "than" {
-        yylex.Error("expecting less than after values")
-        return 1
-    }
     $$ = &PartitionDefinition{Name: $2, Maxvalue: true}
   }
 
@@ -2436,6 +2436,7 @@ non_reserved_keyword:
 | JSON
 | LANGUAGE
 | LAST_INSERT_ID
+| LESS
 | LONGBLOB
 | LONGTEXT
 | MEDIUMBLOB
@@ -2457,6 +2458,7 @@ non_reserved_keyword:
 | SIGNED
 | SMALLINT
 | TEXT
+| THAN
 | TIME
 | TIMESTAMP
 | TINYBLOB
