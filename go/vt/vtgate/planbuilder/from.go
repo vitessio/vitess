@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -26,8 +27,6 @@ import (
 )
 
 // This file has functions to analyze the FROM clause.
-
-var infoSchema = sqlparser.NewTableIdent("information_schema")
 
 // processTableExprs analyzes the FROM clause. It produces a builder
 // with all the routes identified.
@@ -159,7 +158,9 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 // It also returns the associated vschema info (*Table) so that
 // it can be used to create the symbol table entry.
 func buildERoute(tableName sqlparser.TableName, vschema VSchema) (*engine.Route, *vindexes.Table, error) {
-	if tableName.Qualifier == infoSchema {
+	if strings.ToLower(tableName.Qualifier.String()) == "information_schema" ||
+		strings.ToLower(tableName.Qualifier.String()) == "performance_schema" ||
+		strings.ToLower(tableName.Qualifier.String()) == "sys" {
 		ks, err := vschema.DefaultKeyspace()
 		if err != nil {
 			return nil, nil, err

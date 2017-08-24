@@ -31,6 +31,8 @@ var _ columnOriginator = (*route)(nil)
 
 var errIntermixingUnsupported = errors.New("unsupported: intermixing of information_schema and regular tables")
 
+var infoSchema = sqlparser.NewTableIdent("information_schema")
+
 // route is used to build a Route primitive.
 // It's used to build one of the Select routes like
 // SelectScatter, etc. Portions of the original Select AST
