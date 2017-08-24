@@ -79,7 +79,7 @@ func TestQueryExecutorPlanPassDmlRBR(t *testing.T) {
 	// RBR mode
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	defer tsv.StopService()
-	txid := newTransaction(tsv)
+	txid := newTransaction(tsv, nil)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	tsv.qe.binlogFormat = connpool.BinlogFormatRow
 	checkPlanID(t, planbuilder.PlanPassDML, qre.plan.PlanID)
@@ -144,7 +144,7 @@ func TestQueryExecutorPlanPassDmlReplaceInto(t *testing.T) {
 	// RBR mode
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	defer tsv.StopService()
-	txid := newTransaction(tsv)
+	txid := newTransaction(tsv, nil)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	tsv.qe.binlogFormat = connpool.BinlogFormatRow
 	checkPlanID(t, planbuilder.PlanPassDML, qre.plan.PlanID)
@@ -251,7 +251,7 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 		t.Errorf("rows:\n%+v, want\n%+v", mr, wantqr)
 	}
 
-	txid := newTransaction(tsv)
+	txid := newTransaction(tsv, nil)
 	qre = newTestQueryExecutor(ctx, tsv, query, txid)
 	defer testCommitHelper(t, tsv, qre)
 	got, err = qre.Execute()
@@ -357,7 +357,7 @@ func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
 	db.AddQuery(insertQuery, &sqltypes.Result{})
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv)
+	txid := newTransaction(tsv, nil)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 
 	defer tsv.StopService()
@@ -402,7 +402,7 @@ func TestQueryExecutorPlanInsertSubQueryRBR(t *testing.T) {
 	db.AddQuery(insertQuery, &sqltypes.Result{})
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv)
+	txid := newTransaction(tsv, nil)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	tsv.qe.binlogFormat = connpool.BinlogFormatRow
 
@@ -431,7 +431,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	query := "insert into test_table(pk) values(1) on duplicate key update val=1"
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv)
+	txid := newTransaction(tsv, nil)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	defer tsv.StopService()
 	defer testCommitHelper(t, tsv, qre)
@@ -450,7 +450,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	}
 
 	db.AddRejectedQuery("insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */", errRejected)
-	txid = newTransaction(tsv)
+	txid = newTransaction(tsv, nil)
 	qre = newTestQueryExecutor(ctx, tsv, query, txid)
 	defer testCommitHelper(t, tsv, qre)
 	_, err = qre.Execute()
@@ -467,7 +467,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 		mysql.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "err"),
 	)
 	db.AddQuery("update test_table(pk) set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
-	txid = newTransaction(tsv)
+	txid = newTransaction(tsv, nil)
 	qre = newTestQueryExecutor(ctx, tsv, query, txid)
 	defer testCommitHelper(t, tsv, qre)
 	_, err = qre.Execute()
@@ -488,7 +488,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 		"update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */",
 		&sqltypes.Result{RowsAffected: 1},
 	)
-	txid = newTransaction(tsv)
+	txid = newTransaction(tsv, nil)
 	qre = newTestQueryExecutor(ctx, tsv, query, txid)
 	defer testCommitHelper(t, tsv, qre)
 	got, err = qre.Execute()
@@ -516,7 +516,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 		"update test_table set pk = 2 where pk in (1) /* _stream test_table (pk ) (1 ) (2 ); */",
 		&sqltypes.Result{RowsAffected: 1},
 	)
-	txid = newTransaction(tsv)
+	txid = newTransaction(tsv, nil)
 	qre = newTestQueryExecutor(ctx, tsv, "insert into test_table(pk) values (1) on duplicate key update pk=2", txid)
 	defer testCommitHelper(t, tsv, qre)
 	got, err = qre.Execute()
@@ -545,7 +545,7 @@ func TestQueryExecutorPlanUpsertPkSingleUnique(t *testing.T) {
 	want := &sqltypes.Result{}
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv)
+	txid := newTransaction(tsv, nil)
 	qre := newTestQueryExecutor(ctx, tsv, query[0:strings.Index(query, " /*")], txid)
 	defer tsv.StopService()
 	defer testCommitHelper(t, tsv, qre)
@@ -569,7 +569,7 @@ func TestQueryExecutorPlanUpsertPkSingleUnique(t *testing.T) {
 	want = &sqltypes.Result{}
 	ctx = context.Background()
 	tsv = newTestTabletServer(ctx, noFlags, db)
-	txid = newTransaction(tsv)
+	txid = newTransaction(tsv, nil)
 	qre = newTestQueryExecutor(ctx, tsv, query[0:strings.Index(query, " /*")], txid)
 	defer testCommitHelper(t, tsv, qre)
 	checkPlanID(t, planbuilder.PlanInsertPK, qre.plan.PlanID)
@@ -592,7 +592,7 @@ func TestQueryExecutorPlanUpsertPkSingleUnique(t *testing.T) {
 	want = &sqltypes.Result{}
 	ctx = context.Background()
 	tsv = newTestTabletServer(ctx, noFlags, db)
-	txid = newTransaction(tsv)
+	txid = newTransaction(tsv, nil)
 	qre = newTestQueryExecutor(ctx, tsv, query[0:strings.Index(query, " /*")], txid)
 	defer testCommitHelper(t, tsv, qre)
 	checkPlanID(t, planbuilder.PlanInsertPK, qre.plan.PlanID)
@@ -614,7 +614,7 @@ func TestQueryExecutorPlanUpsertPkSingleUnique(t *testing.T) {
 	want = &sqltypes.Result{}
 	ctx = context.Background()
 	tsv = newTestTabletServer(ctx, noFlags, db)
-	txid = newTransaction(tsv)
+	txid = newTransaction(tsv, nil)
 	qre = newTestQueryExecutor(ctx, tsv, query[0:strings.Index(query, " /*")], txid)
 	defer testCommitHelper(t, tsv, qre)
 	checkPlanID(t, planbuilder.PlanInsertPK, qre.plan.PlanID)
@@ -641,7 +641,7 @@ func TestQueryExecutorPlanUpsertPkRBR(t *testing.T) {
 	want := &sqltypes.Result{}
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv)
+	txid := newTransaction(tsv, nil)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	tsv.qe.binlogFormat = connpool.BinlogFormatRow
 	defer tsv.StopService()
@@ -726,7 +726,37 @@ func TestQueryExecutorPlanDmlPk(t *testing.T) {
 	db.AddQuery(query, want)
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv)
+	txid := newTransaction(tsv, nil)
+	qre := newTestQueryExecutor(ctx, tsv, query, txid)
+	defer tsv.StopService()
+	defer testCommitHelper(t, tsv, qre)
+	checkPlanID(t, planbuilder.PlanDMLPK, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+	wantqueries := []string{"update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
+	gotqueries := fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	}
+}
+
+func TestQueryExecutorPlanDmlPkTransactionIsolation(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	query := "update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"
+	want := &sqltypes.Result{}
+	db.AddQuery(query, want)
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	db.AddQuery("set transaction isolation level SERIALIZABLE", &sqltypes.Result{})
+	txid := newTransaction(tsv, &querypb.ExecuteOptions{
+		TransactionIsolation: querypb.ExecuteOptions_SERIALIZABLE,
+	})
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	defer tsv.StopService()
 	defer testCommitHelper(t, tsv, qre)
@@ -755,7 +785,7 @@ func TestQueryExecutorPlanDmlPkRBR(t *testing.T) {
 	db.AddQuery(query, want)
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv)
+	txid := newTransaction(tsv, nil)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	tsv.qe.binlogFormat = connpool.BinlogFormatRow
 	defer tsv.StopService()
@@ -794,7 +824,7 @@ func TestQueryExecutorPlanDmlMessage(t *testing.T) {
 	db.AddQuery("update msg set time_acked = 2, time_next = null where (time_scheduled = 12 and id = 1) /* _stream msg (time_scheduled id ) (12 1 ); */", want)
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv)
+	txid := newTransaction(tsv, nil)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	defer tsv.StopService()
 	defer testCommitHelper(t, tsv, qre)
@@ -834,6 +864,32 @@ func TestQueryExecutorPlanDmlAutoCommit(t *testing.T) {
 	}
 }
 
+func TestQueryExecutorPlanDmlAutoCommitTransactionIsolation(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	query := "update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"
+	want := &sqltypes.Result{}
+	db.AddQuery(query, want)
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	qre := newTestQueryExecutor(ctx, tsv, query, 0)
+
+	qre.options = &querypb.ExecuteOptions{
+		TransactionIsolation: querypb.ExecuteOptions_READ_UNCOMMITTED,
+	}
+	db.AddQuery("set transaction isolation level READ UNCOMMITTED", &sqltypes.Result{})
+
+	defer tsv.StopService()
+	checkPlanID(t, planbuilder.PlanDMLPK, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+}
+
 func TestQueryExecutorPlanDmlSubQuery(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
@@ -854,7 +910,7 @@ func TestQueryExecutorPlanDmlSubQuery(t *testing.T) {
 	db.AddQuery(updateQuery, want)
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv)
+	txid := newTransaction(tsv, nil)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	defer tsv.StopService()
 	defer testCommitHelper(t, tsv, qre)
@@ -895,7 +951,7 @@ func TestQueryExecutorPlanDmlSubQueryRBR(t *testing.T) {
 	db.AddQuery(updateQuery, want)
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv)
+	txid := newTransaction(tsv, nil)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	tsv.qe.binlogFormat = connpool.BinlogFormatRow
 	defer tsv.StopService()
@@ -947,7 +1003,7 @@ func TestQueryExecutorPlanOtherWithinATransaction(t *testing.T) {
 	db.AddQuery(query, want)
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv)
+	txid := newTransaction(tsv, nil)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	defer tsv.StopService()
 	defer testCommitHelper(t, tsv, qre)
@@ -984,7 +1040,7 @@ func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
 	})
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv)
+	txid := newTransaction(tsv, nil)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	defer tsv.StopService()
 	defer testCommitHelper(t, tsv, qre)
@@ -1098,7 +1154,7 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 	}
 
 	// Test inside transaction.
-	txid := newTransaction(tsv)
+	txid := newTransaction(tsv, nil)
 	qre = newTestQueryExecutor(ctx, tsv, setQuery, txid)
 	got, err = qre.Execute()
 	if err != nil {
@@ -1793,8 +1849,8 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	return tsv
 }
 
-func newTransaction(tsv *TabletServer) int64 {
-	transactionID, err := tsv.Begin(context.Background(), &tsv.target, nil)
+func newTransaction(tsv *TabletServer, options *querypb.ExecuteOptions) int64 {
+	transactionID, err := tsv.Begin(context.Background(), &tsv.target, options)
 	if err != nil {
 		panic(fmt.Errorf("failed to start a transaction: %v", err))
 	}

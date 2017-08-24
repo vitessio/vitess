@@ -56,6 +56,13 @@ const txLogInterval = time.Duration(1 * time.Minute)
 var (
 	txOnce  sync.Once
 	txStats = stats.NewTimings("Transactions")
+
+	txIsolations = map[querypb.ExecuteOptions_TransactionIsolation]string{
+		querypb.ExecuteOptions_REPEATABLE_READ:  "set transaction isolation level REPEATABLE READ",
+		querypb.ExecuteOptions_READ_COMMITTED:   "set transaction isolation level READ COMMITTED",
+		querypb.ExecuteOptions_READ_UNCOMMITTED: "set transaction isolation level READ UNCOMMITTED",
+		querypb.ExecuteOptions_SERIALIZABLE:     "set transaction isolation level SERIALIZABLE",
+	}
 )
 
 // TxPool is the transaction pool for the query service.
@@ -164,7 +171,7 @@ func (axp *TxPool) WaitForEmpty() {
 
 // Begin begins a transaction, and returns the associated transaction id.
 // Subsequent statements can access the connection through the transaction id.
-func (axp *TxPool) Begin(ctx context.Context, useFoundRows bool) (int64, error) {
+func (axp *TxPool) Begin(ctx context.Context, useFoundRows bool, txIsolation querypb.ExecuteOptions_TransactionIsolation) (int64, error) {
 	var conn *connpool.DBConn
 	var err error
 	if useFoundRows {
@@ -182,6 +189,14 @@ func (axp *TxPool) Begin(ctx context.Context, useFoundRows bool) (int64, error) 
 		}
 		return 0, err
 	}
+
+	if query, ok := txIsolations[txIsolation]; ok {
+		if _, err := conn.Exec(ctx, query, 1, false); err != nil {
+			conn.Recycle()
+			return 0, err
+		}
+	}
+
 	if _, err := conn.Exec(ctx, "begin", 1, false); err != nil {
 		conn.Recycle()
 		return 0, err
@@ -231,8 +246,8 @@ func (axp *TxPool) Get(transactionID int64, reason string) (*TxConnection, error
 // LocalBegin is equivalent to Begin->Get.
 // It's used for executing transactions within a request. It's safe
 // to always call LocalConclude at the end.
-func (axp *TxPool) LocalBegin(ctx context.Context, useFoundRows bool) (*TxConnection, error) {
-	transactionID, err := axp.Begin(ctx, useFoundRows)
+func (axp *TxPool) LocalBegin(ctx context.Context, useFoundRows bool, txIsolation querypb.ExecuteOptions_TransactionIsolation) (*TxConnection, error) {
+	transactionID, err := axp.Begin(ctx, useFoundRows, txIsolation)
 	if err != nil {
 		return nil, err
 	}
