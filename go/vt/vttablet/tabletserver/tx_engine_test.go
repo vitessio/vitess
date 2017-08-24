@@ -22,6 +22,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"golang.org/x/net/context"
 )
 
@@ -47,7 +48,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Normal close with timeout wait.
 	te.Open(dbconfigs)
-	c, err := te.txPool.LocalBegin(ctx, false)
+	c, err := te.txPool.LocalBegin(ctx, false, querypb.ExecuteOptions_DEFAULT)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +61,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close.
 	te.Open(dbconfigs)
-	c, err = te.txPool.LocalBegin(ctx, false)
+	c, err = te.txPool.LocalBegin(ctx, false, querypb.ExecuteOptions_DEFAULT)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +75,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period.
 	te.shutdownGracePeriod = 250 * time.Millisecond
 	te.Open(dbconfigs)
-	c, err = te.txPool.LocalBegin(ctx, false)
+	c, err = te.txPool.LocalBegin(ctx, false, querypb.ExecuteOptions_DEFAULT)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +92,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period, but pool gets empty early.
 	te.shutdownGracePeriod = 250 * time.Millisecond
 	te.Open(dbconfigs)
-	c, err = te.txPool.LocalBegin(ctx, false)
+	c, err = te.txPool.LocalBegin(ctx, false, querypb.ExecuteOptions_DEFAULT)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +116,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close, but connection is in use.
 	te.Open(dbconfigs)
-	c, err = te.txPool.LocalBegin(ctx, false)
+	c, err = te.txPool.LocalBegin(ctx, false, querypb.ExecuteOptions_DEFAULT)
 	if err != nil {
 		t.Fatal(err)
 	}
