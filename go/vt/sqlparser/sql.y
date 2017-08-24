@@ -96,6 +96,9 @@ func forceEOF(yylex interface{}) {
   indexInfo     *IndexInfo
   indexColumn   *IndexColumn
   indexColumns  []*IndexColumn
+  partDefs      []*PartitionDefinition
+  partDef       *PartitionDefinition
+  partSpec      *PartitionSpec
 }
 
 %token LEX_ERROR
@@ -141,6 +144,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE
 %token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING PRIMARY
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
+%token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN
 
 // Type Tokens
 %token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
@@ -253,6 +257,9 @@ func forceEOF(yylex interface{}) {
 %type <indexInfo> index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
+%type <partDefs> partition_definitions
+%type <partDef> partition_definition
+%type <partSpec> partition_operation
 
 %start any_command
 
@@ -908,6 +915,36 @@ alter_statement:
 | ALTER VIEW table_name ddl_force_eof
   {
     $$ = &DDL{Action: AlterStr, Table: $3.ToViewName(), NewName: $3.ToViewName()}
+  }
+| ALTER ignore_opt TABLE table_name partition_operation
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
+  }
+
+partition_operation:
+  REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb
+  {
+    $$ = &PartitionSpec{Action: ReorganizeStr, Name: $3, Definitions: $6}
+  }
+
+partition_definitions:
+  partition_definition
+  {
+    $$ = []*PartitionDefinition{$1}
+  }
+| partition_definitions ',' partition_definition
+  {
+    $$ = append($1, $3)
+  }
+
+partition_definition:
+  PARTITION sql_id VALUES LESS THAN openb value_expression closeb
+  {
+    $$ = &PartitionDefinition{Name: $2, Limit: $7}
+  }
+| PARTITION sql_id VALUES LESS THAN openb MAXVALUE closeb
+  {
+    $$ = &PartitionDefinition{Name: $2, Maxvalue: true}
   }
 
 rename_statement:
@@ -2204,6 +2241,8 @@ non_rename_operation:
   { $$ = struct{}{} }
 | CONVERT
   { $$ = struct{}{} }
+| PARTITION
+  { $$ = struct{}{} }
 | UNUSED
   { $$ = struct{}{} }
 | ID
@@ -2331,6 +2370,7 @@ reserved_keyword:
 | LOCALTIMESTAMP
 | LOCK
 | MATCH
+| MAXVALUE
 | MOD
 | NATURAL
 | NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
@@ -2396,6 +2436,7 @@ non_reserved_keyword:
 | JSON
 | LANGUAGE
 | LAST_INSERT_ID
+| LESS
 | LONGBLOB
 | LONGTEXT
 | MEDIUMBLOB
@@ -2407,14 +2448,17 @@ non_reserved_keyword:
 | NUMERIC
 | OFFSET
 | OPTIMIZE
+| PARTITION
 | PRIMARY
 | QUERY
 | REAL
+| REORGANIZE
 | REPAIR
 | SHARE
 | SIGNED
 | SMALLINT
 | TEXT
+| THAN
 | TIME
 | TIMESTAMP
 | TINYBLOB
