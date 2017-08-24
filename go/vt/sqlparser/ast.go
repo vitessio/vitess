@@ -499,14 +499,15 @@ func (node *Set) WalkSubtree(visit Visit) error {
 }
 
 // DDL represents a CREATE, ALTER, DROP or RENAME statement.
-// Table is set for AlterStr, DropStr, RenameStr.
+// Table is set for AlterStr, DropStr, RenameStr
 // NewName is set for AlterStr, CreateStr, RenameStr.
 type DDL struct {
-	Action    string
-	Table     TableName
-	NewName   TableName
-	IfExists  bool
-	TableSpec *TableSpec
+	Action        string
+	Table         TableName
+	NewName       TableName
+	IfExists      bool
+	TableSpec     *TableSpec
+	PartitionSpec *PartitionSpec
 }
 
 // DDL strings.
@@ -534,6 +535,12 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		buf.Myprintf("%s table%s %v", node.Action, exists, node.Table)
 	case RenameStr:
 		buf.Myprintf("%s table %v %v", node.Action, node.Table, node.NewName)
+	case AlterStr:
+		if node.PartitionSpec != nil {
+			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.PartitionSpec)
+		} else {
+			buf.Myprintf("%s table %v", node.Action, node.Table)
+		}
 	default:
 		buf.Myprintf("%s table %v", node.Action, node.Table)
 	}
@@ -548,6 +555,78 @@ func (node *DDL) WalkSubtree(visit Visit) error {
 		visit,
 		node.Table,
 		node.NewName,
+	)
+}
+
+// Partition strings
+const (
+	ReorganizeStr = "reorganize partition"
+)
+
+// PartitionSpec describe partition actions (for alter and create)
+type PartitionSpec struct {
+	Action      string
+	Name        ColIdent
+	Definitions []*PartitionDefinition
+}
+
+// Format formats the node.
+func (node *PartitionSpec) Format(buf *TrackedBuffer) {
+	switch node.Action {
+	case ReorganizeStr:
+		buf.Myprintf("%s %v into (", node.Action, node.Name)
+		var prefix string
+		for _, pd := range node.Definitions {
+			buf.Myprintf("%s%v", prefix, pd)
+			prefix = ", "
+		}
+		buf.Myprintf(")")
+	default:
+		panic("unimplemented")
+	}
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *PartitionSpec) WalkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	if err := Walk(visit, node.Name); err != nil {
+		return err
+	}
+	for _, def := range node.Definitions {
+		if err := Walk(visit, def); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// PartitionDefinition describes a very minimal partition definition
+type PartitionDefinition struct {
+	Name     ColIdent
+	Limit    Expr
+	Maxvalue bool
+}
+
+// Format formats the node
+func (node *PartitionDefinition) Format(buf *TrackedBuffer) {
+	if !node.Maxvalue {
+		buf.Myprintf("partition %v values less than (%v)", node.Name, node.Limit)
+	} else {
+		buf.Myprintf("partition %v values less than (maxvalue)", node.Name)
+	}
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *PartitionDefinition) WalkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Name,
+		node.Limit,
 	)
 }
 

@@ -795,6 +795,22 @@ func TestNocacheCases(t *testing.T) {
 			},
 		},
 		&framework.MultiCase{
+			Name: "reorganize partition with bindvar",
+			Cases: []framework.Testable{
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "alter table vitess_part reorganize partition p1 into (partition p2 values less than (:bv), partition p3 values less than (maxvalue))",
+					BindVars: map[string]*querypb.BindVariable{
+						"bv": sqltypes.Int64BindVariable(1000),
+					},
+					Rewritten: []string{
+						"alter table vitess_part reorganize partition p1 into (partition p2 values less than (1000), partition p3 values less than (maxvalue))",
+					},
+				},
+				framework.TestQuery("commit"),
+			},
+		},
+		&framework.MultiCase{
 			Name: "multi-value",
 			Cases: []framework.Testable{
 				framework.TestQuery("begin"),
