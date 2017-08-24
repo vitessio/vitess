@@ -53,7 +53,7 @@ func analyzeDDL(ddl *sqlparser.DDL, tables map[string]*schema.Table) *Plan {
 		NewName: ddl.NewName.Name,
 	}
 	// this can become a whitelist of fully supported ddl actions as support grows
-	if ddl.Action == "reorganize" {
+	if ddl.PartitionSpec != nil {
 		plan.FullQuery = GenerateFullQuery(ddl)
 	}
 	return plan
