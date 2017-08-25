@@ -524,7 +524,8 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 				node.Name.Format(buf)
 				return
 			}
-			node.Format(buf)
+			// We accept INFORMATION_SCHEMA, but underlying mysql might not
+			buf.Myprintf("%s.%v", strings.ToLower(node.Qualifier.String()), node.Name)
 			return
 		}
 		node.Format(buf)
@@ -585,7 +586,8 @@ func (rb *route) generateFieldQuery(sel sqlparser.SelectStatement, jt *jointab) 
 				node.Name.Format(buf)
 				return
 			}
-			node.Format(buf)
+			// We accept INFORMATION_SCHEMA, but underlying mysql might not
+			buf.Myprintf("%s.%v", strings.ToLower(node.Qualifier.String()), node.Name)
 			return
 		}
 		sqlparser.FormatImpossibleQuery(buf, node)
