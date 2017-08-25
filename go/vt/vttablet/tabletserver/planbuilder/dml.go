@@ -23,7 +23,9 @@ import (
 	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 )
 
@@ -317,13 +319,9 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 }
 
 func analyzeInsertNoType(ins *sqlparser.Insert, plan *Plan, table *schema.Table) (*Plan, error) {
-	requiredColumns := len(ins.Columns)
 	// Populate column list from schema if it wasn't specified.
-	if requiredColumns == 0 {
+	if len(ins.Columns) == 0 {
 		for _, col := range table.Columns {
-			if !col.IsAuto {
-				requiredColumns++
-			}
 			ins.Columns = append(ins.Columns, col.Name)
 		}
 	}
@@ -352,9 +350,19 @@ func analyzeInsertNoType(ins *sqlparser.Insert, plan *Plan, table *schema.Table)
 
 	// If it's not a sqlparser.SelectStatement, it's Values.
 	rowList := ins.Rows.(sqlparser.Values)
-	for _, row := range rowList {
-		if len(row) != requiredColumns {
-			return nil, errors.New("column count doesn't match value count")
+	for i := range rowList {
+		if len(rowList[i]) == 0 {
+			for _, col := range table.Columns {
+				expr, err := sqlparser.ExprFromValue(col.Default)
+				if err != nil {
+					return nil, vterrors.Wrap(err, "could not create default row for insert without row values")
+				}
+				rowList[i] = append(rowList[i], expr)
+			}
+			continue
+		}
+		if len(rowList[i]) != len(ins.Columns) {
+			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "column count doesn't match value count")
 		}
 	}
 	plan.PKValues = getInsertPKValues(pkColumnNumbers, rowList, table)
@@ -587,9 +595,6 @@ func analyzeOnDupExpressions(ins *sqlparser.Insert, pkIndex *schema.Index) (pkVa
 func extractColumnValues(rowList sqlparser.Values, colnum int) (sqltypes.PlanValue, bool) {
 	pv := sqltypes.PlanValue{Values: make([]sqltypes.PlanValue, len(rowList))}
 	for i := 0; i < len(rowList); i++ {
-		if len(rowList[i])-1 < colnum {
-			return pv, false
-		}
 		var ok bool
 		pv.Values[i], ok = extractSingleValue(rowList[i][colnum])
 		if !ok {
