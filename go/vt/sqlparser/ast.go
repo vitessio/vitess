@@ -27,6 +27,8 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 // Instructions for creating new types: If a type
@@ -1768,6 +1770,51 @@ func (node *ExistsExpr) WalkSubtree(visit Visit) error {
 		visit,
 		node.Subquery,
 	)
+}
+
+// ExprFromValue converts the given Value into an Expr or returns an error.
+func ExprFromValue(value sqltypes.Value) (Expr, error) {
+	switch value.Type() {
+	case querypb.Type_NULL_TYPE:
+		return &NullVal{}, nil
+	case querypb.Type_INT8,
+		querypb.Type_UINT8,
+		querypb.Type_INT16,
+		querypb.Type_UINT16,
+		querypb.Type_INT24,
+		querypb.Type_UINT24,
+		querypb.Type_INT32,
+		querypb.Type_UINT32,
+		querypb.Type_INT64,
+		querypb.Type_UINT64:
+		return NewIntVal(value.ToBytes()), nil
+	case querypb.Type_FLOAT32,
+		querypb.Type_FLOAT64,
+		querypb.Type_DECIMAL:
+		return NewFloatVal(value.Raw()), nil
+	case querypb.Type_BIT:
+		return NewBitVal(value.Raw()), nil
+	case querypb.Type_TIMESTAMP,
+		querypb.Type_DATE,
+		querypb.Type_TIME,
+		querypb.Type_DATETIME,
+		querypb.Type_YEAR,
+		querypb.Type_TEXT,
+		querypb.Type_BLOB,
+		querypb.Type_VARCHAR,
+		querypb.Type_VARBINARY,
+		querypb.Type_CHAR,
+		querypb.Type_BINARY,
+		querypb.Type_ENUM,
+		querypb.Type_SET,
+		querypb.Type_TUPLE,
+		querypb.Type_GEOMETRY,
+		querypb.Type_JSON,
+		querypb.Type_EXPRESSION:
+		return NewStrVal(value.Raw()), nil
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "default value %v of type %v does not map to a sqlparser type", value.String(), value.Type())
+	}
 }
 
 // ValType specifies the type for SQLVal.
