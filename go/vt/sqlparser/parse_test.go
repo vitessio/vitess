@@ -638,6 +638,12 @@ func TestValid(t *testing.T) {
 		input:  "set character set utf8",
 		output: "set ",
 	}, {
+		input:  "set character set 'utf8'",
+		output: "set ",
+	}, {
+		input:  "set character set \"utf8\"",
+		output: "set ",
+	}, {
 		input:  "set charset default",
 		output: "set ",
 	}, {
