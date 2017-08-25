@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -30,8 +31,6 @@ var _ builder = (*route)(nil)
 var _ columnOriginator = (*route)(nil)
 
 var errIntermixingUnsupported = errors.New("unsupported: intermixing of information_schema and regular tables")
-
-var infoSchema = sqlparser.NewTableIdent("information_schema")
 
 // route is used to build a Route primitive.
 // It's used to build one of the Select routes like
@@ -521,10 +520,12 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 				return
 			}
 		case sqlparser.TableName:
-			if node.Qualifier != infoSchema {
+			if !systemTable(node.Qualifier.String()) {
 				node.Name.Format(buf)
 				return
 			}
+			node.Format(buf)
+			return
 		}
 		node.Format(buf)
 	}
@@ -533,6 +534,11 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 	rb.ERoute.Query = buf.ParsedQuery().Query
 	rb.ERoute.FieldQuery = rb.generateFieldQuery(rb.Select, jt)
 	return nil
+}
+
+func systemTable(qualifier string) bool {
+	lowered := strings.ToLower(qualifier)
+	return lowered == "information_schema" || lowered == "performance_schema" || lowered == "sys"
 }
 
 // procureValues procures and converts the input into
@@ -575,10 +581,12 @@ func (rb *route) generateFieldQuery(sel sqlparser.SelectStatement, jt *jointab) 
 				return
 			}
 		case sqlparser.TableName:
-			if node.Qualifier != infoSchema {
+			if !systemTable(node.Qualifier.String()) {
 				node.Name.Format(buf)
 				return
 			}
+			node.Format(buf)
+			return
 		}
 		sqlparser.FormatImpossibleQuery(buf, node)
 	}
