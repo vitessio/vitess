@@ -902,3 +902,42 @@ func TestParseTargetSingleKeyspace(t *testing.T) {
 		t.Errorf("ParseTarget(%s): %v, want %v", "@master", got, want)
 	}
 }
+
+func TestPassthroughDDL(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	masterSession.TargetString = "TestExecutor"
+
+	_, err := executorExec(executor, "/* leading */ create table passthrough_ddl (col bigint default 123) /* trailing */", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "/* leading */ create table passthrough_ddl (col bigint default 123) /* trailing */",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
+	}
+	sbc1.Queries = nil
+	sbc2.Queries = nil
+
+	// Force the query to go to only one shard. Normalization doesn't make any difference.
+	masterSession.TargetString = "TestExecutor/40-60"
+	executor.normalize = true
+
+	_, err = executorExec(executor, "/* leading */ create table passthrough_ddl (col bigint default 123) /* trailing */", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	if sbc1.Queries != nil {
+		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
+	}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
+	}
+	sbc2.Queries = nil
+	masterSession.TargetString = ""
+}

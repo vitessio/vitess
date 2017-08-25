@@ -162,8 +162,19 @@ func (e *Executor) Execute(ctx context.Context, session *vtgatepb.Session, sql s
 
 func (e *Executor) handleExec(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target) (*sqltypes.Result, error) {
 	if target.Shard != "" {
-		// V1 mode.
+		// V1 mode or V3 mode with a forced shard target
 		sql = sqlannotation.AnnotateIfDML(sql, nil)
+
+		if e.normalize {
+			query, comments := sqlparser.SplitTrailingComments(sql)
+			stmt, err := sqlparser.Parse(query)
+			if err != nil {
+				return nil, err
+			}
+			sqlparser.Normalize(stmt, bindVars, "vtg")
+			normalized := sqlparser.String(stmt)
+			sql = normalized + comments
+		}
 		return e.shardExec(ctx, session, sql, bindVars, target)
 	}
 
