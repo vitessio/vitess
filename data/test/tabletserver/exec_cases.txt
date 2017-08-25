@@ -1036,6 +1036,15 @@
   "PKValues":[":a"]
 }
 
+# insert no values autoinc
+"insert into auto values ()"
+{
+  "PlanID": "PASS_DML",
+  "Reason": "COMPLEX_EXPR",
+  "TableName": "auto",
+  "FullQuery": "insert into auto values ()"
+}
+
 # nextval on non-sequence table
 "select next value from a"
 "a is not a sequence"
