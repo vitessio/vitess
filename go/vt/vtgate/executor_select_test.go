@@ -56,7 +56,7 @@ func TestSelectNext(t *testing.T) {
 func TestExecDBA(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 
-	query := "select * from information_schema.foo"
+	query := "select * from INFORMATION_SCHEMA.foo"
 	_, err := executor.Execute(
 		context.Background(),
 		&vtgatepb.Session{TargetString: "TestExecutor"},
