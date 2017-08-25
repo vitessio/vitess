@@ -538,8 +538,9 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 }
 
 func systemTable(qualifier string) bool {
-	lowered := strings.ToLower(qualifier)
-	return lowered == "information_schema" || lowered == "performance_schema" || lowered == "sys"
+	return strings.EqualFold(qualifier, "information_schema") ||
+		strings.EqualFold(qualifier, "performance_schema") ||
+		strings.EqualFold(qualifier, "sys")
 }
 
 // procureValues procures and converts the input into
