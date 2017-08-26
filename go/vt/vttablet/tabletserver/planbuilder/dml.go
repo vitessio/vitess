@@ -490,7 +490,7 @@ func analyzeInsertMessage(ins *sqlparser.Insert, plan *Plan, table *schema.Table
 	col = sqlparser.NewColIdent("id")
 	num = ins.Columns.FindColumn(col)
 	if num < 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s must not be specified for message insert", col.String())
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s must be specified for message insert", col.String())
 	}
 
 	pkColumnNumbers := getInsertPKColumns(ins.Columns, table)
