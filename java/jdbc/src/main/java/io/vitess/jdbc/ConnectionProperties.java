@@ -207,21 +207,9 @@ public class ConnectionProperties {
         "Should the driver treat java.util.Date as a TIMESTAMP for the purposes of PreparedStatement.setObject()",
         true);
 
-    private LongConnectionProperty queryTimeout = new LongConnectionProperty(
-        "queryTimeout",
-        "The default query timeout, in millis, to use for queries which do not explicitly setQueryTimeout",
-        Constants.DEFAULT_TIMEOUT
-    );
-
-    private LongConnectionProperty connectionTimeout = new LongConnectionProperty(
-        "connectionTimeout",
-        "The timeout, in millis, to use when creating new gRPC connections",
-        Constants.CONNECTION_TIMEOUT
-    );
-
-    private LongConnectionProperty transactionTimeout = new LongConnectionProperty(
-        "transactionTimeout",
-        "The timeout, in millis, to use when committing or rolling back transactions",
+    private LongConnectionProperty timeout = new LongConnectionProperty(
+        "timeout",
+        "The default timeout, in millis, to use for queries, connections, and transaction commit/rollback. Query timeout can be overridden by explicitly calling setQueryTimeout",
         Constants.DEFAULT_TIMEOUT
     );
 
@@ -480,28 +468,12 @@ public class ConnectionProperties {
         this.treatUtilDateAsTimestamp.setValue(treatUtilDateAsTimestamp);
     }
 
-    public long getQueryTimeout() {
-        return queryTimeout.getValueAsLong();
+    public long getTimeout() {
+        return timeout.getValueAsLong();
     }
 
-    public void setQueryTimeout(long queryTimeout) {
-        this.queryTimeout.setValue(queryTimeout);
-    }
-
-    public long getConnectionTimeout() {
-        return connectionTimeout.getValueAsLong();
-    }
-
-    public void setConnectionTimeout(long connectionTimeout) {
-        this.connectionTimeout.setValue(connectionTimeout);
-    }
-
-    public long getTransactionTimeout() {
-        return transactionTimeout.getValueAsLong();
-    }
-
-    public void setTransactionTimeout(long transactionTimeout) {
-        this.transactionTimeout.setValue(transactionTimeout);
+    public void setTimeout(long timeout) {
+        this.timeout.setValue(timeout);
     }
 
     public String getTarget() {
