@@ -172,7 +172,7 @@ public class VitessConnection extends ConnectionProperties implements Connection
         checkAutoCommit(Constants.SQLExceptionMessages.COMMIT_WHEN_AUTO_COMMIT_TRUE);
         try {
             if (isInTransaction()) {
-                Context context = createContext(getTransactionTimeout());
+                Context context = createContext(getTimeout());
                 this.vtGateTx.commit(context, getTwopcEnabled()).checkedGet();
             }
         } finally {
@@ -191,7 +191,7 @@ public class VitessConnection extends ConnectionProperties implements Connection
         checkAutoCommit(Constants.SQLExceptionMessages.ROLLBACK_WHEN_AUTO_COMMIT_TRUE);
         try {
             if (isInTransaction()) {
-                Context context = createContext(getTransactionTimeout());
+                Context context = createContext(getTimeout());
                 this.vtGateTx.rollback(context).checkedGet();
             }
         } finally {

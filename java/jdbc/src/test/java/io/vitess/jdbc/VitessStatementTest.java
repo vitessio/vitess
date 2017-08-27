@@ -530,7 +530,7 @@ import io.vitess.util.Constants;
 
     @Test public void testGetQueryTimeout() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
-        Mockito.when(mockConn.getQueryTimeout()).thenReturn((long)Constants.DEFAULT_TIMEOUT);
+        Mockito.when(mockConn.getTimeout()).thenReturn((long)Constants.DEFAULT_TIMEOUT);
 
         VitessStatement statement = new VitessStatement(mockConn);
         Assert.assertEquals(30, statement.getQueryTimeout());
@@ -538,7 +538,7 @@ import io.vitess.util.Constants;
 
     @Test public void testGetQueryTimeoutZeroDefault() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
-        Mockito.when(mockConn.getQueryTimeout()).thenReturn(0L);
+        Mockito.when(mockConn.getTimeout()).thenReturn(0L);
 
         VitessStatement statement = new VitessStatement(mockConn);
         Assert.assertEquals(0, statement.getQueryTimeout());
@@ -546,7 +546,7 @@ import io.vitess.util.Constants;
 
     @Test public void testSetQueryTimeout() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
-        Mockito.when(mockConn.getQueryTimeout()).thenReturn((long)Constants.DEFAULT_TIMEOUT);
+        Mockito.when(mockConn.getTimeout()).thenReturn((long)Constants.DEFAULT_TIMEOUT);
 
         VitessStatement statement = new VitessStatement(mockConn);
 
