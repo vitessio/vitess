@@ -30,10 +30,10 @@ public class CommonUtils {
      * Create context used to create grpc client and executing query.
      *
      * @param username
-     * @param connectionTimeout
+     * @param timeout
      * @return
      */
-    public static Context createContext(String username, long connectionTimeout) {
+    public static Context createContext(String username, long timeout) {
         Context context = Context.getDefault();
         Vtrpc.CallerID callerID = null;
         if (null != username) {
@@ -43,8 +43,8 @@ public class CommonUtils {
         if (null != callerID) {
             context = context.withCallerId(callerID);
         }
-        if (connectionTimeout > 0) {
-            context = context.withDeadlineAfter(Duration.millis(connectionTimeout));
+        if (timeout > 0) {
+            context = context.withDeadlineAfter(Duration.millis(timeout));
         }
 
         return context;
