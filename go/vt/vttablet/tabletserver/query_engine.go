@@ -181,7 +181,9 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 
 	qe.consolidator = sync2.NewConsolidator()
 	qe.txSerializer = txserializer.New(config.EnableHotRowProtectionDryRun,
-		config.HotRowProtectionMaxQueueSize, config.HotRowProtectionMaxGlobalQueueSize)
+		config.HotRowProtectionMaxQueueSize,
+		config.HotRowProtectionMaxGlobalQueueSize,
+		config.HotRowProtectionConcurrentTransactions)
 	qe.streamQList = NewQueryList()
 
 	qe.autoCommit.Set(config.EnableAutoCommit)

@@ -1475,6 +1475,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.EnableHotRowProtection = true
+	config.HotRowProtectionConcurrentTransactions = 1
 	// Reduce the txpool to 2 because we should never consume more than two slots.
 	config.TransactionCap = 2
 	tsv := NewTabletServerWithNilTopoServer(config)
@@ -1607,6 +1608,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	config.EnableHotRowProtection = true
 	config.HotRowProtectionMaxQueueSize = 1
+	config.HotRowProtectionConcurrentTransactions = 1
 	tsv := NewTabletServerWithNilTopoServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1693,6 +1695,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.EnableHotRowProtection = true
+	config.HotRowProtectionConcurrentTransactions = 1
 	tsv := NewTabletServerWithNilTopoServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
