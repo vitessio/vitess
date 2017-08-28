@@ -38,8 +38,8 @@ func TestClearTextClientAuth(t *testing.T) {
 
 	authServer := NewAuthServerStatic()
 	authServer.Method = MysqlClearPassword
-	authServer.Entries["user1"] = &AuthServerStaticEntry{
-		Password: "password1",
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{
+		&AuthServerStaticEntry{Password: "password1"},
 	}
 
 	// Create the listener.
@@ -96,8 +96,8 @@ func TestSSLConnection(t *testing.T) {
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = &AuthServerStaticEntry{
-		Password: "password1",
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{
+		&AuthServerStaticEntry{Password: "password1"},
 	}
 
 	// Create the listener, so we can get its host.
