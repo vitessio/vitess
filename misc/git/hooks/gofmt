@@ -25,14 +25,39 @@ gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$')
 unformatted=$(gofmt -s -l $gofiles 2>&1)
 [ -z "$unformatted" ] && exit 0
 
-# Some files are not gofmt'd. Print message and fail.
+# Some files are not gofmt'd. Print command to fix them and fail.
 
+# Deduplicate files first in case a file has multiple errors.
+files=$(
+  # Split the "gofmt" output on newlines only.
+  OLDIFS=$IFS
+  IFS='
+'
+  for line in $unformatted; do
+    # Strip everything after the first ':', including it.
+    # Example output for $line:
+    #   go/vt/vttablet/tabletserver/txserializer/tx_serializer_test.go:241:60: expected ';', found 'IDENT' wg
+    echo ${line/:*/}
+  done |
+    # Remove duplicates.
+    sort -u
+  IFS=$OLDIFS
+)
+
+echo >&2
 echo >&2 "Go files must be formatted with gofmt. Please run:"
 echo >&2
-echo -n >&2 "  gofmt -s -w"
-for fn in $unformatted; do
-    echo -n >&2 " $PWD/$fn"
+echo >&2 -n "  gofmt -s -w"
+
+for f in $files; do
+  # Print " \" after the "gofmt" above and each filename (except for the last one).
+  echo >&2 " \\"
+  echo >&2 -n "    $PWD/$f"
 done
-echo
+echo >&2
+
+echo >&2
+echo >&2 "If gofmt fails and outputs errors, you have to fix them manually."
+echo >&2
 
 exit 1
