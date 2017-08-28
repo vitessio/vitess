@@ -52,7 +52,7 @@ func TestDBConnExec(t *testing.T) {
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
 	defer cancel()
-	dbConn, err := NewDBConn(connPool, db.ConnParams(), db.ConnParams())
+	dbConn, err := NewDBConn(connPool, db.ConnParams())
 	defer dbConn.Close()
 	if err != nil {
 		t.Fatalf("should not get an error, err: %v", err)
@@ -85,7 +85,7 @@ func TestDBConnKill(t *testing.T) {
 	connPool := newPool()
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
-	dbConn, err := NewDBConn(connPool, db.ConnParams(), db.ConnParams())
+	dbConn, err := NewDBConn(connPool, db.ConnParams())
 	defer dbConn.Close()
 	query := fmt.Sprintf("kill %d", dbConn.ID())
 	db.AddQuery(query, &sqltypes.Result{})
@@ -136,7 +136,7 @@ func TestDBConnStream(t *testing.T) {
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
 	defer cancel()
-	dbConn, err := NewDBConn(connPool, db.ConnParams(), db.ConnParams())
+	dbConn, err := NewDBConn(connPool, db.ConnParams())
 	defer dbConn.Close()
 	var result sqltypes.Result
 	err = dbConn.Stream(

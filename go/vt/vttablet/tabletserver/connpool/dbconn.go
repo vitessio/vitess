@@ -58,8 +58,7 @@ type DBConn struct {
 // NewDBConn creates a new DBConn. It triggers a CheckMySQL if creation fails.
 func NewDBConn(
 	cp *Pool,
-	appParams,
-	dbaParams *mysql.ConnParams) (*DBConn, error) {
+	appParams *mysql.ConnParams) (*DBConn, error) {
 	c, err := dbconnpool.NewDBConnection(appParams, tabletenv.MySQLStats)
 	if err != nil {
 		cp.checker.CheckMySQL()
