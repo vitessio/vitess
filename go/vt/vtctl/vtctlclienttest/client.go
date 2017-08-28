@@ -35,6 +35,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
 	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 
@@ -61,17 +62,18 @@ func TestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
 
 	// Create a fake tablet
 	tablet := &topodatapb.Tablet{
-		Alias:    &topodatapb.TabletAlias{Cell: "cell1", Uid: 1},
-		Hostname: "localhost",
+		Alias:         &topodatapb.TabletAlias{Cell: "cell1", Uid: 1},
+		Hostname:      "localhost",
+		MysqlHostname: "localhost",
 		PortMap: map[string]int32{
-			"vt":    3333,
-			"mysql": 3334,
+			"vt": 3333,
 		},
 
 		Tags:     map[string]string{"tag": "value"},
 		Keyspace: "test_keyspace",
 		Type:     topodatapb.TabletType_MASTER,
 	}
+	topoproto.SetMysqlPort(tablet, 3334)
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
 		t.Errorf("CreateTablet: %v", err)
 	}

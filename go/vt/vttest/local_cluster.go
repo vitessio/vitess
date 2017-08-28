@@ -24,13 +24,11 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"os/exec"
 	"path"
 	"strconv"
 	"strings"
-	"time"
 
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
@@ -383,6 +381,14 @@ func (hdl *Handle) MySQLConnParams() (mysql.ConnParams, error) {
 	return params, nil
 }
 
+// MySQLAppDebugConnParams builds the MySQL connection params for appdebug user.
+// It's valid only if you used MySQLOnly option.
+func (hdl *Handle) MySQLAppDebugConnParams() (mysql.ConnParams, error) {
+	connParams, err := hdl.MySQLConnParams()
+	connParams.Uname = "vt_appdebug"
+	return connParams, err
+}
+
 func (hdl *Handle) run(
 	options ...VitessOption,
 ) error {
@@ -430,14 +436,4 @@ func (hdl *Handle) run(
 			"error (%v) parsing JSON output from command: %v", err, launcher)
 	}
 	return err
-}
-
-// randomPort returns a random number between 10k & 30k.
-func randomPort() int {
-	v := rand.Int31n(20000)
-	return int(v + 10000)
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
 }

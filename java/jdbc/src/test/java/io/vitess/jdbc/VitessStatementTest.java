@@ -16,6 +16,23 @@
 
 package io.vitess.jdbc;
 
+import java.lang.reflect.Field;
+import java.sql.BatchUpdateException;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.junit.Assert;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Matchers;
+import org.mockito.Mockito;
+import org.powermock.api.mockito.PowerMockito;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.junit4.PowerMockRunner;
+
 import io.vitess.client.Context;
 import io.vitess.client.SQLFuture;
 import io.vitess.client.VTGateConn;
@@ -26,20 +43,6 @@ import io.vitess.proto.Query;
 import io.vitess.proto.Topodata;
 import io.vitess.proto.Vtrpc;
 import io.vitess.util.Constants;
-import java.lang.reflect.Field;
-import java.sql.BatchUpdateException;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.List;
-import org.junit.Assert;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Matchers;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
 
 /**
  * Created by harshit.gangal on 19/01/16.
@@ -216,6 +219,49 @@ import org.powermock.modules.junit4.PowerMockRunner;
         }
     }
 
+    @Test public void testExecuteFetchSizeAsStreaming() throws SQLException {
+        testExecute(5, true, false, true);
+        testExecute(5, false, false, true);
+        testExecute(0, true, true, false);
+        testExecute(0, false, false, true);
+    }
+
+    private void testExecute(int fetchSize, boolean simpleExecute, boolean shouldRunExecute, boolean shouldRunStreamExecute) throws SQLException {
+        VTGateConn mockVtGateConn = PowerMockito.mock(VTGateConn.class);
+        VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
+
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+        PowerMockito.when(mockConn.isSimpleExecute()).thenReturn(simpleExecute);
+        PowerMockito.when(mockConn.getTabletType()).thenReturn(Topodata.TabletType.REPLICA);
+        PowerMockito.when(mockConn.getKeyspace()).thenReturn("test_keyspace");
+        PowerMockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
+        PowerMockito.when(mockConn.getVtGateTx()).thenReturn(mockVtGateTx);
+
+        Cursor mockCursor = PowerMockito.mock(Cursor.class);
+        SQLFuture mockSqlFutureCursor = PowerMockito.mock(SQLFuture.class);
+        PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
+
+        PowerMockito.when(mockVtGateConn
+            .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockSqlFutureCursor);
+        PowerMockito.when(mockVtGateConn
+            .streamExecute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockCursor);
+
+        VitessStatement statement = new VitessStatement(mockConn);
+        statement.setFetchSize(fetchSize);
+        statement.executeQuery(sqlSelect);
+
+        if (shouldRunExecute) {
+            Mockito.verify(mockVtGateConn).execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class));
+        }
+
+        if (shouldRunStreamExecute) {
+            Mockito.verify(mockVtGateConn).streamExecute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class));
+        }
+    }
 
     @Test public void testExecuteUpdate() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
@@ -288,6 +334,24 @@ import org.powermock.modules.junit4.PowerMockRunner;
                 Assert.fail("Should have thrown exception for cursor null");
             } catch (SQLException ex) {
                 Assert.assertEquals("Failed to execute this method", ex.getMessage());
+            }
+
+            //read only
+            PowerMockito.when(mockConn.isReadOnly()).thenReturn(true);
+            try {
+                statement.execute("UPDATE SET foo = 1 ON mytable WHERE id = 1");
+                Assert.fail("Should have thrown exception for read only");
+            } catch (SQLException ex) {
+                Assert.assertEquals(Constants.SQLExceptionMessages.READ_ONLY, ex.getMessage());
+            }
+
+            //read only
+            PowerMockito.when(mockConn.isReadOnly()).thenReturn(true);
+            try {
+                statement.executeBatch();
+                Assert.fail("Should have thrown exception for read only");
+            } catch (SQLException ex) {
+                Assert.assertEquals(Constants.SQLExceptionMessages.READ_ONLY, ex.getMessage());
             }
 
         } catch (SQLException e) {
@@ -681,5 +745,55 @@ import org.powermock.modules.junit4.PowerMockRunner;
             Assert.assertEquals(Statement.EXECUTE_FAILED, ex.getUpdateCounts()[1]);
         }
 
+    }
+
+    @Test public void testBatchGeneratedKeys() throws SQLException {
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+        VitessStatement statement = new VitessStatement(mockConn);
+        VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
+        Cursor mockCursor = PowerMockito.mock(Cursor.class);
+        SQLFuture mockSqlFutureCursor = PowerMockito.mock(SQLFuture.class);
+        SQLFuture mockSqlFutureVtGateTx = PowerMockito.mock(SQLFuture.class);
+        List<Query.Field> fieldList = PowerMockito.mock(ArrayList.class);
+
+        VTGateConn mockVtGateConn = PowerMockito.mock(VTGateConn.class);
+        PowerMockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
+        PowerMockito.when(mockConn.getVtGateTx()).thenReturn(mockVtGateTx);
+        PowerMockito.when(mockConn.getAutoCommit()).thenReturn(true);
+
+        PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
+        PowerMockito.when(mockSqlFutureVtGateTx.checkedGet()).thenReturn(mockVtGateTx);
+        PowerMockito.when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
+        PowerMockito.when(mockConn.getTabletType()).thenReturn(Topodata.TabletType.MASTER);
+
+        PowerMockito.when(mockVtGateConn
+            .executeBatch(Matchers.any(Context.class),
+                          Matchers.anyList(),
+                          Matchers.anyList(),
+                          Matchers.any(Topodata.TabletType.class),
+                          Matchers.any(Query.ExecuteOptions.IncludedFields.class)))
+            .thenReturn(mockSqlFutureCursor);
+        List<CursorWithError> mockCursorWithErrorList = new ArrayList<>();
+        PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursorWithErrorList);
+
+        CursorWithError mockCursorWithError = PowerMockito.mock(CursorWithError.class);
+        PowerMockito.when(mockCursorWithError.getError()).thenReturn(null);
+        PowerMockito.when(mockCursorWithError.getCursor()).thenReturn(PowerMockito.mock(Cursor.class));
+        mockCursorWithErrorList.add(mockCursorWithError);
+
+        long expectedFirstGeneratedId = 121;
+        long[] expectedGeneratedIds = {121, 122, 123, 124, 125};
+        PowerMockito.when(mockCursor.getInsertId()).thenReturn(expectedFirstGeneratedId);
+        PowerMockito.when(mockCursor.getRowsAffected()).thenReturn(Long.valueOf(expectedGeneratedIds.length));
+
+        statement.addBatch(sqlInsert);
+        statement.executeBatch();
+
+        ResultSet rs = statement.getGeneratedKeys();
+        int i = 0;
+        while (rs.next()) {
+            long generatedId = rs.getLong(1);
+            Assert.assertEquals(expectedGeneratedIds[i++], generatedId);
+        }
     }
 }

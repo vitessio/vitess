@@ -130,11 +130,11 @@ func (orc *orcClient) EndMaintenance(tablet *topodatapb.Tablet) error {
 }
 
 func mysqlHostPort(tablet *topodatapb.Tablet) (host, port string, err error) {
-	mysqlPort := int(tablet.PortMap["mysql"])
+	mysqlPort := int(topoproto.MysqlPort(tablet))
 	if mysqlPort == 0 {
 		return "", "", fmt.Errorf("MySQL port is unknown for tablet %v (mysqld may not be running yet)", topoproto.TabletAliasString(tablet.Alias))
 	}
-	return tablet.Hostname, strconv.Itoa(mysqlPort), nil
+	return topoproto.MysqlHostname(tablet), strconv.Itoa(mysqlPort), nil
 }
 
 // apiGet calls the given Orchestrator API endpoint.

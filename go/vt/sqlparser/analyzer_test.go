@@ -17,8 +17,8 @@ limitations under the License.
 package sqlparser
 
 import (
-	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -57,6 +57,7 @@ func TestPreview(t *testing.T) {
 		{"use", StmtUse},
 		{"analyze", StmtOther},
 		{"describe", StmtOther},
+		{"desc", StmtOther},
 		{"explain", StmtOther},
 		{"repair", StmtOther},
 		{"optimize", StmtOther},
@@ -151,24 +152,31 @@ func TestIsValue(t *testing.T) {
 		in  Expr
 		out bool
 	}{{
-		in:  newStrVal(""),
+		in:  newStrVal("aa"),
 		out: true,
 	}, {
-		in:  newHexVal(""),
+		in:  newHexVal("3131"),
 		out: true,
 	}, {
-		in:  newIntVal(""),
+		in:  newIntVal("1"),
 		out: true,
 	}, {
-		in:  newValArg(""),
+		in:  newValArg(":a"),
 		out: true,
 	}, {
-		in: &NullVal{},
+		in:  &NullVal{},
+		out: false,
 	}}
 	for _, tc := range testcases {
 		out := IsValue(tc.in)
 		if out != tc.out {
 			t.Errorf("IsValue(%T): %v, want %v", tc.in, out, tc.out)
+		}
+		if tc.out {
+			// NewPlanValue should not fail for valid values.
+			if _, err := NewPlanValue(tc.in); err != nil {
+				t.Error(err)
+			}
 		}
 	}
 }
@@ -196,12 +204,12 @@ func TestIsSimpleTuple(t *testing.T) {
 		in  Expr
 		out bool
 	}{{
-		in:  ValTuple{newStrVal("")},
+		in:  ValTuple{newStrVal("aa")},
 		out: true,
 	}, {
 		in: ValTuple{&ColName{}},
 	}, {
-		in:  ListArg(""),
+		in:  ListArg("::a"),
 		out: true,
 	}, {
 		in: &ColName{},
@@ -211,57 +219,114 @@ func TestIsSimpleTuple(t *testing.T) {
 		if out != tc.out {
 			t.Errorf("IsSimpleTuple(%T): %v, want %v", tc.in, out, tc.out)
 		}
+		if tc.out {
+			// NewPlanValue should not fail for valid tuples.
+			if _, err := NewPlanValue(tc.in); err != nil {
+				t.Error(err)
+			}
+		}
 	}
 }
 
-func TestAsInterface(t *testing.T) {
-	testcases := []struct {
+func TestNewPlanValue(t *testing.T) {
+	tcases := []struct {
 		in  Expr
-		out interface{}
+		out sqltypes.PlanValue
+		err string
 	}{{
-		in:  ValTuple{newStrVal("aa")},
-		out: []interface{}{sqltypes.MakeString([]byte("aa"))},
+		in: &SQLVal{
+			Type: ValArg,
+			Val:  []byte(":valarg"),
+		},
+		out: sqltypes.PlanValue{Key: "valarg"},
 	}, {
-		in:  ValTuple{&ColName{}},
-		out: errors.New("expression is too complex ''"),
+		in: &SQLVal{
+			Type: IntVal,
+			Val:  []byte("10"),
+		},
+		out: sqltypes.PlanValue{Value: sqltypes.NewInt64(10)},
 	}, {
-		in:  newValArg(":aa"),
-		out: ":aa",
+		in: &SQLVal{
+			Type: IntVal,
+			Val:  []byte("1111111111111111111111111111111111111111"),
+		},
+		err: "value out of range",
 	}, {
-		in:  ListArg("::aa"),
-		out: "::aa",
+		in: &SQLVal{
+			Type: StrVal,
+			Val:  []byte("strval"),
+		},
+		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
 	}, {
-		in:  newStrVal("aa"),
-		out: sqltypes.MakeString([]byte("aa")),
+		in: &SQLVal{
+			Type: HexVal,
+			Val:  []byte("3131"),
+		},
+		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("11")},
 	}, {
-		in:  newHexVal("3131"),
-		out: sqltypes.MakeString([]byte("11")),
+		in: &SQLVal{
+			Type: HexVal,
+			Val:  []byte("313"),
+		},
+		err: "odd length hex string",
 	}, {
-		in:  newHexVal("313"),
-		out: errors.New("encoding/hex: odd length hex string"),
+		in:  ListArg("::list"),
+		out: sqltypes.PlanValue{ListKey: "list"},
 	}, {
-		in:  newIntVal("313"),
-		out: sqltypes.MakeTrusted(sqltypes.Int64, []byte("313")),
+		in: ValTuple{
+			&SQLVal{
+				Type: ValArg,
+				Val:  []byte(":valarg"),
+			},
+			&SQLVal{
+				Type: StrVal,
+				Val:  []byte("strval"),
+			},
+		},
+		out: sqltypes.PlanValue{
+			Values: []sqltypes.PlanValue{{
+				Key: "valarg",
+			}, {
+				Value: sqltypes.NewVarBinary("strval"),
+			}},
+		},
 	}, {
-		in:  newIntVal("18446744073709551616"),
-		out: errors.New("type mismatch: strconv.ParseUint: parsing \"18446744073709551616\": value out of range"),
+		in: ValTuple{
+			&ParenExpr{Expr: &SQLVal{
+				Type: ValArg,
+				Val:  []byte(":valarg"),
+			}},
+		},
+		err: "expression is too complex",
 	}, {
-		in:  newFloatVal("1.2"),
-		out: errors.New("expression is too complex '1.2'"),
+		in: ValTuple{
+			ListArg("::list"),
+		},
+		err: "unsupported: nested lists",
 	}, {
 		in:  &NullVal{},
-		out: nil,
+		out: sqltypes.PlanValue{},
 	}, {
-		in:  &ColName{},
-		out: errors.New("expression is too complex ''"),
+		in: &ParenExpr{Expr: &SQLVal{
+			Type: ValArg,
+			Val:  []byte(":valarg"),
+		}},
+		err: "expression is too complex",
 	}}
-	for _, tc := range testcases {
-		out, err := AsInterface(tc.in)
+	for _, tc := range tcases {
+		got, err := NewPlanValue(tc.in)
 		if err != nil {
-			out = err
+			if !strings.Contains(err.Error(), tc.err) {
+				t.Errorf("NewPlanValue(%s) error: %v, want '%s'", String(tc.in), err, tc.err)
+			}
+			continue
 		}
-		if !reflect.DeepEqual(out, tc.out) {
-			t.Errorf("AsInterface(%#v): %#v, want %#v", tc.in, out, tc.out)
+		if tc.err != "" {
+			t.Errorf("NewPlanValue(%s) error: nil, want '%s'", String(tc.in), tc.err)
+			continue
+		}
+		if !reflect.DeepEqual(got, tc.out) {
+			t.Errorf("NewPlanValue(%s): %v, want %v", String(tc.in), got, tc.out)
 		}
 	}
 }
@@ -289,9 +354,10 @@ func TestStringIn(t *testing.T) {
 
 func TestExtractSetValues(t *testing.T) {
 	testcases := []struct {
-		sql string
-		out map[string]interface{}
-		err string
+		sql     string
+		out     map[string]interface{}
+		charset string
+		err     string
 	}{{
 		sql: "invalid",
 		err: "syntax error at position 8 near 'invalid'",
@@ -313,18 +379,43 @@ func TestExtractSetValues(t *testing.T) {
 	}, {
 		sql: "set AUTOCOMMIT=1",
 		out: map[string]interface{}{"autocommit": int64(1)},
+	}, {
+		sql: "SET character_set_results = NULL",
+		out: map[string]interface{}{"character_set_results": nil},
+	}, {
+		sql: "SET foo = 0x1234",
+		err: "invalid value type: 0x1234",
+	}, {
+		sql:     "SET names utf8",
+		out:     map[string]interface{}{},
+		charset: "utf8",
+	}, {
+		sql:     "SET names ascii collation ascii_bin",
+		out:     map[string]interface{}{},
+		charset: "ascii",
+	}, {
+		sql:     "SET charset default",
+		out:     map[string]interface{}{},
+		charset: "default",
+	}, {
+		sql:     "SET character set ascii",
+		out:     map[string]interface{}{},
+		charset: "ascii",
 	}}
 	for _, tcase := range testcases {
-		out, err := ExtractSetValues(tcase.sql)
+		out, charset, err := ExtractSetValues(tcase.sql)
 		if tcase.err != "" {
 			if err == nil || err.Error() != tcase.err {
-				t.Errorf("ExtractSetNums(%s): %v, want '%s'", tcase.sql, err, tcase.err)
+				t.Errorf("ExtractSetValues(%s): %v, want '%s'", tcase.sql, err, tcase.err)
 			}
 		} else if err != nil {
-			t.Errorf("ExtractSetNums(%s): %v, want no error", tcase.sql, err)
+			t.Errorf("ExtractSetValues(%s): %v, want no error", tcase.sql, err)
 		}
 		if !reflect.DeepEqual(out, tcase.out) {
-			t.Errorf("ExtractSetNums(%s): %v, want '%v'", tcase.sql, out, tcase.out)
+			t.Errorf("ExtractSetValues(%s): %v, want '%v'", tcase.sql, out, tcase.out)
+		}
+		if charset != tcase.charset {
+			t.Errorf("ExtractSetValues(%s): %v, want '%v'", tcase.sql, charset, tcase.charset)
 		}
 	}
 }
@@ -335,10 +426,6 @@ func newStrVal(in string) *SQLVal {
 
 func newIntVal(in string) *SQLVal {
 	return NewIntVal([]byte(in))
-}
-
-func newFloatVal(in string) *SQLVal {
-	return NewFloatVal([]byte(in))
 }
 
 func newHexVal(in string) *SQLVal {

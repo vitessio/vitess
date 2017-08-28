@@ -32,10 +32,12 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestSimpleRead(t *testing.T) {
@@ -91,7 +93,7 @@ func TestBinary(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(binaryData)),
+				sqltypes.NewVarBinary(binaryData),
 			},
 		},
 	}
@@ -102,7 +104,7 @@ func TestBinary(t *testing.T) {
 	// Test with bindvars.
 	_, err = client.Execute(
 		"insert into vitess_test values(5, null, null, :bindata)",
-		map[string]interface{}{"bindata": binaryData},
+		map[string]*querypb.BindVariable{"bindata": sqltypes.StringBindVariable(binaryData)},
 	)
 	if err != nil {
 		t.Error(err)
@@ -124,8 +126,8 @@ func TestNocacheListArgs(t *testing.T) {
 
 	qr, err := client.Execute(
 		query,
-		map[string]interface{}{
-			"list": []interface{}{2, 3, 4},
+		map[string]*querypb.BindVariable{
+			"list": sqltypes.TestBindVariable([]interface{}{2, 3, 4}),
 		},
 	)
 	if err != nil {
@@ -138,8 +140,8 @@ func TestNocacheListArgs(t *testing.T) {
 
 	qr, err = client.Execute(
 		query,
-		map[string]interface{}{
-			"list": []interface{}{3, 4},
+		map[string]*querypb.BindVariable{
+			"list": sqltypes.TestBindVariable([]interface{}{3, 4}),
 		},
 	)
 	if err != nil {
@@ -152,8 +154,8 @@ func TestNocacheListArgs(t *testing.T) {
 
 	qr, err = client.Execute(
 		query,
-		map[string]interface{}{
-			"list": []interface{}{3},
+		map[string]*querypb.BindVariable{
+			"list": sqltypes.TestBindVariable([]interface{}{3}),
 		},
 	)
 	if err != nil {
@@ -167,11 +169,11 @@ func TestNocacheListArgs(t *testing.T) {
 	// Error case
 	_, err = client.Execute(
 		query,
-		map[string]interface{}{
-			"list": []interface{}{},
+		map[string]*querypb.BindVariable{
+			"list": sqltypes.TestBindVariable([]interface{}{}),
 		},
 	)
-	want := "empty list supplied for list"
+	want := "empty list supplied for list, CallerID: dev"
 	if err == nil || err.Error() != want {
 		t.Errorf("Error: %v, want %s", err, want)
 		return
@@ -195,7 +197,7 @@ func TestTrailingComment(t *testing.T) {
 	vstart := framework.DebugVars()
 	v1 := framework.FetchInt(vstart, "QueryCacheLength")
 
-	bindVars := map[string]interface{}{"ival": 1}
+	bindVars := map[string]*querypb.BindVariable{"ival": sqltypes.Int64BindVariable(1)}
 	client := framework.NewClient()
 
 	for _, query := range []string{
@@ -298,29 +300,38 @@ func TestSidecarTables(t *testing.T) {
 }
 
 func TestConsolidation(t *testing.T) {
-	vstart := framework.DebugVars()
 	defer framework.Server.SetPoolSize(framework.Server.PoolSize())
 	framework.Server.SetPoolSize(1)
 
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		framework.NewClient().Execute("select sleep(0.25) from dual", nil)
-		wg.Done()
-	}()
-	go func() {
-		framework.NewClient().Execute("select sleep(0.25) from dual", nil)
-		wg.Done()
-	}()
-	wg.Wait()
+	for sleep := 0.1; sleep < 10.0; sleep *= 2 {
+		query := fmt.Sprintf("select sleep(%v) from dual", sleep)
 
-	vend := framework.DebugVars()
-	if err := compareIntDiff(vend, "Waits/TotalCount", vstart, 1); err != nil {
-		t.Error(err)
+		vstart := framework.DebugVars()
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			framework.NewClient().Execute(query, nil)
+			wg.Done()
+		}()
+		go func() {
+			framework.NewClient().Execute(query, nil)
+			wg.Done()
+		}()
+		wg.Wait()
+
+		vend := framework.DebugVars()
+		if err := compareIntDiff(vend, "Waits/TotalCount", vstart, 1); err != nil {
+			t.Logf("DebugVars Waits/TotalCount not incremented with sleep=%v", sleep)
+			continue
+		}
+		if err := compareIntDiff(vend, "Waits/Histograms/Consolidations/Count", vstart, 1); err != nil {
+			t.Logf("DebugVars Waits/Histograms/Consolidations/Count not incremented with sleep=%v", sleep)
+			continue
+		}
+		t.Logf("DebugVars properly incremented with sleep=%v", sleep)
+		return
 	}
-	if err := compareIntDiff(vend, "Waits/Histograms/Consolidations/Count", vstart, 1); err != nil {
-		t.Error(err)
-	}
+	t.Error("DebugVars for consolidation not incremented")
 }
 
 func TestBindInSelect(t *testing.T) {
@@ -329,7 +340,7 @@ func TestBindInSelect(t *testing.T) {
 	// Int bind var.
 	qr, err := client.Execute(
 		"select :bv from dual",
-		map[string]interface{}{"bv": 1},
+		map[string]*querypb.BindVariable{"bv": sqltypes.Int64BindVariable(1)},
 	)
 	if err != nil {
 		t.Error(err)
@@ -346,7 +357,7 @@ func TestBindInSelect(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+				sqltypes.NewInt64(1),
 			},
 		},
 	}
@@ -357,7 +368,7 @@ func TestBindInSelect(t *testing.T) {
 	// String bind var.
 	qr, err = client.Execute(
 		"select :bv from dual",
-		map[string]interface{}{"bv": "abcd"},
+		map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("abcd")},
 	)
 	if err != nil {
 		t.Error(err)
@@ -375,7 +386,7 @@ func TestBindInSelect(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("abcd")),
+				sqltypes.NewVarChar("abcd"),
 			},
 		},
 	}
@@ -386,7 +397,7 @@ func TestBindInSelect(t *testing.T) {
 	// Binary bind var.
 	qr, err = client.Execute(
 		"select :bv from dual",
-		map[string]interface{}{"bv": "\x00\xff"},
+		map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("\x00\xff")},
 	)
 	if err != nil {
 		t.Error(err)
@@ -404,7 +415,7 @@ func TestBindInSelect(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("\x00\xff")),
+				sqltypes.NewVarChar("\x00\xff"),
 			},
 		},
 	}
@@ -450,8 +461,10 @@ func TestQueryStats(t *testing.T) {
 
 	start := time.Now()
 	query := "select /* query_stats */ eid from vitess_a where eid = :eid"
-	bv := map[string]interface{}{"eid": 1}
-	_, _ = client.Execute(query, bv)
+	bv := map[string]*querypb.BindVariable{"eid": sqltypes.Int64BindVariable(1)}
+	if _, err := client.Execute(query, bv); err != nil {
+		t.Fatal(err)
+	}
 	stat := framework.QueryStats()[query]
 	duration := int(time.Now().Sub(start))
 	if stat.Time <= 0 || stat.Time > duration {
@@ -474,6 +487,7 @@ func TestQueryStats(t *testing.T) {
 		t.Errorf("stat: %+v, want %+v", stat, want)
 	}
 
+	// Query cache should be updated for errors that happen at MySQL level also.
 	query = "select /* query_stats */ eid from vitess_a where dontexist(eid) = :eid"
 	_, _ = client.Execute(query, bv)
 	stat = framework.QueryStats()[query]
@@ -500,6 +514,22 @@ func TestQueryStats(t *testing.T) {
 	if err := compareIntDiff(vend, "QueryErrorCounts/vitess_a.PASS_SELECT", vstart, 1); err != nil {
 		t.Error(err)
 	}
+
+	// Ensure BeginExecute also updates the stats and strips comments.
+	query = "select /* begin_execute */ 1 /* trailing comment */"
+	if _, err := client.BeginExecute(query, bv); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := framework.QueryStats()[query]; ok {
+		t.Errorf("query stats included trailing comments for BeginExecute: %v", framework.QueryStats())
+	}
+	stripped := "select /* begin_execute */ 1"
+	if _, ok := framework.QueryStats()[stripped]; !ok {
+		t.Errorf("query stats did not get updated for BeginExecute: %v", framework.QueryStats())
+	}
 }
 
 func TestDBAStatements(t *testing.T) {
@@ -510,7 +540,7 @@ func TestDBAStatements(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	wantCol := sqltypes.MakeTrusted(sqltypes.VarChar, []byte("version"))
+	wantCol := sqltypes.NewVarChar("version")
 	if !reflect.DeepEqual(qr.Rows[0][0], wantCol) {
 		t.Errorf("Execute: \n%#v, want \n%#v", qr.Rows[0][0], wantCol)
 	}
@@ -540,9 +570,9 @@ func TestLogTruncation(t *testing.T) {
 	// Test that a long error string is not truncated by default
 	_, err := client.Execute(
 		"insert into vitess_test values(123, :data, null, null)",
-		map[string]interface{}{"data": "THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED"},
+		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
-	want := "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess_test values (123, 'THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED', null, null) /* _stream vitess_test (intval ) (123 ); */"
+	want := "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess_test(intval, floatval, charval, binval) values (123, 'THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED', null, null) /* _stream vitess_test (intval ) (123 ); */, CallerID: dev"
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
 	}
@@ -554,9 +584,9 @@ func TestLogTruncation(t *testing.T) {
 	*sqlparser.TruncateErrLen = 30
 	_, err = client.Execute(
 		"insert into vitess_test values(123, :data, null, null)",
-		map[string]interface{}{"data": "THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED"},
+		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
-	want = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess [TRUNCATED] /* _stream vitess_test (intval ) (123 ); */"
+	want = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess [TRUNCATED] /* _stream vitess_test (intval ) (123 ); */, CallerID: dev"
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
 	}
@@ -568,9 +598,9 @@ func TestLogTruncation(t *testing.T) {
 	*sqlparser.TruncateErrLen = 30
 	_, err = client.Execute(
 		"insert into vitess_test values(123, :data, null, null) /* KEEP ME */",
-		map[string]interface{}{"data": "THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED"},
+		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
-	want = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess [TRUNCATED] /* _stream vitess_test (intval ) (123 ); */ /* KEEP ME */"
+	want = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess [TRUNCATED] /* _stream vitess_test (intval ) (123 ); */ /* KEEP ME */, CallerID: dev"
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
 	}
@@ -614,5 +644,88 @@ func TestClientFoundRows(t *testing.T) {
 	}
 	if err := client.Rollback(); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestLastInsertId(t *testing.T) {
+	client := framework.NewClient()
+	res, err := client.Execute("insert ignore into vitess_autoinc_seq SET name = 'foo', sequence = 0", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Execute("delete from vitess_autoinc_seq where name = 'foo'", nil)
+
+	if err := client.Begin(true); err != nil {
+		t.Fatal(err)
+	}
+	defer client.Rollback()
+
+	res, err = client.Execute("insert ignore into vitess_autoinc_seq SET name = 'foo', sequence = 0", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	qr, err := client.Execute("update vitess_autoinc_seq set sequence=last_insert_id(sequence + 1) where name='foo'", nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	insID := res.InsertID
+
+	if want, got := insID+1, qr.InsertID; want != got {
+		t.Errorf("insertId mismatch; got %v, want %v", got, want)
+	}
+
+	qr, err = client.Execute("select sequence from vitess_autoinc_seq where name = 'foo'", nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantCol := sqltypes.NewUint64(insID + uint64(1))
+	if !reflect.DeepEqual(qr.Rows[0][0], wantCol) {
+		t.Errorf("Execute: \n%#v, want \n%#v", qr.Rows[0][0], wantCol)
+	}
+}
+
+func TestAppDebugRequest(t *testing.T) {
+	client := framework.NewClient()
+
+	// Insert with normal user works
+
+	if _, err := client.Execute("insert into vitess_test_debuguser(intval, charval) values(124, 'aa')", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	defer client.Execute("delete from vitess_test where intval= 124", nil)
+
+	// Set vt_appdebug
+	ctx := callerid.NewContext(
+		context.Background(),
+		&vtrpcpb.CallerID{},
+		&querypb.VTGateCallerID{Username: "vt_appdebug"})
+
+	want := "Access denied for user 'vt_appdebug'@'localhost'"
+
+	client = framework.NewClientWithContext(ctx)
+
+	// Start a transaction. This test the other flow that a client can use to insert a value.
+	client.Begin(false)
+	_, err := client.Execute("insert into vitess_test_debuguser(intval, charval) values(124, 'aa')", nil)
+
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("Error: %v, want prefix %s", err, want)
+	}
+
+	// Normal flow, when a client is trying to insert a value and the insert is not in the
+	// context of another transaction.
+	_, err = client.Execute("insert into vitess_test_debuguser(intval, charval) values(124, 'aa')", nil)
+
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("Error: %v, want prefix %s", err, want)
+	}
+
+	_, err = client.Execute("select * from vitess_test_debuguser where intval=1", nil)
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("Error: %v, want prefix %s", err, want)
 	}
 }

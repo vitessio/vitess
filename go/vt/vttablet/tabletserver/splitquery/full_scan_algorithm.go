@@ -19,11 +19,12 @@ package splitquery
 import (
 	"fmt"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -58,8 +59,8 @@ type FullScanAlgorithm struct {
 	sqlExecuter SQLExecuter
 
 	prevBindVariableNames []string
-	initialQuery          *querytypes.BoundQuery
-	noninitialQuery       *querytypes.BoundQuery
+	initialQuery          *querypb.BoundQuery
+	noninitialQuery       *querypb.BoundQuery
 }
 
 // NewFullScanAlgorithm constructs a new FullScanAlgorithm.
@@ -109,13 +110,13 @@ func (a *FullScanAlgorithm) generateBoundaries() ([]tuple, error) {
 }
 
 func (a *FullScanAlgorithm) populatePrevTupleInBindVariables(
-	prevTuple tuple, bindVariables map[string]interface{}) {
+	prevTuple tuple, bindVariables map[string]*querypb.BindVariable) {
 	if len(prevTuple) != len(a.prevBindVariableNames) {
 		panic(fmt.Sprintf("len(prevTuple) != len(a.prevBindVariableNames): %v != %v",
 			len(prevTuple), len(a.prevBindVariableNames)))
 	}
 	for i, tupleElement := range prevTuple {
-		bindVariables[a.prevBindVariableNames[i]] = tupleElement.ToNative()
+		bindVariables[a.prevBindVariableNames[i]] = sqltypes.ValueBindVariable(tupleElement)
 	}
 }
 
@@ -129,9 +130,9 @@ func (a *FullScanAlgorithm) populatePrevTupleInBindVariables(
 //                            ORDER BY <split_columns>
 //                            LIMIT splitParams.numRowsPerQueryPart, 1",
 // The BindVariables field of the result will contain a deep-copy of splitParams.BindVariables.
-func buildInitialQuery(splitParams *SplitParams) *querytypes.BoundQuery {
+func buildInitialQuery(splitParams *SplitParams) *querypb.BoundQuery {
 	resultSelectAST := buildInitialQueryAST(splitParams)
-	return &querytypes.BoundQuery{
+	return &querypb.BoundQuery{
 		Sql:           sqlparser.String(resultSelectAST),
 		BindVariables: cloneBindVariables(splitParams.bindVariables),
 	}
@@ -166,7 +167,7 @@ func buildInitialQueryAST(splitParams *SplitParams) *sqlparser.Select {
 // The BindVariables field of the result will contain a deep-copy of splitParams.BindVariables.
 // The new "prev_<sc>" bind variables are not populated yet.
 func buildNoninitialQuery(
-	splitParams *SplitParams, prevBindVariableNames []string) *querytypes.BoundQuery {
+	splitParams *SplitParams, prevBindVariableNames []string) *querypb.BoundQuery {
 	resultSelectAST := buildInitialQueryAST(splitParams)
 	addAndTermToWhereClause(
 		resultSelectAST,
@@ -174,7 +175,7 @@ func buildNoninitialQuery(
 			convertBindVariableNamesToExpr(prevBindVariableNames),
 			convertColumnsToExpr(splitParams.splitColumns),
 			false /* strict */))
-	return &querytypes.BoundQuery{
+	return &querypb.BoundQuery{
 		Sql:           sqlparser.String(resultSelectAST),
 		BindVariables: cloneBindVariables(splitParams.bindVariables),
 	}
@@ -237,7 +238,7 @@ func buildPrevBindVariableNames(splitColumns []*schema.TableColumn) []string {
 	return result
 }
 
-func (a *FullScanAlgorithm) executeQuery(boundQuery *querytypes.BoundQuery) (tuple, error) {
+func (a *FullScanAlgorithm) executeQuery(boundQuery *querypb.BoundQuery) (tuple, error) {
 	sqlResult, err := a.sqlExecuter.SQLExecute(
 		boundQuery.Sql,
 		boundQuery.BindVariables)

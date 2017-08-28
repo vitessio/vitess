@@ -20,6 +20,7 @@ import io.vitess.proto.Query;
 import io.vitess.proto.Topodata;
 import io.vitess.util.Constants;
 import io.vitess.util.StringUtils;
+
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Field;
 import java.sql.DriverPropertyInfo;
@@ -38,9 +39,9 @@ public class ConnectionProperties {
             // Generate property list for use in dynamically filling out values from Properties objects in
             // #initializeProperties below
             java.lang.reflect.Field[] declaredFields = ConnectionProperties.class.getDeclaredFields();
-            for (int i = 0; i < declaredFields.length; i++) {
-                if (ConnectionProperties.ConnectionProperty.class.isAssignableFrom(declaredFields[i].getType())) {
-                    PROPERTY_LIST.add(declaredFields[i]);
+            for (Field declaredField : declaredFields) {
+                if (ConnectionProperty.class.isAssignableFrom(declaredField.getType())) {
+                    PROPERTY_LIST.add(declaredField);
                 }
             }
         } catch (Exception ex) {
@@ -92,6 +93,39 @@ public class ConnectionProperties {
         null);
 
     // Vitess-specific configs
+    private StringConnectionProperty userName = new StringConnectionProperty(
+            Constants.Property.USERNAME,
+            "query will be executed via this user",
+            Constants.DEFAULT_USERNAME,
+            null);
+    private StringConnectionProperty target = new StringConnectionProperty(
+            Constants.Property.TARGET,
+            "Represents keyspace:shard@tabletType to be used to VTGates. keyspace, keyspace:shard, @tabletType all are optional.",
+            Constants.DEFAULT_TARGET,
+            null);
+    private StringConnectionProperty keyspace = new StringConnectionProperty(
+        Constants.Property.KEYSPACE,
+        "Targeted keyspace to execute queries on",
+        Constants.DEFAULT_KEYSPACE,
+        null);
+    private StringConnectionProperty catalog = new StringConnectionProperty(
+            Constants.Property.DBNAME,
+            "Database name in the keyspace",
+            Constants.DEFAULT_CATALOG,
+            null);
+    private StringConnectionProperty shard = new StringConnectionProperty(
+        Constants.Property.SHARD,
+        "Targeted shard in a given keyspace",
+        Constants.DEFAULT_SHARD,
+        null);
+    private EnumConnectionProperty<Topodata.TabletType> tabletType = new EnumConnectionProperty<>(
+        Constants.Property.TABLET_TYPE,
+        "Tablet Type to which Vitess will connect(master, replica, rdonly)",
+        Constants.DEFAULT_TABLET_TYPE);
+    private EnumConnectionProperty<Topodata.TabletType> oldTabletType = new EnumConnectionProperty<>(
+            Constants.Property.OLD_TABLET_TYPE,
+            "Deprecated Tablet Type to which Vitess will connect(master, replica, rdonly)",
+            Constants.DEFAULT_TABLET_TYPE);
     private EnumConnectionProperty<Constants.QueryExecuteType> executeType = new EnumConnectionProperty<>(
         Constants.Property.EXECUTE_TYPE,
         "Query execution type: simple or stream",
@@ -104,11 +138,6 @@ public class ConnectionProperties {
         Constants.Property.INCLUDED_FIELDS,
         "What fields to return from MySQL to the Driver. Limiting the fields returned can improve performance, but ALL is required for maximum JDBC API support",
         Constants.DEFAULT_INCLUDED_FIELDS);
-    private EnumConnectionProperty<Topodata.TabletType> tabletType = new EnumConnectionProperty<>(
-        Constants.Property.TABLET_TYPE,
-        "Tablet Type to which Vitess will connect(master, replica, rdonly)",
-        Constants.DEFAULT_TABLET_TYPE);
-
     private BooleanConnectionProperty grpcRetriesEnabled = new BooleanConnectionProperty(
         "grpcRetriesEnabled",
         "If enabled, a gRPC interceptor will ensure retries happen in the case of TRANSIENT gRPC errors.",
@@ -173,6 +202,11 @@ public class ConnectionProperties {
         null,
         null);
 
+    private BooleanConnectionProperty treatUtilDateAsTimestamp = new BooleanConnectionProperty(
+        "treatUtilDateAsTimestamp",
+        "Should the driver treat java.util.Date as a TIMESTAMP for the purposes of PreparedStatement.setObject()",
+        true);
+
     // Caching of some hot properties to avoid casting over and over
     private Topodata.TabletType tabletTypeCache;
     private Query.ExecuteOptions.IncludedFields includedFieldsCache;
@@ -180,6 +214,7 @@ public class ConnectionProperties {
     private boolean twopcEnabledCache = false;
     private boolean simpleExecuteTypeCache = true;
     private String characterEncodingAsString = null;
+    private String userNameCache;
 
     void initializeProperties(Properties props) throws SQLException {
         Properties propsCopy = (Properties) props.clone();
@@ -202,6 +237,7 @@ public class ConnectionProperties {
         this.twopcEnabledCache = this.twopcEnabled.getValueAsBoolean();
         this.simpleExecuteTypeCache = this.executeType.getValueAsEnum() == Constants.QueryExecuteType.SIMPLE;
         this.characterEncodingAsString = this.characterEncoding.getValueAsString();
+        this.userNameCache = this.userName.getValueAsString();
     }
 
     /**
@@ -418,6 +454,50 @@ public class ConnectionProperties {
         return trustAlias.getValueAsString();
     }
 
+    public boolean getTreatUtilDateAsTimestamp() {
+        return treatUtilDateAsTimestamp.getValueAsBoolean();
+    }
+
+    public void setTreatUtilDateAsTimestamp(boolean treatUtilDateAsTimestamp) {
+        this.treatUtilDateAsTimestamp.setValue(treatUtilDateAsTimestamp);
+    }
+
+    public String getTarget() {
+        if(!StringUtils.isNullOrEmptyWithoutWS(target.getValueAsString())) {
+            return target.getValueAsString();
+        }
+        String targetString = "";
+        String keyspace = this.keyspace.getValueAsString();
+        if(!StringUtils.isNullOrEmptyWithoutWS(keyspace)) {
+            targetString += keyspace;
+            String shard = this.shard.getValueAsString();
+            if(!StringUtils.isNullOrEmptyWithoutWS(shard)) {
+                targetString += ":" + shard;
+            }
+        }
+        String tabletType = this.tabletType.getValueAsEnum().name();
+        if(!StringUtils.isNullOrEmptyWithoutWS(tabletType)) {
+            targetString += "@" + tabletType.toLowerCase();
+        }
+        return targetString;
+    }
+
+    @Deprecated
+    protected String getKeyspace() {
+        return this.keyspace.getValueAsString();
+    }
+    protected void setCatalog(String catalog) throws SQLException {
+        this.catalog.setValue(catalog);
+    }
+
+    protected String getCatalog() throws SQLException{
+        return this.catalog.getValueAsString();
+    }
+
+    protected String getUsername() {
+        return this.userNameCache;
+    }
+
     abstract static class ConnectionProperty {
 
         private final String name;
@@ -624,4 +704,5 @@ public class ConnectionProperties {
             return (T) valueAsObject;
         }
     }
+
 }

@@ -24,8 +24,12 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	"math"
+	"time"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
+	"google.golang.org/grpc/keepalive"
 )
 
 // This file handles gRPC server, on its own port.
@@ -59,6 +63,14 @@ var (
 
 	// GRPCServer is the global server to serve gRPC.
 	GRPCServer *grpc.Server
+
+	// GRPCMaxConnectionAge is the maximum age of a client connection, before GoAway is sent.
+	// This is useful for L4 loadbalancing to ensure rebalancing after scaling.
+	GRPCMaxConnectionAge *time.Duration
+
+	// GRPCMaxConnectionAgeGrace is an additional grace period after GRPCMaxConnectionAge, after which
+	// connections are forcibly closed.
+	GRPCMaxConnectionAgeGrace *time.Duration
 )
 
 // isGRPCEnabled returns true if gRPC server is set
@@ -95,14 +107,26 @@ func createGRPCServer() {
 		creds := credentials.NewTLS(config)
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}
-	// Override the default max message size (which is 4 MiB in gRPC 1.0.0).
-	// Large messages can occur when users try to insert very big rows. If they
-	// hit the limit, they'll see the following error:
+	// Override the default max message size for both send and receive
+	// (which is 4 MiB in gRPC 1.0.0).
+	// Large messages can occur when users try to insert or fetch very big
+	// rows. If they hit the limit, they'll see the following error:
 	// grpc: received message length XXXXXXX exceeding the max size 4194304
 	// Note: For gRPC 1.0.0 it's sufficient to set the limit on the server only
 	// because it's not enforced on the client side.
 	if GRPCMaxMessageSize != nil {
-		opts = append(opts, grpc.MaxMsgSize(*GRPCMaxMessageSize))
+		opts = append(opts, grpc.MaxRecvMsgSize(*GRPCMaxMessageSize))
+		opts = append(opts, grpc.MaxSendMsgSize(*GRPCMaxMessageSize))
+	}
+
+	if GRPCMaxConnectionAge != nil {
+		ka := keepalive.ServerParameters{
+			MaxConnectionAge: *GRPCMaxConnectionAge,
+		}
+		if GRPCMaxConnectionAgeGrace != nil {
+			ka.MaxConnectionAgeGrace = *GRPCMaxConnectionAgeGrace
+		}
+		opts = append(opts, grpc.KeepaliveParams(ka))
 	}
 
 	GRPCServer = grpc.NewServer(opts...)
@@ -123,6 +147,12 @@ func serveGRPC() {
 
 	// and serve on it
 	go GRPCServer.Serve(listener)
+
+	OnTermSync(func() {
+		log.Info("Initiated graceful stop of gRPC server")
+		GRPCServer.GracefulStop()
+		log.Info("gRPC server stopped")
+	})
 }
 
 // RegisterGRPCFlags registers the right command line flag to enable gRPC
@@ -134,6 +164,9 @@ func RegisterGRPCFlags() {
 	// Note: We're using 4 MiB as default value because that's the default in the
 	// gRPC 1.0.0 Go server.
 	GRPCMaxMessageSize = flag.Int("grpc_max_message_size", 4*1024*1024, "Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'.")
+	// Default is effectively infinity, as defined in grpc.
+	GRPCMaxConnectionAge = flag.Duration("grpc_max_connection_age", time.Duration(math.MaxInt64), "Maximum age of a client connection before GoAway is sent.")
+	GRPCMaxConnectionAgeGrace = flag.Duration("grpc_max_connection_age_grace", time.Duration(math.MaxInt64), "Additional grace period after grpc_max_connection_age, after which connections are forcibly closed.")
 }
 
 // GRPCCheckServiceMap returns if we should register a gRPC service

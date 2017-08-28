@@ -126,6 +126,10 @@ type Conn struct {
 	// server-side connections.
 	ServerVersion string
 
+	// flavor contains the auto-detected flavor for this client
+	// connection. It is unused for server-side connections.
+	flavor flavor
+
 	// StatusFlags are the status flags we will base our returned flags on.
 	// This is a bit field, with values documented in constants.go.
 	// An interesting value here would be ServerStatusAutocommit.
@@ -250,6 +254,9 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 
 	var header [4]byte
 	if _, err := io.ReadFull(c.reader, header[:]); err != nil {
+		if err == io.EOF {
+			return nil, err
+		}
 		return nil, fmt.Errorf("io.ReadFull(header size) failed: %v", err)
 	}
 
@@ -608,6 +615,11 @@ func (c *Conn) RemoteAddr() net.Addr {
 // ID returns the MySQL connection ID for this connection.
 func (c *Conn) ID() int64 {
 	return int64(c.ConnectionID)
+}
+
+// Ident returns a useful identification string for error logging
+func (c *Conn) String() string {
+	return fmt.Sprintf("client %v (%s)", c.ConnectionID, c.RemoteAddr().String())
 }
 
 // Close closes the connection. It can be called from a different go

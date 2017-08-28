@@ -46,6 +46,16 @@ func New(code vtrpcpb.Code, in string) error {
 	}
 }
 
+// Wrap wraps the given error, returning a new error with the given message as a prefix but with the same error code (if err was a vterror) and message of the passed error.
+func Wrap(err error, message string) error {
+	return New(Code(err), fmt.Sprintf("%v: %v", message, err.Error()))
+}
+
+// Wrapf wraps the given error, returning a new error with the given format string as a prefix but with the same error code (if err was a vterror) and message of the passed error.
+func Wrapf(err error, format string, args ...interface{}) error {
+	return Wrap(err, fmt.Sprintf(format, args...))
+}
+
 // Errorf returns a new error built using Printf style arguments.
 func Errorf(code vtrpcpb.Code, format string, args ...interface{}) error {
 	return New(code, fmt.Sprintf(format, args...))

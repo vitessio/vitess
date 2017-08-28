@@ -114,28 +114,26 @@ func StripLeadingComments(sql string) string {
 	sql = strings.TrimFunc(sql, unicode.IsSpace)
 
 	for hasCommentPrefix(sql) {
-		// Multi line comment
-		if sql[0] == '/' {
+		switch sql[0] {
+		case '/':
+			// Multi line comment
 			index := strings.Index(sql, "*/")
-			if index != -1 {
-				sql = sql[index+2:]
-			} else {
-				break
+			if index <= 1 {
+				return sql
 			}
-		}
-
-		// Single line comment
-		if sql[0] == '-' {
+			sql = sql[index+2:]
+		case '-':
+			// Single line comment
 			index := strings.Index(sql, "\n")
-			if index != -1 {
-				sql = sql[index+1:]
-			} else {
-				break
+			if index == -1 {
+				return sql
 			}
+			sql = sql[index+1:]
 		}
 
 		sql = strings.TrimFunc(sql, unicode.IsSpace)
 	}
+
 	return sql
 }
 

@@ -34,6 +34,7 @@ import javax.annotation.Nullable;
  * <p>This is a wrapper around the asynchronous {@link VTGateTx} class
  * that converts all methods to synchronous.
  */
+@Deprecated
 public class VTGateBlockingTx {
   private final VTGateTx tx;
 

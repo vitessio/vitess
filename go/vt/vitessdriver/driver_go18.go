@@ -26,6 +26,9 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+
+	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var (
@@ -95,10 +98,14 @@ func (s *stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driv
 	return s.c.QueryContext(ctx, s.query, args)
 }
 
-func bindVarsFromNamedValues(args []driver.NamedValue) (map[string]interface{}, error) {
-	bv := make(map[string]interface{}, len(args))
+func bindVarsFromNamedValues(args []driver.NamedValue) (map[string]*querypb.BindVariable, error) {
+	bindVars := make(map[string]*querypb.BindVariable, len(args))
 	nameUsed := false
 	for i, v := range args {
+		bv, err := sqltypes.BuildBindVariable(v.Value)
+		if err != nil {
+			return nil, err
+		}
 		if i == 0 {
 			// Determine if args are based on names or ordinals.
 			if v.Name != "" {
@@ -114,14 +121,14 @@ func bindVarsFromNamedValues(args []driver.NamedValue) (map[string]interface{}, 
 			}
 		}
 		if v.Name == "" {
-			bv[fmt.Sprintf("v%d", i+1)] = v.Value
+			bindVars[fmt.Sprintf("v%d", i+1)] = bv
 		} else {
 			if v.Name[0] == ':' || v.Name[0] == '@' {
-				bv[v.Name[1:]] = v.Value
+				bindVars[v.Name[1:]] = bv
 			} else {
-				bv[v.Name] = v.Value
+				bindVars[v.Name] = bv
 			}
 		}
 	}
-	return bv, nil
+	return bindVars, nil
 }

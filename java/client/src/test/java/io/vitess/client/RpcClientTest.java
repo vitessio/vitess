@@ -16,23 +16,6 @@
 
 package io.vitess.client;
 
-import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.google.protobuf.ByteString;
-import io.vitess.client.cursor.Cursor;
-import io.vitess.client.cursor.Row;
-import io.vitess.proto.Query;
-import io.vitess.proto.Query.Field;
-import io.vitess.proto.Query.SplitQueryRequest.Algorithm;
-import io.vitess.proto.Topodata.KeyRange;
-import io.vitess.proto.Topodata.KeyspaceIdType;
-import io.vitess.proto.Topodata.ShardReference;
-import io.vitess.proto.Topodata.SrvKeyspace;
-import io.vitess.proto.Topodata.SrvKeyspace.KeyspacePartition;
-import io.vitess.proto.Topodata.TabletType;
-import io.vitess.proto.Vtgate.SplitQueryResponse;
-import io.vitess.proto.Vtrpc.CallerID;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLDataException;
 import java.sql.SQLException;
@@ -48,12 +31,32 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+
 import org.joda.time.DateTime;
 import org.joda.time.Duration;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+
+import com.google.common.base.Throwables;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.protobuf.ByteString;
+
+import io.vitess.client.cursor.Cursor;
+import io.vitess.client.cursor.Row;
+import io.vitess.proto.Query;
+import io.vitess.proto.Query.Field;
+import io.vitess.proto.Query.SplitQueryRequest.Algorithm;
+import io.vitess.proto.Topodata.KeyRange;
+import io.vitess.proto.Topodata.KeyspaceIdType;
+import io.vitess.proto.Topodata.ShardReference;
+import io.vitess.proto.Topodata.SrvKeyspace;
+import io.vitess.proto.Topodata.SrvKeyspace.KeyspacePartition;
+import io.vitess.proto.Topodata.TabletType;
+import io.vitess.proto.Vtgate.SplitQueryResponse;
+import io.vitess.proto.Vtrpc.CallerID;
 
 /**
  * RpcClientTest tests a given implementation of RpcClient against a mock vtgate server
@@ -201,13 +204,13 @@ public abstract class RpcClientTest {
     boolean waited = false;
     while (DateTime.now().isBefore(deadline)) {
       try {
-        ctx = Context.getDefault().withDeadlineAfter(Duration.standardSeconds(4));
+        ctx = Context.getDefault().withDeadlineAfter(Duration.standardSeconds(30));
         conn.getSrvKeyspace(ctx, "small");
         // RPC succeeded. Stop testing.
         break;
       } catch (SQLTransientException e) {
         Throwable rootCause = Throwables.getRootCause(e);
-        if (!rootCause.getMessage().contains("Connection refused: ")) {
+        if (!rootCause.getMessage().contains("Connection refused")) {
           // Non-retryable exception. Fail for good.
           throw e;
         }

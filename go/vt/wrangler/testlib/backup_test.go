@@ -17,7 +17,6 @@ limitations under the License.
 package testlib
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -145,8 +144,10 @@ func TestBackupRestore(t *testing.T) {
 		},
 	}
 	destTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"cmd1",
-		"set master cmd 1",
+		"STOP SLAVE",
+		"RESET SLAVE ALL",
+		"FAKE SET SLAVE POSITION",
+		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	destTablet.FakeMysqlDaemon.Mycnf = &mysqlctl.Mycnf{
@@ -161,10 +162,8 @@ func TestBackupRestore(t *testing.T) {
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SHOW DATABASES": {},
 	}
-	destTablet.FakeMysqlDaemon.SetSlavePositionCommandsPos = sourceTablet.FakeMysqlDaemon.CurrentMasterPosition
-	destTablet.FakeMysqlDaemon.SetSlavePositionCommandsResult = []string{"cmd1"}
-	destTablet.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", master.Tablet.Hostname, master.Tablet.PortMap["mysql"])
-	destTablet.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
+	destTablet.FakeMysqlDaemon.SetSlavePositionPos = sourceTablet.FakeMysqlDaemon.CurrentMasterPosition
+	destTablet.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
 
 	destTablet.StartActionLoop(t, wr)
 	defer destTablet.StopActionLoop(t)

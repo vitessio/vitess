@@ -24,12 +24,15 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
+var _ Primitive = (*Join)(nil)
+
 // Join specifies the parameters for a join primitive.
 type Join struct {
 	Opcode JoinOpcode
 	// Left and Right are the LHS and RHS primitives
 	// of the Join. They can be any primitive.
 	Left, Right Primitive `json:",omitempty"`
+
 	// Cols defines which columns from the left
 	// or right results should be used to build the
 	// return result. For results coming from the
@@ -38,6 +41,7 @@ type Join struct {
 	// If Cols is {-1, -2, 1, 2}, it means that
 	// the returned result will be {Left0, Left1, Right0, Right1}.
 	Cols []int `json:",omitempty"`
+
 	// Vars defines the list of joinVars that need to
 	// be built from the LHS result before invoking
 	// the RHS subqquery.
@@ -45,7 +49,7 @@ type Join struct {
 }
 
 // Execute performs a non-streaming exec.
-func (jn *Join) Execute(vcursor VCursor, bindVars, joinVars map[string]interface{}, wantfields bool) (*sqltypes.Result, error) {
+func (jn *Join) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	lresult, err := jn.Left.Execute(vcursor, bindVars, joinVars, wantfields)
 	if err != nil {
 		return nil, err
@@ -53,7 +57,7 @@ func (jn *Join) Execute(vcursor VCursor, bindVars, joinVars map[string]interface
 	result := &sqltypes.Result{}
 	if len(lresult.Rows) == 0 && wantfields {
 		for k := range jn.Vars {
-			joinVars[k] = nil
+			joinVars[k] = sqltypes.NullBindVariable
 		}
 		rresult, err := jn.Right.GetFields(vcursor, bindVars, joinVars)
 		if err != nil {
@@ -64,7 +68,7 @@ func (jn *Join) Execute(vcursor VCursor, bindVars, joinVars map[string]interface
 	}
 	for _, lrow := range lresult.Rows {
 		for k, col := range jn.Vars {
-			joinVars[k] = lrow[col]
+			joinVars[k] = sqltypes.ValueBindVariable(lrow[col])
 		}
 		rresult, err := jn.Right.Execute(vcursor, bindVars, joinVars, wantfields)
 		if err != nil {
@@ -88,11 +92,11 @@ func (jn *Join) Execute(vcursor VCursor, bindVars, joinVars map[string]interface
 }
 
 // StreamExecute performs a streaming exec.
-func (jn *Join) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]interface{}, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (jn *Join) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	err := jn.Left.StreamExecute(vcursor, bindVars, joinVars, wantfields, func(lresult *sqltypes.Result) error {
 		for _, lrow := range lresult.Rows {
 			for k, col := range jn.Vars {
-				joinVars[k] = lrow[col]
+				joinVars[k] = sqltypes.ValueBindVariable(lrow[col])
 			}
 			rowSent := false
 			err := jn.Right.StreamExecute(vcursor, bindVars, joinVars, wantfields, func(rresult *sqltypes.Result) error {
@@ -129,7 +133,7 @@ func (jn *Join) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]int
 		if wantfields {
 			wantfields = false
 			for k := range jn.Vars {
-				joinVars[k] = nil
+				joinVars[k] = sqltypes.NullBindVariable
 			}
 			result := &sqltypes.Result{}
 			rresult, err := jn.Right.GetFields(vcursor, bindVars, joinVars)
@@ -145,14 +149,14 @@ func (jn *Join) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]int
 }
 
 // GetFields fetches the field info.
-func (jn *Join) GetFields(vcursor VCursor, bindVars, joinVars map[string]interface{}) (*sqltypes.Result, error) {
+func (jn *Join) GetFields(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	lresult, err := jn.Left.GetFields(vcursor, bindVars, joinVars)
 	if err != nil {
 		return nil, err
 	}
 	result := &sqltypes.Result{}
 	for k := range jn.Vars {
-		joinVars[k] = nil
+		joinVars[k] = sqltypes.NullBindVariable
 	}
 	rresult, err := jn.Right.GetFields(vcursor, bindVars, joinVars)
 	if err != nil {

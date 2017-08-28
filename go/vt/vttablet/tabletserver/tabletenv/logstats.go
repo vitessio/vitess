@@ -17,14 +17,12 @@ limitations under the License.
 package tabletenv
 
 import (
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/url"
 	"strings"
 	"time"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -48,7 +46,7 @@ type LogStats struct {
 	Target               *querypb.Target
 	PlanType             string
 	OriginalSQL          string
-	BindVariables        map[string]interface{}
+	BindVariables        map[string]*querypb.BindVariable
 	rewrittenSqls        []string
 	RowsAffected         int
 	NumberOfQueries      int
@@ -137,30 +135,22 @@ func (stats *LogStats) SizeOfResponse() int {
 // values that are strings or byte slices it only reports their type
 // and length.
 func (stats *LogStats) FmtBindVariables(full bool) string {
-	var out map[string]interface{}
+	var out map[string]*querypb.BindVariable
 	if full {
 		out = stats.BindVariables
 	} else {
 		// NOTE(szopa): I am getting rid of potentially large bind
 		// variables.
-		out = make(map[string]interface{})
+		out = make(map[string]*querypb.BindVariable)
 		for k, v := range stats.BindVariables {
-			switch val := v.(type) {
-			case string:
-				out[k] = fmt.Sprintf("string %v", len(val))
-			case []byte:
-				out[k] = fmt.Sprintf("bytes %v", len(val))
-			default:
+			if sqltypes.IsIntegral(v.Type) || sqltypes.IsFloat(v.Type) {
 				out[k] = v
+			} else {
+				out[k] = sqltypes.StringBindVariable(fmt.Sprintf("%v bytes", len(v.Value)))
 			}
 		}
 	}
-	b, err := json.Marshal(out)
-	if err != nil {
-		log.Warningf("could not marshal %q", stats.BindVariables)
-		return ""
-	}
-	return string(b)
+	return fmt.Sprintf("%v", out)
 }
 
 // FmtQuerySources returns a comma separated list of query

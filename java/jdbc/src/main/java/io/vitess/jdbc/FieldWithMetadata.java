@@ -113,14 +113,17 @@ public class FieldWithMetadata {
                 }
                 this.isSingleBit = this.javaType == Types.BIT && (field.getColumnLength() == 0 || field.getColumnLength() == 1);
 
-                // The server sends back a VARBINARY field whenever varchar/text data is stored on disk as binary, but
+                // The server sends back a BINARY/VARBINARY field whenever varchar/text data is stored on disk as binary, but
                 // that doesn't mean the data is actually binary. For instance, a field with collation ascii_bin
                 // gets stored on disk as bytes for case-sensitive comparison, but is still an ascii string.
-                // Re-map these VARBINARY types to VARCHAR when the data is not actually
+                // Re-map these BINARY/VARBINARY types to CHAR/VARCHAR when the data is not actually
                 // binary encoded
                 boolean isBinaryEncoded = isBinary() && collationIndex == CharsetMapping.MYSQL_COLLATION_INDEX_binary;
                 if (javaType == Types.VARBINARY && !isBinaryEncoded) {
                     this.javaType = Types.VARCHAR;
+                }
+                if (javaType == Types.BINARY && !isBinaryEncoded) {
+                    this.javaType = Types.CHAR;
                 }
             } else {
                 // Default encoding for number-types and date-types
@@ -160,6 +163,10 @@ public class FieldWithMetadata {
                 }
             }
         } else {
+            // MySQL always encodes JSON data with utf8mb4. Discard whatever else we've found, if the type is JSON
+            if (vitessType == Query.Type.JSON) {
+                this.encoding = "UTF-8";
+            }
             // Defaults to appease final variables when not including all fields
             this.isImplicitTempTable = false;
             this.isSingleBit = false;
@@ -346,7 +353,7 @@ public class FieldWithMetadata {
 
         // Detect CHAR(n) CHARACTER SET BINARY which is a synonym for fixed-length binary types
         if (this.collationIndex == CharsetMapping.MYSQL_COLLATION_INDEX_binary && isBinary()
-            && (this.javaType == Types.CHAR || this.javaType == Types.VARCHAR)) {
+            && (this.vitessType == Query.Type.CHAR || this.vitessType == Query.Type.VARCHAR)) {
             // Okay, queries resolved by temp tables also have this 'signature', check for that
             return !isImplicitTemporaryTable();
         }

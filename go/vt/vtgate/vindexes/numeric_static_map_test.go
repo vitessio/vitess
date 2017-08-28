@@ -63,16 +63,15 @@ func TestNumericStaticMapMap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create vindex: %v", err)
 	}
-	sqlVal, _ := sqltypes.BuildIntegral("8")
-	got, err := numericStaticMap.(Unique).Map(nil, []interface{}{
-		1,
-		int32(2),
-		int64(3),
-		uint(4),
-		uint32(5),
-		uint64(6),
-		[]byte("7"),
-		sqlVal,
+	got, err := numericStaticMap.(Unique).Map(nil, []sqltypes.Value{
+		sqltypes.NewInt64(1),
+		sqltypes.NewInt64(2),
+		sqltypes.NewInt64(3),
+		sqltypes.NewInt64(4),
+		sqltypes.NewInt64(5),
+		sqltypes.NewInt64(6),
+		sqltypes.NewInt64(7),
+		sqltypes.NewInt64(8),
 	})
 	if err != nil {
 		t.Error(err)
@@ -100,8 +99,8 @@ func TestNumericStaticMapMapBadData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create vindex: %v", err)
 	}
-	_, err = numericStaticMap.(Unique).Map(nil, []interface{}{1.1})
-	want := `NumericStaticMap.Map: getNumber: unexpected type for 1.1: float64`
+	_, err = numericStaticMap.(Unique).Map(nil, []sqltypes.Value{sqltypes.NewFloat64(1.1)})
+	want := `NumericStaticMap.Map: could not parse value: 1.1`
 	if err == nil || err.Error() != want {
 		t.Errorf("NumericStaticMap.Map: %v, want %v", err, want)
 	}
@@ -112,38 +111,21 @@ func TestNumericStaticMapVerify(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create vindex: %v", err)
 	}
-	success, err := numericStaticMap.Verify(nil, []interface{}{1}, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
+	got, err := numericStaticMap.Verify(nil,
+		[]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
+		[][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01"), []byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
 	if err != nil {
 		t.Error(err)
 	}
-	if !success {
-		t.Errorf("Verify(): %+v, want true", success)
-	}
-}
-
-func TestNumericStaticMapVerifyNeg(t *testing.T) {
-	numericStaticMap, err := createVindex()
-	if err != nil {
-		t.Fatalf("failed to create vindex: %v", err)
-	}
-	_, err = numericStaticMap.Verify(nil, []interface{}{1, 2}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
-	want := "NumericStaticMap.Verify: length of ids 2 doesn't match length of ksids 1"
-	if err.Error() != want {
-		t.Error(err.Error())
+	want := []bool{true, false}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("lhu.Verify(match): %v, want %v", got, want)
 	}
 
-	_, err = numericStaticMap.Verify(nil, []interface{}{1.1}, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
-	want = `NumericStaticMap.Verify: getNumber: unexpected type for 1.1: float64`
-	if err == nil || err.Error() != want {
-		t.Errorf("numericStaticMap.Map: %v, want %v", err, want)
+	// Failure test
+	_, err = numericStaticMap.Verify(nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
+	wantErr := "NumericStaticMap.Verify: could not parse value: aa"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("hash.Verify err: %v, want %s", err, wantErr)
 	}
-
-	success, err := numericStaticMap.Verify(nil, []interface{}{1}, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x02")})
-	if err != nil {
-		t.Errorf(err.Error())
-	}
-	if success {
-		t.Errorf("Numeric.Verify(): %+v, want false", success)
-	}
-
 }

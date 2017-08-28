@@ -164,7 +164,7 @@ func TestExec(t *testing.T) {
 	}
 	defer s2.Close()
 
-	_, err = s2.Exec(nil)
+	_, err = s2.Exec()
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, does not contain %s", err, want)
@@ -296,7 +296,7 @@ func TestQuery(t *testing.T) {
 		}
 		defer s2.Close()
 
-		rows, err := s2.Query(nil)
+		rows, err := s2.Query()
 		want := "no match for: none"
 		if tc.config.Streaming && err == nil {
 			defer rows.Close()

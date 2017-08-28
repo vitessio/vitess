@@ -51,6 +51,15 @@ var executorVSchema = `
 				"to": "user_id"
 			}
 		},
+		"insert_ignore_idx": {
+			"type": "lookup_hash",
+			"owner": "insert_ignore_test",
+			"params": {
+				"table": "ins_lookup",
+				"from": "fromcol",
+				"to": "tocol"
+			}
+		},
 		"idx1": {
 			"type": "hash"
 		},
@@ -127,6 +136,22 @@ var executorVSchema = `
 				}
 			]
 		},
+		"insert_ignore_test": {
+			"column_vindexes": [
+				{
+					"column": "pv",
+					"name": "music_user_map"
+				},
+				{
+					"column": "owned",
+					"name": "insert_ignore_idx"
+				},
+				{
+					"column": "verify",
+					"name": "user_index"
+				}
+			]
+		},
 		"noauto_table": {
 			"column_vindexes": [
 				{
@@ -164,6 +189,7 @@ var unshardedVSchema = `
 		},
 		"music_user_map": {},
 		"name_user_map": {},
+		"ins_lookup": {},
 		"main1": {
 			"auto_increment": {
 				"column": "id",
@@ -174,6 +200,8 @@ var unshardedVSchema = `
 	}
 }
 `
+
+const testBufferSize = 10
 
 func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
@@ -195,16 +223,18 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	createSandbox(KsTestUnsharded)
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
 
-	bad := createSandbox("TestBadSharding")
+	// Ues the 'X' in the name to ensure it's not alphabetically first.
+	// Otherwise, it would become the default keyspace for the dual table.
+	bad := createSandbox("TestXBadSharding")
 	bad.VSchema = badVSchema
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	executor = NewExecutor(context.Background(), serv, cell, "", resolver, false)
+	executor = NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize)
 	return executor, sbc1, sbc2, sbclookup
 }
 
-func executorExec(executor *Executor, sql string, bv map[string]interface{}) (*sqltypes.Result, error) {
+func executorExec(executor *Executor, sql string, bv map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return executor.Execute(context.Background(),
 		masterSession,
 		sql,
@@ -212,7 +242,7 @@ func executorExec(executor *Executor, sql string, bv map[string]interface{}) (*s
 }
 
 func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err error) {
-	results := make(chan *sqltypes.Result, 10)
+	results := make(chan *sqltypes.Result, 100)
 	err = executor.StreamExecute(
 		context.Background(),
 		masterSession,
@@ -237,7 +267,6 @@ func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err er
 			first = false
 		}
 		qr.Rows = append(qr.Rows, r.Rows...)
-		qr.RowsAffected += r.RowsAffected
 	}
 	return qr, nil
 }

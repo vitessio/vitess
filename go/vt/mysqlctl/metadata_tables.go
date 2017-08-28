@@ -79,14 +79,8 @@ func populateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string)
 		return err
 	}
 	for name, val := range localMetadata {
-		nameValue, err := sqltypes.BuildValue(name)
-		if err != nil {
-			return err
-		}
-		valValue, err := sqltypes.BuildValue(val)
-		if err != nil {
-			return err
-		}
+		nameValue := sqltypes.NewVarChar(name)
+		valValue := sqltypes.NewVarChar(val)
 
 		queryBuf := bytes.Buffer{}
 		queryBuf.WriteString("INSERT INTO _vt.local_metadata (name,value) VALUES (")

@@ -25,6 +25,7 @@ import (
 	"path"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -71,29 +72,24 @@ func (th *testHandler) NewConnection(c *Conn) {
 func (th *testHandler) ConnectionClosed(c *Conn) {
 }
 
-func (th *testHandler) ComQuery(c *Conn, q []byte) (*sqltypes.Result, error) {
-	query := string(q)
-	if query == "error" {
-		return nil, NewSQLError(ERUnknownComError, SSUnknownComError, "forced query handling error for: %v", query)
-	}
-
-	if query == "panic" {
+func (th *testHandler) ComQuery(c *Conn, q []byte, callback func(*sqltypes.Result) error) error {
+	switch query := string(q); query {
+	case "error":
+		return NewSQLError(ERUnknownComError, SSUnknownComError, "forced query handling error for: %v", query)
+	case "panic":
 		panic("test panic attack!")
-	}
-
-	if query == "select rows" {
-		return selectRowsResult, nil
-	}
-
-	if query == "insert" {
-		return &sqltypes.Result{
+	case "select rows":
+		callback(selectRowsResult)
+	case "error after send":
+		callback(selectRowsResult)
+		return NewSQLError(ERUnknownComError, SSUnknownComError, "forced query handling error for: %v", query)
+	case "insert":
+		callback(&sqltypes.Result{
 			RowsAffected: 123,
 			InsertID:     123456789,
-		}, nil
-	}
-
-	if query == "schema echo" {
-		return &sqltypes.Result{
+		})
+	case "schema echo":
+		callback(&sqltypes.Result{
 			Fields: []*querypb.Field{
 				{
 					Name: "schema_name",
@@ -105,15 +101,13 @@ func (th *testHandler) ComQuery(c *Conn, q []byte) (*sqltypes.Result, error) {
 					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(c.SchemaName)),
 				},
 			},
-		}, nil
-	}
-
-	if query == "ssl echo" {
+		})
+	case "ssl echo":
 		value := "OFF"
 		if c.Capabilities&CapabilityClientSSL > 0 {
 			value = "ON"
 		}
-		return &sqltypes.Result{
+		callback(&sqltypes.Result{
 			Fields: []*querypb.Field{
 				{
 					Name: "ssl_flag",
@@ -125,11 +119,9 @@ func (th *testHandler) ComQuery(c *Conn, q []byte) (*sqltypes.Result, error) {
 					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(value)),
 				},
 			},
-		}, nil
-	}
-
-	if query == "userData echo" {
-		return &sqltypes.Result{
+		})
+	case "userData echo":
+		callback(&sqltypes.Result{
 			Fields: []*querypb.Field{
 				{
 					Name: "user",
@@ -146,10 +138,11 @@ func (th *testHandler) ComQuery(c *Conn, q []byte) (*sqltypes.Result, error) {
 					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(c.UserData.Get().Username)),
 				},
 			},
-		}, nil
+		})
+	default:
+		callback(&sqltypes.Result{})
 	}
-
-	return &sqltypes.Result{}, nil
+	return nil
 }
 
 func TestClientFoundRows(t *testing.T) {
@@ -235,6 +228,12 @@ func TestServer(t *testing.T) {
 		Pass:  "password1",
 	}
 
+	initialTimingCounts := timings.Counts()
+	initialConnAccept := connAccept.Get()
+	initialConnSlow := connSlow.Get()
+
+	l.SlowConnectWarnThreshold = time.Duration(time.Nanosecond * 1)
+
 	// Run an 'error' command.
 	output, ok := runMysql(t, params, "error")
 	if ok {
@@ -244,6 +243,32 @@ func TestServer(t *testing.T) {
 		!strings.Contains(output, "forced query handling error for") {
 		t.Errorf("Unexpected output for 'error'")
 	}
+	if connCount.Get() != 0 {
+		t.Errorf("Expected ConnCount=0, got %d", connCount.Get())
+	}
+	if connAccept.Get()-initialConnAccept != 1 {
+		t.Errorf("Expected ConnAccept delta=1, got %d", connAccept.Get()-initialConnAccept)
+	}
+	if connSlow.Get()-initialConnSlow != 1 {
+		t.Errorf("Expected ConnSlow delta=1, got %d", connSlow.Get()-initialConnSlow)
+	}
+
+	expectedTimingDeltas := map[string]int64{
+		"All":            2,
+		connectTimingKey: 1,
+		queryTimingKey:   1,
+	}
+	gotTimingCounts := timings.Counts()
+	for key, got := range gotTimingCounts {
+		expected := expectedTimingDeltas[key]
+		delta := got - initialTimingCounts[key]
+		if delta < expected {
+			t.Errorf("Expected Timing count delta %s should be >= %d, got %d", key, expected, delta)
+		}
+	}
+
+	// Set the slow connect threshold to something high that we don't expect to trigger
+	l.SlowConnectWarnThreshold = time.Duration(time.Second * 1)
 
 	// Run a 'panic' command, other side should panic, recover and
 	// close the connection.
@@ -255,6 +280,15 @@ func TestServer(t *testing.T) {
 		!strings.Contains(output, "Lost connection to MySQL server during query") {
 		t.Errorf("Unexpected output for 'panic'")
 	}
+	if connCount.Get() != 0 {
+		t.Errorf("Expected ConnCount=0, got %d", connCount.Get())
+	}
+	if connAccept.Get()-initialConnAccept != 2 {
+		t.Errorf("Expected ConnAccept delta=2, got %d", connAccept.Get()-initialConnAccept)
+	}
+	if connSlow.Get()-initialConnSlow != 1 {
+		t.Errorf("Expected ConnSlow delta=1, got %d", connSlow.Get()-initialConnSlow)
+	}
 
 	// Run a 'select rows' command with results.
 	output, ok = runMysql(t, params, "select rows")
@@ -265,6 +299,17 @@ func TestServer(t *testing.T) {
 		!strings.Contains(output, "nicer name") ||
 		!strings.Contains(output, "2 rows in set") {
 		t.Errorf("Unexpected output for 'select rows'")
+	}
+
+	// If there's an error after streaming has started,
+	// we should get a 2013
+	output, ok = runMysql(t, params, "error after send")
+	if ok {
+		t.Fatalf("mysql should have failed: %v", output)
+	}
+	if !strings.Contains(output, "ERROR 2013 (HY000)") ||
+		!strings.Contains(output, "Lost connection to MySQL server during query") {
+		t.Errorf("Unexpected output for 'panic'")
 	}
 
 	// Run an 'insert' command, no rows, but rows affected.
@@ -497,7 +542,13 @@ func TestTLSServer(t *testing.T) {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	host := l.Addr().(*net.TCPAddr).IP.String()
+
+	// Make sure hostname is added as an entry to /etc/hosts, otherwise ssl handshake will fail
+	host, err := os.Hostname()
+	if err != nil {
+		t.Fatalf("Failed to get os Hostname: %v", err)
+	}
+
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.

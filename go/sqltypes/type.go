@@ -39,79 +39,103 @@ const (
 // IsIntegral returns true if querypb.Type is an integral
 // (signed/unsigned) that can be represented using
 // up to 64 binary bits.
+// If you have a Value object, use its member function.
 func IsIntegral(t querypb.Type) bool {
 	return int(t)&flagIsIntegral == flagIsIntegral
 }
 
 // IsSigned returns true if querypb.Type is a signed integral.
+// If you have a Value object, use its member function.
 func IsSigned(t querypb.Type) bool {
 	return int(t)&(flagIsIntegral|flagIsUnsigned) == flagIsIntegral
 }
 
 // IsUnsigned returns true if querypb.Type is an unsigned integral.
 // Caution: this is not the same as !IsSigned.
+// If you have a Value object, use its member function.
 func IsUnsigned(t querypb.Type) bool {
 	return int(t)&(flagIsIntegral|flagIsUnsigned) == flagIsIntegral|flagIsUnsigned
 }
 
 // IsFloat returns true is querypb.Type is a floating point.
+// If you have a Value object, use its member function.
 func IsFloat(t querypb.Type) bool {
 	return int(t)&flagIsFloat == flagIsFloat
 }
 
 // IsQuoted returns true if querypb.Type is a quoted text or binary.
+// If you have a Value object, use its member function.
 func IsQuoted(t querypb.Type) bool {
 	return int(t)&flagIsQuoted == flagIsQuoted
 }
 
 // IsText returns true if querypb.Type is a text.
+// If you have a Value object, use its member function.
 func IsText(t querypb.Type) bool {
 	return int(t)&flagIsText == flagIsText
 }
 
 // IsBinary returns true if querypb.Type is a binary.
+// If you have a Value object, use its member function.
 func IsBinary(t querypb.Type) bool {
 	return int(t)&flagIsBinary == flagIsBinary
 }
 
+// isNumber returns true if the type is any type of number.
+func isNumber(t querypb.Type) bool {
+	return IsIntegral(t) || IsFloat(t) || t == Decimal
+}
+
 // Vitess data types. These are idiomatically
 // named synonyms for the querypb.Type values.
+// Although these constants are interchangeable,
+// they should be treated as different from querypb.Type.
+// Use the synonyms only to refer to the type in Value.
+// For proto variables, use the querypb.Type constants
+// instead.
+// The following conditions are non-overlapping
+// and cover all types: IsSigned(), IsUnsigned(),
+// IsFloat(), IsQuoted(), Null, Decimal, Expression.
+// Also, IsIntegral() == (IsSigned()||IsUnsigned()).
+// TestCategory needs to be updated accordingly if
+// you add a new type.
+// If IsBinary or IsText is true, then IsQuoted is
+// also true. But there are IsQuoted types that are
+// neither binary or text.
+// querypb.Type_TUPLE is not included in this list
+// because it's not a valid Value type.
 const (
-	Null      = querypb.Type_NULL_TYPE
-	Int8      = querypb.Type_INT8
-	Uint8     = querypb.Type_UINT8
-	Int16     = querypb.Type_INT16
-	Uint16    = querypb.Type_UINT16
-	Int24     = querypb.Type_INT24
-	Uint24    = querypb.Type_UINT24
-	Int32     = querypb.Type_INT32
-	Uint32    = querypb.Type_UINT32
-	Int64     = querypb.Type_INT64
-	Uint64    = querypb.Type_UINT64
-	Float32   = querypb.Type_FLOAT32
-	Float64   = querypb.Type_FLOAT64
-	Timestamp = querypb.Type_TIMESTAMP
-	Date      = querypb.Type_DATE
-	Time      = querypb.Type_TIME
-	Datetime  = querypb.Type_DATETIME
-	Year      = querypb.Type_YEAR
-	Decimal   = querypb.Type_DECIMAL
-	Text      = querypb.Type_TEXT
-	Blob      = querypb.Type_BLOB
-	VarChar   = querypb.Type_VARCHAR
-	VarBinary = querypb.Type_VARBINARY
-	Char      = querypb.Type_CHAR
-	Binary    = querypb.Type_BINARY
-	Bit       = querypb.Type_BIT
-	Enum      = querypb.Type_ENUM
-	Set       = querypb.Type_SET
-	Tuple     = querypb.Type_TUPLE
-	Geometry  = querypb.Type_GEOMETRY
-	TypeJSON  = querypb.Type_JSON
-
-	// TypeSQL is exposed here in the code, but not in the proto file.
-	// This is an internal type used for binlogs only.
-	TypeSQL = querypb.Type(245)
+	Null       = querypb.Type_NULL_TYPE
+	Int8       = querypb.Type_INT8
+	Uint8      = querypb.Type_UINT8
+	Int16      = querypb.Type_INT16
+	Uint16     = querypb.Type_UINT16
+	Int24      = querypb.Type_INT24
+	Uint24     = querypb.Type_UINT24
+	Int32      = querypb.Type_INT32
+	Uint32     = querypb.Type_UINT32
+	Int64      = querypb.Type_INT64
+	Uint64     = querypb.Type_UINT64
+	Float32    = querypb.Type_FLOAT32
+	Float64    = querypb.Type_FLOAT64
+	Timestamp  = querypb.Type_TIMESTAMP
+	Date       = querypb.Type_DATE
+	Time       = querypb.Type_TIME
+	Datetime   = querypb.Type_DATETIME
+	Year       = querypb.Type_YEAR
+	Decimal    = querypb.Type_DECIMAL
+	Text       = querypb.Type_TEXT
+	Blob       = querypb.Type_BLOB
+	VarChar    = querypb.Type_VARCHAR
+	VarBinary  = querypb.Type_VARBINARY
+	Char       = querypb.Type_CHAR
+	Binary     = querypb.Type_BINARY
+	Bit        = querypb.Type_BIT
+	Enum       = querypb.Type_ENUM
+	Set        = querypb.Type_SET
+	Geometry   = querypb.Type_GEOMETRY
+	TypeJSON   = querypb.Type_JSON
+	Expression = querypb.Type_EXPRESSION
 )
 
 // bit-shift the mysql flags by two byte so we

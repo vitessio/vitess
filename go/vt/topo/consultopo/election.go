@@ -74,6 +74,13 @@ type consulMasterParticipation struct {
 
 // WaitForMastership is part of the topo.MasterParticipation interface.
 func (mp *consulMasterParticipation) WaitForMastership() (context.Context, error) {
+	// If Stop was already called, mp.done is closed, so we are interrupted.
+	select {
+	case <-mp.done:
+		return nil, topo.ErrInterrupted
+	default:
+	}
+
 	// Try to lock until mp.stop is closed.
 	lost, err := mp.lock.Lock(mp.stop)
 	if err != nil {

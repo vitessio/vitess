@@ -24,6 +24,7 @@ import io.vitess.client.cursor.SimpleCursor;
 import io.vitess.proto.Query;
 import io.vitess.util.Constants;
 import io.vitess.util.StringUtils;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.Reader;
 import java.io.UnsupportedEncodingException;
@@ -800,8 +801,26 @@ public class VitessResultSet implements ResultSet {
     }
 
     public InputStream getBinaryStream(int columnIndex) throws SQLException {
-        throw new SQLFeatureNotSupportedException(
-            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+        preAccessor(columnIndex);
+        if (isNull(columnIndex)) {
+            return null;
+        }
+        FieldWithMetadata field = this.fields.get(columnIndex - 1);
+        switch (field.getJavaType()) {
+            case Types.BIT:
+            case Types.BINARY:
+            case Types.VARBINARY:
+            case Types.BLOB:
+            case Types.LONGVARBINARY:
+                return this.row.getBinaryInputStream(columnIndex);
+        }
+
+        byte[] bytes = getBytes(columnIndex);
+
+        if (bytes != null) {
+            return new ByteArrayInputStream(bytes);
+        }
+        return null;
     }
 
     public InputStream getAsciiStream(String columnLabel) throws SQLException {
@@ -815,8 +834,8 @@ public class VitessResultSet implements ResultSet {
     }
 
     public InputStream getBinaryStream(String columnLabel) throws SQLException {
-        throw new SQLFeatureNotSupportedException(
-            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+        int columnIndex = this.findColumn(columnLabel);
+        return getBinaryStream(columnIndex);
     }
 
     public String getCursorName() throws SQLException {

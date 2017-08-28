@@ -48,6 +48,7 @@ spec:
           chown -R vitess /vt
 
           su -p -s /bin/bash -c "/vt/bin/vttablet
+          -binlog_use_v3_resharding_mode
           -topo_implementation etcd
           -etcd_global_addrs http://etcd-global:4001
           -log_dir $VTDATAROOT/tmp

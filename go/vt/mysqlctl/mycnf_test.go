@@ -30,7 +30,8 @@ var MycnfPath = "/tmp/my.cnf"
 
 func TestMycnf(t *testing.T) {
 	os.Setenv("MYSQL_FLAVOR", "MariaDB")
-	cnf := NewMycnf(11111, 6802)
+	uid := uint32(11111)
+	cnf := NewMycnf(uid, 6802)
 	// Assigning ServerID to be different from tablet UID to make sure that there are no
 	// assumptions in the code that those IDs are the same.
 	cnf.ServerID = 22222
@@ -58,7 +59,9 @@ func TestMycnf(t *testing.T) {
 		t.Errorf("failed reading, err %v", err)
 		return
 	}
-	mycnf, err := ReadMycnf(MycnfPath)
+	mycnf := NewMycnf(uid, 0)
+	mycnf.path = MycnfPath
+	mycnf, err = ReadMycnf(mycnf)
 	if err != nil {
 		t.Errorf("failed reading, err %v", err)
 	} else {

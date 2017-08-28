@@ -27,8 +27,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"github.com/youtube/vitess/go/netutil"
-
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -200,16 +198,50 @@ func MakeStringTypeList(types []topodatapb.TabletType) []string {
 	return strs
 }
 
-// TabletAddr returns hostname:vt port associated with a tablet
-func TabletAddr(tablet *topodatapb.Tablet) string {
-	return netutil.JoinHostPort(tablet.Hostname, tablet.PortMap["vt"])
+// SetMysqlPort sets the mysql port for tablet. This function
+// also handles legacy by setting the port in PortMap.
+// TODO(sougou); deprecate this function after 3.0.
+func SetMysqlPort(tablet *topodatapb.Tablet, port int32) {
+	if tablet.MysqlHostname == "" || tablet.MysqlHostname == tablet.Hostname {
+		tablet.PortMap["mysql"] = port
+	}
+	// If it's the legacy form, preserve old behavior to prevent
+	// confusion between new and old code.
+	if tablet.MysqlHostname != "" {
+		tablet.MysqlPort = port
+	}
 }
 
-// TabletIP returns the tablet's IP by resolving the host name.
-// TODO(sougou): The only use case for this is in validator, which
-// should be changed to use the upcoming MySQLIP function instead.
-func TabletIP(tablet *topodatapb.Tablet) (string, error) {
-	ipAddrs, err := net.LookupHost(tablet.Hostname)
+// MysqlAddr returns the host:port of the mysql server.
+func MysqlAddr(tablet *topodatapb.Tablet) string {
+	return fmt.Sprintf("%v:%v", MysqlHostname(tablet), MysqlPort(tablet))
+}
+
+// MysqlHostname returns the mysql host name. This function
+// also handles legacy behavior: it uses the tablet's hostname
+// if MysqlHostname is not specified.
+// TODO(sougou); deprecate this function after 3.0.
+func MysqlHostname(tablet *topodatapb.Tablet) string {
+	if tablet.MysqlHostname == "" {
+		return tablet.Hostname
+	}
+	return tablet.MysqlHostname
+}
+
+// MysqlPort returns the mysql port. This function
+// also handles legacy behavior: it uses the tablet's port map
+// if MysqlHostname is not specified.
+// TODO(sougou); deprecate this function after 3.0.
+func MysqlPort(tablet *topodatapb.Tablet) int32 {
+	if tablet.MysqlHostname == "" {
+		return tablet.PortMap["mysql"]
+	}
+	return tablet.MysqlPort
+}
+
+// MySQLIP returns the MySQL server's IP by resolvign the host name.
+func MySQLIP(tablet *topodatapb.Tablet) (string, error) {
+	ipAddrs, err := net.LookupHost(MysqlHostname(tablet))
 	if err != nil {
 		return "", err
 	}

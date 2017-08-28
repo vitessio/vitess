@@ -117,6 +117,32 @@ func TestStreamerParseRBRUpdateEvent(t *testing.T) {
 	updateRows.DataColumns.Set(0, true)
 	updateRows.DataColumns.Set(1, true)
 
+	// Do an update packet with an identify set to NULL, and a
+	// value set to NULL.
+	updateRowsNull := mysql.Rows{
+		Flags:           0x1234,
+		IdentifyColumns: mysql.NewServerBitmap(2),
+		DataColumns:     mysql.NewServerBitmap(2),
+		Rows: []mysql.Row{
+			{
+				NullIdentifyColumns: mysql.NewServerBitmap(2),
+				NullColumns:         mysql.NewServerBitmap(2),
+				Identify: []byte{
+					0x10, 0x20, 0x30, 0x40, // long
+				},
+				Data: []byte{
+					0x10, 0x20, 0x30, 0x40, // long
+				},
+			},
+		},
+	}
+	updateRowsNull.IdentifyColumns.Set(0, true)
+	updateRowsNull.IdentifyColumns.Set(1, true)
+	updateRowsNull.DataColumns.Set(0, true)
+	updateRowsNull.DataColumns.Set(1, true)
+	updateRowsNull.Rows[0].NullIdentifyColumns.Set(1, true)
+	updateRowsNull.Rows[0].NullColumns.Set(1, true)
+
 	// Do a delete packet with all fields set.
 	deleteRows := mysql.Rows{
 		Flags:           0x1234,
@@ -145,6 +171,7 @@ func TestStreamerParseRBRUpdateEvent(t *testing.T) {
 			SQL:      "BEGIN"}),
 		mysql.NewWriteRowsEvent(f, s, tableID, insertRows),
 		mysql.NewUpdateRowsEvent(f, s, tableID, updateRows),
+		mysql.NewUpdateRowsEvent(f, s, tableID, updateRowsNull),
 		mysql.NewDeleteRowsEvent(f, s, tableID, deleteRows),
 		mysql.NewXIDEvent(f, s),
 	}
@@ -177,6 +204,19 @@ func TestStreamerParseRBRUpdateEvent(t *testing.T) {
 					Statement: &binlogdatapb.BinlogTransaction_Statement{
 						Category: binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
 						Sql:      []byte("UPDATE vt_a SET id=1076895760, message='abcd' WHERE id=1076895760 AND message='abc'"),
+					},
+					Table: "vt_a",
+				},
+				{
+					Statement: &binlogdatapb.BinlogTransaction_Statement{
+						Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+						Sql:      []byte("SET TIMESTAMP=1407805592"),
+					},
+				},
+				{
+					Statement: &binlogdatapb.BinlogTransaction_Statement{
+						Category: binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
+						Sql:      []byte("UPDATE vt_a SET id=1076895760, message=NULL WHERE id=1076895760 AND message IS NULL"),
 					},
 					Table: "vt_a",
 				},

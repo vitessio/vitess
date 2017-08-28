@@ -33,7 +33,7 @@ func (s *Server) ListDir(ctx context.Context, cell, dirPath string) ([]string, e
 		return nil, err
 	}
 	nodePath := path.Join(c.root, dirPath) + "/"
-	resp, err := s.global.cli.Get(ctx, nodePath,
+	resp, err := c.cli.Get(ctx, nodePath,
 		clientv3.WithPrefix(),
 		clientv3.WithSort(clientv3.SortByKey, clientv3.SortAscend),
 		clientv3.WithKeysOnly())

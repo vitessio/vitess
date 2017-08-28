@@ -44,7 +44,7 @@ func TestReaderReadHeartbeat(t *testing.T) {
 			{Name: "ts", Type: sqltypes.Int64},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", now.Add(-10*time.Second).UnixNano()))),
+			sqltypes.NewInt64(now.Add(-10 * time.Second).UnixNano()),
 		}},
 	})
 
@@ -115,7 +115,7 @@ func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {
 	tr.dbName = sqlparser.Backtick(dbc.SidecarDBName)
 	tr.keyspaceShard = "test:0"
 	tr.now = nowFunc
-	tr.pool.Open(&dbc.App, &dbc.Dba)
+	tr.pool.Open(&dbc.App, &dbc.Dba, &dbc.AppDebug)
 
 	return tr
 }

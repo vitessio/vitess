@@ -22,7 +22,6 @@ import (
 	"io"
 	"math/rand"
 	"reflect"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -36,8 +35,6 @@ import (
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/messager"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -705,10 +702,10 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 			{Type: sqltypes.VarBinary},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("dtid0")),
-			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
-			sqltypes.MakeString([]byte("")),
-			sqltypes.MakeString([]byte("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */")),
+			sqltypes.NewVarBinary("dtid0"),
+			sqltypes.NewInt64(RedoStatePrepared),
+			sqltypes.NewVarBinary(""),
+			sqltypes.NewVarBinary("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"),
 		}},
 	})
 	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
@@ -732,20 +729,20 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 			{Type: sqltypes.VarBinary},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("bogus")),
-			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
-			sqltypes.MakeString([]byte("")),
-			sqltypes.MakeString([]byte("bogus")),
+			sqltypes.NewVarBinary("bogus"),
+			sqltypes.NewInt64(RedoStatePrepared),
+			sqltypes.NewVarBinary(""),
+			sqltypes.NewVarBinary("bogus"),
 		}, {
-			sqltypes.MakeString([]byte("a:b:10")),
-			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
-			sqltypes.MakeString([]byte("")),
-			sqltypes.MakeString([]byte("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */")),
+			sqltypes.NewVarBinary("a:b:10"),
+			sqltypes.NewInt64(RedoStatePrepared),
+			sqltypes.NewVarBinary(""),
+			sqltypes.NewVarBinary("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"),
 		}, {
-			sqltypes.MakeString([]byte("a:b:20")),
-			sqltypes.MakeString([]byte(strconv.Itoa(RedoStateFailed))),
-			sqltypes.MakeString([]byte("")),
-			sqltypes.MakeString([]byte("unused")),
+			sqltypes.NewVarBinary("a:b:20"),
+			sqltypes.NewInt64(RedoStateFailed),
+			sqltypes.NewVarBinary(""),
+			sqltypes.NewVarBinary("unused"),
 		}},
 	})
 	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
@@ -858,9 +855,9 @@ func TestTabletServerReadTransaction(t *testing.T) {
 			{Type: sqltypes.Uint64},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("aa")),
-			sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_PREPARE)))),
-			sqltypes.MakeString([]byte("1")),
+			sqltypes.NewVarBinary("aa"),
+			sqltypes.NewInt64(int64(querypb.TransactionState_PREPARE)),
+			sqltypes.NewVarBinary("1"),
 		}},
 	}
 	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
@@ -870,11 +867,11 @@ func TestTabletServerReadTransaction(t *testing.T) {
 			{Type: sqltypes.VarBinary},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("test1")),
-			sqltypes.MakeString([]byte("0")),
+			sqltypes.NewVarBinary("test1"),
+			sqltypes.NewVarBinary("0"),
 		}, {
-			sqltypes.MakeString([]byte("test2")),
-			sqltypes.MakeString([]byte("1")),
+			sqltypes.NewVarBinary("test2"),
+			sqltypes.NewVarBinary("1"),
 		}},
 	})
 	got, err = tsv.ReadTransaction(ctx, &target, "aa")
@@ -906,9 +903,9 @@ func TestTabletServerReadTransaction(t *testing.T) {
 			{Type: sqltypes.Uint64},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("aa")),
-			sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_COMMIT)))),
-			sqltypes.MakeString([]byte("1")),
+			sqltypes.NewVarBinary("aa"),
+			sqltypes.NewInt64(int64(querypb.TransactionState_COMMIT)),
+			sqltypes.NewVarBinary("1"),
 		}},
 	}
 	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
@@ -928,9 +925,9 @@ func TestTabletServerReadTransaction(t *testing.T) {
 			{Type: sqltypes.Uint64},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("aa")),
-			sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_ROLLBACK)))),
-			sqltypes.MakeString([]byte("1")),
+			sqltypes.NewVarBinary("aa"),
+			sqltypes.NewInt64(int64(querypb.TransactionState_ROLLBACK)),
+			sqltypes.NewVarBinary("1"),
 		}},
 	}
 	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
@@ -995,7 +992,7 @@ func TestTabletServerCommitTransaction(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeString([]byte("row01"))},
+			{sqltypes.NewVarBinary("row01")},
 		},
 	}
 	db.AddQuery(executeSQL, executeSQLResult)
@@ -1058,7 +1055,7 @@ func TestTabletServerRollback(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeString([]byte("row01"))},
+			{sqltypes.NewVarBinary("row01")},
 		},
 	}
 	db.AddQuery(executeSQL, executeSQLResult)
@@ -1161,7 +1158,7 @@ func TestTabletServerStreamExecute(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeString([]byte("row01"))},
+			{sqltypes.NewVarBinary("row01")},
 		},
 	}
 	db.AddQuery(executeSQL, executeSQLResult)
@@ -1187,9 +1184,9 @@ func TestTabletServerExecuteBatch(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
 	testUtils := newTestUtils()
-	sql := "insert into test_table values (1, 2)"
+	sql := "insert into test_table values (1, 2, 'addr', 'name')"
 	sqlResult := &sqltypes.Result{}
-	expanedSQL := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
+	expanedSQL := "insert into test_table(pk, name, addr, name_string) values (1, 2, 'addr', 'name') /* _stream test_table (pk ) (1 ); */"
 
 	db.AddQuery(sql, sqlResult)
 	db.AddQuery(expanedSQL, sqlResult)
@@ -1203,14 +1200,13 @@ func TestTabletServerExecuteBatch(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	if _, err := tsv.ExecuteBatch(ctx, &target, []querytypes.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{
 		{
 			Sql:           sql,
 			BindVariables: nil,
 		},
 	}, true, 0, nil); err != nil {
-		t.Fatalf("TabletServer.ExecuteBatch should success: %v, but get error: %v",
-			sql, err)
+		t.Fatal(err)
 	}
 }
 
@@ -1228,7 +1224,7 @@ func TestTabletServerExecuteBatchFailEmptyQueryList(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	_, err = tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{}, false, 0, nil)
+	_, err = tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{}, false, 0, nil)
 	want := "Empty query list"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("ExecuteBatch: %v, must contain %s", err, want)
@@ -1249,7 +1245,7 @@ func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	_, err = tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+	_, err = tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
 		{
 			Sql:           "begin",
 			BindVariables: nil,
@@ -1277,7 +1273,7 @@ func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
 		{
 			Sql:           "begin",
 			BindVariables: nil,
@@ -1303,7 +1299,7 @@ func TestTabletServerExecuteBatchCommitFail(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
 		{
 			Sql:           "begin",
 			BindVariables: nil,
@@ -1346,7 +1342,7 @@ func TestTabletServerExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 		t.Fatalf("rollback should not be executed.")
 	}
 
-	if _, err := tsv.ExecuteBatch(ctx, &target, []querytypes.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{
 		{
 			Sql:           sql,
 			BindVariables: nil,
@@ -1364,9 +1360,9 @@ func TestTabletServerExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
 	testUtils := newTestUtils()
-	sql := "insert into test_table values (1, 2)"
+	sql := "insert into test_table values (1, 2, 'addr', 'name')"
 	sqlResult := &sqltypes.Result{}
-	expanedSQL := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
+	expanedSQL := "insert into test_table(pk, name, addr, name_string) values (1, 2, 'addr', 'name') /* _stream test_table (pk ) (1 ); */"
 
 	db.AddQuery(sql, sqlResult)
 	db.AddQuery(expanedSQL, sqlResult)
@@ -1385,7 +1381,7 @@ func TestTabletServerExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	if _, err := tsv.ExecuteBatch(ctx, &target, []querytypes.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{
 		{
 			Sql:           sql,
 			BindVariables: nil,
@@ -1409,7 +1405,7 @@ func TestTabletServerExecuteBatchCallCommitWithoutABegin(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
 		{
 			Sql:           "commit",
 			BindVariables: nil,
@@ -1439,7 +1435,7 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
 		{
 			Sql:           "begin",
 			BindVariables: nil,
@@ -1495,17 +1491,17 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	q2 := "update test_table set name_string = 'tx2' where pk = :pk and name = :name"
 	q3 := "update test_table set name_string = 'tx3' where pk = :pk and name = :name"
 	// Every request needs their own bind variables to avoid data races.
-	bvTx1 := map[string]interface{}{
-		"pk":   1,
-		"name": 1,
+	bvTx1 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
 	}
-	bvTx2 := map[string]interface{}{
-		"pk":   1,
-		"name": 1,
+	bvTx2 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
 	}
-	bvTx3 := map[string]interface{}{
-		"pk":   2,
-		"name": 1,
+	bvTx3 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVariable(2),
+		"name": sqltypes.Int64BindVariable(1),
 	}
 
 	// Make sure that tx2 and tx3 start only after tx1 is running its Execute().
@@ -1624,13 +1620,13 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 	q1 := "update test_table set name_string = 'tx1' where pk = :pk and name = :name"
 	q2 := "update test_table set name_string = 'tx2' where pk = :pk and name = :name"
 	// Every request needs their own bind variables to avoid data races.
-	bvTx1 := map[string]interface{}{
-		"pk":   1,
-		"name": 1,
+	bvTx1 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
 	}
-	bvTx2 := map[string]interface{}{
-		"pk":   1,
-		"name": 1,
+	bvTx2 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
 	}
 
 	// Make sure that tx2 starts only after tx1 is running its Execute().
@@ -1711,17 +1707,17 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	q2 := "update test_table set name_string = 'tx2' where pk = :pk and name = :name"
 	q3 := "update test_table set name_string = 'tx3' where pk = :pk and name = :name"
 	// Every request needs their own bind variables to avoid data races.
-	bvTx1 := map[string]interface{}{
-		"pk":   1,
-		"name": 1,
+	bvTx1 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
 	}
-	bvTx2 := map[string]interface{}{
-		"pk":   1,
-		"name": 1,
+	bvTx2 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
 	}
-	bvTx3 := map[string]interface{}{
-		"pk":   1,
-		"name": 1,
+	bvTx3 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
 	}
 
 	// Make sure that tx2 starts only after tx1 is running its Execute().
@@ -1815,59 +1811,26 @@ func TestMessageStream(t *testing.T) {
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
-	wanterr := "message table nomsg not found"
-	if err := tsv.MessageStream(ctx, &target, "nomsg", func(qr *sqltypes.Result) error {
+	err := tsv.MessageStream(ctx, &target, "nomsg", func(qr *sqltypes.Result) error {
 		return nil
-	}); err == nil || err.Error() != wanterr {
-		t.Errorf("tsv.MessageStream: %v, want %s", err, wanterr)
+	})
+	wantErr := "table nomsg not found in schema"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("tsv.MessageStream: %v, want %s", err, wantErr)
 	}
-	ch := make(chan *sqltypes.Result, 1)
-	done := make(chan struct{})
-	skippedField := false
-	go func() {
-		if err := tsv.MessageStream(ctx, &target, "msg", func(qr *sqltypes.Result) error {
-			if !skippedField {
-				skippedField = true
-				return nil
-			}
-			ch <- qr
-			return io.EOF
-		}); err != nil {
-			t.Error(err)
-		}
-		close(done)
-	}()
-	// Skip first result (field info).
-	newMessages := map[string][]*messager.MessageRow{
-		"msg": {
-			&messager.MessageRow{Row: []sqltypes.Value{sqltypes.MakeString([]byte("1")), sqltypes.NULL}},
-		},
+
+	// Check that the streaming mechanism works.
+	called := false
+	err = tsv.MessageStream(ctx, &target, "msg", func(qr *sqltypes.Result) error {
+		called = true
+		return io.EOF
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-	// We may have to iterate a few times before the stream kicks in.
-	for {
-		runtime.Gosched()
-		time.Sleep(10 * time.Millisecond)
-		unlock := tsv.messager.LockDB(newMessages, nil)
-		tsv.messager.UpdateCaches(newMessages, nil)
-		unlock()
-		want := &sqltypes.Result{
-			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeString([]byte("1")),
-				sqltypes.NULL,
-			}},
-		}
-		select {
-		case got := <-ch:
-			if !want.Equal(got) {
-				t.Errorf("Stream:\n%v, want\n%v", got, want)
-			}
-		default:
-			continue
-		}
-		break
+	if !called {
+		t.Fatal("callback was not called for MessageStream")
 	}
-	// This should not hang.
-	<-done
 }
 
 func TestMessageAck(t *testing.T) {
@@ -1905,8 +1868,8 @@ func TestMessageAck(t *testing.T) {
 			},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeString([]byte("1")),
-				sqltypes.MakeString([]byte("1")),
+				sqltypes.NewVarBinary("1"),
+				sqltypes.NewVarBinary("1"),
 			}},
 		},
 	)
@@ -1948,8 +1911,8 @@ func TestRescheduleMessages(t *testing.T) {
 			},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeString([]byte("1")),
-				sqltypes.MakeString([]byte("1")),
+				sqltypes.NewVarBinary("1"),
+				sqltypes.NewVarBinary("1"),
 			}},
 		},
 	)
@@ -1991,8 +1954,8 @@ func TestPurgeMessages(t *testing.T) {
 			},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeString([]byte("1")),
-				sqltypes.MakeString([]byte("1")),
+				sqltypes.NewVarBinary("1"),
+				sqltypes.NewVarBinary("1"),
 			}},
 		},
 	)
@@ -2017,8 +1980,8 @@ func TestTabletServerSplitQuery(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("100")),
+				sqltypes.NewInt32(1),
+				sqltypes.NewInt32(100),
 			},
 		},
 	})
@@ -2037,7 +2000,7 @@ func TestTabletServerSplitQuery(t *testing.T) {
 	splits, err := tsv.SplitQuery(
 		ctx,
 		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
-		querytypes.BoundQuery{Sql: sql},
+		&querypb.BoundQuery{Sql: sql},
 		[]string{}, /* splitColumns */
 		10,         /* splitCount */
 		0,          /* numRowsPerQueryPart */
@@ -2069,7 +2032,7 @@ func TestTabletServerSplitQueryInvalidQuery(t *testing.T) {
 	_, err = tsv.SplitQuery(
 		ctx,
 		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
-		querytypes.BoundQuery{Sql: sql},
+		&querypb.BoundQuery{Sql: sql},
 		[]string{}, /* splitColumns */
 		10,         /* splitCount */
 		0,          /* numRowsPerQueryPart */
@@ -2098,7 +2061,7 @@ func TestTabletServerSplitQueryInvalidParams(t *testing.T) {
 	_, err = tsv.SplitQuery(
 		ctx,
 		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
-		querytypes.BoundQuery{Sql: sql},
+		&querypb.BoundQuery{Sql: sql},
 		[]string{}, /* splitColumns */
 		10,         /* splitCount */
 		11,         /* numRowsPerQueryPart */
@@ -2127,7 +2090,7 @@ func TestTabletServerSplitQueryEqualSplitsOnStringColumn(t *testing.T) {
 	_, err = tsv.SplitQuery(
 		ctx,
 		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
-		querytypes.BoundQuery{Sql: sql},
+		&querypb.BoundQuery{Sql: sql},
 		// EQUAL_SPLITS should not work on a string column.
 		[]string{"name_string"}, /* splitColumns */
 		10, /* splitCount */
@@ -2154,10 +2117,12 @@ func TestHandleExecUnknownError(t *testing.T) {
 }
 
 func TestHandleExecTabletError(t *testing.T) {
+	ctx := context.Background()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServerWithNilTopoServer(config)
 	err := tsv.convertError(
+		ctx,
 		"select * from test_table",
 		nil,
 		vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tablet error"),
@@ -2169,11 +2134,13 @@ func TestHandleExecTabletError(t *testing.T) {
 }
 
 func TestTerseErrorsNonSQLError(t *testing.T) {
+	ctx := context.Background()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServerWithNilTopoServer(config)
 	err := tsv.convertError(
+		ctx,
 		"select * from test_table",
 		nil,
 		vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tablet error"),
@@ -2185,13 +2152,15 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 }
 
 func TestTerseErrorsBindVars(t *testing.T) {
+	ctx := context.Background()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServerWithNilTopoServer(config)
 	err := tsv.convertError(
+		ctx,
 		"select * from test_table",
-		map[string]interface{}{"a": 1},
+		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(1)},
 		mysql.NewSQLError(10, "HY000", "msg"),
 	)
 	want := "(errno 10) (sqlstate HY000) during query: select * from test_table"
@@ -2201,11 +2170,12 @@ func TestTerseErrorsBindVars(t *testing.T) {
 }
 
 func TestTerseErrorsNoBindVars(t *testing.T) {
+	ctx := context.Background()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServerWithNilTopoServer(config)
-	err := tsv.convertError("", nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "msg"))
+	err := tsv.convertError(ctx, "", nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "msg"))
 	want := "msg"
 	if err == nil || err.Error() != want {
 		t.Errorf("%v, want '%s'", err, want)
@@ -2213,13 +2183,14 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 }
 
 func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
+	ctx := context.Background()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServerWithNilTopoServer(config)
 
-	err := tsv.convertError("select * from test_table where id = :a",
-		map[string]interface{}{"a": 1},
+	err := tsv.convertError(ctx, "select * from test_table where id = :a",
+		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(1)},
 		mysql.NewSQLError(1227, "42000", "failover in progress"),
 	)
 	if got, want := err.Error(), "failover in progress (errno 1227) (sqlstate 42000)"; got != want {
@@ -2297,6 +2268,14 @@ func TestConfigChanges(t *testing.T) {
 		t.Errorf("tsv.qe.maxResultSize.Get: %d, want %d", val, newSize)
 	}
 
+	tsv.SetWarnResultSize(newSize)
+	if val := tsv.WarnResultSize(); val != newSize {
+		t.Errorf("WarnResultSize: %d, want %d", val, newSize)
+	}
+	if val := int(tsv.qe.warnResultSize.Get()); val != newSize {
+		t.Errorf("tsv.qe.warnResultSize.Get: %d, want %d", val, newSize)
+	}
+
 	tsv.SetMaxDMLRows(newSize)
 	if val := tsv.MaxDMLRows(); val != newSize {
 		t.Errorf("MaxDMLRows: %d, want %d", val, newSize)
@@ -2346,7 +2325,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeString([]byte("1")),
+				sqltypes.NewVarBinary("1"),
 			}},
 		},
 		// Complex WHERE clause requires SELECT of primary key first.
@@ -2356,7 +2335,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeString([]byte("2")),
+				sqltypes.NewVarBinary("2"),
 			}},
 		},
 		// queries for twopc
@@ -2377,7 +2356,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{sqltypes.MakeString([]byte("1427325875"))},
+				{sqltypes.NewVarBinary("1427325875")},
 			},
 		},
 		"select @@global.sql_mode": {
@@ -2386,7 +2365,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
+				{sqltypes.NewVarBinary("STRICT_TRANS_TABLES")},
 			},
 		},
 		"select @@autocommit": {
@@ -2395,7 +2374,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{sqltypes.MakeString([]byte("1"))},
+				{sqltypes.NewVarBinary("1")},
 			},
 		},
 		"show variables like 'binlog_format'": {
@@ -2406,8 +2385,8 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeString([]byte("binlog_format")),
-				sqltypes.MakeString([]byte("STATEMENT")),
+				sqltypes.NewVarBinary("binlog_format"),
+				sqltypes.NewVarBinary("STATEMENT"),
 			}},
 		},
 		"select * from test_table where 1 != 1": {

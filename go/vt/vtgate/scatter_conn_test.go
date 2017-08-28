@@ -30,7 +30,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -48,9 +47,9 @@ func TestScatterConnExecute(t *testing.T) {
 
 func TestScatterConnExecuteMulti(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnExecuteMultiShard", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
-		shardQueries := make(map[string]querytypes.BoundQuery, len(shards))
+		shardQueries := make(map[string]*querypb.BoundQuery, len(shards))
 		for _, shard := range shards {
-			query := querytypes.BoundQuery{
+			query := &querypb.BoundQuery{
 				Sql:           "query",
 				BindVariables: nil,
 			}
@@ -97,7 +96,7 @@ func TestScatterConnStreamExecute(t *testing.T) {
 func TestScatterConnStreamExecuteMulti(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnStreamExecuteMulti", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
 		qr := new(sqltypes.Result)
-		shardVars := make(map[string]map[string]interface{})
+		shardVars := make(map[string]map[string]*querypb.BindVariable)
 		for _, shard := range shards {
 			shardVars[shard] = nil
 		}
@@ -140,7 +139,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	sbc := hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	qr, err = f(sc, []string{"0"})
-	want := fmt.Sprintf("target: %v.0.replica, used tablet: (alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"0\" type:REPLICA ), INVALID_ARGUMENT error", name, name)
+	want := fmt.Sprintf("target: %v.0.replica, used tablet: aa-0 (0), INVALID_ARGUMENT error", name)
 	// Verify server error string.
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
@@ -160,7 +159,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = f(sc, []string{"0", "1"})
 	// Verify server errors are consolidated.
-	want = fmt.Sprintf("target: %v.0.replica, used tablet: (alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > keyspace:\"%v\" shard:\"0\" type:REPLICA ), INVALID_ARGUMENT error\ntarget: %v.1.replica, used tablet: (alias:<cell:\"aa\" > hostname:\"1\" port_map:<key:\"vt\" value:1 > keyspace:\"%v\" shard:\"1\" type:REPLICA ), INVALID_ARGUMENT error", name, name, name, name)
+	want = fmt.Sprintf("target: %v.0.replica, used tablet: aa-0 (0), INVALID_ARGUMENT error\ntarget: %v.1.replica, used tablet: aa-0 (1), INVALID_ARGUMENT error", name, name)
 	verifyScatterConnError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
 	// Ensure that we tried only once.
 	if execCount := sbc0.ExecCount.Get(); execCount != 1 {
@@ -180,7 +179,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	sbc1.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1
 	_, err = f(sc, []string{"0", "1"})
 	// Verify server errors are consolidated.
-	want = fmt.Sprintf("target: %v.0.replica, used tablet: (alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > keyspace:\"%v\" shard:\"0\" type:REPLICA ), INVALID_ARGUMENT error\ntarget: %v.1.replica, used tablet: (alias:<cell:\"aa\" > hostname:\"1\" port_map:<key:\"vt\" value:1 > keyspace:\"%v\" shard:\"1\" type:REPLICA ), RESOURCE_EXHAUSTED error", name, name, name, name)
+	want = fmt.Sprintf("target: %v.0.replica, used tablet: aa-0 (0), INVALID_ARGUMENT error\ntarget: %v.1.replica, used tablet: aa-0 (1), RESOURCE_EXHAUSTED error", name, name)
 	// We should only surface the higher priority error code
 	verifyScatterConnError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
 	// Ensure that we tried only once.
@@ -232,17 +231,17 @@ func TestMultiExecs(t *testing.T) {
 	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
 	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestMultiExecs", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestMultiExecs", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
-	shardVars := map[string]map[string]interface{}{
+	shardVars := map[string]map[string]*querypb.BindVariable{
 		"0": {
-			"bv0": 0,
+			"bv0": sqltypes.Int64BindVariable(0),
 		},
 		"1": {
-			"bv1": 1,
+			"bv1": sqltypes.Int64BindVariable(1),
 		},
 	}
-	shardQueries := make(map[string]querytypes.BoundQuery, len(shardVars))
+	shardQueries := make(map[string]*querypb.BoundQuery, len(shardVars))
 	for shard, shardBindVars := range shardVars {
-		query := querytypes.BoundQuery{
+		query := &querypb.BoundQuery{
 			Sql:           "query",
 			BindVariables: shardBindVars,
 		}
@@ -253,22 +252,28 @@ func TestMultiExecs(t *testing.T) {
 	if len(sbc0.Queries) == 0 || len(sbc1.Queries) == 0 {
 		t.Fatalf("didn't get expected query")
 	}
-	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, shardVars["0"]) {
-		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, shardVars["0"])
+	wantVars0 := map[string]*querypb.BindVariable{
+		"bv0": shardVars["0"]["bv0"],
 	}
-	if !reflect.DeepEqual(sbc1.Queries[0].BindVariables, shardVars["1"]) {
-		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, shardVars["1"])
+	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, wantVars0) {
+		t.Errorf("got %v, want %v", sbc0.Queries[0].BindVariables, wantVars0)
+	}
+	wantVars1 := map[string]*querypb.BindVariable{
+		"bv1": shardVars["1"]["bv1"],
+	}
+	if !reflect.DeepEqual(sbc1.Queries[0].BindVariables, wantVars1) {
+		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars1)
 	}
 	sbc0.Queries = nil
 	sbc1.Queries = nil
 	_ = sc.StreamExecuteMulti(context.Background(), "query", "TestMultiExecs", shardVars, topodatapb.TabletType_REPLICA, nil, func(*sqltypes.Result) error {
 		return nil
 	})
-	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, shardVars["0"]) {
-		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, shardVars["0"])
+	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, wantVars0) {
+		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars0)
 	}
-	if !reflect.DeepEqual(sbc1.Queries[0].BindVariables, shardVars["1"]) {
-		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, shardVars["1"])
+	if !reflect.DeepEqual(sbc1.Queries[0].BindVariables, wantVars1) {
+		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars1)
 	}
 }
 
@@ -479,7 +484,7 @@ func TestAppendResult(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     1,
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeString([]byte("abcd"))},
+			{sqltypes.NewVarBinary("abcd")},
 		},
 	}
 	// test one empty result

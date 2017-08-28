@@ -26,6 +26,22 @@
   "FullQuery": "select * from a union select * from b"
 }
 
+# show
+"show tables"
+{
+  "PlanID": "SELECT_STREAM",
+  "TableName": "",
+  "FullQuery": "show tables"
+}
+
+# other
+"desc foo"
+{
+  "PlanID": "SELECT_STREAM",
+  "TableName": "",
+  "FullQuery": "otherread"
+}
+
 # dml
 "update a set b = 1"
 "'update a set b = 1' not allowed for streaming"

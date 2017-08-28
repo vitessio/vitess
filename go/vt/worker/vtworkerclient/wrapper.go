@@ -37,14 +37,14 @@ func RunCommandAndWait(ctx context.Context, server string, args []string, recv f
 	// TODO(mberlin): vtctlclient exposes dialTimeout as flag. If there are no use cases, remove it there as well to be consistent?
 	client, err := New(server, 30*time.Second /* dialTimeout */)
 	if err != nil {
-		return vterrors.Errorf(vterrors.Code(err), "cannot dial to server "+server+": %v", err)
+		return vterrors.Wrapf(err, "cannot dial to server %v", server)
 	}
 	defer client.Close()
 
 	// run the command
 	stream, err := client.ExecuteVtworkerCommand(ctx, args)
 	if err != nil {
-		return vterrors.Errorf(vterrors.Code(err), "cannot execute remote command: %v", err)
+		return vterrors.Wrap(err, "cannot execute remote command")
 	}
 
 	for {
@@ -55,7 +55,7 @@ func RunCommandAndWait(ctx context.Context, server string, args []string, recv f
 		case io.EOF:
 			return nil
 		default:
-			return vterrors.Errorf(vterrors.Code(err), "stream error: %v", err)
+			return vterrors.Wrap(err, "stream error")
 		}
 	}
 }

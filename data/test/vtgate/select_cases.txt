@@ -161,6 +161,38 @@
   }
 }
 
+# select from dual on unqualified keyspace
+"select @@session.auto_increment_increment from dual"
+{
+  "Original": "select @@session.auto_increment_increment from dual",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select @@session.auto_increment_increment from dual",
+    "FieldQuery": "select @@session.auto_increment_increment from dual where 1 != 1"
+  }
+}
+
+# select from dual on sharded keyspace
+"select @@session.auto_increment_increment from user.dual"
+{
+  "Original": "select @@session.auto_increment_increment from user.dual",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select @@session.auto_increment_increment from dual",
+    "FieldQuery": "select @@session.auto_increment_increment from dual where 1 != 1",
+    "Vindex": "binary",
+    "Values": ["\u0000"]
+  }
+}
+
 # RHS route referenced
 "select user_extra.id from user join user_extra"
 {
@@ -282,83 +314,6 @@
       1,
       -2
     ]
-  }
-}
-
-# Aggregate on unsharded
-"select count(*), col from unsharded"
-{
-  "Original": "select count(*), col from unsharded",
-  "Instructions": {
-    "Opcode": "SelectUnsharded",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "Query": "select count(*), col from unsharded",
-    "FieldQuery": "select count(*), col from unsharded where 1 != 1"
-  }
-}
-
-# Aggregate on unique sharded
-"select count(*), col from user where id = 1"
-{
-  "Original": "select count(*), col from user where id = 1",
-  "Instructions": {
-    "Opcode": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "Query": "select count(*), col from user where id = 1",
-    "FieldQuery": "select count(*), col from user where 1 != 1",
-    "Vindex": "user_index",
-    "Values": 1
-  }
-}
-
-# Aggregate on sharded with colvindex
-"select count(*), id from user"
-{
-  "Original": "select count(*), id from user",
-  "Instructions": {
-    "Opcode": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "Query": "select count(*), id from user",
-    "FieldQuery": "select count(*), id from user where 1 != 1"
-  }
-}
-
-# Non-aggregate function on sharded with no colvindex
-"select fun(1), col from user"
-{
-  "Original": "select fun(1), col from user",
-  "Instructions": {
-    "Opcode": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "Query": "select fun(1), col from user",
-    "FieldQuery": "select fun(1), col from user where 1 != 1"
-  }
-}
-
-# Distinct
-"select distinct col, id from user"
-{
-  "Original": "select distinct col, id from user",
-  "Instructions": {
-    "Opcode": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "Query": "select distinct col, id from user",
-    "FieldQuery": "select col, id from user where 1 != 1"
   }
 }
 
@@ -522,7 +477,7 @@
     "Query": "select * from user where name = 'abc' and (id = 4) limit 5",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": 4
+    "Values": [4]
   }
 }
 
@@ -539,7 +494,7 @@
     "Query": "select * from user where (id = 4) and (name = 'abc') limit 5",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": 4
+    "Values": [4]
   }
 }
 
@@ -556,7 +511,7 @@
     "Query": "select user0_.col as col0_ from user as user0_ where id = 1 order by user0_.col desc limit 2",
     "FieldQuery": "select user0_.col as col0_ from user as user0_ where 1 != 1",
     "Vindex": "user_index",
-    "Values": 1
+    "Values": [1]
   }
 }
 
@@ -573,7 +528,7 @@
     "Query": "select user0_.col as col0_ from user as user0_ where id = 1 order by col0_ desc limit 3",
     "FieldQuery": "select user0_.col as col0_ from user as user0_ where 1 != 1",
     "Vindex": "user_index",
-    "Values": 1
+    "Values": [1]
   }
 }
 
@@ -590,7 +545,7 @@
     "Query": "select * from user where (id = 1) and name = true limit 5",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": 1
+    "Values": [1]
   }
 }
 
@@ -607,7 +562,7 @@
     "Query": "select * from user where (id = 1) and name limit 5",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": 1
+    "Values": [1]
   }
 }
 
@@ -624,9 +579,13 @@
     "Query": "select * from user where (id = 5) and name = true limit 5",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": 5
+    "Values": [5]
   }
 }
+
+# non-existent symbol in cross-shard subquery
+"select t.col from (select user.id from user join user_extra) as t"
+"symbol t.col is referencing a non-existent column of the subquery"
 
 # union of information_schema
 "select * from information_schema.a union select * from information_schema.b"
@@ -656,7 +615,7 @@
     "Query": "select * from music where user_id = 1 union select * from user where id = 1",
     "FieldQuery": "select * from music where 1 != 1 union select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": 1
+    "Values": [1]
   }
 }
 
