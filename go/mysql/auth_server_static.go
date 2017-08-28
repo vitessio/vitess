@@ -20,7 +20,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io/ioutil"
+	"net"
 
 	log "github.com/golang/glog"
 
@@ -30,6 +32,10 @@ import (
 var (
 	mysqlAuthServerStaticFile   = flag.String("mysql_auth_server_static_file", "", "JSON File to read the users/passwords from.")
 	mysqlAuthServerStaticString = flag.String("mysql_auth_server_static_string", "", "JSON representation of the users/passwords config.")
+)
+
+const (
+	localhostName = "localhost"
 )
 
 // AuthServerStatic implements AuthServer using a static configuration.
@@ -42,13 +48,14 @@ type AuthServerStatic struct {
 	Method string
 
 	// Entries contains the users, passwords and user data.
-	Entries map[string]*AuthServerStaticEntry
+	Entries map[string][]*AuthServerStaticEntry
 }
 
 // AuthServerStaticEntry stores the values for a given user.
 type AuthServerStaticEntry struct {
-	Password string
-	UserData string
+	Password   string
+	UserData   string
+	SourceHost string
 }
 
 // InitAuthServerStatic Handles initializing the AuthServerStatic if necessary.
@@ -72,7 +79,7 @@ func InitAuthServerStatic() {
 func NewAuthServerStatic() *AuthServerStatic {
 	return &AuthServerStatic{
 		Method:  MysqlNativePassword,
-		Entries: make(map[string]*AuthServerStaticEntry),
+		Entries: make(map[string][]*AuthServerStaticEntry),
 	}
 }
 
@@ -92,12 +99,48 @@ func RegisterAuthServerStaticFromParams(file, str string) {
 	}
 
 	// Parse JSON config.
-	if err := json.Unmarshal(jsonConfig, &authServerStatic.Entries); err != nil {
+	if err := parseConfig(jsonConfig, &authServerStatic.Entries); err != nil {
 		log.Fatalf("Error parsing auth server config: %v", err)
 	}
 
 	// And register the server.
 	RegisterAuthServerImpl("static", authServerStatic)
+}
+
+func parseConfig(jsonConfig []byte, config *map[string][]*AuthServerStaticEntry) error {
+	if err := json.Unmarshal(jsonConfig, config); err == nil {
+		if err := validateConfig(*config); err != nil {
+			return err
+		}
+		return nil
+	}
+	// Couldn't parse, will try to parse with legacy config
+	return parseLegacyConfig(jsonConfig, config)
+}
+
+func parseLegacyConfig(jsonConfig []byte, config *map[string][]*AuthServerStaticEntry) error {
+	// legacy config doesn't have an array
+	legacyConfig := make(map[string]*AuthServerStaticEntry)
+	err := json.Unmarshal(jsonConfig, &legacyConfig)
+	if err == nil {
+		log.Warningf("Config parsed using legacy configuration. Please update to the latest format: {\"user\":[{\"Password\": \"xxx\"}, ...]}")
+		for key, value := range legacyConfig {
+			(*config)[key] = append((*config)[key], value)
+		}
+		return nil
+	}
+	return err
+}
+
+func validateConfig(config map[string][]*AuthServerStaticEntry) error {
+	for _, entries := range config {
+		for _, entry := range entries {
+			if entry.SourceHost != "" && entry.SourceHost != localhostName {
+				return fmt.Errorf("Invalid SourceHost found (only localhost is supported): %v", entry.SourceHost)
+			}
+		}
+	}
+	return nil
 }
 
 // AuthMethod is part of the AuthServer interface.
@@ -111,26 +154,27 @@ func (a *AuthServerStatic) Salt() ([]byte, error) {
 }
 
 // ValidateHash is part of the AuthServer interface.
-func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse []byte) (Getter, error) {
+func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error) {
 	// Find the entry.
-	entry, ok := a.Entries[user]
+	entries, ok := a.Entries[user]
 	if !ok {
 		return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
-	// Validate the password.
-	computedAuthResponse := scramblePassword(salt, []byte(entry.Password))
-	if bytes.Compare(authResponse, computedAuthResponse) != 0 {
-		return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+	for _, entry := range entries {
+		computedAuthResponse := scramblePassword(salt, []byte(entry.Password))
+		// Validate the password.
+		if matchSourceHost(remoteAddr, entry.SourceHost) && bytes.Compare(authResponse, computedAuthResponse) == 0 {
+			return &StaticUserData{entry.UserData}, nil
+		}
 	}
-
-	return &StaticUserData{entry.UserData}, nil
+	return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 }
 
 // Negotiate is part of the AuthServer interface.
 // It will be called if Method is anything else than MysqlNativePassword.
 // We only recognize MysqlClearPassword and MysqlDialog here.
-func (a *AuthServerStatic) Negotiate(c *Conn, user string) (Getter, error) {
+func (a *AuthServerStatic) Negotiate(c *Conn, user string, remoteAddr net.Addr) (Getter, error) {
 	// Finish the negotiation.
 	password, err := AuthServerNegotiateClearOrDialog(c, a.Method)
 	if err != nil {
@@ -138,17 +182,31 @@ func (a *AuthServerStatic) Negotiate(c *Conn, user string) (Getter, error) {
 	}
 
 	// Find the entry.
-	entry, ok := a.Entries[user]
+	entries, ok := a.Entries[user]
 	if !ok {
 		return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
-
-	// Validate the password.
-	if entry.Password != password {
-		return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+	for _, entry := range entries {
+		// Validate the password.
+		if matchSourceHost(remoteAddr, entry.SourceHost) && entry.Password == password {
+			return &StaticUserData{entry.UserData}, nil
+		}
 	}
+	return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+}
 
-	return &StaticUserData{entry.UserData}, nil
+func matchSourceHost(remoteAddr net.Addr, targetSourceHost string) bool {
+	// Legacy support, there was not matcher defined default to true
+	if targetSourceHost == "" {
+		return true
+	}
+	switch remoteAddr.(type) {
+	case *net.UnixAddr:
+		if targetSourceHost == localhostName {
+			return true
+		}
+	}
+	return false
 }
 
 // StaticUserData holds the username

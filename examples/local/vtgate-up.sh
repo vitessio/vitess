@@ -22,6 +22,7 @@ cell='test'
 web_port=15001
 grpc_port=15991
 mysql_server_port=15306
+mysql_server_socket_path="/tmp/mysql.sock"
 
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
@@ -60,7 +61,8 @@ $VTROOT/bin/vtgate \
   -port $web_port \
   -grpc_port $grpc_port \
   -mysql_server_port $mysql_server_port \
-  -mysql_auth_server_static_string '{"mysql_user":{"Password":"mysql_password", "UserData":"mysql_user"}, "vt_appdebug": {"Password": "vtappdebug_password", "UserData": "vt_appdebug"}}' \
+  -mysql_server_socket_path $mysql_server_socket_path \
+  -mysql_auth_server_static_file "./mysql_auth_server_static_creds.json" \
   -cell $cell \
   -cells_to_watch $cell \
   -tablet_types_to_wait MASTER,REPLICA \
