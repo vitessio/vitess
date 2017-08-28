@@ -16,17 +16,6 @@
 
 package io.vitess.jdbc;
 
-import com.google.common.collect.ImmutableMap;
-import io.vitess.client.Context;
-import io.vitess.client.SQLFuture;
-import io.vitess.client.VTGateConn;
-import io.vitess.client.VTGateTx;
-import io.vitess.client.cursor.Cursor;
-import io.vitess.client.cursor.CursorWithError;
-import io.vitess.proto.Query;
-import io.vitess.proto.Topodata;
-import io.vitess.proto.Vtrpc;
-import io.vitess.util.Constants;
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.sql.BatchUpdateException;
@@ -42,14 +31,31 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+
 import javax.sql.rowset.serial.SerialClob;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Matchers;
+import org.mockito.Mockito;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
+
+import com.google.common.collect.ImmutableMap;
+
+import io.vitess.client.Context;
+import io.vitess.client.SQLFuture;
+import io.vitess.client.VTGateConn;
+import io.vitess.client.VTGateTx;
+import io.vitess.client.cursor.Cursor;
+import io.vitess.client.cursor.CursorWithError;
+import io.vitess.mysql.DateTime;
+import io.vitess.proto.Query;
+import io.vitess.proto.Topodata;
+import io.vitess.proto.Vtrpc;
+import io.vitess.util.Constants;
 
 
 /**
@@ -335,6 +341,24 @@ import org.powermock.modules.junit4.PowerMockRunner;
                 Assert.assertEquals("Failed to execute this method", ex.getMessage());
             }
 
+            //read only
+            PowerMockito.when(mockConn.isReadOnly()).thenReturn(true);
+            try {
+                preparedStatement.executeUpdate();
+                Assert.fail("Should have thrown exception for read only");
+            } catch (SQLException ex) {
+                Assert.assertEquals(Constants.SQLExceptionMessages.READ_ONLY, ex.getMessage());
+            }
+
+            //read only
+            PowerMockito.when(mockConn.isReadOnly()).thenReturn(true);
+            try {
+                preparedStatement.executeBatch();
+                Assert.fail("Should have thrown exception for read only");
+            } catch (SQLException ex) {
+                Assert.assertEquals(Constants.SQLExceptionMessages.READ_ONLY, ex.getMessage());
+            }
+
         } catch (SQLException e) {
             Assert.fail("Test failed " + e.getMessage());
         }
@@ -419,6 +443,50 @@ import org.powermock.modules.junit4.PowerMockRunner;
         }
     }
 
+    @Test public void testExecuteFetchSizeAsStreaming() throws SQLException {
+        testExecute(5, true, false, true);
+        testExecute(5, false, false, true);
+        testExecute(0, true, true, false);
+        testExecute(0, false, false, true);
+    }
+
+    private void testExecute(int fetchSize, boolean simpleExecute, boolean shouldRunExecute, boolean shouldRunStreamExecute) throws SQLException {
+        VTGateConn mockVtGateConn = PowerMockito.mock(VTGateConn.class);
+        VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
+
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+        PowerMockito.when(mockConn.isSimpleExecute()).thenReturn(simpleExecute);
+        PowerMockito.when(mockConn.getTabletType()).thenReturn(Topodata.TabletType.REPLICA);
+        PowerMockito.when(mockConn.getKeyspace()).thenReturn("test_keyspace");
+        PowerMockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
+        PowerMockito.when(mockConn.getVtGateTx()).thenReturn(mockVtGateTx);
+
+        Cursor mockCursor = PowerMockito.mock(Cursor.class);
+        SQLFuture mockSqlFutureCursor = PowerMockito.mock(SQLFuture.class);
+        PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
+
+        PowerMockito.when(mockVtGateConn
+            .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockSqlFutureCursor);
+        PowerMockito.when(mockVtGateConn
+            .streamExecute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockCursor);
+
+        VitessPreparedStatement statement = new VitessPreparedStatement(mockConn, sqlSelect);
+        statement.setFetchSize(fetchSize);
+        statement.executeQuery();
+
+        if (shouldRunExecute) {
+            Mockito.verify(mockVtGateConn).execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class));
+        }
+
+        if (shouldRunStreamExecute) {
+            Mockito.verify(mockVtGateConn).streamExecute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class));
+        }
+    }
+
     @Test public void testGetUpdateCount() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
         VTGateConn mockVtGateConn = PowerMockito.mock(VTGateConn.class);
@@ -461,6 +529,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
     @Test public void testSetParameters() throws Exception {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+        Mockito.when(mockConn.getTreatUtilDateAsTimestamp()).thenReturn(true);
         VitessPreparedStatement preparedStatement =
             new VitessPreparedStatement(mockConn, sqlSelect);
         Boolean boolValue = Boolean.TRUE;
@@ -523,13 +592,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
         preparedStatement.setObject(40, timeValue, Types.TIME, 0);
         preparedStatement.setObject(41, timestampValue, Types.TIMESTAMP, 0);
         preparedStatement.setClob(42, new SerialClob("clob".toCharArray()));
-        try {
-            preparedStatement.setObject(42, bytesValue);
-            Assert.fail("Shown have thrown exception for not able to set byte[] parameter");
-        } catch (SQLException ex) {
-            Assert.assertEquals("Cannot infer the SQL type to use for an instance of byte[]",
-                ex.getMessage());
-        }
+        preparedStatement.setObject(43, bytesValue);
         Field bindVariablesMap = preparedStatement.getClass().getDeclaredField("bindVariables");
         bindVariablesMap.setAccessible(true);
         Map<String, Object> bindVariables =
@@ -576,8 +639,37 @@ import org.powermock.modules.junit4.PowerMockRunner;
         Assert.assertEquals(timeValue.toString(), bindVariables.get("v40"));
         Assert.assertEquals(timestampValue.toString(), bindVariables.get("v41"));
         Assert.assertEquals("clob", bindVariables.get("v42"));
+        Assert.assertArrayEquals(bytesValue, (byte[])bindVariables.get("v43"));
 
         preparedStatement.clearParameters();
+    }
+
+    @Test public void testTreatUtilDateAsTimestamp() throws Exception {
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+        VitessPreparedStatement preparedStatement =
+            new VitessPreparedStatement(mockConn, sqlSelect);
+
+        java.util.Date utilDateValue = new java.util.Date(System.currentTimeMillis());
+        Timestamp timestamp = new Timestamp(utilDateValue.getTime());
+        try {
+            preparedStatement.setObject(1, utilDateValue);
+            Assert.fail("setObject on java.util.Date should have failed with SQLException");
+        } catch (SQLException e) {
+            Assert.assertTrue(e.getMessage().startsWith(Constants.SQLExceptionMessages.SQL_TYPE_INFER));
+        }
+
+        preparedStatement.clearParameters();
+
+        Mockito.when(mockConn.getTreatUtilDateAsTimestamp()).thenReturn(true);
+        preparedStatement = new VitessPreparedStatement(mockConn, sqlSelect);
+        preparedStatement.setObject(1, utilDateValue);
+
+        Field bindVariablesMap = preparedStatement.getClass().getDeclaredField("bindVariables");
+        bindVariablesMap.setAccessible(true);
+        Map<String, Object> bindVariables =
+            (Map<String, Object>) bindVariablesMap.get(preparedStatement);
+
+        Assert.assertEquals(DateTime.formatTimestamp(timestamp), bindVariables.get("v1"));
     }
 
     @Test public void testAutoGeneratedKeys() throws SQLException {

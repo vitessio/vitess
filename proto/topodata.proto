@@ -110,7 +110,12 @@ message Tablet {
   // Fully qualified domain name of the host.
   string hostname = 2;
 
-  // Map of named ports. Normally this should include vt, grpc, and mysql.
+  // Map of named ports. Normally this should include vt and grpc.
+  // Going forward, the mysql port will be stored in mysql_port
+  // instead of here.
+  // For accessing mysql port, use topoproto.MysqlPort to fetch, and
+  // topoproto.SetMysqlPort to set. These wrappers will ensure
+  // legacy behavior is supported.
   map<string, int32> port_map = 4;
 
   // Keyspace name.
@@ -132,6 +137,14 @@ message Tablet {
 
   // tablet tags
   map<string, string> tags = 10;
+
+  // MySQL hostname.
+  string mysql_hostname = 12;
+
+  // MySQL port. Use topoproto.MysqlPort and topoproto.SetMysqlPort
+  // to access this variable. The functions provide support
+  // for legacy behavior.
+  int32 mysql_port = 13;
 
   // OBSOLETE: ip and tablet health information
   // string ip = 3;

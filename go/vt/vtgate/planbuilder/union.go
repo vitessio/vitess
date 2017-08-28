@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
@@ -57,7 +58,7 @@ func processUnion(union *sqlparser.Union, vschema VSchema, outer builder) (build
 	if err != nil {
 		return nil, err
 	}
-	err = pushLimit(union.Limit, bldr)
+	bldr, err = pushLimit(union.Limit, bldr)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +76,7 @@ func processPart(part sqlparser.SelectStatement, vschema VSchema, outer builder)
 	case *sqlparser.ParenSelect:
 		bldr, err = processPart(part.Select, vschema, outer)
 	default:
-		panic("unreachable")
+		panic(fmt.Sprintf("BUG: unexpected SELECT type: %T", part))
 	}
 	if err != nil {
 		return nil, err
@@ -98,6 +99,7 @@ func unionRouteMerge(union *sqlparser.Union, left, right builder, vschema VSchem
 	rb := newRoute(
 		&sqlparser.Union{Type: union.Type, Left: union.Left, Right: union.Right, Lock: union.Lock},
 		lroute.ERoute,
+		lroute.condition,
 		vschema,
 	)
 	lroute.Redirect = rb

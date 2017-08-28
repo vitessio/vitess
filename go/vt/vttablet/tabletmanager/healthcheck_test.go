@@ -34,6 +34,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletservermock"
 
@@ -206,8 +207,11 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	if ti.Type != topodatapb.TabletType_REPLICA {
 		t.Errorf("First health check failed to go to replica: %v", ti.Type)
 	}
-	if ti.PortMap["mysql"] != 3306 {
-		t.Errorf("First health check failed to update mysql port: %v", ti.PortMap["mysql"])
+	if port := topoproto.MysqlPort(ti.Tablet); port != 3306 {
+		t.Errorf("First health check failed to update mysql port: %v", port)
+	}
+	if !agent.gotMysqlPort {
+		t.Errorf("Healthcheck didn't record it updated the MySQL port.")
 	}
 	if !agent.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should be running")
@@ -790,8 +794,8 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeString([]byte("MariaDB/0-1-1234")),
-				sqltypes.MakeString([]byte("DontStart")),
+				sqltypes.NewVarBinary("MariaDB/0-1-1234"),
+				sqltypes.NewVarBinary("DontStart"),
 			},
 		},
 	})

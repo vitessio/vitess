@@ -43,12 +43,12 @@ func TestDBConnExec(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeTrusted(sqltypes.VarChar, []byte("123"))},
+			{sqltypes.NewVarChar("123")},
 		},
 	}
 	db.AddQuery(sql, expectedResult)
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams())
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
 	defer cancel()
@@ -83,7 +83,7 @@ func TestDBConnKill(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams())
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	dbConn, err := NewDBConn(connPool, db.ConnParams(), db.ConnParams())
 	defer dbConn.Close()
@@ -127,12 +127,12 @@ func TestDBConnStream(t *testing.T) {
 			{Type: sqltypes.VarChar},
 		},
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeTrusted(sqltypes.VarChar, []byte("123"))},
+			{sqltypes.NewVarChar("123")},
 		},
 	}
 	db.AddQuery(sql, expectedResult)
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams())
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
 	defer cancel()

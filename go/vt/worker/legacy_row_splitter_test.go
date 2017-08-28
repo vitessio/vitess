@@ -63,16 +63,16 @@ func TestRowSplitterUint64(t *testing.T) {
 
 	// rows in different shards
 	row0 := []sqltypes.Value{
-		sqltypes.MakeString([]byte("Ignored Value")),
-		sqltypes.MakeString([]byte(fmt.Sprintf("%v", 0x1000000000000000))),
+		sqltypes.NewVarBinary("Ignored Value"),
+		sqltypes.NewVarBinary(fmt.Sprintf("%v", 0x1000000000000000)),
 	}
 	row1 := []sqltypes.Value{
-		sqltypes.MakeString([]byte("Ignored Value")),
-		sqltypes.MakeString([]byte(fmt.Sprintf("%v", 0x6000000000000000))),
+		sqltypes.NewVarBinary("Ignored Value"),
+		sqltypes.NewVarBinary(fmt.Sprintf("%v", 0x6000000000000000)),
 	}
 	row2 := []sqltypes.Value{
-		sqltypes.MakeString([]byte("Ignored Value")),
-		sqltypes.MakeString([]byte(fmt.Sprintf("%v", uint64(0xe000000000000000)))),
+		sqltypes.NewVarBinary("Ignored Value"),
+		sqltypes.NewVarBinary(fmt.Sprintf("%v", uint64(0xe000000000000000))),
 	}
 
 	// basic split
@@ -119,16 +119,16 @@ func TestRowSplitterString(t *testing.T) {
 
 	// rows in different shards
 	row0 := []sqltypes.Value{
-		sqltypes.MakeString([]byte("Ignored Value")),
-		sqltypes.MakeString([]byte("A")),
+		sqltypes.NewVarBinary("Ignored Value"),
+		sqltypes.NewVarBinary("A"),
 	}
 	row1 := []sqltypes.Value{
-		sqltypes.MakeString([]byte("Ignored Value")),
-		sqltypes.MakeString([]byte("G")),
+		sqltypes.NewVarBinary("Ignored Value"),
+		sqltypes.NewVarBinary("G"),
 	}
 	row2 := []sqltypes.Value{
-		sqltypes.MakeString([]byte("Ignored Value")),
-		sqltypes.MakeString([]byte("Q")),
+		sqltypes.NewVarBinary("Ignored Value"),
+		sqltypes.NewVarBinary("Q"),
 	}
 
 	// basic split

@@ -193,7 +193,7 @@
   "TableName": "a",
   "FullQuery": "insert into a(eid, id) values (1, :a)",
   "OuterQuery": "insert into a(eid, id) values (1, :a)",
-  "PKValues": [1, ":a"]
+  "PKValues": [[1], [":a"]]
 }
 
 # default number
@@ -203,7 +203,7 @@
   "TableName": "a",
   "FullQuery": "insert into a(id) values (1)",
   "OuterQuery": "insert into a(id) values (1)",
-  "PKValues": [0, 1]
+  "PKValues": [0, [1]]
 }
 
 # default string
@@ -237,7 +237,7 @@
   "TableName": "a",
   "FullQuery": "insert into a(eid, id) values (-1, 2)",
   "OuterQuery": "insert into a(eid, id) values (-1, 2)",
-  "PKValues": [-1, 2]
+  "PKValues": [[-1], [2]]
 }
 
 # positive number
@@ -247,7 +247,7 @@
   "TableName": "a",
   "FullQuery": "insert into a(eid, id) values (1, 2)",
   "OuterQuery": "insert into a(eid, id) values (1, 2)",
-  "PKValues": [1, 2]
+  "PKValues": [[1], [2]]
 }
 
 # non-trivial unary
@@ -287,92 +287,91 @@
 }
 
 # no column list
-"insert into a values (1, 2)"
+"insert into a values (1, 2, 'name', 'foo', 'camelcase')"
 {
   "PlanID": "INSERT_PK",
   "TableName": "a",
-  "FullQuery": "insert into a values (1, 2)",
-  "OuterQuery": "insert into a values (1, 2)",
-  "PKValues": [1, 2]
+  "FullQuery": "insert into a values (1, 2, 'name', 'foo', 'camelcase')",
+  "OuterQuery": "insert into a(eid, id, name, foo, CamelCase) values (1, 2, 'name', 'foo', 'camelcase')",
+  "PKValues": [[1], [2]]
 }
 
-# on dup
+# upsert multiple unique index
+"insert into a (eid, id) values (1, 2) on duplicate key update name = func(a)"
+{
+  "PlanID": "UPSERT_PK",
+  "TableName": "a",
+  "FullQuery": "insert into a(eid, id) values (1, 2) on duplicate key update name = func(a)",
+  "OuterQuery": "insert into a(eid, id) values (1, 2)",
+  "UpsertQuery": "update a set name = func(a) where :#pk",
+  "PKValues": [[1], [2]]
+}
+
+# upsert single unique index
 "insert into b (eid, id) values (1, 2) on duplicate key update name = func(a)"
 {
-  "PlanID": "UPSERT_PK",
+  "PlanID": "INSERT_PK",
   "TableName": "b",
   "FullQuery": "insert into b(eid, id) values (1, 2) on duplicate key update name = func(a)",
-  "OuterQuery": "insert into b(eid, id) values (1, 2)",
-  "UpsertQuery": "update b set name = func(a) where :#pk",
-  "PKValues": [1, 2]
+  "OuterQuery": "insert into b(eid, id) values (1, 2) on duplicate key update name = func(a)",
+  "PKValues": [[1], [2]]
 }
 
-# on dup pk change
-"insert into b (eid, id) values (1, 2) on duplicate key update eid = 2"
+# upsert pk change
+"insert into a (eid, id) values (1, 2) on duplicate key update eid = 2"
 {
   "PlanID": "UPSERT_PK",
-  "TableName": "b",
-  "FullQuery": "insert into b(eid, id) values (1, 2) on duplicate key update eid = 2",
-  "OuterQuery": "insert into b(eid, id) values (1, 2)",
-  "UpsertQuery": "update b set eid = 2 where :#pk",
-  "PKValues": [1, 2],
+  "TableName": "a",
+  "FullQuery": "insert into a(eid, id) values (1, 2) on duplicate key update eid = 2",
+  "OuterQuery": "insert into a(eid, id) values (1, 2)",
+  "UpsertQuery": "update a set eid = 2 where :#pk",
+  "PKValues": [[1], [2]],
   "SecondaryPKValues": [2, null]
 }
 
-# on dup, with values() func
+# upsert with values() func
 "insert into a (eid, id, name) values (1, 2, 'foo') on duplicate key update name = values(name)"
 {
   "PlanID": "UPSERT_PK",
   "TableName": "a",
   "FullQuery": "insert into a(eid, id, name) values (1, 2, 'foo') on duplicate key update name = values(name)",
   "OuterQuery": "insert into a(eid, id, name) values (1, 2, 'foo')",
-  "UpsertQuery": "update a set name = 'foo' where :#pk",
-  "PKValues": [1, 2]
+  "UpsertQuery": "update a set name = ('foo') where :#pk",
+  "PKValues": [[1], [2]]
 }
 
-# on dup, with values() inside another func
+# upsert with values() inside another func
 "insert into a (eid, id, name) values (1, 2, 'foo') on duplicate key update name = concat(values(name), 'foo')"
 {
   "PlanID": "UPSERT_PK",
   "TableName": "a",
   "FullQuery": "insert into a(eid, id, name) values (1, 2, 'foo') on duplicate key update name = concat(values(name), 'foo')",
   "OuterQuery": "insert into a(eid, id, name) values (1, 2, 'foo')",
-  "UpsertQuery": "update a set name = concat('foo', 'foo') where :#pk",
-  "PKValues": [1, 2]
+  "UpsertQuery": "update a set name = concat(('foo'), 'foo') where :#pk",
+  "PKValues": [[1], [2]]
 }
 
-# on dup, with values() and simple expression
+# upsert with values() and simple expression
 "insert into a (eid, id, name) values (1, 2, 3) on duplicate key update name = values(name) + 5"
 {
   "PlanID": "UPSERT_PK",
   "TableName": "a",
   "FullQuery": "insert into a(eid, id, name) values (1, 2, 3) on duplicate key update name = values(name) + 5",
   "OuterQuery": "insert into a(eid, id, name) values (1, 2, 3)",
-  "UpsertQuery": "update a set name = 3 + 5 where :#pk",
-  "PKValues": [1, 2]
+  "UpsertQuery": "update a set name = (3) + 5 where :#pk",
+  "PKValues": [[1], [2]]
 }
 
-# on dup, with values() and case expression
-"insert into a (eid, id, name) values (1, 2, 3) on duplicate key update name = case when values(eid) < values(id) then values(name) + 5 else 3 end"
-{
-  "PlanID": "UPSERT_PK",
-  "TableName": "a",
-  "FullQuery": "insert into a(eid, id, name) values (1, 2, 3) on duplicate key update name = case when values(eid) \u003c values(id) then values(name) + 5 else 3 end",
-  "OuterQuery": "insert into a(eid, id, name) values (1, 2, 3)",
-  "UpsertQuery": "update a set name = case when 1 \u003c 2 then 3 + 5 else 3 end where :#pk",
-  "PKValues": [1, 2]
-}
-
-# on dup, with bindvars in values()
+# upsert with bindvars in values()
 "insert into a (eid, id, name) values (1, :id, :name) on duplicate key update name = values(name), id = values(id)"
 {
   "PlanID": "UPSERT_PK",
   "TableName": "a",
   "FullQuery": "insert into a(eid, id, name) values (1, :id, :name) on duplicate key update name = values(name), id = values(id)",
   "OuterQuery": "insert into a(eid, id, name) values (1, :id, :name)",
-  "UpsertQuery": "update a set name = :name, id = :id where :#pk",
-  "PKValues": [1, ":id"],
-  "SecondaryPKValues": [null, ":id"]
+  "UpsertQuery": "update a set name = (:name), id = (:id) where :#pk",
+  "PKValues": [[1], [":id"]],
+  "SecondaryPKValues": [null, [":id"]]
 }
 
 # complex upsert with values()
@@ -384,66 +383,111 @@
   "FullQuery": "insert into a(eid, id) values (1 + 1, 2) on duplicate key update eid = values(eid) + 1"
 }
 
+# upsert where values for pk references a complex expression
+"insert into a (eid, id, name) values (1, 2, 1+1) on duplicate key update eid = values(name)"
+{
+  "PlanID": "PASS_DML",
+  "Reason": "PK_CHANGE",
+  "TableName": "a",
+  "FullQuery": "insert into a(eid, id, name) values (1, 2, 1 + 1) on duplicate key update eid = values(name)",
+  "PKValues": [[1],[2]]
+}
+
+# upsert where values for pk references a non-existent column
+"insert into a (eid, id) values (1, 2) on duplicate key update eid = values(name)"
+{
+  "PlanID": "PASS_DML",
+  "Reason": "PK_CHANGE",
+  "TableName": "a",
+  "FullQuery": "insert into a(eid, id) values (1, 2) on duplicate key update eid = values(name)",
+  "PKValues": [[1],[2]]
+}
 
 # upsert with mismatch values()
 "insert into a (eid, id) values (1, 2) on duplicate key update eid  = values(eid), name = values(name)"
-{
-  "PlanID": "PASS_DML",
-  "Reason": "UPSERT_COL_MISMATCH",
-  "TableName": "a",
-  "FullQuery": "insert into a(eid, id) values (1, 2) on duplicate key update eid = values(eid), name = values(name)",
-  "PKValues": [1, 2]
-}
+"could not find column name"
 
-# on dup pk change, with values() func
-"insert into b (eid, id) values (1, 2) on duplicate key update eid = values(eid), id = values(id)"
+# upsert pk change, with values() func
+"insert into a (eid, id) values (1, 2) on duplicate key update eid = values(eid), id = values(id)"
 {
   "PlanID": "UPSERT_PK",
-  "TableName": "b",
-  "FullQuery": "insert into b(eid, id) values (1, 2) on duplicate key update eid = values(eid), id = values(id)",
-  "OuterQuery": "insert into b(eid, id) values (1, 2)",
-  "UpsertQuery": "update b set eid = 1, id = 2 where :#pk",
-  "PKValues": [1, 2],
-  "SecondaryPKValues": [1, 2]
+  "TableName": "a",
+  "FullQuery": "insert into a(eid, id) values (1, 2) on duplicate key update eid = values(eid), id = values(id)",
+  "OuterQuery": "insert into a(eid, id) values (1, 2)",
+  "UpsertQuery": "update a set eid = (1), id = (2) where :#pk",
+  "PKValues": [[1], [2]],
+  "SecondaryPKValues": [[1], [2]]
 }
 
-# on dup pk change, with mixed expr and values() func
+# upsert pk change, with mixed expr and values() func
 "insert into a (eid, id, name) values (1, 2, 'foo') on duplicate key update eid = 2, id = values(id), name = func()"
 {
   "PlanID": "UPSERT_PK",
   "TableName": "a",
   "FullQuery": "insert into a(eid, id, name) values (1, 2, 'foo') on duplicate key update eid = 2, id = values(id), name = func()",
   "OuterQuery": "insert into a(eid, id, name) values (1, 2, 'foo')",
-  "UpsertQuery": "update a set eid = 2, id = 2, name = func() where :#pk",
-  "PKValues": [1, 2],
-  "SecondaryPKValues": [2, 2]
+  "UpsertQuery": "update a set eid = 2, id = (2), name = func() where :#pk",
+  "PKValues": [[1], [2]],
+  "SecondaryPKValues": [2, [2]]
 }
 
-# on dup complex pk change
-"insert into b (id, eid) values (1, 2) on duplicate key update eid = func(a)"
+# upsert complex pk change
+"insert into a (id, eid) values (1, 2) on duplicate key update eid = func(a)"
 {
   "PlanID": "PASS_DML",
   "Reason": "PK_CHANGE",
-  "TableName": "b",
-  "FullQuery": "insert into b(id, eid) values (1, 2) on duplicate key update eid = func(a)",
-  "PKValues": [2, 1]
+  "TableName": "a",
+  "FullQuery": "insert into a(id, eid) values (1, 2) on duplicate key update eid = func(a)",
+  "PKValues": [[2], [1]]
 }
 
-# on dup multi-row
-"insert into b (id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)"
+# upsert multi-row with multiple unique indexes
+"insert into a (id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)"
 {
   "PlanID": "PASS_DML",
-  "Reason": "UPSERT",
-  "TableName": "b",
-  "FullQuery": "insert into b(id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)",
+  "Reason": "UPSERT_MULTI_ROW",
+  "TableName": "a",
+  "FullQuery": "insert into a(id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)",
   "PKValues": [[2,3],[1,2]]
 }
 
-# on dup subquery
+# upsert multi-row with 0-1 unique indexes
+"insert into b (id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)"
+{
+  "PlanID": "INSERT_PK",
+  "TableName": "b",
+  "FullQuery": "insert into b(id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)",
+  "OuterQuery": "insert into b(id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)",
+  "PKValues": [[2,3],[1,2]]
+}
+
+# upsert multi-row with 0-1 unique indexes and pk change
+"insert into b (id, eid) values (1, 2), (2, 3) on duplicate key update id = 1"
+{
+  "PlanID": "INSERT_PK",
+  "TableName": "b",
+  "FullQuery": "insert into b(id, eid) values (1, 2), (2, 3) on duplicate key update id = 1",
+  "OuterQuery": "insert into b(id, eid) values (1, 2), (2, 3) on duplicate key update id = 1",
+  "PKValues": [[2,3],[1,2]],
+  "SecondaryPKValues": [null, 1]
+}
+
+# upsert multi-row with 0-1 unique indexes and pk change, using values, and a different column source
+"insert into b (id, eid) values (1, 2), (3, 4) on duplicate key update id = values(eid)"
+{
+  "PlanID": "INSERT_PK",
+  "TableName": "b",
+  "FullQuery": "insert into b(id, eid) values (1, 2), (3, 4) on duplicate key update id = values(eid)",
+  "OuterQuery": "insert into b(id, eid) values (1, 2), (3, 4) on duplicate key update id = values(eid)",
+  "PKValues": [[2,4],[1,3]],
+  "SecondaryPKValues": [null, [2, 4]]
+}
+
+# upsert subquery
 "insert into b (id, eid) select * from a on duplicate key update name = func(a)"
 {
   "PlanID": "PASS_DML",
-  "Reason": "UPSERT",
+  "Reason": "UPSERT_SUBQUERY",
   "TableName": "b",
   "FullQuery": "insert into b(id, eid) select * from a on duplicate key update name = func(a)"
 }
@@ -466,7 +510,7 @@
   "PlanID": "INSERT_SUBQUERY",
   "TableName": "b",
   "FullQuery": "insert into b select * from a",
-  "OuterQuery": "insert into b values :#values",
+  "OuterQuery": "insert into b(eid, id) values :#values",
   "Subquery": "select * from a limit :#maxLimit",
   "ColumnNumbers": [0, 1],
   "SubqueryPKColumns": [0, 1]
@@ -489,10 +533,7 @@
   "TableName": "msg",
   "FullQuery": "insert into msg(time_scheduled, id, message) values (1, 2, 'aa')",
   "OuterQuery": "insert into msg(time_scheduled, id, message, time_next, time_created, epoch) values (1, 2, 'aa', 1, :#time_now, 0)",
-  "PKValues": [
-    1,
-    2
-  ]
+  "PKValues": [[1], [2]]
 }
 
 # message insert with no time_schedule
@@ -502,10 +543,7 @@
   "TableName": "msg",
   "FullQuery": "insert into msg(id, message) values (2, 'aa')",
   "OuterQuery": "insert into msg(id, message, time_scheduled, time_next, time_created, epoch) values (2, 'aa', :#time_now, :#time_now, :#time_now, 0)",
-  "PKValues": [
-    ":#time_now",
-    2
-  ]
+  "PKValues": [[":#time_now"], [2]]
 }
 
 # message multi-value insert
@@ -531,7 +569,7 @@
 "insert into msg(time_scheduled, id, message) select * from a"
 "subquery not allowed for message table: msg"
 
-# message insert on dup key
+# message insert upsert key
 "insert into msg(time_scheduled, id, message) Values(1, 2, 'aa') on duplicate key update message='bb'"
 "'on duplicate key' construct not allowed for message table: msg"
 
@@ -640,7 +678,7 @@
 
 # type mismatch
 "update b set eid=18446744073709551616"
-"type mismatch: strconv.ParseUint: parsing "18446744073709551616": value out of range"
+"strconv.ParseUint: parsing "18446744073709551616": value out of range"
 
 # complex pk change
 "update b set eid=foo()"
@@ -794,6 +832,17 @@
   "WhereClause": " where eid = 1 and eid = 2"
 }
 
+# partial pk with order by
+"update a set name = 'foo' where eid=1 order by id desc"
+{
+  "PlanID": "DML_SUBQUERY",
+  "TableName": "a",
+  "FullQuery": "update a set name = 'foo' where eid = 1 order by id desc",
+  "OuterQuery": "update a set name = 'foo' where :#pk order by id desc",
+  "Subquery": "select eid, id from a where eid = 1 order by id desc limit :#maxLimit for update",
+  "WhereClause": " where eid = 1"
+}
+
 # delete cross-db
 "delete from b.a where eid=1 and id=1"
 {
@@ -844,6 +893,17 @@
   "FullQuery": "delete from a where eid = 1",
   "OuterQuery": "delete from a where :#pk",
   "Subquery": "select eid, id from a where eid = 1 limit :#maxLimit for update",
+  "WhereClause": " where eid = 1"
+}
+
+# partial pk with order by
+"delete from a where eid=1 order by id desc"
+{
+  "PlanID": "DML_SUBQUERY",
+  "TableName": "a",
+  "FullQuery": "delete from a where eid = 1 order by id desc",
+  "OuterQuery": "delete from a where :#pk order by id desc",
+  "Subquery": "select eid, id from a where eid = 1 order by id desc limit :#maxLimit for update",
   "WhereClause": " where eid = 1"
 }
 
@@ -1058,24 +1118,60 @@
   "TableName": "a"
 }
 
+# reorganize partition with bind
+"alter table a reorganize partition b into (partition c values less than (:bv), partition d values less than (maxvalue))"
+{
+  "PlanID": "DDL",
+  "TableName": "a",
+  "FullQuery": "alter table a reorganize partition b into (partition c values less than (:bv), partition d values less than (maxvalue))"
+}
+
+# partition
+"alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))"
+{
+  "PlanID": "DDL",
+  "TableName": "a"
+}
+
 # show
 "show a"
 {
-  "PlanID": "OTHER",
+  "PlanID": "OTHER_READ",
   "TableName": ""
 }
 
 # describe
 "describe a"
 {
-  "PlanID": "OTHER",
+  "PlanID": "OTHER_READ",
   "TableName": ""
 }
 
 # explain
 "explain a"
 {
-  "PlanID": "OTHER",
+  "PlanID": "OTHER_READ",
+  "TableName": ""
+}
+
+# repair
+"repair a"
+{
+  "PlanID": "OTHER_ADMIN",
+  "TableName": ""
+}
+
+# optimize
+"optimize a"
+{
+  "PlanID": "OTHER_ADMIN",
+  "TableName": ""
+}
+
+# truncate
+"truncate a"
+{
+  "PlanID": "OTHER_ADMIN",
   "TableName": ""
 }
 

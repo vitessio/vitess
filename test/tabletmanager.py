@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 
 # Copyright 2017 Google Inc.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -44,8 +44,8 @@ healthy_expr = re.compile(r'Current status: <span.+?>healthy')
 def setUpModule():
   try:
     topo_flavor = environment.topo_server().flavor()
-    if topo_flavor == 'zookeeper' or topo_flavor == 'zk2':
-      # This is a one-off test to make sure our zookeeper implementations
+    if topo_flavor == 'zk2':
+      # This is a one-off test to make sure our 'zk2' implementation
       # behave with a server that is not DNS-resolveable.
       environment.topo_server().setup(add_bad_host=True)
     else:
@@ -204,23 +204,6 @@ class TestTabletManager(unittest.TestCase):
 
     # wait for the background vtctl
     bg.wait()
-
-    if environment.topo_server().flavor() == 'zookeeper':
-      # extra small test: we ran for a while, get the states we were in,
-      # make sure they're accounted for properly
-      # first the query engine States
-      v = utils.get_vars(tablet_62344.port)
-      logging.debug('vars: %s', v)
-
-      # then the Zookeeper connections
-      if v['ZkCachedConn']['test_nj'] != 'Connected':
-        self.fail('invalid zk test_nj state: %s' %
-                  v['ZkCachedConn']['test_nj'])
-      if v['ZkCachedConn']['global'] != 'Connected':
-        self.fail('invalid zk global state: %s' %
-                  v['ZkCachedConn']['global'])
-      if v['TabletType'] != 'master':
-        self.fail('TabletType not exported correctly')
 
     tablet_62344.kill_vttablet()
 
@@ -706,6 +689,63 @@ class TestTabletManager(unittest.TestCase):
     self.check_healthz(tablet_62344, False)
 
     tablet_62344.kill_vttablet()
+
+  def test_master_restart_sets_ter_timestamp(self):
+    """Test that TER timestamp is set when we restart the MASTER vttablet.
+
+    TER = TabletExternallyReparented.
+    See StreamHealthResponse.tablet_externally_reparented_timestamp for details.
+    """
+    master, replica = tablet_62344, tablet_62044
+    tablets = [master, replica]
+    # Start vttablets. Our future master is initially a REPLICA.
+    for t in tablets:
+      t.create_db('vt_test_keyspace')
+    for t in tablets:
+      t.start_vttablet(wait_for_state='NOT_SERVING',
+                       init_tablet_type='replica',
+                       init_keyspace='test_keyspace',
+                       init_shard='0')
+
+    # Initialize tablet as MASTER.
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
+                     master.tablet_alias])
+    master.wait_for_vttablet_state('SERVING')
+
+    # Capture the current TER.
+    health = utils.run_vtctl_json(['VtTabletStreamHealth',
+                                   '-count', '1',
+                                   master.tablet_alias])
+    self.assertEqual(topodata_pb2.MASTER, health['target']['tablet_type'])
+    self.assertIn('tablet_externally_reparented_timestamp', health)
+    self.assertGreater(health['tablet_externally_reparented_timestamp'], 0,
+                       'TER on MASTER must be set after InitShardMaster')
+
+    # Restart the MASTER vttablet.
+    master.kill_vttablet()
+    master.start_vttablet(wait_for_state='SERVING',
+                          init_tablet_type='replica',
+                          init_keyspace='test_keyspace',
+                          init_shard='0')
+
+    # Make sure that the TER increased i.e. it was set to the current time.
+    health_after_restart = utils.run_vtctl_json(['VtTabletStreamHealth',
+                                                 '-count', '1',
+                                                 master.tablet_alias])
+    self.assertEqual(topodata_pb2.MASTER,
+                     health_after_restart['target']['tablet_type'])
+    self.assertIn('tablet_externally_reparented_timestamp',
+                  health_after_restart)
+    self.assertGreater(
+        health_after_restart['tablet_externally_reparented_timestamp'],
+        health['tablet_externally_reparented_timestamp'],
+        'When the MASTER vttablet was restarted, the TER timestamp must be set'
+        ' to the current time.')
+
+    # Shutdown.
+    for t in tablets:
+      t.kill_vttablet()
+
 
 if __name__ == '__main__':
   utils.main()

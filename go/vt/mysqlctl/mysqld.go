@@ -78,7 +78,6 @@ type Mysqld struct {
 
 	// mutex protects the fields below.
 	mutex         sync.Mutex
-	mysqlFlavor   MysqlFlavor
 	onTermFuncs   []func()
 	cancelWaitCmd chan struct{}
 }
@@ -95,13 +94,13 @@ func NewMysqld(config *Mycnf, dbcfgs *dbconfigs.DBConfigs, dbconfigsFlags dbconf
 	// Create and open the connection pool for dba access.
 	if dbconfigs.DbaConfig&dbconfigsFlags != 0 {
 		result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *dbaIdleTimeout)
-		result.dbaPool.Open(dbconnpool.DBConnectionCreator(&dbcfgs.Dba, dbaMysqlStats))
+		result.dbaPool.Open(&dbcfgs.Dba, dbaMysqlStats)
 	}
 
 	// Create and open the connection pool for app access.
 	if dbconfigs.AppConfig&dbconfigsFlags != 0 {
 		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout)
-		result.appPool.Open(dbconnpool.DBConnectionCreator(&dbcfgs.App, appMysqlStats))
+		result.appPool.Open(&dbcfgs.App, appMysqlStats)
 	}
 
 	return result
@@ -526,6 +525,13 @@ func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 	return nil
 }
 
+// MySQL 5.7 GA and up have deprecated mysql_install_db.
+// Instead, initialization is built into mysqld.
+func useMysqldInitialize(version string) bool {
+	return strings.Contains(version, "Ver 5.7.") ||
+		strings.Contains(version, "Ver 8.0.")
+}
+
 func (mysqld *Mysqld) installDataDir() error {
 	mysqlRoot, err := vtenv.VtMysqlRoot()
 	if err != nil {
@@ -536,20 +542,23 @@ func (mysqld *Mysqld) installDataDir() error {
 		return err
 	}
 
+	mysqlBaseDir, err := vtenv.VtMysqlBaseDir()
+	if err != nil {
+		return err
+	}
+
 	// Check mysqld version.
 	_, version, err := execCmd(mysqldPath, []string{"--version"}, nil, mysqlRoot, nil)
 	if err != nil {
 		return err
 	}
 
-	if strings.Contains(version, "Ver 5.7.") {
-		// MySQL 5.7 GA and up have deprecated mysql_install_db.
-		// Instead, initialization is built into mysqld.
+	if useMysqldInitialize(version) {
 		log.Infof("Installing data dir with mysqld --initialize-insecure")
 
 		args := []string{
 			"--defaults-file=" + mysqld.config.path,
-			"--basedir=" + mysqlRoot,
+			"--basedir=" + mysqlBaseDir,
 			"--initialize-insecure", // Use empty 'root'@'localhost' password.
 		}
 		if _, _, err = execCmd(mysqldPath, args, nil, mysqlRoot, nil); err != nil {
@@ -562,7 +571,7 @@ func (mysqld *Mysqld) installDataDir() error {
 	log.Infof("Installing data dir with mysql_install_db")
 	args := []string{
 		"--defaults-file=" + mysqld.config.path,
-		"--basedir=" + mysqlRoot,
+		"--basedir=" + mysqlBaseDir,
 	}
 	cmdPath, err := binaryPath(mysqlRoot, "mysql_install_db")
 	if err != nil {
@@ -859,7 +868,7 @@ socket=%v
 
 // GetAppConnection returns a connection from the app pool.
 // Recycle needs to be called on the result.
-func (mysqld *Mysqld) GetAppConnection(ctx context.Context) (dbconnpool.PoolConnection, error) {
+func (mysqld *Mysqld) GetAppConnection(ctx context.Context) (*dbconnpool.PooledDBConnection, error) {
 	return mysqld.appPool.Get(ctx)
 }
 

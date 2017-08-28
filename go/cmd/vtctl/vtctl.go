@@ -70,10 +70,17 @@ func main() {
 
 	flag.Parse()
 	args := flag.Args()
+
+	if *servenv.Version {
+		servenv.AppVersion.Print()
+		os.Exit(0)
+	}
+
 	if len(args) == 0 {
 		flag.Usage()
 		exit.Return(1)
 	}
+
 	action := args[0]
 
 	startMsg := fmt.Sprintf("USER=%v SUDO_USER=%v %v", os.Getenv("USER"), os.Getenv("SUDO_USER"), strings.Join(os.Args, " "))

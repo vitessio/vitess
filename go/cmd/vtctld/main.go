@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"os"
 
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -38,11 +39,19 @@ func main() {
 	servenv.Init()
 	defer servenv.Close()
 
+	if *servenv.Version {
+		servenv.AppVersion.Print()
+		os.Exit(0)
+	}
+
 	ts = topo.Open()
 	defer ts.Close()
 
 	// Init the vtctld core
 	vtctld.InitVtctld(ts)
+
+	// Register http debug/health
+	vtctld.RegisterDebugHealthHandler(ts)
 
 	// Start schema manager service.
 	initSchema()

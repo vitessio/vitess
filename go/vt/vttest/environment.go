@@ -18,8 +18,10 @@ package vttest
 
 import (
 	"errors"
+	"math/rand"
 	"os"
 	"path"
+	"time"
 
 	// we use gRPC everywhere, so import the vtgate client.
 	_ "github.com/youtube/vitess/go/vt/vtgate/grpcvtgateconn"
@@ -35,4 +37,14 @@ func launcherPath() (string, error) {
 
 func vtgateProtocol() string {
 	return "grpc"
+}
+
+// randomPort returns a random number between 10k & 30k.
+func randomPort() int {
+	v := rand.Int31n(20000)
+	return int(v + 10000)
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
 }

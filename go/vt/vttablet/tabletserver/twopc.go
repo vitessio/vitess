@@ -18,7 +18,6 @@ package tabletserver
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 
 	log "github.com/golang/glog"
@@ -202,7 +201,7 @@ func (tpc *TwoPC) Init(sidecarDBName string, dbaparams *mysql.ConnParams) error 
 
 // Open starts the TwoPC service.
 func (tpc *TwoPC) Open(dbconfigs dbconfigs.DBConfigs) {
-	tpc.readPool.Open(&dbconfigs.App, &dbconfigs.Dba)
+	tpc.readPool.Open(&dbconfigs.App, &dbconfigs.Dba, &dbconfigs.AppDebug)
 }
 
 // Close closes the TwoPC service.
@@ -212,10 +211,10 @@ func (tpc *TwoPC) Close() {
 
 // SaveRedo saves the statements in the redo log using the supplied connection.
 func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *TxConnection, dtid string, queries []string) error {
-	bindVars := map[string]interface{}{
-		"dtid":         dtid,
-		"state":        RedoStatePrepared,
-		"time_created": int64(time.Now().UnixNano()),
+	bindVars := map[string]*querypb.BindVariable{
+		"dtid":         sqltypes.StringBindVariable(dtid),
+		"state":        sqltypes.Int64BindVariable(RedoStatePrepared),
+		"time_created": sqltypes.Int64BindVariable(time.Now().UnixNano()),
 	}
 	_, err := tpc.exec(ctx, conn, tpc.insertRedoTx, bindVars)
 	if err != nil {
@@ -225,23 +224,27 @@ func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *TxConnection, dtid string,
 	rows := make([][]sqltypes.Value, len(queries))
 	for i, query := range queries {
 		rows[i] = []sqltypes.Value{
-			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(dtid)),
-			sqltypes.MakeTrusted(sqltypes.Int64, strconv.AppendInt(nil, int64(i+1), 10)),
-			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(query)),
+			sqltypes.NewVarBinary(dtid),
+			sqltypes.NewInt64(int64(i + 1)),
+			sqltypes.NewVarBinary(query),
 		}
 	}
-	bindVars = map[string]interface{}{
-		"vals": rows,
+	extras := map[string]sqlparser.Encodable{
+		"vals": sqlparser.InsertValues(rows),
 	}
-	_, err = tpc.exec(ctx, conn, tpc.insertRedoStmt, bindVars)
+	b, err := tpc.insertRedoStmt.GenerateQuery(nil, extras)
+	if err != nil {
+		return err
+	}
+	_, err = conn.Exec(ctx, hack.String(b), 1, false)
 	return err
 }
 
 // UpdateRedo changes the state of the redo log for the dtid.
 func (tpc *TwoPC) UpdateRedo(ctx context.Context, conn *TxConnection, dtid string, state int) error {
-	bindVars := map[string]interface{}{
-		"dtid":  sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(dtid)),
-		"state": sqltypes.MakeTrusted(sqltypes.Int64, strconv.AppendInt(nil, int64(state), 10)),
+	bindVars := map[string]*querypb.BindVariable{
+		"dtid":  sqltypes.StringBindVariable(dtid),
+		"state": sqltypes.Int64BindVariable(int64(state)),
 	}
 	_, err := tpc.exec(ctx, conn, tpc.updateRedoTx, bindVars)
 	return err
@@ -249,8 +252,8 @@ func (tpc *TwoPC) UpdateRedo(ctx context.Context, conn *TxConnection, dtid strin
 
 // DeleteRedo deletes the redo log for the dtid.
 func (tpc *TwoPC) DeleteRedo(ctx context.Context, conn *TxConnection, dtid string) error {
-	bindVars := map[string]interface{}{
-		"dtid": sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(dtid)),
+	bindVars := map[string]*querypb.BindVariable{
+		"dtid": sqltypes.StringBindVariable(dtid),
 	}
 	_, err := tpc.exec(ctx, conn, tpc.deleteRedoTx, bindVars)
 	if err != nil {
@@ -282,17 +285,17 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*Prepared
 
 	var curTx *PreparedTx
 	for _, row := range qr.Rows {
-		dtid := row[0].String()
+		dtid := row[0].ToString()
 		if curTx == nil || dtid != curTx.Dtid {
 			// Initialize the new element.
 			// A failure in time parsing will show up as a very old time,
 			// which is harmless.
-			tm, _ := strconv.ParseInt(row[2].String(), 10, 64)
+			tm, _ := sqltypes.ToInt64(row[2])
 			curTx = &PreparedTx{
 				Dtid: dtid,
 				Time: time.Unix(0, tm),
 			}
-			st, err := strconv.ParseInt(row[1].String(), 10, 64)
+			st, err := sqltypes.ToInt64(row[1])
 			if err != nil {
 				log.Errorf("Error parsing state for dtid %s: %v.", dtid, err)
 			}
@@ -306,7 +309,7 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*Prepared
 				failed = append(failed, curTx)
 			}
 		}
-		curTx.Queries = append(curTx.Queries, row[3].String())
+		curTx.Queries = append(curTx.Queries, row[3].ToString())
 	}
 	return prepared, failed, nil
 }
@@ -319,8 +322,8 @@ func (tpc *TwoPC) CountUnresolvedRedo(ctx context.Context, unresolvedTime time.T
 	}
 	defer conn.Recycle()
 
-	bindVars := map[string]interface{}{
-		"time_created": int64(unresolvedTime.UnixNano()),
+	bindVars := map[string]*querypb.BindVariable{
+		"time_created": sqltypes.Int64BindVariable(unresolvedTime.UnixNano()),
 	}
 	qr, err := tpc.read(ctx, conn, tpc.countUnresolvedRedo, bindVars)
 	if err != nil {
@@ -329,16 +332,16 @@ func (tpc *TwoPC) CountUnresolvedRedo(ctx context.Context, unresolvedTime time.T
 	if len(qr.Rows) < 1 {
 		return 0, nil
 	}
-	v, _ := strconv.ParseInt(qr.Rows[0][0].String(), 10, 64)
+	v, _ := sqltypes.ToInt64(qr.Rows[0][0])
 	return v, nil
 }
 
 // CreateTransaction saves the metadata of a 2pc transaction as Prepared.
 func (tpc *TwoPC) CreateTransaction(ctx context.Context, conn *TxConnection, dtid string, participants []*querypb.Target) error {
-	bindVars := map[string]interface{}{
-		"dtid":     dtid,
-		"state":    int64(DTStatePrepare),
-		"cur_time": int64(time.Now().UnixNano()),
+	bindVars := map[string]*querypb.BindVariable{
+		"dtid":     sqltypes.StringBindVariable(dtid),
+		"state":    sqltypes.Int64BindVariable(int64(DTStatePrepare)),
+		"cur_time": sqltypes.Int64BindVariable(time.Now().UnixNano()),
 	}
 	_, err := tpc.exec(ctx, conn, tpc.insertTransaction, bindVars)
 	if err != nil {
@@ -348,26 +351,30 @@ func (tpc *TwoPC) CreateTransaction(ctx context.Context, conn *TxConnection, dti
 	rows := make([][]sqltypes.Value, len(participants))
 	for i, participant := range participants {
 		rows[i] = []sqltypes.Value{
-			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(dtid)),
-			sqltypes.MakeTrusted(sqltypes.Int64, strconv.AppendInt(nil, int64(i+1), 10)),
-			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(participant.Keyspace)),
-			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(participant.Shard)),
+			sqltypes.NewVarBinary(dtid),
+			sqltypes.NewInt64(int64(i + 1)),
+			sqltypes.NewVarBinary(participant.Keyspace),
+			sqltypes.NewVarBinary(participant.Shard),
 		}
 	}
-	bindVars = map[string]interface{}{
-		"vals": rows,
+	extras := map[string]sqlparser.Encodable{
+		"vals": sqlparser.InsertValues(rows),
 	}
-	_, err = tpc.exec(ctx, conn, tpc.insertParticipants, bindVars)
+	b, err := tpc.insertParticipants.GenerateQuery(nil, extras)
+	if err != nil {
+		return err
+	}
+	_, err = conn.Exec(ctx, hack.String(b), 1, false)
 	return err
 }
 
 // Transition performs a transition from Prepare to the specified state.
 // If the transaction is not a in the Prepare state, an error is returned.
 func (tpc *TwoPC) Transition(ctx context.Context, conn *TxConnection, dtid string, state querypb.TransactionState) error {
-	bindVars := map[string]interface{}{
-		"dtid":    dtid,
-		"state":   int64(state),
-		"prepare": int64(querypb.TransactionState_PREPARE),
+	bindVars := map[string]*querypb.BindVariable{
+		"dtid":    sqltypes.StringBindVariable(dtid),
+		"state":   sqltypes.Int64BindVariable(int64(state)),
+		"prepare": sqltypes.Int64BindVariable(int64(querypb.TransactionState_PREPARE)),
 	}
 	qr, err := tpc.exec(ctx, conn, tpc.transition, bindVars)
 	if err != nil {
@@ -381,8 +388,8 @@ func (tpc *TwoPC) Transition(ctx context.Context, conn *TxConnection, dtid strin
 
 // DeleteTransaction deletes the metadata for the specified transaction.
 func (tpc *TwoPC) DeleteTransaction(ctx context.Context, conn *TxConnection, dtid string) error {
-	bindVars := map[string]interface{}{
-		"dtid": dtid,
+	bindVars := map[string]*querypb.BindVariable{
+		"dtid": sqltypes.StringBindVariable(dtid),
 	}
 	_, err := tpc.exec(ctx, conn, tpc.deleteTransaction, bindVars)
 	if err != nil {
@@ -401,8 +408,8 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 	defer conn.Recycle()
 
 	result := &querypb.TransactionMetadata{}
-	bindVars := map[string]interface{}{
-		"dtid": dtid,
+	bindVars := map[string]*querypb.BindVariable{
+		"dtid": sqltypes.StringBindVariable(dtid),
 	}
 	qr, err := tpc.read(ctx, conn, tpc.readTransaction, bindVars)
 	if err != nil {
@@ -411,8 +418,8 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 	if len(qr.Rows) == 0 {
 		return result, nil
 	}
-	result.Dtid = qr.Rows[0][0].String()
-	st, err := qr.Rows[0][1].ParseInt64()
+	result.Dtid = qr.Rows[0][0].ToString()
+	st, err := sqltypes.ToInt64(qr.Rows[0][1])
 	if err != nil {
 		return nil, fmt.Errorf("Error parsing state for dtid %s: %v", dtid, err)
 	}
@@ -422,7 +429,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 	}
 	// A failure in time parsing will show up as a very old time,
 	// which is harmless.
-	tm, _ := qr.Rows[0][2].ParseInt64()
+	tm, _ := sqltypes.ToInt64(qr.Rows[0][2])
 	result.TimeCreated = tm
 
 	qr, err = tpc.read(ctx, conn, tpc.readParticipants, bindVars)
@@ -432,8 +439,8 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 	participants := make([]*querypb.Target, 0, len(qr.Rows))
 	for _, row := range qr.Rows {
 		participants = append(participants, &querypb.Target{
-			Keyspace:   row[0].String(),
-			Shard:      row[1].String(),
+			Keyspace:   row[0].ToString(),
+			Shard:      row[1].ToString(),
 			TabletType: topodatapb.TabletType_MASTER,
 		})
 	}
@@ -450,8 +457,8 @@ func (tpc *TwoPC) ReadAbandoned(ctx context.Context, abandonTime time.Time) (map
 	}
 	defer conn.Recycle()
 
-	bindVars := map[string]interface{}{
-		"time_created": int64(abandonTime.UnixNano()),
+	bindVars := map[string]*querypb.BindVariable{
+		"time_created": sqltypes.Int64BindVariable(abandonTime.UnixNano()),
 	}
 	qr, err := tpc.read(ctx, conn, tpc.readAbandoned, bindVars)
 	if err != nil {
@@ -459,11 +466,11 @@ func (tpc *TwoPC) ReadAbandoned(ctx context.Context, abandonTime time.Time) (map
 	}
 	txs := make(map[string]time.Time, len(qr.Rows))
 	for _, row := range qr.Rows {
-		t, err := strconv.ParseInt(row[1].String(), 10, 64)
+		t, err := sqltypes.ToInt64(row[1])
 		if err != nil {
 			return nil, err
 		}
-		txs[row[0].String()] = time.Unix(0, t)
+		txs[row[0].ToString()] = time.Unix(0, t)
 	}
 	return txs, nil
 }
@@ -493,13 +500,13 @@ func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*DistributedTx, er
 	var curTx *DistributedTx
 	var distributed []*DistributedTx
 	for _, row := range qr.Rows {
-		dtid := row[0].String()
+		dtid := row[0].ToString()
 		if curTx == nil || dtid != curTx.Dtid {
 			// Initialize the new element.
 			// A failure in time parsing will show up as a very old time,
 			// which is harmless.
-			tm, _ := strconv.ParseInt(row[2].String(), 10, 64)
-			st, err := strconv.ParseInt(row[1].String(), 10, 64)
+			tm, _ := sqltypes.ToInt64(row[2])
+			st, err := sqltypes.ToInt64(row[1])
 			// Just log on error and continue. The state will show up as UNKNOWN
 			// on the display.
 			if err != nil {
@@ -517,23 +524,23 @@ func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*DistributedTx, er
 			distributed = append(distributed, curTx)
 		}
 		curTx.Participants = append(curTx.Participants, querypb.Target{
-			Keyspace: row[3].String(),
-			Shard:    row[4].String(),
+			Keyspace: row[3].ToString(),
+			Shard:    row[4].ToString(),
 		})
 	}
 	return distributed, nil
 }
 
-func (tpc *TwoPC) exec(ctx context.Context, conn *TxConnection, pq *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {
-	b, err := pq.GenerateQuery(bindVars)
+func (tpc *TwoPC) exec(ctx context.Context, conn *TxConnection, pq *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	b, err := pq.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err
 	}
 	return conn.Exec(ctx, hack.String(b), 1, false)
 }
 
-func (tpc *TwoPC) read(ctx context.Context, conn *connpool.DBConn, pq *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {
-	b, err := pq.GenerateQuery(bindVars)
+func (tpc *TwoPC) read(ctx context.Context, conn *connpool.DBConn, pq *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	b, err := pq.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err
 	}

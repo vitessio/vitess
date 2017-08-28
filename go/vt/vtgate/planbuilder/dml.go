@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"errors"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
@@ -47,17 +48,23 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, err
 	if !ok {
 		return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
 	}
-	if hasSubquery(upd) {
-		return nil, errors.New("unsupported: subqueries in DML")
-	}
+
 	er.Keyspace = rb.ERoute.Keyspace
 	if !er.Keyspace.Sharded {
+		if !validateSubquerySamePlan(upd, rb.ERoute, vschema) {
+			return nil, errors.New("unsupported: sharded subqueries in DML")
+		}
 		er.Opcode = engine.UpdateUnsharded
 		return er, nil
+	}
+
+	if hasSubquery(upd) {
+		return nil, errors.New("unsupported: subqueries in sharded DML")
 	}
 	if len(rb.Symtab().tables) != 1 {
 		return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
 	}
+
 	var tableName sqlparser.TableName
 	for t := range rb.Symtab().tables {
 		tableName = t
@@ -109,16 +116,19 @@ func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Route, err
 	if !ok {
 		return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
 	}
-	if hasSubquery(del) {
-		return nil, errors.New("unsupported: subqueries in DML")
-	}
 	er.Keyspace = rb.ERoute.Keyspace
 	if !er.Keyspace.Sharded {
+		if !validateSubquerySamePlan(del, rb.ERoute, vschema) {
+			return nil, errors.New("unsupported: sharded subqueries in DML")
+		}
 		er.Opcode = engine.DeleteUnsharded
 		return er, nil
 	}
 	if del.Targets != nil || len(rb.Symtab().tables) != 1 {
 		return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
+	}
+	if hasSubquery(del) {
+		return nil, errors.New("unsupported: subqueries in sharded DML")
 	}
 	var tableName sqlparser.TableName
 	for t := range rb.Symtab().tables {
@@ -165,9 +175,9 @@ func getDMLRouting(where *sqlparser.Where, route *engine.Route) error {
 		if !vindexes.IsUnique(index.Vindex) {
 			continue
 		}
-		if values := getMatch(where.Expr, index.Column); values != nil {
+		if pv, ok := getMatch(where.Expr, index.Column); ok {
 			route.Vindex = index.Vindex
-			route.Values = values
+			route.Values = []sqltypes.PlanValue{pv}
 			return nil
 		}
 	}
@@ -177,7 +187,7 @@ func getDMLRouting(where *sqlparser.Where, route *engine.Route) error {
 // getMatch returns the matched value if there is an equality
 // constraint on the specified column that can be used to
 // decide on a route.
-func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) interface{} {
+func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) (pv sqltypes.PlanValue, ok bool) {
 	filters := splitAndExpression(nil, node)
 	for _, filter := range filters {
 		comparison, ok := filter.(*sqlparser.ComparisonExpr)
@@ -193,13 +203,13 @@ func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) interface{} {
 		if !sqlparser.IsValue(comparison.Right) {
 			continue
 		}
-		val, err := valConvert(comparison.Right)
+		pv, err := sqlparser.NewPlanValue(comparison.Right)
 		if err != nil {
 			continue
 		}
-		return val
+		return pv, true
 	}
-	return nil
+	return sqltypes.PlanValue{}, false
 }
 
 func nameMatch(node sqlparser.Expr, col sqlparser.ColIdent) bool {

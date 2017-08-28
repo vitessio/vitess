@@ -101,8 +101,8 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 	}
 
 	result := sqltypes.Proto3ToResult(qr)
-	min := result.Rows[0][0].ToNative()
-	max := result.Rows[0][1].ToNative()
+	min, _ := sqltypes.ToNative(result.Rows[0][0])
+	max, _ := sqltypes.ToNative(result.Rows[0][1])
 
 	if min == nil || max == nil {
 		wr.Logger().Infof("table=%v: Not splitting the table into multiple chunks, min or max is NULL: %v", td.Name, qr.Rows[0])
@@ -182,11 +182,11 @@ func add(start, interval interface{}) interface{} {
 }
 
 func toChunk(start, end interface{}, number, total int) (chunk, error) {
-	startValue, err := sqltypes.BuildValue(start)
+	startValue, err := sqltypes.InterfaceToValue(start)
 	if err != nil {
 		return chunk{}, fmt.Errorf("Failed to convert calculated start value (%v) into internal sqltypes.Value: %v", start, err)
 	}
-	endValue, err := sqltypes.BuildValue(end)
+	endValue, err := sqltypes.InterfaceToValue(end)
 	if err != nil {
 		return chunk{}, fmt.Errorf("Failed to convert calculated end value (%v) into internal sqltypes.Value: %v", end, err)
 	}

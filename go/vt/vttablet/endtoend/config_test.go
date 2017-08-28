@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
@@ -69,6 +71,9 @@ func TestConfigVars(t *testing.T) {
 	}, {
 		tag: "MaxResultSize",
 		val: tabletenv.Config.MaxResultSize,
+	}, {
+		tag: "WarnResultSize",
+		val: tabletenv.Config.WarnResultSize,
 	}, {
 		tag: "QueryCacheCapacity",
 		val: tabletenv.Config.QueryCacheSize,
@@ -153,7 +158,10 @@ func TestQueryCache(t *testing.T) {
 	defer framework.Server.SetQueryCacheCap(framework.Server.QueryCacheCap())
 	framework.Server.SetQueryCacheCap(1)
 
-	bindVars := map[string]interface{}{"ival1": 1, "ival2": 1}
+	bindVars := map[string]*querypb.BindVariable{
+		"ival1": sqltypes.Int64BindVariable(1),
+		"ival2": sqltypes.Int64BindVariable(1),
+	}
 	client := framework.NewClient()
 	_, _ = client.Execute("select * from vitess_test where intval=:ival1", bindVars)
 	_, _ = client.Execute("select * from vitess_test where intval=:ival2", bindVars)
@@ -188,7 +196,7 @@ func TestQueryCache(t *testing.T) {
 	}
 }
 
-func TestMexResultSize(t *testing.T) {
+func TestMaxResultSize(t *testing.T) {
 	defer framework.Server.SetMaxResultSize(framework.Server.MaxResultSize())
 	framework.Server.SetMaxResultSize(2)
 
@@ -208,6 +216,33 @@ func TestMexResultSize(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 		return
+	}
+}
+
+func TestWarnResultSize(t *testing.T) {
+	defer framework.Server.SetWarnResultSize(framework.Server.WarnResultSize())
+	framework.Server.SetWarnResultSize(2)
+	client := framework.NewClient()
+
+	originalWarningsResultsExceededCount := framework.FetchInt(framework.DebugVars(), "Warnings/ResultsExceeded")
+	query := "select * from vitess_test"
+	_, _ = client.Execute(query, nil)
+	newWarningsResultsExceededCount := framework.FetchInt(framework.DebugVars(), "Warnings/ResultsExceeded")
+	exceededCountDiff := newWarningsResultsExceededCount - originalWarningsResultsExceededCount
+	if exceededCountDiff != 1 {
+		t.Errorf("Warnings.ResultsExceeded counter should have increased by 1, instead got %v", exceededCountDiff)
+	}
+
+	if err := verifyIntValue(framework.DebugVars(), "WarnResultSize", 2); err != nil {
+		t.Error(err)
+	}
+
+	framework.Server.SetWarnResultSize(10)
+	_, _ = client.Execute(query, nil)
+	newerWarningsResultsExceededCount := framework.FetchInt(framework.DebugVars(), "Warnings/ResultsExceeded")
+	exceededCountDiff = newerWarningsResultsExceededCount - newWarningsResultsExceededCount
+	if exceededCountDiff != 0 {
+		t.Errorf("Warnings.ResultsExceeded counter should not have increased, instead got %v", exceededCountDiff)
 	}
 }
 

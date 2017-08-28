@@ -17,7 +17,6 @@ limitations under the License.
 package messager
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -75,7 +74,7 @@ func (me *Engine) Open(dbconfigs dbconfigs.DBConfigs) error {
 	if me.isOpen {
 		return nil
 	}
-	me.conns.Open(&dbconfigs.App, &dbconfigs.Dba)
+	me.conns.Open(&dbconfigs.App, &dbconfigs.Dba, &dbconfigs.AppDebug)
 	me.se.RegisterNotifier("messages", me.schemaChanged)
 	me.isOpen = true
 	return nil
@@ -158,6 +157,7 @@ func (me *Engine) UpdateCaches(newMessages map[string][]*MessageRow, changedMess
 		if mm == nil {
 			continue
 		}
+		MessageStats.Add([]string{name, "Queued"}, int64(len(mrs)))
 		for _, mr := range mrs {
 			if mr.TimeNext > now {
 				// We don't handle future messages yet.
@@ -182,42 +182,42 @@ func (me *Engine) GenerateLoadMessagesQuery(name string) (*sqlparser.ParsedQuery
 	defer me.mu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
-		return nil, fmt.Errorf("message table %s not found in schema", name)
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "message table %s not found in schema", name)
 	}
 	return mm.loadMessagesQuery, nil
 }
 
 // GenerateAckQuery returns the query and bind vars for acking a message.
-func (me *Engine) GenerateAckQuery(name string, ids []string) (string, map[string]interface{}, error) {
+func (me *Engine) GenerateAckQuery(name string, ids []string) (string, map[string]*querypb.BindVariable, error) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
-		return "", nil, fmt.Errorf("message table %s not found in schema", name)
+		return "", nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "message table %s not found in schema", name)
 	}
 	query, bv := mm.GenerateAckQuery(ids)
 	return query, bv, nil
 }
 
 // GeneratePostponeQuery returns the query and bind vars for postponing a message.
-func (me *Engine) GeneratePostponeQuery(name string, ids []string) (string, map[string]interface{}, error) {
+func (me *Engine) GeneratePostponeQuery(name string, ids []string) (string, map[string]*querypb.BindVariable, error) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
-		return "", nil, fmt.Errorf("message table %s not found in schema", name)
+		return "", nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "message table %s not found in schema", name)
 	}
 	query, bv := mm.GeneratePostponeQuery(ids)
 	return query, bv, nil
 }
 
 // GeneratePurgeQuery returns the query and bind vars for purging messages.
-func (me *Engine) GeneratePurgeQuery(name string, timeCutoff int64) (string, map[string]interface{}, error) {
+func (me *Engine) GeneratePurgeQuery(name string, timeCutoff int64) (string, map[string]*querypb.BindVariable, error) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
-		return "", nil, fmt.Errorf("message table %s not found in schema", name)
+		return "", nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "message table %s not found in schema", name)
 	}
 	query, bv := mm.GeneratePurgeQuery(timeCutoff)
 	return query, bv, nil
@@ -232,7 +232,7 @@ func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altere
 			continue
 		}
 		if me.managers[name] != nil {
-			// TODO(sougou): Increment internal error counter.
+			tabletenv.InternalErrors.Add("Messages", 1)
 			log.Errorf("Newly created table alread exists in messages: %s", name)
 			continue
 		}

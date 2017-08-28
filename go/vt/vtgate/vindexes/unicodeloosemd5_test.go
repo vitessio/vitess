@@ -17,9 +17,12 @@ limitations under the License.
 package vindexes
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 var charVindex Vindex
@@ -40,7 +43,7 @@ func TestUnicodeLooseMD5String(t *testing.T) {
 	}
 }
 
-func TestUnicodeLooseMD5(t *testing.T) {
+func TestUnicodeLooseMD5Map(t *testing.T) {
 	tcases := []struct {
 		in, out string
 	}{{
@@ -75,7 +78,7 @@ func TestUnicodeLooseMD5(t *testing.T) {
 		out: "\xac\x0f\x91y\xf5\x1d\xb8\u007f\xe8\xec\xc0\xcf@ʹz",
 	}}
 	for _, tcase := range tcases {
-		got, err := charVindex.(Unique).Map(nil, []interface{}{[]byte(tcase.in)})
+		got, err := charVindex.(Unique).Map(nil, []sqltypes.Value{sqltypes.NewVarBinary(tcase.in)})
 		if err != nil {
 			t.Error(err)
 		}
@@ -83,43 +86,19 @@ func TestUnicodeLooseMD5(t *testing.T) {
 		if out != tcase.out {
 			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 		}
-		ok, err := charVindex.Verify(nil, []interface{}{tcase.in}, [][]byte{[]byte(tcase.out)})
-		if err != nil {
-			t.Error(err)
-		}
-		if !ok {
-			t.Errorf("Verify(%#v): false, want true", tcase.in)
-		}
 	}
-
-	//Negative test case
-	_, err := charVindex.(Unique).Map(nil, []interface{}{1})
-	want := "UnicodeLooseMD5.Map: unexpected data type for getBytes: int"
-	if err.Error() != want {
-		t.Error(err)
-	}
-
 }
 
-func TestUnicodeLooseMD5Neg(t *testing.T) {
-	_, err := charVindex.Verify(nil, []interface{}{[]byte("test1"), []byte("test2")}, [][]byte{[]byte("test1")})
-	want := "UnicodeLooseMD5.Verify: length of ids 2 doesn't match length of ksids 1"
-	if err.Error() != want {
-		t.Error(err.Error())
-	}
-
-	ok, err := charVindex.Verify(nil, []interface{}{[]byte("test2")}, [][]byte{[]byte("test1")})
+func TestUnicodeLooseMD5Verify(t *testing.T) {
+	ids := []sqltypes.Value{sqltypes.NewVarBinary("Test"), sqltypes.NewVarBinary("TEst"), sqltypes.NewVarBinary("different")}
+	ksids := [][]byte{[]byte("\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5"), []byte("\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5"), []byte("\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5")}
+	got, err := charVindex.Verify(nil, ids, ksids)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
-	if ok {
-		t.Errorf("Verify(%#v): true, want false", []byte("test2"))
-	}
-
-	_, err = charVindex.Verify(nil, []interface{}{1}, [][]byte{[]byte("test1")})
-	want = "UnicodeLooseMD5.Verify: unexpected data type for getBytes: int"
-	if err.Error() != want {
-		t.Error(err)
+	want := []bool{true, true, false}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("binaryMD5.Verify: %v, want %v", got, want)
 	}
 }
 

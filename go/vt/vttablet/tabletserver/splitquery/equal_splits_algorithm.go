@@ -219,7 +219,7 @@ func bigRatToValue(number *big.Rat, valueType querypb.Type) sqltypes.Value {
 	default:
 		panic(fmt.Sprintf("Unsupported type: %v", valueType))
 	}
-	result, err := sqltypes.ValueFromBytes(valueType, numberAsBytes)
+	result, err := sqltypes.NewValue(valueType, numberAsBytes)
 	if err != nil {
 		panic(fmt.Sprintf("sqltypes.ValueFromBytes failed with: %v", err))
 	}
@@ -246,19 +246,19 @@ func bigIntToSliceOfBytes(bigInt *big.Int) []byte {
 func valueToBigRat(value sqltypes.Value, valueType querypb.Type) (*big.Rat, error) {
 	switch {
 	case sqltypes.IsUnsigned(valueType):
-		nativeValue, err := value.ParseUint64()
+		nativeValue, err := sqltypes.ToUint64(value)
 		if err != nil {
 			return nil, err
 		}
 		return uint64ToBigRat(nativeValue), nil
 	case sqltypes.IsSigned(valueType):
-		nativeValue, err := value.ParseInt64()
+		nativeValue, err := sqltypes.ToInt64(value)
 		if err != nil {
 			return nil, err
 		}
 		return int64ToBigRat(nativeValue), nil
 	case sqltypes.IsFloat(valueType):
-		nativeValue, err := value.ParseFloat64()
+		nativeValue, err := sqltypes.ToFloat64(value)
 		if err != nil {
 			return nil, err
 		}

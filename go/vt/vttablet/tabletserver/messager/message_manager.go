@@ -25,12 +25,18 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
+
+// MessageStats tracks stats for messages.
+var MessageStats = stats.NewMultiCounters("Messages", []string{"TableName", "Metric"})
 
 type messageReceiver struct {
 	mu   sync.Mutex
@@ -183,6 +189,7 @@ func (mm *messageManager) Open() {
 	mm.isOpen = true
 	mm.wg.Add(1)
 	mm.curReceiver = -1
+
 	go mm.runSend()
 	// TODO(sougou): improve ticks to add randomness.
 	mm.pollerTicks.Start(mm.runPoller)
@@ -302,13 +309,18 @@ func (mm *messageManager) runSend() {
 				mm.cond.Wait()
 				continue
 			}
+			lateCount := int64(0)
 			for i := 0; i < mm.batchSize; i++ {
 				if mr := mm.cache.Pop(); mr != nil {
+					if mr.Epoch >= 1 {
+						lateCount++
+					}
 					rows = append(rows, mr.Row)
 					continue
 				}
 				break
 			}
+			MessageStats.Add([]string{mm.name.String(), "Delayed"}, lateCount)
 			if rows != nil {
 				break
 			}
@@ -359,7 +371,7 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 	}
 	ids := make([]string, len(qr.Rows))
 	for i, row := range qr.Rows {
-		ids[i] = row[0].String()
+		ids[i] = row[0].ToString()
 	}
 	// postpone should discard, but this is a safety measure
 	// in case it fails.
@@ -377,7 +389,7 @@ func postpone(tsv TabletService, name string, ackWaitTime time.Duration, ids []s
 	}()
 	_, err := tsv.PostponeMessages(ctx, nil, name, ids)
 	if err != nil {
-		// TODO(sougou): increment internal error.
+		tabletenv.InternalErrors.Add("Messages", 1)
 		log.Errorf("Unable to postpone messages %v: %v", ids, err)
 	}
 }
@@ -390,7 +402,7 @@ func (mm *messageManager) runPoller() {
 	}()
 	conn, err := mm.conns.Get(ctx)
 	if err != nil {
-		// TODO(sougou): increment internal error.
+		tabletenv.InternalErrors.Add("Messages", 1)
 		log.Errorf("Error getting connection: %v", err)
 		return
 	}
@@ -405,9 +417,9 @@ func (mm *messageManager) runPoller() {
 		defer mm.DBLock.Unlock()
 
 		size := mm.cache.Size()
-		bindVars := map[string]interface{}{
-			"time_next": int64(time.Now().UnixNano()),
-			"max":       int64(size),
+		bindVars := map[string]*querypb.BindVariable{
+			"time_next": sqltypes.Int64BindVariable(time.Now().UnixNano()),
+			"max":       sqltypes.Int64BindVariable(int64(size)),
 		}
 		qr, err := mm.read(ctx, conn, mm.readByTimeNext, bindVars)
 		if err != nil {
@@ -434,7 +446,7 @@ func (mm *messageManager) runPoller() {
 		for _, row := range qr.Rows {
 			mr, err := BuildMessageRow(row)
 			if err != nil {
-				// TODO(sougou): increment internal error.
+				tabletenv.InternalErrors.Add("Messages", 1)
 				log.Errorf("Error reading message row: %v", err)
 				continue
 			}
@@ -461,9 +473,10 @@ func purge(tsv TabletService, name string, purgeAfter, purgeInterval time.Durati
 	for {
 		count, err := tsv.PurgeMessages(ctx, nil, name, time.Now().Add(-purgeAfter).UnixNano())
 		if err != nil {
-			// TODO(sougou): increment internal error.
+			tabletenv.InternalErrors.Add("Messages", 1)
 			log.Errorf("Unable to delete messages: %v", err)
 		}
+		MessageStats.Add([]string{name, "Purged"}, count)
 		// If deleted 500 or more, we should continue.
 		if count < 500 {
 			return
@@ -472,44 +485,56 @@ func purge(tsv TabletService, name string, purgeAfter, purgeInterval time.Durati
 }
 
 // GenerateAckQuery returns the query and bind vars for acking a message.
-func (mm *messageManager) GenerateAckQuery(ids []string) (string, map[string]interface{}) {
-	idbvs := make([]interface{}, len(ids))
-	for i, id := range ids {
-		idbvs[i] = id
+func (mm *messageManager) GenerateAckQuery(ids []string) (string, map[string]*querypb.BindVariable) {
+	idbvs := &querypb.BindVariable{
+		Type:   querypb.Type_TUPLE,
+		Values: make([]*querypb.Value, 0, len(ids)),
 	}
-	return mm.ackQuery.Query, map[string]interface{}{
-		"time_acked": int64(time.Now().UnixNano()),
+	for _, id := range ids {
+		idbvs.Values = append(idbvs.Values, &querypb.Value{
+			Type:  querypb.Type_VARCHAR,
+			Value: []byte(id),
+		})
+	}
+	return mm.ackQuery.Query, map[string]*querypb.BindVariable{
+		"time_acked": sqltypes.Int64BindVariable(time.Now().UnixNano()),
 		"ids":        idbvs,
 	}
 }
 
 // GeneratePostponeQuery returns the query and bind vars for postponing a message.
-func (mm *messageManager) GeneratePostponeQuery(ids []string) (string, map[string]interface{}) {
-	idbvs := make([]interface{}, len(ids))
-	for i, id := range ids {
-		idbvs[i] = id
+func (mm *messageManager) GeneratePostponeQuery(ids []string) (string, map[string]*querypb.BindVariable) {
+	idbvs := &querypb.BindVariable{
+		Type:   querypb.Type_TUPLE,
+		Values: make([]*querypb.Value, 0, len(ids)),
 	}
-	return mm.postponeQuery.Query, map[string]interface{}{
-		"time_now":  int64(time.Now().UnixNano()),
-		"wait_time": int64(mm.ackWaitTime),
+	for _, id := range ids {
+		idbvs.Values = append(idbvs.Values, &querypb.Value{
+			Type:  querypb.Type_VARCHAR,
+			Value: []byte(id),
+		})
+	}
+	return mm.postponeQuery.Query, map[string]*querypb.BindVariable{
+		"time_now":  sqltypes.Int64BindVariable(time.Now().UnixNano()),
+		"wait_time": sqltypes.Int64BindVariable(int64(mm.ackWaitTime)),
 		"ids":       idbvs,
 	}
 }
 
 // GeneratePurgeQuery returns the query and bind vars for purging messages.
-func (mm *messageManager) GeneratePurgeQuery(timeCutoff int64) (string, map[string]interface{}) {
-	return mm.purgeQuery.Query, map[string]interface{}{
-		"time_scheduled": timeCutoff,
+func (mm *messageManager) GeneratePurgeQuery(timeCutoff int64) (string, map[string]*querypb.BindVariable) {
+	return mm.purgeQuery.Query, map[string]*querypb.BindVariable{
+		"time_scheduled": sqltypes.Int64BindVariable(timeCutoff),
 	}
 }
 
 // BuildMessageRow builds a MessageRow for a db row.
 func BuildMessageRow(row []sqltypes.Value) (*MessageRow, error) {
-	timeNext, err := row[0].ParseInt64()
+	timeNext, err := sqltypes.ToInt64(row[0])
 	if err != nil {
 		return nil, err
 	}
-	epoch, err := row[1].ParseInt64()
+	epoch, err := sqltypes.ToInt64(row[1])
 	if err != nil {
 		return nil, err
 	}
@@ -526,10 +551,10 @@ func (mm *messageManager) receiverCount() int {
 	return len(mm.receivers)
 }
 
-func (mm *messageManager) read(ctx context.Context, conn *connpool.DBConn, pq *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {
-	b, err := pq.GenerateQuery(bindVars)
+func (mm *messageManager) read(ctx context.Context, conn *connpool.DBConn, pq *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	b, err := pq.GenerateQuery(bindVars, nil)
 	if err != nil {
-		// TODO(sougou): increment internal error.
+		tabletenv.InternalErrors.Add("Messages", 1)
 		log.Errorf("Error reading rows from message table: %v", err)
 		return nil, err
 	}

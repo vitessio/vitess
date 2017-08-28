@@ -59,7 +59,8 @@ func CreateMysqld(tabletUID uint32, mysqlSocket string, mysqlPort int32, dbconfi
 // installation that already exists. This will look for an existing my.cnf file
 // and use that to call NewMysqld().
 func OpenMysqld(tabletUID uint32, dbconfigFlags dbconfigs.DBConfigFlag) (*Mysqld, error) {
-	mycnf, err := ReadMycnf(MycnfFile(tabletUID))
+	// We pass a port of 0, this will be read and overwritten from the path on disk
+	mycnf, err := ReadMycnf(NewMycnf(tabletUID, 0))
 	if err != nil {
 		return nil, fmt.Errorf("couldn't read my.cnf file: %v", err)
 	}

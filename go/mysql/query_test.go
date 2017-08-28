@@ -408,7 +408,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		if got != query {
 			t.Errorf("server got query '%v' but expected '%v'", got, query)
 		}
-		if err := sConn.writeResult(result); err != nil {
+		if err := writeResult(sConn, result); err != nil {
 			t.Errorf("Error writing result to client: %v", err)
 		}
 		sConn.sequence = 0
@@ -417,15 +417,24 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 	wg.Wait()
 }
 
+func writeResult(conn *Conn, result *sqltypes.Result) error {
+	if err := conn.writeFields(result); err != nil {
+		return err
+	}
+	if len(result.Fields) == 0 {
+		return nil
+	}
+	if err := conn.writeRows(result); err != nil {
+		return err
+	}
+	return conn.writeEndResult()
+}
+
 func RowString(row []sqltypes.Value) string {
 	l := len(row)
 	result := fmt.Sprintf("%v values:", l)
 	for _, val := range row {
-		if val.IsNull() {
-			result += " NULL"
-		} else {
-			result += fmt.Sprintf(" (%v)%v", val.Type(), val.String())
-		}
+		result += fmt.Sprintf(" %v", val)
 	}
 	return result
 }

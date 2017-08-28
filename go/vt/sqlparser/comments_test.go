@@ -18,7 +18,7 @@ package sqlparser
 
 import "testing"
 
-func TestComments(t *testing.T) {
+func TestSplitTrailingComments(t *testing.T) {
 	var testCases = []struct {
 		input, outSQL, outComments string
 	}{{
@@ -94,6 +94,76 @@ func TestComments(t *testing.T) {
 		}
 		if gotComments != testCase.outComments {
 			t.Errorf("test input: '%s', got Comments\n%+v, want\n%+v", testCase.input, gotComments, testCase.outComments)
+		}
+	}
+}
+
+func TestStripLeadingComments(t *testing.T) {
+	var testCases = []struct {
+		input, outSQL string
+	}{{
+		input:  "/",
+		outSQL: "/",
+	}, {
+		input:  "*/",
+		outSQL: "*/",
+	}, {
+		input:  "/*/",
+		outSQL: "/*/",
+	}, {
+		input:  "/*a",
+		outSQL: "/*a",
+	}, {
+		input:  "/*a*",
+		outSQL: "/*a*",
+	}, {
+		input:  "/*a**",
+		outSQL: "/*a**",
+	}, {
+		input:  "/*b**a*/",
+		outSQL: "",
+	}, {
+		input:  "/*a*/",
+		outSQL: "",
+	}, {
+		input:  "/**/",
+		outSQL: "",
+	}, {
+		input:  "/*b*/ /*a*/",
+		outSQL: "",
+	}, {
+		input: `/*b*/ --foo
+bar`,
+		outSQL: "bar",
+	}, {
+		input:  "foo /* bar */",
+		outSQL: "foo /* bar */",
+	}, {
+		input:  "/* foo */ bar",
+		outSQL: "bar",
+	}, {
+		input:  "-- /* foo */ bar",
+		outSQL: "-- /* foo */ bar",
+	}, {
+		input:  "foo -- bar */",
+		outSQL: "foo -- bar */",
+	}, {
+		input: `/*
+foo */ bar`,
+		outSQL: "bar",
+	}, {
+		input: `-- foo bar
+a`,
+		outSQL: "a",
+	}, {
+		input:  `-- foo bar`,
+		outSQL: "-- foo bar",
+	}}
+	for _, testCase := range testCases {
+		gotSQL := StripLeadingComments(testCase.input)
+
+		if gotSQL != testCase.outSQL {
+			t.Errorf("test input: '%s', got SQL\n%+v, want\n%+v", testCase.input, gotSQL, testCase.outSQL)
 		}
 	}
 }

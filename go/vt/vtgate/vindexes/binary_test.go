@@ -18,8 +18,11 @@ package vindexes
 
 import (
 	"bytes"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 var binOnlyVindex Vindex
@@ -40,64 +43,39 @@ func TestBinaryString(t *testing.T) {
 	}
 }
 
-func TestBinary(t *testing.T) {
+func TestBinaryMap(t *testing.T) {
 	tcases := []struct {
-		in, out []byte
+		in  sqltypes.Value
+		out []byte
 	}{{
-		in:  []byte("test"),
-		out: []byte("test"),
+		in:  sqltypes.NewVarChar("test1"),
+		out: []byte("test1"),
 	}, {
-		in:  []byte("test2"),
+		in:  sqltypes.NewVarChar("test2"),
 		out: []byte("test2"),
-	}, {
-		in:  []byte("test3"),
-		out: []byte("test3"),
 	}}
 	for _, tcase := range tcases {
-		got, err := binOnlyVindex.(Unique).Map(nil, []interface{}{tcase.in})
+		got, err := binOnlyVindex.(Unique).Map(nil, []sqltypes.Value{tcase.in})
 		if err != nil {
 			t.Error(err)
 		}
 		out := []byte(got[0])
-		if bytes.Compare(tcase.in, out) != 0 {
+		if bytes.Compare(tcase.out, out) != 0 {
 			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 		}
-		ok, err := binOnlyVindex.Verify(nil, []interface{}{tcase.in}, [][]byte{tcase.out})
-		if err != nil {
-			t.Error(err)
-		}
-		if !ok {
-			t.Errorf("Verify(%#v): false, want true", tcase.in)
-		}
-	}
-
-	//Negative Test Case
-	_, err := binOnlyVindex.(Unique).Map(nil, []interface{}{1})
-	want := "Binary.Map :unexpected data type for getBytes: int"
-	if err.Error() != want {
-		t.Error(err)
 	}
 }
 
-func TestBinaryVerifyNeg(t *testing.T) {
-	_, err := binOnlyVindex.Verify(nil, []interface{}{[]byte("test1"), []byte("test2")}, [][]byte{[]byte("test1")})
-	want := "Binary.Verify: length of ids 2 doesn't match length of ksids 1"
-	if err.Error() != want {
-		t.Error(err.Error())
-	}
-
-	ok, err := binOnlyVindex.Verify(nil, []interface{}{[]byte("test2")}, [][]byte{[]byte("test1")})
+func TestBinaryVerify(t *testing.T) {
+	ids := []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NewVarBinary("2")}
+	ksids := [][]byte{[]byte("1"), []byte("1")}
+	got, err := binOnlyVindex.Verify(nil, ids, ksids)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
-	if ok {
-		t.Errorf("Verify(%#v): true, want false", []byte("test2"))
-	}
-
-	_, err = binOnlyVindex.Verify(nil, []interface{}{1}, [][]byte{[]byte("test1")})
-	want = "Binary.Verify: unexpected data type for getBytes: int"
-	if err.Error() != want {
-		t.Error(err)
+	want := []bool{true, false}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("binary.Verify: %v, want %v", got, want)
 	}
 }
 
@@ -106,14 +84,15 @@ func TestBinaryReverseMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if bytes.Compare(got[0].([]byte), []byte("\x00\x00\x00\x00\x00\x00\x00\x01")) != 0 {
-		t.Errorf("ReverseMap(): %+v, want %+v", got, []byte("\x00\x00\x00\x00\x00\x00\x00\x01"))
+	want := []sqltypes.Value{sqltypes.NewVarBinary("\x00\x00\x00\x00\x00\x00\x00\x01")}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ReverseMap(): %+v, want %+v", got, want)
 	}
 
-	//Negative Test
+	// Negative Test
 	_, err = binOnlyVindex.(Reversible).ReverseMap(nil, [][]byte{[]byte(nil)})
-	want := "Binary.ReverseMap: keyspaceId is nil"
-	if err.Error() != want {
-		t.Error(err)
+	wantErr := "Binary.ReverseMap: keyspaceId is nil"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("ReverseMap(): %v, want %s", err, wantErr)
 	}
 }

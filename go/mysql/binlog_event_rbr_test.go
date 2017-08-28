@@ -405,14 +405,14 @@ func TestCellLengthAndData(t *testing.T) {
 		metadata: 2,
 		data: []byte{0x0f, 0x00,
 			0, 1, 0, 14, 0, 11, 0, 1, 0, 12, 12, 0, 97, 1, 98},
-		out: sqltypes.MakeTrusted(sqltypes.TypeSQL,
+		out: sqltypes.MakeTrusted(sqltypes.Expression,
 			[]byte(`JSON_OBJECT('a','b')`)),
 	}, {
 		typ:      TypeJSON,
 		metadata: 4,
 		data: []byte{0x0f, 0x00, 0x00, 0x00,
 			0, 1, 0, 14, 0, 11, 0, 1, 0, 12, 12, 0, 97, 1, 98},
-		out: sqltypes.MakeTrusted(sqltypes.TypeSQL,
+		out: sqltypes.MakeTrusted(sqltypes.Expression,
 			[]byte(`JSON_OBJECT('a','b')`)),
 	}, {
 		typ:      TypeEnum,
@@ -539,7 +539,7 @@ func TestCellLengthAndData(t *testing.T) {
 		// Test CellValue.
 		out, l, err := CellValue(padded, 1, tcase.typ, tcase.metadata, tcase.styp)
 		if err != nil || l != len(tcase.data) || out.Type() != tcase.out.Type() || bytes.Compare(out.Raw(), tcase.out.Raw()) != 0 {
-			t.Errorf("testcase cellData(%v,%v) returned unexpected result: %v(%v) %v %v, was expecting %v(%v) %v <nil>", tcase.typ, tcase.data, out, out.Type(), l, err, tcase.out, tcase.out.Type(), len(tcase.data))
+			t.Errorf("testcase cellData(%v,%v) returned unexpected result: %v %v %v, was expecting %v %v <nil>", tcase.typ, tcase.data, out, l, err, tcase.out, len(tcase.data))
 		}
 	}
 }

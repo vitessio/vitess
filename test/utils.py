@@ -1148,13 +1148,13 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64',
     for shard in partition['shard_references']:
       s = ''
       e = ''
-      if 'key_range' in shard:
+      if 'key_range' in shard and shard['key_range']:
         if 'start' in shard['key_range']:
           s = shard['key_range']['start']
-          s = base64.b64decode(s).encode('hex')
+          s = base64.b64decode(s).encode('hex') if s else ''
         if 'end' in shard['key_range']:
           e = shard['key_range']['end']
-          e = base64.b64decode(e).encode('hex')
+          e = base64.b64decode(e).encode('hex') if e else ''
       r += ' %s-%s' % (s, e)
     pmap[tablet_type] = r + '\n'
   for tablet_type in sorted(pmap):

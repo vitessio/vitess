@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017 Google Inc.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,6 +17,7 @@
 """This module allows you to bring up and tear down keyspaces."""
 
 import cgi
+import decimal
 import json
 import subprocess
 import threading
@@ -63,6 +64,8 @@ def exec_query(conn, title, query, response, keyspace=None, kr=None):  # pylint:
         "title": title,
         "error": str(e),
         }
+    cursor.rollback()
+    cursor.close()
 
 
 def capture_log(port, queries):  # pylint: disable=missing-docstring
@@ -159,9 +162,21 @@ def main():
         conn, "name_user_idx", "select * from name_user_idx", response,
         keyspace="lookup", kr="-")
 
-    print json.dumps(response)
+    print json.dumps(response, default=decimal_default)
   except Exception as e:  # pylint: disable=broad-except
     print json.dumps({"error": str(e)})
+
+
+def decimal_default(obj):
+  """Provide json-encodable conversion for decimal.Decimal type.
+
+  json encoding fails on decimal.Decimal. This
+  function converts the decimal into a float object
+  which json knows how to encode.
+  """
+  if isinstance(obj, decimal.Decimal):
+    return float(obj)
+  raise TypeError
 
 
 if __name__ == "__main__":

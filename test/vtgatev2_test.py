@@ -2,13 +2,13 @@
 # coding: utf-8
 
 # Copyright 2017 Google Inc.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -52,6 +52,9 @@ shard_0_replica2 = tablet.Tablet()
 shard_1_master = tablet.Tablet()
 shard_1_replica1 = tablet.Tablet()
 shard_1_replica2 = tablet.Tablet()
+
+all_tablets = [shard_0_master, shard_0_replica1, shard_0_replica2,
+               shard_1_master, shard_1_replica1, shard_1_replica2]
 
 KEYSPACE_NAME = 'test_keyspace'
 SHARD_NAMES = ['-80', '80-']
@@ -263,18 +266,7 @@ def setup_tablets():
                          [shard_0_master, shard_0_replica1, shard_0_replica2,
                           shard_1_master, shard_1_replica1, shard_1_replica2])
 
-  wait_for_endpoints(
-      '%s.%s.master' % (KEYSPACE_NAME, SHARD_NAMES[0]),
-      1)
-  wait_for_endpoints(
-      '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[0]),
-      2)
-  wait_for_endpoints(
-      '%s.%s.master' % (KEYSPACE_NAME, SHARD_NAMES[1]),
-      1)
-  wait_for_endpoints(
-      '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[1]),
-      2)
+  wait_for_all_tablets()
 
 
 def restart_vtgate(port):
@@ -291,6 +283,13 @@ def wait_for_endpoints(name, count):
     l2vtgate.wait_for_endpoints(name, count)
   else:
     utils.vtgate.wait_for_endpoints(name, count)
+
+
+def wait_for_all_tablets():
+  wait_for_endpoints('%s.%s.master' % (KEYSPACE_NAME, SHARD_NAMES[0]), 1)
+  wait_for_endpoints('%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[0]), 2)
+  wait_for_endpoints('%s.%s.master' % (KEYSPACE_NAME, SHARD_NAMES[1]), 1)
+  wait_for_endpoints('%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[1]), 2)
 
 
 def get_connection(timeout=10.0):
@@ -865,7 +864,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
     query = 'select * from vt_field_types where uint_val in ::uint_val_1'
     rowcount = cursor.execute(query, {'uint_val_1': uint_val_list})
     self.assertEqual(rowcount, len(uint_val_list), "rowcount doesn't match")
-    for _, r in enumerate(cursor.results):
+    for r in cursor.results:
       row = DBRow(field_names, r)
       self.assertIsInstance(row.uint_val, long)
       self.assertGreaterEqual(
@@ -1356,7 +1355,7 @@ class TestFailures(BaseTestCase):
         keyranges=[self.keyrange])
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_after = int(tablet1_vars['Queries']['TotalCount'])
-    self.assertEquals(t1_query_count_after-t1_query_count_before, 1)
+    self.assertEqual(t1_query_count_after-t1_query_count_before, 1)
     # Wait for tablet2 to go down.
     replica_tablet2_proc.wait()
     # send another query, should also succeed on tablet1
@@ -1368,7 +1367,7 @@ class TestFailures(BaseTestCase):
         keyranges=[self.keyrange])
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_after = int(tablet1_vars['Queries']['TotalCount'])
-    self.assertEquals(t1_query_count_after-t1_query_count_before, 1)
+    self.assertEqual(t1_query_count_after-t1_query_count_before, 1)
     # start tablet2
     self.tablet_start(self.replica_tablet2, 'replica')
     wait_for_endpoints(
@@ -1387,8 +1386,8 @@ class TestFailures(BaseTestCase):
     t1_query_count_after = int(tablet1_vars['Queries']['TotalCount'])
     tablet2_vars = utils.get_vars(self.replica_tablet2.port)
     t2_query_count_after = int(tablet2_vars['Queries']['TotalCount'])
-    self.assertEquals(t1_query_count_after-t1_query_count_before
-                      +t2_query_count_after-t2_query_count_before, 1)
+    self.assertEqual(t1_query_count_after-t1_query_count_before
+                     +t2_query_count_after-t2_query_count_before, 1)
     vtgate_conn.close()
 
   # Test the case that there are queries sent during one vttablet is killed,
@@ -1405,7 +1404,7 @@ class TestFailures(BaseTestCase):
         keyranges=[self.keyrange])
     tablet2_vars = utils.get_vars(self.replica_tablet2.port)
     t2_query_count_after = int(tablet2_vars['Queries']['TotalCount'])
-    self.assertEquals(t2_query_count_after-t2_query_count_before, 1)
+    self.assertEqual(t2_query_count_after-t2_query_count_before, 1)
     # start tablet1 mysql
     utils.wait_procs([self.replica_tablet.start_mysql(),])
     # then restart replication, and write data, make sure we go back to healthy
@@ -1436,7 +1435,7 @@ class TestFailures(BaseTestCase):
         keyranges=[self.keyrange])
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_after = int(tablet1_vars['Queries']['TotalCount'])
-    self.assertEquals(t1_query_count_after-t1_query_count_before, 1)
+    self.assertEqual(t1_query_count_after-t1_query_count_before, 1)
     # start tablet2
     self.tablet_start(self.replica_tablet2, 'replica')
     wait_for_endpoints(
@@ -1455,8 +1454,8 @@ class TestFailures(BaseTestCase):
     t1_query_count_after = int(tablet1_vars['Queries']['TotalCount'])
     tablet2_vars = utils.get_vars(self.replica_tablet2.port)
     t2_query_count_after = int(tablet2_vars['Queries']['TotalCount'])
-    self.assertEquals(t1_query_count_after-t1_query_count_before
-                      +t2_query_count_after-t2_query_count_before, 1)
+    self.assertEqual(t1_query_count_after-t1_query_count_before
+                     +t2_query_count_after-t2_query_count_before, 1)
     vtgate_conn.close()
 
   def test_bind_vars_in_exception_message(self):
@@ -1599,7 +1598,7 @@ class TestFailures(BaseTestCase):
       self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_after = int(tablet1_vars['Queries']['TotalCount'])
-    self.assertEquals(t1_query_count_after-t1_query_count_before, 1)
+    self.assertEqual(t1_query_count_after-t1_query_count_before, 1)
     # start a long running query
     num_requests = 10
     pool = ThreadPool(processes=num_requests)

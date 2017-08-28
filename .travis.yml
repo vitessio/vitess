@@ -1,8 +1,14 @@
+# TODO(mberlin): Travis will break this configuration on Sep 5, 2017.
+# Moving off the container based infrastructure (sudo: required) may buy us more time.
+# But we should move to Docker based tests eventually.
+# See their announcement: https://blog.travis-ci.com/2017-07-11-trusty-as-default-linux-is-coming
+dist: precise
 # Use container-based infrastructure (see: http://docs.travis-ci.com/user/workers/container-based-infrastructure/).
 sudo: false
 language: go
 go:
   - 1.8
+go_import_path: github.com/youtube/vitess
 addons:
   apt:
     sources:
@@ -141,3 +147,6 @@ after_failure:
   - ls -alR $HOME/gopath/vtdataroot
   # Output *.log* and *.stderr files. (Add -keep-data to TEST_FLAGS above or tests will delete their logs.)
   - find $HOME/gopath/vtdataroot \( -name "*.log*" -or -name "*.stderr" \) -type f -print0 | xargs -0r --verbose --max-args=1 cat
+notifications:
+  slack:
+    secure: S9n4rVWuEvSaF9RZUIx3Nkc2ycpM254zmalyMMbT5EmV1Xz6Zww2FL39RR5d57zsZ2M8GVW5n9uB8Bx57mr+L/wClEltzknYr7MA2/yYNMo5iK83tdQtNNw5U+dZG9/Plhlm4n883lcw9aZOyotNcLg2zBsd48Y74olk4NdmSfo=

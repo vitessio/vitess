@@ -22,7 +22,6 @@ import (
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
 // buildSelectPlan is the new function to build a Select plan.
@@ -55,7 +54,11 @@ func processSelect(sel *sqlparser.Select, vschema VSchema, outer builder) (build
 			return nil, err
 		}
 	}
-	err = pushSelectExprs(sel, bldr)
+	bldr, err = checkAggregates(sel, bldr)
+	if err != nil {
+		return nil, err
+	}
+	bldr, err = pushSelectExprs(sel, bldr)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +72,7 @@ func processSelect(sel *sqlparser.Select, vschema VSchema, outer builder) (build
 	if err != nil {
 		return nil, err
 	}
-	err = pushLimit(sel.Limit, bldr)
+	bldr, err = pushLimit(sel.Limit, bldr)
 	if err != nil {
 		return nil, err
 	}
@@ -84,12 +87,11 @@ func pushFilter(boolExpr sqlparser.Expr, bldr builder, whereType string) error {
 	filters := splitAndExpression(nil, boolExpr)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
-		rb, err := findRoute(filter, bldr)
+		origin, err := findOrigin(filter, bldr)
 		if err != nil {
 			return err
 		}
-		err = rb.PushFilter(filter, whereType)
-		if err != nil {
+		if err := bldr.PushFilter(filter, whereType, origin); err != nil {
 			return err
 		}
 	}
@@ -118,74 +120,18 @@ func reorderBySubquery(filters []sqlparser.Expr) {
 
 // pushSelectExprs identifies the target route for the
 // select expressions and pushes them down.
-func pushSelectExprs(sel *sqlparser.Select, bldr builder) error {
-	err := checkAggregates(sel, bldr)
-	if err != nil {
-		return err
-	}
-	if sel.Distinct != "" {
-		// We know it's a route, but this may change
-		// in the distant future.
-		bldr.(*route).MakeDistinct()
-	}
+func pushSelectExprs(sel *sqlparser.Select, bldr builder) (builder, error) {
 	resultColumns, err := pushSelectRoutes(sel.SelectExprs, bldr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	bldr.Symtab().ResultColumns = resultColumns
-	err = pushGroupBy(sel.GroupBy, bldr)
+
+	bldr, err = pushGroupBy(sel, bldr)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
-}
-
-// checkAggregates returns an error if the select statement
-// has aggregates that cannot be pushed down due to a complex
-// plan.
-func checkAggregates(sel *sqlparser.Select, bldr builder) error {
-	hasAggregates := false
-	if sel.Distinct != "" {
-		hasAggregates = true
-	} else {
-		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			switch node := node.(type) {
-			case *sqlparser.FuncExpr:
-				if node.IsAggregate() {
-					hasAggregates = true
-					return false, errors.New("dummy")
-				}
-			case *sqlparser.GroupConcatExpr:
-				hasAggregates = true
-				return false, errors.New("dummy")
-			}
-			return true, nil
-		}, sel.SelectExprs)
-	}
-	if !hasAggregates {
-		return nil
-	}
-
-	// Check if we can allow aggregates.
-	rb, ok := bldr.(*route)
-	if !ok {
-		return errors.New("unsupported: complex join with aggregates")
-	}
-	if rb.IsSingle() {
-		return nil
-	}
-	// It's a scatter rb. We can allow aggregates if there is a unique
-	// vindex in the select list.
-	for _, selectExpr := range sel.SelectExprs {
-		switch selectExpr := selectExpr.(type) {
-		case *sqlparser.AliasedExpr:
-			vindex := bldr.Symtab().Vindex(selectExpr.Expr, rb)
-			if vindex != nil && vindexes.IsUnique(vindex) {
-				return nil
-			}
-		}
-	}
-	return errors.New("unsupported: scatter with aggregates")
+	return bldr, nil
 }
 
 // pusheSelectRoutes is a convenience function that pushes all the select
@@ -195,11 +141,11 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*resul
 	for i, node := range selectExprs {
 		switch node := node.(type) {
 		case *sqlparser.AliasedExpr:
-			rb, err := findRoute(node.Expr, bldr)
+			origin, err := findOrigin(node.Expr, bldr)
 			if err != nil {
 				return nil, err
 			}
-			resultColumns[i], _, err = bldr.PushSelect(node, rb)
+			resultColumns[i], _, err = bldr.PushSelect(node, origin)
 			if err != nil {
 				return nil, err
 			}
@@ -207,7 +153,7 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*resul
 			// We'll allow select * for simple routes.
 			rb, ok := bldr.(*route)
 			if !ok {
-				return nil, errors.New("unsupported: '*' expression in complex join")
+				return nil, errors.New("unsupported: '*' expression in cross-shard query")
 			}
 			// Validate keyspace reference if any.
 			if !node.TableName.IsEmpty() {
@@ -222,12 +168,14 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*resul
 			rb, ok := bldr.(*route)
 			if !ok {
 				// This code is unreachable because the parser doesn't allow joins for next val statements.
-				return nil, errors.New("unsupported: SELECT NEXT query in complex join")
+				return nil, errors.New("unsupported: SELECT NEXT query in cross-shard query")
 			}
 			if err := rb.SetOpcode(engine.SelectNext); err != nil {
 				return nil, err
 			}
 			resultColumns[i] = rb.PushAnonymous(node)
+		default:
+			panic(fmt.Sprintf("BUG: unexpceted select expression type: %T", node))
 		}
 	}
 	return resultColumns, nil

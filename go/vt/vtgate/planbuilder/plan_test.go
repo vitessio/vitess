@@ -27,6 +27,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
@@ -37,12 +38,10 @@ type hashIndex struct{ name string }
 
 func (v *hashIndex) String() string { return v.name }
 func (*hashIndex) Cost() int        { return 1 }
-func (*hashIndex) Verify(vindexes.VCursor, []interface{}, [][]byte) (bool, error) {
-	return false, nil
+func (*hashIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+	return []bool{}, nil
 }
-func (*hashIndex) Map(vindexes.VCursor, []interface{}) ([][]byte, error) { return nil, nil }
-func (*hashIndex) Create(vindexes.VCursor, []interface{}) error          { return nil }
-func (*hashIndex) Delete(vindexes.VCursor, []interface{}, []byte) error  { return nil }
+func (*hashIndex) Map(vindexes.VCursor, []sqltypes.Value) ([][]byte, error) { return nil, nil }
 
 func newHashIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &hashIndex{name: name}, nil
@@ -53,12 +52,12 @@ type lookupIndex struct{ name string }
 
 func (v *lookupIndex) String() string { return v.name }
 func (*lookupIndex) Cost() int        { return 2 }
-func (*lookupIndex) Verify(vindexes.VCursor, []interface{}, [][]byte) (bool, error) {
-	return false, nil
+func (*lookupIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+	return []bool{}, nil
 }
-func (*lookupIndex) Map(vindexes.VCursor, []interface{}) ([][]byte, error)  { return nil, nil }
-func (*lookupIndex) Create(vindexes.VCursor, []interface{}, [][]byte) error { return nil }
-func (*lookupIndex) Delete(vindexes.VCursor, []interface{}, []byte) error   { return nil }
+func (*lookupIndex) Map(vindexes.VCursor, []sqltypes.Value) ([][]byte, error)        { return nil, nil }
+func (*lookupIndex) Create(vindexes.VCursor, []sqltypes.Value, [][]byte, bool) error { return nil }
+func (*lookupIndex) Delete(vindexes.VCursor, []sqltypes.Value, []byte) error         { return nil }
 
 func newLookupIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &lookupIndex{name: name}, nil
@@ -69,12 +68,12 @@ type multiIndex struct{ name string }
 
 func (v *multiIndex) String() string { return v.name }
 func (*multiIndex) Cost() int        { return 3 }
-func (*multiIndex) Verify(vindexes.VCursor, []interface{}, [][]byte) (bool, error) {
-	return false, nil
+func (*multiIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+	return []bool{}, nil
 }
-func (*multiIndex) Map(vindexes.VCursor, []interface{}) ([][][]byte, error) { return nil, nil }
-func (*multiIndex) Create(vindexes.VCursor, []interface{}, [][]byte) error  { return nil }
-func (*multiIndex) Delete(vindexes.VCursor, []interface{}, []byte) error    { return nil }
+func (*multiIndex) Map(vindexes.VCursor, []sqltypes.Value) ([][][]byte, error)      { return nil, nil }
+func (*multiIndex) Create(vindexes.VCursor, []sqltypes.Value, [][]byte, bool) error { return nil }
+func (*multiIndex) Delete(vindexes.VCursor, []sqltypes.Value, []byte) error         { return nil }
 
 func newMultiIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &multiIndex{name: name}, nil
@@ -85,12 +84,12 @@ type costlyIndex struct{ name string }
 
 func (v *costlyIndex) String() string { return v.name }
 func (*costlyIndex) Cost() int        { return 10 }
-func (*costlyIndex) Verify(vindexes.VCursor, []interface{}, [][]byte) (bool, error) {
-	return false, nil
+func (*costlyIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+	return []bool{}, nil
 }
-func (*costlyIndex) Map(vindexes.VCursor, []interface{}) ([][][]byte, error) { return nil, nil }
-func (*costlyIndex) Create(vindexes.VCursor, []interface{}, [][]byte) error  { return nil }
-func (*costlyIndex) Delete(vindexes.VCursor, []interface{}, []byte) error    { return nil }
+func (*costlyIndex) Map(vindexes.VCursor, []sqltypes.Value) ([][][]byte, error)      { return nil, nil }
+func (*costlyIndex) Create(vindexes.VCursor, []sqltypes.Value, [][]byte, bool) error { return nil }
+func (*costlyIndex) Delete(vindexes.VCursor, []sqltypes.Value, []byte) error         { return nil }
 
 func newCostlyIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &costlyIndex{name: name}, nil
@@ -112,6 +111,7 @@ func TestPlan(t *testing.T) {
 	// the column is named as Id. This is to make sure that
 	// column names are case-preserved, but treated as
 	// case-insensitive even if they come from the vschema.
+	testFile(t, "aggr_cases.txt", vschema)
 	testFile(t, "from_cases.txt", vschema)
 	testFile(t, "filter_cases.txt", vschema)
 	testFile(t, "select_cases.txt", vschema)
@@ -163,7 +163,7 @@ func testFile(t *testing.T, filename string, vschema *vindexes.VSchema) {
 			out = string(bout)
 		}
 		if out != tcase.output {
-			t.Errorf("File: %s, Line:%v\ngot  = %s\nwant = %s", filename, tcase.lineno, out, tcase.output)
+			t.Errorf("File: %s, Line:%v\n%s, want\n%s", filename, tcase.lineno, out, tcase.output)
 			// Uncomment these lines to re-generate input files
 			if err != nil {
 				out = fmt.Sprintf("\"%s\"", out)

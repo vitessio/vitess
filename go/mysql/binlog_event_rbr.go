@@ -810,7 +810,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 			if err != nil {
 				return sqltypes.NULL, 0, fmt.Errorf("error parsing JSON data %v: %v", data[pos:pos+l], err)
 			}
-			return sqltypes.MakeTrusted(sqltypes.TypeSQL,
+			return sqltypes.MakeTrusted(sqltypes.Expression,
 				d), l + int(metadata), nil
 		}
 
@@ -1049,7 +1049,7 @@ func (rs *Rows) StringValuesForTests(tm *TableMap, rowIndex int) ([]string, erro
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, value.String())
+		result = append(result, value.ToString())
 		pos += l
 		valueIndex++
 	}
@@ -1084,7 +1084,7 @@ func (rs *Rows) StringIdentifiesForTests(tm *TableMap, rowIndex int) ([]string, 
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, value.String())
+		result = append(result, value.ToString())
 		pos += l
 		valueIndex++
 	}

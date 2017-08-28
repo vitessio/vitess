@@ -33,6 +33,8 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 const (
@@ -100,7 +102,7 @@ func (r *Reader) Open(dbc dbconfigs.DBConfigs) {
 	}
 
 	log.Info("Beginning heartbeat reads")
-	r.pool.Open(&dbc.App, &dbc.Dba)
+	r.pool.Open(&dbc.App, &dbc.Dba, &dbc.AppDebug)
 	r.ticks.Start(func() { r.readHeartbeat() })
 	r.isOpen = true
 }
@@ -180,11 +182,11 @@ func (r *Reader) fetchMostRecentHeartbeat(ctx context.Context) (*sqltypes.Result
 // fields to the query as bind vars. This is done to protect ourselves
 // against a badly formed keyspace or shard name.
 func (r *Reader) bindHeartbeatFetch() (string, error) {
-	bindVars := map[string]interface{}{
-		"ks": sqltypes.MakeString([]byte(r.keyspaceShard)),
+	bindVars := map[string]*querypb.BindVariable{
+		"ks": sqltypes.StringBindVariable(r.keyspaceShard),
 	}
 	parsed := sqlparser.BuildParsedQuery(sqlFetchMostRecentHeartbeat, r.dbName, ":ks")
-	bound, err := parsed.GenerateQuery(bindVars)
+	bound, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return "", err
 	}
@@ -196,7 +198,7 @@ func parseHeartbeatResult(res *sqltypes.Result) (int64, error) {
 	if len(res.Rows) != 1 {
 		return 0, fmt.Errorf("Failed to read heartbeat: writer query did not result in 1 row. Got %v", len(res.Rows))
 	}
-	ts, err := res.Rows[0][0].ParseInt64()
+	ts, err := sqltypes.ToInt64(res.Rows[0][0])
 	if err != nil {
 		return 0, err
 	}

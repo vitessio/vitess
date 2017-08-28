@@ -561,7 +561,7 @@
     "Query": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id",
     "FieldQuery": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id where 1 != 1",
     "Vindex": "user_index",
-    "Values": 5
+    "Values": [5]
   }
 }
 
@@ -577,8 +577,8 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select user.col, user.Id from user",
-      "FieldQuery": "select user.col, user.Id from user where 1 != 1"
+      "Query": "select user.col, user.id from user",
+      "FieldQuery": "select user.col, user.id from user where 1 != 1"
     },
     "Right": {
       "Opcode": "SelectScatter",
@@ -616,7 +616,7 @@
       "Query": "select user.col from user where user.id = 5",
       "FieldQuery": "select user.col from user where 1 != 1",
       "Vindex": "user_index",
-      "Values": 5
+      "Values": [5]
     },
     "Right": {
       "Opcode": "SelectScatter",
@@ -648,7 +648,7 @@
       "Query": "select user.col from user where user.id = 5",
       "FieldQuery": "select user.col from user where 1 != 1",
       "Vindex": "user_index",
-      "Values": 5
+      "Values": [5]
     },
     "Right": {
       "Opcode": "SelectScatter",
@@ -677,8 +677,8 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select user.col, user.Id from user",
-      "FieldQuery": "select user.col, user.Id from user where 1 != 1"
+      "Query": "select user.col, user.id from user",
+      "FieldQuery": "select user.col, user.id from user where 1 != 1"
     },
     "Right": {
       "Opcode": "SelectScatter",
@@ -725,7 +725,7 @@
       "Query": "select user.col from user where user.name = :user_extra_user_id",
       "FieldQuery": "select user.col from user where 1 != 1",
       "Vindex": "name_user_map",
-      "Values": ":user_extra_user_id",
+      "Values": [":user_extra_user_id"],
       "JoinVars": {
         "user_extra_user_id": {}
       }
@@ -752,7 +752,7 @@
     "Query": "select id from (select id, col from user where id = 5) as t",
     "FieldQuery": "select id from (select id, col from user where 1 != 1) as t where 1 != 1",
     "Vindex": "user_index",
-    "Values": 5
+    "Values": [5]
   }
 }
 
@@ -769,7 +769,7 @@
     "Query": "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.user_id",
     "FieldQuery": "select t.id from (select id from user where 1 != 1) as t join user_extra on t.id = user_extra.user_id where 1 != 1",
     "Vindex": "user_index",
-    "Values": 5
+    "Values": [5]
   }
 }
 
@@ -786,7 +786,7 @@
     "Query": "select t.id from (select user.id from user where user.id = 5) as t join user_extra on t.id = user_extra.user_id",
     "FieldQuery": "select t.id from (select user.id from user where 1 != 1) as t join user_extra on t.id = user_extra.user_id where 1 != 1",
     "Vindex": "user_index",
-    "Values": 5
+    "Values": [5]
   }
 }
 
@@ -824,7 +824,7 @@
       "Query": "select t.id from (select id from user where id = 5) as t",
       "FieldQuery": "select t.id from (select id from user where 1 != 1) as t where 1 != 1",
       "Vindex": "user_index",
-      "Values": 5
+      "Values": [5]
     },
     "Right": {
       "Opcode": "SelectScatter",
@@ -860,9 +860,164 @@
     "Query": "select u.col, e.col from (select col from user where id = 5) as u join (select col from user_extra where user_id = 5) as e",
     "FieldQuery": "select u.col, e.col from (select col from user where 1 != 1) as u join (select col from user_extra where 1 != 1) as e where 1 != 1",
     "Vindex": "user_index",
-    "Values": 5
+    "Values": [5]
   }
 }
+
+# wire-up on join with cross-shard subquery
+"select t.col1 from (select user.id, user.col1 from user join user_extra) as t join unsharded on unsharded.col1 = t.col1 and unsharded.id = t.id"
+{
+  "Original": "select t.col1 from (select user.id, user.col1 from user join user_extra) as t join unsharded on unsharded.col1 = t.col1 and unsharded.id = t.id",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Cols": [
+        1,
+        0
+      ],
+      "Subquery": {
+        "Opcode": "Join",
+        "Left": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "Query": "select user.id, user.col1 from user",
+          "FieldQuery": "select user.id, user.col1 from user where 1 != 1"
+        },
+        "Right": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "Query": "select 1 from user_extra",
+          "FieldQuery": "select 1 from user_extra where 1 != 1"
+        },
+        "Cols": [
+          -1,
+          -2
+        ]
+      }
+    },
+    "Right": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select 1 from unsharded where unsharded.col1 = :t_col1 and unsharded.id = :t_id",
+      "FieldQuery": "select 1 from unsharded where 1 != 1",
+      "JoinVars": {
+        "t_col1": {},
+        "t_id": {}
+      }
+    },
+    "Cols": [
+      -1
+    ],
+    "Vars": {
+      "t_col1": 0,
+      "t_id": 1
+    }
+  }
+}
+
+# wire-up on within cross-shard subquery
+"select t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t"
+{
+  "Original": "select t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t",
+  "Instructions": {
+    "Cols": [
+      0
+    ],
+    "Subquery": {
+      "Opcode": "Join",
+      "Left": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select user.id, user.col1, user.col from user",
+        "FieldQuery": "select user.id, user.col1, user.col from user where 1 != 1"
+      },
+      "Right": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select 1 from user_extra where user_extra.col = :user_col",
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "JoinVars": {
+          "user_col": {}
+        }
+      },
+      "Cols": [
+        -1,
+        -2
+      ],
+      "Vars": {
+        "user_col": 2
+      }
+    }
+  }
+}
+
+
+# Join with cross-shard subquery on rhs
+"select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t"
+{
+  "Original": "select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select 1 from unsharded_a as ua",
+      "FieldQuery": "select 1 from unsharded_a as ua where 1 != 1"
+    },
+    "Right": {
+      "Cols": [
+        1
+      ],
+      "Subquery": {
+        "Opcode": "Join",
+        "Left": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "Query": "select user.id, user.col1 from user",
+          "FieldQuery": "select user.id, user.col1 from user where 1 != 1"
+        },
+        "Right": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "Query": "select 1 from user_extra",
+          "FieldQuery": "select 1 from user_extra where 1 != 1"
+        },
+        "Cols": [
+          -1,
+          -2
+        ]
+      }
+    },
+    "Cols": [
+      1
+    ]
+  }
+}
+
 
 # keyspace-qualified queries
 "select user.user.col1, main.unsharded.col1 from user.user join main.unsharded where main.unsharded.col2 = user.user.col2"
@@ -931,6 +1086,42 @@
   }
 }
 
+# subquery with join primitive (FROM)
+"select id, t.id from (select user.id from user join user_extra) as t"
+{ 
+  "Original": "select id, t.id from (select user.id from user join user_extra) as t",
+  "Instructions": {
+    "Cols": [
+      0,
+      0
+    ],
+    "Subquery": {
+      "Opcode": "Join",
+      "Left": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select user.id from user",
+        "FieldQuery": "select user.id from user where 1 != 1"
+      },
+      "Right": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select 1 from user_extra",
+        "FieldQuery": "select 1 from user_extra where 1 != 1"
+      },
+      "Cols": [
+        -1
+      ]
+    }
+  }
+}
+
 # verify ',' vs JOIN precedence
 "select u1.a from unsharded u1, unsharded u2 join unsharded u3 on u1.a = u2.a"
 "symbol u1.a not found"
@@ -954,10 +1145,6 @@
 # duplicate symbols for merging routes
 "select user.id from user join user_extra user on user.id = user.user_id"
 "duplicate symbol: user"
-
-# error in subquery
-"select c from (select count(*) from user) as t"
-"unsupported: scatter with aggregates"
 
 # non-existent table
 "select c from t"

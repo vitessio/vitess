@@ -35,13 +35,16 @@ import (
 )
 
 var (
-	mysqlServerPort               = flag.Int("mysql_server_port", 0, "If set, also listen for MySQL binary protocol connections on this port.")
+	mysqlServerPort               = flag.Int("mysql_server_port", -1, "If set, also listen for MySQL binary protocol connections on this port.")
+	mysqlServerBindAddress        = flag.String("mysql_server_bind_address", "", "Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.")
 	mysqlAuthServerImpl           = flag.String("mysql_auth_server_impl", "static", "Which auth server implementation to use.")
 	mysqlAllowClearTextWithoutTLS = flag.Bool("mysql_allow_clear_text_without_tls", false, "If set, the server will allow the use of a clear text password over non-SSL connections.")
 
 	mysqlSslCert = flag.String("mysql_server_ssl_cert", "", "Path to the ssl cert for mysql server plugin SSL")
 	mysqlSslKey  = flag.String("mysql_server_ssl_key", "", "Path to ssl key for mysql server plugin SSL")
 	mysqlSslCa   = flag.String("mysql_server_ssl_ca", "", "Path to ssl CA for mysql server plugin SSL. If specified, server will require and validate client certs.")
+
+	mysqlSlowConnectWarnThreshold = flag.Duration("mysql_slow_connect_warn_threshold", 0, "Warn if it takes more than the given threshold for a mysql connection to establish")
 )
 
 // vtgateHandler implements the Listener interface.
@@ -65,11 +68,11 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	ctx := context.Background()
 	session, _ := c.ClientData.(*vtgatepb.Session)
 	if session != nil {
-		_, _, _ = vh.vtg.Execute(ctx, session, "rollback", make(map[string]interface{}))
+		_, _, _ = vh.vtg.Execute(ctx, session, "rollback", make(map[string]*querypb.BindVariable))
 	}
 }
 
-func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query []byte) (*sqltypes.Result, error) {
+func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query []byte, callback func(*sqltypes.Result) error) error {
 	// FIXME(alainjobart): Add some kind of timeout to the context.
 	ctx := context.Background()
 
@@ -91,6 +94,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query []byte) (*sqltypes.Result
 			Options: &querypb.ExecuteOptions{
 				IncludedFields: querypb.ExecuteOptions_ALL,
 			},
+			Autocommit: true,
 		}
 		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
 			session.Options.ClientFoundRows = true
@@ -99,56 +103,75 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query []byte) (*sqltypes.Result
 	if c.SchemaName != "" {
 		session.TargetString = c.SchemaName
 	}
-	session, result, err := vh.vtg.Execute(ctx, session, string(query), make(map[string]interface{}))
+	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
+		err := vh.vtg.StreamExecute(ctx, session, string(query), make(map[string]*querypb.BindVariable), callback)
+		return mysql.NewSQLErrorFromError(err)
+	}
+	session, result, err := vh.vtg.Execute(ctx, session, string(query), make(map[string]*querypb.BindVariable))
 	c.ClientData = session
-	return result, mysql.NewSQLErrorFromError(err)
+	err = mysql.NewSQLErrorFromError(err)
+	if err != nil {
+		return err
+	}
+	return callback(result)
+}
+
+var mysqlListener *mysql.Listener
+
+// initiMySQLProtocol starts the mysql protocol.
+// It should be called only once in a process.
+func initMySQLProtocol() {
+	// Flag is not set, just return.
+	if *mysqlServerPort < 0 {
+		return
+	}
+
+	// If no VTGate was created, just return.
+	if rpcVTGate == nil {
+		return
+	}
+
+	// Initialize registered AuthServer implementations (or other plugins)
+	for _, initFn := range pluginInitializers {
+		initFn()
+	}
+	authServer := mysql.GetAuthServer(*mysqlAuthServerImpl)
+
+	// Create a Listener.
+	var err error
+	vh := newVtgateHandler(rpcVTGate)
+	mysqlListener, err = mysql.NewListener("tcp", net.JoinHostPort(*mysqlServerBindAddress, fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh)
+	if err != nil {
+		log.Fatalf("mysql.NewListener failed: %v", err)
+	}
+	if *mysqlSslCert != "" && *mysqlSslKey != "" {
+		mysqlListener.TLSConfig, err = grpcutils.TLSServerConfig(*mysqlSslCert, *mysqlSslKey, *mysqlSslCa)
+		if err != nil {
+			log.Fatalf("grpcutils.TLSServerConfig failed: %v", err)
+			return
+		}
+	}
+	mysqlListener.AllowClearTextWithoutTLS = *mysqlAllowClearTextWithoutTLS
+
+	// Check for the connection threshold
+	if *mysqlSlowConnectWarnThreshold != 0 {
+		log.Infof("setting mysql slow connection threshold to %v", mysqlSlowConnectWarnThreshold)
+		mysqlListener.SlowConnectWarnThreshold = *mysqlSlowConnectWarnThreshold
+	}
+
+	// And starts listening.
+	go func() {
+		mysqlListener.Accept()
+	}()
 }
 
 func init() {
-	var listener *mysql.Listener
-
-	servenv.OnRun(func() {
-		// Flag is not set, just return.
-		if *mysqlServerPort == 0 {
-			return
-		}
-
-		// If no VTGate was created, just return.
-		if rpcVTGate == nil {
-			return
-		}
-
-		// Initialize registered AuthServer implementations (or other plugins)
-		for _, initFn := range pluginInitializers {
-			initFn()
-		}
-		authServer := mysql.GetAuthServer(*mysqlAuthServerImpl)
-
-		// Create a Listener.
-		var err error
-		vh := newVtgateHandler(rpcVTGate)
-		listener, err = mysql.NewListener("tcp", net.JoinHostPort("", fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh)
-		if err != nil {
-			log.Fatalf("mysql.NewListener failed: %v", err)
-		}
-		if *mysqlSslCert != "" && *mysqlSslKey != "" {
-			listener.TLSConfig, err = grpcutils.TLSServerConfig(*mysqlSslCert, *mysqlSslKey, *mysqlSslCa)
-			if err != nil {
-				log.Fatalf("grpcutils.TLSServerConfig failed: %v", err)
-				return
-			}
-		}
-		listener.AllowClearTextWithoutTLS = *mysqlAllowClearTextWithoutTLS
-
-		// And starts listening.
-		go func() {
-			listener.Accept()
-		}()
-	})
+	servenv.OnRun(initMySQLProtocol)
 
 	servenv.OnTerm(func() {
-		if listener != nil {
-			listener.Close()
+		if mysqlListener != nil {
+			mysqlListener.Close()
+			mysqlListener = nil
 		}
 	})
 }

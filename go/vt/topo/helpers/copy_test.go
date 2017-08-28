@@ -23,6 +23,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -39,43 +40,47 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 		t.Fatalf("cannot create shard: %v", err)
 	}
 	tts := topo.Server{Impl: fromTS}
-	if err := tts.CreateTablet(ctx, &topodatapb.Tablet{
+	tablet1 := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "test_cell",
 			Uid:  123,
 		},
-		Hostname: "masterhost",
+		Hostname:      "masterhost",
+		MysqlHostname: "masterhost",
 		PortMap: map[string]int32{
-			"vt":    8101,
-			"gprc":  8102,
-			"mysql": 3306,
+			"vt":   8101,
+			"gprc": 8102,
 		},
 		Keyspace:       "test_keyspace",
 		Shard:          "0",
 		Type:           topodatapb.TabletType_MASTER,
 		DbNameOverride: "",
 		KeyRange:       nil,
-	}); err != nil {
+	}
+	topoproto.SetMysqlPort(tablet1, 3306)
+	if err := tts.CreateTablet(ctx, tablet1); err != nil {
 		t.Fatalf("cannot create master tablet: %v", err)
 	}
-	if err := tts.CreateTablet(ctx, &topodatapb.Tablet{
+	tablet2 := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "test_cell",
 			Uid:  234,
 		},
 		PortMap: map[string]int32{
-			"vt":    8101,
-			"grpc":  8102,
-			"mysql": 3306,
+			"vt":   8101,
+			"grpc": 8102,
 		},
-		Hostname: "slavehost",
+		Hostname:      "slavehost",
+		MysqlHostname: "slavehost",
 
 		Keyspace:       "test_keyspace",
 		Shard:          "0",
 		Type:           topodatapb.TabletType_REPLICA,
 		DbNameOverride: "",
 		KeyRange:       nil,
-	}); err != nil {
+	}
+	topoproto.SetMysqlPort(tablet2, 3306)
+	if err := tts.CreateTablet(ctx, tablet2); err != nil {
 		t.Fatalf("cannot create slave tablet: %v", err)
 	}
 

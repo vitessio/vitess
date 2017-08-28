@@ -41,6 +41,7 @@ import javax.annotation.Nullable;
  * This is a wrapper around the asynchronous {@link VTGateConn} class that converts all methods to
  * synchronous.
  */
+@Deprecated
 public class VTGateBlockingConn implements Closeable {
   private final VTGateConn conn;
 

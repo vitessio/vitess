@@ -74,7 +74,6 @@ func CheckOwnership(oldTablet, newTablet *topodatapb.Tablet) error {
 	if oldTablet == nil || newTablet == nil {
 		return errors.New("unable to verify ownership of tablet record")
 	}
-	fmt.Printf("Comparing:\n%v\n%v\n", oldTablet, newTablet)
 	if oldTablet.Hostname != newTablet.Hostname || oldTablet.PortMap["vt"] != newTablet.PortMap["vt"] {
 		return fmt.Errorf(
 			"tablet record was taken over by another process: "+
@@ -101,4 +100,16 @@ func DeleteTablet(ctx context.Context, ts topo.Server, tablet *topodatapb.Tablet
 
 	// then delete the tablet record
 	return ts.DeleteTablet(ctx, tablet.Alias)
+}
+
+// TabletIdent returns a concise string representation of this tablet.
+func TabletIdent(tablet *topodatapb.Tablet) string {
+	tagStr := ""
+	if tablet.Tags != nil {
+		for key, val := range tablet.Tags {
+			tagStr = tagStr + fmt.Sprintf(" %s=%s", key, val)
+		}
+	}
+
+	return fmt.Sprintf("%s-%d (%s%s)", tablet.Alias.Cell, tablet.Alias.Uid, tablet.Hostname, tagStr)
 }

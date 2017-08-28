@@ -546,8 +546,9 @@ func (c *Conn) writeRow(row []sqltypes.Value) error {
 	return c.writeEphemeralPacket(false)
 }
 
-// writeResult writes a query Result to the wire.
-func (c *Conn) writeResult(result *sqltypes.Result) error {
+// writeFields writes the fields of a Result. If fields have no columns,
+// it's sent as an only packet of a DML response.
+func (c *Conn) writeFields(result *sqltypes.Result) error {
 	if len(result.Fields) == 0 {
 		// This is just an INSERT result, send an OK packet.
 		// Nothing yet in the buffer, we can use this.
@@ -573,15 +574,22 @@ func (c *Conn) writeResult(result *sqltypes.Result) error {
 			return err
 		}
 	}
+	return nil
+}
 
-	// Now send one packet per row.
+// writeRows sends the rows of a Result.
+func (c *Conn) writeRows(result *sqltypes.Result) error {
 	for _, row := range result.Rows {
 		if err := c.writeRow(row); err != nil {
 			return err
 		}
 	}
+	return nil
+}
 
-	// And send either an EOF, or an OK packet.
+// writeEndResult concludes the sending of a Result.
+func (c *Conn) writeEndResult() error {
+	// Send either an EOF, or an OK packet.
 	// FIXME(alainjobart) if multi result is set, can send more after this.
 	// See doc.go.
 	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {

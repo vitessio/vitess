@@ -107,6 +107,12 @@ func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *
 	// dest is the master of the dest shard which receives filtered replication events.
 	dest := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_MASTER, nil,
 		TabletKeyspaceShard(t, keyspace, destShard))
+
+	// Use real, but trimmed down QueryService.
+	qs := tabletserver.NewTabletServerWithNilTopoServer(tabletenv.DefaultQsConfig)
+	grpcqueryservice.Register(dest.RPCServer, qs)
+
+	// And start the action loop, after having registered the extra service.
 	dest.StartActionLoop(t, wr)
 	defer dest.StopActionLoop(t)
 
@@ -121,10 +127,6 @@ func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *
 	// observe otherwise because we call TabletServer.BroadcastHealth() directly and
 	// skip going through the tabletmanager's agent.
 	dest.Agent.BinlogPlayerMap = tabletmanager.NewBinlogPlayerMap(ts, nil, nil)
-
-	// Use real, but trimmed down QueryService.
-	qs := tabletserver.NewTabletServerWithNilTopoServer(tabletenv.DefaultQsConfig)
-	grpcqueryservice.Register(dest.RPCServer, qs)
 
 	qs.BroadcastHealth(42, initialStats)
 

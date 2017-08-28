@@ -24,6 +24,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -59,7 +60,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 	if len(qr.Rows) == 0 {
 		return nil, fmt.Errorf("empty create database statement for %v", dbName)
 	}
-	sd.DatabaseSchema = strings.Replace(qr.Rows[0][1].String(), backtickDBName, "{{.DatabaseName}}", 1)
+	sd.DatabaseSchema = strings.Replace(qr.Rows[0][1].ToString(), backtickDBName, "{{.DatabaseName}}", 1)
 
 	// get the list of tables we're interested in
 	sql := "SELECT table_name, table_type, data_length, table_rows FROM information_schema.tables WHERE table_schema = '" + dbName + "'"
@@ -76,14 +77,14 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 
 	sd.TableDefinitions = make([]*tabletmanagerdatapb.TableDefinition, 0, len(qr.Rows))
 	for _, row := range qr.Rows {
-		tableName := row[0].String()
-		tableType := row[1].String()
+		tableName := row[0].ToString()
+		tableType := row[1].ToString()
 
 		// compute dataLength
 		var dataLength uint64
 		if !row[2].IsNull() {
 			// dataLength is NULL for views, then we use 0
-			dataLength, err = row[2].ParseUint64()
+			dataLength, err = sqltypes.ToUint64(row[2])
 			if err != nil {
 				return nil, err
 			}
@@ -92,7 +93,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 		// get row count
 		var rowCount uint64
 		if !row[3].IsNull() {
-			rowCount, err = row[3].ParseUint64()
+			rowCount, err = sqltypes.ToUint64(row[3])
 			if err != nil {
 				return nil, err
 			}
@@ -109,7 +110,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 		// Normalize & remove auto_increment because it changes on every insert
 		// FIXME(alainjobart) find a way to share this with
 		// vt/tabletserver/table_info.go:162
-		norm := qr.Rows[0][1].String()
+		norm := qr.Rows[0][1].ToString()
 		norm = autoIncr.ReplaceAllLiteralString(norm, "")
 		if tableType == tmutils.TableView {
 			// Views will have the dbname in there, replace it
@@ -208,12 +209,12 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, erro
 	var expectedIndex int64 = 1
 	for _, row := range qr.Rows {
 		// skip non-primary keys
-		if row[keyNameIndex].String() != "PRIMARY" {
+		if row[keyNameIndex].ToString() != "PRIMARY" {
 			continue
 		}
 
 		// check the Seq_in_index is always increasing
-		seqInIndex, err := row[seqInIndexIndex].ParseInt64()
+		seqInIndex, err := sqltypes.ToInt64(row[seqInIndexIndex])
 		if err != nil {
 			return nil, err
 		}
@@ -222,7 +223,7 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, erro
 		}
 		expectedIndex++
 
-		columns = append(columns, row[columnNameIndex].String())
+		columns = append(columns, row[columnNameIndex].ToString())
 	}
 	return columns, err
 }

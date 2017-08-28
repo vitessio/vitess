@@ -24,6 +24,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
@@ -35,10 +36,10 @@ type stFU struct {
 	Params map[string]string
 }
 
-func (v *stFU) String() string                                      { return v.name }
-func (*stFU) Cost() int                                             { return 1 }
-func (*stFU) Verify(VCursor, []interface{}, [][]byte) (bool, error) { return false, nil }
-func (*stFU) Map(VCursor, []interface{}) ([][]byte, error)          { return nil, nil }
+func (v *stFU) String() string                                           { return v.name }
+func (*stFU) Cost() int                                                  { return 1 }
+func (*stFU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error) { return []bool{}, nil }
+func (*stFU) Map(VCursor, []sqltypes.Value) ([][]byte, error)            { return nil, nil }
 
 func NewSTFU(name string, params map[string]string) (Vindex, error) {
 	return &stFU{name: name, Params: params}, nil
@@ -50,9 +51,9 @@ type stF struct {
 	Params map[string]string
 }
 
-func (v *stF) String() string                                      { return v.name }
-func (*stF) Cost() int                                             { return 0 }
-func (*stF) Verify(VCursor, []interface{}, [][]byte) (bool, error) { return false, nil }
+func (v *stF) String() string                                           { return v.name }
+func (*stF) Cost() int                                                  { return 0 }
+func (*stF) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error) { return []bool{}, nil }
 
 func NewSTF(name string, params map[string]string) (Vindex, error) {
 	return &stF{name: name, Params: params}, nil
@@ -64,12 +65,12 @@ type stLN struct {
 	Params map[string]string
 }
 
-func (v *stLN) String() string                                      { return v.name }
-func (*stLN) Cost() int                                             { return 0 }
-func (*stLN) Verify(VCursor, []interface{}, [][]byte) (bool, error) { return false, nil }
-func (*stLN) Map(VCursor, []interface{}) ([][][]byte, error)        { return nil, nil }
-func (*stLN) Create(VCursor, []interface{}, [][]byte) error         { return nil }
-func (*stLN) Delete(VCursor, []interface{}, []byte) error           { return nil }
+func (v *stLN) String() string                                           { return v.name }
+func (*stLN) Cost() int                                                  { return 0 }
+func (*stLN) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error) { return []bool{}, nil }
+func (*stLN) Map(VCursor, []sqltypes.Value) ([][][]byte, error)          { return nil, nil }
+func (*stLN) Create(VCursor, []sqltypes.Value, [][]byte, bool) error     { return nil }
+func (*stLN) Delete(VCursor, []sqltypes.Value, []byte) error             { return nil }
 
 func NewSTLN(name string, params map[string]string) (Vindex, error) {
 	return &stLN{name: name, Params: params}, nil
@@ -81,12 +82,12 @@ type stLU struct {
 	Params map[string]string
 }
 
-func (v *stLU) String() string                                      { return v.name }
-func (*stLU) Cost() int                                             { return 2 }
-func (*stLU) Verify(VCursor, []interface{}, [][]byte) (bool, error) { return false, nil }
-func (*stLU) Map(VCursor, []interface{}) ([][]byte, error)          { return nil, nil }
-func (*stLU) Create(VCursor, []interface{}, [][]byte) error         { return nil }
-func (*stLU) Delete(VCursor, []interface{}, []byte) error           { return nil }
+func (v *stLU) String() string                                           { return v.name }
+func (*stLU) Cost() int                                                  { return 2 }
+func (*stLU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error) { return []bool{}, nil }
+func (*stLU) Map(VCursor, []sqltypes.Value) ([][]byte, error)            { return nil, nil }
+func (*stLU) Create(VCursor, []sqltypes.Value, [][]byte, bool) error     { return nil }
+func (*stLU) Delete(VCursor, []sqltypes.Value, []byte) error             { return nil }
 
 func NewSTLU(name string, params map[string]string) (Vindex, error) {
 	return &stLU{name: name, Params: params}, nil
@@ -120,15 +121,21 @@ func TestUnshardedVSchema(t *testing.T) {
 		Name:     sqlparser.NewTableIdent("t1"),
 		Keyspace: ks,
 	}
+	dual := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ks,
+	}
 	want := &VSchema{
 		tables: map[string]*Table{
-			"t1": t1,
+			"t1":   t1,
+			"dual": dual,
 		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"unsharded": {
 				Keyspace: ks,
 				Tables: map[string]*Table{
-					"t1": t1,
+					"t1":   t1,
+					"dual": dual,
 				},
 			},
 		},
@@ -209,15 +216,22 @@ func TestShardedVSchemaOwned(t *testing.T) {
 		t1.ColumnVindexes[0],
 	}
 	t1.Owned = t1.ColumnVindexes[1:]
+	dual := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ks,
+		Pinned:   []byte{0},
+	}
 	want := &VSchema{
 		tables: map[string]*Table{
-			"t1": t1,
+			"t1":   t1,
+			"dual": dual,
 		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"sharded": {
 				Keyspace: ks,
 				Tables: map[string]*Table{
-					"t1": t1,
+					"t1":   t1,
+					"dual": dual,
 				},
 			},
 		},
@@ -292,15 +306,22 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 		t1.ColumnVindexes[1],
 		t1.ColumnVindexes[0],
 	}
+	dual := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ks,
+		Pinned:   []byte{0},
+	}
 	want := &VSchema{
 		tables: map[string]*Table{
-			"t1": t1,
+			"t1":   t1,
+			"dual": dual,
 		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"sharded": {
 				Keyspace: ks,
 				Tables: map[string]*Table{
-					"t1": t1,
+					"t1":   t1,
+					"dual": dual,
 				},
 			},
 		},
@@ -429,21 +450,32 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 		Keyspace:   ksb,
 		IsSequence: true,
 	}
+	duala := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ksa,
+	}
+	dualb := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ksb,
+	}
 	want := &VSchema{
 		tables: map[string]*Table{
-			"t1": nil,
+			"t1":   nil,
+			"dual": duala,
 		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"ksa": {
 				Keyspace: ksa,
 				Tables: map[string]*Table{
-					"t1": t1a,
+					"t1":   t1a,
+					"dual": duala,
 				},
 			},
 			"ksb": {
 				Keyspace: ksb,
 				Tables: map[string]*Table{
-					"t1": t1b,
+					"t1":   t1b,
+					"dual": dualb,
 				},
 			},
 		},
@@ -485,21 +517,32 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 		Name:     sqlparser.NewTableIdent("t1"),
 		Keyspace: ksb,
 	}
+	duala := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ksa,
+	}
+	dualb := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ksb,
+	}
 	want := &VSchema{
 		tables: map[string]*Table{
-			"t1": nil,
+			"t1":   nil,
+			"dual": duala,
 		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"ksa": {
 				Keyspace: ksa,
 				Tables: map[string]*Table{
-					"t1": t1a,
+					"t1":   t1a,
+					"dual": duala,
 				},
 			},
 			"ksb": {
 				Keyspace: ksb,
 				Tables: map[string]*Table{
-					"t1": t1b,
+					"t1":   t1b,
+					"dual": dualb,
 				},
 			},
 		},
@@ -716,24 +759,36 @@ func TestSequence(t *testing.T) {
 	t2.Ordered = []*ColumnVindex{
 		t2.ColumnVindexes[0],
 	}
+	duala := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ksu,
+	}
+	dualb := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: kss,
+		Pinned:   []byte{0},
+	}
 	want := &VSchema{
 		tables: map[string]*Table{
-			"seq": seq,
-			"t1":  t1,
-			"t2":  t2,
+			"seq":  seq,
+			"t1":   t1,
+			"t2":   t2,
+			"dual": dualb,
 		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"unsharded": {
 				Keyspace: ksu,
 				Tables: map[string]*Table{
-					"seq": seq,
+					"seq":  seq,
+					"dual": duala,
 				},
 			},
 			"sharded": {
 				Keyspace: kss,
 				Tables: map[string]*Table{
-					"t1": t1,
-					"t2": t2,
+					"t1":   t1,
+					"t2":   t2,
+					"dual": dualb,
 				},
 			},
 		},

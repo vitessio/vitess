@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
@@ -27,7 +28,7 @@ import (
 // updates the bind vars to those values. The supplied prefix
 // is used to generate the bind var names. The function ensures
 // that there are no collisions with existing bind vars.
-func Normalize(stmt Statement, bindVars map[string]interface{}, prefix string) {
+func Normalize(stmt Statement, bindVars map[string]*querypb.BindVariable, prefix string) {
 	reserved := GetBindvars(stmt)
 	// vals allows us to reuse bindvars for
 	// identical values.
@@ -76,7 +77,7 @@ func Normalize(stmt Statement, bindVars map[string]interface{}, prefix string) {
 			// The RHS is a tuple of values.
 			// Make a list bindvar.
 			bvals := &querypb.BindVariable{
-				Type: sqltypes.Tuple,
+				Type: querypb.Type_TUPLE,
 			}
 			for _, val := range tupleVals {
 				bval := sqlToBindvar(val)
@@ -100,14 +101,22 @@ func Normalize(stmt Statement, bindVars map[string]interface{}, prefix string) {
 
 func sqlToBindvar(node SQLNode) *querypb.BindVariable {
 	if node, ok := node.(*SQLVal); ok {
+		var v sqltypes.Value
+		var err error
 		switch node.Type {
 		case StrVal:
-			return &querypb.BindVariable{Type: sqltypes.VarBinary, Value: node.Val}
+			v, err = sqltypes.NewValue(sqltypes.VarBinary, node.Val)
 		case IntVal:
-			return &querypb.BindVariable{Type: sqltypes.Int64, Value: node.Val}
+			v, err = sqltypes.NewValue(sqltypes.Int64, node.Val)
 		case FloatVal:
-			return &querypb.BindVariable{Type: sqltypes.Float64, Value: node.Val}
+			v, err = sqltypes.NewValue(sqltypes.Float64, node.Val)
+		default:
+			return nil
 		}
+		if err != nil {
+			return nil
+		}
+		return sqltypes.ValueBindVariable(v)
 	}
 	return nil
 }

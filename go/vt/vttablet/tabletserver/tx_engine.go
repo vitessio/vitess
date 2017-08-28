@@ -27,6 +27,7 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dtids"
+	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -104,7 +105,7 @@ func (te *TxEngine) Open(dbconfigs dbconfigs.DBConfigs) {
 	if te.isOpen {
 		return
 	}
-	te.txPool.Open(&dbconfigs.App, &dbconfigs.Dba)
+	te.txPool.Open(&dbconfigs.App, &dbconfigs.Dba, &dbconfigs.AppDebug)
 	if !te.twopcEnabled {
 		te.isOpen = true
 		return
@@ -203,7 +204,7 @@ outer:
 		if txid > maxid {
 			maxid = txid
 		}
-		conn, err := te.txPool.LocalBegin(ctx, false)
+		conn, err := te.txPool.LocalBegin(ctx, false, query.ExecuteOptions_DEFAULT)
 		if err != nil {
 			allErr.RecordError(err)
 			continue

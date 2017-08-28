@@ -24,6 +24,7 @@ import (
 
 	log "github.com/golang/glog"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -69,13 +70,13 @@ func fetchColumns(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
 		return err
 	}
 	for _, row := range columns.Rows {
-		name := row[0].String()
+		name := row[0].ToString()
 		columnType, ok := fieldTypes[name]
 		if !ok {
 			log.Warningf("Table: %s, column %s not found in select list, skipping.", ta.Name, name)
 			continue
 		}
-		ta.AddColumn(name, columnType, row[4], row[5].String())
+		ta.AddColumn(name, columnType, row[4], row[5].ToString())
 	}
 	return nil
 }
@@ -88,19 +89,19 @@ func fetchIndexes(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
 	var currentIndex *Index
 	currentName := ""
 	for _, row := range indexes.Rows {
-		indexName := row[2].String()
+		indexName := row[2].ToString()
 		if currentName != indexName {
-			currentIndex = ta.AddIndex(indexName)
+			currentIndex = ta.AddIndex(indexName, row[1].ToString() == "0")
 			currentName = indexName
 		}
 		var cardinality uint64
 		if !row[6].IsNull() {
-			cardinality, err = strconv.ParseUint(row[6].String(), 0, 64)
+			cardinality, err = sqltypes.ToUint64(row[6])
 			if err != nil {
 				log.Warningf("%s", err)
 			}
 		}
-		currentIndex.AddColumn(row[4].String(), cardinality)
+		currentIndex.AddColumn(row[4].ToString(), cardinality)
 	}
 	ta.Done()
 	return nil
@@ -108,13 +109,26 @@ func fetchIndexes(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
 
 func loadMessageInfo(ta *Table, comment string) error {
 	findCols := map[string]struct{}{
-		"time_scheduled": {},
 		"id":             {},
+		"time_scheduled": {},
 		"time_next":      {},
 		"epoch":          {},
 		"time_created":   {},
 		"time_acked":     {},
 	}
+
+	// orderedColumns are necessary to ensure that they
+	// get added in the correct order to fields if they
+	// need to be returned with the stream.
+	orderedColumns := []string{
+		"id",
+		"time_scheduled",
+		"time_next",
+		"epoch",
+		"time_created",
+		"time_acked",
+	}
+
 	ta.MessageInfo = &MessageInfo{}
 	// Extract keyvalues.
 	keyvals := make(map[string]string)
@@ -142,14 +156,14 @@ func loadMessageInfo(ta *Table, comment string) error {
 	if ta.MessageInfo.PollInterval, err = getDuration(keyvals, "vt_poller_interval"); err != nil {
 		return err
 	}
-	for col := range findCols {
+	for _, col := range orderedColumns {
 		num := ta.FindColumn(sqlparser.NewColIdent(col))
 		if num == -1 {
 			return fmt.Errorf("%s missing from message table: %s", col, ta.Name.String())
 		}
 
-		// "id" must always the first column for Messages.
-		if col == "id" {
+		// id and time_scheduled must be the first two columns.
+		if col == "id" || col == "time_scheduled" {
 			ta.MessageInfo.Fields = append(ta.MessageInfo.Fields, &querypb.Field{
 				Name: ta.Columns[num].Name.String(),
 				Type: ta.Columns[num].Type,

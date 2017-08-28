@@ -320,17 +320,6 @@
 				"site_test"
 			]
 		},
-		"tabletmanager_zookeeper": {
-			"File": "tabletmanager.py",
-			"Args": ["--topo-server-flavor=zookeeper"],
-			"Command": [],
-			"Manual": false,
-			"Shard": 1,
-			"RetryMax": 0,
-			"Tags": [
-				"site_test"
-			]
-		},
 		"tabletmanager_etcd": {
 			"File": "tabletmanager.py",
 			"Args": ["--topo-server-flavor=etcd"],
