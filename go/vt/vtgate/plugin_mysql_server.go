@@ -124,7 +124,7 @@ var mysqlUnixListener *mysql.Listener
 // It should be called only once in a process.
 func initMySQLProtocol() {
 	// Flag is not set, just return.
-	if *mysqlServerPort < 0 {
+	if *mysqlServerPort < 0 && *mysqlServerSocketPath == "" {
 		return
 	}
 
@@ -142,30 +142,32 @@ func initMySQLProtocol() {
 	// Create a Listener.
 	var err error
 	vh := newVtgateHandler(rpcVTGate)
-	mysqlListener, err = mysql.NewListener("tcp", net.JoinHostPort(*mysqlServerBindAddress, fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh)
-	if err != nil {
-		log.Fatalf("mysql.NewListener failed: %v", err)
-	}
-	if *mysqlSslCert != "" && *mysqlSslKey != "" {
-		mysqlListener.TLSConfig, err = grpcutils.TLSServerConfig(*mysqlSslCert, *mysqlSslKey, *mysqlSslCa)
+	if *mysqlServerPort >= 0 {
+		mysqlListener, err = mysql.NewListener("tcp", net.JoinHostPort(*mysqlServerBindAddress, fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh)
 		if err != nil {
-			log.Fatalf("grpcutils.TLSServerConfig failed: %v", err)
-			return
+			log.Fatalf("mysql.NewListener failed: %v", err)
 		}
-	}
-	mysqlListener.AllowClearTextWithoutTLS = *mysqlAllowClearTextWithoutTLS
+		if *mysqlSslCert != "" && *mysqlSslKey != "" {
+			mysqlListener.TLSConfig, err = grpcutils.TLSServerConfig(*mysqlSslCert, *mysqlSslKey, *mysqlSslCa)
+			if err != nil {
+				log.Fatalf("grpcutils.TLSServerConfig failed: %v", err)
+				return
+			}
+		}
+		mysqlListener.AllowClearTextWithoutTLS = *mysqlAllowClearTextWithoutTLS
 
-	// Check for the connection threshold
-	if *mysqlSlowConnectWarnThreshold != 0 {
-		log.Infof("setting mysql slow connection threshold to %v", mysqlSlowConnectWarnThreshold)
-		mysqlListener.SlowConnectWarnThreshold = *mysqlSlowConnectWarnThreshold
+		// Check for the connection threshold
+		if *mysqlSlowConnectWarnThreshold != 0 {
+			log.Infof("setting mysql slow connection threshold to %v", mysqlSlowConnectWarnThreshold)
+			mysqlListener.SlowConnectWarnThreshold = *mysqlSlowConnectWarnThreshold
+		}
+		// Start listening for tcp
+		go func() {
+			mysqlListener.Accept()
+		}()
 	}
-	// Start listening for tcp
-	go func() {
-		mysqlListener.Accept()
-	}()
 
-	if mysqlServerSocketPath != nil {
+	if *mysqlServerSocketPath != "" {
 		mysqlUnixListener, err = mysql.NewListener("unix", *mysqlServerSocketPath, authServer, vh)
 		if err != nil {
 			log.Fatalf("mysql.NewListener failed: %v", err)
