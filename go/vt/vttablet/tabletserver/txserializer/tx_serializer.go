@@ -122,8 +122,8 @@ func (t *TxSerializer) Wait(ctx context.Context, key, table string) (done DoneFu
 	if err != nil {
 		if waited {
 			// Waiting failed early e.g. due a canceled context and we did NOT get the
-			// token. Call "done" now because we don't return it to the caller.
-			t.unlockLocked(key, false /* returnToken */)
+			// slot. Call "done" now because we don't return it to the caller.
+			t.unlockLocked(key, false /* returnSlot */)
 		}
 		return nil, waited, err
 	}
@@ -131,13 +131,13 @@ func (t *TxSerializer) Wait(ctx context.Context, key, table string) (done DoneFu
 }
 
 // lockLocked queues this transaction. It will unblock immediately if this
-// transaction is the first in the queue or when it got a token.
+// transaction is the first in the queue or when it acquired a slot.
 // The method has the suffix "Locked" to clarify that "t.mu" must be locked.
 func (t *TxSerializer) lockLocked(ctx context.Context, key, table string) (bool, error) {
 	q, ok := t.queues[key]
 	if !ok {
 		// First transaction in the queue i.e. we don't wait and return immediately.
-		t.queues[key] = newQueue(t.concurrentTransactions)
+		t.queues[key] = newQueueForFirstTransaction(t.concurrentTransactions)
 		t.globalSize++
 		return false, nil
 	}
@@ -170,15 +170,6 @@ func (t *TxSerializer) lockLocked(ctx context.Context, key, table string) (bool,
 	if q.size == 2 && q.max == 1 {
 		// Hot row detected: A second, concurrent transaction is seen for the first
 		// time.
-		// The first transaction already holds the first token and will return it
-		// when it's done and calls "unlock".
-		// If more tokens are allowed, add them now. (We delayed adding the tokens
-		// until now as an optimization for the default case when there is no hot
-		// row.)
-		additionalTokens := t.concurrentTransactions - 1
-		for i := 1; i <= additionalTokens; i++ {
-			q.tokens <- struct{}{}
-		}
 
 		// Include first transaction in the count at /debug/hotrows. (It was not
 		// recorded on purpose because it did not wait.)
@@ -201,18 +192,18 @@ func (t *TxSerializer) lockLocked(ctx context.Context, key, table string) (bool,
 	t.mu.Unlock()
 	defer t.mu.Lock()
 
-	// Non-blocking read of a token.
+	// Non-blocking write attempt to get a slot.
 	select {
-	case <-q.tokens:
-		// Return waited=false because a token was immediately available.
+	case q.availableSlots <- struct{}{}:
+		// Return waited=false because a slot was immediately available.
 		return false, nil
 	default:
 	}
 
-	// Wait for the next available token.
+	// Blocking wait for the next available slot.
 	waits.Add(table, 1)
 	select {
-	case <-q.tokens:
+	case q.availableSlots <- struct{}{}:
 		return true, nil
 	case <-ctx.Done():
 		return true, ctx.Err()
@@ -226,7 +217,7 @@ func (t *TxSerializer) unlock(key string) {
 	t.unlockLocked(key, true)
 }
 
-func (t *TxSerializer) unlockLocked(key string, returnToken bool) {
+func (t *TxSerializer) unlockLocked(key string, returnSlot bool) {
 	q := t.queues[key]
 	q.size--
 	t.globalSize--
@@ -247,9 +238,11 @@ func (t *TxSerializer) unlockLocked(key string, returnToken bool) {
 		return
 	}
 
-	// Return token to queue. Wakes up the next queued transaction.
-	if !t.dryRun && returnToken {
-		q.tokens <- struct{}{}
+	// Give up slot by removing ourselves from the channel.
+	// Wakes up the next queued transaction.
+	if !t.dryRun && returnSlot {
+		// This should never block.
+		<-q.availableSlots
 	}
 }
 
@@ -266,14 +259,14 @@ func (t *TxSerializer) Pending(key string) int {
 	return q.size
 }
 
-// queue reprents the local queue for a particular row (range).
+// queue represents the local queue for a particular row (range).
 //
 // Note that we don't use a dedicated queue structure for all waiting
 // transactions. Instead, we leverage that Go routines waiting for a channel
-// are woken up in the order they are queued up. The "tokens" field is said
-// channel which has n elements, "tokens", for the number of concurrent
-// transactions which can access the tx pool. All queued transactions are
-// competing for these tokens.
+// are woken up in the order they are queued up. The "availableSlots" field is
+// said channel which has n free slots (for the number of concurrent
+// transactions which can access the tx pool). All queued transactions are
+// competing for these slots and try to add themselves to the channel.
 type queue struct {
 	// NOTE: The following fields are guarded by TxSerializer.mu.
 	// size counts how many transactions are currently queued/in flight (includes
@@ -285,20 +278,21 @@ type queue struct {
 	// were simultaneously queued for the same row range.
 	max int
 
-	// tokens holds one element for each allowed tx pool slot. E.g. if the channel
-	// has a size of 1, only one transaction at a time is allowed through.
-	tokens chan struct{}
+	// availableSlots limits the number of concurrent transactions *per*
+	// hot row (range). It holds one element for each allowed pending
+	// transaction i.e. consumed tx pool slot. Consequently, if the channel
+	// is full, subsequent transactions have to wait until they can place
+	// their entry here.
+	availableSlots chan struct{}
 }
 
-func newQueue(concurrentTransactions int) *queue {
+func newQueueForFirstTransaction(concurrentTransactions int) *queue {
+	availableSlots := make(chan struct{}, concurrentTransactions)
+	availableSlots <- struct{}{}
 	return &queue{
-		size:  1,
-		count: 1,
-		max:   1,
-		// The first available token is not added as an optimization because the
-		// caller would immediately remove it anyway.
-		// If additional tokens are allowed, we delay adding them until the row
-		// range becomes hot and a second in-flight transaction occurs.
-		tokens: make(chan struct{}, concurrentTransactions),
+		size:           1,
+		count:          1,
+		max:            1,
+		availableSlots: availableSlots,
 	}
 }
