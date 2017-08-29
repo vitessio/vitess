@@ -596,6 +596,7 @@ class Tablet(object):
       args.extend(['-service_map', ','.join(protocols_flavor().service_map())])
     if self.grpc_enabled():
       args.extend(['-grpc_port', str(self.grpc_port)])
+      args.extend(['-grpc_max_message_size', str(environment.grpc_max_message_size)])
     if lameduck_period:
       args.extend(environment.lameduck_flag(lameduck_period))
     if grace_period:

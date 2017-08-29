@@ -89,6 +89,7 @@ create_vt_insert_test = '''create table vt_insert_test (
 id bigint auto_increment,
 msg varchar(64),
 keyspace_id bigint(20) unsigned NOT NULL,
+data longblob,
 primary key (id)
 ) Engine=InnoDB'''
 
@@ -152,6 +153,37 @@ class TestMySQL(unittest.TestCase):
     conn = MySQLdb.Connect(**params)
     cursor = conn.cursor()
     cursor.execute('select * from vt_insert_test', {})
+    cursor.close()
+
+    # verify that queries work end-to-end with large grpc messages
+    largeBlob = 'L' * ((4 * 1024 * 1024) + 1)
+    cursor = conn.cursor()
+    cursor.execute('insert into vt_insert_test (id, msg, keyspace_id, data) values(%s, %s, %s, %s)',
+        (1, 'large blob', 123, largeBlob))
+    cursor.close()
+
+    cursor = conn.cursor()
+    cursor.execute('select * from vt_insert_test where id = 1');
+    if cursor.rowcount != 1:
+        self.fail('expected 1 row got ' + str(cursor.rowcount))
+
+    for (id, msg, keyspace_id, blob) in cursor:
+        if blob != largeBlob:
+            self.fail('blob did not match largeBlob')
+
+    cursor.close()
+
+    hugeBlob = 'L' * (environment.grpc_max_message_size + 1)
+
+    cursor = conn.cursor()
+    try:
+        cursor.execute('insert into vt_insert_test (id, msg, keyspace_id, data) values(%s, %s, %s, %s)',
+            (2, 'huge blob', 123, hugeBlob))
+        self.fail('Execute went through')
+    except MySQLdb.OperationalError, e:
+      s = str(e)
+      self.assertIn('trying to send message larger than max', s)
+
     conn.close()
 
     # 'vtgate client 2' is not authorized to access vt_insert_test
@@ -167,7 +199,6 @@ class TestMySQL(unittest.TestCase):
       self.assertIn('table acl error', s)
       self.assertIn('cannot run PASS_SELECT on table', s)
     conn.close()
-
 
 if __name__ == '__main__':
   utils.main()
