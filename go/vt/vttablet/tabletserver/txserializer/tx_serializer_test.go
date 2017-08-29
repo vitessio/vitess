@@ -40,6 +40,29 @@ func resetVariables() {
 	globalQueueExceededDryRun.Set(0)
 }
 
+func TestTxSerializer_NoHotRow(t *testing.T) {
+	resetVariables()
+	txs := New(false, 1, 1, 5)
+
+	done, waited, err := txs.Wait(context.Background(), "t1 where1", "t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if waited {
+		t.Fatal("non-parallel tx must never wait")
+	}
+	done()
+
+	// No hot row was recoded.
+	if err := testHTTPHandler(txs, 0); err != nil {
+		t.Fatal(err)
+	}
+	// No transaction had to wait.
+	if got, want := waits.Counts()["t1"], int64(0); got != want {
+		t.Fatalf("wrong Waits variable: got = %v, want = %v", got, want)
+	}
+}
+
 func TestTxSerializer(t *testing.T) {
 	resetVariables()
 	txs := New(false, 2, 3, 1)
@@ -206,6 +229,10 @@ func testHTTPHandler(txs *TxSerializer, count int) error {
 	want := fmt.Sprintf(`Length: 1
 %d: t1 where1
 `, count)
+	if count == 0 {
+		want = `Length: 0
+`
+	}
 	if got := rr.Body.String(); got != want {
 		return fmt.Errorf("wrong content: got = \n%v\n want = \n%v", got, want)
 	}
@@ -419,5 +446,22 @@ func TestTxSerializerPending(t *testing.T) {
 	txs := New(false, 1, 1, 1)
 	if got, want := txs.Pending("t1 where1"), 0; got != want {
 		t.Fatalf("there should be no pending transaction: got = %v, want = %v", got, want)
+	}
+}
+
+func BenchmarkTxSerializer_NoHotRow(b *testing.B) {
+	txs := New(false, 1, 1, 5)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		done, waited, err := txs.Wait(context.Background(), "t1 where1", "t1")
+		if err != nil {
+			b.Fatal(err)
+		}
+		if waited {
+			b.Fatal("non-parallel tx must never wait")
+		}
+		done()
 	}
 }
