@@ -29,7 +29,6 @@ def setUpModule():
   try:
     worker.setUpModule()
     utils.Vtctld().start()
-    utils.pause("test what you want")
   except:
     tearDownModule()
     raise

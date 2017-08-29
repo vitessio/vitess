@@ -380,6 +380,7 @@ def get_vars(port):
   """Returns the dict for vars from a vtxxx process. None if not available."""
   try:
     url = 'http://localhost:%d/debug/vars' % int(port)
+    print "querying", url
     f = urllib2.urlopen(url)
     data = f.read()
     f.close()
