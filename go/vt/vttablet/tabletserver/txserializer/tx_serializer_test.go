@@ -32,8 +32,11 @@ import (
 )
 
 func resetVariables() {
+	waits.Reset()
 	waitsDryRun.Reset()
+	queueExceeded.Reset()
 	queueExceededDryRun.Reset()
+	globalQueueExceeded.Set(0)
 	globalQueueExceededDryRun.Set(0)
 }
 
@@ -47,7 +50,7 @@ func TestTxSerializer(t *testing.T) {
 		t.Fatal(err1)
 	}
 	if waited1 {
-		t.Fatalf("first transaction must never wait: %v", waited1)
+		t.Fatalf("tx1 must never wait: %v", waited1)
 	}
 
 	// tx2 (gets queued and must wait).
@@ -61,7 +64,7 @@ func TestTxSerializer(t *testing.T) {
 			t.Fatal(err2)
 		}
 		if !waited2 {
-			t.Fatalf("second transaction must wait: %v", waited2)
+			t.Fatalf("tx2 must wait: %v", waited2)
 		}
 		if got, want := waits.Counts()["t1"], int64(1); got != want {
 			t.Fatalf("variable not incremented: got = %v, want = %v", got, want)
@@ -91,8 +94,17 @@ func TestTxSerializer(t *testing.T) {
 		t.Fatal("queue object was not deleted after last transaction")
 	}
 
+	// 2 transactions were recorded.
 	if err := testHTTPHandler(txs, 2); err != nil {
 		t.Fatal(err)
+	}
+	// 1 of them had to wait.
+	if got, want := waits.Counts()["t1"], int64(1); got != want {
+		t.Fatalf("variable not incremented: got = %v, want = %v", got, want)
+	}
+	// 1 (the third one) was rejected because the queue was exceeded.
+	if got, want := queueExceeded.Counts()["t1"], int64(1); got != want {
+		t.Fatalf("variable not incremented: got = %v, want = %v", got, want)
 	}
 }
 
@@ -147,7 +159,7 @@ func TestTxSerializerCancel(t *testing.T) {
 		t.Fatal(err1)
 	}
 	if waited1 {
-		t.Fatalf("first transaction must never wait: %v", waited1)
+		t.Fatalf("tx1 must never wait: %v", waited1)
 	}
 
 	// tx2 (gets queued and must wait).
@@ -179,7 +191,7 @@ func TestTxSerializerCancel(t *testing.T) {
 			t.Fatal(err3)
 		}
 		if !waited3 {
-			t.Fatalf("third transaction must wait: %v", waited3)
+			t.Fatalf("tx3 must have waited: %v", waited3)
 		}
 
 		txDone <- 3
@@ -209,8 +221,13 @@ func TestTxSerializerCancel(t *testing.T) {
 		t.Fatal("queue object was not deleted after last transaction")
 	}
 
+	// 3 total transactions get recorded.
 	if err := testHTTPHandler(txs, 3); err != nil {
 		t.Fatal(err)
+	}
+	// 2 of them had to wait.
+	if got, want := waits.Counts()["t1"], int64(2); got != want {
+		t.Fatalf("variable not incremented: got = %v, want = %v", got, want)
 	}
 }
 
@@ -310,6 +327,9 @@ func TestTxSerializerGlobalQueueOverflow(t *testing.T) {
 	}
 	if got, want := err3.Error(), "hot row protection: too many queued transactions (2 >= 1)"; got != want {
 		t.Fatalf("transaction rejected with wrong error: got = %v, want = %v", got, want)
+	}
+	if got, want := globalQueueExceeded.Get(), int64(1); got != want {
+		t.Fatalf("variable not incremented: got = %v, want = %v", got, want)
 	}
 
 	done1()
