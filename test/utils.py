@@ -1299,6 +1299,7 @@ class Vtctld(object):
     # when a toplevel 'make build_web' is run. This is meant to test
     # the development version of the UI. The real checked-in app is in
     # app/.
+    print "vtctld port", self.port
     args = environment.binary_args('vtctld') + [
         '-enable_queries',
         '-cell', 'test_nj',
@@ -1337,7 +1338,7 @@ class Vtctld(object):
     self.proc = run_bg(args, stdout=stdout_fd, stderr=stderr_fd)
 
     # wait for the process to listen to RPC
-    timeout = 30
+    timeout = 10000
     while True:
       v = get_vars(self.port)
       if v:
@@ -1345,7 +1346,7 @@ class Vtctld(object):
       if self.proc.poll() is not None:
         raise TestError('vtctld died while starting')
       timeout = wait_step('waiting for vtctld to start', timeout,
-                          sleep_time=0.2)
+                          sleep_time=10)
 
     # save the running instance so vtctl commands can be remote executed now
     global vtctld, vtctld_connection

@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -35,6 +36,7 @@ var (
 )
 
 func main() {
+	fmt.Printf("started vtctld\n")
 	flag.Parse()
 	servenv.Init()
 	defer servenv.Close()
@@ -44,10 +46,12 @@ func main() {
 		os.Exit(0)
 	}
 
+	fmt.Printf("starting topo")
 	ts = topo.Open()
 	defer ts.Close()
 
 	// Init the vtctld core
+	fmt.Printf("initing\n")
 	vtctld.InitVtctld(ts)
 
 	// Register http debug/health
@@ -56,6 +60,7 @@ func main() {
 	// Start schema manager service.
 	initSchema()
 
+	fmt.Printf("starting to serve\n")
 	// And run the server.
 	servenv.RunDefault()
 }
