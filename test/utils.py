@@ -383,7 +383,8 @@ def get_vars(port):
     f = urllib2.urlopen(url)
     data = f.read()
     f.close()
-  except urllib2.URLError:
+  except urllib2.URLError as e:
+    print e
     return None
   try:
     return json.loads(data)
