@@ -150,20 +150,19 @@ func (t *TxSerializer) lockLocked(ctx context.Context, key, table string) (bool,
 				"hot row protection: too many queued transactions (%d >= %d)", t.globalSize, t.maxGlobalQueueSize)
 		}
 	}
-	t.globalSize++
 
 	if q.size >= t.maxQueueSize {
 		if t.dryRun {
 			queueExceededDryRun.Add(table, 1)
 			t.logQueueExceededDryRun.Warningf("Would have rejected BeginExecute RPC because there are too many queued transactions (%d >= %d) for the same row (table + WHERE clause: '%v')", q.size, t.maxQueueSize, key)
 		} else {
-			// Decrement global queue size again because we return early.
-			t.globalSize--
 			queueExceeded.Add(table, 1)
 			return false, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED,
 				"hot row protection: too many queued transactions (%d >= %d) for the same row (table + WHERE clause: '%v')", q.size, t.maxQueueSize, key)
 		}
 	}
+
+	t.globalSize++
 	q.size++
 	q.count++
 	if q.size > q.max {
