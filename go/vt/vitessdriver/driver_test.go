@@ -27,6 +27,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vtgate/grpcvtgateservice"
 )
 
@@ -58,6 +59,11 @@ func TestMain(m *testing.M) {
 }
 
 func TestOpen(t *testing.T) {
+	locationPST, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		panic(err)
+	}
+
 	var testcases = []struct {
 		desc    string
 		connStr string
@@ -71,6 +77,9 @@ func TestOpen(t *testing.T) {
 					Target:  "@replica",
 					Timeout: 30 * time.Second,
 				},
+				native: &sqltypes.NativeOptions{
+					DefaultLocation: time.UTC,
+				},
 			},
 		},
 		{
@@ -79,6 +88,9 @@ func TestOpen(t *testing.T) {
 			conn: &conn{
 				Configuration: Configuration{
 					Timeout: 30 * time.Second,
+				},
+				native: &sqltypes.NativeOptions{
+					DefaultLocation: time.UTC,
 				},
 			},
 		},
@@ -90,6 +102,40 @@ func TestOpen(t *testing.T) {
 					Protocol: "grpc",
 					Target:   "ks:0@replica",
 					Timeout:  30 * time.Second,
+				},
+				native: &sqltypes.NativeOptions{
+					DefaultLocation: time.UTC,
+				},
+			},
+		},
+		{
+			desc:    "Open() with native conversion options",
+			connStr: fmt.Sprintf(`{"address": "%s", "timeout": %d, "convertdatetime": true}`, testAddress, int64(30*time.Second)),
+			conn: &conn{
+				Configuration: Configuration{
+					Timeout:         30 * time.Second,
+					ConvertDatetime: true,
+				},
+				native: &sqltypes.NativeOptions{
+					ConvertDatetime: true,
+					DefaultLocation: time.UTC,
+				},
+			},
+		},
+		{
+			desc: "Open() with custom timezone",
+			connStr: fmt.Sprintf(
+				`{"address": "%s", "timeout": %d, "convertdatetime": true, "defaultlocation": "America/Los_Angeles"}`,
+				testAddress, int64(30*time.Second)),
+			conn: &conn{
+				Configuration: Configuration{
+					Timeout:         30 * time.Second,
+					ConvertDatetime: true,
+					DefaultLocation: "America/Los_Angeles",
+				},
+				native: &sqltypes.NativeOptions{
+					ConvertDatetime: true,
+					DefaultLocation: locationPST,
 				},
 			},
 		},
@@ -173,12 +219,14 @@ func TestExec(t *testing.T) {
 
 func TestConfigurationToJSON(t *testing.T) {
 	config := Configuration{
-		Protocol:  "some-invalid-protocol",
-		Target:    "ks2",
-		Streaming: true,
-		Timeout:   1 * time.Second,
+		Protocol:        "some-invalid-protocol",
+		Target:          "ks2",
+		Streaming:       true,
+		Timeout:         1 * time.Second,
+		ConvertDatetime: true,
+		DefaultLocation: "Local",
 	}
-	want := `{"Protocol":"some-invalid-protocol","Address":"","Target":"ks2","Streaming":true,"Timeout":1000000000}`
+	want := `{"Protocol":"some-invalid-protocol","Address":"","Target":"ks2","Streaming":true,"Timeout":1000000000,"ConvertDatetime":true,"DefaultLocation":"Local"}`
 
 	json, err := config.toJSON()
 	if err != nil {
@@ -308,6 +356,169 @@ func TestQuery(t *testing.T) {
 		}
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%v: err: %v, does not contain %s", tc.desc, err, want)
+		}
+	}
+}
+
+func TestDatetimeQuery(t *testing.T) {
+	var testcases = []struct {
+		desc        string
+		config      Configuration
+		requestName string
+	}{
+		{
+			desc: "datetime & date, vtgate",
+			config: Configuration{
+				Protocol:        "grpc",
+				Address:         testAddress,
+				Target:          "@rdonly",
+				Timeout:         30 * time.Second,
+				ConvertDatetime: true,
+			},
+			requestName: "requestDates",
+		},
+		{
+			desc: "datetime & date (local timezone), vtgate",
+			config: Configuration{
+				Protocol:        "grpc",
+				Address:         testAddress,
+				Target:          "@rdonly",
+				Timeout:         30 * time.Second,
+				ConvertDatetime: true,
+				DefaultLocation: "Local",
+			},
+			requestName: "requestDates",
+		},
+		{
+			desc: "datetime & date (no conversion), vtgate",
+			config: Configuration{
+				Protocol: "grpc",
+				Address:  testAddress,
+				Target:   "@rdonly",
+				Timeout:  30 * time.Second,
+			},
+			requestName: "requestDates",
+		},
+		{
+			desc: "datetime & date, streaming, vtgate",
+			config: Configuration{
+				Protocol:        "grpc",
+				Address:         testAddress,
+				Target:          "@rdonly",
+				Timeout:         30 * time.Second,
+				Streaming:       true,
+				ConvertDatetime: true,
+			},
+			requestName: "requestDates",
+		},
+	}
+
+	for _, tc := range testcases {
+		db, err := OpenWithConfiguration(tc.config)
+		if err != nil {
+			t.Errorf("%v: %v", tc.desc, err)
+		}
+		defer db.Close()
+
+		s, err := db.Prepare(tc.requestName)
+		if err != nil {
+			t.Errorf("%v: %v", tc.desc, err)
+		}
+		defer s.Close()
+
+		r, err := s.Query(time.Time{})
+		if err != nil {
+			t.Errorf("%v: %v", tc.desc, err)
+		}
+		defer r.Close()
+
+		cols, err := r.Columns()
+		if err != nil {
+			t.Errorf("%v: %v", tc.desc, err)
+		}
+		wantCols := []string{
+			"fieldDatetime",
+			"fieldDate",
+		}
+		if !reflect.DeepEqual(cols, wantCols) {
+			t.Errorf("%v: cols: %v, want %v", tc.desc, cols, wantCols)
+		}
+
+		location := time.UTC
+		if tc.config.DefaultLocation != "" {
+			location, err = time.LoadLocation(tc.config.DefaultLocation)
+			if err != nil {
+				t.Errorf("%v: %v", tc.desc, err)
+			}
+		}
+
+		count := 0
+		wantValues := []struct {
+			fieldDatetime time.Time
+			fieldDate     time.Time
+		}{{
+			time.Date(2009, 3, 29, 17, 22, 11, 0, location),
+			time.Date(2006, 7, 2, 0, 0, 0, 0, location),
+		}, {
+			time.Time{},
+			time.Time{},
+		}}
+
+		rawValues := []struct {
+			fieldDatetime string
+			fieldDate     string
+		}{{
+			"2009-03-29 17:22:11",
+			"2006-07-02",
+		}, {
+			"0000-00-00 00:00:00",
+			"0000-00-00",
+		}}
+
+		if tc.config.ConvertDatetime {
+			for r.Next() {
+				var fieldDatetime time.Time
+				var fieldDate time.Time
+				err := r.Scan(&fieldDatetime, &fieldDate)
+				if err != nil {
+					t.Errorf("%v: %v", tc.desc, err)
+				}
+				if want := wantValues[count].fieldDatetime; fieldDatetime != want {
+					t.Errorf("%v: wrong value for fieldDatetime: got: %v want: %v", tc.desc, fieldDatetime, want)
+				}
+				if want := wantValues[count].fieldDate; fieldDate != want {
+					t.Errorf("%v: wrong value for fieldDate: got: %v want: %v", tc.desc, fieldDate, want)
+				}
+				count++
+			}
+		} else {
+			for r.Next() {
+				var t1, t2 time.Time
+				var fieldDatetime []byte
+				var fieldDate []byte
+
+				err := r.Scan(&t1, &t2)
+				if err == nil {
+					t.Errorf("%v: storing driver.Value into time.Time should be unsupported", tc.desc)
+				}
+
+				err = r.Scan(&fieldDatetime, &fieldDate)
+				if err != nil {
+					t.Errorf("%v: %v", tc.desc, err)
+				}
+				if want := rawValues[count].fieldDatetime; string(fieldDatetime) != want {
+					t.Errorf("%v: wrong value for fieldDatetime: got: %v want: %v", tc.desc, fieldDatetime, want)
+				}
+				if want := rawValues[count].fieldDate; string(fieldDate) != want {
+					t.Errorf("%v: wrong value for fieldDate: got: %v want: %v", tc.desc, fieldDate, want)
+				}
+
+				count++
+			}
+		}
+
+		if count != len(wantValues) {
+			t.Errorf("%v: count: %d, want %d", tc.desc, count, len(wantValues))
 		}
 	}
 }

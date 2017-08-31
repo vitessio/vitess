@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/youtube/vitess/go/bytes2"
 	"github.com/youtube/vitess/go/hack"
@@ -37,7 +38,29 @@ var (
 	DontEscape = byte(255)
 
 	nullstr = []byte("null")
+
+	// DefaultNativeOptions are the default conversion settings for
+	// MySQL data to Golang native types.
+	DefaultNativeOptions = &NativeOptions{}
 )
+
+// NativeOptions defines the available conversion options when
+// turning a Value object into a native Golang type
+type NativeOptions struct {
+	// ConvertDatetime can be set to force Vitess to parse
+	// DATE and DATETIME columns into native time.Time structs.
+	// If not set, DATE and DATETIME columns will be returned in
+	// their raw format as []byte
+	ConvertDatetime bool
+
+	// DefaultLocation defines the default timezone used when parsing
+	// DATE and DATETIME columns into time.Time structs. This is
+	// necessary because these two column types are _not_ timezone
+	// aware in MySQL.
+	// This setting has no effect if ConvertDatetime is not set.
+	// Defaults to time.UTC if not set.
+	DefaultLocation *time.Location
+}
 
 // BinWriter interface is used for encoding values.
 // Types like bytes.Buffer conform to this interface.
@@ -71,6 +94,11 @@ func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 		return MakeTrusted(typ, val), nil
 	case IsFloat(typ) || typ == Decimal:
 		if _, err := strconv.ParseFloat(string(val), 64); err != nil {
+			return NULL, err
+		}
+		return MakeTrusted(typ, val), nil
+	case typ == Date || typ == Datetime:
+		if err := checkTimeFormat(string(val)); err != nil {
 			return NULL, err
 		}
 		return MakeTrusted(typ, val), nil

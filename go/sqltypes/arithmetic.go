@@ -223,6 +223,13 @@ func ToFloat64(v Value) (float64, error) {
 // ToNative converts Value to a native go type.
 // Decimal is returned as []byte.
 func ToNative(v Value) (interface{}, error) {
+	return ToNativeEx(v, DefaultNativeOptions)
+}
+
+// ToNativeEx converts Value to a native go type with the
+// given conversion options.
+// Decimal is returned as []byte.
+func ToNativeEx(v Value, opts *NativeOptions) (interface{}, error) {
 	var out interface{}
 	var err error
 	switch {
@@ -234,6 +241,10 @@ func ToNative(v Value) (interface{}, error) {
 		return ToUint64(v)
 	case v.IsFloat():
 		return ToFloat64(v)
+	case opts.ConvertDatetime && v.Type() == Date:
+		return DateToNative(v, opts.DefaultLocation)
+	case opts.ConvertDatetime && v.Type() == Datetime:
+		return DatetimeToNative(v, opts.DefaultLocation)
 	case v.IsQuoted() || v.Type() == Decimal:
 		out = v.val
 	case v.Type() == Expression:
