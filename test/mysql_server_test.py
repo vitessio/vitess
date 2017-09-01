@@ -156,10 +156,10 @@ class TestMySQL(unittest.TestCase):
     cursor.close()
 
     # verify that queries work end-to-end with large grpc messages
-    largeBlob = 'L' * ((4 * 1024 * 1024) + 1)
+    largeComment = 'L' * ((4 * 1024 * 1024) + 1)
     cursor = conn.cursor()
-    cursor.execute('insert into vt_insert_test (id, msg, keyspace_id, data) values(%s, %s, %s, %s)',
-        (1, 'large blob', 123, largeBlob))
+    cursor.execute('insert into vt_insert_test (id, msg, keyspace_id, data) values(%s, %s, %s, %s) /* %s */',
+        (1, 'large blob', 123, 'LLL', largeComment))
     cursor.close()
 
     cursor = conn.cursor()
@@ -168,8 +168,8 @@ class TestMySQL(unittest.TestCase):
         self.fail('expected 1 row got ' + str(cursor.rowcount))
 
     for (id, msg, keyspace_id, blob) in cursor:
-        if blob != largeBlob:
-            self.fail('blob did not match largeBlob')
+        if blob != 'LLL':
+            self.fail('blob did not match \'LLL\'')
 
     cursor.close()
 
