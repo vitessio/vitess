@@ -17,6 +17,8 @@ limitations under the License.
 package mysql
 
 import (
+	"net"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
@@ -39,13 +41,13 @@ func (a *AuthServerNone) Salt() ([]byte, error) {
 }
 
 // ValidateHash validates hash
-func (a *AuthServerNone) ValidateHash(salt []byte, user string, authResponse []byte) (Getter, error) {
+func (a *AuthServerNone) ValidateHash(salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error) {
 	return &NoneGetter{}, nil
 }
 
 // Negotiate is part of the AuthServer interface.
 // It will never be called.
-func (a *AuthServerNone) Negotiate(c *Conn, user string) (Getter, error) {
+func (a *AuthServerNone) Negotiate(c *Conn, user string, remotAddr net.Addr) (Getter, error) {
 	panic("Negotiate should not be called as AuthMethod returned mysql_native_password")
 }
 

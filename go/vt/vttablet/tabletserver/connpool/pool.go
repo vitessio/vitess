@@ -104,7 +104,7 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams *mysql.ConnParams) {
 	defer cp.mu.Unlock()
 
 	f := func() (pools.Resource, error) {
-		return NewDBConn(cp, appParams, dbaParams)
+		return NewDBConn(cp, appParams)
 	}
 	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
 	cp.appDebugParams = appDebugParams

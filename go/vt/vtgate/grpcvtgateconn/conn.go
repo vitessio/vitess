@@ -58,7 +58,7 @@ func dial(ctx context.Context, addr string, timeout time.Duration) (vtgateconn.I
 	if err != nil {
 		return nil, err
 	}
-	cc, err := grpc.Dial(addr, opt, grpc.WithBlock(), grpc.WithTimeout(timeout))
+	cc, err := grpc.Dial(addr, opt, grpc.WithBlock(), grpc.WithTimeout(timeout), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(*grpcutils.MaxMessageSize), grpc.MaxCallSendMsgSize(*grpcutils.MaxMessageSize)))
 	if err != nil {
 		return nil, err
 	}
