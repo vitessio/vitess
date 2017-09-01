@@ -18,7 +18,8 @@ gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$' |
 if [ "$gofiles" = "" ]; then
   exit 0
 fi
-gopackages=$(echo $gofiles | xargs dirname | sort -u)
+# xargs -n1 because dirname on MacOS does not support multiple arguments.
+gopackages=$(echo $gofiles | xargs -n1 dirname | sort -u)
 
 warnings=
 
