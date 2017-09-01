@@ -57,10 +57,6 @@ var (
 	// GRPCCA is the CA to use if TLS is enabled
 	GRPCCA *string
 
-	// GRPCMaxMessageSize is the maximum message size which the gRPC server will
-	// accept. Larger messages will be rejected.
-	GRPCMaxMessageSize *int
-
 	// GRPCServer is the global server to serve gRPC.
 	GRPCServer *grpc.Server
 
@@ -114,9 +110,10 @@ func createGRPCServer() {
 	// grpc: received message length XXXXXXX exceeding the max size 4194304
 	// Note: For gRPC 1.0.0 it's sufficient to set the limit on the server only
 	// because it's not enforced on the client side.
-	if GRPCMaxMessageSize != nil {
-		opts = append(opts, grpc.MaxRecvMsgSize(*GRPCMaxMessageSize))
-		opts = append(opts, grpc.MaxSendMsgSize(*GRPCMaxMessageSize))
+	if grpcutils.MaxMessageSize != nil {
+		log.Infof("Setting grpc max message size to %d", *grpcutils.MaxMessageSize)
+		opts = append(opts, grpc.MaxRecvMsgSize(*grpcutils.MaxMessageSize))
+		opts = append(opts, grpc.MaxSendMsgSize(*grpcutils.MaxMessageSize))
 	}
 
 	if GRPCMaxConnectionAge != nil {
@@ -161,12 +158,11 @@ func RegisterGRPCFlags() {
 	GRPCCert = flag.String("grpc_cert", "", "certificate to use, requires grpc_key, enables TLS")
 	GRPCKey = flag.String("grpc_key", "", "key to use, requires grpc_cert, enables TLS")
 	GRPCCA = flag.String("grpc_ca", "", "ca to use, requires TLS, and enforces client cert check")
-	// Note: We're using 4 MiB as default value because that's the default in the
-	// gRPC 1.0.0 Go server.
-	GRPCMaxMessageSize = flag.Int("grpc_max_message_size", 4*1024*1024, "Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'.")
 	// Default is effectively infinity, as defined in grpc.
 	GRPCMaxConnectionAge = flag.Duration("grpc_max_connection_age", time.Duration(math.MaxInt64), "Maximum age of a client connection before GoAway is sent.")
 	GRPCMaxConnectionAgeGrace = flag.Duration("grpc_max_connection_age_grace", time.Duration(math.MaxInt64), "Additional grace period after grpc_max_connection_age, after which connections are forcibly closed.")
+
+	grpcutils.RegisterFlags()
 }
 
 // GRPCCheckServiceMap returns if we should register a gRPC service
