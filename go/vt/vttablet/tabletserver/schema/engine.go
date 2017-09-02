@@ -189,6 +189,22 @@ func (se *Engine) Close() {
 	se.isOpen = false
 }
 
+// MakeNonMaster clears the sequence caches to make sure that
+// they don't get accidentally reused after losing mastership.
+func (se *Engine) MakeNonMaster() {
+	// This function is tested through endtoend test.
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	for _, t := range se.tables {
+		if t.SequenceInfo != nil {
+			t.SequenceInfo.Lock()
+			t.SequenceInfo.NextVal = 0
+			t.SequenceInfo.LastVal = 0
+			t.SequenceInfo.Unlock()
+		}
+	}
+}
+
 // Reload reloads the schema info from the db.
 // Any tables that have changed since the last load are updated.
 // This is a no-op if the Engine is closed.
