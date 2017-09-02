@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
@@ -112,11 +113,11 @@ func checkAggregates(sel *sqlparser.Select, bldr builder) (builder, error) {
 	// 'select id, col from t group by id, col', or a query could be like
 	// 'select id, count(*) from t group by id'. In the above cases,
 	// the grouping can be done at the shard level, which allows the entire query
-	// to be pushed down. However, we cannot analyze group by clauses here
-	// because it can only be done after the symbol table has been updated
-	// with select expressions.
-	// For the sake of simplicity, we won't perform this optimization because
-	// these use cases are rare.
+	// to be pushed down. In order to perform this analysis, we're going to look
+	// ahead at the group by clause to see if it references a unique vindex.
+	if groupByHasUniqueVindex(sel, bldr, rb) {
+		return bldr, nil
+	}
 
 	// We need an aggregator primitive.
 	return &orderedAggregate{
@@ -146,6 +147,81 @@ func nodeHasAggregates(node sqlparser.SQLNode) bool {
 		return true, nil
 	}, node)
 	return hasAggregates
+}
+
+// groupbyHaUniqueVindex looks ahead at the group by expression to see if
+// it references a unique vindex.
+//
+// The vitess group by rules are different from MySQL because it's not possible
+// to match the MySQL behavior without knowing the schema. For example:
+// 'select id as val from t group by val' will have different interpretations
+// under MySQL depending on whether t has a val column or not.
+// In vitess, we always assume that 'val' references 'id'. This is achieved
+// by the symbol table resolving against the select list before searching
+// the tables.
+//
+// In order to look ahead, we have to overcome the chicken-and-egg problem:
+// group by needs the select aliases to be built. Select aliases are built
+// on push-down. But push-down decision depends on whether group by expressions
+// reference a vindex.
+// To overcome this, the look-ahead has to perform a search that matches
+// the group by analyzer. The flow is similar to oa.SetGroupBy, except that
+// we don't search the ResultColumns because they're not created yet. Also,
+// error conditions are treated as no match for simplicity; They will be
+// subsequently caught downstream.
+func groupByHasUniqueVindex(sel *sqlparser.Select, bldr builder, rb *route) bool {
+	for _, expr := range sel.GroupBy {
+		var matchedExpr sqlparser.Expr
+		switch node := expr.(type) {
+		case *sqlparser.ColName:
+			if expr := findAlias(node, sel.SelectExprs); expr != nil {
+				matchedExpr = expr
+			} else {
+				matchedExpr = node
+			}
+		case *sqlparser.SQLVal:
+			if node.Type != sqlparser.IntVal {
+				continue
+			}
+			num, err := strconv.ParseInt(string(node.Val), 0, 64)
+			if err != nil {
+				continue
+			}
+			if num < 1 || num > int64(len(sel.SelectExprs)) {
+				continue
+			}
+			expr, ok := sel.SelectExprs[num-1].(*sqlparser.AliasedExpr)
+			if !ok {
+				continue
+			}
+			matchedExpr = expr.Expr
+		default:
+			continue
+		}
+		vindex := bldr.Symtab().Vindex(matchedExpr, rb)
+		if vindex != nil && vindexes.IsUnique(vindex) {
+			return true
+		}
+	}
+	return false
+}
+
+func findAlias(colname *sqlparser.ColName, selects sqlparser.SelectExprs) sqlparser.Expr {
+	// Qualified column names cannot match an (unqualified) alias.
+	if !colname.Qualifier.IsEmpty() {
+		return nil
+	}
+	// See if this references an alias.
+	for _, selectExpr := range selects {
+		selectExpr, ok := selectExpr.(*sqlparser.AliasedExpr)
+		if !ok {
+			continue
+		}
+		if colname.Name.Equal(selectExpr.As) {
+			return selectExpr.Expr
+		}
+	}
+	return nil
 }
 
 // Symtab satisfies the builder interface.
@@ -245,14 +321,14 @@ func (oa *orderedAggregate) MakeDistinct() error {
 }
 
 // SetGroupBy satisfies the builder interface.
-func (oa *orderedAggregate) SetGroupBy(groupBy sqlparser.GroupBy) (builder, error) {
+func (oa *orderedAggregate) SetGroupBy(groupBy sqlparser.GroupBy) error {
 	colnum := -1
 	for _, expr := range groupBy {
 		switch node := expr.(type) {
 		case *sqlparser.ColName:
 			c := node.Metadata.(*column)
 			if c.Origin() == oa {
-				return nil, fmt.Errorf("group by expression cannot reference an aggregate function: %v", sqlparser.String(node))
+				return fmt.Errorf("group by expression cannot reference an aggregate function: %v", sqlparser.String(node))
 			}
 			for i, rc := range oa.resultColumns {
 				if rc.column == c {
@@ -261,38 +337,22 @@ func (oa *orderedAggregate) SetGroupBy(groupBy sqlparser.GroupBy) (builder, erro
 				}
 			}
 			if colnum == -1 {
-				return nil, errors.New("unsupported: in scatter query: group by column must reference column in SELECT list")
+				return errors.New("unsupported: in scatter query: group by column must reference column in SELECT list")
 			}
 		case *sqlparser.SQLVal:
 			num, err := ResultFromNumber(oa.resultColumns, node)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			colnum = num
 		default:
-			return nil, errors.New("unsupported: in scatter query: only simple references allowed")
-		}
-		if vindexes.IsUnique(oa.resultColumns[colnum].column.Vindex) {
-			oa.setDefunct()
-			return oa.input.SetGroupBy(groupBy)
+			return errors.New("unsupported: in scatter query: only simple references allowed")
 		}
 		oa.eaggr.Keys = append(oa.eaggr.Keys, colnum)
 	}
 
-	_, _ = oa.input.SetGroupBy(groupBy)
-	return oa, nil
-}
-
-// setDefunct replaces the column references originated by
-// oa into the ones of the underlying route, effectively
-// removing itself as an originator. Because resultColumns
-// are shared objects, this change equally affects the ones
-// in symtab. So, the change is global. All future resolves
-// will yield the column originated by the underlying route.
-func (oa *orderedAggregate) setDefunct() {
-	for i, rc := range oa.resultColumns {
-		rc.column = oa.input.ResultColumns()[i].column
-	}
+	_ = oa.input.SetGroupBy(groupBy)
+	return nil
 }
 
 // PushOrderBy pushes the order by expression into the primitive.
