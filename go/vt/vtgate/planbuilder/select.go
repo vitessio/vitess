@@ -127,8 +127,7 @@ func pushSelectExprs(sel *sqlparser.Select, bldr builder) (builder, error) {
 	}
 	bldr.Symtab().ResultColumns = resultColumns
 
-	bldr, err = pushGroupBy(sel, bldr)
-	if err != nil {
+	if err := pushGroupBy(sel, bldr); err != nil {
 		return nil, err
 	}
 	return bldr, nil

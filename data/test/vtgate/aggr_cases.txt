@@ -272,6 +272,51 @@
   }
 }
 
+# group by a unique vindex should revert to simple route, even if aggr is complex
+"select id, 1+count(*) from user group by id"
+{
+  "Original": "select id, 1+count(*) from user group by id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id, 1 + count(*) from user group by id",
+    "FieldQuery": "select id, 1 + count(*) from user where 1 != 1 group by id"
+  }
+}
+
+# group by a unique vindex where expression is qualified (alias should be ignored)
+"select val as id, 1+count(*) from user group by user.id"
+{
+  "Original": "select val as id, 1+count(*) from user group by user.id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select val as id, 1 + count(*) from user group by user.id",
+    "FieldQuery": "select val as id, 1 + count(*) from user where 1 != 1 group by user.id"
+  }
+}
+
+# group by a unique vindex where it should skip non-aliasex expressions.
+"select *, id, 1+count(*) from user group by id"
+{
+  "Original": "select *, id, 1+count(*) from user group by id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select *, id, 1 + count(*) from user group by id",
+    "FieldQuery": "select *, id, 1 + count(*) from user where 1 != 1 group by id"
+  }
+}
+
 # group by a unique vindex should revert to simple route, and having clause should find the correct symbols.
 "select id, count(*) c from user group by id having id=1 and c=10"
 {
@@ -826,3 +871,11 @@
       "Values":[5]
    }
 }
+
+# Group by invalid column number (code is duplicated from symab).
+"select id from user group by 1.1"
+"column number is not an int"
+
+# Group by out of range column number (code is duplicated from symab).
+"select id from user group by 2"
+"column number out of range: 2"
