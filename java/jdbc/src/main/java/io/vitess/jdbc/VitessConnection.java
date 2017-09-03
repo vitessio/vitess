@@ -16,13 +16,6 @@
 
 package io.vitess.jdbc;
 
-import io.vitess.client.Context;
-import io.vitess.client.VTGateConn;
-import io.vitess.client.VTGateTx;
-import io.vitess.util.CommonUtils;
-import io.vitess.util.Constants;
-import io.vitess.util.MysqlDefs;
-
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.CallableStatement;
@@ -49,6 +42,13 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.logging.Logger;
+
+import io.vitess.client.Context;
+import io.vitess.client.VTGateConn;
+import io.vitess.client.VTGateTx;
+import io.vitess.util.CommonUtils;
+import io.vitess.util.Constants;
+import io.vitess.util.MysqlDefs;
 
 /**
  * Created by harshit.gangal on 23/01/16.
@@ -172,7 +172,7 @@ public class VitessConnection extends ConnectionProperties implements Connection
         checkAutoCommit(Constants.SQLExceptionMessages.COMMIT_WHEN_AUTO_COMMIT_TRUE);
         try {
             if (isInTransaction()) {
-                Context context = createContext(Constants.CONNECTION_TIMEOUT);
+                Context context = createContext(getTimeout());
                 this.vtGateTx.commit(context, getTwopcEnabled()).checkedGet();
             }
         } finally {
@@ -191,7 +191,7 @@ public class VitessConnection extends ConnectionProperties implements Connection
         checkAutoCommit(Constants.SQLExceptionMessages.ROLLBACK_WHEN_AUTO_COMMIT_TRUE);
         try {
             if (isInTransaction()) {
-                Context context = createContext(Constants.CONNECTION_TIMEOUT);
+                Context context = createContext(getTimeout());
                 this.vtGateTx.rollback(context).checkedGet();
             }
         } finally {
