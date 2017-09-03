@@ -27,7 +27,7 @@ import org.junit.Test;
 
 import io.vitess.client.Context;
 import io.vitess.client.RpcClient;
-import io.vitess.client.VTGateConn;
+import io.vitess.client.VTGateConnection;
 import io.vitess.client.grpc.GrpcClientFactory;
 import io.vitess.proto.Vtrpc;
 
@@ -36,12 +36,12 @@ import io.vitess.proto.Vtrpc;
  */
 public class VitessVTGateManagerTest {
 
-    public VTGateConn getVtGateConn() {
+    public VTGateConnection getVtGateConn() {
         Vtrpc.CallerID callerId = Vtrpc.CallerID.newBuilder().setPrincipal("username").build();
         Context ctx =
             Context.getDefault().withDeadlineAfter(Duration.millis(500)).withCallerId(callerId);
         RpcClient client = new GrpcClientFactory().create(ctx, "host:80");
-        return new VTGateConn(client);
+        return new VTGateConnection(client);
     }
 
     @Test public void testVtGateConnectionsConstructorMultipleVtGateConnections()
@@ -65,8 +65,8 @@ public class VitessVTGateManagerTest {
         Field privateMapField = VitessVTGateManager.class.
             getDeclaredField("vtGateConnHashMap");
         privateMapField.setAccessible(true);
-        ConcurrentHashMap<String, VTGateConn> map =
-            (ConcurrentHashMap<String, VTGateConn>) privateMapField.get(VitessVTGateManager.class);
+        ConcurrentHashMap<String, VTGateConnection> map =
+            (ConcurrentHashMap<String, VTGateConnection>) privateMapField.get(VitessVTGateManager.class);
         Assert.assertEquals(4, map.size());
         VitessVTGateManager.close();
     }
@@ -81,13 +81,13 @@ public class VitessVTGateManagerTest {
                 + ".233:15991/shipment/shipment?tabletType=master", info);
         VitessVTGateManager.VTGateConnections vtGateConnections =
             new VitessVTGateManager.VTGateConnections(connection);
-        Assert.assertEquals(vtGateConnections.getVtGateConnInstance() instanceof VTGateConn, true);
-        VTGateConn vtGateConn = vtGateConnections.getVtGateConnInstance();
+        Assert.assertEquals(vtGateConnections.getVtGateConnInstance() instanceof VTGateConnection, true);
+        VTGateConnection vtGateConn = vtGateConnections.getVtGateConnInstance();
         Field privateMapField = VitessVTGateManager.class.
             getDeclaredField("vtGateConnHashMap");
         privateMapField.setAccessible(true);
-        ConcurrentHashMap<String, VTGateConn> map =
-            (ConcurrentHashMap<String, VTGateConn>) privateMapField.get(VitessVTGateManager.class);
+        ConcurrentHashMap<String, VTGateConnection> map =
+            (ConcurrentHashMap<String, VTGateConnection>) privateMapField.get(VitessVTGateManager.class);
         Assert.assertEquals(3, map.size());
         VitessVTGateManager.close();
     }

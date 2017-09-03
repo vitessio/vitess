@@ -70,7 +70,7 @@ public class Constants {
         public static final String COMMIT_WHEN_AUTO_COMMIT_TRUE =
             "Cannot call commit when auto commit is true";
         public static final String ROLLBACK_WHEN_AUTO_COMMIT_TRUE =
-            "Cannot call commit when auto commit is true";
+            "Cannot call rollback when auto commit is true";
         public static final String CLOSED_RESULT_SET = "Result Set closed";
         public static final String INVALID_COLUMN_INDEX = "Invalid Column Index";
         public static final String VITESS_CURSOR_CLOSE_ERROR =
