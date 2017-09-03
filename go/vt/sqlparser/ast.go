@@ -1024,7 +1024,11 @@ type Use struct {
 
 // Format formats the node.
 func (node *Use) Format(buf *TrackedBuffer) {
-	buf.Myprintf("use %v", node.DBName)
+	if node.DBName.v != "" {
+		buf.Myprintf("use %v", node.DBName)
+	} else {
+		buf.Myprintf("use")
+	}
 }
 
 // WalkSubtree walks the nodes of the subtree.
