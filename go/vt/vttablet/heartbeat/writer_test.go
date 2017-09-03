@@ -123,7 +123,7 @@ func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *Writer {
 	tw.dbName = sqlparser.Backtick(dbc.SidecarDBName)
 	tw.keyspaceShard = "test:0"
 	tw.now = nowFunc
-	tw.pool.Open(&dbc.App, &dbc.Dba)
+	tw.pool.Open(&dbc.App, &dbc.Dba, &dbc.AppDebug)
 
 	return tw
 }

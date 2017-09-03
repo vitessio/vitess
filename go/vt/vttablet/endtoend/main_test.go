@@ -33,7 +33,8 @@ import (
 )
 
 var (
-	connParams mysql.ConnParams
+	connParams         mysql.ConnParams
+	connAppDebugParams mysql.ConnParams
 )
 
 func TestMain(m *testing.M) {
@@ -53,7 +54,13 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		err = framework.StartServer(connParams)
+		connAppDebugParams, err = hdl.MySQLAppDebugConnParams()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "could not fetch mysql appdebug params: %v\n", err)
+			return 1
+		}
+
+		err = framework.StartServer(connParams, connAppDebugParams)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
@@ -92,6 +99,10 @@ func initTableACL() error {
 }
 
 var testSchema = `create table vitess_test(intval int default 0, floatval float default null, charval varchar(256) default null, binval varbinary(256) default null, primary key(intval));
+create table vitess_test_debuguser(intval int default 0, floatval float default null, charval varchar(256) default null, binval varbinary(256) default null, primary key(intval));
+grant select, show databases, process on *.* to 'vt_appdebug'@'localhost';
+revoke select on *.* from 'vt_appdebug'@'localhost';
+insert into vitess_test_debuguser values(1, 1.12345, 0xC2A2, 0x00FF), (2, null, '', null), (3, null, null, null);
 insert into vitess_test values(1, 1.12345, 0xC2A2, 0x00FF), (2, null, '', null), (3, null, null, null);
 
 create table vitess_a(eid bigint default 0, id int default 1, name varchar(128) default null, foo varbinary(128) default null, primary key(eid, id));
@@ -107,6 +118,14 @@ insert into vitess_b(eid, id) values(1, 1), (1, 2);
 insert into vitess_c(eid, name, foo) values(10, 'abcd', '20'), (11, 'bcde', '30');
 create table vitess_mixed_case(Col1 int default 0, COL2 int default null, primary key(col1));
 
+CREATE TABLE vitess_autoinc_seq (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  name varchar(255) NOT NULL,
+  sequence bigint(20) unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (id),
+  UNIQUE KEY name (name)
+);
+
 create table vitess_big(id int default 0, string1 varchar(128) default null, string2 varchar(100) default null, string3 char(1) default null, string4 varchar(50) default null, string5 varchar(50) default null, string6 varchar(16) default null, string7 varchar(120) default null, bigint1 bigint(20) default null, bigint2 bigint(20) default null, integer1 int default null, tinyint1 tinyint(4) default null, primary key(id));
 
 create table vitess_ints(tiny tinyint default 0, tinyu tinyint unsigned default null, small smallint default null, smallu smallint unsigned default null, medium mediumint default null, mediumu mediumint unsigned default null, normal int default null, normalu int unsigned default null, big bigint default null, bigu bigint unsigned default null, y year default null, primary key(tiny));
@@ -119,6 +138,9 @@ create table vitess_bool(auto int auto_increment, bval tinyint(1) default 0, sva
 
 create table vitess_seq(id int default 0, next_id bigint default null, cache bigint default null, increment bigint default null, primary key(id)) comment 'vitess_sequence';
 insert into vitess_seq(id, next_id, cache) values(0, 1, 3);
+
+create table vitess_part(id int, data varchar(16), primary key(id));
+alter table vitess_part partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue));
 
 create table vitess_acl_no_access(key1 bigint default 0, key2 bigint default null, primary key(key1));
 create table vitess_acl_read_only(key1 bigint default 0, key2 bigint default null, primary key(key1));
@@ -159,7 +181,7 @@ var tableACLConfig = `{
     },
     {
       "name": "vitess",
-      "table_names_or_prefixes": ["vitess_a", "vitess_b", "vitess_c", "dual", "vitess_d", "vitess_temp", "vitess_e", "vitess_f", "vitess_mixed_case", "upsert_test", "vitess_strings", "vitess_fracts", "vitess_ints", "vitess_misc", "vitess_big", "vitess_view", "vitess_json", "vitess_bool"],
+      "table_names_or_prefixes": ["vitess_a", "vitess_b", "vitess_c", "dual", "vitess_d", "vitess_temp", "vitess_e", "vitess_f", "vitess_mixed_case", "upsert_test", "vitess_strings", "vitess_fracts", "vitess_ints", "vitess_misc", "vitess_big", "vitess_view", "vitess_json", "vitess_bool", "vitess_autoinc_seq"],
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]
@@ -225,6 +247,12 @@ var tableACLConfig = `{
       "name": "vitess_acl_all_user_read_only",
       "table_names_or_prefixes": ["vitess_acl_all_user_read_only"],
       "readers": ["dev"]
+    },
+    {
+      "name": "vitess_acl_appdebug",
+      "table_names_or_prefixes": ["vitess_test_debuguser"],
+      "readers": ["dev", "vt_appdebug"],
+      "writers": ["dev", "vt_appdebug"]
     }
   ]
 }`

@@ -16,15 +16,15 @@
 
 package io.vitess.jdbc;
 
-import io.vitess.util.Constants;
-import org.junit.Assert;
-import org.junit.BeforeClass;
-import org.junit.Test;
-
 import java.sql.DriverManager;
 import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
 import java.util.Properties;
+import org.junit.Assert;
+import org.junit.BeforeClass;
+import org.junit.Test;
+
+import io.vitess.util.Constants;
 
 /**
  * Created by harshit.gangal on 19/01/16.

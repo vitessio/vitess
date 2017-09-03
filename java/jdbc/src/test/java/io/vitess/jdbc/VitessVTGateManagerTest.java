@@ -21,7 +21,6 @@ import java.lang.reflect.Field;
 import java.sql.SQLException;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
-
 import org.joda.time.Duration;
 import org.junit.Assert;
 import org.junit.Test;

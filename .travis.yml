@@ -147,3 +147,6 @@ after_failure:
   - ls -alR $HOME/gopath/vtdataroot
   # Output *.log* and *.stderr files. (Add -keep-data to TEST_FLAGS above or tests will delete their logs.)
   - find $HOME/gopath/vtdataroot \( -name "*.log*" -or -name "*.stderr" \) -type f -print0 | xargs -0r --verbose --max-args=1 cat
+notifications:
+  slack:
+    secure: S9n4rVWuEvSaF9RZUIx3Nkc2ycpM254zmalyMMbT5EmV1Xz6Zww2FL39RR5d57zsZ2M8GVW5n9uB8Bx57mr+L/wClEltzknYr7MA2/yYNMo5iK83tdQtNNw5U+dZG9/Plhlm4n883lcw9aZOyotNcLg2zBsd48Y74olk4NdmSfo=

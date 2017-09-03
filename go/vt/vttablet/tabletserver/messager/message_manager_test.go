@@ -621,6 +621,6 @@ func newMMConnPool(db *fakesqldb.DB) *connpool.Pool {
 		App:           *db.ConnParams(),
 		SidecarDBName: "_vt",
 	}
-	pool.Open(&dbconfigs.App, &dbconfigs.Dba)
+	pool.Open(&dbconfigs.App, &dbconfigs.Dba, &dbconfigs.AppDebug)
 	return pool
 }

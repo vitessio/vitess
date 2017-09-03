@@ -16,13 +16,14 @@
 
 package io.vitess.client.cursor;
 
-import io.vitess.proto.Query;
-import io.vitess.proto.Query.Field;
-import io.vitess.proto.Query.QueryResult;
 import java.sql.SQLException;
 import java.util.Iterator;
 import java.util.List;
 import javax.annotation.concurrent.NotThreadSafe;
+
+import io.vitess.proto.Query;
+import io.vitess.proto.Query.Field;
+import io.vitess.proto.Query.QueryResult;
 
 /**
  * A {@link Cursor} that serves records from a single {@link QueryResult} object.

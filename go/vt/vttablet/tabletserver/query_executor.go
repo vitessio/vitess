@@ -58,6 +58,22 @@ type QueryExecutor struct {
 	tsv              *TabletServer
 }
 
+// NewQueryExecutor creates a new QueryExecutor with the given contents. It is
+// used by vtexplain to create the struct ouside the package and assign the private
+// members.
+func NewQueryExecutor(ctx context.Context, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, plan *TabletPlan, logStats *tabletenv.LogStats, tsv *TabletServer) *QueryExecutor {
+	return &QueryExecutor{
+		query:         query,
+		bindVars:      bindVars,
+		transactionID: transactionID,
+		options:       options,
+		plan:          plan,
+		ctx:           ctx,
+		logStats:      logStats,
+		tsv:           tsv,
+	}
+}
+
 var sequenceFields = []*querypb.Field{
 	{
 		Name: "nextval",
@@ -133,7 +149,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		case planbuilder.PlanPassSelect:
 			return qre.execSelect()
 		case planbuilder.PlanSelectLock:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed outside transaction")
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "disallowed outside transaction")
 		case planbuilder.PlanSet:
 			return qre.execSet()
 		case planbuilder.PlanOtherRead:
@@ -145,7 +161,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 			return qre.execSQL(conn, qre.query, true)
 		default:
 			if !qre.tsv.qe.autoCommit.Get() {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed outside transaction")
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "disallowed outside transaction")
 			}
 			return qre.execDmlAutoCommit()
 		}
@@ -236,7 +252,7 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error
 }
 
 func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
-	conn, err := qre.tsv.te.txPool.LocalBegin(qre.ctx, qre.options.GetClientFoundRows())
+	conn, err := qre.tsv.te.txPool.LocalBegin(qre.ctx, qre.options.GetClientFoundRows(), qre.options.GetTransactionIsolation())
 	if err != nil {
 		return nil, err
 	}
@@ -342,7 +358,15 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 }
 
 func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
-	ddlPlan := planbuilder.DDLParse(qre.query)
+	sql := qre.query
+	var err error
+	if qre.plan.FullQuery != nil {
+		sql, err = qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars, nil, nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+	ddlPlan := planbuilder.DDLParse(sql)
 	if ddlPlan.Action == "" {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "DDL is not understood")
 	}
@@ -355,7 +379,7 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 			return nil, err
 		}
 		defer conn.Recycle()
-		result, err := qre.execSQL(conn, qre.query, false)
+		result, err := qre.execSQL(conn, sql, false)
 		if err != nil {
 			return nil, err
 		}
@@ -367,7 +391,7 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 	}
 
 	result, err := qre.execAsTransaction(func(conn *TxConnection) (*sqltypes.Result, error) {
-		return qre.execSQL(conn, qre.query, false)
+		return qre.execSQL(conn, sql, false)
 	})
 
 	if err != nil {
@@ -556,9 +580,13 @@ func (qre *QueryExecutor) execInsertSubquery(conn *TxConnection) (*sqltypes.Resu
 
 func (qre *QueryExecutor) execInsertPKRows(conn *TxConnection, extras map[string]sqlparser.Encodable, pkRows [][]sqltypes.Value) (*sqltypes.Result, error) {
 	var bsc []byte
-	// don't build comment for RBR.
+	// Build comments only if we're not in RBR mode.
 	if qre.tsv.qe.binlogFormat != connpool.BinlogFormatRow {
-		bsc = buildStreamComment(qre.plan.Table, pkRows, nil)
+		secondaryList, err := buildSecondaryList(qre.plan.Table, pkRows, qre.plan.SecondaryPKValues, qre.bindVars)
+		if err != nil {
+			return nil, err
+		}
+		bsc = buildStreamComment(qre.plan.Table, pkRows, secondaryList)
 	}
 	return qre.txFetch(conn, qre.plan.OuterQuery, qre.bindVars, extras, bsc, false, true)
 }
@@ -574,6 +602,9 @@ func (qre *QueryExecutor) execUpsertPK(conn *TxConnection) (*sqltypes.Result, er
 	if err != nil {
 		return nil, err
 	}
+	// We do not need to build the secondary list for the insert part.
+	// But the part that updates will build it if it gets executed,
+	// because it's the one that can change the primary keys.
 	bsc := buildStreamComment(qre.plan.Table, pkRows, nil)
 	result, err := qre.txFetch(conn, qre.plan.OuterQuery, qre.bindVars, nil, bsc, false, true)
 	if err == nil {
@@ -641,7 +672,7 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 			secondaryList = secondaryList[i:end]
 		}
 		var bsc []byte
-		// Don't build comment for RBR.
+		// Build comments only if we're not in RBR mode.
 		if qre.tsv.qe.binlogFormat != connpool.BinlogFormatRow {
 			bsc = buildStreamComment(qre.plan.Table, pkRows, secondaryList)
 		}
@@ -655,7 +686,12 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 		if err != nil {
 			return nil, err
 		}
-		// DMLs should only return RowsAffected.
+
+		// UPDATEs can return InsertID when LAST_INSERT_ID(expr) is used. In
+		// this case it should be the same for all rows.
+		result.InsertID = r.InsertID
+
+		// DMLs should all return RowsAffected.
 		result.RowsAffected += r.RowsAffected
 	}
 	if qre.plan.Table.Type == schema.Message {
@@ -759,7 +795,7 @@ func (qre *QueryExecutor) streamFetch(conn *connpool.DBConn, parsedQuery *sqlpar
 }
 
 func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable, extras map[string]sqlparser.Encodable, buildStreamComment []byte) (string, error) {
-	bindVars["#maxLimit"] = sqltypes.Int64BindVariable(qre.tsv.qe.maxResultSize.Get() + 1)
+	bindVars["#maxLimit"] = sqltypes.Int64BindVariable(qre.getLimit(parsedQuery))
 	sql, err := parsedQuery.GenerateQuery(bindVars, extras)
 	if err != nil {
 		return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)
@@ -769,6 +805,15 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	}
 	sql = append(sql, qre.trailingComments...)
 	return hack.String(sql), nil
+}
+
+func (qre *QueryExecutor) getLimit(query *sqlparser.ParsedQuery) int64 {
+	maxRows := qre.tsv.qe.maxResultSize.Get()
+	sqlLimit := qre.options.GetSqlSelectLimit()
+	if sqlLimit > 0 && sqlLimit < maxRows && strings.HasPrefix(sqlparser.StripLeadingComments(query.Query), "select") {
+		return sqlLimit
+	}
+	return maxRows + 1
 }
 
 // poolConn is an abstraction for reusing code in execSQL.

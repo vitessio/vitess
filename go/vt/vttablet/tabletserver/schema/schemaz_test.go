@@ -36,11 +36,11 @@ func TestSchamazHandler(t *testing.T) {
 	tableD := NewTable("c")
 
 	tableA.AddColumn("column1", sqltypes.Int64, sqltypes.NewInt32(0), "auto_increment")
-	tableA.AddIndex("index1").AddColumn("index_column", 1000)
+	tableA.AddIndex("index1", true).AddColumn("index_column", 1000)
 	tableA.Type = NoType
 
 	tableB.AddColumn("column2", sqltypes.VarChar, sqltypes.NewVarBinary("NULL"), "")
-	tableB.AddIndex("index2").AddColumn("index_column2", 200)
+	tableB.AddIndex("index2", false).AddColumn("index_column2", 200)
 	tableB.Type = Sequence
 
 	tableC.Type = Message
@@ -56,7 +56,7 @@ func TestSchamazHandler(t *testing.T) {
 	tableAPattern := []string{
 		`<td>a</td>`,
 		`<td>column1: INT64, autoinc, <br></td>`,
-		`<td>index1: \(index_column,\), \(1000,\)<br></td>`,
+		`<td>index1\(unique\): \(index_column,\), \(1000,\)<br></td>`,
 		`<td>none</td>`,
 	}
 	matched, err := regexp.Match(strings.Join(tableAPattern, `\s*`), body)
@@ -64,7 +64,7 @@ func TestSchamazHandler(t *testing.T) {
 		t.Fatalf("schemaz page does not contain table A with error: %v", err)
 	}
 	if !matched {
-		t.Fatalf("schemaz page does not contain table A")
+		t.Fatal("schemaz page does not contain table A")
 	}
 	tableBPattern := []string{
 		`<td>b</td>`,

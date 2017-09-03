@@ -24,6 +24,11 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
+var (
+	_ Functional = (*Numeric)(nil)
+	_ Reversible = (*Numeric)(nil)
+)
+
 // Numeric defines a bit-pattern mapping of a uint64 to the KeyspaceId.
 // It's Unique and Reversible.
 type Numeric struct {
@@ -46,22 +51,18 @@ func (*Numeric) Cost() int {
 }
 
 // Verify returns true if ids and ksids match.
-func (*Numeric) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
-	if len(ids) != len(ksids) {
-		return false, fmt.Errorf("Numeric.Verify: length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
-	}
-	for rowNum := range ids {
+func (*Numeric) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	out := make([]bool, len(ids))
+	for i := range ids {
 		var keybytes [8]byte
-		num, err := sqltypes.ToUint64(ids[rowNum])
+		num, err := sqltypes.ToUint64(ids[i])
 		if err != nil {
-			return false, fmt.Errorf("Numeric.Verify: %v", err)
+			return nil, fmt.Errorf("Numeric.Verify: %v", err)
 		}
 		binary.BigEndian.PutUint64(keybytes[:], num)
-		if bytes.Compare(keybytes[:], ksids[rowNum]) != 0 {
-			return false, nil
-		}
+		out[i] = (bytes.Compare(keybytes[:], ksids[i]) == 0)
 	}
-	return true, nil
+	return out, nil
 }
 
 // Map returns the associated keyspace ids for the given ids.
@@ -82,12 +83,12 @@ func (*Numeric) Map(_ VCursor, ids []sqltypes.Value) ([][]byte, error) {
 // ReverseMap returns the associated ids for the ksids.
 func (*Numeric) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error) {
 	var reverseIds = make([]sqltypes.Value, len(ksids))
-	for rownum, keyspaceID := range ksids {
+	for i, keyspaceID := range ksids {
 		if len(keyspaceID) != 8 {
 			return nil, fmt.Errorf("Numeric.ReverseMap: length of keyspaceId is not 8: %d", len(keyspaceID))
 		}
 		val := binary.BigEndian.Uint64([]byte(keyspaceID))
-		reverseIds[rownum] = sqltypes.NewUint64(val)
+		reverseIds[i] = sqltypes.NewUint64(val)
 	}
 	return reverseIds, nil
 }

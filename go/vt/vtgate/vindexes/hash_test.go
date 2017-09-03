@@ -79,34 +79,22 @@ func TestHashMap(t *testing.T) {
 }
 
 func TestHashVerify(t *testing.T) {
-	success, err := hash.Verify(nil, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	ids := []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}
+	ksids := [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x16k@\xb4J\xbaK\xd6")}
+	got, err := hash.Verify(nil, ids, ksids)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
-	if !success {
-		t.Errorf("Verify(): %+v, want true", success)
-	}
-}
-
-func TestHashVerifyNeg(t *testing.T) {
-	_, err := hash.Verify(nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
-	want := "hash.Verify: length of ids 2 doesn't match length of ksids 1"
-	if err.Error() != want {
-		t.Error(err.Error())
+	want := []bool{true, false}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("binaryMD5.Verify: %v, want %v", got, want)
 	}
 
-	_, err = hash.Verify(nil, []sqltypes.Value{sqltypes.NewFloat64(1.2)}, [][]byte{[]byte("test1")})
-	wanterr := "hash.Verify: could not parse value: 1.2"
-	if err == nil || err.Error() != wanterr {
-		t.Errorf("hash.Verify() error: %v, want %s", err, wanterr)
-	}
-
-	success, err := hash.Verify(nil, []sqltypes.Value{sqltypes.NewInt64(4)}, [][]byte{[]byte("\x06\xe7\xea\"Βp\x8f")})
-	if err != nil {
-		t.Error(err)
-	}
-	if success {
-		t.Errorf("Verify(): %+v, want false", success)
+	// Failure test
+	_, err = hash.Verify(nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
+	wantErr := "hash.Verify: could not parse value: aa"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("hash.Verify err: %v, want %s", err, wantErr)
 	}
 }
 

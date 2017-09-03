@@ -247,6 +247,72 @@ const (
 	// ERUnknownError is ER_UNKNOWN_ERROR
 	ERUnknownError = 1105
 
+	// ERBadFieldError is ER_BAD_FIELD_ERROR
+	ERBadFieldError = 1054
+
+	// ERRowIsReferenced is ER_ROW_IS_REFERENCED
+	ERRowIsReferenced = 1217
+
+	// ERRowIsReferenced2 is ER_ROW_IS_REFERENCED_2
+	ERRowIsReferenced2 = 1451
+
+	// ERNoReferencedRow is ER_NO_REFERENCED_ROW
+	ERNoReferencedRow = 1216
+
+	// ErNoReferencedRow2 is ER_NO_REFERENCED_ROW_2
+	ErNoReferencedRow2 = 1452
+
+	// EROperandColumns is ER_OPERAND_COLUMNS
+	EROperandColumns = 1241
+
+	// ERSubqueryNo1Row is ER_SUBQUERY_NO_1_ROW
+	ERSubqueryNo1Row = 1242
+
+	// ERCyclicReference is ER_CYCLIC_REFERENCE
+	ERCyclicReference = 1245
+
+	// ERIllegalReference is ER_ILLEGAL_REFERENCE
+	ERIllegalReference = 1247
+
+	// ERDerivedMustHaveAlias is ER_DERIVED_MUST_HAVE_ALIAS
+	ERDerivedMustHaveAlias = 1248
+
+	// ERTableNameNotAllowedHere is ER_TABLENAME_NOT_ALLOWED_HERE
+	ERTableNameNotAllowedHere = 1250
+
+	// ERTooManyTables is ER_TOO_MANY_TABLES
+	ERTooManyTables = 1116
+
+	// ERTooManyFields is ER_TOO_MANY_FIELDS
+	ERTooManyFields = 1117
+
+	// ERInvalidGroupFuncUse is ER_INVALID_GROUP_FUNC_USE
+	ERInvalidGroupFuncUse = 1111
+
+	// ERNoSuchTable is ER_NO_SUCH_TABLE
+	ERNoSuchTable = 1146
+
+	// ERUnknownTable is ER_UNKNOWN_TABLE
+	ERUnknownTable = 1109
+
+	// ERWrongTableName is ER_WRONG_TABLE_NAME
+	ERWrongTableName = 1103
+
+	// ERWrongDbName is ER_WRONG_DB_NAME
+	ERWrongDbName = 1102
+
+	// ERTableNotLockedForWrite is ER_TABLE_NOT_LOCKED_FOR_WRITE
+	ERTableNotLockedForWrite = 1099
+
+	// ERTooBigSet is ER_TOO_BIG_SET
+	ERTooBigSet = 1097
+
+	// ERUpdateTableUsed is ER_UPDATE_TABLE_USED
+	ERUpdateTableUsed = 1093
+
+	// ERSyntaxError is ER_SYNTAX_ERROR
+	ERSyntaxError = 1149
+
 	// ERCantDoThisDuringAnTransaction is
 	// ER_CANT_DO_THIS_DURING_AN_TRANSACTION
 	ERCantDoThisDuringAnTransaction = 1179
@@ -265,6 +331,9 @@ const (
 
 	// ERDataOutOfRange is ER_DATA_OUT_OF_RANGE
 	ERDataOutOfRange = 1690
+
+	// ERTruncatedWrongValueForField is ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+	ERTruncatedWrongValueForField = 1366
 )
 
 // Sql states for errors.
@@ -290,6 +359,9 @@ const (
 
 	// SSBadNullError is ER_BAD_NULL_ERROR
 	SSBadNullError = "23000"
+
+	// SSBadFieldError is ER_BAD_FIELD_ERROR
+	SSBadFieldError = "42S22"
 
 	// SSDupKey is ER_DUP_KEY
 	SSDupKey = "23000"

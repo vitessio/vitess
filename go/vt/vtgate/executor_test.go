@@ -34,7 +34,7 @@ import (
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
-func TestExecutorTransactions(t *testing.T) {
+func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := &vtgatepb.Session{TargetString: "@master"}
 
@@ -82,6 +82,85 @@ func TestExecutorTransactions(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSession = &vtgatepb.Session{TargetString: "@master"}
+	if !proto.Equal(session, wantSession) {
+		t.Errorf("begin: %v, want %v", session, wantSession)
+	}
+	if rollbackCount := sbclookup.RollbackCount.Get(); rollbackCount != 1 {
+		t.Errorf("want 1, got %d", rollbackCount)
+	}
+
+	// Prevent transactions on non-master.
+	session = &vtgatepb.Session{TargetString: "@replica", InTransaction: true}
+	_, err = executor.Execute(context.Background(), session, "select id from main1", nil)
+	want := "transactions are supported only for master tablet types, current type: REPLICA"
+	if err == nil || err.Error() != want {
+		t.Errorf("Execute(@replica, in_transaction) err: %v, want %s", err, want)
+	}
+
+	// Prevent begin on non-master.
+	session = &vtgatepb.Session{TargetString: "@replica"}
+	_, err = executor.Execute(context.Background(), session, "begin", nil)
+	if err == nil || err.Error() != want {
+		t.Errorf("Execute(@replica, in_transaction) err: %v, want %s", err, want)
+	}
+
+	// Prevent use of non-master if in_transaction is on.
+	session = &vtgatepb.Session{TargetString: "@master", InTransaction: true}
+	_, err = executor.Execute(context.Background(), session, "use @replica", nil)
+	want = "cannot change to a non-master type in the middle of a transaction: REPLICA"
+	if err == nil || err.Error() != want {
+		t.Errorf("Execute(@replica, in_transaction) err: %v, want %s", err, want)
+	}
+}
+
+func TestExecutorTransactionsAutoCommit(t *testing.T) {
+	executor, _, _, sbclookup := createExecutorEnv()
+	session := &vtgatepb.Session{TargetString: "@master", Autocommit: true}
+
+	// begin.
+	_, err := executor.Execute(context.Background(), session, "begin", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSession := &vtgatepb.Session{InTransaction: true, TargetString: "@master", Autocommit: true}
+	if !proto.Equal(session, wantSession) {
+		t.Errorf("begin: %v, want %v", session, wantSession)
+	}
+	if commitCount := sbclookup.CommitCount.Get(); commitCount != 0 {
+		t.Errorf("want 0, got %d", commitCount)
+	}
+
+	// commit.
+	_, err = executor.Execute(context.Background(), session, "select id from main1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = executor.Execute(context.Background(), session, "commit", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSession = &vtgatepb.Session{TargetString: "@master", Autocommit: true}
+	if !proto.Equal(session, wantSession) {
+		t.Errorf("begin: %v, want %v", session, wantSession)
+	}
+	if commitCount := sbclookup.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("want 1, got %d", commitCount)
+	}
+
+	// rollback.
+	_, err = executor.Execute(context.Background(), session, "begin", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = executor.Execute(context.Background(), session, "select id from main1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = executor.Execute(context.Background(), session, "rollback", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSession = &vtgatepb.Session{TargetString: "@master", Autocommit: true}
 	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
@@ -149,6 +228,9 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set workload = 'olap'",
 		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLAP}},
 	}, {
+		in:  "set workload = 'dba'",
+		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_DBA}},
+	}, {
 		in:  "set workload = 'aa'",
 		err: "invalid workload: aa",
 	}, {
@@ -158,6 +240,15 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set transaction_mode = 'twopc', autocommit=1",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
 	}, {
+		in:  "set sql_select_limit = 5",
+		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{SqlSelectLimit: 5}},
+	}, {
+		in:  "set sql_select_limit = DEFAULT",
+		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{SqlSelectLimit: 0}},
+	}, {
+		in:  "set sql_select_limit = 'asdfasfd'",
+		err: "unexpected string value for sql_select_limit: asdfasfd",
+	}, {
 		in:  "set autocommit=1+1",
 		err: "invalid syntax: 1 + 1",
 	}, {
@@ -165,10 +256,31 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{},
 	}, {
 		in:  "set character_set_results='abcd'",
-		err: "only NULL is allowed for character_set_results: abcd",
+		err: "disallowed value for character_set_results: abcd",
 	}, {
 		in:  "set foo=1",
 		err: "unsupported construct: set foo=1",
+	}, {
+		in:  "set names utf8",
+		out: &vtgatepb.Session{},
+	}, {
+		in:  "set names ascii",
+		err: "unexpected value for charset: ascii",
+	}, {
+		in:  "set charset utf8",
+		out: &vtgatepb.Session{},
+	}, {
+		in:  "set character set default",
+		out: &vtgatepb.Session{},
+	}, {
+		in:  "set character set ascii",
+		err: "unexpected value for charset: ascii",
+	}, {
+		in:  "set net_write_timeout = 600",
+		out: &vtgatepb.Session{},
+	}, {
+		in:  "set net_read_timeout = 600",
+		out: &vtgatepb.Session{},
 	}}
 	for _, tcase := range testcases {
 		session := &vtgatepb.Session{}
@@ -217,6 +329,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	}
 
 	// autocommit = 1, "begin"
+	startCount := sbclookup.CommitCount.Get()
 	_, err = executor.Execute(context.Background(), session, "begin", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -231,8 +344,8 @@ func TestExecutorAutocommit(t *testing.T) {
 	if !proto.Equal(&testSession, wantSession) {
 		t.Errorf("autocommit=1: %v, want %v", &testSession, wantSession)
 	}
-	if commitCount := sbclookup.CommitCount.Get(); commitCount != 1 {
-		t.Errorf("want 1, got %d", commitCount)
+	if got, want := sbclookup.CommitCount.Get(), startCount; got != want {
+		t.Errorf("Commit count: %d, want %d", got, want)
 	}
 	_, err = executor.Execute(context.Background(), session, "commit", nil)
 	if err != nil {
@@ -242,8 +355,34 @@ func TestExecutorAutocommit(t *testing.T) {
 	if !proto.Equal(session, wantSession) {
 		t.Errorf("autocommit=1: %v, want %v", session, wantSession)
 	}
-	if commitCount := sbclookup.CommitCount.Get(); commitCount != 2 {
-		t.Errorf("want 2, got %d", commitCount)
+	if got, want := sbclookup.CommitCount.Get(), startCount+1; got != want {
+		t.Errorf("Commit count: %d, want %d", got, want)
+	}
+
+	// transition autocommit from 0 to 1 in the middle of a transaction.
+	startCount = sbclookup.CommitCount.Get()
+	session = &vtgatepb.Session{TargetString: "@master"}
+	_, err = executor.Execute(context.Background(), session, "begin", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = executor.Execute(context.Background(), session, "update main1 set id=1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := sbclookup.CommitCount.Get(), startCount; got != want {
+		t.Errorf("Commit count: %d, want %d", got, want)
+	}
+	_, err = executor.Execute(context.Background(), session, "set autocommit=1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master"}
+	if !proto.Equal(session, wantSession) {
+		t.Errorf("autocommit=1: %v, want %v", session, wantSession)
+	}
+	if got, want := sbclookup.CommitCount.Get(), startCount+1; got != want {
+		t.Errorf("Commit count: %d, want %d", got, want)
 	}
 }
 
@@ -298,13 +437,14 @@ func TestExecutorShow(t *testing.T) {
 		Fields: buildVarCharFields("Tables"),
 		Rows: [][]sqltypes.Value{
 			buildVarCharRow("dual"),
+			buildVarCharRow("ins_lookup"),
 			buildVarCharRow("main1"),
 			buildVarCharRow("music_user_map"),
 			buildVarCharRow("name_user_map"),
 			buildVarCharRow("simple"),
 			buildVarCharRow("user_seq"),
 		},
-		RowsAffected: 6,
+		RowsAffected: 7,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
 		t.Errorf("show vschema_tables:\n%+v, want\n%+v", qr, wantqr)
@@ -761,4 +901,43 @@ func TestParseTargetSingleKeyspace(t *testing.T) {
 	if !proto.Equal(&got, &want) {
 		t.Errorf("ParseTarget(%s): %v, want %v", "@master", got, want)
 	}
+}
+
+func TestPassthroughDDL(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	masterSession.TargetString = "TestExecutor"
+
+	_, err := executorExec(executor, "/* leading */ create table passthrough_ddl (col bigint default 123) /* trailing */", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "/* leading */ create table passthrough_ddl (col bigint default 123) /* trailing */",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
+	}
+	sbc1.Queries = nil
+	sbc2.Queries = nil
+
+	// Force the query to go to only one shard. Normalization doesn't make any difference.
+	masterSession.TargetString = "TestExecutor/40-60"
+	executor.normalize = true
+
+	_, err = executorExec(executor, "/* leading */ create table passthrough_ddl (col bigint default 123) /* trailing */", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	if sbc1.Queries != nil {
+		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
+	}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
+	}
+	sbc2.Queries = nil
+	masterSession.TargetString = ""
 }

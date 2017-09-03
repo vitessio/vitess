@@ -16,9 +16,10 @@
 
 package io.vitess.util;
 
+import org.joda.time.Duration;
+
 import io.vitess.client.Context;
 import io.vitess.proto.Vtrpc;
-import org.joda.time.Duration;
 
 /**
  * Created by naveen.nahata on 24/02/16.

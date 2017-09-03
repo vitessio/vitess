@@ -339,6 +339,10 @@
 "insert into unsharded_auto(id, val) values(1)"
 "column list doesn't match values"
 
+# sharded upsert can't change vindex
+"insert into user(id) values(1) on duplicate key update id = 3"
+"unsupported: DML cannot change vindex column"
+
 # sharded insert from select
 "insert into user(id) select 1 from dual"
 "unsupported: insert into select"

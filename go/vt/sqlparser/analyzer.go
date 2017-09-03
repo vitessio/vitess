@@ -127,10 +127,6 @@ func IsValue(node Expr) bool {
 		case StrVal, HexVal, IntVal, ValArg:
 			return true
 		}
-	case *ValuesFuncExpr:
-		if v.Resolved != nil {
-			return IsValue(v.Resolved)
-		}
 	}
 	return false
 }
@@ -201,10 +197,6 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 			pv.Values = append(pv.Values, innerpv)
 		}
 		return pv, nil
-	case *ValuesFuncExpr:
-		if node.Resolved != nil {
-			return NewPlanValue(node.Resolved)
-		}
 	case *NullVal:
 		return sqltypes.PlanValue{}, nil
 	}
@@ -226,19 +218,19 @@ func StringIn(str string, values ...string) bool {
 // if the query is a SET statement. Values can be int64 or string.
 // Since set variable names are case insensitive, all keys are returned
 // as lower case.
-func ExtractSetValues(sql string) (map[string]interface{}, error) {
+func ExtractSetValues(sql string) (keyValues map[string]interface{}, charset string, err error) {
 	stmt, err := Parse(sql)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	setStmt, ok := stmt.(*Set)
 	if !ok {
-		return nil, fmt.Errorf("ast did not yield *sqlparser.Set: %T", stmt)
+		return nil, "", fmt.Errorf("ast did not yield *sqlparser.Set: %T", stmt)
 	}
 	result := make(map[string]interface{})
 	for _, expr := range setStmt.Exprs {
 		if !expr.Name.Qualifier.IsEmpty() {
-			return nil, fmt.Errorf("invalid syntax: %v", String(expr.Name))
+			return nil, "", fmt.Errorf("invalid syntax: %v", String(expr.Name))
 		}
 		key := expr.Name.Name.Lowered()
 
@@ -250,17 +242,19 @@ func ExtractSetValues(sql string) (map[string]interface{}, error) {
 			case IntVal:
 				num, err := strconv.ParseInt(string(expr.Val), 0, 64)
 				if err != nil {
-					return nil, err
+					return nil, "", err
 				}
 				result[key] = num
 			default:
-				return nil, fmt.Errorf("invalid value type: %v", String(expr))
+				return nil, "", fmt.Errorf("invalid value type: %v", String(expr))
 			}
 		case *NullVal:
 			result[key] = nil
+		case *Default:
+			result[key] = "default"
 		default:
-			return nil, fmt.Errorf("invalid syntax: %s", String(expr))
+			return nil, "", fmt.Errorf("invalid syntax: %s", String(expr))
 		}
 	}
-	return result, nil
+	return result, setStmt.Charset.Lowered(), nil
 }

@@ -16,8 +16,6 @@
 
 package io.vitess.jdbc;
 
-import io.vitess.proto.Query;
-import io.vitess.util.Constants;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
@@ -25,6 +23,9 @@ import java.sql.RowIdLifetime;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.util.logging.Logger;
+
+import io.vitess.proto.Query;
+import io.vitess.util.Constants;
 
 /**
  * Created by ashudeep.sharma on 15/02/16.

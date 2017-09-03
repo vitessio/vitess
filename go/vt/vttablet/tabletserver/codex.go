@@ -56,13 +56,17 @@ func buildSecondaryList(table *schema.Table, pkList [][]sqltypes.Value, secondar
 	if err != nil {
 		return nil, err
 	}
-	// We only expect one row because ON DUPLICATE KEY SET
-	// statements can set only one value. Only pk columns
-	// whose values are changing will be set. The rest will
-	// be NULL.
-	changedValues := secondaryRows[0]
 	rows := make([][]sqltypes.Value, len(pkList))
 	for i, row := range pkList {
+		// If secondaryRows has only one row, then that
+		// row should be duplicated for every row in pkList.
+		// Otherwise, we use the individual values.
+		var changedValues []sqltypes.Value
+		if len(secondaryRows) == 1 {
+			changedValues = secondaryRows[0]
+		} else {
+			changedValues = secondaryRows[i]
+		}
 		rows[i] = make([]sqltypes.Value, len(row))
 		for j, value := range row {
 			if changedValues[j].IsNull() {

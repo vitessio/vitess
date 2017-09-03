@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"errors"
 	"flag"
 	"os"
 	"time"
@@ -44,6 +45,12 @@ func main() {
 	flag.Parse()
 
 	logger := logutil.NewConsoleLogger()
+
+	// We can't do much without a -server flag
+	if *server == "" {
+		log.Error(errors.New("Please specify -server <vtctld_host:vtctld_port> to specify the vtctld server to connect to"))
+		os.Exit(1)
+	}
 
 	err := vtctlclient.RunCommandAndWait(
 		context.Background(), *server, flag.Args(),

@@ -16,21 +16,20 @@
 
 package io.vitess.jdbc;
 
-import io.vitess.client.Context;
-import io.vitess.client.RpcClient;
-import io.vitess.client.VTGateConn;
-import io.vitess.client.VTGateConnection;
-import io.vitess.client.grpc.GrpcClientFactory;
-import io.vitess.client.grpc.RetryingInterceptorConfig;
-import io.vitess.client.grpc.tls.TlsOptions;
-import io.vitess.util.CommonUtils;
-import io.vitess.util.Constants;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
+
+import io.vitess.client.Context;
+import io.vitess.client.RpcClient;
+import io.vitess.client.VTGateConnection;
+import io.vitess.client.grpc.GrpcClientFactory;
+import io.vitess.client.grpc.RetryingInterceptorConfig;
+import io.vitess.client.grpc.tls.TlsOptions;
+import io.vitess.util.Constants;
 
 /**
  * Created by naveen.nahata on 24/02/16.
@@ -106,9 +105,7 @@ public class VitessVTGateManager {
      * @return
      */
     private static VTGateConnection getVtGateConn(VitessJDBCUrl.HostInfo hostInfo, VitessConnection connection) {
-        final String username = connection.getUsername();
-        final String target = connection.getTarget();
-        final Context context = CommonUtils.createContext(username, Constants.CONNECTION_TIMEOUT);
+        final Context context = connection.createContext(Constants.CONNECTION_TIMEOUT);
         RetryingInterceptorConfig retryingConfig = getRetryingInterceptorConfig(connection);
         RpcClient client;
         if (connection.getUseSSL()) {
@@ -140,10 +137,7 @@ public class VitessVTGateManager {
         } else {
             client = new GrpcClientFactory(retryingConfig).create(context, hostInfo.toString());
         }
-        if (null == target) {
-            return (new VTGateConnection(client));
-        }
-        return (new VTGateConnection(client, target));
+        return (new VTGateConnection(client));
     }
 
     private static RetryingInterceptorConfig getRetryingInterceptorConfig(VitessConnection conn) {

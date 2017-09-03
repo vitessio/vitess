@@ -23,6 +23,11 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
+var (
+	_ Functional = (*Binary)(nil)
+	_ Reversible = (*Binary)(nil)
+)
+
 // Binary is a vindex that converts binary bits to a keyspace id.
 type Binary struct {
 	name string
@@ -44,16 +49,12 @@ func (vind *Binary) Cost() int {
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *Binary) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) (bool, error) {
-	if len(ids) != len(ksids) {
-		return false, fmt.Errorf("Binary.Verify: length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
-	}
+func (vind *Binary) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	out := make([]bool, len(ids))
 	for i := range ids {
-		if bytes.Compare(ids[i].ToBytes(), ksids[i]) != 0 {
-			return false, nil
-		}
+		out[i] = (bytes.Compare(ids[i].ToBytes(), ksids[i]) == 0)
 	}
-	return true, nil
+	return out, nil
 }
 
 // Map returns the corresponding keyspace id values for the given ids.

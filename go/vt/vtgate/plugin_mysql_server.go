@@ -37,6 +37,7 @@ import (
 var (
 	mysqlServerPort               = flag.Int("mysql_server_port", -1, "If set, also listen for MySQL binary protocol connections on this port.")
 	mysqlServerBindAddress        = flag.String("mysql_server_bind_address", "", "Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.")
+	mysqlServerSocketPath         = flag.String("mysql_server_socket_path", "", "This option specifies the Unix socket file to use when listening for local connections. By default it will be empty and it won't listen to a unix socket")
 	mysqlAuthServerImpl           = flag.String("mysql_auth_server_impl", "static", "Which auth server implementation to use.")
 	mysqlAllowClearTextWithoutTLS = flag.Bool("mysql_allow_clear_text_without_tls", false, "If set, the server will allow the use of a clear text password over non-SSL connections.")
 
@@ -117,12 +118,13 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query []byte, callback func(*sq
 }
 
 var mysqlListener *mysql.Listener
+var mysqlUnixListener *mysql.Listener
 
 // initiMySQLProtocol starts the mysql protocol.
 // It should be called only once in a process.
 func initMySQLProtocol() {
 	// Flag is not set, just return.
-	if *mysqlServerPort < 0 {
+	if *mysqlServerPort < 0 && *mysqlServerSocketPath == "" {
 		return
 	}
 
@@ -140,29 +142,41 @@ func initMySQLProtocol() {
 	// Create a Listener.
 	var err error
 	vh := newVtgateHandler(rpcVTGate)
-	mysqlListener, err = mysql.NewListener("tcp", net.JoinHostPort(*mysqlServerBindAddress, fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh)
-	if err != nil {
-		log.Fatalf("mysql.NewListener failed: %v", err)
-	}
-	if *mysqlSslCert != "" && *mysqlSslKey != "" {
-		mysqlListener.TLSConfig, err = grpcutils.TLSServerConfig(*mysqlSslCert, *mysqlSslKey, *mysqlSslCa)
+	if *mysqlServerPort >= 0 {
+		mysqlListener, err = mysql.NewListener("tcp", net.JoinHostPort(*mysqlServerBindAddress, fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh)
 		if err != nil {
-			log.Fatalf("grpcutils.TLSServerConfig failed: %v", err)
-			return
+			log.Fatalf("mysql.NewListener failed: %v", err)
 		}
-	}
-	mysqlListener.AllowClearTextWithoutTLS = *mysqlAllowClearTextWithoutTLS
+		if *mysqlSslCert != "" && *mysqlSslKey != "" {
+			mysqlListener.TLSConfig, err = grpcutils.TLSServerConfig(*mysqlSslCert, *mysqlSslKey, *mysqlSslCa)
+			if err != nil {
+				log.Fatalf("grpcutils.TLSServerConfig failed: %v", err)
+				return
+			}
+		}
+		mysqlListener.AllowClearTextWithoutTLS = *mysqlAllowClearTextWithoutTLS
 
-	// Check for the connection threshold
-	if *mysqlSlowConnectWarnThreshold != 0 {
-		log.Infof("setting mysql slow connection threshold to %v", mysqlSlowConnectWarnThreshold)
-		mysqlListener.SlowConnectWarnThreshold = *mysqlSlowConnectWarnThreshold
+		// Check for the connection threshold
+		if *mysqlSlowConnectWarnThreshold != 0 {
+			log.Infof("setting mysql slow connection threshold to %v", mysqlSlowConnectWarnThreshold)
+			mysqlListener.SlowConnectWarnThreshold = *mysqlSlowConnectWarnThreshold
+		}
+		// Start listening for tcp
+		go func() {
+			mysqlListener.Accept()
+		}()
 	}
 
-	// And starts listening.
-	go func() {
-		mysqlListener.Accept()
-	}()
+	if *mysqlServerSocketPath != "" {
+		mysqlUnixListener, err = mysql.NewListener("unix", *mysqlServerSocketPath, authServer, vh)
+		if err != nil {
+			log.Fatalf("mysql.NewListener failed: %v", err)
+		}
+		// Listen for unix socket
+		go func() {
+			mysqlUnixListener.Accept()
+		}()
+	}
 }
 
 func init() {
@@ -172,6 +186,10 @@ func init() {
 		if mysqlListener != nil {
 			mysqlListener.Close()
 			mysqlListener = nil
+		}
+		if mysqlUnixListener != nil {
+			mysqlUnixListener.Close()
+			mysqlUnixListener = nil
 		}
 	})
 }

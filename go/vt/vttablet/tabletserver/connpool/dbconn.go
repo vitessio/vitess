@@ -58,8 +58,7 @@ type DBConn struct {
 // NewDBConn creates a new DBConn. It triggers a CheckMySQL if creation fails.
 func NewDBConn(
 	cp *Pool,
-	appParams,
-	dbaParams *mysql.ConnParams) (*DBConn, error) {
+	appParams *mysql.ConnParams) (*DBConn, error) {
 	c, err := dbconnpool.NewDBConnection(appParams, tabletenv.MySQLStats)
 	if err != nil {
 		cp.checker.CheckMySQL()
@@ -69,6 +68,19 @@ func NewDBConn(
 		conn: c,
 		info: appParams,
 		pool: cp,
+	}, nil
+}
+
+// NewDBConnNoPool creates a new DBConn without a pool.
+func NewDBConnNoPool(params *mysql.ConnParams) (*DBConn, error) {
+	c, err := dbconnpool.NewDBConnection(params, tabletenv.MySQLStats)
+	if err != nil {
+		return nil, err
+	}
+	return &DBConn{
+		conn: c,
+		info: params,
+		pool: nil,
 	}, nil
 }
 
@@ -244,9 +256,12 @@ func (dbc *DBConn) IsClosed() bool {
 
 // Recycle returns the DBConn to the pool.
 func (dbc *DBConn) Recycle() {
-	if dbc.conn.IsClosed() {
+	switch {
+	case dbc.pool == nil:
+		dbc.Close()
+	case dbc.conn.IsClosed():
 		dbc.pool.Put(nil)
-	} else {
+	default:
 		dbc.pool.Put(dbc)
 	}
 }

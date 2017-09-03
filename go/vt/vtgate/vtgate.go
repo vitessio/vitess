@@ -90,6 +90,8 @@ var (
 
 	// Error counters should be global so they can be set from anywhere
 	errorCounts *stats.MultiCounters
+
+	warnings *stats.Counters
 )
 
 // VTGate is the rpc interface to vtgate. Only one instance
@@ -189,6 +191,8 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 	errorsByKeyspace = stats.NewRates("ErrorsByKeyspace", stats.CounterForDimension(errorCounts, "Keyspace"), 15, 1*time.Minute)
 	errorsByDbType = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(errorCounts, "DbType"), 15, 1*time.Minute)
 	errorsByCode = stats.NewRates("ErrorsByCode", stats.CounterForDimension(errorCounts, "Code"), 15, 1*time.Minute)
+
+	warnings = stats.NewCounters("VTGateWarnings", "IgnoredSet")
 
 	servenv.OnRun(func() {
 		for _, f := range RegisterVTGates {

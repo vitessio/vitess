@@ -19,10 +19,6 @@ package io.vitess.jdbc;
 import com.google.common.base.Charsets;
 import com.google.common.io.CharStreams;
 import com.google.protobuf.ByteString;
-import io.vitess.client.cursor.Cursor;
-import io.vitess.client.cursor.SimpleCursor;
-import io.vitess.proto.Query;
-import io.vitess.util.Constants;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -41,6 +37,11 @@ import org.junit.runner.RunWith;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
+
+import io.vitess.client.cursor.Cursor;
+import io.vitess.client.cursor.SimpleCursor;
+import io.vitess.proto.Query;
+import io.vitess.util.Constants;
 
 /**
  * Created by ashudeep.sharma on 08/03/16.

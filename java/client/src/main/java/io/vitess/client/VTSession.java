@@ -76,8 +76,7 @@ public class VTSession {
      * @param autoCommit true or false
      */
     public void setAutoCommit(boolean autoCommit) {
-        boolean inTransaction = !autoCommit;
-        this.session = this.session.toBuilder().setAutocommit(autoCommit).setInTransaction(inTransaction).build();
+        this.session = this.session.toBuilder().setAutocommit(autoCommit).build();
     }
 
     /**

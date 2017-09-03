@@ -255,7 +255,7 @@ func setPK(ta *schema.Table, colnames []string) error {
 	if len(ta.Indexes) != 0 {
 		panic("setPK must be called before adding other indexes")
 	}
-	pkIndex := ta.AddIndex("PRIMARY")
+	pkIndex := ta.AddIndex("PRIMARY", true)
 	for _, colname := range colnames {
 		pkIndex.AddColumn(colname, 1)
 	}
