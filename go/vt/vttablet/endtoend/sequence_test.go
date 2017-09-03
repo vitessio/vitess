@@ -24,6 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestSequence(t *testing.T) {
@@ -41,8 +42,7 @@ func TestSequence(t *testing.T) {
 		want.Rows[0][0] = sqltypes.NewInt64(wantval)
 		qr, err := framework.NewClient().Execute("select next 2 values from vitess_seq", nil)
 		if err != nil {
-			t.Error(err)
-			return
+			t.Fatal(err)
 		}
 		if !reflect.DeepEqual(*qr, want) {
 			t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
@@ -58,10 +58,50 @@ func TestSequence(t *testing.T) {
 	}
 	qr, err := framework.NewClient().Execute("select next_id, cache from vitess_seq", nil)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	qr.Fields = nil
+	if !reflect.DeepEqual(*qr, want) {
+		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
+	}
+}
+
+func TestResetSequence(t *testing.T) {
+	client := framework.NewClient()
+	want := sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "nextval",
+			Type: sqltypes.Int64,
+		}},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(1),
+		}},
+	}
+	qr, err := client.Execute("select next value from vitess_reset_seq", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(*qr, want) {
+		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
+	}
+
+	// Reset mastership
+	err = client.SetServingType(topodatapb.TabletType_REPLICA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = client.SetServingType(topodatapb.TabletType_MASTER)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure the next value skips previously cached values.
+	want.Rows[0][0] = sqltypes.NewInt64(4)
+	qr, err = client.Execute("select next value from vitess_reset_seq", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !reflect.DeepEqual(*qr, want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
 	}

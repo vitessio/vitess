@@ -139,6 +139,9 @@ create table vitess_bool(auto int auto_increment, bval tinyint(1) default 0, sva
 create table vitess_seq(id int default 0, next_id bigint default null, cache bigint default null, increment bigint default null, primary key(id)) comment 'vitess_sequence';
 insert into vitess_seq(id, next_id, cache) values(0, 1, 3);
 
+create table vitess_reset_seq(id int default 0, next_id bigint default null, cache bigint default null, increment bigint default null, primary key(id)) comment 'vitess_sequence';
+insert into vitess_reset_seq(id, next_id, cache) values(0, 1, 3);
+
 create table vitess_part(id int, data varchar(16), primary key(id));
 alter table vitess_part partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue));
 
@@ -196,6 +199,13 @@ var tableACLConfig = `{
     {
       "name": "vitess_seq",
       "table_names_or_prefixes": ["vitess_seq"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess_reset_seq",
+      "table_names_or_prefixes": ["vitess_reset_seq"],
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]
