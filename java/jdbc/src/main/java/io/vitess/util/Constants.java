@@ -35,7 +35,6 @@ public class Constants {
         "Tablet Type to which Vitess will connect(master, replica, rdonly)";
     public static final String DEFAULT_PORT = "15991";
     public static final Topodata.TabletType DEFAULT_TABLET_TYPE = Topodata.TabletType.MASTER;
-    public static final long CONNECTION_TIMEOUT = 30000;
     public static final String LITERAL_V = "v";
     public static final String LITERAL_SINGLE_QUOTE = "'";
     public static final String SQL_S = "s";

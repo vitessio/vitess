@@ -55,9 +55,6 @@ import io.vitess.util.MysqlDefs;
  */
 public class VitessConnection extends ConnectionProperties implements Connection {
 
-    private static final int DEFAULT_RESULT_SET_TYPE = ResultSet.TYPE_FORWARD_ONLY;
-    private static final int DEFAULT_RESULT_SET_CONCURRENCY = ResultSet.CONCUR_READ_ONLY;
-
     /* Get actual class name to be printed on */
     private static Logger logger = Logger.getLogger(VitessConnection.class.getName());
     private static DatabaseMetaData databaseMetaData = null;

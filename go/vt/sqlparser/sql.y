@@ -1017,6 +1017,10 @@ use_statement:
   {
     $$ = &Use{DBName: $2}
   }
+| USE
+  {
+    $$ = &Use{DBName:TableIdent{v:""}}
+  }
 
 other_statement:
   DESC force_eof

@@ -105,7 +105,7 @@ public class VitessVTGateManager {
      * @return
      */
     private static VTGateConnection getVtGateConn(VitessJDBCUrl.HostInfo hostInfo, VitessConnection connection) {
-        final Context context = connection.createContext(Constants.CONNECTION_TIMEOUT);
+        final Context context = connection.createContext(connection.getTimeout());
         RetryingInterceptorConfig retryingConfig = getRetryingInterceptorConfig(connection);
         RpcClient client;
         if (connection.getUseSSL()) {

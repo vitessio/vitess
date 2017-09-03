@@ -941,3 +941,42 @@ func TestPassthroughDDL(t *testing.T) {
 	sbc2.Queries = nil
 	masterSession.TargetString = ""
 }
+
+func TestParseEmptyTargetSingleKeyspace(t *testing.T) {
+	r, _, _, _ := createExecutorEnv()
+	altVSchema := &vindexes.VSchema{
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			KsTestUnsharded: r.vschema.Keyspaces[KsTestUnsharded],
+		},
+	}
+	r.vschema = altVSchema
+
+	got := r.ParseTarget("")
+	want := querypb.Target{
+		Keyspace:   KsTestUnsharded,
+		TabletType: topodatapb.TabletType_MASTER,
+	}
+	if !proto.Equal(&got, &want) {
+		t.Errorf("ParseTarget(%s): %v, want %v", "@master", got, want)
+	}
+}
+
+func TestParseEmptyTargetMultiKeyspace(t *testing.T) {
+	r, _, _, _ := createExecutorEnv()
+	altVSchema := &vindexes.VSchema{
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			KsTestUnsharded: r.vschema.Keyspaces[KsTestUnsharded],
+			KsTestSharded:   r.vschema.Keyspaces[KsTestSharded],
+		},
+	}
+	r.vschema = altVSchema
+
+	got := r.ParseTarget("")
+	want := querypb.Target{
+		Keyspace:   "",
+		TabletType: topodatapb.TabletType_MASTER,
+	}
+	if !proto.Equal(&got, &want) {
+		t.Errorf("ParseTarget(%s): %v, want %v", "@master", got, want)
+	}
+}

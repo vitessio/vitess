@@ -207,6 +207,12 @@ public class ConnectionProperties {
         "Should the driver treat java.util.Date as a TIMESTAMP for the purposes of PreparedStatement.setObject()",
         true);
 
+    private LongConnectionProperty timeout = new LongConnectionProperty(
+        "timeout",
+        "The default timeout, in millis, to use for queries, connections, and transaction commit/rollback. Query timeout can be overridden by explicitly calling setQueryTimeout",
+        Constants.DEFAULT_TIMEOUT
+    );
+
     // Caching of some hot properties to avoid casting over and over
     private Topodata.TabletType tabletTypeCache;
     private Query.ExecuteOptions.IncludedFields includedFieldsCache;
@@ -471,6 +477,14 @@ public class ConnectionProperties {
 
     public void setTreatUtilDateAsTimestamp(boolean treatUtilDateAsTimestamp) {
         this.treatUtilDateAsTimestamp.setValue(treatUtilDateAsTimestamp);
+    }
+
+    public long getTimeout() {
+        return timeout.getValueAsLong();
+    }
+
+    public void setTimeout(long timeout) {
+        this.timeout.setValue(timeout);
     }
 
     public String getTarget() {
