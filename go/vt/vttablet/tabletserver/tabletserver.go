@@ -466,6 +466,9 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.te.Close(true)
 		tsv.watcher.Open(tsv.dbconfigs, tsv.mysqld)
 		tsv.txThrottler.Close()
+
+		// Reset the sequences.
+		tsv.se.MakeNonMaster()
 	}
 	tsv.transition(StateServing)
 	return nil
