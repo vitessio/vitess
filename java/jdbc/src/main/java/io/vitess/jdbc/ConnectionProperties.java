@@ -16,11 +16,6 @@
 
 package io.vitess.jdbc;
 
-import io.vitess.proto.Query;
-import io.vitess.proto.Topodata;
-import io.vitess.util.Constants;
-import io.vitess.util.StringUtils;
-
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Field;
 import java.sql.DriverPropertyInfo;
@@ -29,6 +24,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+
+import io.vitess.proto.Query;
+import io.vitess.proto.Topodata;
+import io.vitess.util.Constants;
+import io.vitess.util.StringUtils;
 
 public class ConnectionProperties {
 
@@ -206,6 +206,12 @@ public class ConnectionProperties {
         "treatUtilDateAsTimestamp",
         "Should the driver treat java.util.Date as a TIMESTAMP for the purposes of PreparedStatement.setObject()",
         true);
+
+    private LongConnectionProperty timeout = new LongConnectionProperty(
+        "timeout",
+        "The default timeout, in millis, to use for queries, connections, and transaction commit/rollback. Query timeout can be overridden by explicitly calling setQueryTimeout",
+        Constants.DEFAULT_TIMEOUT
+    );
 
     // Caching of some hot properties to avoid casting over and over
     private Topodata.TabletType tabletTypeCache;
@@ -460,6 +466,14 @@ public class ConnectionProperties {
 
     public void setTreatUtilDateAsTimestamp(boolean treatUtilDateAsTimestamp) {
         this.treatUtilDateAsTimestamp.setValue(treatUtilDateAsTimestamp);
+    }
+
+    public long getTimeout() {
+        return timeout.getValueAsLong();
+    }
+
+    public void setTimeout(long timeout) {
+        this.timeout.setValue(timeout);
     }
 
     public String getTarget() {
