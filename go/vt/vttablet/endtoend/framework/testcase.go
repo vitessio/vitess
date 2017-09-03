@@ -142,7 +142,7 @@ func (tc *TestCase) Test(name string, client *QueryClient) error {
 			got = append(got, str)
 		}
 		if !reflect.DeepEqual(got, tc.Rewritten) {
-			errs = append(errs, fmt.Sprintf("Rewritten mismatch:\n'%+v' does not match\n'%+v'", got, tc.Rewritten))
+			errs = append(errs, fmt.Sprintf("Rewritten mismatch:\n'%q' does not match\n'%q'", got, tc.Rewritten))
 		}
 	}
 	if tc.Plan != "" {
