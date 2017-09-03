@@ -1774,46 +1774,19 @@ func (node *ExistsExpr) WalkSubtree(visit Visit) error {
 
 // ExprFromValue converts the given Value into an Expr or returns an error.
 func ExprFromValue(value sqltypes.Value) (Expr, error) {
-	switch value.Type() {
-	case querypb.Type_NULL_TYPE:
+	// The type checks here follow the rules defined in sqltypes/types.go.
+	switch {
+	case value.Type() == sqltypes.Null:
 		return &NullVal{}, nil
-	case querypb.Type_INT8,
-		querypb.Type_UINT8,
-		querypb.Type_INT16,
-		querypb.Type_UINT16,
-		querypb.Type_INT24,
-		querypb.Type_UINT24,
-		querypb.Type_INT32,
-		querypb.Type_UINT32,
-		querypb.Type_INT64,
-		querypb.Type_UINT64:
+	case value.IsIntegral():
 		return NewIntVal(value.ToBytes()), nil
-	case querypb.Type_FLOAT32,
-		querypb.Type_FLOAT64,
-		querypb.Type_DECIMAL:
-		return NewFloatVal(value.Raw()), nil
-	case querypb.Type_BIT:
-		return NewBitVal(value.Raw()), nil
-	case querypb.Type_TIMESTAMP,
-		querypb.Type_DATE,
-		querypb.Type_TIME,
-		querypb.Type_DATETIME,
-		querypb.Type_YEAR,
-		querypb.Type_TEXT,
-		querypb.Type_BLOB,
-		querypb.Type_VARCHAR,
-		querypb.Type_VARBINARY,
-		querypb.Type_CHAR,
-		querypb.Type_BINARY,
-		querypb.Type_ENUM,
-		querypb.Type_SET,
-		querypb.Type_TUPLE,
-		querypb.Type_GEOMETRY,
-		querypb.Type_JSON,
-		querypb.Type_EXPRESSION:
-		return NewStrVal(value.Raw()), nil
+	case value.IsFloat() || value.Type() == sqltypes.Decimal:
+		return NewFloatVal(value.ToBytes()), nil
+	case value.IsQuoted():
+		return NewStrVal(value.ToBytes()), nil
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "default value %v of type %v does not map to a sqlparser type", value.String(), value.Type())
+		// We cannot support sqltypes.Expression, or any other invalid type.
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot convert value %v to AST", value)
 	}
 }
 
