@@ -96,6 +96,9 @@ run_local_database = os.path.join(vtroot, 'py-vtdb', 'vttest',
 # url to hit to force the logs to flush.
 flush_logs_url = '/debug/flushlogs'
 
+# set the maximum size for grpc messages to be 5MB (larger than the default of
+# 4MB).
+grpc_max_message_size = 5 * 1024 * 1024
 
 def setup():
   try:

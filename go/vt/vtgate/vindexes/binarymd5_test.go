@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	"reflect"
 	"testing"
 
 	"strings"
@@ -42,7 +43,7 @@ func TestBinaryMD5String(t *testing.T) {
 	}
 }
 
-func TestBinaryMD5(t *testing.T) {
+func TestBinaryMD5Map(t *testing.T) {
 	tcases := []struct {
 		in, out string
 	}{{
@@ -64,29 +65,19 @@ func TestBinaryMD5(t *testing.T) {
 		if out != tcase.out {
 			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 		}
-		ok, err := binVindex.Verify(nil, []sqltypes.Value{sqltypes.NewVarBinary(tcase.in)}, [][]byte{[]byte(tcase.out)})
-		if err != nil {
-			t.Error(err)
-		}
-		if !ok {
-			t.Errorf("Verify(%#v): false, want true", tcase.in)
-		}
 	}
 }
 
-func TestBinaryMD5VerifyNeg(t *testing.T) {
-	_, err := binVindex.Verify(nil, []sqltypes.Value{sqltypes.NewVarChar("test1"), sqltypes.NewVarChar("test2")}, [][]byte{[]byte("test1")})
-	want := "BinaryMD5_hash.Verify: length of ids 2 doesn't match length of ksids 1"
-	if err.Error() != want {
-		t.Error(err.Error())
-	}
-
-	ok, err := binVindex.Verify(nil, []sqltypes.Value{sqltypes.NewVarChar("test2")}, [][]byte{[]byte("test1")})
+func TestBinaryMD5Verify(t *testing.T) {
+	ids := []sqltypes.Value{sqltypes.NewVarBinary("Test"), sqltypes.NewVarBinary("TEst")}
+	ksids := [][]byte{[]byte("\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za["), []byte("\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za[")}
+	got, err := binVindex.Verify(nil, ids, ksids)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
-	if ok {
-		t.Errorf("Verify(%#v): true, want false", []byte("test2"))
+	want := []bool{true, false}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("binaryMD5.Verify: %v, want %v", got, want)
 	}
 }
 

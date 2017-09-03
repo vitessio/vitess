@@ -20,11 +20,12 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.collect.ImmutableList;
-import io.vitess.proto.Query.Field;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
 import org.apache.commons.collections4.map.CaseInsensitiveMap;
+
+import io.vitess.proto.Query.Field;
 
 /**
  * A wrapper for {@code List<Field>} that also facilitates lookup by field name.

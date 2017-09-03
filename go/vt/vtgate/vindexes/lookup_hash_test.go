@@ -17,55 +17,12 @@ limitations under the License.
 package vindexes
 
 import (
-	"errors"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
-
-type vcursor struct {
-	mustFail bool
-	numRows  int
-	result   *sqltypes.Result
-	bq       *querypb.BoundQuery
-}
-
-func (vc *vcursor) Execute(query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	vc.bq = &querypb.BoundQuery{
-		Sql:           query,
-		BindVariables: bindvars,
-	}
-	if vc.mustFail {
-		return nil, errors.New("execute failed")
-	}
-	switch {
-	case strings.HasPrefix(query, "select"):
-		if vc.result != nil {
-			return vc.result, nil
-		}
-		result := &sqltypes.Result{
-			Fields: []*querypb.Field{{
-				Type: sqltypes.Int32,
-			}},
-			RowsAffected: uint64(vc.numRows),
-		}
-		for i := 0; i < vc.numRows; i++ {
-			result.Rows = append(result.Rows, []sqltypes.Value{
-				sqltypes.NewInt64(int64(i + 1)),
-			})
-		}
-		return result, nil
-	case strings.HasPrefix(query, "insert"):
-		return &sqltypes.Result{InsertID: 1}, nil
-	case strings.HasPrefix(query, "delete"):
-		return &sqltypes.Result{}, nil
-	}
-	panic("unexpected")
-}
 
 var lookuphash Vindex
 var lookuphashunique Vindex
@@ -117,41 +74,74 @@ func TestLookupHashMap(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
+
+	// Test conversion fail.
+	vc.result = sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("a", "varbinary"),
+		"notint",
+	)
+	_, err = lookuphash.(NonUnique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	wantErr := "lookupHash.Map.ToUint64: could not parse value: notint"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("lookuphash(query fail) err: %v, want %s", err, wantErr)
+	}
+
+	// Test query fail.
+	vc.mustFail = true
+	_, err = lookuphash.(NonUnique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	wantErr = "lookup.Map: execute failed"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("lookuphash(query fail) err: %v, want %s", err, wantErr)
+	}
+	vc.mustFail = false
 }
 
 func TestLookupHashVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	success, err := lookuphash.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	// The check doesn't actually happen. But we give correct values
+	// to avoid confusion.
+	got, err := lookuphash.Verify(vc,
+		[]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
+		[][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x06\xe7\xea\"Βp\x8f")})
 	if err != nil {
 		t.Error(err)
 	}
-	if !success {
-		t.Errorf("Verify(): %+v, want true", success)
+	want := []bool{true, true}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("lookuphash.Verify(match): %v, want %v", got, want)
+	}
+
+	vc.numRows = 0
+	got, err = lookuphash.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	if err != nil {
+		t.Error(err)
+	}
+	want = []bool{false}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("lookuphash.Verify(mismatch): %v, want %v", got, want)
+	}
+
+	_, err = lookuphash.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("bogus")})
+	wantErr := "lookup.Verify.vunhash: invalid keyspace id: 626f677573"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("lookuphash.Verify(bogus) err: %v, want %s", err, wantErr)
 	}
 }
 
 func TestLookupHashCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := lookuphash.(Lookup).Create(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	err := lookuphash.(Lookup).Create(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &querypb.BoundQuery{
-		Sql: "insert into t(fromc,toc) values(:fromc0,:toc0)",
-		BindVariables: map[string]*querypb.BindVariable{
-			"fromc0": sqltypes.Int64BindVariable(1),
-			"toc0":   sqltypes.Uint64BindVariable(1),
-		},
+	if got, want := len(vc.queries), 1; got != want {
+		t.Errorf("vc.queries length: %v, want %v", got, want)
 	}
-	if !reflect.DeepEqual(vc.bq, wantQuery) {
-		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)
-	}
-}
 
-func TestLookupHashReverse(t *testing.T) {
-	_, ok := lookuphash.(Reversible)
-	if ok {
-		t.Errorf("lhm.(Reversible): true, want false")
+	err = lookuphash.(Lookup).Create(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("bogus")}, false /* ignoreMode */)
+	want := "lookup.Create.vunhash: invalid keyspace id: 626f677573"
+	if err == nil || err.Error() != want {
+		t.Errorf("lookuphash.Create(bogus) err: %v, want %s", err, want)
 	}
 }
 
@@ -161,14 +151,13 @@ func TestLookupHashDelete(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &querypb.BoundQuery{
-		Sql: "delete from t where fromc = :fromc and toc = :toc",
-		BindVariables: map[string]*querypb.BindVariable{
-			"fromc": sqltypes.Int64BindVariable(1),
-			"toc":   sqltypes.Uint64BindVariable(1),
-		},
+	if got, want := len(vc.queries), 1; got != want {
+		t.Errorf("vc.queries length: %v, want %v", got, want)
 	}
-	if !reflect.DeepEqual(vc.bq, wantQuery) {
-		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)
+
+	err = lookuphash.(Lookup).Delete(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, []byte("bogus"))
+	want := "lookup.Delete.vunhash: invalid keyspace id: 626f677573"
+	if err == nil || err.Error() != want {
+		t.Errorf("lookuphash.Delete(bogus) err: %v, want %s", err, want)
 	}
 }

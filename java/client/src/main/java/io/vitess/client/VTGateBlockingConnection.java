@@ -16,18 +16,17 @@
 
 package io.vitess.client;
 
-import io.vitess.client.cursor.Cursor;
-import io.vitess.client.cursor.CursorWithError;
-import io.vitess.proto.Query;
-import io.vitess.proto.Query.SplitQueryRequest.Algorithm;
-import io.vitess.proto.Vtgate.SplitQueryResponse;
-
-import javax.annotation.Nullable;
 import java.io.Closeable;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
+import javax.annotation.Nullable;
+
+import io.vitess.client.cursor.Cursor;
+import io.vitess.client.cursor.CursorWithError;
+import io.vitess.proto.Query.SplitQueryRequest.Algorithm;
+import io.vitess.proto.Vtgate.SplitQueryResponse;
 
 /**
  * An asynchronous VTGate connection.
@@ -60,58 +59,17 @@ public final class VTGateBlockingConnection implements Closeable {
     }
 
     /**
-     * Creates a VTGate connection with targetString (keyspace@shard:tabletType).
-     * <p>
-     * <p>In this mode, VTGate will use the information provided in the session to redirect to query.
-     * For anything undefined, VTGate will use VSchema to resolve it. </p>
-     *
-     * @param client       RPC connection
-     * @param targetString In the format keyspace@shard:tabletType. Only provide the part what needs to be set.
-     */
-    public VTGateBlockingConnection(RpcClient client, String targetString) {
-        vtGateConnection = new VTGateConnection(client, targetString);
-    }
-
-    /**
-     * Creates a VTGate connection.
-     * <p>
-     * <p>In this mode, VTGate will use VSchema to resolve the keyspace for any unprefixed
-     * table names. Note that this only works if the table name is unique across all keyspaces.
-     * Additionally, it will pass on all the options to the underlying database.</p>
-     *
-     * @param client  RPC connection
-     * @param options Additional parameters to be passed along the query to the underlying database engine.
-     */
-    public VTGateBlockingConnection(RpcClient client, Query.ExecuteOptions options) {
-        vtGateConnection = new VTGateConnection(client, options);
-    }
-
-    /**
-     * Creates a VTGate connection with targetString and execution options.
-     * <p>
-     * <p>In this mode, VTGate will use the information provided in the session to redirect to query.
-     * For anything undefined, VTGate will use VSchema to resolve it.
-     * Additionally, it will pass on all the options to the underlying database.</p>
-     *
-     * @param client       RPC connection
-     * @param targetString In the format keyspace@shard:tabletType. Only provide the part what needs to be set.
-     * @param options      Additional parameters to be passed along the query to the underlying database engine.
-     */
-    public VTGateBlockingConnection(RpcClient client, String targetString, Query.ExecuteOptions options) {
-        vtGateConnection = new VTGateConnection(client, targetString, options);
-    }
-
-    /**
      * This method calls the VTGate to execute the query.
      *
-     * @param ctx      Context on user and execution deadline if any.
-     * @param query    Sql Query to be executed.
-     * @param bindVars Parameters to bind with sql.
+     * @param ctx       Context on user and execution deadline if any.
+     * @param query     Sql Query to be executed.
+     * @param bindVars  Parameters to bind with sql.
+     * @param vtSession Session to be used with the call.
      * @return Cursor
      * @throws SQLException If anything fails on query execution.
      */
-    public Cursor execute(Context ctx, String query, @Nullable Map<String, ?> bindVars) throws SQLException {
-        return vtGateConnection.execute(ctx, query, bindVars).checkedGet();
+    public Cursor execute(Context ctx, String query, @Nullable Map<String, ?> bindVars, final VTSession vtSession) throws SQLException {
+        return vtGateConnection.execute(ctx, query, bindVars, vtSession).checkedGet();
     }
 
     /**
@@ -121,11 +79,12 @@ public final class VTGateBlockingConnection implements Closeable {
      * @param queryList    List of sql queries to be executed.
      * @param bindVarsList <p>For each sql query it will provide a list of parameters to bind with.
      *                     If provided, should match the number of sql queries.</p>
+     * @param vtSession    Session to be used with the call.
      * @return List of Cursors
      * @throws SQLException If anything fails on query execution.
      */
-    public List<CursorWithError> executeBatch(Context ctx, List<String> queryList, @Nullable List<Map<String, ?>> bindVarsList) throws SQLException {
-        return vtGateConnection.executeBatch(ctx, queryList, bindVarsList).checkedGet();
+    public List<CursorWithError> executeBatch(Context ctx, List<String> queryList, @Nullable List<Map<String, ?>> bindVarsList, final VTSession vtSession) throws SQLException {
+        return vtGateConnection.executeBatch(ctx, queryList, bindVarsList, vtSession).checkedGet();
     }
 
     /**
@@ -139,24 +98,26 @@ public final class VTGateBlockingConnection implements Closeable {
      * @param bindVarsList  <p>For each sql query it will provide a list of parameters to bind with.
      *                      If provided, should match the number of sql queries.</p>
      * @param asTransaction To execute query without impacting session cookie.
+     * @param vtSession     Session to be used with the call.
      * @return List of Cursors
      * @throws SQLException If anything fails on query execution.
      */
-    public List<CursorWithError> executeBatch(Context ctx, List<String> queryList, @Nullable List<Map<String, ?>> bindVarsList, boolean asTransaction) throws SQLException {
-        return vtGateConnection.executeBatch(ctx, queryList, bindVarsList, asTransaction).checkedGet();
+    public List<CursorWithError> executeBatch(Context ctx, List<String> queryList, @Nullable List<Map<String, ?>> bindVarsList, boolean asTransaction, final VTSession vtSession) throws SQLException {
+        return vtGateConnection.executeBatch(ctx, queryList, bindVarsList, asTransaction, vtSession).checkedGet();
     }
 
     /**
      * This method should be used execute select query to return response as a stream.
      *
-     * @param ctx      Context on user and execution deadline if any.
-     * @param query    Sql Query to be executed.
-     * @param bindVars Parameters to bind with sql.
+     * @param ctx       Context on user and execution deadline if any.
+     * @param query     Sql Query to be executed.
+     * @param bindVars  Parameters to bind with sql.
+     * @param vtSession Session to be used with the call.
      * @return Cursor
      * @throws SQLException Returns SQLException if there is any failure on VTGate.
      */
-    public Cursor streamExecute(Context ctx, String query, @Nullable Map<String, ?> bindVars) throws SQLException {
-        return vtGateConnection.streamExecute(ctx, query, bindVars);
+    public Cursor streamExecute(Context ctx, String query, @Nullable Map<String, ?> bindVars, VTSession vtSession) throws SQLException {
+        return vtGateConnection.streamExecute(ctx, query, bindVars, vtSession);
     }
 
     /**

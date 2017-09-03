@@ -77,6 +77,7 @@ func DialTablet(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.
 	if timeout > 0 {
 		opts = append(opts, grpc.WithBlock(), grpc.WithTimeout(timeout))
 	}
+	opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(*grpcutils.MaxMessageSize), grpc.MaxCallSendMsgSize(*grpcutils.MaxMessageSize)))
 	cc, err := grpc.Dial(addr, opts...)
 	if err != nil {
 		return nil, err

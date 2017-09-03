@@ -16,13 +16,13 @@
 
 package io.vitess.jdbc;
 
-import io.vitess.proto.Topodata;
-import io.vitess.util.Constants;
+import java.sql.SQLException;
+import java.util.Properties;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.sql.SQLException;
-import java.util.Properties;
+import io.vitess.proto.Topodata;
+import io.vitess.util.Constants;
 
 /**
  * Created by naveen.nahata on 18/02/16.

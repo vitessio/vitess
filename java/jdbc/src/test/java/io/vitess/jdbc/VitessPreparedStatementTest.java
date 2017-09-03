@@ -16,6 +16,7 @@
 
 package io.vitess.jdbc;
 
+import com.google.common.collect.ImmutableMap;
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.sql.BatchUpdateException;
@@ -31,9 +32,7 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
-
 import javax.sql.rowset.serial.SerialClob;
-
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -42,8 +41,6 @@ import org.mockito.Mockito;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
-
-import com.google.common.collect.ImmutableMap;
 
 import io.vitess.client.Context;
 import io.vitess.client.SQLFuture;

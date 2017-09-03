@@ -41,7 +41,7 @@ func TestTxExecutorEmptyPrepare(t *testing.T) {
 	txe, tsv, db := newTestTxExecutor(t)
 	defer db.Close()
 	defer tsv.StopService()
-	txid := newTransaction(tsv)
+	txid := newTransaction(tsv, nil)
 	err := txe.Prepare(txid, "aa")
 	if err != nil {
 		t.Error(err)
@@ -616,7 +616,7 @@ func newNoTwopcExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *f
 
 // newTxForPrep creates a non-empty transaction.
 func newTxForPrep(tsv *TabletServer) int64 {
-	txid := newTransaction(tsv)
+	txid := newTransaction(tsv, nil)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	_, err := tsv.Execute(context.Background(), &target, "update test_table set name = 2 where pk = 1", nil, txid, nil)
 	if err != nil {

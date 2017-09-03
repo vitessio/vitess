@@ -305,6 +305,9 @@ func SetDefaultACL(name string) {
 func GetCurrentAclFactory() (acl.Factory, error) {
 	mu.Lock()
 	defer mu.Unlock()
+	if len(acls) == 0 {
+		return nil, fmt.Errorf("no AclFactories registered")
+	}
 	if defaultACL == "" {
 		if len(acls) == 1 {
 			for _, aclFactory := range acls {

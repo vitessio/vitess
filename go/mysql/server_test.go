@@ -145,14 +145,127 @@ func (th *testHandler) ComQuery(c *Conn, q []byte, callback func(*sqltypes.Resul
 	return nil
 }
 
+func TestConnectionWithoutSourceHost(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic()
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
+	l, err := NewListener("tcp", ":0", authServer, th)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	go func() {
+		l.Accept()
+	}()
+
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	c, err := Connect(context.Background(), params)
+	if err != nil {
+		t.Errorf("Should be able to connect to server but found error: %v", err)
+	}
+	c.Close()
+}
+
+func TestConnectionWithSourceHost(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic()
+
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{
+		{
+			Password:   "password1",
+			UserData:   "userData1",
+			SourceHost: "localhost",
+		},
+	}
+
+	l, err := NewListener("tcp", ":0", authServer, th)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	go func() {
+		l.Accept()
+	}()
+
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	_, err = Connect(context.Background(), params)
+	// target is localhost, should not work from tcp connection
+	if err == nil {
+		t.Errorf("Should be able to connect to server but found error: %v", err)
+	}
+}
+
+func TestConnectionUnixSocket(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic()
+
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{
+		{
+			Password:   "password1",
+			UserData:   "userData1",
+			SourceHost: "localhost",
+		},
+	}
+
+	unixSocket := "/tmp/mysql_vitess_test.sock"
+
+	l, err := NewListener("unix", unixSocket, authServer, th)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	go func() {
+		l.Accept()
+	}()
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		UnixSocket: unixSocket,
+		Uname:      "user1",
+		Pass:       "password1",
+	}
+
+	c, err := Connect(context.Background(), params)
+	if err != nil {
+		t.Errorf("Should be able to connect to server but found error: %v", err)
+	}
+	c.Close()
+}
+
 func TestClientFoundRows(t *testing.T) {
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = &AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
-	}
+	}}
 	l, err := NewListener("tcp", ":0", authServer, th)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
@@ -204,10 +317,10 @@ func TestServer(t *testing.T) {
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = &AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
-	}
+	}}
 	l, err := NewListener("tcp", ":0", authServer, th)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
@@ -394,10 +507,10 @@ func TestClearTextServer(t *testing.T) {
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = &AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
-	}
+	}}
 	authServer.Method = MysqlClearPassword
 	l, err := NewListener("tcp", ":0", authServer, th)
 	if err != nil {
@@ -482,10 +595,10 @@ func TestDialogServer(t *testing.T) {
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = &AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
-	}
+	}}
 	authServer.Method = MysqlDialog
 	l, err := NewListener("tcp", ":0", authServer, th)
 	if err != nil {
@@ -529,9 +642,9 @@ func TestTLSServer(t *testing.T) {
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = &AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
-	}
+	}}
 
 	// Create the listener, so we can get its host.
 	// Below, we are enabling --ssl-verify-server-cert, which adds

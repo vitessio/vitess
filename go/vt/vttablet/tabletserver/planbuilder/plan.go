@@ -22,8 +22,10 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tableacl"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 )
 
@@ -164,21 +166,22 @@ const (
 	ReasonTableNoIndex
 	ReasonPKChange
 	ReasonComplexExpr
-	ReasonUpsert
-	ReasonUpsertColMismatch
+	ReasonUpsertSubquery
+	ReasonUpsertMultiRow
 	ReasonReplace
 	ReasonMultiTable
+	NumReasons
 )
 
 // Must exactly match order of reason constants.
-var reasonName = []string{
+var reasonName = [NumReasons]string{
 	"DEFAULT",
 	"TABLE",
 	"TABLE_NOINDEX",
 	"PK_CHANGE",
 	"COMPLEX_EXPR",
-	"UPSERT",
-	"UPSERT_COL_MISMATCH",
+	"UPSERT_SUBQUERY",
+	"UPSERT_MULTI_ROW",
 	"REPLACE",
 	"MULTI_TABLE",
 }
@@ -247,7 +250,7 @@ func (plan *Plan) TableName() sqlparser.TableIdent {
 
 func (plan *Plan) setTable(tableName sqlparser.TableIdent, tables map[string]*schema.Table) (*schema.Table, error) {
 	if plan.Table = tables[tableName.String()]; plan.Table == nil {
-		return nil, fmt.Errorf("table %s not found in schema", tableName)
+		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "table %s not found in schema", tableName)
 	}
 	return plan.Table, nil
 }

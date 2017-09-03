@@ -381,6 +381,14 @@ func (hdl *Handle) MySQLConnParams() (mysql.ConnParams, error) {
 	return params, nil
 }
 
+// MySQLAppDebugConnParams builds the MySQL connection params for appdebug user.
+// It's valid only if you used MySQLOnly option.
+func (hdl *Handle) MySQLAppDebugConnParams() (mysql.ConnParams, error) {
+	connParams, err := hdl.MySQLConnParams()
+	connParams.Uname = "vt_appdebug"
+	return connParams, err
+}
+
 func (hdl *Handle) run(
 	options ...VitessOption,
 ) error {

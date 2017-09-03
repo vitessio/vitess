@@ -32,10 +32,12 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestSimpleRead(t *testing.T) {
@@ -570,7 +572,7 @@ func TestLogTruncation(t *testing.T) {
 		"insert into vitess_test values(123, :data, null, null)",
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
-	want := "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess_test values (123, 'THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED', null, null) /* _stream vitess_test (intval ) (123 ); */, CallerID: dev"
+	want := "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess_test(intval, floatval, charval, binval) values (123, 'THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED', null, null) /* _stream vitess_test (intval ) (123 ); */, CallerID: dev"
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
 	}
@@ -642,5 +644,88 @@ func TestClientFoundRows(t *testing.T) {
 	}
 	if err := client.Rollback(); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestLastInsertId(t *testing.T) {
+	client := framework.NewClient()
+	res, err := client.Execute("insert ignore into vitess_autoinc_seq SET name = 'foo', sequence = 0", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Execute("delete from vitess_autoinc_seq where name = 'foo'", nil)
+
+	if err := client.Begin(true); err != nil {
+		t.Fatal(err)
+	}
+	defer client.Rollback()
+
+	res, err = client.Execute("insert ignore into vitess_autoinc_seq SET name = 'foo', sequence = 0", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	qr, err := client.Execute("update vitess_autoinc_seq set sequence=last_insert_id(sequence + 1) where name='foo'", nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	insID := res.InsertID
+
+	if want, got := insID+1, qr.InsertID; want != got {
+		t.Errorf("insertId mismatch; got %v, want %v", got, want)
+	}
+
+	qr, err = client.Execute("select sequence from vitess_autoinc_seq where name = 'foo'", nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantCol := sqltypes.NewUint64(insID + uint64(1))
+	if !reflect.DeepEqual(qr.Rows[0][0], wantCol) {
+		t.Errorf("Execute: \n%#v, want \n%#v", qr.Rows[0][0], wantCol)
+	}
+}
+
+func TestAppDebugRequest(t *testing.T) {
+	client := framework.NewClient()
+
+	// Insert with normal user works
+
+	if _, err := client.Execute("insert into vitess_test_debuguser(intval, charval) values(124, 'aa')", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	defer client.Execute("delete from vitess_test where intval= 124", nil)
+
+	// Set vt_appdebug
+	ctx := callerid.NewContext(
+		context.Background(),
+		&vtrpcpb.CallerID{},
+		&querypb.VTGateCallerID{Username: "vt_appdebug"})
+
+	want := "Access denied for user 'vt_appdebug'@'localhost'"
+
+	client = framework.NewClientWithContext(ctx)
+
+	// Start a transaction. This test the other flow that a client can use to insert a value.
+	client.Begin(false)
+	_, err := client.Execute("insert into vitess_test_debuguser(intval, charval) values(124, 'aa')", nil)
+
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("Error: %v, want prefix %s", err, want)
+	}
+
+	// Normal flow, when a client is trying to insert a value and the insert is not in the
+	// context of another transaction.
+	_, err = client.Execute("insert into vitess_test_debuguser(intval, charval) values(124, 'aa')", nil)
+
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("Error: %v, want prefix %s", err, want)
+	}
+
+	_, err = client.Execute("select * from vitess_test_debuguser where intval=1", nil)
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("Error: %v, want prefix %s", err, want)
 	}
 }

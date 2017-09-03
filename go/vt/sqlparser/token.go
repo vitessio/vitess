@@ -39,6 +39,7 @@ type Tokenizer struct {
 	LastError     string
 	posVarIndex   int
 	ParseTree     Statement
+	partialDDL    *DDL
 	nesting       int
 }
 
@@ -69,11 +70,14 @@ var keywords = map[string]int{
 	"as":                  AS,
 	"asc":                 ASC,
 	"asensitive":          UNUSED,
+	"auto_increment":      AUTO_INCREMENT,
 	"before":              UNUSED,
 	"between":             BETWEEN,
-	"bigint":              UNUSED,
+	"bigint":              BIGINT,
 	"binary":              BINARY,
-	"blob":                UNUSED,
+	"bit":                 BIT,
+	"blob":                BLOB,
+	"bool":                BOOL,
 	"boolean":             BOOLEAN,
 	"both":                UNUSED,
 	"by":                  BY,
@@ -82,10 +86,13 @@ var keywords = map[string]int{
 	"case":                CASE,
 	"cast":                CAST,
 	"change":              UNUSED,
+	"char":                CHAR,
 	"character":           CHARACTER,
+	"charset":             CHARSET,
 	"check":               UNUSED,
 	"collate":             COLLATE,
 	"column":              UNUSED,
+	"comment":             COMMENT_KEYWORD,
 	"condition":           UNUSED,
 	"constraint":          UNUSED,
 	"continue":            UNUSED,
@@ -104,7 +111,9 @@ var keywords = map[string]int{
 	"day_minute":          UNUSED,
 	"day_second":          UNUSED,
 	"date":                DATE,
+	"datetime":            DATETIME,
 	"dec":                 UNUSED,
+	"decimal":             DECIMAL,
 	"declare":             UNUSED,
 	"default":             DEFAULT,
 	"delayed":             UNUSED,
@@ -115,7 +124,7 @@ var keywords = map[string]int{
 	"distinct":            DISTINCT,
 	"distinctrow":         UNUSED,
 	"div":                 DIV,
-	"double":              UNUSED,
+	"double":              DOUBLE,
 	"drop":                DROP,
 	"duplicate":           DUPLICATE,
 	"each":                UNUSED,
@@ -123,6 +132,7 @@ var keywords = map[string]int{
 	"elseif":              UNUSED,
 	"enclosed":            UNUSED,
 	"end":                 END,
+	"enum":                ENUM,
 	"escape":              ESCAPE,
 	"escaped":             UNUSED,
 	"exists":              EXISTS,
@@ -131,7 +141,7 @@ var keywords = map[string]int{
 	"expansion":           EXPANSION,
 	"false":               FALSE,
 	"fetch":               UNUSED,
-	"float":               UNUSED,
+	"float":               FLOAT_TYPE,
 	"float4":              UNUSED,
 	"float8":              UNUSED,
 	"for":                 FOR,
@@ -158,7 +168,7 @@ var keywords = map[string]int{
 	"inner":               INNER,
 	"insensitive":         UNUSED,
 	"insert":              INSERT,
-	"int":                 UNUSED,
+	"int":                 INT,
 	"int1":                UNUSED,
 	"int2":                UNUSED,
 	"int3":                UNUSED,
@@ -171,6 +181,7 @@ var keywords = map[string]int{
 	"is":                  IS,
 	"iterate":             UNUSED,
 	"join":                JOIN,
+	"json":                JSON,
 	"key":                 KEY,
 	"keys":                UNUSED,
 	"kill":                UNUSED,
@@ -179,6 +190,7 @@ var keywords = map[string]int{
 	"leading":             UNUSED,
 	"leave":               UNUSED,
 	"left":                LEFT,
+	"less":                LESS,
 	"like":                LIKE,
 	"limit":               LIMIT,
 	"linear":              UNUSED,
@@ -188,28 +200,30 @@ var keywords = map[string]int{
 	"localtimestamp":      LOCALTIMESTAMP,
 	"lock":                LOCK,
 	"long":                UNUSED,
-	"longblob":            UNUSED,
-	"longtext":            UNUSED,
+	"longblob":            LONGBLOB,
+	"longtext":            LONGTEXT,
 	"loop":                UNUSED,
 	"low_priority":        UNUSED,
 	"master_bind":         UNUSED,
 	"match":               MATCH,
-	"maxvalue":            UNUSED,
-	"mediumblob":          UNUSED,
-	"mediumint":           UNUSED,
-	"mediumtext":          UNUSED,
+	"maxvalue":            MAXVALUE,
+	"mediumblob":          MEDIUMBLOB,
+	"mediumint":           MEDIUMINT,
+	"mediumtext":          MEDIUMTEXT,
 	"middleint":           UNUSED,
 	"minute_microsecond":  UNUSED,
 	"minute_second":       UNUSED,
 	"mod":                 MOD,
 	"mode":                MODE,
 	"modifies":            UNUSED,
+	"names":               NAMES,
 	"natural":             NATURAL,
+	"nchar":               NCHAR,
 	"next":                NEXT,
 	"not":                 NOT,
 	"no_write_to_binlog":  UNUSED,
 	"null":                NULL,
-	"numeric":             UNUSED,
+	"numeric":             NUMERIC,
 	"offset":              OFFSET,
 	"on":                  ON,
 	"optimize":            OPTIMIZE,
@@ -221,20 +235,21 @@ var keywords = map[string]int{
 	"out":                 UNUSED,
 	"outer":               OUTER,
 	"outfile":             UNUSED,
-	"partition":           UNUSED,
+	"partition":           PARTITION,
 	"precision":           UNUSED,
-	"primary":             UNUSED,
+	"primary":             PRIMARY,
 	"procedure":           UNUSED,
 	"query":               QUERY,
 	"range":               UNUSED,
 	"read":                UNUSED,
 	"reads":               UNUSED,
 	"read_write":          UNUSED,
-	"real":                UNUSED,
+	"real":                REAL,
 	"references":          UNUSED,
 	"regexp":              REGEXP,
 	"release":             UNUSED,
 	"rename":              RENAME,
+	"reorganize":          REORGANIZE,
 	"repair":              REPAIR,
 	"repeat":              UNUSED,
 	"replace":             REPLACE,
@@ -255,7 +270,8 @@ var keywords = map[string]int{
 	"share":               SHARE,
 	"show":                SHOW,
 	"signal":              UNUSED,
-	"smallint":            UNUSED,
+	"signed":              SIGNED,
+	"smallint":            SMALLINT,
 	"spatial":             UNUSED,
 	"specific":            UNUSED,
 	"sql":                 UNUSED,
@@ -274,10 +290,14 @@ var keywords = map[string]int{
 	"table":               TABLE,
 	"tables":              TABLES,
 	"terminated":          UNUSED,
+	"text":                TEXT,
+	"than":                THAN,
 	"then":                THEN,
-	"tinyblob":            UNUSED,
-	"tinyint":             UNUSED,
-	"tinytext":            UNUSED,
+	"time":                TIME,
+	"timestamp":           TIMESTAMP,
+	"tinyblob":            TINYBLOB,
+	"tinyint":             TINYINT,
+	"tinytext":            TINYTEXT,
 	"to":                  TO,
 	"trailing":            UNUSED,
 	"trigger":             UNUSED,
@@ -287,6 +307,7 @@ var keywords = map[string]int{
 	"union":               UNION,
 	"unique":              UNIQUE,
 	"unlock":              UNUSED,
+	"unsigned":            UNSIGNED,
 	"update":              UPDATE,
 	"usage":               UNUSED,
 	"use":                 USE,
@@ -295,8 +316,8 @@ var keywords = map[string]int{
 	"utc_time":            UTC_TIME,
 	"utc_timestamp":       UTC_TIMESTAMP,
 	"values":              VALUES,
-	"varbinary":           UNUSED,
-	"varchar":             UNUSED,
+	"varbinary":           VARBINARY,
+	"varchar":             VARCHAR,
 	"varcharacter":        UNUSED,
 	"varying":             UNUSED,
 	"virtual":             UNUSED,
@@ -310,8 +331,21 @@ var keywords = map[string]int{
 	"with":                WITH,
 	"write":               UNUSED,
 	"xor":                 UNUSED,
+	"year":                YEAR,
 	"year_month":          UNUSED,
-	"zerofill":            UNUSED,
+	"zerofill":            ZEROFILL,
+}
+
+// keywordStrings contains the reverse mapping of token to keyword strings
+var keywordStrings = map[int]string{}
+
+func init() {
+	for str, id := range keywords {
+		if id == UNUSED {
+			continue
+		}
+		keywordStrings[id] = str
+	}
 }
 
 // Lex returns the next token form the Tokenizer.
@@ -358,6 +392,12 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 			if tkn.lastChar == '\'' {
 				tkn.next()
 				return tkn.scanHex()
+			}
+		}
+		if ch == 'B' || ch == 'b' {
+			if tkn.lastChar == '\'' {
+				tkn.next()
+				return tkn.scanBitLiteral()
 			}
 		}
 		return tkn.scanIdentifier(byte(ch))
@@ -507,6 +547,16 @@ func (tkn *Tokenizer) scanHex() (int, []byte) {
 		return LEX_ERROR, buffer.Bytes()
 	}
 	return HEX, buffer.Bytes()
+}
+
+func (tkn *Tokenizer) scanBitLiteral() (int, []byte) {
+	buffer := &bytes2.Buffer{}
+	tkn.scanMantissa(2, buffer)
+	if tkn.lastChar != '\'' {
+		return LEX_ERROR, buffer.Bytes()
+	}
+	tkn.next()
+	return BIT_LITERAL, buffer.Bytes()
 }
 
 func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {

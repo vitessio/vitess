@@ -93,10 +93,10 @@ In addition, Vitess requires the software and libraries listed below.
     error like `Could not find my-default.cnf`. If you run into this, just add
     it with the following contents:
 
-    ```ini
-[mysqld]
-sql_mode=NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES
-```
+    ```
+	[mysqld]
+	sql_mode=NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES
+	```
 
 3.  Select a lock service from the options listed below. It is technically
     possible to use another lock server, but plugins currently exist only

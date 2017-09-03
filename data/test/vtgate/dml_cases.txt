@@ -297,6 +297,21 @@
   }
 }
 
+# simple upsert unsharded
+"insert into unsharded values(1, 2) on duplicate key update x = 3"
+{
+  "Original": "insert into unsharded values(1, 2) on duplicate key update x = 3",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into unsharded values (1, 2) on duplicate key update x = 3",
+    "Table": "unsharded"
+  }
+}
+
 # insert unsharded with select
 "insert into unsharded select id from unsharded_auto"
 {
@@ -472,6 +487,77 @@
     },
     "Prefix": "insert into user(id, Name, Costly) values ",
     "Mid":["(:_Id0, :_Name0, :_Costly0)"]
+  }
+}
+
+# insert ignore sharded
+"insert ignore into user(id) values (1)"
+{
+  "Original": "insert ignore into user(id) values (1)",
+  "Instructions": {
+    "Opcode": "InsertShardedIgnore",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert ignore into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
+    "Values": [
+      [":__seq0"],
+      [null],
+      [null]
+    ],
+    "Table": "user",
+    "Generate": {
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from seq",
+      "Values": [1]
+    },
+    "Prefix": "insert ignore into user(id, Name, Costly) values ",
+    "Mid":["(:_Id0, :_Name0, :_Costly0)"]
+  }
+}
+
+# insert on duplicate key
+"insert into user(id) values(1) on duplicate key update col = 2"
+{
+  "Original": "insert into user(id) values(1) on duplicate key update col = 2",
+  "Instructions": {
+    "Opcode": "InsertShardedIgnore",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0) on duplicate key update col = 2",
+    "Values": [
+      [
+        ":__seq0"
+      ],
+      [
+        null
+      ],
+      [
+        null
+      ]
+    ],
+    "Table": "user",
+    "Generate": {
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from seq",
+      "Values": [
+        1
+      ]
+    },
+    "Prefix": "insert into user(id, Name, Costly) values ",
+    "Mid": [
+      "(:_Id0, :_Name0, :_Costly0)"
+    ],
+    "Suffix": " on duplicate key update col = 2"
   }
 }
 

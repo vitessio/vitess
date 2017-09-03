@@ -262,6 +262,7 @@ message ExecuteOptions {
     UNSPECIFIED = 0;
     OLTP = 1;
     OLAP = 2;
+    DBA = 3;
   }
 
   // workload specifies the type of workload:
@@ -269,8 +270,23 @@ message ExecuteOptions {
   // query timeouts are shorter.
   // OLAP: DMLS not allowed, no limit on row count, timeouts
   // can be as high as desired.
+  // DBA: no limit on rowcount or timeout, all queries allowed 
+  // but intended for long DMLs and DDLs.
   Workload workload = 6;
 
+  // sql_select_limit sets an implicit limit on all select statements. Since
+  // vitess also sets a rowcount limit on queries, the smallest value wins.
+  int64 sql_select_limit = 8;
+
+  enum TransactionIsolation {
+    DEFAULT = 0;
+    REPEATABLE_READ = 1;
+    READ_COMMITTED = 2;
+    READ_UNCOMMITTED = 3;
+    SERIALIZABLE = 4;
+  }
+
+  TransactionIsolation transaction_isolation = 9;
 }
 
 // Field describes a single column returned by a query
