@@ -51,6 +51,7 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletconn"
 	"golang.org/x/net/context"
@@ -477,7 +478,8 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, shr *querypb.St
 	// initial message), we want to log it, and maybe advertise it too.
 	if hcc.tabletStats.Target.TabletType != topodatapb.TabletType_UNKNOWN && hcc.tabletStats.Target.TabletType != shr.Target.TabletType {
 		// Log and maybe notify
-		log.Infof("HealthCheckUpdate(Type Change): %v, tablet: %v/%+v, target %+v => %+v, reparent time: %v", oldTs.Name, oldTs.Tablet.Alias.Cell, oldTs.Tablet, oldTs.Target, shr.Target, shr.TabletExternallyReparentedTimestamp)
+		log.Infof("HealthCheckUpdate(Type Change): %v, tablet: %s, target %+v => %+v, reparent time: %v",
+			oldTs.Name, topotools.TabletIdent(oldTs.Tablet), topotools.TargetIdent(oldTs.Target), topotools.TargetIdent(shr.Target), shr.TabletExternallyReparentedTimestamp)
 		if hc.listener != nil && hc.sendDownEvents {
 			oldTs.Up = false
 			hc.listener.StatsUpdate(&oldTs)
