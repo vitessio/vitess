@@ -149,7 +149,7 @@ func nodeHasAggregates(node sqlparser.SQLNode) bool {
 	return hasAggregates
 }
 
-// groupbyHaUniqueVindex looks ahead at the group by expression to see if
+// groupbyHasUniqueVindex looks ahead at the group by expression to see if
 // it references a unique vindex.
 //
 // The vitess group by rules are different from MySQL because it's not possible
