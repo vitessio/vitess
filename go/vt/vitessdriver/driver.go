@@ -99,6 +99,9 @@ func (d drv) Open(name string) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err = c.setupNativeOptions(); err != nil {
+		return nil, err
+	}
 	if err = c.dial(); err != nil {
 		return nil, err
 	}
@@ -131,6 +134,18 @@ type Configuration struct {
 	// Timeout after which a pending query will be aborted.
 	// TODO(sougou): deprecate once we switch to go1.8.
 	Timeout time.Duration
+
+	// ConvertDatetime must be set to enable native conversion
+	// between MySQL DATETIME and DATE data into Go's time.Time
+	// structs. If not set, these column types will be scanned
+	// as their raw []byte representation
+	ConvertDatetime bool
+
+	// DefaultLocation is the timezone string that will be used
+	// when converting DATETIME and DATE into time.Time.
+	// This setting has no effect if ConvertDatetime is not set.
+	// Default: UTC
+	DefaultLocation string
 }
 
 // toJSON converts Configuration to the JSON string which is required by the
@@ -153,8 +168,27 @@ func (c *Configuration) setDefaults() {
 
 type conn struct {
 	Configuration
+	native  *sqltypes.NativeOptions
 	conn    *vtgateconn.VTGateConn
 	session *vtgateconn.VTGateSession
+}
+
+func (c *conn) setupNativeOptions() (err error) {
+	location := time.UTC
+
+	if c.DefaultLocation != "" {
+		location, err = time.LoadLocation(c.DefaultLocation)
+		if err != nil {
+			return
+		}
+	}
+
+	c.native = &sqltypes.NativeOptions{
+		ConvertDatetime: c.ConvertDatetime,
+		DefaultLocation: location,
+	}
+
+	return
 }
 
 func (c *conn) dial() error {
@@ -233,7 +267,7 @@ func (c *conn) Query(query string, args []driver.Value) (driver.Rows, error) {
 			cancel()
 			return nil, err
 		}
-		return newStreamingRows(stream, cancel), nil
+		return newStreamingRows(stream, cancel, c.native), nil
 	}
 	// Do not cancel in case of a streaming query.
 	// It will be called when streamingRows is closed later.
@@ -243,7 +277,7 @@ func (c *conn) Query(query string, args []driver.Value) (driver.Rows, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newRows(qr), nil
+	return newRows(qr, c.native), nil
 }
 
 type stmt struct {

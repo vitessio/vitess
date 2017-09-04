@@ -35,13 +35,15 @@ type streamingRows struct {
 	qr     *sqltypes.Result
 	index  int
 	cancel context.CancelFunc
+	native *sqltypes.NativeOptions
 }
 
 // newStreamingRows creates a new streamingRows from stream.
-func newStreamingRows(stream sqltypes.ResultStream, cancel context.CancelFunc) driver.Rows {
+func newStreamingRows(stream sqltypes.ResultStream, cancel context.CancelFunc, opts *sqltypes.NativeOptions) driver.Rows {
 	return &streamingRows{
 		stream: stream,
 		cancel: cancel,
+		native: opts,
 	}
 }
 
@@ -84,7 +86,7 @@ func (ri *streamingRows) Next(dest []driver.Value) error {
 		ri.qr = qr
 		ri.index = 0
 	}
-	populateRow(dest, ri.qr.Rows[ri.index])
+	populateRow(dest, ri.qr.Rows[ri.index], ri.native)
 	ri.index++
 	return nil
 }

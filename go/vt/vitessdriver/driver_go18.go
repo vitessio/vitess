@@ -80,14 +80,14 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 		if err != nil {
 			return nil, err
 		}
-		return newStreamingRows(stream, nil), nil
+		return newStreamingRows(stream, nil, c.native), nil
 	}
 
 	qr, err := c.session.Execute(ctx, query, bv)
 	if err != nil {
 		return nil, err
 	}
-	return newRows(qr), nil
+	return newRows(qr, c.native), nil
 }
 
 func (s *stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {

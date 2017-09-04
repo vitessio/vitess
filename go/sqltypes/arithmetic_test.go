@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
@@ -354,6 +355,69 @@ func TestToFloat64(t *testing.T) {
 		}
 		if got != tcase.out {
 			t.Errorf("ToFloat64(%v): %v, want %v", tcase.v, got, tcase.out)
+		}
+	}
+}
+
+func TestToNativeEx(t *testing.T) {
+	convertTime := &NativeOptions{
+		ConvertDatetime: true,
+	}
+
+	convertTimeLocal := &NativeOptions{
+		ConvertDatetime: true,
+		DefaultLocation: time.Local,
+	}
+
+	testcases := []struct {
+		opts *NativeOptions
+		in   Value
+		out  interface{}
+	}{{
+		opts: convertTime,
+		in:   TestValue(Int32, "1"),
+		out:  int64(1),
+	}, {
+		opts: convertTime,
+		in:   TestValue(Timestamp, "2012-02-24 23:19:43"),
+		out:  []byte("2012-02-24 23:19:43"), // TIMESTAMP is not handled
+	}, {
+		opts: convertTime,
+		in:   TestValue(Time, "23:19:43"),
+		out:  []byte("23:19:43"), // TIME is not handled
+	}, {
+		opts: convertTime,
+		in:   TestValue(Date, "2012-02-24"),
+		out:  time.Date(2012, 02, 24, 0, 0, 0, 0, time.UTC),
+	}, {
+		opts: convertTime,
+		in:   TestValue(Datetime, "2012-02-24 23:19:43"),
+		out:  time.Date(2012, 02, 24, 23, 19, 43, 0, time.UTC),
+	}, {
+		opts: DefaultNativeOptions,
+		in:   TestValue(Date, "2012-02-24"),
+		out:  []byte("2012-02-24"),
+	}, {
+		opts: DefaultNativeOptions,
+		in:   TestValue(Datetime, "2012-02-24 23:19:43"),
+		out:  []byte("2012-02-24 23:19:43"),
+	}, {
+		opts: convertTimeLocal,
+		in:   TestValue(Datetime, "2012-02-24 23:19:43"),
+		out:  time.Date(2012, 02, 24, 23, 19, 43, 0, time.Local),
+	}, {
+		opts: convertTimeLocal,
+		in:   TestValue(Date, "2012-02-24"),
+		out:  time.Date(2012, 02, 24, 0, 0, 0, 0, time.Local),
+	}}
+
+	for _, tcase := range testcases {
+		v, err := ToNativeEx(tcase.in, tcase.opts)
+		if err != nil {
+			t.Error(err)
+		}
+		if !reflect.DeepEqual(v, tcase.out) {
+			t.Errorf("%v.ToNativeEx = %#v, want %#v", tcase.in, v, tcase.out)
 		}
 	}
 }

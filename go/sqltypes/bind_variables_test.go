@@ -20,6 +20,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 
@@ -227,6 +228,12 @@ func TestBuildBindVariable(t *testing.T) {
 	}, {
 		in:  []interface{}{1, byte(1)},
 		err: "type uint8 not supported as bind var: 1",
+	}, {
+		in: time.Date(1999, 5, 1, 19, 30, 0, 0, time.UTC),
+		out: &querypb.BindVariable{
+			Type:  querypb.Type_DATETIME,
+			Value: []byte("1999-05-01 19:30:00"),
+		},
 	}}
 	for _, tcase := range tcases {
 		bv, err := BuildBindVariable(tcase.in)

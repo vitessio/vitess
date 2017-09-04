@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 
@@ -81,6 +82,11 @@ func BytesBindVariable(v []byte) *querypb.BindVariable {
 	return &querypb.BindVariable{Type: VarBinary, Value: v}
 }
 
+// DatetimeBindVariable converts a time.Time to a bind var.
+func DatetimeBindVariable(t time.Time) *querypb.BindVariable {
+	return ValueBindVariable(NewDatetime(t))
+}
+
 // ValueBindVariable converts a Value to a bind var.
 func ValueBindVariable(v Value) *querypb.BindVariable {
 	return &querypb.BindVariable{Type: v.typ, Value: v.val}
@@ -106,6 +112,8 @@ func BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
 		return Float64BindVariable(v), nil
 	case nil:
 		return NullBindVariable, nil
+	case time.Time:
+		return DatetimeBindVariable(v), nil
 	case Value:
 		return ValueBindVariable(v), nil
 	case *querypb.BindVariable:
