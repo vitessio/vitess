@@ -257,7 +257,7 @@
   }
 }
 
-# group by a unique vindex should revert to simple route
+# group by a unique vindex should use a simple route
 "select id, count(*) from user group by id"
 {
   "Original": "select id, count(*) from user group by id",
@@ -269,6 +269,145 @@
     },
     "Query": "select id, count(*) from user group by id",
     "FieldQuery": "select id, count(*) from user where 1 != 1 group by id"
+  }
+}
+
+# group by a unique vindex and other column should use a simple route
+"select id, col, count(*) from user group by id, col"
+{
+  "Original": "select id, col, count(*) from user group by id, col",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id, col, count(*) from user group by id, col",
+    "FieldQuery": "select id, col, count(*) from user where 1 != 1 group by id, col"
+  }
+}
+
+# group by a non-vindex column should use an OrderdAggregate primitive
+"select col, count(*) from user group by col"
+{
+  "Original": "select col, count(*) from user group by col",
+  "Instructions": {
+    "Aggregates": [
+      {
+        "Opcode": "count",
+        "Col": 1
+      }
+    ],
+    "Keys": [
+      0
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col, count(*) from user group by col order by col asc",
+      "FieldQuery": "select col, count(*) from user where 1 != 1 group by col",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        }
+      ]
+    }
+  }
+}
+
+# group by a non-unique vindex column should use an OrderdAggregate primitive
+"select name, count(*) from user group by name"
+{
+  "Original": "select name, count(*) from user group by name",
+  "Instructions": {
+    "Aggregates": [
+      {
+        "Opcode": "count",
+        "Col": 1
+      }
+    ],
+    "Keys": [
+      0
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select name, count(*) from user group by name order by name asc",
+      "FieldQuery": "select name, count(*) from user where 1 != 1 group by name",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        }
+      ]
+    }
+  }
+}
+
+# group by a unique vindex should use a simple route, even if aggr is complex
+"select id, 1+count(*) from user group by id"
+{
+  "Original": "select id, 1+count(*) from user group by id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id, 1 + count(*) from user group by id",
+    "FieldQuery": "select id, 1 + count(*) from user where 1 != 1 group by id"
+  }
+}
+
+# group by a unique vindex where alias from select list is used
+"select id as val, 1+count(*) from user group by val"
+{
+  "Original": "select id as val, 1+count(*) from user group by val",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id as val, 1 + count(*) from user group by val",
+    "FieldQuery": "select id as val, 1 + count(*) from user where 1 != 1 group by val"
+  }
+}
+
+# group by a unique vindex where expression is qualified (alias should be ignored)
+"select val as id, 1+count(*) from user group by user.id"
+{
+  "Original": "select val as id, 1+count(*) from user group by user.id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select val as id, 1 + count(*) from user group by user.id",
+    "FieldQuery": "select val as id, 1 + count(*) from user where 1 != 1 group by user.id"
+  }
+}
+
+# group by a unique vindex where it should skip non-aliased expressions.
+"select *, id, 1+count(*) from user group by id"
+{
+  "Original": "select *, id, 1+count(*) from user group by id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select *, id, 1 + count(*) from user group by id",
+    "FieldQuery": "select *, id, 1 + count(*) from user where 1 != 1 group by id"
   }
 }
 
@@ -826,3 +965,11 @@
       "Values":[5]
    }
 }
+
+# Group by invalid column number (code is duplicated from symab).
+"select id from user group by 1.1"
+"column number is not an int"
+
+# Group by out of range column number (code is duplicated from symab).
+"select id from user group by 2"
+"column number out of range: 2"
