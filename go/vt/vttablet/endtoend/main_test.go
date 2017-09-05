@@ -132,7 +132,7 @@ create table vitess_ints(tiny tinyint default 0, tinyu tinyint unsigned default 
 create table vitess_fracts(id int default 0, deci decimal(5,2) default null, num numeric(5,2) default null, f float default null, d double default null, primary key(id));
 create table vitess_strings(vb varbinary(16) default 'vb', c char(16) default null, vc varchar(16) default null, b binary(4) default null, tb tinyblob default null, bl blob default null, ttx tinytext default null, tx text default null, en enum('a','b') default null, s set('a','b') default null, primary key(vb));
 create table vitess_misc(id int default 0, b bit(8) default null, d date default null, dt datetime default null, t time default null, g geometry default null, primary key(id));
-create table vitess_unsupported(id int default 0, pt point default null, primary key(id));
+create table vitess_bit_default(id bit(8) default b'101', primary key(id));
 
 create table vitess_bool(auto int auto_increment, bval tinyint(1) default 0, sval varchar(16) default '', ival int default null, primary key (auto));
 
@@ -184,7 +184,7 @@ var tableACLConfig = `{
     },
     {
       "name": "vitess",
-      "table_names_or_prefixes": ["vitess_a", "vitess_b", "vitess_c", "dual", "vitess_d", "vitess_temp", "vitess_e", "vitess_f", "vitess_mixed_case", "upsert_test", "vitess_strings", "vitess_fracts", "vitess_ints", "vitess_misc", "vitess_big", "vitess_view", "vitess_json", "vitess_bool", "vitess_autoinc_seq"],
+      "table_names_or_prefixes": ["vitess_a", "vitess_b", "vitess_c", "dual", "vitess_d", "vitess_temp", "vitess_e", "vitess_f", "vitess_mixed_case", "upsert_test", "vitess_strings", "vitess_fracts", "vitess_ints", "vitess_misc", "vitess_bit_default", "vitess_big", "vitess_view", "vitess_json", "vitess_bool", "vitess_autoinc_seq"],
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]

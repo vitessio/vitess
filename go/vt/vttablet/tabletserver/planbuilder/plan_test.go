@@ -219,7 +219,7 @@ func loadSchema(name string) map[string]*schema.Table {
 	if err != nil {
 		panic(err)
 	}
-	tables := make([]*schema.Table, 0, 8)
+	tables := make([]*schema.Table, 0, 10)
 	err = json.Unmarshal(b, &tables)
 	if err != nil {
 		panic(err)

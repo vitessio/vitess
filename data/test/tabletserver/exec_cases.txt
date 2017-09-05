@@ -1036,6 +1036,30 @@
   "PKValues":[":a"]
 }
 
+# insert no values autoinc
+"insert into auto values ()"
+{
+  "PlanID": "INSERT_PK",
+  "TableName": "auto",
+  "FullQuery": "insert into auto values ()",
+  "OuterQuery": "insert into auto(id) values (null)",
+  "PKValues":[
+    [null]
+  ]
+}
+
+# insert no values defaults
+"insert into with_defaults values ()"
+{
+  "PlanID": "INSERT_PK",
+  "TableName": "with_defaults",
+  "FullQuery": "insert into with_defaults values ()",
+  "OuterQuery": "insert into with_defaults(aid, bid, cid) values (3, -2, null)",
+  "PKValues":[
+    3
+  ]
+}
+
 # nextval on non-sequence table
 "select next value from a"
 "a is not a sequence"
