@@ -21,7 +21,7 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -30,7 +30,7 @@ import (
 
 var (
 	// ErrTooComplex indicates given sql query is too complex.
-	ErrTooComplex = vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Complex")
+	ErrTooComplex = vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "Complex")
 	execLimit     = &sqlparser.Limit{Rowcount: sqlparser.NewValArg([]byte(":#maxLimit"))}
 )
 
@@ -249,7 +249,7 @@ func (plan *Plan) TableName() sqlparser.TableIdent {
 
 func (plan *Plan) setTable(tableName sqlparser.TableIdent, tables map[string]*schema.Table) (*schema.Table, error) {
 	if plan.Table = tables[tableName.String()]; plan.Table == nil {
-		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "table %s not found in schema", tableName)
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "table %s not found in schema", tableName)
 	}
 	return plan.Table, nil
 }
@@ -287,7 +287,7 @@ func Build(sql string, tables map[string]*schema.Table) (*Plan, error) {
 		return &Plan{PlanID: PlanOtherAdmin}, nil
 	}
 
-	return nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "invalid SQL")
+	return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid SQL")
 }
 
 // BuildStreaming builds a streaming plan based on the schema.
@@ -305,7 +305,7 @@ func BuildStreaming(sql string, tables map[string]*schema.Table) (*Plan, error) 
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:
 		if stmt.Lock != "" {
-			return nil, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "select with lock not allowed for streaming")
+			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "select with lock not allowed for streaming")
 		}
 		if tableName := analyzeFrom(stmt.From); !tableName.IsEmpty() {
 			plan.setTable(tableName, tables)
@@ -313,7 +313,7 @@ func BuildStreaming(sql string, tables map[string]*schema.Table) (*Plan, error) 
 	case *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Union:
 		// pass
 	default:
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "'%v' not allowed for streaming", sqlparser.String(stmt))
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "'%v' not allowed for streaming", sqlparser.String(stmt))
 	}
 
 	return plan, nil
@@ -326,10 +326,10 @@ func BuildMessageStreaming(name string, tables map[string]*schema.Table) (*Plan,
 		Table:  tables[name],
 	}
 	if plan.Table == nil {
-		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "table %s not found in schema", name)
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "table %s not found in schema", name)
 	}
 	if plan.Table.Type != schema.Message {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "'%s' is not a message table", name)
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "'%s' is not a message table", name)
 	}
 	return plan, nil
 }
