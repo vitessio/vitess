@@ -395,7 +395,7 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 		}
 		ks, ok := e.VSchema().Keyspaces[target.Keyspace]
 		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "keyspace %s not found in vschema", target.Keyspace)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace %s not found in vschema", target.Keyspace)
 		}
 
 		var tables []string
