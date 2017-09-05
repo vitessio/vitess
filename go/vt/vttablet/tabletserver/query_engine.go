@@ -48,7 +48,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/txserializer"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 //_______________________________________________
@@ -339,7 +338,7 @@ func (qe *QueryEngine) GetStreamPlan(sql string) (*TabletPlan, error) {
 	defer qe.mu.RUnlock()
 	splan, err := planbuilder.BuildStreaming(sql, qe.tables)
 	if err != nil {
-		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
+		return nil, vterrors.Wrap(err, "could not build streaming plan")
 	}
 	plan := &TabletPlan{Plan: splan}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
@@ -353,7 +352,7 @@ func (qe *QueryEngine) GetMessageStreamPlan(name string) (*TabletPlan, error) {
 	defer qe.mu.RUnlock()
 	splan, err := planbuilder.BuildMessageStreaming(name, qe.tables)
 	if err != nil {
-		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
+		return nil, vterrors.Wrap(err, "could not build message streaming plan")
 	}
 	plan := &TabletPlan{Plan: splan}
 	plan.Rules = qe.queryRuleSources.FilterByPlan("stream from "+name, plan.PlanID, plan.TableName().String())
