@@ -27,6 +27,8 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 // Instructions for creating new types: If a type
@@ -1768,6 +1770,24 @@ func (node *ExistsExpr) WalkSubtree(visit Visit) error {
 		visit,
 		node.Subquery,
 	)
+}
+
+// ExprFromValue converts the given Value into an Expr or returns an error.
+func ExprFromValue(value sqltypes.Value) (Expr, error) {
+	// The type checks here follow the rules defined in sqltypes/types.go.
+	switch {
+	case value.Type() == sqltypes.Null:
+		return &NullVal{}, nil
+	case value.IsIntegral():
+		return NewIntVal(value.ToBytes()), nil
+	case value.IsFloat() || value.Type() == sqltypes.Decimal:
+		return NewFloatVal(value.ToBytes()), nil
+	case value.IsQuoted():
+		return NewStrVal(value.ToBytes()), nil
+	default:
+		// We cannot support sqltypes.Expression, or any other invalid type.
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot convert value %v to AST", value)
+	}
 }
 
 // ValType specifies the type for SQLVal.
