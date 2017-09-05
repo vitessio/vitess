@@ -177,7 +177,8 @@ const (
 )
 
 // Error codes for client-side errors.
-// Originally found in include/mysql/errmsg.h
+// Originally found in include/mysql/errmsg.h and
+// https://dev.mysql.com/doc/refman/5.7/en/error-messages-client.html
 const (
 	// CRUnknownError is CR_UNKNOWN_ERROR
 	CRUnknownError = 2000
@@ -227,113 +228,194 @@ const (
 )
 
 // Error codes for server-side errors.
-// Originally found in include/mysql/mysqld_error.h
+// Originally found in include/mysql/mysqld_error.h and
+// https://dev.mysql.com/doc/refman/5.7/en/error-messages-server.html
+// The below are in sorted order by value, grouped by vterror code they should be bucketed into.
+// See above reference for more information on each code.
 const (
-	// ERAccessDeniedError is ER_ACCESS_DENIED_ERROR
-	ERAccessDeniedError = 1045
-
-	// ERUnknownComError is ER_UNKNOWN_COM_ERROR
-	ERUnknownComError = 1047
-
-	// ERBadNullError is ER_BAD_NULL_ERROR
-	ERBadNullError = 1048
-
-	// ERServerShutdown is ER_SERVER_SHUTDOWN
-	ERServerShutdown = 1053
-
-	// ERDupEntry is ER_DUP_ENTRY
-	ERDupEntry = 1062
-
-	// ERUnknownError is ER_UNKNOWN_ERROR
+	// unknown
 	ERUnknownError = 1105
 
-	// ERBadFieldError is ER_BAD_FIELD_ERROR
-	ERBadFieldError = 1054
+	// unimplemented
+	ERNotSupportedYet = 1235
 
-	// ERRowIsReferenced is ER_ROW_IS_REFERENCED
-	ERRowIsReferenced = 1217
+	// resource exhausted
+	ERDiskFull               = 1021
+	EROutOfMemory            = 1037
+	EROutOfSortMemory        = 1038
+	ERConCount               = 1040
+	EROutOfResources         = 1041
+	ERRecordFileFull         = 1114
+	ERHostIsBlocked          = 1129
+	ERCantCreateThread       = 1135
+	ERTooManyDelayedThreads  = 1151
+	ERNetPacketTooLarge      = 1153
+	ERTooManyUserConnections = 1203
+	ERLockTableFull          = 1206
+	ERUserLimitReached       = 1226
 
-	// ERRowIsReferenced2 is ER_ROW_IS_REFERENCED_2
-	ERRowIsReferenced2 = 1451
-
-	// ERNoReferencedRow is ER_NO_REFERENCED_ROW
-	ERNoReferencedRow = 1216
-
-	// ErNoReferencedRow2 is ER_NO_REFERENCED_ROW_2
-	ErNoReferencedRow2 = 1452
-
-	// EROperandColumns is ER_OPERAND_COLUMNS
-	EROperandColumns = 1241
-
-	// ERSubqueryNo1Row is ER_SUBQUERY_NO_1_ROW
-	ERSubqueryNo1Row = 1242
-
-	// ERCyclicReference is ER_CYCLIC_REFERENCE
-	ERCyclicReference = 1245
-
-	// ERIllegalReference is ER_ILLEGAL_REFERENCE
-	ERIllegalReference = 1247
-
-	// ERDerivedMustHaveAlias is ER_DERIVED_MUST_HAVE_ALIAS
-	ERDerivedMustHaveAlias = 1248
-
-	// ERTableNameNotAllowedHere is ER_TABLENAME_NOT_ALLOWED_HERE
-	ERTableNameNotAllowedHere = 1250
-
-	// ERTooManyTables is ER_TOO_MANY_TABLES
-	ERTooManyTables = 1116
-
-	// ERTooManyFields is ER_TOO_MANY_FIELDS
-	ERTooManyFields = 1117
-
-	// ERInvalidGroupFuncUse is ER_INVALID_GROUP_FUNC_USE
-	ERInvalidGroupFuncUse = 1111
-
-	// ERNoSuchTable is ER_NO_SUCH_TABLE
-	ERNoSuchTable = 1146
-
-	// ERUnknownTable is ER_UNKNOWN_TABLE
-	ERUnknownTable = 1109
-
-	// ERWrongTableName is ER_WRONG_TABLE_NAME
-	ERWrongTableName = 1103
-
-	// ERWrongDbName is ER_WRONG_DB_NAME
-	ERWrongDbName = 1102
-
-	// ERTableNotLockedForWrite is ER_TABLE_NOT_LOCKED_FOR_WRITE
-	ERTableNotLockedForWrite = 1099
-
-	// ERTooBigSet is ER_TOO_BIG_SET
-	ERTooBigSet = 1097
-
-	// ERUpdateTableUsed is ER_UPDATE_TABLE_USED
-	ERUpdateTableUsed = 1093
-
-	// ERSyntaxError is ER_SYNTAX_ERROR
-	ERSyntaxError = 1149
-
-	// ERCantDoThisDuringAnTransaction is
-	// ER_CANT_DO_THIS_DURING_AN_TRANSACTION
-	ERCantDoThisDuringAnTransaction = 1179
-
-	// ERLockWaitTimeout is ER_LOCK_WAIT_TIMEOUT
+	// deadline exceeded
 	ERLockWaitTimeout = 1205
 
-	// ERLockDeadlock is ER_LOCK_DEADLOCK
-	ERLockDeadlock = 1213
+	// unavailable
+	ERServerShutdown = 1053
 
-	// EROptionPreventsStatement is ER_OPTION_PREVENTS_STATEMENT
-	EROptionPreventsStatement = 1290
+	// not found
+	ERFormNotFound          = 1029
+	ERKeyNotFound           = 1032
+	ERBadFieldError         = 1054
+	ERNoSuchThread          = 1094
+	ERUnknownTable          = 1109
+	ERCantFindUDF           = 1122
+	ERNonExistingGrant      = 1141
+	ERNoSuchTable           = 1146
+	ERNonExistingTableGrant = 1147
+	ERKeyDoesNotExist       = 1176
 
-	// ERDataTooLong is ER_DATA_TOO_LONG
-	ERDataTooLong = 1406
+	// permissions
+	ERDBAccessDenied            = 1044
+	ERAccessDeniedError         = 1045
+	ERKillDenied                = 1095
+	ERNoPermissionToCreateUsers = 1211
+	ERSpecifiedAccessDenied     = 1227
 
-	// ERDataOutOfRange is ER_DATA_OUT_OF_RANGE
-	ERDataOutOfRange = 1690
+	// failed precondition
+	ERNoDb                          = 1046
+	ERNoSuchIndex                   = 1082
+	ERCantDropFieldOrKey            = 1091
+	ERTableNotLockedForWrite        = 1099
+	ERTableNotLocked                = 1100
+	ERTooBigSelect                  = 1104
+	ERNotAllowedCommand             = 1148
+	ERTooLongString                 = 1162
+	ERDelayedInsertTableLocked      = 1165
+	ERDupUnique                     = 1169
+	ERRequiresPrimaryKey            = 1173
+	ERCantDoThisDuringAnTransaction = 1179
+	ERReadOnlyTransaction           = 1207
+	ERCannotAddForeign              = 1215
+	ERNoReferencedRow               = 1216
+	ERRowIsReferenced               = 1217
+	ERCantUpdateWithReadLock        = 1223
+	ERNoDefault                     = 1230
+	EROperandColumns                = 1241
+	ERSubqueryNo1Row                = 1242
+	ERNonUpdateableTable            = 1288
+	ERFeatureDisabled               = 1289
+	EROptionPreventsStatement       = 1290
+	ERDuplicatedValueInType         = 1291
+	ERRowIsReferenced2              = 1451
+	ErNoReferencedRow2              = 1452
 
-	// ERTruncatedWrongValueForField is ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
-	ERTruncatedWrongValueForField = 1366
+	// already exists
+	ERTableExists = 1050
+	ERDupEntry    = 1062
+	ERFileExists  = 1086
+	ERUDFExists   = 1125
+
+	// aborted
+	ERGotSignal          = 1078
+	ERForcingClose       = 1080
+	ERAbortingConnection = 1152
+	ERLockDeadlock       = 1213
+
+	// invalid arg
+	ERUnknownComError              = 1047
+	ERBadNullError                 = 1048
+	ERBadDb                        = 1049
+	ERBadTable                     = 1051
+	ERNonUniq                      = 1052
+	ERWrongFieldWithGroup          = 1055
+	ERWrongGroupField              = 1056
+	ERWrongSumSelect               = 1057
+	ERWrongValueCount              = 1058
+	ERTooLongIdent                 = 1059
+	ERDupFieldName                 = 1060
+	ERDupKeyName                   = 1061
+	ERWrongFieldSpec               = 1063
+	ERParseError                   = 1064
+	EREmptyQuery                   = 1065
+	ERNonUniqTable                 = 1066
+	ERInvalidDefault               = 1067
+	ERMultiplePriKey               = 1068
+	ERTooManyKeys                  = 1069
+	ERTooManyKeyParts              = 1070
+	ERTooLongKey                   = 1071
+	ERKeyColumnDoesNotExist        = 1072
+	ERBlobUsedAsKey                = 1073
+	ERTooBigFieldLength            = 1074
+	ERWrongAutoKey                 = 1075
+	ERWrongFieldTerminators        = 1083
+	ERBlobsAndNoTerminated         = 1084
+	ERTextFileNotReadable          = 1085
+	ERWrongSubKey                  = 1089
+	ERCantRemoveAllFields          = 1090
+	ERUpdateTableUsed              = 1093
+	ERNoTablesUsed                 = 1096
+	ERTooBigSet                    = 1097
+	ERBlobCantHaveDefault          = 1101
+	ERWrongDbName                  = 1102
+	ERWrongTableName               = 1103
+	ERUnknownProcedure             = 1106
+	ERWrongParamCountToProcedure   = 1107
+	ERWrongParametersToProcedure   = 1108
+	ERFieldSpecifiedTwice          = 1110
+	ERInvalidGroupFuncUse          = 1111
+	ERTableMustHaveColumns         = 1113
+	ERUnknownCharacterSet          = 1115
+	ERTooManyTables                = 1116
+	ERTooManyFields                = 1117
+	ERTooBigRowSize                = 1118
+	ERWrongOuterJoin               = 1120
+	ERNullColumnInIndex            = 1121
+	ERFunctionNotDefined           = 1128
+	ERWrongValueCountOnRow         = 1136
+	ERInvalidUseOfNull             = 1138
+	ERRegexpError                  = 1139
+	ERMixOfGroupFuncAndFields      = 1140
+	ERIllegalGrantForTable         = 1144
+	ERSyntaxError                  = 1149
+	ERWrongColumnName              = 1166
+	ERWrongKeyColumn               = 1167
+	ERBlobKeyWithoutLength         = 1170
+	ERPrimaryCantHaveNull          = 1171
+	ERTooManyRows                  = 1172
+	ERUnknownSystemVariable        = 1193
+	ERSetConstantsOnly             = 1204
+	ERWrongArguments               = 1210
+	ERWrongUsage                   = 1221
+	ERWrongNumberOfColumnsInSelect = 1222
+	ERDupArgument                  = 1225
+	ERLocalVariable                = 1228
+	ERGlobalVariable               = 1229
+	ERWrongValueForVar             = 1231
+	ERWrongTypeForVar              = 1232
+	ERVarCantBeRead                = 1233
+	ERCantUseOptionHere            = 1234
+	ERIncorrectGlobalLocalVar      = 1238
+	ERWrongFKDef                   = 1239
+	ERKeyRefDoNotMatchTableRef     = 1240
+	ERCyclicReference              = 1245
+	ERCollationCharsetMismatch     = 1253
+	ERCantAggregate2Collations     = 1267
+	ERCantAggregate3Collations     = 1270
+	ERCantAggregateNCollations     = 1271
+	ERVariableIsNotStruct          = 1272
+	ERUnknownCollation             = 1273
+	ERWrongNameForIndex            = 1280
+	ERWrongNameForCatalog          = 1281
+	ERBadFTColumn                  = 1283
+	ERTruncatedWrongValue          = 1292
+	ERTooMuchAutoTimestampCols     = 1293
+	ERInvalidOnUpdate              = 1294
+	ERUnknownTimeZone              = 1298
+	ERInvalidCharacterString       = 1300
+	ERIllegalReference             = 1247
+	ERDerivedMustHaveAlias         = 1248
+	ERTableNameNotAllowedHere      = 1250
+	ERDataTooLong                  = 1406
+	ERDataOutOfRange               = 1690
+	ERTruncatedWrongValueForField  = 1366
 )
 
 // Sql states for errors.
