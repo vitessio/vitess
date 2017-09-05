@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -306,7 +305,7 @@ func BuildStreaming(sql string, tables map[string]*schema.Table) (*Plan, error) 
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:
 		if stmt.Lock != "" {
-			return nil, errors.New("select with lock not allowed for streaming")
+			return nil, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "select with lock not allowed for streaming")
 		}
 		if tableName := analyzeFrom(stmt.From); !tableName.IsEmpty() {
 			plan.setTable(tableName, tables)
@@ -314,7 +313,7 @@ func BuildStreaming(sql string, tables map[string]*schema.Table) (*Plan, error) 
 	case *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Union:
 		// pass
 	default:
-		return nil, fmt.Errorf("'%v' not allowed for streaming", sqlparser.String(stmt))
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "'%v' not allowed for streaming", sqlparser.String(stmt))
 	}
 
 	return plan, nil
@@ -327,10 +326,10 @@ func BuildMessageStreaming(name string, tables map[string]*schema.Table) (*Plan,
 		Table:  tables[name],
 	}
 	if plan.Table == nil {
-		return nil, fmt.Errorf("table %s not found in schema", name)
+		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "table %s not found in schema", name)
 	}
 	if plan.Table.Type != schema.Message {
-		return nil, fmt.Errorf("'%s' is not a message table", name)
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "'%s' is not a message table", name)
 	}
 	return plan, nil
 }
