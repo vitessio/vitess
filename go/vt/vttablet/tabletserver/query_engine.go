@@ -39,7 +39,6 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	tacl "github.com/youtube/vitess/go/vt/tableacl/acl"
-	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/rules"
@@ -300,7 +299,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	defer qe.mu.RUnlock()
 	splan, err := planbuilder.Build(sql, qe.tables)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "could not build plan")
+		return nil, err
 	}
 	plan := &TabletPlan{Plan: splan}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
@@ -338,7 +337,7 @@ func (qe *QueryEngine) GetStreamPlan(sql string) (*TabletPlan, error) {
 	defer qe.mu.RUnlock()
 	splan, err := planbuilder.BuildStreaming(sql, qe.tables)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "could not build streaming plan")
+		return nil, err
 	}
 	plan := &TabletPlan{Plan: splan}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
@@ -352,7 +351,7 @@ func (qe *QueryEngine) GetMessageStreamPlan(name string) (*TabletPlan, error) {
 	defer qe.mu.RUnlock()
 	splan, err := planbuilder.BuildMessageStreaming(name, qe.tables)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "could not build message streaming plan")
+		return nil, err
 	}
 	plan := &TabletPlan{Plan: splan}
 	plan.Rules = qe.queryRuleSources.FilterByPlan("stream from "+name, plan.PlanID, plan.TableName().String())

@@ -249,7 +249,7 @@ func (plan *Plan) TableName() sqlparser.TableIdent {
 
 func (plan *Plan) setTable(tableName sqlparser.TableIdent, tables map[string]*schema.Table) (*schema.Table, error) {
 	if plan.Table = tables[tableName.String()]; plan.Table == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "table %s not found in schema", tableName)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table %s not found in schema", tableName)
 	}
 	return plan.Table, nil
 }
@@ -326,7 +326,7 @@ func BuildMessageStreaming(name string, tables map[string]*schema.Table) (*Plan,
 		Table:  tables[name],
 	}
 	if plan.Table == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "table %s not found in schema", name)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table %s not found in schema", name)
 	}
 	if plan.Table.Type != schema.Message {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "'%s' is not a message table", name)
