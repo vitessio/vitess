@@ -339,7 +339,6 @@ func (qe *QueryEngine) GetStreamPlan(sql string) (*TabletPlan, error) {
 	defer qe.mu.RUnlock()
 	splan, err := planbuilder.BuildStreaming(sql, qe.tables)
 	if err != nil {
-		// TODO(sougou): Inspect to see if BuildStreaming can return coded error.
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
 	}
 	plan := &TabletPlan{Plan: splan}
@@ -354,7 +353,6 @@ func (qe *QueryEngine) GetMessageStreamPlan(name string) (*TabletPlan, error) {
 	defer qe.mu.RUnlock()
 	splan, err := planbuilder.BuildMessageStreaming(name, qe.tables)
 	if err != nil {
-		// TODO(sougou): Inspect to see if BuildMessageStreaming can return coded error.
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
 	}
 	plan := &TabletPlan{Plan: splan}
