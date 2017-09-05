@@ -31,7 +31,7 @@ import (
 
 var (
 	// ErrTooComplex indicates given sql query is too complex.
-	ErrTooComplex = errors.New("Complex")
+	ErrTooComplex = vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Complex")
 	execLimit     = &sqlparser.Limit{Rowcount: sqlparser.NewValArg([]byte(":#maxLimit"))}
 )
 
@@ -287,7 +287,8 @@ func Build(sql string, tables map[string]*schema.Table) (*Plan, error) {
 	case *sqlparser.OtherAdmin:
 		return &Plan{PlanID: PlanOtherAdmin}, nil
 	}
-	return nil, errors.New("invalid SQL")
+
+	return nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "invalid SQL")
 }
 
 // BuildStreaming builds a streaming plan based on the schema.
