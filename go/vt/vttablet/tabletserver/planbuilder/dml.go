@@ -469,7 +469,6 @@ func analyzeInsertMessage(ins *sqlparser.Insert, plan *Plan, table *schema.Table
 	// time_created should always be now.
 	col = sqlparser.NewColIdent("time_created")
 	if num := ins.Columns.FindColumn(col); num >= 0 {
-
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s must not be specified for message insert", col.String())
 	}
 	_ = addVal(ins, col, timeNow)

@@ -301,8 +301,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	defer qe.mu.RUnlock()
 	splan, err := planbuilder.Build(sql, qe.tables)
 	if err != nil {
-		// TODO(sougou): Inspect to see if Build can return coded error.
-		return nil, vterrors.New(vtrpcpb.Code_UNKNOWN, err.Error())
+		return nil, vterrors.Wrap(err, "could not build plan")
 	}
 	plan := &TabletPlan{Plan: splan}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
