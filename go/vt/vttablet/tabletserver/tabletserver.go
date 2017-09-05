@@ -1339,38 +1339,61 @@ func (tsv *TabletServer) convertError(ctx context.Context, sql string, bindVaria
 	errstr := err.Error()
 	errnum := sqlErr.Number()
 	sqlState := sqlErr.SQLState()
+
 	switch errnum {
-	case mysql.EROptionPreventsStatement:
-		// Special-case this error code. It's probably because
-		// there was a failover and there are old clients still connected.
-		if strings.Contains(errstr, "read-only") {
-			errCode = vtrpcpb.Code_FAILED_PRECONDITION
-		}
-	case 1227: // Google internal failover error code.
-		if strings.Contains(errstr, "failover in progress") {
-			errCode = vtrpcpb.Code_FAILED_PRECONDITION
-		}
-	case mysql.ERDupEntry:
-		errCode = vtrpcpb.Code_ALREADY_EXISTS
-	case mysql.ERDataTooLong, mysql.ERDataOutOfRange, mysql.ERBadNullError, mysql.ERSyntaxError, mysql.ERUpdateTableUsed, mysql.ERTooBigSet,
-		mysql.ERWrongDbName, mysql.ERWrongTableName, mysql.ERInvalidGroupFuncUse, mysql.ERTooManyFields, mysql.ERTooManyTables,
-		mysql.ERTableNameNotAllowedHere, mysql.ERDerivedMustHaveAlias, mysql.ERIllegalReference, mysql.ERCyclicReference, mysql.ERTruncatedWrongValueForField:
-		errCode = vtrpcpb.Code_INVALID_ARGUMENT
+	case mysql.ERNotSupportedYet:
+		errCode = vtrpcpb.Code_UNIMPLEMENTED
+	case mysql.ERDiskFull, mysql.EROutOfMemory, mysql.EROutOfSortMemory, mysql.ERConCount, mysql.EROutOfResources, mysql.ERRecordFileFull, mysql.ERHostIsBlocked,
+		mysql.ERCantCreateThread, mysql.ERTooManyDelayedThreads, mysql.ERNetPacketTooLarge, mysql.ERTooManyUserConnections, mysql.ERLockTableFull, mysql.ERUserLimitReached:
+		errCode = vtrpcpb.Code_RESOURCE_EXHAUSTED
 	case mysql.ERLockWaitTimeout:
-		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
-	case mysql.ERLockDeadlock:
-		// A deadlock rolls back the transaction.
-		errCode = vtrpcpb.Code_ABORTED
-	case mysql.CRServerLost:
-		// Query was killed.
 		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
 	case mysql.CRServerGone, mysql.ERServerShutdown:
 		errCode = vtrpcpb.Code_UNAVAILABLE
-	case mysql.ERBadFieldError, mysql.ERUnknownTable, mysql.ERNoSuchTable:
+	case mysql.ERFormNotFound, mysql.ERKeyNotFound, mysql.ERBadFieldError, mysql.ERNoSuchThread, mysql.ERUnknownTable, mysql.ERCantFindUDF, mysql.ERNonExistingGrant,
+		mysql.ERNoSuchTable, mysql.ERNonExistingTableGrant, mysql.ERKeyDoesNotExist:
 		errCode = vtrpcpb.Code_NOT_FOUND
-	case mysql.ERNoReferencedRow, mysql.ErNoReferencedRow2, mysql.ERRowIsReferenced, mysql.ERRowIsReferenced2, mysql.ERTableNotLockedForWrite,
-		mysql.ERSubqueryNo1Row, mysql.EROperandColumns, mysql.ERCantDoThisDuringAnTransaction:
+	case mysql.ERDBAccessDenied, mysql.ERAccessDeniedError, mysql.ERKillDenied, mysql.ERNoPermissionToCreateUsers:
+		errCode = vtrpcpb.Code_PERMISSION_DENIED
+	case mysql.ERNoDb, mysql.ERNoSuchIndex, mysql.ERCantDropFieldOrKey, mysql.ERTableNotLockedForWrite, mysql.ERTableNotLocked, mysql.ERTooBigSelect, mysql.ERNotAllowedCommand,
+		mysql.ERTooLongString, mysql.ERDelayedInsertTableLocked, mysql.ERDupUnique, mysql.ERRequiresPrimaryKey, mysql.ERCantDoThisDuringAnTransaction, mysql.ERReadOnlyTransaction,
+		mysql.ERCannotAddForeign, mysql.ERNoReferencedRow, mysql.ERRowIsReferenced, mysql.ERCantUpdateWithReadLock, mysql.ERNoDefault, mysql.EROperandColumns,
+		mysql.ERSubqueryNo1Row, mysql.ERNonUpdateableTable, mysql.ERFeatureDisabled, mysql.EROptionPreventsStatement, mysql.ERDuplicatedValueInType, mysql.ERRowIsReferenced2,
+		mysql.ErNoReferencedRow2:
 		errCode = vtrpcpb.Code_FAILED_PRECONDITION
+	case mysql.ERTableExists, mysql.ERDupEntry, mysql.ERFileExists, mysql.ERUDFExists:
+		errCode = vtrpcpb.Code_ALREADY_EXISTS
+	case mysql.ERGotSignal, mysql.ERForcingClose, mysql.ERAbortingConnection, mysql.ERLockDeadlock:
+		// For ERLockDeadlock, a deadlock rolls back the transaction.
+		errCode = vtrpcpb.Code_ABORTED
+	case mysql.ERUnknownComError, mysql.ERBadNullError, mysql.ERBadDb, mysql.ERBadTable, mysql.ERNonUniq, mysql.ERWrongFieldWithGroup, mysql.ERWrongGroupField,
+		mysql.ERWrongSumSelect, mysql.ERWrongValueCount, mysql.ERTooLongIdent, mysql.ERDupFieldName, mysql.ERDupKeyName, mysql.ERWrongFieldSpec, mysql.ERParseError,
+		mysql.EREmptyQuery, mysql.ERNonUniqTable, mysql.ERInvalidDefault, mysql.ERMultiplePriKey, mysql.ERTooManyKeys, mysql.ERTooManyKeyParts, mysql.ERTooLongKey,
+		mysql.ERKeyColumnDoesNotExist, mysql.ERBlobUsedAsKey, mysql.ERTooBigFieldLength, mysql.ERWrongAutoKey, mysql.ERWrongFieldTerminators, mysql.ERBlobsAndNoTerminated,
+		mysql.ERTextFileNotReadable, mysql.ERWrongSubKey, mysql.ERCantRemoveAllFields, mysql.ERUpdateTableUsed, mysql.ERNoTablesUsed, mysql.ERTooBigSet,
+		mysql.ERBlobCantHaveDefault, mysql.ERWrongDbName, mysql.ERWrongTableName, mysql.ERUnknownProcedure, mysql.ERWrongParamCountToProcedure,
+		mysql.ERWrongParametersToProcedure, mysql.ERFieldSpecifiedTwice, mysql.ERInvalidGroupFuncUse, mysql.ERTableMustHaveColumns, mysql.ERUnknownCharacterSet,
+		mysql.ERTooManyTables, mysql.ERTooManyFields, mysql.ERTooBigRowSize, mysql.ERWrongOuterJoin, mysql.ERNullColumnInIndex, mysql.ERFunctionNotDefined,
+		mysql.ERWrongValueCountOnRow, mysql.ERInvalidUseOfNull, mysql.ERRegexpError, mysql.ERMixOfGroupFuncAndFields, mysql.ERIllegalGrantForTable, mysql.ERSyntaxError,
+		mysql.ERWrongColumnName, mysql.ERWrongKeyColumn, mysql.ERBlobKeyWithoutLength, mysql.ERPrimaryCantHaveNull, mysql.ERTooManyRows, mysql.ERUnknownSystemVariable,
+		mysql.ERSetConstantsOnly, mysql.ERWrongArguments, mysql.ERWrongUsage, mysql.ERWrongNumberOfColumnsInSelect, mysql.ERDupArgument, mysql.ERLocalVariable,
+		mysql.ERGlobalVariable, mysql.ERWrongValueForVar, mysql.ERWrongTypeForVar, mysql.ERVarCantBeRead, mysql.ERCantUseOptionHere, mysql.ERIncorrectGlobalLocalVar,
+		mysql.ERWrongFKDef, mysql.ERKeyRefDoNotMatchTableRef, mysql.ERCyclicReference, mysql.ERCollationCharsetMismatch, mysql.ERCantAggregate2Collations,
+		mysql.ERCantAggregate3Collations, mysql.ERCantAggregateNCollations, mysql.ERVariableIsNotStruct, mysql.ERUnknownCollation, mysql.ERWrongNameForIndex,
+		mysql.ERWrongNameForCatalog, mysql.ERBadFTColumn, mysql.ERTruncatedWrongValue, mysql.ERTooMuchAutoTimestampCols, mysql.ERInvalidOnUpdate, mysql.ERUnknownTimeZone,
+		mysql.ERInvalidCharacterString, mysql.ERIllegalReference, mysql.ERDerivedMustHaveAlias, mysql.ERTableNameNotAllowedHere, mysql.ERDataTooLong, mysql.ERDataOutOfRange,
+		mysql.ERTruncatedWrongValueForField:
+		errCode = vtrpcpb.Code_INVALID_ARGUMENT
+	case mysql.ERSpecifiedAccessDenied:
+		// This code is also utilized for Google internal failover error code.
+		if strings.Contains(errstr, "failover in progress") {
+			errCode = vtrpcpb.Code_FAILED_PRECONDITION
+		} else {
+			errCode = vtrpcpb.Code_PERMISSION_DENIED
+		}
+	case mysql.CRServerLost:
+		// Query was killed.
+		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
 	}
 
 	// If TerseErrors is on, strip the error message returned by MySQL and only
