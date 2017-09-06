@@ -557,19 +557,24 @@ func (tsv *TabletServer) setTimeBomb() chan struct{} {
 	return done
 }
 
-// IsHealthy returns nil if the query service is healthy (able to
-// connect to the database and serving traffic) or an error explaining
+// IsHealthy returns nil for non-serving types or if the query service is healthy (able to
+// connect to the database and serving traffic), or an error explaining
 // the unhealthiness otherwise.
 func (tsv *TabletServer) IsHealthy() error {
-	_, err := tsv.Execute(
-		tabletenv.LocalContext(),
-		nil,
-		"select 1 from dual",
-		nil,
-		0,
-		nil,
-	)
-	return err
+	switch tsv.target.TabletType {
+	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH:
+		_, err := tsv.Execute(
+			tabletenv.LocalContext(),
+			nil,
+			"/* health */ select 1 from dual",
+			nil,
+			0,
+			nil,
+		)
+		return err
+	default:
+		return nil
+	}
 }
 
 // CheckMySQL initiates a check to see if MySQL is reachable.
@@ -1738,7 +1743,8 @@ func (tsv *TabletServer) registerDebugHealthHandler() {
 		}
 		w.Header().Set("Content-Type", "text/plain")
 		if err := tsv.IsHealthy(); err != nil {
-			w.Write([]byte("not ok"))
+			w.WriteHeader(500)
+			w.Write([]byte(fmt.Sprintf("not ok: %v", err)))
 			return
 		}
 		w.Write([]byte("ok"))
