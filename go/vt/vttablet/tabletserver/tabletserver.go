@@ -561,7 +561,10 @@ func (tsv *TabletServer) setTimeBomb() chan struct{} {
 // connect to the database and serving traffic), or an error explaining
 // the unhealthiness otherwise.
 func (tsv *TabletServer) IsHealthy() error {
-	switch tsv.target.TabletType {
+	tsv.mu.Lock()
+	tabletType := tsv.target.TabletType
+	tsv.mu.Unlock()
+	switch tabletType {
 	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH:
 		_, err := tsv.Execute(
 			tabletenv.LocalContext(),
