@@ -1358,9 +1358,15 @@ func (tsv *TabletServer) convertError(ctx context.Context, sql string, bindVaria
 	case mysql.ERNoDb, mysql.ERNoSuchIndex, mysql.ERCantDropFieldOrKey, mysql.ERTableNotLockedForWrite, mysql.ERTableNotLocked, mysql.ERTooBigSelect, mysql.ERNotAllowedCommand,
 		mysql.ERTooLongString, mysql.ERDelayedInsertTableLocked, mysql.ERDupUnique, mysql.ERRequiresPrimaryKey, mysql.ERCantDoThisDuringAnTransaction, mysql.ERReadOnlyTransaction,
 		mysql.ERCannotAddForeign, mysql.ERNoReferencedRow, mysql.ERRowIsReferenced, mysql.ERCantUpdateWithReadLock, mysql.ERNoDefault, mysql.EROperandColumns,
-		mysql.ERSubqueryNo1Row, mysql.ERNonUpdateableTable, mysql.ERFeatureDisabled, mysql.EROptionPreventsStatement, mysql.ERDuplicatedValueInType, mysql.ERRowIsReferenced2,
+		mysql.ERSubqueryNo1Row, mysql.ERNonUpdateableTable, mysql.ERFeatureDisabled, mysql.ERDuplicatedValueInType, mysql.ERRowIsReferenced2,
 		mysql.ErNoReferencedRow2:
 		errCode = vtrpcpb.Code_FAILED_PRECONDITION
+	case mysql.EROptionPreventsStatement:
+		// Special-case this error code. It's probably because
+		// there was a failover and there are old clients still connected.
+		if strings.Contains(errstr, "read-only") {
+			errCode = vtrpcpb.Code_FAILED_PRECONDITION
+		}
 	case mysql.ERTableExists, mysql.ERDupEntry, mysql.ERFileExists, mysql.ERUDFExists:
 		errCode = vtrpcpb.Code_ALREADY_EXISTS
 	case mysql.ERGotSignal, mysql.ERForcingClose, mysql.ERAbortingConnection, mysql.ERLockDeadlock:
