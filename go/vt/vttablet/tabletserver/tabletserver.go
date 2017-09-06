@@ -1743,8 +1743,7 @@ func (tsv *TabletServer) registerDebugHealthHandler() {
 		}
 		w.Header().Set("Content-Type", "text/plain")
 		if err := tsv.IsHealthy(); err != nil {
-			w.WriteHeader(500)
-			w.Write([]byte(fmt.Sprintf("not ok: %v", err)))
+			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
 			return
 		}
 		w.Write([]byte("ok"))
