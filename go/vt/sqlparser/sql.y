@@ -240,6 +240,7 @@ func forceEOF(yylex interface{}) {
 %type <str> charset
 %type <convertType> convert_type
 %type <str> show_statement_type
+%type <colIdent> show_statement_target_opt
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type
 %type <optVal> length_opt column_default_opt column_comment_opt
@@ -1015,10 +1016,23 @@ show_statement_type:
     }
 }
 
-show_statement:
-  SHOW show_statement_type force_eof
+show_statement_target_opt:
   {
-    $$ = &Show{Type: $2}
+    $$ = NewColIdent("")
+  }
+| reserved_sql_id
+  {
+    $$ = $1
+  }
+
+show_statement:
+  SHOW show_statement_type show_statement_target_opt force_eof
+  {
+    if ($2 != ShowUnsupportedStr){
+        $$ = &Show{Type: $2, Target: $3}
+    } else {
+        $$ = &Show{Type: $2}
+    }
   }
 
 use_statement:

@@ -425,7 +425,33 @@ func TestExecutorShow(t *testing.T) {
 		RowsAffected: 25,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("show databases:\n%+v, want\n%+v", qr, wantqr)
+		t.Errorf("show vitess_shards:\n%+v, want\n%+v", qr, wantqr)
+	}
+
+	// Test with keyspace qualifier
+	qr, err = executor.Execute(context.Background(), session, "show vitess_shards TestSharded", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	// Just test for first & last.
+	qr.Rows = [][]sqltypes.Value{qr.Rows[0], qr.Rows[len(qr.Rows)-1]}
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Shards"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("TestSharded/-20"),
+			buildVarCharRow("TestSharded/e0-"),
+		},
+		RowsAffected: 8,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show vitess_shards TestSharded:\n%+v, want\n%+v", qr, wantqr)
+	}
+
+	// Test with bogus keyspace
+	_, err = executor.Execute(context.Background(), session, "show vitess_shards ThisIsNoKeyspace", nil)
+	wantErr := "invalid keyspace ThisIsNoKeyspace"
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Errorf("err: %v does not contain %v", err, wantErr)
 	}
 
 	session = &vtgatepb.Session{TargetString: KsTestUnsharded}

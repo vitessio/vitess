@@ -996,7 +996,8 @@ const (
 
 // Show represents a show statement.
 type Show struct {
-	Type string
+	Type   string
+	Target ColIdent
 }
 
 // The frollowing constants represent SHOW statements.
@@ -1012,6 +1013,9 @@ const (
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
 	buf.Myprintf("show %s", node.Type)
+	if !node.Target.IsEmpty() {
+		buf.Myprintf(" %s", node.Target.Lowered())
+	}
 }
 
 // WalkSubtree walks the nodes of the subtree.

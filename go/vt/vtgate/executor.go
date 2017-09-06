@@ -372,11 +372,28 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 			return nil, err
 		}
 
+		if !show.Target.IsEmpty() {
+			target := show.Target.String()
+			valid := false
+			for _, k := range keyspaces {
+				if target == k {
+					valid = true
+					break
+				}
+			}
+			if !valid {
+				return nil, fmt.Errorf("invalid keyspace %s", target)
+			}
+			keyspaces = []string{target}
+		}
+
 		var rows [][]sqltypes.Value
 		for _, keyspace := range keyspaces {
 			_, _, shards, err := getKeyspaceShards(ctx, e.serv, e.cell, keyspace, target.TabletType)
 			if err != nil {
-				return nil, err
+				// There might be a misconfigured keyspace or no shards in the keyspace.
+				// Skip any errors and move on.
+				continue
 			}
 
 			for _, shard := range shards {
