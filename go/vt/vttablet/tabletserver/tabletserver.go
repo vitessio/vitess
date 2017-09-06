@@ -565,7 +565,7 @@ func (tsv *TabletServer) IsHealthy() error {
 	tabletType := tsv.target.TabletType
 	tsv.mu.Unlock()
 	switch tabletType {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH:
+	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH, topodatapb.TabletType_EXPERIMENTAL:
 		_, err := tsv.Execute(
 			tabletenv.LocalContext(),
 			nil,
