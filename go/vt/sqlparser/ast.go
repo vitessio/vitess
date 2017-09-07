@@ -55,7 +55,7 @@ func Parse(sql string) (Statement, error) {
 			tokenizer.ParseTree = tokenizer.partialDDL
 			return tokenizer.ParseTree, nil
 		}
-		return nil, errors.New(tokenizer.LastError)
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError)
 	}
 	return tokenizer.ParseTree, nil
 }
