@@ -271,6 +271,19 @@ var execMap = map[string]struct {
 		result:  &result1,
 		session: nil,
 	},
+	"requestDates": {
+		execQuery: &queryExecute{
+			SQL: "requestDates",
+			BindVariables: map[string]*querypb.BindVariable{
+				"v1": sqltypes.Int64BindVariable(0),
+			},
+			Session: &vtgatepb.Session{
+				TargetString: "@rdonly",
+			},
+		},
+		result:  &result2,
+		session: nil,
+	},
 	"txRequest": {
 		execQuery: &queryExecute{
 			SQL: "txRequest",
@@ -335,6 +348,31 @@ var result1 = sqltypes.Result{
 		{
 			sqltypes.NewVarBinary("2"),
 			sqltypes.NewVarBinary("value2"),
+		},
+	},
+}
+
+var result2 = sqltypes.Result{
+	Fields: []*querypb.Field{
+		{
+			Name: "fieldDatetime",
+			Type: sqltypes.Datetime,
+		},
+		{
+			Name: "fieldDate",
+			Type: sqltypes.Date,
+		},
+	},
+	RowsAffected: 42,
+	InsertID:     73,
+	Rows: [][]sqltypes.Value{
+		{
+			sqltypes.NewVarBinary("2009-03-29 17:22:11"),
+			sqltypes.NewVarBinary("2006-07-02"),
+		},
+		{
+			sqltypes.NewVarBinary("0000-00-00 00:00:00"),
+			sqltypes.NewVarBinary("0000-00-00"),
 		},
 	},
 }

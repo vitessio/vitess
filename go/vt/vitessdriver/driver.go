@@ -21,13 +21,10 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"time"
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 )
 
@@ -99,6 +96,9 @@ func (d drv) Open(name string) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+	if c.convert, err = newConverter(&c.Configuration); err != nil {
+		return nil, err
+	}
 	if err = c.dial(); err != nil {
 		return nil, err
 	}
@@ -131,6 +131,12 @@ type Configuration struct {
 	// Timeout after which a pending query will be aborted.
 	// TODO(sougou): deprecate once we switch to go1.8.
 	Timeout time.Duration
+
+	// DefaultLocation is the timezone string that will be used
+	// when converting DATETIME and DATE into time.Time.
+	// This setting has no effect if ConvertDatetime is not set.
+	// Default: UTC
+	DefaultLocation string
 }
 
 // toJSON converts Configuration to the JSON string which is required by the
@@ -153,6 +159,7 @@ func (c *Configuration) setDefaults() {
 
 type conn struct {
 	Configuration
+	convert *converter
 	conn    *vtgateconn.VTGateConn
 	session *vtgateconn.VTGateSession
 }
@@ -208,7 +215,7 @@ func (c *conn) Exec(query string, args []driver.Value) (driver.Result, error) {
 	if c.Streaming {
 		return nil, errors.New("Exec not allowed for streaming connections")
 	}
-	bindVars, err := buildBindVars(args)
+	bindVars, err := c.convert.buildBindVars(args)
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +229,7 @@ func (c *conn) Exec(query string, args []driver.Value) (driver.Result, error) {
 
 func (c *conn) Query(query string, args []driver.Value) (driver.Rows, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
-	bindVars, err := buildBindVars(args)
+	bindVars, err := c.convert.buildBindVars(args)
 	if err != nil {
 		return nil, err
 	}
@@ -233,7 +240,7 @@ func (c *conn) Query(query string, args []driver.Value) (driver.Rows, error) {
 			cancel()
 			return nil, err
 		}
-		return newStreamingRows(stream, cancel), nil
+		return newStreamingRows(stream, cancel, c.convert), nil
 	}
 	// Do not cancel in case of a streaming query.
 	// It will be called when streamingRows is closed later.
@@ -243,7 +250,7 @@ func (c *conn) Query(query string, args []driver.Value) (driver.Rows, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newRows(qr), nil
+	return newRows(qr, c.convert), nil
 }
 
 type stmt struct {
@@ -266,18 +273,6 @@ func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
 
 func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 	return s.c.Query(s.query, args)
-}
-
-func buildBindVars(args []driver.Value) (map[string]*querypb.BindVariable, error) {
-	bindVars := make(map[string]*querypb.BindVariable, len(args))
-	for i, v := range args {
-		bv, err := sqltypes.BuildBindVariable(v)
-		if err != nil {
-			return nil, err
-		}
-		bindVars[fmt.Sprintf("v%d", i+1)] = bv
-	}
-	return bindVars, nil
 }
 
 type result struct {

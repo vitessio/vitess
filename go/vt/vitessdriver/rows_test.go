@@ -84,7 +84,7 @@ func logMismatchedTypes(t *testing.T, gotRow, wantRow []driver.Value) {
 }
 
 func TestRows(t *testing.T) {
-	ri := newRows(&rowsResult1)
+	ri := newRows(&rowsResult1, &converter{})
 	wantCols := []string{
 		"field1",
 		"field2",
