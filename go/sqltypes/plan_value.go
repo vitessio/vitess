@@ -18,10 +18,10 @@ package sqltypes
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 // PlanValue represents a value or a list of values for
@@ -87,7 +87,7 @@ func (pv PlanValue) ResolveValue(bindVars map[string]*querypb.BindVariable) (Val
 	case pv.ListKey != "" || pv.Values != nil:
 		// This code is unreachable because the parser does not allow
 		// multi-value constructs where a single value is expected.
-		return NULL, errors.New("a list was supplied where a single value was expected")
+		return NULL, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "a list was supplied where a single value was expected")
 	}
 	return NULL, nil
 }
@@ -95,10 +95,10 @@ func (pv PlanValue) ResolveValue(bindVars map[string]*querypb.BindVariable) (Val
 func (pv PlanValue) lookupValue(bindVars map[string]*querypb.BindVariable) (*querypb.BindVariable, error) {
 	bv, ok := bindVars[pv.Key]
 	if !ok {
-		return nil, fmt.Errorf("missing bind var %s", pv.Key)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "missing bind var %s", pv.Key)
 	}
 	if bv.Type == querypb.Type_TUPLE {
-		return nil, fmt.Errorf("TUPLE was supplied for single value bind var %s", pv.ListKey)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "TUPLE was supplied for single value bind var %s", pv.ListKey)
 	}
 	return bv, nil
 }
@@ -129,16 +129,16 @@ func (pv PlanValue) ResolveList(bindVars map[string]*querypb.BindVariable) ([]Va
 	}
 	// This code is unreachable because the parser does not allow
 	// single value constructs where multiple values are expected.
-	return nil, errors.New("a single value was supplied where a list was expected")
+	return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "a single value was supplied where a list was expected")
 }
 
 func (pv PlanValue) lookupList(bindVars map[string]*querypb.BindVariable) (*querypb.BindVariable, error) {
 	bv, ok := bindVars[pv.ListKey]
 	if !ok {
-		return nil, fmt.Errorf("missing bind var %s", pv.ListKey)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "missing bind var %s", pv.ListKey)
 	}
 	if bv.Type != querypb.Type_TUPLE {
-		return nil, fmt.Errorf("single value was supplied for TUPLE bind var %s", pv.ListKey)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "single value was supplied for TUPLE bind var %s", pv.ListKey)
 	}
 	return bv, nil
 }
@@ -171,7 +171,7 @@ func rowCount(pvs []PlanValue, bindVars map[string]*querypb.BindVariable) (int, 
 		case l:
 			return nil
 		default:
-			return errors.New("mismatch in number of column values")
+			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "mismatch in number of column values")
 		}
 	}
 

@@ -82,7 +82,7 @@ func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
 	}
 	ks, ok := vc.executor.VSchema().Keyspaces[vc.target.Keyspace]
 	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "keyspace %s not found in vschema", vc.target.Keyspace)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace %s not found in vschema", vc.target.Keyspace)
 	}
 	return ks.Keyspace, nil
 }

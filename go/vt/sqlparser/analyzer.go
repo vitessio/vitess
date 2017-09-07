@@ -19,13 +19,14 @@ package sqlparser
 // analyzer.go contains utility analysis functions.
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"unicode"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 // These constants are used to identify the SQL statement type.
@@ -168,7 +169,7 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 		case IntVal:
 			n, err := sqltypes.NewIntegral(string(node.Val))
 			if err != nil {
-				return sqltypes.PlanValue{}, err
+				return sqltypes.PlanValue{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 			}
 			return sqltypes.PlanValue{Value: n}, nil
 		case StrVal:
@@ -176,7 +177,7 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 		case HexVal:
 			v, err := node.HexDecode()
 			if err != nil {
-				return sqltypes.PlanValue{}, err
+				return sqltypes.PlanValue{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 			}
 			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, v)}, nil
 		}
@@ -192,7 +193,7 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 				return sqltypes.PlanValue{}, err
 			}
 			if innerpv.ListKey != "" || innerpv.Values != nil {
-				return sqltypes.PlanValue{}, errors.New("unsupported: nested lists")
+				return sqltypes.PlanValue{}, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: nested lists")
 			}
 			pv.Values = append(pv.Values, innerpv)
 		}
@@ -200,7 +201,7 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 	case *NullVal:
 		return sqltypes.PlanValue{}, nil
 	}
-	return sqltypes.PlanValue{}, fmt.Errorf("expression is too complex '%v'", String(node))
+	return sqltypes.PlanValue{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expression is too complex '%v'", String(node))
 }
 
 // StringIn is a convenience function that returns

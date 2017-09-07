@@ -39,7 +39,6 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	tacl "github.com/youtube/vitess/go/vt/tableacl/acl"
-	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/rules"
@@ -48,7 +47,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/txserializer"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 //_______________________________________________
@@ -301,8 +299,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	defer qe.mu.RUnlock()
 	splan, err := planbuilder.Build(sql, qe.tables)
 	if err != nil {
-		// TODO(sougou): Inspect to see if Build can return coded error.
-		return nil, vterrors.New(vtrpcpb.Code_UNKNOWN, err.Error())
+		return nil, err
 	}
 	plan := &TabletPlan{Plan: splan}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
@@ -340,8 +337,7 @@ func (qe *QueryEngine) GetStreamPlan(sql string) (*TabletPlan, error) {
 	defer qe.mu.RUnlock()
 	splan, err := planbuilder.BuildStreaming(sql, qe.tables)
 	if err != nil {
-		// TODO(sougou): Inspect to see if BuildStreaming can return coded error.
-		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
+		return nil, err
 	}
 	plan := &TabletPlan{Plan: splan}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
@@ -355,8 +351,7 @@ func (qe *QueryEngine) GetMessageStreamPlan(name string) (*TabletPlan, error) {
 	defer qe.mu.RUnlock()
 	splan, err := planbuilder.BuildMessageStreaming(name, qe.tables)
 	if err != nil {
-		// TODO(sougou): Inspect to see if BuildMessageStreaming can return coded error.
-		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
+		return nil, err
 	}
 	plan := &TabletPlan{Plan: splan}
 	plan.Rules = qe.queryRuleSources.FilterByPlan("stream from "+name, plan.PlanID, plan.TableName().String())
