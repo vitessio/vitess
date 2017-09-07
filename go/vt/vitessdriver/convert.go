@@ -26,27 +26,22 @@ import (
 )
 
 type converter struct {
-	datetime bool
 	location *time.Location
 }
 
 func (cv *converter) ToNative(v sqltypes.Value) (interface{}, error) {
-	if cv.datetime {
-		switch v.Type() {
-		case sqltypes.Datetime:
-			return DatetimeToNative(v, cv.location)
-		case sqltypes.Date:
-			return DateToNative(v, cv.location)
-		}
+	switch v.Type() {
+	case sqltypes.Datetime:
+		return DatetimeToNative(v, cv.location)
+	case sqltypes.Date:
+		return DateToNative(v, cv.location)
 	}
 	return sqltypes.ToNative(v)
 }
 
 func (cv *converter) BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
-	if cv.datetime {
-		if t, ok := v.(time.Time); ok {
-			return sqltypes.ValueBindVariable(NewDatetime(t, cv.location)), nil
-		}
+	if t, ok := v.(time.Time); ok {
+		return sqltypes.ValueBindVariable(NewDatetime(t, cv.location)), nil
 	}
 	return sqltypes.BuildBindVariable(v)
 }
@@ -114,7 +109,6 @@ func (cv *converter) bindVarsFromNamedValues(args []driver.NamedValue) (map[stri
 
 func newConverter(cfg *Configuration) (c *converter, err error) {
 	c = &converter{
-		datetime: cfg.ConvertDatetime,
 		location: time.UTC,
 	}
 	if cfg.DefaultLocation != "" {
