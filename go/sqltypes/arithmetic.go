@@ -284,7 +284,7 @@ func newIntegralNumeric(v Value) (result numeric, err error) {
 	case v.IsSigned():
 		result.ival, err = strconv.ParseInt(str, 10, 64)
 		if err != nil {
-			err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value %s: %v", str, err)
+			err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 			return
 		}
 		result.typ = Int64
@@ -292,7 +292,7 @@ func newIntegralNumeric(v Value) (result numeric, err error) {
 	case v.IsUnsigned():
 		result.uval, err = strconv.ParseUint(str, 10, 64)
 		if err != nil {
-			err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value %s: %v", str, err)
+			err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 			return
 		}
 		result.typ = Uint64
