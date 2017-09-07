@@ -112,8 +112,11 @@ func TestBindVars(t *testing.T) {
 		}},
 		outErr: errNoIntermixing.Error(),
 	}}
+
+	converter := &converter{}
+
 	for _, tc := range testcases {
-		bv, err := bindVarsFromNamedValues(tc.in)
+		bv, err := converter.bindVarsFromNamedValues(tc.in)
 		if bv != nil {
 			if !reflect.DeepEqual(bv, tc.out) {
 				t.Errorf("%s: %v, want %v", tc.desc, bv, tc.out)
