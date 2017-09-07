@@ -35,7 +35,7 @@ var (
 	maxFailoverDuration     = flag.Duration("buffer_max_failover_duration", 20*time.Second, "Stop buffering completely if a failover takes longer than this duration.")
 	minTimeBetweenFailovers = flag.Duration("buffer_min_time_between_failovers", 1*time.Minute, "Minimum time between the end of a failover and the start of the next one (tracked per shard). Faster consecutive failovers will not trigger buffering.")
 
-	drainConcurrency = flag.Int("buffer_drain_concurrency", 1, "Maximum number of requests retried simultaneously.")
+	drainConcurrency = flag.Int("buffer_drain_concurrency", 1, "Maximum number of requests retried simultaneously. More concurrency will increase the load on the MASTER vttablet when draining the buffer.")
 
 	shards = flag.String("buffer_keyspace_shards", "", "If not empty, limit buffering to these entries (comma separated). Entry format: keyspace or keyspace/shard. Requires --enable_buffer=true.")
 )
