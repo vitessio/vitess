@@ -492,7 +492,7 @@ lock service. ZooKeeper is included in the Vitess distribution.
     After running this command, go back to the **Shard Status** page
     in the *vtctld* web interface. When you refresh the
     page, you should see that one *vttablet* is the master,
-    two are replicas and the two are rdonly.
+    two are replicas and two are rdonly.
 
     You can also see this on the command line:
 
