@@ -108,32 +108,16 @@ func TestOpen(t *testing.T) {
 			},
 		},
 		{
-			desc:    "Open() with native conversion options",
-			connStr: fmt.Sprintf(`{"address": "%s", "timeout": %d, "convertdatetime": true}`, testAddress, int64(30*time.Second)),
-			conn: &conn{
-				Configuration: Configuration{
-					Timeout:         30 * time.Second,
-					ConvertDatetime: true,
-				},
-				convert: &converter{
-					datetime: true,
-					location: time.UTC,
-				},
-			},
-		},
-		{
 			desc: "Open() with custom timezone",
 			connStr: fmt.Sprintf(
-				`{"address": "%s", "timeout": %d, "convertdatetime": true, "defaultlocation": "America/Los_Angeles"}`,
+				`{"address": "%s", "timeout": %d, "defaultlocation": "America/Los_Angeles"}`,
 				testAddress, int64(30*time.Second)),
 			conn: &conn{
 				Configuration: Configuration{
 					Timeout:         30 * time.Second,
-					ConvertDatetime: true,
 					DefaultLocation: "America/Los_Angeles",
 				},
 				convert: &converter{
-					datetime: true,
 					location: locationPST,
 				},
 			},
@@ -222,10 +206,9 @@ func TestConfigurationToJSON(t *testing.T) {
 		Target:          "ks2",
 		Streaming:       true,
 		Timeout:         1 * time.Second,
-		ConvertDatetime: true,
 		DefaultLocation: "Local",
 	}
-	want := `{"Protocol":"some-invalid-protocol","Address":"","Target":"ks2","Streaming":true,"Timeout":1000000000,"ConvertDatetime":true,"DefaultLocation":"Local"}`
+	want := `{"Protocol":"some-invalid-protocol","Address":"","Target":"ks2","Streaming":true,"Timeout":1000000000,"DefaultLocation":"Local"}`
 
 	json, err := config.toJSON()
 	if err != nil {
@@ -368,11 +351,10 @@ func TestDatetimeQuery(t *testing.T) {
 		{
 			desc: "datetime & date, vtgate",
 			config: Configuration{
-				Protocol:        "grpc",
-				Address:         testAddress,
-				Target:          "@rdonly",
-				Timeout:         30 * time.Second,
-				ConvertDatetime: true,
+				Protocol: "grpc",
+				Address:  testAddress,
+				Target:   "@rdonly",
+				Timeout:  30 * time.Second,
 			},
 			requestName: "requestDates",
 		},
@@ -383,7 +365,6 @@ func TestDatetimeQuery(t *testing.T) {
 				Address:         testAddress,
 				Target:          "@rdonly",
 				Timeout:         30 * time.Second,
-				ConvertDatetime: true,
 				DefaultLocation: "Local",
 			},
 			requestName: "requestDates",
@@ -391,22 +372,11 @@ func TestDatetimeQuery(t *testing.T) {
 		{
 			desc: "datetime & date, streaming, vtgate",
 			config: Configuration{
-				Protocol:        "grpc",
-				Address:         testAddress,
-				Target:          "@rdonly",
-				Timeout:         30 * time.Second,
-				Streaming:       true,
-				ConvertDatetime: true,
-			},
-			requestName: "requestDates",
-		},
-		{
-			desc: "datetime & date (no conversion), vtgate",
-			config: Configuration{
-				Protocol: "grpc",
-				Address:  testAddress,
-				Target:   "@rdonly",
-				Timeout:  30 * time.Second,
+				Protocol:  "grpc",
+				Address:   testAddress,
+				Target:    "@rdonly",
+				Timeout:   30 * time.Second,
+				Streaming: true,
 			},
 			requestName: "requestDates",
 		},
@@ -463,57 +433,20 @@ func TestDatetimeQuery(t *testing.T) {
 			time.Time{},
 		}}
 
-		rawValues := []struct {
-			fieldDatetime string
-			fieldDate     string
-		}{{
-			"2009-03-29 17:22:11",
-			"2006-07-02",
-		}, {
-			"0000-00-00 00:00:00",
-			"0000-00-00",
-		}}
-
-		if tc.config.ConvertDatetime {
-			for r.Next() {
-				var fieldDatetime time.Time
-				var fieldDate time.Time
-				err := r.Scan(&fieldDatetime, &fieldDate)
-				if err != nil {
-					t.Errorf("%v: %v", tc.desc, err)
-				}
-				if want := wantValues[count].fieldDatetime; fieldDatetime != want {
-					t.Errorf("%v: wrong value for fieldDatetime: got: %v want: %v", tc.desc, fieldDatetime, want)
-				}
-				if want := wantValues[count].fieldDate; fieldDate != want {
-					t.Errorf("%v: wrong value for fieldDate: got: %v want: %v", tc.desc, fieldDate, want)
-				}
-				count++
+		for r.Next() {
+			var fieldDatetime time.Time
+			var fieldDate time.Time
+			err := r.Scan(&fieldDatetime, &fieldDate)
+			if err != nil {
+				t.Errorf("%v: %v", tc.desc, err)
 			}
-		} else {
-			for r.Next() {
-				var t1, t2 time.Time
-				var fieldDatetime []byte
-				var fieldDate []byte
-
-				err := r.Scan(&t1, &t2)
-				if err == nil {
-					t.Errorf("%v: storing driver.Value into time.Time should be unsupported", tc.desc)
-				}
-
-				err = r.Scan(&fieldDatetime, &fieldDate)
-				if err != nil {
-					t.Errorf("%v: %v", tc.desc, err)
-				}
-				if want := rawValues[count].fieldDatetime; string(fieldDatetime) != want {
-					t.Errorf("%v: wrong value for fieldDatetime: got: %v want: %v", tc.desc, fieldDatetime, want)
-				}
-				if want := rawValues[count].fieldDate; string(fieldDate) != want {
-					t.Errorf("%v: wrong value for fieldDate: got: %v want: %v", tc.desc, fieldDate, want)
-				}
-
-				count++
+			if want := wantValues[count].fieldDatetime; fieldDatetime != want {
+				t.Errorf("%v: wrong value for fieldDatetime: got: %v want: %v", tc.desc, fieldDatetime, want)
 			}
+			if want := wantValues[count].fieldDate; fieldDate != want {
+				t.Errorf("%v: wrong value for fieldDate: got: %v want: %v", tc.desc, fieldDate, want)
+			}
+			count++
 		}
 
 		if count != len(wantValues) {

@@ -132,12 +132,6 @@ type Configuration struct {
 	// TODO(sougou): deprecate once we switch to go1.8.
 	Timeout time.Duration
 
-	// ConvertDatetime must be set to enable native conversion
-	// between MySQL DATETIME and DATE data into Go's time.Time
-	// structs. If not set, these column types will be scanned
-	// as their raw []byte representation
-	ConvertDatetime bool
-
 	// DefaultLocation is the timezone string that will be used
 	// when converting DATETIME and DATE into time.Time.
 	// This setting has no effect if ConvertDatetime is not set.

@@ -25,12 +25,7 @@ import (
 )
 
 func TestToNative(t *testing.T) {
-	convertTime := &converter{
-		datetime: true,
-	}
-
 	convertTimeLocal := &converter{
-		datetime: true,
 		location: time.Local,
 	}
 
@@ -39,33 +34,25 @@ func TestToNative(t *testing.T) {
 		in      sqltypes.Value
 		out     interface{}
 	}{{
-		convert: convertTime,
+		convert: &converter{},
 		in:      sqltypes.TestValue(sqltypes.Int32, "1"),
 		out:     int64(1),
 	}, {
-		convert: convertTime,
+		convert: &converter{},
 		in:      sqltypes.TestValue(sqltypes.Timestamp, "2012-02-24 23:19:43"),
 		out:     []byte("2012-02-24 23:19:43"), // TIMESTAMP is not handled
 	}, {
-		convert: convertTime,
+		convert: &converter{},
 		in:      sqltypes.TestValue(sqltypes.Time, "23:19:43"),
 		out:     []byte("23:19:43"), // TIME is not handled
 	}, {
-		convert: convertTime,
+		convert: &converter{},
 		in:      sqltypes.TestValue(sqltypes.Date, "2012-02-24"),
 		out:     time.Date(2012, 02, 24, 0, 0, 0, 0, time.UTC),
 	}, {
-		convert: convertTime,
+		convert: &converter{},
 		in:      sqltypes.TestValue(sqltypes.Datetime, "2012-02-24 23:19:43"),
 		out:     time.Date(2012, 02, 24, 23, 19, 43, 0, time.UTC),
-	}, {
-		convert: &converter{},
-		in:      sqltypes.TestValue(sqltypes.Date, "2012-02-24"),
-		out:     []byte("2012-02-24"),
-	}, {
-		convert: &converter{},
-		in:      sqltypes.TestValue(sqltypes.Datetime, "2012-02-24 23:19:43"),
-		out:     []byte("2012-02-24 23:19:43"),
 	}, {
 		convert: convertTimeLocal,
 		in:      sqltypes.TestValue(sqltypes.Datetime, "2012-02-24 23:19:43"),
