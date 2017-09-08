@@ -21,17 +21,18 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
-	"strings"
 	"testing"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 func TestAdd(t *testing.T) {
 	tcases := []struct {
 		v1, v2 Value
 		out    Value
-		err    string
+		err    error
 	}{{
 		// All nulls.
 		v1:  NULL,
@@ -56,32 +57,32 @@ func TestAdd(t *testing.T) {
 		// Make sure underlying error is returned for LHS.
 		v1:  TestValue(Int64, "1.2"),
 		v2:  NewInt64(2),
-		err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
 	}, {
 		// Make sure underlying error is returned for RHS.
 		v1:  NewInt64(2),
 		v2:  TestValue(Int64, "1.2"),
-		err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
 	}, {
 		// Make sure underlying error is returned while adding.
 		v1:  NewInt64(-1),
 		v2:  NewUint64(2),
-		err: "cannot add a negative number to an unsigned integer: 2, -1",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot add a negative number to an unsigned integer: 2, -1"),
 	}, {
 		// Make sure underlying error is returned while converting.
 		v1:  NewFloat64(1),
 		v2:  NewFloat64(2),
-		err: "unexpected type conversion: FLOAT64 to INT64",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: FLOAT64 to INT64"),
 	}}
 	for _, tcase := range tcases {
 		got, err := NullsafeAdd(tcase.v1, tcase.v2, Int64)
-		errstr := ""
-		if err != nil {
-			errstr = err.Error()
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("Add(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
 		}
-		if errstr != tcase.err {
-			t.Errorf("Add(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), err, tcase.err)
+		if tcase.err != nil {
+			continue
 		}
+
 		if !reflect.DeepEqual(got, tcase.out) {
 			t.Errorf("Add(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
 		}
@@ -92,7 +93,7 @@ func TestNullsafeCompare(t *testing.T) {
 	tcases := []struct {
 		v1, v2 Value
 		out    int
-		err    string
+		err    error
 	}{{
 		// All nulls.
 		v1:  NULL,
@@ -112,17 +113,17 @@ func TestNullsafeCompare(t *testing.T) {
 		// LHS Text
 		v1:  TestValue(VarChar, "abcd"),
 		v2:  TestValue(VarChar, "abcd"),
-		err: "types are not comparable: VARCHAR vs VARCHAR",
+		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
 	}, {
 		// Make sure underlying error is returned for LHS.
 		v1:  TestValue(Int64, "1.2"),
 		v2:  NewInt64(2),
-		err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
 	}, {
 		// Make sure underlying error is returned for RHS.
 		v1:  NewInt64(2),
 		v2:  TestValue(Int64, "1.2"),
-		err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
 	}, {
 		// Numeric equal.
 		v1:  NewInt64(1),
@@ -146,13 +147,13 @@ func TestNullsafeCompare(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		got, err := NullsafeCompare(tcase.v1, tcase.v2)
-		errstr := ""
-		if err != nil {
-			errstr = err.Error()
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
 		}
-		if errstr != tcase.err {
-			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), err, tcase.err)
+		if tcase.err != nil {
+			continue
 		}
+
 		if got != tcase.out {
 			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), got, tcase.out)
 		}
@@ -164,7 +165,7 @@ func TestCast(t *testing.T) {
 		typ querypb.Type
 		v   Value
 		out Value
-		err string
+		err error
 	}{{
 		typ: VarChar,
 		v:   NULL,
@@ -184,7 +185,7 @@ func TestCast(t *testing.T) {
 	}, {
 		typ: Int24,
 		v:   TestValue(VarChar, "bad int"),
-		err: "invalid syntax",
+		err: vterrors.New(vtrpcpb.Code_UNKNOWN, `strconv.ParseInt: parsing "bad int": invalid syntax`),
 	}, {
 		typ: Uint64,
 		v:   TestValue(Uint32, "32"),
@@ -196,7 +197,7 @@ func TestCast(t *testing.T) {
 	}, {
 		typ: Uint24,
 		v:   TestValue(Int64, "-1"),
-		err: "invalid syntax",
+		err: vterrors.New(vtrpcpb.Code_UNKNOWN, `strconv.ParseUint: parsing "-1": invalid syntax`),
 	}, {
 		typ: Float64,
 		v:   TestValue(Int64, "64"),
@@ -216,7 +217,7 @@ func TestCast(t *testing.T) {
 	}, {
 		typ: Float64,
 		v:   TestValue(VarChar, "bad float"),
-		err: "invalid syntax",
+		err: vterrors.New(vtrpcpb.Code_UNKNOWN, `strconv.ParseFloat: parsing "bad float": invalid syntax`),
 	}, {
 		typ: VarChar,
 		v:   TestValue(Int64, "64"),
@@ -240,19 +241,17 @@ func TestCast(t *testing.T) {
 	}, {
 		typ: VarChar,
 		v:   TestValue(Expression, "bad string"),
-		err: "EXPRESSION(bad string) cannot be cast to VARCHAR",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "EXPRESSION(bad string) cannot be cast to VARCHAR"),
 	}}
 	for _, tcase := range tcases {
 		got, err := Cast(tcase.v, tcase.typ)
-		if tcase.err != "" {
-			if err == nil || !strings.Contains(err.Error(), tcase.err) {
-				t.Errorf("Cast(%v) error: %v, must contain %s", tcase.v, err, tcase.err)
-			}
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("Cast(%v) error: %v, want %v", tcase.v, vterrors.Print(err), vterrors.Print(tcase.err))
+		}
+		if tcase.err != nil {
 			continue
 		}
-		if err != nil {
-			t.Errorf("Cast(%v) error: %v", tcase.v, err)
-		}
+
 		if !reflect.DeepEqual(got, tcase.out) {
 			t.Errorf("Cast(%v): %v, want %v", tcase.v, got, tcase.out)
 		}
@@ -263,13 +262,13 @@ func TestToUint64(t *testing.T) {
 	tcases := []struct {
 		v   Value
 		out uint64
-		err string
+		err error
 	}{{
 		v:   TestValue(VarChar, "abcd"),
-		err: "could not parse value: abcd",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: abcd"),
 	}, {
 		v:   NewInt64(-1),
-		err: "negative number cannot be converted to unsigned: -1",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "negative number cannot be converted to unsigned: -1"),
 	}, {
 		v:   NewInt64(1),
 		out: 1,
@@ -279,13 +278,13 @@ func TestToUint64(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		got, err := ToUint64(tcase.v)
-		errstr := ""
-		if err != nil {
-			errstr = err.Error()
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("ToUint64(%v) error: %v, want %v", tcase.v, vterrors.Print(err), vterrors.Print(tcase.err))
 		}
-		if errstr != tcase.err {
-			t.Errorf("ToUint64(%v) error: %v, want %v", tcase.v, err, tcase.err)
+		if tcase.err != nil {
+			continue
 		}
+
 		if got != tcase.out {
 			t.Errorf("ToUint64(%v): %v, want %v", tcase.v, got, tcase.out)
 		}
@@ -296,13 +295,13 @@ func TestToInt64(t *testing.T) {
 	tcases := []struct {
 		v   Value
 		out int64
-		err string
+		err error
 	}{{
 		v:   TestValue(VarChar, "abcd"),
-		err: "could not parse value: abcd",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: abcd"),
 	}, {
 		v:   NewUint64(18446744073709551615),
-		err: "unsigned number overflows int64 value: 18446744073709551615",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsigned number overflows int64 value: 18446744073709551615"),
 	}, {
 		v:   NewInt64(1),
 		out: 1,
@@ -312,13 +311,13 @@ func TestToInt64(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		got, err := ToInt64(tcase.v)
-		errstr := ""
-		if err != nil {
-			errstr = err.Error()
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("ToInt64(%v) error: %v, want %v", tcase.v, vterrors.Print(err), vterrors.Print(tcase.err))
 		}
-		if errstr != tcase.err {
-			t.Errorf("ToInt64(%v) error: %v, want %s", tcase.v, err, tcase.err)
+		if tcase.err != nil {
+			continue
 		}
+
 		if got != tcase.out {
 			t.Errorf("ToInt64(%v): %v, want %v", tcase.v, got, tcase.out)
 		}
@@ -329,10 +328,10 @@ func TestToFloat64(t *testing.T) {
 	tcases := []struct {
 		v   Value
 		out float64
-		err string
+		err error
 	}{{
 		v:   TestValue(VarChar, "abcd"),
-		err: "could not parse value: abcd",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: abcd"),
 	}, {
 		v:   NewInt64(1),
 		out: 1,
@@ -345,13 +344,13 @@ func TestToFloat64(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		got, err := ToFloat64(tcase.v)
-		errstr := ""
-		if err != nil {
-			errstr = err.Error()
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("ToFloat64(%v) error: %v, want %v", tcase.v, vterrors.Print(err), vterrors.Print(tcase.err))
 		}
-		if errstr != tcase.err {
-			t.Errorf("ToFloat64(%v) error: %v, want %s", tcase.v, err, tcase.err)
+		if tcase.err != nil {
+			continue
 		}
+
 		if got != tcase.out {
 			t.Errorf("ToFloat64(%v): %v, want %v", tcase.v, got, tcase.out)
 		}
@@ -459,9 +458,9 @@ func TestToNative(t *testing.T) {
 
 	// Test Expression failure.
 	_, err := ToNative(TestValue(Expression, "aa"))
-	want := "EXPRESSION(aa) cannot be converted to a go type"
-	if err == nil || err.Error() != want {
-		t.Errorf("ToNative(EXPRESSION): %v, want %s", err, want)
+	want := vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "EXPRESSION(aa) cannot be converted to a go type")
+	if !vterrors.Equals(err, want) {
+		t.Errorf("ToNative(EXPRESSION): %v, want %v", vterrors.Print(err), vterrors.Print(want))
 	}
 }
 
@@ -469,7 +468,7 @@ func TestNewNumeric(t *testing.T) {
 	tcases := []struct {
 		v   Value
 		out numeric
-		err string
+		err error
 	}{{
 		v:   NewInt64(1),
 		out: numeric{typ: Int64, ival: 1},
@@ -490,29 +489,29 @@ func TestNewNumeric(t *testing.T) {
 	}, {
 		// Only valid Int64 allowed if type is Int64.
 		v:   TestValue(Int64, "1.2"),
-		err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
 	}, {
 		// Only valid Uint64 allowed if type is Uint64.
 		v:   TestValue(Uint64, "1.2"),
-		err: "strconv.ParseUint: parsing \"1.2\": invalid syntax",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseUint: parsing \"1.2\": invalid syntax"),
 	}, {
 		// Only valid Float64 allowed if type is Float64.
 		v:   TestValue(Float64, "abcd"),
-		err: "strconv.ParseFloat: parsing \"abcd\": invalid syntax",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseFloat: parsing \"abcd\": invalid syntax"),
 	}, {
 		v:   TestValue(VarChar, "abcd"),
-		err: "could not parse value: abcd",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: abcd"),
 	}}
 	for _, tcase := range tcases {
 		got, err := newNumeric(tcase.v)
-		errstr := ""
-		if err != nil {
-			errstr = err.Error()
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("newNumeric(%s) error: %v, want %v", printValue(tcase.v), vterrors.Print(err), vterrors.Print(tcase.err))
 		}
-		if errstr != tcase.err {
-			t.Errorf("newNumeric(%s) error: %v, want %v", printValue(tcase.v), err, tcase.err)
+		if tcase.err == nil {
+			continue
 		}
-		if tcase.err == "" && got != tcase.out {
+
+		if got != tcase.out {
 			t.Errorf("newNumeric(%s): %v, want %v", printValue(tcase.v), got, tcase.out)
 		}
 	}
@@ -522,7 +521,7 @@ func TestNewIntegralNumeric(t *testing.T) {
 	tcases := []struct {
 		v   Value
 		out numeric
-		err string
+		err error
 	}{{
 		v:   NewInt64(1),
 		out: numeric{typ: Int64, ival: 1},
@@ -543,24 +542,24 @@ func TestNewIntegralNumeric(t *testing.T) {
 	}, {
 		// Only valid Int64 allowed if type is Int64.
 		v:   TestValue(Int64, "1.2"),
-		err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
 	}, {
 		// Only valid Uint64 allowed if type is Uint64.
 		v:   TestValue(Uint64, "1.2"),
-		err: "strconv.ParseUint: parsing \"1.2\": invalid syntax",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseUint: parsing \"1.2\": invalid syntax"),
 	}, {
 		v:   TestValue(VarChar, "abcd"),
-		err: "could not parse value: abcd",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: abcd"),
 	}}
 	for _, tcase := range tcases {
 		got, err := newIntegralNumeric(tcase.v)
-		errstr := ""
-		if err != nil {
-			errstr = err.Error()
+		if err != nil && !vterrors.Equals(err, tcase.err) {
+			t.Errorf("newIntegralNumeric(%s) error: %v, want %v", printValue(tcase.v), vterrors.Print(err), vterrors.Print(tcase.err))
 		}
-		if errstr != tcase.err {
-			t.Errorf("newIntegralNumeric(%s) error: %v, want %v", printValue(tcase.v), err, tcase.err)
+		if tcase.err == nil {
+			continue
 		}
+
 		if got != tcase.out {
 			t.Errorf("newIntegralNumeric(%s): %v, want %v", printValue(tcase.v), got, tcase.out)
 		}
@@ -571,7 +570,7 @@ func TestAddNumeric(t *testing.T) {
 	tcases := []struct {
 		v1, v2 numeric
 		out    numeric
-		err    string
+		err    error
 	}{{
 		v1:  numeric{typ: Int64, ival: 1},
 		v2:  numeric{typ: Int64, ival: 2},
@@ -609,7 +608,7 @@ func TestAddNumeric(t *testing.T) {
 	}, {
 		v1:  numeric{typ: Int64, ival: -1},
 		v2:  numeric{typ: Uint64, uval: 2},
-		err: "cannot add a negative number to an unsigned integer: 2, -1",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot add a negative number to an unsigned integer: 2, -1"),
 	}, {
 		// Uint64 overflow.
 		v1:  numeric{typ: Uint64, uval: 18446744073709551615},
@@ -618,13 +617,13 @@ func TestAddNumeric(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		got, err := addNumeric(tcase.v1, tcase.v2)
-		errstr := ""
-		if err != nil {
-			errstr = err.Error()
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("addNumeric(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
 		}
-		if errstr != tcase.err {
-			t.Errorf("addNumeric(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, err, tcase.err)
+		if tcase.err != nil {
+			continue
 		}
+
 		if got != tcase.out {
 			t.Errorf("addNumeric(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
 		}
@@ -683,7 +682,7 @@ func TestCastFromNumeric(t *testing.T) {
 		typ querypb.Type
 		v   numeric
 		out Value
-		err string
+		err error
 	}{{
 		typ: Int64,
 		v:   numeric{typ: Int64, ival: 1},
@@ -691,15 +690,15 @@ func TestCastFromNumeric(t *testing.T) {
 	}, {
 		typ: Int64,
 		v:   numeric{typ: Uint64, uval: 1},
-		err: "unexpected type conversion: UINT64 to INT64",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: UINT64 to INT64"),
 	}, {
 		typ: Int64,
 		v:   numeric{typ: Float64, fval: 1.2e-16},
-		err: "unexpected type conversion: FLOAT64 to INT64",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: FLOAT64 to INT64"),
 	}, {
 		typ: Uint64,
 		v:   numeric{typ: Int64, ival: 1},
-		err: "unexpected type conversion: INT64 to UINT64",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: INT64 to UINT64"),
 	}, {
 		typ: Uint64,
 		v:   numeric{typ: Uint64, uval: 1},
@@ -707,7 +706,7 @@ func TestCastFromNumeric(t *testing.T) {
 	}, {
 		typ: Uint64,
 		v:   numeric{typ: Float64, fval: 1.2e-16},
-		err: "unexpected type conversion: FLOAT64 to UINT64",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: FLOAT64 to UINT64"),
 	}, {
 		typ: Float64,
 		v:   numeric{typ: Int64, ival: 1},
@@ -736,19 +735,19 @@ func TestCastFromNumeric(t *testing.T) {
 	}, {
 		typ: VarBinary,
 		v:   numeric{typ: Int64, ival: 1},
-		err: "unexpected type conversion to non-numeric: VARBINARY",
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion to non-numeric: VARBINARY"),
 	}}
 	for _, tcase := range tcases {
 		got, err := castFromNumeric(tcase.v, tcase.typ)
-		errstr := ""
-		if err != nil {
-			errstr = err.Error()
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("castFromNumeric(%v, %v) error: %v, want %v", tcase.v, tcase.typ, vterrors.Print(err), vterrors.Print(tcase.err))
 		}
-		if errstr != tcase.err {
-			t.Errorf("castFromNumeric(%v, %v) error: %v, want %v", tcase.v, tcase.typ, err, tcase.err)
+		if tcase.err != nil {
+			continue
 		}
+
 		if !reflect.DeepEqual(got, tcase.out) {
-			t.Errorf("castFromNumeric(%v, %v): %s, want %s", tcase.v, tcase.typ, printValue(got), printValue(tcase.out))
+			t.Errorf("castFromNumeric(%v, %v): %v, want %v", tcase.v, tcase.typ, printValue(got), printValue(tcase.out))
 		}
 	}
 }
@@ -888,7 +887,7 @@ func TestMin(t *testing.T) {
 	tcases := []struct {
 		v1, v2 Value
 		min    Value
-		err    string
+		err    error
 	}{{
 		v1:  NULL,
 		v2:  NULL,
@@ -916,17 +915,17 @@ func TestMin(t *testing.T) {
 	}, {
 		v1:  TestValue(VarChar, "aa"),
 		v2:  TestValue(VarChar, "aa"),
-		err: "types are not comparable: VARCHAR vs VARCHAR",
+		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
 	}}
 	for _, tcase := range tcases {
 		v, err := Min(tcase.v1, tcase.v2)
-		errstr := ""
-		if err != nil {
-			errstr = err.Error()
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("Min error: %v, want %v", vterrors.Print(err), vterrors.Print(tcase.err))
 		}
-		if errstr != tcase.err {
-			t.Errorf("Min error: %v, want %s", err, tcase.err)
+		if tcase.err != nil {
+			continue
 		}
+
 		if !reflect.DeepEqual(v, tcase.min) {
 			t.Errorf("Min(%v, %v): %v, want %v", tcase.v1, tcase.v2, v, tcase.min)
 		}
@@ -937,7 +936,7 @@ func TestMax(t *testing.T) {
 	tcases := []struct {
 		v1, v2 Value
 		max    Value
-		err    string
+		err    error
 	}{{
 		v1:  NULL,
 		v2:  NULL,
@@ -965,17 +964,17 @@ func TestMax(t *testing.T) {
 	}, {
 		v1:  TestValue(VarChar, "aa"),
 		v2:  TestValue(VarChar, "aa"),
-		err: "types are not comparable: VARCHAR vs VARCHAR",
+		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
 	}}
 	for _, tcase := range tcases {
 		v, err := Max(tcase.v1, tcase.v2)
-		errstr := ""
-		if err != nil {
-			errstr = err.Error()
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("Max error: %v, want %v", vterrors.Print(err), vterrors.Print(tcase.err))
 		}
-		if errstr != tcase.err {
-			t.Errorf("Max error: %v, want %s", err, tcase.err)
+		if tcase.err != nil {
+			continue
 		}
+
 		if !reflect.DeepEqual(v, tcase.max) {
 			t.Errorf("Max(%v, %v): %v, want %v", tcase.v1, tcase.v2, v, tcase.max)
 		}
