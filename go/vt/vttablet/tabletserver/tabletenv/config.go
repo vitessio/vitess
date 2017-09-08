@@ -79,6 +79,7 @@ func init() {
 	flag.BoolVar(&Config.EnableHotRowProtectionDryRun, "enable_hot_row_protection_dry_run", DefaultQsConfig.EnableHotRowProtectionDryRun, "If true, hot row protection is not enforced but logs if transactions would have been queued.")
 	flag.IntVar(&Config.HotRowProtectionMaxQueueSize, "hot_row_protection_max_queue_size", DefaultQsConfig.HotRowProtectionMaxQueueSize, "Maximum number of BeginExecute RPCs which will be queued for the same row (range).")
 	flag.IntVar(&Config.HotRowProtectionMaxGlobalQueueSize, "hot_row_protection_max_global_queue_size", DefaultQsConfig.HotRowProtectionMaxGlobalQueueSize, "Global queue limit across all row (ranges). Useful to prevent that the queue can grow unbounded.")
+	flag.IntVar(&Config.HotRowProtectionConcurrentTransactions, "hot_row_protection_concurrent_transactions", DefaultQsConfig.HotRowProtectionConcurrentTransactions, "Number of concurrent transactions let through to the txpool/MySQL for the same hot row. Should be > 1 to have enough 'ready' transactions in MySQL and benefit from a pipelining effect.")
 
 	flag.BoolVar(&Config.HeartbeatEnable, "heartbeat_enable", DefaultQsConfig.HeartbeatEnable, "If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.")
 	flag.DurationVar(&Config.HeartbeatInterval, "heartbeat_interval", DefaultQsConfig.HeartbeatInterval, "How frequently to read and write replication heartbeat.")
@@ -125,10 +126,11 @@ type TabletConfig struct {
 	TxThrottlerConfig           string
 	TxThrottlerHealthCheckCells []string
 
-	EnableHotRowProtection             bool
-	EnableHotRowProtectionDryRun       bool
-	HotRowProtectionMaxQueueSize       int
-	HotRowProtectionMaxGlobalQueueSize int
+	EnableHotRowProtection                 bool
+	EnableHotRowProtectionDryRun           bool
+	HotRowProtectionMaxQueueSize           int
+	HotRowProtectionMaxGlobalQueueSize     int
+	HotRowProtectionConcurrentTransactions int
 
 	HeartbeatEnable   bool
 	HeartbeatInterval time.Duration
@@ -180,6 +182,9 @@ var DefaultQsConfig = TabletConfig{
 	// Default value is the same as TransactionCap.
 	HotRowProtectionMaxQueueSize:       20,
 	HotRowProtectionMaxGlobalQueueSize: 1000,
+	// Allow more than 1 transaction for the same hot row through to have enough
+	// of them ready in MySQL and profit from a pipelining effect.
+	HotRowProtectionConcurrentTransactions: 5,
 
 	HeartbeatEnable:   false,
 	HeartbeatInterval: 1 * time.Second,
@@ -217,6 +222,9 @@ func VerifyConfig() error {
 	}
 	if globalSize, size := Config.HotRowProtectionMaxGlobalQueueSize, Config.HotRowProtectionMaxQueueSize; globalSize < size {
 		return fmt.Errorf("global queue size must be >= per row (range) queue size: -hot_row_protection_max_global_queue_size < hot_row_protection_max_queue_size (%v < %v)", globalSize, size)
+	}
+	if v := Config.HotRowProtectionConcurrentTransactions; v <= 0 {
+		return fmt.Errorf("-hot_row_protection_concurrent_transactions must be > 0 (specified value: %v)", v)
 	}
 	return nil
 }

@@ -328,7 +328,7 @@ func (e *Executor) handleSet(ctx context.Context, session *vtgatepb.Session, sql
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed value for character_set_results: %v", v)
 			}
-		case "net_write_timeout", "net_read_timeout":
+		case "net_write_timeout", "net_read_timeout", "lc_messages":
 			log.Warningf("Ignored inapplicable SET %v = %v", k, v)
 			warnings.Add("IgnoredSet", 1)
 		default:
@@ -395,7 +395,7 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 		}
 		ks, ok := e.VSchema().Keyspaces[target.Keyspace]
 		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "keyspace %s not found in vschema", target.Keyspace)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace %s not found in vschema", target.Keyspace)
 		}
 
 		var tables []string

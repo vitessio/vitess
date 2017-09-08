@@ -200,6 +200,22 @@ func TestLoadTableMessage(t *testing.T) {
 	}
 }
 
+func TestLoadTableWithBitColumn(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	for query, result := range getTestLoadTableWithBitColumnQueries() {
+		db.AddQuery(query, result)
+	}
+	table, err := newTestLoadTable("USER_TABLE", "test table", db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantValue := sqltypes.MakeTrusted(sqltypes.Bit, []byte{1, 0, 1})
+	if got, want := table.Columns[1].Default, wantValue; !reflect.DeepEqual(got, want) {
+		t.Errorf("Default bit value: %v, want %v", got, want)
+	}
+}
+
 func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Table, error) {
 	ctx := context.Background()
 	appParams := db.ConnParams()
@@ -299,6 +315,42 @@ func getMessageTableQueries() map[string]*sqltypes.Result {
 			Rows: [][]sqltypes.Value{
 				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "time_scheduled", false),
 				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 2, "id", false),
+			},
+		},
+	}
+}
+
+func getTestLoadTableWithBitColumnQueries() map[string]*sqltypes.Result {
+	return map[string]*sqltypes.Result{
+		"select * from test_table where 1 != 1": {
+			Fields: []*querypb.Field{{
+				Name: "pk",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "flags",
+				Type: sqltypes.Bit,
+			}},
+		},
+		"describe test_table": {
+			Fields:       mysql.DescribeTableFields,
+			RowsAffected: 2,
+			Rows: [][]sqltypes.Value{
+				mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
+				mysql.DescribeTableRow("flags", "int(11)", false, "", "b'101'"),
+			},
+		},
+		"show index from test_table": {
+			Fields:       mysql.ShowIndexFromTableFields,
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false),
+			},
+		},
+		"select b'101'": {
+			Fields:       sqltypes.MakeTestFields("", "varbinary"),
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				{sqltypes.MakeTrusted(sqltypes.VarBinary, []byte{1, 0, 1})},
 			},
 		},
 	}

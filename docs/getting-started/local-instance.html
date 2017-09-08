@@ -393,8 +393,8 @@ directly from <a href="https://downloads.mariadb.org/mariadb/">mariadb.org</a>.<
 missing a file too, <code class="prettyprint">/usr/share/mysql/my-default.cnf</code>. It would show as an
 error like <code class="prettyprint">Could not find my-default.cnf</code>. If you run into this, just add
 it with the following contents:</p>
-<div class="highlight"><pre><code class="language-ini" data-lang="ini"><span class="k">[mysqld]</span>
-<span class="na">sql_mode</span><span class="o">=</span><span class="s">NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES</span>
+<div class="highlight"><pre><code class="language-text" data-lang="text">[mysqld]
+sql_mode=NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES
 </code></pre></div></li>
 <li><p>Select a lock service from the options listed below. It is technically
 possible to use another lock server, but plugins currently exist only
@@ -719,15 +719,17 @@ brand new shard.</p>
 
 <p>After running this command, go back to the <strong>Shard Status</strong> page
 in the <em>vtctld</em> web interface. When you refresh the
-page, you should see that one <em>vttablet</em> is the master
-and the other two are replicas.</p>
+page, you should see that one <em>vttablet</em> is the master,
+two are replicas and two are rdonly.</p>
 
 <p>You can also see this on the command line:</p>
 <div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./lvtctl.sh ListAllTablets <span class="nb">test</span>
 <span class="c">### example output:</span>
-<span class="c"># test-0000000100 test_keyspace 0 master localhost:15100 localhost:33100 []</span>
-<span class="c"># test-0000000101 test_keyspace 0 replica localhost:15101 localhost:33101 []</span>
-<span class="c"># test-0000000102 test_keyspace 0 replica localhost:15102 localhost:33102 []</span>
+<span class="c"># test-0000000100 test_keyspace 0 master localhost:15100 localhost:17100 []</span>
+<span class="c"># test-0000000101 test_keyspace 0 replica localhost:15101 localhost:17101 []</span>
+<span class="c"># test-0000000102 test_keyspace 0 replica localhost:15102 localhost:17102 []</span>
+<span class="c"># test-0000000103 test_keyspace 0 rdonly localhost:15103 localhost:17103 []</span>
+<span class="c"># test-0000000104 test_keyspace 0 rdonly localhost:15104 localhost:17104 []</span>
 </code></pre></div></li>
 <li><p><strong>Create a table</strong></p>
 

@@ -104,6 +104,10 @@ func isNumber(t querypb.Type) bool {
 // neither binary or text.
 // querypb.Type_TUPLE is not included in this list
 // because it's not a valid Value type.
+// TODO(sougou): provide a categorization function
+// that returns enums, which will allow for cleaner
+// switch statements for those who want to cover types
+// by their category.
 const (
 	Null       = querypb.Type_NULL_TYPE
 	Int8       = querypb.Type_INT8

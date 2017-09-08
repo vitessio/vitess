@@ -20,8 +20,9 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var frameworkErrors = `fail failed:
@@ -30,8 +31,8 @@ Result mismatch:
 '[[2 1] [1 2]]'
 RowsAffected mismatch: 2, want 1
 Rewritten mismatch:
-'[select eid, id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1 select /* fail */ eid, id from vitess_a union select eid, id from vitess_b limit 10001]' does not match
-'[select eid id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1 select /* fail */ eid, id from vitess_a union select eid, id from vitess_b]'
+'["select eid, id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1" "select /* fail */ eid, id from vitess_a union select eid, id from vitess_b limit 10001"]' does not match
+'["select eid id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1" "select /* fail */ eid, id from vitess_a union select eid, id from vitess_b"]'
 Plan mismatch: PASS_SELECT, want aa`
 
 func TestTheFramework(t *testing.T) {
@@ -58,7 +59,8 @@ func TestTheFramework(t *testing.T) {
 	}
 }
 
-func TestNocacheCases(t *testing.T) {
+// TODO(sougou): break this up into smaller parts.
+func TestQueries(t *testing.T) {
 	client := framework.NewClient()
 
 	testCases := []framework.Testable{
@@ -1784,6 +1786,39 @@ func TestNocacheCases(t *testing.T) {
 					Result: [][]string{
 						{"0"},
 					},
+				},
+			},
+		},
+	}
+	for _, tcase := range testCases {
+		if err := tcase.Test("", client); err != nil {
+			t.Error(err)
+		}
+	}
+}
+
+func TestBitDefault(t *testing.T) {
+	client := framework.NewClient()
+
+	testCases := []framework.Testable{
+		&framework.MultiCase{
+			Name: "bit default value",
+			Cases: []framework.Testable{
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "insert into vitess_bit_default values()",
+					Rewritten: []string{
+						"insert into vitess_bit_default(id) values ('\x05') /* _stream vitess_bit_default (id ) ('BQ==' )",
+					},
+					RowsAffected: 1,
+				},
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select hex(id) from vitess_bit_default",
+					Result: [][]string{
+						{"5"},
+					},
+					RowsAffected: 1,
 				},
 			},
 		},

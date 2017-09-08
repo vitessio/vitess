@@ -123,6 +123,10 @@
 "select * from user join user_extra"
 "unsupported: '*' expression in cross-shard query"
 
+# Group by column number, used with non-aliased expression (duplicated code)
+"select * from user group by 1"
+"unsupported: '*' expression in cross-shard query"
+
 # Filtering on scatter aggregates
 "select count(*) a from user having a >10"
 "unsupported: filtering on results of aggregates"

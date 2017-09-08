@@ -248,6 +248,68 @@
     "Type": 1
   },
   {
+    "Name": "auto",
+    "Columns": [
+      {
+        "Name": "id",
+        "IsAuto": true
+      }
+    ],
+    "Indexes": [
+      {
+        "Name": "PRIMARY",
+        "Unique": true,
+        "Columns": [
+          "id"
+        ],
+        "Cardinality": [
+          1
+        ],
+        "DataColumns": [
+        ]
+      }
+    ],
+    "PKColumns": [
+      0
+    ],
+    "Type": 0
+  },
+  {
+    "Name": "with_defaults",
+    "Columns": [
+      {
+        "Name": "aid",
+        "Default": 3
+      },
+      {
+        "Name": "bid",
+        "Default": -2
+      },
+      {
+        "Name": "cid",
+        "Default": null
+      }
+    ],
+    "Indexes": [
+      {
+        "Name": "PRIMARY",
+        "Unique": true,
+        "Columns": [
+          "id"
+        ],
+        "Cardinality": [
+          1
+        ],
+        "DataColumns": [
+        ]
+      }
+    ],
+    "PKColumns": [
+      0
+    ],
+    "Type": 0
+  },
+  {
     "Name": "msg",
     "Columns": [
       {

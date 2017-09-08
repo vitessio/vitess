@@ -29,19 +29,21 @@ import (
 // streamingRows creates a database/sql/driver compliant Row iterator
 // for a streaming query.
 type streamingRows struct {
-	stream sqltypes.ResultStream
-	failed error
-	fields []*querypb.Field
-	qr     *sqltypes.Result
-	index  int
-	cancel context.CancelFunc
+	stream  sqltypes.ResultStream
+	failed  error
+	fields  []*querypb.Field
+	qr      *sqltypes.Result
+	index   int
+	cancel  context.CancelFunc
+	convert *converter
 }
 
 // newStreamingRows creates a new streamingRows from stream.
-func newStreamingRows(stream sqltypes.ResultStream, cancel context.CancelFunc) driver.Rows {
+func newStreamingRows(stream sqltypes.ResultStream, cancel context.CancelFunc, conv *converter) driver.Rows {
 	return &streamingRows{
-		stream: stream,
-		cancel: cancel,
+		stream:  stream,
+		cancel:  cancel,
+		convert: conv,
 	}
 }
 
@@ -84,7 +86,9 @@ func (ri *streamingRows) Next(dest []driver.Value) error {
 		ri.qr = qr
 		ri.index = 0
 	}
-	populateRow(dest, ri.qr.Rows[ri.index])
+	if err := ri.convert.populateRow(dest, ri.qr.Rows[ri.index]); err != nil {
+		return err
+	}
 	ri.index++
 	return nil
 }

@@ -182,7 +182,7 @@ func (me *Engine) GenerateLoadMessagesQuery(name string) (*sqlparser.ParsedQuery
 	defer me.mu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "message table %s not found in schema", name)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found in schema", name)
 	}
 	return mm.loadMessagesQuery, nil
 }
@@ -193,7 +193,7 @@ func (me *Engine) GenerateAckQuery(name string, ids []string) (string, map[strin
 	defer me.mu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
-		return "", nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "message table %s not found in schema", name)
+		return "", nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found in schema", name)
 	}
 	query, bv := mm.GenerateAckQuery(ids)
 	return query, bv, nil
@@ -205,7 +205,7 @@ func (me *Engine) GeneratePostponeQuery(name string, ids []string) (string, map[
 	defer me.mu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
-		return "", nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "message table %s not found in schema", name)
+		return "", nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found in schema", name)
 	}
 	query, bv := mm.GeneratePostponeQuery(ids)
 	return query, bv, nil
@@ -217,7 +217,7 @@ func (me *Engine) GeneratePurgeQuery(name string, timeCutoff int64) (string, map
 	defer me.mu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
-		return "", nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "message table %s not found in schema", name)
+		return "", nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found in schema", name)
 	}
 	query, bv := mm.GeneratePurgeQuery(timeCutoff)
 	return query, bv, nil

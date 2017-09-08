@@ -233,7 +233,7 @@ func forceEOF(yylex interface{}) {
 %type <byt> exists_opt
 %type <empty> not_exists_opt non_rename_operation to_opt index_opt constraint_opt using_opt
 %type <bytes> reserved_keyword non_reserved_keyword
-%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
+%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt charset_value
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id
 %type <empty> as_opt
 %type <empty> force_eof ddl_force_eof
@@ -403,7 +403,7 @@ table_name_list:
   }
 
 set_statement:
-  SET comment_opt charset_or_character_set reserved_sql_id force_eof
+  SET comment_opt charset_or_character_set charset_value force_eof
   {
     $$ = &Set{Comments: Comments($2), Charset: $4}
   }
@@ -417,6 +417,15 @@ charset_or_character_set:
 | CHARACTER SET
 | NAMES
 
+charset_value:
+  reserved_sql_id
+  {
+    $$ = $1
+  }
+| STRING
+  {
+    $$ = NewColIdent(string($1))
+  }
 
 create_statement:
   create_table_prefix table_spec
@@ -1016,6 +1025,10 @@ use_statement:
   USE table_id
   {
     $$ = &Use{DBName: $2}
+  }
+| USE
+  {
+    $$ = &Use{DBName:TableIdent{v:""}}
   }
 
 other_statement:

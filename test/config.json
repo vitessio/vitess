@@ -371,7 +371,7 @@
 				"make",
 				"unit_test_race"
 			],
-			"Manual": false,
+			"Manual": true,
 			"Shard": 0,
 			"RetryMax": 0,
 			"Tags": []
