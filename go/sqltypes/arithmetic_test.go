@@ -151,10 +151,10 @@ func TestNullsafeCompare(t *testing.T) {
 			errstr = err.Error()
 		}
 		if errstr != tcase.err {
-			t.Errorf("NullsafeLess(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), err, tcase.err)
+			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), err, tcase.err)
 		}
 		if got != tcase.out {
-			t.Errorf("NullsafeLess(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), got, tcase.out)
+			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), got, tcase.out)
 		}
 	}
 }
