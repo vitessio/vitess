@@ -55,10 +55,12 @@ type Reader struct {
 	now           func() time.Time
 	errorLog      *logutil.ThrottledLogger
 
-	mu             sync.Mutex
-	isOpen         bool
-	pool           *connpool.Pool
-	ticks          *timer.Timer
+	runMu  sync.Mutex
+	isOpen bool
+	pool   *connpool.Pool
+	ticks  *timer.Timer
+
+	lagMu          sync.Mutex
 	lastKnownLag   time.Duration
 	lastKnownError error
 }
@@ -95,8 +97,8 @@ func (r *Reader) Open(dbc dbconfigs.DBConfigs) {
 	if !r.enabled {
 		return
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.runMu.Lock()
+	defer r.runMu.Unlock()
 	if r.isOpen {
 		return
 	}
@@ -113,8 +115,8 @@ func (r *Reader) Close() {
 	if !r.enabled {
 		return
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.runMu.Lock()
+	defer r.runMu.Unlock()
 	if !r.isOpen {
 		return
 	}
@@ -126,8 +128,8 @@ func (r *Reader) Close() {
 
 // GetLatest returns the most recently recorded lag measurement or error encountered.
 func (r *Reader) GetLatest() (time.Duration, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.lagMu.Lock()
+	defer r.lagMu.Unlock()
 	if r.lastKnownError != nil {
 		return 0, r.lastKnownError
 	}
@@ -157,10 +159,10 @@ func (r *Reader) readHeartbeat() {
 	lagNs.Add(lag.Nanoseconds())
 	reads.Add(1)
 
-	r.mu.Lock()
+	r.lagMu.Lock()
 	r.lastKnownLag = lag
 	r.lastKnownError = nil
-	r.mu.Unlock()
+	r.lagMu.Unlock()
 }
 
 // fetchMostRecentHeartbeat fetches the most recently recorded heartbeat from the heartbeat table,
@@ -209,9 +211,9 @@ func parseHeartbeatResult(res *sqltypes.Result) (int64, error) {
 // Errors tracked here are logged with throttling to cut down on log spam since
 // operations can happen very frequently in this package.
 func (r *Reader) recordError(err error) {
-	r.mu.Lock()
+	r.lagMu.Lock()
 	r.lastKnownError = err
-	r.mu.Unlock()
+	r.lagMu.Unlock()
 	r.errorLog.Errorf("%v", err)
 	readErrors.Add(1)
 }

@@ -73,8 +73,25 @@ func fetchColumns(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
 		name := row[0].ToString()
 		columnType, ok := fieldTypes[name]
 		if !ok {
+			// This code is unreachable.
 			log.Warningf("Table: %s, column %s not found in select list, skipping.", ta.Name, name)
 			continue
+		}
+		// BIT data type default value representation differs from how
+		// it's returned. It's represented as b'101', but returned in
+		// its binary form. Extract the binary form.
+		if columnType == querypb.Type_BIT && row[4].ToString() != "" {
+			query := fmt.Sprintf("select %s", row[4].ToString())
+			r, err := conn.Exec(tabletenv.LocalContext(), query, 10000, false)
+			if err != nil {
+				return err
+			}
+			if len(r.Rows) != 1 || len(r.Rows[0]) != 1 {
+				// This code is unreachable.
+				return fmt.Errorf("Invalid rows returned from %s: %v", query, r.Rows)
+			}
+			// overwrite the original value with the new one.
+			row[4] = r.Rows[0][0]
 		}
 		ta.AddColumn(name, columnType, row[4], row[5].ToString())
 	}

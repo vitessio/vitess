@@ -44,6 +44,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -112,4 +113,9 @@ func TabletIdent(tablet *topodatapb.Tablet) string {
 	}
 
 	return fmt.Sprintf("%s-%d (%s%s)", tablet.Alias.Cell, tablet.Alias.Uid, tablet.Hostname, tagStr)
+}
+
+// TargetIdent returns a concise string representation of a query target
+func TargetIdent(target *querypb.Target) string {
+	return fmt.Sprintf("%s/%s (%s)", target.Keyspace, target.Shard, target.TabletType)
 }

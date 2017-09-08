@@ -27,6 +27,8 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 // Instructions for creating new types: If a type
@@ -53,7 +55,7 @@ func Parse(sql string) (Statement, error) {
 			tokenizer.ParseTree = tokenizer.partialDDL
 			return tokenizer.ParseTree, nil
 		}
-		return nil, errors.New(tokenizer.LastError)
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError)
 	}
 	return tokenizer.ParseTree, nil
 }
@@ -1024,7 +1026,11 @@ type Use struct {
 
 // Format formats the node.
 func (node *Use) Format(buf *TrackedBuffer) {
-	buf.Myprintf("use %v", node.DBName)
+	if node.DBName.v != "" {
+		buf.Myprintf("use %v", node.DBName)
+	} else {
+		buf.Myprintf("use")
+	}
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -1764,6 +1770,24 @@ func (node *ExistsExpr) WalkSubtree(visit Visit) error {
 		visit,
 		node.Subquery,
 	)
+}
+
+// ExprFromValue converts the given Value into an Expr or returns an error.
+func ExprFromValue(value sqltypes.Value) (Expr, error) {
+	// The type checks here follow the rules defined in sqltypes/types.go.
+	switch {
+	case value.Type() == sqltypes.Null:
+		return &NullVal{}, nil
+	case value.IsIntegral():
+		return NewIntVal(value.ToBytes()), nil
+	case value.IsFloat() || value.Type() == sqltypes.Decimal:
+		return NewFloatVal(value.ToBytes()), nil
+	case value.IsQuoted():
+		return NewStrVal(value.ToBytes()), nil
+	default:
+		// We cannot support sqltypes.Expression, or any other invalid type.
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot convert value %v to AST", value)
+	}
 }
 
 // ValType specifies the type for SQLVal.

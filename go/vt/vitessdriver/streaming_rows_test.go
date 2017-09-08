@@ -84,7 +84,7 @@ func TestStreamingRows(t *testing.T) {
 	c <- &packet2
 	c <- &packet3
 	close(c)
-	ri := newStreamingRows(&adapter{c: c, err: io.EOF}, nil)
+	ri := newStreamingRows(&adapter{c: c, err: io.EOF}, nil, &converter{})
 	wantCols := []string{
 		"field1",
 		"field2",
@@ -136,7 +136,7 @@ func TestStreamingRowsReversed(t *testing.T) {
 	c <- &packet2
 	c <- &packet3
 	close(c)
-	ri := newStreamingRows(&adapter{c: c, err: io.EOF}, nil)
+	ri := newStreamingRows(&adapter{c: c, err: io.EOF}, nil, &converter{})
 	defer ri.Close()
 
 	wantRow := []driver.Value{
@@ -169,7 +169,7 @@ func TestStreamingRowsReversed(t *testing.T) {
 func TestStreamingRowsError(t *testing.T) {
 	c := make(chan *sqltypes.Result)
 	close(c)
-	ri := newStreamingRows(&adapter{c: c, err: errors.New("error before fields")}, nil)
+	ri := newStreamingRows(&adapter{c: c, err: errors.New("error before fields")}, nil, &converter{})
 
 	gotCols := ri.Columns()
 	if gotCols != nil {
@@ -186,7 +186,7 @@ func TestStreamingRowsError(t *testing.T) {
 	c = make(chan *sqltypes.Result, 1)
 	c <- &packet1
 	close(c)
-	ri = newStreamingRows(&adapter{c: c, err: errors.New("error after fields")}, nil)
+	ri = newStreamingRows(&adapter{c: c, err: errors.New("error after fields")}, nil, &converter{})
 	wantCols := []string{
 		"field1",
 		"field2",
@@ -213,7 +213,7 @@ func TestStreamingRowsError(t *testing.T) {
 	c <- &packet1
 	c <- &packet2
 	close(c)
-	ri = newStreamingRows(&adapter{c: c, err: errors.New("error after rows")}, nil)
+	ri = newStreamingRows(&adapter{c: c, err: errors.New("error after rows")}, nil, &converter{})
 	gotRow = make([]driver.Value, 3)
 	err = ri.Next(gotRow)
 	if err != nil {
@@ -229,7 +229,7 @@ func TestStreamingRowsError(t *testing.T) {
 	c = make(chan *sqltypes.Result, 1)
 	c <- &packet2
 	close(c)
-	ri = newStreamingRows(&adapter{c: c, err: io.EOF}, nil)
+	ri = newStreamingRows(&adapter{c: c, err: io.EOF}, nil, &converter{})
 	gotRow = make([]driver.Value, 3)
 	err = ri.Next(gotRow)
 	wantErr = "first packet did not return fields"

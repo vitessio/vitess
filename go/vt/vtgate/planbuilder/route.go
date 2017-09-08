@@ -392,9 +392,9 @@ func (rb *route) MakeDistinct() error {
 }
 
 // SetGroupBy sets the GROUP BY clause for the route.
-func (rb *route) SetGroupBy(groupBy sqlparser.GroupBy) (builder, error) {
+func (rb *route) SetGroupBy(groupBy sqlparser.GroupBy) error {
 	rb.Select.(*sqlparser.Select).GroupBy = groupBy
-	return rb, nil
+	return nil
 }
 
 // PushOrderBy sets the order by for the route.

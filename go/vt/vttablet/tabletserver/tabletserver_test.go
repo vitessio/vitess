@@ -1475,6 +1475,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.EnableHotRowProtection = true
+	config.HotRowProtectionConcurrentTransactions = 1
 	// Reduce the txpool to 2 because we should never consume more than two slots.
 	config.TransactionCap = 2
 	tsv := NewTabletServerWithNilTopoServer(config)
@@ -1512,7 +1513,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk in (1) /* _stream test_table (pk ) (1 ); */",
 		func() {
 			close(tx1Started)
-			if err := waitForTxSerializationCount(tsv, "test_table where pk = 1 and name = 1", 2); err != nil {
+			if err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and name = 1", 2); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -1580,7 +1581,134 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	}
 }
 
-func waitForTxSerializationCount(tsv *TabletServer, key string, i int) error {
+func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
+	// This test runs three transaction in parallel:
+	// tx1 | tx2 | tx3
+	// Out of these three, two can run in parallel because we increased the
+	// ConcurrentTransactions limit to 2.
+	// One out of the three transaction will always get serialized though.
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.EnableHotRowProtection = true
+	config.HotRowProtectionConcurrentTransactions = 2
+	// Reduce the txpool to 2 because we should never consume more than two slots.
+	config.TransactionCap = 2
+	tsv := NewTabletServerWithNilTopoServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	if err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs)); err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	countStart := tabletenv.WaitStats.Counts()["TxSerializer"]
+
+	// Fake data.
+	q1 := "update test_table set name_string = 'tx1' where pk = :pk and name = :name"
+	q2 := "update test_table set name_string = 'tx2' where pk = :pk and name = :name"
+	q3 := "update test_table set name_string = 'tx3' where pk = :pk and name = :name"
+	// Every request needs their own bind variables to avoid data races.
+	bvTx1 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
+	}
+	bvTx2 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
+	}
+	bvTx3 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
+	}
+
+	tx1Started := make(chan struct{})
+	allQueriesPending := make(chan struct{})
+	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk in (1) /* _stream test_table (pk ) (1 ); */",
+		func() {
+			close(tx1Started)
+			<-allQueriesPending
+		})
+
+	// Run all three transactions.
+	ctx := context.Background()
+	wg := sync.WaitGroup{}
+
+	// tx1.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		_, tx1, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
+		if err != nil {
+			t.Fatalf("failed to execute query: %s: %s", q1, err)
+		}
+
+		if err := tsv.Commit(ctx, &target, tx1); err != nil {
+			t.Fatalf("call TabletServer.Commit failed: %v", err)
+		}
+	}()
+
+	// tx2.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		// Wait for tx1 to avoid that this tx could pass tx1, without any contention.
+		// In that case, we would see less than 3 pending transactions.
+		<-tx1Started
+
+		_, tx2, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, nil)
+		if err != nil {
+			t.Fatalf("failed to execute query: %s: %s", q2, err)
+		}
+
+		if err := tsv.Commit(ctx, &target, tx2); err != nil {
+			t.Fatalf("call TabletServer.Commit failed: %v", err)
+		}
+	}()
+
+	// tx3.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		// Wait for tx1 to avoid that this tx could pass tx1, without any contention.
+		// In that case, we would see less than 3 pending transactions.
+		<-tx1Started
+
+		_, tx3, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, nil)
+		if err != nil {
+			t.Fatalf("failed to execute query: %s: %s", q3, err)
+		}
+
+		if err := tsv.Commit(ctx, &target, tx3); err != nil {
+			t.Fatalf("call TabletServer.Commit failed: %v", err)
+		}
+	}()
+
+	// At this point, all three transactions should be blocked in BeginExecute()
+	// and therefore count as pending transaction by the Hot Row Protection.
+	//
+	// NOTE: We are not doing more sophisticated synchronizations between the
+	// transactions via db.SetBeforeFunc() for the same reason as mentioned
+	// in TestSerializeTransactionsSameRow: The MySQL C client does not seem
+	// to allow more than connection attempt at a time.
+	if err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and name = 1", 3); err != nil {
+		t.Fatal(err)
+	}
+	close(allQueriesPending)
+
+	wg.Wait()
+
+	got, ok := tabletenv.WaitStats.Counts()["TxSerializer"]
+	want := countStart + 1
+	if !ok || got != want {
+		t.Fatalf("One out of the three transactions must have waited: ok? %v got: %v want: %v", ok, got, want)
+	}
+}
+
+func waitForTxSerializationPendingQueries(tsv *TabletServer, key string, i int) error {
 	start := time.Now()
 	for {
 		got, want := tsv.qe.txSerializer.Pending(key), i
@@ -1607,6 +1735,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	config.EnableHotRowProtection = true
 	config.HotRowProtectionMaxQueueSize = 1
+	config.HotRowProtectionConcurrentTransactions = 1
 	tsv := NewTabletServerWithNilTopoServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1693,6 +1822,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.EnableHotRowProtection = true
+	config.HotRowProtectionConcurrentTransactions = 1
 	tsv := NewTabletServerWithNilTopoServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1774,7 +1904,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 		defer wg.Done()
 
 		// Wait until tx1 and tx2 are pending to make the test deterministic.
-		if err := waitForTxSerializationCount(tsv, "test_table where pk = 1 and name = 1", 2); err != nil {
+		if err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and name = 1", 2); err != nil {
 			t.Fatal(err)
 		}
 
@@ -1789,7 +1919,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	}()
 
 	// Wait until tx1, 2 and 3 are pending.
-	if err := waitForTxSerializationCount(tsv, "test_table where pk = 1 and name = 1", 3); err != nil {
+	if err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and name = 1", 3); err != nil {
 		t.Fatal(err)
 	}
 	// Now unblock tx2 and cancel it.
