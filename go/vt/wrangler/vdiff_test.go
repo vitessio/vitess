@@ -938,9 +938,55 @@ func TestVDiffPKWeightString(t *testing.T) {
 	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/)
 	require.NoError(t, err)
 	wantdr := &DiffReport{
-		ProcessedRows: 4,
-		MatchingRows:  4,
+		ProcessedRows:   6,
+		MatchingRows:    2,
 		TableName:     "t1",
+		ExtraRowsSource: 2,
+		ExtraRowsSourceSample: []*RowDiff{
+			{
+				Row: map[string]sqltypes.Value{
+					"c1":                sqltypes.NewVarChar("A"),
+					"c2":                sqltypes.NewInt64(3),
+					"weight_string(c1)": sqltypes.NewVarBinary("A"),
+				},
+				Query: "",
+			},
+			{
+				Row: map[string]sqltypes.Value{
+					"c1":                sqltypes.NewVarChar("b"),
+					"c2":                sqltypes.NewInt64(4),
+					"weight_string(c1)": sqltypes.NewVarBinary("B"),
+				},
+				Query: "",
+			},
+			{
+				Row: map[string]sqltypes.Value{
+					"c1":                sqltypes.NewVarChar("a"),
+					"c2":                sqltypes.NewInt64(3),
+					"weight_string(c1)": sqltypes.NewVarBinary("A"),
+				},
+				Query: "",
+			},
+		},
+		ExtraRowsTarget: 2,
+		ExtraRowsTargetSample: []*RowDiff{
+			{
+				Row: map[string]sqltypes.Value{
+					"c1":                sqltypes.NewVarChar("A"),
+					"c2":                sqltypes.NewInt64(3),
+					"weight_string(c1)": sqltypes.NewVarBinary("A"),
+				},
+				Query: "",
+			},
+			{
+				Row: map[string]sqltypes.Value{
+					"c1":                sqltypes.NewVarChar("b"),
+					"c2":                sqltypes.NewInt64(4),
+					"weight_string(c1)": sqltypes.NewVarBinary("B"),
+				},
+				Query: "",
+			},
+		},
 	}
 	assert.Equal(t, wantdr, dr["t1"])
 }

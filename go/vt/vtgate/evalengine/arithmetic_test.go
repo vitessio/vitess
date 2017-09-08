@@ -518,10 +518,15 @@ func TestNullsafeCompare(t *testing.T) {
 		v2:  NULL,
 		out: 1,
 	}, {
-		// LHS Text
+		// Text compare
 		v1:  TestValue(querypb.Type_VARCHAR, "abcd"),
 		v2:  TestValue(querypb.Type_VARCHAR, "abcd"),
-		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
+		out: 0,
+	}, {
+		// Text compare
+		v1:  TestValue(querypb.Type_VARCHAR, "abcd"),
+		v2:  TestValue(querypb.Type_VARCHAR, "bcde"),
+		out: -1,
 	}, {
 		// Make sure underlying error is returned for LHS.
 		v1:  TestValue(querypb.Type_INT64, "1.2"),
@@ -547,6 +552,16 @@ func TestNullsafeCompare(t *testing.T) {
 		v1:  TestValue(querypb.Type_VARBINARY, "abcd"),
 		v2:  TestValue(querypb.Type_BINARY, "abcd"),
 		out: 0,
+	}, {
+		// String equal
+		v1:  TestValue(querypb.Type_ENUM, "ENUM"),
+		v2:  TestValue(querypb.Type_ENUM, "ENUM"),
+		out: 0,
+	}, {
+		// Non-numeric equal
+		v1:  TestValue(querypb.Type_ENUM, "ENUM1"),
+		v2:  TestValue(querypb.Type_ENUM, "ENUM2"),
+		out: -1,
 	}, {
 		// Non-numeric unequal
 		v1:  TestValue(querypb.Type_VARBINARY, "abcd"),
@@ -1264,8 +1279,8 @@ func TestMin(t *testing.T) {
 		min: NewInt64(1),
 	}, {
 		v1:  TestValue(querypb.Type_VARCHAR, "aa"),
-		v2:  TestValue(querypb.Type_VARCHAR, "aa"),
-		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
+		v2:  TestValue(querypb.Type_VARCHAR, "bb"),
+		min: TestValue(querypb.Type_VARCHAR, "aa"),
 	}}
 	for _, tcase := range tcases {
 		v, err := Min(tcase.v1, tcase.v2)
@@ -1313,8 +1328,8 @@ func TestMax(t *testing.T) {
 		max: NewInt64(1),
 	}, {
 		v1:  TestValue(querypb.Type_VARCHAR, "aa"),
-		v2:  TestValue(querypb.Type_VARCHAR, "aa"),
-		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
+		v2:  TestValue(querypb.Type_VARCHAR, "bb"),
+		max: TestValue(querypb.Type_VARCHAR, "bb"),
 	}}
 	for _, tcase := range tcases {
 		v, err := Max(tcase.v1, tcase.v2)

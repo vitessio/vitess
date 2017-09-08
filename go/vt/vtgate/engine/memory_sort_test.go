@@ -17,10 +17,12 @@ limitations under the License.
 package engine
 
 import (
+	"reflect"
 	"testing"
 
 	"vitess.io/vitess/go/test/utils"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -118,11 +120,11 @@ func TestMemorySortStreamExecuteWeightString(t *testing.T) {
 
 		wantResults := sqltypes.MakeTestStreamingResults(
 			fields,
-			"null|x",
 			"a|a",
-			"c|t",
-			"f|p",
 			"g|d",
+			"f|p",
+			"c|t",
+			"null|x",
 		)
 		utils.MustMatch(t, wantResults, results)
 	})
@@ -143,9 +145,9 @@ func TestMemorySortStreamExecuteWeightString(t *testing.T) {
 
 		wantResults := sqltypes.MakeTestStreamingResults(
 			fields,
-			"null|x",
 			"a|a",
-			"c|t",
+			"g|d",
+			"f|p",
 		)
 		utils.MustMatch(t, wantResults, results)
 	})
@@ -182,9 +184,9 @@ func TestMemorySortExecuteWeightString(t *testing.T) {
 		fields,
 		"a|1",
 		"a|1",
-		"g|2",
 		"c|3",
 		"c|4",
+		"g|2",
 	)
 	utils.MustMatch(t, wantResult, result)
 
@@ -201,7 +203,7 @@ func TestMemorySortExecuteWeightString(t *testing.T) {
 		fields,
 		"a|1",
 		"a|1",
-		"g|2",
+		"c|4",
 	)
 	utils.MustMatch(t, wantResult, result)
 }
@@ -502,17 +504,18 @@ func TestMemorySortExecuteNoVarChar(t *testing.T) {
 		Input: fp,
 	}
 
-	_, err := ms.Execute(nil, nil, false)
-	want := "types are not comparable: VARCHAR vs VARCHAR"
-	if err == nil || err.Error() != want {
-		t.Errorf("Execute err: %v, want %v", err, want)
-	}
+	result, err := ms.Execute(nil, nil, false)
+	assert.NoError(t, err)
 
-	fp.rewind()
-	err = ms.StreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
-		return nil
-	})
-	if err == nil || err.Error() != want {
-		t.Errorf("StreamExecute err: %v, want %v", err, want)
+	wantResult := sqltypes.MakeTestResult(
+		fields,
+		"a|1",
+		"a|1",
+		"b|2",
+		"c|3",
+		"c|4",
+	)
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("oa.Execute:\n%v, want\n%v", result, wantResult)
 	}
 }

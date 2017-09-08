@@ -543,6 +543,7 @@ func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
 }
 
 func TestOrderedAggregateKeysFail(t *testing.T) {
+	assert := assert.New(t)
 	fields := sqltypes.MakeTestFields(
 		"col|count(*)",
 		"varchar|decimal",
@@ -564,15 +565,14 @@ func TestOrderedAggregateKeysFail(t *testing.T) {
 		Input:       fp,
 	}
 
-	want := "types are not comparable: VARCHAR vs VARCHAR"
-	if _, err := oa.Execute(nil, nil, false); err == nil || err.Error() != want {
-		t.Errorf("oa.Execute(): %v, want %s", err, want)
-	}
+	result, err := oa.Execute(nil, nil, false)
+	assert.NoError(err)
 
-	fp.rewind()
-	if err := oa.StreamExecute(nil, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
-		t.Errorf("oa.StreamExecute(): %v, want %s", err, want)
-	}
+	wantResult := sqltypes.MakeTestResult(
+		fields,
+		"a|2",
+	)
+	assert.Equal(wantResult, result)
 }
 
 func TestOrderedAggregateMergeFail(t *testing.T) {

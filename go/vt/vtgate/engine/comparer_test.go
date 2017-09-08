@@ -85,7 +85,7 @@ func TestComparer(t *testing.T) {
 				sqltypes.NewInt64(34),
 				sqltypes.NewVarChar("a"),
 			},
-			output: -1,
+			output: 1,
 		}, {
 			comparer: comparer{
 				orderBy:      1,
@@ -100,7 +100,7 @@ func TestComparer(t *testing.T) {
 				sqltypes.NewInt64(23),
 				sqltypes.NewVarChar("a"),
 			},
-			output: 0,
+			output: 1,
 		},
 	}
 

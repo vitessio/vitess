@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -212,6 +213,9 @@ func NullsafeCompare(v1, v2 sqltypes.Value) (int, error) {
 	if isByteComparable(v1) && isByteComparable(v2) {
 		return bytes.Compare(v1.ToBytes(), v2.ToBytes()), nil
 	}
+	if isStringComparable(v1) && isStringComparable(v2) {
+		return strings.Compare(v1.ToString(), v2.ToString()), nil
+	}
 	return 0, UnsupportedComparisonError{
 		Type1: v1.Type(),
 		Type2: v2.Type(),
@@ -235,6 +239,11 @@ func NullsafeHashcode(v sqltypes.Value) (int64, error) {
 	}
 
 	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v", v.Type())
+}
+
+// isStringComparable returns true if the type is text or quoted.
+func isStringComparable(v sqltypes.Value) bool {
+	return v.IsText() || v.IsQuoted()
 }
 
 // isByteComparable returns true if the type is binary or date/time.

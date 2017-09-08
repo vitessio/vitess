@@ -875,8 +875,19 @@ func TestRouteSort(t *testing.T) {
 			),
 		},
 	}
-	_, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	require.EqualError(t, err, `types are not comparable: VARCHAR vs VARCHAR`)
+	result, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	assert.NoError(t, err)
+	wantResult = sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id",
+			"varchar",
+		),
+		"3",
+		"2",
+		"1",
+	)
+
+	expectResult(t, "sel.Execute", result, wantResult)
 }
 
 func TestRouteSortWeightStrings(t *testing.T) {
@@ -902,11 +913,11 @@ func TestRouteSortWeightStrings(t *testing.T) {
 					"weightString|normal",
 					"varbinary|varchar",
 				),
-				"v|x",
-				"g|d",
 				"a|a",
-				"c|t",
+				"g|d",
 				"f|p",
+				"c|t",
+				"v|x",
 			),
 		},
 	}
@@ -927,9 +938,9 @@ func TestRouteSortWeightStrings(t *testing.T) {
 				"varbinary|varchar",
 			),
 			"a|a",
-			"c|t",
-			"f|p",
 			"g|d",
+			"f|p",
+			"c|t",
 			"v|x",
 		)
 		expectResult(t, "sel.Execute", result, wantResult)
@@ -946,15 +957,15 @@ func TestRouteSortWeightStrings(t *testing.T) {
 				"varbinary|varchar",
 			),
 			"v|x",
-			"g|d",
-			"f|p",
 			"c|t",
+			"f|p",
+			"g|d",
 			"a|a",
 		)
 		expectResult(t, "sel.Execute", result, wantResult)
 	})
 
-	t.Run("Error when no weight string set", func(t *testing.T) {
+	t.Run("No error when no weight string set", func(t *testing.T) {
 		sel.OrderBy = []OrderByParams{{
 			Col:             1,
 			WeightStringCol: -1,
@@ -976,8 +987,20 @@ func TestRouteSortWeightStrings(t *testing.T) {
 				),
 			},
 		}
-		_, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
-		require.EqualError(t, err, `types are not comparable: VARCHAR vs VARCHAR`)
+		result, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+		require.NoError(t, err)
+		wantResult = sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"weightString|normal",
+				"varbinary|varchar",
+			),
+			"a|a",
+			"g|d",
+			"f|p",
+			"c|t",
+			"v|x",
+		)
+		expectResult(t, "sel.Execute", result, wantResult)
 	})
 }
 
