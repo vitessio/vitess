@@ -23,6 +23,8 @@ import (
 
 	"strconv"
 
+	"strings"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -126,7 +128,15 @@ func NullsafeCompare(v1, v2 Value) (int, error) {
 	if isByteComparable(v1) && isByteComparable(v2) {
 		return bytes.Compare(v1.ToBytes(), v2.ToBytes()), nil
 	}
+	if isStringComparable(v1) && isStringComparable(v2) {
+		return strings.Compare(v1.ToString(), v2.ToString()), nil
+	}
 	return 0, fmt.Errorf("types are not comparable: %v vs %v", v1.Type(), v2.Type())
+}
+
+// isByteComparable returns true if the type is text or quoted.
+func isStringComparable(v Value) bool {
+	return v.IsText() || v.IsQuoted()
 }
 
 // isByteComparable returns true if the type is binary or date/time.
