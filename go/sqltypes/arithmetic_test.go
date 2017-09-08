@@ -109,10 +109,15 @@ func TestNullsafeCompare(t *testing.T) {
 		v2:  NULL,
 		out: 1,
 	}, {
-		// LHS Text
+		// Text compare
 		v1:  TestValue(VarChar, "abcd"),
 		v2:  TestValue(VarChar, "abcd"),
-		err: "types are not comparable: VARCHAR vs VARCHAR",
+		out: 0,
+	}, {
+		// Text compare
+		v1:  TestValue(VarChar, "abcd"),
+		v2:  TestValue(VarChar, "bcde"),
+		out: -1,
 	}, {
 		// Make sure underlying error is returned for LHS.
 		v1:  TestValue(Int64, "1.2"),
@@ -138,6 +143,16 @@ func TestNullsafeCompare(t *testing.T) {
 		v1:  TestValue(VarBinary, "abcd"),
 		v2:  TestValue(Binary, "abcd"),
 		out: 0,
+	}, {
+		// String equal
+		v1:  TestValue(Enum, "ENUM"),
+		v2:  TestValue(Enum, "ENUM"),
+		out: 0,
+	}, {
+		// Non-numeric equal
+		v1:  TestValue(Enum, "ENUM1"),
+		v2:  TestValue(Enum, "ENUM2"),
+		out: -1,
 	}, {
 		// Non-numeric unequal
 		v1:  TestValue(VarBinary, "abcd"),
