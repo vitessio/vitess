@@ -245,75 +245,65 @@ func ToNative(v Value) (interface{}, error) {
 }
 
 // newNumeric parses a value and produces an Int64, Uint64 or Float64.
-func newNumeric(v Value) (result numeric, err error) {
+func newNumeric(v Value) (numeric, error) {
 	str := v.ToString()
 	switch {
 	case v.IsSigned():
-		result.ival, err = strconv.ParseInt(str, 10, 64)
-		result.typ = Int64
-		return
+		ival, err := strconv.ParseInt(str, 10, 64)
+		if err != nil {
+			return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+		}
+		return numeric{ival: ival, typ: Int64}, nil
 	case v.IsUnsigned():
-		result.uval, err = strconv.ParseUint(str, 10, 64)
-		result.typ = Uint64
-		return
+		uval, err := strconv.ParseUint(str, 10, 64)
+		if err != nil {
+			return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+		}
+		return numeric{uval: uval, typ: Uint64}, nil
 	case v.IsFloat():
-		result.fval, err = strconv.ParseFloat(str, 64)
-		result.typ = Float64
-		return
+		fval, err := strconv.ParseFloat(str, 64)
+		if err != nil {
+			return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+		}
+		return numeric{fval: fval, typ: Float64}, nil
 	}
 
 	// For other types, do best effort.
-	result.ival, err = strconv.ParseInt(str, 10, 64)
-	if err == nil {
-		result.typ = Int64
-		return
+	if ival, err := strconv.ParseInt(str, 10, 64); err == nil {
+		return numeric{ival: ival, typ: Int64}, nil
 	}
-	result.fval, err = strconv.ParseFloat(str, 64)
-	if err == nil {
-		result.typ = Float64
-		return
+	if fval, err := strconv.ParseFloat(str, 64); err == nil {
+		return numeric{fval: fval, typ: Float64}, nil
 	}
-	err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: %s", str)
-	return
+	return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: %s", str)
 }
 
 // newIntegralNumeric parses a value and produces an Int64 or Uint64.
-func newIntegralNumeric(v Value) (result numeric, err error) {
+func newIntegralNumeric(v Value) (numeric, error) {
 	str := v.ToString()
 	switch {
 	case v.IsSigned():
-		result.ival, err = strconv.ParseInt(str, 10, 64)
+		ival, err := strconv.ParseInt(str, 10, 64)
 		if err != nil {
-			err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-			return
+			return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
-		result.typ = Int64
-		return
+		return numeric{ival: ival, typ: Int64}, nil
 	case v.IsUnsigned():
-		result.uval, err = strconv.ParseUint(str, 10, 64)
+		uval, err := strconv.ParseUint(str, 10, 64)
 		if err != nil {
-			err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-			return
+			return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
-		result.typ = Uint64
-		return
+		return numeric{uval: uval, typ: Uint64}, nil
 	}
 
 	// For other types, do best effort.
-	result.ival, err = strconv.ParseInt(str, 10, 64)
-	if err == nil {
-		result.typ = Int64
-		return
+	if ival, err := strconv.ParseInt(str, 10, 64); err == nil {
+		return numeric{ival: ival, typ: Int64}, nil
 	}
-	// ParseInt can return a non-zero value on failure.
-	result.ival = 0
-	result.uval, err = strconv.ParseUint(str, 10, 64)
-	if err == nil {
-		result.typ = Uint64
-		return
+	if uval, err := strconv.ParseUint(str, 10, 64); err == nil {
+		return numeric{uval: uval, typ: Uint64}, nil
 	}
-	err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: %s", str)
-	return
+	return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: %s", str)
 }
 
 func addNumeric(v1, v2 numeric) (numeric, error) {
