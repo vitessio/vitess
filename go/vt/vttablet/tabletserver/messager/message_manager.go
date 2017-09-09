@@ -39,43 +39,40 @@ import (
 var MessageStats = stats.NewMultiCounters("Messages", []string{"TableName", "Metric"})
 
 type messageReceiver struct {
-	mu   sync.Mutex
-	send func(*sqltypes.Result) error
-	done chan struct{}
+	ctx     context.Context
+	errChan chan error
+	send    func(*sqltypes.Result) error
+	cancel  func()
 }
 
-func newMessageReceiver(send func(*sqltypes.Result) error) (*messageReceiver, chan struct{}) {
+func newMessageReceiver(ctx context.Context, send func(*sqltypes.Result) error) (*messageReceiver, <-chan struct{}) {
+	ctx, cancel := context.WithCancel(ctx)
 	rcv := &messageReceiver{
-		send: send,
-		done: make(chan struct{}),
+		ctx:     ctx,
+		errChan: make(chan error, 1),
+		send:    send,
+		cancel:  cancel,
 	}
-	return rcv, rcv.done
+	return rcv, ctx.Done()
 }
 
 func (rcv *messageReceiver) Send(qr *sqltypes.Result) error {
-	rcv.mu.Lock()
-	defer rcv.mu.Unlock()
-	if rcv.done == nil {
-		return io.EOF
-	}
-	err := rcv.send(qr)
-	if err == io.EOF {
-		close(rcv.done)
-		rcv.done = nil
-	}
-	return err
-}
-
-func (rcv *messageReceiver) Cancel() {
-	// Do this async to avoid getting stuck.
+	// We have to use a channel so we can also
+	// monitor the context.
 	go func() {
-		rcv.mu.Lock()
-		defer rcv.mu.Unlock()
-		if rcv.done != nil {
-			close(rcv.done)
-			rcv.done = nil
-		}
+		rcv.errChan <- rcv.send(qr)
 	}()
+	select {
+	case <-rcv.ctx.Done():
+		return io.EOF
+	case err := <-rcv.errChan:
+		if err == io.EOF {
+			// This is only a failsafe. If we received an EOF,
+			// grpc would have already canceled the context.
+			rcv.cancel()
+		}
+		return err
+	}
 }
 
 // receiverWithStatus is a separate struct to signify
@@ -208,7 +205,7 @@ func (mm *messageManager) Close() {
 	}
 	mm.isOpen = false
 	for _, rcvr := range mm.receivers {
-		rcvr.receiver.Cancel()
+		rcvr.receiver.cancel()
 	}
 	mm.receivers = nil
 	mm.cache.Clear()
@@ -218,8 +215,12 @@ func (mm *messageManager) Close() {
 	mm.wg.Wait()
 }
 
-// Subscribe adds the receiver to the list of subsribers.
-func (mm *messageManager) Subscribe(receiver *messageReceiver) {
+// Subscribe registers the send function as a receiver of messages
+// and returns a 'done' channel that will be closed when the subscription
+// ends. There are many reaons for a subscription to end: a grpc context
+// cancel or timeout, or tabletserver shutdown, etc.
+func (mm *messageManager) Subscribe(ctx context.Context, send func(*sqltypes.Result) error) <-chan struct{} {
+	receiver, done := newMessageReceiver(ctx, send)
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 	withStatus := &receiverWithStatus{
@@ -231,6 +232,13 @@ func (mm *messageManager) Subscribe(receiver *messageReceiver) {
 	// Send the message asynchronously.
 	mm.wg.Add(1)
 	go mm.send(withStatus, mm.fieldResult)
+
+	// Track the context and unsubscribe if it gets cancelled.
+	go func() {
+		<-done
+		mm.unsubscribe(receiver)
+	}()
+	return done
 }
 
 func (mm *messageManager) unsubscribe(receiver *messageReceiver) {

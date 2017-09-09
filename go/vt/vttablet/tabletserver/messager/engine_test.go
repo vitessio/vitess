@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
@@ -105,9 +107,9 @@ func TestSubscribe(t *testing.T) {
 	f1, ch1 := newEngineReceiver()
 	f2, ch2 := newEngineReceiver()
 	// Each receiver is subscribed to different managers.
-	engine.Subscribe("t1", f1)
+	engine.Subscribe(context.Background(), "t1", f1)
 	<-ch1
-	engine.Subscribe("t2", f2)
+	engine.Subscribe(context.Background(), "t2", f2)
 	<-ch2
 	engine.managers["t1"].Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("1")}})
 	engine.managers["t2"].Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("2")}})
@@ -116,7 +118,7 @@ func TestSubscribe(t *testing.T) {
 
 	// Error case.
 	want := "message table t3 not found"
-	_, err := engine.Subscribe("t3", f1)
+	_, err := engine.Subscribe(context.Background(), "t3", f1)
 	if err == nil || err.Error() != want {
 		t.Errorf("Subscribe: %v, want %s", err, want)
 	}
@@ -133,7 +135,7 @@ func TestLockDB(t *testing.T) {
 	}
 	engine.schemaChanged(tables, []string{"t1", "t2"}, nil, nil)
 	f1, ch1 := newEngineReceiver()
-	engine.Subscribe("t1", f1)
+	engine.Subscribe(context.Background(), "t1", f1)
 	<-ch1
 
 	row1 := &MessageRow{
@@ -158,7 +160,7 @@ func TestLockDB(t *testing.T) {
 
 	ch2 := make(chan *sqltypes.Result)
 	var count sync2.AtomicInt64
-	engine.Subscribe("t2", func(qr *sqltypes.Result) error {
+	engine.Subscribe(context.Background(), "t2", func(qr *sqltypes.Result) error {
 		count.Add(1)
 		ch2 <- qr
 		return nil
