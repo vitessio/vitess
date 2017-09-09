@@ -17,7 +17,6 @@ limitations under the License.
 package messager
 
 import (
-	"io"
 	"reflect"
 	"runtime"
 	"testing"
@@ -71,8 +70,7 @@ func newMMTable() *schema.Table {
 }
 
 type testReceiver struct {
-	rcv   *messageReceiver
-	done  chan struct{}
+	rcv   func(*sqltypes.Result) error
 	count sync2.AtomicInt64
 	ch    chan *sqltypes.Result
 }
@@ -81,20 +79,11 @@ func newTestReceiver(size int) *testReceiver {
 	tr := &testReceiver{
 		ch: make(chan *sqltypes.Result, size),
 	}
-	tr.rcv, tr.done = newMessageReceiver(func(qr *sqltypes.Result) error {
-		select {
-		case <-tr.done:
-			return io.EOF
-		default:
-		}
+	tr.rcv = func(qr *sqltypes.Result) error {
 		tr.count.Add(1)
-		select {
-		case tr.ch <- qr:
-		case <-time.After(20 * time.Second):
-			panic("test may be hung")
-		}
+		tr.ch <- qr
 		return nil
-	})
+	}
 	return tr
 }
 
@@ -108,28 +97,16 @@ func (tr *testReceiver) WaitForCount(n int) {
 	}
 }
 
-func (tr *testReceiver) WaitForDone() {
-	for {
-		runtime.Gosched()
-		time.Sleep(10 * time.Millisecond)
-		select {
-		case <-tr.done:
-			return
-		default:
-		}
-	}
-}
-
-func TestReceiverEOF(t *testing.T) {
+func TestReceiverCancel(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	mm := newMessageManager(newFakeTabletServer(), mmTable, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(0)
-	r1.done = make(chan struct{})
-	mm.Subscribe(r1.rcv)
-	close(r1.done)
+	ctx, cancel := context.WithCancel(context.Background())
+	_ = mm.Subscribe(ctx, r1.rcv)
+	cancel()
 	// r1 should eventually be unsubscribed.
 	for i := 0; i < 10; i++ {
 		runtime.Gosched()
@@ -165,7 +142,7 @@ func TestMessageManagerState(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		mm.Open()
 		r1 := newTestReceiver(1)
-		mm.Subscribe(r1.rcv)
+		mm.Subscribe(context.Background(), r1.rcv)
 		// This time the wait is in a different code path.
 		runtime.Gosched()
 		mm.Close()
@@ -189,7 +166,7 @@ func TestMessageManagerAdd(t *testing.T) {
 	}
 
 	r1 := newTestReceiver(0)
-	mm.Subscribe(r1.rcv)
+	mm.Subscribe(context.Background(), r1.rcv)
 	<-r1.ch
 	if !mm.Add(row1) {
 		t.Error("Add(1 receiver): false, want true")
@@ -203,11 +180,6 @@ func TestMessageManagerAdd(t *testing.T) {
 	if mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("3")}}) {
 		t.Error("Add(cache full): true, want false")
 	}
-	// Drain the receiver to prevent hangs.
-	go func() {
-		for range r1.ch {
-		}
-	}()
 }
 
 func TestMessageManagerSend(t *testing.T) {
@@ -218,7 +190,7 @@ func TestMessageManagerSend(t *testing.T) {
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(1)
-	mm.Subscribe(r1.rcv)
+	mm.Subscribe(context.Background(), r1.rcv)
 	want := &sqltypes.Result{
 		Fields: testFields,
 	}
@@ -250,22 +222,36 @@ func TestMessageManagerSend(t *testing.T) {
 		t.Error("Message 1 is still present in cache")
 	}
 
+	// Test that mm stops sending to a canceled receiver.
 	r2 := newTestReceiver(1)
-	mm.Subscribe(r2.rcv)
+	ctx, cancel := context.WithCancel(context.Background())
+	mm.Subscribe(ctx, r2.rcv)
 	<-r2.ch
 	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("2")}})
 	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("3")}})
 	// Send should be round-robin.
 	<-r1.ch
 	<-r2.ch
-	r2.rcv.Cancel()
-	r2.WaitForDone()
-	// One of these messages will fail to send
-	// because r1 will return EOF.
+
+	// Cancel and wait for it to take effect.
+	cancel()
+	for i := 0; i < 10; i++ {
+		runtime.Gosched()
+		time.Sleep(10 * time.Millisecond)
+		mm.mu.Lock()
+		if len(mm.receivers) != 1 {
+			mm.mu.Unlock()
+			continue
+		}
+		mm.mu.Unlock()
+		return
+	}
+
 	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("4")}})
 	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("5")}})
 	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("6")}})
 	// Only r1 should be receiving.
+	<-r1.ch
 	<-r1.ch
 	<-r1.ch
 }
@@ -279,7 +265,7 @@ func TestMessageManagerBatchSend(t *testing.T) {
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(1)
-	mm.Subscribe(r1.rcv)
+	mm.Subscribe(context.Background(), r1.rcv)
 	<-r1.ch
 	row1 := &MessageRow{
 		Row: []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NULL},
@@ -354,7 +340,8 @@ func TestMessageManagerPoller(t *testing.T) {
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(1)
-	mm.Subscribe(r1.rcv)
+	ctx, cancel := context.WithCancel(context.Background())
+	mm.Subscribe(ctx, r1.rcv)
 	<-r1.ch
 	mm.pollerTicks.Trigger()
 	want := [][]sqltypes.Value{{
@@ -381,8 +368,7 @@ func TestMessageManagerPoller(t *testing.T) {
 	}
 
 	// If there are no receivers, nothing should fire.
-	r1.rcv.Cancel()
-	r1.WaitForDone()
+	cancel()
 	mm.pollerTicks.Trigger()
 	runtime.Gosched()
 	select {
@@ -424,7 +410,7 @@ func TestMessagesPending1(t *testing.T) {
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(0)
-	mm.Subscribe(r1.rcv)
+	mm.Subscribe(context.Background(), r1.rcv)
 	<-r1.ch
 
 	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("1")}})
@@ -491,7 +477,7 @@ func TestMessagesPending2(t *testing.T) {
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(0)
-	mm.Subscribe(r1.rcv)
+	mm.Subscribe(context.Background(), r1.rcv)
 	<-r1.ch
 
 	// Trigger the poller.
@@ -506,12 +492,6 @@ func TestMessagesPending2(t *testing.T) {
 	if d := time.Now().Sub(start); d > 15*time.Second {
 		t.Errorf("pending work trigger did not happen. Duration: %v", d)
 	}
-	// Consume the rest of the messages asynchronously to
-	// prevent hangs.
-	go func() {
-		for range r1.ch {
-		}
-	}()
 }
 
 func TestMessageManagerPurge(t *testing.T) {

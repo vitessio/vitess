@@ -223,7 +223,7 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 	checkPlanID(t, planbuilder.PlanInsertMessage, qre.plan.PlanID)
 	ch1 := make(chan *sqltypes.Result)
 	count := 0
-	tsv.messager.Subscribe("msg", func(qr *sqltypes.Result) error {
+	tsv.messager.Subscribe(context.Background(), "msg", func(qr *sqltypes.Result) error {
 		if count > 1 {
 			return io.EOF
 		}
