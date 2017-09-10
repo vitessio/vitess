@@ -301,7 +301,14 @@ func (sbc *SandboxConn) BeginExecuteBatch(ctx context.Context, target *querypb.T
 
 // MessageStream is part of the QueryService interface.
 func (sbc *SandboxConn) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) (err error) {
-	callback(SingleRowResult)
+	if err := sbc.getError(); err != nil {
+		return err
+	}
+	r := sbc.getNextResult()
+	if r == nil {
+		return nil
+	}
+	callback(r)
 	return nil
 }
 

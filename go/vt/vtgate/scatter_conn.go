@@ -17,6 +17,8 @@ limitations under the License.
 package vtgate
 
 import (
+	"flag"
+	"io"
 	"math/rand"
 	"sync"
 	"time"
@@ -34,6 +36,10 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+)
+
+var (
+	messageStreamGracePeriod = flag.Duration("message_stream_grace_period", 30*time.Second, "the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent.")
 )
 
 // ScatterConn is used for executing queries across
@@ -403,15 +409,82 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	return allErrors.AggrError(vterrors.Aggregate)
 }
 
+// timeTracker is a convenience wrapper used by MessageStream
+// to track how long a stream has been unavailable.
+type timeTracker struct {
+	mu         sync.Mutex
+	timestamps map[*querypb.Target]time.Time
+}
+
+func newTimeTracker() *timeTracker {
+	return &timeTracker{
+		timestamps: make(map[*querypb.Target]time.Time),
+	}
+}
+
+func (tt *timeTracker) Refresh(target *querypb.Target) {
+	tt.mu.Lock()
+	defer tt.mu.Unlock()
+	tt.timestamps[target] = time.Now()
+}
+
+func (tt *timeTracker) LastRefresh(target *querypb.Target) time.Time {
+	tt.mu.Lock()
+	defer tt.mu.Unlock()
+	last, ok := tt.timestamps[target]
+	if !ok {
+		last = time.Now()
+		tt.timestamps[target] = last
+	}
+	return last
+}
+
 // MessageStream streams messages from the specified shards.
 func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shards []string, name string, callback func(*sqltypes.Result) error) error {
+	// The cancelable context is used for handling errors
+	// from individual streams.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	// mu is used to merge multiple callback calls into one.
 	var mu sync.Mutex
 	fieldSent := false
+	sendTimestamps := newTimeTracker()
 	allErrors := stc.multiGo(ctx, "MessageStream", keyspace, shards, topodatapb.TabletType_MASTER, func(target *querypb.Target) error {
-		return stc.gateway.MessageStream(ctx, target, name, func(qr *sqltypes.Result) error {
-			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
-		})
+		// This loop handles the case where a reparent happens, which can cause
+		// an individual stream to end. If we don't succeed on the retries for
+		// messageStreamGracePeriod, we abort and return an error.
+		for {
+			err := stc.gateway.MessageStream(ctx, target, name, func(qr *sqltypes.Result) error {
+				sendTimestamps.Refresh(target)
+				return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
+			})
+			if err != nil && err != io.EOF {
+				cancel()
+				return err
+			}
+
+			// There was no error. We have see if we need to retry.
+			// If context was canceled, likely due to client disconnect,
+			// return normally without retrying.
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+			}
+			if time.Now().Sub(sendTimestamps.LastRefresh(target)) >= *messageStreamGracePeriod {
+				// Cancel all streams and return an error.
+				cancel()
+				return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "message stream from %v has repeatedly failed for longer than %v", target, *messageStreamGracePeriod)
+			}
+
+			// It's not been too long since our last good send. Wait and retry.
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(*messageStreamGracePeriod / 5):
+			}
+		}
 	})
 	return allErrors.AggrError(vterrors.Aggregate)
 }
