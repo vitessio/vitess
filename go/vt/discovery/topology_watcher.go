@@ -42,6 +42,9 @@ type TabletRecorder interface {
 
 	// RemoveTablet removes the tablet.
 	RemoveTablet(tablet *topodatapb.Tablet)
+
+	// ReplaceTablet does an AddTablet and RemoveTablet within a lock.
+	ReplaceTablet(old, new *topodatapb.Tablet, name string)
 }
 
 // NewCellTabletsWatcher returns a TopologyWatcher that monitors all
@@ -183,8 +186,10 @@ func (tw *TopologyWatcher) loadTablets() {
 	wg.Wait()
 	tw.mu.Lock()
 	for key, tep := range newTablets {
-		if _, ok := tw.tablets[key]; !ok {
+		if val, ok := tw.tablets[key]; !ok {
 			tw.tr.AddTablet(tep.tablet, tep.alias)
+		} else if val.alias != tep.alias {
+			tw.tr.ReplaceTablet(val.tablet, tep.tablet, tep.alias)
 		}
 	}
 	for key, tep := range tw.tablets {
@@ -290,6 +295,13 @@ func (fbs *FilterByShard) AddTablet(tablet *topodatapb.Tablet, name string) {
 func (fbs *FilterByShard) RemoveTablet(tablet *topodatapb.Tablet) {
 	if fbs.isIncluded(tablet) {
 		fbs.tr.RemoveTablet(tablet)
+	}
+}
+
+// ReplaceTablet is part of the TabletRecorder interface.
+func (fbs *FilterByShard) ReplaceTablet(old, new *topodatapb.Tablet, name string) {
+	if fbs.isIncluded(old) && fbs.isIncluded(new) {
+		fbs.tr.ReplaceTablet(old, new, name)
 	}
 }
 
