@@ -209,7 +209,7 @@ func (qre *QueryExecutor) MessageStream(callback func(*sqltypes.Result) error) e
 		return err
 	}
 
-	done, err := qre.tsv.messager.Subscribe(qre.plan.TableName().String(), func(r *sqltypes.Result) error {
+	done, err := qre.tsv.messager.Subscribe(qre.ctx, qre.plan.TableName().String(), func(r *sqltypes.Result) error {
 		select {
 		case <-qre.ctx.Done():
 			return io.EOF
