@@ -42,7 +42,7 @@ type messageReceiver struct {
 	ctx     context.Context
 	errChan chan error
 	send    func(*sqltypes.Result) error
-	cancel  func()
+	cancel  context.CancelFunc
 }
 
 func newMessageReceiver(ctx context.Context, send func(*sqltypes.Result) error) (*messageReceiver, <-chan struct{}) {
