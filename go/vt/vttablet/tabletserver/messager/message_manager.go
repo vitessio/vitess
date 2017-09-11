@@ -356,8 +356,10 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 		tabletenv.LogError()
 		mm.wg.Done()
 	}()
+	receiverClosed := false
 	if err := receiver.receiver.Send(qr); err != nil {
 		if err == io.EOF {
+			receiverClosed = true
 			// No need to call Cancel. messageReceiver already
 			// does that before returning this error.
 			mm.unsubscribe(receiver.receiver)
@@ -381,10 +383,18 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 	for i, row := range qr.Rows {
 		ids[i] = row[0].ToString()
 	}
-	// postpone should discard, but this is a safety measure
-	// in case it fails.
+
 	mm.cache.Discard(ids)
-	go postpone(mm.tsv, mm.name.String(), mm.ackWaitTime, ids)
+	if receiverClosed {
+		// If the receiver ended the stream, we want the messages
+		// to be resent ASAP without postponement. Setting messagesPending
+		// will trigger the poller as soon as the cache is clear.
+		mm.mu.Lock()
+		mm.messagesPending = true
+		mm.mu.Unlock()
+	} else {
+		go postpone(mm.tsv, mm.name.String(), mm.ackWaitTime, ids)
+	}
 }
 
 // postpone is a non-member because it should be called asynchronously and should
