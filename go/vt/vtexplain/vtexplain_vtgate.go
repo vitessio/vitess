@@ -26,6 +26,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -100,6 +101,10 @@ func buildTopology(vschemaStr string, numShardsPerKeyspace int) error {
 			hostname := fmt.Sprintf("%s/%s", ks, shard)
 			log.Infof("registering test tablet %s for keyspace %s shard %s", hostname, ks, shard)
 			sc := healthCheck.AddTestTablet(vtexplainCell, hostname, 1, ks, shard, topodatapb.TabletType_MASTER, true, 1, nil)
+
+			tablet := newFakeTablet()
+			sc.Executor = tablet
+
 			explainTopo.TabletConns[hostname] = sc
 		}
 	}
@@ -110,7 +115,7 @@ func buildTopology(vschemaStr string, numShardsPerKeyspace int) error {
 func vtgateExecute(sql string) ([]*engine.Plan, map[string][]*TabletQuery, error) {
 	_, err := vtgateExecutor.Execute(context.Background(), vtgateSession, sql, nil)
 	if err != nil {
-		return nil, nil, fmt.Errorf("vtgate Execute: %v", err)
+		return nil, nil, fmt.Errorf("vtexplain execute error: %v in %s", err, sql)
 	}
 
 	// use the plan cache to get the set of plans used for this query, then
@@ -123,19 +128,26 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string][]*TabletQuery, error
 	planCache.Clear()
 
 	tabletQueries := make(map[string][]*TabletQuery)
-	for tablet, tc := range explainTopo.TabletConns {
+	for shard, tc := range explainTopo.TabletConns {
 		if len(tc.Queries) == 0 {
 			continue
 		}
 
+		tablet := tc.Executor.(*fakeTablet)
+
 		queries := make([]*TabletQuery, 0, len(tc.Queries))
 		for _, bq := range tc.Queries {
-			tq := &TabletQuery{SQL: bq.Sql, BindVars: bq.BindVariables}
+			tq := &TabletQuery{
+				SQL:          bq.Sql,
+				BindVars:     sqltypes.CopyBindVariables(bq.BindVariables),
+				MysqlQueries: tablet.queries,
+			}
 			queries = append(queries, tq)
 		}
 		tc.Queries = nil
+		tablet.queries = nil
 
-		tabletQueries[tablet] = queries
+		tabletQueries[shard] = queries
 	}
 
 	return plans, tabletQueries, nil
