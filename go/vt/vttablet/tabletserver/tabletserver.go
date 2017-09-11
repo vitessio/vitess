@@ -1344,7 +1344,7 @@ func (tsv *TabletServer) convertError(ctx context.Context, sql string, bindVaria
 	case mysql.ERNotSupportedYet:
 		errCode = vtrpcpb.Code_UNIMPLEMENTED
 	case mysql.ERDiskFull, mysql.EROutOfMemory, mysql.EROutOfSortMemory, mysql.ERConCount, mysql.EROutOfResources, mysql.ERRecordFileFull, mysql.ERHostIsBlocked,
-		mysql.ERCantCreateThread, mysql.ERTooManyDelayedThreads, mysql.ERNetPacketTooLarge, mysql.ERTooManyUserConnections, mysql.ERLockTableFull, mysql.ERUserLimitReached:
+		mysql.ERCantCreateThread, mysql.ERTooManyDelayedThreads, mysql.ERNetPacketTooLarge, mysql.ERTooManyUserConnections, mysql.ERLockTableFull, mysql.ERUserLimitReached, mysql.ERVitessMaxRowsExceeded:
 		errCode = vtrpcpb.Code_RESOURCE_EXHAUSTED
 	case mysql.ERLockWaitTimeout:
 		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
