@@ -24,7 +24,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
-	"github.com/youtube/vitess/go/jsonutil"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/vtexplain"
@@ -38,7 +37,7 @@ var (
 	vschemaFlag     = flag.String("vschema", "", "Identifies the VTGate routing schema")
 	vschemaFileFlag = flag.String("vschema-file", "", "Identifies the VTGate routing schema file")
 	numShards       = flag.Int("shards", 2, "Number of shards per keyspace")
-	replicationMode = flag.String("replication-mode", "", "The replication mode to simulate -- must be set to either ROW or STATEMENT")
+	replicationMode = flag.String("replication-mode", "ROW", "The replication mode to simulate -- must be set to either ROW or STATEMENT")
 	normalize       = flag.Bool("normalize", false, "Whether to enable vtgate normalization")
 	outputMode      = flag.String("output-mode", "text", "Output in human-friendly text or json")
 
@@ -182,32 +181,10 @@ func parseAndRun() error {
 	}
 
 	if *outputMode == "text" {
-		printPlans(plans)
+		fmt.Print(vtexplain.PlansAsText(plans))
 	} else {
-		planJSON, err := jsonutil.MarshalIndentNoEscape(plans, "", "   ")
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf(string(planJSON))
+		fmt.Print(vtexplain.PlansAsJSON(plans))
 	}
 
 	return nil
-}
-
-func printPlans(plans []*vtexplain.Plan) {
-	for _, plan := range plans {
-		fmt.Printf("----------------------------------------------------------------------\n")
-		fmt.Printf("%s\n\n", plan.SQL)
-		for tablet, queries := range plan.TabletQueries {
-			fmt.Printf("[%s]:\n", tablet)
-			for _, tq := range queries {
-				for _, sql := range tq.MysqlQueries {
-					fmt.Printf("%s\n", sql)
-				}
-			}
-			fmt.Printf("\n")
-		}
-	}
-	fmt.Printf("----------------------------------------------------------------------\n")
 }

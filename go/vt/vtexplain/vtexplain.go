@@ -22,6 +22,7 @@ package vtexplain
 import (
 	"bytes"
 	"fmt"
+	"sort"
 	"strings"
 
 	log "github.com/golang/glog"
@@ -104,11 +105,6 @@ func Init(vSchemaStr, sqlSchema string, opts *Options) error {
 		return fmt.Errorf("invalid replication mode \"%s\"", opts.ReplicationMode)
 	}
 
-	err := initVtgateExecutor(vSchemaStr, opts)
-	if err != nil {
-		return fmt.Errorf("initVtgateExecutor: %v", err)
-	}
-
 	parsedDDLs, err := parseSchema(sqlSchema)
 	if err != nil {
 		return fmt.Errorf("parseSchema: %v", err)
@@ -117,6 +113,11 @@ func Init(vSchemaStr, sqlSchema string, opts *Options) error {
 	err = initTabletEnvironment(parsedDDLs, opts)
 	if err != nil {
 		return fmt.Errorf("initTabletEnvironment: %v", err)
+	}
+
+	err = initVtgateExecutor(vSchemaStr, opts)
+	if err != nil {
+		return fmt.Errorf("initVtgateExecutor: %v", err)
 	}
 
 	return nil
@@ -198,20 +199,43 @@ func getPlan(sql string) (*Plan, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, tqs := range tabletQueries {
-		for _, tq := range tqs {
-			mqs, err := fakeTabletExecute(tq.SQL, tq.BindVars)
-			if err != nil {
-				return nil, fmt.Errorf("fakeTabletExecute: %v", err)
-			}
-			tq.MysqlQueries = mqs
-		}
-
-	}
 
 	return &Plan{
 		SQL:           sql,
 		Plans:         plans,
 		TabletQueries: tabletQueries,
 	}, nil
+}
+
+// PlansAsText returns a text representation of the plans
+func PlansAsText(plans []*Plan) string {
+	var b bytes.Buffer
+	for _, plan := range plans {
+		fmt.Fprintf(&b, "----------------------------------------------------------------------\n")
+		fmt.Fprintf(&b, "%s\n\n", plan.SQL)
+
+		tablets := make([]string, 0, len(plan.TabletQueries))
+		for tablet := range plan.TabletQueries {
+			tablets = append(tablets, tablet)
+		}
+		sort.Strings(tablets)
+		for _, tablet := range tablets {
+			queries := plan.TabletQueries[tablet]
+			fmt.Fprintf(&b, "[%s]:\n", tablet)
+			for _, tq := range queries {
+				for _, sql := range tq.MysqlQueries {
+					fmt.Fprintf(&b, "%s\n", sql)
+				}
+			}
+			fmt.Fprintf(&b, "\n")
+		}
+	}
+	fmt.Fprintf(&b, "----------------------------------------------------------------------\n")
+	return string(b.Bytes())
+}
+
+// PlansAsJSON returns a json representation of the plans
+func PlansAsJSON(plans []*Plan) string {
+	planJSON, _ := jsonutil.MarshalIndentNoEscape(plans, "", "    ")
+	return string(planJSON)
 }
