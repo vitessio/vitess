@@ -379,7 +379,7 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result 
 				return nil, err
 			}
 			return nil, &SQLError{
-				Num:     0,
+				Num:     ERVitessMaxRowsExceeded,
 				Message: fmt.Sprintf("Row count exceeded %d", maxrows),
 			}
 		}
