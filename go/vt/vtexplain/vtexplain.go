@@ -21,12 +21,12 @@ package vtexplain
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	log "github.com/golang/glog"
 
+	"github.com/youtube/vitess/go/jsonutil"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 
@@ -69,7 +69,7 @@ func (tq *TabletQuery) MarshalJSON() ([]byte, error) {
 		bindVars[k] = b.String()
 	}
 
-	return json.Marshal(&struct {
+	return jsonutil.MarshalNoEscape(&struct {
 		SQL          string
 		BindVars     map[string]string
 		MysqlQueries []string
