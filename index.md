@@ -29,6 +29,7 @@
 
 <div class="page-spacer"></div>
 
+<!-- Ordering of logos: alphabetical with YouTube as exception -->
 <div class="row">
   <div class="col-md-6">
     <h2><i class="fa fa-flag-checkered"></i>&nbsp;Who uses Vitess</h2>
@@ -37,36 +38,37 @@
         <img src="/images/users/youtube_logo.png" alt="YouTube" width="120">
       </div>
       <div class="col-md-3">
-        <img src="/images/users/bettercloud_logo.png" alt="BetterCloud" width="120">
+        <img src="/images/users/axon_logo.png" alt="Axon" width="60">
       </div>
       <div class="col-md-3">
-        <img src="/images/users/flipkart_logo.png" alt="Flipkart" width="120">
+        <img src="/images/users/bettercloud_logo.png" alt="BetterCloud" width="120">
       </div>
     </div>
     <div class="row logo">
+      <div class="col-md-3">
+        <img src="/images/users/flipkart_logo.png" alt="Flipkart" width="120">
+      </div>
       <div class="col-md-3">
         <img src="/images/users/hubspot_logo.png" alt="Hubspot" width="120">
       </div>
       <div class="col-md-3">
         <img src="/images/users/nozzle_logo.png" alt="Nozzle" width="60">
       </div>
+    </div>
+    <div class="row logo">
       <div class="col-md-3">
         <img src="/images/users/pixel_federation_logo.png" alt="Pixel Federation" width="100">
       </div>
-    </div>
-    <div class="row logo">
       <div class="col-md-3">
         <img src="/images/users/quiz_of_kings_logo.jpg" alt="Quiz of Kings" width="100">
       </div>
       <div class="col-md-3">
         <img src="/images/users/slack_logo.png" alt="Slack" width="120">
       </div>
-      <div class="col-md-3">
-        <img src="/images/users/square_logo.png" alt="Square" width="120">
-      </div>
     </div>
     <div class="row logo">
-      <div class="col-md-3"> <!-- empty column so stitchlabs is centered -->
+      <div class="col-md-3">
+        <img src="/images/users/square_logo.png" alt="Square" width="120">
       </div>
       <div class="col-md-3">
         <img src="/images/users/stitchlabs_logo.png" alt="Stitch Labs" width="120">
@@ -80,7 +82,6 @@
     </div>
   </div>
 </div>
-
 
 <!--
 ## Contact
