@@ -213,8 +213,8 @@ func TestMessageManagerSend(t *testing.T) {
 	}
 
 	// Ensure Postpone got called.
-	if got := <-ch; got != mmTable.Name.String() {
-		t.Errorf("Postpone: %s, want %v", got, mmTable.Name)
+	if got, want := <-ch, "postpone"; got != want {
+		t.Errorf("Postpone: %s, want %v", got, want)
 	}
 
 	// Verify item has been removed from cache.
@@ -244,7 +244,7 @@ func TestMessageManagerSend(t *testing.T) {
 			continue
 		}
 		mm.mu.Unlock()
-		return
+		break
 	}
 
 	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("4")}})
@@ -254,6 +254,43 @@ func TestMessageManagerSend(t *testing.T) {
 	<-r1.ch
 	<-r1.ch
 	<-r1.ch
+}
+
+func TestMessageManagerSendEOF(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	tsv := newFakeTabletServer()
+	mm := newMessageManager(tsv, mmTable, newMMConnPool(db))
+	mm.Open()
+	defer mm.Close()
+	r1 := newTestReceiver(0)
+	ctx, cancel := context.WithCancel(context.Background())
+	mm.Subscribe(ctx, r1.rcv)
+	// Pull field info.
+	<-r1.ch
+
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NULL}})
+	// Wait for send to enqueue
+	r1.WaitForCount(2)
+
+	// Now cancel, which will send an EOF to the sender.
+	cancel()
+	// Wait for send to enqueue
+	messagesWerePending := false
+	for i := 0; i < 10; i++ {
+		runtime.Gosched()
+		mm.mu.Lock()
+		if mm.messagesPending {
+			messagesWerePending = true
+			mm.mu.Unlock()
+			break
+		}
+		mm.mu.Unlock()
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !messagesWerePending {
+		t.Error("Send with EOF did not trigger pending messages")
+	}
 }
 
 func TestMessageManagerBatchSend(t *testing.T) {
@@ -509,8 +546,8 @@ func TestMessageManagerPurge(t *testing.T) {
 	mm.Open()
 	defer mm.Close()
 	// Ensure Purge got called.
-	if got := <-ch; got != mmTable.Name.String() {
-		t.Errorf("Postpone: %s, want %v", got, mmTable.Name)
+	if got, want := <-ch, "purge"; got != want {
+		t.Errorf("Purge: %s, want %v", got, want)
 	}
 }
 
@@ -583,14 +620,14 @@ func (fts *fakeTabletServer) SetChannel(ch chan string) {
 
 func (fts *fakeTabletServer) PostponeMessages(ctx context.Context, target *querypb.Target, name string, ids []string) (count int64, err error) {
 	if fts.ch != nil {
-		fts.ch <- name
+		fts.ch <- "postpone"
 	}
 	return 0, nil
 }
 
 func (fts *fakeTabletServer) PurgeMessages(ctx context.Context, target *querypb.Target, name string, timeCutoff int64) (count int64, err error) {
 	if fts.ch != nil {
-		fts.ch <- name
+		fts.ch <- "purge"
 	}
 	return 0, nil
 }
