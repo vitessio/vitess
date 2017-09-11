@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -25,6 +24,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
+	"github.com/youtube/vitess/go/jsonutil"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/vtexplain"
@@ -184,7 +184,7 @@ func parseAndRun() error {
 	if *outputMode == "text" {
 		printPlans(plans)
 	} else {
-		planJSON, err := json.MarshalIndent(plans, "", "    ")
+		planJSON, err := jsonutil.MarshalIndentNoEscape(plans, "", "   ")
 		if err != nil {
 			return err
 		}

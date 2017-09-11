@@ -17,13 +17,13 @@ limitations under the License.
 package engine
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 
 	"strconv"
 	"strings"
 
+	"github.com/youtube/vitess/go/jsonutil"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -140,7 +140,7 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		Mid:        route.Mid,
 		Suffix:     route.Suffix,
 	}
-	return json.Marshal(marshalRoute)
+	return jsonutil.MarshalNoEscape(marshalRoute)
 }
 
 // Generate represents the instruction to generate
