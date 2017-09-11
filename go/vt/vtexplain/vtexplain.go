@@ -156,17 +156,37 @@ func parseSchema(sqlSchema string) ([]*sqlparser.DDL, error) {
 }
 
 // Run the explain analysis on the given queries
-func Run(sqlStr string) ([]*Plan, error) {
+func Run(sql string) ([]*Plan, error) {
 	plans := make([]*Plan, 0, 16)
 
-	for _, sql := range strings.Split(sqlStr, ";") {
-		s := strings.TrimSpace(sql)
-		if s != "" {
-			plan, err := getPlan(s)
+	for {
+		// Need to strip comments in a loop to handle multiple comments
+		// in a row.
+		for {
+			s := sqlparser.StripLeadingComments(sql)
+			if s == sql {
+				break
+			}
+			sql = s
+		}
+		rem := ""
+		idx := strings.Index(sql, ";")
+		if idx != -1 {
+			rem = sql[idx+1:]
+			sql = sql[:idx]
+		}
+
+		if sql != "" {
+			plan, err := getPlan(sql)
 			if err != nil {
 				return nil, err
 			}
 			plans = append(plans, plan)
+		}
+
+		sql = rem
+		if sql == "" {
+			break
 		}
 	}
 
