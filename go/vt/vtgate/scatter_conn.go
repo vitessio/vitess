@@ -464,7 +464,7 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shar
 				return err
 			}
 
-			// There was no error. We have see if we need to retry.
+			// There was no error. We have to see if we need to retry.
 			// If context was canceled, likely due to client disconnect,
 			// return normally without retrying.
 			select {
