@@ -103,16 +103,14 @@ func (me *Engine) Close() {
 // usually triggered by Close. It's the responsibility of the send
 // function to promptly return if the done channel is closed. Otherwise,
 // the engine's Close function will hang indefinitely.
-func (me *Engine) Subscribe(name string, send func(*sqltypes.Result) error) (done chan struct{}, err error) {
+func (me *Engine) Subscribe(ctx context.Context, name string, send func(*sqltypes.Result) error) (done <-chan struct{}, err error) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found", name)
 	}
-	rcv, done := newMessageReceiver(send)
-	mm.Subscribe(rcv)
-	return done, nil
+	return mm.Subscribe(ctx, send), nil
 }
 
 // LockDB obtains db locks for all messages that need to

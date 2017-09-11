@@ -19,10 +19,12 @@ package vtgate
 import (
 	"encoding/hex"
 	"fmt"
+	"io"
 	"math"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -1172,10 +1174,15 @@ func TestVTGateMessageStreamSharded(t *testing.T) {
 	_ = hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1002, ks, shard2, topodatapb.TabletType_MASTER, true, 1, nil)
 	ch := make(chan *sqltypes.Result)
 	done := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		kr := &topodatapb.KeyRange{End: []byte{0x40}}
-		err := rpcVTGate.MessageStream(context.Background(), ks, "", kr, "msg", func(qr *sqltypes.Result) error {
-			ch <- qr
+		err := rpcVTGate.MessageStream(ctx, ks, "", kr, "msg", func(qr *sqltypes.Result) error {
+			select {
+			case <-ctx.Done():
+				return io.EOF
+			case ch <- qr:
+			}
 			return nil
 		})
 		if err != nil {
@@ -1189,6 +1196,8 @@ func TestVTGateMessageStreamSharded(t *testing.T) {
 	if !reflect.DeepEqual(got, sandboxconn.SingleRowResult) {
 		t.Errorf("MessageStream: %v, want %v", got, sandboxconn.SingleRowResult)
 	}
+	// Once we cancel, the function should return.
+	cancel()
 	<-done
 
 	// Test error case.
@@ -1210,9 +1219,14 @@ func TestVTGateMessageStreamUnsharded(t *testing.T) {
 	_ = hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, "0", topodatapb.TabletType_MASTER, true, 1, nil)
 	ch := make(chan *sqltypes.Result)
 	done := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		err := rpcVTGate.MessageStream(context.Background(), ks, "0", nil, "msg", func(qr *sqltypes.Result) error {
-			ch <- qr
+		err := rpcVTGate.MessageStream(ctx, ks, "0", nil, "msg", func(qr *sqltypes.Result) error {
+			select {
+			case <-ctx.Done():
+				return io.EOF
+			case ch <- qr:
+			}
 			return nil
 		})
 		if err != nil {
@@ -1224,7 +1238,97 @@ func TestVTGateMessageStreamUnsharded(t *testing.T) {
 	if !reflect.DeepEqual(got, sandboxconn.SingleRowResult) {
 		t.Errorf("MessageStream: %v, want %v", got, sandboxconn.SingleRowResult)
 	}
+	// Function should return after cancel.
+	cancel()
 	<-done
+}
+
+func TestVTGateMessageStreamRetry(t *testing.T) {
+	*messageStreamGracePeriod = 5 * time.Second
+	defer func() {
+		*messageStreamGracePeriod = 30 * time.Second
+	}()
+	ks := KsTestUnsharded
+	createSandbox(ks)
+	hcVTGateTest.Reset()
+	_ = hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	ch := make(chan *sqltypes.Result)
+	done := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		err := rpcVTGate.MessageStream(ctx, ks, "0", nil, "msg", func(qr *sqltypes.Result) error {
+			select {
+			case <-ctx.Done():
+				return io.EOF
+			case ch <- qr:
+			}
+			return nil
+		})
+		if err != nil {
+			t.Error(err)
+		}
+		close(done)
+	}()
+	<-ch
+	start := time.Now()
+	<-ch
+	duration := time.Now().Sub(start)
+	if duration < 1*time.Second || duration > 2*time.Second {
+		t.Errorf("Retry duration should be around 1 second: %v", duration)
+	}
+	// Function should return after cancel.
+	cancel()
+	<-done
+}
+
+func TestVTGateMessageStreamGracePeriod(t *testing.T) {
+	*messageStreamGracePeriod = 1 * time.Second
+	defer func() {
+		*messageStreamGracePeriod = 30 * time.Second
+	}()
+	ks := KsTestUnsharded
+	createSandbox(ks)
+	hcVTGateTest.Reset()
+	tablet := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	// tablet should return no results for at least 5 calls for the grace period to kick in.
+	tablet.SetResults([]*sqltypes.Result{
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+	})
+	start := time.Now()
+	err := rpcVTGate.MessageStream(context.Background(), ks, "0", nil, "msg", func(qr *sqltypes.Result) error {
+		return nil
+	})
+	want := "has repeatedly failed for longer than 1s"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("MessageStream err: %v, must contain %s", err, want)
+	}
+	duration := time.Now().Sub(start)
+	if duration < 1*time.Second || duration > 2*time.Second {
+		t.Errorf("Retry duration should be around 1 second: %v", duration)
+	}
+}
+
+func TestVTGateMessageStreamFail(t *testing.T) {
+	ks := KsTestUnsharded
+	createSandbox(ks)
+	hcVTGateTest.Reset()
+	tablet := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	// tablet should return no results for at least 5 calls for the grace period to kick in.
+	tablet.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1
+	err := rpcVTGate.MessageStream(context.Background(), ks, "0", nil, "msg", func(qr *sqltypes.Result) error {
+		return nil
+	})
+	want := "RESOURCE_EXHAUSTED error"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("MessageStream err: %v, must contain %s", err, want)
+	}
 }
 
 func TestVTGateMessageAck(t *testing.T) {
