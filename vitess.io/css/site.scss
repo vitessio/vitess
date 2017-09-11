@@ -304,6 +304,12 @@ aside.success, div.success, p.success {
   margin-top: 40px;
 }
 
+// Logos are centered and need the padding.
+.logo {
+  margin-top : 10px;
+  text-align: center;
+}
+
 
 // Table styles
 table {
