@@ -40,11 +40,8 @@ create table t2 (
 	}
 	initTabletEnvironment(ddls, defaultTestOpts())
 
-	db, tsv := startFakeTablet()
-	defer db.Close()
-	defer tsv.StopService()
-
-	se := tsv.SchemaEngine()
+	tablet := newFakeTablet()
+	se := tablet.tsv.SchemaEngine()
 	tables := se.GetSchema()
 
 	t1 := tables["t1"]

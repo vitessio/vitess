@@ -1,0 +1,41 @@
+----------------------------------------------------------------------
+select * from user /* scatter */
+
+[ks_sharded/-80]:
+select * from user where 1 != 1
+select * from user limit 10001
+
+[ks_sharded/80-]:
+select * from user where 1 != 1
+select * from user limit 10001
+
+----------------------------------------------------------------------
+select * from user where id = 1 /* equal unique */
+
+[ks_sharded/-80]:
+select * from user where 1 != 1
+select * from user where id = 1 limit 10001
+
+----------------------------------------------------------------------
+select * from user where id > 100 /* scatter range */
+
+[ks_sharded/-80]:
+select * from user where 1 != 1
+select * from user where id > 100 limit 10001
+
+[ks_sharded/80-]:
+select * from user where 1 != 1
+select * from user where id > 100 limit 10001
+
+----------------------------------------------------------------------
+select * from user where name = 'bob'/* vindex lookup */
+
+[ks_sharded/-80]:
+select * from user where 1 != 1
+select * from user where name = 'bob' limit 10001
+
+[ks_sharded/80-]:
+select user_id from name_user_map where 1 != 1
+select user_id from name_user_map where name = 'bob' limit 10001
+
+----------------------------------------------------------------------

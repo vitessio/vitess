@@ -1,0 +1,48 @@
+----------------------------------------------------------------------
+select * from user where email="null@void.com"
+
+[ks_sharded/-40]:
+select * from user where 1 != 1
+select * from user where email = 'null@void.com' limit 10001
+
+[ks_sharded/40-80]:
+select * from user where 1 != 1
+select * from user where email = 'null@void.com' limit 10001
+
+[ks_sharded/80-c0]:
+select * from user where 1 != 1
+select * from user where email = 'null@void.com' limit 10001
+
+[ks_sharded/c0-]:
+select * from user where 1 != 1
+select * from user where email = 'null@void.com' limit 10001
+
+----------------------------------------------------------------------
+select * from user where id in (1,2,3,4,5,6,7,8)
+
+[ks_sharded/-40]:
+select * from user where 1 != 1
+select * from user where id in (1, 2) limit 10001
+
+[ks_sharded/40-80]:
+select * from user where 1 != 1
+select * from user where id in (3, 5) limit 10001
+
+[ks_sharded/c0-]:
+select * from user where 1 != 1
+select * from user where id in (4, 6, 7, 8) limit 10001
+
+----------------------------------------------------------------------
+insert into user (id, name) values(2, "bob")
+
+[ks_sharded/-40]:
+begin
+insert into user(id, name) values (2, 'bob') /* _stream user (id ) (2 ); */
+commit
+
+[ks_sharded/c0-]:
+begin
+insert into name_user_map(name, user_id) values ('bob', 2) /* _stream name_user_map (name user_id ) ('Ym9i' 2 ); */
+commit
+
+----------------------------------------------------------------------
