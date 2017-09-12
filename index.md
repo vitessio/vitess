@@ -29,11 +29,13 @@
 
 <div class="page-spacer"></div>
 
-<!-- Ordering of logos: alphabetical with YouTube as exception -->
+<!-- Ordering of logos: alphabetical with YouTube as exception.
+Slack and Nozzle are swapped for aesthetics, because the icons don't align well otherwise. -->
+
 <div class="row">
   <div class="col-md-6">
     <h2><i class="fa fa-flag-checkered"></i>&nbsp;Who uses Vitess</h2>
-    <div class="row logo">
+    <div class="row logo-row">
       <div class="col-md-3">
         <img src="/images/users/youtube_logo.png" alt="YouTube" width="120">
       </div>
@@ -44,7 +46,7 @@
         <img src="/images/users/bettercloud_logo.png" alt="BetterCloud" width="120">
       </div>
     </div>
-    <div class="row logo">
+    <div class="row logo-row">
       <div class="col-md-3">
         <img src="/images/users/flipkart_logo.png" alt="Flipkart" width="120">
       </div>
@@ -52,10 +54,10 @@
         <img src="/images/users/hubspot_logo.png" alt="Hubspot" width="120">
       </div>
       <div class="col-md-3">
-        <img src="/images/users/nozzle_logo.png" alt="Nozzle" width="60">
+        <img src="/images/users/slack_logo.png" alt="Slack" width="120">
       </div>
     </div>
-    <div class="row logo">
+    <div class="row logo-row">
       <div class="col-md-3">
         <img src="/images/users/pixel_federation_logo.png" alt="Pixel Federation" width="100">
       </div>
@@ -63,10 +65,10 @@
         <img src="/images/users/quiz_of_kings_logo.jpg" alt="Quiz of Kings" width="100">
       </div>
       <div class="col-md-3">
-        <img src="/images/users/slack_logo.png" alt="Slack" width="120">
+        <img src="/images/users/nozzle_logo.png" alt="Nozzle" width="60">
       </div>
     </div>
-    <div class="row logo">
+    <div class="row logo-row">
       <div class="col-md-3">
         <img src="/images/users/square_logo.png" alt="Square" width="120">
       </div>
@@ -76,9 +78,11 @@
     </div>
   </div>
   <div class="col-md-6">
-    <h2><i class="fa fa-rocket"></i>&nbsp;Vitess Presentation at Square</h2>
+    <h2><i class="fa fa-rocket"></i>&nbsp;An Introduction to Vitess</h2>
     <div class="row">
-      <iframe width="480" height="270" src="https://www.youtube.com/embed/q65TleTn2vg?rel=0" frameborder="0" allowfullscreen></iframe>
+      <div class="col-md-12">
+        <iframe width="480" height="270" src="https://www.youtube.com/embed/q65TleTn2vg?rel=0" frameborder="0" allowfullscreen></iframe>
+      </div>
     </div>
   </div>
 </div>
