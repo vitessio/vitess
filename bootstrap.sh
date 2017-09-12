@@ -21,10 +21,9 @@ fi
 
 # Run parallel make, based on number of cores available.
 case $(uname) in
-Linux)	NB_CORES=$(grep -c '^processor' /proc/cpuinfo);;
-Darwin)	NB_CORES=$(sysctl hw.ncpu | awk '{ print $2 }');;
+  Linux)  NB_CORES=$(grep -c '^processor' /proc/cpuinfo);;
+  Darwin) NB_CORES=$(sysctl hw.ncpu | awk '{ print $2 }');;
 esac
-
 if [ -n "$NB_CORES" ]; then
   export MAKEFLAGS="-j$((NB_CORES+1)) -l${NB_CORES}"
 fi
