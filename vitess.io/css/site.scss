@@ -4,13 +4,15 @@
 @import url("https://ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/themes/smoothness/jquery-ui.css");
 
 // Colors
-// We're using the Material "Indigo" palette: https://material.google.com/style/color.html#color-color-palette
-// 500
+// We're using colors picked from images/vitess_logo.svg.
+// Using the brightness principles in https://material.google.com/style/color.html#color-color-palette.
+// Primary is a color of mid-range brighntess from the logo.
 $primaryBrandColor: #296589;
-// 800
+// Darker is one of the darker colors from the logo.
 $darkerBrandColor: #183B4F;
-// 50
-$lighterBrandColor: #61B7EB;
+// The logo doesn't have a color light enough. So, we pick something similar from material design.
+// Cyan 50
+$lighterBrandColor: #E0F7FA;
 // Purple 800
 $accentColor: #6A1B9A;
 
@@ -304,12 +306,11 @@ aside.success, div.success, p.success {
   margin-top: 40px;
 }
 
-// Logos are centered and need the padding.
-.logo {
-  margin-top : 10px;
+// User logos are centered and need the padding.
+.logo-row {
+  margin-top: 10px;
   text-align: center;
 }
-
 
 // Table styles
 table {
