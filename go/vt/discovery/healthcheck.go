@@ -44,6 +44,10 @@ import (
 	"sync"
 	"time"
 
+	"bytes"
+	"encoding/json"
+	"net/http"
+
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/netutil"
@@ -60,6 +64,7 @@ import (
 var (
 	hcErrorCounters          = stats.NewMultiCounters("HealthcheckErrors", []string{"Keyspace", "ShardName", "TabletType"})
 	hcMasterPromotedCounters = stats.NewMultiCounters("HealthcheckMasterPromoted", []string{"Keyspace", "ShardName"})
+	healthcheckOnce          sync.Once
 )
 
 // See the documentation for NewHealthCheck below for an explanation of these parameters.
@@ -322,12 +327,32 @@ func NewHealthCheck(connTimeout, retryDelay, healthCheckTimeout time.Duration) H
 			}
 		}
 	}()
+
+	healthcheckOnce.Do(func() {
+		http.Handle("/debug/gateway", hc)
+	})
+
 	return hc
 }
 
 // RegisterStats registers the connection counts stats
 func (hc *HealthCheckImpl) RegisterStats() {
 	stats.NewMultiCountersFunc("HealthcheckConnections", []string{"Keyspace", "ShardName", "TabletType"}, hc.servingConnStats)
+}
+
+// ServeHTTP is part of the http.Handler interface. It renders the current state of the discovery gateway tablet cache into json.
+func (hc *HealthCheckImpl) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	status := hc.cacheStatusMap()
+	b, err := json.MarshalIndent(status, "", " ")
+	if err != nil {
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	buf := bytes.NewBuffer(nil)
+	json.HTMLEscape(buf, b)
+	w.Write(buf.Bytes())
 }
 
 // servingConnStats returns the number of serving tablets per keyspace/shard/tablet type.
@@ -742,11 +767,22 @@ func (tcsl TabletsCacheStatusList) Swap(i, j int) {
 
 // CacheStatus returns a displayable version of the cache.
 func (hc *HealthCheckImpl) CacheStatus() TabletsCacheStatusList {
+	tcsMap := hc.cacheStatusMap()
+	tcsl := make(TabletsCacheStatusList, 0, len(tcsMap))
+	for _, tcs := range tcsMap {
+		tcsl = append(tcsl, tcs)
+	}
+	sort.Sort(tcsl)
+	return tcsl
+}
+
+func (hc *HealthCheckImpl) cacheStatusMap() map[string]*TabletsCacheStatus {
 	tcsMap := make(map[string]*TabletsCacheStatus)
 	hc.mu.RLock()
+	defer hc.mu.RUnlock()
 	for _, hcc := range hc.addrToConns {
 		hcc.mu.RLock()
-		key := fmt.Sprintf("%v.%v.%v.%v", hcc.tabletStats.Tablet.Alias.Cell, hcc.tabletStats.Target.Keyspace, hcc.tabletStats.Target.Shard, string(hcc.tabletStats.Target.TabletType))
+		key := fmt.Sprintf("%v.%v.%v.%v", hcc.tabletStats.Tablet.Alias.Cell, hcc.tabletStats.Target.Keyspace, hcc.tabletStats.Target.Shard, hcc.tabletStats.Target.TabletType.String())
 		var tcs *TabletsCacheStatus
 		var ok bool
 		if tcs, ok = tcsMap[key]; !ok {
@@ -760,13 +796,7 @@ func (hc *HealthCheckImpl) CacheStatus() TabletsCacheStatusList {
 		hcc.mu.RUnlock()
 		tcs.TabletsStats = append(tcs.TabletsStats, &stats)
 	}
-	hc.mu.RUnlock()
-	tcsl := make(TabletsCacheStatusList, 0, len(tcsMap))
-	for _, tcs := range tcsMap {
-		tcsl = append(tcsl, tcs)
-	}
-	sort.Sort(tcsl)
-	return tcsl
+	return tcsMap
 }
 
 // Close stops the healthcheck.
