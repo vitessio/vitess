@@ -422,16 +422,16 @@ func newTimeTracker() *timeTracker {
 	}
 }
 
-// Reset resets the timestamp set by LastError.
+// Reset resets the timestamp set by Record.
 func (tt *timeTracker) Reset(target *querypb.Target) {
 	tt.mu.Lock()
 	defer tt.mu.Unlock()
 	delete(tt.timestamps, target)
 }
 
-// LastError sets the time to Now if there was no previous timestamp,
+// Record records the time to Now if there was no previous timestamp,
 // and it keeps returning that value until the next Reset.
-func (tt *timeTracker) LastError(target *querypb.Target) time.Time {
+func (tt *timeTracker) Record(target *querypb.Target) time.Time {
 	tt.mu.Lock()
 	defer tt.mu.Unlock()
 	last, ok := tt.timestamps[target]
@@ -462,7 +462,9 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shar
 				lastErrors.Reset(target)
 				return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 			})
-			if err != nil && err != io.EOF {
+			// nil and EOF are equivalent. UNAVAILABLE can be returned by vttablet if it's demoted
+			// from master to replica. For any of these conditions, we have to retry.
+			if err != nil && err != io.EOF && vterrors.Code(err) != vtrpcpb.Code_UNAVAILABLE {
 				cancel()
 				return err
 			}
@@ -475,7 +477,8 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shar
 				return nil
 			default:
 			}
-			if time.Now().Sub(lastErrors.LastError(target)) >= *messageStreamGracePeriod {
+			firstErrorTimeStamp := lastErrors.Record(target)
+			if time.Now().Sub(firstErrorTimeStamp) >= *messageStreamGracePeriod {
 				// Cancel all streams and return an error.
 				cancel()
 				return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "message stream from %v has repeatedly failed for longer than %v", target, *messageStreamGracePeriod)

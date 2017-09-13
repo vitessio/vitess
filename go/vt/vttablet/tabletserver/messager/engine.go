@@ -106,13 +106,8 @@ func (me *Engine) Close() {
 func (me *Engine) Subscribe(ctx context.Context, name string, send func(*sqltypes.Result) error) (done <-chan struct{}, err error) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
-	// Return a closed channel if engine is not open.
-	// This means that we are not the master, and will
-	// prompt vtgate to look for the new master.
 	if !me.isOpen {
-		ch := make(chan struct{})
-		close(ch)
-		return ch, nil
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "messager engine is closed, probably because this is not a master any more")
 	}
 	mm := me.managers[name]
 	if mm == nil {
