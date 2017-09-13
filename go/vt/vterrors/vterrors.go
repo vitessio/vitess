@@ -83,3 +83,25 @@ func Code(err error) vtrpcpb.Code {
 	}
 	return vtrpcpb.Code_UNKNOWN
 }
+
+// Equals returns true iff the error message and the code returned by Code()
+// is equal.
+func Equals(a, b error) bool {
+	if a == nil && b == nil {
+		// Both are nil.
+		return true
+	}
+
+	if a == nil && b != nil || a != nil && b == nil {
+		// One of the two is nil.
+		return false
+	}
+
+	return a.Error() == b.Error() && Code(a) == Code(b)
+}
+
+// Print is meant to print the vtError object in test failures.
+// For comparing two vterrors, use Equals() instead.
+func Print(err error) string {
+	return fmt.Sprintf("%v: %v", Code(err), err.Error())
+}
