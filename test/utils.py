@@ -569,6 +569,7 @@ class VtGate(object):
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
         '-stderrthreshold', get_log_level(),
         '-normalize_queries',
+        '-alsologtostderr',
     ]
     if l2vtgates:
       args.extend([
