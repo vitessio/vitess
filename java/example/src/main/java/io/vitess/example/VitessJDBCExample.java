@@ -62,7 +62,7 @@ public class VitessJDBCExample {
             conn.commit();
 
             // Read it back from replica.
-            dbURL += "/test_keyspace?TABLET_TYPE=replica";
+            dbURL += "?target=test_keyspace@replica";
             try (Connection connReplica = DriverManager.getConnection(dbURL, null)) {
                 System.out.println("Reading from replica...");
                 readData(connReplica);

@@ -149,7 +149,7 @@ func TestConnectionWithoutSourceHost(t *testing.T) {
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{&AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
@@ -186,7 +186,7 @@ func TestConnectionWithSourceHost(t *testing.T) {
 	authServer := NewAuthServerStatic()
 
 	authServer.Entries["user1"] = []*AuthServerStaticEntry{
-		&AuthServerStaticEntry{
+		{
 			Password:   "password1",
 			UserData:   "userData1",
 			SourceHost: "localhost",
@@ -226,7 +226,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 	authServer := NewAuthServerStatic()
 
 	authServer.Entries["user1"] = []*AuthServerStaticEntry{
-		&AuthServerStaticEntry{
+		{
 			Password:   "password1",
 			UserData:   "userData1",
 			SourceHost: "localhost",
@@ -262,7 +262,7 @@ func TestClientFoundRows(t *testing.T) {
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{&AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
@@ -317,7 +317,7 @@ func TestServer(t *testing.T) {
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{&AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
@@ -507,7 +507,7 @@ func TestClearTextServer(t *testing.T) {
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{&AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
@@ -595,7 +595,7 @@ func TestDialogServer(t *testing.T) {
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{&AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
@@ -642,7 +642,7 @@ func TestTLSServer(t *testing.T) {
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{&AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 	}}
 

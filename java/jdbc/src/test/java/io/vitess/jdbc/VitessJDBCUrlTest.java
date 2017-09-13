@@ -16,13 +16,13 @@
 
 package io.vitess.jdbc;
 
-import io.vitess.proto.Topodata;
-import io.vitess.util.Constants;
+import java.sql.SQLException;
+import java.util.Properties;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.sql.SQLException;
-import java.util.Properties;
+import io.vitess.proto.Topodata;
+import io.vitess.util.Constants;
 
 /**
  * Created by naveen.nahata on 18/02/16.
@@ -216,5 +216,19 @@ public class VitessJDBCUrlTest {
         Assert.assertEquals(12345, vitessJDBCUrl.getHostInfos().get(0).getPort());
         Assert.assertEquals(Topodata.TabletType.REPLICA.name(), vitessJDBCUrl.getProperties().getProperty(Constants.Property.TABLET_TYPE).toUpperCase());
         Assert.assertEquals(Topodata.TabletType.REPLICA.name(), vitessJDBCUrl.getProperties().getProperty(Constants.Property.OLD_TABLET_TYPE).toUpperCase());
+    }
+
+    @Test public void testCompleteURLWithTarget() throws Exception {
+        Properties info = new Properties();
+        VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(
+            "jdbc:vitess://user@h1:8080,h2:8081?target=keyspace:-80@replica&prop=val",
+            info);
+        Assert.assertEquals("user", vitessJDBCUrl.getProperties().getProperty(Constants.Property.USERNAME));
+        Assert.assertEquals("h1", vitessJDBCUrl.getHostInfos().get(0).getHostname());
+        Assert.assertEquals(8080, vitessJDBCUrl.getHostInfos().get(0).getPort());
+        Assert.assertEquals("h2", vitessJDBCUrl.getHostInfos().get(1).getHostname());
+        Assert.assertEquals(8081, vitessJDBCUrl.getHostInfos().get(1).getPort());
+        Assert.assertEquals("keyspace:-80@replica", vitessJDBCUrl.getProperties().getProperty(Constants.Property.TARGET));
+        Assert.assertEquals("val", vitessJDBCUrl.getProperties().getProperty("prop"));
     }
 }

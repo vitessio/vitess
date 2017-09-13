@@ -16,8 +16,6 @@
 
 package io.vitess.jdbc;
 
-import io.vitess.util.Constants;
-
 import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.DriverManager;
@@ -26,6 +24,8 @@ import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.util.Properties;
 import java.util.logging.Logger;
+
+import io.vitess.util.Constants;
 
 /**
  * VitessDriver is the official JDBC driver for Vitess.
