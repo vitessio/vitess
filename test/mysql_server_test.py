@@ -143,7 +143,7 @@ class TestMySQL(unittest.TestCase):
     utils.VtGate(mysql_server=True).start(
         extra_args=['-mysql_auth_server_impl', 'static',
                     '-mysql_auth_server_static_file', mysql_auth_server_static])
-    params = dict(host='::',
+    params = dict(host='127.0.0.1',
                   port=utils.vtgate.mysql_port,
                   user='testuser1',
                   passwd='testpassword1',
