@@ -98,7 +98,6 @@ func TestSubscribe(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	engine := newTestEngine(db)
-	defer engine.Close()
 	tables := map[string]*schema.Table{
 		"t1": meTable,
 		"t2": meTable,
@@ -121,6 +120,18 @@ func TestSubscribe(t *testing.T) {
 	_, err := engine.Subscribe(context.Background(), "t3", f1)
 	if err == nil || err.Error() != want {
 		t.Errorf("Subscribe: %v, want %s", err, want)
+	}
+
+	// After close, Subscribe should return a closed channel.
+	engine.Close()
+	done, err := engine.Subscribe(context.Background(), "t1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-done:
+	default:
+		t.Error("done should be closed, but was not")
 	}
 }
 
