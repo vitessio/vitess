@@ -16,11 +16,10 @@
 
 package io.vitess.jdbc;
 
+import com.google.common.annotations.VisibleForTesting;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.util.regex.PatternSyntaxException;
-
-import com.google.common.annotations.VisibleForTesting;
 
 import io.vitess.proto.Query;
 import io.vitess.util.Constants;

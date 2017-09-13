@@ -35,7 +35,6 @@ public class Constants {
         "Tablet Type to which Vitess will connect(master, replica, rdonly)";
     public static final String DEFAULT_PORT = "15991";
     public static final Topodata.TabletType DEFAULT_TABLET_TYPE = Topodata.TabletType.MASTER;
-    public static final long CONNECTION_TIMEOUT = 30000;
     public static final String LITERAL_V = "v";
     public static final String LITERAL_SINGLE_QUOTE = "'";
     public static final String SQL_S = "s";
@@ -70,7 +69,7 @@ public class Constants {
         public static final String COMMIT_WHEN_AUTO_COMMIT_TRUE =
             "Cannot call commit when auto commit is true";
         public static final String ROLLBACK_WHEN_AUTO_COMMIT_TRUE =
-            "Cannot call commit when auto commit is true";
+            "Cannot call rollback when auto commit is true";
         public static final String CLOSED_RESULT_SET = "Result Set closed";
         public static final String INVALID_COLUMN_INDEX = "Invalid Column Index";
         public static final String VITESS_CURSOR_CLOSE_ERROR =

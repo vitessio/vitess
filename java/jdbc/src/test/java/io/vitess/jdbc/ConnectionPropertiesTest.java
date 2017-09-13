@@ -20,6 +20,13 @@ import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Properties;
+import org.junit.Assert;
+import org.junit.Test;
+import org.mockito.Mockito;
+
+import io.vitess.proto.Query;
+import io.vitess.proto.Topodata;
+import io.vitess.util.Constants;
 
 import org.junit.Assert;
 import org.junit.Test;

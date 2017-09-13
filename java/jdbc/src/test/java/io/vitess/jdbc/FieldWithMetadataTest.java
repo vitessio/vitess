@@ -18,7 +18,6 @@ package io.vitess.jdbc;
 
 import java.sql.SQLException;
 import java.sql.Types;
-
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;

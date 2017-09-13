@@ -21,17 +21,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
-import io.vitess.client.cursor.Cursor;
-import io.vitess.client.cursor.CursorWithError;
-import io.vitess.client.cursor.SimpleCursor;
-import io.vitess.proto.Query;
-import io.vitess.proto.Query.BindVariable;
-import io.vitess.proto.Query.BoundQuery;
-import io.vitess.proto.Query.QueryResult;
-import io.vitess.proto.Vtgate.BoundKeyspaceIdQuery;
-import io.vitess.proto.Vtgate.BoundShardQuery;
-import io.vitess.proto.Vtgate.ExecuteEntityIdsRequest.EntityId;
-import io.vitess.proto.Vtrpc.RPCError;
 import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
@@ -45,6 +34,18 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
+
+import io.vitess.client.cursor.Cursor;
+import io.vitess.client.cursor.CursorWithError;
+import io.vitess.client.cursor.SimpleCursor;
+import io.vitess.proto.Query;
+import io.vitess.proto.Query.BindVariable;
+import io.vitess.proto.Query.BoundQuery;
+import io.vitess.proto.Query.QueryResult;
+import io.vitess.proto.Vtgate.BoundKeyspaceIdQuery;
+import io.vitess.proto.Vtgate.BoundShardQuery;
+import io.vitess.proto.Vtgate.ExecuteEntityIdsRequest.EntityId;
+import io.vitess.proto.Vtrpc.RPCError;
 
 /**
  * Proto contains methods for working with Vitess protobuf messages.

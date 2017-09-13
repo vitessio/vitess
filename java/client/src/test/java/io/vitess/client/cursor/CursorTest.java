@@ -16,6 +16,8 @@
 
 package io.vitess.client.cursor;
 
+import com.google.common.primitives.UnsignedLong;
+import com.google.protobuf.ByteString;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Date;
@@ -25,14 +27,10 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
 import java.util.TimeZone;
-
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import com.google.common.primitives.UnsignedLong;
-import com.google.protobuf.ByteString;
 
 import io.vitess.proto.Query;
 import io.vitess.proto.Query.Field;

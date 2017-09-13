@@ -20,17 +20,17 @@ package io.vitess.jdbc;
  * Created by ashudeep.sharma on 10/03/16.
  */
 public class DBProperties {
-    private final String productversion;
+    private final String productVersion;
     private final String majorVersion;
     private final String minorVersion;
     private final int isolationLevel;
     private final boolean caseInsensitiveComparison;
     private final boolean storesLowerCaseTableName;
 
-    public DBProperties(String productversion, String majorVersion, String minorVersion,
+    public DBProperties(String productVersion, String majorVersion, String minorVersion,
                         int isolationLevel, String lowerCaseTableNames) {
 
-        this.productversion = productversion;
+        this.productVersion = productVersion;
         this.majorVersion = majorVersion;
         this.minorVersion = minorVersion;
         this.isolationLevel = isolationLevel;
@@ -38,8 +38,8 @@ public class DBProperties {
         this.storesLowerCaseTableName = "1".equalsIgnoreCase(lowerCaseTableNames);
     }
 
-    public String getProductversion() {
-        return this.productversion;
+    public String getProductVersion() {
+        return this.productVersion;
     }
 
     public String getMajorVersion() {

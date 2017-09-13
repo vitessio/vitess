@@ -44,8 +44,8 @@ import java.util.concurrent.Executor;
 import java.util.logging.Logger;
 
 import io.vitess.client.Context;
-import io.vitess.client.VTGateConn;
-import io.vitess.client.VTGateTx;
+import io.vitess.client.VTGateConnection;
+import io.vitess.client.VTSession;
 import io.vitess.util.CommonUtils;
 import io.vitess.util.Constants;
 import io.vitess.util.MysqlDefs;
@@ -54,9 +54,6 @@ import io.vitess.util.MysqlDefs;
  * Created by harshit.gangal on 23/01/16.
  */
 public class VitessConnection extends ConnectionProperties implements Connection {
-
-    private static final int DEFAULT_RESULT_SET_TYPE = ResultSet.TYPE_FORWARD_ONLY;
-    private static final int DEFAULT_RESULT_SET_CONCURRENCY = ResultSet.CONCUR_READ_ONLY;
 
     /* Get actual class name to be printed on */
     private static Logger logger = Logger.getLogger(VitessConnection.class.getName());
@@ -67,12 +64,11 @@ public class VitessConnection extends ConnectionProperties implements Connection
      */
     private Set<Statement> openStatements = new HashSet<>();
     private VitessVTGateManager.VTGateConnections vTGateConnections;
-    private VTGateTx vtGateTx;
     private boolean closed = true;
-    private boolean autoCommit = true;
     private boolean readOnly = false;
     private DBProperties dbProperties;
     private final VitessJDBCUrl vitessJDBCUrl;
+    private final VTSession vtSession;
 
     /**
      * Constructor to Create Connection Object
@@ -86,12 +82,12 @@ public class VitessConnection extends ConnectionProperties implements Connection
             this.vitessJDBCUrl = new VitessJDBCUrl(url, connectionProperties);
             this.closed = false;
             this.dbProperties = null;
+            initializeProperties(vitessJDBCUrl.getProperties());
+            this.vtSession = new VTSession(this.getTarget(), this.getExecuteOptions());
         } catch (Exception e) {
             throw new SQLException(
                 Constants.SQLExceptionMessages.CONN_INIT_ERROR + " - " + e.getMessage(), e);
         }
-
-        initializeProperties(vitessJDBCUrl.getProperties());
     }
 
     public void connect() {
@@ -142,7 +138,7 @@ public class VitessConnection extends ConnectionProperties implements Connection
      */
     public boolean getAutoCommit() throws SQLException {
         checkOpen();
-        return this.autoCommit;
+        return this.vtSession.isAutoCommit();
     }
 
     /**
@@ -153,12 +149,12 @@ public class VitessConnection extends ConnectionProperties implements Connection
      */
     public void setAutoCommit(boolean autoCommit) throws SQLException {
         checkOpen();
-        if (this.autoCommit != autoCommit) { //If same then no-op
+        if (this.vtSession.isAutoCommit() != autoCommit) { //If same then no-op
             //Old Transaction Needs to be committed as per JDBC 4.1 Spec.
             if (isInTransaction()) {
                 this.commit();
             }
-            this.autoCommit = autoCommit;
+            this.vtSession.setAutoCommit(autoCommit);
         }
     }
 
@@ -170,15 +166,13 @@ public class VitessConnection extends ConnectionProperties implements Connection
     public void commit() throws SQLException {
         checkOpen();
         checkAutoCommit(Constants.SQLExceptionMessages.COMMIT_WHEN_AUTO_COMMIT_TRUE);
-        try {
-            if (isInTransaction()) {
-                Context context = createContext(getTimeout());
-                this.vtGateTx.commit(context, getTwopcEnabled()).checkedGet();
-            }
-        } finally {
-            this.vtGateTx = null;
+        if (isInTransaction()) {
+            commitTx();
         }
+    }
 
+    private void commitTx() throws SQLException {
+        executeCommand("commit");
     }
 
     /**
@@ -189,13 +183,18 @@ public class VitessConnection extends ConnectionProperties implements Connection
     public void rollback() throws SQLException {
         checkOpen();
         checkAutoCommit(Constants.SQLExceptionMessages.ROLLBACK_WHEN_AUTO_COMMIT_TRUE);
-        try {
-            if (isInTransaction()) {
-                Context context = createContext(getTimeout());
-                this.vtGateTx.rollback(context).checkedGet();
-            }
-        } finally {
-            this.vtGateTx = null;
+        if (isInTransaction()) {
+            rollbackTx();
+        }
+    }
+
+    private void rollbackTx() throws SQLException{
+        executeCommand("rollback");
+    }
+
+    private void executeCommand(String sql) throws SQLException {
+        try (Statement statement = this.createStatement()){
+            statement.executeUpdate(sql);
         }
     }
 
@@ -212,7 +211,6 @@ public class VitessConnection extends ConnectionProperties implements Connection
                 }
                 closeAllOpenStatements();
             } finally {
-                this.vtGateTx = null;
                 this.closed = true;
             }
         }
@@ -584,25 +582,21 @@ public class VitessConnection extends ConnectionProperties implements Connection
     }
 
     private void checkAutoCommit(String exception) throws SQLException {
-        if (this.autoCommit) {
+        if (this.vtSession.isAutoCommit()) {
             throw new SQLException(exception);
         }
     }
 
-    private boolean isInTransaction() {
-        return null != this.vtGateTx;
+    public boolean isInTransaction() {
+        return this.vtSession.isInTransaction();
     }
 
-    public VTGateConn getVtGateConn() {
+    public VTGateConnection getVtGateConn() {
         return vTGateConnections.getVtGateConnInstance();
     }
 
-    public VTGateTx getVtGateTx() {
-        return vtGateTx;
-    }
-
-    public void setVtGateTx(VTGateTx vtGateTx) {
-        this.vtGateTx = vtGateTx;
+    public VTSession getVtSession() {
+        return this.vtSession;
     }
 
     public VitessJDBCUrl getUrl() {
