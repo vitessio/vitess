@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"strings"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -99,10 +101,30 @@ func NullsafeCompare(v1, v2 Value) (int, error) {
 		}
 		return compareNumeric(lv1, lv2), nil
 	}
-	if v1.IsBinary() && v2.IsBinary() {
+	if isByteComparable(v1) && isByteComparable(v2) {
 		return bytes.Compare(v1.ToBytes(), v2.ToBytes()), nil
 	}
+	if isStringComparable(v1) && isStringComparable(v2) {
+		return strings.Compare(v1.ToString(), v2.ToString()), nil
+	}
 	return 0, fmt.Errorf("types are not comparable: %v vs %v", v1.Type(), v2.Type())
+}
+
+// isByteComparable returns true if the type is text or quoted.
+func isStringComparable(v Value) bool {
+	return v.IsText() || v.IsQuoted()
+}
+
+// isByteComparable returns true if the type is binary or date/time.
+func isByteComparable(v Value) bool {
+	if v.IsBinary() {
+		return true
+	}
+	switch v.Type() {
+	case Timestamp, Date, Time, Datetime:
+		return true
+	}
+	return false
 }
 
 // Min returns the minimum of v1 and v2. If one of the
