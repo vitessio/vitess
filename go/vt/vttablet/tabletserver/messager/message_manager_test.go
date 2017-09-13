@@ -275,7 +275,7 @@ func TestMessageManagerSendEOF(t *testing.T) {
 
 	// Now cancel, which will send an EOF to the sender.
 	cancel()
-	// Wait for send to enqueue
+	// messagesPending should get turned on.
 	messagesWerePending := false
 	for i := 0; i < 10; i++ {
 		runtime.Gosched()

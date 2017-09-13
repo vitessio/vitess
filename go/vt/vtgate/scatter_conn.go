@@ -422,13 +422,16 @@ func newTimeTracker() *timeTracker {
 	}
 }
 
-func (tt *timeTracker) Refresh(target *querypb.Target) {
+// Reset resets the timestamp set by LastError.
+func (tt *timeTracker) Reset(target *querypb.Target) {
 	tt.mu.Lock()
 	defer tt.mu.Unlock()
-	tt.timestamps[target] = time.Now()
+	delete(tt.timestamps, target)
 }
 
-func (tt *timeTracker) LastRefresh(target *querypb.Target) time.Time {
+// LastError sets the time to Now if there was no previous timestamp,
+// and it keeps returning that value until the next Reset.
+func (tt *timeTracker) LastError(target *querypb.Target) time.Time {
 	tt.mu.Lock()
 	defer tt.mu.Unlock()
 	last, ok := tt.timestamps[target]
@@ -449,14 +452,14 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shar
 	// mu is used to merge multiple callback calls into one.
 	var mu sync.Mutex
 	fieldSent := false
-	sendTimestamps := newTimeTracker()
+	lastErrors := newTimeTracker()
 	allErrors := stc.multiGo(ctx, "MessageStream", keyspace, shards, topodatapb.TabletType_MASTER, func(target *querypb.Target) error {
 		// This loop handles the case where a reparent happens, which can cause
 		// an individual stream to end. If we don't succeed on the retries for
 		// messageStreamGracePeriod, we abort and return an error.
 		for {
 			err := stc.gateway.MessageStream(ctx, target, name, func(qr *sqltypes.Result) error {
-				sendTimestamps.Refresh(target)
+				lastErrors.Reset(target)
 				return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 			})
 			if err != nil && err != io.EOF {
@@ -472,7 +475,7 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shar
 				return nil
 			default:
 			}
-			if time.Now().Sub(sendTimestamps.LastRefresh(target)) >= *messageStreamGracePeriod {
+			if time.Now().Sub(lastErrors.LastError(target)) >= *messageStreamGracePeriod {
 				// Cancel all streams and return an error.
 				cancel()
 				return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "message stream from %v has repeatedly failed for longer than %v", target, *messageStreamGracePeriod)
