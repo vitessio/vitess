@@ -359,7 +359,7 @@
 			"Command": [
 				"tools/unit_test_runner.sh"
 			],
-			"Manual": true,
+			"Manual": false,
 			"Shard": 11,
 			"RetryMax": 1,
 			"Tags": []
