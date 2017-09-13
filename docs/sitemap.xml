@@ -28,13 +28,10 @@
     <loc>http://vitess.io/internal/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/overview/</loc>
+    <loc>http://vitess.io/getting-started/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/about/</loc>
-  </url>
-  <url>
-    <loc>http://vitess.io/terms/</loc>
+    <loc>http://vitess.io/contributing/</loc>
   </url>
   <url>
     <loc>http://vitess.io/</loc>
@@ -43,10 +40,13 @@
     <loc>http://vitess.io/search/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/getting-started/</loc>
+    <loc>http://vitess.io/terms/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/contributing/</loc>
+    <loc>http://vitess.io/about/</loc>
+  </url>
+  <url>
+    <loc>http://vitess.io/overview/</loc>
   </url>
   <url>
     <loc>http://vitess.io/user-guide/introduction.html</loc>
