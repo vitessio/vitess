@@ -30,7 +30,9 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
@@ -124,14 +126,9 @@ func TestSubscribe(t *testing.T) {
 
 	// After close, Subscribe should return a closed channel.
 	engine.Close()
-	done, err := engine.Subscribe(context.Background(), "t1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case <-done:
-	default:
-		t.Error("done should be closed, but was not")
+	_, err = engine.Subscribe(context.Background(), "t1", nil)
+	if got, want := vterrors.Code(err), vtrpcpb.Code_UNAVAILABLE; got != want {
+		t.Errorf("Subscribed on closed engine error code: %v, want %v", got, want)
 	}
 }
 
