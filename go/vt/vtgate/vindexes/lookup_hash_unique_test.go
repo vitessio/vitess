@@ -75,10 +75,13 @@ func TestLookupHashUniqueMap(t *testing.T) {
 		sqltypes.MakeTestFields("a", "varbinary"),
 		"notint",
 	)
-	_, err = lhu.(Unique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
-	wantErr = "LookupHash.Map: could not parse value: notint"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("lhu(query fail) err: %v, want %s", err, wantErr)
+	got, err = lhu.(Unique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	if err != nil {
+		t.Error(err)
+	}
+	want = [][]byte{nil}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
 
 	// Test query fail.

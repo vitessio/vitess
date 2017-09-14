@@ -99,7 +99,8 @@ func (vind *NumericStaticMap) Map(_ VCursor, ids []sqltypes.Value) ([][]byte, er
 	for _, id := range ids {
 		num, err := sqltypes.ToUint64(id)
 		if err != nil {
-			return nil, fmt.Errorf("NumericStaticMap.Map: %v", err)
+			out = append(out, nil)
+			continue
 		}
 		lookupNum, ok := vind.lookup[num]
 		if ok {
