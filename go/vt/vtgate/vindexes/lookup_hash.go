@@ -74,7 +74,9 @@ func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([][][]byte, er
 		for _, row := range result.Rows {
 			num, err := sqltypes.ToUint64(row[0])
 			if err != nil {
-				return nil, fmt.Errorf("lookupHash.Map.ToUint64: %v", err)
+				// A failure to convert is equivalent to not being
+				// able to map.
+				continue
 			}
 			ksids = append(ksids, vhash(num))
 		}
@@ -169,7 +171,8 @@ func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][]byt
 		case 1:
 			num, err := sqltypes.ToUint64(result.Rows[0][0])
 			if err != nil {
-				return nil, fmt.Errorf("LookupHash.Map: %v", err)
+				out = append(out, nil)
+				continue
 			}
 			out = append(out, vhash(num))
 		default:

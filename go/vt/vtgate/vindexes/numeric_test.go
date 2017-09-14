@@ -48,6 +48,7 @@ func TestNumericMap(t *testing.T) {
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 		sqltypes.NewInt64(3),
+		sqltypes.NewFloat64(1.1),
 		sqltypes.NewInt64(4),
 		sqltypes.NewInt64(5),
 		sqltypes.NewInt64(6),
@@ -61,6 +62,7 @@ func TestNumericMap(t *testing.T) {
 		[]byte("\x00\x00\x00\x00\x00\x00\x00\x01"),
 		[]byte("\x00\x00\x00\x00\x00\x00\x00\x02"),
 		[]byte("\x00\x00\x00\x00\x00\x00\x00\x03"),
+		nil,
 		[]byte("\x00\x00\x00\x00\x00\x00\x00\x04"),
 		[]byte("\x00\x00\x00\x00\x00\x00\x00\x05"),
 		[]byte("\x00\x00\x00\x00\x00\x00\x00\x06"),
@@ -69,14 +71,6 @@ func TestNumericMap(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %+v, want %+v", got, want)
-	}
-}
-
-func TestNumericMapBadData(t *testing.T) {
-	_, err := numeric.(Unique).Map(nil, []sqltypes.Value{sqltypes.NewFloat64(1.1)})
-	want := `Numeric.Map: could not parse value: 1.1`
-	if err == nil || err.Error() != want {
-		t.Errorf("numeric.Map: %v, want %v", err, want)
 	}
 }
 

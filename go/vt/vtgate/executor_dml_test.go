@@ -174,14 +174,6 @@ func TestUpdateEqualFail(t *testing.T) {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}
 
-	_, err = executorExec(executor, "update user set a=2 where id = :id", map[string]*querypb.BindVariable{
-		"id": sqltypes.StringBindVariable("aa"),
-	})
-	want = `execUpdateEqual: hash.Map: could not parse value: aa`
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
 	s.ShardSpec = "80-"
 	_, err = executorExec(executor, "update user set a=2 where id = :id", map[string]*querypb.BindVariable{
 		"id": sqltypes.Int64BindVariable(1),
@@ -347,14 +339,6 @@ func TestDeleteEqualFail(t *testing.T) {
 		"id": sqltypes.Int64BindVariable(1),
 	})
 	want = "execDeleteEqual: keyspace TestExecutor fetch error: topo error GetSrvKeyspace"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
-	_, err = executorExec(executor, "delete from user where id = :id", map[string]*querypb.BindVariable{
-		"id": sqltypes.StringBindVariable("aa"),
-	})
-	want = `execDeleteEqual: hash.Map: could not parse value: aa`
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}

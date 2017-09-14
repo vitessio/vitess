@@ -80,16 +80,19 @@ func TestLookupHashMap(t *testing.T) {
 		sqltypes.MakeTestFields("a", "varbinary"),
 		"notint",
 	)
-	_, err = lookuphash.(NonUnique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
-	wantErr := "lookupHash.Map.ToUint64: could not parse value: notint"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("lookuphash(query fail) err: %v, want %s", err, wantErr)
+	got, err = lookuphash.(NonUnique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	if err != nil {
+		t.Error(err)
+	}
+	want = [][][]byte{{}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Map(): %#v, want %#v", got, want)
 	}
 
 	// Test query fail.
 	vc.mustFail = true
 	_, err = lookuphash.(NonUnique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
-	wantErr = "lookup.Map: execute failed"
+	wantErr := "lookup.Map: execute failed"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("lookuphash(query fail) err: %v, want %s", err, wantErr)
 	}
