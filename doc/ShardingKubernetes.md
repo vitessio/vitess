@@ -1,25 +1,25 @@
 This guide walks you through the process of sharding an existing unsharded
-Vitess [keyspace](http://vitess.io/overview/concepts.html#keyspace) in
+Vitess [keyspace]({% link overview/concepts.md %}#keyspace) in
 [Kubernetes](http://kubernetes.io/).
 
 ## Prerequisites
 
 We begin by assuming you've completed the
-[Getting Started on Kubernetes](http://vitess.io/getting-started/) guide, and
+[Getting Started on Kubernetes]({% link getting-started/index.md %}) guide, and
 have left the cluster running.
 
 ## Overview
 
 We will follow a process similar to the one in the general
-[Horizontal Sharding](http://vitess.io/user-guide/horizontal-sharding.html)
+[Horizontal Sharding]({% link user-guide/horizontal-sharding.md %})
 guide, except that here we'll give the commands you'll need to do it for
 the example Vitess cluster in Kubernetes.
 
-Since Vitess makes [sharding](http://vitess.io/user-guide/sharding.html)
+Since Vitess makes [sharding]({% link user-guide/sharding.md %})
 transparent to the app layer, the
 [Guestbook](https://github.com/youtube/vitess/tree/master/examples/kubernetes/guestbook)
 sample app will stay live throughout the
-[resharding](http://vitess.io/user-guide/sharding.html#resharding) process,
+[resharding]({% link user-guide/sharding.md %}#resharding) process,
 confirming that the Vitess cluster continues to serve without downtime.
 
 ## Configure sharding information
@@ -77,7 +77,7 @@ vitess/examples/kubernetes$ ./sharded-vttablet-up.sh
 Since the sharding key in the Guestbook app is the page number,
 this will result in half the pages going to each shard,
 since *0x80* is the midpoint of the
-[sharding key range](http://vitess.io/user-guide/sharding.html#key-ranges-and-partitions).
+[sharding key range]({% link user-guide/sharding.md %}#key-ranges-and-partitions).
 
 These new shards will run in parallel with the original shard during the
 transition, but actual traffic will be served only by the original shard
@@ -153,7 +153,7 @@ will be served only by the remaining, un-paused *rdonly* tablets.
 ## Check filtered replication
 
 Once the copy from the paused snapshot finishes, *vtworker* turns on
-[filtered replication](http://vitess.io/user-guide/sharding.html#filtered-replication)
+[filtered replication]({% link user-guide/sharding.md %}#filtered-replication)
 from the source shard to each destination shard. This allows the destination
 shards to catch up on updates that have continued to flow in from the app since
 the time of the snapshot.
@@ -196,10 +196,10 @@ I0416 02:10:56.927313      10 split_diff.go:496] Table messages checks out (4 ro
 ## Switch over to new shards
 
 Now we're ready to switch over to serving from the new shards.
-The [MigrateServedTypes](http://vitess.io/reference/vtctl.html#migrateservedtypes)
+The [MigrateServedTypes]({% link reference/vtctl.md %}#migrateservedtypes)
 command lets you do this one
-[tablet type](http://vitess.io/overview/concepts.html#tablet) at a time,
-and even one [cell](http://vitess.io/overview/concepts.html#cell-data-center)
+[tablet type]({% link overview/concepts.md %}#tablet) at a time,
+and even one [cell]({% link overview/concepts.md %}#cell-data-center)
 at a time. The process can be rolled back at any point *until* the master is
 switched over.
 

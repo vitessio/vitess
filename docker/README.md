@@ -39,7 +39,7 @@ All these Vitess images include a specific MySQL/MariaDB version ("flavor").
   * We provide Dockerfile files for multiple flavors (`Dockerfile.<flavor>`).
   * As of April 2017, the following flavors are supported: `mariadb`, `mysql56`, `mysql57`, `percona`(56), `percona57`
   * On Docker Hub we publish only images with MySQL 5.7 to minimize maintenance overhead and avoid confusion.
-  * If you need an image for a different flavor, it is very easy to build it yourself. See the [Custom Docker Build instructions](http://vitess.io/getting-started/docker-build.html).
+  * If you need an image for a different flavor, it is very easy to build it yourself. See the [Custom Docker Build instructions](http://vitess.io/getting-started/docker-build/).
 
 If you are looking for a stable version of Vitess, use the **lite** image with a fixed version. If you are looking for the latest Vitess code in binary form, use the "latest" tag of the **base** image.
 

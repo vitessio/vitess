@@ -62,10 +62,10 @@ Setting up these components directly -- for example, writing your own topology s
 
 **Related Vitess documentation:**
 
-* [Running Vitess on Kubernetes](http://vitess.io/getting-started/)
-* [Running Vitess on a local server](http://vitess.io/getting-started/local-instance.html)
-* [Backing up data](http://vitess.io/user-guide/backup-and-restore.html)
-* [Reparenting - basic assignment of master instance in Vitess](http://vitess.io/user-guide/reparenting.html)
+* [Running Vitess on Kubernetes]({% link getting-started/index.md %})
+* [Running Vitess on a local server]({% link getting-started/local-instance.md %})
+* [Backing up data]({% link user-guide/backup-and-restore.md %})
+* [Reparenting - basic assignment of master instance in Vitess]({% link user-guide/reparenting.md %})
 
 ## Step 2: Connect your application to your database
 
@@ -96,9 +96,9 @@ Note that this path is highly dependent on the source setup. Thus, while Vitess 
 
 **Related Vitess documentation:**
 
-* [Vitess API Reference](http://vitess.io/reference/vitess-api.html)
-* [Schema Management](http://vitess.io/user-guide/schema-management.html)
-* [Transport Security Model](http://vitess.io/user-guide/transport-security-model.html)
+* [Vitess API Reference]({% link reference/vitess-api.md %})
+* [Schema Management]({% link user-guide/schema-management.md %})
+* [Transport Security Model]({% link user-guide/transport-security-model.md %})
 
 ## Step 3: Vertical sharding (scaling to multiple keyspaces)
 
@@ -117,7 +117,7 @@ Several vtctl functions -- vtctl is Vitess' command-line tool for managing your 
 
 **Related Vitess documentation:**
 
-* [vtctl Reference guide](http://vitess.io/reference/vtctl.html)
+* [vtctl Reference guide]({% link reference/vtctl.md %})
 
 ## Step 4: Horizontal sharding (partitioning your data)
 
@@ -141,9 +141,9 @@ Vitess offers robust resharding support, which involves updating the sharding sc
 
 **Related Vitess documentation:**
 
-* [Sharding](http://vitess.io/user-guide/sharding.html)
-* [Horizontal sharding (Codelab)](http://vitess.io/user-guide/horizontal-sharding.html)
-* [Sharding in Kubernetes (Codelab)](http://vitess.io/user-guide/sharding-kubernetes.html)
+* [Sharding]({% link user-guide/sharding.md %})
+* [Horizontal sharding (Codelab)]({% link user-guide/horizontal-sharding.md %})
+* [Sharding in Kubernetes (Codelab)]({% link user-guide/sharding-kubernetes.md %})
 
 ## Related tasks
 

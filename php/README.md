@@ -5,7 +5,7 @@ This folder contains the PHP client for Vitess.
 For a simple example of using the API, see the [client.php]
 (https://github.com/youtube/vitess/blob/master/examples/local/client.php)
 script, which works with the environment created by the [local setup example]
-(http://vitess.io/getting-started/local-instance.html).
+(http://vitess.io/getting-started/local-instance/).
 
 There is also a similar example client for the [VTGateV3 demo]
 (https://github.com/youtube/vitess/tree/master/examples/demo) environment.

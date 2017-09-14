@@ -132,7 +132,7 @@ public class ConnectionProperties {
         Constants.DEFAULT_EXECUTE_TYPE);
     private BooleanConnectionProperty twopcEnabled = new BooleanConnectionProperty(
         Constants.Property.TWOPC_ENABLED,
-        "Whether to enable two-phased commit, for atomic distributed commits. See http://vitess.io/user-guide/twopc.html",
+        "Whether to enable two-phased commit, for atomic distributed commits. See http://vitess.io/user-guide/twopc/",
         false);
     private EnumConnectionProperty<Query.ExecuteOptions.IncludedFields> includedFields = new EnumConnectionProperty<>(
         Constants.Property.INCLUDED_FIELDS,

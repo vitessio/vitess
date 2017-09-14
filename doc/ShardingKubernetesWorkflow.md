@@ -1,20 +1,20 @@
 This guide shows you an example about how to apply range-based sharding
-process in an existing unsharded Vitess [keyspace](http://vitess.io/overview/concepts.html#keyspace)
+process in an existing unsharded Vitess [keyspace]({% link overview/concepts.md %}#keyspace)
 in [Kubernetes](http://kubernetes.io/) using the horizontal resharding workflow.
 In this example, we will reshard from 1 shard "0" into 2 shards "-80" and "80-".
 We will follow a process similar to the general
-[Horizontal Sharding guide](http://vitess.io/user-guide/horizontal-sharding-workflow.html)
+[Horizontal Sharding guide]({% link user-guide/horizontal-sharding-workflow.md %})
 except that here we'll give you the commands you'll need in the kubernetes
 environment.
 
 ## Overview
 
 The horizontal resharding process overview can be found
-[here](http://vitess.io/user-guide/horizontal-sharding-workflow.html#overview) 
+[here]({% link user-guide/horizontal-sharding-workflow.md %}#overview) 
 
 ## Prerequisites
 
-You should complete the [Getting Started on Kubernetes](http://vitess.io/getting-started/)
+You should complete the [Getting Started on Kubernetes]({% link getting-started/index.md %})
 guide (please finish all the steps before Try Vitess resharding) and have left
 the cluster running. Then, please follow these steps before running the
 resharding process:
@@ -28,7 +28,7 @@ resharding process:
 
 1.  Bring up tablets for 2 additional shards:  *test_keyspace/-80* and
     *test_keyspace/80-* (you can learn more about sharding key range
-    [here](http://vitess.io/user-guide/sharding.html#key-ranges-and-partitions)):
+    [here]({% link user-guide/sharding.md %}#key-ranges-and-partitions)):
 
     ``` sh
     vitess/examples/kubernetes$ ./sharded-vttablet-up.sh
@@ -73,10 +73,10 @@ resharding process:
 ### Create the Workflow
 
 Using the web vtctld UI to create the workflow is the same with [steps in local
-environment](http://vitess.io/user-guide/horizontal-sharding-workflow.html#create-the-workflow)
+environment]({% link user-guide/horizontal-sharding-workflow.md %}#create-the-workflow)
 except for filling the "vtworker Addresses" slot. You need to get the external
 IP for vtworker service (mentioned in
-[Prerequisites](sharding-kubernetes-workflow.html#prerequisites)) and use
+[Prerequisites](#prerequisites)) and use
 \<EXTERNAL-IP\>:15033 as the vtworker addresses.
 
 Another way to start the workflow is through the vtctlclient command:
@@ -88,17 +88,17 @@ vitess/examples/kubernetes$ ./kvtctl.sh WorkflowCreate -skip_start=false horizon
 ### Approvals of Tasks Execution (Canary feature)
 
 Please check the content in general 
-[Horizontal Sharding guide](http://vitess.io/user-guide/horizontal-sharding-workflow.html#approvals-of-tasks-execution-canary-feature)
+[Horizontal Sharding guide]({% link user-guide/horizontal-sharding-workflow.md %}#approvals-of-tasks-execution-canary-feature)
 
 ### Retry
 
 Please check the content in general 
-[Horizontal Sharding guide](http://vitess.io/user-guide/horizontal-sharding-workflow.html#retry)
+[Horizontal Sharding guide]({% link user-guide/horizontal-sharding-workflow.md %}#retry)
 
 ### Checkpoint and Recovery
 
 Please check the content in general 
-[Horizontal Sharding guide](http://vitess.io/user-guide/horizontal-sharding-workflow.html#checkpoint-and-recovery)
+[Horizontal Sharding guide]({% link user-guide/horizontal-sharding-workflow.md %}#checkpoint-and-recovery)
 
 ## Verify Results and Clean up
 
@@ -111,7 +111,7 @@ then add messages to the guestbook page and inspect again. You can use
 http://\<EXTERNAL-IP\> (EXTERNAL-IP refers to the external IP of the guest book
 service) to visit the guestbook webpage in your browser and choose any random
 page for inserting information. Details can be found
-[here](http://vitess.io/getting-started/#test-your-cluster-with-a-client-app))
+[here]({% link getting-started/index.md %}#test-your-cluster-with-a-client-app))
 You can inspect the database content using the following commands:
 
 ``` sh
@@ -178,7 +178,7 @@ $ gcloud compute firewall-rules delete vtctld guestbook
 
 ## Reference
 
-You can checkout the old version tutorial [here](http://vitess.io/user-guide/sharding-kubernetes.html).
+You can checkout the old version tutorial [here]({% link user-guide/sharding-kubernetes.md %}).
 It walks you through the resharding process by manually executing commands.
 
 For the kubectl command line interface, which helps you interact with the

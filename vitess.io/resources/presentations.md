@@ -1,6 +1,7 @@
 ---
 layout: doc
 title: "Presentations and Videos"
+redirect_from: /resources/presentations.html
 description: Slides and videos from presentations about Vitess.
 modified:
 excerpt:
@@ -17,9 +18,9 @@ share: false
 
 [Sugu](https://github.com/sougou) and [Anthony](https://github.com/enisoc)
 showed what it looks like to use Vitess now that
-[Keyspace IDs](http://vitess.io/overview/concepts.html#keyspace-id) can be
+[Keyspace IDs]({% link overview/concepts.md %}#keyspace-id) can be
 completely hidden from the application. They gave a live demo of
-[resharding the Guestbook sample app](http://vitess.io/user-guide/sharding-kubernetes.html),
+[resharding the Guestbook sample app]({% link user-guide/sharding-kubernetes.md %}),
 which now knows nothing about shards, and explained how new features in VTGate
 make all of this possible.
 
@@ -45,7 +46,7 @@ Oracle OpenWorld 2015 focused on
 what the [Cloud Native Computing](http://cncf.io) paradigm means when
 applied to MySQL in the cloud. The talk also included a deep dive into
 [transparent, live resharding]
-(http://vitess.io/user-guide/sharding.html#resharding), one of the key
+({% link user-guide/sharding.md %}#resharding), one of the key
 features of Vitess that makes it well-adapted for a Cloud Native environment.
 
 <iframe src="http://docs.google.com/gview?url=http://vitess.io/resources/openworld-2015-vitess.pdf&embedded=true" style="width:643px; height:379px; margin-top: 20px;" frameborder="0"></iframe>

@@ -100,7 +100,7 @@ section below).
 
 Within YouTube, we also use a combination of statement based replication and
 backups to apply long-running schema changes without disrupting ongoing
-operations. See the [schema swap tutorial](/user-guide/schema-swap.html)
+operations. See the [schema swap tutorial]({% link user-guide/schema-swap.md %})
 for a detailed example.
 
 This operation, which is called **schema swap**, works as follows:
@@ -143,7 +143,7 @@ process!), this does not add much more complexity to a running system.
 Since the SBR replication stream also contains comments of which primary key is
 affected by a change, it is possible to look at the replication stream and know
 exactly what objects have changed. This Vitess feature is
-called [Update Stream](/user-guide/update-stream.html).
+called [Update Stream]({% link user-guide/update-stream.md %}).
 
 By subscribing to the Update Stream for a given shard, one can know what values
 change. This stream can be used to create a stream of data changes (export to an
@@ -153,7 +153,7 @@ Note: the Update Stream only reliably contains the primary key values of the
 rows that have changed, not the actual values for all columns. To get these
 values, it is necessary to re-query the database.
 
-We have plans to make this [Update Stream](/user-guide/update-stream.html)
+We have plans to make this [Update Stream]({% link user-guide/update-stream.md %})
 feature more consistent, very resilient, fast, and transparent to sharding.
 
 ## Semi-Sync
@@ -184,7 +184,7 @@ then the following will happen:
 These behaviors combine to give you the property that, in case of master
 failure, there is at least one other *replica* type slave that has every
 transaction that was ever reported to clients as having completed.
-You can then ([manually](http://vitess.io/reference/vtctl.html#emergencyreparentshard),
+You can then ([manually]({% link reference/vtctl.md %}#emergencyreparentshard),
 or with an automated tool like [Orchestrator](https://github.com/github/orchestrator))
 pick the replica that is farthest ahead in GTID position and promote that to be
 the new master.
@@ -213,4 +213,4 @@ master.
 
 We are in the process of adding support for RBR in Vitess.
 
-See [this document](/user-guide/row-based-replication.html)) for more information.
+See [this document]({% link user-guide/row-based-replication.md %})) for more information.
