@@ -85,6 +85,25 @@ func checkWatcher(t *testing.T, cellTablets bool) {
 		t.Errorf("fhc.GetAllTablets() = %+v; want %+v", allTablets, want)
 	}
 
+	// Remove and re-add with a new uid. This should trigger a ReplaceTablet in loadTablets,
+	// because the uid does not match.
+	ft.RemoveTablet("aa", 0)
+	ft.AddTablet("aa", 1, "host1", map[string]int32{"vt": 456})
+	tw.loadTablets()
+	t.Logf(`ft.ReplaceTablet("aa", 0, "host1", {"vt": 456}); tw.loadTablets()`)
+	want = &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Uid: 1,
+		},
+		Hostname: "host1",
+		PortMap:  map[string]int32{"vt": 456},
+	}
+	allTablets = fhc.GetAllTablets()
+	key = TabletToMapKey(want)
+	if _, ok := allTablets[key]; !ok || len(allTablets) != 1 {
+		t.Errorf("fhc.GetAllTablets() = %+v; want %+v", allTablets, want)
+	}
+
 	tw.Stop()
 }
 
