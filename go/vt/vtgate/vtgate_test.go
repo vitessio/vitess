@@ -1270,6 +1270,50 @@ func TestVTGateMessageStreamRetry(t *testing.T) {
 		close(done)
 	}()
 	<-ch
+
+	// By default, will end the stream after the first message,
+	// which should make vtgate wait for 1s (5s/5) and retry.
+	start := time.Now()
+	<-ch
+	duration := time.Now().Sub(start)
+	if duration < 1*time.Second || duration > 2*time.Second {
+		t.Errorf("Retry duration should be around 1 second: %v", duration)
+	}
+	// Function should return after cancel.
+	cancel()
+	<-done
+}
+
+func TestVTGateMessageStreamUnavailable(t *testing.T) {
+	*messageStreamGracePeriod = 5 * time.Second
+	defer func() {
+		*messageStreamGracePeriod = 30 * time.Second
+	}()
+	ks := KsTestUnsharded
+	createSandbox(ks)
+	hcVTGateTest.Reset()
+	tablet := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	// Unavailable error should cause vtgate to wait 1s and retry.
+	tablet.MustFailCodes[vtrpcpb.Code_UNAVAILABLE] = 1
+	ch := make(chan *sqltypes.Result)
+	done := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		err := rpcVTGate.MessageStream(ctx, ks, "0", nil, "msg", func(qr *sqltypes.Result) error {
+			select {
+			case <-ctx.Done():
+				return io.EOF
+			case ch <- qr:
+			}
+			return nil
+		})
+		if err != nil {
+			t.Error(err)
+		}
+		close(done)
+	}()
+
+	// Verify the 1s delay.
 	start := time.Now()
 	<-ch
 	duration := time.Now().Sub(start)
@@ -1290,7 +1334,7 @@ func TestVTGateMessageStreamGracePeriod(t *testing.T) {
 	createSandbox(ks)
 	hcVTGateTest.Reset()
 	tablet := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, "0", topodatapb.TabletType_MASTER, true, 1, nil)
-	// tablet should return no results for at least 5 calls for the grace period to kick in.
+	// tablet should return no results for at least 5 calls for it to exceed the grace period.
 	tablet.SetResults([]*sqltypes.Result{
 		nil,
 		nil,
@@ -1320,7 +1364,7 @@ func TestVTGateMessageStreamFail(t *testing.T) {
 	createSandbox(ks)
 	hcVTGateTest.Reset()
 	tablet := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, "0", topodatapb.TabletType_MASTER, true, 1, nil)
-	// tablet should return no results for at least 5 calls for the grace period to kick in.
+	// tablet should should fail immediately if the error is not EOF or UNAVAILABLE.
 	tablet.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1
 	err := rpcVTGate.MessageStream(context.Background(), ks, "0", nil, "msg", func(qr *sqltypes.Result) error {
 		return nil

@@ -106,6 +106,9 @@ func (me *Engine) Close() {
 func (me *Engine) Subscribe(ctx context.Context, name string, send func(*sqltypes.Result) error) (done <-chan struct{}, err error) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
+	if !me.isOpen {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "messager engine is closed, probably because this is not a master any more")
+	}
 	mm := me.managers[name]
 	if mm == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found", name)
