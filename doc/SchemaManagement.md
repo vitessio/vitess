@@ -3,11 +3,11 @@ contains table definitions that explain how to create those tables.
 Table definitions identify table names, column names, column types,
 primary key information, and so forth.
 
-This document describes the <code>[vtctl](/reference/vtctl.html)</code>
+This document describes the <code>[vtctl]({% link reference/vtctl.md %})</code>
 commands that you can use to [review](#reviewing-your-schema) or
 [update](#changing-your-schema) your schema in Vitess.
 
-Note that this functionality is not recommended for long-running schema changes. In such cases, we recommend to do a [schema swap](/user-guide/schema-swap.html) instead.
+Note that this functionality is not recommended for long-running schema changes. In such cases, we recommend to do a [schema swap]({% link user-guide/schema-swap.md %}) instead.
 
 ## Reviewing your schema
 
@@ -19,14 +19,14 @@ This section describes the following <code>vtctl</code> commands, which let you 
 
 ### GetSchema
 
-The <code>[GetSchema](/reference/vtctl.html#getschema)</code> command
+The <code>[GetSchema]({% link reference/vtctl.md %}#getschema)</code> command
 displays the full schema for a tablet or a subset of the tablet's tables.
 When you call <code>GetSchema</code>, you specify the tablet alias that
 uniquely identifies the tablet. The <code>\<tablet alias\></code>
 argument value has the format <code>\<cell name\>-\<uid\></code>.
 
 **Note:** You can use the
-<code>[vtctl ListAllTablets](/reference/vtctl.html#listalltablets)</code> 
+<code>[vtctl ListAllTablets]({% link reference/vtctl.md %}#listalltablets)</code> 
 command to retrieve a list of tablets in a cell and their unique IDs.
 
 The following example retrieves the schema for the tablet with the
@@ -39,7 +39,7 @@ GetSchema test-000000100
 ### ValidateSchemaShard
 
 The
-<code>[ValidateSchemaShard](/reference/vtctl.html#validateschemashard)</code>
+<code>[ValidateSchemaShard]({% link reference/vtctl.md %}#validateschemashard)</code>
 command confirms that for a given keyspace, all of the slave tablets
 in a specified shard have the same schema as the master tablet in that
 shard. When you call <code>ValidateSchemaShard</code>, you specify both 
@@ -55,7 +55,7 @@ ValidateSchemaShard user/0
 
 ### ValidateSchemaKeyspace
 
-The <code>[ValidateSchemaKeyspace](/reference/vtctl.html#validateschemakeyspace)</code>
+The <code>[ValidateSchemaKeyspace]({% link reference/vtctl.md %}#validateschemakeyspace)</code>
 command confirms that all of the tablets in a given keyspace have
 the the same schema as the master tablet on shard <code>0</code>
 in that keyspace. Thus, whereas the <code>ValidateSchemaShard</code>
@@ -91,7 +91,7 @@ or grants.
 
 ### ApplySchema
 
-The <code>[ApplySchema](/reference/vtctl.html#applyschema)</code>
+The <code>[ApplySchema]({% link reference/vtctl.md %}#applyschema)</code>
 command applies a schema change to the specified keyspace on every
 master tablet, running in parallel on all shards. Changes are then
 propagated to slaves via replication. The command format is:
@@ -103,7 +103,7 @@ When the <code>ApplySchema</code> action actually applies a schema
 change to the specified keyspace, it performs the following steps:
 
 1. It finds shards that belong to the keyspace, including newly added
-   shards if a [resharding event](/user-guide/sharding.html#resharding)
+   shards if a [resharding event]({% link user-guide/sharding.md %}#resharding)
    has taken place.
 1. It validates the SQL syntax and determines the impact of the schema
    change. If the scope of the change is too large, Vitess rejects it.
@@ -155,4 +155,4 @@ impact of a potential change:
   must have 2 million rows or less.
 
 If a schema change gets rejected because it affects too many rows, you can specify the flag `-allow_long_unavailability` to tell `ApplySchema` to skip this check.
-However, we do not recommend this. Instead, you should apply large schema changes by following the [schema swap process](/user-guide/schema-swap.html).
+However, we do not recommend this. Instead, you should apply large schema changes by following the [schema swap process]({% link user-guide/schema-swap.md %}).

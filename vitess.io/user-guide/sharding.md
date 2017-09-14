@@ -1,6 +1,7 @@
 ---
 layout: doc
 title: "Sharding"
+redirect_from: /user-guide/sharding.html
 description:
 modified:
 excerpt:

@@ -138,7 +138,7 @@ Custom vindexes can also be plugged in as needed.
 
 ## Sequences
 
-Auto-increment columns do not work very well for sharded tables. [Vitess sequences](/user-guide/vitess-sequences.html) solve this problem. Sequence tables must be specified in the VSchema, and then tied to table columns. At the time of insert, if no value is specified for such a column, VTGate will generate a number for it using the sequence table.
+Auto-increment columns do not work very well for sharded tables. [Vitess sequences]({% link user-guide/vitess-sequences.md %}) solve this problem. Sequence tables must be specified in the VSchema, and then tied to table columns. At the time of insert, if no value is specified for such a column, VTGate will generate a number for it using the sequence table.
 
 ## VSchema
 

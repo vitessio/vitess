@@ -4,7 +4,7 @@ In Vitess 2.2, we are adding preliminary support for Row Based Replication. This
 document explains how we are managing it and how it affects various Vitess
 features.
 
-See the [Vites and Replication](/user-guide/vitess-replication.html) document
+See the [Vites and Replication]({% link user-guide/vitess-replication.md %}) document
 for an introduction on various types of replication and how it affects Vitess.
 
 ## MySQL Row Based Replication
@@ -42,7 +42,7 @@ we use RBR for these.
 ### vttablet Replication Stream Watcher
 
 This is enabled by the `watch_replication_stream` option, and is used
-by [Update Stream](/user-guide/update-stream.html). It only cares about the
+by [Update Stream]({% link user-guide/update-stream.md %}). It only cares about the
 GTIDs for the events, so it is unaffected by the use of RBR.
 
 *Note*: the current vttablet also reloads the schema when it sees a DDL in the
@@ -104,7 +104,7 @@ easy to not change the schema at the same time as resharding is on-going.
 ### Applying Schema Changes
 
 When using
-RBR, [Schema Swap](/user-guide/vitess-replication.html#vitess-schema-swap)
+RBR, [Schema Swap]({% link user-guide/vitess-replication.md %}#vitess-schema-swap)
 becomes useless, as replication between hosts with different schemas will most
 likely break. This is however an existing limitation that is already known and
 handled by MySQL DBAs.
@@ -144,7 +144,7 @@ March 2017:
 
 ## Update Stream Extensions
 
-[Update Stream](/user-guide/update-stream.html) can be changed to contain both
+[Update Stream]({% link user-guide/update-stream.md %}) can be changed to contain both
 old and new values of the rows being changed. Again the values will depend on
 the schema. We will also make this feature optional, so if the client is using
 this for Primary Key based cache invalidation for instance, no extra unneeded

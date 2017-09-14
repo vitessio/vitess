@@ -7,7 +7,7 @@ TABLE` or large-scale data changes (e.g. populating a column or clearing out
 values).
 
 If a schema change is not long-running, please use the simpler [vtctl
-ApplySchema](/user-guide/schema-management.html) instead.
+ApplySchema]({% link user-guide/schema-management.md %}) instead.
 
 ## Overview
 
@@ -26,7 +26,7 @@ way it's done, and therefore we refer to it by this name throughout the
 document.
 
 This tutorial outlines the necessary steps for a schema swap and is based on the
-[Vitess Kubernetes Getting Started Guide](http://vitess.io/getting-started/).
+[Vitess Kubernetes Getting Started Guide]({% link getting-started/index.md %}).
 
 **At the high level, a schema swap comprises the following phases:**
 
@@ -57,7 +57,7 @@ We'll add a column to it.
 ## Prerequisites
 
 We assume that you have followed the [Vitess Kubernetes Getting Started
-Guide](http://vitess.io/getting-started/) up to and including the step "9.
+Guide]({% link getting-started/index.md %}) up to and including the step "9.
 Create a table".
 
 ## Schema Swap Steps

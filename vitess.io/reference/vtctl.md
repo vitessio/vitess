@@ -1,6 +1,7 @@
 ---
 layout: doc
 title: "vtctl Reference"
+redirect_from: /reference/vtctl.html
 description:
 modified:
 excerpt:

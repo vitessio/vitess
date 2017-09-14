@@ -16,8 +16,9 @@ sass:
   style: compressed
 permalink: /:categories/:title/
 highlighter: pygments
-gems:
+plugins:
   - jekyll-sitemap
+  - jekyll-redirect-from
 
 markdown: redcarpet
 
