@@ -30,7 +30,9 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
@@ -98,7 +100,6 @@ func TestSubscribe(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	engine := newTestEngine(db)
-	defer engine.Close()
 	tables := map[string]*schema.Table{
 		"t1": meTable,
 		"t2": meTable,
@@ -121,6 +122,13 @@ func TestSubscribe(t *testing.T) {
 	_, err := engine.Subscribe(context.Background(), "t3", f1)
 	if err == nil || err.Error() != want {
 		t.Errorf("Subscribe: %v, want %s", err, want)
+	}
+
+	// After close, Subscribe should return a closed channel.
+	engine.Close()
+	_, err = engine.Subscribe(context.Background(), "t1", nil)
+	if got, want := vterrors.Code(err), vtrpcpb.Code_UNAVAILABLE; got != want {
+		t.Errorf("Subscribed on closed engine error code: %v, want %v", got, want)
 	}
 }
 
