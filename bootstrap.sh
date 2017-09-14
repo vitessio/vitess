@@ -33,7 +33,7 @@ function fail() {
   exit 1
 }
 
-[ -f bootstrap.sh ] || fail "bootstrap.sh must be run from its current directory"
+[ "$(dirname $0)" = '.' ] || fail "bootstrap.sh must be run from its current directory"
 
 go version 2>&1 >/dev/null || fail "Go is not installed or is not on \$PATH"
 
