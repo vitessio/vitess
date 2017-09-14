@@ -65,7 +65,7 @@
 
 # scatter order by with * expression
 "select * from user order by id"
-"unsupported: scatter order by with a '*' in select expression"
+"unsupported: in scatter query: order by must reference a column in the select list: id asc"
 
 # filtering on a cross-shard subquery
 "select id from (select user.id, user.col from user join user_extra) as t where id=5"

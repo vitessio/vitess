@@ -406,7 +406,7 @@ func (rb *route) PushOrderBy(order *sqlparser.Order) error {
 	}
 
 	// If it's a scatter, we have to populate the OrderBy field.
-	var colnum int
+	colnum := -1
 	switch expr := order.Expr.(type) {
 	case *sqlparser.SQLVal:
 		var err error
@@ -415,8 +415,6 @@ func (rb *route) PushOrderBy(order *sqlparser.Order) error {
 		}
 	case *sqlparser.ColName:
 		c := expr.Metadata.(*column)
-		// The column is guaranteed to be found because this function is called
-		// only after a successful symbol resolution that points to this route.
 		for i, rc := range rb.resultColumns {
 			if rc.column == c {
 				colnum = i
@@ -424,11 +422,12 @@ func (rb *route) PushOrderBy(order *sqlparser.Order) error {
 			}
 		}
 	default:
-		return fmt.Errorf("unsupported: in scatter query: complex order by expression: %v", sqlparser.String(expr))
+		return fmt.Errorf("unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
 	}
-	// Ensure that it's not an anonymous column (* expression).
-	if rb.resultColumns[colnum].alias.IsEmpty() {
-		return errors.New("unsupported: scatter order by with a '*' in select expression")
+	// If column is not found, then the order by is referencing
+	// a column that's not on the select list.
+	if colnum == -1 {
+		return fmt.Errorf("unsupported: in scatter query: order by must reference a column in the select list: %s", sqlparser.String(order))
 	}
 	rb.ERoute.OrderBy = append(rb.ERoute.OrderBy, engine.OrderbyParams{
 		Col:  colnum,
