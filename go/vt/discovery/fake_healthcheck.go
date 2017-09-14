@@ -106,6 +106,12 @@ func (fhc *FakeHealthCheck) RemoveTablet(tablet *topodatapb.Tablet) {
 	delete(fhc.items, key)
 }
 
+// ReplaceTablet removes the old tablet and adds the new.
+func (fhc *FakeHealthCheck) ReplaceTablet(old, new *topodatapb.Tablet, name string) {
+	fhc.RemoveTablet(old)
+	fhc.AddTablet(new, name)
+}
+
 // GetConnection returns the TabletConn of the given tablet.
 func (fhc *FakeHealthCheck) GetConnection(key string) queryservice.QueryService {
 	fhc.mu.RLock()

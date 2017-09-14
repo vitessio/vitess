@@ -660,6 +660,14 @@ func (hc *HealthCheckImpl) RemoveTablet(tablet *topodatapb.Tablet) {
 	go hc.deleteConn(tablet)
 }
 
+// ReplaceTablet removes the old tablet and adds the new tablet.
+func (hc *HealthCheckImpl) ReplaceTablet(old, new *topodatapb.Tablet, name string) {
+	go func() {
+		hc.deleteConn(old)
+		hc.AddTablet(new, name)
+	}()
+}
+
 // WaitForInitialStatsUpdates waits until all tablets added via AddTablet() call
 // were propagated to downstream via corresponding StatsUpdate() calls.
 func (hc *HealthCheckImpl) WaitForInitialStatsUpdates() {
