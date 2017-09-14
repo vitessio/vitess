@@ -27,8 +27,6 @@ import (
 
 // This file has functions to analyze the FROM clause.
 
-var infoSchema = sqlparser.NewTableIdent("information_schema")
-
 // processTableExprs analyzes the FROM clause. It produces a builder
 // with all the routes identified.
 func processTableExprs(tableExprs sqlparser.TableExprs, vschema VSchema) (builder, error) {
@@ -159,7 +157,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 // It also returns the associated vschema info (*Table) so that
 // it can be used to create the symbol table entry.
 func buildERoute(tableName sqlparser.TableName, vschema VSchema) (*engine.Route, *vindexes.Table, error) {
-	if tableName.Qualifier == infoSchema {
+	if systemTable(tableName.Qualifier.String()) {
 		ks, err := vschema.DefaultKeyspace()
 		if err != nil {
 			return nil, nil, err

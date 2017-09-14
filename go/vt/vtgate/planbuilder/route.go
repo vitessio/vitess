@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -519,10 +520,12 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 				return
 			}
 		case sqlparser.TableName:
-			if node.Qualifier != infoSchema {
+			if !systemTable(node.Qualifier.String()) {
 				node.Name.Format(buf)
 				return
 			}
+			node.Format(buf)
+			return
 		}
 		node.Format(buf)
 	}
@@ -531,6 +534,13 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 	rb.ERoute.Query = buf.ParsedQuery().Query
 	rb.ERoute.FieldQuery = rb.generateFieldQuery(rb.Select, jt)
 	return nil
+}
+
+func systemTable(qualifier string) bool {
+	return strings.EqualFold(qualifier, "information_schema") ||
+		strings.EqualFold(qualifier, "performance_schema") ||
+		strings.EqualFold(qualifier, "sys") ||
+		strings.EqualFold(qualifier, "mysql")
 }
 
 // procureValues procures and converts the input into
@@ -573,10 +583,12 @@ func (rb *route) generateFieldQuery(sel sqlparser.SelectStatement, jt *jointab) 
 				return
 			}
 		case sqlparser.TableName:
-			if node.Qualifier != infoSchema {
+			if !systemTable(node.Qualifier.String()) {
 				node.Name.Format(buf)
 				return
 			}
+			node.Format(buf)
+			return
 		}
 		sqlparser.FormatImpossibleQuery(buf, node)
 	}
