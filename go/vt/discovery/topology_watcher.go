@@ -43,7 +43,7 @@ type TabletRecorder interface {
 	// RemoveTablet removes the tablet.
 	RemoveTablet(tablet *topodatapb.Tablet)
 
-	// ReplaceTablet does an AddTablet and RemoveTablet within a lock.
+	// ReplaceTablet does an AddTablet and RemoveTablet in one call, effectively replacing the old tablet with the new.
 	ReplaceTablet(old, new *topodatapb.Tablet, name string)
 }
 
