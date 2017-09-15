@@ -169,7 +169,7 @@ support any filtering, this functionality is all specific to Vitess.
 
 Vitess provides the following tools to help manage range-based shards:
 
-* The [vtctl](/reference/vtctl.html) command-line tool supports
+* The [vtctl]({% link reference/vtctl.md %}) command-line tool supports
     functions for managing keyspaces, shards, tablets, and more.
 * Client APIs account for sharding operations.
 * The [MapReduce framework](https://github.com/youtube/vitess/tree/master/java/hadoop/src/main/java/io/vitess/hadoop)

@@ -66,9 +66,9 @@ The boiler plate markdown files have multiple purposes:
     the file
 *   re-arrange paths on the website e.g.
     [`doc/GitHubWorkFlow.md`](https://github.com/youtube/vitess/blob/master/doc/GitHubWorkflow.md)
-    is actually served as http://vitess.io/contributing/github-workflow.html
+    is actually served as http://vitess.io/contributing/github-workflow/
     because there is the file
-    [`vitess.io/vitess.io/contributing/github-workflow.md`](https://github.com/youtube/vitess/blob/master/vitess.io/contributing/github-workflow.md).
+    [`vitess.io/contributing/github-workflow.md`](https://github.com/youtube/vitess/blob/master/vitess.io/contributing/github-workflow.md).
 
 ### Changing Content
 
@@ -78,6 +78,16 @@ To modify our website, you need to:
 *   re-generate the static pages (see [`publish-site.sh`
     above](#to-publish-the-site))
 *   merge your changes into the master branch e.g. as pull request
+
+### Linking pages
+
+Always use the `{% raw %}{% link ... %}{% endraw %}` template tag to link other pages.
+
+Note that you have to refer to the `.md` file of the page. Example:
+
+```
+[GitHub Workflow page]({% raw %}{% link contributing/github-workflow.md %}{% endraw %})
+```
 
 ### Adding new Pages
 
@@ -97,19 +107,8 @@ part. Example: `doc/Contributing.md` is included by
 `vitess.io/contributing/index.md` and therefore served as
 http://vitess.io/contributing/.
 
-### Links
-
-Please always use absolute paths with a leading `/` e.g. in links to other
-documents or images.
-
-**Right:**
-
-*   `/user-guide/troubleshooting.html`
-
-**Wrong:**
-
-*   `../troubleshooting.html`
-*   `http://vitess.io/user-guide/troubleshooting.html`
+Make sure that you use `{% raw %}{% link ... %}{% endraw %}` to generate the URLs.
+See existing entries for examples.
 
 ### Orphaned doc/ Markdown Files
 

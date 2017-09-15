@@ -20,7 +20,7 @@ data resides.
 ## Keyspace ID
 
 The *keyspace ID* is the value that is used to decide on which shard a given
-record lives. [Range-based Sharding](http://vitess.io/user-guide/sharding.html#range-based-sharding)
+record lives. [Range-based Sharding]({% link user-guide/sharding.md %}#range-based-sharding)
 refers to creating shards that each cover a particular range of keyspace IDs.
 
 Often, the keyspace ID is computed as the hash of some column in your data,
@@ -51,7 +51,7 @@ shards with non-overlapping data.
 
 ### Resharding
 
-Vitess supports [dynamic resharding](http://vitess.io/user-guide/sharding.html#resharding),
+Vitess supports [dynamic resharding]({% link user-guide/sharding.md %}#resharding),
 in which the number of shards is changed on a live cluster. This can be either
 splitting one or more shards into smaller pieces, or merging neighboring shards
 into bigger pieces.
@@ -144,14 +144,14 @@ to a newly designated master database so that replication can continue.
 
 ## Topology Service
 
-The *[Topology Service](/user-guide/topology-service.html)*
+The *[Topology Service]({% link user-guide/topology-service.md %})*
 is a set of backend processes running on different servers.
 Those servers store topology data and provide a distributed locking service.
 
 Vitess uses a plug-in system to support various backends for storing topology
 data, which are assumed to provide a distributed, consistent key-value store.
-By default, our [local example](http://vitess.io/getting-started/local-instance.html)
-uses the ZooKeeper plugin, and the [Kubernetes example](http://vitess.io/getting-started/)
+By default, our [local example]({% link getting-started/local-instance.md %})
+uses the ZooKeeper plugin, and the [Kubernetes example]({% link getting-started/index.md %})
 uses etcd.
 
 The topology service exists for several reasons:

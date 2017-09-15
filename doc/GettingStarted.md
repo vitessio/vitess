@@ -17,7 +17,7 @@ To run Vitess in Docker, you can either use our pre-built images on [Docker Hub]
 * The [vitess/lite](https://hub.docker.com/r/vitess/lite/) image contains only
   the compiled Vitess binaries, excluding ZooKeeper. It can run Vitess, but
   lacks the environment needed to build Vitess or run tests. It's primarily used
-  for the [Vitess on Kubernetes](http://vitess.io/getting-started/) guide.
+  for the [Vitess on Kubernetes]({% link getting-started/index.md %}) guide.
 
 For example, you can directly run `vitess/base`, and Docker will download the
 image for you:
@@ -437,8 +437,8 @@ lock service. ZooKeeper is included in the Vitess distribution.
 1.  **Start vttablets**
 
     The `vttablet-up.sh` script brings up three vttablets, and assigns them to
-    a [keyspace](http://vitess.io/overview/concepts.html#keyspace) and [shard]
-    (http://vitess.io/overview/concepts.html#shard) according to the variables
+    a [keyspace]({% link overview/concepts.md %}#keyspace) and [shard]
+    ({% link overview/concepts.md %}#shard) according to the variables
     set at the top of the script file.
 
     ``` sh
@@ -460,7 +460,7 @@ lock service. ZooKeeper is included in the Vitess distribution.
     This is what an unsharded keyspace looks like.
 
     If you click on the shard box, you'll see a list of [tablets]
-    (http://vitess.io/overview/concepts.html#tablet) in that shard.
+    ({% link overview/concepts.md %}#tablet) in that shard.
     Note that it's normal for the tablets to be unhealthy at this point, since
     you haven't initialized them yet.
 
@@ -531,7 +531,7 @@ lock service. ZooKeeper is included in the Vitess distribution.
 1.  **Take a backup**
 
     Now that the initial schema is applied, it's a good time to take the first
-    [backup](http://vitess.io/user-guide/backup-and-restore.html). This backup
+    [backup]({% link user-guide/backup-and-restore.md %}). This backup
     will be used to automatically restore any additional replicas that you run,
     before they connect themselves to the master and catch up on replication.
     If an existing tablet goes down and comes back up without its data, it will
@@ -609,10 +609,10 @@ See the comments at the top of each sample file for usage instructions.
 ### Try Vitess resharding
 
 Now that you have a full Vitess stack running, you may want to go on to the
-[Horizontal Sharding workflow guide](http://vitess.io/user-guide/horizontal-sharding-workflow.html)
-or [Horizontal Sharding codelab](http://vitess.io/user-guide/horizontal-sharding.html)
+[Horizontal Sharding workflow guide]({% link user-guide/horizontal-sharding-workflow.md %})
+or [Horizontal Sharding codelab]({% link user-guide/horizontal-sharding.md %})
 (if you prefer to run each step manually through commands) to try out
-[dynamic resharding](http://vitess.io/user-guide/sharding.html#resharding).
+[dynamic resharding]({% link user-guide/sharding.md %}#resharding).
 
 If so, you can skip the tear-down since the sharding guide picks up right here.
 If not, continue to the clean-up steps below.

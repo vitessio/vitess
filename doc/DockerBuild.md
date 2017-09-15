@@ -97,4 +97,4 @@ Then you can run our build script for the `lite` image which extracts the Vitess
     with a specific label that you change each time you make a new build,
     so you can control when pods update.
 
-1.  Launch [Vitess on Kubernetes](http://vitess.io/getting-started/) as usual.
+1.  Launch [Vitess on Kubernetes]({% link getting-started/index.md %}) as usual.

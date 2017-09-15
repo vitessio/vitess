@@ -1,28 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd" xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>http://vitess.io/user-guide/backup-and-restore.html</loc>
+    <loc>http://vitess.io/user-guide/backup-and-restore/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/client-libraries.html</loc>
+    <loc>http://vitess.io/user-guide/client-libraries/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/contributing/code-reviews.html</loc>
+    <loc>http://vitess.io/contributing/code-reviews/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/overview/concepts.html</loc>
+    <loc>http://vitess.io/overview/concepts/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/getting-started/docker-build.html</loc>
+    <loc>http://vitess.io/getting-started/docker-build/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/contributing/github-workflow.html</loc>
+    <loc>http://vitess.io/contributing/github-workflow/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/horizontal-sharding-workflow.html</loc>
+    <loc>http://vitess.io/user-guide/horizontal-sharding-workflow/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/horizontal-sharding.html</loc>
+    <loc>http://vitess.io/user-guide/horizontal-sharding/</loc>
   </url>
   <url>
     <loc>http://vitess.io/internal/</loc>
@@ -34,9 +34,6 @@
     <loc>http://vitess.io/terms/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/</loc>
-  </url>
-  <url>
     <loc>http://vitess.io/search/</loc>
   </url>
   <url>
@@ -46,93 +43,96 @@
     <loc>http://vitess.io/contributing/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/introduction.html</loc>
+    <loc>http://vitess.io/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/launching.html</loc>
+    <loc>http://vitess.io/user-guide/introduction/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/getting-started/local-instance.html</loc>
+    <loc>http://vitess.io/user-guide/launching/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/mysql-server-protocol.html</loc>
+    <loc>http://vitess.io/getting-started/local-instance/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/resources/presentations.html</loc>
+    <loc>http://vitess.io/user-guide/mysql-server-protocol/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/production-planning.html</loc>
+    <loc>http://vitess.io/resources/presentations/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/internal/publish-website.html</loc>
+    <loc>http://vitess.io/user-guide/production-planning/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/internal/release-instructions.html</loc>
+    <loc>http://vitess.io/internal/publish-website/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/reparenting.html</loc>
+    <loc>http://vitess.io/internal/release-instructions/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/resources/roadmap.html</loc>
+    <loc>http://vitess.io/user-guide/reparenting/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/row-based-replication.html</loc>
+    <loc>http://vitess.io/resources/roadmap/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/scalability-philosophy.html</loc>
+    <loc>http://vitess.io/user-guide/row-based-replication/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/overview/scaling-mysql.html</loc>
+    <loc>http://vitess.io/user-guide/scalability-philosophy/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/schema-management.html</loc>
+    <loc>http://vitess.io/overview/scaling-mysql/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/schema-swap.html</loc>
+    <loc>http://vitess.io/user-guide/schema-management/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/server-configuration.html</loc>
+    <loc>http://vitess.io/user-guide/schema-swap/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/sharding-kubernetes-workflow.html</loc>
+    <loc>http://vitess.io/user-guide/server-configuration/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/sharding-kubernetes.html</loc>
+    <loc>http://vitess.io/user-guide/sharding-kubernetes-workflow/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/sharding.html</loc>
+    <loc>http://vitess.io/user-guide/sharding-kubernetes/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/topology-service.html</loc>
+    <loc>http://vitess.io/user-guide/sharding/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/transport-security-model.html</loc>
+    <loc>http://vitess.io/user-guide/topology-service/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/troubleshooting.html</loc>
+    <loc>http://vitess.io/user-guide/transport-security-model/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/twopc.html</loc>
+    <loc>http://vitess.io/user-guide/troubleshooting/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/update-stream.html</loc>
+    <loc>http://vitess.io/user-guide/twopc/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/upgrading.html</loc>
+    <loc>http://vitess.io/user-guide/update-stream/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/reference/vitess-api.html</loc>
+    <loc>http://vitess.io/user-guide/upgrading/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/vitess-replication.html</loc>
+    <loc>http://vitess.io/reference/vitess-api/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/vitess-sequences.html</loc>
+    <loc>http://vitess.io/user-guide/vitess-replication/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/vschema.html</loc>
+    <loc>http://vitess.io/user-guide/vitess-sequences/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/reference/vtctl.html</loc>
+    <loc>http://vitess.io/user-guide/vschema/</loc>
+  </url>
+  <url>
+    <loc>http://vitess.io/reference/vtctl/</loc>
   </url>
 </urlset>

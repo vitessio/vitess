@@ -25,7 +25,7 @@ and we are open to contributions in this area.
 
 ## Deploying in Kubernetes
 
-See the [Getting Started](http://vitess.io/getting-started/) guide.
+See the [Getting Started]({% link getting-started/index.md %}) guide.
 
 ## Deploying on bare metal
 

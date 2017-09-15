@@ -1,6 +1,7 @@
 ---
 layout: doc
 title: "Update Stream"
+redirect_from: /user-guide/update-stream.html
 description:
 modified:
 excerpt:

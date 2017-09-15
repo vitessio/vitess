@@ -1,6 +1,7 @@
 ---
 layout: doc
 title: "Running Vitess on a Local Server"
+redirect_from: /getting-started/local-instance.html
 description: Learn how to build Vitess on a local server.
 date: 
 modified:

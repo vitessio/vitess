@@ -1,6 +1,7 @@
 ---
 layout: doc
 title: "Launching Vitess"
+redirect_from: /user-guide/launching.html
 description:
 modified:
 excerpt:

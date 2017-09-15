@@ -1,10 +1,10 @@
 This guide walks you through the process of sharding an existing unsharded
-Vitess [keyspace](http://vitess.io/overview/concepts.html#keyspace).
+Vitess [keyspace]({% link overview/concepts.md %}#keyspace).
 
 ## Prerequisites
 
 We begin by assuming you've completed the
-[Getting Started](http://vitess.io/getting-started/local-instance.html) guide,
+[Getting Started]({% link getting-started/local-instance.md %}) guide,
 and have left the cluster running.
 
 ## Overview
@@ -79,7 +79,7 @@ vitess/examples/local$ ./sharded-vttablet-up.sh
 Since the sharding key is the page number,
 this will result in half the pages going to each shard,
 since *0x80* is the midpoint of the
-[sharding key range](http://vitess.io/user-guide/sharding.html#key-ranges-and-partitions).
+[sharding key range]({% link user-guide/sharding.md %}#key-ranges-and-partitions).
 
 These new shards will run in parallel with the original shard during the
 transition, but actual traffic will be served only by the original shard
@@ -150,7 +150,7 @@ will be served only by the remaining, un-paused *rdonly* tablets.
 ## Check filtered replication
 
 Once the copy from the paused snapshot finishes, *vtworker* turns on
-[filtered replication](http://vitess.io/user-guide/sharding.html#filtered-replication)
+[filtered replication]({% link user-guide/sharding.md %}#filtered-replication)
 from the source shard to each destination shard. This allows the destination
 shards to catch up on updates that have continued to flow in from the app since
 the time of the snapshot.
@@ -194,10 +194,10 @@ I0416 02:10:56.927313      10 split_diff.go:496] Table messages checks out (4 ro
 ## Switch over to new shards
 
 Now we're ready to switch over to serving from the new shards.
-The [MigrateServedTypes](http://vitess.io/reference/vtctl.html#migrateservedtypes)
+The [MigrateServedTypes]({% link reference/vtctl.md %}#migrateservedtypes)
 command lets you do this one
-[tablet type](http://vitess.io/overview/concepts.html#tablet) at a time,
-and even one [cell](http://vitess.io/overview/concepts.html#cell-data-center)
+[tablet type]({% link overview/concepts.md %}#tablet) at a time,
+and even one [cell]({% link overview/concepts.md %}#cell-data-center)
 at a time. The process can be rolled back at any point *until* the master is
 switched over.
 
