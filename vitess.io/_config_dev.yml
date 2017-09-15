@@ -19,6 +19,7 @@ highlighter: pygments
 plugins:
   - jekyll-sitemap
   - jekyll-redirect-from
+  - jekyll-seo-tag
 
 markdown: redcarpet
 
@@ -37,3 +38,4 @@ owner:
 
 
 exclude: ["config.rb", ".sass-cache", "Capfile", "config", "log", "Rakefile", "Rakefile.rb", "tmp", "*.sublime-project", "*.sublime-workspace", "Gemfile", "Gemfile.lock", "README.md", "LICENSE", "node_modules", "Gruntfile.js", "package.json", "preview-site.sh", "publish-site.sh"]
+
