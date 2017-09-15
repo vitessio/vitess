@@ -1,9 +1,8 @@
 ---
 layout: doc
-title: "Understanding Vitess "
+title: "Scaling MySQL with Vitess"
 redirect_from: /overview/scaling-mysql.html
-description: Learn about core Vitess features and how Vitess stacks up
-          against data storage alternatives. 
+description: Vitess simplifies every aspect of managing a MySQL cluster, allowing easy scaling to any size without complicating your application layer.
 modified:
 excerpt:
 tags: []
