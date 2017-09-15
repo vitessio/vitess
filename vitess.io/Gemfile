@@ -1,3 +1,6 @@
+# Note: When you change this file and run "bundle install", the Gemfile.lock
+# file will be changed as well. Please always commit both files and do not
+# ignore the changes in the .lock file.
 source "https://rubygems.org"
 
 gem 'jekyll', '3.5.2'
