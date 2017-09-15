@@ -15,27 +15,31 @@
                 }
             }
         ],
-        "TabletQueries": {
-            "ks_sharded/-80": [
-                {
-                    "SQL": "select * from user",
-                    "BindVars": {},
-                    "MysqlQueries": [
-                        "select * from user where 1 != 1",
-                        "select * from user limit 10001"
-                    ]
-                }
-            ],
-            "ks_sharded/80-": [
-                {
-                    "SQL": "select * from user",
-                    "BindVars": {},
-                    "MysqlQueries": [
-                        "select * from user where 1 != 1",
-                        "select * from user limit 10001"
-                    ]
-                }
-            ]
+        "TabletActions": {
+            "ks_sharded/-80": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select * from user",
+                        "BindVars": {}
+                    }
+                ],
+                "MysqlQueries": [
+                    "select * from user where 1 != 1",
+                    "select * from user limit 10001"
+                ]
+            },
+            "ks_sharded/80-": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select * from user",
+                        "BindVars": {}
+                    }
+                ],
+                "MysqlQueries": [
+                    "select * from user where 1 != 1",
+                    "select * from user limit 10001"
+                ]
+            }
         }
     }
 ]

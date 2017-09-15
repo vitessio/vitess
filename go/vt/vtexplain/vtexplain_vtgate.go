@@ -112,7 +112,7 @@ func buildTopology(vschemaStr string, numShardsPerKeyspace int) error {
 	return err
 }
 
-func vtgateExecute(sql string) ([]*engine.Plan, map[string][]*TabletQuery, error) {
+func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error) {
 	_, err := vtgateExecutor.Execute(context.Background(), vtgateSession, sql, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("vtexplain execute error: %v in %s", err, sql)
@@ -127,7 +127,7 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string][]*TabletQuery, error
 	}
 	planCache.Clear()
 
-	tabletQueries := make(map[string][]*TabletQuery)
+	tabletActions := make(map[string]*TabletActions)
 	for shard, tc := range explainTopo.TabletConns {
 		if len(tc.Queries) == 0 {
 			continue
@@ -135,20 +135,23 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string][]*TabletQuery, error
 
 		tablet := tc.Executor.(*fakeTablet)
 
-		queries := make([]*TabletQuery, 0, len(tc.Queries))
+		tqs := make([]*TabletQuery, 0, len(tc.Queries))
 		for _, bq := range tc.Queries {
 			tq := &TabletQuery{
-				SQL:          bq.Sql,
-				BindVars:     sqltypes.CopyBindVariables(bq.BindVariables),
-				MysqlQueries: tablet.queries,
+				SQL:      bq.Sql,
+				BindVars: sqltypes.CopyBindVariables(bq.BindVariables),
 			}
-			queries = append(queries, tq)
+			tqs = append(tqs, tq)
 		}
+
+		tabletActions[shard] = &TabletActions{
+			TabletQueries: tqs,
+			MysqlQueries:  tablet.queries,
+		}
+
 		tc.Queries = nil
 		tablet.queries = nil
-
-		tabletQueries[shard] = queries
 	}
 
-	return plans, tabletQueries, nil
+	return plans, tabletActions, nil
 }
