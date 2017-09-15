@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"syscall"
 
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
@@ -168,7 +169,11 @@ func initMySQLProtocol() {
 	}
 
 	if *mysqlServerSocketPath != "" {
+		// Let's create this unix socket with permissions to all users. In this way,
+		// clients can connect to vtgate mysql server without being vtgate user
+		oldMask := syscall.Umask(000)
 		mysqlUnixListener, err = mysql.NewListener("unix", *mysqlServerSocketPath, authServer, vh)
+		_ = syscall.Umask(oldMask)
 		if err != nil {
 			log.Fatalf("mysql.NewListener failed: %v", err)
 		}
