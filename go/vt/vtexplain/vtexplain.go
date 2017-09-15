@@ -55,9 +55,6 @@ type TabletQuery struct {
 
 	// BindVars sent with the command
 	BindVars map[string]*querypb.BindVariable
-
-	// The actual queries executed by mysql
-	MysqlQueries []string
 }
 
 // MarshalJSON renders the json structure
@@ -71,19 +68,26 @@ func (tq *TabletQuery) MarshalJSON() ([]byte, error) {
 	}
 
 	return jsonutil.MarshalNoEscape(&struct {
-		SQL          string
-		BindVars     map[string]string
-		MysqlQueries []string
+		SQL      string
+		BindVars map[string]string
 	}{
-		SQL:          tq.SQL,
-		BindVars:     bindVars,
-		MysqlQueries: tq.MysqlQueries,
+		SQL:      tq.SQL,
+		BindVars: bindVars,
 	})
 }
 
-// Plan defines how vitess will execute a given sql query, including the vtgate
+// TabletActions contains the set of operations done by a given tablet
+type TabletActions struct {
+	// Queries sent from vtgate to the tablet
+	TabletQueries []*TabletQuery
+
+	// Queries that were run on mysql
+	MysqlQueries []string
+}
+
+// Explain defines how vitess will execute a given sql query, including the vtgate
 // query plans and all queries run on each tablet.
-type Plan struct {
+type Explain struct {
 	// original sql statement
 	SQL string
 
@@ -91,7 +95,7 @@ type Plan struct {
 	Plans []*engine.Plan
 
 	// list of queries / bind vars sent to each tablet
-	TabletQueries map[string][]*TabletQuery
+	TabletActions map[string]*TabletActions
 }
 
 const (
@@ -157,8 +161,8 @@ func parseSchema(sqlSchema string) ([]*sqlparser.DDL, error) {
 }
 
 // Run the explain analysis on the given queries
-func Run(sql string) ([]*Plan, error) {
-	plans := make([]*Plan, 0, 16)
+func Run(sql string) ([]*Explain, error) {
+	explains := make([]*Explain, 0, 16)
 
 	for {
 		// Need to strip comments in a loop to handle multiple comments
@@ -178,11 +182,11 @@ func Run(sql string) ([]*Plan, error) {
 		}
 
 		if sql != "" {
-			plan, err := getPlan(sql)
+			e, err := explain(sql)
 			if err != nil {
 				return nil, err
 			}
-			plans = append(plans, plan)
+			explains = append(explains, e)
 		}
 
 		sql = rem
@@ -191,41 +195,39 @@ func Run(sql string) ([]*Plan, error) {
 		}
 	}
 
-	return plans, nil
+	return explains, nil
 }
 
-func getPlan(sql string) (*Plan, error) {
-	plans, tabletQueries, err := vtgateExecute(sql)
+func explain(sql string) (*Explain, error) {
+	plans, tabletActions, err := vtgateExecute(sql)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Plan{
+	return &Explain{
 		SQL:           sql,
 		Plans:         plans,
-		TabletQueries: tabletQueries,
+		TabletActions: tabletActions,
 	}, nil
 }
 
-// PlansAsText returns a text representation of the plans
-func PlansAsText(plans []*Plan) string {
+// ExplainsAsText returns a text representation of the explains
+func ExplainsAsText(explains []*Explain) string {
 	var b bytes.Buffer
-	for _, plan := range plans {
+	for _, explain := range explains {
 		fmt.Fprintf(&b, "----------------------------------------------------------------------\n")
-		fmt.Fprintf(&b, "%s\n\n", plan.SQL)
+		fmt.Fprintf(&b, "%s\n\n", explain.SQL)
 
-		tablets := make([]string, 0, len(plan.TabletQueries))
-		for tablet := range plan.TabletQueries {
+		tablets := make([]string, 0, len(explain.TabletActions))
+		for tablet := range explain.TabletActions {
 			tablets = append(tablets, tablet)
 		}
 		sort.Strings(tablets)
 		for _, tablet := range tablets {
-			queries := plan.TabletQueries[tablet]
 			fmt.Fprintf(&b, "[%s]:\n", tablet)
-			for _, tq := range queries {
-				for _, sql := range tq.MysqlQueries {
-					fmt.Fprintf(&b, "%s\n", sql)
-				}
+			tc := explain.TabletActions[tablet]
+			for _, sql := range tc.MysqlQueries {
+				fmt.Fprintf(&b, "%s\n", sql)
 			}
 			fmt.Fprintf(&b, "\n")
 		}
@@ -234,8 +236,8 @@ func PlansAsText(plans []*Plan) string {
 	return string(b.Bytes())
 }
 
-// PlansAsJSON returns a json representation of the plans
-func PlansAsJSON(plans []*Plan) string {
-	planJSON, _ := jsonutil.MarshalIndentNoEscape(plans, "", "    ")
-	return string(planJSON)
+// ExplainsAsJSON returns a json representation of the explains
+func ExplainsAsJSON(explains []*Explain) string {
+	explainJSON, _ := jsonutil.MarshalIndentNoEscape(explains, "", "    ")
+	return string(explainJSON)
 }

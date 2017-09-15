@@ -64,47 +64,46 @@ func testExplain(testcase string, opts *Options, t *testing.T) {
 	textOutFile := testfiles.Locate(fmt.Sprintf("vtexplain/%s-output.txt", testcase))
 	textOut, err := ioutil.ReadFile(textOutFile)
 
-	plans, err := Run(string(sql))
+	explains, err := Run(string(sql))
 	if err != nil {
 		t.Fatalf("vtexplain error: %v", err)
 	}
-	if plans == nil {
-		t.Fatalf("vtexplain error running %s: no plan", string(sql))
+	if explains == nil {
+		t.Fatalf("vtexplain error running %s: no explain", string(sql))
 	}
 
-	planJSON := PlansAsJSON(plans)
-
-	if strings.TrimSpace(string(planJSON)) != strings.TrimSpace(string(jsonOut)) {
+	explainJSON := ExplainsAsJSON(explains)
+	if strings.TrimSpace(string(explainJSON)) != strings.TrimSpace(string(jsonOut)) {
 		// Print the json that was actually returned and also dump to a
 		// temp file to be able to diff the results.
 		t.Errorf("json output did not match")
-		t.Logf("got:\n%s\n", string(planJSON))
+		t.Logf("got:\n%s\n", string(explainJSON))
 
 		tempDir, err := ioutil.TempDir("", "vtexplain_output")
 		if err != nil {
 			t.Fatalf("error getting tempdir: %v", err)
 		}
 		gotFile := fmt.Sprintf("%s/%s-output.json", tempDir, testcase)
-		ioutil.WriteFile(gotFile, []byte(planJSON), 0644)
+		ioutil.WriteFile(gotFile, []byte(explainJSON), 0644)
 
 		command := exec.Command("diff", "-u", jsonOutFile, gotFile)
 		out, _ := command.CombinedOutput()
 		t.Logf("diff:\n%s\n", out)
 	}
 
-	planText := PlansAsText(plans)
-	if strings.TrimSpace(string(planText)) != strings.TrimSpace(string(textOut)) {
+	explainText := ExplainsAsText(explains)
+	if strings.TrimSpace(string(explainText)) != strings.TrimSpace(string(textOut)) {
 		// Print the Text that was actually returned and also dump to a
 		// temp file to be able to diff the results.
 		t.Errorf("Text output did not match")
-		t.Logf("got:\n%s\n", string(planText))
+		t.Logf("got:\n%s\n", string(explainText))
 
 		tempDir, err := ioutil.TempDir("", "vtexplain_output")
 		if err != nil {
 			t.Fatalf("error getting tempdir: %v", err)
 		}
 		gotFile := fmt.Sprintf("%s/%s-output.txt", tempDir, testcase)
-		ioutil.WriteFile(gotFile, []byte(planText), 0644)
+		ioutil.WriteFile(gotFile, []byte(explainText), 0644)
 
 		command := exec.Command("diff", "-u", textOutFile, gotFile)
 		out, _ := command.CombinedOutput()
