@@ -26,19 +26,19 @@ Diagnosis 4: No particular transaction seems to be the culprit. Nothing seems to
 To prevent accidentally accepting writes, our default `my.cnf` settings
 tell MySQL to always start up read-only. If the master MySQL gets restarted,
 it will thus come back read-only until you intervene to confirm that it should
-accept writes. You can use the [SetReadWrite](/reference/vtctl.html#setreadwrite)
+accept writes. You can use the [SetReadWrite]({% link reference/vtctl.md %}#setreadwrite)
 command to do that.
 
 However, usually if something unexpected happens to the master, it's better to
-reparent to a different replica with [EmergencyReparentShard](/reference/vtctl.html#emergencyreparentshard). If you need to do planned maintenance on the master,
-it's best to first reparent to another replica with [PlannedReparentShard](/reference/vtctl.html#plannedreparentshard).
+reparent to a different replica with [EmergencyReparentShard]({% link reference/vtctl.md %}#emergencyreparentshard). If you need to do planned maintenance on the master,
+it's best to first reparent to another replica with [PlannedReparentShard]({% link reference/vtctl.md %}#plannedreparentshard).
 
 ### Vitess sees the wrong tablet as master
 
 If you do a failover manually (not through Vitess), you'll need to tell
 Vitess which tablet corresponds to the new master MySQL. Until then,
 writes will fail since they'll be routed to a read-only replica
-(the old master). Use the [TabletExternallyReparented](/reference/vtctl.html#tabletexternallyreparented)
+(the old master). Use the [TabletExternallyReparented]({% link reference/vtctl.md %}#tabletexternallyreparented)
 command to tell Vitess the new master tablet for a shard.
 
 Tools like [Orchestrator](https://github.com/github/orchestrator)

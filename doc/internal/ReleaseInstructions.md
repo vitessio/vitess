@@ -154,7 +154,7 @@ work with them.
 ### Local Tutorial
 
 We must check that the [local startup
-tutorial](http://vitess.io/getting-started/local-instance.html#start-a-vitess-cluster)
+tutorial]({% link getting-started/local-instance.md %}#start-a-vitess-cluster)
 is not broken.
 
 Instead of going through the steps manually, run the `local_example` test which
@@ -168,7 +168,7 @@ in parallel to shorten the test duration.
 
 ### Kubernetes Tutorial
 
-Follow the [Kubernetes tutorial](http://vitess.io/getting-started/), which will
+Follow the [Kubernetes tutorial]({% link getting-started/index.md %}), which will
 automatically use the latest Docker images you pushed.
 
 TODO(mberlin): Describe how to launch our new cluster tests in `test/cluster`

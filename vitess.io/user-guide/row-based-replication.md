@@ -1,6 +1,7 @@
 ---
 layout: doc
 title: "Row Based Replication"
+redirect_from: /user-guide/row-based-replication.html
 description:
 modified:
 excerpt:

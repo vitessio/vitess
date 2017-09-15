@@ -73,7 +73,7 @@ $ git checkout master
 
 Try to commit small pieces along the way as you finish them, with an explanation
 of the changes in the commit message.
-Please see the [Code Review page](/contributing/code-reviews.html) for more guidance.
+Please see the [Code Review page]({% link contributing/code-reviews.md %}) for more guidance.
 
 As you work in a package, you can run just
 the unit tests for that package by running `go test` from within that package.

@@ -17,7 +17,7 @@ schema. Vitess supports both primary and secondary indexes.
 
 Vitess supports almost all MySQL scalar data types.
 It also provides full SQL support within a
-[shard](/overview/concepts.html#shard), including JOIN statements.
+[shard]({% link overview/concepts.md %}#shard), including JOIN statements.
 
 Vitess does not currently support encoded protobufs or protocol buffer
 querying. (The latter is also known as cracking.) Protocol buffers can
@@ -44,7 +44,7 @@ check to ensure that the update can be applied to your schema. In
 addition, to avoid reducing the availability of your entire system,
 Vitess rejects changes that exceed a certain scope.
 
-See the [Schema Management](/user-guide/schema-management.html)
+See the [Schema Management]({% link user-guide/schema-management.md %})
 section of this guide for more information.
 
 ## Supported clients
@@ -81,6 +81,6 @@ Backup storage is implemented through a pluggable interface,
 and we currently have plugins available for Google Cloud Storage, Amazon S3,
 and Ceph.
 
-See the [Backing Up Data](/user-guide/backup-and-restore.html) section
+See the [Backing Up Data]({% link user-guide/backup-and-restore.md %}) section
 of this guide for more information about creating and restoring data
 backups with Vitess. 

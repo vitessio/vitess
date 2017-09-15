@@ -1,5 +1,5 @@
 This guide shows you an example about how to apply range-based sharding
-process in an existing unsharded Vitess [keyspace](http://vitess.io/overview/concepts.html#keyspace)
+process in an existing unsharded Vitess [keyspace]({% link overview/concepts.md %}#keyspace)
 using the horizontal resharding workflow. In this example, we will reshard
 from 1 shard "0" into 2 shards "-80" and "80-".
 
@@ -27,7 +27,7 @@ The horizontal resharding process mainly contains the following steps
 
 ## Prerequisites
 
-You should complete the [Getting Started](http://vitess.io/getting-started/local-instance.html) guide
+You should complete the [Getting Started]({% link getting-started/local-instance.md %}) guide
 (please finish all the steps before Try Vitess resharding) and have left
 the cluster running. Then, please follow these steps before running
 the resharding process:
@@ -41,7 +41,7 @@ the resharding process:
 
 1.  Bring up tablets for 2 additional shards:  *test_keyspace/-80* and
     *test_keyspace/80-* (you can learn more about sharding key range
-    [here](http://vitess.io/user-guide/sharding.html#key-ranges-and-partitions)):
+    [here]({% link user-guide/sharding.md %}#key-ranges-and-partitions)):
 
     ``` sh
     vitess/examples/local$ ./sharded-vttablet-up.sh
@@ -107,7 +107,7 @@ When creating the resharding workflow, the program automatically detect the
 source shards and destination shards and create tasks for the resharding
 process. After the creation, click the workflow node, you can see a list of
 child nodes. Each child node represents a phase in the workflow (each phase
-represents a step mentioned in [Overview](http://vitess.io/user-guide/horizontal-sharding-workflow.html#overview)).
+represents a step mentioned in [Overview]({% link user-guide/horizontal-sharding-workflow.md %}#overview)).
 Further click a phase node, you can inspect tasks in this phase.
 For example, in the "CopySchemaShard" phase, it includes tasks to copy schema
 to 2 destination shards, therefore you can see task node "Shard -80" and
@@ -172,7 +172,7 @@ original shard. You should then see in the vtctld UI *Dashboard* page that shard
 *0* becomes non-serving and shard *-80* and shard *80-* are serving shards.
 Verify this for yourself: inspect the database content using following commands,
 then add messages to the guestbook page (you can use script client.sh mentioned
-[here](http://vitess.io/getting-started/local-instance.html#run-a-client-application))
+[here]({% link getting-started/local-instance.md %}#run-a-client-application))
 and inspect using same commands:
 
 ``` sh
@@ -226,7 +226,7 @@ vitess/examples/local$ ./zk-down.sh
 
 ## Reference
 
-You can checkout the old version tutorial [here](http://vitess.io/user-guide/horizontal-sharding.html).
+You can checkout the old version tutorial [here]({% link user-guide/horizontal-sharding.md %}).
 It walks you through the resharding process by manually executing commands.
 
 ### Details in SplitClone phase
@@ -248,7 +248,7 @@ combine to cover the same range.
 ### Details in WaitForFilteredReplication phase
 
 Once the copying from a paused snapshot (phase SplitClone) has finished,
-*vtworker* turns on [filtered replication](http://vitess.io/user-guide/sharding.html#filtered-replication),
+*vtworker* turns on [filtered replication]({% link user-guide/sharding.md %}#filtered-replication),
 which allows the destination shards to catch up on updates that have continued
 to flow in from the app since the time of the snapshot. After the destination
 shards are caught up, they will continue to replicate new updates. 

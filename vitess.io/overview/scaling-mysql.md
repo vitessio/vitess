@@ -1,6 +1,7 @@
 ---
 layout: doc
 title: "Understanding Vitess "
+redirect_from: /overview/scaling-mysql.html
 description: Learn about core Vitess features and how Vitess stacks up
           against data storage alternatives. 
 modified:

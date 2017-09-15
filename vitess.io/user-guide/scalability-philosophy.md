@@ -1,6 +1,7 @@
 ---
 layout: doc
 title: "Scalability Philosophy"
+redirect_from: /user-guide/scalability-philosophy.html
 description:
 modified:
 excerpt:

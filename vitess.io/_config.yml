@@ -14,10 +14,11 @@ repo: https://github.com/youtube/vitess
 sass:
   sass_dir: _sass
   style: compressed
-permalink: /:categories/:title/
+permalink: pretty
 highlighter: pygments
-gems:
+plugins:
   - jekyll-sitemap
+  - jekyll-redirect-from
 
 markdown: redcarpet
 

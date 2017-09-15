@@ -134,7 +134,7 @@ The diagram below illustrates Vitess' components:
 
 ### Topology
 
-The [Topology Service](/user-guide/topology-service.html) is a metadata store that contains information about running servers, the sharding scheme, and the replication graph.  The topology is backed by a consistent data store.  You can explore the topology using **vtctl** (command-line) and **vtctld** (web).
+The [Topology Service]({% link user-guide/topology-service.md %}) is a metadata store that contains information about running servers, the sharding scheme, and the replication graph.  The topology is backed by a consistent data store.  You can explore the topology using **vtctl** (command-line) and **vtctld** (web).
 
 In Kubernetes, the data store is [etcd](https://github.com/coreos/etcd).  Vitess source code also ships with [Apache ZooKeeper](http://zookeeper.apache.org/) support.
 
@@ -148,7 +148,7 @@ To route queries, vtgate considers the sharding scheme, required latency, and th
 
 **vttablet** is a proxy server that sits in front of a MySQL database. A Vitess implementation has one vttablet for each MySQL instance.
 
-vttablet performs tasks that attempt to maximize throughput as well as protect MySQL from harmful queries. Its features include connection pooling, query rewriting, and query de-duping. In addition, vttablet executes management tasks that vtctl initiates, and it provides streaming services that are used for [filtered replication](/user-guide/sharding.html#filtered-replication) and data exports.
+vttablet performs tasks that attempt to maximize throughput as well as protect MySQL from harmful queries. Its features include connection pooling, query rewriting, and query de-duping. In addition, vttablet executes management tasks that vtctl initiates, and it provides streaming services that are used for [filtered replication]({% link user-guide/sharding.md %}#filtered-replication) and data exports.
 
 A lightweight Vitess implementation uses vttablet as a smart connection proxy that serves queries for a single MySQL database. By running vttablet in front of your MySQL database and changing your app to use the Vitess client instead of your MySQL driver, your app benefits from vttablet's connection pooling, query rewriting, and query de-duping features.
 

@@ -11,7 +11,7 @@ The use cases for this service include:
 * Maintain a change record of all the transactions that have been applied to the data.
 
 A good understanding
-of [Vitess Replication](/user-guide/vitess-replication.html) is required to
+of [Vitess Replication]({% link user-guide/vitess-replication.md %}) is required to
 understand this document better. We will go through the use cases in a bit more
 details, then introduce the EventToken notion, and finally explain the service.
 

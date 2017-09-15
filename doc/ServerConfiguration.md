@@ -173,7 +173,7 @@ CallerID object. It allows unsecure but easy to use authorization using Table
 ACLs.
 
 See the
-[Transport Security Model document](http://vitess.io/user-guide/transport-security-model.html)
+[Transport Security Model document]({% link user-guide/transport-security-model.md %})
 for more information on how to setup both of these features, and what command
 line parameters exist.
 
@@ -190,7 +190,7 @@ Topology Server. First the *topo\_implementation* flag needs to be set to one of
 Note that the local cell for the tablet must exist and be configured properly in
 the Topology Service for vttablet to start. Local cells are configured inside
 the topo server, by using the `vtctl AddCellInfo` command. See
-the [Topology Service](/user-guide/topology-service.html) documentation for more
+the [Topology Service]({% link user-guide/topology-service.md %}) documentation for more
 information.
 
 ## VTTablet
@@ -597,7 +597,7 @@ Things that need to be configured:
 
 ### Periodic backup configuration
 
-We recommend to take backups regularly e.g. you should set up a cron job for it. See our recommendations at  [http://vitess.io/user-guide/backup-and-restore.html#backup-frequency](http://vitess.io/user-guide/backup-and-restore.html#backup-frequency).
+We recommend to take backups regularly e.g. you should set up a cron job for it. See our recommendations at  [{% link user-guide/backup-and-restore.md %}#backup-frequency]({% link user-guide/backup-and-restore.md %}#backup-frequency).
 
 ### Logs archiver/purger
 
@@ -647,7 +647,7 @@ source of truth, and expect it to send a top-down signal to Vitess.
 This signal is sent by ensuring the Orchestrator server has access to
 `vtctlclient`, which it then uses to send an RPC to vtctld, informing
 Vitess of the change in mastership via the
-[TabletExternallyReparented](/reference/vtctl.html#tabletexternallyreparented)
+[TabletExternallyReparented]({% link reference/vtctl.md %}#tabletexternallyreparented)
 command.
 
 ```json

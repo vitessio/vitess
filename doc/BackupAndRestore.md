@@ -120,7 +120,7 @@ the [scope](https://cloud.google.com/compute/docs/authentication#using) that
 grants read-write access to Cloud Storage. When using Container Engine, you can
 do this for all the instances it creates by adding `--scopes storage-rw` to the
 `gcloud container clusters create` command as shown in the [Vitess on Kubernetes
-guide](http://vitess.io/getting-started/#start-a-container-engine-cluster).
+guide]({% link getting-started/index.md %}#start-a-container-engine-cluster).
 
 ## Creating a backup
 
@@ -181,14 +181,14 @@ vttablet ... -backup_storage_implementation=file \
 
 **vtctl** provides two commands for managing backups:
 
-* [ListBackups](/reference/vtctl.html#listbackups) displays the
+* [ListBackups]({% link reference/vtctl.md %}#listbackups) displays the
     existing backups for a keyspace/shard in chronological order.
 
     ``` sh
     vtctl ListBackups <keyspace/shard>
     ```
 
-* [RemoveBackup](/reference/vtctl.html#removebackup) deletes a
+* [RemoveBackup]({% link reference/vtctl.md %}#removebackup) deletes a
     specified backup for a keyspace/shard.
 
     ``` sh
@@ -233,7 +233,7 @@ The back-up and restore processes simultaneously copy and either
 compress or decompress multiple files to increase throughput. You
 can control the concurrency using command-line flags:
 
-* The vtctl [Backup](/reference/vtctl.html#backup) command uses the
+* The vtctl [Backup]({% link reference/vtctl.md %}#backup) command uses the
   `-concurrency` flag.
 * vttablet uses the `-restore_concurrency` flag.
 
