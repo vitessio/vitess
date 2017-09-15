@@ -217,7 +217,7 @@ func TestGenerateLoadMessagesQuery(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := "select time_next, epoch, id, time_scheduled, message from t1 where :#pk"
+	want := "select time_next, epoch, time_created, id, time_scheduled, message from t1 where :#pk"
 	if q.Query != want {
 		t.Errorf("GenerateLoadMessagesQuery: %s, want %s", q.Query, want)
 	}
