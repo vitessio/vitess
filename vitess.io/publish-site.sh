@@ -19,6 +19,15 @@ if [[ -n "$1" ]]; then
   fi
 fi
 
+# Infer $VTTOP if it was not set.
+if [[ -z "$VTTOP" ]]; then
+  DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+  VTTOP="${DIR}/.."
+fi
+
+# Make sure we're within the Git repository before checking it.
+pushd $VTTOP >/dev/null
+
 if [[ -n "$(git status --porcelain)" ]]; then
   echo "ERROR: Your working directory is not clean."
   echo
@@ -75,4 +84,5 @@ echo "Please sanity-check the output: git diff HEAD~"
 echo
 echo "When you're ready to publish, create a pull request."
 
-popd >/dev/null
+popd >/dev/null # Leaving $website_path.
+popd >/dev/null # Leaving $VTTOP.
