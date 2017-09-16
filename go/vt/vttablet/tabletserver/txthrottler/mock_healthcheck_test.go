@@ -101,6 +101,10 @@ func (_mr *_MockHealthCheckRecorder) RemoveTablet(arg0 interface{}) *gomock.Call
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "RemoveTablet", arg0)
 }
 
+func (_m *MockHealthCheck) ReplaceTablet(old, new *topodata.Tablet, name string) {
+	panic("unimplemented")
+}
+
 func (_m *MockHealthCheck) SetListener(_param0 discovery.HealthCheckStatsListener, _param1 bool) {
 	_m.ctrl.Call(_m, "SetListener", _param0, _param1)
 }
