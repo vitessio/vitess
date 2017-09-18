@@ -84,7 +84,11 @@ func main() {
 		log.Exitf("mycnf read failed: %v", err)
 	}
 
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, dbconfigFlags)
+	var socketFile string
+	if mycnf != nil {
+		socketFile = mycnf.SocketFile
+	}
+	dbcfgs, err := dbconfigs.Init(socketFile, dbconfigFlags)
 	if err != nil {
 		log.Warning(err)
 	}
