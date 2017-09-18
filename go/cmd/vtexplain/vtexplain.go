@@ -181,9 +181,9 @@ func parseAndRun() error {
 	}
 
 	if *outputMode == "text" {
-		fmt.Print(vtexplain.PlansAsText(plans))
+		fmt.Print(vtexplain.ExplainsAsText(plans))
 	} else {
-		fmt.Print(vtexplain.PlansAsJSON(plans))
+		fmt.Print(vtexplain.ExplainsAsJSON(plans))
 	}
 
 	return nil
