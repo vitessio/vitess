@@ -1,8 +1,15 @@
-Vitess is a database solution for scaling MySQL. It's architected to run as
-effectively in a public or private cloud architecture as it does on dedicated
-hardware. It combines and extends many important MySQL features with the
-scalability of a NoSQL database. Vitess has been serving all YouTube database
-traffic since 2011.
+Vitess is a database solution for deploying, scaling and managing large clusters of MySQL instances.
+It's architected to run as effectively in a public or private cloud architecture as it does
+on dedicated hardware. It combines and extends many important MySQL features with the
+scalability of a NoSQL database. Vitess can you help you with the following problems:
+
+1. Scaling a MySQL database by allowing you to shard it, while keeping application changes to a minimum.
+2. Migrating from baremetal to a private or public cloud.
+3. Deploying and managing a large number of MySQL instances.
+
+Vitess provides compliant JDBC and Go database drivers. Additionally, it understands the MySQL protocol which you can use with any language.
+
+Vitess has been serving all YouTube database traffic since 2011, and has now been adopted by many enterprises for their production needs.
 
 ## Vitess on Kubernetes
 
@@ -44,7 +51,7 @@ Vitess improves a vanilla MySQL implementation in several ways:
   </tr>
   <tr>
     <td>Sharding is a process of partitioning your data to improve scalability and performance. MySQL lacks native sharding support, requiring you to write sharding code and embed sharding logic in your application.</td>
-    <td>Vitess uses range-based sharding. It supports both horizontal and vertical resharding, completing most data transitions with just a few seconds of read-only downtime. Vitess can even accommodate a custom sharding scheme that you already have in place.</td>
+    <td>Vitess supports a variety of sharding schemes. It can also migrate tables into different databases. It performs these functions non-intrusively, completing most data transitions with just a few seconds of read-only downtime. Vitess can even accommodate a custom sharding scheme that you already have in place.</td>
   </tr>
   <tr>
     <td>A MySQL cluster using replication for availability has a master database and a few replicas. If the master fails, a replica should become the new master. This requires you to manage the database lifecycle and communicate the current system state to your application.</td>
@@ -75,7 +82,7 @@ If you're considering a NoSQL solution primarily because of concerns about the s
   </tr>
   <tr>
     <td>NoSQL datastores do not support transactions.</td>
-    <td>Vitess supports transactions within a shard. We are also exploring the feasibility of supporting cross-shard transactions using 2PC.</td>
+    <td>Vitess supports transactions within a shard. For transactions that span multiple shards, it allows you to optionally enable 2PC.</td>
   </tr>
   <tr>
     <td>NoSQL solutions have custom APIs, leading to custom architectures, applications, and tools.</td>
@@ -115,7 +122,7 @@ If you're considering a NoSQL solution primarily because of concerns about the s
 * **Sharding**
   * Virtually seamless dynamic re-sharding
   * Vertical and Horizontal sharding support
-  * Built-in range-based, or application-defined sharding support
+  * Multiple sharding schemes, with the ability to plug-in custom ones
 
 
 ## Architecture
@@ -176,6 +183,8 @@ vtworker also lets you easily add other validation procedures. You could do in-t
 Vitess also includes the following tools:
 
 * **mysqlctl**: Manage MySQL instances
+* **vtcombo**: A single binary that contains all components of Vitess. It can be used for testing queries in a Continuous Integration environment.
+* **vtexplain**: A lightweight binary that can be used to verify how vitess will handle various queries based on a user-supplied schema and topology.
 * **zk**: Command-line ZooKeeper client and explorer
 * **zkctl**: Manage ZooKeeper instances
 
