@@ -144,6 +144,21 @@ func TestNullsafeCompare(t *testing.T) {
 		v1:  TestValue(VarBinary, "abcd"),
 		v2:  TestValue(Binary, "bcde"),
 		out: -1,
+	}, {
+		// Date/Time types
+		v1:  TestValue(Datetime, "1000-01-01 00:00:00"),
+		v2:  TestValue(Binary, "1000-01-01 00:00:00"),
+		out: 0,
+	}, {
+		// Date/Time types
+		v1:  TestValue(Datetime, "2000-01-01 00:00:00"),
+		v2:  TestValue(Binary, "1000-01-01 00:00:00"),
+		out: 1,
+	}, {
+		// Date/Time types
+		v1:  TestValue(Datetime, "1000-01-01 00:00:00"),
+		v2:  TestValue(Binary, "2000-01-01 00:00:00"),
+		out: -1,
 	}}
 	for _, tcase := range tcases {
 		got, err := NullsafeCompare(tcase.v1, tcase.v2)
