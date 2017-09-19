@@ -275,14 +275,15 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltype
 	return reply, nil
 }
 
-// checkPermissions
+// checkPermissions returns an error if the query does not pass all checks
+// (query blacklisting, table ACL).
 func (qre *QueryExecutor) checkPermissions() error {
 	// Skip permissions check if the context is local.
 	if tabletenv.IsLocalContext(qre.ctx) {
 		return nil
 	}
 
-	// Blacklist
+	// Check if the query is blacklisted.
 	remoteAddr := ""
 	username := ""
 	ci, ok := callinfo.FromContext(qre.ctx)
@@ -298,7 +299,8 @@ func (qre *QueryExecutor) checkPermissions() error {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "disallowed due to rule: %s", desc)
 	}
 
-	// Check for SuperUser calling directly to VTTablet (e.g. VTWorker)
+	// Skip the ACL check if the connecting user is an exempted superuser.
+	// Necessary to whitelist e.g. direct vtworker access.
 	if qre.tsv.qe.exemptACL != nil && qre.tsv.qe.exemptACL.IsMember(&querypb.VTGateCallerID{Username: username}) {
 		qre.tsv.qe.tableaclExemptCount.Add(1)
 		return nil
@@ -312,16 +314,18 @@ func (qre *QueryExecutor) checkPermissions() error {
 		return nil
 	}
 
-	// a superuser that exempts from table ACL checking.
+	// Skip the ACL check if the caller id is an exempted superuser.
 	if qre.tsv.qe.exemptACL != nil && qre.tsv.qe.exemptACL.IsMember(callerID) {
 		qre.tsv.qe.tableaclExemptCount.Add(1)
 		return nil
 	}
 
-	// empty table name, do not need a table ACL check.
+	// Skip the ACL check if no table name is available in the query or DDL.
 	if qre.plan.TableName().IsEmpty() && qre.plan.NewName.IsEmpty() {
 		return nil
 	}
+
+	// DDL: Check against the new name of the table as well.
 	if !qre.plan.NewName.IsEmpty() {
 		altAuthorized := tableacl.Authorized(qre.plan.NewName.String(), qre.plan.PlanID.MinRole())
 		err := qre.checkAccess(altAuthorized, qre.plan.NewName, callerID)
@@ -329,7 +333,11 @@ func (qre *QueryExecutor) checkPermissions() error {
 			return err
 		}
 	}
+
+	// Actual ACL check: Check if the user is a member of the ACL.
 	if qre.plan.Authorized == nil {
+		// Note: This should never happen because tableacl.Authorized() sets this
+		// field to an "acl.DenyAllACL" ACL if no ACL was found.
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table acl error: nil acl")
 	}
 	if !qre.plan.TableName().IsEmpty() {

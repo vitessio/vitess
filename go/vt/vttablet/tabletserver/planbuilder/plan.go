@@ -199,9 +199,10 @@ func (rt ReasonType) MarshalJSON() ([]byte, error) {
 
 // Plan is built for selects and DMLs.
 type Plan struct {
-	PlanID  PlanType
-	Reason  ReasonType
-	Table   *schema.Table
+	PlanID PlanType
+	Reason ReasonType
+	Table  *schema.Table
+	// NewName is the new name of the table. Set for DDLs which create or change the table.
 	NewName sqlparser.TableIdent
 
 	// FieldQuery is used to fetch field info
