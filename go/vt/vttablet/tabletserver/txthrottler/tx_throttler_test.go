@@ -16,6 +16,16 @@ limitations under the License.
 
 package txthrottler
 
+// Commands to generate the mocks for this test.
+//go:generate mockgen -destination mock_toposerver_impl_test.go -package txthrottler github.com/youtube/vitess/go/vt/topo Impl
+// We need the following to fix the generated mock_impl.go, since mockgen imports the 'context'
+// package from the wrong place.
+// TODO(mberlin): Remove the next line once we use the Go 1.7 package 'context' everywhere.
+//go:generate sed -i s,github.com/youtube/vitess/vendor/,,g mock_toposerver_impl_test.go
+//go:generate mockgen -destination mock_healthcheck_test.go -package txthrottler github.com/youtube/vitess/go/vt/discovery HealthCheck
+//go:generate mockgen -destination mock_throttler_test.go -package txthrottler github.com/youtube/vitess/go/vt/vttablet/tabletserver/txthrottler ThrottlerInterface
+//go:generate mockgen -destination mock_topology_watcher_test.go -package txthrottler github.com/youtube/vitess/go/vt/vttablet/tabletserver/txthrottler TopologyWatcherInterface
+
 import (
 	"testing"
 	"time"
@@ -133,13 +143,3 @@ func TestEnabledThrottler(t *testing.T) {
 	}
 	throttler.Close()
 }
-
-// Commands to generate the mocks for this test.
-//go:generate mockgen -destination mock_toposerver_impl_test.go -package txthrottler github.com/youtube/vitess/go/vt/topo Impl
-// We need the following to fix the generated mock_impl.go, since mockgen imports the 'context'
-// package from the wrong place.
-// TODO(mberlin): Remove the next line once we use the Go 1.7 package 'context' everywhere.
-//go:generate sed -i s,github.com/youtube/vitess/vendor/,,g mock_toposerver_impl_test.go
-//go:generate mockgen -destination mock_healthcheck_test.go -package txthrottler github.com/youtube/vitess/go/vt/discovery HealthCheck
-//go:generate mockgen -destination mock_throttler_test.go -package txthrottler github.com/youtube/vitess/go/vt/tabletserver/txthrottler ThrottlerInterface
-//go:generate mockgen -destination mock_topology_watcher_test.go -package txthrottler github.com/youtube/vitess/go/vt/tabletserver/txthrottler TopologyWatcherInterface
