@@ -1920,13 +1920,13 @@ func (tsv *TabletServer) MaxDMLRows() int {
 // and also truncates data if it's too long
 func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable) string {
 	buf := &bytes.Buffer{}
-	fmt.Fprintf(buf, "Sql: %q, BindVars: {", sqlparser.TruncateForLog(sql))
+	fmt.Fprintf(buf, "Sql: %q, BindVars: {", sql)
 	for k, v := range bindVariables {
 		valString := fmt.Sprintf("%v", v)
-		fmt.Fprintf(buf, "%s: %q", k, sqlparser.TruncateForLog(valString))
+		fmt.Fprintf(buf, "%s: %q", k, valString)
 	}
 	fmt.Fprintf(buf, "}")
-	return string(buf.Bytes())
+	return sqlparser.TruncateForLog(string(buf.Bytes()))
 }
 
 // withTimeout returns a context based on the specified timeout.

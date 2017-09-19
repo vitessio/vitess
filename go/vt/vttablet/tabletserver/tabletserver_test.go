@@ -35,6 +35,7 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -2370,6 +2371,33 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 	if wantLog != getTestLog(0) {
 		t.Errorf("error log '%s', want '%s'", getTestLog(0), wantLog)
 	}
+}
+
+func TestTruncateErrors(t *testing.T) {
+	ctx := context.Background()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.TerseErrors = true
+	*sqlparser.TruncateErrLen = 20
+	tsv := NewTabletServerWithNilTopoServer(config)
+	setupTestLogger()
+	defer clearTestLogger()
+	err := tsv.convertAndLogError(
+		ctx,
+		"select * from test_table",
+		map[string]*querypb.BindVariable{"this is kinda long eh": sqltypes.Int64BindVariable(1)},
+		mysql.NewSQLError(10, "HY000", "sensitive message"),
+		nil,
+	)
+	want := "(errno 10) (sqlstate HY000) during query: select * [TRUNCATED]"
+	if err == nil || err.Error() != want {
+		t.Errorf("%v, want '%s'", err, want)
+	}
+	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"se [TRUNCATED]"
+	if wantLog != getTestLog(0) {
+		t.Errorf("error log '%s', want '%s'", getTestLog(0), wantLog)
+	}
+	*sqlparser.TruncateErrLen = 0
 }
 
 func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
