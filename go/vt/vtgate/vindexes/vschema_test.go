@@ -192,9 +192,10 @@ func TestShardedVSchemaOwned(t *testing.T) {
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Column: sqlparser.NewColIdent("c1"),
-				Type:   "stfu",
-				Name:   "stfu1",
+				Column:    sqlparser.NewColIdent("c1"),
+				Type:      "stfu",
+				Name:      "stfu1",
+				Exclusive: true,
 				Vindex: &stFU{
 					name: "stfu1",
 					Params: map[string]string{
@@ -203,11 +204,12 @@ func TestShardedVSchemaOwned(t *testing.T) {
 				},
 			},
 			{
-				Column: sqlparser.NewColIdent("c2"),
-				Type:   "stln",
-				Name:   "stln1",
-				Owned:  true,
-				Vindex: &stLN{name: "stln1"},
+				Column:    sqlparser.NewColIdent("c2"),
+				Type:      "stln",
+				Name:      "stln1",
+				Owned:     true,
+				Exclusive: true,
+				Vindex:    &stLN{name: "stln1"},
 			},
 		},
 	}
@@ -287,18 +289,20 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Column: sqlparser.NewColIdent("c1"),
-				Type:   "stlu",
-				Name:   "stlu1",
-				Owned:  false,
-				Vindex: &stLU{name: "stlu1"},
+				Column:    sqlparser.NewColIdent("c1"),
+				Type:      "stlu",
+				Name:      "stlu1",
+				Owned:     false,
+				Exclusive: true,
+				Vindex:    &stLU{name: "stlu1"},
 			},
 			{
-				Column: sqlparser.NewColIdent("c2"),
-				Type:   "stfu",
-				Name:   "stfu1",
-				Owned:  false,
-				Vindex: &stFU{name: "stfu1"},
+				Column:    sqlparser.NewColIdent("c2"),
+				Type:      "stfu",
+				Name:      "stfu1",
+				Owned:     false,
+				Exclusive: true,
+				Vindex:    &stFU{name: "stfu1"},
 			},
 		},
 	}
@@ -327,7 +331,9 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 		},
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("BuildVSchema:s\n%v, want\n%v", got, want)
+		gotjson, _ := json.Marshal(got)
+		wantjson, _ := json.Marshal(want)
+		t.Errorf("BuildVSchema:s\n%s, want\n%s", gotjson, wantjson)
 	}
 }
 
@@ -1118,11 +1124,12 @@ func TestVSchemaJSON(t *testing.T) {
 				"t3": {
 					Name: sqlparser.NewTableIdent("n3"),
 					ColumnVindexes: []*ColumnVindex{{
-						Column: sqlparser.NewColIdent("aa"),
-						Type:   "vtype",
-						Name:   "vname",
-						Owned:  true,
-						Vindex: lkp,
+						Column:    sqlparser.NewColIdent("aa"),
+						Type:      "vtype",
+						Name:      "vname",
+						Owned:     true,
+						Exclusive: true,
+						Vindex:    lkp,
 					}},
 				},
 			},
@@ -1145,6 +1152,7 @@ func TestVSchemaJSON(t *testing.T) {
             "type": "vtype",
             "name": "vname",
             "owned": true,
+            "exlusive": true,
             "vindex": {
               "table": "t",
               "from": "f",
