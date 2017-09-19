@@ -107,6 +107,49 @@
   }
 }
 
+# update by primary keyspace id, changing one vindex column
+"update user_metadata set Email = 'juan@vitess.io' where user_id = 1"
+{
+  "Original": "update user_metadata set Email = 'juan@vitess.io' where user_id = 1",
+  "Instructions": {
+    "Opcode": "UpdateEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user_metadata set Email = 'juan@vitess.io' where user_id = 1",
+    "Vindex": "user_index",
+    "Values": [1],
+    "ChangedVindexValues": {
+      "email_user_map": "juan@vitess.io"
+    },
+    "Table": "user_metadata",
+    "Subquery": "select Email, Lastname, Address from user_metadata where user_id = 1 for update"
+  }
+}
+
+# update by primary keyspace id, changing multiple vindex columns
+"update user_metadata set Email = 'juan@vitess.io', Address = '155 5th street' where user_id = 1"
+{
+  "Original": "update user_metadata set Email = 'juan@vitess.io', Address = '155 5th street' where user_id = 1",
+  "Instructions": {
+    "Opcode": "UpdateEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user_metadata set Email = 'juan@vitess.io', Address = '155 5th street' where user_id = 1",
+    "Vindex": "user_index",
+    "Values": [1],
+    "ChangedVindexValues": {
+      "address_user_map": "155 5th street",
+      "email_user_map": "juan@vitess.io"
+    },
+    "Table": "user_metadata",
+    "Subquery": "select Email, Lastname, Address from user_metadata where user_id = 1 for update"
+  }
+}
+
 # update by primary keyspace id, stray where clause
 "update user set val = 1 where id = id2 and id = 1"
 {
