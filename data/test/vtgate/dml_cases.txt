@@ -124,7 +124,7 @@
       "email_user_map": "juan@vitess.io"
     },
     "Table": "user_metadata",
-    "Subquery": "select Email, Lastname, Address from user_metadata where user_id = 1 for update"
+    "Subquery": "select Email, Address from user_metadata where user_id = 1 for update"
   }
 }
 
@@ -146,7 +146,7 @@
       "email_user_map": "juan@vitess.io"
     },
     "Table": "user_metadata",
-    "Subquery": "select Email, Lastname, Address from user_metadata where user_id = 1 for update"
+    "Subquery": "select Email, Address from user_metadata where user_id = 1 for update"
   }
 }
 
