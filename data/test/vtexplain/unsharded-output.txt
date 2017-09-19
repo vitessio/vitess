@@ -1,0 +1,41 @@
+----------------------------------------------------------------------
+select * from t1
+
+[ks_unsharded/-]:
+select * from t1 where 1 != 1
+select * from t1 limit 10001
+
+----------------------------------------------------------------------
+insert into t1 (id,val) values (1,2)
+
+[ks_unsharded/-]:
+begin
+insert into t1(id, val) values (1, 2)
+commit
+
+----------------------------------------------------------------------
+update t1 set val = 10
+
+[ks_unsharded/-]:
+begin
+select id from t1 limit 10001 for update
+update t1 set val = 10 where id in (1)
+commit
+
+----------------------------------------------------------------------
+delete from t1 where id = 100
+
+[ks_unsharded/-]:
+begin
+delete from t1 where id in (100)
+commit
+
+----------------------------------------------------------------------
+insert into t1 (id,val) values (1,2) on duplicate key update val=3
+
+[ks_unsharded/-]:
+begin
+insert into t1(id, val) values (1, 2) on duplicate key update val = 3
+commit
+
+----------------------------------------------------------------------

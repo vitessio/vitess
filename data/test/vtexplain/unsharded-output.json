@@ -1,0 +1,160 @@
+[
+    {
+        "SQL": "select * from t1",
+        "Plans": [
+            {
+                "Original": "select * from t1",
+                "Instructions": {
+                    "Opcode": "SelectUnsharded",
+                    "Keyspace": {
+                        "Name": "ks_unsharded",
+                        "Sharded": false
+                    },
+                    "Query": "select * from t1",
+                    "FieldQuery": "select * from t1 where 1 != 1"
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_unsharded/-": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select * from t1",
+                        "BindVars": {}
+                    }
+                ],
+                "MysqlQueries": [
+                    "select * from t1 where 1 != 1",
+                    "select * from t1 limit 10001"
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "insert into t1 (id,val) values (1,2)",
+        "Plans": [
+            {
+                "Original": "insert into t1 (id,val) values (1,2)",
+                "Instructions": {
+                    "Opcode": "InsertUnsharded",
+                    "Keyspace": {
+                        "Name": "ks_unsharded",
+                        "Sharded": false
+                    },
+                    "Query": "insert into t1(id, val) values (1, 2)",
+                    "Table": "t1"
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_unsharded/-": {
+                "TabletQueries": [
+                    {
+                        "SQL": "insert into t1(id, val) values (1, 2)",
+                        "BindVars": {}
+                    }
+                ],
+                "MysqlQueries": [
+                    "begin",
+                    "insert into t1(id, val) values (1, 2)",
+                    "commit"
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "update t1 set val = 10",
+        "Plans": [
+            {
+                "Original": "update t1 set val = 10",
+                "Instructions": {
+                    "Opcode": "UpdateUnsharded",
+                    "Keyspace": {
+                        "Name": "ks_unsharded",
+                        "Sharded": false
+                    },
+                    "Query": "update t1 set val = 10"
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_unsharded/-": {
+                "TabletQueries": [
+                    {
+                        "SQL": "update t1 set val = 10",
+                        "BindVars": {}
+                    }
+                ],
+                "MysqlQueries": [
+                    "begin",
+                    "select id from t1 limit 10001 for update",
+                    "update t1 set val = 10 where id in (1)",
+                    "commit"
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "delete from t1 where id = 100",
+        "Plans": [
+            {
+                "Original": "delete from t1 where id = 100",
+                "Instructions": {
+                    "Opcode": "DeleteUnsharded",
+                    "Keyspace": {
+                        "Name": "ks_unsharded",
+                        "Sharded": false
+                    },
+                    "Query": "delete from t1 where id = 100"
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_unsharded/-": {
+                "TabletQueries": [
+                    {
+                        "SQL": "delete from t1 where id = 100",
+                        "BindVars": {}
+                    }
+                ],
+                "MysqlQueries": [
+                    "begin",
+                    "delete from t1 where id in (100)",
+                    "commit"
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "insert into t1 (id,val) values (1,2) on duplicate key update val=3",
+        "Plans": [
+            {
+                "Original": "insert into t1 (id,val) values (1,2) on duplicate key update val=3",
+                "Instructions": {
+                    "Opcode": "InsertUnsharded",
+                    "Keyspace": {
+                        "Name": "ks_unsharded",
+                        "Sharded": false
+                    },
+                    "Query": "insert into t1(id, val) values (1, 2) on duplicate key update val = 3",
+                    "Table": "t1"
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_unsharded/-": {
+                "TabletQueries": [
+                    {
+                        "SQL": "insert into t1(id, val) values (1, 2) on duplicate key update val = 3",
+                        "BindVars": {}
+                    }
+                ],
+                "MysqlQueries": [
+                    "begin",
+                    "insert into t1(id, val) values (1, 2) on duplicate key update val = 3",
+                    "commit"
+                ]
+            }
+        }
+    }
+]

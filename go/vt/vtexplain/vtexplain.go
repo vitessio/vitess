@@ -21,12 +21,13 @@ package vtexplain
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	log "github.com/golang/glog"
 
+	"github.com/youtube/vitess/go/jsonutil"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 
@@ -54,9 +55,6 @@ type TabletQuery struct {
 
 	// BindVars sent with the command
 	BindVars map[string]*querypb.BindVariable
-
-	// The actual queries executed by mysql
-	MysqlQueries []string
 }
 
 // MarshalJSON renders the json structure
@@ -69,20 +67,27 @@ func (tq *TabletQuery) MarshalJSON() ([]byte, error) {
 		bindVars[k] = b.String()
 	}
 
-	return json.Marshal(&struct {
-		SQL          string
-		BindVars     map[string]string
-		MysqlQueries []string
+	return jsonutil.MarshalNoEscape(&struct {
+		SQL      string
+		BindVars map[string]string
 	}{
-		SQL:          tq.SQL,
-		BindVars:     bindVars,
-		MysqlQueries: tq.MysqlQueries,
+		SQL:      tq.SQL,
+		BindVars: bindVars,
 	})
 }
 
-// Plan defines how vitess will execute a given sql query, including the vtgate
+// TabletActions contains the set of operations done by a given tablet
+type TabletActions struct {
+	// Queries sent from vtgate to the tablet
+	TabletQueries []*TabletQuery
+
+	// Queries that were run on mysql
+	MysqlQueries []string
+}
+
+// Explain defines how vitess will execute a given sql query, including the vtgate
 // query plans and all queries run on each tablet.
-type Plan struct {
+type Explain struct {
 	// original sql statement
 	SQL string
 
@@ -90,7 +95,7 @@ type Plan struct {
 	Plans []*engine.Plan
 
 	// list of queries / bind vars sent to each tablet
-	TabletQueries map[string][]*TabletQuery
+	TabletActions map[string]*TabletActions
 }
 
 const (
@@ -104,11 +109,6 @@ func Init(vSchemaStr, sqlSchema string, opts *Options) error {
 		return fmt.Errorf("invalid replication mode \"%s\"", opts.ReplicationMode)
 	}
 
-	err := initVtgateExecutor(vSchemaStr, opts)
-	if err != nil {
-		return fmt.Errorf("initVtgateExecutor: %v", err)
-	}
-
 	parsedDDLs, err := parseSchema(sqlSchema)
 	if err != nil {
 		return fmt.Errorf("parseSchema: %v", err)
@@ -117,6 +117,11 @@ func Init(vSchemaStr, sqlSchema string, opts *Options) error {
 	err = initTabletEnvironment(parsedDDLs, opts)
 	if err != nil {
 		return fmt.Errorf("initTabletEnvironment: %v", err)
+	}
+
+	err = initVtgateExecutor(vSchemaStr, opts)
+	if err != nil {
+		return fmt.Errorf("initVtgateExecutor: %v", err)
 	}
 
 	return nil
@@ -156,42 +161,83 @@ func parseSchema(sqlSchema string) ([]*sqlparser.DDL, error) {
 }
 
 // Run the explain analysis on the given queries
-func Run(sqlStr string) ([]*Plan, error) {
-	plans := make([]*Plan, 0, 16)
+func Run(sql string) ([]*Explain, error) {
+	explains := make([]*Explain, 0, 16)
 
-	for _, sql := range strings.Split(sqlStr, ";") {
-		s := strings.TrimSpace(sql)
-		if s != "" {
-			plan, err := getPlan(s)
+	for {
+		// Need to strip comments in a loop to handle multiple comments
+		// in a row.
+		for {
+			s := sqlparser.StripLeadingComments(sql)
+			if s == sql {
+				break
+			}
+			sql = s
+		}
+		rem := ""
+		idx := strings.Index(sql, ";")
+		if idx != -1 {
+			rem = sql[idx+1:]
+			sql = sql[:idx]
+		}
+
+		if sql != "" {
+			e, err := explain(sql)
 			if err != nil {
 				return nil, err
 			}
-			plans = append(plans, plan)
+			explains = append(explains, e)
+		}
+
+		sql = rem
+		if sql == "" {
+			break
 		}
 	}
 
-	return plans, nil
+	return explains, nil
 }
 
-func getPlan(sql string) (*Plan, error) {
-	plans, tabletQueries, err := vtgateExecute(sql)
+func explain(sql string) (*Explain, error) {
+	plans, tabletActions, err := vtgateExecute(sql)
 	if err != nil {
 		return nil, err
 	}
-	for _, tqs := range tabletQueries {
-		for _, tq := range tqs {
-			mqs, err := fakeTabletExecute(tq.SQL, tq.BindVars)
-			if err != nil {
-				return nil, fmt.Errorf("fakeTabletExecute: %v", err)
-			}
-			tq.MysqlQueries = mqs
-		}
 
-	}
-
-	return &Plan{
+	return &Explain{
 		SQL:           sql,
 		Plans:         plans,
-		TabletQueries: tabletQueries,
+		TabletActions: tabletActions,
 	}, nil
+}
+
+// ExplainsAsText returns a text representation of the explains
+func ExplainsAsText(explains []*Explain) string {
+	var b bytes.Buffer
+	for _, explain := range explains {
+		fmt.Fprintf(&b, "----------------------------------------------------------------------\n")
+		fmt.Fprintf(&b, "%s\n\n", explain.SQL)
+
+		tablets := make([]string, 0, len(explain.TabletActions))
+		for tablet := range explain.TabletActions {
+			tablets = append(tablets, tablet)
+		}
+		sort.Strings(tablets)
+		for _, tablet := range tablets {
+			fmt.Fprintf(&b, "[%s]:\n", tablet)
+			tc := explain.TabletActions[tablet]
+			for _, sql := range tc.MysqlQueries {
+				fmt.Fprintf(&b, "%s\n", sql)
+			}
+			fmt.Fprintf(&b, "\n")
+		}
+	}
+	fmt.Fprintf(&b, "----------------------------------------------------------------------\n")
+	return string(b.Bytes())
+}
+
+// ExplainsAsJSON returns a json representation of the explains
+func ExplainsAsJSON(explains []*Explain) string {
+	explainJSON, _ := jsonutil.MarshalIndentNoEscape(explains, "", "    ")
+	return string(explainJSON)
 }
