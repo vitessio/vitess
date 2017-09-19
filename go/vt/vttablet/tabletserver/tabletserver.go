@@ -1295,7 +1295,6 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		return nil
 	}
 
-	errStr := err.Error()
 	errCode := tsv.convertErrorCode(err)
 	tabletenv.ErrorStats.Add(errCode.String(), 1)
 
@@ -1313,7 +1312,7 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	}
 
 	origErr := err
-	err = formatErrorWithCallerID(ctx, vterrors.New(errCode, errStr))
+	err = formatErrorWithCallerID(ctx, vterrors.New(errCode, err.Error()))
 	if logMethod != nil {
 		logMethod("%v: %v", err, queryAsString(sql, bindVariables))
 	}
@@ -1334,8 +1333,8 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		if ok {
 			sqlState := sqlErr.SQLState()
 			errnum := sqlErr.Number()
-			errStr = fmt.Sprintf("(errno %d) (sqlstate %s) during query: %s", errnum, sqlState, sqlparser.TruncateForLog(sql))
-			err = formatErrorWithCallerID(ctx, vterrors.New(errCode, errStr))
+			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s) during query: %s", errnum, sqlState, sqlparser.TruncateForLog(sql))
+			err = formatErrorWithCallerID(ctx, err)
 		}
 	}
 
