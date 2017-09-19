@@ -552,7 +552,7 @@ make build
 <p><strong>Note:</strong> If you are using etcd, set the following environment variable:</p>
 <div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nb">export </span><span class="nv">VT_TEST_FLAGS</span><span class="o">=</span><span class="s1">&#39;--topo-server-flavor=etcd&#39;</span>
 </code></pre></div>
-<p>The default targets when running <code class="prettyprint">make</code> or <code class="prettyprint">make test</code> contain a full set of
+<p>The default targets when running <code class="prettyprint">make test</code> contain a full set of
 tests intended to help Vitess developers to verify code changes. Those tests
 simulate a small Vitess cluster by launching many servers on the local
 machine. To do so, they require a lot of resources; a minimum of 8GB RAM
@@ -564,7 +564,7 @@ you can run a lighter set of tests:</p>
 </code></pre></div>
 <h4 id="common-test-issues">Common Test Issues</h4>
 
-<p>Attempts to run the full developer test suite (<code class="prettyprint">make</code> or <code class="prettyprint">make test</code>)
+<p>Attempts to run the full developer test suite (<code class="prettyprint">make test</code>)
 on an underpowered machine often results in failure. If you still see
 the same failures when running the lighter set of tests (<code class="prettyprint">make site_test</code>),
 please let the development team know in the

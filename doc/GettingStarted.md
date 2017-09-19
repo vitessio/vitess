@@ -283,7 +283,7 @@ In addition, Vitess requires the software and libraries listed below.
 export VT_TEST_FLAGS='--topo-server-flavor=etcd'
 ```
 
-The default targets when running `make` or `make test` contain a full set of
+The default targets when running `make test` contain a full set of
 tests intended to help Vitess developers to verify code changes. Those tests
 simulate a small Vitess cluster by launching many servers on the local
 machine. To do so, they require a lot of resources; a minimum of 8GB RAM
@@ -298,7 +298,7 @@ make site_test
 
 #### Common Test Issues
 
-Attempts to run the full developer test suite (`make` or `make test`)
+Attempts to run the full developer test suite (`make test`)
 on an underpowered machine often results in failure. If you still see
 the same failures when running the lighter set of tests (`make site_test`),
 please let the development team know in the
