@@ -1,14 +1,17 @@
 # VTExplain Tool
 
-The following document explains how to use VTExplain tool. This tool provides information about how Vitess will execute a statement (the Vitess analogous of MySQL "EXPLAIN").
+The vtexplain tool provides information about how Vitess will execute a statement (the Vitess version of MySQL "EXPLAIN").
 
 ## Prerequisites
 
-You will have to compile the `vtexplain` binary in your environment. To find instructions on how to build this binary please refer to this [guide](http://vitess.io/getting-started/local-instance.html#manual-build). 
+You'll need to build the `vtexplain` binary in your environment.
+To find instructions on how to build this binary please refer to this [guide](http://vitess.io/getting-started/local-instance.html#manual-build). 
 
 ## Explaining a Query
 
-In order to explain a query you will need to have at hand a schema and a vschema. Let's use the following:
+In order to explain a query you will need to first collect a sql schema for the various tables and a vschema json file containing a map of keyspace to the set of vindexes / tables in the vschema.
+
+For example, let's use the following:
 
 Schema:
 
@@ -80,7 +83,9 @@ VSchema:
 }
 ```
 
-Next, you could create a file with these schemas and start explaining queries:
+These can be passed to vtexplain either on the command line or (more readily) through files.
+
+Then you can use the tool like this:
 
 **Select:**
 
@@ -125,7 +130,13 @@ commit
 ----------------------------------------------------------------------
 ```
 
-You can find full capabilities of `vtexplain` by executing the following command: 
+**Configuration Options**
+
+The `--shards` option specifies the number of shards to simulate. vtexplain will always allocate an evenly divided key range to each.
+
+The `--replication-mode` option controls whether to simulate row based or statement based replication.
+
+You can find more usage of `vtexplain` by executing the following command: 
 
 ```
 vtexplain --help 
