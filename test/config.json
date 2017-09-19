@@ -212,7 +212,7 @@
 			"File": "mysql_server_test.py",
 			"Args": [],
 			"Command": [],
-			"Manual": false,
+			"Manual": true,
 			"Shard": 1,
 			"RetryMax": 0,
 			"Tags": []
