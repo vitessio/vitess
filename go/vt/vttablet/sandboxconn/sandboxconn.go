@@ -80,6 +80,10 @@ type SandboxConn struct {
 	// no results left, SingleRowResult is returned.
 	results []*sqltypes.Result
 
+	// Executor contains an optional interface to get results, otherwise
+	// it uses the static results
+	Executor SandboxExecutor
+
 	// ReadTransactionResults is used for returning results for ReadTransaction.
 	ReadTransactionResults []*querypb.TransactionMetadata
 
@@ -87,6 +91,12 @@ type SandboxConn struct {
 
 	// transaction id generator
 	TransactionID sync2.AtomicInt64
+}
+
+// SandboxExecutor is an interface to allow test clients to obtain query
+// results via a callback
+type SandboxExecutor interface {
+	Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error)
 }
 
 var _ queryservice.QueryService = (*SandboxConn)(nil) // compile-time interface check
@@ -129,6 +139,9 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 	sbc.Options = append(sbc.Options, options)
 	if err := sbc.getError(); err != nil {
 		return nil, err
+	}
+	if sbc.Executor != nil {
+		return sbc.Executor.Execute(ctx, target, query, bindVars, transactionID, options)
 	}
 	return sbc.getNextResult(), nil
 }

@@ -1,0 +1,188 @@
+[
+    {
+        "SQL": "select * from user /* scatter */",
+        "Plans": [
+            {
+                "Original": "select * from user",
+                "Instructions": {
+                    "Opcode": "SelectScatter",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "select * from user",
+                    "FieldQuery": "select * from user where 1 != 1"
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-80": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select * from user /* scatter */",
+                        "BindVars": {}
+                    }
+                ],
+                "MysqlQueries": [
+                    "select * from user where 1 != 1",
+                    "select * from user limit 10001"
+                ]
+            },
+            "ks_sharded/80-": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select * from user /* scatter */",
+                        "BindVars": {}
+                    }
+                ],
+                "MysqlQueries": [
+                    "select * from user where 1 != 1",
+                    "select * from user limit 10001"
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "select * from user where id = 1 /* equal unique */",
+        "Plans": [
+            {
+                "Original": "select * from user where id = 1",
+                "Instructions": {
+                    "Opcode": "SelectEqualUnique",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "select * from user where id = 1",
+                    "FieldQuery": "select * from user where 1 != 1",
+                    "Vindex": "hash",
+                    "Values": [
+                        1
+                    ]
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-80": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select * from user where id = 1 /* equal unique */",
+                        "BindVars": {}
+                    }
+                ],
+                "MysqlQueries": [
+                    "select * from user where 1 != 1",
+                    "select * from user where id = 1 limit 10001"
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "select * from user where id > 100 /* scatter range */",
+        "Plans": [
+            {
+                "Original": "select * from user where id > 100",
+                "Instructions": {
+                    "Opcode": "SelectScatter",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "select * from user where id > 100",
+                    "FieldQuery": "select * from user where 1 != 1"
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-80": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select * from user where id > 100 /* scatter range */",
+                        "BindVars": {}
+                    }
+                ],
+                "MysqlQueries": [
+                    "select * from user where 1 != 1",
+                    "select * from user where id > 100 limit 10001"
+                ]
+            },
+            "ks_sharded/80-": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select * from user where id > 100 /* scatter range */",
+                        "BindVars": {}
+                    }
+                ],
+                "MysqlQueries": [
+                    "select * from user where 1 != 1",
+                    "select * from user where id > 100 limit 10001"
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "select * from user where name = 'bob'/* vindex lookup */",
+        "Plans": [
+            {
+                "Original": "select user_id from name_user_map where name = :name",
+                "Instructions": {
+                    "Opcode": "SelectEqualUnique",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "select user_id from name_user_map where name = :name",
+                    "FieldQuery": "select user_id from name_user_map where 1 != 1",
+                    "Vindex": "md5",
+                    "Values": [
+                        ":name"
+                    ]
+                }
+            },
+            {
+                "Original": "select * from user where name = 'bob'",
+                "Instructions": {
+                    "Opcode": "SelectEqual",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "select * from user where name = 'bob'",
+                    "FieldQuery": "select * from user where 1 != 1",
+                    "Vindex": "name_user_map",
+                    "Values": [
+                        "bob"
+                    ]
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-80": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select * from user where name = 'bob'/* vindex lookup */",
+                        "BindVars": {}
+                    }
+                ],
+                "MysqlQueries": [
+                    "select * from user where 1 != 1",
+                    "select * from user where name = 'bob' limit 10001"
+                ]
+            },
+            "ks_sharded/80-": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select user_id from name_user_map where name = :name/* vindex lookup */",
+                        "BindVars": {
+                            "name": "'bob'"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    "select user_id from name_user_map where 1 != 1",
+                    "select user_id from name_user_map where name = 'bob' limit 10001"
+                ]
+            }
+        }
+    }
+]

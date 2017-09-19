@@ -1,0 +1,55 @@
+----------------------------------------------------------------------
+insert into user (id, name) values(1, "alice")
+
+[ks_sharded/-80]:
+begin
+insert into name_user_map(name, user_id) values ('alice', 1)
+commit
+begin
+insert into user(id, name) values (1, 'alice')
+commit
+
+----------------------------------------------------------------------
+insert into user (id, name) values(2, "bob")
+
+[ks_sharded/-80]:
+begin
+insert into user(id, name) values (2, 'bob')
+commit
+
+[ks_sharded/80-]:
+begin
+insert into name_user_map(name, user_id) values ('bob', 2)
+commit
+
+----------------------------------------------------------------------
+insert ignore into user (id, name) values(2, "bob")
+
+[ks_sharded/-80]:
+begin
+insert ignore into user(id, name) values (2, 'bob')
+commit
+
+[ks_sharded/80-]:
+begin
+insert ignore into name_user_map(name, user_id) values ('bob', 2)
+commit
+select name from name_user_map where 1 != 1
+select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
+
+----------------------------------------------------------------------
+insert ignore into user (id, name) values(2, "bob"),(3, "charlie")
+
+[ks_sharded/-80]:
+begin
+insert ignore into user(id, name) values (2, 'bob'), (3, 'charlie')
+commit
+
+[ks_sharded/80-]:
+begin
+insert ignore into name_user_map(name, user_id) values ('bob', 2), ('charlie', 3)
+commit
+select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
+select name from name_user_map where name = 'charlie' and user_id = 3 limit 10001
+
+----------------------------------------------------------------------

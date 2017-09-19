@@ -1,0 +1,45 @@
+[
+    {
+        "SQL": "SELECT * from user",
+        "Plans": [
+            {
+                "Original": "SELECT * from user",
+                "Instructions": {
+                    "Opcode": "SelectScatter",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "select * from user",
+                    "FieldQuery": "select * from user where 1 != 1"
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-80": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select * from user",
+                        "BindVars": {}
+                    }
+                ],
+                "MysqlQueries": [
+                    "select * from user where 1 != 1",
+                    "select * from user limit 10001"
+                ]
+            },
+            "ks_sharded/80-": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select * from user",
+                        "BindVars": {}
+                    }
+                ],
+                "MysqlQueries": [
+                    "select * from user where 1 != 1",
+                    "select * from user limit 10001"
+                ]
+            }
+        }
+    }
+]

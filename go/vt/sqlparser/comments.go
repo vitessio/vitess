@@ -126,7 +126,7 @@ func StripLeadingComments(sql string) string {
 			// Single line comment
 			index := strings.Index(sql, "\n")
 			if index == -1 {
-				return sql
+				return ""
 			}
 			sql = sql[index+1:]
 		}

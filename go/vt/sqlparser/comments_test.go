@@ -143,7 +143,7 @@ bar`,
 		outSQL: "bar",
 	}, {
 		input:  "-- /* foo */ bar",
-		outSQL: "-- /* foo */ bar",
+		outSQL: "",
 	}, {
 		input:  "foo -- bar */",
 		outSQL: "foo -- bar */",
@@ -157,7 +157,7 @@ a`,
 		outSQL: "a",
 	}, {
 		input:  `-- foo bar`,
-		outSQL: "-- foo bar",
+		outSQL: "",
 	}}
 	for _, testCase := range testCases {
 		gotSQL := StripLeadingComments(testCase.input)

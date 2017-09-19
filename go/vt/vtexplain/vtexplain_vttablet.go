@@ -25,6 +25,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vttablet/sandboxconn"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -36,7 +37,14 @@ var (
 	schemaQueries map[string]*sqltypes.Result
 )
 
-func startFakeTablet() (*fakesqldb.DB, *tabletserver.TabletServer) {
+type fakeTablet struct {
+	db  *fakesqldb.DB
+	tsv *tabletserver.TabletServer
+
+	queries []string
+}
+
+func newFakeTablet() *fakeTablet {
 	db := newFakeDB()
 
 	// XXX much of this is cloned from the tabletserver tests
@@ -59,35 +67,29 @@ func startFakeTablet() (*fakesqldb.DB, *tabletserver.TabletServer) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	tsv.StartService(target, dbcfgs, mysqld)
 
-	return db, tsv
+	tablet := fakeTablet{db: db, tsv: tsv}
+	db.QueryLogger = func(query string, result *sqltypes.Result, err error) {
+		tablet.queries = append(tablet.queries, query)
+	}
+
+	return &tablet
 }
 
-func fakeTabletExecute(sql string, bindVars map[string]*querypb.BindVariable) ([]string, error) {
-	db, tsv := startFakeTablet()
-	defer db.Close()
-	defer tsv.StopService()
-
-	ctx := context.Background()
+// Execute hook called by SandboxConn as part of running the query.
+func (tablet *fakeTablet) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	logStats := tabletenv.NewLogStats(ctx, "FakeQueryExecutor")
-	plan, err := tsv.GetPlan(ctx, logStats, sql)
+
+	plan, err := tablet.tsv.GetPlan(ctx, logStats, query)
 	if err != nil {
 		return nil, err
 	}
+
 	txID := int64(0)
-	qre := tabletserver.NewQueryExecutor(ctx, sql, bindVars, txID, nil, plan, logStats, tsv)
 
-	queries := make([]string, 0, 4)
-
-	db.QueryLogger = func(query string, result *sqltypes.Result, err error) {
-		queries = append(queries, query)
-	}
-
-	_, err = qre.Execute()
-	if err != nil {
-		return nil, err
-	}
-
-	return queries, nil
+	// Since the query is simulated being "sent" over the wire we need to
+	// copy the bindVars into the executor to avoid a data race.
+	qre := tabletserver.NewQueryExecutor(ctx, query, sqltypes.CopyBindVariables(bindVars), txID, nil, plan, logStats, tablet.tsv)
+	return qre.Execute()
 }
 
 func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
@@ -214,11 +216,10 @@ func newFakeDB() *fakesqldb.DB {
 	db := fakesqldb.New(nil)
 
 	for q, r := range schemaQueries {
-		//		log.Infof("adding query %s %v", q, r)
 		db.AddQuery(q, r)
 	}
 
-	db.AddQueryPattern(".*", &sqltypes.Result{})
+	db.AddQueryPattern(".*", sandboxconn.SingleRowResult)
 
 	return db
 }

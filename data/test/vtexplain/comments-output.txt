@@ -1,0 +1,12 @@
+----------------------------------------------------------------------
+SELECT * from user
+
+[ks_sharded/-80]:
+select * from user where 1 != 1
+select * from user limit 10001
+
+[ks_sharded/80-]:
+select * from user where 1 != 1
+select * from user limit 10001
+
+----------------------------------------------------------------------

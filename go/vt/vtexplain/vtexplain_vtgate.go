@@ -26,6 +26,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -100,6 +101,10 @@ func buildTopology(vschemaStr string, numShardsPerKeyspace int) error {
 			hostname := fmt.Sprintf("%s/%s", ks, shard)
 			log.Infof("registering test tablet %s for keyspace %s shard %s", hostname, ks, shard)
 			sc := healthCheck.AddTestTablet(vtexplainCell, hostname, 1, ks, shard, topodatapb.TabletType_MASTER, true, 1, nil)
+
+			tablet := newFakeTablet()
+			sc.Executor = tablet
+
 			explainTopo.TabletConns[hostname] = sc
 		}
 	}
@@ -107,10 +112,10 @@ func buildTopology(vschemaStr string, numShardsPerKeyspace int) error {
 	return err
 }
 
-func vtgateExecute(sql string) ([]*engine.Plan, map[string][]*TabletQuery, error) {
+func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error) {
 	_, err := vtgateExecutor.Execute(context.Background(), vtgateSession, sql, nil)
 	if err != nil {
-		return nil, nil, fmt.Errorf("vtgate Execute: %v", err)
+		return nil, nil, fmt.Errorf("vtexplain execute error: %v in %s", err, sql)
 	}
 
 	// use the plan cache to get the set of plans used for this query, then
@@ -122,21 +127,31 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string][]*TabletQuery, error
 	}
 	planCache.Clear()
 
-	tabletQueries := make(map[string][]*TabletQuery)
-	for tablet, tc := range explainTopo.TabletConns {
+	tabletActions := make(map[string]*TabletActions)
+	for shard, tc := range explainTopo.TabletConns {
 		if len(tc.Queries) == 0 {
 			continue
 		}
 
-		queries := make([]*TabletQuery, 0, len(tc.Queries))
-		for _, bq := range tc.Queries {
-			tq := &TabletQuery{SQL: bq.Sql, BindVars: bq.BindVariables}
-			queries = append(queries, tq)
-		}
-		tc.Queries = nil
+		tablet := tc.Executor.(*fakeTablet)
 
-		tabletQueries[tablet] = queries
+		tqs := make([]*TabletQuery, 0, len(tc.Queries))
+		for _, bq := range tc.Queries {
+			tq := &TabletQuery{
+				SQL:      bq.Sql,
+				BindVars: sqltypes.CopyBindVariables(bq.BindVariables),
+			}
+			tqs = append(tqs, tq)
+		}
+
+		tabletActions[shard] = &TabletActions{
+			TabletQueries: tqs,
+			MysqlQueries:  tablet.queries,
+		}
+
+		tc.Queries = nil
+		tablet.queries = nil
 	}
 
-	return plans, tabletQueries, nil
+	return plans, tabletActions, nil
 }
