@@ -86,6 +86,12 @@ var (
 	TableaclDenied = stats.NewMultiCounters("TableACLDenied", []string{"TableName", "TableGroup", "PlanID", "Username"})
 	// TableaclPseudoDenied tracks the number of pseudo denies.
 	TableaclPseudoDenied = stats.NewMultiCounters("TableACLPseudoDenied", []string{"TableName", "TableGroup", "PlanID", "Username"})
+	// Infof can be overridden during tests
+	Infof = log.Infof
+	// Warningf can be overridden during tests
+	Warningf = log.Warningf
+	// Errorf can be overridden during tests
+	Errorf = log.Errorf
 )
 
 // RecordUserQuery records the query data against the user.
