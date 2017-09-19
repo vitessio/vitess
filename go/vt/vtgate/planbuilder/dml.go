@@ -21,8 +21,11 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
+
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // dmlFormatter strips out keyspace name from dmls.
@@ -38,7 +41,8 @@ func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 // buildUpdatePlan builds the instructions for an UPDATE statement.
 func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, error) {
 	er := &engine.Route{
-		Query: generateQuery(upd),
+		Query:               generateQuery(upd),
+		ChangedVindexValues: make(map[string]sqltypes.PlanValue),
 	}
 	bldr, err := processTableExprs(upd.TableExprs, vschema)
 	if err != nil {
@@ -78,8 +82,20 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, err
 		return nil, err
 	}
 	er.Opcode = engine.UpdateEqual
-	if isIndexChanging(upd.Exprs, er.Table.ColumnVindexes) {
-		return nil, errors.New("unsupported: DML cannot change vindex column")
+
+	if isSharedVindexChanging(upd.Exprs, er.Table.ColumnVindexes) {
+		return nil, errors.New("unsupported: DML cannot change vindex column that is shared by other tables")
+
+	}
+
+	err = addChangedVindexesValues(er, upd.Exprs, er.Table.Owned)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(er.ChangedVindexValues) != 0 {
+		er.Subquery = generateUpdateSubquery(upd, er.Table)
 	}
 	return er, nil
 }
@@ -88,6 +104,19 @@ func generateQuery(statement sqlparser.Statement) string {
 	buf := sqlparser.NewTrackedBuffer(dmlFormatter)
 	statement.Format(buf)
 	return buf.String()
+}
+
+// isSharedVindexChanging returns true if any of the update
+// expressions modifies a vindex column that is shared by other tables.
+func isSharedVindexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.ColumnVindex) bool {
+	for _, assignment := range setClauses {
+		for _, vcol := range colVindexes {
+			if _, ok := vcol.Vindex.(vindexes.Lookup); ok && vcol.Column.Equal(assignment.Name.Name) && !vcol.Exclusive {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // isIndexChanging returns true if any of the update
@@ -101,6 +130,21 @@ func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.C
 		}
 	}
 	return false
+}
+
+func addChangedVindexesValues(route *engine.Route, setClauses sqlparser.UpdateExprs, ownColVindexes []*vindexes.ColumnVindex) error {
+	for _, assignment := range setClauses {
+		for _, vcol := range ownColVindexes {
+			if vcol.Column.Equal(assignment.Name.Name) {
+				pv, ok := extractValueFromUpdate(assignment, vcol.Column)
+				if !ok {
+					return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Only values are supported. Invalid update on column: %v", assignment.Name.Name)
+				}
+				route.ChangedVindexValues[vcol.Name] = pv
+			}
+		}
+	}
+	return nil
 }
 
 // buildUpdatePlan builds the instructions for a DELETE statement.
@@ -165,6 +209,21 @@ func generateDeleteSubquery(del *sqlparser.Delete, table *vindexes.Table) string
 	return buf.String()
 }
 
+func generateUpdateSubquery(upd *sqlparser.Update, table *vindexes.Table) string {
+	if len(table.Owned) == 0 {
+		return ""
+	}
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.WriteString("select ")
+	prefix := ""
+	for _, cv := range table.Owned {
+		buf.Myprintf("%s%v", prefix, cv.Column)
+		prefix = ", "
+	}
+	buf.Myprintf(" from %v%v for update", table.Name, upd.Where)
+	return buf.String()
+}
+
 // getDMLRouting updates the route with the necessary routing
 // info. If it cannot find a unique route, then it returns an error.
 func getDMLRouting(where *sqlparser.Where, route *engine.Route) error {
@@ -182,6 +241,18 @@ func getDMLRouting(where *sqlparser.Where, route *engine.Route) error {
 		}
 	}
 	return errors.New("unsupported: multi-shard where clause in DML")
+}
+
+func extractValueFromUpdate(upd *sqlparser.UpdateExpr, col sqlparser.ColIdent) (pv sqltypes.PlanValue, ok bool) {
+	if !sqlparser.IsValue(upd.Expr) {
+		return sqltypes.PlanValue{}, false
+	}
+	pv, err := sqlparser.NewPlanValue(upd.Expr)
+
+	if err != nil {
+		return sqltypes.PlanValue{}, false
+	}
+	return pv, true
 }
 
 // getMatch returns the matched value if there is an equality
