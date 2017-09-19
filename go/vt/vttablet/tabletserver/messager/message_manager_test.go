@@ -340,9 +340,10 @@ func TestMessageManagerPoller(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQueryPattern(
-		"select time_next, epoch, id, time_scheduled, message from foo.*",
+		"select time_next, epoch, time_created, id, time_scheduled, message from foo.*",
 		&sqltypes.Result{
 			Fields: []*querypb.Field{
+				{Type: sqltypes.Int64},
 				{Type: sqltypes.Int64},
 				{Type: sqltypes.Int64},
 				{Type: sqltypes.Int64},
@@ -352,18 +353,21 @@ func TestMessageManagerPoller(t *testing.T) {
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt64(1),
 				sqltypes.NewInt64(0),
+				sqltypes.NewInt64(0),
 				sqltypes.NewInt64(1),
 				sqltypes.NewInt64(10),
 				sqltypes.NewVarBinary("01"),
 			}, {
 				sqltypes.NewInt64(2),
 				sqltypes.NewInt64(0),
+				sqltypes.NewInt64(1),
 				sqltypes.NewInt64(2),
 				sqltypes.NewInt64(20),
 				sqltypes.NewVarBinary("02"),
 			}, {
 				sqltypes.NewInt64(1),
 				sqltypes.NewInt64(1),
+				sqltypes.NewInt64(0),
 				sqltypes.NewInt64(3),
 				sqltypes.NewInt64(30),
 				sqltypes.NewVarBinary("11"),
@@ -421,7 +425,7 @@ func TestMessagesPending1(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQueryPattern(
-		"select time_next, epoch, id, time_scheduled, message from foo.*",
+		"select time_next, epoch, time_created, id, time_scheduled, message from foo.*",
 		&sqltypes.Result{
 			Fields: []*querypb.Field{
 				{Type: sqltypes.Int64},
@@ -488,7 +492,7 @@ func TestMessagesPending2(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQueryPattern(
-		"select time_next, epoch, id, time_scheduled, message from foo.*",
+		"select time_next, epoch, time_created, id, time_scheduled, message from foo.*",
 		&sqltypes.Result{
 			Fields: []*querypb.Field{
 				{Type: sqltypes.Int64},

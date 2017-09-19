@@ -38,6 +38,9 @@ import (
 // MessageStats tracks stats for messages.
 var MessageStats = stats.NewMultiCounters("Messages", []string{"TableName", "Metric"})
 
+// MessageDelayTimings records total latency from queueing to sent to clients.
+var MessageDelayTimings = stats.NewMultiTimings("MessageDelay", []string{"TableName"})
+
 type messageReceiver struct {
 	ctx     context.Context
 	errChan chan error
@@ -144,10 +147,10 @@ func newMessageManager(tsv TabletService, table *schema.Table, conns *connpool.P
 
 	columnList := buildSelectColumnList(table)
 	mm.readByTimeNext = sqlparser.BuildParsedQuery(
-		"select time_next, epoch, %s from %v where time_next < %a order by time_next desc limit %a",
+		"select time_next, epoch, time_created, %s from %v where time_next < %a order by time_next desc limit %a",
 		columnList, mm.name, ":time_next", ":max")
 	mm.loadMessagesQuery = sqlparser.BuildParsedQuery(
-		"select time_next, epoch, %s from %v where %a",
+		"select time_next, epoch, time_created, %s from %v where %a",
 		columnList, mm.name, ":#pk")
 	mm.ackQuery = sqlparser.BuildParsedQuery(
 		"update %v set time_acked = %a, time_next = null where id in %a and time_acked is null",
@@ -318,11 +321,13 @@ func (mm *messageManager) runSend() {
 				continue
 			}
 			lateCount := int64(0)
+			timingsKey := []string{mm.name.String()}
 			for i := 0; i < mm.batchSize; i++ {
 				if mr := mm.cache.Pop(); mr != nil {
 					if mr.Epoch >= 1 {
 						lateCount++
 					}
+					MessageDelayTimings.Record(timingsKey, time.Unix(0, mr.TimeCreated))
 					rows = append(rows, mr.Row)
 					continue
 				}
@@ -338,6 +343,7 @@ func (mm *messageManager) runSend() {
 			}
 			mm.cond.Wait()
 		}
+		MessageStats.Add([]string{mm.name.String(), "Sent"}, int64(len(rows)))
 		// If we're here, there is a current receiver, and messages
 		// to send. Reserve the receiver and find the next one.
 		receiver := mm.receivers[mm.curReceiver]
@@ -556,10 +562,15 @@ func BuildMessageRow(row []sqltypes.Value) (*MessageRow, error) {
 	if err != nil {
 		return nil, err
 	}
+	timeCreated, err := sqltypes.ToInt64(row[2])
+	if err != nil {
+		return nil, err
+	}
 	return &MessageRow{
-		TimeNext: timeNext,
-		Epoch:    epoch,
-		Row:      row[2:],
+		TimeNext:    timeNext,
+		Epoch:       epoch,
+		TimeCreated: timeCreated,
+		Row:         row[3:],
 	}, nil
 }
 
