@@ -141,5 +141,5 @@ func TestEnabledThrottler(t *testing.T) {
 // TODO(mberlin): Remove the next line once we use the Go 1.7 package 'context' everywhere.
 //go:generate sed -i s,github.com/youtube/vitess/vendor/,,g mock_toposerver_impl_test.go
 //go:generate mockgen -destination mock_healthcheck_test.go -package txthrottler github.com/youtube/vitess/go/vt/discovery HealthCheck
-//go:generate mockgen -destination mock_throttler_test.go -package txthrottler github.com/youtube/vitess/go/vt/tabletserver/txthrottler ThrottlerInterface
-//go:generate mockgen -destination mock_topology_watcher_test.go -package txthrottler github.com/youtube/vitess/go/vt/tabletserver/txthrottler TopologyWatcherInterface
+//go:generate mockgen -destination mock_throttler_test.go -package txthrottler github.com/youtube/vitess/go/vt/vttablet/tabletserver/txthrottler ThrottlerInterface
+//go:generate mockgen -destination mock_topology_watcher_test.go -package txthrottler github.com/youtube/vitess/go/vt/vttablet/tabletserver/txthrottler TopologyWatcherInterface
