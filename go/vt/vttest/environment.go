@@ -1,5 +1,6 @@
 /*
 Copyright 2017 Google Inc.
+Copyright 2017 GitHub Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,34 +18,252 @@ limitations under the License.
 package vttest
 
 import (
-	"errors"
+	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"path"
-	"time"
+	"strings"
 
 	// we use gRPC everywhere, so import the vtgate client.
 	_ "github.com/youtube/vitess/go/vt/vtgate/grpcvtgateconn"
 )
 
-func launcherPath() (string, error) {
-	vttop := os.Getenv("VTTOP")
-	if vttop == "" {
-		return "", errors.New("VTTOP not set")
-	}
-	return path.Join(vttop, "py/vttest/run_local_database.py"), nil
+// Environment is the interface that customizes the global settings for
+// the test cluster. Usually the same environment settings are shared by
+// all the LocalCluster instances in a given test suite, with each instance
+// receiving a different Config for specific tests.
+// For Environments that create temporary data on-disk and clean it up on
+// termination, a brand new instance of Environment should be passed to
+// each LocalCluster.
+type Environment interface {
+	// BinaryPath returns the full path to the given executable
+	BinaryPath(bin string) string
+
+	// MySQLManager is the constructor for the MySQL manager that will
+	// be used by the cluster. The manager must take care of initializing
+	// and destructing the MySQL instance(s) that will be used by the cluster.
+	// See: vttest.MySQLManager for the interface the manager must implement
+	MySQLManager(mycnf []string, snapshot string) (MySQLManager, error)
+
+	// Directory is the path where the local cluster will store all its
+	// data and metadata. For local testing, this should probably be an
+	// unique temporary directory.
+	Directory() string
+
+	// LogDirectory is the directory where logs for all services in the
+	// cluster will be stored.
+	LogDirectory() string
+
+	// VtcomoboArguments are the extra commandline arguments that will be
+	// passed to `vtcombo`
+	VtcomboArguments() []string
+
+	// ProcessHealthCheck returns a HealthChecker for the given service.
+	// The HealthChecker takes an address and attempts to check whether
+	// the service is up and healthy.
+	// If a given service does not require any custom health checks,
+	// nil can be returned.
+	ProcessHealthCheck(name string) HealthChecker
+
+	// DefaultProtocol is the protocol used to communicate with the
+	// Vitess cluster. This is usually "grpc".
+	DefaultProtocol() string
+
+	// PortForProtocol returns the listening port for a given service
+	// on the given protocol. If protocol is empty, the default protocol
+	// for each service is assumed.
+	PortForProtocol(name, protocol string) int
+
+	// EnvVars returns the environment variables that will be passed
+	// to all Vitess processes spawned by the local cluster. These variables
+	// always take precedence over the variables inherited from the current
+	// process.
+	EnvVars() []string
+
+	// TearDown is called during LocalCluster.TearDown() to cleanup
+	// any temporary data in the environment. Environments that can
+	// last through several test runs do not need to implement it.
+	TearDown() error
 }
 
-func vtgateProtocol() string {
+// LocalTestEnv is an Environment implementation for local testing
+// See: NewLocalTestEnv()
+type LocalTestEnv struct {
+	BasePort     int
+	TmpPath      string
+	DefaultMyCnf []string
+	Env          []string
+}
+
+// DefaultMySQLFlavor is the MySQL flavor used by vttest when MYSQL_FLAVOR is not
+// set in the environment
+const DefaultMySQLFlavor = "MariaDB"
+
+// GetMySQLOptions returns the default option set for the given MySQL
+// flavor. If flavor is not set, the value from the `MYSQL_FLAVOR` env
+// variable is used, and if this is not set, DefaultMySQLFlavor will
+// be used.
+// Returns the name of the MySQL flavor being used, the set of MySQL CNF
+// files specific to this flavor, and any errors.
+func GetMySQLOptions(flavor string) (string, []string, error) {
+	if flavor == "" {
+		flavor = os.Getenv("MYSQL_FLAVOR")
+	}
+
+	if flavor == "" {
+		flavor = DefaultMySQLFlavor
+	}
+
+	mycnf := []string{"config/mycnf/vtcombo.cnf"}
+	switch flavor {
+	case "MariaDB":
+		mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
+		mycnf = append(mycnf, "config/mycnf/master_mariadb.cnf")
+
+	case "MySQL56":
+		mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
+		mycnf = append(mycnf, "config/mycnf/master_mysql56.cnf")
+
+	default:
+		return "", nil, fmt.Errorf("unknown mysql flavor: %s", flavor)
+	}
+
+	for i, cnf := range mycnf {
+		mycnf[i] = path.Join(os.Getenv("VTTOP"), cnf)
+	}
+
+	return flavor, mycnf, nil
+}
+
+// EnvVars implements EnvVars for LocalTestEnv
+func (env *LocalTestEnv) EnvVars() []string {
+	return env.Env
+}
+
+// BinaryPath implements BinaryPath for LocalTestEnv
+func (env *LocalTestEnv) BinaryPath(binary string) string {
+	return path.Join(os.Getenv("VTROOT"), "bin", binary)
+}
+
+// MySQLManager implements MySQLManager for LocalTestEnv
+func (env *LocalTestEnv) MySQLManager(mycnf []string, snapshot string) (MySQLManager, error) {
+	return &Mysqlctl{
+		Binary:    env.BinaryPath("mysqlctl"),
+		InitFile:  path.Join(os.Getenv("VTTOP"), "config/init_db.sql"),
+		Directory: env.TmpPath,
+		Port:      env.PortForProtocol("mysql", ""),
+		MyCnf:     append(mycnf, env.DefaultMyCnf...),
+		Env:       env.EnvVars(),
+	}, nil
+}
+
+// DefaultProtocol implements DefaultProtocol for LocalTestEnv.
+// It is always GRPC.
+func (env *LocalTestEnv) DefaultProtocol() string {
 	return "grpc"
 }
 
-// randomPort returns a random number between 10k & 30k.
+// PortForProtocol implements PortForProtocol for LocalTestEnv.
+func (env *LocalTestEnv) PortForProtocol(name, proto string) int {
+	switch name {
+	case "vtcombo":
+		if proto == "grpc" {
+			return env.BasePort + 1
+		}
+		return env.BasePort
+
+	case "mysql":
+		return env.BasePort + 2
+
+	case "vtcombo_mysql_port":
+		return env.BasePort + 3
+
+	default:
+		panic("unknown service name: " + name)
+	}
+}
+
+// ProcessHealthCheck implements ProcessHealthCheck for LocalTestEnv.
+// By default, it performs no service-specific health checks
+func (env *LocalTestEnv) ProcessHealthCheck(name string) HealthChecker {
+	return nil
+}
+
+// VtcomboArguments implements VtcomboArguments for LocalTestEnv.
+func (env *LocalTestEnv) VtcomboArguments() []string {
+	return []string{
+		"-service_map", strings.Join(
+			[]string{"grpc-vtgateservice", "grpc-vtctl"}, ",",
+		)}
+}
+
+// LogDirectory implements LogDirectory for LocalTestEnv.
+func (env *LocalTestEnv) LogDirectory() string {
+	return path.Join(env.TmpPath, "logs")
+}
+
+// Directory implements Directory for LocalTestEnv.
+func (env *LocalTestEnv) Directory() string {
+	return env.TmpPath
+}
+
+// TearDown implements TearDown for LocalTestEnv
+func (env *LocalTestEnv) TearDown() error {
+	return os.RemoveAll(env.TmpPath)
+}
+
+func tmpdir(dataroot string) (dir string, err error) {
+	dir, err = ioutil.TempDir(dataroot, "vttest")
+	if err == nil {
+		err = os.Mkdir(path.Join(dir, "logs"), 0700)
+	}
+	return
+}
+
 func randomPort() int {
 	v := rand.Int31n(20000)
 	return int(v + 10000)
 }
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
+// NewLocalTestEnv returns an instance of the default test environment used
+// for local testing Vitess. The defaults are as follows:
+// - Directory() is a random temporary directory in VTDATAROOT, which is cleaned
+// up when closing the Environment.
+// - LogDirectory() is the `logs` subdir inside Directory()
+// - The MySQL flavor is set to `flavor`. If the argument is not set, it will
+// default to the value of MYSQL_FLAVOR, and if this variable is not set, to
+// DefaultMySQLFlavor
+// - PortForProtocol() will return ports based off the given basePort. If basePort
+// is zero, a random port between 10000 and 20000 will be chosen.
+// - DefaultProtocol() is always "grpc"
+// - ProcessHealthCheck() performs no service-specific health checks
+// - BinaryPath() will look up the default Vitess binaries in VTROOT
+// - MySQLManager() will return a vttest.Mysqlctl instance, configured with the
+// given MySQL flavor. This will use the `mysqlctl` command to initialize and
+// teardown a single mysqld instance.
+func NewLocalTestEnv(flavor string, basePort int) (*LocalTestEnv, error) {
+	flavor, mycnf, err := GetMySQLOptions(flavor)
+	if err != nil {
+		return nil, err
+	}
+
+	directory, err := tmpdir(os.Getenv("VTDATAROOT"))
+	if err != nil {
+		return nil, err
+	}
+
+	if basePort == 0 {
+		basePort = randomPort()
+	}
+
+	return &LocalTestEnv{
+		BasePort:     basePort,
+		TmpPath:      directory,
+		DefaultMyCnf: mycnf,
+		Env: []string{
+			fmt.Sprintf("VTDATAROOT=%s", directory),
+			fmt.Sprintf("MYSQL_FLAVOR=%s", flavor),
+		},
+	}, nil
 }
