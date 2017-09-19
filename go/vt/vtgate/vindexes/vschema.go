@@ -54,11 +54,12 @@ type Keyspace struct {
 
 // ColumnVindex contains the index info for each index of a table.
 type ColumnVindex struct {
-	Column sqlparser.ColIdent `json:"column"`
-	Type   string             `json:"type"`
-	Name   string             `json:"name"`
-	Owned  bool               `json:"owned,omitempty"`
-	Vindex Vindex             `json:"vindex"`
+	Column    sqlparser.ColIdent `json:"column"`
+	Type      string             `json:"type"`
+	Name      string             `json:"name"`
+	Owned     bool               `json:"owned,omitempty"`
+	Exclusive bool               `json:"exlusive"`
+	Vindex    Vindex             `json:"vindex"`
 }
 
 // KeyspaceSchema contains the schema(table) for a keyspace.
@@ -153,6 +154,7 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 	for ksname, ks := range source.Keyspaces {
 		keyspace := vschema.Keyspaces[ksname].Keyspace
 		vindexes := make(map[string]Vindex)
+		vindexesUsageCount := make(map[string]int)
 		for vname, vindexInfo := range ks.Vindexes {
 			vindex, err := CreateVindex(vindexInfo.Type, vname, vindexInfo.Params)
 			if err != nil {
@@ -166,6 +168,17 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 			}
 			vindexes[vname] = vindex
 		}
+
+		for tname, table := range ks.Tables {
+			for _, ind := range table.ColumnVindexes {
+				_, ok := ks.Vindexes[ind.Name]
+				if !ok {
+					return fmt.Errorf("vindex %s not found for table %s", ind.Name, tname)
+				}
+				vindexesUsageCount[ind.Name] = vindexesUsageCount[ind.Name] + 1
+			}
+		}
+
 		for tname, table := range ks.Tables {
 			t := &Table{
 				Name:     sqlparser.NewTableIdent(tname),
@@ -190,15 +203,22 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 				}
 				vindex := vindexes[ind.Name]
 				owned := false
+				exclusive := true
+
+				if vindexesUsageCount[ind.Name] > 1 {
+					exclusive = false
+				}
+
 				if _, ok := vindex.(Lookup); ok && vindexInfo.Owner == tname {
 					owned = true
 				}
 				columnVindex := &ColumnVindex{
-					Column: sqlparser.NewColIdent(ind.Column),
-					Type:   vindexInfo.Type,
-					Name:   ind.Name,
-					Owned:  owned,
-					Vindex: vindex,
+					Column:    sqlparser.NewColIdent(ind.Column),
+					Type:      vindexInfo.Type,
+					Name:      ind.Name,
+					Owned:     owned,
+					Vindex:    vindex,
+					Exclusive: exclusive,
 				}
 				if i == 0 {
 					// Perform Primary vindex check.
