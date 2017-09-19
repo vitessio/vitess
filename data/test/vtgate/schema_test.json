@@ -15,6 +15,18 @@
           "type": "multi",
           "owner": "user"
         },
+        "email_user_map": {
+          "type": "lookup_test",
+          "owner": "user_metadata"
+        },
+        "address_user_map": {
+          "type": "lookup_test",
+          "owner": "user_metadata"
+        },
+        "lastname_user_map": {
+          "type": "lookup_test",
+          "owner": "user_metadata"
+        },
         "costly_map": {
           "type": "costly",
           "owner": "user"
@@ -40,6 +52,26 @@
             "column": "id",
             "sequence": "seq"
           }
+        },
+        "user_metadata": {
+          "column_vindexes": [
+            {
+              "column": "user_id",
+              "name": "user_index"
+            },
+            {
+              "column": "Email",
+              "name": "email_user_map"
+            },
+            {
+              "column": "Lastname",
+              "name": "lastname_user_map"
+            },
+            {
+              "column": "Address",
+              "name": "address_user_map"
+            }
+          ]
         },
         "user_extra": {
           "column_vindexes": [
