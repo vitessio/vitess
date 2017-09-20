@@ -109,5 +109,16 @@ func NewDatetime(t time.Time, defaultLoc *time.Location) sqltypes.Value {
 	if t.Location() != defaultLoc {
 		t = t.In(defaultLoc)
 	}
-	return sqltypes.MakeTrusted(sqltypes.Datetime, []byte(t.Format(isoTimeFormat)))
+
+	// using this backing array and AppendFormat reduces heap allocations
+	var a [64]byte
+	var b = a[:0]
+
+	if t.IsZero() {
+		b = append(b, "0000-00-00"...)
+	} else {
+		b = t.AppendFormat(b, isoTimeFormat)
+	}
+
+	return sqltypes.MakeTrusted(sqltypes.Datetime, b)
 }
