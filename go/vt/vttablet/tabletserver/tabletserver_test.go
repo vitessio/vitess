@@ -28,12 +28,14 @@ import (
 	"testing"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -2246,20 +2248,59 @@ func TestHandleExecUnknownError(t *testing.T) {
 	panic("unknown exec error")
 }
 
+var testLogs []string
+
+func recordInfof(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	testLogs = append(testLogs, msg)
+	log.Infof(msg)
+}
+
+func recordErrorf(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	testLogs = append(testLogs, msg)
+	log.Errorf(msg)
+}
+
+func setupTestLogger() {
+	testLogs = make([]string, 0)
+	tabletenv.Infof = recordInfof
+	tabletenv.Errorf = recordErrorf
+}
+
+func clearTestLogger() {
+	tabletenv.Infof = log.Infof
+	tabletenv.Errorf = log.Errorf
+}
+
+func getTestLog(i int) string {
+	if i < len(testLogs) {
+		return testLogs[i]
+	}
+	return fmt.Sprintf("ERROR: log %d/%d does not exist", i, len(testLogs))
+}
+
 func TestHandleExecTabletError(t *testing.T) {
 	ctx := context.Background()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServerWithNilTopoServer(config)
-	err := tsv.convertError(
+	setupTestLogger()
+	defer clearTestLogger()
+	err := tsv.convertAndLogError(
 		ctx,
 		"select * from test_table",
 		nil,
 		vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tablet error"),
+		nil,
 	)
 	want := "tablet error"
 	if err == nil || err.Error() != want {
 		t.Errorf("%v, want '%s'", err, want)
+	}
+	wantLog := "tablet error: Sql: \"select * from test_table\", BindVars: {}"
+	if wantLog != getTestLog(0) {
+		t.Errorf("error log %s, want '%s'", getTestLog(0), wantLog)
 	}
 }
 
@@ -2269,15 +2310,22 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServerWithNilTopoServer(config)
-	err := tsv.convertError(
+	setupTestLogger()
+	defer clearTestLogger()
+	err := tsv.convertAndLogError(
 		ctx,
 		"select * from test_table",
 		nil,
 		vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tablet error"),
+		nil,
 	)
 	want := "tablet error"
 	if err == nil || err.Error() != want {
 		t.Errorf("%v, want '%s'", err, want)
+	}
+	wantLog := "tablet error: Sql: \"select * from test_table\", BindVars: {}"
+	if wantLog != getTestLog(0) {
+		t.Errorf("error log %s, want '%s'", getTestLog(0), wantLog)
 	}
 }
 
@@ -2287,15 +2335,22 @@ func TestTerseErrorsBindVars(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServerWithNilTopoServer(config)
-	err := tsv.convertError(
+	setupTestLogger()
+	defer clearTestLogger()
+	err := tsv.convertAndLogError(
 		ctx,
 		"select * from test_table",
 		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(1)},
-		mysql.NewSQLError(10, "HY000", "msg"),
+		mysql.NewSQLError(10, "HY000", "sensitive message"),
+		nil,
 	)
 	want := "(errno 10) (sqlstate HY000) during query: select * from test_table"
 	if err == nil || err.Error() != want {
 		t.Errorf("%v, want '%s'", err, want)
+	}
+	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table\", BindVars: {a: \"type:INT64 value:\\\"1\\\" \"}"
+	if wantLog != getTestLog(0) {
+		t.Errorf("error log '%s', want '%s'", getTestLog(0), wantLog)
 	}
 }
 
@@ -2305,11 +2360,44 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServerWithNilTopoServer(config)
-	err := tsv.convertError(ctx, "", nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "msg"))
-	want := "msg"
+	setupTestLogger()
+	defer clearTestLogger()
+	err := tsv.convertAndLogError(ctx, "", nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "sensitive message"), nil)
+	want := "sensitive message"
 	if err == nil || err.Error() != want {
 		t.Errorf("%v, want '%s'", err, want)
 	}
+	wantLog := "sensitive message: Sql: \"\", BindVars: {}"
+	if wantLog != getTestLog(0) {
+		t.Errorf("error log '%s', want '%s'", getTestLog(0), wantLog)
+	}
+}
+
+func TestTruncateErrors(t *testing.T) {
+	ctx := context.Background()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.TerseErrors = true
+	*sqlparser.TruncateErrLen = 20
+	tsv := NewTabletServerWithNilTopoServer(config)
+	setupTestLogger()
+	defer clearTestLogger()
+	err := tsv.convertAndLogError(
+		ctx,
+		"select * from test_table",
+		map[string]*querypb.BindVariable{"this is kinda long eh": sqltypes.Int64BindVariable(1)},
+		mysql.NewSQLError(10, "HY000", "sensitive message"),
+		nil,
+	)
+	want := "(errno 10) (sqlstate HY000) during query: select * [TRUNCATED]"
+	if err == nil || err.Error() != want {
+		t.Errorf("%v, want '%s'", err, want)
+	}
+	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"se [TRUNCATED]"
+	if wantLog != getTestLog(0) {
+		t.Errorf("error log '%s', want '%s'", getTestLog(0), wantLog)
+	}
+	*sqlparser.TruncateErrLen = 0
 }
 
 func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
@@ -2318,13 +2406,20 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServerWithNilTopoServer(config)
-
-	err := tsv.convertError(ctx, "select * from test_table where id = :a",
+	setupTestLogger()
+	defer clearTestLogger()
+	err := tsv.convertAndLogError(ctx, "select * from test_table where id = :a",
 		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(1)},
 		mysql.NewSQLError(1227, "42000", "failover in progress"),
+		nil,
 	)
 	if got, want := err.Error(), "failover in progress (errno 1227) (sqlstate 42000)"; got != want {
 		t.Fatalf("'failover in progress' text must never be stripped: got = %v, want = %v", got, want)
+	}
+
+	// errors during failover aren't logged at all
+	if len(testLogs) != 0 {
+		t.Errorf("unexpected error log during failover")
 	}
 }
 
