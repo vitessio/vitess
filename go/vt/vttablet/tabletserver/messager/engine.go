@@ -24,6 +24,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -49,9 +50,10 @@ type Engine struct {
 	isOpen   bool
 	managers map[string]*messageManager
 
-	tsv   TabletService
-	se    *schema.Engine
-	conns *connpool.Pool
+	tsv          TabletService
+	se           *schema.Engine
+	conns        *connpool.Pool
+	postponeSema *sync2.Semaphore
 }
 
 // NewEngine creates a new Engine.
@@ -65,7 +67,8 @@ func NewEngine(tsv TabletService, se *schema.Engine, config tabletenv.TabletConf
 			time.Duration(config.IdleTimeout*1e9),
 			tsv,
 		),
-		managers: make(map[string]*messageManager),
+		postponeSema: sync2.NewSemaphore(config.MessagePostponeCap, 0),
+		managers:     make(map[string]*messageManager),
 	}
 }
 
@@ -237,7 +240,7 @@ func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altere
 			log.Errorf("Newly created table alread exists in messages: %s", name)
 			continue
 		}
-		mm := newMessageManager(me.tsv, t, me.conns)
+		mm := newMessageManager(me.tsv, t, me.conns, me.postponeSema)
 		me.managers[name] = mm
 		mm.Open()
 	}

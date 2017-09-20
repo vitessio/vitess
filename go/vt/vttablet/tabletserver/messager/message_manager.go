@@ -26,6 +26,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -93,14 +94,15 @@ type messageManager struct {
 
 	isOpen bool
 
-	name        sqlparser.TableIdent
-	fieldResult *sqltypes.Result
-	ackWaitTime time.Duration
-	purgeAfter  time.Duration
-	batchSize   int
-	pollerTicks *timer.Timer
-	purgeTicks  *timer.Timer
-	conns       *connpool.Pool
+	name         sqlparser.TableIdent
+	fieldResult  *sqltypes.Result
+	ackWaitTime  time.Duration
+	purgeAfter   time.Duration
+	batchSize    int
+	pollerTicks  *timer.Timer
+	purgeTicks   *timer.Timer
+	conns        *connpool.Pool
+	postponeSema *sync2.Semaphore
 
 	mu sync.Mutex
 	// cond gets triggered if a receiver becomes available (curReceiver != -1),
@@ -128,20 +130,21 @@ type messageManager struct {
 // newMessageManager creates a new message manager.
 // Calls into tsv have to be made asynchronously. Otherwise,
 // it can lead to deadlocks.
-func newMessageManager(tsv TabletService, table *schema.Table, conns *connpool.Pool) *messageManager {
+func newMessageManager(tsv TabletService, table *schema.Table, conns *connpool.Pool, postponeSema *sync2.Semaphore) *messageManager {
 	mm := &messageManager{
 		tsv:  tsv,
 		name: table.Name,
 		fieldResult: &sqltypes.Result{
 			Fields: table.MessageInfo.Fields,
 		},
-		ackWaitTime: table.MessageInfo.AckWaitDuration,
-		purgeAfter:  table.MessageInfo.PurgeAfterDuration,
-		batchSize:   table.MessageInfo.BatchSize,
-		cache:       newCache(table.MessageInfo.CacheSize),
-		pollerTicks: timer.NewTimer(table.MessageInfo.PollInterval),
-		purgeTicks:  timer.NewTimer(table.MessageInfo.PollInterval),
-		conns:       conns,
+		ackWaitTime:  table.MessageInfo.AckWaitDuration,
+		purgeAfter:   table.MessageInfo.PurgeAfterDuration,
+		batchSize:    table.MessageInfo.BatchSize,
+		cache:        newCache(table.MessageInfo.CacheSize),
+		pollerTicks:  timer.NewTimer(table.MessageInfo.PollInterval),
+		purgeTicks:   timer.NewTimer(table.MessageInfo.PollInterval),
+		conns:        conns,
+		postponeSema: postponeSema,
 	}
 	mm.cond.L = &mm.mu
 
@@ -362,59 +365,60 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 		tabletenv.LogError()
 		mm.wg.Done()
 	}()
-	receiverClosed := false
+
+	ids := make([]string, len(qr.Rows))
+	for i, row := range qr.Rows {
+		ids[i] = row[0].ToString()
+	}
+
+	// This is the cleanup.
+	defer func() {
+		// Discard messages from cache only at the end. This will
+		// prevent them from being requeued while they're being postponed.
+		mm.cache.Discard(ids)
+
+		mm.mu.Lock()
+		defer mm.mu.Unlock()
+
+		receiver.busy = false
+		// Rescan if there were no previously available receivers
+		// because the current receiver became non-busy.
+		if mm.curReceiver == -1 {
+			mm.rescanReceivers(-1)
+		}
+	}()
+
 	if err := receiver.receiver.Send(qr); err != nil {
 		if err == io.EOF {
-			receiverClosed = true
+			// If the receiver ended the stream, we want the messages
+			// to be resent ASAP without postponement. Setting messagesPending
+			// will trigger the poller as soon as the cache is clear.
+			mm.mu.Lock()
+			mm.messagesPending = true
+			mm.mu.Unlock()
 			// No need to call Cancel. messageReceiver already
 			// does that before returning this error.
 			mm.unsubscribe(receiver.receiver)
 		} else {
 			log.Errorf("Error sending messages: %v", qr)
 		}
-	}
-	mm.mu.Lock()
-	receiver.busy = false
-	if mm.curReceiver == -1 {
-		// Since the current receiver became non-busy,
-		// rescan.
-		mm.rescanReceivers(-1)
-	}
-	mm.mu.Unlock()
-	if len(qr.Rows) == 0 {
-		// It was just a Fields send.
 		return
 	}
-	ids := make([]string, len(qr.Rows))
-	for i, row := range qr.Rows {
-		ids[i] = row[0].ToString()
-	}
-
-	mm.cache.Discard(ids)
-	if receiverClosed {
-		// If the receiver ended the stream, we want the messages
-		// to be resent ASAP without postponement. Setting messagesPending
-		// will trigger the poller as soon as the cache is clear.
-		mm.mu.Lock()
-		mm.messagesPending = true
-		mm.mu.Unlock()
-	} else {
-		go postpone(mm.tsv, mm.name.String(), mm.ackWaitTime, ids)
-	}
+	mm.postpone(mm.tsv, mm.name.String(), mm.ackWaitTime, ids)
 }
 
-// postpone is a non-member because it should be called asynchronously and should
-// not rely on members of messageManager.
-func postpone(tsv TabletService, name string, ackWaitTime time.Duration, ids []string) {
+func (mm *messageManager) postpone(tsv TabletService, name string, ackWaitTime time.Duration, ids []string) {
+	// Use the semaphore to limit parallelism.
+	if !mm.postponeSema.Acquire() {
+		// Unreachable.
+		return
+	}
+	defer mm.postponeSema.Release()
 	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), ackWaitTime)
-	defer func() {
-		tabletenv.LogError()
-		cancel()
-	}()
-	_, err := tsv.PostponeMessages(ctx, nil, name, ids)
-	if err != nil {
-		tabletenv.InternalErrors.Add("Messages", 1)
-		log.Errorf("Unable to postpone messages %v: %v", ids, err)
+	defer cancel()
+	if _, err := tsv.PostponeMessages(ctx, nil, name, ids); err != nil {
+		// This can happen during spikes. Record the incident for monitoring.
+		MessageStats.Add([]string{mm.name.String(), "PostponeFailed"}, 1)
 	}
 }
 
