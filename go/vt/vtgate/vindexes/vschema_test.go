@@ -355,7 +355,7 @@ func TestBuildVSchemaVindexNotFoundFail(t *testing.T) {
 		},
 	}
 	_, err := BuildVSchema(&bad)
-	want := "vindexType noexist not found"
+	want := `vindexType "noexist" not found`
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
@@ -408,7 +408,7 @@ func TestBuildVSchemaInvalidVindexFail(t *testing.T) {
 		},
 	}
 	_, err := BuildVSchema(&bad)
-	want := "vindex stf needs to be Unique or NonUnique"
+	want := `vindex "stf" needs to be Unique or NonUnique`
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
@@ -1028,7 +1028,7 @@ func TestValidate(t *testing.T) {
 		},
 	}
 	err = ValidateKeyspace(bad)
-	want := "vindexType absent not found"
+	want := `vindexType "absent" not found`
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Validate: %v, must start with %s", err, want)
 	}
