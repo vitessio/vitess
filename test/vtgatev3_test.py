@@ -923,7 +923,7 @@ class TestVTGateFunctions(unittest.TestCase):
         result,
         (('buendia', 5L),))
 
-    # It works when you updating to same value on unique index
+    # It works when you update to same value on unique index
     vtgate_conn.begin()
     result = self.execute_on_master(
         vtgate_conn,

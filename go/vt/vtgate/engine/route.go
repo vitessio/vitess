@@ -443,47 +443,40 @@ func (route *Route) execUpdateEqual(vcursor VCursor, bindVars map[string]*queryp
 	return route.execUpdateEqualChangedVindex(vcursor, route.Subquery, bindVars, ks, shard, ksid)
 }
 
-// execupdateequalchangedvindex performs an update when a vindex is being modify
-// by the statement. the following operations will be performed:
-// 1) fetch for update changing row
-// 2) delete from vindexes old values
-// 3) insert into secondary vindexes the updated values
-// 4) update row
-//
-// note 1: the order seen above won't neccesarly match the one executed by
-// vttablet. given that dmls will be mapped to existent transactions on each
-// shard, the order could change. for more info on how dml's get mapped to
-// transactions in the tablet see vt/vtgate/safe_sessions.go
-//
-// however, to avoid issues with duplicate key constraints violations in the
-// case that a vindex update (delete/insert) lands in the same shard,
-// it's more convenient to do  the delete first. the following is an example
-// of this sceneario:
-// - an update statement with an unique vindex column that sets a value to
+// execUpdateEqualChangedVindex performs an update when a vindex is being modified
+// by the statement.
+// Note: The order seen in the DML's seen below won't neccesarly matches
+// the one that will be executed by vttablet.
+// Given that dmls will be mapped to existent transactions on each
+// shard, the order could change.
+// However, to avoid issues with duplicate key constraints violations in the
+// case that a vindex update lands in the same shard, it's more convenient
+// to do the delete first. The following is an example of this sceneario:
+// - An update statement with an unique vindex column that sets a value to
 //   to what already exists in the db:
 //   update user set name='juan' where user_id=1
-//   followed by:
+//   Followed by:
 //   update user set name='juan' where user_id=1
-// if we don't do the delete first, this query will fail because the lookup
+// If we don't perform the delete first, this query will fail because the lookup
 // table already has an entry from name=juan to user_id=1.
 //
-// note 2: while changes are being committed the changing row could be unreachable by
-// either the new or old column values.
-func (route *Route) execUpdateEqualChangedVindex(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, keyspace, shard string, keyspaceId []byte) (*sqltypes.Result, error) {
+// Note 2: While changes are being committed, the changing row could be
+// unreachable by either the new or old column values.
+func (route *Route) execUpdateEqualChangedVindex(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, keyspace, shard string, keyspaceID []byte) (*sqltypes.Result, error) {
 	var subQueryResult *sqltypes.Result
 	var err error
-	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{keyspaceId}, "")
+	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{keyspaceID}, "")
 	if route.Subquery != "" && len(route.Table.Owned) != 0 {
 		subQueryResult, err = route.execShard(vcursor, route.Subquery, bindVars, keyspace, shard, false /* isDML */)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "execUpdateEqual")
 		}
 	}
-	err = route.deleteUpdatedVindexEntries(subQueryResult, vcursor, bindVars, keyspaceId)
+	err = route.deleteUpdatedVindexEntries(subQueryResult, vcursor, bindVars, keyspaceID)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execUpdateEqual")
 	}
-	err = route.insertUpdatedVindexEntries(vcursor, bindVars, keyspaceId)
+	err = route.insertUpdatedVindexEntries(vcursor, bindVars, keyspaceID)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execUpdateEqual")
 	}
