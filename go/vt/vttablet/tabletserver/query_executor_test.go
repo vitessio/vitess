@@ -195,9 +195,10 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 	defer db.Close()
 	db.AddQueryPattern("insert into msg\\(time_scheduled, id, message, time_next, time_created, epoch\\) values \\(1, 2, 3, 1,.*", &sqltypes.Result{})
 	db.AddQuery(
-		"select time_next, epoch, id, time_scheduled, message from msg where (time_scheduled = 1 and id = 2)",
+		"select time_next, epoch, time_created, id, time_scheduled, message from msg where (time_scheduled = 1 and id = 2)",
 		&sqltypes.Result{
 			Fields: []*querypb.Field{
+				{Type: sqltypes.Int64},
 				{Type: sqltypes.Int64},
 				{Type: sqltypes.Int64},
 				{Type: sqltypes.Int64},
@@ -208,6 +209,7 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewVarBinary("1"),
 				sqltypes.NewVarBinary("0"),
+				sqltypes.NewVarBinary("10"),
 				sqltypes.NewVarBinary("1"),
 				sqltypes.NewVarBinary("10"),
 				sqltypes.NewVarBinary("2"),
