@@ -106,16 +106,15 @@ func DateToNative(v sqltypes.Value, loc *time.Location) (time.Time, error) {
 
 // NewDatetime builds a Datetime Value
 func NewDatetime(t time.Time, defaultLoc *time.Location) sqltypes.Value {
-	if t.Location() != defaultLoc {
-		t = t.In(defaultLoc)
-	}
-
 	// using this backing array and AppendFormat reduces heap allocations
 	var b = make([]byte, 0, 64)
 
 	if t.IsZero() {
 		b = append(b, "0000-00-00"...)
 	} else {
+		if t.Location() != defaultLoc {
+			t = t.In(defaultLoc)
+		}
 		b = t.AppendFormat(b, isoTimeFormat)
 	}
 
