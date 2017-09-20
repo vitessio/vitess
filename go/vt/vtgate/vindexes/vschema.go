@@ -162,7 +162,7 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 			case Unique:
 			case NonUnique:
 			default:
-				return fmt.Errorf("vindex %s needs to be Unique or NonUnique", vname)
+				return fmt.Errorf("vindex %q needs to be Unique or NonUnique", vname)
 			}
 			vindexes[vname] = vindex
 		}

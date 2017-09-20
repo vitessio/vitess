@@ -129,7 +129,7 @@ func Register(vindexType string, newVindexFunc NewVindexFunc) {
 func CreateVindex(vindexType, name string, params map[string]string) (Vindex, error) {
 	f, ok := registry[vindexType]
 	if !ok {
-		return nil, fmt.Errorf("vindexType %s not found", vindexType)
+		return nil, fmt.Errorf("vindexType %q not found", vindexType)
 	}
 	return f(name, params)
 }
