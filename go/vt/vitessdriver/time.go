@@ -111,8 +111,7 @@ func NewDatetime(t time.Time, defaultLoc *time.Location) sqltypes.Value {
 	}
 
 	// using this backing array and AppendFormat reduces heap allocations
-	var a [64]byte
-	var b = a[:0]
+	var b = make([]byte, 0, 64)
 
 	if t.IsZero() {
 		b = append(b, "0000-00-00"...)
