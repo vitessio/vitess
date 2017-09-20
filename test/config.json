@@ -1,24 +1,6 @@
 
 {
 	"Tests": {
-		"automation_horizontal_resharding": {
-			"File": "automation_horizontal_resharding.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"automation_vertical_split": {
-			"File": "automation_vertical_split.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 3,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"backup": {
 			"File": "backup.py",
 			"Args": [],
