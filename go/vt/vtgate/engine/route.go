@@ -500,12 +500,7 @@ func (route *Route) execDeleteEqual(vcursor VCursor, bindVars map[string]*queryp
 		return &sqltypes.Result{}, nil
 	}
 	if route.Subquery != "" && len(route.Table.Owned) != 0 {
-		result, err := route.execShard(vcursor, route.Subquery, bindVars, ks, shard, false /* isDML */)
-		if err != nil {
-			return nil, vterrors.Wrap(err, "execDeleteEqual")
-		}
-
-		err = route.deleteVindexEntries(result, vcursor, bindVars, ksid)
+		err = route.deleteVindexEntries(vcursor, bindVars, ks, shard, ksid)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "execDeleteEqual")
 		}
@@ -646,17 +641,21 @@ func (route *Route) deleteUpdatedVindexEntries(subQueryResult *sqltypes.Result, 
 	return nil
 }
 
-func (route *Route) deleteVindexEntries(subQueryResult *sqltypes.Result, vcursor VCursor, bindVars map[string]*querypb.BindVariable, ksid []byte) error {
-	if len(subQueryResult.Rows) == 0 {
+func (route *Route) deleteVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, ks, shard string, ksid []byte) error {
+	result, err := route.execShard(vcursor, route.Subquery, bindVars, ks, shard, false /* isDML */)
+	if err != nil {
+		return err
+	}
+	if len(result.Rows) == 0 {
 		return nil
 	}
 	// Columns are selected by table.Owned order see generateDeleteSubquery for details
 	for i, colVindex := range route.Table.Owned {
-		ids := make([]sqltypes.Value, 0, len(subQueryResult.Rows))
-		for _, row := range subQueryResult.Rows {
+		ids := make([]sqltypes.Value, 0, len(result.Rows))
+		for _, row := range result.Rows {
 			ids = append(ids, row[i])
 		}
-		if err := colVindex.Vindex.(vindexes.Lookup).Delete(vcursor, ids, ksid); err != nil {
+		if err = colVindex.Vindex.(vindexes.Lookup).Delete(vcursor, ids, ksid); err != nil {
 			return err
 		}
 	}
