@@ -128,12 +128,13 @@ before_script:
 script:
   # Log GOMAXPROCS (should be 2 as of 07/2015).
   - go run travis/log_gomaxprocs.go
+  # TODO(mberlin): Remove the "tests_broken_on_travis" exclude tag when we switch to Docker based tests.
   - |
     if [[ $TRAVIS_PULL_REQUEST = "false" ]]; then
-      go run test.go $TEST_FLAGS $TEST_MATRIX
+      go run test.go $TEST_FLAGS $TEST_MATRIX -exclude=tests_broken_on_travis
     else
       # Exclude webdriver tests on Travis PRs since the sauce addon does not work for PRs
-      go run test.go $TEST_FLAGS $TEST_MATRIX -exclude=webdriver
+      go run test.go $TEST_FLAGS $TEST_MATRIX -exclude=webdriver,tests_broken_on_travis
     fi
 after_script:
   # Stop Sauce Connect at the end

@@ -212,10 +212,12 @@
 			"File": "mysql_server_test.py",
 			"Args": [],
 			"Command": [],
-			"Manual": true,
+			"Manual": false,
 			"Shard": 1,
 			"RetryMax": 0,
-			"Tags": []
+			"Tags": [
+				"tests_broken_on_travis"
+			]
 		},
 		"mysqlctl": {
 			"File": "mysqlctl.py",
@@ -362,7 +364,9 @@
 			"Manual": false,
 			"Shard": 1,
 			"RetryMax": 1,
-			"Tags": []
+			"Tags": [
+				"tests_broken_on_travis"
+			]
 		},
 		"unit_race": {
 			"File": "",
