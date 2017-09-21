@@ -138,6 +138,16 @@ public class ConnectionProperties {
         Constants.Property.INCLUDED_FIELDS,
         "What fields to return from MySQL to the Driver. Limiting the fields returned can improve performance, but ALL is required for maximum JDBC API support",
         Constants.DEFAULT_INCLUDED_FIELDS);
+    private EnumConnectionProperty<Query.ExecuteOptions.Workload> workload = new EnumConnectionProperty<>(
+        "workload",
+        "The workload type to use when executing queries",
+        Query.ExecuteOptions.Workload.UNSPECIFIED
+    );
+    private BooleanConnectionProperty useAffectedRows = new BooleanConnectionProperty(
+        "useAffectedRows",
+        "Don't set the CLIENT_FOUND_ROWS flag when connecting to the server",
+        false);
+
     private BooleanConnectionProperty grpcRetriesEnabled = new BooleanConnectionProperty(
         "grpcRetriesEnabled",
         "If enabled, a gRPC interceptor will ensure retries happen in the case of TRANSIENT gRPC errors.",
@@ -245,7 +255,8 @@ public class ConnectionProperties {
         this.simpleExecuteTypeCache = this.executeType.getValueAsEnum() == Constants.QueryExecuteType.SIMPLE;
         this.characterEncodingAsString = this.characterEncoding.getValueAsString();
         this.userNameCache = this.userName.getValueAsString();
-        this.executeOptionsCache = Query.ExecuteOptions.newBuilder().setIncludedFields(this.includedFieldsCache).build();
+
+        setExecuteOptions();
     }
 
     /**
@@ -368,8 +379,30 @@ public class ConnectionProperties {
         this.setExecuteOptions();
     }
 
+    public Query.ExecuteOptions.Workload getWorkload() {
+        return this.workload.getValueAsEnum();
+    }
+
+    public void setWorkload(Query.ExecuteOptions.Workload workload) {
+        this.workload.setValue(workload);
+        setExecuteOptions();
+    }
+
+    public boolean getUseAffectedRows() {
+        return useAffectedRows.getValueAsBoolean();
+    }
+
+    public void setUseAffectedRows(boolean useAffectedRows) {
+        this.useAffectedRows.setValue(useAffectedRows);
+        setExecuteOptions();
+    }
+
     private void setExecuteOptions() {
-        this.executeOptionsCache = Query.ExecuteOptions.newBuilder().setIncludedFields(this.includedFieldsCache).build();
+        this.executeOptionsCache = Query.ExecuteOptions.newBuilder()
+            .setIncludedFields(getIncludedFields())
+            .setWorkload(getWorkload())
+            .setClientFoundRows(!getUseAffectedRows())
+            .build();
     }
 
     public Query.ExecuteOptions getExecuteOptions() {
