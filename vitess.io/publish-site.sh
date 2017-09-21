@@ -72,6 +72,14 @@ if [ -n "$list" ]; then
 fi
 set -e
 
+if ! git remote | grep -q "^origin$"; then
+  echo
+  echo "INFO: Skipping 'git commit' because you have no git remote called 'origin'."
+  echo "      Most likely this is run as netlify.com build where git commit does not work"
+  echo "      and nothing else has to be done here."
+  exit 0
+fi
+
 # Commit new version.
 git add -A .
 git commit -m "publish site `date`"
