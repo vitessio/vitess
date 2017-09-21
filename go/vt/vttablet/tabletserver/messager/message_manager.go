@@ -410,6 +410,10 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 }
 
 func (mm *messageManager) postpone(tsv TabletService, name string, ackWaitTime time.Duration, ids []string) {
+	// ids can be empty if it's the field info being sent.
+	if len(ids) == 0 {
+		return
+	}
 	// Use the semaphore to limit parallelism.
 	if !mm.postponeSema.Acquire() {
 		// Unreachable.
