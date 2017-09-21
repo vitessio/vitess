@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"os"
 	"syscall"
 
 	log "github.com/golang/glog"
@@ -172,15 +173,45 @@ func initMySQLProtocol() {
 		// Let's create this unix socket with permissions to all users. In this way,
 		// clients can connect to vtgate mysql server without being vtgate user
 		oldMask := syscall.Umask(000)
-		mysqlUnixListener, err = mysql.NewListener("unix", *mysqlServerSocketPath, authServer, vh)
+		mysqlUnixListener, err = newMysqlUnixSocket(*mysqlServerSocketPath, authServer, vh)
 		_ = syscall.Umask(oldMask)
 		if err != nil {
 			log.Fatalf("mysql.NewListener failed: %v", err)
+			return
 		}
 		// Listen for unix socket
 		go func() {
 			mysqlUnixListener.Accept()
 		}()
+	}
+}
+
+// newtMysqlUnixSocket creates a new unix socket mysql listener. If a socket file already exists, attempts
+// to clean it up.
+func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mysql.Handler) (*mysql.Listener, error) {
+	mysqlUnixListener, err := mysql.NewListener("unix", address, authServer, handler)
+	switch err := err.(type) {
+	case nil:
+		return mysqlUnixListener, nil
+	case *net.OpError:
+		log.Warningf("Found existent socket when trying to create new unix mysql listener: %s, attempting to clean up", address)
+		if err.Op == "listen" {
+			_, dialErr := net.Dial("unix", address)
+			if dialErr == nil {
+				log.Errorf("Existent socket is still accepting connections, aborting", address)
+				return nil, err
+			}
+			removeFileErr := os.Remove(address)
+			if removeFileErr != nil {
+				log.Errorf("Couldn't remove existent socket file: %s", address)
+				return nil, err
+			}
+			mysqlUnixListener, err := mysql.NewListener("unix", address, authServer, handler)
+			return mysqlUnixListener, err
+		}
+		return nil, err
+	default:
+		return nil, err
 	}
 }
 
