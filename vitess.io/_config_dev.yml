@@ -14,7 +14,7 @@ repo: https://github.com/youtube/vitess
 sass:
   sass_dir: _sass
   style: compressed
-permalink: /:categories/:title/
+permalink: pretty
 highlighter: pygments
 plugins:
   - jekyll-sitemap
