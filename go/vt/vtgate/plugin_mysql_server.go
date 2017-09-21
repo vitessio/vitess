@@ -164,9 +164,7 @@ func initMySQLProtocol() {
 			mysqlListener.SlowConnectWarnThreshold = *mysqlSlowConnectWarnThreshold
 		}
 		// Start listening for tcp
-		go func() {
-			mysqlListener.Accept()
-		}()
+		go mysqlListener.Accept()
 	}
 
 	if *mysqlServerSocketPath != "" {
@@ -180,36 +178,36 @@ func initMySQLProtocol() {
 			return
 		}
 		// Listen for unix socket
-		go func() {
-			mysqlUnixListener.Accept()
-		}()
+		go mysqlUnixListener.Accept()
 	}
 }
 
-// newtMysqlUnixSocket creates a new unix socket mysql listener. If a socket file already exists, attempts
+// newMysqlUnixSocket creates a new unix socket mysql listener. If a socket file already exists, attempts
 // to clean it up.
 func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mysql.Handler) (*mysql.Listener, error) {
-	mysqlUnixListener, err := mysql.NewListener("unix", address, authServer, handler)
+	listener, err := mysql.NewListener("unix", address, authServer, handler)
 	switch err := err.(type) {
 	case nil:
-		return mysqlUnixListener, nil
+		return listener, nil
 	case *net.OpError:
 		log.Warningf("Found existent socket when trying to create new unix mysql listener: %s, attempting to clean up", address)
-		if err.Op == "listen" {
-			_, dialErr := net.Dial("unix", address)
-			if dialErr == nil {
-				log.Errorf("Existent socket is still accepting connections, aborting", address)
-				return nil, err
-			}
-			removeFileErr := os.Remove(address)
-			if removeFileErr != nil {
-				log.Errorf("Couldn't remove existent socket file: %s", address)
-				return nil, err
-			}
-			mysqlUnixListener, err := mysql.NewListener("unix", address, authServer, handler)
-			return mysqlUnixListener, err
+		// err.Op should never be different from listen, just being extra careful
+		// in case in the future other errors are returned here
+		if err.Op != "listen" {
+			return nil, err
 		}
-		return nil, err
+		_, dialErr := net.Dial("unix", address)
+		if dialErr == nil {
+			log.Errorf("Existent socket is still accepting connections, aborting", address)
+			return nil, err
+		}
+		removeFileErr := os.Remove(address)
+		if removeFileErr != nil {
+			log.Errorf("Couldn't remove existent socket file: %s", address)
+			return nil, err
+		}
+		listener, listenerErr := mysql.NewListener("unix", address, authServer, handler)
+		return listener, listenerErr
 	default:
 		return nil, err
 	}

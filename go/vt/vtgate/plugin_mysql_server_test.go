@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"golang.org/x/net/context"
+	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -54,19 +55,23 @@ func TestConnectionUnixSocket(t *testing.T) {
 		},
 	}
 
-	unixSocket := "/tmp/mysql_vitess_test.sock"
+	// Use tmp file to reserve a path, remove it immediately, we only care about
+	// name in this context
+	unixSocket, err := ioutil.TempFile("", "mysql_vitess_test.sock")
+	if err != nil {
+		t.Fatalf("Failed to create temp file")
+	}
+	os.Remove(unixSocket.Name())
 
-	l, err := newMysqlUnixSocket(unixSocket, authServer, th)
+	l, err := newMysqlUnixSocket(unixSocket.Name(), authServer, th)
 	if err != nil {
 		t.Fatalf("NewUnixSocket failed: %v", err)
 	}
 	defer l.Close()
-	go func() {
-		l.Accept()
-	}()
+	go l.Accept()
 
 	params := &mysql.ConnParams{
-		UnixSocket: unixSocket,
+		UnixSocket: unixSocket.Name(),
 		Uname:      "user1",
 		Pass:       "password1",
 	}
@@ -91,24 +96,22 @@ func TestConnectionStaleUnixSocket(t *testing.T) {
 		},
 	}
 
-	unixSocket := "/tmp/mysql_vitess_test.sock"
-
-	_, err := os.Create(unixSocket)
+	// First let's create a file. In this way, we simulate
+	// having a stale socket on disk that needs to be cleaned up.
+	unixSocket, err := ioutil.TempFile("", "mysql_vitess_test.sock")
 	if err != nil {
-		t.Fatalf("NewListener failed to create file: %v", err)
+		t.Fatalf("Failed to create temp file")
 	}
 
-	l, err := newMysqlUnixSocket(unixSocket, authServer, th)
+	l, err := newMysqlUnixSocket(unixSocket.Name(), authServer, th)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go func() {
-		l.Accept()
-	}()
+	go l.Accept()
 
 	params := &mysql.ConnParams{
-		UnixSocket: unixSocket,
+		UnixSocket: unixSocket.Name(),
 		Uname:      "user1",
 		Pass:       "password1",
 	}
@@ -133,18 +136,20 @@ func TestConnectionRespectsExistingUnixSocket(t *testing.T) {
 		},
 	}
 
-	unixSocket := "/tmp/mysql_vitess_test.sock"
+	unixSocket, err := ioutil.TempFile("", "mysql_vitess_test.sock")
+	if err != nil {
+		t.Fatalf("Failed to create temp file")
+	}
+	os.Remove(unixSocket.Name())
 
-	l, err := newMysqlUnixSocket(unixSocket, authServer, th)
+	l, err := newMysqlUnixSocket(unixSocket.Name(), authServer, th)
 	if err != nil {
 		t.Errorf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go func() {
-		l.Accept()
-	}()
-	_, err = newMysqlUnixSocket(unixSocket, authServer, th)
-	want := "listen unix /tmp/mysql_vitess_test.sock"
+	go l.Accept()
+	_, err = newMysqlUnixSocket(unixSocket.Name(), authServer, th)
+	want := "listen unix"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, want prefix %s", err, want)
 	}
