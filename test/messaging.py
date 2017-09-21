@@ -17,6 +17,7 @@
 
 
 import logging
+import time
 import unittest
 
 import environment
@@ -29,6 +30,7 @@ from vtdb import vtgate_client
 
 
 shard_0_master = None
+shard_0_replica = None
 shard_1_master = None
 lookup_master = None
 
@@ -95,6 +97,7 @@ vschema = {
 def setUpModule():
   global keyspace_env
   global shard_0_master
+  global shard_0_replica
   global shard_1_master
   global lookup_master
   logging.debug('in setUpModule')
@@ -117,13 +120,15 @@ def setUpModule():
             ],
         )
     shard_0_master = keyspace_env.tablet_map['user.-80.master']
+    shard_0_replica = keyspace_env.tablet_map['user.-80.replica.0']
     shard_1_master = keyspace_env.tablet_map['user.80-.master']
     lookup_master = keyspace_env.tablet_map['lookup.0.master']
 
     utils.apply_vschema(vschema)
     utils.VtGate().start(
-        tablets=[shard_0_master, shard_1_master, lookup_master])
+        tablets=[shard_0_master, shard_0_replica, shard_1_master, lookup_master])
     utils.vtgate.wait_for_endpoints('user.-80.master', 1)
+    utils.vtgate.wait_for_endpoints('user.-80.replica', 1)
     utils.vtgate.wait_for_endpoints('user.80-.master', 1)
     utils.vtgate.wait_for_endpoints('lookup.0.master', 1)
   except:
@@ -153,6 +158,11 @@ def get_connection(timeout=15.0):
   except Exception:
     logging.exception('Connection to vtgate (timeout=%s) failed.', timeout)
     raise
+
+
+def get_client_count(tablet):
+    debugvars = utils.get_vars(tablet.port)
+    return debugvars['Messages'].get('sharded_message.ClientCount', 0)
 
 
 class TestMessaging(unittest.TestCase):
@@ -207,6 +217,98 @@ class TestMessaging(unittest.TestCase):
     # Only one should be acked.
     count = vtgate_conn.message_ack(name, [1, 4])
     self.assertEqual(count, 1)
+    it.close()
+
+  def test_connections(self):
+    name = 'sharded_message'
+    keyspace = 'user'
+
+    self.assertEqual(get_client_count(shard_0_master), 0)
+    self.assertEqual(get_client_count(shard_1_master), 0)
+
+    vtgate_conn1 = get_connection()
+    (it1, fields1) = vtgate_conn1.message_stream(keyspace, name)
+    self.assertEqual(get_client_count(shard_0_master), 1)
+    self.assertEqual(get_client_count(shard_1_master), 1)
+
+    vtgate_conn2 = get_connection()
+    (it2, fields2) = vtgate_conn2.message_stream(keyspace, name)
+    self.assertEqual(get_client_count(shard_0_master), 2)
+    self.assertEqual(get_client_count(shard_1_master), 2)
+
+    cursor = vtgate_conn1.cursor(
+        tablet_type='master', keyspace=None, writable=True)
+    query = 'insert into %s(id, message) values(:id, :message)'%(name)
+    cursor.begin()
+    cursor.execute(query, {'id': 2, 'message': 'hello world 2'})
+    cursor.execute(query, {'id': 5, 'message': 'hello world 5'})
+    cursor.commit()
+
+    # Each connection should get one message.
+    it1.next()
+    it2.next()
+
+    # Ack the messages.
+    count = vtgate_conn1.message_ack(name, [2, 5])
+
+    # After closing one stream, ensure vttablets have dropped it.
+    it1.close()
+    time.sleep(1)
+    self.assertEqual(get_client_count(shard_0_master), 1)
+    self.assertEqual(get_client_count(shard_1_master), 1)
+
+    it2.close()
+
+  def test_reparent(self):
+    name = 'sharded_message'
+    keyspace = 'user'
+
+    # Start a stream. Use a timeout that's greater than how long
+    # the test will take to run.
+    vtgate_conn = get_connection(120)
+    (it, fields) = vtgate_conn.message_stream(keyspace, name)
+    self.assertEqual(get_client_count(shard_0_master), 1)
+    self.assertEqual(get_client_count(shard_0_replica), 0)
+    self.assertEqual(get_client_count(shard_1_master), 1)
+
+    # Perform a graceful reparent to the replica.
+    utils.run_vtctl(['PlannedReparentShard',
+                     '-keyspace_shard', 'user/-80',
+                     '-new_master', shard_0_replica.tablet_alias], auto_log=True)
+    utils.validate_topology()
+
+    # Verify connection has migrated.
+    # The wait must be at least 6s which is how long vtgate will
+    # wait before retrying: that is 30s/5 where 30s is the default
+    # message_stream_grace_period.
+    time.sleep(10)
+    self.assertEqual(get_client_count(shard_0_master), 0)
+    self.assertEqual(get_client_count(shard_0_replica), 1)
+    self.assertEqual(get_client_count(shard_1_master), 1)
+
+    cursor = vtgate_conn.cursor(
+        tablet_type='master', keyspace=None, writable=True)
+    query = 'insert into %s(id, message) values(:id, :message)'%(name)
+    cursor.begin()
+    cursor.execute(query, {'id': 3, 'message': 'hello world 3'})
+    cursor.commit()
+
+    # Receive the message.
+    it.next()
+
+    # Reparent back to old master.
+    utils.run_vtctl(['PlannedReparentShard',
+                     '-keyspace_shard', 'user/-80',
+                     '-new_master', shard_0_master.tablet_alias], auto_log=True)
+    utils.validate_topology()
+
+    time.sleep(10)
+    self.assertEqual(get_client_count(shard_0_master), 1)
+    self.assertEqual(get_client_count(shard_0_replica), 0)
+    self.assertEqual(get_client_count(shard_1_master), 1)
+
+    # Ack the message.
+    count = vtgate_conn.message_ack(name, [3])
 
 
 if __name__ == '__main__':
