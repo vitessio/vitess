@@ -55,10 +55,6 @@ func TestConnectionUnixSocket(t *testing.T) {
 	}
 
 	unixSocket := "/tmp/mysql_vitess_test.sock"
-	_, err := os.Create(unixSocket)
-	if err != nil {
-		t.Fatalf("NewListener failed to create file: %v", err)
-	}
 
 	l, err := newMysqlUnixSocket(unixSocket, authServer, th)
 	if err != nil {
@@ -97,6 +93,11 @@ func TestConnectionStaleUnixSocket(t *testing.T) {
 	}
 
 	unixSocket := "/tmp/mysql_vitess_test.sock"
+
+	_, err := os.Create(unixSocket)
+	if err != nil {
+		t.Fatalf("NewListener failed to create file: %v", err)
+	}
 
 	l, err := newMysqlUnixSocket(unixSocket, authServer, th)
 	if err != nil {
