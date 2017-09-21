@@ -65,7 +65,6 @@ func TestConnectionUnixSocket(t *testing.T) {
 		l.Accept()
 	}()
 
-	// Setup the right parameters.
 	params := &mysql.ConnParams{
 		UnixSocket: unixSocket,
 		Uname:      "user1",
@@ -108,7 +107,6 @@ func TestConnectionStaleUnixSocket(t *testing.T) {
 		l.Accept()
 	}()
 
-	// Setup the right parameters.
 	params := &mysql.ConnParams{
 		UnixSocket: unixSocket,
 		Uname:      "user1",
