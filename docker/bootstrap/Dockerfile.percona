@@ -3,7 +3,7 @@ FROM vitess/bootstrap:common
 # Install Percona 5.6
 RUN apt-key adv --keyserver keys.gnupg.net \
         --recv-keys 8507EFA5 && \
-    add-apt-repository 'deb http://repo.percona.com/apt jessie main' && \
+    add-apt-repository 'deb http://repo.percona.com/apt stretch main' && \
     { \
         echo debconf debconf/frontend select Noninteractive; \
         echo percona-server-server-5.6 percona-server-server/root_password password 'unused'; \

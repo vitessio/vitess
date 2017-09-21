@@ -48,6 +48,24 @@ mkdir -p $VTROOT/vthook
 echo "Updating git submodules..."
 git submodule update --init
 
+# Install "protoc" protobuf compiler binary.
+protoc_version=3.4.0
+protoc_dist=$VTROOT/dist/protoc
+protoc_version_file=$protoc_dist/version
+if [[ -f $protoc_version_file && "$(cat $protoc_version_file)" == "$protoc_version" ]]; then
+  echo "skipping protoc install. remove $protoc_version_file to force re-install."
+else
+  rm -rf $protoc_dist
+  mkdir -p $protoc_dist
+  download_url=https://github.com/google/protobuf/releases/download/v${protoc_version}/protoc-${protoc_version}-linux-x86_64.zip
+  (cd $protoc_dist && \
+    wget $download_url && \
+    unzip protoc-${protoc_version}-linux-x86_64.zip)
+  [ $? -eq 0 ] || fail "protoc download failed"
+  echo "$protoc_version" > $protoc_version_file
+fi
+ln -snf $protoc_dist/bin/protoc $VTROOT/bin/protoc
+
 # install zookeeper
 zk_ver=3.4.6
 zk_dist=$VTROOT/dist/vt-zookeeper-$zk_ver
