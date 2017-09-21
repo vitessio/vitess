@@ -2,7 +2,7 @@ FROM vitess/bootstrap:common
 
 # Install MySQL 5.6
 RUN apt-key adv --recv-keys --keyserver ha.pool.sks-keyservers.net 5072E1F5 && \
-    add-apt-repository 'deb http://repo.mysql.com/apt/debian/ jessie mysql-5.6' && \
+    add-apt-repository 'deb http://repo.mysql.com/apt/debian/ stretch mysql-5.6' && \
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server libmysqlclient-dev && \
     rm -rf /var/lib/apt/lists/*
