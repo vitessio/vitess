@@ -39,3 +39,6 @@ owner:
 
 exclude: ["config.rb", ".sass-cache", "Capfile", "config", "log", "Rakefile", "Rakefile.rb", "tmp", "*.sublime-project", "*.sublime-workspace", "Gemfile", "Gemfile.lock", "README.md", "LICENSE", "node_modules", "Gruntfile.js", "package.json", "preview-site.sh", "publish-site.sh"]
 
+# Open up "jekyll serve" because the requests via the Docker forwarding are not
+# treated as incoming from "localhost".
+host: 0.0.0.0
