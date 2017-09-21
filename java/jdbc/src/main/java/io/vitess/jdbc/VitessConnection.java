@@ -46,6 +46,8 @@ import java.util.logging.Logger;
 import io.vitess.client.Context;
 import io.vitess.client.VTGateConnection;
 import io.vitess.client.VTSession;
+import io.vitess.proto.Query;
+import io.vitess.proto.Vtgate;
 import io.vitess.util.CommonUtils;
 import io.vitess.util.Constants;
 import io.vitess.util.MysqlDefs;
@@ -69,6 +71,7 @@ public class VitessConnection extends ConnectionProperties implements Connection
     private DBProperties dbProperties;
     private final VitessJDBCUrl vitessJDBCUrl;
     private final VTSession vtSession;
+
 
     /**
      * Constructor to Create Connection Object
@@ -302,7 +305,20 @@ public class VitessConnection extends ConnectionProperties implements Connection
      */
     public int getTransactionIsolation() throws SQLException {
         checkOpen();
-        return this.getMetaData().getDefaultTransactionIsolation();
+        switch (this.vtSession.getSession().getOptions().getTransactionIsolation()) {
+            case DEFAULT:
+                return this.getMetaData().getDefaultTransactionIsolation();
+            case READ_COMMITTED:
+                return Connection.TRANSACTION_READ_COMMITTED;
+            case READ_UNCOMMITTED:
+                return Connection.TRANSACTION_READ_UNCOMMITTED;
+            case REPEATABLE_READ:
+                return Connection.TRANSACTION_REPEATABLE_READ;
+            case SERIALIZABLE:
+                return Connection.TRANSACTION_SERIALIZABLE;
+            default:
+                throw new SQLException(Constants.SQLExceptionMessages.ISOLATION_LEVEL_NOT_SUPPORTED);
+        }
     }
 
     /**
@@ -312,23 +328,35 @@ public class VitessConnection extends ConnectionProperties implements Connection
      * @throws SQLException
      */
     public void setTransactionIsolation(int level) throws SQLException {
-        /* Future Implementation of this method
         checkOpen();
-        if (null != this.vtGateTx) {
-            try {
-                this.vtGateTx.rollback(this.context);
-            } catch (SQLException ex) {
-                throw new SQLException(ex);
-            } finally {
-                this.vtGateTx = null;
-            }
+        if (isInTransaction()) {
+            rollbackTx();
         }
         if (Connection.TRANSACTION_NONE == level || !getMetaData()
             .supportsTransactionIsolationLevel(level)) {
             throw new SQLException(Constants.SQLExceptionMessages.ISOLATION_LEVEL_NOT_SUPPORTED);
-        } */
-        throw new SQLFeatureNotSupportedException(
-            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+        }
+
+        Query.ExecuteOptions.TransactionIsolation isolation;
+        switch (level) {
+            case Connection.TRANSACTION_READ_COMMITTED:
+                isolation = Query.ExecuteOptions.TransactionIsolation.READ_COMMITTED;
+                break;
+            case Connection.TRANSACTION_READ_UNCOMMITTED:
+                isolation = Query.ExecuteOptions.TransactionIsolation.READ_UNCOMMITTED;
+                break;
+            case Connection.TRANSACTION_REPEATABLE_READ:
+                isolation = Query.ExecuteOptions.TransactionIsolation.REPEATABLE_READ;
+                break;
+            case Connection.TRANSACTION_SERIALIZABLE:
+                isolation = Query.ExecuteOptions.TransactionIsolation.SERIALIZABLE;
+                break;
+            default:
+                throw new SQLException(Constants.SQLExceptionMessages.ISOLATION_LEVEL_NOT_SUPPORTED);
+        }
+        Vtgate.Session session = this.vtSession.getSession();
+        this.vtSession.setSession(session.toBuilder()
+            .setOptions(session.getOptions().toBuilder().setTransactionIsolation(isolation)).build());
     }
 
     /**

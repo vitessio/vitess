@@ -17,13 +17,16 @@
 package io.vitess.jdbc;
 
 import java.lang.reflect.Field;
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Properties;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mockito;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.modules.junit4.PowerMockRunner;
 
@@ -219,9 +222,34 @@ public class VitessConnectionTest extends BaseTest {
             }
             String url = "jdbc:vitess://locahost:9000/vt_keyspace/keyspace?TABLET_TYPE=replica&workload=" + workload.toString().toLowerCase();
             VitessConnection conn = new VitessConnection(url, new Properties());
-
+            
             Assert.assertEquals(workload, conn.getWorkload());
             Assert.assertEquals(workload, conn.getVtSession().getSession().getOptions().getWorkload());
         }
+    }
+
+    @Test public void testTransactionIsolation() throws SQLException {
+        VitessConnection conn = Mockito.spy(getVitessConnection());
+        Mockito.doReturn(new DBProperties("random", "random", "random", Connection.TRANSACTION_REPEATABLE_READ, "random"))
+            .when(conn)
+            .getDbProperties();
+        Mockito.doReturn(new VitessMySQLDatabaseMetadata(conn)).when(conn).getMetaData();
+
+        Assert.assertEquals(Query.ExecuteOptions.TransactionIsolation.DEFAULT, conn.getVtSession().getSession().getOptions().getTransactionIsolation());
+        Assert.assertEquals(Connection.TRANSACTION_REPEATABLE_READ, conn.getTransactionIsolation());
+
+        conn.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
+
+        Assert.assertEquals(Query.ExecuteOptions.TransactionIsolation.READ_COMMITTED, conn.getVtSession().getSession().getOptions().getTransactionIsolation());
+        Assert.assertEquals(Connection.TRANSACTION_READ_COMMITTED, conn.getTransactionIsolation());
+
+        VitessStatement statement = Mockito.mock(VitessStatement.class);
+        Mockito.when(conn.createStatement()).thenReturn(statement);
+        Mockito.when(conn.isInTransaction()).thenReturn(true);
+        conn.setTransactionIsolation(Connection.TRANSACTION_READ_UNCOMMITTED);
+
+        Mockito.verify(statement).executeUpdate("rollback");
+        Assert.assertEquals(Query.ExecuteOptions.TransactionIsolation.READ_UNCOMMITTED, conn.getVtSession().getSession().getOptions().getTransactionIsolation());
+        Assert.assertEquals(Connection.TRANSACTION_READ_UNCOMMITTED, conn.getTransactionIsolation());
     }
 }
