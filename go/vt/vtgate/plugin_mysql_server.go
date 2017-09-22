@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"os"
 	"syscall"
 
 	log "github.com/golang/glog"
@@ -163,24 +164,52 @@ func initMySQLProtocol() {
 			mysqlListener.SlowConnectWarnThreshold = *mysqlSlowConnectWarnThreshold
 		}
 		// Start listening for tcp
-		go func() {
-			mysqlListener.Accept()
-		}()
+		go mysqlListener.Accept()
 	}
 
 	if *mysqlServerSocketPath != "" {
 		// Let's create this unix socket with permissions to all users. In this way,
 		// clients can connect to vtgate mysql server without being vtgate user
 		oldMask := syscall.Umask(000)
-		mysqlUnixListener, err = mysql.NewListener("unix", *mysqlServerSocketPath, authServer, vh)
+		mysqlUnixListener, err = newMysqlUnixSocket(*mysqlServerSocketPath, authServer, vh)
 		_ = syscall.Umask(oldMask)
 		if err != nil {
 			log.Fatalf("mysql.NewListener failed: %v", err)
+			return
 		}
 		// Listen for unix socket
-		go func() {
-			mysqlUnixListener.Accept()
-		}()
+		go mysqlUnixListener.Accept()
+	}
+}
+
+// newMysqlUnixSocket creates a new unix socket mysql listener. If a socket file already exists, attempts
+// to clean it up.
+func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mysql.Handler) (*mysql.Listener, error) {
+	listener, err := mysql.NewListener("unix", address, authServer, handler)
+	switch err := err.(type) {
+	case nil:
+		return listener, nil
+	case *net.OpError:
+		log.Warningf("Found existent socket when trying to create new unix mysql listener: %s, attempting to clean up", address)
+		// err.Op should never be different from listen, just being extra careful
+		// in case in the future other errors are returned here
+		if err.Op != "listen" {
+			return nil, err
+		}
+		_, dialErr := net.Dial("unix", address)
+		if dialErr == nil {
+			log.Errorf("Existent socket is still accepting connections, aborting", address)
+			return nil, err
+		}
+		removeFileErr := os.Remove(address)
+		if removeFileErr != nil {
+			log.Errorf("Couldn't remove existent socket file: %s", address)
+			return nil, err
+		}
+		listener, listenerErr := mysql.NewListener("unix", address, authServer, handler)
+		return listener, listenerErr
+	default:
+		return nil, err
 	}
 }
 
