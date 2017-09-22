@@ -813,11 +813,6 @@ func (route *Route) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*
 
 // processPrimary maps the primary vindex values to the kesypace ids.
 func (route *Route) processPrimary(vcursor VCursor, vindexKeys []sqltypes.Value, colVindex *vindexes.ColumnVindex, bv map[string]*querypb.BindVariable) (keyspaceIDs [][]byte, err error) {
-	for _, vindexKey := range vindexKeys {
-		if vindexKey.IsNull() {
-			return nil, fmt.Errorf("value must be supplied for column %v", colVindex.Column)
-		}
-	}
 	mapper := colVindex.Vindex.(vindexes.Unique)
 	keyspaceIDs, err = mapper.Map(vcursor, vindexKeys)
 	if err != nil {
