@@ -517,6 +517,12 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, shr *querypb.St
 		}
 	}
 
+	// In this case where a new tablet is initialized or a tablet type changes, we want to
+	// initialize the counter so the rate can be calculated correctly.
+	if hcc.tabletStats.Target.TabletType != shr.Target.TabletType {
+		hcErrorCounters.Add([]string{shr.Target.Keyspace, shr.Target.Shard, topoproto.TabletTypeLString(shr.Target.TabletType)}, 0)
+	}
+
 	// Update our record, and notify downstream for tabletType and
 	// realtimeStats change.
 	ts := hcc.update(shr, serving, healthErr)
