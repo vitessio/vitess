@@ -319,6 +319,12 @@ func (route *Route) Execute(vcursor VCursor, bindVars, joinVars map[string]*quer
 		return nil, err
 	}
 
+	// If there is no route for a select and we still 'wantfields',
+	// we have to do a GetFields.
+	if len(params.shardVars) == 0 && !isDML && wantfields {
+		return route.GetFields(vcursor, bindVars, joinVars)
+	}
+
 	shardQueries := route.getShardQueries(route.Query, params)
 	result, err := vcursor.ExecuteMultiShard(params.ks, shardQueries, isDML)
 	if err != nil {
