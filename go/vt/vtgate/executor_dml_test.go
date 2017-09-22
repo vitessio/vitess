@@ -985,7 +985,7 @@ func TestInsertFail(t *testing.T) {
 	}
 
 	_, err = executorExec(executor, "insert into ksid_table(keyspace_id) values (null)", nil)
-	want = "execInsertSharded: getInsertShardedRoute: value must be supplied for column keyspace_id"
+	want = "execInsertSharded: getInsertShardedRoute: could not map NULL to a keyspace id"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}
@@ -1059,7 +1059,7 @@ func TestInsertFail(t *testing.T) {
 	}
 
 	_, err = executorExec(executor, "insert into noauto_table(id) values (null)", nil)
-	want = "execInsertSharded: getInsertShardedRoute: value must be supplied for column id"
+	want = "execInsertSharded: getInsertShardedRoute: could not map NULL to a keyspace id"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("executorExec: %v, want prefix %v", err, want)
 	}
