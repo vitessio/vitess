@@ -227,6 +227,7 @@ func (mm *messageManager) Close() {
 // cancel or timeout, or tabletserver shutdown, etc.
 func (mm *messageManager) Subscribe(ctx context.Context, send func(*sqltypes.Result) error) <-chan struct{} {
 	receiver, done := newMessageReceiver(ctx, send)
+	MessageStats.Add([]string{mm.name.String(), "ClientCount"}, 1)
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 	withStatus := &receiverWithStatus{
@@ -248,6 +249,7 @@ func (mm *messageManager) Subscribe(ctx context.Context, send func(*sqltypes.Res
 }
 
 func (mm *messageManager) unsubscribe(receiver *messageReceiver) {
+	MessageStats.Add([]string{mm.name.String(), "ClientCount"}, -1)
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 	for i, rcv := range mm.receivers {
@@ -408,6 +410,10 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 }
 
 func (mm *messageManager) postpone(tsv TabletService, name string, ackWaitTime time.Duration, ids []string) {
+	// ids can be empty if it's the field info being sent.
+	if len(ids) == 0 {
+		return
+	}
 	// Use the semaphore to limit parallelism.
 	if !mm.postponeSema.Acquire() {
 		// Unreachable.
