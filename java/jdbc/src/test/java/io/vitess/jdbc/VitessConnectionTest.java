@@ -197,4 +197,31 @@ public class VitessConnectionTest extends BaseTest {
         Assert.assertEquals(Topodata.TabletType.REPLICA, conn.getTabletType());
         Assert.assertEquals(true, conn.getBlobsAreStrings());
     }
+
+    @Test public void testClientFoundRows() throws SQLException {
+        String url = "jdbc:vitess://locahost:9000/vt_keyspace/keyspace?TABLET_TYPE=replica&useAffectedRows=true";
+        VitessConnection conn = new VitessConnection(url, new Properties());
+
+        Assert.assertEquals(true, conn.getUseAffectedRows());
+        Assert.assertEquals(false, conn.getVtSession().getSession().getOptions().getClientFoundRows());
+
+        url = "jdbc:vitess://locahost:9000/vt_keyspace/keyspace?TABLET_TYPE=replica&useAffectedRows=false";
+        conn = new VitessConnection(url, new Properties());
+
+        Assert.assertEquals(false, conn.getUseAffectedRows());
+        Assert.assertEquals(true, conn.getVtSession().getSession().getOptions().getClientFoundRows());
+    }
+
+    @Test public void testWorkload() throws SQLException {
+        for (Query.ExecuteOptions.Workload workload : Query.ExecuteOptions.Workload.values()) {
+            if (workload == Query.ExecuteOptions.Workload.UNRECOGNIZED) {
+                continue;
+            }
+            String url = "jdbc:vitess://locahost:9000/vt_keyspace/keyspace?TABLET_TYPE=replica&workload=" + workload.toString().toLowerCase();
+            VitessConnection conn = new VitessConnection(url, new Properties());
+
+            Assert.assertEquals(workload, conn.getWorkload());
+            Assert.assertEquals(workload, conn.getVtSession().getSession().getOptions().getWorkload());
+        }
+    }
 }
