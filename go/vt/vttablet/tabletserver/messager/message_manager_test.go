@@ -299,7 +299,7 @@ func TestMessageManagerPostponeThrottle(t *testing.T) {
 		runtime.Gosched()
 		time.Sleep(10 * time.Millisecond)
 	}
-	if got, want := tsv.postponeCount.Get(), int64(2); got != want {
+	if got, want := tsv.postponeCount.Get(), int64(1); got != want {
 		t.Errorf("tsv.postponeCount: %d, want %d", got, want)
 	}
 	<-ch
