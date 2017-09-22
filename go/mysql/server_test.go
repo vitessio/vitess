@@ -158,9 +158,7 @@ func TestConnectionWithoutSourceHost(t *testing.T) {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go func() {
-		l.Accept()
-	}()
+	go l.Accept()
 
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
@@ -198,9 +196,7 @@ func TestConnectionWithSourceHost(t *testing.T) {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go func() {
-		l.Accept()
-	}()
+	go l.Accept()
 
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
@@ -233,20 +229,22 @@ func TestConnectionUnixSocket(t *testing.T) {
 		},
 	}
 
-	unixSocket := "/tmp/mysql_vitess_test.sock"
+	unixSocket, err := ioutil.TempFile("", "mysql_vitess_test.sock")
+	if err != nil {
+		t.Fatalf("Failed to create temp file")
+	}
+	os.Remove(unixSocket.Name())
 
-	l, err := NewListener("unix", unixSocket, authServer, th)
+	l, err := NewListener("unix", unixSocket.Name(), authServer, th)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go func() {
-		l.Accept()
-	}()
+	go l.Accept()
 
 	// Setup the right parameters.
 	params := &ConnParams{
-		UnixSocket: unixSocket,
+		UnixSocket: unixSocket.Name(),
 		Uname:      "user1",
 		Pass:       "password1",
 	}
@@ -271,9 +269,7 @@ func TestClientFoundRows(t *testing.T) {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go func() {
-		l.Accept()
-	}()
+	go l.Accept()
 
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
@@ -326,9 +322,7 @@ func TestServer(t *testing.T) {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go func() {
-		l.Accept()
-	}()
+	go l.Accept()
 
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
@@ -517,9 +511,7 @@ func TestClearTextServer(t *testing.T) {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go func() {
-		l.Accept()
-	}()
+	go l.Accept()
 
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
@@ -606,9 +598,7 @@ func TestDialogServer(t *testing.T) {
 	}
 	l.AllowClearTextWithoutTLS = true
 	defer l.Close()
-	go func() {
-		l.Accept()
-	}()
+	go l.Accept()
 
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
@@ -683,9 +673,7 @@ func TestTLSServer(t *testing.T) {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
 	l.TLSConfig = serverConfig
-	go func() {
-		l.Accept()
-	}()
+	go l.Accept()
 
 	// Setup the right parameters.
 	params := &ConnParams{
