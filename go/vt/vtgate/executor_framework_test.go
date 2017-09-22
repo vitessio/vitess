@@ -202,6 +202,7 @@ var unshardedVSchema = `
 `
 
 const testBufferSize = 10
+const testCacheSize = int64(10)
 
 func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
@@ -230,7 +231,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	executor = NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize)
+	executor = NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
 	return executor, sbc1, sbc2, sbclookup
 }
 
