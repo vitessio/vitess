@@ -197,9 +197,7 @@
 			"Manual": false,
 			"Shard": 1,
 			"RetryMax": 0,
-			"Tags": [
-				"tests_broken_on_travis"
-			]
+			"Tags": []
 		},
 		"mysqlctl": {
 			"File": "mysqlctl.py",
@@ -346,9 +344,7 @@
 			"Manual": false,
 			"Shard": 1,
 			"RetryMax": 1,
-			"Tags": [
-				"tests_broken_on_travis"
-			]
+			"Tags": []
 		},
 		"unit_race": {
 			"File": "",
