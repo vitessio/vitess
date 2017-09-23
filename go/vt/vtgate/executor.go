@@ -328,7 +328,7 @@ func (e *Executor) handleSet(ctx context.Context, session *vtgatepb.Session, sql
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed value for character_set_results: %v", v)
 			}
-		case "net_write_timeout", "net_read_timeout", "lc_messages":
+		case "net_write_timeout", "net_read_timeout", "lc_messages", "collation_connection":
 			log.Warningf("Ignored inapplicable SET %v = %v", k, v)
 			warnings.Add("IgnoredSet", 1)
 		default:
