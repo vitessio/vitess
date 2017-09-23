@@ -12,9 +12,9 @@ The horizontal resharding process mainly contains the following steps
     (**Phase: CopySchemaShard**) 
 1.  Copy the data with a batch process called *vtworker*
     (**Phase: SplitClone**).
-    [more details](horizontal-sharding-workflow.html#details-in-splitclone-phase)
+    [more details](#details-in-splitclone-phase)
 1.  Check filtered replication (**Phase: WaitForFilteredReplication**).
-    [more details](horizontal-sharding-workflow.html#details-in-waitforfilteredreplication-phase) 
+    [more details](#details-in-waitforfilteredreplication-phase)
 1.  Check copied data integrity using *vtworker* batch process in the mode
     to compare the source and destination data. (**Phase: SplitDiff**)
 1.  Migrate all the serving rdonly tablets in the original shards.
@@ -23,7 +23,7 @@ The horizontal resharding process mainly contains the following steps
     (**Phase: MigrateServedTypeReplica**)
 1.  Migrate all the serving master tablets in the original shards.
     (**Phase: MigrateServedTypeMaster**)
-    [more details](horizontal-sharding-workflow.html#details-in-migrateservedtypemaste-phase) 
+    [more details](#details-in-migrateservedtypemaste-phase)
 
 ## Prerequisites
 
