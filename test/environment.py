@@ -253,3 +253,12 @@ def create_webdriver():
     driver.set_window_position(0, 0)
     driver.set_window_size(1280, 1024)
   return driver
+
+
+def set_log_level(verbose):
+  level = logging.DEBUG
+  if verbose == 0:
+    level = logging.WARNING
+  elif verbose == 1:
+    level = logging.INFO
+  logging.getLogger().setLevel(level)

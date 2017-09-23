@@ -142,7 +142,7 @@ def main(mod=None, test_options=None):
     test_options(parser)
   (options, args) = parser.parse_args()
 
-  set_log_level(options.verbose)
+  environment.set_log_level(options.verbose)
   logging.basicConfig(
       format='-- %(asctime)s %(module)s:%(lineno)d %(levelname)s %(message)s')
 
@@ -968,15 +968,6 @@ def get_log_level():
     return '1'
   else:
     return '2'
-
-
-def set_log_level(verbose):
-  level = logging.DEBUG
-  if verbose == 0:
-    level = logging.WARNING
-  elif verbose == 1:
-    level = logging.INFO
-  logging.getLogger().setLevel(level)
 
 
 # vtworker helpers
