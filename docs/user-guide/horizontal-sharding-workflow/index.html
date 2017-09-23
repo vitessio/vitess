@@ -332,9 +332,9 @@ from 1 shard &quot;0&quot; into 2 shards &quot;-80&quot; and &quot;80-&quot;.</p
 (<strong>Phase: CopySchemaShard</strong>) </li>
 <li> Copy the data with a batch process called <em>vtworker</em>
 (<strong>Phase: SplitClone</strong>).
-<a href="horizontal-sharding-workflow.html#details-in-splitclone-phase">more details</a></li>
+<a href="#details-in-splitclone-phase">more details</a></li>
 <li> Check filtered replication (<strong>Phase: WaitForFilteredReplication</strong>).
-<a href="horizontal-sharding-workflow.html#details-in-waitforfilteredreplication-phase">more details</a> </li>
+<a href="#details-in-waitforfilteredreplication-phase">more details</a></li>
 <li> Check copied data integrity using <em>vtworker</em> batch process in the mode
 to compare the source and destination data. (<strong>Phase: SplitDiff</strong>)</li>
 <li> Migrate all the serving rdonly tablets in the original shards.
@@ -343,7 +343,7 @@ to compare the source and destination data. (<strong>Phase: SplitDiff</strong>)<
 (<strong>Phase: MigrateServedTypeReplica</strong>)</li>
 <li> Migrate all the serving master tablets in the original shards.
 (<strong>Phase: MigrateServedTypeMaster</strong>)
-<a href="horizontal-sharding-workflow.html#details-in-migrateservedtypemaste-phase">more details</a> </li>
+<a href="#details-in-migrateservedtypemaste-phase">more details</a></li>
 </ol>
 
 <h2 id="prerequisites">Prerequisites</h2>
