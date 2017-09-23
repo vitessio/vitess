@@ -100,6 +100,7 @@ flush_logs_url = '/debug/flushlogs'
 # 4MB).
 grpc_max_message_size = 5 * 1024 * 1024
 
+
 def setup():
   try:
     os.makedirs(tmproot)
@@ -253,3 +254,12 @@ def create_webdriver():
     driver.set_window_position(0, 0)
     driver.set_window_size(1280, 1024)
   return driver
+
+
+def set_log_level(verbose):
+  level = logging.DEBUG
+  if verbose == 0:
+    level = logging.WARNING
+  elif verbose == 1:
+    level = logging.INFO
+  logging.getLogger().setLevel(level)
