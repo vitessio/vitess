@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 
 # Copyright 2017 Google Inc.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -142,7 +142,7 @@ def main(mod=None, test_options=None):
     test_options(parser)
   (options, args) = parser.parse_args()
 
-  set_log_level(options.verbose)
+  environment.set_log_level(options.verbose)
   logging.basicConfig(
       format='-- %(asctime)s %(module)s:%(lineno)d %(levelname)s %(message)s')
 
@@ -586,7 +586,8 @@ class VtGate(object):
 
     if protocols_flavor().vtgate_protocol() == 'grpc':
       args.extend(['-grpc_port', str(self.grpc_port)])
-      args.extend(['-grpc_max_message_size', str(environment.grpc_max_message_size)])
+      args.extend(['-grpc_max_message_size',
+                   str(environment.grpc_max_message_size)])
     if protocols_flavor().service_map():
       args.extend(['-service_map', ','.join(protocols_flavor().service_map())])
     if topo_impl:
@@ -968,15 +969,6 @@ def get_log_level():
     return '1'
   else:
     return '2'
-
-
-def set_log_level(verbose):
-  level = logging.DEBUG
-  if verbose == 0:
-    level = logging.WARNING
-  elif verbose == 1:
-    level = logging.INFO
-  logging.getLogger().setLevel(level)
 
 
 # vtworker helpers
