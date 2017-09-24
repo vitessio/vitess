@@ -273,7 +273,7 @@ any_command:
 
 semicolon_opt:
 /*empty*/ {}
-| ';' {}
+| ';' force_eof {}
 
 command:
   select_statement
