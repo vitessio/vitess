@@ -16,11 +16,14 @@ limitations under the License.
 
 package sqlparser
 
-import "strings"
-import "testing"
+import (
+	"io"
+	"strings"
+	"testing"
+)
 
-func TestValid(t *testing.T) {
-	validSQL := []struct {
+var (
+	validSQL = []struct {
 		input  string
 		output string
 	}{{
@@ -44,13 +47,13 @@ func TestValid(t *testing.T) {
 		input:  "select - -1 from t",
 		output: "select 1 from t",
 	}, {
-		input:  "select 1 from t // aa",
+		input:  "select 1 from t // aa\n",
 		output: "select 1 from t",
 	}, {
-		input:  "select 1 from t -- aa",
+		input:  "select 1 from t -- aa\n",
 		output: "select 1 from t",
 	}, {
-		input:  "select 1 from t # aa",
+		input:  "select 1 from t # aa\n",
 		output: "select 1 from t",
 	}, {
 		input:  "select 1 --aa\nfrom t",
@@ -892,7 +895,9 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
 	}}
+)
 
+func TestValid(t *testing.T) {
 	for _, tcase := range validSQL {
 		if tcase.output == "" {
 			tcase.output = tcase.input
@@ -913,6 +918,42 @@ func TestValid(t *testing.T) {
 		Walk(func(node SQLNode) (bool, error) {
 			return true, nil
 		}, tree)
+	}
+}
+
+func TestParseNext(t *testing.T) {
+
+	// Test only the first N queries, because after that we hit errors
+	// TODO Remove this limit
+	testLimit := 275
+
+	// Uses all the valid test cases concatenated together (reading one at a time).
+	var sql string
+	for _, tcase := range validSQL[:testLimit] {
+		sql += tcase.input + ";"
+	}
+
+	tokens := NewStringTokenizer(sql)
+	for i, tcase := range validSQL[:testLimit] {
+		want := tcase.output
+		if want == "" {
+			want = tcase.input
+		}
+
+		tree, err := ParseNext(tokens)
+		if err != nil {
+			t.Fatalf("[%d] input: %q, err: %q", i, tcase.input+";", err)
+			continue
+		}
+
+		if got := String(tree); got != want {
+			t.Fatalf("got: %q, want %q", got, want)
+		}
+	}
+
+	// Read one more and it should be EOF
+	if tree, err := ParseNext(tokens); err != io.EOF {
+		t.Errorf("ParseNext(tokens) = (%v, %v) want io.EOF", tree, err)
 	}
 }
 

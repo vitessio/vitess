@@ -41,6 +41,7 @@ type Tokenizer struct {
 	ParseTree     Statement
 	partialDDL    *DDL
 	nesting       int
+	multi         bool
 }
 
 // NewStringTokenizer creates a new Tokenizer for the
@@ -405,6 +406,8 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		return tkn.scanNumber(false)
 	case ch == ':':
 		return tkn.scanBindVar()
+	case ch == ';' && tkn.multi:
+		return 0, nil
 	default:
 		tkn.next()
 		switch ch {
@@ -744,6 +747,15 @@ func (tkn *Tokenizer) next() {
 		tkn.lastChar = uint16(ch)
 	}
 	tkn.Position++
+}
+
+// reset clears any internal state
+func (tkn *Tokenizer) reset() {
+	tkn.posVarIndex = 0
+	tkn.nesting = 0
+	//tkn.Position = 0
+	tkn.ForceEOF = false
+	tkn.lastChar = 0
 }
 
 func isLetter(ch uint16) bool {
