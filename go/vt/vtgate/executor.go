@@ -92,10 +92,10 @@ func NewExecutor(ctx context.Context, serv topo.SrvTopoServer, cell, statsName s
 	}
 	e.watchSrvVSchema(ctx, cell)
 	executorOnce.Do(func() {
-		stats.Publish("QueryCacheLength", stats.IntFunc(e.plans.Length))
-		stats.Publish("QueryCacheSize", stats.IntFunc(e.plans.Size))
-		stats.Publish("QueryCacheCapacity", stats.IntFunc(e.plans.Capacity))
-		stats.Publish("QueryCacheOldest", stats.StringFunc(func() string {
+		stats.Publish("QueryPlanCacheLength", stats.IntFunc(e.plans.Length))
+		stats.Publish("QueryPlanCacheSize", stats.IntFunc(e.plans.Size))
+		stats.Publish("QueryPlanCacheCapacity", stats.IntFunc(e.plans.Capacity))
+		stats.Publish("QueryPlanCacheOldest", stats.StringFunc(func() string {
 			return fmt.Sprintf("%v", e.plans.Oldest())
 		}))
 		http.Handle("/debug/query_plans", e)
