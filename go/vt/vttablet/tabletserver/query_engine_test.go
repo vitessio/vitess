@@ -95,7 +95,7 @@ func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
-	_, err := qe.GetPlan(ctx, logStats, "")
+	_, err := qe.GetPlan(ctx, logStats, "", false)
 	want := "syntax error"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("qe.GetPlan: %v, want %s", err, want)
@@ -131,7 +131,7 @@ func TestGetMessageStreamPlan(t *testing.T) {
 	}
 }
 
-func TestQueryCache(t *testing.T) {
+func TestQueryPlanCache(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	for query, result := range schematest.Queries() {
@@ -153,14 +153,14 @@ func TestQueryCache(t *testing.T) {
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
 	qe.SetQueryCacheCap(1)
-	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery)
+	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if firstPlan == nil {
 		t.Fatalf("plan should not be nil")
 	}
-	secondPlan, err := qe.GetPlan(ctx, logStats, secondQuery)
+	secondPlan, err := qe.GetPlan(ctx, logStats, secondQuery, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,6 +170,43 @@ func TestQueryCache(t *testing.T) {
 	expvar.Do(func(kv expvar.KeyValue) {
 		_ = kv.Value.String()
 	})
+	if qe.queries.Size() == 0 {
+		t.Fatalf("query plan cache should not be 0")
+	}
+	qe.ClearQueryPlanCache()
+}
+
+func TestNoQueryPlanCache(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	for query, result := range schematest.Queries() {
+		db.AddQuery(query, result)
+	}
+
+	firstQuery := "select * from test_table_01"
+	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
+	db.AddQuery("select * from test_table_02 where 1 != 1", &sqltypes.Result{})
+
+	qe := newTestQueryEngine(10, 10*time.Second, true)
+	testUtils := newTestUtils()
+	dbconfigs := testUtils.newDBConfigs(db)
+	qe.se.Open(db.ConnParams())
+	qe.Open(dbconfigs)
+	defer qe.Close()
+
+	ctx := context.Background()
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+	qe.SetQueryCacheCap(1)
+	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstPlan == nil {
+		t.Fatalf("plan should not be nil")
+	}
+	if qe.queries.Size() != 0 {
+		t.Fatalf("query plan cache should be 0")
+	}
 	qe.ClearQueryPlanCache()
 }
 
@@ -190,7 +227,7 @@ func TestStatsURL(t *testing.T) {
 	// warm up cache
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
-	qe.GetPlan(ctx, logStats, query)
+	qe.GetPlan(ctx, logStats, query, false)
 
 	request, _ := http.NewRequest("GET", "/debug/tablet_plans", nil)
 	response := httptest.NewRecorder()
