@@ -75,7 +75,7 @@ func TabletAliasUIDStr(ta *topodatapb.TabletAlias) string {
 func ParseTabletAlias(aliasStr string) (*topodatapb.TabletAlias, error) {
 	nameParts := strings.Split(aliasStr, "-")
 	if len(nameParts) != 2 {
-		return nil, fmt.Errorf("invalid tablet alias: %v", aliasStr)
+		return nil, fmt.Errorf("invalid tablet alias: %q, expecting format: %q", aliasStr, "<cell>-<uid>")
 	}
 	uid, err := ParseUID(nameParts[1])
 	if err != nil {
