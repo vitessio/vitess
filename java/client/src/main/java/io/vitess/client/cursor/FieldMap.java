@@ -57,16 +57,19 @@ public class FieldMap {
         labelMap.put(columnLabel, columnIndex);
       }
       String origName = field.getOrgName();
-      if (!nameMap.containsKey(origName)) {
+      if (origName != null && !"".equals(origName) && !nameMap.containsKey(origName)) {
         nameMap.put(origName, columnIndex);
       }
-      StringBuilder fullNameBuf = new StringBuilder();
-      fullNameBuf.append(field.getTableName());
-      fullNameBuf.append('.');
-      fullNameBuf.append(field.getName());
-      String fullName = fullNameBuf.toString();
-      if (!fullNameMap.containsKey(fullName)) {
-        fullNameMap.put(fullName, columnIndex);
+      String tableName = field.getTable();
+      if (tableName != null && !"".equals(tableName)) {
+        StringBuilder fullNameBuf = new StringBuilder();
+        fullNameBuf.append(tableName);
+        fullNameBuf.append('.');
+        fullNameBuf.append(field.getName());
+        String fullName = fullNameBuf.toString();
+        if (!fullNameMap.containsKey(fullName)) {
+          fullNameMap.put(fullName, columnIndex);
+        }
       }
       ++columnIndex;
     }
