@@ -345,9 +345,16 @@ func (sc *SlaveConnection) Close() {
 		log.Infof("closing slave socket to unblock reads")
 		sc.Conn.Close()
 
-		log.Infof("waiting for slave dump thread to end")
-		sc.cancel()
-		sc.wg.Wait()
+		// sc.cancel is set at the beginning of the StartBinlogDump*
+		// methods. If we error out before then, it's nil.
+		// Note we also may error out before adding 1 to sc.wg,
+		// but then the Wait() still works.
+		if sc.cancel != nil {
+			log.Infof("waiting for slave dump thread to end")
+			sc.cancel()
+			sc.wg.Wait()
+			sc.cancel = nil
+		}
 
 		log.Infof("closing slave MySQL client, recycling slaveID %v", sc.slaveID)
 		sc.Conn = nil
