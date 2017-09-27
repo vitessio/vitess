@@ -932,7 +932,24 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot start a new transaction in the scope of an existing one")
 	}
 
+	if tsv.enableHotRowProtection && asTransaction && len(queries) == 1 {
+		// Serialize transactions which target the same hot row range.
+		// NOTE: We put this intentionally at this place *before* tsv.startRequest()
+		// gets called below. Otherwise, the startRequest()/endRequest() section from
+		// below would overlap with the startRequest()/endRequest() section executed
+		// by tsv.beginWaitForSameRangeTransactions().
+		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, queries[0].Sql, queries[0].BindVariables)
+		if err != nil {
+			return nil, err
+		}
+		if txDone != nil {
+			defer txDone()
+		}
+	}
+
 	allowOnShutdown := (transactionID != 0)
+	// TODO(sougou): Convert startRequest/endRequest pattern to use wrapper
+	// function tsv.execRequest() instead.
 	if err = tsv.startRequest(ctx, target, false, allowOnShutdown); err != nil {
 		return nil, err
 	}
@@ -1068,6 +1085,8 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 
 // BeginExecuteBatch combines Begin and ExecuteBatch.
 func (tsv *TabletServer) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
+	// TODO(mberlin): Integrate hot row protection here as we did for BeginExecute()
+	// and ExecuteBatch(asTransaction=true).
 	transactionID, err := tsv.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, err
