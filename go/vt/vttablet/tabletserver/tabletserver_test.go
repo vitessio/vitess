@@ -1583,6 +1583,134 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	}
 }
 
+// TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction tests the same as
+// TestSerializeTransactionsSameRow but for the ExecuteBatch method with
+// asTransaction=true (i.e. vttablet wraps the query in a BEGIN/Query/COMMIT
+// sequence).
+// One subtle difference is that we have no control over the commit of tx2 and
+// therefore we cannot reproduce that tx2 is still pending after tx3 has
+// finished. Nonetheless, we check the overall serialization count and verify
+// that only tx1 and tx2, 2 transactions in total, are serialized.
+func TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction(t *testing.T) {
+	// This test runs three transaction in parallel:
+	// tx1 | tx2 | tx3
+	// However, tx1 and tx2 have the same WHERE clause (i.e. target the same row)
+	// and therefore tx2 cannot start until the first query of tx1 has finished.
+	// The actual execution looks like this:
+	// tx1 | tx3
+	// tx2
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.EnableHotRowProtection = true
+	config.HotRowProtectionConcurrentTransactions = 1
+	// Reduce the txpool to 2 because we should never consume more than two slots.
+	config.TransactionCap = 2
+	tsv := NewTabletServerWithNilTopoServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	if err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs)); err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	countStart := tabletenv.WaitStats.Counts()["TxSerializer"]
+
+	// Fake data.
+	q1 := "update test_table set name_string = 'tx1' where pk = :pk and name = :name"
+	q2 := "update test_table set name_string = 'tx2' where pk = :pk and name = :name"
+	q3 := "update test_table set name_string = 'tx3' where pk = :pk and name = :name"
+	// Every request needs their own bind variables to avoid data races.
+	bvTx1 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
+	}
+	bvTx2 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
+	}
+	bvTx3 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVariable(2),
+		"name": sqltypes.Int64BindVariable(1),
+	}
+
+	// Make sure that tx2 and tx3 start only after tx1 is running its Execute().
+	tx1Started := make(chan struct{})
+
+	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk in (1) /* _stream test_table (pk ) (1 ); */",
+		func() {
+			close(tx1Started)
+			if err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and name = 1", 2); err != nil {
+				t.Fatal(err)
+			}
+		})
+
+	// Run all three transactions.
+	ctx := context.Background()
+	wg := sync.WaitGroup{}
+
+	// tx1.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		results, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{{
+			Sql:           q1,
+			BindVariables: bvTx1,
+		}}, true /*asTransaction*/, 0 /*transactionID*/, nil /*options*/)
+		if err != nil {
+			t.Fatalf("failed to execute query: %s: %s", q1, err)
+		}
+		if len(results) != 1 || results[0].RowsAffected != 1 {
+			t.Fatalf("TabletServer.ExecuteBatch returned wrong results: %+v", results)
+		}
+	}()
+
+	// tx2.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		<-tx1Started
+		results, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{{
+			Sql:           q2,
+			BindVariables: bvTx2,
+		}}, true /*asTransaction*/, 0 /*transactionID*/, nil /*options*/)
+		if err != nil {
+			t.Fatalf("failed to execute query: %s: %s", q2, err)
+		}
+		if len(results) != 1 || results[0].RowsAffected != 1 {
+			t.Fatalf("TabletServer.ExecuteBatch returned wrong results: %+v", results)
+		}
+	}()
+
+	// tx3.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		<-tx1Started
+		results, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{{
+			Sql:           q3,
+			BindVariables: bvTx3,
+		}}, true /*asTransaction*/, 0 /*transactionID*/, nil /*options*/)
+		if err != nil {
+			t.Fatalf("failed to execute query: %s: %s", q3, err)
+		}
+		if len(results) != 1 || results[0].RowsAffected != 1 {
+			t.Fatalf("TabletServer.ExecuteBatch returned wrong results: %+v", results)
+		}
+	}()
+
+	wg.Wait()
+
+	got, ok := tabletenv.WaitStats.Counts()["TxSerializer"]
+	want := countStart + 1
+	if !ok || got != want {
+		t.Fatalf("only tx2 should have been serialized: ok? %v got: %v want: %v", ok, got, want)
+	}
+}
+
 func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 	// This test runs three transaction in parallel:
 	// tx1 | tx2 | tx3
@@ -1801,6 +1929,100 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 			t.Fatalf("tx2 should have failed because there are too many pending requests: %v", err)
 		}
 		// No commit necessary because the Begin failed.
+	}()
+
+	wg.Wait()
+
+	got, _ := tabletenv.WaitStats.Counts()["TxSerializer"]
+	want := countStart + 0
+	if got != want {
+		t.Fatalf("tx2 should have failed early and not tracked as serialized: got: %v want: %v", got, want)
+	}
+}
+
+// TestSerializeTransactionsSameRow_TooManyPendingRequests_ExecuteBatchAsTransaction
+// tests the same thing as TestSerializeTransactionsSameRow_TooManyPendingRequests
+// but for the ExecuteBatch method with asTransaction=true.
+// We have this test to verify that the error handling in ExecuteBatch() works
+// correctly for the hot row protection integration.
+func TestSerializeTransactionsSameRow_TooManyPendingRequests_ExecuteBatchAsTransaction(t *testing.T) {
+	// This test rejects queries if more than one transaction is currently in
+	// progress for the hot row i.e. we check that tx2 actually fails.
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.EnableHotRowProtection = true
+	config.HotRowProtectionMaxQueueSize = 1
+	config.HotRowProtectionConcurrentTransactions = 1
+	tsv := NewTabletServerWithNilTopoServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	if err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs)); err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	countStart := tabletenv.WaitStats.Counts()["TxSerializer"]
+
+	// Fake data.
+	q1 := "update test_table set name_string = 'tx1' where pk = :pk and name = :name"
+	q2 := "update test_table set name_string = 'tx2' where pk = :pk and name = :name"
+	// Every request needs their own bind variables to avoid data races.
+	bvTx1 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
+	}
+	bvTx2 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
+	}
+
+	// Make sure that tx2 starts only after tx1 is running its Execute().
+	tx1Started := make(chan struct{})
+	// Signal when tx2 is done.
+	tx2Failed := make(chan struct{})
+
+	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk in (1) /* _stream test_table (pk ) (1 ); */",
+		func() {
+			close(tx1Started)
+			<-tx2Failed
+		})
+
+	// Run the two transactions.
+	ctx := context.Background()
+	wg := sync.WaitGroup{}
+
+	// tx1.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		results, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{{
+			Sql:           q1,
+			BindVariables: bvTx1,
+		}}, true /*asTransaction*/, 0 /*transactionID*/, nil /*options*/)
+		if err != nil {
+			t.Fatalf("failed to execute query: %s: %s", q1, err)
+		}
+		if len(results) != 1 || results[0].RowsAffected != 1 {
+			t.Fatalf("TabletServer.ExecuteBatch returned wrong results: %+v", results)
+		}
+	}()
+
+	// tx2.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer close(tx2Failed)
+
+		<-tx1Started
+		results, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{{
+			Sql:           q2,
+			BindVariables: bvTx2,
+		}}, true /*asTransaction*/, 0 /*transactionID*/, nil /*options*/)
+		if err == nil || vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED || err.Error() != "hot row protection: too many queued transactions (1 >= 1) for the same row (table + WHERE clause: 'test_table where pk = 1 and name = 1')" {
+			t.Fatalf("tx2 should have failed because there are too many pending requests: %v results: %+v", err, results)
+		}
 	}()
 
 	wg.Wait()
