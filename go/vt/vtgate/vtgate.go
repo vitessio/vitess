@@ -499,7 +499,7 @@ handleError:
 func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(tabletType)
-	statsKey := []string{"ExecuteBatchShards", "", ltt}
+	statsKey := []string{"ExecuteBatchShards", unambiguousKeyspaceBSQ(queries), ltt}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	var qrs []sqltypes.Result
@@ -548,7 +548,7 @@ handleError:
 func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(tabletType)
-	statsKey := []string{"ExecuteBatchKeyspaceIds", "", ltt}
+	statsKey := []string{"ExecuteBatchKeyspaceIds", unambiguousKeyspaceBKSIQ(queries), ltt}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	var qrs []sqltypes.Result
@@ -1072,5 +1072,49 @@ func annotateBoundKeyspaceIDQueries(queries []*vtgatepb.BoundKeyspaceIdQuery) {
 func annotateBoundShardQueriesAsUnfriendly(queries []*vtgatepb.BoundShardQuery) {
 	for i, q := range queries {
 		queries[i].Query.Sql = sqlannotation.AnnotateIfDML(q.Query.Sql, nil)
+	}
+}
+
+// unambiguousKeyspaceBKSIQ is a helper function used in the
+// ExecuteBatchKeyspaceIds method to determine the "keyspace" label for the
+// stats reporting.
+// If all queries target the same keyspace, it returns that keyspace.
+// Otherwise it returns an empty string.
+func unambiguousKeyspaceBKSIQ(queries []*vtgatepb.BoundKeyspaceIdQuery) string {
+	switch len(queries) {
+	case 0:
+		return ""
+	case 1:
+		return queries[0].Keyspace
+	default:
+		keyspace := queries[0].Keyspace
+		for _, q := range queries[1:] {
+			if q.Keyspace != keyspace {
+				// Request targets at least two different keyspaces.
+				return ""
+			}
+		}
+		return keyspace
+	}
+}
+
+// unambiguousKeyspaceBSQ is the same as unambiguousKeyspaceBKSIQ but for the
+// ExecuteBatchShards method. We are intentionally duplicating the code here and
+// do not try to generalize it because this may be less performant.
+func unambiguousKeyspaceBSQ(queries []*vtgatepb.BoundShardQuery) string {
+	switch len(queries) {
+	case 0:
+		return ""
+	case 1:
+		return queries[0].Keyspace
+	default:
+		keyspace := queries[0].Keyspace
+		for _, q := range queries[1:] {
+			if q.Keyspace != keyspace {
+				// Request targets at least two different keyspaces.
+				return ""
+			}
+		}
+		return keyspace
 	}
 }

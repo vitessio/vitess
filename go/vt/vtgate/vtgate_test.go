@@ -793,6 +793,11 @@ func TestVTGateExecuteBatchShards(t *testing.T) {
 	if len(session.ShardSessions) != 2 {
 		t.Errorf("want 2, got %d", len(session.ShardSessions))
 	}
+
+	timingsCount := rpcVTGate.timings.Counts()["ExecuteBatchShards.TestVTGateExecuteBatchShards.master"]
+	if got, want := timingsCount, int64(2); got != want {
+		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
+	}
 }
 
 func TestVTGateExecuteBatchKeyspaceIds(t *testing.T) {
@@ -861,6 +866,11 @@ func TestVTGateExecuteBatchKeyspaceIds(t *testing.T) {
 		nil)
 	if len(session.ShardSessions) != 2 {
 		t.Errorf("want 2, got %d", len(session.ShardSessions))
+	}
+
+	timingsCount := rpcVTGate.timings.Counts()["ExecuteBatchKeyspaceIds.TestVTGateExecuteBatchKeyspaceIds.master"]
+	if got, want := timingsCount, int64(2); got != want {
+		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
 }
 
@@ -2144,6 +2154,10 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
 	}
+	statsKey := fmt.Sprintf("%s.%s.master.%v", "ExecuteBatchShards", KsTestUnsharded, vterrors.Code(err))
+	if got, want := errorCounts.Counts()[statsKey], int64(1); got != want {
+		t.Errorf("errorCounts not increased for '%s': got = %v, want = %v", statsKey, got, want)
+	}
 	for _, sbc := range sbcs {
 		after(sbc)
 	}
@@ -2175,12 +2189,16 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 		nil,
 		executeOptions)
 	if err == nil {
-		t.Errorf("error %v not propagated for ExecuteBatchShards", expected)
+		t.Errorf("error %v not propagated for ExecuteBatchKeyspaceIds", expected)
 	} else {
 		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
+	}
+	statsKey = fmt.Sprintf("%s.%s.master.%v", "ExecuteBatchKeyspaceIds", KsTestUnsharded, vterrors.Code(err))
+	if got, want := errorCounts.Counts()[statsKey], int64(1); got != want {
+		t.Errorf("errorCounts not increased for '%s': got = %v, want = %v", statsKey, got, want)
 	}
 	for _, sbc := range sbcs {
 		after(sbc)
