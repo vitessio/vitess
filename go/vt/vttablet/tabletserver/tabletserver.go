@@ -950,6 +950,10 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	allowOnShutdown := (transactionID != 0)
 	// TODO(sougou): Convert startRequest/endRequest pattern to use wrapper
 	// function tsv.execRequest() instead.
+	// Note that below we always return "err" right away and do not call
+	// tsv.convertAndLogError. That's because the methods which returned "err",
+	// e.g. tsv.Execute(), already called that function and therefore already
+	// converted and logged the error.
 	if err = tsv.startRequest(ctx, target, false, allowOnShutdown); err != nil {
 		return nil, err
 	}
@@ -959,7 +963,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	if asTransaction {
 		transactionID, err = tsv.Begin(ctx, target, options)
 		if err != nil {
-			return nil, tsv.convertAndLogError(ctx, "batch", nil, err, nil)
+			return nil, err
 		}
 		// If transaction was not committed by the end, it means
 		// that there was an error, roll it back.
@@ -973,14 +977,14 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	for _, bound := range queries {
 		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, transactionID, options)
 		if err != nil {
-			return nil, tsv.convertAndLogError(ctx, "batch", nil, err, nil)
+			return nil, err
 		}
 		results = append(results, *localReply)
 	}
 	if asTransaction {
 		if err = tsv.Commit(ctx, target, transactionID); err != nil {
 			transactionID = 0
-			return nil, tsv.convertAndLogError(ctx, "batch", nil, err, nil)
+			return nil, err
 		}
 		transactionID = 0
 	}
