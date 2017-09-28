@@ -428,6 +428,26 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("show databases:\n%+v, want\n%+v", qr, wantqr)
 	}
 
+	// Make sure it still works when one of the keyspaces is in a bad state
+	getSandbox("TestExecutor").SrvKeyspaceMustFail++
+	qr, err = executor.Execute(context.Background(), session, "show vitess_shards", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	// Just test for first & last.
+	qr.Rows = [][]sqltypes.Value{qr.Rows[0], qr.Rows[len(qr.Rows)-1]}
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Shards"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("TestSharded/-20"),
+			buildVarCharRow("TestXBadSharding/e0-"),
+		},
+		RowsAffected: 17,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show databases:\n%+v, want\n%+v", qr, wantqr)
+	}
+
 	session = &vtgatepb.Session{TargetString: KsTestUnsharded}
 	qr, err = executor.Execute(context.Background(), session, "show vschema_tables", nil)
 	if err != nil {

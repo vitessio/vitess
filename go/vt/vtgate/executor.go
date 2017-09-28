@@ -376,7 +376,9 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 		for _, keyspace := range keyspaces {
 			_, _, shards, err := getKeyspaceShards(ctx, e.serv, e.cell, keyspace, target.TabletType)
 			if err != nil {
-				return nil, err
+				// There might be a misconfigured keyspace or no shards in the keyspace.
+				// Skip any errors and move on.
+				continue
 			}
 
 			for _, shard := range shards {
