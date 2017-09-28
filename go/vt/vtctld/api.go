@@ -251,7 +251,12 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 		for _, keyspaceName := range keyspaceNamesList {
 			err := addSrvkeyspace(ctx, ts, cell, keyspaceName, srvKeyspaces)
 			if err != nil {
-				return nil, err
+				// If a keyspace is in the process of being set up, it exists
+				// in the list of keyspaces but GetSrvKeyspace fails
+				//
+				// Instead of returning this error, simply skip it in the
+				// loop so we still return the other valid keyspaces.
+				continue
 			}
 		}
 		return srvKeyspaces, nil
