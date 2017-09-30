@@ -30,7 +30,7 @@ func defaultTestOpts() *Options {
 	return &Options{
 		ReplicationMode: "ROW",
 		NumShards:       2,
-		Normalize:       false,
+		Normalize:       true,
 	}
 }
 
@@ -127,7 +127,7 @@ func TestOptions(t *testing.T) {
 	opts := &Options{
 		ReplicationMode: "STATEMENT",
 		NumShards:       4,
-		Normalize:       true,
+		Normalize:       false,
 	}
 
 	testExplain("options", opts, t)
