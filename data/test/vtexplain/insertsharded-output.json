@@ -320,14 +320,14 @@
                 }
             },
             {
-                "Original": "insert ignore into user(id, name, nickname) values (:vtg1, :vtg2, :vtg2)",
+                "Original": "insert ignore into user(id, name, nickname) values (:vtg1, :vtg2, :vtg3)",
                 "Instructions": {
                     "Opcode": "InsertShardedIgnore",
                     "Keyspace": {
                         "Name": "ks_sharded",
                         "Sharded": true
                     },
-                    "Query": "insert ignore into user(id, name, nickname) values (:_id0, :_name0, :vtg2)",
+                    "Query": "insert ignore into user(id, name, nickname) values (:_id0, :_name0, :vtg3)",
                     "Values": [
                         [
                             ":vtg1"
@@ -339,7 +339,7 @@
                     "Table": "user",
                     "Prefix": "insert ignore into user(id, name, nickname) values ",
                     "Mid": [
-                        "(:_id0, :_name0, :vtg2)"
+                        "(:_id0, :_name0, :vtg3)"
                     ]
                 }
             }
@@ -348,12 +348,13 @@
             "ks_sharded/-80": {
                 "TabletQueries": [
                     {
-                        "SQL": "insert ignore into user(id, name, nickname) values (:_id0, :_name0, :vtg2) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+                        "SQL": "insert ignore into user(id, name, nickname) values (:_id0, :_name0, :vtg3) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
                         "BindVars": {
                             "_id0": "2",
                             "_name0": "'bob'",
                             "vtg1": "2",
-                            "vtg2": "'bob'"
+                            "vtg2": "'bob'",
+                            "vtg3": "'bob'"
                         }
                     }
                 ],
@@ -562,14 +563,14 @@
                 }
             },
             {
-                "Original": "insert into user(id, name, nickname) values (:vtg1, :vtg2, :vtg3) on duplicate key update nickname = :vtg3",
+                "Original": "insert into user(id, name, nickname) values (:vtg1, :vtg2, :vtg3) on duplicate key update nickname = :vtg4",
                 "Instructions": {
                     "Opcode": "InsertShardedIgnore",
                     "Keyspace": {
                         "Name": "ks_sharded",
                         "Sharded": true
                     },
-                    "Query": "insert into user(id, name, nickname) values (:_id0, :_name0, :vtg3) on duplicate key update nickname = :vtg3",
+                    "Query": "insert into user(id, name, nickname) values (:_id0, :_name0, :vtg3) on duplicate key update nickname = :vtg4",
                     "Values": [
                         [
                             ":vtg1"
@@ -583,7 +584,7 @@
                     "Mid": [
                         "(:_id0, :_name0, :vtg3)"
                     ],
-                    "Suffix": " on duplicate key update nickname = :vtg3"
+                    "Suffix": " on duplicate key update nickname = :vtg4"
                 }
             }
         ],
@@ -591,13 +592,14 @@
             "ks_sharded/-80": {
                 "TabletQueries": [
                     {
-                        "SQL": "insert into user(id, name, nickname) values (:_id0, :_name0, :vtg3) on duplicate key update nickname = :vtg3 /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+                        "SQL": "insert into user(id, name, nickname) values (:_id0, :_name0, :vtg3) on duplicate key update nickname = :vtg4 /* vtgate:: keyspace_id:06e7ea22ce92708f */",
                         "BindVars": {
                             "_id0": "2",
                             "_name0": "'bob'",
                             "vtg1": "2",
                             "vtg2": "'bob'",
-                            "vtg3": "'bobby'"
+                            "vtg3": "'bobby'",
+                            "vtg4": "'bobby'"
                         }
                     }
                 ],
