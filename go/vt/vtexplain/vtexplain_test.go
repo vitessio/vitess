@@ -123,6 +123,14 @@ func TestInsertSharded(t *testing.T) {
 	testExplain("insertsharded", defaultTestOpts(), t)
 }
 
+func TestUpdateSharded(t *testing.T) {
+	testExplain("updatesharded", defaultTestOpts(), t)
+}
+
+func TestDeleteSharded(t *testing.T) {
+	testExplain("deletesharded", defaultTestOpts(), t)
+}
+
 func TestOptions(t *testing.T) {
 	opts := &Options{
 		ReplicationMode: "STATEMENT",

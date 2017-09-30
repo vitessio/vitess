@@ -1,0 +1,18 @@
+----------------------------------------------------------------------
+delete from user where id=10
+
+[ks_sharded/-80]:
+select name from user where 1 != 1
+begin
+select name from user where id = 10 limit 10001 for update
+commit
+begin
+delete from user where id in (10)
+commit
+
+[ks_sharded/80-]:
+begin
+delete from name_user_map where (name = 'name_val_1' and user_id = 10)
+commit
+
+----------------------------------------------------------------------
