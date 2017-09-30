@@ -86,6 +86,9 @@ func (nz *normalizer) WalkSelect(node SQLNode) (bool, error) {
 
 func (nz *normalizer) convertSQLValDedup(node *SQLVal) {
 	// If value is too long, don't dedup.
+	// Such values are most likely not for vindexes.
+	// We save a lot of CPU because we avoid building
+	// the key for them.
 	if len(node.Val) > 256 {
 		nz.convertSQLVal(node)
 		return
@@ -140,12 +143,9 @@ func (nz *normalizer) convertSQLVal(node *SQLVal) {
 // and iterate on converting each individual value into separate
 // bind vars.
 func (nz *normalizer) convertComparison(node *ComparisonExpr) {
-	switch node.Operator {
-	case InStr, NotInStr:
-	default:
+	if node.Operator != InStr && node.Operator != NotInStr {
 		return
 	}
-	// It's either IN or NOT IN.
 	tupleVals, ok := node.Right.(ValTuple)
 	if !ok {
 		return
