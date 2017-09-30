@@ -149,7 +149,10 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		case planbuilder.PlanPassSelect:
 			return qre.execSelect()
 		case planbuilder.PlanSelectLock:
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "disallowed outside transaction")
+			if false || !qre.tsv.qe.autoCommit.Get() {
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "disallowed outside transaction")
+			}
+			return qre.execDmlAutoCommit()
 		case planbuilder.PlanSet:
 			return qre.execSet()
 		case planbuilder.PlanOtherRead:
@@ -244,6 +247,8 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error
 			reply, err = qre.execDMLSubquery(conn)
 		case planbuilder.PlanUpsertPK:
 			reply, err = qre.execUpsertPK(conn)
+		case planbuilder.PlanSelectLock:
+			return qre.execDirect(conn)
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported query: %s", qre.query)
 		}
