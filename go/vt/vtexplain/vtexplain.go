@@ -182,6 +182,7 @@ func Run(sql string) ([]*Explain, error) {
 		}
 
 		if sql != "" {
+			log.V(100).Infof("explain %s", sql)
 			e, err := explain(sql)
 			if err != nil {
 				return nil, err
