@@ -2,17 +2,15 @@
 delete from user where id=10
 
 [ks_sharded/-80]:
+begin
 select name from user where 1 != 1
-begin
 select name from user where id = 10 limit 10001 for update
-commit
-begin
-delete from user where id in (10)
+delete from user where id in (10) /* vtgate:: keyspace_id:594764e1a2b2d98e */
 commit
 
 [ks_sharded/80-]:
 begin
-delete from name_user_map where (name = 'name_val_1' and user_id = 10)
+delete from name_user_map where (name = 'name_val_1' and user_id = 10) /* vtgate:: keyspace_id:a6e89b54b129c33051b76db219595660 */
 commit
 
 ----------------------------------------------------------------------

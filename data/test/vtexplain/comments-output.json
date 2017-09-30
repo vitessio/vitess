@@ -20,7 +20,9 @@
                 "TabletQueries": [
                     {
                         "SQL": "select * from user",
-                        "BindVars": {}
+                        "BindVars": {
+                            "#maxLimit": "10001"
+                        }
                     }
                 ],
                 "MysqlQueries": [
@@ -32,7 +34,9 @@
                 "TabletQueries": [
                     {
                         "SQL": "select * from user",
-                        "BindVars": {}
+                        "BindVars": {
+                            "#maxLimit": "10001"
+                        }
                     }
                 ],
                 "MysqlQueries": [

@@ -20,7 +20,9 @@
                 "TabletQueries": [
                     {
                         "SQL": "select * from t1",
-                        "BindVars": {}
+                        "BindVars": {
+                            "#maxLimit": "10001"
+                        }
                     }
                 ],
                 "MysqlQueries": [
@@ -52,6 +54,7 @@
                     {
                         "SQL": "insert into t1(id, val) values (:vtg1, :vtg2)",
                         "BindVars": {
+                            "#maxLimit": "10001",
                             "vtg1": "1",
                             "vtg2": "2"
                         }
@@ -86,6 +89,7 @@
                     {
                         "SQL": "update t1 set val = :vtg1",
                         "BindVars": {
+                            "#maxLimit": "10001",
                             "vtg1": "10"
                         }
                     }
@@ -120,6 +124,7 @@
                     {
                         "SQL": "delete from t1 where id = :vtg1",
                         "BindVars": {
+                            "#maxLimit": "10001",
                             "vtg1": "100"
                         }
                     }
@@ -154,6 +159,7 @@
                     {
                         "SQL": "insert into t1(id, val) values (:vtg1, :vtg2) on duplicate key update val = :vtg3",
                         "BindVars": {
+                            "#maxLimit": "10001",
                             "vtg1": "1",
                             "vtg2": "2",
                             "vtg3": "3"
