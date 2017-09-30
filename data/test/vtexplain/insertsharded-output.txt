@@ -1,5 +1,5 @@
 ----------------------------------------------------------------------
-insert into user (id, name) values(1, "alice")
+insert into user (id, name) values(1, 'alice')
 
 [ks_sharded/-80]:
 begin
@@ -10,7 +10,7 @@ insert into user(id, name) values (1, 'alice')
 commit
 
 ----------------------------------------------------------------------
-insert into user (id, name) values(2, "bob")
+insert into user (id, name) values(2, 'bob')
 
 [ks_sharded/-80]:
 begin
@@ -23,7 +23,7 @@ insert into name_user_map(name, user_id) values ('bob', 2)
 commit
 
 ----------------------------------------------------------------------
-insert ignore into user (id, name) values(2, "bob")
+insert ignore into user (id, name) values(2, 'bob')
 
 [ks_sharded/-80]:
 begin
@@ -38,7 +38,21 @@ select name from name_user_map where 1 != 1
 select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
 
 ----------------------------------------------------------------------
-insert ignore into user (id, name) values(2, "bob"),(3, "charlie")
+insert ignore into user (id, name, nickname) values(2, 'bob', 'bob')
+
+[ks_sharded/-80]:
+begin
+insert ignore into user(id, name, nickname) values (2, 'bob', 'bob')
+commit
+
+[ks_sharded/80-]:
+begin
+insert ignore into name_user_map(name, user_id) values ('bob', 2)
+commit
+select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
+
+----------------------------------------------------------------------
+insert ignore into user (id, name) values(2, 'bob'),(3, 'charlie')
 
 [ks_sharded/-80]:
 begin
@@ -51,5 +65,52 @@ insert ignore into name_user_map(name, user_id) values ('bob', 2), ('charlie', 3
 commit
 select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
 select name from name_user_map where name = 'charlie' and user_id = 3 limit 10001
+
+----------------------------------------------------------------------
+insert into user (id, name, nickname) values(2, 'bob', 'bobby') on duplicate key update nickname='bobby'
+
+[ks_sharded/-80]:
+begin
+insert into user(id, name, nickname) values (2, 'bob', 'bobby') on duplicate key update nickname = 'bobby'
+commit
+
+[ks_sharded/80-]:
+begin
+insert ignore into name_user_map(name, user_id) values ('bob', 2)
+commit
+select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
+
+----------------------------------------------------------------------
+insert into user (id, name, nickname, address) values(2, 'bob', 'bobby', '123 main st') on duplicate key update nickname=values(nickname), address=values(address)
+
+[ks_sharded/-80]:
+begin
+insert into user(id, name, nickname, address) values (2, 'bob', 'bobby', '123 main st') on duplicate key update nickname = values(nickname), address = values(address)
+commit
+
+[ks_sharded/80-]:
+begin
+insert ignore into name_user_map(name, user_id) values ('bob', 2)
+commit
+select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
+
+----------------------------------------------------------------------
+insert into user (id, name, nickname, address) values(2, 'bob', 'bobby', '123 main st'), (3, 'jane', 'janie', '456 elm st')on duplicate key update nickname=values(nickname), address=values(address)
+
+[ks_sharded/-80]:
+begin
+insert ignore into name_user_map(name, user_id) values ('jane', 3)
+commit
+select name from name_user_map where 1 != 1
+select name from name_user_map where name = 'jane' and user_id = 3 limit 10001
+begin
+insert into user(id, name, nickname, address) values (2, 'bob', 'bobby', '123 main st'), (3, 'jane', 'janie', '456 elm st') on duplicate key update nickname = values(nickname), address = values(address)
+commit
+
+[ks_sharded/80-]:
+begin
+insert ignore into name_user_map(name, user_id) values ('bob', 2)
+commit
+select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
 
 ----------------------------------------------------------------------

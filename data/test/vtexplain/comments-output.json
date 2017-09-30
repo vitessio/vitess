@@ -3,7 +3,7 @@
         "SQL": "SELECT * from user",
         "Plans": [
             {
-                "Original": "SELECT * from user",
+                "Original": "select * from user",
                 "Instructions": {
                     "Opcode": "SelectScatter",
                     "Keyspace": {

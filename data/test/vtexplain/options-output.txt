@@ -1,5 +1,5 @@
 ----------------------------------------------------------------------
-select * from user where email="null@void.com"
+select * from user where email='null@void.com'
 
 [ks_sharded/-40]:
 select * from user where 1 != 1
@@ -33,7 +33,7 @@ select * from user where 1 != 1
 select * from user where id in (4, 6, 7, 8) limit 10001
 
 ----------------------------------------------------------------------
-insert into user (id, name) values(2, "bob")
+insert into user (id, name) values(2, 'bob')
 
 [ks_sharded/-40]:
 begin

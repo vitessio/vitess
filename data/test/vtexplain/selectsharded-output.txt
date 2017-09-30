@@ -39,3 +39,39 @@ select user_id from name_user_map where 1 != 1
 select user_id from name_user_map where name = 'bob' limit 10001
 
 ----------------------------------------------------------------------
+select * from user where name = 'bob' or nickname = 'bob'/* vindex lookup */
+
+[ks_sharded/-80]:
+select * from user where 1 != 1
+select * from user where (name = 'bob' or nickname = 'bob') limit 10001
+
+[ks_sharded/80-]:
+select * from user where 1 != 1
+select * from user where (name = 'bob' or nickname = 'bob') limit 10001
+
+----------------------------------------------------------------------
+select u.name, n.info from user u join name_info n on u.name = n.name /* join on varchar */
+
+[ks_sharded/-80]:
+select u.name from user as u where 1 != 1
+select u.name from user as u limit 10001
+
+[ks_sharded/80-]:
+select u.name from user as u where 1 != 1
+select u.name from user as u limit 10001
+select n.info from name_info as n where 1 != 1
+select n.info from name_info as n where n.name = 1 limit 10001
+select n.info from name_info as n where n.name = 1 limit 10001
+
+----------------------------------------------------------------------
+select m.id, m.song, e.extra from music m join music_extra e on m.id = e.id where m.user_id = 100 /* join on int */
+
+[ks_sharded/-80]:
+select e.extra from music_extra as e where 1 != 1
+select e.extra from music_extra as e where e.id = 1 limit 10001
+
+[ks_sharded/80-]:
+select m.id, m.song from music as m where 1 != 1
+select m.id, m.song from music as m where m.user_id = 100 limit 10001
+
+----------------------------------------------------------------------
