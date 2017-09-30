@@ -344,7 +344,13 @@ func (mm *messageManager) runSend() {
 			}
 			if mm.messagesPending {
 				// Trigger the poller to fetch more.
-				mm.pollerTicks.Trigger()
+				// Do this as a separate goroutine. Otherwise, this could cause
+				// the following deadlock:
+				// 1. runSend obtains a lock
+				// 2. Poller gets trigerred, and waits for lock.
+				// 3. runSend calls this function, but the trigger will hang because
+				// this function cannot return until poller returns.
+				go mm.pollerTicks.Trigger()
 			}
 			mm.cond.Wait()
 		}
