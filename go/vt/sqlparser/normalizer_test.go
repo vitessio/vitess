@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -80,6 +81,56 @@ func TestNormalize(t *testing.T) {
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.Int64BindVariable(1),
 			"bv2": sqltypes.BytesBindVariable([]byte("1")),
+		},
+	}, {
+		// val should not be reused for non-select statements
+		in:      "insert into a values(1, 1)",
+		outstmt: "insert into a values (:bv1, :bv2)",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.Int64BindVariable(1),
+			"bv2": sqltypes.Int64BindVariable(1),
+		},
+	}, {
+		// val should be reused only in subqueries of DMLs
+		in:      "update a set v1=(select 5 from t), v2=5, v3=(select 5 from t), v4=5",
+		outstmt: "update a set v1 = (select :bv1 from t), v2 = :bv2, v3 = (select :bv1 from t), v4 = :bv3",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.Int64BindVariable(5),
+			"bv2": sqltypes.Int64BindVariable(5),
+			"bv3": sqltypes.Int64BindVariable(5),
+		},
+	}, {
+		// list vars should work for DMLs also
+		in:      "update a set v1=5 where v2 in (1, 4, 5)",
+		outstmt: "update a set v1 = :bv1 where v2 in ::bv2",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.Int64BindVariable(5),
+			"bv2": sqltypes.TestBindVariable([]interface{}{1, 4, 5}),
+		},
+	}, {
+		// Hex value does not convert
+		in:      "select * from t where v1 = 0x1234",
+		outstmt: "select * from t where v1 = 0x1234",
+		outbv:   map[string]*querypb.BindVariable{},
+	}, {
+		// Hex value does not convert for DMLs
+		in:      "update a set v1 = 0x1234",
+		outstmt: "update a set v1 = 0x1234",
+		outbv:   map[string]*querypb.BindVariable{},
+	}, {
+		// Values up to len 256 will reuse.
+		in:      fmt.Sprintf("select * from t where v1 = '%256s' and v2 = '%256s'", "a", "a"),
+		outstmt: "select * from t where v1 = :bv1 and v2 = :bv1",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.BytesBindVariable([]byte(fmt.Sprintf("%256s", "a"))),
+		},
+	}, {
+		// Values greater than len 256 will not reuse.
+		in:      fmt.Sprintf("select * from t where v1 = '%257s' and v2 = '%257s'", "b", "b"),
+		outstmt: "select * from t where v1 = :bv1 and v2 = :bv2",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.BytesBindVariable([]byte(fmt.Sprintf("%257s", "b"))),
+			"bv2": sqltypes.BytesBindVariable([]byte(fmt.Sprintf("%257s", "b"))),
 		},
 	}, {
 		// bad int
