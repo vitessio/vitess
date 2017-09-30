@@ -39,3 +39,14 @@ select user_id from name_user_map where 1 != 1
 select user_id from name_user_map where name = 'bob' limit 10001
 
 ----------------------------------------------------------------------
+select * from user where name = 'bob' or nickname = 'bob'/* vindex lookup */
+
+[ks_sharded/-80]:
+select * from user where 1 != 1
+select * from user where (name = 'bob' or nickname = 'bob') limit 10001
+
+[ks_sharded/80-]:
+select * from user where 1 != 1
+select * from user where (name = 'bob' or nickname = 'bob') limit 10001
+
+----------------------------------------------------------------------
