@@ -38,20 +38,39 @@ import io.vitess.proto.Query.Field;
  */
 public class FieldMap {
   private final List<Field> fields;
-  private final Map<String, Integer> indexMap;
+  private final Map<String, Integer> labelMap;
+  private final Map<String, Integer> nameMap;
+  private final Map<String, Integer> fullNameMap;
 
   public FieldMap(Iterable<Field> fields) {
     this.fields = ImmutableList.copyOf(checkNotNull(fields));
 
-    indexMap = new CaseInsensitiveMap<String, Integer>();
+    labelMap = new CaseInsensitiveMap<String, Integer>();
+    nameMap = new CaseInsensitiveMap<String, Integer>();
+    fullNameMap = new CaseInsensitiveMap<String, Integer>();
     // columnIndex is 1-based.
     int columnIndex = 1;
     for (Field field : this.fields) {
-      String columnLabel = field.getName();
       // If multiple columns have the same name,
       // prefer the earlier one as JDBC ResultSet does.
-      if (!indexMap.containsKey(columnLabel)) {
-        indexMap.put(columnLabel, columnIndex);
+      String columnLabel = field.getName();
+      if (!labelMap.containsKey(columnLabel)) {
+        labelMap.put(columnLabel, columnIndex);
+      }
+      String origName = field.getOrgName();
+      if (origName != null && !"".equals(origName) && !nameMap.containsKey(origName)) {
+        nameMap.put(origName, columnIndex);
+      }
+      String tableName = field.getTable();
+      if (tableName != null && !"".equals(tableName)) {
+        StringBuilder fullNameBuf = new StringBuilder();
+        fullNameBuf.append(tableName);
+        fullNameBuf.append('.');
+        fullNameBuf.append(field.getName());
+        String fullName = fullNameBuf.toString();
+        if (!fullNameMap.containsKey(fullName)) {
+          fullNameMap.put(fullName, columnIndex);
+        }
       }
       ++columnIndex;
     }
@@ -82,6 +101,13 @@ public class FieldMap {
    */
   @Nullable
   public Integer getIndex(String columnLabel) {
-    return indexMap.get(columnLabel);
+    Integer index = labelMap.get(columnLabel);
+    if (index == null) {
+      index = nameMap.get(columnLabel);
+    }
+    if (index == null) {
+      index = fullNameMap.get(columnLabel);
+    }
+    return index;
   }
 }
