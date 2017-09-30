@@ -21,6 +21,7 @@ import com.google.protobuf.ByteString;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Date;
+import java.sql.SQLDataException;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.util.Arrays;
@@ -51,6 +52,26 @@ public class CursorTest {
       Assert.assertEquals(1, cursor.findColumn("col1")); // should return first col1
       Assert.assertEquals(2, cursor.findColumn("Col2")); // should be case-insensitive
       Assert.assertEquals(4, cursor.findColumn("col4")); // index should skip over duplicate
+    }
+  }
+
+  @Test
+  public void testFindColumnAlternateIndexes() throws Exception {
+    try (Cursor cursor = new SimpleCursor(
+        QueryResult.newBuilder().addFields(Field.newBuilder().setName("col1").setTable("Table1").build())
+        .addFields(Field.newBuilder().setName("myAlias").setOrgName("boringColName").setTable("Table2").build())
+        .build())) {
+      Assert.assertEquals(1, cursor.findColumn("Table1.col1"));
+      Assert.assertEquals(1, cursor.findColumn("Table1.Col1"));
+      Assert.assertEquals(2, cursor.findColumn("myAlias"));
+      Assert.assertEquals(2, cursor.findColumn("Table2.myAlias"));
+      Assert.assertEquals(2, cursor.findColumn("boringColName"));
+      try {
+        int idx = cursor.findColumn("Table2.boringColName"); // don't do what mysql-connector-j doesn't do
+        Assert.fail("no exception thrown for findColumn(\"Table2.boringColName\")");
+      } catch (Exception ex) {
+        Assert.assertEquals(SQLDataException.class, ex.getClass());
+      }
     }
   }
 
