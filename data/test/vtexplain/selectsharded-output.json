@@ -148,7 +148,7 @@
             {
                 "Original": "select * from user where name = :vtg1",
                 "Instructions": {
-                    "Opcode": "SelectEqual",
+                    "Opcode": "SelectEqualUnique",
                     "Keyspace": {
                         "Name": "ks_sharded",
                         "Sharded": true
@@ -241,10 +241,10 @@
         }
     },
     {
-        "SQL": "select u.name, n.info from user u join name_info n on u.name = n.name /* join on varchar */",
+        "SQL": "select u.id, u.name, u.nickname, n.info from user u join name_info n on u.name = n.name /* join on varchar */",
         "Plans": [
             {
-                "Original": "select u.name, n.info from user as u join name_info as n on u.name = n.name",
+                "Original": "select u.id, u.name, u.nickname, n.info from user as u join name_info as n on u.name = n.name",
                 "Instructions": {
                     "Opcode": "Join",
                     "Left": {
@@ -253,8 +253,8 @@
                             "Name": "ks_sharded",
                             "Sharded": true
                         },
-                        "Query": "select u.name from user as u",
-                        "FieldQuery": "select u.name from user as u where 1 != 1"
+                        "Query": "select u.id, u.name, u.nickname from user as u",
+                        "FieldQuery": "select u.id, u.name, u.nickname from user as u where 1 != 1"
                     },
                     "Right": {
                         "Opcode": "SelectEqualUnique",
@@ -274,10 +274,12 @@
                     },
                     "Cols": [
                         -1,
+                        -2,
+                        -3,
                         1
                     ],
                     "Vars": {
-                        "u_name": 0
+                        "u_name": 1
                     }
                 }
             }
@@ -286,40 +288,40 @@
             "ks_sharded/-80": {
                 "TabletQueries": [
                     {
-                        "SQL": "select u.name from user as u /* join on varchar */",
+                        "SQL": "select u.id, u.name, u.nickname from user as u /* join on varchar */",
                         "BindVars": {}
+                    },
+                    {
+                        "SQL": "select n.info from name_info as n where n.name = :u_name /* join on varchar */",
+                        "BindVars": {
+                            "u_name": "'name_val_2'"
+                        }
+                    },
+                    {
+                        "SQL": "select n.info from name_info as n where n.name = :u_name /* join on varchar */",
+                        "BindVars": {
+                            "u_name": "'name_val_2'"
+                        }
                     }
                 ],
                 "MysqlQueries": [
-                    "select u.name from user as u where 1 != 1",
-                    "select u.name from user as u limit 10001"
+                    "select u.id, u.name, u.nickname from user as u where 1 != 1",
+                    "select u.id, u.name, u.nickname from user as u limit 10001",
+                    "select n.info from name_info as n where 1 != 1",
+                    "select n.info from name_info as n where n.name = 'name_val_2' limit 10001",
+                    "select n.info from name_info as n where n.name = 'name_val_2' limit 10001"
                 ]
             },
             "ks_sharded/80-": {
                 "TabletQueries": [
                     {
-                        "SQL": "select u.name from user as u /* join on varchar */",
+                        "SQL": "select u.id, u.name, u.nickname from user as u /* join on varchar */",
                         "BindVars": {}
-                    },
-                    {
-                        "SQL": "select n.info from name_info as n where n.name = :u_name /* join on varchar */",
-                        "BindVars": {
-                            "u_name": "1"
-                        }
-                    },
-                    {
-                        "SQL": "select n.info from name_info as n where n.name = :u_name /* join on varchar */",
-                        "BindVars": {
-                            "u_name": "1"
-                        }
                     }
                 ],
                 "MysqlQueries": [
-                    "select u.name from user as u where 1 != 1",
-                    "select u.name from user as u limit 10001",
-                    "select n.info from name_info as n where 1 != 1",
-                    "select n.info from name_info as n where n.name = 1 limit 10001",
-                    "select n.info from name_info as n where n.name = 1 limit 10001"
+                    "select u.id, u.name, u.nickname from user as u where 1 != 1",
+                    "select u.id, u.name, u.nickname from user as u limit 10001"
                 ]
             }
         }
@@ -399,6 +401,269 @@
                 "MysqlQueries": [
                     "select m.id, m.song from music as m where 1 != 1",
                     "select m.id, m.song from music as m where m.user_id = 100 limit 10001"
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "select count(*) from user where id = 1 /* point aggregate */",
+        "Plans": [
+            {
+                "Original": "select count(*) from user where id = :vtg1",
+                "Instructions": {
+                    "Opcode": "SelectEqualUnique",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "select count(*) from user where id = :vtg1",
+                    "FieldQuery": "select count(*) from user where 1 != 1",
+                    "Vindex": "hash",
+                    "Values": [
+                        ":vtg1"
+                    ]
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-80": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select count(*) from user where id = :vtg1 /* point aggregate */",
+                        "BindVars": {
+                            "vtg1": "1"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    "select count(*) from user where 1 != 1",
+                    "select count(*) from user where id = 1 limit 10001"
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "select count(*) from user where name in ('alice','bob') /* scatter aggregate */",
+        "Plans": [
+            {
+                "Original": "select user_id from name_user_map where name = :name",
+                "Instructions": {
+                    "Opcode": "SelectEqualUnique",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "select user_id from name_user_map where name = :name",
+                    "FieldQuery": "select user_id from name_user_map where 1 != 1",
+                    "Vindex": "md5",
+                    "Values": [
+                        ":name"
+                    ]
+                }
+            },
+            {
+                "Original": "select count(*) from user where name in ::vtg1",
+                "Instructions": {
+                    "Aggregates": [
+                        {
+                            "Opcode": "count",
+                            "Col": 0
+                        }
+                    ],
+                    "Keys": null,
+                    "Input": {
+                        "Opcode": "SelectIN",
+                        "Keyspace": {
+                            "Name": "ks_sharded",
+                            "Sharded": true
+                        },
+                        "Query": "select count(*) from user where name in ::__vals",
+                        "FieldQuery": "select count(*) from user where 1 != 1",
+                        "Vindex": "name_user_map",
+                        "Values": [
+                            "::vtg1"
+                        ]
+                    }
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-80": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select user_id from name_user_map where name = :name /* scatter aggregate */",
+                        "BindVars": {
+                            "name": "'alice'"
+                        }
+                    },
+                    {
+                        "SQL": "select count(*) from user where name in ::__vals /* scatter aggregate */",
+                        "BindVars": {
+                            "__vals": "('alice', 'bob')",
+                            "vtg1": "('alice', 'bob')"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    "select user_id from name_user_map where 1 != 1",
+                    "select user_id from name_user_map where name = 'alice' limit 10001",
+                    "select count(*) from user where 1 != 1",
+                    "select count(*) from user where name in ('alice', 'bob') limit 10001"
+                ]
+            },
+            "ks_sharded/80-": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select user_id from name_user_map where name = :name /* scatter aggregate */",
+                        "BindVars": {
+                            "name": "'bob'"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    "select user_id from name_user_map where 1 != 1",
+                    "select user_id from name_user_map where name = 'bob' limit 10001"
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "select name, count(*) from user group by name /* scatter aggregate */",
+        "Plans": [
+            {
+                "Original": "select name, count(*) from user group by name",
+                "Instructions": {
+                    "Opcode": "SelectScatter",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "select name, count(*) from user group by name",
+                    "FieldQuery": "select name, count(*) from user where 1 != 1 group by name"
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-80": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select name, count(*) from user group by name /* scatter aggregate */",
+                        "BindVars": {}
+                    }
+                ],
+                "MysqlQueries": [
+                    "select name, count(*) from user where 1 != 1 group by name",
+                    "select name, count(*) from user group by name limit 10001"
+                ]
+            },
+            "ks_sharded/80-": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select name, count(*) from user group by name /* scatter aggregate */",
+                        "BindVars": {}
+                    }
+                ],
+                "MysqlQueries": [
+                    "select name, count(*) from user where 1 != 1 group by name",
+                    "select name, count(*) from user group by name limit 10001"
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "select 1, \"hello\", 3.14 from user limit 10 /* select constant sql values */",
+        "Plans": [
+            {
+                "Original": "select :vtg1, :vtg2, :vtg3 from user limit :vtg4",
+                "Instructions": {
+                    "Opcode": "Limit",
+                    "Count": ":vtg4",
+                    "Input": {
+                        "Opcode": "SelectScatter",
+                        "Keyspace": {
+                            "Name": "ks_sharded",
+                            "Sharded": true
+                        },
+                        "Query": "select :vtg1, :vtg2, :vtg3 from user limit :vtg4",
+                        "FieldQuery": "select :vtg1, :vtg2, :vtg3 from user where 1 != 1"
+                    }
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-80": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select :vtg1, :vtg2, :vtg3 from user limit :vtg4 /* select constant sql values */",
+                        "BindVars": {
+                            "vtg1": "1",
+                            "vtg2": "'hello'",
+                            "vtg3": "3.14",
+                            "vtg4": "10"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    "select 1, 'hello', 3.14 from user limit 10"
+                ]
+            },
+            "ks_sharded/80-": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select :vtg1, :vtg2, :vtg3 from user limit :vtg4 /* select constant sql values */",
+                        "BindVars": {
+                            "vtg1": "1",
+                            "vtg2": "'hello'",
+                            "vtg3": "3.14",
+                            "vtg4": "10"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    "select 1, 'hello', 3.14 from user limit 10"
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "select * from (select id from user) s /* scatter paren select */",
+        "Plans": [
+            {
+                "Original": "select * from (select id from user) as s",
+                "Instructions": {
+                    "Opcode": "SelectScatter",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "select * from (select id from user) as s",
+                    "FieldQuery": "select * from (select id from user where 1 != 1) as s where 1 != 1"
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-80": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select * from (select id from user) as s /* scatter paren select */",
+                        "BindVars": {}
+                    }
+                ],
+                "MysqlQueries": [
+                    "select * from (select id from user where 1 != 1) as s where 1 != 1",
+                    "select * from (select id from user) as s limit 10001"
+                ]
+            },
+            "ks_sharded/80-": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select * from (select id from user) as s /* scatter paren select */",
+                        "BindVars": {}
+                    }
+                ],
+                "MysqlQueries": [
+                    "select * from (select id from user where 1 != 1) as s where 1 != 1",
+                    "select * from (select id from user) as s limit 10001"
                 ]
             }
         }

@@ -19,7 +19,7 @@
 				}
 			},
 			"name_user_map": {
-				"type": "lookup_hash",
+				"type": "lookup_hash_unique",
 				"owner": "user",
 				"params": {
 					"table": "name_user_map",
