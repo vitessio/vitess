@@ -580,7 +580,7 @@ func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []
 			return 0, err
 		}
 		for i, ksid := range ksids {
-			if len(ksid) == 0 {
+			if ksid == nil {
 				continue
 			}
 			shard, err := getShardForKeyspaceID(allShards, ksid)

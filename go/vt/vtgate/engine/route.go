@@ -579,7 +579,7 @@ func (route *Route) resolveShards(vcursor VCursor, bindVars map[string]*querypb.
 			return "", nil, err
 		}
 		for i, ksid := range ksids {
-			if len(ksid) == 0 {
+			if ksid == nil {
 				continue
 			}
 			shard, err := vcursor.GetShardForKeyspaceID(allShards, ksid)
@@ -619,7 +619,7 @@ func (route *Route) resolveSingleShard(vcursor VCursor, bindVars map[string]*que
 		return "", "", nil, err
 	}
 	ksid = ksids[0]
-	if len(ksid) == 0 {
+	if ksid == nil {
 		return "", "", ksid, nil
 	}
 	shard, err = vcursor.GetShardForKeyspaceID(allShards, ksid)
