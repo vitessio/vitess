@@ -144,10 +144,11 @@ func (fhc *FakeHealthCheck) Reset() {
 	fhc.items = make(map[string]*fhcItem)
 }
 
-// AddTestTablet inserts a fake entry into FakeHealthCheck.
+// AddFakeTablet inserts a fake entry into FakeHealthCheck.
 // The Tablet can be talked to using the provided connection.
 // The Listener is called, as if AddTablet had been called.
-func (fhc *FakeHealthCheck) AddTestTablet(cell, host string, port int32, keyspace, shard string, tabletType topodatapb.TabletType, serving bool, reparentTS int64, err error) *sandboxconn.SandboxConn {
+// For flexibility the connection is created via a connFactory callback
+func (fhc *FakeHealthCheck) AddFakeTablet(cell, host string, port int32, keyspace, shard string, tabletType topodatapb.TabletType, serving bool, reparentTS int64, err error, connFactory func(*topodatapb.Tablet) queryservice.QueryService) queryservice.QueryService {
 	t := topo.NewTablet(0, cell, host)
 	t.Keyspace = keyspace
 	t.Shard = shard
@@ -177,13 +178,22 @@ func (fhc *FakeHealthCheck) AddTestTablet(cell, host string, port int32, keyspac
 	item.ts.TabletExternallyReparentedTimestamp = reparentTS
 	item.ts.Stats = &querypb.RealtimeStats{}
 	item.ts.LastError = err
-	conn := sandboxconn.NewSandboxConn(t)
+	conn := connFactory(t)
 	item.conn = conn
 
 	if fhc.listener != nil {
 		fhc.listener.StatsUpdate(item.ts)
 	}
 	return conn
+}
+
+// AddTestTablet adds a fake tablet for tests using the SandboxConn and returns
+// the fake connection
+func (fhc *FakeHealthCheck) AddTestTablet(cell, host string, port int32, keyspace, shard string, tabletType topodatapb.TabletType, serving bool, reparentTS int64, err error) *sandboxconn.SandboxConn {
+	conn := fhc.AddFakeTablet(cell, host, port, keyspace, shard, tabletType, serving, reparentTS, err, func(tablet *topodatapb.Tablet) queryservice.QueryService {
+		return sandboxconn.NewSandboxConn(tablet)
+	})
+	return conn.(*sandboxconn.SandboxConn)
 }
 
 // GetAllTablets returns all the tablets we have.
