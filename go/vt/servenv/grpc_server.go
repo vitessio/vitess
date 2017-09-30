@@ -143,6 +143,11 @@ func serveGRPC() {
 	}
 
 	// and serve on it
+	// NOTE: Before we call Serve(), all services must have registered themselves
+	//       with "GRPCServer". This is the case because go/vt/servenv/run.go
+	//       runs all OnRun() hooks after createGRPCServer() and before
+	//       serveGRPC(). If this was not the case, the binary would crash with
+	//       the error "grpc: Server.RegisterService after Server.Serve".
 	go GRPCServer.Serve(listener)
 
 	OnTermSync(func() {

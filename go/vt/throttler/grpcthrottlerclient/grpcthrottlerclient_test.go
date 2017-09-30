@@ -30,9 +30,8 @@ import (
 // TestThrottlerServer tests the gRPC implementation using a throttler client
 // and server.
 func TestThrottlerServer(t *testing.T) {
-	s, port := startGRPCServer(t)
 	// Use the global manager which is a singleton.
-	grpcthrottlerserver.StartServer(s, throttler.GlobalManager)
+	port := startGRPCServer(t, throttler.GlobalManager)
 
 	// Create a ThrottlerClient gRPC client to talk to the throttler.
 	client, err := factory(fmt.Sprintf("localhost:%v", port))
@@ -47,9 +46,8 @@ func TestThrottlerServer(t *testing.T) {
 // TestThrottlerServerPanics tests the panic handling of the gRPC throttler
 // server implementation.
 func TestThrottlerServerPanics(t *testing.T) {
-	s, port := startGRPCServer(t)
 	// For testing the panic handling, use a fake Manager instead.
-	grpcthrottlerserver.StartServer(s, &throttlerclienttest.FakeManager{})
+	port := startGRPCServer(t, &throttlerclienttest.FakeManager{})
 
 	// Create a ThrottlerClient gRPC client to talk to the throttler.
 	client, err := factory(fmt.Sprintf("localhost:%v", port))
@@ -61,15 +59,17 @@ func TestThrottlerServerPanics(t *testing.T) {
 	throttlerclienttest.TestSuitePanics(t, client)
 }
 
-func startGRPCServer(t *testing.T) (*grpc.Server, int) {
+func startGRPCServer(t *testing.T, m throttler.Manager) int {
 	// Listen on a random port.
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}
 
-	// Create a gRPC server and listen on the port.
 	s := grpc.NewServer()
+	grpcthrottlerserver.RegisterServer(s, m)
+	// Call Serve() after our service has been registered. Otherwise, the test
+	// will fail with the error "grpc: Server.RegisterService after Server.Serve".
 	go s.Serve(listener)
-	return s, listener.Addr().(*net.TCPAddr).Port
+	return listener.Addr().(*net.TCPAddr).Port
 }
