@@ -1,9 +1,9 @@
 [
     {
-        "SQL": "insert into user (id, name) values(1, \"alice\")",
+        "SQL": "insert into user (id, name) values(1, 'alice')",
         "Plans": [
             {
-                "Original": "insert into name_user_map(name, user_id) values(:name0, :user_id0)",
+                "Original": "insert into name_user_map(name, user_id) values (:name0, :user_id0)",
                 "Instructions": {
                     "Opcode": "InsertSharded",
                     "Keyspace": {
@@ -24,7 +24,7 @@
                 }
             },
             {
-                "Original": "insert into user (id, name) values(1, \"alice\")",
+                "Original": "insert into user(id, name) values (:vtg1, :vtg2)",
                 "Instructions": {
                     "Opcode": "InsertSharded",
                     "Keyspace": {
@@ -34,10 +34,10 @@
                     "Query": "insert into user(id, name) values (:_id0, :_name0)",
                     "Values": [
                         [
-                            1
+                            ":vtg1"
                         ],
                         [
-                            "alice"
+                            ":vtg2"
                         ]
                     ],
                     "Table": "user",
@@ -63,7 +63,9 @@
                         "SQL": "insert into user(id, name) values (:_id0, :_name0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
                         "BindVars": {
                             "_id0": "1",
-                            "_name0": "'alice'"
+                            "_name0": "'alice'",
+                            "vtg1": "1",
+                            "vtg2": "'alice'"
                         }
                     }
                 ],
@@ -79,10 +81,10 @@
         }
     },
     {
-        "SQL": "insert into user (id, name) values(2, \"bob\")",
+        "SQL": "insert into user (id, name) values(2, 'bob')",
         "Plans": [
             {
-                "Original": "insert into name_user_map(name, user_id) values(:name0, :user_id0)",
+                "Original": "insert into name_user_map(name, user_id) values (:name0, :user_id0)",
                 "Instructions": {
                     "Opcode": "InsertSharded",
                     "Keyspace": {
@@ -103,7 +105,7 @@
                 }
             },
             {
-                "Original": "insert into user (id, name) values(2, \"bob\")",
+                "Original": "insert into user(id, name) values (:vtg1, :vtg2)",
                 "Instructions": {
                     "Opcode": "InsertSharded",
                     "Keyspace": {
@@ -113,10 +115,10 @@
                     "Query": "insert into user(id, name) values (:_id0, :_name0)",
                     "Values": [
                         [
-                            2
+                            ":vtg1"
                         ],
                         [
-                            "bob"
+                            ":vtg2"
                         ]
                     ],
                     "Table": "user",
@@ -134,7 +136,9 @@
                         "SQL": "insert into user(id, name) values (:_id0, :_name0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
                         "BindVars": {
                             "_id0": "2",
-                            "_name0": "'bob'"
+                            "_name0": "'bob'",
+                            "vtg1": "2",
+                            "vtg2": "'bob'"
                         }
                     }
                 ],
@@ -164,7 +168,7 @@
         }
     },
     {
-        "SQL": "insert ignore into user (id, name) values(2, \"bob\")",
+        "SQL": "insert ignore into user (id, name) values(2, 'bob')",
         "Plans": [
             {
                 "Original": "select name from name_user_map where name = :name and user_id = :user_id",
@@ -183,7 +187,7 @@
                 }
             },
             {
-                "Original": "insert ignore into name_user_map(name, user_id) values(:name0, :user_id0)",
+                "Original": "insert ignore into name_user_map(name, user_id) values (:name0, :user_id0)",
                 "Instructions": {
                     "Opcode": "InsertShardedIgnore",
                     "Keyspace": {
@@ -204,7 +208,7 @@
                 }
             },
             {
-                "Original": "insert ignore into user (id, name) values(2, \"bob\")",
+                "Original": "insert ignore into user(id, name) values (:vtg1, :vtg2)",
                 "Instructions": {
                     "Opcode": "InsertShardedIgnore",
                     "Keyspace": {
@@ -214,10 +218,10 @@
                     "Query": "insert ignore into user(id, name) values (:_id0, :_name0)",
                     "Values": [
                         [
-                            2
+                            ":vtg1"
                         ],
                         [
-                            "bob"
+                            ":vtg2"
                         ]
                     ],
                     "Table": "user",
@@ -235,7 +239,9 @@
                         "SQL": "insert ignore into user(id, name) values (:_id0, :_name0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
                         "BindVars": {
                             "_id0": "2",
-                            "_name0": "'bob'"
+                            "_name0": "'bob'",
+                            "vtg1": "2",
+                            "vtg2": "'bob'"
                         }
                     }
                 ],
@@ -274,7 +280,7 @@
         }
     },
     {
-        "SQL": "insert ignore into user (id, name) values(2, \"bob\"),(3, \"charlie\")",
+        "SQL": "insert ignore into user (id, name, nickname) values(2, 'bob', 'bob')",
         "Plans": [
             {
                 "Original": "select name from name_user_map where name = :name and user_id = :user_id",
@@ -293,7 +299,118 @@
                 }
             },
             {
-                "Original": "insert ignore into name_user_map(name, user_id) values(:name0, :user_id0), (:name1, :user_id1)",
+                "Original": "insert ignore into name_user_map(name, user_id) values (:name0, :user_id0)",
+                "Instructions": {
+                    "Opcode": "InsertShardedIgnore",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0)",
+                    "Values": [
+                        [
+                            ":name0"
+                        ]
+                    ],
+                    "Table": "name_user_map",
+                    "Prefix": "insert ignore into name_user_map(name, user_id) values ",
+                    "Mid": [
+                        "(:_name0, :user_id0)"
+                    ]
+                }
+            },
+            {
+                "Original": "insert ignore into user(id, name, nickname) values (:vtg1, :vtg2, :vtg2)",
+                "Instructions": {
+                    "Opcode": "InsertShardedIgnore",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert ignore into user(id, name, nickname) values (:_id0, :_name0, :vtg2)",
+                    "Values": [
+                        [
+                            ":vtg1"
+                        ],
+                        [
+                            ":vtg2"
+                        ]
+                    ],
+                    "Table": "user",
+                    "Prefix": "insert ignore into user(id, name, nickname) values ",
+                    "Mid": [
+                        "(:_id0, :_name0, :vtg2)"
+                    ]
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-80": {
+                "TabletQueries": [
+                    {
+                        "SQL": "insert ignore into user(id, name, nickname) values (:_id0, :_name0, :vtg2) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+                        "BindVars": {
+                            "_id0": "2",
+                            "_name0": "'bob'",
+                            "vtg1": "2",
+                            "vtg2": "'bob'"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    "begin",
+                    "insert ignore into user(id, name, nickname) values (2, 'bob', 'bob')",
+                    "commit"
+                ]
+            },
+            "ks_sharded/80-": {
+                "TabletQueries": [
+                    {
+                        "SQL": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */",
+                        "BindVars": {
+                            "_name0": "'bob'",
+                            "name0": "'bob'",
+                            "user_id0": "2"
+                        }
+                    },
+                    {
+                        "SQL": "select name from name_user_map where name = :name and user_id = :user_id",
+                        "BindVars": {
+                            "name": "'bob'",
+                            "user_id": "2"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    "begin",
+                    "insert ignore into name_user_map(name, user_id) values ('bob', 2)",
+                    "commit",
+                    "select name from name_user_map where name = 'bob' and user_id = 2 limit 10001"
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "insert ignore into user (id, name) values(2, 'bob'),(3, 'charlie')",
+        "Plans": [
+            {
+                "Original": "select name from name_user_map where name = :name and user_id = :user_id",
+                "Instructions": {
+                    "Opcode": "SelectEqualUnique",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "select name from name_user_map where name = :name and user_id = :user_id",
+                    "FieldQuery": "select name from name_user_map where 1 != 1",
+                    "Vindex": "md5",
+                    "Values": [
+                        ":name"
+                    ]
+                }
+            },
+            {
+                "Original": "insert ignore into name_user_map(name, user_id) values (:name0, :user_id0), (:name1, :user_id1)",
                 "Instructions": {
                     "Opcode": "InsertShardedIgnore",
                     "Keyspace": {
@@ -316,7 +433,7 @@
                 }
             },
             {
-                "Original": "insert ignore into user (id, name) values(2, \"bob\"),(3, \"charlie\")",
+                "Original": "insert ignore into user(id, name) values (:vtg1, :vtg2), (:vtg3, :vtg4)",
                 "Instructions": {
                     "Opcode": "InsertShardedIgnore",
                     "Keyspace": {
@@ -326,12 +443,12 @@
                     "Query": "insert ignore into user(id, name) values (:_id0, :_name0), (:_id1, :_name1)",
                     "Values": [
                         [
-                            2,
-                            3
+                            ":vtg1",
+                            ":vtg3"
                         ],
                         [
-                            "bob",
-                            "charlie"
+                            ":vtg2",
+                            ":vtg4"
                         ]
                     ],
                     "Table": "user",
@@ -352,7 +469,11 @@
                             "_id0": "2",
                             "_id1": "3",
                             "_name0": "'bob'",
-                            "_name1": "'charlie'"
+                            "_name1": "'charlie'",
+                            "vtg1": "2",
+                            "vtg2": "'bob'",
+                            "vtg3": "3",
+                            "vtg4": "'charlie'"
                         }
                     }
                 ],
@@ -396,6 +517,384 @@
                     "commit",
                     "select name from name_user_map where name = 'bob' and user_id = 2 limit 10001",
                     "select name from name_user_map where name = 'charlie' and user_id = 3 limit 10001"
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "insert into user (id, name, nickname) values(2, 'bob', 'bobby') on duplicate key update nickname='bobby'",
+        "Plans": [
+            {
+                "Original": "select name from name_user_map where name = :name and user_id = :user_id",
+                "Instructions": {
+                    "Opcode": "SelectEqualUnique",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "select name from name_user_map where name = :name and user_id = :user_id",
+                    "FieldQuery": "select name from name_user_map where 1 != 1",
+                    "Vindex": "md5",
+                    "Values": [
+                        ":name"
+                    ]
+                }
+            },
+            {
+                "Original": "insert ignore into name_user_map(name, user_id) values (:name0, :user_id0)",
+                "Instructions": {
+                    "Opcode": "InsertShardedIgnore",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0)",
+                    "Values": [
+                        [
+                            ":name0"
+                        ]
+                    ],
+                    "Table": "name_user_map",
+                    "Prefix": "insert ignore into name_user_map(name, user_id) values ",
+                    "Mid": [
+                        "(:_name0, :user_id0)"
+                    ]
+                }
+            },
+            {
+                "Original": "insert into user(id, name, nickname) values (:vtg1, :vtg2, :vtg3) on duplicate key update nickname = :vtg3",
+                "Instructions": {
+                    "Opcode": "InsertShardedIgnore",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert into user(id, name, nickname) values (:_id0, :_name0, :vtg3) on duplicate key update nickname = :vtg3",
+                    "Values": [
+                        [
+                            ":vtg1"
+                        ],
+                        [
+                            ":vtg2"
+                        ]
+                    ],
+                    "Table": "user",
+                    "Prefix": "insert into user(id, name, nickname) values ",
+                    "Mid": [
+                        "(:_id0, :_name0, :vtg3)"
+                    ],
+                    "Suffix": " on duplicate key update nickname = :vtg3"
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-80": {
+                "TabletQueries": [
+                    {
+                        "SQL": "insert into user(id, name, nickname) values (:_id0, :_name0, :vtg3) on duplicate key update nickname = :vtg3 /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+                        "BindVars": {
+                            "_id0": "2",
+                            "_name0": "'bob'",
+                            "vtg1": "2",
+                            "vtg2": "'bob'",
+                            "vtg3": "'bobby'"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    "begin",
+                    "insert into user(id, name, nickname) values (2, 'bob', 'bobby') on duplicate key update nickname = 'bobby'",
+                    "commit"
+                ]
+            },
+            "ks_sharded/80-": {
+                "TabletQueries": [
+                    {
+                        "SQL": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */",
+                        "BindVars": {
+                            "_name0": "'bob'",
+                            "name0": "'bob'",
+                            "user_id0": "2"
+                        }
+                    },
+                    {
+                        "SQL": "select name from name_user_map where name = :name and user_id = :user_id",
+                        "BindVars": {
+                            "name": "'bob'",
+                            "user_id": "2"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    "begin",
+                    "insert ignore into name_user_map(name, user_id) values ('bob', 2)",
+                    "commit",
+                    "select name from name_user_map where name = 'bob' and user_id = 2 limit 10001"
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "insert into user (id, name, nickname, address) values(2, 'bob', 'bobby', '123 main st') on duplicate key update nickname=values(nickname), address=values(address)",
+        "Plans": [
+            {
+                "Original": "select name from name_user_map where name = :name and user_id = :user_id",
+                "Instructions": {
+                    "Opcode": "SelectEqualUnique",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "select name from name_user_map where name = :name and user_id = :user_id",
+                    "FieldQuery": "select name from name_user_map where 1 != 1",
+                    "Vindex": "md5",
+                    "Values": [
+                        ":name"
+                    ]
+                }
+            },
+            {
+                "Original": "insert ignore into name_user_map(name, user_id) values (:name0, :user_id0)",
+                "Instructions": {
+                    "Opcode": "InsertShardedIgnore",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0)",
+                    "Values": [
+                        [
+                            ":name0"
+                        ]
+                    ],
+                    "Table": "name_user_map",
+                    "Prefix": "insert ignore into name_user_map(name, user_id) values ",
+                    "Mid": [
+                        "(:_name0, :user_id0)"
+                    ]
+                }
+            },
+            {
+                "Original": "insert into user(id, name, nickname, address) values (:vtg1, :vtg2, :vtg3, :vtg4) on duplicate key update nickname = values(nickname), address = values(address)",
+                "Instructions": {
+                    "Opcode": "InsertShardedIgnore",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert into user(id, name, nickname, address) values (:_id0, :_name0, :vtg3, :vtg4) on duplicate key update nickname = values(nickname), address = values(address)",
+                    "Values": [
+                        [
+                            ":vtg1"
+                        ],
+                        [
+                            ":vtg2"
+                        ]
+                    ],
+                    "Table": "user",
+                    "Prefix": "insert into user(id, name, nickname, address) values ",
+                    "Mid": [
+                        "(:_id0, :_name0, :vtg3, :vtg4)"
+                    ],
+                    "Suffix": " on duplicate key update nickname = values(nickname), address = values(address)"
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-80": {
+                "TabletQueries": [
+                    {
+                        "SQL": "insert into user(id, name, nickname, address) values (:_id0, :_name0, :vtg3, :vtg4) on duplicate key update nickname = values(nickname), address = values(address) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+                        "BindVars": {
+                            "_id0": "2",
+                            "_name0": "'bob'",
+                            "vtg1": "2",
+                            "vtg2": "'bob'",
+                            "vtg3": "'bobby'",
+                            "vtg4": "'123 main st'"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    "begin",
+                    "insert into user(id, name, nickname, address) values (2, 'bob', 'bobby', '123 main st') on duplicate key update nickname = values(nickname), address = values(address)",
+                    "commit"
+                ]
+            },
+            "ks_sharded/80-": {
+                "TabletQueries": [
+                    {
+                        "SQL": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */",
+                        "BindVars": {
+                            "_name0": "'bob'",
+                            "name0": "'bob'",
+                            "user_id0": "2"
+                        }
+                    },
+                    {
+                        "SQL": "select name from name_user_map where name = :name and user_id = :user_id",
+                        "BindVars": {
+                            "name": "'bob'",
+                            "user_id": "2"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    "begin",
+                    "insert ignore into name_user_map(name, user_id) values ('bob', 2)",
+                    "commit",
+                    "select name from name_user_map where name = 'bob' and user_id = 2 limit 10001"
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "insert into user (id, name, nickname, address) values(2, 'bob', 'bobby', '123 main st'), (3, 'jane', 'janie', '456 elm st')on duplicate key update nickname=values(nickname), address=values(address)",
+        "Plans": [
+            {
+                "Original": "select name from name_user_map where name = :name and user_id = :user_id",
+                "Instructions": {
+                    "Opcode": "SelectEqualUnique",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "select name from name_user_map where name = :name and user_id = :user_id",
+                    "FieldQuery": "select name from name_user_map where 1 != 1",
+                    "Vindex": "md5",
+                    "Values": [
+                        ":name"
+                    ]
+                }
+            },
+            {
+                "Original": "insert ignore into name_user_map(name, user_id) values (:name0, :user_id0), (:name1, :user_id1)",
+                "Instructions": {
+                    "Opcode": "InsertShardedIgnore",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0), (:_name1, :user_id1)",
+                    "Values": [
+                        [
+                            ":name0",
+                            ":name1"
+                        ]
+                    ],
+                    "Table": "name_user_map",
+                    "Prefix": "insert ignore into name_user_map(name, user_id) values ",
+                    "Mid": [
+                        "(:_name0, :user_id0)",
+                        "(:_name1, :user_id1)"
+                    ]
+                }
+            },
+            {
+                "Original": "insert into user(id, name, nickname, address) values (:vtg1, :vtg2, :vtg3, :vtg4), (:vtg5, :vtg6, :vtg7, :vtg8) on duplicate key update nickname = values(nickname), address = values(address)",
+                "Instructions": {
+                    "Opcode": "InsertShardedIgnore",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert into user(id, name, nickname, address) values (:_id0, :_name0, :vtg3, :vtg4), (:_id1, :_name1, :vtg7, :vtg8) on duplicate key update nickname = values(nickname), address = values(address)",
+                    "Values": [
+                        [
+                            ":vtg1",
+                            ":vtg5"
+                        ],
+                        [
+                            ":vtg2",
+                            ":vtg6"
+                        ]
+                    ],
+                    "Table": "user",
+                    "Prefix": "insert into user(id, name, nickname, address) values ",
+                    "Mid": [
+                        "(:_id0, :_name0, :vtg3, :vtg4)",
+                        "(:_id1, :_name1, :vtg7, :vtg8)"
+                    ],
+                    "Suffix": " on duplicate key update nickname = values(nickname), address = values(address)"
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-80": {
+                "TabletQueries": [
+                    {
+                        "SQL": "insert ignore into name_user_map(name, user_id) values (:_name1, :user_id1) /* vtgate:: keyspace_id:2833d31717650107c367cdd51cb7d90c */",
+                        "BindVars": {
+                            "_name0": "'bob'",
+                            "_name1": "'jane'",
+                            "name0": "'bob'",
+                            "name1": "'jane'",
+                            "user_id0": "2",
+                            "user_id1": "3"
+                        }
+                    },
+                    {
+                        "SQL": "select name from name_user_map where name = :name and user_id = :user_id",
+                        "BindVars": {
+                            "name": "'jane'",
+                            "user_id": "3"
+                        }
+                    },
+                    {
+                        "SQL": "insert into user(id, name, nickname, address) values (:_id0, :_name0, :vtg3, :vtg4),(:_id1, :_name1, :vtg7, :vtg8) on duplicate key update nickname = values(nickname), address = values(address) /* vtgate:: keyspace_id:06e7ea22ce92708f,4eb190c9a2fa169c */",
+                        "BindVars": {
+                            "_id0": "2",
+                            "_id1": "3",
+                            "_name0": "'bob'",
+                            "_name1": "'jane'",
+                            "vtg1": "2",
+                            "vtg2": "'bob'",
+                            "vtg3": "'bobby'",
+                            "vtg4": "'123 main st'",
+                            "vtg5": "3",
+                            "vtg6": "'jane'",
+                            "vtg7": "'janie'",
+                            "vtg8": "'456 elm st'"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    "begin",
+                    "insert ignore into name_user_map(name, user_id) values ('jane', 3)",
+                    "commit",
+                    "select name from name_user_map where 1 != 1",
+                    "select name from name_user_map where name = 'jane' and user_id = 3 limit 10001",
+                    "begin",
+                    "insert into user(id, name, nickname, address) values (2, 'bob', 'bobby', '123 main st'), (3, 'jane', 'janie', '456 elm st') on duplicate key update nickname = values(nickname), address = values(address)",
+                    "commit"
+                ]
+            },
+            "ks_sharded/80-": {
+                "TabletQueries": [
+                    {
+                        "SQL": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */",
+                        "BindVars": {
+                            "_name0": "'bob'",
+                            "_name1": "'jane'",
+                            "name0": "'bob'",
+                            "name1": "'jane'",
+                            "user_id0": "2",
+                            "user_id1": "3"
+                        }
+                    },
+                    {
+                        "SQL": "select name from name_user_map where name = :name and user_id = :user_id",
+                        "BindVars": {
+                            "name": "'bob'",
+                            "user_id": "2"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    "begin",
+                    "insert ignore into name_user_map(name, user_id) values ('bob', 2)",
+                    "commit",
+                    "select name from name_user_map where name = 'bob' and user_id = 2 limit 10001"
                 ]
             }
         }

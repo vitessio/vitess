@@ -34,14 +34,14 @@
         "SQL": "insert into t1 (id,val) values (1,2)",
         "Plans": [
             {
-                "Original": "insert into t1 (id,val) values (1,2)",
+                "Original": "insert into t1(id, val) values (:vtg1, :vtg2)",
                 "Instructions": {
                     "Opcode": "InsertUnsharded",
                     "Keyspace": {
                         "Name": "ks_unsharded",
                         "Sharded": false
                     },
-                    "Query": "insert into t1(id, val) values (1, 2)",
+                    "Query": "insert into t1(id, val) values (:vtg1, :vtg2)",
                     "Table": "t1"
                 }
             }
@@ -50,8 +50,11 @@
             "ks_unsharded/-": {
                 "TabletQueries": [
                     {
-                        "SQL": "insert into t1(id, val) values (1, 2)",
-                        "BindVars": {}
+                        "SQL": "insert into t1(id, val) values (:vtg1, :vtg2)",
+                        "BindVars": {
+                            "vtg1": "1",
+                            "vtg2": "2"
+                        }
                     }
                 ],
                 "MysqlQueries": [
@@ -66,14 +69,14 @@
         "SQL": "update t1 set val = 10",
         "Plans": [
             {
-                "Original": "update t1 set val = 10",
+                "Original": "update t1 set val = :vtg1",
                 "Instructions": {
                     "Opcode": "UpdateUnsharded",
                     "Keyspace": {
                         "Name": "ks_unsharded",
                         "Sharded": false
                     },
-                    "Query": "update t1 set val = 10"
+                    "Query": "update t1 set val = :vtg1"
                 }
             }
         ],
@@ -81,8 +84,10 @@
             "ks_unsharded/-": {
                 "TabletQueries": [
                     {
-                        "SQL": "update t1 set val = 10",
-                        "BindVars": {}
+                        "SQL": "update t1 set val = :vtg1",
+                        "BindVars": {
+                            "vtg1": "10"
+                        }
                     }
                 ],
                 "MysqlQueries": [
@@ -98,14 +103,14 @@
         "SQL": "delete from t1 where id = 100",
         "Plans": [
             {
-                "Original": "delete from t1 where id = 100",
+                "Original": "delete from t1 where id = :vtg1",
                 "Instructions": {
                     "Opcode": "DeleteUnsharded",
                     "Keyspace": {
                         "Name": "ks_unsharded",
                         "Sharded": false
                     },
-                    "Query": "delete from t1 where id = 100"
+                    "Query": "delete from t1 where id = :vtg1"
                 }
             }
         ],
@@ -113,8 +118,10 @@
             "ks_unsharded/-": {
                 "TabletQueries": [
                     {
-                        "SQL": "delete from t1 where id = 100",
-                        "BindVars": {}
+                        "SQL": "delete from t1 where id = :vtg1",
+                        "BindVars": {
+                            "vtg1": "100"
+                        }
                     }
                 ],
                 "MysqlQueries": [
@@ -129,14 +136,14 @@
         "SQL": "insert into t1 (id,val) values (1,2) on duplicate key update val=3",
         "Plans": [
             {
-                "Original": "insert into t1 (id,val) values (1,2) on duplicate key update val=3",
+                "Original": "insert into t1(id, val) values (:vtg1, :vtg2) on duplicate key update val = :vtg3",
                 "Instructions": {
                     "Opcode": "InsertUnsharded",
                     "Keyspace": {
                         "Name": "ks_unsharded",
                         "Sharded": false
                     },
-                    "Query": "insert into t1(id, val) values (1, 2) on duplicate key update val = 3",
+                    "Query": "insert into t1(id, val) values (:vtg1, :vtg2) on duplicate key update val = :vtg3",
                     "Table": "t1"
                 }
             }
@@ -145,8 +152,12 @@
             "ks_unsharded/-": {
                 "TabletQueries": [
                     {
-                        "SQL": "insert into t1(id, val) values (1, 2) on duplicate key update val = 3",
-                        "BindVars": {}
+                        "SQL": "insert into t1(id, val) values (:vtg1, :vtg2) on duplicate key update val = :vtg3",
+                        "BindVars": {
+                            "vtg1": "1",
+                            "vtg2": "2",
+                            "vtg3": "3"
+                        }
                     }
                 ],
                 "MysqlQueries": [

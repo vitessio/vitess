@@ -1,16 +1,16 @@
 [
     {
-        "SQL": "select * from user where email=\"null@void.com\"",
+        "SQL": "select * from user where email='null@void.com'",
         "Plans": [
             {
-                "Original": "select * from user where email = :vtg1",
+                "Original": "select * from user where email='null@void.com'",
                 "Instructions": {
                     "Opcode": "SelectScatter",
                     "Keyspace": {
                         "Name": "ks_sharded",
                         "Sharded": true
                     },
-                    "Query": "select * from user where email = :vtg1",
+                    "Query": "select * from user where email = 'null@void.com'",
                     "FieldQuery": "select * from user where 1 != 1"
                 }
             }
@@ -19,10 +19,8 @@
             "ks_sharded/-40": {
                 "TabletQueries": [
                     {
-                        "SQL": "select * from user where email = :vtg1",
-                        "BindVars": {
-                            "vtg1": "'null@void.com'"
-                        }
+                        "SQL": "select * from user where email = 'null@void.com'",
+                        "BindVars": {}
                     }
                 ],
                 "MysqlQueries": [
@@ -33,10 +31,8 @@
             "ks_sharded/40-80": {
                 "TabletQueries": [
                     {
-                        "SQL": "select * from user where email = :vtg1",
-                        "BindVars": {
-                            "vtg1": "'null@void.com'"
-                        }
+                        "SQL": "select * from user where email = 'null@void.com'",
+                        "BindVars": {}
                     }
                 ],
                 "MysqlQueries": [
@@ -47,10 +43,8 @@
             "ks_sharded/80-c0": {
                 "TabletQueries": [
                     {
-                        "SQL": "select * from user where email = :vtg1",
-                        "BindVars": {
-                            "vtg1": "'null@void.com'"
-                        }
+                        "SQL": "select * from user where email = 'null@void.com'",
+                        "BindVars": {}
                     }
                 ],
                 "MysqlQueries": [
@@ -61,10 +55,8 @@
             "ks_sharded/c0-": {
                 "TabletQueries": [
                     {
-                        "SQL": "select * from user where email = :vtg1",
-                        "BindVars": {
-                            "vtg1": "'null@void.com'"
-                        }
+                        "SQL": "select * from user where email = 'null@void.com'",
+                        "BindVars": {}
                     }
                 ],
                 "MysqlQueries": [
@@ -78,7 +70,7 @@
         "SQL": "select * from user where id in (1,2,3,4,5,6,7,8)",
         "Plans": [
             {
-                "Original": "select * from user where id in ::vtg1",
+                "Original": "select * from user where id in (1,2,3,4,5,6,7,8)",
                 "Instructions": {
                     "Opcode": "SelectIN",
                     "Keyspace": {
@@ -89,7 +81,16 @@
                     "FieldQuery": "select * from user where 1 != 1",
                     "Vindex": "hash",
                     "Values": [
-                        "::vtg1"
+                        [
+                            1,
+                            2,
+                            3,
+                            4,
+                            5,
+                            6,
+                            7,
+                            8
+                        ]
                     ]
                 }
             }
@@ -100,8 +101,7 @@
                     {
                         "SQL": "select * from user where id in ::__vals",
                         "BindVars": {
-                            "__vals": "(1, 2)",
-                            "vtg1": "(1, 2, 3, 4, 5, 6, 7, 8)"
+                            "__vals": "(1, 2)"
                         }
                     }
                 ],
@@ -115,8 +115,7 @@
                     {
                         "SQL": "select * from user where id in ::__vals",
                         "BindVars": {
-                            "__vals": "(3, 5)",
-                            "vtg1": "(1, 2, 3, 4, 5, 6, 7, 8)"
+                            "__vals": "(3, 5)"
                         }
                     }
                 ],
@@ -130,8 +129,7 @@
                     {
                         "SQL": "select * from user where id in ::__vals",
                         "BindVars": {
-                            "__vals": "(4, 6, 7, 8)",
-                            "vtg1": "(1, 2, 3, 4, 5, 6, 7, 8)"
+                            "__vals": "(4, 6, 7, 8)"
                         }
                     }
                 ],
@@ -143,10 +141,10 @@
         }
     },
     {
-        "SQL": "insert into user (id, name) values(2, \"bob\")",
+        "SQL": "insert into user (id, name) values(2, 'bob')",
         "Plans": [
             {
-                "Original": "insert into name_user_map(name, user_id) values (:name0, :user_id0)",
+                "Original": "insert into name_user_map(name, user_id) values(:name0, :user_id0)",
                 "Instructions": {
                     "Opcode": "InsertSharded",
                     "Keyspace": {
@@ -167,7 +165,7 @@
                 }
             },
             {
-                "Original": "insert into user(id, name) values (:vtg1, :vtg2)",
+                "Original": "insert into user (id, name) values(2, 'bob')",
                 "Instructions": {
                     "Opcode": "InsertSharded",
                     "Keyspace": {
@@ -177,10 +175,10 @@
                     "Query": "insert into user(id, name) values (:_id0, :_name0)",
                     "Values": [
                         [
-                            ":vtg1"
+                            2
                         ],
                         [
-                            ":vtg2"
+                            "bob"
                         ]
                     ],
                     "Table": "user",
@@ -198,9 +196,7 @@
                         "SQL": "insert into user(id, name) values (:_id0, :_name0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
                         "BindVars": {
                             "_id0": "2",
-                            "_name0": "'bob'",
-                            "vtg1": "2",
-                            "vtg2": "'bob'"
+                            "_name0": "'bob'"
                         }
                     }
                 ],
