@@ -26,7 +26,6 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -134,17 +133,8 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error
 			continue
 		}
 
-		tqs := make([]*TabletQuery, 0, len(tc.tabletQueries))
-		for _, bq := range tc.tabletQueries {
-			tq := &TabletQuery{
-				SQL:      bq.Sql,
-				BindVars: sqltypes.CopyBindVariables(bq.BindVariables),
-			}
-			tqs = append(tqs, tq)
-		}
-
 		tabletActions[shard] = &TabletActions{
-			TabletQueries: tqs,
+			TabletQueries: tc.tabletQueries,
 			MysqlQueries:  tc.mysqlQueries,
 		}
 
