@@ -64,9 +64,7 @@ func newFakeTablet(t *topodatapb.Tablet) *fakeTablet {
 	db := fakesqldb.New(nil)
 
 	// XXX much of this is cloned from the tabletserver tests
-	config := tabletenv.DefaultQsConfig
-	config.EnableAutoCommit = true
-	tsv := tabletserver.NewTabletServerWithNilTopoServer(config)
+	tsv := tabletserver.NewTabletServerWithNilTopoServer(tabletenv.DefaultQsConfig)
 
 	tablet := fakeTablet{db: db, tsv: tsv}
 	db.Handler = &tablet
