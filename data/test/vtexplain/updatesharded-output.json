@@ -1,0 +1,198 @@
+[
+    {
+        "SQL": "update user set nickname='alice' where id=1",
+        "Plans": [
+            {
+                "Original": "update user set nickname = :vtg1 where id = :vtg2",
+                "Instructions": {
+                    "Opcode": "UpdateEqual",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "update user set nickname = :vtg1 where id = :vtg2",
+                    "Vindex": "hash",
+                    "Values": [
+                        ":vtg2"
+                    ],
+                    "Table": "user"
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-40": {
+                "TabletQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "update user set nickname = :vtg1 where id = :vtg2 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "vtg1": "'alice'",
+                            "vtg2": "1"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 1,
+                        "SQL": "update user set nickname = 'alice' where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */"
+                    },
+                    {
+                        "Time": 2,
+                        "SQL": "commit"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "update user set nickname='alice' where name='alice'",
+        "Plans": [
+            {
+                "Original": "select user_id from name_user_map where name = :name",
+                "Instructions": {
+                    "Opcode": "SelectEqualUnique",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "select user_id from name_user_map where name = :name",
+                    "FieldQuery": "select user_id from name_user_map where 1 != 1",
+                    "Vindex": "md5",
+                    "Values": [
+                        ":name"
+                    ]
+                }
+            },
+            {
+                "Original": "update user set nickname = :vtg1 where name = :vtg2",
+                "Instructions": {
+                    "Opcode": "UpdateEqual",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "update user set nickname = :vtg1 where name = :vtg2",
+                    "Vindex": "name_user_map",
+                    "Values": [
+                        ":vtg2"
+                    ],
+                    "Table": "user"
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-40": {
+                "TabletQueries": [
+                    {
+                        "Time": 2,
+                        "SQL": "update user set nickname = :vtg1 where name = :vtg2 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "vtg1": "'alice'",
+                            "vtg2": "'alice'"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 2,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 2,
+                        "SQL": "select id from user where name = 'alice' limit 10001 for update /* vtgate:: keyspace_id:166b40b44aba4bd6 */"
+                    },
+                    {
+                        "Time": 2,
+                        "SQL": "update user set nickname = 'alice' where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */"
+                    },
+                    {
+                        "Time": 4,
+                        "SQL": "commit"
+                    }
+                ]
+            },
+            "ks_sharded/40-80": {
+                "TabletQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "select user_id from name_user_map where name = :name",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "name": "'alice'"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 1,
+                        "SQL": "select user_id from name_user_map where name = 'alice' limit 10001"
+                    },
+                    {
+                        "Time": 3,
+                        "SQL": "commit"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "update user set pet='fido' where id=1",
+        "Plans": [
+            {
+                "Original": "update user set pet = :vtg1 where id = :vtg2",
+                "Instructions": {
+                    "Opcode": "UpdateEqual",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "update user set pet = :vtg1 where id = :vtg2",
+                    "Vindex": "hash",
+                    "Values": [
+                        ":vtg2"
+                    ],
+                    "Table": "user"
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-40": {
+                "TabletQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "update user set pet = :vtg1 where id = :vtg2 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "vtg1": "'fido'",
+                            "vtg2": "1"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 1,
+                        "SQL": "update user set pet = 'fido' where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */"
+                    },
+                    {
+                        "Time": 2,
+                        "SQL": "commit"
+                    }
+                ]
+            }
+        }
+    }
+]
