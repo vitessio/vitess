@@ -78,8 +78,9 @@ type DB struct {
 	// for all queries. This flag is used for benchmarking.
 	AllowAll bool
 
-	// QueryLogger: if non-nil, will be called for each ComQuery call
-	QueryLogger func(string, *sqltypes.Result, error)
+	// Handler: interface that allows a caller to override the query handling
+	// implementation. By default it points to the DB itself
+	Handler QueryHandler
 
 	// This next set of fields is used when ordering of the queries doesn't
 	// matter.
@@ -106,6 +107,11 @@ type DB struct {
 	// connections tracks all open connections.
 	// The key for the map is the value of mysql.Conn.ConnectionID.
 	connections map[uint32]*mysql.Conn
+}
+
+// QueryHandler is the interface used by the DB to simulate executed queries
+type QueryHandler interface {
+	HandleQuery(*mysql.Conn, []byte, func(*sqltypes.Result) error) error
 }
 
 // ExpectedResult holds the data for a matched query.
@@ -150,6 +156,8 @@ func New(t *testing.T) *DB {
 		queryCalled:  make(map[string]int),
 		connections:  make(map[uint32]*mysql.Conn),
 	}
+
+	db.Handler = db
 
 	authServer := &mysql.AuthServerNone{}
 
@@ -303,20 +311,11 @@ func (db *DB) ConnectionClosed(c *mysql.Conn) {
 
 // ComQuery is part of the mysql.Handler interface.
 func (db *DB) ComQuery(c *mysql.Conn, q []byte, callback func(*sqltypes.Result) error) error {
-	err := db.comQueryImpl(c, q, func(qr *sqltypes.Result) error {
-		if db.QueryLogger != nil {
-			db.QueryLogger(string(q), qr, nil)
-		}
-		return callback(qr)
-	})
-
-	if err != nil && db.QueryLogger != nil {
-		db.QueryLogger(string(q), nil, err)
-	}
-	return err
+	return db.Handler.HandleQuery(c, q, callback)
 }
 
-func (db *DB) comQueryImpl(c *mysql.Conn, q []byte, callback func(*sqltypes.Result) error) error {
+// HandleQuery is the default implementation of the QueryHandler interface
+func (db *DB) HandleQuery(c *mysql.Conn, q []byte, callback func(*sqltypes.Result) error) error {
 	if db.AllowAll {
 		return callback(&sqltypes.Result{})
 	}

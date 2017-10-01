@@ -8,6 +8,8 @@ create table user (
 	id bigint,
 	name varchar(64),
 	email varchar(64),
+	nickname varchar(64),
+	pet varchar(64),
 	primary key (id)
 ) Engine=InnoDB;
 

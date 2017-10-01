@@ -20,7 +20,9 @@
                 "TabletQueries": [
                     {
                         "SQL": "select * from user where email = 'null@void.com'",
-                        "BindVars": {}
+                        "BindVars": {
+                            "#maxLimit": "10001"
+                        }
                     }
                 ],
                 "MysqlQueries": [
@@ -32,7 +34,9 @@
                 "TabletQueries": [
                     {
                         "SQL": "select * from user where email = 'null@void.com'",
-                        "BindVars": {}
+                        "BindVars": {
+                            "#maxLimit": "10001"
+                        }
                     }
                 ],
                 "MysqlQueries": [
@@ -44,7 +48,9 @@
                 "TabletQueries": [
                     {
                         "SQL": "select * from user where email = 'null@void.com'",
-                        "BindVars": {}
+                        "BindVars": {
+                            "#maxLimit": "10001"
+                        }
                     }
                 ],
                 "MysqlQueries": [
@@ -56,7 +62,9 @@
                 "TabletQueries": [
                     {
                         "SQL": "select * from user where email = 'null@void.com'",
-                        "BindVars": {}
+                        "BindVars": {
+                            "#maxLimit": "10001"
+                        }
                     }
                 ],
                 "MysqlQueries": [
@@ -101,6 +109,7 @@
                     {
                         "SQL": "select * from user where id in ::__vals",
                         "BindVars": {
+                            "#maxLimit": "10001",
                             "__vals": "(1, 2)"
                         }
                     }
@@ -115,6 +124,7 @@
                     {
                         "SQL": "select * from user where id in ::__vals",
                         "BindVars": {
+                            "#maxLimit": "10001",
                             "__vals": "(3, 5)"
                         }
                     }
@@ -129,6 +139,7 @@
                     {
                         "SQL": "select * from user where id in ::__vals",
                         "BindVars": {
+                            "#maxLimit": "10001",
                             "__vals": "(4, 6, 7, 8)"
                         }
                     }
@@ -195,6 +206,7 @@
                     {
                         "SQL": "insert into user(id, name) values (:_id0, :_name0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
                         "BindVars": {
+                            "#maxLimit": "10001",
                             "_id0": "2",
                             "_name0": "'bob'"
                         }
@@ -202,7 +214,7 @@
                 ],
                 "MysqlQueries": [
                     "begin",
-                    "insert into user(id, name) values (2, 'bob') /* _stream user (id ) (2 ); */",
+                    "insert into user(id, name) values (2, 'bob') /* _stream user (id ) (2 ); */ /* vtgate:: keyspace_id:06e7ea22ce92708f */",
                     "commit"
                 ]
             },
@@ -211,6 +223,7 @@
                     {
                         "SQL": "insert into name_user_map(name, user_id) values (:_name0, :user_id0) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */",
                         "BindVars": {
+                            "#maxLimit": "10001",
                             "_name0": "'bob'",
                             "name0": "'bob'",
                             "user_id0": "2"
@@ -219,7 +232,7 @@
                 ],
                 "MysqlQueries": [
                     "begin",
-                    "insert into name_user_map(name, user_id) values ('bob', 2) /* _stream name_user_map (name user_id ) ('Ym9i' 2 ); */",
+                    "insert into name_user_map(name, user_id) values ('bob', 2) /* _stream name_user_map (name user_id ) ('Ym9i' 2 ); */ /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */",
                     "commit"
                 ]
             }

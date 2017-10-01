@@ -1,0 +1,84 @@
+[
+    {
+        "SQL": "delete from user where id=10",
+        "Plans": [
+            {
+                "Original": "delete from name_user_map where name = :name and user_id = :user_id",
+                "Instructions": {
+                    "Opcode": "DeleteEqual",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "delete from name_user_map where name = :name and user_id = :user_id",
+                    "Vindex": "md5",
+                    "Values": [
+                        ":name"
+                    ],
+                    "Table": "name_user_map"
+                }
+            },
+            {
+                "Original": "delete from user where id = :vtg1",
+                "Instructions": {
+                    "Opcode": "DeleteEqual",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "delete from user where id = :vtg1",
+                    "Vindex": "hash",
+                    "Values": [
+                        ":vtg1"
+                    ],
+                    "Table": "user",
+                    "Subquery": "select name from user where id = :vtg1 for update"
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-80": {
+                "TabletQueries": [
+                    {
+                        "SQL": "select name from user where id = :vtg1 for update",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "vtg1": "10"
+                        }
+                    },
+                    {
+                        "SQL": "delete from user where id = :vtg1 /* vtgate:: keyspace_id:594764e1a2b2d98e */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "vtg1": "10"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    "begin",
+                    "select name from user where 1 != 1",
+                    "select name from user where id = 10 limit 10001 for update",
+                    "delete from user where id in (10) /* vtgate:: keyspace_id:594764e1a2b2d98e */",
+                    "commit"
+                ]
+            },
+            "ks_sharded/80-": {
+                "TabletQueries": [
+                    {
+                        "SQL": "delete from name_user_map where name = :name and user_id = :user_id /* vtgate:: keyspace_id:a6e89b54b129c33051b76db219595660 */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "name": "'name_val_1'",
+                            "user_id": "10"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    "begin",
+                    "delete from name_user_map where (name = 'name_val_1' and user_id = 10) /* vtgate:: keyspace_id:a6e89b54b129c33051b76db219595660 */",
+                    "commit"
+                ]
+            }
+        }
+    }
+]
