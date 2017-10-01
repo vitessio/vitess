@@ -17,6 +17,7 @@ limitations under the License.
 package tabletserver
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -846,10 +847,30 @@ func TestQueryExecutorPlanDmlMessage(t *testing.T) {
 	conn.Recycle()
 }
 
-func TestQueryExecutorPlanDmlAutoCommit(t *testing.T) {
+func TestQueryExecutorPlanUpdateAutoCommit(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 	query := "update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"
+	want := &sqltypes.Result{}
+	db.AddQuery(query, want)
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	qre := newTestQueryExecutor(ctx, tsv, query, 0)
+	defer tsv.StopService()
+	checkPlanID(t, planbuilder.PlanDMLPK, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+}
+
+func TestQueryExecutorPlanDeleteAutoCommit(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	query := "delete from test_table where pk in (1) /* _stream test_table (pk ) (1 ); */"
 	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
 	ctx := context.Background()
@@ -1072,13 +1093,49 @@ func TestQueryExecutorPlanPassSelectWithLockOutsideATransaction(t *testing.T) {
 		Fields: getTestTableFields(),
 	})
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
+	tsv := newTestTabletServer(ctx, noAutoCommit, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanSelectLock, qre.plan.PlanID)
 	_, err := qre.Execute()
 	if code := vterrors.Code(err); code != vtrpcpb.Code_FAILED_PRECONDITION {
 		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_FAILED_PRECONDITION)
+	}
+}
+
+// When handling DMLs with an owned secondary vindex, vtgate will sometimes send
+// a SELECT ... FOR UPDATE query to find out the current value of the secondary
+// index field, so this needs to be supported when autocommit is enabled.
+func TestQueryExecutorPlanSelectForUpdateAutoCommit(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	query := "select name from test_table where pk in (1) limit 10001 for update"
+	want := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name: "name",
+				Type: sqltypes.VarChar,
+			},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarChar("name")},
+		},
+	}
+	db.AddQuery(query, want)
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	qre := newTestQueryExecutor(ctx, tsv, query, 0)
+	defer tsv.StopService()
+	checkPlanID(t, planbuilder.PlanSelectLock, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		x, _ := json.MarshalIndent(got, "", "    ")
+		y, _ := json.MarshalIndent(want, "", "    ")
+		t.Fatalf("got: %v, want: %v", string(x), string(y))
 	}
 }
 
@@ -1813,6 +1870,7 @@ const (
 	smallTxPool
 	noTwopc
 	shortTwopcAge
+	noAutoCommit
 )
 
 // newTestQueryExecutor uses a package level variable testTabletServer defined in tabletserver_test.go
@@ -1826,7 +1884,11 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	} else {
 		config.TransactionCap = 100
 	}
-	config.EnableAutoCommit = true
+	if flags&noAutoCommit > 0 {
+		config.EnableAutoCommit = false
+	} else {
+		config.EnableAutoCommit = true
+	}
 	if flags&enableStrictTableACL > 0 {
 		config.StrictTableACL = true
 	} else {
@@ -1999,6 +2061,12 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 			}, {
 				Name: "addr",
 				Type: sqltypes.Int32,
+			}},
+		},
+		"select name from test_table where 1 != 1": {
+			Fields: []*querypb.Field{{
+				Name: "name",
+				Type: sqltypes.VarChar,
 			}},
 		},
 		"describe test_table": {
