@@ -280,7 +280,7 @@ func (qe *QueryEngine) Close() {
 }
 
 // GetPlan returns the TabletPlan that for the query. Plans are cached in a cache.LRUCache.
-func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string) (*TabletPlan, error) {
+func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool) (*TabletPlan, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("QueryEngine.GetPlan")
 	defer span.Finish()
@@ -326,7 +326,9 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	} else if plan.PlanID == planbuilder.PlanDDL || plan.PlanID == planbuilder.PlanSet {
 		return plan, nil
 	}
-	qe.queries.Set(sql, plan)
+	if !skipQueryPlanCache {
+		qe.queries.Set(sql, plan)
+	}
 	return plan, nil
 }
 
