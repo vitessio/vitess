@@ -287,6 +287,10 @@ message ExecuteOptions {
   }
 
   TransactionIsolation transaction_isolation = 9;
+
+  // skip_query_plan_cache specifies if the query plan shoud be cached by vitess.
+  // By default all query plans are cached.
+  bool skip_query_plan_cache = 10;
 }
 
 // Field describes a single column returned by a query

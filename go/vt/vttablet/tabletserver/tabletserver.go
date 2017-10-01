@@ -860,7 +860,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 				bindVariables = make(map[string]*querypb.BindVariable)
 			}
 			query, comments := sqlparser.SplitTrailingComments(sql)
-			plan, err := tsv.qe.GetPlan(ctx, logStats, query)
+			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options))
 			if err != nil {
 				return err
 			}
@@ -1059,7 +1059,7 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *tabletenv.LogStats, sql string, bindVariables map[string]*querypb.BindVariable) (string, string) {
 	// Strip trailing comments so we don't pollute the query cache.
 	sql, _ = sqlparser.SplitTrailingComments(sql)
-	plan, err := tsv.qe.GetPlan(ctx, logStats, sql)
+	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false /* skipQueryPlanCache */)
 	if err != nil {
 		logComputeRowSerializerKey.Errorf("failed to get plan for query: %v err: %v", sql, err)
 		return "", ""
@@ -1798,7 +1798,7 @@ func (tsv *TabletServer) endRequest(isTx bool) {
 
 // GetPlan is only used from vtexplain
 func (tsv *TabletServer) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string) (*TabletPlan, error) {
-	return tsv.qe.GetPlan(ctx, logStats, sql)
+	return tsv.qe.GetPlan(ctx, logStats, sql, false /* skipQueryPlanCache */)
 }
 
 func (tsv *TabletServer) registerDebugHealthHandler() {
@@ -1959,4 +1959,12 @@ func withTimeout(ctx context.Context, timeout time.Duration, options *querypb.Ex
 		return ctx, func() {}
 	}
 	return context.WithTimeout(ctx, timeout)
+}
+
+// skipQueryPlanCache returns true if the query plan should be cached
+func skipQueryPlanCache(options *querypb.ExecuteOptions) bool {
+	if options == nil {
+		return false
+	}
+	return options.SkipQueryPlanCache
 }
