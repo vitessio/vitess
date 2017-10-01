@@ -19,6 +19,7 @@ package vtexplain
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"golang.org/x/net/context"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -45,13 +47,17 @@ var (
 
 	// map for each table from the column name to its type
 	tableColumns map[string]map[string]querypb.Type
+
+	// time simulator
+	batchTime *sync2.Batcher
 )
 
 type fakeTablet struct {
 	db            *fakesqldb.DB
 	tsv           *tabletserver.TabletServer
-	tabletQueries []*querypb.BoundQuery
-	mysqlQueries  []string
+	tabletQueries []*TabletQuery
+	mysqlQueries  []*MysqlQuery
+	currentTime   int32
 }
 
 func newFakeTablet(t *topodatapb.Tablet) *fakeTablet {
@@ -95,16 +101,19 @@ var _ queryservice.QueryService = (*fakeTablet)(nil) // compile-time interface c
 
 // Begin is part of the QueryService interface.
 func (tablet *fakeTablet) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, error) {
+	tablet.currentTime = batchTime.Wait()
 	return tablet.tsv.Begin(ctx, target, options)
 }
 
 // Commit is part of the QueryService interface.
 func (tablet *fakeTablet) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
+	tablet.currentTime = batchTime.Wait()
 	return tablet.tsv.Commit(ctx, target, transactionID)
 }
 
 // Rollback is part of the QueryService interface.
 func (tablet *fakeTablet) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
+	tablet.currentTime = batchTime.Wait()
 	return tablet.tsv.Rollback(ctx, target, transactionID)
 }
 
@@ -150,12 +159,16 @@ func (tablet *fakeTablet) ReadTransaction(ctx context.Context, target *querypb.T
 
 // Execute is part of the QueryService interface.
 func (tablet *fakeTablet) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+
+	tablet.currentTime = batchTime.Wait()
+
 	// Since the query is simulated being "sent" over the wire we need to
 	// copy the bindVars into the executor to avoid a data race.
 	bindVariables = sqltypes.CopyBindVariables(bindVariables)
-	tablet.tabletQueries = append(tablet.tabletQueries, &querypb.BoundQuery{
-		Sql:           sql,
-		BindVariables: bindVariables,
+	tablet.tabletQueries = append(tablet.tabletQueries, &TabletQuery{
+		Time:     tablet.currentTime,
+		SQL:      sql,
+		BindVars: bindVariables,
 	})
 	return tablet.tsv.Execute(ctx, target, sql, bindVariables, transactionID, options)
 }
@@ -172,10 +185,12 @@ func (tablet *fakeTablet) ExecuteBatch(ctx context.Context, target *querypb.Targ
 
 // BeginExecute is part of the QueryService interface.
 func (tablet *fakeTablet) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
+	tablet.currentTime = batchTime.Wait()
 	bindVariables = sqltypes.CopyBindVariables(bindVariables)
-	tablet.tabletQueries = append(tablet.tabletQueries, &querypb.BoundQuery{
-		Sql:           sql,
-		BindVariables: bindVariables,
+	tablet.tabletQueries = append(tablet.tabletQueries, &TabletQuery{
+		Time:     tablet.currentTime,
+		SQL:      sql,
+		BindVars: bindVariables,
 	})
 	return tablet.tsv.BeginExecute(ctx, target, sql, bindVariables, options)
 }
@@ -345,7 +360,12 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 // HandleQuery implements the fakesqldb query handler interface
 func (tablet *fakeTablet) HandleQuery(c *mysql.Conn, q []byte, callback func(*sqltypes.Result) error) error {
 	query := string(q)
-	tablet.mysqlQueries = append(tablet.mysqlQueries, query)
+	if !strings.Contains(query, "1 != 1") {
+		tablet.mysqlQueries = append(tablet.mysqlQueries, &MysqlQuery{
+			Time: tablet.currentTime,
+			SQL:  query,
+		})
+	}
 
 	// return the pre-computed results for any schema introspection queries
 	result, ok := schemaQueries[query]
