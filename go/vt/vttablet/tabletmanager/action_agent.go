@@ -271,6 +271,10 @@ func NewActionAgent(
 		return nil, err
 	}
 
+	// Run a background task to rebuild the SrvKeyspace in our cell/keyspace
+	// if it doesn't exist yet.
+	go agent.maybeRebuildKeyspace(agent.initialTablet.Alias.Cell, agent.initialTablet.Keyspace)
+
 	// register the RPC services from the agent
 	servenv.OnRun(func() {
 		agent.registerQueryService()
@@ -637,10 +641,6 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 	startingTablet := proto.Clone(agent.initialTablet).(*topodatapb.Tablet)
 	startingTablet.Type = topodatapb.TabletType_UNKNOWN
 	agent.setTablet(startingTablet)
-
-	// run a background task to rebuild the SrvKeyspace in our cell/keyspace
-	// if it doesn't exist yet
-	go agent.maybeRebuildKeyspace(agent.initialTablet.Alias.Cell, agent.initialTablet.Keyspace)
 
 	return nil
 }
