@@ -199,7 +199,7 @@ func Run(sql string) ([]*Explain, error) {
 		}
 
 		if sql != "" {
-			batchTime = sync2.NewBatcher(time.Duration(10 * 1000 * 1000))
+			batchTime = sync2.NewBatcher(time.Duration(10 * time.Millisecond))
 			log.V(100).Infof("explain %s", sql)
 			e, err := explain(sql)
 			if err != nil {
