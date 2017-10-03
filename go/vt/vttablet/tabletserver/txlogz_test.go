@@ -28,6 +28,18 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
+func testNotRedacted(t *testing.T, r *httptest.ResponseRecorder) {
+	if strings.Contains(r.Body.String(), "redacted") {
+		t.Errorf("/debug/txlogz unexpectedly redacted")
+	}
+}
+
+func testRedacted(t *testing.T, r *httptest.ResponseRecorder) {
+	if !strings.Contains(r.Body.String(), "redacted") {
+		t.Errorf("/debug/txlogz unexpectedly not redacted")
+	}
+}
+
 func testHandler(req *http.Request, t *testing.T) {
 	response := httptest.NewRecorder()
 	tabletenv.TxLogger.Send("test msg")
@@ -48,14 +60,21 @@ func testHandler(req *http.Request, t *testing.T) {
 	response = httptest.NewRecorder()
 	tabletenv.TxLogger.Send(txConn)
 	txlogzHandler(response, req)
+	testNotRedacted(t, response)
 	txConn.EndTime = txConn.StartTime.Add(time.Duration(2) * time.Second)
 	response = httptest.NewRecorder()
 	tabletenv.TxLogger.Send(txConn)
 	txlogzHandler(response, req)
+	testNotRedacted(t, response)
 	txConn.EndTime = txConn.StartTime.Add(time.Duration(500) * time.Millisecond)
 	response = httptest.NewRecorder()
 	tabletenv.TxLogger.Send(txConn)
 	txlogzHandler(response, req)
+	testNotRedacted(t, response)
+	*tabletenv.RedactDebugUIQueries = true
+	txlogzHandler(response, req)
+	testRedacted(t, response)
+	*tabletenv.RedactDebugUIQueries = false
 
 }
 

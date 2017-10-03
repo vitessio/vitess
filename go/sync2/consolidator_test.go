@@ -16,15 +16,27 @@ limitations under the License.
 
 package sync2
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestConsolidator(t *testing.T) {
 	con := NewConsolidator()
 	sql := "select * from SomeTable"
 
+	want := []ConsolidatorCacheItem{}
+	if !reflect.DeepEqual(con.Items(), want) {
+		t.Fatalf("expected consolidator to have no items")
+	}
+
 	orig, added := con.Create(sql)
 	if !added {
 		t.Fatalf("expected consolidator to register a new entry")
+	}
+
+	if !reflect.DeepEqual(con.Items(), want) {
+		t.Fatalf("expected consolidator to still have no items")
 	}
 
 	dup, added := con.Create(sql)
@@ -46,10 +58,27 @@ func TestConsolidator(t *testing.T) {
 		t.Fatalf("failed to share the result")
 	}
 
+	want = []ConsolidatorCacheItem{{Query: sql, Count: 1}}
+	if !reflect.DeepEqual(con.Items(), want) {
+		t.Fatalf("expected consolidator to have one items %v", con.Items())
+	}
+
 	// Running the query again should add a new entry since the original
 	// query execution completed
-	_, added = con.Create(sql)
+	second, added := con.Create(sql)
 	if !added {
 		t.Fatalf("expected consolidator to register a new entry")
 	}
+
+	go func() {
+		second.Result = &result
+		second.Broadcast()
+	}()
+	dup.Wait()
+
+	want = []ConsolidatorCacheItem{{Query: sql, Count: 2}}
+	if !reflect.DeepEqual(con.Items(), want) {
+		t.Fatalf("expected consolidator to have two items %v", con.Items())
+	}
+
 }
