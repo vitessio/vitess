@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -27,6 +28,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -38,6 +40,7 @@ func resetVariables() {
 	queueExceededDryRun.Reset()
 	globalQueueExceeded.Set(0)
 	globalQueueExceededDryRun.Set(0)
+	*tabletenv.RedactDebugUIQueries = false
 }
 
 func TestTxSerializer_NoHotRow(t *testing.T) {
@@ -54,7 +57,31 @@ func TestTxSerializer_NoHotRow(t *testing.T) {
 	done()
 
 	// No hot row was recoded.
-	if err := testHTTPHandler(txs, 0); err != nil {
+	if err := testHTTPHandler(txs, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	// No transaction had to wait.
+	if got, want := waits.Counts()["t1"], int64(0); got != want {
+		t.Fatalf("wrong Waits variable: got = %v, want = %v", got, want)
+	}
+}
+
+func TestTxSerializerRedactDebugUI(t *testing.T) {
+	resetVariables()
+	*tabletenv.RedactDebugUIQueries = true
+	txs := New(false, 1, 1, 5)
+
+	done, waited, err := txs.Wait(context.Background(), "t1 where1", "t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if waited {
+		t.Fatal("non-parallel tx must never wait")
+	}
+	done()
+
+	// No hot row was recoded.
+	if err := testHTTPHandler(txs, 0, true); err != nil {
 		t.Fatal(err)
 	}
 	// No transaction had to wait.
@@ -118,7 +145,7 @@ func TestTxSerializer(t *testing.T) {
 	}
 
 	// 2 transactions were recorded.
-	if err := testHTTPHandler(txs, 2); err != nil {
+	if err := testHTTPHandler(txs, 2, false); err != nil {
 		t.Fatal(err)
 	}
 	// 1 of them had to wait.
@@ -191,7 +218,7 @@ func TestTxSerializer_ConcurrentTransactions(t *testing.T) {
 	}
 
 	// 3 transactions were recorded.
-	if err := testHTTPHandler(txs, 3); err != nil {
+	if err := testHTTPHandler(txs, 3, false); err != nil {
 		t.Fatal(err)
 	}
 	// 1 of them had to wait.
@@ -215,7 +242,7 @@ func waitForPending(txs *TxSerializer, key string, i int) error {
 	}
 }
 
-func testHTTPHandler(txs *TxSerializer, count int) error {
+func testHTTPHandler(txs *TxSerializer, count int, redacted bool) error {
 	req, err := http.NewRequest("GET", "/path-is-ignored-in-test", nil)
 	if err != nil {
 		return err
@@ -226,6 +253,14 @@ func testHTTPHandler(txs *TxSerializer, count int) error {
 	if got, want := rr.Code, http.StatusOK; got != want {
 		return fmt.Errorf("wrong status code: got = %v, want = %v", got, want)
 	}
+
+	if redacted {
+		if !strings.Contains(rr.Body.String(), "/debug/hotrows has been redacted for your protection") {
+			return fmt.Errorf("expected /debug/hotrows to be redacted")
+		}
+		return nil
+	}
+
 	want := fmt.Sprintf(`Length: 1
 %d: t1 where1
 `, count)
@@ -328,7 +363,7 @@ func TestTxSerializerCancel(t *testing.T) {
 	}
 
 	// 4 total transactions get recorded.
-	if err := testHTTPHandler(txs, 4); err != nil {
+	if err := testHTTPHandler(txs, 4, false); err != nil {
 		t.Fatal(err)
 	}
 	// 2 of them had to wait.
@@ -394,7 +429,7 @@ func TestTxSerializerDryRun(t *testing.T) {
 		t.Fatal("queue object was not deleted after last transaction")
 	}
 
-	if err := testHTTPHandler(txs, 3); err != nil {
+	if err := testHTTPHandler(txs, 3, false); err != nil {
 		t.Fatal(err)
 	}
 }
