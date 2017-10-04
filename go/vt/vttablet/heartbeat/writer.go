@@ -26,6 +26,7 @@ import (
 
 	"github.com/youtube/vitess/go/hack"
 	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/sqlescape"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
@@ -95,7 +96,7 @@ func (w *Writer) Init(dbc dbconfigs.DBConfigs, target query.Target) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	log.Info("Initializing heartbeat table.")
-	w.dbName = sqlparser.Backtick(dbc.SidecarDBName)
+	w.dbName = sqlescape.EscapeID(dbc.SidecarDBName)
 	w.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
 	err := w.initializeTables(&dbc.Dba)
 	if err != nil {

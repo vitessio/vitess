@@ -25,6 +25,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/hack"
+	"github.com/youtube/vitess/go/sqlescape"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -87,7 +88,7 @@ func (r *Reader) Init(dbc dbconfigs.DBConfigs, target query.Target) {
 	if !r.enabled {
 		return
 	}
-	r.dbName = sqlparser.Backtick(dbc.SidecarDBName)
+	r.dbName = sqlescape.EscapeID(dbc.SidecarDBName)
 	r.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
 }
 
