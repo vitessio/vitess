@@ -24,10 +24,10 @@ import (
 	"math/rand"
 
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
+	"github.com/youtube/vitess/go/sqlescape"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -112,7 +112,7 @@ func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {
 	}
 
 	tr := NewReader(&fakeMysqlChecker{}, config)
-	tr.dbName = sqlparser.Backtick(dbc.SidecarDBName)
+	tr.dbName = sqlescape.EscapeID(dbc.SidecarDBName)
 	tr.keyspaceShard = "test:0"
 	tr.now = nowFunc
 	tr.pool.Open(&dbc.App, &dbc.Dba, &dbc.AppDebug)

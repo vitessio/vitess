@@ -2758,20 +2758,6 @@ func (node *TableIdent) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// Backtick produces a backticked literal given an input string.
-func Backtick(in string) string {
-	var buf bytes.Buffer
-	buf.WriteByte('`')
-	for _, c := range in {
-		buf.WriteRune(c)
-		if c == '`' {
-			buf.WriteByte('`')
-		}
-	}
-	buf.WriteByte('`')
-	return buf.String()
-}
-
 func formatID(buf *TrackedBuffer, original, lowered string) {
 	for i, c := range original {
 		if !isLetter(uint16(c)) {
