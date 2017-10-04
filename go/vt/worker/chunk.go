@@ -21,6 +21,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/sqlescape"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -89,7 +90,7 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 	}
 
 	// Get the MIN and MAX of the leading column of the primary key.
-	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", escape(td.PrimaryKeyColumns[0]), escape(td.PrimaryKeyColumns[0]), escape(topoproto.TabletDbName(tablet)), escape(td.Name))
+	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", sqlescape.EscapeID(td.PrimaryKeyColumns[0]), sqlescape.EscapeID(td.PrimaryKeyColumns[0]), sqlescape.EscapeID(topoproto.TabletDbName(tablet)), sqlescape.EscapeID(td.Name))
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(shortCtx, tablet, true, []byte(query), 1)
 	cancel()
