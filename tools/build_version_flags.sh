@@ -23,4 +23,5 @@ echo "\
   -X 'github.com/youtube/vitess/go/vt/servenv.buildGitRev=$(git rev-parse --short HEAD)' \
   -X 'github.com/youtube/vitess/go/vt/servenv.buildGitBranch=$(git rev-parse --abbrev-ref HEAD)' \
   -X 'github.com/youtube/vitess/go/vt/servenv.buildTime=$(LC_ALL=C date)' \
+  -X 'github.com/youtube/vitess/go/vt/servenv.jenkinsBuildNumberStr=${BUILD_NUMBER}' \
 "
