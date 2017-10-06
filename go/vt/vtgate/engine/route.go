@@ -436,11 +436,15 @@ func (route *Route) execUpdateEqual(vcursor VCursor, bindVars map[string]*queryp
 	if len(ksid) == 0 {
 		return &sqltypes.Result{}, nil
 	}
-	if len(route.ChangedVindexValues) == 0 {
-		rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{ksid}, "")
-		return route.execShard(vcursor, rewritten, bindVars, ks, shard, true /* isDML */)
+	if len(route.ChangedVindexValues) != 0 {
+		result, err := route.execUpdateEqualChangedVindex(vcursor, route.Subquery, bindVars, ks, shard, ksid)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
 	}
-	return route.execUpdateEqualChangedVindex(vcursor, route.Subquery, bindVars, ks, shard, ksid)
+	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{ksid}, "")
+	return route.execShard(vcursor, rewritten, bindVars, ks, shard, true /* isDML */)
 }
 
 // execUpdateEqualChangedVindex performs an update when a vindex is being modified
@@ -466,17 +470,13 @@ func (route *Route) execUpdateEqualChangedVindex(vcursor VCursor, query string, 
 	var subQueryResult *sqltypes.Result
 	var err error
 	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{keyspaceID}, "")
-	if route.Subquery != "" && len(route.Table.Owned) != 0 {
+	if route.Subquery != "" {
 		subQueryResult, err = route.execShard(vcursor, route.Subquery, bindVars, keyspace, shard, false /* isDML */)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "execUpdateEqual")
 		}
 	}
-	err = route.deleteUpdatedVindexEntries(subQueryResult, vcursor, bindVars, keyspaceID)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "execUpdateEqual")
-	}
-	err = route.insertUpdatedVindexEntries(vcursor, bindVars, keyspaceID)
+	err = route.updateChangedVindexes(subQueryResult, vcursor, bindVars, keyspaceID)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execUpdateEqual")
 	}
@@ -623,17 +623,25 @@ func (route *Route) resolveSingleShard(vcursor VCursor, bindVars map[string]*que
 	return newKeyspace, shard, ksid, nil
 }
 
-func (route *Route) deleteUpdatedVindexEntries(subQueryResult *sqltypes.Result, vcursor VCursor, bindVars map[string]*querypb.BindVariable, ksid []byte) error {
-	if len(subQueryResult.Rows) == 0 || len(route.ChangedVindexValues) == 0 {
+func (route *Route) updateChangedVindexes(subQueryResult *sqltypes.Result, vcursor VCursor, bindVars map[string]*querypb.BindVariable, ksid []byte) error {
+	if len(route.ChangedVindexValues) == 0 {
 		return nil
 	}
 	for i, colVindex := range route.Table.Owned {
-		if _, ok := route.ChangedVindexValues[colVindex.Name]; ok {
+		if colValue, ok := route.ChangedVindexValues[colVindex.Name]; ok {
+			resolvedVal, err := colValue.ResolveValue(bindVars)
+			if err != nil {
+				return err
+			}
 			ids := make([]sqltypes.Value, 0, len(subQueryResult.Rows))
+
 			for _, row := range subQueryResult.Rows {
 				ids = append(ids, row[i])
 			}
 			if err := colVindex.Vindex.(vindexes.Lookup).Delete(vcursor, ids, ksid); err != nil {
+				return err
+			}
+			if err := route.processOwned(vcursor, []sqltypes.Value{resolvedVal}, colVindex, bindVars, [][]byte{ksid}); err != nil {
 				return err
 			}
 		}
@@ -713,27 +721,6 @@ func (route *Route) processGenerate(vcursor VCursor, bindVars map[string]*queryp
 		}
 	}
 	return insertID, nil
-}
-
-// insertUpdatedVindexEntries inserts vindex entries are being changed by an update statement
-func (route *Route) insertUpdatedVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, ksid []byte) error {
-	if len(route.ChangedVindexValues) == 0 {
-		return nil
-	}
-
-	for _, colVindex := range route.Table.Owned {
-		if colValue, ok := route.ChangedVindexValues[colVindex.Name]; ok {
-			resolvedVal, err := colValue.ResolveValue(bindVars)
-			if err != nil {
-				return vterrors.Wrap(err, "insertUpdatedVindexEntries")
-			}
-			err = route.processOwned(vcursor, []sqltypes.Value{resolvedVal}, colVindex, bindVars, [][]byte{ksid})
-			if err != nil {
-				return vterrors.Wrap(err, "insertUpdatedVindexEntries")
-			}
-		}
-	}
-	return nil
 }
 
 // getInsertShardedRoute performs all the vindex related work
