@@ -140,69 +140,61 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 	return has
 }
 
-func validateSubquerySamePlan(node sqlparser.SQLNode, outer *engine.Route, vschema VSchema) bool {
+func validateSubquerySamePlan(outer *engine.Route, vschema VSchema, nodes ...sqlparser.SQLNode) bool {
 	samePlan := true
-	inSubQuery := false
 
-	partialNode := node
-	switch typedNode := node.(type) {
-	case *sqlparser.Delete:
-		partialNode = &sqlparser.Delete{Targets: typedNode.Targets, Where: typedNode.Where, OrderBy: typedNode.OrderBy, Limit: typedNode.Limit}
-	case *sqlparser.Update:
-		partialNode = &sqlparser.Update{Exprs: typedNode.Exprs, Where: typedNode.Where, OrderBy: typedNode.OrderBy, Limit: typedNode.Limit}
-	case *sqlparser.Insert:
-		partialNode = typedNode
-	default:
-		panic("unexpected DML statement type")
-	}
+	for _, node := range nodes {
+		inSubQuery := false
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch nodeType := node.(type) {
+			case *sqlparser.Subquery, *sqlparser.Insert:
+				inSubQuery = true
+				return true, nil
+			case *sqlparser.Select:
+				if !inSubQuery {
+					return true, nil
+				}
+				bldr, err := processSelect(nodeType, vschema, nil)
+				if err != nil {
+					samePlan = false
+					return false, err
+				}
+				innerRoute, ok := bldr.(*route)
+				if !ok {
+					samePlan = false
+					return false, errors.New("dummy")
+				}
+				if innerRoute.ERoute.Keyspace.Name != outer.Keyspace.Name {
+					samePlan = false
+					return false, errors.New("dummy")
+				}
+			case *sqlparser.Union:
+				if !inSubQuery {
+					return true, nil
+				}
+				bldr, err := processUnion(nodeType, vschema, nil)
+				if err != nil {
+					samePlan = false
+					return false, err
+				}
+				innerRoute, ok := bldr.(*route)
+				if !ok {
+					samePlan = false
+					return false, errors.New("dummy")
+				}
+				if innerRoute.ERoute.Keyspace.Name != outer.Keyspace.Name {
+					samePlan = false
+					return false, errors.New("dummy")
+				}
+			}
 
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch nodeType := node.(type) {
-		case *sqlparser.Subquery, *sqlparser.Insert:
-			inSubQuery = true
 			return true, nil
-		case *sqlparser.Select:
-			if !inSubQuery {
-				return true, nil
-			}
-			bldr, err := processSelect(nodeType, vschema, nil)
-			if err != nil {
-				samePlan = false
-				return false, err
-			}
-			innerRoute, ok := bldr.(*route)
-			if !ok {
-				samePlan = false
-				return false, errors.New("dummy")
-			}
-			if innerRoute.ERoute.Keyspace.Name != outer.Keyspace.Name {
-				samePlan = false
-				return false, errors.New("dummy")
-			}
-		case *sqlparser.Union:
-			if !inSubQuery {
-				return true, nil
-			}
-			bldr, err := processUnion(nodeType, vschema, nil)
-			if err != nil {
-				samePlan = false
-				return false, err
-			}
-			innerRoute, ok := bldr.(*route)
-			if !ok {
-				samePlan = false
-				return false, errors.New("dummy")
-			}
-			if innerRoute.ERoute.Keyspace.Name != outer.Keyspace.Name {
-				samePlan = false
-				return false, errors.New("dummy")
-			}
+		}, node)
+		if !samePlan {
+			return false
 		}
-
-		return true, nil
-	}, partialNode)
-
-	return samePlan
+	}
+	return true
 }
 
 func valEqual(a, b sqlparser.Expr) bool {
