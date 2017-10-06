@@ -144,6 +144,18 @@ func validateSubquerySamePlan(node sqlparser.SQLNode, outer *engine.Route, vsche
 	samePlan := true
 	inSubQuery := false
 
+	partialNode := node
+	switch typedNode := node.(type) {
+	case *sqlparser.Delete:
+		partialNode = &sqlparser.Delete{Targets: typedNode.Targets, Where: typedNode.Where, OrderBy: typedNode.OrderBy, Limit: typedNode.Limit}
+	case *sqlparser.Update:
+		partialNode = &sqlparser.Update{Exprs: typedNode.Exprs, Where: typedNode.Where, OrderBy: typedNode.OrderBy, Limit: typedNode.Limit}
+	case *sqlparser.Insert:
+		partialNode = typedNode
+	default:
+		panic("unexpected DML statement type")
+	}
+
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch nodeType := node.(type) {
 		case *sqlparser.Subquery, *sqlparser.Insert:
@@ -188,7 +200,7 @@ func validateSubquerySamePlan(node sqlparser.SQLNode, outer *engine.Route, vsche
 		}
 
 		return true, nil
-	}, node)
+	}, partialNode)
 
 	return samePlan
 }

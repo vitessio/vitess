@@ -103,7 +103,7 @@ func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.C
 	return false
 }
 
-// buildUpdatePlan builds the instructions for a DELETE statement.
+// buildDeletePlan builds the instructions for a DELETE statement.
 func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Route, error) {
 	er := &engine.Route{
 		Query: generateQuery(del),
