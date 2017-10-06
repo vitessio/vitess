@@ -40,7 +40,6 @@ func resetVariables() {
 	queueExceededDryRun.Reset()
 	globalQueueExceeded.Set(0)
 	globalQueueExceededDryRun.Set(0)
-	*tabletenv.RedactDebugUIQueries = false
 }
 
 func TestTxSerializer_NoHotRow(t *testing.T) {
@@ -88,6 +87,7 @@ func TestTxSerializerRedactDebugUI(t *testing.T) {
 	if got, want := waits.Counts()["t1"], int64(0); got != want {
 		t.Fatalf("wrong Waits variable: got = %v, want = %v", got, want)
 	}
+	*tabletenv.RedactDebugUIQueries = false
 }
 
 func TestTxSerializer(t *testing.T) {
