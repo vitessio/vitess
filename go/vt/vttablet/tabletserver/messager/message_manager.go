@@ -88,6 +88,74 @@ type receiverWithStatus struct {
 }
 
 // messageManager manages messages for a message table.
+//
+// messageManager has three core components that interact with each other.
+// 1. The cache: this is essentially the send queue. Its size is limited by the
+// number of rows.
+// 2. The send loop: this loop pulls items out of the cache and sends them to the
+// various clients.
+// 3. The poller: this wakes up periodically to fill the cache with values by
+// reading the message table from the database.
+// The message manager operates in three modes:
+//
+// Idle mode
+// This mode is entered if there is no client connected or if there are
+// no outstanding messages to be sent. In this mode:
+// The cache is empty.
+// The send loop is in a cond.Wait state doing nothing.
+// The poller wakes up periodically, but terminates immediately.
+// Idle mode is exited when there is at least one client connected
+// and there are pending messages to be sent.
+//
+// Steady state mode
+// In this mode, there are connected clients and there is a continuous
+// stream of messages being sent. The cache is not full, and there are
+// occasional resends.
+// Message creation inserts rows to the database and adds them to the cache.
+// Each addition makes sure the send loop is awakened if it's waiting.
+// The send loop continuously pulls items out of the cache and sends them.
+// After every successful send, the messages are postponed, and are
+// also removed from the cache. If a send failed, then the messages are
+// just removed from the cache. This triggers the messagesPending state explained
+// below.
+// The poller wakes up periodically, loads messages that are due and adds them
+// to the cache. Most of these items are likely to be those that did not
+// receive a timely ack.
+//
+// messagesPending mode
+// This mode is a variation of the steady state mode. This mode is
+// entered when there are outstanding items on disk that need to be sent
+// but are not present in the cache. This state can be entered in one
+// of three ways:
+// 1. The poller read returns as many rows as the cache size
+// 2. The Add of a message fails (cache full).
+// 3. A send failed that caused a message to be discarded without postponement.
+// In any of the above cases, the messagesPending flag gets turned on.
+// In this phase, the send loop proactively wakes up the poller every time
+// it clears the cache.
+// The system exits the messagesPending state if the number of items the poller
+// loads are less than the cache size and all cache adds are successful.
+// If so, the system reverts to the steady state mode.
+//
+// Rate limiting
+// There are two ways for the system to rate-limit:
+// 1. Client ingestion rate. If clients ingest messages slowly,
+// that makes the senders wait on them to send more messages.
+// 2. Postpone rate limiting: A client is considered to be non-busy only
+// after it has postponed the message it has sent. This way, if postpones
+// are too slow, the clients become less available and essentially
+// limit the send rate to how fast messages can be postponed.
+// The postpone functions also needs to obtain a semaphore that limits
+// the number of tx pool connections they can occupy.
+//
+// Client load balancing
+// The messages are sent to the clients in a round-robin fashion.
+// If, for some reason, a client is closed, the load balancer resets
+// by starting with the first non-busy client.
+//
+// The Purge thread
+// This thread is mostly independent. It wakes up periodically
+// to delete old rows that were successfully acked.
 type messageManager struct {
 	DBLock sync.Mutex
 	tsv    TabletService
@@ -302,6 +370,12 @@ func (mm *messageManager) Add(mr *MessageRow) bool {
 		return false
 	}
 	if !mm.cache.Add(mr) {
+		// Cache is full. Enter "messagesPending" mode to let the poller
+		// fill the cache with messages from disk as soon as a cache
+		// slot becomes available.
+		// We also skip notifying the send routine via mm.cond.Broadcast()
+		// because a full cache means that it's already active.
+		mm.messagesPending = true
 		return false
 	}
 	mm.cond.Broadcast()
@@ -321,10 +395,14 @@ func (mm *messageManager) runSend() {
 				mm.mu.Unlock()
 				return
 			}
+
+			// If there are no receivers, we wait.
 			if mm.curReceiver == -1 {
 				mm.cond.Wait()
 				continue
 			}
+
+			// Fetch rows from cache.
 			lateCount := int64(0)
 			timingsKey := []string{mm.name.String()}
 			for i := 0; i < mm.batchSize; i++ {
@@ -339,11 +417,14 @@ func (mm *messageManager) runSend() {
 				break
 			}
 			MessageStats.Add([]string{mm.name.String(), "Delayed"}, lateCount)
+
+			// We have rows to send, break out of this loop.
 			if rows != nil {
 				break
 			}
+
 			if mm.messagesPending {
-				// Trigger the poller to fetch more.
+				// If messages are pending, trigger the poller to fetch more.
 				// Do this as a separate goroutine. Otherwise, this could cause
 				// the following deadlock:
 				// 1. runSend obtains a lock
@@ -352,6 +433,8 @@ func (mm *messageManager) runSend() {
 				// this function cannot return until poller returns.
 				go mm.pollerTicks.Trigger()
 			}
+
+			// There are no rows in the cache. We wait.
 			mm.cond.Wait()
 		}
 		MessageStats.Add([]string{mm.name.String(), "Sent"}, int64(len(rows)))
@@ -398,19 +481,37 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 
 	if err := receiver.receiver.Send(qr); err != nil {
 		if err == io.EOF {
-			// If the receiver ended the stream, we want the messages
-			// to be resent ASAP without postponement. Setting messagesPending
-			// will trigger the poller as soon as the cache is clear.
+			// If the receiver ended the stream, we do not postpone the message.
+			// Instead, we mark messagesPending, which will proactively trigger
+			// the poller when cache goes empty, and the message will be immediately
+			// resent through another receiver.
 			mm.mu.Lock()
 			mm.messagesPending = true
+			// If this was the last message from the cache, the send loop
+			// could have gone idle. If so, wake it up.
+			mm.cond.Broadcast()
 			mm.mu.Unlock()
-			// No need to call Cancel. messageReceiver already
+			// No need to call cancel. messageReceiver already
 			// does that before returning this error.
 			mm.unsubscribe(receiver.receiver)
-		} else {
-			log.Errorf("Error sending messages: %v", qr)
+			return
 		}
-		return
+
+		// A rare corner case:
+		// If we fail to send the field info, then we should not send
+		// rows on this connection anymore. We should instead terminate
+		// the connection.
+		if len(ids) == 0 {
+			receiver.receiver.cancel()
+			mm.unsubscribe(receiver.receiver)
+			log.Errorf("Terminating connection due to error sending field info: %v", err)
+			return
+		}
+
+		// Log the error, but we still want to postpone the message.
+		// Otherwise, if this is a chronic failure like "message too
+		// big", we'll end up spamming non-stop.
+		log.Errorf("Error sending messages: %v: %v", qr, err)
 	}
 	mm.postpone(mm.tsv, mm.name.String(), mm.ackWaitTime, ids)
 }
