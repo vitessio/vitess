@@ -51,7 +51,8 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, err
 
 	er.Keyspace = rb.ERoute.Keyspace
 	if !er.Keyspace.Sharded {
-		if !validateSubquerySamePlan(upd, rb.ERoute, vschema) {
+		// We only validate non-table subexpressions because the previous analysis has already validated them.
+		if !validateSubquerySamePlan(rb.ERoute, vschema, upd.Exprs, upd.Where, upd.OrderBy, upd.Limit) {
 			return nil, errors.New("unsupported: sharded subqueries in DML")
 		}
 		er.Opcode = engine.UpdateUnsharded
@@ -103,7 +104,7 @@ func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.C
 	return false
 }
 
-// buildUpdatePlan builds the instructions for a DELETE statement.
+// buildDeletePlan builds the instructions for a DELETE statement.
 func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Route, error) {
 	er := &engine.Route{
 		Query: generateQuery(del),
@@ -118,7 +119,8 @@ func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Route, err
 	}
 	er.Keyspace = rb.ERoute.Keyspace
 	if !er.Keyspace.Sharded {
-		if !validateSubquerySamePlan(del, rb.ERoute, vschema) {
+		// We only validate non-table subexpressions because the previous analysis has already validated them.
+		if !validateSubquerySamePlan(rb.ERoute, vschema, del.Targets, del.Where, del.OrderBy, del.Limit) {
 			return nil, errors.New("unsupported: sharded subqueries in DML")
 		}
 		er.Opcode = engine.DeleteUnsharded
