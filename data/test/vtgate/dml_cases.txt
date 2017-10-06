@@ -76,6 +76,20 @@
   }
 }
 
+# update with join subquery
+"update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col < 1000"
+{
+  "Original": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col \u003c 1000",
+  "Instructions": {
+    "Opcode": "UpdateUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col \u003c 1000"
+  }
+}
+
 # delete unsharded
 "delete from unsharded"
 {
@@ -337,6 +351,21 @@
       "Sharded": false
     },
     "Query": "insert into unsharded select id from unsharded_auto",
+    "Table": "unsharded"
+  }
+}
+
+# insert unsharded with select with join
+"insert into unsharded select id from unsharded join unsharded_auto"
+{
+  "Original": "insert into unsharded select id from unsharded join unsharded_auto",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into unsharded select id from unsharded join unsharded_auto",
     "Table": "unsharded"
   }
 }
