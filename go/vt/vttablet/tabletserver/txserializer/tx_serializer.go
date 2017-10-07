@@ -19,15 +19,19 @@ limitations under the License.
 package txserializer
 
 import (
+	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -274,6 +278,37 @@ func (t *TxSerializer) Pending(key string) int {
 		return 0
 	}
 	return q.size
+}
+
+// ServeHTTP lists the most recent, cached queries and their count.
+func (t *TxSerializer) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+	if *tabletenv.RedactDebugUIQueries {
+		response.Write([]byte(`
+	<!DOCTYPE html>
+	<html>
+	<body>
+	<h1>Redacted</h1>
+	<p>/debug/hotrows has been redacted for your protection</p>
+	</body>
+	</html>
+		`))
+		return
+	}
+
+	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
+		acl.SendError(response, err)
+		return
+	}
+	items := t.Items()
+	response.Header().Set("Content-Type", "text/plain")
+	if items == nil {
+		response.Write([]byte("empty\n"))
+		return
+	}
+	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(items))))
+	for _, v := range items {
+		response.Write([]byte(fmt.Sprintf("%v: %s\n", v.Count, v.Query)))
+	}
 }
 
 // queue represents the local queue for a particular row (range).

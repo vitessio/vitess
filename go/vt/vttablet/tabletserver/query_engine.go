@@ -228,13 +228,13 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		_ = stats.NewMultiCountersFunc("QueryRowCounts", []string{"Table", "Plan"}, qe.getQueryRowCount)
 		_ = stats.NewMultiCountersFunc("QueryErrorCounts", []string{"Table", "Plan"}, qe.getQueryErrorCount)
 
-		http.Handle("/debug/consolidations", qe.consolidator)
 		http.Handle("/debug/hotrows", qe.txSerializer)
 
 		endpoints := []string{
 			"/debug/tablet_plans",
 			"/debug/query_stats",
 			"/debug/query_rules",
+			"/debug/consolidations",
 		}
 		for _, ep := range endpoints {
 			http.Handle(ep, qe)
@@ -492,6 +492,8 @@ func (qe *QueryEngine) ServeHTTP(response http.ResponseWriter, request *http.Req
 		qe.handleHTTPQueryStats(response, request)
 	case "/debug/query_rules":
 		qe.handleHTTPQueryRules(response, request)
+	case "/debug/consolidations":
+		qe.handleHTTPConsolidations(response, request)
 	default:
 		response.WriteHeader(http.StatusNotFound)
 	}
@@ -545,4 +547,35 @@ func (qe *QueryEngine) handleHTTPQueryRules(response http.ResponseWriter, reques
 	buf := bytes.NewBuffer(nil)
 	json.HTMLEscape(buf, b)
 	response.Write(buf.Bytes())
+}
+
+// ServeHTTP lists the most recent, cached queries and their count.
+func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, request *http.Request) {
+	if *tabletenv.RedactDebugUIQueries {
+		response.Write([]byte(`
+	<!DOCTYPE html>
+	<html>
+	<body>
+	<h1>Redacted</h1>
+	<p>/debug/consolidations has been redacted for your protection</p>
+	</body>
+	</html>
+		`))
+		return
+	}
+
+	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
+		acl.SendError(response, err)
+		return
+	}
+	items := qe.consolidator.Items()
+	response.Header().Set("Content-Type", "text/plain")
+	if items == nil {
+		response.Write([]byte("empty\n"))
+		return
+	}
+	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(items))))
+	for _, v := range items {
+		response.Write([]byte(fmt.Sprintf("%v: %s\n", v.Count, v.Query)))
+	}
 }

@@ -17,12 +17,9 @@ limitations under the License.
 package sync2
 
 import (
-	"fmt"
-	"net/http"
 	"sync"
 	"sync/atomic"
 
-	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cache"
 )
 
@@ -100,24 +97,6 @@ func NewConsolidatorCache(capacity int64) *ConsolidatorCache {
 	return &ConsolidatorCache{cache.NewLRUCache(capacity)}
 }
 
-// ServeHTTP lists the most recent, cached queries and their count.
-func (cc *ConsolidatorCache) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
-		acl.SendError(response, err)
-		return
-	}
-	items := cc.Items()
-	response.Header().Set("Content-Type", "text/plain")
-	if items == nil {
-		response.Write([]byte("empty\n"))
-		return
-	}
-	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(items))))
-	for _, v := range items {
-		response.Write([]byte(fmt.Sprintf("%v: %s\n", v.Value.(*ccount).get(), v.Key)))
-	}
-}
-
 // Record increments the count for "query" by 1.
 // If it's not in the cache yet, it will be added.
 func (cc *ConsolidatorCache) Record(query string) {
@@ -127,6 +106,22 @@ func (cc *ConsolidatorCache) Record(query string) {
 		c := ccount(1)
 		cc.Set(query, &c)
 	}
+}
+
+// ConsolidatorCacheItem is a wrapper for the items in the consolidator cache
+type ConsolidatorCacheItem struct {
+	Query string
+	Count int64
+}
+
+// Items returns the items in the cache as an array of String, int64 structs
+func (cc *ConsolidatorCache) Items() []ConsolidatorCacheItem {
+	items := cc.LRUCache.Items()
+	ret := make([]ConsolidatorCacheItem, len(items), len(items))
+	for i, v := range items {
+		ret[i] = ConsolidatorCacheItem{Query: v.Key, Count: v.Value.(*ccount).get()}
+	}
+	return ret
 }
 
 // ccount elements are used with a cache.LRUCache object to track if another
