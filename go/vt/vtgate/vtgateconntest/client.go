@@ -2226,6 +2226,7 @@ var execMap = map[string]struct {
 			Session: &vtgatepb.Session{
 				TargetString: "connection_ks@rdonly",
 				Options:      testExecuteOptions,
+				Autocommit:   true,
 			},
 		},
 		shardQuery: &queryExecuteShards{
