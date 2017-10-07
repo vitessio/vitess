@@ -282,6 +282,7 @@ func (mm *messageManager) Close() {
 		rcvr.receiver.cancel()
 	}
 	mm.receivers = nil
+	MessageStats.Set([]string{mm.name.String(), "ClientCount"}, 0)
 	mm.cache.Clear()
 	mm.cond.Broadcast()
 	mm.mu.Unlock()
@@ -295,7 +296,6 @@ func (mm *messageManager) Close() {
 // cancel or timeout, or tabletserver shutdown, etc.
 func (mm *messageManager) Subscribe(ctx context.Context, send func(*sqltypes.Result) error) <-chan struct{} {
 	receiver, done := newMessageReceiver(ctx, send)
-	MessageStats.Add([]string{mm.name.String(), "ClientCount"}, 1)
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 	withStatus := &receiverWithStatus{
@@ -303,6 +303,7 @@ func (mm *messageManager) Subscribe(ctx context.Context, send func(*sqltypes.Res
 		busy:     true,
 	}
 	mm.receivers = append(mm.receivers, withStatus)
+	MessageStats.Set([]string{mm.name.String(), "ClientCount"}, int64(len(mm.receivers)))
 
 	// Send the message asynchronously.
 	mm.wg.Add(1)
@@ -317,7 +318,6 @@ func (mm *messageManager) Subscribe(ctx context.Context, send func(*sqltypes.Res
 }
 
 func (mm *messageManager) unsubscribe(receiver *messageReceiver) {
-	MessageStats.Add([]string{mm.name.String(), "ClientCount"}, -1)
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 	for i, rcv := range mm.receivers {
@@ -328,6 +328,7 @@ func (mm *messageManager) unsubscribe(receiver *messageReceiver) {
 		n := len(mm.receivers)
 		copy(mm.receivers[i:n-1], mm.receivers[i+1:n])
 		mm.receivers = mm.receivers[0 : n-1]
+		MessageStats.Set([]string{mm.name.String(), "ClientCount"}, int64(len(mm.receivers)))
 		break
 	}
 	// curReceiver is obsolete. Recompute.
