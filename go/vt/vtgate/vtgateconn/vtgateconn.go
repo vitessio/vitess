@@ -50,6 +50,7 @@ func (conn *VTGateConn) Session(targetString string, options *querypb.ExecuteOpt
 		session: &vtgatepb.Session{
 			TargetString: targetString,
 			Options:      options,
+			Autocommit:   true,
 		},
 		impl: conn.impl,
 	}
