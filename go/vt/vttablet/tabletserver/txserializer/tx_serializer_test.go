@@ -68,6 +68,10 @@ func TestTxSerializer_NoHotRow(t *testing.T) {
 func TestTxSerializerRedactDebugUI(t *testing.T) {
 	resetVariables()
 	*tabletenv.RedactDebugUIQueries = true
+	defer func() {
+		*tabletenv.RedactDebugUIQueries = false
+	}()
+
 	txs := New(false, 1, 1, 5)
 
 	done, waited, err := txs.Wait(context.Background(), "t1 where1", "t1")
@@ -87,7 +91,6 @@ func TestTxSerializerRedactDebugUI(t *testing.T) {
 	if got, want := waits.Counts()["t1"], int64(0); got != want {
 		t.Fatalf("wrong Waits variable: got = %v, want = %v", got, want)
 	}
-	*tabletenv.RedactDebugUIQueries = false
 }
 
 func TestTxSerializer(t *testing.T) {
