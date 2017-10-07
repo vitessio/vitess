@@ -265,6 +265,46 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 	}
 }
 
+// TestQueryExecutorPlanInsertMessageAutoInc tests that the query that reads
+// back rows correctly handles auto-inc values.
+func TestQueryExecutorPlanInsertMessageAutoInc(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	db.AddQueryPattern("insert into msg\\(time_scheduled, id, message, time_next, time_created, epoch\\) values \\(1, .*", &sqltypes.Result{InsertID: 2})
+	query := "insert into msg(time_scheduled, id, message) values(1, null, 3), (1, 3, 3), (1, null, 3)"
+	// First auto-inc value should be used.
+	// But subsequent ones will not be used because value was supplied
+	// for the second row.
+	db.AddQuery(
+		"select time_next, epoch, time_created, id, time_scheduled, message from msg where (time_scheduled = 1 and id = 2) or (time_scheduled = 1 and id = 3) or (time_scheduled = 1 and id = null)",
+		&sqltypes.Result{
+			Fields: []*querypb.Field{
+				{Type: sqltypes.Int64},
+				{Type: sqltypes.Int64},
+				{Type: sqltypes.Int64},
+				{Type: sqltypes.Int64},
+				{Type: sqltypes.Int64},
+				{Type: sqltypes.Int64},
+			},
+			RowsAffected: 0,
+			Rows:         [][]sqltypes.Value{},
+		},
+	)
+	want := &sqltypes.Result{InsertID: 2}
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	qre := newTestQueryExecutor(ctx, tsv, query, 0)
+	defer tsv.StopService()
+	checkPlanID(t, planbuilder.PlanInsertMessage, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+}
+
 func TestQueryExecutorInsertMessageACL(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
 	tableacl.Register(aclName, &simpleacl.Factory{})
