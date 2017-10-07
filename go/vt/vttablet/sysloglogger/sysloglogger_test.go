@@ -137,7 +137,7 @@ func TestSyslog(t *testing.T) {
 }
 
 // TestSyslogRedacted sends a stream of five query records to the plugin, and verifies that they are logged
-// when redaction is enabled
+// when redaction is enabled.
 func TestSyslogRedacted(t *testing.T) {
 	// Overwrite the usual syslog writer and StatsLogger subscription channel with mocks
 	*tabletenv.RedactDebugUIQueries = true
