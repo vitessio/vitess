@@ -30,6 +30,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/event"
+	"github.com/youtube/vitess/go/sqlescape"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/discovery"
@@ -699,7 +700,7 @@ func (scw *LegacySplitCloneWorker) processData(ctx context.Context, dbNames []st
 	// different dbName.
 	baseCmds := make([]string, len(dbNames))
 	for i, dbName := range dbNames {
-		baseCmds[i] = "INSERT INTO " + escape(dbName) + "." + escape(td.Name) + " (" + strings.Join(escapeAll(td.Columns), ", ") + ") VALUES "
+		baseCmds[i] = "INSERT INTO " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID(td.Name) + " (" + strings.Join(escapeAll(td.Columns), ", ") + ") VALUES "
 	}
 	sr := rowSplitter.StartSplit()
 	packCount := 0

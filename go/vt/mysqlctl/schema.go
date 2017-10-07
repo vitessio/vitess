@@ -24,10 +24,10 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/sqlescape"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	"github.com/youtube/vitess/go/vt/sqlparser"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -50,7 +50,7 @@ func (mysqld *Mysqld) executeSchemaCommands(sql string) error {
 func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	ctx := context.TODO()
 	sd := &tabletmanagerdatapb.SchemaDefinition{}
-	backtickDBName := sqlparser.Backtick(dbName)
+	backtickDBName := sqlescape.EscapeID(dbName)
 
 	// get the database creation command
 	qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE DATABASE IF NOT EXISTS %s", backtickDBName))
@@ -99,7 +99,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 			}
 		}
 
-		qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE TABLE %s.%s", backtickDBName, sqlparser.Backtick(tableName)))
+		qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE TABLE %s.%s", backtickDBName, sqlescape.EscapeID(tableName)))
 		if fetchErr != nil {
 			return nil, fetchErr
 		}
@@ -165,7 +165,7 @@ func (mysqld *Mysqld) GetColumns(dbName, table string) ([]string, error) {
 		return nil, err
 	}
 	defer conn.Recycle()
-	qr, err := conn.ExecuteFetch(fmt.Sprintf("SELECT * FROM %s.%s WHERE 1=0", sqlparser.Backtick(dbName), sqlparser.Backtick(table)), 0, true)
+	qr, err := conn.ExecuteFetch(fmt.Sprintf("SELECT * FROM %s.%s WHERE 1=0", sqlescape.EscapeID(dbName), sqlescape.EscapeID(table)), 0, true)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +184,7 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, erro
 		return nil, err
 	}
 	defer conn.Recycle()
-	qr, err := conn.ExecuteFetch(fmt.Sprintf("SHOW INDEX FROM %s.%s", sqlparser.Backtick(dbName), sqlparser.Backtick(table)), 100, true)
+	qr, err := conn.ExecuteFetch(fmt.Sprintf("SHOW INDEX FROM %s.%s", sqlescape.EscapeID(dbName), sqlescape.EscapeID(table)), 100, true)
 	if err != nil {
 		return nil, err
 	}
@@ -336,7 +336,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *tmutils.SchemaCha
 	}
 
 	// add a 'use XXX' in front of the SQL
-	sql = fmt.Sprintf("USE %s;\n%s", sqlparser.Backtick(dbName), sql)
+	sql = fmt.Sprintf("USE %s;\n%s", sqlescape.EscapeID(dbName), sql)
 
 	// execute the schema change using an external mysql process
 	// (to benefit from the extra commands in mysql cli)

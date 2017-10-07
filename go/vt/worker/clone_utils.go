@@ -25,6 +25,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/sqlescape"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -111,27 +112,11 @@ func makeValueString(fields []*querypb.Field, rows [][]sqltypes.Value) string {
 	return buf.String()
 }
 
-// escape adds surrounding backticks (`) to an MySQL identifier.
-// This is required for identifiers which are reserved words e.g. "CREATE".
-func escape(identifier string) string {
-	b := bytes.Buffer{}
-	writeEscaped(&b, identifier)
-	return b.String()
-}
-
-// escapeAll runs escape() for all entries in the slice.
+// escapeAll runs sqlescape.EscapeID() for all entries in the slice.
 func escapeAll(identifiers []string) []string {
 	result := make([]string, len(identifiers))
 	for i := range identifiers {
-		result[i] = escape(identifiers[i])
+		result[i] = sqlescape.EscapeID(identifiers[i])
 	}
 	return result
-}
-
-// writeEscaped escapes the SQL "identifier" before writing it to "b".
-// See also escape().
-func writeEscaped(b *bytes.Buffer, identifier string) {
-	b.WriteByte('`')
-	b.WriteString(identifier)
-	b.WriteByte('`')
 }
