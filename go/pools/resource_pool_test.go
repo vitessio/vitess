@@ -49,7 +49,7 @@ func FailFactory() (Resource, error) {
 }
 
 func SlowFailFactory() (Resource, error) {
-	time.Sleep(10 * time.Nanosecond)
+	time.Sleep(10 * time.Millisecond)
 	return nil, errors.New("Failed")
 }
 
@@ -308,13 +308,13 @@ func TestShrinking(t *testing.T) {
 		p.Put(r)
 		done <- true
 	}()
-	time.Sleep(10 * time.Nanosecond)
+	time.Sleep(10 * time.Millisecond)
 
 	// This will wait till we Put
 	go p.SetCapacity(2)
-	time.Sleep(10 * time.Nanosecond)
+	time.Sleep(10 * time.Millisecond)
 	go p.SetCapacity(4)
-	time.Sleep(10 * time.Nanosecond)
+	time.Sleep(10 * time.Millisecond)
 
 	// This should not hang
 	for i := 0; i < 3; i++ {
@@ -360,7 +360,7 @@ func TestClosing(t *testing.T) {
 	}()
 
 	// Wait for goroutine to call Close
-	time.Sleep(10 * time.Nanosecond)
+	time.Sleep(10 * time.Millisecond)
 	stats := p.StatsJSON()
 	expected := `{"Capacity": 0, "Available": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000}`
 	if stats != expected {
@@ -398,7 +398,7 @@ func TestIdleTimeout(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Nanosecond)
+	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond)
 	defer p.Close()
 
 	r, err := p.Get(ctx)
@@ -412,7 +412,7 @@ func TestIdleTimeout(t *testing.T) {
 	if count.Get() != 1 {
 		t.Errorf("Expecting 1, received %d", count.Get())
 	}
-	time.Sleep(20 * time.Nanosecond)
+	time.Sleep(20 * time.Millisecond)
 	r, err = p.Get(ctx)
 	if err != nil {
 		t.Errorf("Unexpected error %v", err)
