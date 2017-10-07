@@ -23,10 +23,10 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
+	"github.com/youtube/vitess/go/sqlescape"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -120,7 +120,7 @@ func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *Writer {
 	tw := NewWriter(&fakeMysqlChecker{},
 		topodatapb.TabletAlias{Cell: "test", Uid: 1111},
 		config)
-	tw.dbName = sqlparser.Backtick(dbc.SidecarDBName)
+	tw.dbName = sqlescape.EscapeID(dbc.SidecarDBName)
 	tw.keyspaceShard = "test:0"
 	tw.now = nowFunc
 	tw.pool.Open(&dbc.App, &dbc.Dba, &dbc.AppDebug)

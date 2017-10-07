@@ -387,24 +387,6 @@ func TestCompliantName(t *testing.T) {
 	}
 }
 
-func TestEscape(t *testing.T) {
-	testcases := []struct {
-		in, out string
-	}{{
-		in:  "aa",
-		out: "`aa`",
-	}, {
-		in:  "a`a",
-		out: "`a``a`",
-	}}
-	for _, tc := range testcases {
-		out := Backtick(tc.in)
-		if out != tc.out {
-			t.Errorf("Escape(%s): %s, want %s", tc.in, out, tc.out)
-		}
-	}
-}
-
 func TestColumns_FindColumn(t *testing.T) {
 	cols := Columns{NewColIdent("a"), NewColIdent("c"), NewColIdent("b"), NewColIdent("0")}
 
