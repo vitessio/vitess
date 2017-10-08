@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-func expectBatch(testcase string, b *Batcher, want int32, t *testing.T) {
+func expectBatch(testcase string, b *Batcher, want int, t *testing.T) {
 	id := b.Wait()
 	if id != want {
 		t.Errorf("%s: got %d, want %d", testcase, id, want)
@@ -29,7 +29,7 @@ func expectBatch(testcase string, b *Batcher, want int32, t *testing.T) {
 }
 
 func TestBatcher(t *testing.T) {
-	interval := time.Duration(10 * 1000 * 1000 /* 10ms */)
+	interval := time.Duration(50 * time.Millisecond)
 	b := NewBatcher(interval)
 
 	// test single waiter

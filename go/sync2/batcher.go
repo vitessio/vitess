@@ -29,7 +29,7 @@ import (
 // Hence a waiter is delayed for at most the batch interval.
 type Batcher struct {
 	interval time.Duration
-	queue    chan int32
+	queue    chan int
 	waiters  AtomicInt32
 	nextID   AtomicInt32
 }
@@ -38,14 +38,14 @@ type Batcher struct {
 func NewBatcher(interval time.Duration) *Batcher {
 	return &Batcher{
 		interval: interval,
-		queue:    make(chan int32),
+		queue:    make(chan int),
 		waiters:  NewAtomicInt32(0),
 		nextID:   NewAtomicInt32(0),
 	}
 }
 
 // Wait adds a new waiter to the queue and blocks until the next batch
-func (b *Batcher) Wait() int32 {
+func (b *Batcher) Wait() int {
 	numWaiters := b.waiters.Add(1)
 	if numWaiters == 1 {
 		b.newBatch()
@@ -69,7 +69,7 @@ func (b *Batcher) newBatch() {
 		}
 
 		for i := int32(0); i < waiters; i++ {
-			b.queue <- id
+			b.queue <- int(id)
 		}
 	}()
 }
