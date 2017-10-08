@@ -52,8 +52,8 @@ type Options struct {
 // TabletQuery defines a query that was sent to a given tablet and how it was
 // processed in mysql
 type TabletQuery struct {
-	// Sequence number of the query
-	Time int32
+	// Logical time of the query
+	Time int
 
 	// SQL command sent to the given tablet
 	SQL string
@@ -66,7 +66,7 @@ type TabletQuery struct {
 // processed in mysql
 type MysqlQuery struct {
 	// Sequence number of the query
-	Time int32
+	Time int
 
 	// SQL command sent to the given tablet
 	SQL string
@@ -83,7 +83,7 @@ func (tq *TabletQuery) MarshalJSON() ([]byte, error) {
 	}
 
 	return jsonutil.MarshalNoEscape(&struct {
-		Time     int32
+		Time     int
 		SQL      string
 		BindVars map[string]string
 	}{
@@ -232,7 +232,7 @@ func explain(sql string) (*Explain, error) {
 
 type outputQuery struct {
 	tablet string
-	Time   int32
+	Time   int
 	sql    string
 }
 
