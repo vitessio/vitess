@@ -199,6 +199,7 @@ func Run(sql string) ([]*Explain, error) {
 		}
 
 		if sql != "" {
+			// Reset the global time simulator for each query
 			batchTime = sync2.NewBatcher(time.Duration(10 * time.Millisecond))
 			log.V(100).Infof("explain %s", sql)
 			e, err := explain(sql)
