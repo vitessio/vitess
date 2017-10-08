@@ -430,14 +430,17 @@ func (tablet *fakeTablet) HandleQuery(c *mysql.Conn, q []byte, callback func(*sq
 					colNames = append(colNames, sqlparser.String(node))
 					switch node.Type {
 					case sqlparser.IntVal:
+						fallthrough
+					case sqlparser.HexNum:
+						fallthrough
+					case sqlparser.HexVal:
+						fallthrough
+					case sqlparser.BitVal:
 						colTypes = append(colTypes, querypb.Type_INT32)
-						break
 					case sqlparser.StrVal:
 						colTypes = append(colTypes, querypb.Type_VARCHAR)
-						break
 					case sqlparser.FloatVal:
-						colTypes = append(colTypes, querypb.Type_VARCHAR)
-						break
+						colTypes = append(colTypes, querypb.Type_FLOAT64)
 					default:
 						return fmt.Errorf("unsupported sql value %s", sqlparser.String(node))
 					}
@@ -454,8 +457,6 @@ func (tablet *fakeTablet) HandleQuery(c *mysql.Conn, q []byte, callback func(*sq
 			}
 		}
 
-		// Generate a fake value for the given column. For numeric types,
-		// use the column index. For strings, use the column name + index.
 		fields := make([]*querypb.Field, len(colNames))
 		values := make([]sqltypes.Value, len(colNames))
 		for i, col := range colNames {
@@ -465,14 +466,15 @@ func (tablet *fakeTablet) HandleQuery(c *mysql.Conn, q []byte, callback func(*sq
 				Type: colType,
 			}
 
+			// Generate a fake value for the given column. For numeric types,
+			// use the column index. For all other types, just shortcut to using
+			// a string type that encodes the column name + index.
 			if sqltypes.IsIntegral(colType) {
 				values[i] = sqltypes.NewInt32(int32(i + 1))
 			} else if sqltypes.IsFloat(colType) {
 				values[i] = sqltypes.NewFloat64(1.0 + float64(i))
-			} else if sqltypes.IsBinary(colType) || sqltypes.IsText(colType) {
-				values[i] = sqltypes.NewVarChar(fmt.Sprintf("%s_val_%d", col, i+1))
 			} else {
-				return fmt.Errorf("unhandled type %d for col %s", colType, col)
+				values[i] = sqltypes.NewVarChar(fmt.Sprintf("%s_val_%d", col, i+1))
 			}
 		}
 		result = &sqltypes.Result{
