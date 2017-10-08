@@ -57,7 +57,7 @@ type fakeTablet struct {
 	tsv           *tabletserver.TabletServer
 	tabletQueries []*TabletQuery
 	mysqlQueries  []*MysqlQuery
-	currentTime   int32
+	currentTime   int
 }
 
 func newFakeTablet(t *topodatapb.Tablet) *fakeTablet {
