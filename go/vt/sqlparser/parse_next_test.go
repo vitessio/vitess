@@ -57,6 +57,44 @@ func TestParseNextValid(t *testing.T) {
 	}
 }
 
+// TestParseNextErrors tests all the error cases, and ensures a valid
+// SQL statement can be passed afterwards.
+func TestParseNextErrors(t *testing.T) {
+	for i, tcase := range invalidSQL {
+		if i == 5 || i == 6 || i == 14 {
+			// Skip a few of the tests which leave unclosed strings, or comments.
+			continue
+		}
+
+		sql := tcase.input + " ; select 1 from t"
+		tokens := NewStringTokenizer(sql)
+
+		// The first statement should be an error
+		_, err := ParseNext(tokens)
+		if err == nil || err.Error() != tcase.output {
+			t.Fatalf("[0] ParseNext(%q) err: %q, want %q", sql, err, tcase.output)
+			continue
+		}
+
+		// The second should be valid
+		tree, err := ParseNext(tokens)
+		if err != nil {
+			t.Fatalf("[1] ParseNext(%q) err: %q, want nil", sql, err)
+			continue
+		}
+
+		want := "select 1 from t"
+		if got := String(tree); got != want {
+			t.Fatalf("[1] ParseNext(%q) = %q, want %q", sql, got, want)
+		}
+
+		// Read once more and it should be EOF.
+		if tree, err := ParseNext(tokens); err != io.EOF {
+			t.Errorf("ParseNext(tokens) = (%q, %v) want io.EOF", String(tree), err)
+		}
+	}
+}
+
 // TestParseNextEdgeCases tests various ParseNext edge cases.
 func TestParseNextEdgeCases(t *testing.T) {
 	tests := []struct {
@@ -123,8 +161,3 @@ func TestParseNextEdgeCases(t *testing.T) {
 		}
 	}
 }
-
-// TODO Add Tests to check the resyncing after errors.
-// "sel ga blah ab a; select 1 from a;""
-// "; select 1"
-// "   ; select 1"
