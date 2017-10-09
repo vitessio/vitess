@@ -1361,8 +1361,8 @@ func TestCreateTable(t *testing.T) {
 	}
 }
 
-func TestErrors(t *testing.T) {
-	invalidSQL := []struct {
+var (
+	invalidSQL = []struct {
 		input  string
 		output string
 	}{{
@@ -1471,10 +1471,10 @@ func TestErrors(t *testing.T) {
 		input:  "select * from t where id = ((select a from t1 union select b from t2) order by a limit 1)",
 		output: "syntax error at position 76 near 'order'",
 	}}
+)
+
+func TestErrors(t *testing.T) {
 	for _, tcase := range invalidSQL {
-		if tcase.output == "" {
-			tcase.output = tcase.input
-		}
 		_, err := Parse(tcase.input)
 		if err == nil || err.Error() != tcase.output {
 			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
