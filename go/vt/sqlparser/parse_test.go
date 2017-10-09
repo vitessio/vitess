@@ -17,7 +17,6 @@ limitations under the License.
 package sqlparser
 
 import (
-	"io"
 	"strings"
 	"testing"
 )
@@ -904,12 +903,12 @@ func TestValid(t *testing.T) {
 		}
 		tree, err := Parse(tcase.input)
 		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
+			t.Errorf("Parse(%q) err: %v, want nil", tcase.input, err)
 			continue
 		}
 		out := String(tree)
 		if out != tcase.output {
-			t.Errorf("out: %s, want %s", out, tcase.output)
+			t.Errorf("Parse(%q) = %q, want: %q", tcase.input, out, tcase.output)
 		}
 		// This test just exercises the tree walking functionality.
 		// There's no way automated way to verify that a node calls
@@ -918,42 +917,6 @@ func TestValid(t *testing.T) {
 		Walk(func(node SQLNode) (bool, error) {
 			return true, nil
 		}, tree)
-	}
-}
-
-func TestParseNext(t *testing.T) {
-
-	// Test only the first N queries, because after that we hit errors
-	// TODO Remove this limit
-	testLimit := 275
-
-	// Uses all the valid test cases concatenated together (reading one at a time).
-	var sql string
-	for _, tcase := range validSQL[:testLimit] {
-		sql += tcase.input + ";"
-	}
-
-	tokens := NewStringTokenizer(sql)
-	for i, tcase := range validSQL[:testLimit] {
-		want := tcase.output
-		if want == "" {
-			want = tcase.input
-		}
-
-		tree, err := ParseNext(tokens)
-		if err != nil {
-			t.Fatalf("[%d] input: %q, err: %q", i, tcase.input+";", err)
-			continue
-		}
-
-		if got := String(tree); got != want {
-			t.Fatalf("got: %q, want %q", got, want)
-		}
-	}
-
-	// Read one more and it should be EOF
-	if tree, err := ParseNext(tokens); err != io.EOF {
-		t.Errorf("ParseNext(tokens) = (%v, %v) want io.EOF", tree, err)
 	}
 }
 
