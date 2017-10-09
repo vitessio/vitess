@@ -57,19 +57,6 @@ type VitessOption struct {
 	afterRun  func()
 }
 
-// WithEnvironment allows the user to configure the default Environment
-// used when launching the local cluster
-// See: Environment
-// Deprecated: It's recommended to use LocalCluster directly
-func WithEnvironment(env Environment) VitessOption {
-	return VitessOption{
-		beforeRun: func(hdl *Handle) error {
-			hdl.db.Env = env
-			return nil
-		},
-	}
-}
-
 // Verbose makes the underlying local_cluster verbose.
 // Deprecated: See LocalCluster, Config
 func Verbose(verbose bool) VitessOption {
