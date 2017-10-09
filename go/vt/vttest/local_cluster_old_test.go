@@ -89,7 +89,9 @@ func TestVitess(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	conn, err := vtgateconn.DialProtocol(ctx, vtgateProtocol(), vtgateAddr, 5*time.Second)
+
+	proto := hdl.db.Env.DefaultProtocol()
+	conn, err := vtgateconn.DialProtocol(ctx, proto, vtgateAddr, 5*time.Second)
 	if err != nil {
 		t.Error(err)
 		return

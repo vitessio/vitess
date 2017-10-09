@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2017 GitHub Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,426 +14,436 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package vttest provides the functionality to bring
-// up a test cluster.
 package vttest
 
 import (
+	"bufio"
+	"bytes"
+	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
-	"strconv"
+	"path/filepath"
 	"strings"
+	"unicode"
+
+	"github.com/youtube/vitess/go/sqltypes"
 
 	log "github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
-
 	"github.com/youtube/vitess/go/mysql"
 	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
 )
 
-// Handle allows you to interact with the processes launched by vttest.
-type Handle struct {
-	Data map[string]interface{}
+// Config are the settings used to configure the self-contained Vitess cluster.
+// The LocalCluster struct embeds Config so it's possible to either initialize
+// a LocalCluster with the given settings, or set the settings directly after
+// initialization.
+// All settings must be set before LocalCluster.Setup() is called.
+type Config struct {
+	// Topology defines the fake cluster's topology. This field is mandatory.
+	// See: vt/proto/vttest.VTTestTopology
+	Topology *vttestpb.VTTestTopology
 
-	cmd   *exec.Cmd
-	stdin io.WriteCloser
+	// Seed can be set with a SeedConfig struct to enable
+	// auto-initialization of the database cluster with random data.
+	// If nil, no random initialization will be performed.
+	// See: SeedConfig
+	Seed *SeedConfig
 
-	// schemaDir is the directory which will be passed as --schema_dir flag.
-	// We store it here because the VSchema() option must reference it.
-	schemaDir string
+	// SchemaDir is the directory for schema files. Within this dir,
+	// there should be a subdir for each keyspace. Within each keyspace
+	// dir, each file is executed as SQL after the database is created on
+	// each shard.
+	// If the directory contains a `vschema.json`` file, it will be used
+	// as the VSchema for the V3 API
+	SchemaDir string
 
-	// dbname is valid only for LaunchMySQL.
-	dbname string
+	// DefaultSchemaDir is the default directory for initial schema files.
+	// If no schema is found in SchemaDir, default to this location.
+	DefaultSchemaDir string
+
+	// Charset is the default charset used by MySQL
+	Charset string
+
+	// WebDir is the location of the vtcld web server files
+	WebDir string
+
+	// WebDir2 is the location of the vtcld2 web server files
+	WebDir2 string
+
+	// ExtraMyCnf are the extra .CNF files to be added to the MySQL config
+	ExtraMyCnf []string
+
+	// OnlyMySQL can be set so only MySQL is initialized as part of the
+	// local cluster configuration. The rest of the Vitess components will
+	// not be started.
+	OnlyMySQL bool
+
+	// SnapshotFile is the path to the MySQL Snapshot that will be used to
+	// initialize the mysqld instance in the cluster. Note that some environments
+	// do not suppport initialization through snapshot files.
+	SnapshotFile string
 }
 
-// VtgateAddress returns the address under which vtgate is reachable e.g.
-// "localhost:15991".
-// An error is returned if the data is not available.
-func (hdl *Handle) VtgateAddress() (string, error) {
-	if hdl.Data == nil {
-		return "", errors.New("Data field in Handle is empty")
+// DbName returns the default name for a database in this cluster.
+// If OnlyMySQL is set, this will be the name of the single database
+// created in MySQL. Otherwise, this will be the database that stores
+// the first keyspace in the topology.
+func (cfg *Config) DbName() string {
+	ns := cfg.Topology.GetKeyspaces()
+	if len(ns) > 0 {
+		return ns[0].Name
 	}
-	portName := "port"
-	if vtgateProtocol() == "grpc" {
-		portName = "grpc_port"
-	}
-	fport, ok := hdl.Data[portName]
-	if !ok {
-		return "", fmt.Errorf("port %v not found in map", portName)
-	}
-	port := int(fport.(float64))
-	return fmt.Sprintf("localhost:%d", port), nil
+	return ""
 }
 
-// VitessOption is the type for generic options to be passed in to LaunchVitess.
-type VitessOption struct {
-	// beforeRun is executed before we start run_local_database.py.
-	beforeRun func(*Handle) error
+// LocalCluster controls a local Vitess setup for testing, containing
+// a MySQL instance and one or more vtgate-equivalent access points.
+// To use, simply create a new LocalCluster instance and either pass in
+// the desired Config, or manually set each field on the struct itself.
+// Once the struct is configured, call LocalCluster.Setup() to instantiate
+// the cluster.
+// See: Config for configuration settings on the cluster
+type LocalCluster struct {
+	Config
 
-	// afterRun is executed after run_local_database.py has been
-	// started and is running (and is done reading and applying
-	// the schema).
-	afterRun func()
+	// Env is the Environment which will be used for unning this local cluster.
+	// It can be set by the user before calling Setup(). If not set, Setup() will
+	// use the NewDefaultEnv callback to instantiate an environment with the system
+	// default settings
+	Env Environment
+
+	mysql MySQLManager
+	vt    *VtProcess
 }
 
-// Verbose makes the underlying local_cluster verbose.
-func Verbose(verbose bool) VitessOption {
-	return VitessOption{
-		beforeRun: func(hdl *Handle) error {
-			if verbose {
-				hdl.cmd.Args = append(hdl.cmd.Args, "--verbose")
-			}
-			return nil
-		},
-	}
+// MySQLConnParams returns a mysql.ConnParams struct that can be used
+// to connect directly to the mysqld service in the self-contained cluster
+// This connection should be used for debug/introspection purposes; normal
+// cluster access should be performed through the vtgate port.
+func (db *LocalCluster) MySQLConnParams() mysql.ConnParams {
+	return db.mysql.Params(db.DbName())
 }
 
-// NoStderr makes the underlying local_cluster stderr output disapper.
-func NoStderr() VitessOption {
-	return VitessOption{
-		beforeRun: func(hdl *Handle) error {
-			hdl.cmd.Stderr = nil
-			return nil
-		},
+// Setup brings up the self-contained Vitess cluster by spinning up
+// MySQL and Vitess instances. The spawned processes will be running
+// until the TearDown() method is called.
+// Please ensure to `defer db.TearDown()` after calling this method
+func (db *LocalCluster) Setup() error {
+	var err error
+
+	if db.Env == nil {
+		log.Info("No environment in cluster settings. Creating default...")
+		db.Env, err = NewDefaultEnv()
+		if err != nil {
+			return err
+		}
 	}
+
+	log.Infof("LocalCluster environment: %+v", db.Env)
+
+	db.mysql, err = db.Env.MySQLManager(db.ExtraMyCnf, db.SnapshotFile)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Initializing MySQL Manager (%T)...", db.mysql)
+
+	if err := db.mysql.Setup(); err != nil {
+		log.Errorf("Mysqlctl failed to start: %s", err)
+		if err, ok := err.(*exec.ExitError); ok {
+			log.Errorf("stderr: %s", err.Stderr)
+		}
+		return err
+	}
+
+	mycfg, _ := json.Marshal(db.mysql.Params(""))
+	log.Infof("MySQL up: %s", mycfg)
+
+	if err := db.createDatabases(); err != nil {
+		return err
+	}
+
+	if err := db.loadSchema(); err != nil {
+		return err
+	}
+
+	if db.Seed != nil {
+		if err := db.populateWithRandomData(); err != nil {
+			return err
+		}
+	}
+
+	if !db.OnlyMySQL {
+		log.Infof("Starting vtcombo...")
+		db.vt = VtcomboProcess(db.Env, &db.Config, db.mysql)
+		if err := db.vt.WaitStart(); err != nil {
+			return err
+		}
+		log.Infof("vtcombo up: %s", db.vt.Address())
+	}
+
+	return nil
 }
 
-// SchemaDirectory is used to specify a directory to read schema from.
-// It cannot be used at the same time as Schema.
-func SchemaDirectory(dir string) VitessOption {
-	if dir == "" {
-		log.Fatal("BUG: provided directory must not be empty")
+// TearDown shuts down all the processes in the local cluster
+// and cleans up any temporary on-disk data.
+// If an error is returned, some of the running processes may not
+// have been shut down cleanly and may need manual cleanup.
+func (db *LocalCluster) TearDown() error {
+	var errors []string
+
+	if db.vt != nil {
+		db.vt.Kill()
+		if err := db.vt.Wait(); err != nil {
+			errors = append(errors, fmt.Sprintf("vtprocess: %s", err))
+		}
 	}
 
-	return VitessOption{
-		beforeRun: func(hdl *Handle) error {
-			if hdl.schemaDir != "" {
-				return fmt.Errorf("SchemaDirectory option (%v) would overwrite directory set by another option (%v)", dir, hdl.schemaDir)
-			}
-			hdl.schemaDir = dir
-			return nil
-		},
+	if err := db.mysql.TearDown(); err != nil {
+		errors = append(errors, fmt.Sprintf("mysql: %s", err))
+
+		log.Errorf("failed to shutdown MySQL: %s", err)
+		if err, ok := err.(*exec.ExitError); ok {
+			log.Errorf("stderr: %s", err.Stderr)
+		}
 	}
+
+	if err := db.Env.TearDown(); err != nil {
+		errors = append(errors, fmt.Sprintf("environment: %s", err))
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("failed to teardown LocalCluster:\n%s",
+			strings.Join(errors, "\n"))
+	}
+
+	return nil
 }
 
-// ProtoTopo is used to pass in the topology as a vttest proto definition.
-// See vttest.proto for more information.
-// It cannot be used at the same time as MySQLOnly.
-func ProtoTopo(topo *vttestpb.VTTestTopology) VitessOption {
-	return VitessOption{
-		beforeRun: func(hdl *Handle) error {
-			if hdl.dbname != "" {
-				return fmt.Errorf("duplicate MySQLOnly option or conflicting ProtoTopo option. You can only use one")
-			}
-
-			if len(topo.GetKeyspaces()) > 0 {
-				hdl.dbname = topo.GetKeyspaces()[0].Name
-			}
-			hdl.cmd.Args = append(hdl.cmd.Args, "--proto_topo", proto.CompactTextString(topo))
-			return nil
-		},
+func (db *LocalCluster) shardNames(keyspace *vttestpb.Keyspace) (names []string) {
+	for _, spb := range keyspace.Shards {
+		dbname := spb.DbNameOverride
+		if dbname == "" {
+			dbname = fmt.Sprintf("vt_%s_%s", keyspace.Name, spb.Name)
+		}
+		names = append(names, dbname)
 	}
+	return
 }
 
-// MySQLOnly is used to launch only a mysqld instance, with the specified db name.
-// It cannot be used at the same as ProtoTopo.
-func MySQLOnly(dbName string) VitessOption {
-	return VitessOption{
-		beforeRun: func(hdl *Handle) error {
-			if hdl.dbname != "" {
-				return fmt.Errorf("duplicate MySQLOnly option or conflicting ProtoTopo option. You can only use one")
-			}
-
-			// the way to pass the dbname for creation in
-			// is to provide a topology
-			topo := &vttestpb.VTTestTopology{
-				Keyspaces: []*vttestpb.Keyspace{
-					{
-						Name: dbName,
-						Shards: []*vttestpb.Shard{
-							{
-								Name:           "0",
-								DbNameOverride: dbName,
-							},
-						},
-					},
-				},
-			}
-
-			hdl.dbname = dbName
-			hdl.cmd.Args = append(hdl.cmd.Args,
-				"--mysql_only",
-				"--proto_topo", proto.CompactTextString(topo))
-			return nil
-		},
-	}
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
-// Schema is used to specify SQL commands to run at startup.
-// It conflicts with SchemaDirectory.
-// This option requires a ProtoTopo or MySQLOnly option before.
-func Schema(schema string) VitessOption {
-	if schema == "" {
-		log.Fatal("BUG: provided schema must not be empty")
+func (db *LocalCluster) loadSchema() error {
+	if db.SchemaDir == "" {
+		return nil
 	}
 
-	tempSchemaDir := ""
-	return VitessOption{
-		beforeRun: func(hdl *Handle) error {
-			if hdl.dbname == "" {
-				return fmt.Errorf("Schema option requires a previously passed MySQLOnly option")
-			}
-			if hdl.schemaDir != "" {
-				return fmt.Errorf("Schema option would overwrite directory set by another option (%v)", hdl.schemaDir)
-			}
+	log.Info("Loading custom schema...")
 
-			var err error
-			tempSchemaDir, err = ioutil.TempDir("", "vt")
+	if !isDir(db.SchemaDir) {
+		return fmt.Errorf("LoadSchema(): SchemaDir does not exist")
+	}
+
+	for _, kpb := range db.Topology.Keyspaces {
+		if kpb.ServedFrom != "" {
+			// redirected keyspaces have no underlying database
+			continue
+		}
+
+		keyspace := kpb.Name
+		keyspaceDir := path.Join(db.SchemaDir, keyspace)
+
+		schemaDir := keyspaceDir
+		if !isDir(schemaDir) {
+			schemaDir = db.DefaultSchemaDir
+			if schemaDir == "" || !isDir(schemaDir) {
+				return fmt.Errorf("LoadSchema: schema dir for ks `%s` does not exist (%s)", keyspace, schemaDir)
+			}
+		}
+
+		glob, _ := filepath.Glob(path.Join(schemaDir, "*.sql"))
+		for _, filepath := range glob {
+			cmds, err := LoadSQLFile(filepath, schemaDir)
 			if err != nil {
 				return err
 			}
-			ksDir := path.Join(tempSchemaDir, hdl.dbname)
-			err = os.Mkdir(ksDir, os.ModeDir|0775)
-			if err != nil {
-				return err
-			}
-			fileName := path.Join(ksDir, "schema.sql")
-			f, err := os.Create(fileName)
-			if err != nil {
-				return err
-			}
-			n, err := f.WriteString(schema)
-			if n != len(schema) {
-				return errors.New("short write")
-			}
-			if err != nil {
-				return err
-			}
-			err = f.Close()
-			if err != nil {
-				return err
-			}
-			hdl.schemaDir = tempSchemaDir
-			return nil
-		},
-		afterRun: func() {
-			if tempSchemaDir != "" {
-				os.RemoveAll(tempSchemaDir)
-			}
-		},
-	}
-}
 
-// VSchema is used to create a vschema.json file in the --schema_dir directory.
-// It must be used *after* the Schema or SchemaDirectory option was provided.
-func VSchema(vschema interface{}) VitessOption {
-	if vschema == "" {
-		log.Fatal("BUG: provided vschema object must not be nil")
+			for _, dbname := range db.shardNames(kpb) {
+				if err := db.Execute(cmds, dbname); err != nil {
+					return err
+				}
+			}
+		}
 	}
 
-	vschemaFilePath := ""
-	return VitessOption{
-		beforeRun: func(hdl *Handle) error {
-			if hdl.schemaDir == "" {
-				return errors.New("VSchema option must be specified after a Schema or SchemaDirectory option")
-			}
+	return nil
+}
 
-			vschemaFilePath := path.Join(hdl.schemaDir, "vschema.json")
-			if _, err := os.Stat(vschemaFilePath); err == nil {
-				return fmt.Errorf("temporary vschema.json already exists at %v. delete it first", vschemaFilePath)
-			}
+func (db *LocalCluster) createDatabases() error {
+	log.Info("Creating databases in cluster...")
 
-			vschemaJSON, err := json.Marshal(vschema)
-			if err != nil {
-				return err
-			}
-			if err := ioutil.WriteFile(vschemaFilePath, vschemaJSON, 0644); err != nil {
-				return err
-			}
-			return nil
-		},
-		afterRun: func() {
-			os.Remove(vschemaFilePath)
-		},
+	var sql []string
+	for _, kpb := range db.Topology.Keyspaces {
+		if kpb.ServedFrom != "" {
+			continue
+		}
+		for _, dbname := range db.shardNames(kpb) {
+			sql = append(sql, fmt.Sprintf("create database `%s`", dbname))
+		}
 	}
+	return db.Execute(sql, "")
 }
 
-// ExtraMyCnf adds one or more 'my.cnf'-style config files to MySQL.
-// (if more than one, the ':' separator should be used).
-func ExtraMyCnf(extraMyCnf string) VitessOption {
-	return VitessOption{
-		beforeRun: func(hdl *Handle) error {
-			hdl.cmd.Args = append(hdl.cmd.Args, "--extra_my_cnf", extraMyCnf)
-			return nil
-		},
+// Execute runs a series of SQL statements on the MySQL instance backing
+// this local cluster. This is provided for debug/introspection purposes;
+// normal cluster access should be performed through the Vitess GRPC interface.
+func (db *LocalCluster) Execute(sql []string, dbname string) error {
+	params := db.mysql.Params(dbname)
+	conn, err := mysql.Connect(context.Background(), &params)
+	if err != nil {
+		return err
 	}
-}
+	defer conn.Close()
 
-// InitDataOptions contain the command line arguments that configure
-// initialization of vttest with random data. See the documentation of
-// the corresponding command line flags in py/vttest/run_local_database.py
-// for the meaning of each field. If a field is nil, the flag will not be
-// specified when running 'run_local_database.py' and the default value for
-// the flag will be used.
-type InitDataOptions struct {
-	rngSeed           *int
-	minTableShardSize *int
-	maxTableShardSize *int
-	nullProbability   *float64
-}
-
-// InitData returns a VitessOption that sets the InitDataOptions parameters.
-func InitData(i *InitDataOptions) VitessOption {
-	return VitessOption{
-		beforeRun: func(hdl *Handle) error {
-			hdl.cmd.Args = append(hdl.cmd.Args, "--initialize_with_random_data")
-			if i.rngSeed != nil {
-				hdl.cmd.Args = append(hdl.cmd.Args, "--rng_seed", fmt.Sprintf("%v", *i.rngSeed))
-			}
-			if i.minTableShardSize != nil {
-				hdl.cmd.Args = append(hdl.cmd.Args, "--min_table_shard_size", fmt.Sprintf("%v", *i.minTableShardSize))
-			}
-			if i.maxTableShardSize != nil {
-				hdl.cmd.Args = append(hdl.cmd.Args, "--max_table_shard_size", fmt.Sprintf("%v", *i.maxTableShardSize))
-			}
-			if i.nullProbability != nil {
-				hdl.cmd.Args = append(hdl.cmd.Args, "--null_probability", fmt.Sprintf("%v", *i.nullProbability))
-			}
-			return nil
-		},
+	_, err = conn.ExecuteFetch("START TRANSACTION", 0, false)
+	if err != nil {
+		return err
 	}
+
+	for _, cmd := range sql {
+		log.Infof("Execute(%s): \"%s\"", dbname, cmd)
+		_, err := conn.ExecuteFetch(cmd, 0, false)
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = conn.ExecuteFetch("COMMIT", 0, false)
+	return err
 }
 
-// LaunchVitess launches a vitess test cluster.
-func LaunchVitess(
-	options ...VitessOption,
-) (hdl *Handle, err error) {
-	hdl = &Handle{}
-	err = hdl.run(options...)
+// Query runs a  SQL query on the MySQL instance backing this local cluster and returns
+// its result. This is provided for debug/introspection purposes;
+// normal cluster access should be performed through the Vitess GRPC interface.
+func (db *LocalCluster) Query(sql, dbname string, limit int) (*sqltypes.Result, error) {
+	params := db.mysql.Params(dbname)
+	conn, err := mysql.Connect(context.Background(), &params)
 	if err != nil {
 		return nil, err
 	}
-	return hdl, nil
+	defer conn.Close()
+
+	return conn.ExecuteFetch(sql, limit, false)
 }
 
-// TearDown tears down the launched processes.
-func (hdl *Handle) TearDown() error {
-	_, err := hdl.stdin.Write([]byte("\n"))
-	if err != nil {
-		return err
+// JSONConfig returns a key/value object with the configuration
+// settings for the local cluster. It should be serialized with
+// `json.Marshal`
+func (db *LocalCluster) JSONConfig() interface{} {
+	if db.OnlyMySQL {
+		return db.mysql.Params("")
 	}
-	return hdl.cmd.Wait()
+
+	config := map[string]interface{}{
+		"port":               db.vt.Port,
+		"socket":             db.mysql.UnixSocket(),
+		"vtcombo_mysql_port": db.Env.PortForProtocol("vtcombo_mysql_port", ""),
+	}
+
+	if grpc := db.vt.PortGrpc; grpc != 0 {
+		config["grpc_port"] = grpc
+	}
+
+	return config
 }
 
-// MySQLConnParams builds the MySQL connection params.
-// It's valid only if you used MySQLOnly option.
-func (hdl *Handle) MySQLConnParams() (mysql.ConnParams, error) {
-	params := mysql.ConnParams{
-		Charset: "utf8",
-		DbName:  hdl.dbname,
-	}
-	if hdl.Data == nil {
-		return params, errors.New("no data")
-	}
-	iuser, ok := hdl.Data["username"]
-	if !ok {
-		return params, errors.New("no username")
-	}
-	user, ok := iuser.(string)
-	if !ok {
-		return params, fmt.Errorf("invalid user type: %T", iuser)
-	}
-	params.Uname = user
-	if ipassword, ok := hdl.Data["password"]; ok {
-		password, ok := ipassword.(string)
-		if !ok {
-			return params, fmt.Errorf("invalid password type: %T", ipassword)
-		}
-		params.Pass = password
-	}
-	if ihost, ok := hdl.Data["host"]; ok {
-		host, ok := ihost.(string)
-		if !ok {
-			return params, fmt.Errorf("invalid host type: %T", ihost)
-		}
-		params.Host = host
-	}
-	if iport, ok := hdl.Data["port"]; ok {
-		port, ok := iport.(float64)
-		if !ok {
-			return params, fmt.Errorf("invalid port type: %T", iport)
-		}
-		params.Port = int(port)
-	}
-	if isocket, ok := hdl.Data["socket"]; ok {
-		socket, ok := isocket.(string)
-		if !ok {
-			return params, fmt.Errorf("invalid socket type: %T", isocket)
-		}
-		params.UnixSocket = socket
-	}
-	return params, nil
-}
-
-// MySQLAppDebugConnParams builds the MySQL connection params for appdebug user.
-// It's valid only if you used MySQLOnly option.
-func (hdl *Handle) MySQLAppDebugConnParams() (mysql.ConnParams, error) {
-	connParams, err := hdl.MySQLConnParams()
-	connParams.Uname = "vt_appdebug"
-	return connParams, err
-}
-
-func (hdl *Handle) run(
-	options ...VitessOption,
-) error {
-	launcher, err := launcherPath()
-	if err != nil {
-		return err
-	}
-	port := randomPort()
-	hdl.cmd = exec.Command(
-		launcher,
-		"--port", strconv.Itoa(port),
+// LoadSQLFile loads a parses a .sql file from disk, removing all the
+// different comments that mysql/mysqldump inserts in these, and returning
+// each individual SQL statement as its own string.
+// If sourceroot is set, that directory will be used when resolving `source `
+// statements in the SQL file.
+func LoadSQLFile(filename, sourceroot string) ([]string, error) {
+	var (
+		cmd  bytes.Buffer
+		sql  []string
+		inSQ bool
+		inDQ bool
 	)
-	hdl.cmd.Stderr = os.Stderr
 
-	for _, option := range options {
-		if err := option.beforeRun(hdl); err != nil {
-			return err
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		line = strings.TrimRightFunc(line, unicode.IsSpace)
+
+		if !inSQ && !inDQ && strings.HasPrefix(line, "--") {
+			continue
 		}
-		if option.afterRun != nil {
-			defer option.afterRun()
+
+		var i, next int
+		for {
+			i = next
+			if i >= len(line) {
+				break
+			}
+
+			next = i + 1
+
+			if line[i] == '\\' {
+				next = i + 2
+			} else if line[i] == '\'' && !inDQ {
+				inSQ = !inSQ
+			} else if line[i] == '"' && !inSQ {
+				inDQ = !inDQ
+			} else if !inSQ && !inDQ {
+				if line[i] == '#' || strings.HasPrefix(line[i:], "-- ") {
+					line = line[:i]
+					break
+				}
+				if line[i] == ';' {
+					cmd.WriteString(line[:i])
+					sql = append(sql, cmd.String())
+					cmd.Reset()
+
+					line = line[i+1:]
+					next = 0
+				}
+			}
+		}
+
+		if strings.TrimSpace(line) != "" {
+			if sourceroot != "" && cmd.Len() == 0 && strings.HasPrefix(line, "source ") {
+				srcfile := path.Join(sourceroot, line[7:])
+				sql2, err := LoadSQLFile(srcfile, sourceroot)
+				if err != nil {
+					return nil, err
+				}
+				sql = append(sql, sql2...)
+			} else {
+				cmd.WriteString(line)
+				cmd.WriteByte('\n')
+			}
 		}
 	}
-	if hdl.schemaDir != "" {
-		hdl.cmd.Args = append(hdl.cmd.Args, "--schema_dir", hdl.schemaDir)
+
+	if cmd.Len() != 0 {
+		sql = append(sql, cmd.String())
 	}
 
-	log.Infof("executing: %v", strings.Join(hdl.cmd.Args, " "))
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
 
-	stdout, err := hdl.cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	decoder := json.NewDecoder(stdout)
-	hdl.stdin, err = hdl.cmd.StdinPipe()
-	if err != nil {
-		return err
-	}
-	err = hdl.cmd.Start()
-	if err != nil {
-		return err
-	}
-	err = decoder.Decode(&hdl.Data)
-	if err != nil {
-		err = fmt.Errorf(
-			"error (%v) parsing JSON output from command: %v", err, launcher)
-	}
-	return err
+	return sql, nil
 }
