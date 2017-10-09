@@ -52,7 +52,15 @@ var (
 	batchTime *sync2.Batcher
 )
 
-type fakeTablet struct {
+// explainTablet is the query service that simulates a tablet.
+//
+// To avoid needing to boilerplate implement the unneeded portions of the
+// QueryService interface, it overrides only the necessary methods and embeds
+// a wrapped QueryService that throws an error if an unimplemented method is
+// called.
+type explainTablet struct {
+	queryservice.QueryService
+
 	db            *fakesqldb.DB
 	tsv           *tabletserver.TabletServer
 	tabletQueries []*TabletQuery
@@ -60,14 +68,21 @@ type fakeTablet struct {
 	currentTime   int
 }
 
-func newFakeTablet(t *topodatapb.Tablet) *fakeTablet {
+func newTablet(t *topodatapb.Tablet) *explainTablet {
 	db := fakesqldb.New(nil)
 
 	// XXX much of this is cloned from the tabletserver tests
 	tsv := tabletserver.NewTabletServerWithNilTopoServer(tabletenv.DefaultQsConfig)
 
-	tablet := fakeTablet{db: db, tsv: tsv}
+	tablet := explainTablet{db: db, tsv: tsv}
 	db.Handler = &tablet
+
+	tablet.QueryService = queryservice.Wrap(
+		nil,
+		func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, inTransaction bool, inner func(context.Context, *querypb.Target, queryservice.QueryService) (error, bool)) error {
+			return fmt.Errorf("explainTablet does not implement %s", name)
+		},
+	)
 
 	dbcfgs := dbconfigs.DBConfigs{
 		App:           *db.ConnParams(),
@@ -95,68 +110,28 @@ func newFakeTablet(t *topodatapb.Tablet) *fakeTablet {
 	return &tablet
 }
 
-var _ queryservice.QueryService = (*fakeTablet)(nil) // compile-time interface check
+var _ queryservice.QueryService = (*explainTablet)(nil) // compile-time interface check
 
 // Begin is part of the QueryService interface.
-func (t *fakeTablet) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, error) {
+func (t *explainTablet) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, error) {
 	t.currentTime = batchTime.Wait()
 	return t.tsv.Begin(ctx, target, options)
 }
 
 // Commit is part of the QueryService interface.
-func (t *fakeTablet) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
+func (t *explainTablet) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	t.currentTime = batchTime.Wait()
 	return t.tsv.Commit(ctx, target, transactionID)
 }
 
 // Rollback is part of the QueryService interface.
-func (t *fakeTablet) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
+func (t *explainTablet) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	t.currentTime = batchTime.Wait()
 	return t.tsv.Rollback(ctx, target, transactionID)
 }
 
-// Prepare is part of the QueryService interface.
-func (t *fakeTablet) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
-	panic("not implemented")
-}
-
-// CommitPrepared is part of the QueryService interface.
-func (t *fakeTablet) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error) {
-	panic("not implemented")
-}
-
-// RollbackPrepared is part of the QueryService interface.
-func (t *fakeTablet) RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) (err error) {
-	panic("not implemented")
-}
-
-// CreateTransaction is part of the QueryService interface.
-func (t *fakeTablet) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
-	panic("not implemented")
-}
-
-// StartCommit is part of the QueryService interface.
-func (t *fakeTablet) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
-	panic("not implemented")
-}
-
-// SetRollback is part of the QueryService interface.
-func (t *fakeTablet) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error) {
-	panic("not implemented")
-}
-
-// ConcludeTransaction is part of the QueryService interface.
-func (t *fakeTablet) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
-	panic("not implemented")
-}
-
-// ReadTransaction is part of the QueryService interface.
-func (t *fakeTablet) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
-	panic("not implemented")
-}
-
 // Execute is part of the QueryService interface.
-func (t *fakeTablet) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (t *explainTablet) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	t.currentTime = batchTime.Wait()
 
 	// Since the query is simulated being "sent" over the wire we need to
@@ -170,18 +145,8 @@ func (t *fakeTablet) Execute(ctx context.Context, target *querypb.Target, sql st
 	return t.tsv.Execute(ctx, target, sql, bindVariables, transactionID, options)
 }
 
-// StreamExecute is part of the QueryService interface.
-func (t *fakeTablet) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
-	panic("not implemented")
-}
-
-// ExecuteBatch is part of the QueryService interface.
-func (t *fakeTablet) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
-	panic("not implemented")
-}
-
 // BeginExecute is part of the QueryService interface.
-func (t *fakeTablet) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
+func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
 	t.currentTime = batchTime.Wait()
 	bindVariables = sqltypes.CopyBindVariables(bindVariables)
 	t.tabletQueries = append(t.tabletQueries, &TabletQuery{
@@ -192,43 +157,8 @@ func (t *fakeTablet) BeginExecute(ctx context.Context, target *querypb.Target, s
 	return t.tsv.BeginExecute(ctx, target, sql, bindVariables, options)
 }
 
-// BeginExecuteBatch is part of the QueryService interface.
-func (t *fakeTablet) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
-	panic("not implemented")
-}
-
-// MessageStream is part of the QueryService interface.
-func (t *fakeTablet) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error {
-	panic("not implemented")
-}
-
-// MessageAck is part of the QueryService interface.
-func (t *fakeTablet) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (count int64, err error) {
-	panic("not implemented")
-}
-
-// SplitQuery is part of the QueryService interface.
-func (t *fakeTablet) SplitQuery(ctx context.Context, target *querypb.Target, query *querypb.BoundQuery, splitColumns []string, splitCount int64, numRowsPerQueryPart int64, algorithm querypb.SplitQueryRequest_Algorithm) ([]*querypb.QuerySplit, error) {
-	panic("not implemented")
-}
-
-// UpdateStream is part of the QueryService interface.
-func (t *fakeTablet) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
-	panic("not implemented")
-}
-
-// StreamHealth is part of the QueryService interface.
-func (t *fakeTablet) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
-	panic("not implemented")
-}
-
-// HandlePanic is part of the QueryService interface.
-func (t *fakeTablet) HandlePanic(err *error) {
-	panic("not implemented")
-}
-
 // Close is part of the QueryService interface.
-func (t *fakeTablet) Close(ctx context.Context) error {
+func (t *explainTablet) Close(ctx context.Context) error {
 	return t.tsv.Close(ctx)
 }
 
@@ -355,7 +285,7 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 }
 
 // HandleQuery implements the fakesqldb query handler interface
-func (t *fakeTablet) HandleQuery(c *mysql.Conn, q []byte, callback func(*sqltypes.Result) error) error {
+func (t *explainTablet) HandleQuery(c *mysql.Conn, q []byte, callback func(*sqltypes.Result) error) error {
 	query := string(q)
 	if !strings.Contains(query, "1 != 1") {
 		t.mysqlQueries = append(t.mysqlQueries, &MysqlQuery{
