@@ -105,11 +105,14 @@ func (cfg *Config) DbName() string {
 // the desired Config, or manually set each field on the struct itself.
 // Once the struct is configured, call LocalCluster.Setup() to instantiate
 // the cluster.
-// The Env for the local cluster can also be set before calling Setup(); if
-// not set, Setup() will instantiate a LocalTestEnv with the default values
 // See: Config for configuration settings on the cluster
 type LocalCluster struct {
 	Config
+
+	// Env is the Environment which will be used for unning this local cluster.
+	// It can be set by the user before calling Setup(). If not set, Setup() will
+	// use the NewDefaultEnv callback to instantiate an environment with the system
+	// default settings
 	Env Environment
 
 	mysql MySQLManager
@@ -133,7 +136,7 @@ func (db *LocalCluster) Setup() error {
 
 	if db.Env == nil {
 		log.Info("No environment in cluster settings. Creating default...")
-		db.Env, err = NewLocalTestEnv("", 0)
+		db.Env, err = NewDefaultEnv()
 		if err != nil {
 			return err
 		}
