@@ -87,7 +87,7 @@ func buildTopology(vschemaStr string, numShardsPerKeyspace int) error {
 		return err
 	}
 
-	explainTopo.TabletConns = make(map[string]*fakeTablet)
+	explainTopo.TabletConns = make(map[string]*explainTablet)
 	for ks, vschema := range explainTopo.Keyspaces {
 		numShards := 1
 		if vschema.Sharded {
@@ -103,9 +103,9 @@ func buildTopology(vschemaStr string, numShardsPerKeyspace int) error {
 			log.Infof("registering test tablet %s for keyspace %s shard %s", hostname, ks, shard)
 
 			tablet := healthCheck.AddFakeTablet(vtexplainCell, hostname, 1, ks, shard, topodatapb.TabletType_MASTER, true, 1, nil, func(t *topodatapb.Tablet) queryservice.QueryService {
-				return newFakeTablet(t)
+				return newTablet(t)
 			})
-			explainTopo.TabletConns[hostname] = tablet.(*fakeTablet)
+			explainTopo.TabletConns[hostname] = tablet.(*explainTablet)
 		}
 	}
 

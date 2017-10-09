@@ -36,7 +36,7 @@ type ExplainTopo struct {
 	Keyspaces map[string]*vschemapb.Keyspace
 
 	// Map of ks/shard to test tablet connection
-	TabletConns map[string]*fakeTablet
+	TabletConns map[string]*explainTablet
 
 	// Synchronization lock
 	Lock sync.Mutex
