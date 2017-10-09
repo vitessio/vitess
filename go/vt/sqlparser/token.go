@@ -18,6 +18,7 @@ package sqlparser
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -36,7 +37,7 @@ type Tokenizer struct {
 	lastChar      uint16
 	Position      int
 	lastToken     []byte
-	LastError     string
+	LastError     error
 	posVarIndex   int
 	ParseTree     Statement
 	partialDDL    *DDL
@@ -372,19 +373,26 @@ func (tkn *Tokenizer) Error(err string) {
 	} else {
 		fmt.Fprintf(buf, "%s at position %v", err, tkn.Position)
 	}
-	tkn.LastError = buf.String()
+	tkn.LastError = errors.New(buf.String())
+
+	// Try and re-sync to the next statement
+	if tkn.lastChar != ';' {
+		tkn.skipStatement()
+	}
 }
 
 // Scan scans the tokenizer for the next token and returns
 // the token type and an optional value.
 func (tkn *Tokenizer) Scan() (int, []byte) {
-	if tkn.ForceEOF {
-		return 0, nil
-	}
-
 	if tkn.lastChar == 0 {
 		tkn.next()
 	}
+
+	if tkn.ForceEOF {
+		tkn.skipStatement()
+		return 0, nil
+	}
+
 	tkn.skipBlank()
 	switch ch := tkn.lastChar; {
 	case isLetter(ch):
@@ -509,6 +517,15 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		default:
 			return LEX_ERROR, []byte{byte(ch)}
 		}
+	}
+}
+
+// skipStatement scans until the EOF, or end of statement is encountered.
+func (tkn *Tokenizer) skipStatement() {
+	ch := tkn.lastChar
+	for ch != ';' && ch != eofChar {
+		tkn.next()
+		ch = tkn.lastChar
 	}
 }
 
@@ -751,11 +768,11 @@ func (tkn *Tokenizer) next() {
 
 // reset clears any internal state
 func (tkn *Tokenizer) reset() {
+	tkn.ParseTree = nil
+	tkn.partialDDL = nil
 	tkn.posVarIndex = 0
 	tkn.nesting = 0
-	//tkn.Position = 0
 	tkn.ForceEOF = false
-	tkn.lastChar = 0
 }
 
 func isLetter(ch uint16) bool {
