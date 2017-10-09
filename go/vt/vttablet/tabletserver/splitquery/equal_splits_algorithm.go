@@ -193,10 +193,10 @@ func buildMinMaxQuery(splitParams *SplitParams) string {
 	if tableName.IsEmpty() {
 		panic(fmt.Sprintf("Can't get tableName from query %v", splitParams.sql))
 	}
-	return fmt.Sprintf("select min(%v), max(%v) from %v",
-		splitParams.splitColumns[0].Name,
-		splitParams.splitColumns[0].Name,
-		tableName)
+	return fmt.Sprintf("select min(%s), max(%s) from %s",
+		sqlparser.String(splitParams.splitColumns[0].Name),
+		sqlparser.String(splitParams.splitColumns[0].Name),
+		sqlparser.String(tableName))
 }
 
 // bigRatToValue converts 'number' to an SQL value with SQL type: valueType.
