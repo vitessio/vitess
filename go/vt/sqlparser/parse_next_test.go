@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"bytes"
 	"io"
 	"strings"
 	"testing"
@@ -25,17 +26,14 @@ import (
 // TestParseNextValid concatenates all the valid SQL test cases and check it can read
 // them as one long string.
 func TestParseNextValid(t *testing.T) {
-	// Test only the first N queries, because after that we hit errors
-	// TODO Remove this limit
-	testLimit := len(validSQL)
-
-	var sql string
-	for _, tcase := range validSQL[:testLimit] {
-		sql += strings.TrimSuffix(tcase.input, ";") + ";"
+	var sql bytes.Buffer
+	for _, tcase := range validSQL {
+		sql.WriteString(strings.TrimSuffix(tcase.input, ";"))
+		sql.WriteRune(';')
 	}
 
-	tokens := NewStringTokenizer(sql)
-	for i, tcase := range validSQL[:testLimit] {
+	tokens := NewStringTokenizer(sql.String())
+	for i, tcase := range validSQL {
 		input := tcase.input + ";"
 		want := tcase.output
 		if want == "" {
@@ -53,13 +51,13 @@ func TestParseNextValid(t *testing.T) {
 		}
 	}
 
-	// Read one more and it should be EOF
+	// Read once more and it should be EOF.
 	if tree, err := ParseNext(tokens); err != io.EOF {
 		t.Errorf("ParseNext(tokens) = (%q, %v) want io.EOF", String(tree), err)
 	}
 }
 
-// TestParseNextEdgeCases tests various ParseNext edge cases
+// TestParseNextEdgeCases tests various ParseNext edge cases.
 func TestParseNextEdgeCases(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -114,12 +112,12 @@ func TestParseNextEdgeCases(t *testing.T) {
 			}
 		}
 
-		// Read one more and it should be EOF
+		// Read once more and it should be EOF.
 		if tree, err := ParseNext(tokens); err != io.EOF {
 			t.Errorf("ParseNext(%q) = (%q, %v) want io.EOF", test.input, String(tree), err)
 		}
 
-		// And again, one more should be EOF
+		// And again, once more should be EOF.
 		if tree, err := ParseNext(tokens); err != io.EOF {
 			t.Errorf("ParseNext(%q) = (%q, %v) want io.EOF", test.input, String(tree), err)
 		}

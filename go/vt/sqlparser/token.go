@@ -766,7 +766,7 @@ func (tkn *Tokenizer) next() {
 	tkn.Position++
 }
 
-// reset clears any internal state
+// reset clears any internal state.
 func (tkn *Tokenizer) reset() {
 	tkn.ParseTree = nil
 	tkn.partialDDL = nil
