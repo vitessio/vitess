@@ -698,7 +698,7 @@ type ColumnDefinition struct {
 
 // Format formats the node.
 func (col *ColumnDefinition) Format(buf *TrackedBuffer) {
-	buf.Myprintf("`%s` %v", col.Name.String(), &col.Type)
+	buf.Myprintf("%v %v", col.Name, &col.Type)
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -920,9 +920,9 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v (", idx.Info)
 	for i, col := range idx.Columns {
 		if i != 0 {
-			buf.Myprintf(", `%s`", col.Column.String())
+			buf.Myprintf(", %v", col.Column)
 		} else {
-			buf.Myprintf("`%s`", col.Column.String())
+			buf.Myprintf("%v", col.Column)
 		}
 		if col.Length != nil {
 			buf.Myprintf("(%v)", col.Length)
