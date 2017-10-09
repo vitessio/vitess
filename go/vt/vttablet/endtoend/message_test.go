@@ -73,15 +73,6 @@ func TestMessage(t *testing.T) {
 		}
 		close(ch)
 	}()
-	// Once the test is done, consume any left-over pending
-	// messages. Some could make it into the pipeline and get
-	// stuck forever causing vttablet shutdown to hang.
-	defer func() {
-		go func() {
-			for range ch {
-			}
-		}()
-	}()
 	got := <-ch
 	want := &sqltypes.Result{
 		Fields: []*querypb.Field{{
@@ -271,15 +262,6 @@ func TestThreeColMessage(t *testing.T) {
 		}
 		close(ch)
 	}()
-	// Once the test is done, consume any left-over pending
-	// messages. Some could make it into the pipeline and get
-	// stuck forever causing vttablet shutdown to hang.
-	defer func() {
-		go func() {
-			for range ch {
-			}
-		}()
-	}()
 
 	// Verify fields.
 	got := <-ch
@@ -350,4 +332,132 @@ func getTimeEpoch(qr *sqltypes.Result) (int64, int64) {
 	t, _ := sqltypes.ToInt64(qr.Rows[0][0])
 	e, _ := sqltypes.ToInt64(qr.Rows[0][1])
 	return t, e
+}
+
+var createMessageAuto = `create table vitess_message_auto(
+	time_scheduled bigint,
+	id bigint auto_increment,
+	time_next bigint,
+	epoch bigint,
+	time_created bigint,
+	time_acked bigint,
+	message varchar(128),
+	primary key(time_scheduled, id),
+	unique index id_idx(id),
+	index next_idx(time_next, epoch))
+comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=1'`
+
+// TestMessageAuto tests for the case where id is an auto-inc column.
+func TestMessageAuto(t *testing.T) {
+	ch := make(chan *sqltypes.Result)
+	done := make(chan struct{})
+	client := framework.NewClient()
+	if _, err := client.Execute(createMessageAuto, nil); err != nil {
+		t.Fatal(err)
+	}
+	defer client.Execute("drop table vitess_message_auto", nil)
+
+	// Start goroutine to consume message stream.
+	go func() {
+		if err := client.MessageStream("vitess_message_auto", func(qr *sqltypes.Result) error {
+			select {
+			case <-done:
+				return io.EOF
+			default:
+			}
+			ch <- qr
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		close(ch)
+	}()
+	<-ch
+	defer func() { close(done) }()
+
+	// Create message.
+	err := client.Begin(false)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	// This insert should cause the engine to make a best-effort guess at generated ids.
+	// It will expedite the first two rows with null values, and the third row, and will
+	// give up on the last row, which should eventually be picked up by the poller.
+	_, err = client.Execute("insert into vitess_message_auto(id, message) values(null, 'msg1'), (null, 'msg2'), (5, 'msg5'), (null, 'msg6')", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	err = client.Commit()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	// Only three messages should be queued.
+	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message_auto.Queued"), 3; got != want {
+		t.Errorf("Messages/vitess_message_auto.Queued: %d, want %d", got, want)
+	}
+
+	wantResults := []*sqltypes.Result{{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(1),
+			sqltypes.NULL,
+			sqltypes.NewVarChar("msg1"),
+		}},
+	}, {
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(2),
+			sqltypes.NULL,
+			sqltypes.NewVarChar("msg2"),
+		}},
+	}, {
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(5),
+			sqltypes.NULL,
+			sqltypes.NewVarChar("msg5"),
+		}},
+	}}
+
+	// Consume first three messages
+	// and ensure they were received promptly.
+	start := time.Now()
+	for i := 0; i < 3; i++ {
+		got := <-ch
+		got.Rows[0][1] = sqltypes.NULL
+
+		// Results can come in any order.
+		found := false
+		for _, want := range wantResults {
+			if reflect.DeepEqual(got, want) {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("message fetch: %v not found in expected list: %v", got, wantResults)
+		}
+	}
+	if d := time.Since(start); d > 1*time.Second {
+		t.Errorf("First three messages were delayed: %v", d)
+	}
+
+	_, err = client.MessageAck("vitess_message_auto", []string{"1, 2, 5"})
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Ensure msg6 is eventually received.
+	got := <-ch
+	got.Rows[0][1] = sqltypes.NULL
+	want := &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(6),
+			sqltypes.NULL,
+			sqltypes.NewVarChar("msg6"),
+		}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("message received:\n%v, want\n%v", got, want)
+	}
 }
