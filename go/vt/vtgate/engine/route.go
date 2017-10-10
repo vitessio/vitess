@@ -443,7 +443,8 @@ func (route *Route) execUpdateEqual(vcursor VCursor, bindVars map[string]*queryp
 		}
 		return result, nil
 	}
-	return route.execShard(vcursor, route.Query, bindVars, ks, shard, true /* isDML */)
+	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{ksid}, "")
+	return route.execShard(vcursor, rewritten, bindVars, ks, shard, true /* isDML */)
 }
 
 // execUpdateEqualChangedVindex performs an update when a vindex is being modified
