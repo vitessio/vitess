@@ -2559,18 +2559,22 @@ func TestTerseErrorsBindVars(t *testing.T) {
 	tsv := NewTabletServerWithNilTopoServer(config)
 	setupTestLogger()
 	defer clearTestLogger()
+
+	sqlErr := mysql.NewSQLError(10, "HY000", "sensitive message")
+	sqlErr.Query = "select * from test_table where a = 1"
+
 	err := tsv.convertAndLogError(
 		ctx,
-		"select * from test_table",
+		"select * from test_table where a = :a",
 		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(1)},
-		mysql.NewSQLError(10, "HY000", "sensitive message"),
+		sqlErr,
 		nil,
 	)
-	want := "(errno 10) (sqlstate HY000) during query: select * from test_table"
+	want := "(errno 10) (sqlstate HY000) during query: select * from test_table where a = :a"
 	if err == nil || err.Error() != want {
 		t.Errorf("%v, want '%s'", err, want)
 	}
-	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table\", BindVars: {a: \"type:INT64 value:\\\"1\\\" \"}"
+	wantLog := "sensitive message (errno 10) (sqlstate HY000) during query: select * from test_table where a = 1: Sql: \"select * from test_table where a = :a\", BindVars: {a: \"type:INT64 value:\\\"1\\\" \"}"
 	if wantLog != getTestLog(0) {
 		t.Errorf("error log '%s', want '%s'", getTestLog(0), wantLog)
 	}
@@ -2600,25 +2604,50 @@ func TestTruncateErrors(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TerseErrors = true
-	*sqlparser.TruncateErrLen = 20
 	tsv := NewTabletServerWithNilTopoServer(config)
 	setupTestLogger()
 	defer clearTestLogger()
+
+	*sqlparser.TruncateErrLen = 52
+	sql := "select * from test_table where xyz = :vtg1 order by abc desc"
+	sqlErr := mysql.NewSQLError(10, "HY000", "sensitive message")
+	sqlErr.Query = "select * from test_table where xyz = 'this is kinda long eh'"
 	err := tsv.convertAndLogError(
 		ctx,
-		"select * from test_table",
-		map[string]*querypb.BindVariable{"this is kinda long eh": sqltypes.Int64BindVariable(1)},
-		mysql.NewSQLError(10, "HY000", "sensitive message"),
+		sql,
+		map[string]*querypb.BindVariable{"vtg1": sqltypes.StringBindVariable("this is kinda long eh")},
+		sqlErr,
 		nil,
 	)
-	want := "(errno 10) (sqlstate HY000) during query: select * [TRUNCATED]"
-	if err == nil || err.Error() != want {
-		t.Errorf("%v, want '%s'", err, want)
+	wantErr := "(errno 10) (sqlstate HY000) during query: select * from test_table where xyz = :vt [TRUNCATED]"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("%v, want '%s'", err, wantErr)
 	}
-	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"se [TRUNCATED]"
+
+	wantLog := "sensitive message (errno 10) (sqlstate H [TRUNCATED]"
 	if wantLog != getTestLog(0) {
 		t.Errorf("error log '%s', want '%s'", getTestLog(0), wantLog)
 	}
+
+	*sqlparser.TruncateErrLen = 140
+	err = tsv.convertAndLogError(
+		ctx,
+		sql,
+		map[string]*querypb.BindVariable{"vtg1": sqltypes.StringBindVariable("this is kinda long eh")},
+		sqlErr,
+		nil,
+	)
+
+	wantErr = "(errno 10) (sqlstate HY000) during query: select * from test_table where xyz = :vtg1 order by abc desc"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("%v, want '%s'", err, wantErr)
+	}
+
+	wantLog = "sensitive message (errno 10) (sqlstate HY000) during query: select * from test_table where xyz = 'this is kinda long eh': Sql: \" [TRUNCATED]"
+	if wantLog != getTestLog(1) {
+		t.Errorf("error log '%s', want '%s'", getTestLog(1), wantLog)
+	}
+
 	*sqlparser.TruncateErrLen = 0
 }
 

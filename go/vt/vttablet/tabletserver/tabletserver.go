@@ -1337,7 +1337,19 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	origErr := err
 	err = formatErrorWithCallerID(ctx, vterrors.New(errCode, err.Error()))
 	if logMethod != nil {
-		logMethod("%v: %v", err, queryAsString(sql, bindVariables))
+		// In order to correctly truncate long queries in logs, combine
+		// the error (which contains both the mysql error string and the
+		// full query) with the unexpanded query + bind variables, then
+		// truncate the resulting string.
+		//
+		// This makes it so that the query portion of the logs is
+		// properly truncated to the expected max log length.
+		message := fmt.Sprintf("%v: %v", err, queryAsString(sql, bindVariables))
+		maxLen := *sqlparser.TruncateErrLen
+		if maxLen != 0 && len(message) > maxLen {
+			message = message[:maxLen-12] + " [TRUNCATED]"
+		}
+		logMethod(message)
 	}
 
 	// If TerseErrors is on, strip the error message returned by MySQL and only
@@ -1948,7 +1960,7 @@ func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable) s
 		fmt.Fprintf(buf, "%s: %q", k, valString)
 	}
 	fmt.Fprintf(buf, "}")
-	return sqlparser.TruncateForLog(string(buf.Bytes()))
+	return string(buf.Bytes())
 }
 
 // withTimeout returns a context based on the specified timeout.
