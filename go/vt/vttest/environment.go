@@ -98,7 +98,7 @@ type LocalTestEnv struct {
 
 // DefaultMySQLFlavor is the MySQL flavor used by vttest when MYSQL_FLAVOR is not
 // set in the environment
-const DefaultMySQLFlavor = "MariaDB"
+const DefaultMySQLFlavor = "MySQL56"
 
 // GetMySQLOptions returns the default option set for the given MySQL
 // flavor. If flavor is not set, the value from the `MYSQL_FLAVOR` env
