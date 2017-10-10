@@ -443,8 +443,7 @@ func (route *Route) execUpdateEqual(vcursor VCursor, bindVars map[string]*queryp
 		}
 		return result, nil
 	}
-	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{ksid}, "")
-	return route.execShard(vcursor, rewritten, bindVars, ks, shard, true /* isDML */)
+	return route.execShard(vcursor, route.Query, bindVars, ks, shard, true /* isDML */)
 }
 
 // execUpdateEqualChangedVindex performs an update when a vindex is being modified
@@ -635,6 +634,9 @@ func (route *Route) updateChangedVindexes(subQueryResult *sqltypes.Result, vcurs
 			}
 			ids := make([]sqltypes.Value, 0, len(subQueryResult.Rows))
 
+			if len(subQueryResult.Rows) > 1 {
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update changes multiple columns in the vindex")
+			}
 			for _, row := range subQueryResult.Rows {
 				ids = append(ids, row[i])
 			}
