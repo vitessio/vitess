@@ -120,7 +120,11 @@ func (t *tableStatusList) format() ([]string, time.Time) {
 			result[i] = fmt.Sprintf("%v: copy done, processed %v rows", ts.name, ts.copiedRows)
 		} else {
 			// copy is running
-			result[i] = fmt.Sprintf("%v: copy running using %v threads (%v/%v rows processed)", ts.name, ts.threadsStarted-ts.threadsDone, ts.copiedRows, ts.rowCount)
+			var pct float32
+			if ts.rowCount > 0 {
+				pct = float32(ts.copiedRows) / float32(ts.rowCount)
+			}
+			result[i] = fmt.Sprintf("%v: copy running using %v threads (%v/%v rows processed, %.1f%%)", ts.name, ts.threadsStarted-ts.threadsDone, ts.copiedRows, ts.rowCount, pct)
 		}
 		copiedRows += ts.copiedRows
 		rowCount += ts.rowCount
