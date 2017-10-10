@@ -7,6 +7,9 @@
           "type": "hash_test",
           "owner": "user"
         },
+        "user_md5_index": {
+          "type": "hash_test"
+        },
         "music_user_map": {
           "type": "lookup_test",
           "owner": "music"
@@ -56,12 +59,16 @@
               "name": "user_index"
             },
             {
-              "column": "Email",
+              "column": "email",
               "name": "email_user_map"
             },
             {
-              "column": "Address",
+              "column": "address",
               "name": "address_user_map"
+            },
+            {
+              "column": "md5",
+              "name": "user_md5_index"
             }
           ]
         },

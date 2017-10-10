@@ -111,19 +111,17 @@ func addChangedVindexesValues(route *engine.Route, setClauses sqlparser.UpdateEx
 			if i == 0 {
 				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can't update primary vindex columns. Invalid update on column: %v", assignment.Name.Name)
 			}
-			if !vcol.Owned {
-				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update owned vindexes. Invalid update on column: %v", assignment.Name.Name)
-			}
 			if _, ok := vcol.Vindex.(vindexes.Lookup); !ok {
 				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update lookup vindexes. Invalid update on column: %v", assignment.Name.Name)
 			}
-			if vcol.Owned {
-				pv, err := extractValueFromUpdate(assignment, vcol.Column)
-				if err != nil {
-					return err
-				}
-				route.ChangedVindexValues[vcol.Name] = pv
+			if !vcol.Owned {
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update owned vindexes. Invalid update on column: %v", assignment.Name.Name)
 			}
+			pv, err := extractValueFromUpdate(assignment, vcol.Column)
+			if err != nil {
+				return err
+			}
+			route.ChangedVindexValues[vcol.Name] = pv
 		}
 	}
 	return nil

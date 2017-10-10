@@ -108,37 +108,37 @@
 }
 
 # update by primary keyspace id, changing one vindex column
-"update user_metadata set Email = 'juan@vitess.io' where user_id = 1"
+"update user_metadata set email = 'juan@vitess.io' where user_id = 1"
 {
-  "Original": "update user_metadata set Email = 'juan@vitess.io' where user_id = 1",
+  "Original": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
   "Instructions": {
     "Opcode": "UpdateEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "update user_metadata set Email = 'juan@vitess.io' where user_id = 1",
+    "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
     "Vindex": "user_index",
     "Values": [1],
     "ChangedVindexValues": {
       "email_user_map": "juan@vitess.io"
     },
     "Table": "user_metadata",
-    "Subquery": "select Email, Address from user_metadata where user_id = 1 for update"
+    "Subquery": "select email, address from user_metadata where user_id = 1 for update"
   }
 }
 
 # update by primary keyspace id, changing multiple vindex columns
-"update user_metadata set Email = 'juan@vitess.io', Address = '155 5th street' where user_id = 1"
+"update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1"
 {
-  "Original": "update user_metadata set Email = 'juan@vitess.io', Address = '155 5th street' where user_id = 1",
+  "Original": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
   "Instructions": {
     "Opcode": "UpdateEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "update user_metadata set Email = 'juan@vitess.io', Address = '155 5th street' where user_id = 1",
+    "Query": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
     "Vindex": "user_index",
     "Values": [1],
     "ChangedVindexValues": {
@@ -146,7 +146,7 @@
       "email_user_map": "juan@vitess.io"
     },
     "Table": "user_metadata",
-    "Subquery": "select Email, Address from user_metadata where user_id = 1 for update"
+    "Subquery": "select email, address from user_metadata where user_id = 1 for update"
   }
 }
 
