@@ -54,6 +54,13 @@ email varchar(64),
 primary key (user_id)
 ) Engine=InnoDB'''
 
+create_vt_user_extra2 = '''create table vt_user_extra2 (
+user_id bigint,
+lastname varchar(64),
+address varchar(64),
+primary key (user_id)
+) Engine=InnoDB'''
+
 create_vt_music = '''create table vt_music (
 user_id bigint,
 id bigint,
@@ -133,6 +140,18 @@ user2_id bigint,
 primary key (name, user2_id)
 ) Engine=InnoDB'''
 
+create_lastname_user_extra2_map = '''create table lastname_user_extra2_map (
+lastname varchar(64),
+user_id bigint,
+primary key (lastname, user_id)
+) Engine=InnoDB'''
+
+create_address_user_extra2_map = '''create table address_user_extra2_map (
+address varchar(64),
+user_id bigint,
+primary key (address)
+) Engine=InnoDB'''
+
 create_music_user_map = '''create table music_user_map (
 music_id bigint,
 user_id bigint,
@@ -181,6 +200,24 @@ vschema = {
             "to": "user2_id"
           },
           "owner": "vt_user2"
+        },
+        "lastname_user_extra2_map": {
+          "type": "lookup_hash",
+          "params": {
+            "table": "lastname_user_extra2_map",
+            "from": "lastname",
+            "to": "user_id"
+          },
+          "owner": "vt_user_extra2"
+        },
+        "address_user_extra2_map": {
+          "type": "lookup_hash_unique",
+          "params": {
+            "table": "address_user_extra2_map",
+            "from": "address",
+            "to": "user_id"
+          },
+          "owner": "vt_user_extra2"
         },
         "music_user_map": {
           "type": "lookup_hash_unique",
@@ -239,6 +276,22 @@ vschema = {
             {
               "column": "user_id",
               "name": "user_index"
+            }
+          ]
+        },
+        "vt_user_extra2": {
+          "column_vindexes": [
+            {
+              "column": "user_id",
+              "name": "user_index"
+            },
+            {
+              "column": "lastname",
+              "name": "lastname_user_extra2_map"
+            },
+            {
+              "column": "address",
+              "name": "address_user_extra2_map"
             }
           ]
         },
@@ -334,6 +387,8 @@ vschema = {
         },
         "music_user_map": {},
         "name_user2_map": {},
+        "lastname_user_extra2_map": {},
+        "address_user_extra2_map": {},
         "upsert_primary": {},
         "upsert_owned": {},
         "main": {
@@ -366,6 +421,7 @@ def setUpModule():
             create_vt_user,
             create_vt_user2,
             create_vt_user_extra,
+            create_vt_user_extra2,
             create_vt_music,
             create_vt_music_extra,
             create_upsert,
@@ -385,6 +441,8 @@ def setUpModule():
             create_vt_main_seq,
             create_music_user_map,
             create_name_user2_map,
+            create_lastname_user_extra2_map,
+            create_address_user_extra2_map,
             create_upsert_primary,
             create_upsert_owned,
             create_main,
@@ -800,6 +858,112 @@ class TestVTGateFunctions(unittest.TestCase):
         'delete from  vt_user_extra where user_id = :user_id',
         {'user_id': 3})
     vtgate_conn.commit()
+
+  def test_user_extra2(self):
+    # user_extra2 is for testing updates to secondary vindexes
+    vtgate_conn = get_connection()
+    vtgate_conn.begin()
+    result = self.execute_on_master(
+        vtgate_conn,
+        'insert into vt_user_extra2 (user_id, lastname, address) '
+        'values (:user_id, :lastname, :address)',
+        {'user_id': 5, 'lastname': 'nieves', 'address': 'invernalia'})
+    self.assertEqual(result, ([], 1L, 0L, []))
+    vtgate_conn.commit()
+
+    # Updating both vindexes
+    vtgate_conn.begin()
+    result = self.execute_on_master(
+        vtgate_conn,
+        'update vt_user_extra2 set lastname = :lastname, address = :address where user_id = :user_id',
+        {'user_id': 5, 'lastname': 'buendia', 'address': 'macondo'})
+    self.assertEqual(result, ([], 1L, 0L, []))
+    vtgate_conn.commit()
+    result = self.execute_on_master(
+        vtgate_conn, 'select lastname, address from vt_user_extra2 where user_id = 5', {})
+    self.assertEqual(
+        result,
+        ([('buendia', 'macondo')], 1, 0,
+         [('lastname', self.string_type),
+          ('address', self.string_type)]))
+    result = lookup_master.mquery(
+        'vt_lookup', 'select lastname, user_id from lastname_user_extra2_map')
+    self.assertEqual(
+        result,
+        (('buendia', 5L),))
+    result = lookup_master.mquery(
+        'vt_lookup', 'select address, user_id from address_user_extra2_map')
+    self.assertEqual(
+        result,
+        (('macondo', 5L),))
+
+    # Updating only one vindex
+    vtgate_conn.begin()
+    result = self.execute_on_master(
+        vtgate_conn,
+        'update vt_user_extra2 set address = :address where user_id = :user_id',
+        {'user_id': 5, 'address': 'yoknapatawpha'})
+    self.assertEqual(result, ([], 1L, 0L, []))
+    vtgate_conn.commit()
+    result = self.execute_on_master(
+        vtgate_conn, 'select lastname, address from vt_user_extra2 where user_id = 5', {})
+    self.assertEqual(
+        result,
+        ([('buendia', 'yoknapatawpha')], 1, 0,
+         [('lastname', self.string_type),
+          ('address', self.string_type)]))
+    result = lookup_master.mquery(
+        'vt_lookup', 'select address, user_id from address_user_extra2_map')
+    self.assertEqual(
+        result,
+        (('yoknapatawpha', 5L),))
+    result = lookup_master.mquery(
+        'vt_lookup', 'select lastname, user_id from lastname_user_extra2_map')
+    self.assertEqual(
+        result,
+        (('buendia', 5L),))
+
+    # It works when you update to same value on unique index
+    vtgate_conn.begin()
+    result = self.execute_on_master(
+        vtgate_conn,
+        'update vt_user_extra2 set address = :address where user_id = :user_id',
+        {'user_id': 5, 'address': 'yoknapatawpha'})
+    self.assertEqual(result, ([], 0L, 0L, []))
+    vtgate_conn.commit()
+    result = self.execute_on_master(
+        vtgate_conn, 'select lastname, address from vt_user_extra2 where user_id = 5', {})
+    self.assertEqual(
+        result,
+        ([('buendia', 'yoknapatawpha')], 1, 0,
+         [('lastname', self.string_type),
+          ('address', self.string_type)]))
+    result = lookup_master.mquery(
+        'vt_lookup', 'select lastname, user_id from lastname_user_extra2_map')
+    self.assertEqual(
+        result,
+        (('buendia', 5L),))
+    result = lookup_master.mquery(
+        'vt_lookup', 'select address, user_id from address_user_extra2_map')
+    self.assertEqual(
+        result,
+        (('yoknapatawpha', 5L),))
+
+    # you can find the record by either vindex
+    result = self.execute_on_master(
+        vtgate_conn, 'select lastname, address from vt_user_extra2 where lastname = "buendia"', {})
+    self.assertEqual(
+        result,
+        ([('buendia', 'yoknapatawpha')], 1, 0,
+         [('lastname', self.string_type),
+          ('address', self.string_type)]))
+    result = self.execute_on_master(
+        vtgate_conn, 'select lastname, address from vt_user_extra2 where address = "yoknapatawpha"', {})
+    self.assertEqual(
+        result,
+        ([('buendia', 'yoknapatawpha')], 1, 0,
+         [('lastname', self.string_type),
+          ('address', self.string_type)]))
 
   def test_music(self):
     # music is for testing owned lookup index

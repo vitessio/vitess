@@ -55,6 +55,9 @@ type Route struct {
 	Vindex vindexes.Vindex
 	Values []sqltypes.PlanValue
 
+	// ChangedVindexValues contains values for updated Vindexes during an update statement.
+	ChangedVindexValues map[string]sqltypes.PlanValue
+
 	// JoinVars contains the list of joinvar keys that will be used
 	// to extract join variables.
 	JoinVars map[string]struct{}
@@ -110,35 +113,37 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		vindexName = route.Vindex.String()
 	}
 	marshalRoute := struct {
-		Opcode     RouteOpcode          `json:",omitempty"`
-		Keyspace   *vindexes.Keyspace   `json:",omitempty"`
-		Query      string               `json:",omitempty"`
-		FieldQuery string               `json:",omitempty"`
-		Vindex     string               `json:",omitempty"`
-		Values     []sqltypes.PlanValue `json:",omitempty"`
-		JoinVars   map[string]struct{}  `json:",omitempty"`
-		OrderBy    []OrderbyParams      `json:",omitempty"`
-		Table      string               `json:",omitempty"`
-		Subquery   string               `json:",omitempty"`
-		Generate   *Generate            `json:",omitempty"`
-		Prefix     string               `json:",omitempty"`
-		Mid        []string             `json:",omitempty"`
-		Suffix     string               `json:",omitempty"`
+		Opcode              RouteOpcode                   `json:",omitempty"`
+		Keyspace            *vindexes.Keyspace            `json:",omitempty"`
+		Query               string                        `json:",omitempty"`
+		FieldQuery          string                        `json:",omitempty"`
+		Vindex              string                        `json:",omitempty"`
+		Values              []sqltypes.PlanValue          `json:",omitempty"`
+		ChangedVindexValues map[string]sqltypes.PlanValue `json:",omitempty"`
+		JoinVars            map[string]struct{}           `json:",omitempty"`
+		OrderBy             []OrderbyParams               `json:",omitempty"`
+		Table               string                        `json:",omitempty"`
+		Subquery            string                        `json:",omitempty"`
+		Generate            *Generate                     `json:",omitempty"`
+		Prefix              string                        `json:",omitempty"`
+		Mid                 []string                      `json:",omitempty"`
+		Suffix              string                        `json:",omitempty"`
 	}{
-		Opcode:     route.Opcode,
-		Keyspace:   route.Keyspace,
-		Query:      route.Query,
-		FieldQuery: route.FieldQuery,
-		Vindex:     vindexName,
-		Values:     route.Values,
-		JoinVars:   route.JoinVars,
-		OrderBy:    route.OrderBy,
-		Table:      tname,
-		Subquery:   route.Subquery,
-		Generate:   route.Generate,
-		Prefix:     route.Prefix,
-		Mid:        route.Mid,
-		Suffix:     route.Suffix,
+		Opcode:              route.Opcode,
+		Keyspace:            route.Keyspace,
+		Query:               route.Query,
+		FieldQuery:          route.FieldQuery,
+		Vindex:              vindexName,
+		ChangedVindexValues: route.ChangedVindexValues,
+		Values:              route.Values,
+		JoinVars:            route.JoinVars,
+		OrderBy:             route.OrderBy,
+		Table:               tname,
+		Subquery:            route.Subquery,
+		Generate:            route.Generate,
+		Prefix:              route.Prefix,
+		Mid:                 route.Mid,
+		Suffix:              route.Suffix,
 	}
 	return jsonutil.MarshalNoEscape(marshalRoute)
 }
@@ -431,8 +436,55 @@ func (route *Route) execUpdateEqual(vcursor VCursor, bindVars map[string]*queryp
 	if len(ksid) == 0 {
 		return &sqltypes.Result{}, nil
 	}
+	if len(route.ChangedVindexValues) != 0 {
+		result, err := route.execUpdateEqualChangedVindex(vcursor, route.Subquery, bindVars, ks, shard, ksid)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
+	}
 	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{ksid}, "")
 	return route.execShard(vcursor, rewritten, bindVars, ks, shard, true /* isDML */)
+}
+
+// execUpdateEqualChangedVindex performs an update when a vindex is being modified
+// by the statement.
+// Note: The order seen in the DML's seen below won't neccesarly matches
+// the one that will be executed by vttablet.
+// Given that dmls will be mapped to existent transactions on each
+// shard, the order could change.
+// However, to avoid issues with duplicate key constraints violations in the
+// case that a vindex update lands in the same shard, it's more convenient
+// to do the delete first. The following is an example of this sceneario:
+// - An update statement with an unique vindex column that sets a value to
+//   to what already exists in the db:
+//   update user set name='juan' where user_id=1
+//   Followed by:
+//   update user set name='juan' where user_id=1
+// If we don't perform the delete first, this query will fail because the lookup
+// table already has an entry from name=juan to user_id=1.
+//
+// Note 2: While changes are being committed, the changing row could be
+// unreachable by either the new or old column values.
+func (route *Route) execUpdateEqualChangedVindex(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, keyspace, shard string, keyspaceID []byte) (*sqltypes.Result, error) {
+	var subQueryResult *sqltypes.Result
+	var err error
+	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{keyspaceID}, "")
+	if route.Subquery != "" {
+		subQueryResult, err = route.execShard(vcursor, route.Subquery, bindVars, keyspace, shard, false /* isDML */)
+		if err != nil {
+			return nil, vterrors.Wrap(err, "execUpdateEqual")
+		}
+	}
+	err = route.updateChangedVindexes(subQueryResult, vcursor, bindVars, keyspaceID)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "execUpdateEqual")
+	}
+	result, err := route.execShard(vcursor, rewritten, bindVars, keyspace, shard, true /* isDML */)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "execUpdateEqual")
+	}
+	return result, nil
 }
 
 func (route *Route) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
@@ -571,6 +623,35 @@ func (route *Route) resolveSingleShard(vcursor VCursor, bindVars map[string]*que
 	return newKeyspace, shard, ksid, nil
 }
 
+func (route *Route) updateChangedVindexes(subQueryResult *sqltypes.Result, vcursor VCursor, bindVars map[string]*querypb.BindVariable, ksid []byte) error {
+	if len(route.ChangedVindexValues) == 0 {
+		return nil
+	}
+	for i, colVindex := range route.Table.Owned {
+		if colValue, ok := route.ChangedVindexValues[colVindex.Name]; ok {
+			resolvedVal, err := colValue.ResolveValue(bindVars)
+			if err != nil {
+				return err
+			}
+			ids := make([]sqltypes.Value, 0, len(subQueryResult.Rows))
+
+			if len(subQueryResult.Rows) > 1 {
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update changes multiple columns in the vindex")
+			}
+			for _, row := range subQueryResult.Rows {
+				ids = append(ids, row[i])
+			}
+			if err := colVindex.Vindex.(vindexes.Lookup).Delete(vcursor, ids, ksid); err != nil {
+				return err
+			}
+			if err := route.processOwned(vcursor, []sqltypes.Value{resolvedVal}, colVindex, bindVars, [][]byte{ksid}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (route *Route) deleteVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, ks, shard string, ksid []byte) error {
 	result, err := route.execShard(vcursor, route.Subquery, bindVars, ks, shard, false /* isDML */)
 	if err != nil {
@@ -579,6 +660,7 @@ func (route *Route) deleteVindexEntries(vcursor VCursor, bindVars map[string]*qu
 	if len(result.Rows) == 0 {
 		return nil
 	}
+	// Columns are selected by table.Owned order see generateDeleteSubquery for details
 	for i, colVindex := range route.Table.Owned {
 		ids := make([]sqltypes.Value, 0, len(result.Rows))
 		for _, row := range result.Rows {
