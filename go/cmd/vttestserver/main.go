@@ -1,3 +1,5 @@
+// vttestserver is a native Go implementation of `run_local_server.py`.
+// It allows users to spawn a self-contained Vitess server for local testing/CI
 package main
 
 import (
