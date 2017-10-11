@@ -21,8 +21,11 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
+
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // dmlFormatter strips out keyspace name from dmls.
@@ -38,7 +41,8 @@ func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 // buildUpdatePlan builds the instructions for an UPDATE statement.
 func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, error) {
 	er := &engine.Route{
-		Query: generateQuery(upd),
+		Query:               generateQuery(upd),
+		ChangedVindexValues: make(map[string]sqltypes.PlanValue),
 	}
 	bldr, err := processTableExprs(upd.TableExprs, vschema)
 	if err != nil {
@@ -79,8 +83,12 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, err
 		return nil, err
 	}
 	er.Opcode = engine.UpdateEqual
-	if isIndexChanging(upd.Exprs, er.Table.ColumnVindexes) {
-		return nil, errors.New("unsupported: DML cannot change vindex column")
+
+	if err := addChangedVindexesValues(er, upd.Exprs, er.Table.ColumnVindexes); err != nil {
+		return nil, err
+	}
+	if len(er.ChangedVindexValues) != 0 {
+		er.Subquery = generateUpdateSubquery(upd, er.Table)
 	}
 	return er, nil
 }
@@ -91,17 +99,33 @@ func generateQuery(statement sqlparser.Statement) string {
 	return buf.String()
 }
 
-// isIndexChanging returns true if any of the update
-// expressions modify a vindex column.
-func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.ColumnVindex) bool {
+// addChangedVindexesValues adds to the plan all the lookup vindexes that are changing.
+// Updates can only be performed to secondary lookup vindexes with no complex expressions
+// in the set clause.
+func addChangedVindexesValues(route *engine.Route, setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.ColumnVindex) error {
 	for _, assignment := range setClauses {
-		for _, vcol := range colVindexes {
-			if vcol.Column.Equal(assignment.Name.Name) {
-				return true
+		for i, vcol := range colVindexes {
+			// Column not changing, continue
+			if !vcol.Column.Equal(assignment.Name.Name) {
+				continue
 			}
+			if i == 0 {
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can't update primary vindex columns. Invalid update on column: %v", assignment.Name.Name)
+			}
+			if _, ok := vcol.Vindex.(vindexes.Lookup); !ok {
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update lookup vindexes. Invalid update on column: %v", assignment.Name.Name)
+			}
+			if !vcol.Owned {
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update owned vindexes. Invalid update on column: %v", assignment.Name.Name)
+			}
+			pv, err := extractValueFromUpdate(assignment, vcol.Column)
+			if err != nil {
+				return err
+			}
+			route.ChangedVindexValues[vcol.Name] = pv
 		}
 	}
-	return false
+	return nil
 }
 
 // buildDeletePlan builds the instructions for a DELETE statement.
@@ -158,12 +182,28 @@ func generateDeleteSubquery(del *sqlparser.Delete, table *vindexes.Table) string
 	}
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.WriteString("select ")
-	prefix := ""
-	for _, cv := range table.Owned {
-		buf.Myprintf("%s%v", prefix, cv.Column)
-		prefix = ", "
+	for i, cv := range table.Owned {
+		if i == 0 {
+			buf.Myprintf("%v", cv.Column)
+		} else {
+			buf.Myprintf(", %v", cv.Column)
+		}
 	}
 	buf.Myprintf(" from %v%v for update", table.Name, del.Where)
+	return buf.String()
+}
+
+func generateUpdateSubquery(upd *sqlparser.Update, table *vindexes.Table) string {
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.WriteString("select ")
+	for i, cv := range table.Owned {
+		if i == 0 {
+			buf.Myprintf("%v", cv.Column)
+		} else {
+			buf.Myprintf(", %v", cv.Column)
+		}
+	}
+	buf.Myprintf(" from %v%v for update", table.Name, upd.Where)
 	return buf.String()
 }
 
@@ -184,6 +224,17 @@ func getDMLRouting(where *sqlparser.Where, route *engine.Route) error {
 		}
 	}
 	return errors.New("unsupported: multi-shard where clause in DML")
+}
+
+// extractValueFromUpdate given an UpdateExpr attempts to extracts the Value
+// it's holding. At the moment it only supports: StrVal, HexVal, IntVal, ValArg.
+// If a complex expression is provided (e.g set name = name + 1), the update will be rejected.
+func extractValueFromUpdate(upd *sqlparser.UpdateExpr, col sqlparser.ColIdent) (pv sqltypes.PlanValue, err error) {
+	if !sqlparser.IsValue(upd.Expr) {
+		err := vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Only values are supported. Invalid update on column: %v", upd.Name.Name)
+		return sqltypes.PlanValue{}, err
+	}
+	return sqlparser.NewPlanValue(upd.Expr)
 }
 
 // getMatch returns the matched value if there is an equality

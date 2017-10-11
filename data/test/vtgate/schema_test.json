@@ -7,6 +7,9 @@
           "type": "hash_test",
           "owner": "user"
         },
+        "user_md5_index": {
+          "type": "hash_test"
+        },
         "music_user_map": {
           "type": "lookup_test",
           "owner": "music"
@@ -14,6 +17,14 @@
         "name_user_map": {
           "type": "multi",
           "owner": "user"
+        },
+        "email_user_map": {
+          "type": "lookup_test",
+          "owner": "user_metadata"
+        },
+        "address_user_map": {
+          "type": "lookup_test",
+          "owner": "user_metadata"
         },
         "costly_map": {
           "type": "costly",
@@ -40,6 +51,26 @@
             "column": "id",
             "sequence": "seq"
           }
+        },
+        "user_metadata": {
+          "column_vindexes": [
+            {
+              "column": "user_id",
+              "name": "user_index"
+            },
+            {
+              "column": "email",
+              "name": "email_user_map"
+            },
+            {
+              "column": "address",
+              "name": "address_user_map"
+            },
+            {
+              "column": "md5",
+              "name": "user_md5_index"
+            }
+          ]
         },
         "user_extra": {
           "column_vindexes": [

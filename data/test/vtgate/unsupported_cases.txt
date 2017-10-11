@@ -303,9 +303,21 @@
 "delete user from user join user_extra on user.id = user_extra.id where user.name = 'foo'"
 "unsupported: multi-table delete statement in sharded keyspace"
 
-# update changes index column
-"update music set id = 1 where id = 1"
-"unsupported: DML cannot change vindex column"
+# update changes primary vindex column
+"update user set id = 1 where id = 1"
+"unsupported: You can't update primary vindex columns. Invalid update on column: id"
+
+# update changes non owned vindex column
+"update music_extra set music_id = 1 where user_id = 1"
+"unsupported: You can only update owned vindexes. Invalid update on column: music_id"
+
+# update changes non lookup vindex column
+"update user_metadata set md5 = 1 where user_id = 1"
+"unsupported: You can only update lookup vindexes. Invalid update on column: md5"
+
+# update with complex set clause
+"update music set id = id + 1 where id = 1"
+"unsupported: Only values are supported. Invalid update on column: id"
 
 # cross-shard update tables
 "update (select id from user) as u set id = 4"
