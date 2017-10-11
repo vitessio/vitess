@@ -210,6 +210,17 @@
 				"site_test"
 			]
 		},
+		"parser_generator": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"tools/test_parser_generator.sh"
+			],
+			"Manual": false,
+			"Shard": 0,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"php": {
 			"File": "",
 			"Args": [],
