@@ -219,7 +219,7 @@ func TestMessageManagerSend(t *testing.T) {
 	}
 
 	// Verify item has been removed from cache.
-	if _, ok := mm.cache.messages["1"]; ok {
+	if _, ok := mm.cache.inQueue["1"]; ok {
 		t.Error("Message 1 is still present in cache")
 	}
 
