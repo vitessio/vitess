@@ -1363,8 +1363,9 @@ func TestCreateTable(t *testing.T) {
 
 var (
 	invalidSQL = []struct {
-		input  string
-		output string
+		input        string
+		output       string
+		excludeMulti bool // Don't use in the ParseNext multi-statement parsing tests.
 	}{{
 		input:  "select $ from t",
 		output: "syntax error at position 9 near '$'",
@@ -1380,12 +1381,6 @@ var (
 	}, {
 		input:  "select x'777' from t",
 		output: "syntax error at position 14 near '777'",
-	}, {
-		input:  "select 'aa\\",
-		output: "syntax error at position 12 near 'aa'",
-	}, {
-		input:  "select 'aa",
-		output: "syntax error at position 12 near 'aa'",
 	}, {
 		input:  "select * from t where :1 = 2",
 		output: "syntax error at position 24 near ':'",
@@ -1421,9 +1416,6 @@ var (
 			"F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
 			"(F(F(F(F(F(F(F(F(F(F(F(",
 		output: "syntax error at position 405",
-	}, {
-		input:  "select /* aa",
-		output: "syntax error at position 13 near '/* aa'",
 	}, {
 		// This construct is considered invalid due to a grammar conflict.
 		input:  "insert into a select * from b join c on duplicate key update d=e",
@@ -1470,6 +1462,18 @@ var (
 	}, {
 		input:  "select * from t where id = ((select a from t1 union select b from t2) order by a limit 1)",
 		output: "syntax error at position 76 near 'order'",
+	}, {
+		input:        "select 'aa\\",
+		output:       "syntax error at position 12 near 'aa'",
+		excludeMulti: true,
+	}, {
+		input:        "select 'aa",
+		output:       "syntax error at position 12 near 'aa'",
+		excludeMulti: true,
+	}, {
+		input:        "select /* aa",
+		output:       "syntax error at position 13 near '/* aa'",
+		excludeMulti: true,
 	}}
 )
 
