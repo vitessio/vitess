@@ -614,10 +614,11 @@ func purge(tsv TabletService, name string, purgeAfter, purgeInterval time.Durati
 	for {
 		count, err := tsv.PurgeMessages(ctx, nil, name, time.Now().Add(-purgeAfter).UnixNano())
 		if err != nil {
-			tabletenv.InternalErrors.Add("Messages", 1)
+			MessageStats.Add([]string{name, "PurgeFailed"}, 1)
 			log.Errorf("Unable to delete messages: %v", err)
+		} else {
+			MessageStats.Add([]string{name, "Purged"}, count)
 		}
-		MessageStats.Add([]string{name, "Purged"}, count)
 		// If deleted 500 or more, we should continue.
 		if count < 500 {
 			return
