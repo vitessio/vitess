@@ -160,8 +160,6 @@ type messageManager struct {
 	DBLock sync.Mutex
 	tsv    TabletService
 
-	isOpen bool
-
 	name         sqlparser.TableIdent
 	fieldResult  *sqltypes.Result
 	ackWaitTime  time.Duration
@@ -172,7 +170,8 @@ type messageManager struct {
 	conns        *connpool.Pool
 	postponeSema *sync2.Semaphore
 
-	mu sync.Mutex
+	mu     sync.Mutex
+	isOpen bool
 	// cond gets triggered if a receiver becomes available (curReceiver != -1),
 	// an item gets added to the cache, or if the manager is closed.
 	// The trigger wakes up the runSend thread.
