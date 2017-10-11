@@ -61,7 +61,7 @@ func TestParseNextValid(t *testing.T) {
 // SQL statement can be passed afterwards.
 func TestParseNextErrors(t *testing.T) {
 	for _, tcase := range invalidSQL {
-		if tcase.skipMulti {
+		if tcase.excludeMulti {
 			// Skip tests which leave unclosed strings, or comments.
 			continue
 		}
