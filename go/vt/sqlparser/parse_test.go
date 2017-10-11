@@ -793,6 +793,12 @@ func TestValid(t *testing.T) {
 		input:  "show vitess_shards",
 		output: "show vitess_shards",
 	}, {
+		input:  "show vitess_shards keyspace",
+		output: "show vitess_shards keyspace",
+	}, {
+		input:  "show vitess_shards keyspace garbage",
+		output: "show vitess_shards keyspace",
+	}, {
 		input:  "show vschema_tables",
 		output: "show vschema_tables",
 	}, {
