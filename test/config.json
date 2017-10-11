@@ -218,7 +218,7 @@
 			],
 			"Manual": false,
 			"Shard": 0,
-			"RetryMax": 0,
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"php": {
