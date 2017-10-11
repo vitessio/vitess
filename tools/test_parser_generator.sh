@@ -9,15 +9,19 @@
 CUR="sql.go"
 TMP="/tmp/sql.$$.go"
 
-cd go/vt/sqlparser/
+
+if ! cd go/vt/sqlparser/
+then
+        echo "ERROR: $0 must be run in the root project directory"
+        exit 1
+fi
 
 goyacc -o $TMP sql.y
 gofmt -w $TMP
 
-diff -q $CUR $TMP > /dev/null 2>&1
-
-if [ $? != 0 ] ; then
-        echo "ERROR: Regenerated parser $TMP does not match current version `pwd`/sql.go:"
+if ! diff -q $CUR $TMP > /dev/null
+then
+        echo "ERROR: Regenerated parser $TMP does not match current version $(pwd)/sql.go:"
         diff -u $CUR $TMP
         exit 1
 fi
