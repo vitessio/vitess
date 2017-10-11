@@ -196,8 +196,7 @@ func (db *LocalCluster) TearDown() error {
 	var errors []string
 
 	if db.vt != nil {
-		db.vt.Kill()
-		if err := db.vt.Wait(); err != nil {
+		if err := db.vt.WaitTerminate(); err != nil {
 			errors = append(errors, fmt.Sprintf("vtprocess: %s", err))
 		}
 	}

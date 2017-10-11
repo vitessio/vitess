@@ -95,11 +95,26 @@ func (vtp *VtProcess) Wait() error {
 	if vtp.proc == nil {
 		return nil
 	}
+	return vtp.proc.Wait()
+}
 
-	err := vtp.proc.Wait()
-	if _, ok := err.(*exec.ExitError); ok {
+// WaitTerminate attemps to gracefully shutdown the Vitess process by sending
+// a SIGTERM, then wait for up to 10s for it to exit. If the process hasn't
+// exited cleanly after 10s, a SIGKILL is forced and the corresponding exit
+// error is returned to the user
+func (vtp *VtProcess) WaitTerminate() error {
+	if vtp.proc == nil || vtp.proc.Process == nil {
 		return nil
 	}
+
+	vtp.proc.Process.Signal(syscall.SIGTERM)
+	timer := time.AfterFunc(10*time.Second, func() {
+		vtp.proc.Process.Kill()
+	})
+
+	err := vtp.proc.Wait()
+	timer.Stop()
+	vtp.proc = nil
 
 	return err
 }
