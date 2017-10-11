@@ -16,11 +16,13 @@ limitations under the License.
 
 package sqlparser
 
-import "strings"
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
-func TestValid(t *testing.T) {
-	validSQL := []struct {
+var (
+	validSQL = []struct {
 		input  string
 		output string
 	}{{
@@ -44,13 +46,13 @@ func TestValid(t *testing.T) {
 		input:  "select - -1 from t",
 		output: "select 1 from t",
 	}, {
-		input:  "select 1 from t // aa",
+		input:  "select 1 from t // aa\n",
 		output: "select 1 from t",
 	}, {
-		input:  "select 1 from t -- aa",
+		input:  "select 1 from t -- aa\n",
 		output: "select 1 from t",
 	}, {
-		input:  "select 1 from t # aa",
+		input:  "select 1 from t # aa\n",
 		output: "select 1 from t",
 	}, {
 		input:  "select 1 --aa\nfrom t",
@@ -892,19 +894,21 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
 	}}
+)
 
+func TestValid(t *testing.T) {
 	for _, tcase := range validSQL {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
 		tree, err := Parse(tcase.input)
 		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
+			t.Errorf("Parse(%q) err: %v, want nil", tcase.input, err)
 			continue
 		}
 		out := String(tree)
 		if out != tcase.output {
-			t.Errorf("out: %s, want %s", out, tcase.output)
+			t.Errorf("Parse(%q) = %q, want: %q", tcase.input, out, tcase.output)
 		}
 		// This test just exercises the tree walking functionality.
 		// There's no way automated way to verify that a node calls
@@ -1357,10 +1361,11 @@ func TestCreateTable(t *testing.T) {
 	}
 }
 
-func TestErrors(t *testing.T) {
-	invalidSQL := []struct {
-		input  string
-		output string
+var (
+	invalidSQL = []struct {
+		input        string
+		output       string
+		excludeMulti bool // Don't use in the ParseNext multi-statement parsing tests.
 	}{{
 		input:  "select $ from t",
 		output: "syntax error at position 9 near '$'",
@@ -1376,12 +1381,6 @@ func TestErrors(t *testing.T) {
 	}, {
 		input:  "select x'777' from t",
 		output: "syntax error at position 14 near '777'",
-	}, {
-		input:  "select 'aa\\",
-		output: "syntax error at position 12 near 'aa'",
-	}, {
-		input:  "select 'aa",
-		output: "syntax error at position 12 near 'aa'",
 	}, {
 		input:  "select * from t where :1 = 2",
 		output: "syntax error at position 24 near ':'",
@@ -1417,9 +1416,6 @@ func TestErrors(t *testing.T) {
 			"F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
 			"(F(F(F(F(F(F(F(F(F(F(F(",
 		output: "syntax error at position 405",
-	}, {
-		input:  "select /* aa",
-		output: "syntax error at position 13 near '/* aa'",
 	}, {
 		// This construct is considered invalid due to a grammar conflict.
 		input:  "insert into a select * from b join c on duplicate key update d=e",
@@ -1466,11 +1462,23 @@ func TestErrors(t *testing.T) {
 	}, {
 		input:  "select * from t where id = ((select a from t1 union select b from t2) order by a limit 1)",
 		output: "syntax error at position 76 near 'order'",
+	}, {
+		input:        "select 'aa\\",
+		output:       "syntax error at position 12 near 'aa'",
+		excludeMulti: true,
+	}, {
+		input:        "select 'aa",
+		output:       "syntax error at position 12 near 'aa'",
+		excludeMulti: true,
+	}, {
+		input:        "select /* aa",
+		output:       "syntax error at position 13 near '/* aa'",
+		excludeMulti: true,
 	}}
+)
+
+func TestErrors(t *testing.T) {
 	for _, tcase := range invalidSQL {
-		if tcase.output == "" {
-			tcase.output = tcase.input
-		}
 		_, err := Parse(tcase.input)
 		if err == nil || err.Error() != tcase.output {
 			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
