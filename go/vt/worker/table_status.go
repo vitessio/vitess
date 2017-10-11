@@ -120,7 +120,13 @@ func (t *tableStatusList) format() ([]string, time.Time) {
 			result[i] = fmt.Sprintf("%v: copy done, processed %v rows", ts.name, ts.copiedRows)
 		} else {
 			// copy is running
-			result[i] = fmt.Sprintf("%v: copy running using %v threads (%v/%v rows processed)", ts.name, ts.threadsStarted-ts.threadsDone, ts.copiedRows, ts.rowCount)
+			// Display 0% if rowCount is 0 because the actual number of rows can be > 0
+			// due to InnoDB's imperfect statistics.
+			percentage := 0.0
+			if ts.rowCount > 0 {
+				percentage = float64(ts.copiedRows) / float64(ts.rowCount) * 100.0
+			}
+			result[i] = fmt.Sprintf("%v: copy running using %v threads (%v/%v rows processed, %.1f%%)", ts.name, ts.threadsStarted-ts.threadsDone, ts.copiedRows, ts.rowCount, percentage)
 		}
 		copiedRows += ts.copiedRows
 		rowCount += ts.rowCount
