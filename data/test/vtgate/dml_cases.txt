@@ -121,6 +121,25 @@
   }
 }
 
+# update by primary keyspace id with parenthesized expression
+"update user set val = 1 where (id = 1)"
+{
+  "Original": "update user set val = 1 where (id = 1)",
+  "Instructions": {
+    "Opcode": "UpdateEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user set val = 1 where (id = 1)",
+    "Vindex": "user_index",
+    "Values": [
+      1
+    ],
+    "Table": "user"
+  }
+}
+
 # update by primary keyspace id, changing one vindex column
 "update user_metadata set email = 'juan@vitess.io' where user_id = 1"
 {

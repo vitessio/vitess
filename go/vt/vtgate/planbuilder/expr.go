@@ -39,6 +39,17 @@ func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlpars
 	return append(filters, node)
 }
 
+// skipParenthesis skips the parenthesis (if any) of an expression and
+// returns the innermost unparenthesized expression.
+func skipParenthesis(node sqlparser.Expr) sqlparser.Expr {
+	for {
+		if node, ok := node.(*sqlparser.ParenExpr); ok {
+			return skipParenthesis(node.Expr)
+		}
+		return node
+	}
+}
+
 // findOrigin identifies the right-most origin referenced by expr. In situations where
 // the expression references columns from multiple origins, the expression will be
 // pushed to the right-most origin, and the executor will use the results of
