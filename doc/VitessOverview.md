@@ -11,19 +11,33 @@ Vitess provides compliant JDBC and Go database drivers. Additionally, it underst
 
 Vitess has been serving all YouTube database traffic since 2011, and has now been adopted by many enterprises for their production needs.
 
-## Vitess on Kubernetes
+## Features
 
-[Kubernetes](http://kubernetes.io/) is an open-source orchestration system for Docker containers, and Vitess can run as a Kubernetes-aware cloud native distributed database.
+* **Performance**
+  * Connection pooling - Scale front-end connections while optimizing MySQL performance.
+  * Query de-duping – Reuse results of an in-flight query for any identical requests received while the in-flight query was still executing.
+  * Transaction manager – Limit number of concurrent transactions and manage deadlines to optimize overall throughput.
 
-Kubernetes handles scheduling onto nodes in a compute cluster, actively manages workloads on those nodes, and groups containers comprising an application for easy management and discovery.
-This provides an analogous open-source environment to the way Vitess runs in YouTube,
-on the [predecessor to Kubernetes](http://blog.kubernetes.io/2015/04/borg-predecessor-to-kubernetes.html).
+* **Protection**
+  * Query rewriting and sanitation – Add limits and avoid non-deterministic updates.
+  * Query blacklisting – Customize rules to prevent potentially problematic queries from hitting your database.
+  * Query killer – Terminate queries that take too long to return data.
+  * Table ACLs – Specify access control lists (ACLs) for tables based on the connected user.
 
-<div style="text-align:center">
-<a class="btn btn-default btn-lg" href="/getting-started/" role="button" style="margin-bottom:16px">
-<img src="/images/kubernetes.svg" style="width:30px;height:30px;margin-top:-5px">
-Quickstart</a>
-</div>
+* **Monitoring**
+  * Performance analysis: Tools let you monitor, diagnose, and analyze your database performance.
+  * Query streaming – Use a list of incoming queries to serve OLAP workloads.
+  * Update stream – A server streams the list of rows changing in the database, which can be used as a mechanism to propagate changes to other data stores.
+
+* **Topology Management Tools**
+  * Master management tools (handles reparenting)
+  * Web-based management GUI
+  * Designed to work in multiple data centers / regions
+
+* **Sharding**
+  * Virtually seamless dynamic re-sharding
+  * Vertical and Horizontal sharding support
+  * Multiple sharding schemes, with the ability to plug-in custom ones
 
 ## Comparisons to other storage options
 
@@ -95,36 +109,6 @@ If you're considering a NoSQL solution primarily because of concerns about the s
   </tbody>
 </table>
 
-## Features
-
-* **Performance**
-  * Connection pooling - Scale front-end connections while optimizing MySQL performance.
-  * Query de-duping – Reuse results of an in-flight query for any identical requests received while the in-flight query was still executing.
-  * Transaction manager – Limit number of concurrent transactions and manage deadlines to optimize overall throughput.
-
-* **Protection**
-
-  * Query rewriting and sanitation – Add limits and avoid non-deterministic updates.
-  * Query blacklisting – Customize rules to prevent potentially problematic queries from hitting your database.
-  * Query killer – Terminate queries that take too long to return data.
-  * Table ACLs – Specify access control lists (ACLs) for tables based on the connected user.
-
-* **Monitoring**
-  * Performance analysis: Tools let you monitor, diagnose, and analyze your database performance.
-  * Query streaming – Use a list of incoming queries to serve OLAP workloads.
-  * Update stream – A server streams the list of rows changing in the database, which can be used as a mechanism to propagate changes to other data stores.
-
-* **Topology Management Tools**
-  * Master management tools (handles reparenting)
-  * Web-based management GUI
-  * Designed to work in multiple data centers / regions
-
-* **Sharding**
-  * Virtually seamless dynamic re-sharding
-  * Vertical and Horizontal sharding support
-  * Multiple sharding schemes, with the ability to plug-in custom ones
-
-
 ## Architecture
 
 The Vitess platform consists of a number of server processes, command-line utilities, and web-based utilities, backed by a consistent metadata store.
@@ -187,6 +171,20 @@ Vitess also includes the following tools:
 * **vtexplain**: A lightweight binary that can be used to verify how vitess will handle various queries based on a user-supplied schema and topology.
 * **zk**: Command-line ZooKeeper client and explorer
 * **zkctl**: Manage ZooKeeper instances
+
+## Vitess on Kubernetes
+
+[Kubernetes](http://kubernetes.io/) is an open-source orchestration system for Docker containers, and Vitess can run as a Kubernetes-aware cloud native distributed database.
+
+Kubernetes handles scheduling onto nodes in a compute cluster, actively manages workloads on those nodes, and groups containers comprising an application for easy management and discovery.
+This provides an analogous open-source environment to the way Vitess runs in YouTube,
+on the [predecessor to Kubernetes](http://blog.kubernetes.io/2015/04/borg-predecessor-to-kubernetes.html).
+
+<div style="text-align:center">
+<a class="btn btn-default btn-lg" href="/getting-started/" role="button" style="margin-bottom:16px">
+<img src="/images/kubernetes.svg" style="width:30px;height:30px;margin-top:-5px">
+Quickstart</a>
+</div>
 
 ## History
 
