@@ -26,10 +26,12 @@ import (
 	"github.com/youtube/vitess/go/testfiles"
 )
 
+var testOutputTempDir string
+
 func defaultTestOpts() *Options {
 	return &Options{
 		ReplicationMode: "ROW",
-		NumShards:       2,
+		NumShards:       4,
 		Normalize:       true,
 	}
 }
@@ -79,11 +81,13 @@ func testExplain(testcase string, opts *Options, t *testing.T) {
 		t.Errorf("json output did not match")
 		t.Logf("got:\n%s\n", string(explainJSON))
 
-		tempDir, err := ioutil.TempDir("", "vtexplain_output")
-		if err != nil {
-			t.Fatalf("error getting tempdir: %v", err)
+		if testOutputTempDir == "" {
+			testOutputTempDir, err = ioutil.TempDir("", "vtexplain_output")
+			if err != nil {
+				t.Fatalf("error getting tempdir: %v", err)
+			}
 		}
-		gotFile := fmt.Sprintf("%s/%s-output.json", tempDir, testcase)
+		gotFile := fmt.Sprintf("%s/%s-output.json", testOutputTempDir, testcase)
 		ioutil.WriteFile(gotFile, []byte(explainJSON), 0644)
 
 		command := exec.Command("diff", "-u", jsonOutFile, gotFile)
@@ -98,11 +102,13 @@ func testExplain(testcase string, opts *Options, t *testing.T) {
 		t.Errorf("Text output did not match")
 		t.Logf("got:\n%s\n", string(explainText))
 
-		tempDir, err := ioutil.TempDir("", "vtexplain_output")
-		if err != nil {
-			t.Fatalf("error getting tempdir: %v", err)
+		if testOutputTempDir == "" {
+			testOutputTempDir, err = ioutil.TempDir("", "vtexplain_output")
+			if err != nil {
+				t.Fatalf("error getting tempdir: %v", err)
+			}
 		}
-		gotFile := fmt.Sprintf("%s/%s-output.txt", tempDir, testcase)
+		gotFile := fmt.Sprintf("%s/%s-output.txt", testOutputTempDir, testcase)
 		ioutil.WriteFile(gotFile, []byte(explainText), 0644)
 
 		command := exec.Command("diff", "-u", textOutFile, gotFile)
@@ -121,6 +127,14 @@ func TestSelectSharded(t *testing.T) {
 
 func TestInsertSharded(t *testing.T) {
 	testExplain("insertsharded", defaultTestOpts(), t)
+}
+
+func TestUpdateSharded(t *testing.T) {
+	testExplain("updatesharded", defaultTestOpts(), t)
+}
+
+func TestDeleteSharded(t *testing.T) {
+	testExplain("deletesharded", defaultTestOpts(), t)
 }
 
 func TestOptions(t *testing.T) {

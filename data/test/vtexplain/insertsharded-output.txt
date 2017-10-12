@@ -1,116 +1,99 @@
 ----------------------------------------------------------------------
 insert into user (id, name) values(1, 'alice')
 
-[ks_sharded/-80]:
-begin
-insert into name_user_map(name, user_id) values ('alice', 1)
-commit
-begin
-insert into user(id, name) values (1, 'alice')
-commit
+1 ks_sharded/40-80: begin
+1 ks_sharded/40-80: insert into name_user_map(name, user_id) values ('alice', 1) /* vtgate:: keyspace_id:475e26c086f437f36bd72ecd883504a7 */
+2 ks_sharded/-40: begin
+2 ks_sharded/-40: insert into user(id, name) values (1, 'alice') /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+3 ks_sharded/40-80: commit
+4 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
 insert into user (id, name) values(2, 'bob')
 
-[ks_sharded/-80]:
-begin
-insert into user(id, name) values (2, 'bob')
-commit
-
-[ks_sharded/80-]:
-begin
-insert into name_user_map(name, user_id) values ('bob', 2)
-commit
+1 ks_sharded/c0-: begin
+1 ks_sharded/c0-: insert into name_user_map(name, user_id) values ('bob', 2) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */
+2 ks_sharded/-40: begin
+2 ks_sharded/-40: insert into user(id, name) values (2, 'bob') /* vtgate:: keyspace_id:06e7ea22ce92708f */
+3 ks_sharded/c0-: commit
+4 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
 insert ignore into user (id, name) values(2, 'bob')
 
-[ks_sharded/-80]:
-begin
-insert ignore into user(id, name) values (2, 'bob')
-commit
-
-[ks_sharded/80-]:
-begin
-insert ignore into name_user_map(name, user_id) values ('bob', 2)
-commit
-select name from name_user_map where 1 != 1
-select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
+1 ks_sharded/c0-: begin
+1 ks_sharded/c0-: insert ignore into name_user_map(name, user_id) values ('bob', 2) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */
+2 ks_sharded/c0-: select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
+3 ks_sharded/-40: begin
+3 ks_sharded/-40: insert ignore into user(id, name) values (2, 'bob') /* vtgate:: keyspace_id:06e7ea22ce92708f */
+4 ks_sharded/c0-: commit
+5 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
 insert ignore into user (id, name, nickname) values(2, 'bob', 'bob')
 
-[ks_sharded/-80]:
-begin
-insert ignore into user(id, name, nickname) values (2, 'bob', 'bob')
-commit
-
-[ks_sharded/80-]:
-begin
-insert ignore into name_user_map(name, user_id) values ('bob', 2)
-commit
-select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
+1 ks_sharded/c0-: begin
+1 ks_sharded/c0-: insert ignore into name_user_map(name, user_id) values ('bob', 2) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */
+2 ks_sharded/c0-: select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
+3 ks_sharded/-40: begin
+3 ks_sharded/-40: insert ignore into user(id, name, nickname) values (2, 'bob', 'bob') /* vtgate:: keyspace_id:06e7ea22ce92708f */
+4 ks_sharded/c0-: commit
+5 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
 insert ignore into user (id, name) values(2, 'bob'),(3, 'charlie')
 
-[ks_sharded/-80]:
-begin
-insert ignore into user(id, name) values (2, 'bob'), (3, 'charlie')
-commit
-
-[ks_sharded/80-]:
-begin
-insert ignore into name_user_map(name, user_id) values ('bob', 2), ('charlie', 3)
-commit
-select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
-select name from name_user_map where name = 'charlie' and user_id = 3 limit 10001
+1 ks_sharded/80-c0: begin
+1 ks_sharded/80-c0: insert ignore into name_user_map(name, user_id) values ('charlie', 3) /* vtgate:: keyspace_id:91f3487c9b6830974afd7308bdf9c10d */
+1 ks_sharded/c0-: begin
+1 ks_sharded/c0-: insert ignore into name_user_map(name, user_id) values ('bob', 2) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */
+2 ks_sharded/c0-: select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
+3 ks_sharded/80-c0: select name from name_user_map where name = 'charlie' and user_id = 3 limit 10001
+4 ks_sharded/-40: begin
+4 ks_sharded/-40: insert ignore into user(id, name) values (2, 'bob') /* vtgate:: keyspace_id:06e7ea22ce92708f */
+4 ks_sharded/40-80: begin
+4 ks_sharded/40-80: insert ignore into user(id, name) values (3, 'charlie') /* vtgate:: keyspace_id:4eb190c9a2fa169c */
+5 ks_sharded/c0-: commit
+6 ks_sharded/80-c0: commit
+7 ks_sharded/-40: commit
+8 ks_sharded/40-80: commit
 
 ----------------------------------------------------------------------
 insert into user (id, name, nickname) values(2, 'bob', 'bobby') on duplicate key update nickname='bobby'
 
-[ks_sharded/-80]:
-begin
-insert into user(id, name, nickname) values (2, 'bob', 'bobby') on duplicate key update nickname = 'bobby'
-commit
-
-[ks_sharded/80-]:
-begin
-insert ignore into name_user_map(name, user_id) values ('bob', 2)
-commit
-select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
+1 ks_sharded/c0-: begin
+1 ks_sharded/c0-: insert ignore into name_user_map(name, user_id) values ('bob', 2) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */
+2 ks_sharded/c0-: select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
+3 ks_sharded/-40: begin
+3 ks_sharded/-40: insert into user(id, name, nickname) values (2, 'bob', 'bobby') on duplicate key update nickname = 'bobby' /* vtgate:: keyspace_id:06e7ea22ce92708f */
+4 ks_sharded/c0-: commit
+5 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
 insert into user (id, name, nickname, address) values(2, 'bob', 'bobby', '123 main st') on duplicate key update nickname=values(nickname), address=values(address)
 
-[ks_sharded/-80]:
-begin
-insert into user(id, name, nickname, address) values (2, 'bob', 'bobby', '123 main st') on duplicate key update nickname = values(nickname), address = values(address)
-commit
-
-[ks_sharded/80-]:
-begin
-insert ignore into name_user_map(name, user_id) values ('bob', 2)
-commit
-select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
+1 ks_sharded/c0-: begin
+1 ks_sharded/c0-: insert ignore into name_user_map(name, user_id) values ('bob', 2) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */
+2 ks_sharded/c0-: select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
+3 ks_sharded/-40: begin
+3 ks_sharded/-40: insert into user(id, name, nickname, address) values (2, 'bob', 'bobby', '123 main st') on duplicate key update nickname = values(nickname), address = values(address) /* vtgate:: keyspace_id:06e7ea22ce92708f */
+4 ks_sharded/c0-: commit
+5 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
 insert into user (id, name, nickname, address) values(2, 'bob', 'bobby', '123 main st'), (3, 'jane', 'janie', '456 elm st')on duplicate key update nickname=values(nickname), address=values(address)
 
-[ks_sharded/-80]:
-begin
-insert ignore into name_user_map(name, user_id) values ('jane', 3)
-commit
-select name from name_user_map where 1 != 1
-select name from name_user_map where name = 'jane' and user_id = 3 limit 10001
-begin
-insert into user(id, name, nickname, address) values (2, 'bob', 'bobby', '123 main st'), (3, 'jane', 'janie', '456 elm st') on duplicate key update nickname = values(nickname), address = values(address)
-commit
-
-[ks_sharded/80-]:
-begin
-insert ignore into name_user_map(name, user_id) values ('bob', 2)
-commit
-select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
+1 ks_sharded/-40: begin
+1 ks_sharded/-40: insert ignore into name_user_map(name, user_id) values ('jane', 3) /* vtgate:: keyspace_id:2833d31717650107c367cdd51cb7d90c */
+1 ks_sharded/c0-: begin
+1 ks_sharded/c0-: insert ignore into name_user_map(name, user_id) values ('bob', 2) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */
+2 ks_sharded/c0-: select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
+3 ks_sharded/-40: select name from name_user_map where name = 'jane' and user_id = 3 limit 10001
+4 ks_sharded/-40: insert into user(id, name, nickname, address) values (2, 'bob', 'bobby', '123 main st') on duplicate key update nickname = values(nickname), address = values(address) /* vtgate:: keyspace_id:06e7ea22ce92708f */
+4 ks_sharded/40-80: begin
+4 ks_sharded/40-80: insert into user(id, name, nickname, address) values (3, 'jane', 'janie', '456 elm st') on duplicate key update nickname = values(nickname), address = values(address) /* vtgate:: keyspace_id:4eb190c9a2fa169c */
+5 ks_sharded/c0-: commit
+6 ks_sharded/-40: commit
+7 ks_sharded/40-80: commit
 
 ----------------------------------------------------------------------

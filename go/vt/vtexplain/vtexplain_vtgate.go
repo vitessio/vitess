@@ -26,14 +26,14 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
-	"github.com/youtube/vitess/go/vt/vttablet/sandboxconn"
+
+	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
@@ -87,7 +87,7 @@ func buildTopology(vschemaStr string, numShardsPerKeyspace int) error {
 		return err
 	}
 
-	explainTopo.TabletConns = make(map[string]*sandboxconn.SandboxConn)
+	explainTopo.TabletConns = make(map[string]*explainTablet)
 	for ks, vschema := range explainTopo.Keyspaces {
 		numShards := 1
 		if vschema.Sharded {
@@ -101,12 +101,11 @@ func buildTopology(vschemaStr string, numShardsPerKeyspace int) error {
 			shard := key.KeyRangeString(kr)
 			hostname := fmt.Sprintf("%s/%s", ks, shard)
 			log.Infof("registering test tablet %s for keyspace %s shard %s", hostname, ks, shard)
-			sc := healthCheck.AddTestTablet(vtexplainCell, hostname, 1, ks, shard, topodatapb.TabletType_MASTER, true, 1, nil)
 
-			tablet := newFakeTablet()
-			sc.Executor = tablet
-
-			explainTopo.TabletConns[hostname] = sc
+			tablet := healthCheck.AddFakeTablet(vtexplainCell, hostname, 1, ks, shard, topodatapb.TabletType_MASTER, true, 1, nil, func(t *topodatapb.Tablet) queryservice.QueryService {
+				return newTablet(t)
+			})
+			explainTopo.TabletConns[hostname] = tablet.(*explainTablet)
 		}
 	}
 
@@ -130,28 +129,17 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error
 
 	tabletActions := make(map[string]*TabletActions)
 	for shard, tc := range explainTopo.TabletConns {
-		if len(tc.Queries) == 0 {
+		if len(tc.tabletQueries) == 0 {
 			continue
 		}
 
-		tablet := tc.Executor.(*fakeTablet)
-
-		tqs := make([]*TabletQuery, 0, len(tc.Queries))
-		for _, bq := range tc.Queries {
-			tq := &TabletQuery{
-				SQL:      bq.Sql,
-				BindVars: sqltypes.CopyBindVariables(bq.BindVariables),
-			}
-			tqs = append(tqs, tq)
-		}
-
 		tabletActions[shard] = &TabletActions{
-			TabletQueries: tqs,
-			MysqlQueries:  tablet.queries,
+			TabletQueries: tc.tabletQueries,
+			MysqlQueries:  tc.mysqlQueries,
 		}
 
-		tc.Queries = nil
-		tablet.queries = nil
+		tc.tabletQueries = nil
+		tc.mysqlQueries = nil
 	}
 
 	return plans, tabletActions, nil

@@ -16,28 +16,72 @@
             }
         ],
         "TabletActions": {
-            "ks_sharded/-80": {
+            "ks_sharded/-40": {
                 "TabletQueries": [
                     {
+                        "Time": 1,
                         "SQL": "select * from user",
-                        "BindVars": {}
+                        "BindVars": {
+                            "#maxLimit": "10001"
+                        }
                     }
                 ],
                 "MysqlQueries": [
-                    "select * from user where 1 != 1",
-                    "select * from user limit 10001"
+                    {
+                        "Time": 1,
+                        "SQL": "select * from user limit 10001"
+                    }
                 ]
             },
-            "ks_sharded/80-": {
+            "ks_sharded/40-80": {
                 "TabletQueries": [
                     {
+                        "Time": 1,
                         "SQL": "select * from user",
-                        "BindVars": {}
+                        "BindVars": {
+                            "#maxLimit": "10001"
+                        }
                     }
                 ],
                 "MysqlQueries": [
-                    "select * from user where 1 != 1",
-                    "select * from user limit 10001"
+                    {
+                        "Time": 1,
+                        "SQL": "select * from user limit 10001"
+                    }
+                ]
+            },
+            "ks_sharded/80-c0": {
+                "TabletQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "select * from user",
+                        "BindVars": {
+                            "#maxLimit": "10001"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "select * from user limit 10001"
+                    }
+                ]
+            },
+            "ks_sharded/c0-": {
+                "TabletQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "select * from user",
+                        "BindVars": {
+                            "#maxLimit": "10001"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "select * from user limit 10001"
+                    }
                 ]
             }
         }
