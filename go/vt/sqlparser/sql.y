@@ -754,6 +754,10 @@ column_default_opt:
   {
     $$ = NewValArg($2)
   }
+| DEFAULT CURRENT_TIMESTAMP
+  {
+    $$ = NewValArg($2)
+  }
 
 auto_increment_opt:
   {

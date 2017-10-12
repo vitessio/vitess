@@ -1264,7 +1264,8 @@ func TestCreateTable(t *testing.T) {
 			"	`f1` float default 1.23,\n" +
 			"	`s1` varchar default 'c',\n" +
 			"	`s2` varchar default 'this is a string',\n" +
-			"	`s3` varchar default null\n" +
+			"	`s3` varchar default null,\n" +
+			"	`s4` timestamp default current_timestamp\n" +
 			")",
 
 		// test key field options
