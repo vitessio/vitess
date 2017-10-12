@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/youtube/vitess/go/bytes2"
@@ -31,7 +32,7 @@ const eofChar = 0x100
 // Tokenizer is the struct used to generate SQL
 // tokens for the parser.
 type Tokenizer struct {
-	InStream      *strings.Reader
+	InStream      io.ByteReader
 	AllowComments bool
 	ForceEOF      bool
 	lastChar      uint16
