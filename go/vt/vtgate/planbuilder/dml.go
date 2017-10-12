@@ -246,6 +246,7 @@ func extractValueFromUpdate(upd *sqlparser.UpdateExpr, col sqlparser.ColIdent) (
 func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) (pv sqltypes.PlanValue, ok bool) {
 	filters := splitAndExpression(nil, node)
 	for _, filter := range filters {
+		filter = skipParenthesis(filter)
 		comparison, ok := filter.(*sqlparser.ComparisonExpr)
 		if !ok {
 			continue
