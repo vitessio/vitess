@@ -10,8 +10,7 @@ CUR="sql.go"
 TMP="/tmp/sql.$$.go"
 
 
-if ! cd go/vt/sqlparser/
-then
+if ! cd go/vt/sqlparser/ ; then
         echo "ERROR: $0 must be run in the root project directory"
         exit 1
 fi
@@ -19,10 +18,11 @@ fi
 goyacc -o $TMP sql.y
 gofmt -w $TMP
 
-if ! diff -q $CUR $TMP > /dev/null
-then
+if ! diff -q $CUR $TMP > /dev/null ; then
         echo "ERROR: Regenerated parser $TMP does not match current version $(pwd)/sql.go:"
         diff -u $CUR $TMP
+        rm $TMP
+        echo "Please ensure go and goyacc are up to date and re-run 'make parser' to generate."
         exit 1
 fi
 

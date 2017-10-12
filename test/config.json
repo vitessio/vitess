@@ -214,7 +214,7 @@
 			"File": "",
 			"Args": [],
 			"Command": [
-				"tools/test_parser_generator.sh"
+				"tools/check_make_parser.sh"
 			],
 			"Manual": false,
 			"Shard": 0,
