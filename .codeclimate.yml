@@ -5,13 +5,15 @@ engines:
     enabled: true
   govet:
     enabled: true
+  shellcheck:
+    enabled: true
 
 ratings:
   paths:
     - "**.go"
+    - "**.sh"
 
 # Ignore generated code.
 exclude_paths:
 - "go/vt/proto/"
 - "go/vt/sqlparser/sql.go"
-
