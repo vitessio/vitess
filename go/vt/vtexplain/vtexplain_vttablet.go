@@ -17,15 +17,23 @@ limitations under the License.
 package vtexplain
 
 import (
+	"encoding/json"
+	"fmt"
+	"strings"
+
 	"golang.org/x/net/context"
+
+	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/vttablet/sandboxconn"
+
+	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -34,23 +42,47 @@ import (
 )
 
 var (
+	// map of schema introspection queries to their expected results
 	schemaQueries map[string]*sqltypes.Result
+
+	// map for each table from the column name to its type
+	tableColumns map[string]map[string]querypb.Type
+
+	// time simulator
+	batchTime *sync2.Batcher
 )
 
-type fakeTablet struct {
-	db  *fakesqldb.DB
-	tsv *tabletserver.TabletServer
+// explainTablet is the query service that simulates a tablet.
+//
+// To avoid needing to boilerplate implement the unneeded portions of the
+// QueryService interface, it overrides only the necessary methods and embeds
+// a wrapped QueryService that throws an error if an unimplemented method is
+// called.
+type explainTablet struct {
+	queryservice.QueryService
 
-	queries []string
+	db            *fakesqldb.DB
+	tsv           *tabletserver.TabletServer
+	tabletQueries []*TabletQuery
+	mysqlQueries  []*MysqlQuery
+	currentTime   int
 }
 
-func newFakeTablet() *fakeTablet {
-	db := newFakeDB()
+func newTablet(t *topodatapb.Tablet) *explainTablet {
+	db := fakesqldb.New(nil)
 
 	// XXX much of this is cloned from the tabletserver tests
-	config := tabletenv.DefaultQsConfig
-	config.EnableAutoCommit = true
-	tsv := tabletserver.NewTabletServerWithNilTopoServer(config)
+	tsv := tabletserver.NewTabletServerWithNilTopoServer(tabletenv.DefaultQsConfig)
+
+	tablet := explainTablet{db: db, tsv: tsv}
+	db.Handler = &tablet
+
+	tablet.QueryService = queryservice.Wrap(
+		nil,
+		func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, inTransaction bool, inner func(context.Context, *querypb.Target, queryservice.QueryService) (error, bool)) error {
+			return fmt.Errorf("explainTablet does not implement %s", name)
+		},
+	)
 
 	dbcfgs := dbconfigs.DBConfigs{
 		App:           *db.ConnParams(),
@@ -64,35 +96,74 @@ func newFakeTablet() *fakeTablet {
 		dbconfigs.AppConfig, // These tests only use the app pool.
 	)
 
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	target := querypb.Target{
+		Keyspace:   t.Keyspace,
+		Shard:      t.Shard,
+		TabletType: topodatapb.TabletType_MASTER,
+	}
 	tsv.StartService(target, dbcfgs, mysqld)
 
-	tablet := fakeTablet{db: db, tsv: tsv}
-	db.QueryLogger = func(query string, result *sqltypes.Result, err error) {
-		tablet.queries = append(tablet.queries, query)
-	}
+	// clear all the schema initialization queries out of the tablet
+	// to avoid clutttering the output
+	tablet.mysqlQueries = nil
 
 	return &tablet
 }
 
-// Execute hook called by SandboxConn as part of running the query.
-func (tablet *fakeTablet) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
-	logStats := tabletenv.NewLogStats(ctx, "FakeQueryExecutor")
+var _ queryservice.QueryService = (*explainTablet)(nil) // compile-time interface check
 
-	plan, err := tablet.tsv.GetPlan(ctx, logStats, query)
-	if err != nil {
-		return nil, err
-	}
+// Begin is part of the QueryService interface.
+func (t *explainTablet) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, error) {
+	t.currentTime = batchTime.Wait()
+	return t.tsv.Begin(ctx, target, options)
+}
 
-	txID := int64(0)
+// Commit is part of the QueryService interface.
+func (t *explainTablet) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
+	t.currentTime = batchTime.Wait()
+	return t.tsv.Commit(ctx, target, transactionID)
+}
+
+// Rollback is part of the QueryService interface.
+func (t *explainTablet) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
+	t.currentTime = batchTime.Wait()
+	return t.tsv.Rollback(ctx, target, transactionID)
+}
+
+// Execute is part of the QueryService interface.
+func (t *explainTablet) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+	t.currentTime = batchTime.Wait()
 
 	// Since the query is simulated being "sent" over the wire we need to
 	// copy the bindVars into the executor to avoid a data race.
-	qre := tabletserver.NewQueryExecutor(ctx, query, sqltypes.CopyBindVariables(bindVars), txID, nil, plan, logStats, tablet.tsv)
-	return qre.Execute()
+	bindVariables = sqltypes.CopyBindVariables(bindVariables)
+	t.tabletQueries = append(t.tabletQueries, &TabletQuery{
+		Time:     t.currentTime,
+		SQL:      sql,
+		BindVars: bindVariables,
+	})
+	return t.tsv.Execute(ctx, target, sql, bindVariables, transactionID, options)
+}
+
+// BeginExecute is part of the QueryService interface.
+func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
+	t.currentTime = batchTime.Wait()
+	bindVariables = sqltypes.CopyBindVariables(bindVariables)
+	t.tabletQueries = append(t.tabletQueries, &TabletQuery{
+		Time:     t.currentTime,
+		SQL:      sql,
+		BindVars: bindVariables,
+	})
+	return t.tsv.BeginExecute(ctx, target, sql, bindVariables, options)
+}
+
+// Close is part of the QueryService interface.
+func (t *explainTablet) Close(ctx context.Context) error {
+	return t.tsv.Close(ctx)
 }
 
 func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
+	tableColumns = make(map[string]map[string]querypb.Type)
 	schemaQueries = map[string]*sqltypes.Result{
 		"select unix_timestamp()": {
 			Fields: []*querypb.Field{{
@@ -175,6 +246,8 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 
 		describeTableRows := make([][]sqltypes.Value, 0, 4)
 		rowTypes := make([]*querypb.Field, 0, 4)
+		tableColumns[table] = make(map[string]querypb.Type)
+
 		for _, col := range ddl.TableSpec.Columns {
 			colName := col.Name.String()
 			defaultVal := ""
@@ -193,6 +266,8 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 				Type: col.Type.SQLType(),
 			}
 			rowTypes = append(rowTypes, rowType)
+
+			tableColumns[table][colName] = col.Type.SQLType()
 		}
 
 		schemaQueries["describe "+table] = &sqltypes.Result{
@@ -209,17 +284,150 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 	return nil
 }
 
-// Set up the fakesqldb with queries needed to resolve the schema and accept
-// all other queries
-func newFakeDB() *fakesqldb.DB {
-	// XXX passing nil for testing.t?
-	db := fakesqldb.New(nil)
-
-	for q, r := range schemaQueries {
-		db.AddQuery(q, r)
+// HandleQuery implements the fakesqldb query handler interface
+func (t *explainTablet) HandleQuery(c *mysql.Conn, q []byte, callback func(*sqltypes.Result) error) error {
+	query := string(q)
+	if !strings.Contains(query, "1 != 1") {
+		t.mysqlQueries = append(t.mysqlQueries, &MysqlQuery{
+			Time: t.currentTime,
+			SQL:  query,
+		})
 	}
 
-	db.AddQueryPattern(".*", sandboxconn.SingleRowResult)
+	// return the pre-computed results for any schema introspection queries
+	result, ok := schemaQueries[query]
+	if ok {
+		return callback(result)
+	}
 
-	return db
+	switch sqlparser.Preview(query) {
+	case sqlparser.StmtSelect:
+		// Parse the select statement to figure out the table and columns
+		// that were referenced so that the synthetic response has the
+		// expected field names and types.
+		stmt, err := sqlparser.Parse(query)
+		if err != nil {
+			return err
+		}
+
+		selStmt := stmt.(*sqlparser.Select)
+
+		if len(selStmt.From) != 1 {
+			return fmt.Errorf("unsupported select with multiple from clauses")
+		}
+
+		var table sqlparser.TableIdent
+		switch node := selStmt.From[0].(type) {
+		case *sqlparser.AliasedTableExpr:
+			table = sqlparser.GetTableName(node.Expr)
+			break
+		}
+
+		// For complex select queries just return an empty result
+		// since it's too hard to figure out the real columns
+		if table.IsEmpty() {
+			log.V(100).Infof("query %s result {}\n", query)
+			return callback(&sqltypes.Result{})
+		}
+
+		colTypeMap := tableColumns[table.String()]
+		if colTypeMap == nil {
+			return fmt.Errorf("unable to resolve table name %s", table.String())
+		}
+
+		colNames := make([]string, 0, 4)
+		colTypes := make([]querypb.Type, 0, 4)
+		for _, node := range selStmt.SelectExprs {
+			switch node := node.(type) {
+			case *sqlparser.AliasedExpr:
+				switch node := node.Expr.(type) {
+				case *sqlparser.ColName:
+					col := node.Name.String()
+					colType := colTypeMap[col]
+					if colType == querypb.Type_NULL_TYPE {
+						return fmt.Errorf("invalid column %s", col)
+					}
+					colNames = append(colNames, col)
+					colTypes = append(colTypes, colType)
+					break
+				case *sqlparser.FuncExpr:
+					// As a shortcut, functions are integral types
+					colNames = append(colNames, sqlparser.String(node))
+					colTypes = append(colTypes, querypb.Type_INT32)
+					break
+				case *sqlparser.SQLVal:
+					colNames = append(colNames, sqlparser.String(node))
+					switch node.Type {
+					case sqlparser.IntVal:
+						fallthrough
+					case sqlparser.HexNum:
+						fallthrough
+					case sqlparser.HexVal:
+						fallthrough
+					case sqlparser.BitVal:
+						colTypes = append(colTypes, querypb.Type_INT32)
+					case sqlparser.StrVal:
+						colTypes = append(colTypes, querypb.Type_VARCHAR)
+					case sqlparser.FloatVal:
+						colTypes = append(colTypes, querypb.Type_FLOAT64)
+					default:
+						return fmt.Errorf("unsupported sql value %s", sqlparser.String(node))
+					}
+					break
+				default:
+					return fmt.Errorf("unsupported select expression %s", sqlparser.String(node))
+				}
+				break
+			case *sqlparser.StarExpr:
+				for col, colType := range colTypeMap {
+					colNames = append(colNames, col)
+					colTypes = append(colTypes, colType)
+				}
+			}
+		}
+
+		fields := make([]*querypb.Field, len(colNames))
+		values := make([]sqltypes.Value, len(colNames))
+		for i, col := range colNames {
+			colType := colTypes[i]
+			fields[i] = &querypb.Field{
+				Name: col,
+				Type: colType,
+			}
+
+			// Generate a fake value for the given column. For numeric types,
+			// use the column index. For all other types, just shortcut to using
+			// a string type that encodes the column name + index.
+			if sqltypes.IsIntegral(colType) {
+				values[i] = sqltypes.NewInt32(int32(i + 1))
+			} else if sqltypes.IsFloat(colType) {
+				values[i] = sqltypes.NewFloat64(1.0 + float64(i))
+			} else {
+				values[i] = sqltypes.NewVarChar(fmt.Sprintf("%s_val_%d", col, i+1))
+			}
+		}
+		result = &sqltypes.Result{
+			Fields:       fields,
+			RowsAffected: 1,
+			InsertID:     0,
+			Rows:         [][]sqltypes.Value{values},
+		}
+
+		resultJSON, _ := json.MarshalIndent(result, "", "    ")
+		log.V(100).Infof("query %s result %s\n", query, string(resultJSON))
+
+		break
+	case sqlparser.StmtBegin, sqlparser.StmtCommit:
+		result = &sqltypes.Result{}
+		break
+	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
+		result = &sqltypes.Result{
+			RowsAffected: 1,
+		}
+		break
+	default:
+		return fmt.Errorf("unsupported query %s", query)
+	}
+
+	return callback(result)
 }

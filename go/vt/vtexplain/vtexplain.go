@@ -24,10 +24,12 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/jsonutil"
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 
@@ -50,11 +52,24 @@ type Options struct {
 // TabletQuery defines a query that was sent to a given tablet and how it was
 // processed in mysql
 type TabletQuery struct {
+	// Logical time of the query
+	Time int
+
 	// SQL command sent to the given tablet
 	SQL string
 
 	// BindVars sent with the command
 	BindVars map[string]*querypb.BindVariable
+}
+
+// MysqlQuery defines a query that was sent to a given tablet and how it was
+// processed in mysql
+type MysqlQuery struct {
+	// Sequence number of the query
+	Time int
+
+	// SQL command sent to the given tablet
+	SQL string
 }
 
 // MarshalJSON renders the json structure
@@ -68,9 +83,11 @@ func (tq *TabletQuery) MarshalJSON() ([]byte, error) {
 	}
 
 	return jsonutil.MarshalNoEscape(&struct {
+		Time     int
 		SQL      string
 		BindVars map[string]string
 	}{
+		Time:     tq.Time,
 		SQL:      tq.SQL,
 		BindVars: bindVars,
 	})
@@ -82,7 +99,7 @@ type TabletActions struct {
 	TabletQueries []*TabletQuery
 
 	// Queries that were run on mysql
-	MysqlQueries []string
+	MysqlQueries []*MysqlQuery
 }
 
 // Explain defines how vitess will execute a given sql query, including the vtgate
@@ -182,6 +199,9 @@ func Run(sql string) ([]*Explain, error) {
 		}
 
 		if sql != "" {
+			// Reset the global time simulator for each query
+			batchTime = sync2.NewBatcher(time.Duration(10 * time.Millisecond))
+			log.V(100).Infof("explain %s", sql)
 			e, err := explain(sql)
 			if err != nil {
 				return nil, err
@@ -211,26 +231,44 @@ func explain(sql string) (*Explain, error) {
 	}, nil
 }
 
-// ExplainsAsText returns a text representation of the explains
+type outputQuery struct {
+	tablet string
+	Time   int
+	sql    string
+}
+
+// ExplainsAsText returns a text representation of the explains in logical time
+// order
 func ExplainsAsText(explains []*Explain) string {
 	var b bytes.Buffer
 	for _, explain := range explains {
 		fmt.Fprintf(&b, "----------------------------------------------------------------------\n")
 		fmt.Fprintf(&b, "%s\n\n", explain.SQL)
 
-		tablets := make([]string, 0, len(explain.TabletActions))
-		for tablet := range explain.TabletActions {
-			tablets = append(tablets, tablet)
-		}
-		sort.Strings(tablets)
-		for _, tablet := range tablets {
-			fmt.Fprintf(&b, "[%s]:\n", tablet)
-			tc := explain.TabletActions[tablet]
-			for _, sql := range tc.MysqlQueries {
-				fmt.Fprintf(&b, "%s\n", sql)
+		queries := make([]outputQuery, 0, 4)
+		for tablet, actions := range explain.TabletActions {
+			for _, q := range actions.MysqlQueries {
+				queries = append(queries, outputQuery{
+					tablet: tablet,
+					Time:   q.Time,
+					sql:    q.SQL,
+				})
 			}
-			fmt.Fprintf(&b, "\n")
 		}
+
+		// Make sure to sort first by the batch time and then by the
+		// shard to avoid flakiness in the tests for parallel queries
+		sort.SliceStable(queries, func(i, j int) bool {
+			if queries[i].Time == queries[j].Time {
+				return queries[i].tablet < queries[j].tablet
+			}
+			return queries[i].Time < queries[j].Time
+		})
+
+		for _, q := range queries {
+			fmt.Fprintf(&b, "%d %s: %s\n", q.Time, q.tablet, q.sql)
+		}
+		fmt.Fprintf(&b, "\n")
 	}
 	fmt.Fprintf(&b, "----------------------------------------------------------------------\n")
 	return string(b.Bytes())
