@@ -210,6 +210,17 @@
 				"site_test"
 			]
 		},
+		"check_make_parser": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"tools/check_make_parser.sh"
+			],
+			"Manual": false,
+			"Shard": 0,
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"php": {
 			"File": "",
 			"Args": [],
