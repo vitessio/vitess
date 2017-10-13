@@ -210,7 +210,7 @@
 				"site_test"
 			]
 		},
-		"parser_generator": {
+		"check_make_parser": {
 			"File": "",
 			"Args": [],
 			"Command": [
