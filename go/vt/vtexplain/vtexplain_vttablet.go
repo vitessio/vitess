@@ -285,8 +285,7 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 }
 
 // HandleQuery implements the fakesqldb query handler interface
-func (t *explainTablet) HandleQuery(c *mysql.Conn, q []byte, callback func(*sqltypes.Result) error) error {
-	query := string(q)
+func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	if !strings.Contains(query, "1 != 1") {
 		t.mysqlQueries = append(t.mysqlQueries, &MysqlQuery{
 			Time: t.currentTime,

@@ -72,8 +72,8 @@ func (th *testHandler) NewConnection(c *Conn) {
 func (th *testHandler) ConnectionClosed(c *Conn) {
 }
 
-func (th *testHandler) ComQuery(c *Conn, q []byte, callback func(*sqltypes.Result) error) error {
-	switch query := string(q); query {
+func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+	switch query {
 	case "error":
 		return NewSQLError(ERUnknownComError, SSUnknownComError, "forced query handling error for: %v", query)
 	case "panic":
