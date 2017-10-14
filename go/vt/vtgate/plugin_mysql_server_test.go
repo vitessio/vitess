@@ -17,11 +17,12 @@ limitations under the License.
 package vtgate
 
 import (
-	"golang.org/x/net/context"
 	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
+
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -38,7 +39,7 @@ func (th *testHandler) NewConnection(c *mysql.Conn) {
 func (th *testHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
-func (th *testHandler) ComQuery(c *mysql.Conn, q []byte, callback func(*sqltypes.Result) error) error {
+func (th *testHandler) ComQuery(c *mysql.Conn, q string, callback func(*sqltypes.Result) error) error {
 	return nil
 }
 

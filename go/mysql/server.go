@@ -73,7 +73,7 @@ type Handler interface {
 	// Note the contents of the query slice may change after
 	// the first call to callback. So the Handler should not
 	// hang on to the byte slice.
-	ComQuery(c *Conn, query []byte, callback func(*sqltypes.Result) error) error
+	ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error
 }
 
 // Listener is the MySQL server protocol listener.
@@ -320,9 +320,9 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		case ComQuery:
 			queryStart := time.Now()
 			query := c.parseComQuery(data)
+			c.recycleReadPacket()
 			fieldSent := false
-			// sendFinished is set if a response has completed and
-			// no further packets must be sent.
+			// sendFinished is set if the response should just be an OK packet.
 			sendFinished := false
 			err := l.handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
 				if sendFinished {
@@ -331,12 +331,12 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 				}
 
 				if !fieldSent {
-					c.recycleReadPacket()
 					fieldSent = true
 
 					if len(qr.Fields) == 0 {
-						// We should not send any more packets after this.
 						sendFinished = true
+						// We should not send any more packets after this.
+						return c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
 					}
 					if err := c.writeFields(qr); err != nil {
 						return err
@@ -348,7 +348,6 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 			// If no field was sent, we expect an error.
 			if !fieldSent {
-				c.recycleReadPacket()
 				// This is just a failsafe. Should never happen.
 				if err == nil || err == io.EOF {
 					err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
@@ -368,7 +367,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 				return
 			}
 
-			// Send the end packet only is sendFinished is false (not a DML).
+			// Send the end packet only sendFinished is false (results were streamed).
 			if !sendFinished {
 				if err := c.writeEndResult(); err != nil {
 					log.Errorf("Error writing result to %s: %v", c, err)
@@ -630,8 +629,5 @@ func (c *Conn) writeAuthSwitchRequest(pluginName string, pluginData []byte) erro
 	if pos != len(data) {
 		return fmt.Errorf("error building AuthSwitchRequestPacket packet: got %v bytes expected %v", pos, len(data))
 	}
-	if err := c.writeEphemeralPacket(true); err != nil {
-		return err
-	}
-	return nil
+	return c.writeEphemeralPacket(true)
 }

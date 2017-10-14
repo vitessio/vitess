@@ -75,7 +75,7 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	}
 }
 
-func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query []byte, callback func(*sqltypes.Result) error) error {
+func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	// FIXME(alainjobart): Add some kind of timeout to the context.
 	ctx := context.Background()
 
@@ -107,10 +107,10 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query []byte, callback func(*sq
 		session.TargetString = c.SchemaName
 	}
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-		err := vh.vtg.StreamExecute(ctx, session, string(query), make(map[string]*querypb.BindVariable), callback)
+		err := vh.vtg.StreamExecute(ctx, session, query, make(map[string]*querypb.BindVariable), callback)
 		return mysql.NewSQLErrorFromError(err)
 	}
-	session, result, err := vh.vtg.Execute(ctx, session, string(query), make(map[string]*querypb.BindVariable))
+	session, result, err := vh.vtg.Execute(ctx, session, query, make(map[string]*querypb.BindVariable))
 	c.ClientData = session
 	err = mysql.NewSQLErrorFromError(err)
 	if err != nil {
@@ -198,7 +198,7 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 		}
 		_, dialErr := net.Dial("unix", address)
 		if dialErr == nil {
-			log.Errorf("Existent socket is still accepting connections, aborting", address)
+			log.Errorf("Existent socket '%s' is still accepting connections, aborting", address)
 			return nil, err
 		}
 		removeFileErr := os.Remove(address)

@@ -454,8 +454,8 @@ func (c *Conn) readComQueryResponse() (uint64, uint64, int, error) {
 // Server side methods.
 //
 
-func (c *Conn) parseComQuery(data []byte) []byte {
-	return data[1:]
+func (c *Conn) parseComQuery(data []byte) string {
+	return string(data[1:])
 }
 
 func (c *Conn) parseComInitDB(data []byte) string {
@@ -546,16 +546,10 @@ func (c *Conn) writeRow(row []sqltypes.Value) error {
 	return c.writeEphemeralPacket(false)
 }
 
-// writeFields writes the fields of a Result. If fields have no columns,
-// it's sent as an only packet of a DML response.
+// writeFields writes the fields of a Result. It should be called only
+// if there are valid columns in the result.
 func (c *Conn) writeFields(result *sqltypes.Result) error {
-	if len(result.Fields) == 0 {
-		// This is just an INSERT result, send an OK packet.
-		// Nothing yet in the buffer, we can use this.
-		return c.writeOKPacket(result.RowsAffected, result.InsertID, c.StatusFlags, 0)
-	}
-
-	// Now send a packet with just the number of fields.
+	// Send the number of fields first.
 	if err := c.sendColumnCount(uint64(len(result.Fields))); err != nil {
 		return err
 	}
