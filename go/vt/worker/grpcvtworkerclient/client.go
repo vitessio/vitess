@@ -24,8 +24,8 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
 
@@ -49,13 +49,13 @@ type gRPCVtworkerClient struct {
 
 func gRPCVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworkerclient.Client, error) {
 	// create the RPC client
-	opt, err := grpcutils.ClientSecureDialOption(*cert, *key, *ca, *name)
+	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
 	if err != nil {
 		return nil, err
 	}
-	cc, err := grpc.Dial(addr, opt, grpc.WithBlock(), grpc.WithTimeout(dialTimeout))
+	cc, err := grpcclient.Dial(addr, opt, grpc.WithBlock(), grpc.WithTimeout(dialTimeout))
 	if err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "grpc.Dial() err: %v", err)
+		return nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "grpcclient.Dial() err: %v", err)
 	}
 	c := vtworkerservicepb.NewVtworkerClient(cc)
 

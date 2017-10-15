@@ -26,7 +26,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
-	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"golang.org/x/net/context"
@@ -54,11 +54,11 @@ type vtgateConn struct {
 }
 
 func dial(ctx context.Context, addr string, timeout time.Duration) (vtgateconn.Impl, error) {
-	opt, err := grpcutils.ClientSecureDialOption(*cert, *key, *ca, *name)
+	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
 	if err != nil {
 		return nil, err
 	}
-	cc, err := grpc.Dial(addr, opt, grpc.WithBlock(), grpc.WithTimeout(timeout), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(*grpcutils.MaxMessageSize), grpc.MaxCallSendMsgSize(*grpcutils.MaxMessageSize)))
+	cc, err := grpcclient.Dial(addr, opt, grpc.WithBlock(), grpc.WithTimeout(timeout))
 	if err != nil {
 		return nil, err
 	}

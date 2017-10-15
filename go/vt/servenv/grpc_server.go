@@ -28,7 +28,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
+	"github.com/youtube/vitess/go/vt/grpccommon"
 	"github.com/youtube/vitess/go/vt/vttls"
 	"google.golang.org/grpc/keepalive"
 )
@@ -47,27 +47,27 @@ import (
 // and not before, as it is initialized right before calling OnRun.
 var (
 	// GRPCPort is the port to listen on for gRPC. If not set or zero, don't listen.
-	GRPCPort *int
+	GRPCPort = flag.Int("grpc_port", 0, "Port to listen on for gRPC calls")
 
 	// GRPCCert is the cert to use if TLS is enabled
-	GRPCCert *string
+	GRPCCert = flag.String("grpc_cert", "", "certificate to use, requires grpc_key, enables TLS")
 
 	// GRPCKey is the key to use if TLS is enabled
-	GRPCKey *string
+	GRPCKey = flag.String("grpc_key", "", "key to use, requires grpc_cert, enables TLS")
 
 	// GRPCCA is the CA to use if TLS is enabled
-	GRPCCA *string
+	GRPCCA = flag.String("grpc_ca", "", "ca to use, requires TLS, and enforces client cert check")
 
 	// GRPCServer is the global server to serve gRPC.
 	GRPCServer *grpc.Server
 
 	// GRPCMaxConnectionAge is the maximum age of a client connection, before GoAway is sent.
 	// This is useful for L4 loadbalancing to ensure rebalancing after scaling.
-	GRPCMaxConnectionAge *time.Duration
+	GRPCMaxConnectionAge = flag.Duration("grpc_max_connection_age", time.Duration(math.MaxInt64), "Maximum age of a client connection before GoAway is sent.")
 
 	// GRPCMaxConnectionAgeGrace is an additional grace period after GRPCMaxConnectionAge, after which
 	// connections are forcibly closed.
-	GRPCMaxConnectionAgeGrace *time.Duration
+	GRPCMaxConnectionAgeGrace = flag.Duration("grpc_max_connection_age_grace", time.Duration(math.MaxInt64), "Additional grace period after grpc_max_connection_age, after which connections are forcibly closed.")
 )
 
 // isGRPCEnabled returns true if gRPC server is set
@@ -111,11 +111,9 @@ func createGRPCServer() {
 	// grpc: received message length XXXXXXX exceeding the max size 4194304
 	// Note: For gRPC 1.0.0 it's sufficient to set the limit on the server only
 	// because it's not enforced on the client side.
-	if grpcutils.MaxMessageSize != nil {
-		log.Infof("Setting grpc max message size to %d", *grpcutils.MaxMessageSize)
-		opts = append(opts, grpc.MaxRecvMsgSize(*grpcutils.MaxMessageSize))
-		opts = append(opts, grpc.MaxSendMsgSize(*grpcutils.MaxMessageSize))
-	}
+	log.Infof("Setting grpc max message size to %d", *grpccommon.MaxMessageSize)
+	opts = append(opts, grpc.MaxRecvMsgSize(*grpccommon.MaxMessageSize))
+	opts = append(opts, grpc.MaxSendMsgSize(*grpccommon.MaxMessageSize))
 
 	if GRPCMaxConnectionAge != nil {
 		ka := keepalive.ServerParameters{
@@ -156,19 +154,6 @@ func serveGRPC() {
 		GRPCServer.GracefulStop()
 		log.Info("gRPC server stopped")
 	})
-}
-
-// RegisterGRPCFlags registers the right command line flag to enable gRPC
-func RegisterGRPCFlags() {
-	GRPCPort = flag.Int("grpc_port", 0, "Port to listen on for gRPC calls")
-	GRPCCert = flag.String("grpc_cert", "", "certificate to use, requires grpc_key, enables TLS")
-	GRPCKey = flag.String("grpc_key", "", "key to use, requires grpc_cert, enables TLS")
-	GRPCCA = flag.String("grpc_ca", "", "ca to use, requires TLS, and enforces client cert check")
-	// Default is effectively infinity, as defined in grpc.
-	GRPCMaxConnectionAge = flag.Duration("grpc_max_connection_age", time.Duration(math.MaxInt64), "Maximum age of a client connection before GoAway is sent.")
-	GRPCMaxConnectionAgeGrace = flag.Duration("grpc_max_connection_age_grace", time.Duration(math.MaxInt64), "Additional grace period after grpc_max_connection_age, after which connections are forcibly closed.")
-
-	grpcutils.RegisterFlags()
 }
 
 // GRPCCheckServiceMap returns if we should register a gRPC service
