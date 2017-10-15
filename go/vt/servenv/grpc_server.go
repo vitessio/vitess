@@ -29,6 +29,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
+	"github.com/youtube/vitess/go/vt/vttls"
 	"google.golang.org/grpc/keepalive"
 )
 
@@ -94,7 +95,7 @@ func createGRPCServer() {
 
 	var opts []grpc.ServerOption
 	if GRPCPort != nil && *GRPCCert != "" && *GRPCKey != "" {
-		config, err := grpcutils.TLSServerConfig(*GRPCCert, *GRPCKey, *GRPCCA)
+		config, err := vttls.ServerConfig(*GRPCCert, *GRPCKey, *GRPCCA)
 		if err != nil {
 			log.Fatalf("Failed to log gRPC cert/key/ca: %v", err)
 		}

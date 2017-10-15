@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package grpcutils
+package vttls
 
 import (
 	"crypto/tls"
@@ -23,9 +23,44 @@ import (
 	"io/ioutil"
 )
 
-// TLSServerConfig returns the TLS config to use for a server to
+// ClientConfig returns the TLS config to use for a client to
+// connect to a server with the provided parameters.
+func ClientConfig(cert, key, ca, name string) (*tls.Config, error) {
+	config := &tls.Config{}
+
+	// Load the client-side cert & key if any.
+	if cert != "" && key != "" {
+		crt, err := tls.LoadX509KeyPair(cert, key)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load cert/key: %v", err)
+		}
+		config.Certificates = []tls.Certificate{crt}
+	}
+
+	// Load the server CA if any.
+	if ca != "" {
+		b, err := ioutil.ReadFile(ca)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read ca file: %v", err)
+		}
+		cp := x509.NewCertPool()
+		if !cp.AppendCertsFromPEM(b) {
+			return nil, fmt.Errorf("failed to append certificates")
+		}
+		config.RootCAs = cp
+	}
+
+	// Set the server name if any.
+	if name != "" {
+		config.ServerName = name
+	}
+
+	return config, nil
+}
+
+// ServerConfig returns the TLS config to use for a server to
 // accept client connections.
-func TLSServerConfig(cert, key, ca string) (*tls.Config, error) {
+func ServerConfig(cert, key, ca string) (*tls.Config, error) {
 	config := &tls.Config{}
 
 	// Load the server cert and key.

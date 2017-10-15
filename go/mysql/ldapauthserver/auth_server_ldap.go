@@ -29,7 +29,7 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/netutil"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
+	"github.com/youtube/vitess/go/vt/vttls"
 	"gopkg.in/ldap.v2"
 )
 
@@ -227,7 +227,7 @@ func (lci *ClientImpl) Connect(network string, config *ServerConfig) error {
 	if err != nil {
 		return err
 	}
-	tlsConfig, err := grpcutils.TLSClientConfig(config.LdapCert, config.LdapKey, config.LdapCA, serverName)
+	tlsConfig, err := vttls.ClientConfig(config.LdapCert, config.LdapKey, config.LdapCA, serverName)
 	if err != nil {
 		return err
 	}
