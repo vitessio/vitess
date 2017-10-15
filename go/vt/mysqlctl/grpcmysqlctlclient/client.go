@@ -39,7 +39,7 @@ type client struct {
 
 func factory(network, addr string, dialTimeout time.Duration) (mysqlctlclient.MysqlctlClient, error) {
 	// create the RPC client
-	cc, err := grpcclient.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(dialTimeout), grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
+	cc, err := grpcclient.Dial(addr, grpc.WithInsecure(), grpc.WithTimeout(dialTimeout), grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
 		return net.DialTimeout(network, addr, timeout)
 	}))
 	if err != nil {
