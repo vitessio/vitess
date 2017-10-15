@@ -50,7 +50,7 @@ func gRPCVtctlClientFactory(addr string, dialTimeout time.Duration) (vtctlclient
 		return nil, err
 	}
 	// create the RPC client
-	cc, err := grpcclient.Dial(addr, opt, grpc.WithBlock(), grpc.WithTimeout(dialTimeout))
+	cc, err := grpcclient.Dial(addr, opt, grpc.WithTimeout(dialTimeout))
 	if err != nil {
 		return nil, err
 	}

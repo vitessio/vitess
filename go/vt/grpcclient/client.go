@@ -26,10 +26,20 @@ import (
 
 // Dial creates a grpc connection to the given target.
 func Dial(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
-	newopts := []grpc.DialOption{grpc.WithDefaultCallOptions(
-		grpc.MaxCallRecvMsgSize(*grpccommon.MaxMessageSize),
-		grpc.MaxCallSendMsgSize(*grpccommon.MaxMessageSize),
-	)}
+	newopts := []grpc.DialOption{
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(*grpccommon.MaxMessageSize),
+			grpc.MaxCallSendMsgSize(*grpccommon.MaxMessageSize),
+		),
+		// FailOnNonTempDialError makes the grpc fail faster on chronic errors.
+		// Additionally, the error messages are more specific, which
+		// is more helpful for troubleshooting.
+		grpc.FailOnNonTempDialError(true),
+		// With grpc 1.7.0, some requests are failing with
+		// 'the connection is unavailable' error. Adding this
+		// WithBlock option mitigates the problem.
+		grpc.WithBlock(),
+	}
 	newopts = append(newopts, opts...)
 	return grpc.Dial(target, newopts...)
 }

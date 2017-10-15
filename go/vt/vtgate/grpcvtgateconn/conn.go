@@ -58,7 +58,7 @@ func dial(ctx context.Context, addr string, timeout time.Duration) (vtgateconn.I
 	if err != nil {
 		return nil, err
 	}
-	cc, err := grpcclient.Dial(addr, opt, grpc.WithBlock(), grpc.WithTimeout(timeout))
+	cc, err := grpcclient.Dial(addr, opt, grpc.WithTimeout(timeout))
 	if err != nil {
 		return nil, err
 	}
