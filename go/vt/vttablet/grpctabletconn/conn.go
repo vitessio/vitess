@@ -25,7 +25,7 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
-	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletconn"
 	"golang.org/x/net/context"
@@ -69,7 +69,7 @@ func DialTablet(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.
 	} else {
 		addr = tablet.Hostname
 	}
-	opt, err := grpcutils.ClientSecureDialOption(*cert, *key, *ca, *name)
+	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
 	if err != nil {
 		return nil, err
 	}
@@ -77,8 +77,7 @@ func DialTablet(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.
 	if timeout > 0 {
 		opts = append(opts, grpc.WithBlock(), grpc.WithTimeout(timeout))
 	}
-	opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(*grpcutils.MaxMessageSize), grpc.MaxCallSendMsgSize(*grpcutils.MaxMessageSize)))
-	cc, err := grpc.Dial(addr, opts...)
+	cc, err := grpcclient.Dial(addr, opts...)
 	if err != nil {
 		return nil, err
 	}

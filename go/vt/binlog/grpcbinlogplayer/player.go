@@ -25,6 +25,7 @@ import (
 
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
+	"github.com/youtube/vitess/go/vt/grpcclient"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	binlogservicepb "github.com/youtube/vitess/go/vt/proto/binlogservice"
@@ -40,7 +41,7 @@ type client struct {
 func (client *client) Dial(tablet *topodatapb.Tablet, connTimeout time.Duration) error {
 	addr := netutil.JoinHostPort(tablet.Hostname, tablet.PortMap["grpc"])
 	var err error
-	client.cc, err = grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(connTimeout))
+	client.cc, err = grpcclient.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(connTimeout))
 	if err != nil {
 		return err
 	}
