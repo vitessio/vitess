@@ -27,8 +27,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
 	"github.com/youtube/vitess/go/vt/tlstest"
+	"github.com/youtube/vitess/go/vt/vttls"
 )
 
 // This file tests the handshake scenarios between our client and our server.
@@ -120,7 +120,7 @@ func TestSSLConnection(t *testing.T) {
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
 
 	// Create the server with TLS config.
-	serverConfig, err := grpcutils.TLSServerConfig(
+	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
 		path.Join(root, "ca-cert.pem"))
