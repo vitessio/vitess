@@ -97,7 +97,9 @@ func main() {
 	// vtctld UI requires the cell flag
 	flag.Set("cell", tpb.Cells[0])
 	flag.Set("enable_realtime_stats", "true")
-	flag.Set("log_dir", "$VTDATAROOT/tmp")
+	if flag.Lookup("log_dir") == nil {
+		flag.Set("log_dir", "$VTDATAROOT/tmp")
+	}
 
 	// Create topo server. We use a 'memorytopo' implementation.
 	ts = memorytopo.NewServer(tpb.Cells...)
