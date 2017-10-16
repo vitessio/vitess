@@ -1,0 +1,2 @@
+# Don't check in site-local customizations.
+site-values.yaml

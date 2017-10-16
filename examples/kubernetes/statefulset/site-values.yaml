@@ -1,0 +1,38 @@
+vttablet:
+  controllerType: StatefulSet
+  dataVolumeType: PersistentVolume
+
+backupFlags:
+  backup_storage_implementation: "gcs"
+  gcs_backup_storage_bucket: "enisoc-vitess-backups"
+
+topology:
+  cells:
+    - name: "global"
+      etcd:
+        replicas: 3
+      orchestrator:
+        replicas: 1
+    - name: "zone1"
+      etcd:
+        replicas: 3
+      vtctld:
+        replicas: 1
+      vtgate:
+        replicas: 3
+      keyspaces:
+        - name: "main"
+          shards:
+            - name: "-80"
+              tablets:
+                - type: "replica"
+                  uidBase: 100
+                  vttablet:
+                    replicas: 2
+            - name: "80-"
+              tablets:
+                - type: "replica"
+                  uidBase: 200
+                  vttablet:
+                    replicas: 2
+
