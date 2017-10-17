@@ -49,6 +49,7 @@ type VtProcess struct {
 	HealthCheck  HealthChecker
 
 	proc *exec.Cmd
+	exit chan error
 }
 
 // GetVars returns the JSON contents of the `/debug/vars` endpoint
@@ -80,43 +81,28 @@ func (vtp *VtProcess) Address() string {
 	return fmt.Sprintf("localhost:%d", vtp.Port)
 }
 
-// Kill kills the running Vitess process. If the process is not running,
-// this is a no-op.
-func (vtp *VtProcess) Kill() {
-	if vtp.proc != nil && vtp.proc.Process != nil {
-		vtp.proc.Process.Kill()
-	}
-}
-
-// Wait waits for the Vitess process to terminate and returns any exit errors.
-// Note that most Vitess processes are long-running services, so you will need
-// to call Kill on them before you can Wait.
-func (vtp *VtProcess) Wait() error {
-	if vtp.proc == nil {
-		return nil
-	}
-	return vtp.proc.Wait()
-}
-
 // WaitTerminate attemps to gracefully shutdown the Vitess process by sending
 // a SIGTERM, then wait for up to 10s for it to exit. If the process hasn't
 // exited cleanly after 10s, a SIGKILL is forced and the corresponding exit
 // error is returned to the user
 func (vtp *VtProcess) WaitTerminate() error {
-	if vtp.proc == nil || vtp.proc.Process == nil {
+	if vtp.proc == nil || vtp.exit == nil {
 		return nil
 	}
 
+	// Attempt graceful shutdown with SIGTERM first
 	vtp.proc.Process.Signal(syscall.SIGTERM)
-	timer := time.AfterFunc(10*time.Second, func() {
+
+	select {
+	case err := <-vtp.exit:
+		vtp.proc = nil
+		return err
+
+	case <-time.After(10 * time.Second):
 		vtp.proc.Process.Kill()
-	})
-
-	err := vtp.proc.Wait()
-	timer.Stop()
-	vtp.proc = nil
-
-	return err
+		vtp.proc = nil
+		return <-vtp.exit
+	}
 }
 
 // WaitStart spawns this Vitess process and waits for it to be up
@@ -154,21 +140,27 @@ func (vtp *VtProcess) WaitStart() (err error) {
 		return
 	}
 
+	vtp.exit = make(chan error)
+	go func() {
+		vtp.exit <- vtp.proc.Wait()
+	}()
+
 	timeout := time.Now().Add(60 * time.Second)
 	for time.Now().Before(timeout) {
 		if vtp.IsHealthy() {
 			return nil
 		}
 
-		if err := vtp.proc.Process.Signal(syscall.Signal(0)); err != nil {
-			return fmt.Errorf("process '%s' exited prematurely", vtp.Name)
+		select {
+		case err := <-vtp.exit:
+			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vtp.Name, err)
+		default:
+			time.Sleep(300 * time.Millisecond)
 		}
-
-		time.Sleep(300 * time.Millisecond)
 	}
 
 	vtp.proc.Process.Kill()
-	return fmt.Errorf("process '%s' timed out after 60s", vtp.Name)
+	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vtp.Name, <-vtp.exit)
 }
 
 // DefaultCharset is the default charset used by MySQL instances
