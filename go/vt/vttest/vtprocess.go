@@ -127,7 +127,7 @@ func (vtp *VtProcess) WaitStart() (err error) {
 	vtp.proc.Args = append(vtp.proc.Args, vtp.ExtraArgs...)
 
 	logfile := path.Join(vtp.LogDirectory, fmt.Sprintf("%s.%d.log", vtp.Name, vtp.Port))
-	vtp.proc.Stdout, err = os.Create(logfile)
+	vtp.proc.Stderr, err = os.Create(logfile)
 	if err != nil {
 		return
 	}
