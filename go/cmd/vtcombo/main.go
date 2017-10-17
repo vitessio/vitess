@@ -101,6 +101,9 @@ func main() {
 		flag.Set("log_dir", "$VTDATAROOT/tmp")
 	}
 
+	// vttablet config. Strict mode is enabled by default, however vtcombo dont need to enforce it
+	flag.Set("enforce_strict_trans_tables", "false")
+
 	// Create topo server. We use a 'memorytopo' implementation.
 	ts = memorytopo.NewServer(tpb.Cells...)
 	servenv.Init()
