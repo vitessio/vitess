@@ -111,7 +111,7 @@ type DB struct {
 
 // QueryHandler is the interface used by the DB to simulate executed queries
 type QueryHandler interface {
-	HandleQuery(*mysql.Conn, []byte, func(*sqltypes.Result) error) error
+	HandleQuery(*mysql.Conn, string, func(*sqltypes.Result) error) error
 }
 
 // ExpectedResult holds the data for a matched query.
@@ -310,17 +310,16 @@ func (db *DB) ConnectionClosed(c *mysql.Conn) {
 }
 
 // ComQuery is part of the mysql.Handler interface.
-func (db *DB) ComQuery(c *mysql.Conn, q []byte, callback func(*sqltypes.Result) error) error {
-	return db.Handler.HandleQuery(c, q, callback)
+func (db *DB) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
+	return db.Handler.HandleQuery(c, query, callback)
 }
 
 // HandleQuery is the default implementation of the QueryHandler interface
-func (db *DB) HandleQuery(c *mysql.Conn, q []byte, callback func(*sqltypes.Result) error) error {
+func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	if db.AllowAll {
 		return callback(&sqltypes.Result{})
 	}
 
-	query := string(q)
 	if db.t != nil {
 		db.t.Logf("ComQuery(%v): client %v: %v", db.name, c.ConnectionID, query)
 	}
