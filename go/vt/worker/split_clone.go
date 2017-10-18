@@ -937,6 +937,10 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				if state == WorkerStateCloneOnline {
 					// Wait for enough healthy tablets (they might have become unhealthy
 					// and their replication lag might have increased since we started.)
+					if err := checkDone(ctx); err != nil {
+						// Something else may have cancelled the operation, don't clobber the logs with meaningless errors
+						return
+					}
 					if err := scw.waitForTablets(ctx, scw.sourceShards, *retryDuration); err != nil {
 						processError("%v: No healthy source tablets found (gave up after %v): %v", errPrefix, *retryDuration, err)
 						return
@@ -963,7 +967,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					}
 					sourceResultReader, err := NewRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk, allowMultipleRetries)
 					if err != nil {
-						processError("%v: NewRestartableResultReader for source: %v failed", errPrefix, tp.description())
+						processError("%v: NewRestartableResultReader for source, %v failed: %v", errPrefix, tp.description(), err)
 						return
 					}
 					defer sourceResultReader.Close(ctx)
