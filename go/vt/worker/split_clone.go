@@ -933,6 +933,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				defer sema.Release()
 
 				tableStatusList.threadStarted(tableIndex)
+				defer tableStatusList.threadDone(tableIndex)
 
 				if state == WorkerStateCloneOnline {
 					// Wait for enough healthy tablets (they might have become unhealthy
@@ -1033,8 +1034,6 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					processError("%v: RowDiffer2 failed: %v", errPrefix, err)
 					return
 				}
-
-				tableStatusList.threadDone(tableIndex)
 			}(td, tableIndex, c)
 		}
 	}
