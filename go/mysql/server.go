@@ -299,6 +299,12 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		data, err := c.readEphemeralPacket()
 		if err != nil {
 			// Don't log EOF errors. They cause too much spam.
+			// Note the EOF detection is not 100%
+			// guaranteed, in the case where the client
+			// connection is already closed before we call
+			// 'readEphemeralPacket'.  This is a corner
+			// case though, and very unlikely to happen,
+			// and the only downside is we log a bit more then.
 			if err != io.EOF {
 				log.Errorf("Error reading packet from %s: %v", c, err)
 			}

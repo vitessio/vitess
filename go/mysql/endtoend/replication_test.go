@@ -308,7 +308,7 @@ func TestStatementReplicationWithRealDatabase(t *testing.T) {
 
 }
 
-func testRowReplicationWithRealDatabase(t *testing.T) {
+func TestRowReplicationWithRealDatabase(t *testing.T) {
 	conn, f := connectForReplication(t, true /* rbr */)
 	defer conn.Close()
 
