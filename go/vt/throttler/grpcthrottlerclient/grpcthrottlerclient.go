@@ -22,9 +22,9 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/proto/throttlerdata"
 	"github.com/youtube/vitess/go/vt/proto/throttlerservice"
-	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
 	"github.com/youtube/vitess/go/vt/throttler/throttlerclient"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"google.golang.org/grpc"
@@ -43,11 +43,11 @@ type client struct {
 }
 
 func factory(addr string) (throttlerclient.Client, error) {
-	opt, err := grpcutils.ClientSecureDialOption(*cert, *key, *ca, *name)
+	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
 	if err != nil {
 		return nil, err
 	}
-	conn, err := grpc.Dial(addr, opt)
+	conn, err := grpcclient.Dial(addr, opt)
 	if err != nil {
 		return nil, err
 	}

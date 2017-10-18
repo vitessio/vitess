@@ -27,7 +27,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
+	"github.com/youtube/vitess/go/vt/vttls"
 )
 
 // TestClientServer generates:
@@ -51,14 +51,14 @@ func TestClientServer(t *testing.T) {
 
 	CreateSignedCert(root, CA, "02", "clients", "Clients CA")
 	CreateSignedCert(root, "clients", "01", "client-instance", "Client Instance")
-	serverConfig, err := grpcutils.TLSServerConfig(
+	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-instance-cert.pem"),
 		path.Join(root, "server-instance-key.pem"),
 		path.Join(root, "clients-cert.pem"))
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
-	clientConfig, err := grpcutils.TLSClientConfig(
+	clientConfig, err := vttls.ClientConfig(
 		path.Join(root, "client-instance-cert.pem"),
 		path.Join(root, "client-instance-key.pem"),
 		path.Join(root, "servers-cert.pem"),
@@ -114,7 +114,7 @@ func TestClientServer(t *testing.T) {
 	// server cert on the client side).
 	//
 
-	badClientConfig, err := grpcutils.TLSClientConfig(
+	badClientConfig, err := vttls.ClientConfig(
 		path.Join(root, "server-instance-cert.pem"),
 		path.Join(root, "server-instance-key.pem"),
 		path.Join(root, "servers-cert.pem"),

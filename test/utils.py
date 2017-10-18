@@ -983,7 +983,9 @@ def run_vtworker(clargs, auto_log=False, expect_fail=False, **kwargs):
 def run_vtworker_bg(clargs, auto_log=False, **kwargs):
   """Starts a background vtworker process."""
   cmd, port, rpc_port = _get_vtworker_cmd(clargs, auto_log)
-  return run_bg(cmd, **kwargs), port, rpc_port
+  proc = run_bg(cmd, **kwargs), port, rpc_port
+  wait_for_vars('vtworker', port)
+  return proc
 
 
 def _get_vtworker_cmd(clargs, auto_log=False):

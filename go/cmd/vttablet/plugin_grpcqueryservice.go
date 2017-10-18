@@ -25,7 +25,6 @@ import (
 )
 
 func init() {
-	servenv.RegisterGRPCFlags()
 	tabletserver.RegisterFunctions = append(tabletserver.RegisterFunctions, func(qsc tabletserver.Controller) {
 		if servenv.GRPCCheckServiceMap("queryservice") {
 			grpcqueryservice.Register(servenv.GRPCServer, qsc.QueryService())

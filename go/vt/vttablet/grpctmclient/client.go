@@ -25,10 +25,10 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/netutil"
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 	"golang.org/x/net/context"
@@ -79,11 +79,11 @@ func NewClient() *Client {
 // dial returns a client to use
 func (client *Client) dial(tablet *topodatapb.Tablet) (*grpc.ClientConn, tabletmanagerservicepb.TabletManagerClient, error) {
 	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
-	opt, err := grpcutils.ClientSecureDialOption(*cert, *key, *ca, *name)
+	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
 	if err != nil {
 		return nil, nil, err
 	}
-	cc, err := grpc.Dial(addr, opt)
+	cc, err := grpcclient.Dial(addr, opt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -92,7 +92,7 @@ func (client *Client) dial(tablet *topodatapb.Tablet) (*grpc.ClientConn, tabletm
 
 func (client *Client) dialPool(tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, error) {
 	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
-	opt, err := grpcutils.ClientSecureDialOption(*cert, *key, *ca, *name)
+	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func (client *Client) dialPool(tablet *topodatapb.Tablet) (tabletmanagerservicep
 		client.mu.Unlock()
 
 		for i := 0; i < cap(c); i++ {
-			cc, err := grpc.Dial(addr, opt)
+			cc, err := grpcclient.Dial(addr, opt)
 			if err != nil {
 				return nil, err
 			}
