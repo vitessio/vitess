@@ -967,7 +967,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					}
 					sourceResultReader, err := NewRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk, allowMultipleRetries)
 					if err != nil {
-						processError("%v: NewRestartableResultReader for source, %v failed: %v", errPrefix, tp.description(), err)
+						processError("%v: NewRestartableResultReader for source: %v failed: %v", errPrefix, tp.description(), err)
 						return
 					}
 					defer sourceResultReader.Close(ctx)
