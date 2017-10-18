@@ -247,13 +247,27 @@ func (c *Conn) readPacketDirect() ([]byte, error) {
 // connBufferSize, we revert to using the same behavior as a regular
 // readPacket.  recycleReadPacket() has to be called after this method
 // is used, and before we read or write any other packet on the connection.
+//
+// Note if the connection is closed already, an error will be
+// returned, and it may not be io.EOF. If the connection closes while
+// we are stuck waiting for data, an error will also be returned, and
+// it most likely will be io.EOF.
 func (c *Conn) readEphemeralPacket() ([]byte, error) {
 	if c.currentEphemeralPolicy != ephemeralUnused {
 		panic(fmt.Errorf("readEphemeralPacket: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
 	}
 
+	// Note io.ReadFull will return two different types of errors:
+	// 1. if the socket is already closed, and the go runtime knows it,
+	//   then ReadFull will return an error (different than EOF),
+	//   someting like 'read: connection reset by peer'.
+	// 2. if the socket is not closed while we start the read,
+	//   but gets closed after the read is started, we'll get io.EOF.
 	var header [4]byte
 	if _, err := io.ReadFull(c.reader, header[:]); err != nil {
+		// The special casing of propagating io.EOF up
+		// is used by the server side only, to suppress an error
+		// message if a client just disconnects.
 		if err == io.EOF {
 			return nil, err
 		}
@@ -683,10 +697,7 @@ func (c *Conn) writeOKPacketWithEOFHeader(affectedRows, lastInsertID uint64, fla
 	if err := c.writeEphemeralPacket(false); err != nil {
 		return err
 	}
-	if err := c.flush(); err != nil {
-		return err
-	}
-	return nil
+	return c.flush()
 }
 
 // writeErrorPacket writes an error packet.
@@ -711,10 +722,7 @@ func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string
 	pos = writeEOFString(data, pos, sqlState)
 	pos = writeEOFString(data, pos, errorMessage)
 
-	if err := c.writeEphemeralPacket(true); err != nil {
-		return err
-	}
-	return nil
+	return c.writeEphemeralPacket(true)
 }
 
 // writeErrorPacketFromError writes an error packet, from a regular error.
