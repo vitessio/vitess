@@ -84,7 +84,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, err
 	}
 	er.Opcode = engine.UpdateEqual
 
-	if err := addChangedVindexesValues(er, upd.Exprs, er.Table.ColumnVindexes); err != nil {
+	if err := addChangedVindexesValues(er, upd, er.Table.ColumnVindexes); err != nil {
 		return nil, err
 	}
 	if len(er.ChangedVindexValues) != 0 {
@@ -102,12 +102,15 @@ func generateQuery(statement sqlparser.Statement) string {
 // addChangedVindexesValues adds to the plan all the lookup vindexes that are changing.
 // Updates can only be performed to secondary lookup vindexes with no complex expressions
 // in the set clause.
-func addChangedVindexesValues(route *engine.Route, setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.ColumnVindex) error {
-	for _, assignment := range setClauses {
+func addChangedVindexesValues(route *engine.Route, update *sqlparser.Update, colVindexes []*vindexes.ColumnVindex) error {
+	for _, assignment := range update.Exprs {
 		for i, vcol := range colVindexes {
 			// Column not changing, continue
 			if !vcol.Column.Equal(assignment.Name.Name) {
 				continue
+			}
+			if update.Limit != nil && len(update.OrderBy) == 0 {
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Need to provide order by clause when using limit. Invalid update on column: %v", assignment.Name.Name)
 			}
 			if i == 0 {
 				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can't update primary vindex columns. Invalid update on column: %v", assignment.Name.Name)
@@ -203,7 +206,7 @@ func generateUpdateSubquery(upd *sqlparser.Update, table *vindexes.Table) string
 			buf.Myprintf(", %v", cv.Column)
 		}
 	}
-	buf.Myprintf(" from %v%v for update", table.Name, upd.Where)
+	buf.Myprintf(" from %v%v%v%v for update", table.Name, upd.Where, upd.OrderBy, upd.Limit)
 	return buf.String()
 }
 
