@@ -2086,11 +2086,12 @@ type UnaryExpr struct {
 
 // UnaryExpr.Operator
 const (
-	UPlusStr  = "+"
-	UMinusStr = "-"
-	TildaStr  = "~"
-	BangStr   = "!"
-	BinaryStr = "binary "
+	UPlusStr   = "+"
+	UMinusStr  = "-"
+	TildaStr   = "~"
+	BangStr    = "!"
+	BinaryStr  = "binary "
+	UBinaryStr = "_binary "
 )
 
 // Format formats the node.

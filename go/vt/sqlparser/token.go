@@ -77,6 +77,7 @@ var keywords = map[string]int{
 	"between":             BETWEEN,
 	"bigint":              BIGINT,
 	"binary":              BINARY,
+	"_binary":             UNDERSCORE_BINARY,
 	"bit":                 BIT,
 	"blob":                BLOB,
 	"bool":                BOOL,
