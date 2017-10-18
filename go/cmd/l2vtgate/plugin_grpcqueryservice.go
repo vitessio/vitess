@@ -26,7 +26,6 @@ import (
 )
 
 func init() {
-	servenv.RegisterGRPCFlags()
 	l2vtgate.RegisterL2VTGates = append(l2vtgate.RegisterL2VTGates, func(qs queryservice.QueryService) {
 		if servenv.GRPCCheckServiceMap("queryservice") {
 			grpcqueryservice.Register(servenv.GRPCServer, qs)

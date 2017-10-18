@@ -27,6 +27,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
 	automationservicepb "github.com/youtube/vitess/go/vt/proto/automationservice"
 )
@@ -52,7 +53,7 @@ func (p *cmdParams) Set(v string) error {
 	if v != "" {
 		keyAndValue := strings.SplitN(v, "=", 2)
 		if len(keyAndValue) < 2 {
-			return fmt.Errorf("No key specified: '%v' Expected format: key=value.", v)
+			return fmt.Errorf("no key specified: '%v' Expected format: key=value", v)
 		}
 		if p.parameters == nil {
 			p.parameters = make(map[string]string)
@@ -78,7 +79,7 @@ func main() {
 
 	fmt.Println("Connecting to Automation Server:", *automationServer)
 
-	conn, err := grpc.Dial(*automationServer, grpc.WithInsecure())
+	conn, err := grpcclient.Dial(*automationServer, grpc.WithInsecure())
 	if err != nil {
 		fmt.Println("Cannot create connection:", err)
 		os.Exit(3)
