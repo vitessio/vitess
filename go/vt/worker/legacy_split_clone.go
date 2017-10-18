@@ -575,6 +575,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 					defer sema.Release()
 
 					scw.tableStatusList.threadStarted(tableIndex)
+					defer scw.tableStatusList.threadDone(tableIndex)
 
 					// Start streaming from the source tablets.
 					tp := newSingleTabletProvider(ctx, scw.wr.TopoServer(), scw.sourceAliases[shardIndex])
@@ -594,7 +595,6 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 					if err := scw.processData(ctx, dbNames, td, tableIndex, rr, rowSplitter, insertChannels, scw.destinationPackCount); err != nil {
 						processError("processData failed: %v", err)
 					}
-					scw.tableStatusList.threadDone(tableIndex)
 				}(td, shardIndex, tableIndex, c)
 			}
 		}

@@ -856,9 +856,9 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 	ctx, cancelCopy := context.WithCancel(ctx)
 	defer cancelCopy()
 	processError := func(format string, args ...interface{}) {
-		scw.wr.Logger().Errorf(format, args...)
 		mu.Lock()
 		if firstError == nil {
+			scw.wr.Logger().Errorf(format, args...)
 			firstError = fmt.Errorf(format, args...)
 			cancelCopy()
 		}
@@ -932,15 +932,17 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				sema.Acquire()
 				defer sema.Release()
 
+				if err := checkDone(ctx); err != nil {
+					processError("%v: Context expired while this thread was waiting for its turn. Context error: %v", errPrefix, err)
+					return
+				}
+
 				tableStatusList.threadStarted(tableIndex)
+				defer tableStatusList.threadDone(tableIndex)
 
 				if state == WorkerStateCloneOnline {
 					// Wait for enough healthy tablets (they might have become unhealthy
 					// and their replication lag might have increased since we started.)
-					if err := checkDone(ctx); err != nil {
-						// Something else may have cancelled the operation, don't clobber the logs with meaningless errors
-						return
-					}
 					if err := scw.waitForTablets(ctx, scw.sourceShards, *retryDuration); err != nil {
 						processError("%v: No healthy source tablets found (gave up after %v): %v", errPrefix, *retryDuration, err)
 						return
@@ -967,7 +969,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					}
 					sourceResultReader, err := NewRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk, allowMultipleRetries)
 					if err != nil {
-						processError("%v: NewRestartableResultReader for source, %v failed: %v", errPrefix, tp.description(), err)
+						processError("%v: NewRestartableResultReader for source: %v failed: %v", errPrefix, tp.description(), err)
 						return
 					}
 					defer sourceResultReader.Close(ctx)
@@ -1033,8 +1035,6 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					processError("%v: RowDiffer2 failed: %v", errPrefix, err)
 					return
 				}
-
-				tableStatusList.threadDone(tableIndex)
 			}(td, tableIndex, c)
 		}
 	}
