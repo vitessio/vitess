@@ -705,18 +705,44 @@ exit:
 }
 
 func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
-	buffer := &bytes2.Buffer{}
+	var buffer bytes2.Buffer
 	for {
 		ch := tkn.lastChar
-		tkn.next()
-		if ch == delim {
-			if tkn.lastChar == delim {
-				tkn.next()
-			} else {
-				break
+		if ch == eofChar {
+			// Unterminated string.
+			return LEX_ERROR, buffer.Bytes()
+		}
+
+		if ch != delim && ch != '\\' {
+			buffer.WriteByte(byte(ch))
+
+			// Scan ahead to the next interesting character.
+			start := tkn.bufPos
+			for ; tkn.bufPos < tkn.bufSize; tkn.bufPos++ {
+				ch = uint16(tkn.buf[tkn.bufPos])
+				if ch == delim || ch == '\\' {
+					break
+				}
 			}
-		} else if ch == '\\' {
+
+			buffer.Write(tkn.buf[start:tkn.bufPos])
+			tkn.Position += (tkn.bufPos - start)
+
+			if tkn.bufPos >= tkn.bufSize {
+				// Reached the end of the buffer without finding a delim or
+				// escape character.
+				tkn.next()
+				continue
+			}
+
+			tkn.bufPos++
+			tkn.Position++
+		}
+		tkn.next() // Read one past the delim or escape character.
+
+		if ch == '\\' {
 			if tkn.lastChar == eofChar {
+				// String terminates mid escape character.
 				return LEX_ERROR, buffer.Bytes()
 			}
 			if decodedChar := sqltypes.SQLDecodeMap[byte(tkn.lastChar)]; decodedChar == sqltypes.DontEscape {
@@ -724,13 +750,16 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 			} else {
 				ch = uint16(decodedChar)
 			}
-			tkn.next()
+
+		} else if ch == delim && tkn.lastChar != delim {
+			// Correctly terminated string, which is not a double delim.
+			break
 		}
-		if ch == eofChar {
-			return LEX_ERROR, buffer.Bytes()
-		}
+
 		buffer.WriteByte(byte(ch))
+		tkn.next()
 	}
+
 	return typ, buffer.Bytes()
 }
 
