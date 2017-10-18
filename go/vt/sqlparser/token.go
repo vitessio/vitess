@@ -20,18 +20,21 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"strings"
+	"io"
 
 	"github.com/youtube/vitess/go/bytes2"
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
-const eofChar = 0x100
+const (
+	defaultBufSize = 4096
+	eofChar        = 0x100
+)
 
 // Tokenizer is the struct used to generate SQL
 // tokens for the parser.
 type Tokenizer struct {
-	InStream      *strings.Reader
+	InStream      io.Reader
 	AllowComments bool
 	ForceEOF      bool
 	lastChar      uint16
@@ -43,12 +46,29 @@ type Tokenizer struct {
 	partialDDL    *DDL
 	nesting       int
 	multi         bool
+
+	buf     []byte
+	bufPos  int
+	bufSize int
 }
 
 // NewStringTokenizer creates a new Tokenizer for the
 // sql string.
 func NewStringTokenizer(sql string) *Tokenizer {
-	return &Tokenizer{InStream: strings.NewReader(sql)}
+	buf := []byte(sql)
+	return &Tokenizer{
+		buf:     buf,
+		bufSize: len(buf),
+	}
+}
+
+// NewTokenizer creates a new Tokenizer reading a sql
+// string from the io.Reader.
+func NewTokenizer(r io.Reader) *Tokenizer {
+	return &Tokenizer{
+		InStream: r,
+		buf:      make([]byte, defaultBufSize),
+	}
 }
 
 // keywords is a map of mysql keywords that fall into two categories:
@@ -757,13 +777,25 @@ func (tkn *Tokenizer) consumeNext(buffer *bytes2.Buffer) {
 }
 
 func (tkn *Tokenizer) next() {
-	if ch, err := tkn.InStream.ReadByte(); err != nil {
-		// Only EOF is possible.
+	if tkn.bufPos >= tkn.bufSize && tkn.InStream != nil {
+		// Try and refill the buffer
+		var err error
+		tkn.bufPos = 0
+		if tkn.bufSize, err = tkn.InStream.Read(tkn.buf); err != io.EOF && err != nil {
+			tkn.LastError = err
+		}
+	}
+
+	if tkn.bufPos >= tkn.bufSize {
 		tkn.lastChar = eofChar
 	} else {
-		tkn.lastChar = uint16(ch)
+		tkn.lastChar = uint16(tkn.buf[tkn.bufPos])
+		tkn.bufPos++
 	}
 	tkn.Position++
+	// TODO(bramp) Move tkn.Position++, so it only increments if a char was read.
+	// Many of the test examples, have incorrect "syntax error at position N", due
+	// to calling next() multiple times after EOF.
 }
 
 // reset clears any internal state.
