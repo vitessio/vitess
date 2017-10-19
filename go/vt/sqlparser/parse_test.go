@@ -17,6 +17,8 @@ limitations under the License.
 package sqlparser
 
 import (
+	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -1495,11 +1497,11 @@ var (
 		input:  "select * from t where id = ((select a from t1 union select b from t2) order by a limit 1)",
 		output: "syntax error at position 76 near 'order'",
 	}, {
-		input:        "select 'aa\\",
-		output:       "syntax error at position 12 near 'aa'",
+		input:        "select 'aa",
+		output:       "syntax error at position 11 near 'aa'",
 		excludeMulti: true,
 	}, {
-		input:        "select 'aa",
+		input:        "select 'aa\\",
 		output:       "syntax error at position 12 near 'aa'",
 		excludeMulti: true,
 	}, {
@@ -1541,5 +1543,37 @@ func BenchmarkParse2(b *testing.B) {
 			b.Fatal(err)
 		}
 		_ = String(ast)
+	}
+}
+
+var benchQuery string
+
+func init() {
+	// benchQuerySize is the approximate size of the query.
+	benchQuerySize := 1000000
+
+	// Size of value is 1/10 size of query. Then we add
+	// 10 such values to the where clause.
+	var baseval bytes.Buffer
+	for i := 0; i < benchQuerySize/100; i++ {
+		// Add an escape character: This will force the upcoming
+		// tokenizer improvement to still create a copy of the string.
+		// Then we can see if avoiding the copy will be worth it.
+		baseval.WriteString("\\'123456789")
+	}
+
+	var buf bytes.Buffer
+	buf.WriteString("select a from t1 where v = 1")
+	for i := 0; i < 10; i++ {
+		fmt.Fprintf(&buf, " and v%d = \"%d%s\"", i, i, baseval.String())
+	}
+	benchQuery = buf.String()
+}
+
+func BenchmarkParse3(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		if _, err := Parse(benchQuery); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
