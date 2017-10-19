@@ -164,6 +164,29 @@
   }
 }
 
+# update by primary keyspace id, changing one vindex column, using order by and limit
+"update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10"
+{
+  "Original": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
+  "Instructions": {
+    "Opcode": "UpdateEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
+    "Vindex": "user_index",
+    "Values": [
+      1
+    ],
+    "ChangedVindexValues": {
+      "email_user_map": "juan@vitess.io"
+    },
+    "Table": "user_metadata",
+    "Subquery": "select email, address from user_metadata where user_id = 1 order by user_id asc limit 10 for update"
+  }
+}
+
 # update by primary keyspace id, stray where clause
 "update user set val = 1 where id = id2 and id = 1"
 {
