@@ -34,10 +34,6 @@ func TestCreation(t *testing.T) {
 	}, {
 		in:   vtrpcpb.Code_UNKNOWN,
 		want: vtrpcpb.Code_UNKNOWN,
-	}, {
-		// Invalid code OK should be converted to INTERNAL.
-		in:   vtrpcpb.Code_OK,
-		want: vtrpcpb.Code_INTERNAL,
 	}}
 	for _, tcase := range testcases {
 		if got := Code(New(tcase.in, "")); got != tcase.want {
