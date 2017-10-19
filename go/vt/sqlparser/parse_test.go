@@ -887,6 +887,11 @@ var (
 	}, {
 		input: "select binary 'a' = 'A' from t",
 	}, {
+		input: "select 1 from t where foo = _binary 'bar'",
+	}, {
+		input:  "select 1 from t where foo = _binary'bar'",
+		output: "select 1 from t where foo = _binary 'bar'",
+	}, {
 		input: "select match(a) against ('foo') from t",
 	}, {
 		input: "select match(a1, a2) against ('foo' in natural language mode with query expansion) from t",
