@@ -817,15 +817,15 @@ func (tkn *Tokenizer) next() {
 	}
 
 	if tkn.bufPos >= tkn.bufSize {
-		tkn.lastChar = eofChar
+		if tkn.lastChar != eofChar {
+			tkn.Position++
+			tkn.lastChar = eofChar
+		}
 	} else {
+		tkn.Position++
 		tkn.lastChar = uint16(tkn.buf[tkn.bufPos])
 		tkn.bufPos++
 	}
-	tkn.Position++
-	// TODO(bramp) Move tkn.Position++, so it only increments if a char was read.
-	// Many of the test examples, have incorrect "syntax error at position N", due
-	// to calling next() multiple times after EOF.
 }
 
 // reset clears any internal state.
