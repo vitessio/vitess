@@ -16,7 +16,10 @@ limitations under the License.
 
 package sqlparser
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestLiteralID(t *testing.T) {
 	testcases := []struct {
@@ -58,6 +61,78 @@ func TestLiteralID(t *testing.T) {
 		id, out := tkn.Scan()
 		if tcase.id != id || string(out) != tcase.out {
 			t.Errorf("Scan(%s): %d, %s, want %d, %s", tcase.in, id, out, tcase.id, tcase.out)
+		}
+	}
+}
+
+func tokenName(id int) string {
+	if id == STRING {
+		return "STRING"
+	} else if id == LEX_ERROR {
+		return "LEX_ERROR"
+	}
+	return fmt.Sprintf("%d", id)
+}
+
+func TestString(t *testing.T) {
+	testcases := []struct {
+		in   string
+		id   int
+		want string
+	}{{
+		in:   "''",
+		id:   STRING,
+		want: "",
+	}, {
+		in:   "''''",
+		id:   STRING,
+		want: "'",
+	}, {
+		in:   "'hello'",
+		id:   STRING,
+		want: "hello",
+	}, {
+		in:   "'\\n'",
+		id:   STRING,
+		want: "\n",
+	}, {
+		in:   "'\\nhello\\n'",
+		id:   STRING,
+		want: "\nhello\n",
+	}, {
+		in:   "'a''b'",
+		id:   STRING,
+		want: "a'b",
+	}, {
+		in:   "'a\\'b'",
+		id:   STRING,
+		want: "a'b",
+	}, {
+		in:   "'\\'",
+		id:   LEX_ERROR,
+		want: "'",
+	}, {
+		in:   "'",
+		id:   LEX_ERROR,
+		want: "",
+	}, {
+		in:   "'hello\\'",
+		id:   LEX_ERROR,
+		want: "hello'",
+	}, {
+		in:   "'hello",
+		id:   LEX_ERROR,
+		want: "hello",
+	}, {
+		in:   "'hello\\",
+		id:   LEX_ERROR,
+		want: "hello",
+	}}
+
+	for _, tcase := range testcases {
+		id, got := NewStringTokenizer(tcase.in).Scan()
+		if tcase.id != id || string(got) != tcase.want {
+			t.Errorf("Scan(%q) = (%s, %q), want (%s, %q)", tcase.in, tokenName(id), got, tokenName(tcase.id), tcase.want)
 		}
 	}
 }
