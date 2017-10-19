@@ -1,6 +1,7 @@
 create table t1 (
 	id bigint(20) unsigned not null,
-	val bigint(20) unsigned not null default 0,
+	intval bigint(20) unsigned not null default 0,
+	floatval float not null default 0,
 	primary key (id)
 );
 
