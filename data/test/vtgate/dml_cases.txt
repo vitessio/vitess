@@ -164,7 +164,7 @@
   }
 }
 
-# update by primary keyspace id, changing one vindex column
+# update by primary keyspace id, changing one vindex column, using order by and limit
 "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10"
 {
   "Original": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
