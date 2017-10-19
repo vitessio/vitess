@@ -923,7 +923,7 @@ func (ct *ColumnType) SQLType() querypb.Type {
 		return sqltypes.Timestamp
 	case keywordStrings[YEAR]:
 		return sqltypes.Year
-	case keywordStrings[FLOAT]:
+	case keywordStrings[FLOAT_TYPE]:
 		return sqltypes.Float32
 	case keywordStrings[DOUBLE]:
 		return sqltypes.Float64

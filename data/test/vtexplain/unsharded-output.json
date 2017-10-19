@@ -36,17 +36,17 @@
         }
     },
     {
-        "SQL": "insert into t1 (id,val) values (1,2)",
+        "SQL": "insert into t1 (id,intval,floatval) values (1,2,3.14)",
         "Plans": [
             {
-                "Original": "insert into t1(id, val) values (:vtg1, :vtg2)",
+                "Original": "insert into t1(id, intval, floatval) values (:vtg1, :vtg2, :vtg3)",
                 "Instructions": {
                     "Opcode": "InsertUnsharded",
                     "Keyspace": {
                         "Name": "ks_unsharded",
                         "Sharded": false
                     },
-                    "Query": "insert into t1(id, val) values (:vtg1, :vtg2)",
+                    "Query": "insert into t1(id, intval, floatval) values (:vtg1, :vtg2, :vtg3)",
                     "Table": "t1"
                 }
             }
@@ -56,11 +56,12 @@
                 "TabletQueries": [
                     {
                         "Time": 1,
-                        "SQL": "insert into t1(id, val) values (:vtg1, :vtg2)",
+                        "SQL": "insert into t1(id, intval, floatval) values (:vtg1, :vtg2, :vtg3)",
                         "BindVars": {
                             "#maxLimit": "10001",
                             "vtg1": "1",
-                            "vtg2": "2"
+                            "vtg2": "2",
+                            "vtg3": "3.14"
                         }
                     }
                 ],
@@ -71,7 +72,7 @@
                     },
                     {
                         "Time": 1,
-                        "SQL": "insert into t1(id, val) values (1, 2)"
+                        "SQL": "insert into t1(id, intval, floatval) values (1, 2, 3.14)"
                     },
                     {
                         "Time": 2,
@@ -82,17 +83,17 @@
         }
     },
     {
-        "SQL": "update t1 set val = 10",
+        "SQL": "update t1 set intval = 10",
         "Plans": [
             {
-                "Original": "update t1 set val = :vtg1",
+                "Original": "update t1 set intval = :vtg1",
                 "Instructions": {
                     "Opcode": "UpdateUnsharded",
                     "Keyspace": {
                         "Name": "ks_unsharded",
                         "Sharded": false
                     },
-                    "Query": "update t1 set val = :vtg1"
+                    "Query": "update t1 set intval = :vtg1"
                 }
             }
         ],
@@ -101,7 +102,7 @@
                 "TabletQueries": [
                     {
                         "Time": 1,
-                        "SQL": "update t1 set val = :vtg1",
+                        "SQL": "update t1 set intval = :vtg1",
                         "BindVars": {
                             "#maxLimit": "10001",
                             "vtg1": "10"
@@ -119,7 +120,55 @@
                     },
                     {
                         "Time": 1,
-                        "SQL": "update t1 set val = 10 where id in (1)"
+                        "SQL": "update t1 set intval = 10 where id in (1)"
+                    },
+                    {
+                        "Time": 2,
+                        "SQL": "commit"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "update t1 set floatval = 9.99",
+        "Plans": [
+            {
+                "Original": "update t1 set floatval = :vtg1",
+                "Instructions": {
+                    "Opcode": "UpdateUnsharded",
+                    "Keyspace": {
+                        "Name": "ks_unsharded",
+                        "Sharded": false
+                    },
+                    "Query": "update t1 set floatval = :vtg1"
+                }
+            }
+        ],
+        "TabletActions": {
+            "ks_unsharded/-": {
+                "TabletQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "update t1 set floatval = :vtg1",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "vtg1": "9.99"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 1,
+                        "SQL": "select id from t1 limit 10001 for update"
+                    },
+                    {
+                        "Time": 1,
+                        "SQL": "update t1 set floatval = 9.99 where id in (1)"
                     },
                     {
                         "Time": 2,
@@ -174,17 +223,17 @@
         }
     },
     {
-        "SQL": "insert into t1 (id,val) values (1,2) on duplicate key update val=3",
+        "SQL": "insert into t1 (id,intval,floatval) values (1,2,3.14) on duplicate key update intval=3, floatval=3.14",
         "Plans": [
             {
-                "Original": "insert into t1(id, val) values (:vtg1, :vtg2) on duplicate key update val = :vtg3",
+                "Original": "insert into t1(id, intval, floatval) values (:vtg1, :vtg2, :vtg3) on duplicate key update intval = :vtg4, floatval = :vtg5",
                 "Instructions": {
                     "Opcode": "InsertUnsharded",
                     "Keyspace": {
                         "Name": "ks_unsharded",
                         "Sharded": false
                     },
-                    "Query": "insert into t1(id, val) values (:vtg1, :vtg2) on duplicate key update val = :vtg3",
+                    "Query": "insert into t1(id, intval, floatval) values (:vtg1, :vtg2, :vtg3) on duplicate key update intval = :vtg4, floatval = :vtg5",
                     "Table": "t1"
                 }
             }
@@ -194,12 +243,14 @@
                 "TabletQueries": [
                     {
                         "Time": 1,
-                        "SQL": "insert into t1(id, val) values (:vtg1, :vtg2) on duplicate key update val = :vtg3",
+                        "SQL": "insert into t1(id, intval, floatval) values (:vtg1, :vtg2, :vtg3) on duplicate key update intval = :vtg4, floatval = :vtg5",
                         "BindVars": {
                             "#maxLimit": "10001",
                             "vtg1": "1",
                             "vtg2": "2",
-                            "vtg3": "3"
+                            "vtg3": "3.14",
+                            "vtg4": "3",
+                            "vtg5": "3.14"
                         }
                     }
                 ],
@@ -210,7 +261,7 @@
                     },
                     {
                         "Time": 1,
-                        "SQL": "insert into t1(id, val) values (1, 2) on duplicate key update val = 3"
+                        "SQL": "insert into t1(id, intval, floatval) values (1, 2, 3.14) on duplicate key update intval = 3, floatval = 3.14"
                     },
                     {
                         "Time": 2,
