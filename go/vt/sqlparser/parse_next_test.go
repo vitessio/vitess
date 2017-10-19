@@ -66,7 +66,7 @@ func TestParseNextErrors(t *testing.T) {
 			continue
 		}
 
-		sql := tcase.input + " ; select 1 from t"
+		sql := tcase.input + "; select 1 from t"
 		tokens := NewStringTokenizer(sql)
 
 		// The first statement should be an error
