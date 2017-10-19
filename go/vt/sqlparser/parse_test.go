@@ -1282,7 +1282,9 @@ func TestCreateTable(t *testing.T) {
 			"	id int auto_increment primary key,\n" +
 			"	username varchar unique key,\n" +
 			"	email varchar unique,\n" +
-			"	full_name varchar key\n" +
+			"	full_name varchar key,\n" +
+			"	time1 timestamp on update current_timestamp,\n" +
+			"	time2 timestamp default current_timestamp on update current_timestamp\n" +
 			")",
 
 		// test defining indexes separately
