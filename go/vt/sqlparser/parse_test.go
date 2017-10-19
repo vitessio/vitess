@@ -1456,14 +1456,14 @@ var (
 			"(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(" +
 			"F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
 			"(F(F(F(F(F(F(F(F(F(F(F(",
-		output: "syntax error at position 405",
+		output: "syntax error at position 404",
 	}, {
 		// This construct is considered invalid due to a grammar conflict.
 		input:  "insert into a select * from b join c on duplicate key update d=e",
 		output: "syntax error at position 54 near 'key'",
 	}, {
 		input:  "select * from a left join b",
-		output: "syntax error at position 29",
+		output: "syntax error at position 28",
 	}, {
 		input:  "select * from a natural join b on c = d",
 		output: "syntax error at position 34 near 'on'",
@@ -1478,7 +1478,7 @@ var (
 		output: "syntax error at position 29 near 'select'",
 	}, {
 		input:  "select database",
-		output: "syntax error at position 17",
+		output: "syntax error at position 16",
 	}, {
 		input:  "select mod from t",
 		output: "syntax error at position 16 near 'from'",
@@ -1487,7 +1487,7 @@ var (
 		output: "syntax error at position 26 near 'div'",
 	}, {
 		input:  "select 1 from t where binary",
-		output: "syntax error at position 30",
+		output: "syntax error at position 29",
 	}, {
 		input:  "select match(a1, a2) against ('foo' in boolean mode with query expansion) from t",
 		output: "syntax error at position 57 near 'with'",
@@ -1499,7 +1499,7 @@ var (
 		output: "syntax error at position 81 near 'escape'",
 	}, {
 		input:  "(select /* parenthesized select */ * from t)",
-		output: "syntax error at position 46",
+		output: "syntax error at position 45",
 	}, {
 		input:  "select * from t where id = ((select a from t1 union select b from t2) order by a limit 1)",
 		output: "syntax error at position 76 near 'order'",
