@@ -66,6 +66,7 @@ public class ConnectionPropertiesTest {
         Assert.assertEquals("includedFieldsCache", true, props.isIncludeAllFields());
         Assert.assertEquals("tabletType", Constants.DEFAULT_TABLET_TYPE, props.getTabletType());
         Assert.assertEquals("useSSL", false, props.getUseSSL());
+        Assert.assertEquals("useAffectedRows", true, props.getUseAffectedRows());
     }
 
     @Test
