@@ -88,4 +88,23 @@ public class VTSession {
         return this.session.getShardSessionsCount() > 0;
     }
 
+    /**
+     * Returns this session's transaction isolation level.
+     *
+     * @return Transaction Isolation Level of the Session
+     */
+    public Query.ExecuteOptions.TransactionIsolation getTransactionIsolation() {
+        return this.session.getOptions().getTransactionIsolation();
+    }
+
+    /**
+     * Sets this session's transaction isolation level.
+     *
+     * @param Transaction Isolation Level of the Session
+     */
+    public void getTransactionIsolation(Query.ExecuteOptions.TransactionIsolation isolation) {
+        this.session = this.session.toBuilder()
+            .setOptions(this.session.getOptions().toBuilder()
+                        .setTransactionIsolation(isolation)).build();
+    }
 }

@@ -305,7 +305,7 @@ public class VitessConnection extends ConnectionProperties implements Connection
      */
     public int getTransactionIsolation() throws SQLException {
         checkOpen();
-        switch (this.vtSession.getSession().getOptions().getTransactionIsolation()) {
+        switch (this.vtSession.getTransactionIsolation()) {
             case DEFAULT:
                 return this.getMetaData().getDefaultTransactionIsolation();
             case READ_COMMITTED:
@@ -354,9 +354,7 @@ public class VitessConnection extends ConnectionProperties implements Connection
             default:
                 throw new SQLException(Constants.SQLExceptionMessages.ISOLATION_LEVEL_NOT_SUPPORTED);
         }
-        Vtgate.Session session = this.vtSession.getSession();
-        this.vtSession.setSession(session.toBuilder()
-            .setOptions(session.getOptions().toBuilder().setTransactionIsolation(isolation)).build());
+        this.vtSession.setTransactionIsolation(isolation);
     }
 
     /**
