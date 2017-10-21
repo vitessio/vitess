@@ -634,6 +634,8 @@ var (
 	}, {
 		input: "set /* simple */ a = 3",
 	}, {
+		input: "set #simple\n b = 4",
+	}, {
 		input: "set character_set_results = utf8",
 	}, {
 		input:  "set names utf8 collate foo",
