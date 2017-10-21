@@ -901,6 +901,8 @@ var (
 		input: "select name, group_concat(score) from t group by name",
 	}, {
 		input: "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
+	}, {
+		input: "select `a``b`() from t",
 	}}
 )
 
