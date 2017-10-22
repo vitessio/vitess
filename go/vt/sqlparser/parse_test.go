@@ -827,8 +827,11 @@ var (
 		input:  "explain foobar",
 		output: "otherread",
 	}, {
+		input:  "truncate table foo",
+		output: "truncate table foo",
+	}, {
 		input:  "truncate foo",
-		output: "otheradmin",
+		output: "truncate table foo",
 	}, {
 		input:  "repair foo",
 		output: "otheradmin",

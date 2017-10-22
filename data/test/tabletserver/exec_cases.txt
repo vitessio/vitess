@@ -1195,8 +1195,8 @@
 # truncate
 "truncate a"
 {
-  "PlanID": "OTHER_ADMIN",
-  "TableName": ""
+  "PlanID": "DDL",
+  "TableName": "a"
 }
 
 # table not found select
