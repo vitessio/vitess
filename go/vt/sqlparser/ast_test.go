@@ -297,7 +297,9 @@ func TestColIdentMarshal(t *testing.T) {
 		t.Errorf("json.Marshal()= %s, want %s", got, want)
 	}
 	var out ColIdent
-	err = json.Unmarshal(b, &out)
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Errorf("Unmarshal err: %v, want nil", err, str)
+	}
 	if !reflect.DeepEqual(out, str) {
 		t.Errorf("Unmarshal: %v, want %v", out, str)
 	}
@@ -323,7 +325,9 @@ func TestTableIdentMarshal(t *testing.T) {
 		t.Errorf("json.Marshal()= %s, want %s", got, want)
 	}
 	var out TableIdent
-	err = json.Unmarshal(b, &out)
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Errorf("Unmarshal err: %v, want nil", err, str)
+	}
 	if !reflect.DeepEqual(out, str) {
 		t.Errorf("Unmarshal: %v, want %v", out, str)
 	}
