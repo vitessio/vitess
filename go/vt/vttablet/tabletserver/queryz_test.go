@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
@@ -34,7 +35,7 @@ import (
 func TestQueryzHandler(t *testing.T) {
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/schemaz", nil)
-	qe := newTestQueryEngine(100, 10*time.Second, true)
+	qe := newTestQueryEngine(100, 10*time.Second, true, dbconfigs.DBConfigs{})
 
 	plan1 := &TabletPlan{
 		Plan: &planbuilder.Plan{
