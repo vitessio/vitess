@@ -49,6 +49,8 @@ const (
 // table against the current time at read time. This value is reported in metrics and
 // also to the healthchecks.
 type Reader struct {
+	dbconfigs dbconfigs.DBConfigs
+
 	enabled       bool
 	interval      time.Duration
 	keyspaceShard string
@@ -82,19 +84,24 @@ func NewReader(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *Re
 	}
 }
 
+// InitDBConfig must be called before Init.
+func (r *Reader) InitDBConfig(dbcfgs dbconfigs.DBConfigs) {
+	r.dbconfigs = dbcfgs
+}
+
 // Init does last minute initialization of db settings, such as dbName
 // and keyspaceShard
-func (r *Reader) Init(dbc dbconfigs.DBConfigs, target query.Target) {
+func (r *Reader) Init(target query.Target) {
 	if !r.enabled {
 		return
 	}
-	r.dbName = sqlescape.EscapeID(dbc.SidecarDBName)
+	r.dbName = sqlescape.EscapeID(r.dbconfigs.SidecarDBName)
 	r.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
 }
 
 // Open starts the heartbeat ticker and opens the db pool. It may be called multiple
 // times, as long as it was closed since last invocation.
-func (r *Reader) Open(dbc dbconfigs.DBConfigs) {
+func (r *Reader) Open() {
 	if !r.enabled {
 		return
 	}
@@ -105,7 +112,7 @@ func (r *Reader) Open(dbc dbconfigs.DBConfigs) {
 	}
 
 	log.Info("Beginning heartbeat reads")
-	r.pool.Open(&dbc.App, &dbc.Dba, &dbc.AppDebug)
+	r.pool.Open(&r.dbconfigs.App, &r.dbconfigs.Dba, &r.dbconfigs.AppDebug)
 	r.ticks.Start(func() { r.readHeartbeat() })
 	r.isOpen = true
 }

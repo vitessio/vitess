@@ -65,6 +65,7 @@ func (util *testUtils) newMysqld(dbcfgs *dbconfigs.DBConfigs) mysqlctl.MysqlDaem
 func (util *testUtils) newDBConfigs(db *fakesqldb.DB) dbconfigs.DBConfigs {
 	return dbconfigs.DBConfigs{
 		App:           *db.ConnParams(),
+		Dba:           *db.ConnParams(),
 		SidecarDBName: "_vt",
 	}
 }
