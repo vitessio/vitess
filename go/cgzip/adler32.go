@@ -33,8 +33,8 @@ type adler32Hash struct {
 	adler C.uLong
 }
 
-// an empty buffer has an adler32 of '1' by default, so start with that
-// (the go hash/adler32 does the same)
+// NewAdler32 creates an empty buffer which has an adler32 of '1'. The go
+// hash/adler32 does the same.
 func NewAdler32() hash.Hash32 {
 	a := &adler32Hash{}
 	a.Reset()
@@ -76,9 +76,9 @@ func (a *adler32Hash) Sum32() uint32 {
 	return uint32(a.adler)
 }
 
-// helper method for partial checksums. From the zlib.h header:
+// Adler32Combine method for partial checksums. From the zlib.h header:
 //
-//   Combine two Adler-32 checksums into one.  For two sequences of bytes, seq1
+// Combine two Adler-32 checksums into one.  For two sequences of bytes, seq1
 // and seq2 with lengths len1 and len2, Adler-32 checksums were calculated for
 // each, adler1 and adler2.  adler32_combine() returns the Adler-32 checksum of
 // seq1 and seq2 concatenated, requiring only adler1, adler2, and len2.
