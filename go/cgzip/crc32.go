@@ -33,8 +33,8 @@ type crc32Hash struct {
 	crc C.uLong
 }
 
-// an empty buffer has an crc32 of '1' by default, so start with that
-// (the go hash/crc32 does the same)
+// NewAdler32 creates an empty buffer which has an crc32 of '1'. The go
+// hash/crc32 does the same.
 func NewCrc32() hash.Hash32 {
 	c := &crc32Hash{}
 	c.Reset()
@@ -76,9 +76,9 @@ func (a *crc32Hash) Sum32() uint32 {
 	return uint32(a.crc)
 }
 
-// helper method for partial checksums. From the zlib.h header:
+// Crc32Combine helper method for partial checksums. From the zlib.h header:
 //
-//   Combine two CRC-32 checksums into one.  For two sequences of bytes, seq1
+// Combine two CRC-32 checksums into one.  For two sequences of bytes, seq1
 // and seq2 with lengths len1 and len2, CRC-32 checksums were calculated for
 // each, crc1 and crc2.  crc32_combine() returns the CRC-32 checksum of
 // seq1 and seq2 concatenated, requiring only crc1, crc2, and len2.

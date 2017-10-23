@@ -30,10 +30,14 @@ type reader struct {
 	skipIn bool
 }
 
+// NewReader returns a new cgzip.reader for reading gzip files with the C gzip
+// library.
 func NewReader(r io.Reader) (io.ReadCloser, error) {
 	return NewReaderBuffer(r, DEFAULT_COMPRESSED_BUFFER_SIZE)
 }
 
+// NewReaderBuffer returns a new cgzip.reader with a given buffer size for
+// reading gzip files with the C gzip library.
 func NewReaderBuffer(r io.Reader, bufferSize int) (io.ReadCloser, error) {
 	z := &reader{r: r, in: make([]byte, bufferSize)}
 	if err := z.strm.inflateInit(); err != nil {
@@ -42,6 +46,7 @@ func NewReaderBuffer(r io.Reader, bufferSize int) (io.ReadCloser, error) {
 	return z, nil
 }
 
+// Read reads from the gz stream.
 func (z *reader) Read(p []byte) (int, error) {
 	if z.err != nil {
 		return 0, z.err
