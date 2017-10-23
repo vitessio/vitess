@@ -1192,13 +1192,6 @@
   "TableName": ""
 }
 
-# truncate
-"truncate a"
-{
-  "PlanID": "DDL",
-  "TableName": "a"
-}
-
 # table not found select
 "select * from aaaa"
 "table aaaa not found in schema"
