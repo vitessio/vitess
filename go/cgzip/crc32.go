@@ -33,7 +33,7 @@ type crc32Hash struct {
 	crc C.uLong
 }
 
-// NewAdler32 creates an empty buffer which has an crc32 of '1'. The go
+// NewCrc32 creates an empty buffer which has an crc32 of '1'. The go
 // hash/crc32 does the same.
 func NewCrc32() hash.Hash32 {
 	c := &crc32Hash{}
