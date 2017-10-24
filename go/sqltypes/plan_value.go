@@ -221,7 +221,7 @@ func ResolveRows(pvs []PlanValue, bindVars map[string]*querypb.BindVariable) ([]
 		rows[i] = make([]Value, len(pvs))
 	}
 
-	// Using j becasue we're resolving by columns.
+	// Using j because we're resolving by columns.
 	for j, pv := range pvs {
 		switch {
 		case pv.Key != "":
