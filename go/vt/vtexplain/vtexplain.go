@@ -146,7 +146,15 @@ func Init(vSchemaStr, sqlSchema string, opts *Options) error {
 
 func parseSchema(sqlSchema string) ([]*sqlparser.DDL, error) {
 	parsedDDLs := make([]*sqlparser.DDL, 0, 16)
-	for _, sql := range strings.Split(sqlSchema, ";") {
+	for {
+		sql, rem, err := sqlparser.SplitStatement(sqlSchema)
+		sqlSchema = rem
+		if err != nil {
+			return nil, err
+		}
+		if sql == "" {
+			break
+		}
 		s := sqlparser.StripLeadingComments(sql)
 		s, _ = sqlparser.SplitTrailingComments(sql)
 		s = strings.TrimSpace(s)
@@ -181,6 +189,11 @@ func parseSchema(sqlSchema string) ([]*sqlparser.DDL, error) {
 func Run(sql string) ([]*Explain, error) {
 	explains := make([]*Explain, 0, 16)
 
+	var (
+		rem string
+		err error
+	)
+
 	for {
 		// Need to strip comments in a loop to handle multiple comments
 		// in a row.
@@ -191,11 +204,10 @@ func Run(sql string) ([]*Explain, error) {
 			}
 			sql = s
 		}
-		rem := ""
-		idx := strings.Index(sql, ";")
-		if idx != -1 {
-			rem = sql[idx+1:]
-			sql = sql[:idx]
+
+		sql, rem, err = sqlparser.SplitStatement(sql)
+		if err != nil {
+			return nil, err
 		}
 
 		if sql != "" {
