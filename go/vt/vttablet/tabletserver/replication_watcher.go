@@ -40,6 +40,9 @@ import (
 // replication stream. It can tell you the current event token,
 // and it will trigger schema reloads if a DDL is encountered.
 type ReplicationWatcher struct {
+	dbconfigs dbconfigs.DBConfigs
+	mysqld    mysqlctl.MysqlDaemon
+
 	// Life cycle management vars
 	isOpen bool
 	cancel context.CancelFunc
@@ -77,15 +80,21 @@ func NewReplicationWatcher(se *schema.Engine, config tabletenv.TabletConfig) *Re
 	return rpw
 }
 
+// InitDBConfig must be called before Open.
+func (rpw *ReplicationWatcher) InitDBConfig(dbcfgs dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) {
+	rpw.dbconfigs = dbcfgs
+	rpw.mysqld = mysqld
+}
+
 // Open starts the ReplicationWatcher service.
-func (rpw *ReplicationWatcher) Open(dbconfigs dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) {
+func (rpw *ReplicationWatcher) Open() {
 	if rpw.isOpen || !rpw.watchReplication {
 		return
 	}
 	ctx, cancel := context.WithCancel(tabletenv.LocalContext())
 	rpw.cancel = cancel
 	rpw.wg.Add(1)
-	go rpw.Process(ctx, dbconfigs, mysqld)
+	go rpw.Process(ctx, rpw.dbconfigs, rpw.mysqld)
 	rpw.isOpen = true
 }
 
