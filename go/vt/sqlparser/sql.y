@@ -989,7 +989,7 @@ drop_statement:
     }
     $$ = &DDL{Action: DropStr, Table: $4, IfExists: exists}
   }
-| DROP INDEX ID ON table_name
+| DROP INDEX ID ON table_name ddl_force_eof
   {
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $5, NewName: $5}

@@ -48,7 +48,7 @@ type BinWriter interface {
 }
 
 // Value can store any SQL value. If the value represents
-// an integral type, the bytes are always stored as a cannonical
+// an integral type, the bytes are always stored as a canonical
 // representation that matches how MySQL returns such values.
 type Value struct {
 	typ querypb.Type
@@ -126,7 +126,7 @@ func NewVarBinary(v string) Value {
 	return MakeTrusted(VarBinary, []byte(v))
 }
 
-// NewIntegral builds an integral type from a string representaion.
+// NewIntegral builds an integral type from a string representation.
 // The type will be Int64 or Uint64. Int64 will be preferred where possible.
 func NewIntegral(val string) (n Value, err error) {
 	signed, err := strconv.ParseInt(val, 0, 64)
@@ -169,7 +169,7 @@ func (v Value) Type() querypb.Type {
 	return v.typ
 }
 
-// Raw returns the internal represenation of the value. For newer types,
+// Raw returns the internal representation of the value. For newer types,
 // this may not match MySQL's representation.
 func (v Value) Raw() []byte {
 	return v.val

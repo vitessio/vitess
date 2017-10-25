@@ -33,6 +33,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -48,6 +49,8 @@ type notifier func(full map[string]*Table, created, altered, dropped []string)
 // Engine stores the schema info and performs operations that
 // keep itself up-to-date.
 type Engine struct {
+	dbconfigs dbconfigs.DBConfigs
+
 	// mu protects the following fields.
 	mu         sync.Mutex
 	isOpen     bool
@@ -89,9 +92,14 @@ func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *En
 	return se
 }
 
+// InitDBConfig must be called before Open.
+func (se *Engine) InitDBConfig(dbcfgs dbconfigs.DBConfigs) {
+	se.dbconfigs = dbcfgs
+}
+
 // Open initializes the Engine. Calling Open on an already
 // open engine is a no-op.
-func (se *Engine) Open(dbaParams *mysql.ConnParams) error {
+func (se *Engine) Open() error {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	if se.isOpen {
@@ -100,6 +108,7 @@ func (se *Engine) Open(dbaParams *mysql.ConnParams) error {
 	start := time.Now()
 	defer log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
 	ctx := tabletenv.LocalContext()
+	dbaParams := &se.dbconfigs.Dba
 	se.conns.Open(dbaParams, dbaParams, dbaParams)
 
 	conn, err := se.conns.Get(ctx)

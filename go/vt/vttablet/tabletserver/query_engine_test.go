@@ -29,11 +29,13 @@ import (
 
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema/schematest"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 func TestStrictTransTables(t *testing.T) {
@@ -43,14 +45,15 @@ func TestStrictTransTables(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	testUtils := newTestUtils()
-	dbconfigs := testUtils.newDBConfigs(db)
+	dbcfgs := testUtils.newDBConfigs(db)
 
 	// Test default behavior.
 	config := tabletenv.DefaultQsConfig
 	// config.EnforceStrictTransTable is true by default.
 	qe := NewQueryEngine(DummyChecker, schema.NewEngine(DummyChecker, config), config)
-	qe.se.Open(db.ConnParams())
-	if err := qe.Open(dbconfigs); err != nil {
+	qe.InitDBConfig(dbcfgs)
+	qe.se.Open()
+	if err := qe.Open(); err != nil {
 		t.Error(err)
 	}
 	qe.Close()
@@ -64,7 +67,8 @@ func TestStrictTransTables(t *testing.T) {
 		},
 	)
 	qe = NewQueryEngine(DummyChecker, schema.NewEngine(DummyChecker, config), config)
-	err := qe.Open(dbconfigs)
+	qe.InitDBConfig(dbcfgs)
+	err := qe.Open()
 	wantErr := "require sql_mode to be STRICT_TRANS_TABLES: got ''"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("Open: %v, want %s", err, wantErr)
@@ -74,8 +78,9 @@ func TestStrictTransTables(t *testing.T) {
 	// Test that we succeed if the enforcement flag is off.
 	config.EnforceStrictTransTables = false
 	qe = NewQueryEngine(DummyChecker, schema.NewEngine(DummyChecker, config), config)
-	if err := qe.Open(dbconfigs); err != nil {
-		t.Error(err)
+	qe.InitDBConfig(dbcfgs)
+	if err := qe.Open(); err != nil {
+		t.Fatal(err)
 	}
 	qe.Close()
 }
@@ -86,11 +91,11 @@ func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	qe := newTestQueryEngine(10, 10*time.Second, true)
 	testUtils := newTestUtils()
-	dbconfigs := testUtils.newDBConfigs(db)
-	qe.se.Open(db.ConnParams())
-	qe.Open(dbconfigs)
+	dbcfgs := testUtils.newDBConfigs(db)
+	qe := newTestQueryEngine(10, 10*time.Second, true, dbcfgs)
+	qe.se.Open()
+	qe.Open()
 	defer qe.Close()
 
 	ctx := context.Background()
@@ -108,11 +113,11 @@ func TestGetMessageStreamPlan(t *testing.T) {
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	qe := newTestQueryEngine(10, 10*time.Second, true)
 	testUtils := newTestUtils()
-	dbconfigs := testUtils.newDBConfigs(db)
-	qe.se.Open(db.ConnParams())
-	qe.Open(dbconfigs)
+	dbcfgs := testUtils.newDBConfigs(db)
+	qe := newTestQueryEngine(10, 10*time.Second, true, dbcfgs)
+	qe.se.Open()
+	qe.Open()
 	defer qe.Close()
 
 	plan, err := qe.GetMessageStreamPlan("msg")
@@ -143,11 +148,11 @@ func TestQueryPlanCache(t *testing.T) {
 	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
 	db.AddQuery("select * from test_table_02 where 1 != 1", &sqltypes.Result{})
 
-	qe := newTestQueryEngine(10, 10*time.Second, true)
 	testUtils := newTestUtils()
-	dbconfigs := testUtils.newDBConfigs(db)
-	qe.se.Open(db.ConnParams())
-	qe.Open(dbconfigs)
+	dbcfgs := testUtils.newDBConfigs(db)
+	qe := newTestQueryEngine(10, 10*time.Second, true, dbcfgs)
+	qe.se.Open()
+	qe.Open()
 	defer qe.Close()
 
 	ctx := context.Background()
@@ -187,11 +192,11 @@ func TestNoQueryPlanCache(t *testing.T) {
 	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
 	db.AddQuery("select * from test_table_02 where 1 != 1", &sqltypes.Result{})
 
-	qe := newTestQueryEngine(10, 10*time.Second, true)
 	testUtils := newTestUtils()
-	dbconfigs := testUtils.newDBConfigs(db)
-	qe.se.Open(db.ConnParams())
-	qe.Open(dbconfigs)
+	dbcfgs := testUtils.newDBConfigs(db)
+	qe := newTestQueryEngine(10, 10*time.Second, true, dbcfgs)
+	qe.se.Open()
+	qe.Open()
 	defer qe.Close()
 
 	ctx := context.Background()
@@ -218,11 +223,11 @@ func TestStatsURL(t *testing.T) {
 	}
 	query := "select * from test_table_01"
 	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
-	qe := newTestQueryEngine(10, 1*time.Second, true)
 	testUtils := newTestUtils()
-	dbconfigs := testUtils.newDBConfigs(db)
-	qe.se.Open(db.ConnParams())
-	qe.Open(dbconfigs)
+	dbcfgs := testUtils.newDBConfigs(db)
+	qe := newTestQueryEngine(10, 1*time.Second, true, dbcfgs)
+	qe.se.Open()
+	qe.Open()
 	defer qe.Close()
 	// warm up cache
 	ctx := context.Background()
@@ -246,9 +251,13 @@ func TestStatsURL(t *testing.T) {
 	qe.ServeHTTP(response, request)
 }
 
-func newTestQueryEngine(queryCacheSize int, idleTimeout time.Duration, strict bool) *QueryEngine {
+func newTestQueryEngine(queryCacheSize int, idleTimeout time.Duration, strict bool, dbcfgs dbconfigs.DBConfigs) *QueryEngine {
 	config := tabletenv.DefaultQsConfig
 	config.QueryCacheSize = queryCacheSize
 	config.IdleTimeout = float64(idleTimeout) / 1e9
-	return NewQueryEngine(DummyChecker, schema.NewEngine(DummyChecker, config), config)
+	se := schema.NewEngine(DummyChecker, config)
+	qe := NewQueryEngine(DummyChecker, se, config)
+	se.InitDBConfig(dbcfgs)
+	qe.InitDBConfig(dbcfgs)
+	return qe
 }

@@ -26,9 +26,8 @@ func HasWildcard(path string) bool {
 		case '\\':
 			if i+1 >= len(path) {
 				return true
-			} else {
-				i++
 			}
+			i++
 		case '*', '?', '[':
 			return true
 		}
