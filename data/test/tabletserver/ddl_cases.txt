@@ -38,6 +38,11 @@
   "Action": "alter", "TableName": "b.c", "NewName": "b.c"
 }
 
+"drop index a on b lock=none"
+{
+  "Action": "alter", "TableName": "b", "NewName": "b"
+}
+
 "rename table a to b"
 {
   "Action": "rename", "TableName": "a", "NewTable": "b"
