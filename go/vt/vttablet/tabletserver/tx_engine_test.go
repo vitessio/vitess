@@ -30,16 +30,17 @@ func TestTxEngineClose(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 	testUtils := newTestUtils()
-	dbconfigs := testUtils.newDBConfigs(db)
+	dbcfgs := testUtils.newDBConfigs(db)
 	ctx := context.Background()
 	config := tabletenv.DefaultQsConfig
 	config.TransactionCap = 10
 	config.TransactionTimeout = 0.5
 	config.TxShutDownGracePeriod = 0
 	te := NewTxEngine(nil, config)
+	te.InitDBConfig(dbcfgs)
 
 	// Normal close.
-	te.Open(dbconfigs)
+	te.Open()
 	start := time.Now()
 	te.Close(false)
 	if diff := time.Now().Sub(start); diff > 500*time.Millisecond {
@@ -47,7 +48,7 @@ func TestTxEngineClose(t *testing.T) {
 	}
 
 	// Normal close with timeout wait.
-	te.Open(dbconfigs)
+	te.Open()
 	c, err := te.txPool.LocalBegin(ctx, false, querypb.ExecuteOptions_DEFAULT)
 	if err != nil {
 		t.Fatal(err)
@@ -60,7 +61,7 @@ func TestTxEngineClose(t *testing.T) {
 	}
 
 	// Immediate close.
-	te.Open(dbconfigs)
+	te.Open()
 	c, err = te.txPool.LocalBegin(ctx, false, querypb.ExecuteOptions_DEFAULT)
 	if err != nil {
 		t.Fatal(err)
@@ -74,7 +75,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Normal close with short grace period.
 	te.shutdownGracePeriod = 250 * time.Millisecond
-	te.Open(dbconfigs)
+	te.Open()
 	c, err = te.txPool.LocalBegin(ctx, false, querypb.ExecuteOptions_DEFAULT)
 	if err != nil {
 		t.Fatal(err)
@@ -91,7 +92,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Normal close with short grace period, but pool gets empty early.
 	te.shutdownGracePeriod = 250 * time.Millisecond
-	te.Open(dbconfigs)
+	te.Open()
 	c, err = te.txPool.LocalBegin(ctx, false, querypb.ExecuteOptions_DEFAULT)
 	if err != nil {
 		t.Fatal(err)
@@ -115,7 +116,7 @@ func TestTxEngineClose(t *testing.T) {
 	}
 
 	// Immediate close, but connection is in use.
-	te.Open(dbconfigs)
+	te.Open()
 	c, err = te.txPool.LocalBegin(ctx, false, querypb.ExecuteOptions_DEFAULT)
 	if err != nil {
 		t.Fatal(err)

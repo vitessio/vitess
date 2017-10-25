@@ -17,6 +17,7 @@ limitations under the License.
 package vttest
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -72,6 +73,8 @@ func TestVitess(t *testing.T) {
 	}
 
 	hdl, err := LaunchVitess(ProtoTopo(topology), Schema(schema), VSchema(vschema))
+	fmt.Printf("sleeping\n")
+	time.Sleep(1 * time.Minute)
 	if err != nil {
 		t.Error(err)
 		return

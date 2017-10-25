@@ -136,3 +136,56 @@ func TestString(t *testing.T) {
 		}
 	}
 }
+
+func TestSplitStatement(t *testing.T) {
+	testcases := []struct {
+		in  string
+		sql string
+		rem string
+	}{{
+		in:  "select * from table",
+		sql: "select * from table",
+	}, {
+		in:  "select * from table; ",
+		sql: "select * from table",
+		rem: " ",
+	}, {
+		in:  "select * from table; select * from table2;",
+		sql: "select * from table",
+		rem: " select * from table2;",
+	}, {
+		in:  "select * from /* comment */ table;",
+		sql: "select * from /* comment */ table",
+	}, {
+		in:  "select * from /* comment ; */ table;",
+		sql: "select * from /* comment ; */ table",
+	}, {
+		in:  "select * from table where semi = ';';",
+		sql: "select * from table where semi = ';'",
+	}, {
+		in:  "-- select * from table",
+		sql: "-- select * from table",
+	}, {
+		in:  " ",
+		sql: " ",
+	}, {
+		in:  "",
+		sql: "",
+	}}
+
+	for _, tcase := range testcases {
+		sql, rem, err := SplitStatement(tcase.in)
+		if err != nil {
+			t.Errorf("EndOfStatementPosition(%s): ERROR: %v", tcase.in, err)
+			continue
+		}
+
+		if tcase.sql != sql {
+			t.Errorf("EndOfStatementPosition(%s) got sql \"%s\" want \"%s\"", tcase.in, sql, tcase.sql)
+		}
+
+		if tcase.rem != rem {
+			t.Errorf("EndOfStatementPosition(%s) got remainder \"%s\" want \"%s\"", tcase.in, rem, tcase.rem)
+		}
+	}
+}
