@@ -780,6 +780,31 @@ class TestVTGateFunctions(unittest.TestCase):
         {'id': 7})
     vtgate_conn.commit()
 
+  def test_user_truncate(self):
+    vtgate_conn = get_connection()
+    vtgate_conn.begin()
+    result = self.execute_on_master(
+        vtgate_conn,
+        'insert into vt_user2 (id, name) values (:id, :name)',
+        {'id': 1, 'name': 'name1'})
+    self.assertEqual(result, ([], 1L, 0L, []))
+    vtgate_conn.commit()
+    vtgate_conn.begin()
+    result = vtgate_conn._execute(
+        'truncate vt_user2',
+        {},
+        tablet_type='master',
+        keyspace_name='user'
+    )
+    vtgate_conn.commit()
+    self.assertEqual(result, ([], 0L, 0L, []))
+    # Test select by id
+    result = self.execute_on_master(
+        vtgate_conn,
+        'select id, name from vt_user2 where id = :id', {'id': 1})
+    self.assertEqual(
+        result, ([], 0L, 0, [('id', self.int_type), ('name', self.string_type)]))
+
   def test_user_extra(self):
     # user_extra is for testing unowned functional vindex
     count = 4
