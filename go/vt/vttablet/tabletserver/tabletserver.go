@@ -98,6 +98,19 @@ var stateName = []string{
 }
 
 // TabletServer implements the RPC interface for the query service.
+// TabletServer is initialized in the following sequence:
+// NewTabletServer->InitDBConfig->SetServingType.
+// Subcomponents of TabletServer are initialized using one of the
+// following sequences:
+// New->InitDBConfig->Init->Open, or New->InitDBConfig->Open.
+// Essentially, InitDBConfig is a continuation of New. However,
+// the db config is not initially available. For this reason,
+// the initialization is done in two phases.
+// Some subcomponents have Init functions. Such functions usually
+// perform one-time initializations like creating metadata tables
+// in the sidecar database. These functions must be idempotent.
+// Open and Close can be called repeatedly during the lifetime of
+// a subcomponent. These should also be idempotent.
 type TabletServer struct {
 	QueryTimeout           sync2.AtomicDuration
 	BeginTimeout           sync2.AtomicDuration
@@ -290,31 +303,39 @@ func (tsv *TabletServer) IsServing() bool {
 
 // InitDBConfig inititalizes the db config variables for TabletServer. You must call this function before
 // calling SetServingType.
-func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbconfigs dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) error {
+func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) error {
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	if tsv.state != StateNotConnected {
 		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "InitDBConfig failed, current state: %s", stateName[tsv.state])
 	}
 	tsv.target = target
-	tsv.dbconfigs = dbconfigs
+	tsv.dbconfigs = dbcfgs
 	// Massage Dba so that it inherits the
 	// App values but keeps the credentials.
-	tsv.dbconfigs.Dba = dbconfigs.App
-	if n, p := dbconfigs.Dba.Uname, dbconfigs.Dba.Pass; n != "" {
+	tsv.dbconfigs.Dba = dbcfgs.App
+	if n, p := dbcfgs.Dba.Uname, dbcfgs.Dba.Pass; n != "" {
 		tsv.dbconfigs.Dba.Uname = n
 		tsv.dbconfigs.Dba.Pass = p
 	}
 	tsv.mysqld = mysqld
+
+	tsv.se.InitDBConfig(tsv.dbconfigs)
+	tsv.qe.InitDBConfig(tsv.dbconfigs)
+	tsv.te.InitDBConfig(tsv.dbconfigs)
+	tsv.hw.InitDBConfig(tsv.dbconfigs)
+	tsv.hr.InitDBConfig(tsv.dbconfigs)
+	tsv.messager.InitDBConfig(tsv.dbconfigs)
+	tsv.watcher.InitDBConfig(tsv.dbconfigs, mysqld)
 	return nil
 }
 
 // StartService is a convenience function for InitDBConfig->SetServingType
 // with serving=true.
-func (tsv *TabletServer) StartService(target querypb.Target, dbconfigs dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) (err error) {
+func (tsv *TabletServer) StartService(target querypb.Target, dbcfgs dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) (err error) {
 	// Save tablet type away to prevent data races
 	tabletType := target.TabletType
-	err = tsv.InitDBConfig(target, dbconfigs, mysqld)
+	err = tsv.InitDBConfig(target, dbcfgs, mysqld)
 	if err != nil {
 		return err
 	}
@@ -426,19 +447,19 @@ func (tsv *TabletServer) fullStart() (err error) {
 	}
 	c.Close()
 
-	if err := tsv.se.Open(&tsv.dbconfigs.Dba); err != nil {
+	if err := tsv.se.Open(); err != nil {
 		return err
 	}
-	if err := tsv.qe.Open(tsv.dbconfigs); err != nil {
+	if err := tsv.qe.Open(); err != nil {
 		return err
 	}
-	if err := tsv.te.Init(tsv.dbconfigs); err != nil {
+	if err := tsv.te.Init(); err != nil {
 		return err
 	}
-	if err := tsv.hw.Init(tsv.dbconfigs, tsv.target); err != nil {
+	if err := tsv.hw.Init(tsv.target); err != nil {
 		return err
 	}
-	tsv.hr.Init(tsv.dbconfigs, tsv.target)
+	tsv.hr.Init(tsv.target)
 	tsv.updateStreamList.Init()
 	return tsv.serveNewType()
 }
@@ -449,13 +470,13 @@ func (tsv *TabletServer) serveNewType() (err error) {
 			return err
 		}
 		tsv.watcher.Close()
-		tsv.te.Open(tsv.dbconfigs)
-		tsv.messager.Open(tsv.dbconfigs)
+		tsv.te.Open()
+		tsv.messager.Open()
 		tsv.hr.Close()
-		tsv.hw.Open(tsv.dbconfigs)
+		tsv.hw.Open()
 	} else {
 		tsv.messager.Close()
-		tsv.hr.Open(tsv.dbconfigs)
+		tsv.hr.Open()
 		tsv.hw.Close()
 
 		// Wait for in-flight transactional requests to complete
@@ -464,7 +485,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		// be sure that the tx pool won't change after the wait.
 		tsv.txRequests.Wait()
 		tsv.te.Close(true)
-		tsv.watcher.Open(tsv.dbconfigs, tsv.mysqld)
+		tsv.watcher.Open()
 		tsv.txThrottler.Close()
 
 		// Reset the sequences.

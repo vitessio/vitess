@@ -171,6 +171,11 @@ func NewStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, se *schema.Engine, 
 
 // Stream starts streaming binlog events using the settings from NewStreamer().
 func (bls *Streamer) Stream(ctx context.Context) (err error) {
+	// Ensure se is Open. If vttablet came up in a non_serving role,
+	// the schema engine may not have been initialized.
+	if err := bls.se.Open(); err != nil {
+		return err
+	}
 	stopPos := bls.startPos
 	defer func() {
 		if err != nil && err != mysqlctl.ErrBinlogUnavailable {
