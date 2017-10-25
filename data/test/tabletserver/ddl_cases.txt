@@ -102,3 +102,17 @@
 {
   "Action": "alter", "TableName": "a", "NewTable": "a"
 }
+
+# truncate
+"truncate a"
+{
+  "PlanID": "DDL",
+  "TableName": "a"
+}
+
+# truncate
+"truncate table a"
+{
+  "PlanID": "DDL",
+  "TableName": "a"
+}

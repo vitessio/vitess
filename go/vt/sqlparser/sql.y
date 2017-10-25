@@ -183,7 +183,7 @@ func forceEOF(yylex interface{}) {
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
 %type <statement> insert_statement update_statement delete_statement set_statement
-%type <statement> create_statement alter_statement rename_statement drop_statement
+%type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement
 %type <ddl> create_table_prefix
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <bytes2> comment_opt comment_list
@@ -291,6 +291,7 @@ command:
 | alter_statement
 | rename_statement
 | drop_statement
+| truncate_statement
 | analyze_statement
 | show_statement
 | use_statement
@@ -1002,6 +1003,15 @@ drop_statement:
     $$ = &DDL{Action: DropStr, Table: $4.ToViewName(), IfExists: exists}
   }
 
+truncate_statement:
+  TRUNCATE TABLE table_name
+  {
+    $$ = &DDL{Action: TruncateStr, Table: $3}
+  }
+| TRUNCATE table_name
+  {
+    $$ = &DDL{Action: TruncateStr, Table: $2}
+  }
 analyze_statement:
   ANALYZE TABLE table_name
   {
@@ -1066,10 +1076,6 @@ other_statement:
     $$ = &OtherAdmin{}
   }
 | OPTIMIZE force_eof
-  {
-    $$ = &OtherAdmin{}
-  }
-| TRUNCATE force_eof
   {
     $$ = &OtherAdmin{}
   }
@@ -2498,7 +2504,6 @@ non_reserved_keyword:
 | TINYBLOB
 | TINYINT
 | TINYTEXT
-| TRUNCATE
 | UNSIGNED
 | UNUSED
 | VARBINARY

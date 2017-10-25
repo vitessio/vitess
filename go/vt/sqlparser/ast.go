@@ -554,8 +554,8 @@ func (node *Set) WalkSubtree(visit Visit) error {
 	)
 }
 
-// DDL represents a CREATE, ALTER, DROP or RENAME statement.
-// Table is set for AlterStr, DropStr, RenameStr
+// DDL represents a CREATE, ALTER, DROP, RENAME or TRUNCATE statement.
+// Table is set for AlterStr, DropStr, RenameStr, TruncateStr
 // NewName is set for AlterStr, CreateStr, RenameStr.
 type DDL struct {
 	Action        string
@@ -568,10 +568,11 @@ type DDL struct {
 
 // DDL strings.
 const (
-	CreateStr = "create"
-	AlterStr  = "alter"
-	DropStr   = "drop"
-	RenameStr = "rename"
+	CreateStr   = "create"
+	AlterStr    = "alter"
+	DropStr     = "drop"
+	RenameStr   = "rename"
+	TruncateStr = "truncate"
 )
 
 // Format formats the node.

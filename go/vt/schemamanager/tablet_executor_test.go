@@ -128,6 +128,12 @@ func TestTabletExecutorValidate(t *testing.T) {
 	}
 
 	if err := executor.Validate(ctx, []string{
+		"TRUNCATE TABLE test_table_04",
+	}); err != nil {
+		t.Fatalf("executor.Validate should succeed, drop a table with more than 2,000,000 rows is allowed")
+	}
+
+	if err := executor.Validate(ctx, []string{
 		"DROP TABLE test_table_04",
 	}); err != nil {
 		t.Fatalf("executor.Validate should succeed, drop a table with more than 2,000,000 rows is allowed")
