@@ -191,6 +191,9 @@ var bufPool = sync.Pool{}
 // newConn is an internal method to create a Conn. Used by client and server
 // side for common creation code.
 func newConn(conn net.Conn) *Conn {
+	if conn == nil {
+		panic("conn (net.Conn) is nil")
+	}
 	return &Conn{
 		conn: conn,
 
@@ -560,8 +563,17 @@ func (c *Conn) writeEphemeralPacket(direct bool) error {
 	// tests are fixed
 	defer c.endEphemeralPacket()
 	var w io.Writer = c.writer
+	if w == nil {
+		panic("w (io.Writer) is nil")
+	}
 	if direct {
 		w = c.conn
+		if w == nil {
+			panic("w (c.conn) is nil")
+		}
+	}
+	if c.currentEphemeralBuffer == nil {
+		panic("c.currentEphemeralBuffer is nil")
 	}
 
 	switch c.currentEphemeralPolicy {

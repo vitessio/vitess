@@ -163,6 +163,9 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 			return nil, cr.err
 		}
 	}
+	if c == nil {
+		panic("c is nil")
+	}
 	return c, nil
 }
 

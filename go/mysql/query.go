@@ -34,6 +34,9 @@ import (
 // Client -> Server.
 // Returns SQLError(CRServerGone) if it can't.
 func (c *Conn) writeComQuery(query string) error {
+	if c == nil {
+		panic("Conn is nil")
+	}
 	data := c.startEphemeralPacket(len(query) + 1)
 	defer c.endEphemeralPacket()
 	data[0] = ComQuery
