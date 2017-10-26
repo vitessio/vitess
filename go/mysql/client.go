@@ -493,6 +493,7 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 	}
 
 	data := c.startEphemeralPacket(length)
+	defer c.endEphemeralPacket()
 	pos := 0
 
 	// Client capability flags.
@@ -554,6 +555,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	}
 
 	data := c.startEphemeralPacket(length)
+	defer c.endEphemeralPacket()
 	pos := 0
 
 	// Client capability flags.
@@ -616,6 +618,7 @@ func parseAuthSwitchRequest(data []byte) (string, []byte, error) {
 func (c *Conn) writeClearTextPassword(params *ConnParams) error {
 	length := len(params.Pass) + 1
 	data := c.startEphemeralPacket(length)
+	defer c.endEphemeralPacket()
 	pos := 0
 	pos = writeNullString(data, pos, params.Pass)
 	// Sanity check.
