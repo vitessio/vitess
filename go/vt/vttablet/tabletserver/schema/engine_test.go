@@ -423,9 +423,9 @@ func (dummyChecker) CheckMySQL() {}
 
 var DummyChecker = dummyChecker{}
 
-func newEngine(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, strict bool, db *fakesqldb.DB) *Engine {
+func newEngine(queryPlanCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, strict bool, db *fakesqldb.DB) *Engine {
 	config := tabletenv.DefaultQsConfig
-	config.QueryCacheSize = queryCacheSize
+	config.QueryPlanCacheSize = queryPlanCacheSize
 	config.SchemaReloadTime = float64(reloadTime) / 1e9
 	config.IdleTimeout = float64(idleTimeout) / 1e9
 	se := NewEngine(DummyChecker, config)
