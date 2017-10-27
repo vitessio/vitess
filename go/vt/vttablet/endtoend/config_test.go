@@ -76,7 +76,7 @@ func TestConfigVars(t *testing.T) {
 		val: tabletenv.Config.WarnResultSize,
 	}, {
 		tag: "QueryCacheCapacity",
-		val: tabletenv.Config.QueryCacheSize,
+		val: tabletenv.Config.QueryPlanCacheSize,
 	}, {
 		tag: "QueryTimeout",
 		val: int(tabletenv.Config.QueryTimeout * 1e9),
@@ -154,9 +154,9 @@ func TestPoolSize(t *testing.T) {
 	}
 }
 
-func TestQueryCache(t *testing.T) {
-	defer framework.Server.SetQueryCacheCap(framework.Server.QueryCacheCap())
-	framework.Server.SetQueryCacheCap(1)
+func TestQueryPlanCache(t *testing.T) {
+	defer framework.Server.SetQueryPlanCacheCap(framework.Server.QueryPlanCacheCap())
+	framework.Server.SetQueryPlanCacheCap(1)
 
 	bindVars := map[string]*querypb.BindVariable{
 		"ival1": sqltypes.Int64BindVariable(1),
@@ -176,7 +176,7 @@ func TestQueryCache(t *testing.T) {
 		t.Error(err)
 	}
 
-	framework.Server.SetQueryCacheCap(10)
+	framework.Server.SetQueryPlanCacheCap(10)
 	_, _ = client.Execute("select * from vitess_test where intval=:ival1", bindVars)
 	vend = framework.DebugVars()
 	if err := verifyIntValue(vend, "QueryCacheLength", 2); err != nil {

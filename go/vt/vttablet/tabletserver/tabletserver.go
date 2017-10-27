@@ -1921,15 +1921,15 @@ func (tsv *TabletServer) TxTimeout() time.Duration {
 	return tsv.te.txPool.Timeout()
 }
 
-// SetQueryCacheCap changes the pool size to the specified value.
+// SetQueryPlanCacheCap changes the pool size to the specified value.
 // This function should only be used for testing.
-func (tsv *TabletServer) SetQueryCacheCap(val int) {
-	tsv.qe.SetQueryCacheCap(val)
+func (tsv *TabletServer) SetQueryPlanCacheCap(val int) {
+	tsv.qe.SetQueryPlanCacheCap(val)
 }
 
-// QueryCacheCap returns the pool size.
-func (tsv *TabletServer) QueryCacheCap() int {
-	return int(tsv.qe.QueryCacheCap())
+// QueryPlanCacheCap returns the pool size.
+func (tsv *TabletServer) QueryPlanCacheCap() int {
+	return int(tsv.qe.QueryPlanCacheCap())
 }
 
 // SetAutoCommit sets autocommit on or off.

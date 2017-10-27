@@ -157,7 +157,7 @@ func TestQueryPlanCache(t *testing.T) {
 
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
-	qe.SetQueryCacheCap(1)
+	qe.SetQueryPlanCacheCap(1)
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false)
 	if err != nil {
 		t.Fatal(err)
@@ -175,7 +175,7 @@ func TestQueryPlanCache(t *testing.T) {
 	expvar.Do(func(kv expvar.KeyValue) {
 		_ = kv.Value.String()
 	})
-	if qe.queries.Size() == 0 {
+	if qe.plans.Size() == 0 {
 		t.Fatalf("query plan cache should not be 0")
 	}
 	qe.ClearQueryPlanCache()
@@ -201,7 +201,7 @@ func TestNoQueryPlanCache(t *testing.T) {
 
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
-	qe.SetQueryCacheCap(1)
+	qe.SetQueryPlanCacheCap(1)
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, true)
 	if err != nil {
 		t.Fatal(err)
@@ -209,7 +209,7 @@ func TestNoQueryPlanCache(t *testing.T) {
 	if firstPlan == nil {
 		t.Fatalf("plan should not be nil")
 	}
-	if qe.queries.Size() != 0 {
+	if qe.plans.Size() != 0 {
 		t.Fatalf("query plan cache should be 0")
 	}
 	qe.ClearQueryPlanCache()
@@ -251,9 +251,9 @@ func TestStatsURL(t *testing.T) {
 	qe.ServeHTTP(response, request)
 }
 
-func newTestQueryEngine(queryCacheSize int, idleTimeout time.Duration, strict bool, dbcfgs dbconfigs.DBConfigs) *QueryEngine {
+func newTestQueryEngine(queryPlanCacheSize int, idleTimeout time.Duration, strict bool, dbcfgs dbconfigs.DBConfigs) *QueryEngine {
 	config := tabletenv.DefaultQsConfig
-	config.QueryCacheSize = queryCacheSize
+	config.QueryPlanCacheSize = queryPlanCacheSize
 	config.IdleTimeout = float64(idleTimeout) / 1e9
 	se := schema.NewEngine(DummyChecker, config)
 	qe := NewQueryEngine(DummyChecker, se, config)
