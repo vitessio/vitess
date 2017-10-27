@@ -409,7 +409,7 @@ func (qe *QueryEngine) peekQuery(sql string) *TabletPlan {
 	return nil
 }
 
-// SetQueryPlanCap sets the query cache capacity.
+// SetQueryPlanCacheCap sets the query plan cache capacity.
 func (qe *QueryEngine) SetQueryPlanCacheCap(size int) {
 	if size <= 0 {
 		size = 1
