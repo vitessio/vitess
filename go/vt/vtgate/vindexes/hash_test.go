@@ -51,6 +51,7 @@ func TestHashMap(t *testing.T) {
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 		sqltypes.NewInt64(3),
+		sqltypes.NULL,
 		sqltypes.NewInt64(4),
 		sqltypes.NewInt64(5),
 		sqltypes.NewInt64(6),
@@ -62,19 +63,13 @@ func TestHashMap(t *testing.T) {
 		[]byte("\x16k@\xb4J\xbaK\xd6"),
 		[]byte("\x06\xe7\xea\"Βp\x8f"),
 		[]byte("N\xb1\x90ɢ\xfa\x16\x9c"),
+		nil,
 		[]byte("\xd2\xfd\x88g\xd5\r-\xfe"),
 		[]byte("p\xbb\x02<\x81\f\xa8z"),
 		[]byte("\xf0\x98H\n\xc4ľq"),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
-	}
-
-	// Negative Test Case.
-	_, err = hash.(Unique).Map(nil, []sqltypes.Value{sqltypes.NewFloat64(1.2)})
-	wanterr := "hash.Map: could not parse value: 1.2"
-	if err == nil || err.Error() != wanterr {
-		t.Errorf("hash.Map() error: %v, want %s", err, wanterr)
 	}
 }
 

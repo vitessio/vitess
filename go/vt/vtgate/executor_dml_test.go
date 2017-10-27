@@ -174,14 +174,6 @@ func TestUpdateEqualFail(t *testing.T) {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}
 
-	_, err = executorExec(executor, "update user set a=2 where id = :id", map[string]*querypb.BindVariable{
-		"id": sqltypes.StringBindVariable("aa"),
-	})
-	want = `execUpdateEqual: hash.Map: could not parse value: aa`
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
 	s.ShardSpec = "80-"
 	_, err = executorExec(executor, "update user set a=2 where id = :id", map[string]*querypb.BindVariable{
 		"id": sqltypes.Int64BindVariable(1),
@@ -347,14 +339,6 @@ func TestDeleteEqualFail(t *testing.T) {
 		"id": sqltypes.Int64BindVariable(1),
 	})
 	want = "execDeleteEqual: keyspace TestExecutor fetch error: topo error GetSrvKeyspace"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
-	_, err = executorExec(executor, "delete from user where id = :id", map[string]*querypb.BindVariable{
-		"id": sqltypes.StringBindVariable("aa"),
-	})
-	want = `execDeleteEqual: hash.Map: could not parse value: aa`
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}
@@ -1001,7 +985,7 @@ func TestInsertFail(t *testing.T) {
 	}
 
 	_, err = executorExec(executor, "insert into ksid_table(keyspace_id) values (null)", nil)
-	want = "execInsertSharded: getInsertShardedRoute: value must be supplied for column keyspace_id"
+	want = "execInsertSharded: getInsertShardedRoute: could not map NULL to a keyspace id"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}
@@ -1075,7 +1059,7 @@ func TestInsertFail(t *testing.T) {
 	}
 
 	_, err = executorExec(executor, "insert into noauto_table(id) values (null)", nil)
-	want = "execInsertSharded: getInsertShardedRoute: value must be supplied for column id"
+	want = "execInsertSharded: getInsertShardedRoute: could not map NULL to a keyspace id"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("executorExec: %v, want prefix %v", err, want)
 	}

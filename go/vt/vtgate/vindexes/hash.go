@@ -60,7 +60,8 @@ func (vind *Hash) Map(_ VCursor, ids []sqltypes.Value) ([][]byte, error) {
 	for _, id := range ids {
 		num, err := sqltypes.ToUint64(id)
 		if err != nil {
-			return nil, fmt.Errorf("hash.Map: %v", err)
+			out = append(out, nil)
+			continue
 		}
 		out = append(out, vhash(num))
 	}

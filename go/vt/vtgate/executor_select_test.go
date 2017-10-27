@@ -536,7 +536,7 @@ func TestSelectEqualNotFound(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantResult := &sqltypes.Result{}
+	wantResult := sandboxconn.SingleRowResult
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
@@ -546,7 +546,6 @@ func TestSelectEqualNotFound(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantResult = &sqltypes.Result{}
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}

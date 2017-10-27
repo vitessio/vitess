@@ -319,6 +319,12 @@ func (route *Route) Execute(vcursor VCursor, bindVars, joinVars map[string]*quer
 		return nil, err
 	}
 
+	// If there is no route for a select and we still 'wantfields',
+	// we have to do a GetFields.
+	if len(params.shardVars) == 0 && !isDML && wantfields {
+		return route.GetFields(vcursor, bindVars, joinVars)
+	}
+
 	shardQueries := route.getShardQueries(route.Query, params)
 	result, err := vcursor.ExecuteMultiShard(params.ks, shardQueries, isDML)
 	if err != nil {
@@ -573,7 +579,7 @@ func (route *Route) resolveShards(vcursor VCursor, bindVars map[string]*querypb.
 			return "", nil, err
 		}
 		for i, ksid := range ksids {
-			if len(ksid) == 0 {
+			if ksid == nil {
 				continue
 			}
 			shard, err := vcursor.GetShardForKeyspaceID(allShards, ksid)
@@ -613,7 +619,7 @@ func (route *Route) resolveSingleShard(vcursor VCursor, bindVars map[string]*que
 		return "", "", nil, err
 	}
 	ksid = ksids[0]
-	if len(ksid) == 0 {
+	if ksid == nil {
 		return "", "", ksid, nil
 	}
 	shard, err = vcursor.GetShardForKeyspaceID(allShards, ksid)
@@ -807,11 +813,6 @@ func (route *Route) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*
 
 // processPrimary maps the primary vindex values to the kesypace ids.
 func (route *Route) processPrimary(vcursor VCursor, vindexKeys []sqltypes.Value, colVindex *vindexes.ColumnVindex, bv map[string]*querypb.BindVariable) (keyspaceIDs [][]byte, err error) {
-	for _, vindexKey := range vindexKeys {
-		if vindexKey.IsNull() {
-			return nil, fmt.Errorf("value must be supplied for column %v", colVindex.Column)
-		}
-	}
 	mapper := colVindex.Vindex.(vindexes.Unique)
 	keyspaceIDs, err = mapper.Map(vcursor, vindexKeys)
 	if err != nil {
