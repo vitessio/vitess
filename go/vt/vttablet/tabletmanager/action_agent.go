@@ -645,6 +645,25 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 	return nil
 }
 
+// Close prepares a tablet for shutdown. First we check our tablet ownership and
+// then prune the tablet topology entry of all post-init fields. This prevents
+// stale identifiers from hanging around in topology.
+func (agent *ActionAgent) Close() {
+	// cleanup initialized fields in the tablet entry
+	f := func(tablet *topodatapb.Tablet) error {
+		if err := topotools.CheckOwnership(agent.initialTablet, tablet); err != nil {
+			return err
+		}
+		tablet.Hostname = ""
+		tablet.MysqlHostname = ""
+		tablet.PortMap = nil
+		return nil
+	}
+	if _, err := agent.TopoServer.UpdateTabletFields(context.Background(), agent.TabletAlias, f); err != nil {
+		log.Warningf("Failed to update tablet record, may contain stale identifiers: %v", err)
+	}
+}
+
 // Stop shuts down the agent. Normally this is not necessary, since we use
 // servenv OnTerm and OnClose hooks to coordinate shutdown automatically,
 // while taking lameduck into account. However, this may be useful for tests,

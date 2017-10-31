@@ -140,6 +140,9 @@ func main() {
 	}
 
 	servenv.OnClose(func() {
+		// stop the agent so that our topo entry gets pruned properly
+		agent.Close()
+
 		// We will still use the topo server during lameduck period
 		// to update our state, so closing it in OnClose()
 		ts.Close()
