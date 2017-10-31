@@ -35,6 +35,8 @@ var (
 	key  = flag.String("throttler_client_grpc_key", "", "the key to use to connect")
 	ca   = flag.String("throttler_client_grpc_ca", "", "the server ca to use to validate servers when connecting")
 	name = flag.String("throttler_client_grpc_server_name", "", "the server name to use to validate server certificate")
+
+	staticAuthCreds = flag.String("throttler_client_grpc_static_auth_creds", "", "when using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server")
 )
 
 type client struct {

@@ -73,8 +73,8 @@ esac
 mkdir -p $VTDATAROOT/backups
 
 # Start 5 vttablets by default.
-# Pass a list of UID indices on the command line to override.
-uids=${@:-'0 1 2 3 4'}
+# Pass TABLETS_UIDS indices as env variable to change
+uids=${TABLETS_UIDS:-'0 1 2 3 4'}
 
 # Start all mysqlds in background.
 for uid_index in $uids; do
@@ -100,6 +100,13 @@ done
 
 # Wait for all mysqld to start up.
 wait
+
+optional_auth_args=''
+if [ "$1" = "--enable-grpc-tablet-static-auth" ];
+then
+	  echo "Enabling Auth with static authentication in grpc"
+    optional_auth_args='-grpc_server_auth static -grpc_server_auth_static_file ./grpc_static_auth.json'
+fi
 
 # Start all vttablets in background.
 for uid_index in $uids; do
@@ -133,6 +140,7 @@ for uid_index in $uids; do
     -service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
     -pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
     -vtctld_addr http://$hostname:$vtctld_web_port/ \
+    $optional_auth_args \
     $dbconfig_flags \
     > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 

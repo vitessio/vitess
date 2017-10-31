@@ -28,7 +28,8 @@ exitcode=1
 num_tablets=2
 uid_base=100
 cell=test
-tablet_tasks=`seq 0 $[$num_tablets - 1]`
+export TABLETS_UIDS=`seq 0 $[$num_tablets - 1]`
+tablet_tasks = $TABLET_UIDS
 
 teardown() {
   ./vtgate-down.sh &
@@ -43,7 +44,7 @@ trap teardown SIGTERM SIGINT EXIT
 # Set up servers.
 timeout $timeout ./zk-up.sh || teardown
 timeout $timeout ./vtctld-up.sh || teardown
-timeout $timeout ./vttablet-up.sh $tablet_tasks || teardown
+timeout $timeout ./vttablet-up.sh || teardown
 
 # Retry loop function
 retry_with_timeout() {

@@ -54,6 +54,13 @@ then
     optional_tls_args="-grpc_cert $cert_dir/server-cert.pem -grpc_key $cert_dir/server-key.pem -grpc_ca $cert_dir/ca-cert.pem"
 fi
 
+optional_auth_args=''
+if [ "$1" = "--enable-grpc-tablet-static-auth" ];
+then
+	  echo "Enabling Auth with static authentication in grpc"
+    optional_auth_args='-tablet_grpc_static_auth_creds ./grpc_static_client_auth.json'
+fi
+
 # Start vtgate.
 $VTROOT/bin/vtgate \
   $TOPOLOGY_FLAGS \
@@ -69,6 +76,7 @@ $VTROOT/bin/vtgate \
   -gateway_implementation discoverygateway \
   -service_map 'grpc-vtgateservice' \
   -pid_file $VTDATAROOT/tmp/vtgate.pid \
+  $optional_auth_args \
   $optional_tls_args \
   > $VTDATAROOT/tmp/vtgate.out 2>&1 &
 
