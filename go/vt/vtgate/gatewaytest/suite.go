@@ -104,5 +104,5 @@ func TestSuite(t *testing.T, name string, g gateway.Gateway, f *tabletconntest.F
 		Keyspace: tabletconntest.TestTarget.Keyspace,
 		Shard:    tabletconntest.TestTarget.Shard,
 		Type:     tabletconntest.TestTarget.TabletType,
-	}, f)
+	}, f, nil)
 }

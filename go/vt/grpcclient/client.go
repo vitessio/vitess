@@ -17,6 +17,9 @@ limitations under the License.
 package grpcclient
 
 import (
+	"encoding/json"
+	"io/ioutil"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -60,4 +63,24 @@ func SecureDialOption(cert, key, ca, name string) (grpc.DialOption, error) {
 	// Create the creds server options.
 	creds := credentials.NewTLS(config)
 	return grpc.WithTransportCredentials(creds), nil
+}
+
+// StaticAuthDialOption returns the gRPC auth dial option to use for the
+// given client connection. Only grpc_vitess_static_auth supported at the moment.
+func StaticAuthDialOption(opts []grpc.DialOption, staticAuthClientConfig string) ([]grpc.DialOption, error) {
+	if staticAuthClientConfig == "" {
+		return opts, nil
+	}
+	data, err := ioutil.ReadFile(staticAuthClientConfig)
+	if err != nil {
+		return nil, err
+	}
+	clientCreds := &StaticAuthClientCreds{}
+	err = json.Unmarshal(data, clientCreds)
+	if err != nil {
+		return nil, err
+	}
+	creds := grpc.WithPerRPCCredentials(clientCreds)
+	opts = append(opts, creds)
+	return opts, nil
 }
