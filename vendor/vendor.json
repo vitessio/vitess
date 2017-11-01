@@ -1041,6 +1041,20 @@
 			"versionExact": "v1.7.1"
 		},
 		{
+			"checksumSHA1": "ntHev01vgZgeIh5VFRmbLx/BSTo=",
+			"path": "google.golang.org/grpc/grpclog",
+			"revision": "61d37c5d657a47e4404fd6823bd598341a2595de",
+			"revisionTime": "2017-10-25T22:03:47Z",
+			"version": "=v1.7.1",
+			"versionExact": "v1.7.1"
+		},
+		{
+			"checksumSHA1": "QyasSHZlgle+PHSIQ2/p+fr+ihY=",
+			"path": "google.golang.org/grpc/grpclog/glogger",
+			"revision": "08a45354194cd00490a5d926825670fb928b5f76",
+			"revisionTime": "2017-11-01T20:14:29Z"
+		},
+		{
 			"checksumSHA1": "U9vDe05/tQrvFBojOQX8Xk12W9I=",
 			"path": "google.golang.org/grpc/internal",
 			"revision": "61d37c5d657a47e4404fd6823bd598341a2595de",
