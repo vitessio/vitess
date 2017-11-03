@@ -51,6 +51,9 @@ var (
 	// root is a prefix added to all object names.
 	root = flag.String("s3_backup_storage_root", "", "root prefix for all backup-related object names")
 
+	// sse is the server-side encryption algorithm used when storing this object in S3
+	sse = flag.String("s3_backup_server_side_encryption", "", "server-side encryption algorithm (e.g., AES256, aws:kms)")
+
 	// path component delimiter
 	delimiter = "/"
 )
@@ -89,10 +92,16 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string) (io.Writ
 		defer bh.waitGroup.Done()
 		uploader := s3manager.NewUploaderWithClient(bh.client)
 		object := objName(bh.dir, bh.name, filename)
+
+		var sseOption *string
+		if *sse != "" {
+			sseOption = sse
+		}
 		_, err := uploader.Upload(&s3manager.UploadInput{
-			Bucket: bucket,
-			Key:    object,
-			Body:   reader,
+			Bucket:               bucket,
+			Key:                  object,
+			Body:                 reader,
+			ServerSideEncryption: sseOption,
 		})
 		if err != nil {
 			reader.CloseWithError(err)
