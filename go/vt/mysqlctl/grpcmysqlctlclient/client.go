@@ -19,10 +19,12 @@ limitations under the License.
 package grpcmysqlctlclient
 
 import (
+	"fmt"
 	"net"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 
 	"golang.org/x/net/context"
 
@@ -55,35 +57,64 @@ func factory(network, addr string, dialTimeout time.Duration) (mysqlctlclient.My
 
 // Start is part of the MysqlctlClient interface.
 func (c *client) Start(ctx context.Context, mysqldArgs ...string) error {
-	_, err := c.c.Start(ctx, &mysqlctlpb.StartRequest{
-		MysqldArgs: mysqldArgs,
+	return c.withRetry(ctx, func() error {
+		_, err := c.c.Start(ctx, &mysqlctlpb.StartRequest{
+			MysqldArgs: mysqldArgs,
+		})
+		return err
 	})
-	return err
 }
 
 // Shutdown is part of the MysqlctlClient interface.
 func (c *client) Shutdown(ctx context.Context, waitForMysqld bool) error {
-	_, err := c.c.Shutdown(ctx, &mysqlctlpb.ShutdownRequest{
-		WaitForMysqld: waitForMysqld,
+	return c.withRetry(ctx, func() error {
+		_, err := c.c.Shutdown(ctx, &mysqlctlpb.ShutdownRequest{
+			WaitForMysqld: waitForMysqld,
+		})
+		return err
 	})
-	return err
 }
 
 // RunMysqlUpgrade is part of the MysqlctlClient interface.
 func (c *client) RunMysqlUpgrade(ctx context.Context) error {
-	_, err := c.c.RunMysqlUpgrade(ctx, &mysqlctlpb.RunMysqlUpgradeRequest{})
-	return err
+	return c.withRetry(ctx, func() error {
+		_, err := c.c.RunMysqlUpgrade(ctx, &mysqlctlpb.RunMysqlUpgradeRequest{})
+		return err
+	})
 }
 
 // ReinitConfig is part of the MysqlctlClient interface.
 func (c *client) ReinitConfig(ctx context.Context) error {
-	_, err := c.c.ReinitConfig(ctx, &mysqlctlpb.ReinitConfigRequest{})
-	return err
+	return c.withRetry(ctx, func() error {
+		_, err := c.c.ReinitConfig(ctx, &mysqlctlpb.ReinitConfigRequest{})
+		return err
+	})
 }
 
 // Close is part of the MysqlctlClient interface.
 func (c *client) Close() {
 	c.cc.Close()
+}
+
+// withRetry is needed because grpc doesn't handle some transient errors
+// correctly (like EAGAIN) when sockets are used.
+func (c *client) withRetry(ctx context.Context, f func() error) error {
+	var lastError error
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("%v: %v", ctx.Err(), lastError)
+		default:
+		}
+		if err := f(); err != nil {
+			if grpc.Code(err) == codes.Unavailable {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			return err
+		}
+		return nil
+	}
 }
 
 func init() {

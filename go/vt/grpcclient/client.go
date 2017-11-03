@@ -20,6 +20,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	// grpc doesn't return underlying errors. So, we have
+	// to rely on logs to know the root cause if a request
+	// fails.
+	_ "google.golang.org/grpc/grpclog/glogger"
+
 	"github.com/youtube/vitess/go/vt/grpccommon"
 	"github.com/youtube/vitess/go/vt/vttls"
 )
@@ -31,14 +36,6 @@ func Dial(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 			grpc.MaxCallRecvMsgSize(*grpccommon.MaxMessageSize),
 			grpc.MaxCallSendMsgSize(*grpccommon.MaxMessageSize),
 		),
-		// FailOnNonTempDialError makes the grpc fail faster on chronic errors.
-		// Additionally, the error messages are more specific, which
-		// is more helpful for troubleshooting.
-		grpc.FailOnNonTempDialError(true),
-		// With grpc 1.7.0, some requests are failing with
-		// 'the connection is unavailable' error. Adding this
-		// WithBlock option mitigates the problem.
-		grpc.WithBlock(),
 	}
 	newopts = append(newopts, opts...)
 	return grpc.Dial(target, newopts...)

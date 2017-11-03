@@ -17,10 +17,15 @@ limitations under the License.
 package grpcclient
 
 import (
+	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
+
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtgateservicepb "github.com/youtube/vitess/go/vt/proto/vtgateservice"
 )
 
 func TestDialErrors(t *testing.T) {
@@ -28,16 +33,23 @@ func TestDialErrors(t *testing.T) {
 		address, err string
 	}{{
 		address: "badhost",
-		err:     "dial tcp: address badhost: missing port in address",
+		err:     "Unavailable",
 	}, {
 		address: "badhost:123456",
-		err:     "dial tcp: address 123456: invalid port",
+		err:     "Unavailable",
 	}, {
 		address: "[::]:12346",
-		err:     "dial tcp [::]:12346: getsockopt: connection refused",
+		err:     "Unavailable",
 	}}
 	for _, tcase := range tcases {
-		_, err := Dial(tcase.address, grpc.WithInsecure())
+		gconn, err := Dial(tcase.address, grpc.WithInsecure())
+		if err != nil {
+			t.Fatal(err)
+		}
+		vtg := vtgateservicepb.NewVitessClient(gconn)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		_, err = vtg.Execute(ctx, &vtgatepb.ExecuteRequest{})
+		cancel()
 		if err == nil || !strings.Contains(err.Error(), tcase.err) {
 			t.Errorf("Dial(%s): %v, must contain %s", tcase.address, err, tcase.err)
 		}

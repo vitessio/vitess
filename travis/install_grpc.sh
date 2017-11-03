@@ -51,5 +51,5 @@ fi
 
 # Install gRPC python libraries from PyPI.
 # Dependencies like protobuf python will be installed automatically.
-grpcio_ver=1.6.0
+grpcio_ver=1.7.0
 $PIP install --upgrade grpcio==$grpcio_ver
