@@ -122,7 +122,7 @@ ln -snf $consul_dist/consul $VTROOT/bin/consul
 # install gRPC C++ base, so we can install the python adapters.
 # this also installs protobufs
 grpc_dist=$VTROOT/dist/grpc
-grpc_ver=v1.0.0
+grpc_ver=v1.7.0
 if [ $SKIP_ROOT_INSTALLS == "True" ]; then
   echo "skipping grpc build, as root version was already installed."
 elif [[ -f $grpc_dist/.build_finished && "$(cat $grpc_dist/.build_finished)" == "$grpc_ver" ]]; then
