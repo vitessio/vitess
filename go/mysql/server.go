@@ -439,6 +439,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 			lenNullString(MysqlNativePassword) // auth-plugin-name
 
 	data := c.startEphemeralPacket(length)
+	defer c.endEphemeralPacket()
 	pos := 0
 
 	// Protocol version.
@@ -620,6 +621,7 @@ func (c *Conn) writeAuthSwitchRequest(pluginName string, pluginData []byte) erro
 		len(pluginData)
 
 	data := c.startEphemeralPacket(length)
+	defer c.endEphemeralPacket()
 	pos := 0
 
 	// Packet header.

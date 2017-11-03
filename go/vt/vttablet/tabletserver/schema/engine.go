@@ -145,6 +145,9 @@ func (se *Engine) Open() error {
 				log.Errorf("Engine.Open: connection error while reading table %s: %v", tableName, err)
 				return
 			}
+			if conn == nil {
+				panic("conn (mysql.Conn) is nil")
+			}
 			defer conn.Recycle()
 
 			table, err := LoadTable(

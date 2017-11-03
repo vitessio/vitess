@@ -34,7 +34,11 @@ import (
 // Client -> Server.
 // Returns SQLError(CRServerGone) if it can't.
 func (c *Conn) writeComQuery(query string) error {
+	if c == nil {
+		panic("Conn is nil")
+	}
 	data := c.startEphemeralPacket(len(query) + 1)
+	defer c.endEphemeralPacket()
 	data[0] = ComQuery
 	copy(data[1:], query)
 	if err := c.writeEphemeralPacket(true); err != nil {
@@ -48,6 +52,7 @@ func (c *Conn) writeComQuery(query string) error {
 // Returns SQLError(CRServerGone) if it can't.
 func (c *Conn) writeComInitDB(db string) error {
 	data := c.startEphemeralPacket(len(db) + 1)
+	defer c.endEphemeralPacket()
 	data[0] = ComInitDB
 	copy(data[1:], db)
 	if err := c.writeEphemeralPacket(true); err != nil {
@@ -465,6 +470,7 @@ func (c *Conn) parseComInitDB(data []byte) string {
 func (c *Conn) sendColumnCount(count uint64) error {
 	length := lenEncIntSize(count)
 	data := c.startEphemeralPacket(length)
+	defer c.endEphemeralPacket()
 	writeLenEncInt(data, 0, count)
 	return c.writeEphemeralPacket(false)
 }
@@ -493,6 +499,7 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
 	}
 
 	data := c.startEphemeralPacket(length)
+	defer c.endEphemeralPacket()
 	pos := 0
 
 	pos = writeLenEncString(data, pos, "def") // Always the same.
@@ -528,6 +535,7 @@ func (c *Conn) writeRow(row []sqltypes.Value) error {
 	}
 
 	data := c.startEphemeralPacket(length)
+	defer c.endEphemeralPacket()
 	pos := 0
 	for _, val := range row {
 		if val.IsNull() {

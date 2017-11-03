@@ -191,6 +191,9 @@ var bufPool = sync.Pool{}
 // newConn is an internal method to create a Conn. Used by client and server
 // side for common creation code.
 func newConn(conn net.Conn) *Conn {
+	if conn == nil {
+		panic("conn (net.Conn) is nil")
+	}
 	return &Conn{
 		conn: conn,
 
@@ -548,17 +551,29 @@ func (c *Conn) startEphemeralPacket(length int) []byte {
 	return c.currentEphemeralPacket
 }
 
+func (c *Conn) endEphemeralPacket() {
+	c.currentEphemeralPolicy = ephemeralUnused
+}
+
 // writeEphemeralPacket writes the packet that was allocated by
 // startEphemeralPacket. If 'direct' is set, we write to the
 // underlying connection directly, by-passing the write buffer.
 func (c *Conn) writeEphemeralPacket(direct bool) error {
-	defer func() {
-		c.currentEphemeralPolicy = ephemeralUnused
-	}()
-
+	// TODO(sougou): this call is not necessary. Remove after
+	// tests are fixed
+	defer c.endEphemeralPacket()
 	var w io.Writer = c.writer
+	if w == nil {
+		panic("w (io.Writer) is nil")
+	}
 	if direct {
 		w = c.conn
+		if w == nil {
+			panic("w (c.conn) is nil")
+		}
+	}
+	if c.currentEphemeralBuffer == nil {
+		panic("c.currentEphemeralBuffer is nil")
 	}
 
 	switch c.currentEphemeralPolicy {
@@ -614,6 +629,7 @@ func (c *Conn) writeComQuit() error {
 	c.sequence = 0
 
 	data := c.startEphemeralPacket(1)
+	defer c.endEphemeralPacket()
 	data[0] = ComQuit
 	if err := c.writeEphemeralPacket(true); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
@@ -665,6 +681,7 @@ func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, wa
 		2 + // flags
 		2 // warnings
 	data := c.startEphemeralPacket(length)
+	defer c.endEphemeralPacket()
 	pos := 0
 	pos = writeByte(data, pos, OKPacket)
 	pos = writeLenEncInt(data, pos, affectedRows)
@@ -687,6 +704,7 @@ func (c *Conn) writeOKPacketWithEOFHeader(affectedRows, lastInsertID uint64, fla
 		2 + // flags
 		2 // warnings
 	data := c.startEphemeralPacket(length)
+	defer c.endEphemeralPacket()
 	pos := 0
 	pos = writeByte(data, pos, EOFPacket)
 	pos = writeLenEncInt(data, pos, affectedRows)
@@ -709,6 +727,7 @@ func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string
 	errorMessage := fmt.Sprintf(format, args...)
 	length := 1 + 2 + 1 + 5 + len(errorMessage)
 	data := c.startEphemeralPacket(length)
+	defer c.endEphemeralPacket()
 	pos := 0
 	pos = writeByte(data, pos, ErrPacket)
 	pos = writeUint16(data, pos, errorCode)
@@ -740,6 +759,7 @@ func (c *Conn) writeErrorPacketFromError(err error) error {
 func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
 	length := 5
 	data := c.startEphemeralPacket(length)
+	defer c.endEphemeralPacket()
 	pos := 0
 	pos = writeByte(data, pos, EOFPacket)
 	pos = writeUint16(data, pos, warnings)
