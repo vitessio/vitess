@@ -111,7 +111,7 @@ type QueryEngine struct {
 	// mu protects the following fields.
 	mu               sync.RWMutex
 	tables           map[string]*schema.Table
-	queries          *cache.LRUCache
+	plans            *cache.LRUCache
 	queryRuleSources *rules.Map
 
 	// Pools
@@ -160,7 +160,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 	qe := &QueryEngine{
 		se:               se,
 		tables:           make(map[string]*schema.Table),
-		queries:          cache.NewLRUCache(int64(config.QueryCacheSize)),
+		plans:            cache.NewLRUCache(int64(config.QueryPlanCacheSize)),
 		queryRuleSources: rules.NewMap(),
 	}
 
@@ -217,11 +217,11 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		stats.Publish("StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
 		stats.Publish("TableACLExemptCount", stats.IntFunc(qe.tableaclExemptCount.Get))
 
-		stats.Publish("QueryCacheLength", stats.IntFunc(qe.queries.Length))
-		stats.Publish("QueryCacheSize", stats.IntFunc(qe.queries.Size))
-		stats.Publish("QueryCacheCapacity", stats.IntFunc(qe.queries.Capacity))
+		stats.Publish("QueryCacheLength", stats.IntFunc(qe.plans.Length))
+		stats.Publish("QueryCacheSize", stats.IntFunc(qe.plans.Size))
+		stats.Publish("QueryCacheCapacity", stats.IntFunc(qe.plans.Capacity))
 		stats.Publish("QueryCacheOldest", stats.StringFunc(func() string {
-			return fmt.Sprintf("%v", qe.queries.Oldest())
+			return fmt.Sprintf("%v", qe.plans.Oldest())
 		}))
 		_ = stats.NewMultiCountersFunc("QueryCounts", []string{"Table", "Plan"}, qe.getQueryCount)
 		_ = stats.NewMultiCountersFunc("QueryTimesNs", []string{"Table", "Plan"}, qe.getQueryTime)
@@ -277,7 +277,7 @@ func (qe *QueryEngine) Open() error {
 func (qe *QueryEngine) Close() {
 	// Close in reverse order of Open.
 	qe.se.UnregisterNotifier("qe")
-	qe.queries.Clear()
+	qe.plans.Clear()
 	qe.tables = make(map[string]*schema.Table)
 	qe.streamConns.Close()
 	qe.conns.Close()
@@ -331,7 +331,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 		return plan, nil
 	}
 	if !skipQueryPlanCache {
-		qe.queries.Set(sql, plan)
+		qe.plans.Set(sql, plan)
 	}
 	return plan, nil
 }
@@ -367,7 +367,7 @@ func (qe *QueryEngine) GetMessageStreamPlan(name string) (*TabletPlan, error) {
 
 // ClearQueryPlanCache should be called if query plan cache is potentially obsolete
 func (qe *QueryEngine) ClearQueryPlanCache() {
-	qe.queries.Clear()
+	qe.plans.Clear()
 }
 
 // IsMySQLReachable returns true if we can connect to MySQL.
@@ -389,13 +389,13 @@ func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, a
 	defer qe.mu.Unlock()
 	qe.tables = tables
 	if len(altered) != 0 || len(dropped) != 0 {
-		qe.queries.Clear()
+		qe.plans.Clear()
 	}
 }
 
 // getQuery fetches the plan and makes it the most recent.
 func (qe *QueryEngine) getQuery(sql string) *TabletPlan {
-	if cacheResult, ok := qe.queries.Get(sql); ok {
+	if cacheResult, ok := qe.plans.Get(sql); ok {
 		return cacheResult.(*TabletPlan)
 	}
 	return nil
@@ -403,23 +403,23 @@ func (qe *QueryEngine) getQuery(sql string) *TabletPlan {
 
 // peekQuery fetches the plan without changing the LRU order.
 func (qe *QueryEngine) peekQuery(sql string) *TabletPlan {
-	if cacheResult, ok := qe.queries.Peek(sql); ok {
+	if cacheResult, ok := qe.plans.Peek(sql); ok {
 		return cacheResult.(*TabletPlan)
 	}
 	return nil
 }
 
-// SetQueryCacheCap sets the query cache capacity.
-func (qe *QueryEngine) SetQueryCacheCap(size int) {
+// SetQueryPlanCacheCap sets the query plan cache capacity.
+func (qe *QueryEngine) SetQueryPlanCacheCap(size int) {
 	if size <= 0 {
 		size = 1
 	}
-	qe.queries.SetCapacity(int64(size))
+	qe.plans.SetCapacity(int64(size))
 }
 
-// QueryCacheCap returns the capacity of the query cache.
-func (qe *QueryEngine) QueryCacheCap() int {
-	return int(qe.queries.Capacity())
+// QueryPlanCacheCap returns the capacity of the query cache.
+func (qe *QueryEngine) QueryPlanCacheCap() int {
+	return int(qe.plans.Capacity())
 }
 
 func (qe *QueryEngine) getQueryCount() map[string]int64 {
@@ -457,7 +457,7 @@ func (qe *QueryEngine) getQueryErrorCount() map[string]int64 {
 type queryStatsFunc func(*TabletPlan) int64
 
 func (qe *QueryEngine) getQueryStats(f queryStatsFunc) map[string]int64 {
-	keys := qe.queries.Keys()
+	keys := qe.plans.Keys()
 	qstats := make(map[string]int64)
 	for _, v := range keys {
 		if plan := qe.peekQuery(v); plan != nil {
@@ -504,7 +504,7 @@ func (qe *QueryEngine) ServeHTTP(response http.ResponseWriter, request *http.Req
 }
 
 func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, request *http.Request) {
-	keys := qe.queries.Keys()
+	keys := qe.plans.Keys()
 	response.Header().Set("Content-Type", "text/plain")
 	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
 	for _, v := range keys {
@@ -521,7 +521,7 @@ func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, reques
 }
 
 func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, request *http.Request) {
-	keys := qe.queries.Keys()
+	keys := qe.plans.Keys()
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
 	qstats := make([]perQueryStats, 0, len(keys))
 	for _, v := range keys {
