@@ -108,6 +108,7 @@ func (c *client) withRetry(ctx context.Context, f func() error) error {
 		}
 		if err := f(); err != nil {
 			if grpc.Code(err) == codes.Unavailable {
+				lastError = err
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
