@@ -2723,12 +2723,12 @@ func TestConfigChanges(t *testing.T) {
 		t.Errorf("tsv.te.txPool.Timeout: %v, want %v", val, newDuration)
 	}
 
-	tsv.SetQueryCacheCap(newSize)
-	if val := tsv.QueryCacheCap(); val != newSize {
-		t.Errorf("QueryCacheCap: %d, want %d", val, newSize)
+	tsv.SetQueryPlanCacheCap(newSize)
+	if val := tsv.QueryPlanCacheCap(); val != newSize {
+		t.Errorf("QueryPlanCacheCap: %d, want %d", val, newSize)
 	}
-	if val := int(tsv.qe.QueryCacheCap()); val != newSize {
-		t.Errorf("tsv.qe.QueryCacheCap: %d, want %d", val, newSize)
+	if val := int(tsv.qe.QueryPlanCacheCap()); val != newSize {
+		t.Errorf("tsv.qe.QueryPlanCacheCap: %d, want %d", val, newSize)
 	}
 
 	tsv.SetAutoCommit(true)

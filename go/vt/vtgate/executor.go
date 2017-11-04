@@ -79,14 +79,14 @@ type Executor struct {
 var executorOnce sync.Once
 
 // NewExecutor creates a new Executor.
-func NewExecutor(ctx context.Context, serv topo.SrvTopoServer, cell, statsName string, resolver *Resolver, normalize bool, streamSize int, queryCacheSize int64) *Executor {
+func NewExecutor(ctx context.Context, serv topo.SrvTopoServer, cell, statsName string, resolver *Resolver, normalize bool, streamSize int, queryPlanCacheSize int64) *Executor {
 	e := &Executor{
 		serv:        serv,
 		cell:        cell,
 		resolver:    resolver,
 		scatterConn: resolver.scatterConn,
 		txConn:      resolver.scatterConn.txConn,
-		plans:       cache.NewLRUCache(queryCacheSize),
+		plans:       cache.NewLRUCache(queryPlanCacheSize),
 		normalize:   normalize,
 		streamSize:  streamSize,
 	}

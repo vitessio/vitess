@@ -137,14 +137,14 @@ func queryzHandler(qe *QueryEngine, w http.ResponseWriter, r *http.Request) {
 	defer logz.EndHTMLTable(w)
 	w.Write(queryzHeader)
 
-	keys := qe.queries.Keys()
+	keys := qe.plans.Keys()
 	sorter := queryzSorter{
 		rows: make([]*queryzRow, 0, len(keys)),
 		less: func(row1, row2 *queryzRow) bool {
 			return row1.timePQ() > row2.timePQ()
 		},
 	}
-	for _, v := range qe.queries.Keys() {
+	for _, v := range qe.plans.Keys() {
 		plan := qe.peekQuery(v)
 		if plan == nil {
 			continue

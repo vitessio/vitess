@@ -461,7 +461,7 @@ There are other internal pools used by VTTablet that are not very consequential.
 
 The above three variables table acl stats broken out by table, plan and user.
 
-##### QueryCacheSize
+##### QueryPlanCacheSize
 
 If the application does not make good use of bind variables, this value would reach the QueryCacheCapacity. If so, inspecting the current query cache will give you a clue about where the misuse is happening.
 
