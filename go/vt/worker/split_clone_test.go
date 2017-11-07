@@ -1010,6 +1010,10 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 
 	// Wait for a retry due to NoMasterAvailable to happen, expect the 30th write
 	// on leftReplica and change leftReplica from REPLICA to MASTER.
+	//
+	// Reset the stats now. It also happens when the worker starts but that's too
+	// late because this Go routine looks at it and can run before the worker.
+	statsRetryCounters.Reset()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
