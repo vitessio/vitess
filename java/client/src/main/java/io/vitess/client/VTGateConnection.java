@@ -20,9 +20,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.util.concurrent.Futures.transformAsync;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 
-import com.google.common.util.concurrent.AsyncFunction;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
 import java.io.Closeable;
 import java.io.IOException;
 import java.sql.SQLDataException;
@@ -30,7 +27,12 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+
 import javax.annotation.Nullable;
+
+import com.google.common.util.concurrent.AsyncFunction;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
 
 import io.vitess.client.cursor.Cursor;
 import io.vitess.client.cursor.CursorWithError;
@@ -60,7 +62,7 @@ import io.vitess.proto.Vtgate.StreamExecuteRequest;
  * <p>All non-streaming calls on {@code VTGateConnection} are asynchronous. Use {@link VTGateBlockingConnection} if
  * you want synchronous calls.</p>
  */
-public final class VTGateConnection implements Closeable {
+public class VTGateConnection implements Closeable {
     private final RpcClient client;
     private SQLFuture<?> lastCall;
 
