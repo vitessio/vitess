@@ -105,7 +105,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 
 	// Create a Go RPC client connecting to the server
 	ctx := context.Background()
-	flag.Set("vtgate_grpc_static_auth_creds", f.Name())
+	flag.Set("grpc_auth_static_client_creds", f.Name())
 	client, err := dial(ctx, listener.Addr().String(), 30*time.Second)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
@@ -138,7 +138,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 
 	// Create a Go RPC client connecting to the server
 	ctx = context.Background()
-	flag.Set("vtgate_grpc_static_auth_creds", f.Name())
+	flag.Set("grpc_auth_static_client_creds", f.Name())
 	client, err = dial(ctx, listener.Addr().String(), 30*time.Second)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)

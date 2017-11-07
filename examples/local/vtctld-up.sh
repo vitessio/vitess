@@ -25,10 +25,10 @@ script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
 optional_auth_args=''
-if [ "$1" = "--enable-grpc-tablet-static-auth" ];
+if [ "$1" = "--enable-grpc-static-auth" ];
 then
 	  echo "Enabling Auth with static authentication in grpc"
-    optional_auth_args='-tablet_manager_grpc_static_auth_creds ./grpc_static_client_auth.json '
+    optional_auth_args='-grpc_auth_static_client_creds ./grpc_static_client_auth.json '
 fi
 
 echo "Starting vtctld..."

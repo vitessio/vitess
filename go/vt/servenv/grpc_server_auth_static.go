@@ -31,7 +31,7 @@ import (
 )
 
 var (
-	credsFile = flag.String("grpc_server_auth_static_file", "", "JSON File to read the users/passwords from.")
+	credsFile = flag.String("grpc_auth_static_password_file", "", "JSON File to read the users/passwords from.")
 	// StaticAuthPlugin implements AuthPlugin interface
 	_ AuthPlugin = (*StaticAuthPlugin)(nil)
 )

@@ -35,11 +35,10 @@ import (
 )
 
 var (
-	cert            = flag.String("vtworker_client_grpc_cert", "", "the cert to use to connect")
-	key             = flag.String("vtworker_client_grpc_key", "", "the key to use to connect")
-	ca              = flag.String("vtworker_client_grpc_ca", "", "the server ca to use to validate servers when connecting")
-	name            = flag.String("vtworker_client_grpc_server_name", "", "the server name to use to validate server certificate")
-	staticAuthCreds = flag.String("vtworker_grpc_static_auth_creds", "", "when using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server")
+	cert = flag.String("vtworker_client_grpc_cert", "", "the cert to use to connect")
+	key  = flag.String("vtworker_client_grpc_key", "", "the key to use to connect")
+	ca   = flag.String("vtworker_client_grpc_ca", "", "the server ca to use to validate servers when connecting")
+	name = flag.String("vtworker_client_grpc_server_name", "", "the server name to use to validate server certificate")
 )
 
 type gRPCVtworkerClient struct {
