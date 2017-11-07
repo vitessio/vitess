@@ -60,7 +60,7 @@ var (
 	GRPCCA = flag.String("grpc_ca", "", "ca to use, requires TLS, and enforces client cert check")
 
 	// GRPCAuth which auth plugin to use (at the moment now only static is supported)
-	GRPCAuth = flag.String("grpc_server_auth", "", "Which auth plugin implementation to use (eg: static)")
+	GRPCAuth = flag.String("grpc_auth_mode", "", "Which auth plugin implementation to use (eg: static)")
 
 	// GRPCServer is the global server to serve gRPC.
 	GRPCServer *grpc.Server

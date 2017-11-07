@@ -1011,7 +1011,7 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 
 	// create a connection
 	if clientCreds != nil {
-		flag.Set("tablet_grpc_static_auth_creds", clientCreds.Name())
+		flag.Set("grpc_auth_static_client_creds", clientCreds.Name())
 	}
 
 	conn, err := tabletconn.GetDialer()(tablet, grpcclient.FailFast(false))
