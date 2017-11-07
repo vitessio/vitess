@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"golang.org/x/net/context"
 
@@ -61,8 +62,10 @@ var (
 type explainTablet struct {
 	queryservice.QueryService
 
-	db            *fakesqldb.DB
-	tsv           *tabletserver.TabletServer
+	db  *fakesqldb.DB
+	tsv *tabletserver.TabletServer
+
+	mu            sync.Mutex
 	tabletQueries []*TabletQuery
 	mysqlQueries  []*MysqlQuery
 	currentTime   int
@@ -114,24 +117,32 @@ var _ queryservice.QueryService = (*explainTablet)(nil) // compile-time interfac
 
 // Begin is part of the QueryService interface.
 func (t *explainTablet) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, error) {
+	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
+	t.mu.Unlock()
+
 	return t.tsv.Begin(ctx, target, options)
 }
 
 // Commit is part of the QueryService interface.
 func (t *explainTablet) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
+	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
+	t.mu.Unlock()
 	return t.tsv.Commit(ctx, target, transactionID)
 }
 
 // Rollback is part of the QueryService interface.
 func (t *explainTablet) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
+	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
+	t.mu.Unlock()
 	return t.tsv.Rollback(ctx, target, transactionID)
 }
 
 // Execute is part of the QueryService interface.
 func (t *explainTablet) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
 
 	// Since the query is simulated being "sent" over the wire we need to
@@ -142,11 +153,14 @@ func (t *explainTablet) Execute(ctx context.Context, target *querypb.Target, sql
 		SQL:      sql,
 		BindVars: bindVariables,
 	})
+	t.mu.Unlock()
+
 	return t.tsv.Execute(ctx, target, sql, bindVariables, transactionID, options)
 }
 
 // BeginExecute is part of the QueryService interface.
 func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
+	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
 	bindVariables = sqltypes.CopyBindVariables(bindVariables)
 	t.tabletQueries = append(t.tabletQueries, &TabletQuery{
@@ -154,6 +168,8 @@ func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target
 		SQL:      sql,
 		BindVars: bindVariables,
 	})
+	t.mu.Unlock()
+
 	return t.tsv.BeginExecute(ctx, target, sql, bindVariables, options)
 }
 
@@ -286,6 +302,9 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 
 // HandleQuery implements the fakesqldb query handler interface
 func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	if !strings.Contains(query, "1 != 1") {
 		t.mysqlQueries = append(t.mysqlQueries, &MysqlQuery{
 			Time: t.currentTime,
