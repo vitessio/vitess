@@ -17,6 +17,8 @@
 # This is the script to build the vitess/lite Docker image by extracting
 # the pre-built binaries from a vitess/base image.
 
+set -ex
+
 # Parse command line arguments.
 prompt_notice=true
 if [[ "$1" == "--prompt"* ]]; then
@@ -73,7 +75,7 @@ fi
 mkdir base
 # Ignore permission errors. They occur for directories we do not care e.g. ".git".
 # (Copying them fails because they are owned by root and not $UID and have stricter permissions.)
-docker run -ti --rm -v $PWD/base:/base -u $UID $base_image bash -c 'cp -R /vt /base/ 2>&1 | grep -v "Permission denied"'
+docker run --rm -v $PWD/base:/base -u $UID $base_image bash -c 'cp -R /vt /base/ 2>&1 | grep -v "Permission denied"' || true
 
 # Grab only what we need
 lite=$PWD/lite
