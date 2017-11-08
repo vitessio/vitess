@@ -20,11 +20,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	// grpc doesn't return underlying errors. So, we have
-	// to rely on logs to know the root cause if a request
-	// fails.
-	_ "google.golang.org/grpc/grpclog/glogger"
-
 	"github.com/youtube/vitess/go/vt/grpccommon"
 	"github.com/youtube/vitess/go/vt/vttls"
 )
