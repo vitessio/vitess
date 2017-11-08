@@ -20,6 +20,7 @@ import (
 	"errors"
 	"reflect"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -219,9 +220,15 @@ func TestMessageManagerSend(t *testing.T) {
 	}
 
 	// Verify item has been removed from cache.
+	// Need to obtain lock to prevent data race.
+	mm.cache.mu.Lock()
 	if _, ok := mm.cache.inQueue["1"]; ok {
-		t.Error("Message 1 is still present in cache")
+		t.Error("Message 1 is still present in inQueue cache")
 	}
+	if _, ok := mm.cache.inFlight["1"]; ok {
+		t.Error("Message 1 is still present in inFlight cache")
+	}
+	mm.cache.mu.Unlock()
 
 	// Test that mm stops sending to a canceled receiver.
 	r2 := newTestReceiver(1)
@@ -739,7 +746,9 @@ func TestMMGenerate(t *testing.T) {
 type fakeTabletServer struct {
 	postponeCount sync2.AtomicInt64
 	purgeCount    sync2.AtomicInt64
-	ch            chan string
+
+	mu sync.Mutex
+	ch chan string
 }
 
 func newFakeTabletServer() *fakeTabletServer { return &fakeTabletServer{} }
@@ -747,21 +756,29 @@ func newFakeTabletServer() *fakeTabletServer { return &fakeTabletServer{} }
 func (fts *fakeTabletServer) CheckMySQL() {}
 
 func (fts *fakeTabletServer) SetChannel(ch chan string) {
+	fts.mu.Lock()
 	fts.ch = ch
+	fts.mu.Unlock()
 }
 
 func (fts *fakeTabletServer) PostponeMessages(ctx context.Context, target *querypb.Target, name string, ids []string) (count int64, err error) {
 	fts.postponeCount.Add(1)
-	if fts.ch != nil {
-		fts.ch <- "postpone"
+	fts.mu.Lock()
+	ch := fts.ch
+	fts.mu.Unlock()
+	if ch != nil {
+		ch <- "postpone"
 	}
 	return 0, nil
 }
 
 func (fts *fakeTabletServer) PurgeMessages(ctx context.Context, target *querypb.Target, name string, timeCutoff int64) (count int64, err error) {
 	fts.purgeCount.Add(1)
-	if fts.ch != nil {
-		fts.ch <- "purge"
+	fts.mu.Lock()
+	ch := fts.ch
+	fts.mu.Unlock()
+	if ch != nil {
+		ch <- "purge"
 	}
 	return 0, nil
 }

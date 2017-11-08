@@ -80,10 +80,6 @@ unit_test: build
 unit_test_cover: build
 	go test $(VT_GO_PARALLEL) -cover ./go/... | misc/parse_cover.py
 
-# TODO(mberlin): This is currently disabled in test/config.json for automatic
-# runs on Travis (manual=false). Re-enable it there once we switched the Travis
-# tests to using Docker and we verified that this is no longer flaky e.g. in
-# doubt increase timeouts in all tests.
 unit_test_race: build
 	tools/unit_test_race.sh
 
