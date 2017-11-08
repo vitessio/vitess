@@ -1,10 +1,12 @@
 <?php
 namespace Vitess;
 
+use PHPUnit\Framework\TestCase;
+
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/TestUtils.php';
 
-class ProtoUtilsTest extends \PHPUnit_Framework_TestCase
+class ProtoUtilsTest extends TestCase
 {
 
     public function testBoundQuery()
