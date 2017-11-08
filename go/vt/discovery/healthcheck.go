@@ -37,28 +37,29 @@ limitations under the License.
 package discovery
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"html/template"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"bytes"
-	"encoding/json"
-	"net/http"
-
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletconn"
-	"golang.org/x/net/context"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -408,6 +409,7 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 	}
 	hc.initialUpdatesWG.Done()
 
+	retryDelay := hc.retryDelay
 	for {
 		ctx, cancel := context.WithCancel(hcc.ctx)
 		hcc.mu.Lock()
@@ -416,6 +418,8 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 
 		// Read stream health responses.
 		hcc.stream(ctx, hc, func(shr *querypb.StreamHealthResponse) error {
+			// We received a message. Reset the back-off.
+			retryDelay = hc.retryDelay
 			return hcc.processResponse(hc, shr)
 		})
 
@@ -424,7 +428,9 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 		select {
 		case <-hcc.ctx.Done():
 			return
-		case <-time.After(hc.retryDelay):
+		case <-time.After(retryDelay):
+			// Exponentially back-off to prevent tight-loop.
+			retryDelay *= 2
 		}
 	}
 }
