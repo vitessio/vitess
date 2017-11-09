@@ -26,6 +26,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     virtualenv \
     unzip \
     xvfb \
+    zip \
     # gRPC PHP requirements \
     libz-dev \
     php-pear \
