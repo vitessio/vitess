@@ -347,7 +347,13 @@ func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wa
 	r, err := txc.DBConn.ExecOnce(ctx, query, maxrows, wantfields)
 	if err != nil {
 		if mysql.IsConnErr(err) {
-			txc.pool.checker.CheckMySQL()
+			select {
+			case <-ctx.Done():
+				// If the context is done, the query was killed.
+				// So, don't trigger a mysql check.
+			default:
+				txc.pool.checker.CheckMySQL()
+			}
 		}
 		return nil, err
 	}

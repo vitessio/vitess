@@ -38,7 +38,7 @@ type QueryDetail struct {
 type killable interface {
 	Current() string
 	ID() int64
-	Kill(string) error
+	Kill(message string, startTime time.Duration) error
 }
 
 // NewQueryDetail creates a new QueryDetail
@@ -79,7 +79,7 @@ func (ql *QueryList) Terminate(connID int64) error {
 	if qd == nil {
 		return fmt.Errorf("query %v not found", connID)
 	}
-	qd.conn.Kill("QueryList.Terminate()")
+	qd.conn.Kill("QueryList.Terminate()", time.Since(qd.start))
 	return nil
 }
 
@@ -88,7 +88,7 @@ func (ql *QueryList) TerminateAll() {
 	ql.mu.Lock()
 	defer ql.mu.Unlock()
 	for _, qd := range ql.queryDetails {
-		qd.conn.Kill("QueryList.TerminateAll()")
+		qd.conn.Kill("QueryList.TerminateAll()", time.Since(qd.start))
 	}
 }
 
