@@ -67,6 +67,7 @@ public class ConnectionPropertiesTest {
         Assert.assertEquals("tabletType", Constants.DEFAULT_TABLET_TYPE, props.getTabletType());
         Assert.assertEquals("useSSL", false, props.getUseSSL());
         Assert.assertEquals("useAffectedRows", true, props.getUseAffectedRows());
+        Assert.assertEquals("refreshSSLConnectionsOnCertFileModification", true, props.getRefreshSSLConnectionsOnCertFileModification());
     }
 
     @Test
