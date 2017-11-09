@@ -23,14 +23,16 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"golang.org/x/net/context"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // BinlogFormat is used for for specifying the binlog format.
@@ -95,23 +97,26 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 		r, err := dbc.execOnce(ctx, query, maxrows, wantfields)
 		switch {
 		case err == nil:
+			// Success.
 			return r, nil
 		case !mysql.IsConnErr(err):
-			// MySQL error that isn't due to a connection issue
+			// Not a connection error. Don't retry.
 			return nil, err
 		case attempt == 2:
-			// If the MySQL connection is bad, we assume that there is nothing wrong with
-			// the query itself, and retrying it might succeed. The MySQL connection might
-			// fix itself, or the query could succeed on a different VtTablet.
+			// Reached the retry limit.
 			return nil, err
 		}
 
-		// Connection error. Try to reconnect.
+		// Connection error. Retry if context has not expired.
+		select {
+		case <-ctx.Done():
+			return nil, err
+		default:
+		}
+
 		if reconnectErr := dbc.reconnect(); reconnectErr != nil {
-			// Reconnect failed.
 			dbc.pool.checker.CheckMySQL()
 			// Return the error of the reconnect and not the original connection error.
-			// NOTE: We return a tryable error code here.
 			return nil, reconnectErr
 		}
 
@@ -147,8 +152,8 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 	span.StartClient("DBConn.Stream")
 	defer span.Finish()
 
+	resultSent := false
 	for attempt := 1; attempt <= 2; attempt++ {
-		resultSent := false
 		err := dbc.streamOnce(
 			ctx,
 			query,
@@ -163,15 +168,29 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 		)
 		switch {
 		case err == nil:
+			// Success.
 			return nil
-		case !mysql.IsConnErr(err) || resultSent || attempt == 2:
-			// MySQL error that isn't due to a connection issue
+		case !mysql.IsConnErr(err):
+			// Not a connection error. Don't retry.
+			return err
+		case attempt == 2:
+			// Reached the retry limit.
+			return err
+		case resultSent:
+			// Don't retry if streaming has started.
 			return err
 		}
-		err2 := dbc.reconnect()
-		if err2 != nil {
-			dbc.pool.checker.CheckMySQL()
+
+		// Connection error. Retry if context has not expired.
+		select {
+		case <-ctx.Done():
 			return err
+		default:
+		}
+		if reconnectErr := dbc.reconnect(); reconnectErr != nil {
+			dbc.pool.checker.CheckMySQL()
+			// Return the error of the reconnect and not the original connection error.
+			return reconnectErr
 		}
 	}
 	panic("unreachable")
@@ -269,9 +288,9 @@ func (dbc *DBConn) Recycle() {
 // Kill kills the currently executing query both on MySQL side
 // and on the connection side. If no query is executing, it's a no-op.
 // Kill will also not kill a query more than once.
-func (dbc *DBConn) Kill(reason string) error {
+func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 	tabletenv.KillStats.Add("Queries", 1)
-	log.Infof("Due to %s, killing query %s", reason, dbc.Current())
+	log.Infof("Due to %s, elapsed time: %v, killing query %s", reason, elapsed, dbc.Current())
 	killConn, err := dbc.pool.dbaPool.Get(context.TODO())
 	if err != nil {
 		log.Warningf("Failed to get conn from dba pool: %v", err)
@@ -323,7 +342,7 @@ func (dbc *DBConn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup)
 		startTime := time.Now()
 		select {
 		case <-ctx.Done():
-			dbc.Kill(ctx.Err().Error())
+			dbc.Kill(ctx.Err().Error(), time.Since(startTime))
 		case <-done:
 			return
 		}

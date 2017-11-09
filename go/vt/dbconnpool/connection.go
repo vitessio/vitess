@@ -37,13 +37,8 @@ type DBConnection struct {
 }
 
 func (dbc *DBConnection) handleError(err error) {
-	if sqlErr, ok := err.(*mysql.SQLError); ok {
-		if sqlErr.Number() >= 2000 && sqlErr.Number() <= 2018 { // mysql connection errors
-			dbc.Close()
-		}
-		if sqlErr.Number() == 1317 { // Query was interrupted
-			dbc.Close()
-		}
+	if mysql.IsConnErr(err) {
+		dbc.Close()
 	}
 }
 
@@ -86,6 +81,7 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 	for {
 		row, err := dbc.FetchNext()
 		if err != nil {
+			dbc.handleError(err)
 			return err
 		}
 		if row == nil {
