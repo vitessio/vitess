@@ -420,9 +420,10 @@ const (
 	ERIllegalReference             = 1247
 	ERDerivedMustHaveAlias         = 1248
 	ERTableNameNotAllowedHere      = 1250
+	ERQueryInterrupted             = 1317
+	ERTruncatedWrongValueForField  = 1366
 	ERDataTooLong                  = 1406
 	ERDataOutOfRange               = 1690
-	ERTruncatedWrongValueForField  = 1366
 )
 
 // Sql states for errors.
@@ -542,14 +543,7 @@ func IsNum(typ uint8) bool {
 func IsConnErr(err error) bool {
 	if sqlErr, ok := err.(*SQLError); ok {
 		num := sqlErr.Number()
-		// ServerLost means that the query has already been
-		// received by MySQL and may have already been executed.
-		// Since we don't know if the query is idempotent, we don't
-		// count this error as connection error which could be retried.
-		if num == CRServerLost {
-			return false
-		}
-		return num >= CRUnknownError && num <= CRNamedPipeStateError
+		return (num >= CRUnknownError && num <= CRNamedPipeStateError) || num == ERQueryInterrupted
 	}
 	return false
 }
