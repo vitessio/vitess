@@ -38,6 +38,8 @@ var (
 
 // assertSQLError makes sure we get the right error.
 func assertSQLError(t *testing.T, err error, code int, sqlState string, subtext string, query string) {
+	t.Helper()
+
 	if err == nil {
 		t.Fatalf("was expecting SQLError %v / %v / %v but got no error.", code, sqlState, subtext)
 	}
