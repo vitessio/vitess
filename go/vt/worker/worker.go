@@ -51,7 +51,7 @@ var (
 	retryDuration         = flag.Duration("retry_duration", 2*time.Hour, "Amount of time we wait before giving up on a retryable action (e.g. write to destination, waiting for healthy tablets)")
 	executeFetchRetryTime = flag.Duration("executefetch_retry_time", 30*time.Second, "Amount of time we should wait before retrying ExecuteFetch calls")
 	remoteActionsTimeout  = flag.Duration("remote_actions_timeout", time.Minute, "Amount of time to wait for remote actions (like replication stop, ...)")
-	useV3ReshardingMode   = flag.Bool("use_v3_resharding_mode", false, "True iff the workers should use V3-style resharding, which doesn't require a preset sharding key column.")
+	useV3ReshardingMode   = flag.Bool("use_v3_resharding_mode", true, "True iff the workers should use V3-style resharding, which doesn't require a preset sharding key column.")
 
 	healthCheckTopologyRefresh = flag.Duration("worker_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology")
 	healthcheckRetryDelay      = flag.Duration("worker_healthcheck_retry_delay", 5*time.Second, "delay before retrying a failed healthcheck")

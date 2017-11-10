@@ -106,6 +106,7 @@ def setUpModule():
     # both have the full keyrange. Happens to work correctly).
     logging.debug('Running the clone worker to start binlog stream...')
     utils.run_vtworker(['--cell', 'test_nj',
+                        '--use_v3_resharding_mode=false',
                         'SplitClone',
                         '--chunk_count', '10',
                         '--min_rows_per_chunk', '1',
