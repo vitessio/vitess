@@ -209,7 +209,8 @@ index by_msg (msg)
               shard_1_master, shard_1_replica, shard_1_rdonly,
               shard_2_master, shard_2_replica, shard_2_rdonly]:
       t.create_db('vt_test_keyspace')
-      t.start_vttablet(wait_for_state=None)
+      t.start_vttablet(wait_for_state=None,
+                       binlog_use_v3_resharding_mode=False)
 
     # won't be serving, no replication state
     for t in [shard_0_master, shard_0_replica, shard_0_rdonly,
@@ -244,7 +245,8 @@ index by_msg (msg)
     # start vttablet on the destination shard (no db created,
     # so they're all not serving)
     for t in [shard_dest_master, shard_dest_replica, shard_dest_rdonly]:
-      t.start_vttablet(wait_for_state=None)
+      t.start_vttablet(wait_for_state=None,
+                       binlog_use_v3_resharding_mode=False)
     for t in [shard_dest_master, shard_dest_replica, shard_dest_rdonly]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
@@ -268,7 +270,8 @@ index by_msg (msg)
     # copy the data (will also start filtered replication), reset source
     # Run vtworker as daemon for the following SplitClone commands.
     worker_proc, worker_port, worker_rpc_port = utils.run_vtworker_bg(
-        ['--cell', 'test_nj', '--command_display_interval', '10ms'],
+        ['--cell', 'test_nj', '--command_display_interval', '10ms',
+          '--use_v3_resharding_mode=false'],
         auto_log=True)
 
     # Initial clone (online).
@@ -358,7 +361,9 @@ index by_msg (msg)
     # rdonly tablets so discovery works)
     utils.run_vtctl(['RunHealthCheck', shard_dest_rdonly.tablet_alias])
     logging.debug('Running vtworker SplitDiff on first half')
-    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
+    utils.run_vtworker(['-cell', 'test_nj',
+                        '--use_v3_resharding_mode=false',
+                        'SplitDiff',
                         '--exclude_tables', 'unrelated',
                         '--min_healthy_rdonly_tablets', '1',
                         '--source_uid', '0',
@@ -369,7 +374,9 @@ index by_msg (msg)
     utils.run_vtctl(['ChangeSlaveType', shard_dest_rdonly.tablet_alias,
                      'rdonly'], auto_log=True)
     logging.debug('Running vtworker SplitDiff on second half')
-    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
+    utils.run_vtworker(['-cell', 'test_nj',
+                        '--use_v3_resharding_mode=false',
+                        'SplitDiff',
                         '--exclude_tables', 'unrelated',
                         '--min_healthy_rdonly_tablets', '1',
                         '--source_uid', '1',

@@ -415,6 +415,7 @@ msg varchar(64)
 
     utils.run_vtworker(['--cell', 'test_nj',
                         '--command_display_interval', '10ms',
+                        '--use_v3_resharding_mode=false',
                         'VerticalSplitClone',
                         '--tables', '/moving/,view1',
                         '--chunk_count', '10',
@@ -455,7 +456,9 @@ msg varchar(64)
 
     # use vtworker to compare the data
     logging.debug('Running vtworker VerticalSplitDiff')
-    utils.run_vtworker(['-cell', 'test_nj', 'VerticalSplitDiff',
+    utils.run_vtworker(['-cell', 'test_nj',
+                        '--use_v3_resharding_mode=false',
+                        'VerticalSplitDiff',
                         '--min_healthy_rdonly_tablets', '1',
                         'destination_keyspace/0'], auto_log=True)
 
