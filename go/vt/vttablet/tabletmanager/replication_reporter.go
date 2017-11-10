@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/health"
+	"vitess.io/vitess/go/vt/mysqlctl"
 )
 
 var (
@@ -112,6 +113,9 @@ func repairReplication(ctx context.Context, agent *ActionAgent) error {
 	}
 	if !si.HasMaster() {
 		return fmt.Errorf("no master tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
+	}
+	if *mysqlctl.DisableActiveReparents {
+		return agent.StartSlave(ctx)
 	}
 	return agent.setMasterLocked(ctx, si.MasterAlias, 0, true)
 }
