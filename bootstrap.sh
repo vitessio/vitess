@@ -67,7 +67,7 @@ fi
 ln -snf $protoc_dist/bin/protoc $VTROOT/bin/protoc
 
 # install zookeeper
-zk_ver=3.4.6
+zk_ver=3.4.11
 zk_dist=$VTROOT/dist/vt-zookeeper-$zk_ver
 if [ -f $zk_dist/.build_finished ]; then
   echo "skipping zookeeper build. remove $zk_dist to force rebuild."
