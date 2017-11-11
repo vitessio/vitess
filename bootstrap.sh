@@ -67,7 +67,8 @@ fi
 ln -snf $protoc_dist/bin/protoc $VTROOT/bin/protoc
 
 # install zookeeper
-zk_ver=3.4.6
+# TODO(sougou): when version changes, see if we can drop the 'zip -d' hack to get the fatjars working.
+zk_ver=3.4.10
 zk_dist=$VTROOT/dist/vt-zookeeper-$zk_ver
 if [ -f $zk_dist/.build_finished ]; then
   echo "skipping zookeeper build. remove $zk_dist to force rebuild."
@@ -78,6 +79,7 @@ else
     tar -xzf zookeeper-$zk_ver.tar.gz && \
     mkdir -p $zk_dist/lib && \
     cp zookeeper-$zk_ver/contrib/fatjar/zookeeper-$zk_ver-fatjar.jar $zk_dist/lib && \
+    zip -d $zk_dist/lib/zookeeper-$zk_ver-fatjar.jar 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*SF' && \
     rm -rf zookeeper-$zk_ver zookeeper-$zk_ver.tar.gz)
   [ $? -eq 0 ] || fail "zookeeper build failed"
   touch $zk_dist/.build_finished
