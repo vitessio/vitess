@@ -352,7 +352,7 @@ func (scw *SplitCloneWorker) StatusAsText() string {
 	switch state {
 	case WorkerStateCloneOnline:
 		result += "Running:\n"
-		result += "Copying from: " + scw.formatOnlineSources() + "\n"
+		result += "Comparing source and destination using: " + scw.formatOnlineSources() + "\n"
 		statuses, eta := scw.tableStatusListOnline.format()
 		result += "ETA: " + eta.String() + "\n"
 		result += strings.Join(statuses, "\n")
