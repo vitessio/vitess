@@ -2142,12 +2142,12 @@ func (node *UnaryExpr) WalkSubtree(visit Visit) error {
 // IntervalExpr represents a date-time INTERVAL expression.
 type IntervalExpr struct {
 	Expr Expr
-	Unit ColIdent
+	Unit string
 }
 
 // Format formats the node.
 func (node *IntervalExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("interval %v %v", node.Expr, node.Unit)
+	buf.Myprintf("interval %v %s", node.Expr, node.Unit)
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -2158,7 +2158,6 @@ func (node *IntervalExpr) WalkSubtree(visit Visit) error {
 	return Walk(
 		visit,
 		node.Expr,
-		node.Unit,
 	)
 }
 
