@@ -71,6 +71,12 @@ END
   read
 fi
 
+# cleanup both temporary folders when exiting, even in case of errors
+function cleanup {
+  rm -rf $PWD/base $PWD/lite
+}
+trap cleanup EXIT
+
 # Extract files from vitess/base image
 mkdir base
 # Ignore permission errors. They occur for directories we do not care e.g. ".git".
@@ -94,13 +100,11 @@ mkdir -p $lite/$vttop/config
 cp -R base/$vttop/config/* $lite/$vttop/config/
 ln -s /$vttop/config $lite/vt/config
 
-rm -rf base
+# remove the base folder now -- not needed for the final build
+rm -rf $PWD/base
 
 # Fix permissions for AUFS workaround
 chmod -R o=g lite
 
 # Build vitess/lite image
 docker build --no-cache -f $dockerfile -t $lite_image .
-
-# Clean up temporary files
-rm -rf lite
