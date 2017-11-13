@@ -107,6 +107,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/flagutil"
+	"github.com/youtube/vitess/go/json2"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
@@ -2078,7 +2079,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		schema = []byte(*vschema)
 	}
 	var vs vschemapb.Keyspace
-	err := json.Unmarshal(schema, &vs)
+	err := json2.Unmarshal(schema, &vs)
 	if err != nil {
 		return err
 	}
