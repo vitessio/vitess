@@ -142,6 +142,7 @@ func TestToSQLStrings(t *testing.T) {
 }
 
 func testDiff(t *testing.T, left, right *tabletmanagerdatapb.SchemaDefinition, leftName, rightName string, expected []string) {
+	t.Helper()
 
 	actual := DiffSchemaToArray(leftName, left, rightName, right)
 
@@ -219,7 +220,7 @@ func TestSchemaDiff(t *testing.T) {
 	testDiff(t, nil, nil, "sd1", "sd2", nil)
 
 	testDiff(t, sd1, nil, "sd1", "sd2", []string{
-		fmt.Sprintf("sd1 and sd2 are different, sd1: %v, sd2: <nil>", sd1),
+		fmt.Sprintf("schemas are different:\nsd1: %v, sd2: <nil>", sd1),
 	})
 
 	testDiff(t, sd1, sd3, "sd1", "sd3", []string{
@@ -239,12 +240,12 @@ func TestSchemaDiff(t *testing.T) {
 	})
 
 	testDiff(t, sd4, sd5, "sd4", "sd5", []string{
-		fmt.Sprintf("sd4 and sd5 disagree on table type for table table2:\nVIEW\n differs from:\nBASE TABLE"),
+		fmt.Sprintf("schemas differ on table type for table table2:\nsd4: VIEW\n differs from:\nsd5: BASE TABLE"),
 	})
 
 	sd1.DatabaseSchema = "CREATE DATABASE {{.DatabaseName}}"
 	sd2.DatabaseSchema = "DONT CREATE DATABASE {{.DatabaseName}}"
-	testDiff(t, sd1, sd2, "sd1", "sd2", []string{"sd1 and sd2 don't agree on database creation command:\nCREATE DATABASE {{.DatabaseName}}\n differs from:\nDONT CREATE DATABASE {{.DatabaseName}}", "sd1 has an extra table named table1", "sd1 has an extra table named table2"})
+	testDiff(t, sd1, sd2, "sd1", "sd2", []string{"schemas are different:\nsd1: CREATE DATABASE {{.DatabaseName}}\n differs from:\nsd2: DONT CREATE DATABASE {{.DatabaseName}}", "sd1 has an extra table named table1", "sd1 has an extra table named table2"})
 	sd2.DatabaseSchema = "CREATE DATABASE {{.DatabaseName}}"
 	testDiff(t, sd2, sd1, "sd2", "sd1", []string{"sd1 has an extra table named table1", "sd1 has an extra table named table2"})
 
@@ -252,7 +253,7 @@ func TestSchemaDiff(t *testing.T) {
 	testDiff(t, sd1, sd2, "sd1", "sd2", []string{"sd1 has an extra table named table2"})
 
 	sd2.TableDefinitions = append(sd2.TableDefinitions, &tabletmanagerdatapb.TableDefinition{Name: "table2", Schema: "schema3", Type: TableBaseTable})
-	testDiff(t, sd1, sd2, "sd1", "sd2", []string{"sd1 and sd2 disagree on schema for table table2:\nschema2\n differs from:\nschema3"})
+	testDiff(t, sd1, sd2, "sd1", "sd2", []string{"schemas differ on table table2:\nsd1: schema2\n differs from:\nsd2: schema3"})
 }
 
 func TestFilterTables(t *testing.T) {
