@@ -160,10 +160,8 @@ class TestSharded(unittest.TestCase):
     utils.run_vtctl(['ValidateSchemaShard', 'test_keyspace/80-'])
     _, err = utils.run_vtctl(['ValidateSchemaKeyspace', 'test_keyspace'],
                              trap_output=True, raise_on_error=False)
-    if ('test_nj-0000062344 and test_nj-0000062346 disagree on schema '
-        'for table vt_select_test:\nCREATE TABLE' not in err or
-        'test_nj-0000062344 and test_nj-0000062347 disagree on schema '
-        'for table vt_select_test:\nCREATE TABLE' not in err):
+    if ('schemas differ on table vt_select_test:\n'
+        'test_nj-0000062344: CREATE TABLE' not in err):
       self.fail('wrong ValidateSchemaKeyspace output: ' + err)
 
     # validate versions
