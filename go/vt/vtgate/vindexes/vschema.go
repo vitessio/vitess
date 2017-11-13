@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/youtube/vitess/go/json2"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
@@ -348,7 +349,7 @@ func LoadFormal(filename string) (*vschemapb.SrvVSchema, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = json.Unmarshal(data, formal)
+	err = json2.Unmarshal(data, formal)
 	if err != nil {
 		return nil, err
 	}
@@ -366,7 +367,7 @@ func LoadFormalKeyspace(filename string) (*vschemapb.Keyspace, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = json.Unmarshal(data, formal)
+	err = json2.Unmarshal(data, formal)
 	if err != nil {
 		return nil, err
 	}
