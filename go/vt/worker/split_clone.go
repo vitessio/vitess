@@ -944,7 +944,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					// Wait for enough healthy tablets (they might have become unhealthy
 					// and their replication lag might have increased since we started.)
 					if err := scw.waitForTablets(ctx, scw.sourceShards, *retryDuration); err != nil {
-						processError("%v: No healthy source tablets found (gave up after %v): %v", errPrefix, *retryDuration, err)
+						processError("%v: No healthy source tablets found (gave up after %v): %v", errPrefix, time.Since(start), err)
 						return
 					}
 				}
@@ -980,7 +980,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				// and their replication lag might have increased due to a previous
 				// chunk pipeline.)
 				if err := scw.waitForTablets(ctx, scw.destinationShards, *retryDuration); err != nil {
-					processError("%v: No healthy destination tablets found (gave up after %v): ", errPrefix, *retryDuration, err)
+					processError("%v: No healthy destination tablets found (gave up after %v): ", errPrefix, time.Since(start), err)
 					return
 				}
 
