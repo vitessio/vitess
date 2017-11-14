@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
@@ -40,36 +39,34 @@ var (
 )
 
 func init() {
-	servenv.OnRun(func() {
-		if *DisableActiveReparents {
-			return
-		}
+	addCommand("Tablets", command{
+		"ReparentTablet",
+		commandReparentTablet,
+		"<tablet alias>",
+		"Reparent a tablet to the current master in the shard. This only works if the current slave position matches the last known reparent action."})
 
-		addCommand("Tablets", command{
-			"ReparentTablet",
-			commandReparentTablet,
-			"<tablet alias>",
-			"Reparent a tablet to the current master in the shard. This only works if the current slave position matches the last known reparent action."})
-
-		addCommand("Shards", command{
-			"InitShardMaster",
-			commandInitShardMaster,
-			"[-force] [-wait_slave_timeout=<duration>] <keyspace/shard> <tablet alias>",
-			"Sets the initial master for a shard. Will make all other tablets in the shard slaves of the provided master. WARNING: this could cause data loss on an already replicating shard. PlannedReparentShard or EmergencyReparentShard should be used instead."})
-		addCommand("Shards", command{
-			"PlannedReparentShard",
-			commandPlannedReparentShard,
-			"-keyspace_shard=<keyspace/shard> [-new_master=<tablet alias>] [-avoid_master=<tablet alias>]",
-			"Reparents the shard to the new master, or away from old master. Both old and new master need to be up and running."})
-		addCommand("Shards", command{
-			"EmergencyReparentShard",
-			commandEmergencyReparentShard,
-			"-keyspace_shard=<keyspace/shard> -new_master=<tablet alias>",
-			"Reparents the shard to the new master. Assumes the old master is dead and not responsding."})
-	})
+	addCommand("Shards", command{
+		"InitShardMaster",
+		commandInitShardMaster,
+		"[-force] [-wait_slave_timeout=<duration>] <keyspace/shard> <tablet alias>",
+		"Sets the initial master for a shard. Will make all other tablets in the shard slaves of the provided master. WARNING: this could cause data loss on an already replicating shard. PlannedReparentShard or EmergencyReparentShard should be used instead."})
+	addCommand("Shards", command{
+		"PlannedReparentShard",
+		commandPlannedReparentShard,
+		"-keyspace_shard=<keyspace/shard> [-new_master=<tablet alias>] [-avoid_master=<tablet alias>]",
+		"Reparents the shard to the new master, or away from old master. Both old and new master need to be up and running."})
+	addCommand("Shards", command{
+		"EmergencyReparentShard",
+		commandEmergencyReparentShard,
+		"-keyspace_shard=<keyspace/shard> -new_master=<tablet alias>",
+		"Reparents the shard to the new master. Assumes the old master is dead and not responsding."})
 }
 
 func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if *DisableActiveReparents {
+		return fmt.Errorf("active reparent commands disabled")
+	}
+
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -84,6 +81,10 @@ func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 }
 
 func commandInitShardMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if *DisableActiveReparents {
+		return fmt.Errorf("active reparent commands disabled")
+	}
+
 	force := subFlags.Bool("force", false, "will force the reparent even if the provided tablet is not a master or the shard master")
 	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "time to wait for slaves to catch up in reparenting")
 	if err := subFlags.Parse(args); err != nil {
@@ -104,6 +105,10 @@ func commandInitShardMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags
 }
 
 func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if *DisableActiveReparents {
+		return fmt.Errorf("active reparent commands disabled")
+	}
+
 	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "time to wait for slaves to catch up in reparenting")
 	keyspaceShard := subFlags.String("keyspace_shard", "", "keyspace/shard of the shard that needs to be reparented")
 	newMaster := subFlags.String("new_master", "", "alias of a tablet that should be the new master")
@@ -143,6 +148,10 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 }
 
 func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if *DisableActiveReparents {
+		return fmt.Errorf("active reparent commands disabled")
+	}
+
 	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "time to wait for slaves to catch up in reparenting")
 	keyspaceShard := subFlags.String("keyspace_shard", "", "keyspace/shard of the shard that needs to be reparented")
 	newMaster := subFlags.String("new_master", "", "alias of a tablet that should be the new master")
