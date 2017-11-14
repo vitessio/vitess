@@ -56,9 +56,6 @@ thread_cache_size = 200
 tmpdir = {{.TmpDir}}
 tmp_table_size = 32M
 transaction-isolation = REPEATABLE-READ
-# READ-COMMITTED would be better, but mysql 5.1 disables this with statement based replication
-# READ-UNCOMMITTED might be better
-lower_case_table_names = 1
 
 # Semi-sync replication is required for automated unplanned failover
 # (when the master goes away). Here we just load the plugin so it's
