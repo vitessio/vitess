@@ -472,6 +472,7 @@ class Tablet(object):
       # TODO(mberlin): Assign the index automatically and remove this parameter.
       tablet_index=None,
       init_db_name_override=None,
+      binlog_use_v3_resharding_mode=True,
       supports_backups=True, grace_period='1s', enable_semi_sync=True):
     # pylint: disable=g-doc-args
     """Starts a vttablet process, and returns it.
@@ -560,6 +561,10 @@ class Tablet(object):
         args.extend(['-init_db_name_override', init_db_name_override])
       else:
         self.dbname = 'vt_' + init_keyspace
+
+    # Default value for this flag is True. So, add it only if it's false.
+    if not binlog_use_v3_resharding_mode:
+      args.extend(['-binlog_use_v3_resharding_mode=false'])
 
     if supports_backups:
       args.extend(['-restore_from_backup'] + get_backup_storage_flags())

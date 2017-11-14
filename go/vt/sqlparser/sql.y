@@ -1712,7 +1712,7 @@ value_expression:
     // as a function. If support is needed for that,
     // we'll need to revisit this. The solution
     // will be non-trivial because of grammar conflicts.
-    $$ = &IntervalExpr{Expr: $2, Unit: $3}
+    $$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
   }
 | function_call_generic
 | function_call_keyword

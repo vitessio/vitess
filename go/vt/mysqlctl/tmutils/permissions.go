@@ -184,7 +184,7 @@ func diffPermissions(name, leftName string, left permissionList, rightName strin
 
 		// same name, let's see content
 		if lval != rval {
-			er.RecordError(fmt.Errorf("%v and %v disagree on %v %v:\n%v\n differs from:\n%v", leftName, rightName, name, lpk, lval, rval))
+			er.RecordError(fmt.Errorf("permissions differ on %v %v:\n%s: %v\n differs from:\n%s: %v", name, lpk, leftName, lval, rightName, rval))
 		}
 		leftIndex++
 		rightIndex++

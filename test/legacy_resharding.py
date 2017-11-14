@@ -285,7 +285,8 @@ primary key (name)
               shard_1_master, shard_1_slave1, shard_1_slave2, shard_1_ny_rdonly,
               shard_1_rdonly1]:
       t.create_db('vt_test_keyspace')
-      t.start_vttablet(wait_for_state=None, full_mycnf_args=full_mycnf_args)
+      t.start_vttablet(wait_for_state=None, full_mycnf_args=full_mycnf_args,
+                       binlog_use_v3_resharding_mode=False)
 
     # wait for the tablets (replication is not setup, they won't be healthy)
     for t in [shard_0_master, shard_0_replica, shard_0_ny_rdonly,
@@ -326,11 +327,14 @@ primary key (name)
 
     # start vttablet on the split shards (no db created,
     # so they're all not serving)
-    shard_2_master.start_vttablet(wait_for_state=None)
-    shard_3_master.start_vttablet(wait_for_state=None)
+    shard_2_master.start_vttablet(wait_for_state=None,
+                                  binlog_use_v3_resharding_mode=False)
+    shard_3_master.start_vttablet(wait_for_state=None,
+                                  binlog_use_v3_resharding_mode=False)
     for t in [shard_2_replica1, shard_2_replica2,
               shard_3_replica, shard_3_rdonly1]:
-      t.start_vttablet(wait_for_state=None)
+      t.start_vttablet(wait_for_state=None,
+                       binlog_use_v3_resharding_mode=False)
     for t in [shard_2_master, shard_2_replica1, shard_2_replica2,
               shard_3_master, shard_3_replica, shard_3_rdonly1]:
       t.wait_for_vttablet_state('NOT_SERVING')
@@ -372,6 +376,7 @@ primary key (name)
     # the rate limit is set very high.
     utils.run_vtworker(['--cell', 'test_nj',
                         '--command_display_interval', '10ms',
+                        '--use_v3_resharding_mode=false',
                         'LegacySplitClone',
                         '--exclude_tables', 'unrelated',
                         '--min_healthy_rdonly_tablets', '1',
@@ -428,7 +433,9 @@ primary key (name)
     # rdonly tablets so discovery works)
     utils.run_vtctl(['RunHealthCheck', shard_3_rdonly1.tablet_alias])
     logging.debug('Running vtworker SplitDiff')
-    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
+    utils.run_vtworker(['-cell', 'test_nj',
+                        '--use_v3_resharding_mode=false',
+                        'SplitDiff',
                         '--exclude_tables', 'unrelated',
                         '--min_healthy_rdonly_tablets', '1',
                         'test_keyspace/c0-'],
@@ -570,7 +577,9 @@ primary key (name)
 
     # use vtworker to compare the data again
     logging.debug('Running vtworker SplitDiff')
-    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
+    utils.run_vtworker(['-cell', 'test_nj',
+                        '--use_v3_resharding_mode=false',
+                        'SplitDiff',
                         '--exclude_tables', 'unrelated',
                         '--min_healthy_rdonly_tablets', '1',
                         'test_keyspace/c0-'],
