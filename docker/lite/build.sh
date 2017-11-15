@@ -89,7 +89,7 @@ vttop=vt/src/github.com/youtube/vitess
 mkdir -p $lite/vt/vtdataroot
 
 mkdir -p $lite/vt/bin
-(cd base/vt/bin; cp mysqlctld vtctld vtgate vttablet vtworker $lite/vt/bin/)
+(cd base/vt/bin; cp mysqlctld vtctld vtctlclient vtgate vttablet vtworker $lite/vt/bin/)
 
 mkdir -p $lite/$vttop/web
 cp -R base/$vttop/web/vtctld $lite/$vttop/web/
