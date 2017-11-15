@@ -109,14 +109,13 @@ install_protoc-gen-go:
 	cp -a vendor/github.com/golang/protobuf $${GOPATH}/src/github.com/golang/
 	go install github.com/golang/protobuf/protoc-gen-go
 
-PROTOC_DIR := $(VTROOT)/dist/grpc/usr/local/bin
-PROTOC_EXISTS := $(shell type -p $(PROTOC_DIR)/protoc)
-ifeq (,$(PROTOC_EXISTS))
-  PROTOC_BINARY := $(shell which protoc)
-  ifeq (,$(PROTOC_BINARY))
-    $(error "Cannot find protoc binary. Did bootstrap.sh succeed, and did you execute 'source dev.env'?")
-  endif
-  PROTOC_DIR := $(dir $(PROTOC_BINARY))
+PROTOC_BINARY := $(shell type -p $(VTROOT)/dist/grpc/usr/local/bin/protoc)
+ifeq (,$(PROTOC_BINARY))
+	PROTOC_BINARY := $(shell which protoc)
+endif
+
+ifneq (,$(PROTOC_BINARY))
+	PROTOC_DIR := $(dir $(PROTOC_BINARY))
 endif
 
 PROTO_SRCS = $(wildcard proto/*.proto)
@@ -129,6 +128,10 @@ PROTO_GO_TEMPS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/.proto.tmp/$(name).pb
 proto: proto_banner $(PROTO_GO_OUTS) $(PROTO_PY_OUTS)
 
 proto_banner:
+ifeq (,$(PROTOC_DIR))
+	$(error "Cannot find protoc binary. Did bootstrap.sh succeed, and did you execute 'source dev.env'?")
+endif
+
 ifndef NOBANNER
 	echo $$(date): Compiling proto definitions
 endif
@@ -138,8 +141,8 @@ $(PROTO_PY_OUTS): py/vtproto/%_pb2.py: proto/%.proto
 
 $(PROTO_GO_OUTS): $(PROTO_GO_TEMPS)
 	for name in $(PROTO_SRC_NAMES); do \
-	  mkdir -p go/vt/proto/$${name}; \
-	  cp -a go/vt/.proto.tmp/$${name}.pb.go go/vt/proto/$${name}/$${name}.pb.go; \
+		mkdir -p go/vt/proto/$${name}; \
+		cp -a go/vt/.proto.tmp/$${name}.pb.go go/vt/proto/$${name}/$${name}.pb.go; \
 	done
 
 $(PROTO_GO_TEMPS): install_protoc-gen-go
