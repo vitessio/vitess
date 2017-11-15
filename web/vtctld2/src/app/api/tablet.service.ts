@@ -7,7 +7,7 @@ import { Proto } from '../shared/proto';
 
 @Injectable()
 export class TabletService {
-  private tabletsUrl = '/api/tablets/';
+  private tabletsUrl = '../api/tablets/';
 
   constructor(private http: Http) {}
   getTabletList(shardRef: string): Observable<any> {
