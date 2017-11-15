@@ -50,8 +50,9 @@ spec:
               -port 15000
               -grpc_port 15999
               -service_map 'grpc-vtctl'
-              -topo_implementation etcd
-              -etcd_global_addrs http://etcd-global:4001
+              -topo_implementation etcd2
+              -topo_global_server_address http://etcd-global-client:2379
+              -topo_global_root /global
               {{backup_flags}} {{test_flags}}" vitess
       volumes:
         - name: syslog

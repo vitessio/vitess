@@ -100,10 +100,13 @@ In addition, Vitess requires the software and libraries listed below.
 
 3.  Select a lock service from the options listed below. It is technically
     possible to use another lock server, but plugins currently exist only
-    for ZooKeeper and etcd.
+    for ZooKeeper, etcd and consul.
     - ZooKeeper 3.3.5 is included by default. 
     - [Install etcd v3.0+](https://github.com/coreos/etcd/releases).
       If you use etcd, remember to include the `etcd` command
+      on your path.
+    - [Install Consul](https://www.consul.io/).
+      If you use consul, remember to include the `consul` command
       on your path.
 
 4.  Install the following other tools needed to build and run Vitess:
@@ -280,7 +283,13 @@ In addition, Vitess requires the software and libraries listed below.
 **Note:** If you are using etcd, set the following environment variable:
 
 ``` sh
-export VT_TEST_FLAGS='--topo-server-flavor=etcd'
+export VT_TEST_FLAGS='--topo-server-flavor=etcd2'
+```
+
+**Note:** If you are using consul, set the following environment variable:
+
+``` sh
+export VT_TEST_FLAGS='--topo-server-flavor=consul
 ```
 
 The default targets when running `make test` contain a full set of

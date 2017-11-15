@@ -70,7 +70,7 @@ To pass extra args to Python tests (test/*.py), terminate the
 list of test names with -- and then add them at the end.
 
 For example:
-  go run test.go test1 test2 -- --topo-server-flavor=etcd
+  go run test.go test1 test2 -- --topo-server-flavor=etcd2
 `
 
 // List of flavors for which a bootstrap Docker image is available.

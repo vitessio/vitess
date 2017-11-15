@@ -204,16 +204,15 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     It can store this data in one of several consistent storage systems.
     In this example, we'll use [etcd](https://github.com/coreos/etcd).
     Note that we need our own etcd clusters, separate from the one used by
-    Kubernetes itself.
+    Kubernetes itself. We will use etcd-operator to manage these clusters.
 
     ``` sh
     vitess/examples/kubernetes$ ./etcd-up.sh
     ### example output:
-    # Creating etcd service for global cell...
-    # service "etcd-global" created
-    # service "etcd-global-srv" created
-    # Creating etcd replicationcontroller for global cell...
-    # replicationcontroller "etcd-global" created
+    # Creating etcd service for 'global' cell...
+    # etcdcluster "etcd-global" created
+    # Creating etcd service for 'global' cell...
+    # etcdcluster "etcd-test" created
     # ...
     ```
 
@@ -229,12 +228,13 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     $ kubectl get pods
     ### example output:
     # NAME                READY     STATUS    RESTARTS   AGE
-    # etcd-global-8oxzm   1/1       Running   0          1m
-    # etcd-global-hcxl6   1/1       Running   0          1m
-    # etcd-global-xupzu   1/1       Running   0          1m
-    # etcd-test-e2y6o     1/1       Running   0          1m
-    # etcd-test-m6wse     1/1       Running   0          1m
-    # etcd-test-qajdj     1/1       Running   0          1m
+    # etcd-global-0000                1/1       Running   0          1m
+    # etcd-global-0001                1/1       Running   0          1m
+    # etcd-global-0002                1/1       Running   0          1m
+    # etcd-operator-857677187-rvgf5   1/1       Running   0          28m
+    # etcd-test-0000                  1/1       Running   0          1m
+    # etcd-test-0001                  1/1       Running   0          1m
+    # etcd-test-0002                  1/1       Running   0          1m
     ```
 
     It may take a while for each Kubernetes node to download the
@@ -328,6 +328,18 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
 
     See the [vtctl reference]({% link reference/vtctl.md %}) for a
     web-formatted version of the `vtctl help` output.
+
+1.  **Setup the cell in the topology**
+
+    The global etcd cluster is configured from command-line parameters,
+    specified in the Kubernetes configuration files. The per-cell etcd cluster
+    however needs to be configured, so it is reachable by Vitess. The following
+    command sets it up:
+
+    ``` sh
+    ./kvtctl.sh AddCellInfo --root /test -server_address http://etcd-test-client:2379 test
+    ```
+
 
 1.  **Start vttablets**
 
