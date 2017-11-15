@@ -202,6 +202,15 @@ func (*SwapWorkflowFactory) Init(_ *workflow.Manager, workflowProto *workflowpb.
 	return nil
 }
 
+// GetData is part of the workflow.Factory interface.
+func (*SwapWorkflowFactory) GetData(_ *workflow.Manager, workflowProto *workflowpb.Workflow) (workflow.Data, error) {
+	data := &swapWorkflowData{}
+	if err := json.Unmarshal(workflowProto.Data, data); err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
 // Instantiate is a part of workflow.Factory interface. It instantiates workflow.Workflow object from
 // workflowpb.Workflow protobuf object.
 func (*SwapWorkflowFactory) Instantiate(_ *workflow.Manager, workflowProto *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
