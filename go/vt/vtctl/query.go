@@ -161,7 +161,7 @@ func parseExecuteOptions(value string) (*querypb.ExecuteOptions, error) {
 
 func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if !*enableQueries {
-		return fmt.Errorf("query commands are disabled")
+		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
 	}
 
 	server := subFlags.String("server", "", "VtGate server to connect to")
@@ -207,7 +207,7 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 
 func commandVtGateExecuteShards(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if !*enableQueries {
-		return fmt.Errorf("query commands are disabled")
+		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
 	}
 
 	server := subFlags.String("server", "", "VtGate server to connect to")
@@ -262,7 +262,7 @@ func commandVtGateExecuteShards(ctx context.Context, wr *wrangler.Wrangler, subF
 
 func commandVtGateExecuteKeyspaceIds(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if !*enableQueries {
-		return fmt.Errorf("query commands are disabled")
+		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
 	}
 
 	server := subFlags.String("server", "", "VtGate server to connect to")
@@ -324,7 +324,7 @@ func commandVtGateExecuteKeyspaceIds(ctx context.Context, wr *wrangler.Wrangler,
 
 func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if !*enableQueries {
-		return fmt.Errorf("query commands are disabled")
+		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
 	}
 
 	server := subFlags.String("server", "", "VtGate server to connect to")
@@ -396,7 +396,7 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 
 func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if !*enableQueries {
-		return fmt.Errorf("query commands are disabled")
+		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
 	}
 
 	username := subFlags.String("username", "", "If set, value is set as immediate caller id in the request and used by vttablet for TableACL check")
@@ -459,7 +459,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 
 func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if !*enableQueries {
-		return fmt.Errorf("query commands are disabled")
+		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
 	}
 
 	username := subFlags.String("username", "", "If set, value is set as immediate caller id in the request and used by vttablet for TableACL check")
@@ -507,7 +507,7 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 
 func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if !*enableQueries {
-		return fmt.Errorf("query commands are disabled")
+		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
 	}
 
 	username := subFlags.String("username", "", "If set, value is set as immediate caller id in the request and used by vttablet for TableACL check")
@@ -552,7 +552,7 @@ func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 
 func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if !*enableQueries {
-		return fmt.Errorf("query commands are disabled")
+		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
 	}
 
 	username := subFlags.String("username", "", "If set, value is set as immediate caller id in the request and used by vttablet for TableACL check")
@@ -597,7 +597,7 @@ func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlag
 
 func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if !*enableQueries {
-		return fmt.Errorf("query commands are disabled")
+		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
 	}
 
 	count := subFlags.Int("count", 1, "number of responses to wait for")
@@ -647,7 +647,7 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 
 func commandVtTabletUpdateStream(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if !*enableQueries {
-		return fmt.Errorf("query commands are disabled")
+		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
 	}
 
 	count := subFlags.Int("count", 1, "number of responses to wait for")
