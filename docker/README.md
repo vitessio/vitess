@@ -47,8 +47,6 @@ If you are looking for a stable version of Vitess, use the **lite** image with a
 
 | Image | How (When) Updated | Description |
 | --- | --- | --- |
-| **etcd-lite** | manual | Our Kubernetes tutorial uses etcd as Vitess topology backing store and runs this image. It is a stripped version of the **etcd** image for faster Kubernetes startup times. Published as `vitess/etcd:<version>-lite` e.g. [v2.0.13-lite](https://hub.docker.com/r/vitess/etcd/tags/). |
-| **etcd** | manual | Basis for **etcd-lite**. |
 | **guestbook** | manual (updated with every Vitess release) | Vitess adaption of the Kubernetes guestbook example. Used to showcase sharding in Vitess. Dockerfile is located in [`examples/kubernetes/guestbook/`](https://github.com/youtube/vitess/tree/master/examples/kubernetes/guestbook). |
 | **orchestrator** | manual | Binaries for [Orchestrator](https://github.com/github/orchestrator). It can be used with Vitess for automatic failovers. Currently not part of the Kubernetes Tutorial and only used in tests. |
 

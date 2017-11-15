@@ -219,9 +219,6 @@ docker_lite_percona57:
 docker_guestbook:
 	cd examples/kubernetes/guestbook && ./build.sh
 
-docker_etcd:
-	cd docker/etcd-lite && ./build.sh
-
 docker_publish_site:
 	docker build -f docker/publish-site/Dockerfile -t vitess/publish-site .
 
