@@ -32,6 +32,11 @@ func (s *Server) ListDir(ctx context.Context, cell, dirPath string) ([]string, e
 		return nil, err
 	}
 	nodePath := path.Join(c.root, dirPath) + "/"
+	if nodePath == "//" {
+		// Special case where c.root is "/", dirPath is empty,
+		// we would end up with "//". in that case, we want "/".
+		nodePath = "/"
+	}
 
 	keys, _, err := c.kv.Keys(nodePath, "", nil)
 	if err != nil {
