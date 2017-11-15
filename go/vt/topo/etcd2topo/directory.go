@@ -33,6 +33,11 @@ func (s *Server) ListDir(ctx context.Context, cell, dirPath string) ([]string, e
 		return nil, err
 	}
 	nodePath := path.Join(c.root, dirPath) + "/"
+	if nodePath == "//" {
+		// Special case where c.root is "/", dirPath is empty,
+		// we would end up with "//". in that case, we want "/".
+		nodePath = "/"
+	}
 	resp, err := c.cli.Get(ctx, nodePath,
 		clientv3.WithPrefix(),
 		clientv3.WithSort(clientv3.SortByKey, clientv3.SortAscend),
