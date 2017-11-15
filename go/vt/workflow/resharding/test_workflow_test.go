@@ -86,6 +86,15 @@ func (*TestWorkflowFactory) Init(_ *workflow.Manager, w *workflowpb.Workflow, ar
 	return nil
 }
 
+// GetData is part the workflow.Factory interface.
+func (*TestWorkflowFactory) GetData(m *workflow.Manager, w *workflowpb.Workflow) (workflow.Data, error) {
+	checkpoint := &workflowpb.WorkflowCheckpoint{}
+	if err := proto.Unmarshal(w.Data, checkpoint); err != nil {
+		return nil, err
+	}
+	return w, nil
+}
+
 // Instantiate is part the workflow.Factory interface.
 func (*TestWorkflowFactory) Instantiate(m *workflow.Manager, w *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
 	checkpoint := &workflowpb.WorkflowCheckpoint{}

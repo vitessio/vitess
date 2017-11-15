@@ -218,6 +218,11 @@ func (f *WorkflowFactory) Init(_ *workflow.Manager, w *workflowpb.Workflow, args
 	return nil
 }
 
+// GetData is part of the workflow.Factory interface.
+func (f *WorkflowFactory) GetData(_ *workflow.Manager, w *workflowpb.Workflow) (workflow.Data, error) {
+	return "", nil
+}
+
 // Instantiate is part of the workflow.Factory interface.
 func (f *WorkflowFactory) Instantiate(_ *workflow.Manager, w *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
 	rootNode.Message = "Validates the Topology and proposes fixes for known issues."

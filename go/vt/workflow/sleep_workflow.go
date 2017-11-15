@@ -230,6 +230,15 @@ func (f *SleepWorkflowFactory) Init(_ *Manager, w *workflowpb.Workflow, args []s
 	return nil
 }
 
+// GetData is part of the workflow.Factory interface.
+func (f *SleepWorkflowFactory) GetData(_ *Manager, w *workflowpb.Workflow) (Data, error) {
+	data := &SleepWorkflowData{}
+	if err := json.Unmarshal(w.Data, data); err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
 // Instantiate is part of the workflow.Factory interface.
 func (f *SleepWorkflowFactory) Instantiate(_ *Manager, w *workflowpb.Workflow, rootNode *Node) (Workflow, error) {
 	rootNode.Message = "This workflow is a test workflow that just sleeps for the provided amount of time."

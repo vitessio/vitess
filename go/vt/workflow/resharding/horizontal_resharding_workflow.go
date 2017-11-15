@@ -102,6 +102,15 @@ func (*HorizontalReshardingWorkflowFactory) Init(m *workflow.Manager, w *workflo
 	return nil
 }
 
+// GetData is part of the workflow.Factory interface.
+func (*HorizontalReshardingWorkflowFactory) GetData(_ *workflow.Manager, w *workflowpb.Workflow) (workflow.Data, error) {
+	checkpoint := &workflowpb.WorkflowCheckpoint{}
+	if err := proto.Unmarshal(w.Data, checkpoint); err != nil {
+		return nil, err
+	}
+	return checkpoint, nil
+}
+
 // Instantiate is part the workflow.Factory interface.
 func (*HorizontalReshardingWorkflowFactory) Instantiate(m *workflow.Manager, w *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
 	rootNode.Message = "This is a workflow to execute horizontal resharding automatically."
