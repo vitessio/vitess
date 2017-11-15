@@ -30,11 +30,9 @@ import (
 
 var (
 	// DisableActiveReparents is a flag to disable active
-	// reparents for safety reasons. It is used in two places:
-	// 1. in this file to skip registering the commands.
-	// 2. in vtctld so it can be exported to the UI (different
-	// package, that's why it's exported). That way we can disable
-	// menu items there, using features.
+	// reparents for safety reasons. It is used in vtctld so it can be
+	// exported to the UI (different package, that's why it's exported).
+	// That way we can disable menu items there, using features.
 	DisableActiveReparents = flag.Bool("disable_active_reparents", false, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
 )
 
@@ -64,7 +62,7 @@ func init() {
 
 func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if *DisableActiveReparents {
-		return fmt.Errorf("active reparent commands disabled")
+		return fmt.Errorf("active reparent commands disabled (unset the -disable_active_reparents flag to enable)")
 	}
 
 	if err := subFlags.Parse(args); err != nil {
@@ -82,7 +80,7 @@ func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 
 func commandInitShardMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if *DisableActiveReparents {
-		return fmt.Errorf("active reparent commands disabled")
+		return fmt.Errorf("active reparent commands disabled (unset the -disable_active_reparents flag to enable)")
 	}
 
 	force := subFlags.Bool("force", false, "will force the reparent even if the provided tablet is not a master or the shard master")
@@ -106,7 +104,7 @@ func commandInitShardMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags
 
 func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if *DisableActiveReparents {
-		return fmt.Errorf("active reparent commands disabled")
+		return fmt.Errorf("active reparent commands disabled (unset the -disable_active_reparents flag to enable)")
 	}
 
 	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "time to wait for slaves to catch up in reparenting")
@@ -149,7 +147,7 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 
 func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if *DisableActiveReparents {
-		return fmt.Errorf("active reparent commands disabled")
+		return fmt.Errorf("active reparent commands disabled (unset the -disable_active_reparents flag to enable)")
 	}
 
 	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "time to wait for slaves to catch up in reparenting")
