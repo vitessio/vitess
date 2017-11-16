@@ -47,13 +47,9 @@ var (
 	// Takes three ports.
 	GoVtTabletserverCustomruleZkcustomrulePort = GoVtTopoZk2topoPort + 3
 
-	// GoVtEtcdtopoPort is used by the go/vt/etcdtopo package.
-	// Takes two ports.
-	GoVtEtcdtopoPort = GoVtTabletserverCustomruleZkcustomrulePort + 3
-
 	// GoVtTopoConsultopoPort is used by the go/vt/topo/consultopo package.
 	// Takes five ports.
-	GoVtTopoConsultopoPort = GoVtEtcdtopoPort + 2
+	GoVtTopoConsultopoPort = GoVtTabletserverCustomruleZkcustomrulePort + 3
 )
 
 //
