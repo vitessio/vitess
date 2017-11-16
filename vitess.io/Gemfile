@@ -12,7 +12,7 @@ gem 'rdiscount', '2.1.7'
 gem 'redcarpet', '3.3.2'
 gem 'RedCloth', '4.2.9'
 gem 'liquid', '4.0.0'
-gem 'pygments.rb', '0.6.3'
+gem 'pygments.rb'
 gem 'jemoji', '0.5.0'
 # Note that we cannot use 0.12.1 because it does not have the bugfix
 # https://github.com/jekyll/jekyll-redirect-from/pull/142. Instead,
