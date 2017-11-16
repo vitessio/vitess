@@ -26,6 +26,9 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 
+	"regexp"
+	"strings"
+
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -137,9 +140,15 @@ func (e *executor) fetchWithRetries(ctx context.Context, command string) error {
 				// We can ignore the error and don't have to retry.
 				return nil
 			}
-			if finalErr != nil {
-				// Non-retryable error.
-				return finalErr
+
+			if strings.Contains(fmt.Sprintf("%s", finalErr), "Duplicate entry") {
+				// Try to resolve this on the fly so that we can make progress
+				e.fixUniquenessConstraint(retryCtx, master, isRetry, finalErr)
+			} else {
+				if finalErr != nil {
+					// Non-retryable error.
+					return finalErr
+				}
 			}
 		}
 
@@ -161,6 +170,31 @@ func (e *executor) fetchWithRetries(ctx context.Context, command string) error {
 		}
 		isRetry = true
 	}
+}
+
+func (e *executor) fixUniquenessConstraint(retryCtx context.Context, master *discovery.TabletStats, isRetry bool, errorToFix error) error {
+	errorMessage := fmt.Sprintf("%s", errorToFix)
+
+	r := regexp.MustCompile("Duplicate entry '([^']+)' for key 'PRIMARY'.*INSERT INTO `[^`]+`\\.`([^`]+)`")
+	m := r.FindStringSubmatch(errorMessage)
+	deleteSQL := ""
+	if m != nil {
+		id := m[1]
+		table := m[2]
+		// TODO id as a primary key is totally hard wired. We need to actually read the table definition to figure generalize this.
+		deleteSQL = fmt.Sprintf("DELETE FROM %s WHERE id = %s", table, id)
+	}
+
+	if deleteSQL != "" {
+		e.wr.Logger().Infof("Running this to fix uniqueness constraint violation: %s", deleteSQL)
+		tryCtx, cancel := context.WithTimeout(retryCtx, 2*time.Minute)
+		_, err := e.wr.TabletManagerClient().ExecuteFetchAsApp(tryCtx, master.Tablet, true, []byte(deleteSQL), 0)
+		cancel()
+		return err
+	}
+
+	e.wr.Logger().Warningf("Can't resolve uniqueness constraint violation: %s", errorMessage)
+	return errorToFix
 }
 
 // checkError returns true if the error can be ignored and the command
@@ -205,6 +239,10 @@ func (e *executor) checkError(ctx context.Context, err error, isRetry bool, mast
 		e.wr.Logger().Warningf("ExecuteFetch failed on %v; will reresolve and retry because it's due to a MySQL connection error: %v", tabletString, err)
 		statsRetryCount.Add(1)
 		statsRetryCounters.Add(retryCategoryConnectionError, 1)
+	case errNo == "1213":
+		// Retry on deadlock errors
+		e.wr.Logger().Warningf("ExecuteFetch failed on %v; will reresolve and retry because it's due to a MySQL deadlock error: %v", tabletString, err)
+		statsRetryCount.Add(1)
 	case errNo == "1062":
 		if !isRetry {
 			return false, fmt.Errorf("ExecuteFetch failed on %v on the first attempt; not retrying as this is not a recoverable error: %v", tabletString, err)
