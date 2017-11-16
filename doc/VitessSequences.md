@@ -12,7 +12,7 @@ Vitess Sequences fill that gap:
 
 * Inspired from the usual SQL sequences (implemented in different ways by
   Oracle, SQL Server and PostgreSQL).
-  
+
 * Very high throughput for ID creation, using a configurable in-memory block allocation.
 
 * Transparent use, similar to MySQL auto-increment: when the field is omitted in
@@ -126,13 +126,14 @@ the administration commands yet.
 *Note*: The names in this section are extracted from the examples/demo sample
 application.
 
-To create a Sequence, a backing table must first be created. The columns for
-that table have to be respected.
+To create a Sequence, a backing table must first be created and initialized with a single row. The columns for that table have to be respected.
 
 This is an example:
 
 ``` sql
 create table user_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
+
+insert into user_seq(id, next_id, cache) values(0, 1, 100);
 ```
 
 Then, the Sequence has to be define in the VSchema for that keyspace:
