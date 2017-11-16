@@ -1,10 +1,12 @@
 <?php
 namespace Vitess;
 
+use PHPUnit\Framework\TestCase;
+
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/TestUtils.php';
 
-class VTGateConnTest extends \PHPUnit_Framework_TestCase
+class VTGateConnTest extends TestCase
 {
 
     private static $proc;
