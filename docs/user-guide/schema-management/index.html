@@ -366,7 +366,7 @@ command to retrieve a list of tablets in a cell and their unique IDs.</p>
 
 <p>The following example retrieves the schema for the tablet with the
 unique ID <code>test-000000100</code>:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text">GetSchema test-000000100
+<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>GetSchema test-000000100
 </code></pre></div>
 <h3 id="validateschemashard">ValidateSchemaShard</h3>
 
@@ -380,7 +380,7 @@ the keyspace and the shard that you are validating.</p>
 <p>The following command confirms that the master and slave tablets in
 shard <code>0</code> all have the same schema for the <code>user</code>
 keyspace:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text">ValidateSchemaShard user/0
+<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>ValidateSchemaShard user/0
 </code></pre></div>
 <h3 id="validateschemakeyspace">ValidateSchemaKeyspace</h3>
 
@@ -395,7 +395,7 @@ consistency across all tablets in all shards for that keyspace.</p>
 <p>The following command confirms that all tablets in all shards have the
 same schema as the master tablet in shard <code>0</code> for the
 <code>user</code> keyspace:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text">ValidateSchemaKeyspace user
+<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>ValidateSchemaKeyspace user
 </code></pre></div>
 <h2 id="changing-your-schema">Changing your schema</h2>
 
@@ -449,7 +449,7 @@ succeeds without actually touching live database tables.</li>
 
 <p>The following sample command applies the SQL in the <strong>user_table.sql</strong>
 file to the <strong>user</strong> keyspace:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text">ApplySchema -sql_file=user_table.sql user
+<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>ApplySchema -sql_file=user_table.sql user
 </code></pre></div>
 <h4 id="permitted-schema-changes">Permitted schema changes</h4>
 

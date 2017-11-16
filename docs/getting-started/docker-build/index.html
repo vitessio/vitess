@@ -359,11 +359,11 @@ or <a href="https://github.com/youtube/vitess/blob/master/vendor/vendor.json">ve
 for example to add new dependencies. If you do need it then build the
 bootstrap image, otherwise pull the image using one of the following
 commands depending on the MySQL flavor you want:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess<span class="nv">$ </span>docker pull vitess/bootstrap:mysql57   <span class="c"># MySQL Community Edition 5.7</span>
-vitess<span class="nv">$ </span>docker pull vitess/bootstrap:mysql56   <span class="c"># MySQL Community Edition 5.6</span>
-vitess<span class="nv">$ </span>docker pull vitess/bootstrap:percona57 <span class="c"># Percona Server 5.7</span>
-vitess<span class="nv">$ </span>docker pull vitess/bootstrap:percona   <span class="c"># Percona Server</span>
-vitess<span class="nv">$ </span>docker pull vitess/bootstrap:mariadb   <span class="c"># MariaDB</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess$ docker pull vitess/bootstrap:mysql57   <span class="c1"># MySQL Community Edition 5.7</span>
+vitess$ docker pull vitess/bootstrap:mysql56   <span class="c1"># MySQL Community Edition 5.6</span>
+vitess$ docker pull vitess/bootstrap:percona57 <span class="c1"># Percona Server 5.7</span>
+vitess$ docker pull vitess/bootstrap:percona   <span class="c1"># Percona Server</span>
+vitess$ docker pull vitess/bootstrap:mariadb   <span class="c1"># MariaDB</span>
 </code></pre></div>
 <p><strong>Note:</strong> If you have already downloaded the <code class="prettyprint">vitess/bootstrap:&lt;flavor&gt;</code>
 image on your machine before then it could be old, which may cause build
@@ -374,11 +374,11 @@ It will include the compiled the Vitess binaries.
 
 <p>Choose one of the following commands (the command without suffix builds
 the default image containing MySQL 5.7):</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess<span class="nv">$ </span>make docker_base
-vitess<span class="nv">$ </span>make docker_base_mysql56
-vitess<span class="nv">$ </span>make docker_base_percona57
-vitess<span class="nv">$ </span>make docker_base_percona
-vitess<span class="nv">$ </span>make docker_base_mariadb
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess$ make docker_base
+vitess$ make docker_base_mysql56
+vitess$ make docker_base_percona57
+vitess$ make docker_base_percona
+vitess$ make docker_base_mariadb
 </code></pre></div></li>
 <li><p>Build the <code class="prettyprint">vitess/lite[:&lt;flavor&gt;]</code> image.
 This will run a script that extracts from <code class="prettyprint">vitess/base</code> only the files
@@ -386,20 +386,20 @@ needed to run Vitess.</p>
 
 <p>Choose one of the following commands (the command without suffix builds
 the default image containing MySQL 5.7):</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess<span class="nv">$ </span>make docker_lite
-vitess<span class="nv">$ </span>make docker_lite_mysql56
-vitess<span class="nv">$ </span>make docker_lite_percona57
-vitess<span class="nv">$ </span>make docker_lite_percona
-vitess<span class="nv">$ </span>make docker_lite_mariadb
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess$ make docker_lite
+vitess$ make docker_lite_mysql56
+vitess$ make docker_lite_percona57
+vitess$ make docker_lite_percona
+vitess$ make docker_lite_mariadb
 </code></pre></div></li>
 <li><p>Re-tag the image under your personal repository, then upload it.</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess<span class="nv">$ </span>docker tag -f vitess/lite yourname/vitess
-vitess<span class="nv">$ </span>docker push yourname/vitess
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess$ docker tag -f vitess/lite yourname/vitess
+vitess$ docker push yourname/vitess
 </code></pre></div>
 <p><strong>Note:</strong> If you chose a non-default flavor above, then change <code class="prettyprint">vitess/lite</code> in
 the above command to <code class="prettyprint">vitess/lite:&lt;flavor&gt;</code>.</p></li>
 <li><p>Change the Kubernetes configs to point to your personal repository:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>sed -i -e <span class="s1">&#39;s,image: vitess/lite,image: yourname/vitess:latest,&#39;</span> *.yaml
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess/examples/kubernetes$ sed -i -e <span class="s1">&#39;s,image: vitess/lite,image: yourname/vitess:latest,&#39;</span> *.yaml
 </code></pre></div>
 <p>Adding the <code class="prettyprint">:latest</code> label at the end of the image name tells Kubernetes
 to check for a newer image every time a pod is launched.

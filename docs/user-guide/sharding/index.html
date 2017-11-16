@@ -429,11 +429,11 @@ value lower than 0x80 are assigned to one shard. Keys with a byte-array
 value equal to or higher than 0x80 are assigned to the other shard.</p>
 
 <p>Several sample key ranges are shown below:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">Start</span><span class="o">=[]</span>, <span class="nv">End</span><span class="o">=[]</span>: Full Key Range
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="nv">Start</span><span class="o">=[]</span>, <span class="nv">End</span><span class="o">=[]</span>: Full Key Range
 <span class="nv">Start</span><span class="o">=[]</span>, <span class="nv">End</span><span class="o">=[</span>0x80<span class="o">]</span>: Lower half of the Key Range.
 <span class="nv">Start</span><span class="o">=[</span>0x80<span class="o">]</span>, <span class="nv">End</span><span class="o">=[]</span>: Upper half of the Key Range.
 <span class="nv">Start</span><span class="o">=[</span>0x40<span class="o">]</span>, <span class="nv">End</span><span class="o">=[</span>0x80<span class="o">]</span>: Second quarter of the Key Range.
-<span class="nv">Start</span><span class="o">=[</span>0xFF00<span class="o">]</span>, <span class="nv">End</span><span class="o">=[</span>0xFF80<span class="o">]</span>: Second to last 1/512th of the Key Range.
+<span class="nv">Start</span><span class="o">=[</span>0xFF00<span class="o">]</span>, <span class="nv">End</span><span class="o">=[</span>0xFF80<span class="o">]</span>: Second to last <span class="m">1</span>/512th of the Key Range.
 </code></pre></div>
 <p>Two key ranges are consecutive if the end value of one range equals the
 start value of the other range.</p>

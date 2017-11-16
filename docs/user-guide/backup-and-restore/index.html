@@ -462,7 +462,7 @@ guide</a>.</p>
 <h2 id="creating-a-backup">Creating a backup</h2>
 
 <p>Run the following vtctl command to create a backup:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vtctl Backup &lt;tablet-alias&gt;
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vtctl Backup &lt;tablet-alias&gt;
 </code></pre></div>
 <p>In response to this command, the designated tablet performs the following
 sequence of actions:</p>
@@ -502,7 +502,7 @@ tablet. This is the equivalent of starting a new tablet in a new shard.</li>
 generally enabled all of the time for all of the tablets in a shard.
 If Vitess cannot find a backup in the Backup Storage system, it just
 starts the vttablet as a new tablet.</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vttablet ... -backup_storage_implementation<span class="o">=</span>file <span class="se">\</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vttablet ... -backup_storage_implementation<span class="o">=</span>file <span class="se">\</span>
              -file_backup_storage_root<span class="o">=</span>/nfs/XXX <span class="se">\</span>
              -restore_from_backup
 </code></pre></div>
@@ -513,11 +513,11 @@ starts the vttablet as a new tablet.</p>
 <ul>
 <li><p><a href="/reference/vtctl/#listbackups">ListBackups</a> displays the
 existing backups for a keyspace/shard in chronological order.</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vtctl ListBackups &lt;keyspace/shard&gt;
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vtctl ListBackups &lt;keyspace/shard&gt;
 </code></pre></div></li>
 <li><p><a href="/reference/vtctl/#removebackup">RemoveBackup</a> deletes a
 specified backup for a keyspace/shard.</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">RemoveBackup &lt;keyspace/shard&gt; &lt;backup name&gt;
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>RemoveBackup &lt;keyspace/shard&gt; &lt;backup name&gt;
 </code></pre></div></li>
 </ul>
 
@@ -527,7 +527,7 @@ specified backup for a keyspace/shard.</p>
 The only thing you need to be cautious about is that the tablet specifies its
 keyspace, shard and tablet type when it registers itself at the topology.
 Specifically, make sure that the following vttablet parameters are set:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">    -init_keyspace &lt;keyspace&gt;
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>    -init_keyspace &lt;keyspace&gt;
     -init_shard &lt;shard&gt;
     -init_tablet_type replica<span class="p">|</span>rdonly
 </code></pre></div>
