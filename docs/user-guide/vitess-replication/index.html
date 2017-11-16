@@ -409,10 +409,10 @@ to provide the same features when possible. See Appendix for our plan.</p>
 
 <p>Vitess rewrites ‘UPDATE’ SQL statements to always know what rows will be
 affected. For instance, this statement:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text">UPDATE &lt;table&gt; SET &lt;set values&gt; WHERE &lt;clause&gt;
+<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>UPDATE &lt;table&gt; SET &lt;set values&gt; WHERE &lt;clause&gt;
 </code></pre></div>
 <p>Will be rewritten into:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text">SELECT &lt;primary key columns&gt; FROM &lt;table&gt; WHERE &lt;clause&gt; FOR UPDATE
+<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>SELECT &lt;primary key columns&gt; FROM &lt;table&gt; WHERE &lt;clause&gt; FOR UPDATE
 UPDATE &lt;table&gt; SET &lt;set values&gt; WHERE &lt;primary key columns&gt; IN &lt;result from previous SELECT&gt; /* primary key values: … */
 </code></pre></div>
 <p>With this rewrite in effect, we know exactly which rows are affected, by primary
