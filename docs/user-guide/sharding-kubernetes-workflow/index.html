@@ -355,16 +355,16 @@ resharding process:</p>
 <ol>
 <li><p>Configure sharding information. By running the command below, we tell
 Vitess to shard the data using the page column through the provided VSchema.</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh ApplyVSchema -vschema <span class="s2">&quot;$(cat vschema.json)&quot;</span> test_keyspace
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess/examples/kubernetes$ ./kvtctl.sh ApplyVSchema -vschema <span class="s2">&quot;</span><span class="k">$(</span>cat vschema.json<span class="k">)</span><span class="s2">&quot;</span> test_keyspace
 </code></pre></div></li>
 <li><p>Bring up tablets for 2 additional shards:  <em>test_keyspace/-80</em> and
 <em>test_keyspace/80-</em> (you can learn more about sharding key range
 <a href="/user-guide/sharding/#key-ranges-and-partitions">here</a>):</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./sharded-vttablet-up.sh
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess/examples/kubernetes$ ./sharded-vttablet-up.sh
 </code></pre></div>
 <p>Initialize replication by electing the first master for each of the new shards:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh InitShardMaster -force test_keyspace/-80 <span class="nb">test</span>-200
-vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh InitShardMaster -force test_keyspace/80- <span class="nb">test</span>-300
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess/examples/kubernetes$ ./kvtctl.sh InitShardMaster -force test_keyspace/-80 test-200
+vitess/examples/kubernetes$ ./kvtctl.sh InitShardMaster -force test_keyspace/80- test-300
 </code></pre></div>
 <p>After this set up, you should see the shards on Dashboard page of vtctld UI
 (<a href="http://localhost:8001/api/v1/proxy/namespaces/default/services/vtctld:web">http://localhost:8001/api/v1/proxy/namespaces/default/services/vtctld:web</a>).
@@ -375,12 +375,12 @@ information.</p></li>
 which is used by the workflow to connect with the <em>vtworker</em> pod. (The
 number of <em>vtworker</em> should be the same of original shards, we start one
 vtworker process here since we have only one original shard in this example.)</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./vtworker-up.sh
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess/examples/kubernetes$ ./vtworker-up.sh
 </code></pre></div>
 <p>You can check out the external IP for the vtworker service (please take note
 of this external IP, it will be used for the vtworker address in creating
 the resharding workflow):</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>kubectl get service vtworker
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>$ kubectl get service vtworker
 </code></pre></div>
 <p>You can verify this <em>vtworker</em> process set up through http://<EXTERNAL-IP>:15032/Debugging.
 It should be pinged successfully. After you ping the vtworker, please click
@@ -399,7 +399,7 @@ IP for vtworker service (mentioned in
 &lt;EXTERNAL-IP&gt;:15033 as the vtworker addresses.</p>
 
 <p>Another way to start the workflow is through the vtctlclient command:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh WorkflowCreate -skip_start<span class="o">=</span><span class="nb">false </span>horizontal_resharding -keyspace<span class="o">=</span>test_keyspace -vtworkers<span class="o">=</span>&lt;EXTERNAL-IP&gt;:15033 -enable_approvals<span class="o">=</span><span class="nb">true</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess/examples/kubernetes$ ./kvtctl.sh WorkflowCreate -skip_start<span class="o">=</span><span class="nb">false</span> horizontal_resharding -keyspace<span class="o">=</span>test_keyspace -vtworkers<span class="o">=</span>&lt;EXTERNAL-IP&gt;:15033 -enable_approvals<span class="o">=</span><span class="nb">true</span>
 </code></pre></div>
 <h3 id="approvals-of-tasks-execution-canary-feature">Approvals of Tasks Execution (Canary feature)</h3>
 
@@ -429,13 +429,13 @@ service) to visit the guestbook webpage in your browser and choose any random
 page for inserting information. Details can be found
 <a href="/getting-started/#test-your-cluster-with-a-client-app">here</a>)
 You can inspect the database content using the following commands:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="c"># See what&#39;s on shard test_keyspace/0</span>
-<span class="c"># (no updates visible since we migrated away from it):</span>
-vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh ExecuteFetchAsDba <span class="nb">test</span>-100 <span class="s2">&quot;SELECT * FROM messages&quot;</span>
-<span class="c"># See what&#39;s on shard test_keyspace/-80:</span>
-vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh ExecuteFetchAsDba <span class="nb">test</span>-200 <span class="s2">&quot;SELECT * FROM messages&quot;</span>
-<span class="c"># See what&#39;s on shard test_keyspace/80-:</span>
-vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh ExecuteFetchAsDba <span class="nb">test</span>-300 <span class="s2">&quot;SELECT * FROM messages&quot;</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="c1"># See what&#39;s on shard test_keyspace/0</span>
+<span class="c1"># (no updates visible since we migrated away from it):</span>
+vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-100 <span class="s2">&quot;SELECT * FROM messages&quot;</span>
+<span class="c1"># See what&#39;s on shard test_keyspace/-80:</span>
+vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-200 <span class="s2">&quot;SELECT * FROM messages&quot;</span>
+<span class="c1"># See what&#39;s on shard test_keyspace/80-:</span>
+vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-300 <span class="s2">&quot;SELECT * FROM messages&quot;</span>
 </code></pre></div>
 <p>You can also checkout the <em>Topology</em> browser on vtctl UI. It shows you the
 information of the keyrange of shard and their serving status. Each shard
@@ -449,10 +449,10 @@ should look like this</p>
 
 <p>After you verify the result, we can remove the
 original shard since all traffic is being served from the new shards:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./vttablet-down.sh
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess/examples/kubernetes$ ./vttablet-down.sh
 </code></pre></div>
 <p>Then we can delete the now-empty shard:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./kvtctl.sh DeleteShard -recursive test_keyspace/0
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess/examples/local$ ./kvtctl.sh DeleteShard -recursive test_keyspace/0
 </code></pre></div>
 <p>You should then see in the vtctld UI <em>Dashboard</em> page that shard <em>0</em> is gone.</p>
 
@@ -461,18 +461,18 @@ original shard since all traffic is being served from the new shards:</p>
 <p>Since you already cleaned up the tablets from the original unsharded example by
 running <code class="prettyprint">./vttablet-down.sh</code>, that step has been replaced with
 <code class="prettyprint">./sharded-vttablet-down.sh</code> to clean up the new sharded tablets.</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./guestbook-down.sh
-vitess/examples/kubernetes<span class="nv">$ </span>./vtworker-down.sh
-vitess/examples/kubernetes<span class="nv">$ </span>./vtgate-down.sh
-vitess/examples/kubernetes<span class="nv">$ </span>./sharded-vttablet-down.sh
-vitess/examples/kubernetes<span class="nv">$ </span>./vtctld-down.sh
-vitess/examples/kubernetes<span class="nv">$ </span>./etcd-down.sh
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess/examples/kubernetes$ ./guestbook-down.sh
+vitess/examples/kubernetes$ ./vtworker-down.sh
+vitess/examples/kubernetes$ ./vtgate-down.sh
+vitess/examples/kubernetes$ ./sharded-vttablet-down.sh
+vitess/examples/kubernetes$ ./vtctld-down.sh
+vitess/examples/kubernetes$ ./etcd-down.sh
 </code></pre></div>
 <p>Then tear down the Container Engine cluster itself, which will stop the virtual machines running on Compute Engine:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>gcloud container clusters delete example
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>$ gcloud container clusters delete example
 </code></pre></div>
 <p>It&#39;s also a good idea to remove the firewall rules you created, unless you plan to use them again soon:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>gcloud compute firewall-rules delete vtctld guestbook
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>$ gcloud compute firewall-rules delete vtctld guestbook
 </code></pre></div>
 <h2 id="reference">Reference</h2>
 
@@ -490,18 +490,18 @@ kubernetes cluster, you can check out more information
 <p>To get status of pods and services you&#39;ve setup, you can use the commands
 (all pods should be in Running status, guestbook and vtworker services
 should have assign external IP):</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>kubectl get pods
-<span class="nv">$ </span>kubectl get services
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>$ kubectl get pods
+$ kubectl get services
 </code></pre></div>
 <h3 id="debugging-pods">Debugging pods.</h3>
 
 <p>If you find out a component (e.g. vttablet, vtgate) doesn&#39;t respond as
 expected, you can surface the log using this command (the pod name can be
 found out using the command mentioned above):</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>kubectl logs &lt;pod name&gt; <span class="o">[</span>-c &lt;container&gt;<span class="o">]</span>
-<span class="c">### example</span>
-<span class="c"># $ kubectl logs vtworker</span>
-<span class="c"># $ kubectl logs vttablet-XXXX -c vttablet</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>$ kubectl logs &lt;pod name&gt; <span class="o">[</span>-c &lt;container&gt;<span class="o">]</span>
+<span class="c1">### example</span>
+<span class="c1"># $ kubectl logs vtworker</span>
+<span class="c1"># $ kubectl logs vttablet-XXXX -c vttablet</span>
 </code></pre></div>
 <h3 id="debugging-pending-external-ip-issue">Debugging pending external IP issue.</h3>
 
