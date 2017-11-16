@@ -28,12 +28,14 @@ import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
+import java.util.logging.Level;
 
 import com.google.common.io.Closeables;
 
 import io.vitess.client.Context;
 import io.vitess.client.RpcClient;
 import io.vitess.client.VTGateConnection;
+import io.vitess.client.RefreshableVTGateConnection;
 import io.vitess.client.grpc.GrpcClientFactory;
 import io.vitess.client.grpc.RetryingInterceptorConfig;
 import io.vitess.client.grpc.tls.TlsOptions;
@@ -63,25 +65,25 @@ public class VitessVTGateManager {
          *
          * @param connection
          */
-        public VTGateConnections(VitessConnection connection) {
-            for (VitessJDBCUrl.HostInfo hostInfo : connection.getUrl().getHostInfos()) {
+        public VTGateConnections(final VitessConnection connection) {
+            for (final VitessJDBCUrl.HostInfo hostInfo : connection.getUrl().getHostInfos()) {
                 String identifier = getIdentifer(hostInfo.getHostname(), hostInfo.getPort(), connection.getUsername(), connection.getTarget());
                 synchronized (VitessVTGateManager.class) {
                     if (!vtGateConnHashMap.containsKey(identifier)) {
                         updateVtGateConnHashMap(identifier, hostInfo, connection);
                     }
-                    if (connection.getUseSSL() && connection.getRefreshSSLConnectionsOnCertFileModification() && vtgateConnRefreshTimer == null) {
+                    if (connection.getUseSSL() && connection.getRefreshConnection() && vtgateConnRefreshTimer == null) {
                         logger.info("ssl vtgate connection detected -- installing connection refresh based on ssl keystore modification");
                         vtgateConnRefreshTimer = new Timer("ssl-refresh-vtgate-conn", true);
                         vtgateConnRefreshTimer.scheduleAtFixedRate(
                             new TimerTask() {
                                 @Override
                                 public void run() {
-                                    refreshUpdatedSSLConnections();
+                                    refreshUpdatedSSLConnections(hostInfo, connection);
                                 }
                             },
-                            TimeUnit.SECONDS.toMillis(60),
-                            TimeUnit.SECONDS.toMillis(60));
+                            TimeUnit.SECONDS.toMillis(connection.getRefreshSeconds()),
+                            TimeUnit.SECONDS.toMillis(connection.getRefreshSeconds()));
                     }
                 }
                 vtGateIdentifiers.add(identifier);
@@ -107,54 +109,6 @@ public class VitessVTGateManager {
         return (hostname + port + userIdentifer + keyspace);
     }
 
-    public static class RefreshableVTGateConn extends VTGateConnection {
-        private final VitessJDBCUrl.HostInfo hostInfo;
-        private final VitessConnection conn;
-        private final File keystoreFile;
-        private final File truststoreFile;
-        private volatile long keystoreMtime;
-        private volatile long truststoreMtime;
-
-        RefreshableVTGateConn(RpcClient client,
-                              VitessJDBCUrl.HostInfo hostInfo,
-                              VitessConnection conn,
-                              String keystorePath,
-                              String truststorePath) {
-            super(client);
-            this.hostInfo = hostInfo;
-            this.conn = conn;
-            this.keystoreFile = new File(keystorePath);
-            this.truststoreFile = new File(truststorePath);
-            // initial check ensures the mtimes are up-to-date
-            checkKeystoreUpdates();
-        }
-
-        VitessJDBCUrl.HostInfo getHostInfo() {
-            return hostInfo;
-        }
-
-        VitessConnection getConn() {
-            return conn;
-        }
-
-        boolean checkKeystoreUpdates() {
-            long keystoreMtime = keystoreFile.exists() ? keystoreFile.lastModified() : 0;
-            long truststoreMtime = truststoreFile.exists() ? truststoreFile.lastModified() : 0;
-
-            boolean modified = false;
-            if (keystoreMtime > this.keystoreMtime) {
-                modified = true;
-                this.keystoreMtime = keystoreMtime;
-            }
-            if (truststoreMtime > this.truststoreMtime) {
-                modified = true;
-                this.truststoreMtime = truststoreMtime;
-            }
-
-            return modified;
-        }
-    }
-
     /**
      * Create VTGateConn and update vtGateConnHashMap.
      *
@@ -167,19 +121,19 @@ public class VitessVTGateManager {
         vtGateConnHashMap.put(identifier, getVtGateConn(hostInfo, connection));
     }
 
-    private static void refreshUpdatedSSLConnections() {
+    private static void refreshUpdatedSSLConnections(VitessJDBCUrl.HostInfo hostInfo, VitessConnection connection) {
         synchronized (VitessVTGateManager.class) {
             int updatedCount = 0;
             for (Map.Entry<String, VTGateConnection> entry : vtGateConnHashMap.entrySet()) {
-                if (entry.getValue() instanceof RefreshableVTGateConn) {
-                    RefreshableVTGateConn existing = (RefreshableVTGateConn) entry.getValue();
+                if (entry.getValue() instanceof RefreshableVTGateConnection) {
+                    RefreshableVTGateConnection existing = (RefreshableVTGateConnection) entry.getValue();
                     if (existing.checkKeystoreUpdates()) {
                         updatedCount++;
-                        VTGateConnection old = vtGateConnHashMap.replace(entry.getKey(), getVtGateConn(existing.getHostInfo(), existing.getConn()));
+                        VTGateConnection old = vtGateConnHashMap.replace(entry.getKey(), getVtGateConn(hostInfo, connection));
                         try {
-                            Closeables.close(old, true);
-                        } catch (IOException e) {
-                            // exception will be logged by Closeables.close
+                            old.close();
+                        } catch (IOException ioe) {
+                            logger.log(Level.WARNING, "Error closing VTGateConnection", ioe);
                         }
                     }
                 }
@@ -225,10 +179,8 @@ public class VitessVTGateManager {
                     .trustStorePassword(trustStorePassword)
                     .trustAlias(trustAlias);
 
-            return new RefreshableVTGateConn(
+            return new RefreshableVTGateConnection(
                 new GrpcClientFactory(retryingConfig).createTls(context, hostInfo.toString(), tlsOptions),
-                hostInfo,
-                connection,
                 keyStorePath,
                 trustStorePath);
         } else {

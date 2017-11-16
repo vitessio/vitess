@@ -31,7 +31,7 @@ import io.vitess.util.Constants;
 
 public class ConnectionPropertiesTest {
 
-    private static final int NUM_PROPS = 35;
+    private static final int NUM_PROPS = 36;
 
     @Test
     public void testReflection() throws Exception {
@@ -67,7 +67,8 @@ public class ConnectionPropertiesTest {
         Assert.assertEquals("tabletType", Constants.DEFAULT_TABLET_TYPE, props.getTabletType());
         Assert.assertEquals("useSSL", false, props.getUseSSL());
         Assert.assertEquals("useAffectedRows", true, props.getUseAffectedRows());
-        Assert.assertEquals("refreshSSLConnectionsOnCertFileModification", true, props.getRefreshSSLConnectionsOnCertFileModification());
+        Assert.assertEquals("refreshConnection", false, props.getRefreshConnection());
+        Assert.assertEquals("refreshSeconds", 60, props.getRefreshSeconds());
     }
 
     @Test
