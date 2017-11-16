@@ -25,6 +25,7 @@ import io.vitess.proto.Vtgate;
  */
 public class VTSession {
     private Vtgate.Session session;
+    private SQLFuture<?> lastCall;
 
     /**
      * Create session cookie.
@@ -107,4 +108,32 @@ public class VTSession {
             .setOptions(this.session.getOptions().toBuilder()
                         .setTransactionIsolation(isolation)).build();
     }
+
+    /**
+     * Set the last SQLFuture call made on this session.
+     *
+     * @param call - SQLFuture
+     */
+    public void setLastCall(SQLFuture call) {
+        this.lastCall = call;
+    }
+
+    /**
+     * This method checks if the last SQLFuture call is complete or not.
+     * <p>
+     * <p>This should be called only in the start of the function
+     * where we modify the session cookie after the response from VTGate.
+     * This is to protect any possible loss of session modification like shard transaction.</p>
+     *
+     * @param call - The represents the callee function name.
+     * @throws IllegalStateException - Throws IllegalStateException if lastCall has not completed.
+     */
+    public void checkCallIsAllowed(String call) throws IllegalStateException {
+        // Calls are not allowed to overlap.
+        if (lastCall != null && !lastCall.isDone()) {
+            throw new IllegalStateException("Can't call " + call
+                + "() until the last asynchronous call is done on this transaction.");
+        }
+    }
+
 }
