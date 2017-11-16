@@ -509,14 +509,13 @@ stores coordination data for all the servers in a Vitess cluster.
 It can store this data in one of several consistent storage systems.
 In this example, we&#39;ll use <a href="https://github.com/coreos/etcd">etcd</a>.
 Note that we need our own etcd clusters, separate from the one used by
-Kubernetes itself.</p>
+Kubernetes itself. We will use etcd-operator to manage these clusters.</p>
 <div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./etcd-up.sh
 <span class="c">### example output:</span>
-<span class="c"># Creating etcd service for global cell...</span>
-<span class="c"># service &quot;etcd-global&quot; created</span>
-<span class="c"># service &quot;etcd-global-srv&quot; created</span>
-<span class="c"># Creating etcd replicationcontroller for global cell...</span>
-<span class="c"># replicationcontroller &quot;etcd-global&quot; created</span>
+<span class="c"># Creating etcd service for &#39;global&#39; cell...</span>
+<span class="c"># etcdcluster &quot;etcd-global&quot; created</span>
+<span class="c"># Creating etcd service for &#39;global&#39; cell...</span>
+<span class="c"># etcdcluster &quot;etcd-test&quot; created</span>
 <span class="c"># ...</span>
 </code></pre></div>
 <p>This command creates two clusters. One is for the
@@ -529,12 +528,13 @@ in the cluster by running:</p>
 <div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>kubectl get pods
 <span class="c">### example output:</span>
 <span class="c"># NAME                READY     STATUS    RESTARTS   AGE</span>
-<span class="c"># etcd-global-8oxzm   1/1       Running   0          1m</span>
-<span class="c"># etcd-global-hcxl6   1/1       Running   0          1m</span>
-<span class="c"># etcd-global-xupzu   1/1       Running   0          1m</span>
-<span class="c"># etcd-test-e2y6o     1/1       Running   0          1m</span>
-<span class="c"># etcd-test-m6wse     1/1       Running   0          1m</span>
-<span class="c"># etcd-test-qajdj     1/1       Running   0          1m</span>
+<span class="c"># etcd-global-0000                1/1       Running   0          1m</span>
+<span class="c"># etcd-global-0001                1/1       Running   0          1m</span>
+<span class="c"># etcd-global-0002                1/1       Running   0          1m</span>
+<span class="c"># etcd-operator-857677187-rvgf5   1/1       Running   0          28m</span>
+<span class="c"># etcd-test-0000                  1/1       Running   0          1m</span>
+<span class="c"># etcd-test-0001                  1/1       Running   0          1m</span>
+<span class="c"># etcd-test-0002                  1/1       Running   0          1m</span>
 </code></pre></div>
 <p>It may take a while for each Kubernetes node to download the
 Docker images the first time it needs them. While the images
@@ -608,6 +608,14 @@ commands that you can use to administer the Vitess cluster.</p>
 </code></pre></div>
 <p>See the <a href="/reference/vtctl/">vtctl reference</a> for a
 web-formatted version of the <code class="prettyprint">vtctl help</code> output.</p></li>
+<li><p><strong>Setup the cell in the topology</strong></p>
+
+<p>The global etcd cluster is configured from command-line parameters,
+specified in the Kubernetes configuration files. The per-cell etcd cluster
+however needs to be configured, so it is reachable by Vitess. The following
+command sets it up:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">./kvtctl.sh AddCellInfo --root /test -server_address http://etcd-test-client:2379 <span class="nb">test</span>
+</code></pre></div></li>
 <li><p><strong>Start vttablets</strong></p>
 
 <p>A Vitess <a href="/overview/concepts/#tablet">tablet</a> is the
