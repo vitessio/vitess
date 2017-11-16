@@ -70,7 +70,8 @@ func startEtcd(t *testing.T) (*exec.Cmd, string, string) {
 	}
 
 	// Wait until we can list "/", or timeout.
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	start := time.Now()
 	for {
 		if _, err := c.cli.Get(ctx, "/"); err == nil {

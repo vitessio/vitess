@@ -27,7 +27,6 @@ import protocols_flavor
 # --topo-server-flavor flag.
 # pylint: disable=unused-import
 import topo_flavor.zk2
-import topo_flavor.etcd
 import topo_flavor.etcd2
 import topo_flavor.consul
 
