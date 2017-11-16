@@ -448,7 +448,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 				return nil, fmt.Errorf("invalid cache value for sequence %s: %d", tableName, cache)
 			}
 			newLast := nextID + cache
-			for newLast <= t.SequenceInfo.NextVal+inc {
+			for newLast < t.SequenceInfo.NextVal+inc {
 				newLast += cache
 			}
 			query = fmt.Sprintf("update %s set next_id = %d where id = 0", sqlparser.String(tableName), newLast)
