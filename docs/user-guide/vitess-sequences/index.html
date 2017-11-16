@@ -433,7 +433,7 @@ hold that keyspace_id. That way we are completely compatible with any horizontal
 resharding.</p>
 
 <p>The final goal is to have Sequences supported with SQL statements, like:</p>
-<div class="highlight"><pre><code class="language-sql" data-lang="sql"><span class="cm">/* DDL support */</span>
+<div class="highlight"><pre><code class="language-sql" data-lang="sql"><span></span><span class="cm">/* DDL support */</span>
 <span class="k">CREATE</span> <span class="n">SEQUENCE</span> <span class="n">my_sequence</span><span class="p">;</span>
 
 <span class="k">SELECT</span> <span class="k">NEXT</span> <span class="n">VALUE</span> <span class="k">FROM</span> <span class="n">my_sequence</span><span class="p">;</span>
@@ -452,14 +452,15 @@ the administration commands yet.</p>
 <p><em>Note</em>: The names in this section are extracted from the examples/demo sample
 application.</p>
 
-<p>To create a Sequence, a backing table must first be created. The columns for
-that table have to be respected.</p>
+<p>To create a Sequence, a backing table must first be created and initialized with a single row. The columns for that table have to be respected.</p>
 
 <p>This is an example:</p>
-<div class="highlight"><pre><code class="language-sql" data-lang="sql"><span class="k">create</span> <span class="k">table</span> <span class="n">user_seq</span><span class="p">(</span><span class="n">id</span> <span class="nb">int</span><span class="p">,</span> <span class="n">next_id</span> <span class="nb">bigint</span><span class="p">,</span> <span class="k">cache</span> <span class="nb">bigint</span><span class="p">,</span> <span class="k">primary</span> <span class="k">key</span><span class="p">(</span><span class="n">id</span><span class="p">))</span> <span class="k">comment</span> <span class="s1">&#39;vitess_sequence&#39;</span><span class="p">;</span>
+<div class="highlight"><pre><code class="language-sql" data-lang="sql"><span></span><span class="k">create</span> <span class="k">table</span> <span class="n">user_seq</span><span class="p">(</span><span class="n">id</span> <span class="nb">int</span><span class="p">,</span> <span class="n">next_id</span> <span class="nb">bigint</span><span class="p">,</span> <span class="k">cache</span> <span class="nb">bigint</span><span class="p">,</span> <span class="k">primary</span> <span class="k">key</span><span class="p">(</span><span class="n">id</span><span class="p">))</span> <span class="k">comment</span> <span class="s1">&#39;vitess_sequence&#39;</span><span class="p">;</span>
+
+<span class="k">insert</span> <span class="k">into</span> <span class="n">user_seq</span><span class="p">(</span><span class="n">id</span><span class="p">,</span> <span class="n">next_id</span><span class="p">,</span> <span class="k">cache</span><span class="p">)</span> <span class="k">values</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">100</span><span class="p">);</span>
 </code></pre></div>
 <p>Then, the Sequence has to be define in the VSchema for that keyspace:</p>
-<div class="highlight"><pre><code class="language-json" data-lang="json"><span class="p">{</span>
+<div class="highlight"><pre><code class="language-json" data-lang="json"><span></span><span class="p">{</span>
   <span class="nt">&quot;sharded&quot;</span><span class="p">:</span> <span class="kc">false</span><span class="p">,</span>
   <span class="nt">&quot;tables&quot;</span><span class="p">:</span> <span class="p">{</span>
     <span class="nt">&quot;user_seq&quot;</span><span class="p">:</span> <span class="p">{</span>
@@ -470,7 +471,7 @@ that table have to be respected.</p>
 <span class="p">}</span>
 </code></pre></div>
 <p>And the table it is going to be using it can also reference the Sequence in its VSchema:</p>
-<div class="highlight"><pre><code class="language-json" data-lang="json"><span class="p">{</span>
+<div class="highlight"><pre><code class="language-json" data-lang="json"><span></span><span class="p">{</span>
   <span class="err">...</span>
   <span class="nt">&quot;tables&quot;</span> <span class="p">:</span> <span class="p">{</span>
     <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="p">{</span>
@@ -493,7 +494,7 @@ be done. Just sending no value for the column will make vtgate insert the next
 Sequence value in its place.</p>
 
 <p>It is also possible to access the Sequence directly with the following SQL constructs:</p>
-<div class="highlight"><pre><code class="language-sql" data-lang="sql"><span class="cm">/* Returns the next value for the sequence */</span>
+<div class="highlight"><pre><code class="language-sql" data-lang="sql"><span></span><span class="cm">/* Returns the next value for the sequence */</span>
 <span class="k">select</span> <span class="k">next</span> <span class="n">value</span> <span class="k">from</span> <span class="n">my_sequence</span><span class="p">;</span>
 
 <span class="cm">/* Returns the next value for the sequence, and also reserve 4 values after that. */</span>
@@ -504,7 +505,7 @@ Sequence value in its place.</p>
 <h3 id="ddl-support">DDL Support</h3>
 
 <p>We want to add DDL support for sequences, as previously mentioned:</p>
-<div class="highlight"><pre><code class="language-sql" data-lang="sql"><span class="k">CREATE</span> <span class="n">SEQUENCE</span> <span class="n">my_sequence</span><span class="p">;</span>
+<div class="highlight"><pre><code class="language-sql" data-lang="sql"><span></span><span class="k">CREATE</span> <span class="n">SEQUENCE</span> <span class="n">my_sequence</span><span class="p">;</span>
 
 <span class="k">ALTER</span> <span class="n">SEQUENCE</span> <span class="n">my_sequence</span> <span class="p">...;</span>
 
