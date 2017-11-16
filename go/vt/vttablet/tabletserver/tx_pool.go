@@ -258,7 +258,6 @@ func (axp *TxPool) LocalBegin(ctx context.Context, useFoundRows bool, txIsolatio
 func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, messager *messager.Engine) error {
 	defer conn.conclude(TxCommit)
 	defer messager.LockDB(conn.NewMessages, conn.ChangedMessages)()
-	txStats.Add("Completed", time.Now().Sub(conn.StartTime))
 	if _, err := conn.Exec(ctx, "commit", 1, false); err != nil {
 		conn.Close()
 		return err
@@ -277,7 +276,6 @@ func (axp *TxPool) LocalConclude(ctx context.Context, conn *TxConnection) {
 
 func (axp *TxPool) localRollback(ctx context.Context, conn *TxConnection) error {
 	defer conn.conclude(TxRollback)
-	txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
 	if _, err := conn.Exec(ctx, "rollback", 1, false); err != nil {
 		conn.Close()
 		return err
@@ -404,6 +402,7 @@ func (txc *TxConnection) log(conclusion string) {
 	duration := txc.EndTime.Sub(txc.StartTime)
 	tabletenv.UserTransactionCount.Add([]string{username, conclusion}, 1)
 	tabletenv.UserTransactionTimesNs.Add([]string{username, conclusion}, int64(duration))
+	txStats.Add(conclusion, duration)
 	if txc.LogToFile.Get() != 0 {
 		log.Infof("Logged transaction: %s", txc.Format(nil))
 	}
