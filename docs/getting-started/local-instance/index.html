@@ -421,12 +421,15 @@ sql_mode=NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES
 </code></pre></div></li>
 <li><p>Select a lock service from the options listed below. It is technically
 possible to use another lock server, but plugins currently exist only
-for ZooKeeper and etcd.</p>
+for ZooKeeper, etcd and consul.</p>
 
 <ul>
 <li>ZooKeeper 3.3.5 is included by default. </li>
 <li><a href="https://github.com/coreos/etcd/releases">Install etcd v3.0+</a>.
 If you use etcd, remember to include the <code class="prettyprint">etcd</code> command
+on your path.</li>
+<li><a href="https://www.consul.io/">Install Consul</a>.
+If you use consul, remember to include the <code class="prettyprint">consul</code> command
 on your path.</li>
 </ul></li>
 <li><p>Install the following other tools needed to build and run Vitess:</p>
@@ -445,11 +448,10 @@ on your path.</li>
 <li>bison</li>
 <li>curl</li>
 <li>unzip</li>
-<li>zip</li>
 </ul>
 
 <p>These can be installed with the following apt-get command:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>sudo apt-get install make automake libtool python-dev python-virtualenv python-mysqldb libssl-dev g++ git pkg-config bison curl unzip zip
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>sudo apt-get install make automake libtool python-dev python-virtualenv python-mysqldb libssl-dev g++ git pkg-config bison curl unzip
 </code></pre></div></li>
 <li><p>If you decided to use ZooKeeper in step 3, you also need to install a
 Java Runtime, such as OpenJDK.</p>
@@ -565,7 +567,10 @@ make build
 <h3 id="run-tests">Run Tests</h3>
 
 <p><strong>Note:</strong> If you are using etcd, set the following environment variable:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nb">export </span><span class="nv">VT_TEST_FLAGS</span><span class="o">=</span><span class="s1">&#39;--topo-server-flavor=etcd&#39;</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nb">export </span><span class="nv">VT_TEST_FLAGS</span><span class="o">=</span><span class="s1">&#39;--topo-server-flavor=etcd2&#39;</span>
+</code></pre></div>
+<p><strong>Note:</strong> If you are using consul, set the following environment variable:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nb">export </span><span class="nv">VT_TEST_FLAGS</span><span class="o">=</span><span class="err">&#39;</span>--topo-server-flavor<span class="o">=</span>consul
 </code></pre></div>
 <p>The default targets when running <code class="prettyprint">make test</code> contain a full set of
 tests intended to help Vitess developers to verify code changes. Those tests
