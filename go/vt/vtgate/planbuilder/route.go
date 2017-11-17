@@ -205,6 +205,7 @@ func (rb *route) merge(rhs *route, ajoin *sqlparser.JoinTableExpr) (builder, err
 // mergeable by unique vindex. The constraint has to be an equality
 // like a.id = b.id where both columns have the same unique vindex.
 func (rb *route) isSameRoute(rhs *route, filter sqlparser.Expr) bool {
+	filter = skipParenthesis(filter)
 	comparison, ok := filter.(*sqlparser.ComparisonExpr)
 	if !ok {
 		return false
