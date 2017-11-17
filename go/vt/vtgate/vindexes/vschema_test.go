@@ -126,11 +126,11 @@ func TestUnshardedVSchema(t *testing.T) {
 		Keyspace: ks,
 	}
 	want := &VSchema{
-		tables: map[string]*Table{
+		uniqueTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
 		},
-		vindexes: map[string]Vindex{},
+		uniqueVindexes: map[string]Vindex{},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"unsharded": {
 				Keyspace: ks,
@@ -226,11 +226,11 @@ func TestShardedVSchemaOwned(t *testing.T) {
 		Pinned:   []byte{0},
 	}
 	want := &VSchema{
-		tables: map[string]*Table{
+		uniqueTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
 		},
-		vindexes: map[string]Vindex{
+		uniqueVindexes: map[string]Vindex{
 			"stfu1": vindex1,
 			"stln1": vindex2,
 		},
@@ -326,11 +326,11 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 		Pinned:   []byte{0},
 	}
 	want := &VSchema{
-		tables: map[string]*Table{
+		uniqueTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
 		},
-		vindexes: map[string]Vindex{
+		uniqueVindexes: map[string]Vindex{
 			"stlu1": vindex1,
 			"stfu1": vindex2,
 		},
@@ -483,11 +483,11 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 		Keyspace: ksb,
 	}
 	want := &VSchema{
-		tables: map[string]*Table{
+		uniqueTables: map[string]*Table{
 			"t1":   nil,
 			"dual": duala,
 		},
-		vindexes: map[string]Vindex{},
+		uniqueVindexes: map[string]Vindex{},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"ksa": {
 				Keyspace: ksa,
@@ -553,11 +553,11 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 		Keyspace: ksb,
 	}
 	want := &VSchema{
-		tables: map[string]*Table{
+		uniqueTables: map[string]*Table{
 			"t1":   nil,
 			"dual": duala,
 		},
-		vindexes: map[string]Vindex{},
+		uniqueVindexes: map[string]Vindex{},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"ksa": {
 				Keyspace: ksa,
@@ -683,11 +683,11 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 		Pinned:   []byte{0},
 	}
 	want := &VSchema{
-		tables: map[string]*Table{
+		uniqueTables: map[string]*Table{
 			"t1":   nil,
 			"dual": duala,
 		},
-		vindexes: map[string]Vindex{
+		uniqueVindexes: map[string]Vindex{
 			"stlu1": nil,
 		},
 		Keyspaces: map[string]*KeyspaceSchema{
@@ -931,13 +931,13 @@ func TestSequence(t *testing.T) {
 		Pinned:   []byte{0},
 	}
 	want := &VSchema{
-		tables: map[string]*Table{
+		uniqueTables: map[string]*Table{
 			"seq":  seq,
 			"t1":   t1,
 			"t2":   t2,
 			"dual": dualb,
 		},
-		vindexes: map[string]Vindex{
+		uniqueVindexes: map[string]Vindex{
 			"stfu1": vindex1,
 		},
 		Keyspaces: map[string]*KeyspaceSchema{

@@ -32,9 +32,9 @@ import (
 // VSchema represents the denormalized version of SrvVSchema,
 // used for building routing plans.
 type VSchema struct {
-	tables    map[string]*Table
-	vindexes  map[string]Vindex
-	Keyspaces map[string]*KeyspaceSchema `json:"keyspaces"`
+	uniqueTables   map[string]*Table
+	uniqueVindexes map[string]Vindex
+	Keyspaces      map[string]*KeyspaceSchema `json:"keyspaces"`
 }
 
 // Table represents a table in VSchema.
@@ -96,9 +96,9 @@ type AutoIncrement struct {
 // BuildVSchema builds a VSchema from a SrvVSchema.
 func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema, err error) {
 	vschema = &VSchema{
-		tables:    make(map[string]*Table),
-		vindexes:  make(map[string]Vindex),
-		Keyspaces: make(map[string]*KeyspaceSchema),
+		uniqueTables:   make(map[string]*Table),
+		uniqueVindexes: make(map[string]Vindex),
+		Keyspaces:      make(map[string]*KeyspaceSchema),
 	}
 	buildKeyspaces(source, vschema)
 	err = buildTables(source, vschema)
@@ -126,9 +126,9 @@ func BuildKeyspaceSchema(input *vschemapb.Keyspace, keyspace string) (*KeyspaceS
 		},
 	}
 	vschema := &VSchema{
-		tables:    make(map[string]*Table),
-		vindexes:  make(map[string]Vindex),
-		Keyspaces: make(map[string]*KeyspaceSchema),
+		uniqueTables:   make(map[string]*Table),
+		uniqueVindexes: make(map[string]Vindex),
+		Keyspaces:      make(map[string]*KeyspaceSchema),
 	}
 	buildKeyspaces(formal, vschema)
 	err := buildTables(formal, vschema)
@@ -172,10 +172,10 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 			default:
 				return fmt.Errorf("vindex %q needs to be Unique or NonUnique", vname)
 			}
-			if _, ok := vschema.vindexes[vname]; ok {
-				vschema.vindexes[vname] = nil
+			if _, ok := vschema.uniqueVindexes[vname]; ok {
+				vschema.uniqueVindexes[vname] = nil
 			} else {
-				vschema.vindexes[vname] = vindex
+				vschema.uniqueVindexes[vname] = vindex
 			}
 			vschema.Keyspaces[ksname].Vindexes[vname] = vindex
 		}
@@ -184,10 +184,10 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 				Name:     sqlparser.NewTableIdent(tname),
 				Keyspace: keyspace,
 			}
-			if _, ok := vschema.tables[tname]; ok {
-				vschema.tables[tname] = nil
+			if _, ok := vschema.uniqueTables[tname]; ok {
+				vschema.uniqueTables[tname] = nil
 			} else {
-				vschema.tables[tname] = t
+				vschema.uniqueTables[tname] = t
 			}
 			vschema.Keyspaces[ksname].Tables[tname] = t
 			if table.Type == "sequence" {
@@ -277,7 +277,7 @@ func addDual(vschema *VSchema) {
 			// the keyspaces. For consistency, we'll always use the
 			// first keyspace by lexical ordering.
 			first = ksname
-			vschema.tables["dual"] = t
+			vschema.uniqueTables["dual"] = t
 		}
 	}
 }
@@ -315,7 +315,7 @@ func (vschema *VSchema) FindTable(keyspace, tablename string) (*Table, error) {
 // findTable is like FindTable, but does not return an error if a table is not found.
 func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
 	if keyspace == "" {
-		table, ok := vschema.tables[tablename]
+		table, ok := vschema.uniqueTables[tablename]
 		if table == nil {
 			if ok {
 				return nil, fmt.Errorf("ambiguous table reference: %s", tablename)
@@ -360,10 +360,10 @@ func (vschema *VSchema) FindTableOrVindex(keyspace, name string) (*Table, Vindex
 	if err != nil {
 		return nil, nil, err
 	}
-	if v == nil {
-		return nil, nil, fmt.Errorf("table %s not found", name)
+	if v != nil {
+		return nil, v, nil
 	}
-	return nil, v, nil
+	return nil, nil, fmt.Errorf("table %s not found", name)
 }
 
 // FindVindex finds a vindex by name. If a keyspace is specified, only vindexes
@@ -372,7 +372,7 @@ func (vschema *VSchema) FindTableOrVindex(keyspace, name string) (*Table, Vindex
 // returns an error only if the vindex name is ambiguous.
 func (vschema *VSchema) FindVindex(keyspace, name string) (Vindex, error) {
 	if keyspace == "" {
-		vindex, ok := vschema.vindexes[name]
+		vindex, ok := vschema.uniqueVindexes[name]
 		if vindex == nil && ok {
 			return nil, fmt.Errorf("ambiguous vindex reference: %s", name)
 		}

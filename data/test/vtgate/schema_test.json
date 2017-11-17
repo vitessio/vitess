@@ -29,6 +29,10 @@
         "costly_map": {
           "type": "costly",
           "owner": "user"
+        },
+        "hash_dup": {
+          "type": "hash_test",
+          "owner": "user"
         }
       },
       "tables": {
@@ -116,6 +120,17 @@
             }
           ]
         }
+      }
+    },
+    "second_user": {
+      "sharded": true,
+      "vindexes": {
+        "hash_dup": {
+          "type": "hash_test",
+          "owner": "user"
+        }
+      },
+      "tables": {
       }
     },
     "main": {
