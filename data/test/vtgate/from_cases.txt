@@ -518,6 +518,21 @@
   }
 }
 
+# mergeable sharded join on unique vindex (parenthesized ON clause)
+"select user.col from user join user_extra on (user.id = user_extra.user_id)"
+{
+  "Original": "select user.col from user join user_extra on (user.id = user_extra.user_id)",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.col from user join user_extra on (user.id = user_extra.user_id)",
+    "FieldQuery": "select user.col from user join user_extra on (user.id = user_extra.user_id) where 1 != 1"
+  }
+}
+
 # mergeable sharded join on unique vindex, with a stray condition
 "select user.col from user join user_extra on user.col between 1 and 2 and user.id = user_extra.user_id"
 {
