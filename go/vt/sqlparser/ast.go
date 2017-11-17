@@ -420,7 +420,7 @@ type Insert struct {
 	OnDup    OnDup
 }
 
-// DDL strings.
+// DML strings.
 const (
 	InsertStr  = "insert"
 	ReplaceStr = "replace"
@@ -564,6 +564,7 @@ type DDL struct {
 	IfExists      bool
 	TableSpec     *TableSpec
 	PartitionSpec *PartitionSpec
+	Tables        *TableNames
 }
 
 // DDL strings.
@@ -589,7 +590,11 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		if node.IfExists {
 			exists = " if exists"
 		}
-		buf.Myprintf("%s table%s %v", node.Action, exists, node.Table)
+		if node.Tables != nil {
+			buf.Myprintf("%s table%s %v", node.Action, exists, node.Tables)
+		} else {
+			buf.Myprintf("%s table%s %v", node.Action, exists, node.Table)
+		}
 	case RenameStr:
 		buf.Myprintf("%s table %v %v", node.Action, node.Table, node.NewName)
 	case AlterStr:

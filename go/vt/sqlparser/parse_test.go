@@ -775,8 +775,10 @@ var (
 		input:  "drop view a",
 		output: "drop table a",
 	}, {
-		input:  "drop table a",
-		output: "drop table a",
+		input: "drop table a",
+	}, {
+		input:  "drop table a, b",
+		output: "drop table a, b",
 	}, {
 		input:  "drop table if exists a",
 		output: "drop table if exists a",

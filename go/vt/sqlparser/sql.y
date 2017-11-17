@@ -981,13 +981,13 @@ rename_statement:
   }
 
 drop_statement:
-  DROP TABLE exists_opt table_name
+  DROP TABLE exists_opt table_name_list
   {
     var exists bool
     if $3 != 0 {
       exists = true
     }
-    $$ = &DDL{Action: DropStr, Table: $4, IfExists: exists}
+    $$ = &DDL{Action: DropStr, Tables: &$4, IfExists: exists}
   }
 | DROP INDEX ID ON table_name ddl_force_eof
   {
