@@ -24,6 +24,41 @@
   }
 }
 
+# ambiguous vindex reference
+"select id, keyspace_id, id from hash_dup where id = :id"
+"ambiguous vindex reference: hash_dup"
+
+# disambiguated vindex reference
+"select id, keyspace_id, id from second_user.hash_dup where id = :id"
+{
+  "Original": "select id, keyspace_id, id from second_user.hash_dup where id = :id",
+  "Instructions": {
+    "Opcode": "VindexMap",
+    "Fields": [
+      {
+        "name": "id",
+        "type": 10262
+      },
+      {
+        "name": "keyspace_id",
+        "type": 10262
+      },
+      {
+        "name": "id",
+        "type": 10262
+      }
+    ],
+    "Cols": [
+      0,
+      1,
+      0
+    ],
+    "Vindex": "hash_dup",
+    "Value": ":id"
+  }
+}
+
+
 # You can even join with a vindexFunc primitive
 "select user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id"
 {
