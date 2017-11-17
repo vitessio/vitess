@@ -282,6 +282,7 @@ func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, ta
 	return client.TabletManagerClient.ExecuteFetchAsDba(ctx, tablet, usePool, query, maxRows, disableBinlogs, reloadSchema)
 }
 
+// FIXME(alainjobart) replace with a memorytopo.
 type fakeTopo struct {
 	faketopo.FakeTopo
 	WithEmptyMasterAlias bool
@@ -291,14 +292,6 @@ func newFakeTopo() topo.Server {
 	return topo.Server{
 		Impl: &fakeTopo{},
 	}
-}
-
-func (ts *fakeTopo) GetShardNames(ctx context.Context, keyspace string) ([]string, error) {
-	if keyspace != "test_keyspace" {
-		return nil, fmt.Errorf("expect to get keyspace: test_keyspace, but got: %s",
-			keyspace)
-	}
-	return []string{"0", "1", "2"}, nil
 }
 
 func (ts *fakeTopo) GetShard(ctx context.Context, keyspace string, shard string) (*topodatapb.Shard, int64, error) {
@@ -320,6 +313,14 @@ func (ts *fakeTopo) GetTablet(ctx context.Context, tabletAlias *topodatapb.Table
 		Alias:    tabletAlias,
 		Keyspace: "test_keyspace",
 	}, 0, nil
+}
+
+func (ts *fakeTopo) ListDir(ctx context.Context, cell, dirPath string) ([]string, error) {
+	// Check for the GetShardNames call.
+	if cell == topo.GlobalCell && dirPath == "keyspaces/test_keyspace/shards" {
+		return []string{"0", "1", "2"}, nil
+	}
+	return nil, fmt.Errorf("Unexpected ListDir for cell=%v and dirPath=%v", cell, dirPath)
 }
 
 func (ts *fakeTopo) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {

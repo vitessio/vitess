@@ -31,14 +31,14 @@ import (
 // checkShard verifies the Shard operations work correctly
 func checkShard(t *testing.T, ts topo.Impl) {
 	ctx := context.Background()
+	// FIXME(alainjobart) when everywhere, just pass topo.Server as ts.
 	tts := topo.Server{Impl: ts}
-
-	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
+	if err := tts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
 	// Check GetShardNames returns [], nil for existing keyspace with no shards.
-	if names, err := ts.GetShardNames(ctx, "test_keyspace"); err != nil || len(names) != 0 {
+	if names, err := tts.GetShardNames(ctx, "test_keyspace"); err != nil || len(names) != 0 {
 		t.Errorf("GetShardNames(keyspace with no shards) didn't return [] nil: %v %v", names, err)
 	}
 
@@ -147,7 +147,7 @@ func checkShard(t *testing.T, ts topo.Impl) {
 	}
 
 	// test GetShardNames
-	shards, err := ts.GetShardNames(ctx, "test_keyspace")
+	shards, err := tts.GetShardNames(ctx, "test_keyspace")
 	if err != nil {
 		t.Errorf("GetShardNames: %v", err)
 	}
@@ -155,7 +155,7 @@ func checkShard(t *testing.T, ts topo.Impl) {
 		t.Errorf(`GetShardNames: want [ "b0-c0" ], got %v`, shards)
 	}
 
-	if _, err := ts.GetShardNames(ctx, "test_keyspace666"); err != topo.ErrNoNode {
+	if _, err := tts.GetShardNames(ctx, "test_keyspace666"); err != topo.ErrNoNode {
 		t.Errorf("GetShardNames(666): %v", err)
 	}
 }

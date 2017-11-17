@@ -30,7 +30,9 @@ import (
 // checkVSchema runs the tests on the VSchema part of the API
 func checkVSchema(t *testing.T, ts topo.Impl) {
 	ctx := context.Background()
-	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
+	// FIXME(alainjobart) when everywhere, just pass topo.Server as ts.
+	tts := topo.Server{Impl: ts}
+	if err := tts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
@@ -137,7 +139,7 @@ func checkVSchema(t *testing.T, ts topo.Impl) {
 
 	// Make sure the vschema is not returned as a shard name,
 	// because they share the same directory location.
-	shards, err := ts.GetShardNames(ctx, "test_keyspace")
+	shards, err := tts.GetShardNames(ctx, "test_keyspace")
 	if err != nil {
 		t.Errorf("GetShardNames: %v", err)
 	}

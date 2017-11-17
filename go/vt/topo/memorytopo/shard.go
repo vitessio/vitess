@@ -71,23 +71,6 @@ func (mt *MemoryTopo) GetShard(ctx context.Context, keyspace, shard string) (*to
 	return sh, int64(version.(NodeVersion)), nil
 }
 
-// GetShardNames implements topo.Impl.GetShardNames
-func (mt *MemoryTopo) GetShardNames(ctx context.Context, keyspace string) ([]string, error) {
-	shardsPath := path.Join(keyspacesPath, keyspace, shardsPath)
-	children, err := mt.ListDir(ctx, topo.GlobalCell, shardsPath)
-	if err == topo.ErrNoNode {
-		// The directory doesn't exist, let's see if the keyspace
-		// is here or not.
-		_, _, kerr := mt.GetKeyspace(ctx, keyspace)
-		if kerr == nil {
-			// Keyspace is here, means no shards.
-			return nil, nil
-		}
-		return nil, err
-	}
-	return children, err
-}
-
 // DeleteShard implements topo.Impl.DeleteShard
 func (mt *MemoryTopo) DeleteShard(ctx context.Context, keyspace, shard string) error {
 	shardPath := path.Join(keyspacesPath, keyspace, shardsPath, shard, topo.ShardFile)

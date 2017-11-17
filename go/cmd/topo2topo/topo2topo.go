@@ -65,7 +65,7 @@ func main() {
 	ctx := context.Background()
 
 	if *doKeyspaces {
-		helpers.CopyKeyspaces(ctx, fromTS.Impl, toTS.Impl)
+		helpers.CopyKeyspaces(ctx, fromTS, toTS)
 	}
 	if *doShards {
 		helpers.CopyShards(ctx, fromTS.Impl, toTS.Impl)

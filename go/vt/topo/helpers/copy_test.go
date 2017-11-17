@@ -31,15 +31,15 @@ import (
 func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 	fromTS := memorytopo.New("test_cell")
 	toTS := memorytopo.New("test_cell")
+	fromTTS := topo.Server{Impl: fromTS}
 
 	// create a keyspace and a couple tablets
-	if err := fromTS.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
+	if err := fromTTS.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("cannot create keyspace: %v", err)
 	}
 	if err := fromTS.CreateShard(ctx, "test_keyspace", "0", &topodatapb.Shard{Cells: []string{"test_cell"}}); err != nil {
 		t.Fatalf("cannot create shard: %v", err)
 	}
-	tts := topo.Server{Impl: fromTS}
 	tablet1 := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "test_cell",
@@ -58,7 +58,7 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 		KeyRange:       nil,
 	}
 	topoproto.SetMysqlPort(tablet1, 3306)
-	if err := tts.CreateTablet(ctx, tablet1); err != nil {
+	if err := fromTTS.CreateTablet(ctx, tablet1); err != nil {
 		t.Fatalf("cannot create master tablet: %v", err)
 	}
 	tablet2 := &topodatapb.Tablet{
@@ -80,7 +80,7 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 		KeyRange:       nil,
 	}
 	topoproto.SetMysqlPort(tablet2, 3306)
-	if err := tts.CreateTablet(ctx, tablet2); err != nil {
+	if err := fromTTS.CreateTablet(ctx, tablet2); err != nil {
 		t.Fatalf("cannot create slave tablet: %v", err)
 	}
 
@@ -92,19 +92,21 @@ func TestBasic(t *testing.T) {
 	fromTS, toTS := createSetup(ctx, t)
 
 	// check keyspace copy
-	CopyKeyspaces(ctx, fromTS, toTS)
-	keyspaces, err := toTS.GetKeyspaces(ctx)
+	fromTTS := topo.Server{Impl: fromTS}
+	toTTS := topo.Server{Impl: toTS}
+	CopyKeyspaces(ctx, fromTTS, toTTS)
+	keyspaces, err := toTTS.GetKeyspaces(ctx)
 	if err != nil {
 		t.Fatalf("toTS.GetKeyspaces failed: %v", err)
 	}
 	if len(keyspaces) != 1 || keyspaces[0] != "test_keyspace" {
 		t.Fatalf("unexpected keyspaces: %v", keyspaces)
 	}
-	CopyKeyspaces(ctx, fromTS, toTS)
+	CopyKeyspaces(ctx, fromTTS, toTTS)
 
 	// check shard copy
 	CopyShards(ctx, fromTS, toTS)
-	shards, err := toTS.GetShardNames(ctx, "test_keyspace")
+	shards, err := toTTS.GetShardNames(ctx, "test_keyspace")
 	if err != nil {
 		t.Fatalf("toTS.GetShardNames failed: %v", err)
 	}

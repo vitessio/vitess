@@ -28,7 +28,7 @@ import (
 func TestUpdateServedFromMap(t *testing.T) {
 	ki := &KeyspaceInfo{
 		keyspace: "ks",
-		version:  1,
+		version:  nil,
 		Keyspace: &topodatapb.Keyspace{
 			ServedFroms: []*topodatapb.Keyspace_ServedFrom{
 				{
@@ -133,7 +133,7 @@ func TestUpdateServedFromMap(t *testing.T) {
 func TestComputeCellServedFrom(t *testing.T) {
 	ki := &KeyspaceInfo{
 		keyspace: "ks",
-		version:  1,
+		version:  nil,
 		Keyspace: &topodatapb.Keyspace{
 			ServedFroms: []*topodatapb.Keyspace_ServedFrom{
 				{

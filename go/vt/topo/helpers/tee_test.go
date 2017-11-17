@@ -31,19 +31,21 @@ func TestTee(t *testing.T) {
 
 	// create the setup, copy the data
 	fromTS, toTS := createSetup(ctx, t)
-	CopyKeyspaces(ctx, fromTS, toTS)
+	fromTTS := topo.Server{Impl: fromTS}
+	toTTS := topo.Server{Impl: toTS}
+	CopyKeyspaces(ctx, fromTTS, toTTS)
 	CopyShards(ctx, fromTS, toTS)
 	CopyTablets(ctx, fromTS, toTS)
 
 	// create a tee and check it implements the interface
 	tee := NewTee(fromTS, toTS, true)
-	var _ topo.Impl = tee
+	teeTTS := topo.Server{Impl: tee}
 
 	// create a keyspace, make sure it is on both sides
-	if err := tee.CreateKeyspace(ctx, "keyspace2", &topodatapb.Keyspace{}); err != nil {
+	if err := teeTTS.CreateKeyspace(ctx, "keyspace2", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("tee.CreateKeyspace(keyspace2) failed: %v", err)
 	}
-	teeKeyspaces, err := tee.GetKeyspaces(ctx)
+	teeKeyspaces, err := teeTTS.GetKeyspaces(ctx)
 	if err != nil {
 		t.Fatalf("tee.GetKeyspaces() failed: %v", err)
 	}
@@ -51,7 +53,7 @@ func TestTee(t *testing.T) {
 	if !reflect.DeepEqual(expected, teeKeyspaces) {
 		t.Errorf("teeKeyspaces mismatch, got %+v, want %+v", teeKeyspaces, expected)
 	}
-	fromKeyspaces, err := fromTS.GetKeyspaces(ctx)
+	fromKeyspaces, err := fromTTS.GetKeyspaces(ctx)
 	if err != nil {
 		t.Fatalf("fromTS.GetKeyspaces() failed: %v", err)
 	}
@@ -59,7 +61,7 @@ func TestTee(t *testing.T) {
 	if !reflect.DeepEqual(expected, fromKeyspaces) {
 		t.Errorf("fromKeyspaces mismatch, got %+v, want %+v", fromKeyspaces, expected)
 	}
-	toKeyspaces, err := toTS.GetKeyspaces(ctx)
+	toKeyspaces, err := toTTS.GetKeyspaces(ctx)
 	if err != nil {
 		t.Fatalf("toTS.GetKeyspaces() failed: %v", err)
 	}

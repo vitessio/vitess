@@ -39,6 +39,12 @@ const (
 	SrvKeyspaceFile      = "SrvKeyspace"
 )
 
+// Path for all object types.
+const (
+	KeyspacesPath = "keyspaces"
+	ShardsPath    = "shards"
+)
+
 var (
 	// ErrNodeExists is returned by functions to specify the
 	// requested resource already exists.
@@ -102,34 +108,6 @@ type Impl interface {
 	GetKnownCells(ctx context.Context) ([]string, error)
 
 	//
-	// Keyspace management, global.
-	//
-
-	// CreateKeyspace creates the given keyspace, assuming it doesn't exist
-	// yet. Can return ErrNodeExists if it already exists.
-	CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error
-
-	// UpdateKeyspace updates the keyspace information
-	// pointed at by ki.keyspace to the *ki value.
-	// This will only be called with a lock on the keyspace.
-	// Can return ErrNoNode if the keyspace doesn't exist yet,
-	// or ErrBadVersion if the version has changed.
-	//
-	// Do not use directly, but instead use Server.UpdateKeyspace.
-	UpdateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace, existingVersion int64) (newVersion int64, err error)
-
-	// DeleteKeyspace deletes the specified keyspace.
-	// Can return ErrNoNode if the keyspace doesn't exist.
-	DeleteKeyspace(ctx context.Context, keyspace string) error
-
-	// GetKeyspace reads a keyspace and returns it, along with its version.
-	// Can return ErrNoNode
-	GetKeyspace(ctx context.Context, keyspace string) (*topodatapb.Keyspace, int64, error)
-
-	// GetKeyspaces returns the known keyspace names. They shall be sorted.
-	GetKeyspaces(ctx context.Context) ([]string, error)
-
-	//
 	// Shard management, global.
 	//
 
@@ -148,12 +126,6 @@ type Impl interface {
 	// GetShard reads a shard and returns it, along with its version.
 	// Can return ErrNoNode
 	GetShard(ctx context.Context, keyspace, shard string) (*topodatapb.Shard, int64, error)
-
-	// GetShardNames returns the known shards in a keyspace.
-	// Can return ErrNoNode if the keyspace wasn't created.
-	// Will return an empty list if the keyspace has no shard.
-	// They shall be sorted.
-	GetShardNames(ctx context.Context, keyspace string) ([]string, error)
 
 	// DeleteShard deletes the provided shard.
 	// Can return ErrNoNode if the shard doesn't exist.
