@@ -38,8 +38,14 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 	if err := fromTTS.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("cannot create keyspace: %v", err)
 	}
-	if err := fromTS.CreateShard(ctx, "test_keyspace", "0", &topodatapb.Shard{Cells: []string{"test_cell"}}); err != nil {
+	if err := fromTTS.CreateShard(ctx, "test_keyspace", "0"); err != nil {
 		t.Fatalf("cannot create shard: %v", err)
+	}
+	if _, err := fromTTS.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
+		si.Cells = []string{"test_cell"}
+		return nil
+	}); err != nil {
+		t.Fatalf("cannot update shard: %v", err)
 	}
 	tablet1 := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -115,12 +121,12 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("unexpected shards: %v", shards)
 	}
 	CopyShards(ctx, fromTS, toTS)
-	s, _, err := toTS.GetShard(ctx, "test_keyspace", "0")
+	si, err := toTTS.GetShard(ctx, "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("cannot read shard: %v", err)
 	}
-	if len(s.Cells) != 1 || s.Cells[0] != "test_cell" {
-		t.Fatalf("bad shard data: %v", *s)
+	if len(si.Shard.Cells) != 1 || si.Shard.Cells[0] != "test_cell" {
+		t.Fatalf("bad shard data: %v", *si.Shard)
 	}
 
 	// check ShardReplication copy

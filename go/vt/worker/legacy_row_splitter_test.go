@@ -47,7 +47,7 @@ func si(start, end string) *topo.ShardInfo {
 			Start: s,
 			End:   e,
 		},
-	}, 0)
+	}, nil)
 }
 
 func TestRowSplitterUint64(t *testing.T) {
@@ -103,7 +103,7 @@ func siBytes(start, end string) *topo.ShardInfo {
 			Start: []byte(start),
 			End:   []byte(end),
 		},
-	}, 0)
+	}, nil)
 }
 
 func TestRowSplitterString(t *testing.T) {

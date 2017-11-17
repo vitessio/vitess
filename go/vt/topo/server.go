@@ -108,30 +108,6 @@ type Impl interface {
 	GetKnownCells(ctx context.Context) ([]string, error)
 
 	//
-	// Shard management, global.
-	//
-
-	// CreateShard creates a shard, assuming it doesn't exist yet.
-	// Can return ErrNodeExists if it already exists.
-	CreateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard) error
-
-	// UpdateShard updates the shard information
-	// pointed at by si.keyspace / si.shard to the *si value.
-	// Can return ErrNoNode if the shard doesn't exist yet,
-	// or ErrBadVersion if the version has changed.
-	//
-	// Do not use directly, but instead use topo.UpdateShardFields.
-	UpdateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard, existingVersion int64) (newVersion int64, err error)
-
-	// GetShard reads a shard and returns it, along with its version.
-	// Can return ErrNoNode
-	GetShard(ctx context.Context, keyspace, shard string) (*topodatapb.Shard, int64, error)
-
-	// DeleteShard deletes the provided shard.
-	// Can return ErrNoNode if the shard doesn't exist.
-	DeleteShard(ctx context.Context, keyspace, shard string) error
-
-	//
 	// Tablet management, per cell.
 	//
 

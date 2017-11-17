@@ -36,10 +36,7 @@ func checkVSchema(t *testing.T, ts topo.Impl) {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
-	shard := &topodatapb.Shard{
-		KeyRange: newKeyRange("b0-c0"),
-	}
-	if err := ts.CreateShard(ctx, "test_keyspace", "b0-c0", shard); err != nil {
+	if err := tts.CreateShard(ctx, "test_keyspace", "b0-c0"); err != nil {
 		t.Fatalf("CreateShard: %v", err)
 	}
 

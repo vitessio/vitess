@@ -81,6 +81,7 @@ func CopyKeyspaces(ctx context.Context, fromTS, toTS topo.Server) {
 // CopyShards will create the shards in the destination topo.
 func CopyShards(ctx context.Context, fromTS, toTS topo.Impl) {
 	fromTTS := topo.Server{Impl: fromTS}
+	toTTS := topo.Server{Impl: toTS}
 	keyspaces, err := fromTTS.GetKeyspaces(ctx)
 	if err != nil {
 		log.Fatalf("fromTS.GetKeyspaces: %v", err)
@@ -103,19 +104,26 @@ func CopyShards(ctx context.Context, fromTS, toTS topo.Impl) {
 				go func(keyspace, shard string) {
 					defer wg.Done()
 
-					s, _, err := fromTS.GetShard(ctx, keyspace, shard)
+					si, err := fromTTS.GetShard(ctx, keyspace, shard)
 					if err != nil {
 						rec.RecordError(fmt.Errorf("GetShard(%v, %v): %v", keyspace, shard, err))
 						return
 					}
 
-					if err := toTS.CreateShard(ctx, keyspace, shard, s); err != nil {
+					if err := toTTS.CreateShard(ctx, keyspace, shard); err != nil {
 						if err == topo.ErrNodeExists {
 							log.Warningf("shard %v/%v already exists", keyspace, shard)
 						} else {
 							rec.RecordError(fmt.Errorf("CreateShard(%v, %v): %v", keyspace, shard, err))
 							return
 						}
+					}
+					if _, err := toTTS.UpdateShardFields(ctx, keyspace, shard, func(toSI *topo.ShardInfo) error {
+						*toSI.Shard = *si.Shard
+						return nil
+					}); err != nil {
+						rec.RecordError(fmt.Errorf("UpdateShardFields(%v, %v): %v", keyspace, shard, err))
+						return
 					}
 				}(keyspace, shard)
 			}
@@ -214,13 +222,13 @@ func CopyShardReplications(ctx context.Context, fromTS, toTS topo.Impl) {
 					defer wg.Done()
 
 					// read the source shard to get the cells
-					s, _, err := fromTS.GetShard(ctx, keyspace, shard)
+					si, err := fromTTS.GetShard(ctx, keyspace, shard)
 					if err != nil {
 						rec.RecordError(fmt.Errorf("GetShard(%v, %v): %v", keyspace, shard, err))
 						return
 					}
 
-					for _, cell := range s.Cells {
+					for _, cell := range si.Shard.Cells {
 						sri, err := fromTS.GetShardReplication(ctx, cell, keyspace, shard)
 						if err != nil {
 							rec.RecordError(fmt.Errorf("GetShardReplication(%v, %v, %v): %v", cell, keyspace, shard, err))

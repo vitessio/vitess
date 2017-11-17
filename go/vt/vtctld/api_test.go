@@ -27,6 +27,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
@@ -47,15 +48,19 @@ func TestAPI(t *testing.T) {
 	server := httptest.NewServer(nil)
 	defer server.Close()
 
-	// Populate topo.
+	// Populate topo. Remove ServedTypes from shards to avoid ordering issues.
 	ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{ShardingColumnName: "shardcol"})
-	ts.Impl.CreateShard(ctx, "ks1", "-80", &topodatapb.Shard{
-		Cells:    cells,
-		KeyRange: &topodatapb.KeyRange{Start: nil, End: []byte{0x80}},
+	ts.CreateShard(ctx, "ks1", "-80")
+	ts.UpdateShardFields(ctx, "ks1", "-80", func(si *topo.ShardInfo) error {
+		si.Shard.Cells = cells
+		si.Shard.ServedTypes = nil
+		return nil
 	})
-	ts.Impl.CreateShard(ctx, "ks1", "80-", &topodatapb.Shard{
-		Cells:    cells,
-		KeyRange: &topodatapb.KeyRange{Start: []byte{0x80}, End: nil},
+	ts.CreateShard(ctx, "ks1", "80-")
+	ts.UpdateShardFields(ctx, "ks1", "80-", func(si *topo.ShardInfo) error {
+		si.Shard.Cells = cells
+		si.Shard.ServedTypes = nil
+		return nil
 	})
 
 	tablet1 := topodatapb.Tablet{
