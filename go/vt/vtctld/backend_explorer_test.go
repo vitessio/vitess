@@ -52,7 +52,6 @@ func TestHandlePathKeyspace(t *testing.T) {
 	keyspace := &topodatapb.Keyspace{
 		ShardingColumnName: "keyspace_id",
 	}
-	shard := &topodatapb.Shard{}
 
 	ctx := context.Background()
 	ts := memorytopo.New(cells...)
@@ -60,10 +59,10 @@ func TestHandlePathKeyspace(t *testing.T) {
 	if err := tts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
 		t.Fatalf("CreateKeyspace error: %v", err)
 	}
-	if err := ts.CreateShard(ctx, "test_keyspace", "10-20", shard); err != nil {
+	if err := tts.CreateShard(ctx, "test_keyspace", "10-20"); err != nil {
 		t.Fatalf("CreateShard error: %v", err)
 	}
-	if err := ts.CreateShard(ctx, "test_keyspace", "20-30", shard); err != nil {
+	if err := tts.CreateShard(ctx, "test_keyspace", "20-30"); err != nil {
 		t.Fatalf("CreateShard error: %v", err)
 	}
 
@@ -102,9 +101,6 @@ func TestHandlePathShard(t *testing.T) {
 	input := path.Join("/global", "keyspaces", "test_keyspace", "shards", "-80", "Shard")
 	cells := []string{"cell1", "cell2", "cell3"}
 	keyspace := &topodatapb.Keyspace{}
-	shard := &topodatapb.Shard{
-		Cells: []string{"cell1", "cell2", "cell3"},
-	}
 	want := "cells: \"cell1\"\ncells: \"cell2\"\ncells: \"cell3\"\n"
 
 	ctx := context.Background()
@@ -113,8 +109,17 @@ func TestHandlePathShard(t *testing.T) {
 	if err := tts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
 		t.Fatalf("CreateKeyspace error: %v", err)
 	}
-	if err := ts.CreateShard(ctx, "test_keyspace", "-80", shard); err != nil {
+	if err := tts.CreateShard(ctx, "test_keyspace", "-80"); err != nil {
 		t.Fatalf("CreateShard error: %v", err)
+	}
+	if _, err := tts.UpdateShardFields(ctx, "test_keyspace", "-80", func(si *topo.ShardInfo) error {
+		// Set cells, reset other fields so printout is easier to compare.
+		si.Shard.Cells = cells
+		si.ServedTypes = nil
+		si.KeyRange = nil
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateShardFields error: %v", err)
 	}
 
 	ex := NewBackendExplorer(ts)

@@ -141,9 +141,7 @@ func checkShardLock(t *testing.T, ts topo.Impl) {
 	if err := tts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
-	if err := ts.CreateShard(ctx, "test_keyspace", "10-20", &topodatapb.Shard{
-		KeyRange: newKeyRange("10-20"),
-	}); err != nil {
+	if err := tts.CreateShard(ctx, "test_keyspace", "10-20"); err != nil {
 		t.Fatalf("CreateShard: %v", err)
 	}
 

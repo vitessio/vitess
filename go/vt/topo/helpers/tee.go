@@ -53,7 +53,6 @@ type Tee struct {
 	// protects the variables below this point
 	mu sync.Mutex
 
-	shardVersionMapping  map[string]versionMapping
 	tabletVersionMapping map[string]versionMapping
 
 	keyspaceLockPaths map[string]string
@@ -84,7 +83,6 @@ func NewTee(primary, secondary topo.Impl, reverseLockOrder bool) *Tee {
 		readFromSecond:       secondary,
 		lockFirst:            lockFirst,
 		lockSecond:           lockSecond,
-		shardVersionMapping:  make(map[string]versionMapping),
 		tabletVersionMapping: make(map[string]versionMapping),
 		keyspaceLockPaths:    make(map[string]string),
 		shardLockPaths:       make(map[string]string),
@@ -178,113 +176,6 @@ func (tee *Tee) Watch(ctx context.Context, cell, filePath string) (*topo.WatchDa
 // GetKnownCells is part of the topo.Server interface
 func (tee *Tee) GetKnownCells(ctx context.Context) ([]string, error) {
 	return tee.readFrom.GetKnownCells(ctx)
-}
-
-//
-// Shard management, global.
-//
-
-// CreateShard is part of the topo.Server interface
-func (tee *Tee) CreateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard) error {
-	err := tee.primary.CreateShard(ctx, keyspace, shard, value)
-	if err != nil && err != topo.ErrNodeExists {
-		return err
-	}
-
-	serr := tee.secondary.CreateShard(ctx, keyspace, shard, value)
-	if serr != nil && serr != topo.ErrNodeExists {
-		// not critical enough to fail
-		log.Warningf("secondary.CreateShard(%v,%v) failed: %v", keyspace, shard, err)
-	}
-	return err
-}
-
-// UpdateShard is part of the topo.Server interface
-func (tee *Tee) UpdateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard, existingVersion int64) (newVersion int64, err error) {
-	if newVersion, err = tee.primary.UpdateShard(ctx, keyspace, shard, value, existingVersion); err != nil {
-		// failed on primary, not updating secondary
-		return
-	}
-
-	// if we have a mapping between shard version in first topo
-	// and shard version in second topo, replace the version number.
-	// if not, this will probably fail and log.
-	tee.mu.Lock()
-	svm, ok := tee.shardVersionMapping[keyspace+"/"+shard]
-	if ok && svm.readFromVersion == existingVersion {
-		existingVersion = svm.readFromSecondVersion
-		delete(tee.shardVersionMapping, keyspace+"/"+shard)
-	}
-	tee.mu.Unlock()
-	if newVersion2, serr := tee.secondary.UpdateShard(ctx, keyspace, shard, value, existingVersion); serr != nil {
-		// not critical enough to fail
-		if serr == topo.ErrNoNode {
-			// the shard doesn't exist on the secondary, let's
-			// just create it
-			if serr = tee.secondary.CreateShard(ctx, keyspace, shard, value); serr != nil {
-				log.Warningf("secondary.CreateShard(%v,%v) failed (after UpdateShard returned ErrNoNode): %v", keyspace, shard, serr)
-			} else {
-				log.Infof("secondary.UpdateShard(%v, %v) failed with ErrNoNode, CreateShard then worked.", keyspace, shard)
-				_, v, gerr := tee.secondary.GetShard(ctx, keyspace, shard)
-				if gerr != nil {
-					log.Warningf("Failed to re-read shard(%v, %v) after creating it on secondary: %v", keyspace, shard, gerr)
-				} else {
-					tee.mu.Lock()
-					tee.shardVersionMapping[keyspace+"/"+shard] = versionMapping{
-						readFromVersion:       newVersion,
-						readFromSecondVersion: v,
-					}
-					tee.mu.Unlock()
-				}
-			}
-		} else {
-			log.Warningf("secondary.UpdateShard(%v, %v) failed: %v", keyspace, shard, serr)
-		}
-	} else {
-		tee.mu.Lock()
-		tee.shardVersionMapping[keyspace+"/"+shard] = versionMapping{
-			readFromVersion:       newVersion,
-			readFromSecondVersion: newVersion2,
-		}
-		tee.mu.Unlock()
-	}
-	return
-}
-
-// GetShard is part of the topo.Server interface
-func (tee *Tee) GetShard(ctx context.Context, keyspace, shard string) (*topodatapb.Shard, int64, error) {
-	s, v, err := tee.readFrom.GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	_, v2, err := tee.readFromSecond.GetShard(ctx, keyspace, shard)
-	if err != nil {
-		// can't read from secondary, so we can's keep version map
-		return s, v, nil
-	}
-
-	tee.mu.Lock()
-	tee.shardVersionMapping[keyspace+"/"+shard] = versionMapping{
-		readFromVersion:       v,
-		readFromSecondVersion: v2,
-	}
-	tee.mu.Unlock()
-	return s, v, nil
-}
-
-// DeleteShard is part of the topo.Server interface
-func (tee *Tee) DeleteShard(ctx context.Context, keyspace, shard string) error {
-	err := tee.primary.DeleteShard(ctx, keyspace, shard)
-	if err != nil && err != topo.ErrNoNode {
-		return err
-	}
-
-	if err := tee.secondary.DeleteShard(ctx, keyspace, shard); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.DeleteShard(%v, %v) failed: %v", keyspace, shard, err)
-	}
-	return err
 }
 
 //

@@ -62,7 +62,7 @@ func TopoServerTestSuite(t *testing.T, factory func() topo.Impl) {
 
 	t.Log("=== checkShard")
 	ts = factory()
-	checkShard(t, ts)
+	checkShard(t, topo.Server{Impl: ts})
 	ts.Close()
 
 	t.Log("=== checkTablet")

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/gogo/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -321,6 +322,25 @@ func (ts *fakeTopo) ListDir(ctx context.Context, cell, dirPath string) ([]string
 		return []string{"0", "1", "2"}, nil
 	}
 	return nil, fmt.Errorf("Unexpected ListDir for cell=%v and dirPath=%v", cell, dirPath)
+}
+
+func (ts *fakeTopo) Get(ctx context.Context, cell, filePath string) ([]byte, topo.Version, error) {
+	// Check the GetShard call.
+	if cell == topo.GlobalCell && (filePath == "keyspaces/test_keyspace/shards/0/Shard" || filePath == "keyspaces/test_keyspace/shards/1/Shard" || filePath == "keyspaces/test_keyspace/shards/2/Shard") {
+		var masterAlias *topodatapb.TabletAlias
+		if !ts.WithEmptyMasterAlias {
+			masterAlias = &topodatapb.TabletAlias{
+				Cell: "test_cell",
+				Uid:  0,
+			}
+		}
+		value := &topodatapb.Shard{
+			MasterAlias: masterAlias,
+		}
+		data, err := proto.Marshal(value)
+		return data, nil, err
+	}
+	return nil, nil, fmt.Errorf("Unexpected Get for cell=%v and filePath=%v", cell, filePath)
 }
 
 func (ts *fakeTopo) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {
