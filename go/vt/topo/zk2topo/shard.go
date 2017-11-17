@@ -73,23 +73,6 @@ func (zs *Server) GetShard(ctx context.Context, keyspace, shard string) (*topoda
 	return s, int64(version.(ZKVersion)), nil
 }
 
-// GetShardNames is part of the topo.Server interface.
-func (zs *Server) GetShardNames(ctx context.Context, keyspace string) ([]string, error) {
-	shardsPath := path.Join(keyspacesPath, keyspace, shardsPath)
-	children, err := zs.ListDir(ctx, topo.GlobalCell, shardsPath)
-	if err == topo.ErrNoNode {
-		// The directory doesn't exist, let's see if the keyspace
-		// is here or not.
-		_, _, kerr := zs.GetKeyspace(ctx, keyspace)
-		if kerr == nil {
-			// Keyspace is here, means no shards.
-			return nil, nil
-		}
-		return nil, err
-	}
-	return children, err
-}
-
 // DeleteShard is part of the topo.Server interface.
 func (zs *Server) DeleteShard(ctx context.Context, keyspace, shard string) error {
 	shardPath := path.Join(keyspacesPath, keyspace, shardsPath, shard, topo.ShardFile)

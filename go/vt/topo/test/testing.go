@@ -57,7 +57,7 @@ func TopoServerTestSuite(t *testing.T, factory func() topo.Impl) {
 
 	t.Log("=== checkKeyspace")
 	ts = factory()
-	checkKeyspace(t, ts)
+	checkKeyspace(t, topo.Server{Impl: ts})
 	ts.Close()
 
 	t.Log("=== checkShard")

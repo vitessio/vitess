@@ -34,7 +34,9 @@ var timeUntilLockIsTaken = 10 * time.Millisecond
 // checkKeyspaceLock checks we can take a keyspace lock as expected.
 func checkKeyspaceLock(t *testing.T, ts topo.Impl) {
 	ctx := context.Background()
-	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
+	// FIXME(alainjobart) when everywhere, just pass topo.Server as ts.
+	tts := topo.Server{Impl: ts}
+	if err := tts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
@@ -134,7 +136,9 @@ func checkKeyspaceLockUnblocks(ctx context.Context, t *testing.T, ts topo.Impl) 
 // checkShardLock checks we can take a shard lock
 func checkShardLock(t *testing.T, ts topo.Impl) {
 	ctx := context.Background()
-	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
+	// FIXME(alainjobart) when everywhere, just pass topo.Server as ts.
+	tts := topo.Server{Impl: ts}
+	if err := tts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 	if err := ts.CreateShard(ctx, "test_keyspace", "10-20", &topodatapb.Shard{

@@ -31,7 +31,7 @@ import (
 )
 
 // CopyKeyspaces will create the keyspaces in the destination topo.
-func CopyKeyspaces(ctx context.Context, fromTS, toTS topo.Impl) {
+func CopyKeyspaces(ctx context.Context, fromTS, toTS topo.Server) {
 	keyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
 		log.Fatalf("GetKeyspaces: %v", err)
@@ -44,13 +44,13 @@ func CopyKeyspaces(ctx context.Context, fromTS, toTS topo.Impl) {
 		go func(keyspace string) {
 			defer wg.Done()
 
-			k, _, err := fromTS.GetKeyspace(ctx, keyspace)
+			ki, err := fromTS.GetKeyspace(ctx, keyspace)
 			if err != nil {
 				rec.RecordError(fmt.Errorf("GetKeyspace(%v): %v", keyspace, err))
 				return
 			}
 
-			if err := toTS.CreateKeyspace(ctx, keyspace, k); err != nil {
+			if err := toTS.CreateKeyspace(ctx, keyspace, ki.Keyspace); err != nil {
 				if err == topo.ErrNodeExists {
 					log.Warningf("keyspace %v already exists", keyspace)
 				} else {
@@ -80,7 +80,8 @@ func CopyKeyspaces(ctx context.Context, fromTS, toTS topo.Impl) {
 
 // CopyShards will create the shards in the destination topo.
 func CopyShards(ctx context.Context, fromTS, toTS topo.Impl) {
-	keyspaces, err := fromTS.GetKeyspaces(ctx)
+	fromTTS := topo.Server{Impl: fromTS}
+	keyspaces, err := fromTTS.GetKeyspaces(ctx)
 	if err != nil {
 		log.Fatalf("fromTS.GetKeyspaces: %v", err)
 	}
@@ -91,7 +92,7 @@ func CopyShards(ctx context.Context, fromTS, toTS topo.Impl) {
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
-			shards, err := fromTS.GetShardNames(ctx, keyspace)
+			shards, err := fromTTS.GetShardNames(ctx, keyspace)
 			if err != nil {
 				rec.RecordError(fmt.Errorf("GetShardNames(%v): %v", keyspace, err))
 				return
@@ -186,7 +187,8 @@ func CopyTablets(ctx context.Context, fromTS, toTS topo.Impl) {
 // CopyShardReplications will create the ShardReplication objects in
 // the destination topo.
 func CopyShardReplications(ctx context.Context, fromTS, toTS topo.Impl) {
-	keyspaces, err := fromTS.GetKeyspaces(ctx)
+	fromTTS := topo.Server{Impl: fromTS}
+	keyspaces, err := fromTTS.GetKeyspaces(ctx)
 	if err != nil {
 		log.Fatalf("fromTS.GetKeyspaces: %v", err)
 	}
@@ -200,7 +202,7 @@ func CopyShardReplications(ctx context.Context, fromTS, toTS topo.Impl) {
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
-			shards, err := fromTS.GetShardNames(ctx, keyspace)
+			shards, err := fromTTS.GetShardNames(ctx, keyspace)
 			if err != nil {
 				rec.RecordError(fmt.Errorf("GetShardNames(%v): %v", keyspace, err))
 				return

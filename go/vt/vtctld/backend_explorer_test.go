@@ -56,7 +56,8 @@ func TestHandlePathKeyspace(t *testing.T) {
 
 	ctx := context.Background()
 	ts := memorytopo.New(cells...)
-	if err := ts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
+	tts := topo.Server{Impl: ts}
+	if err := tts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
 		t.Fatalf("CreateKeyspace error: %v", err)
 	}
 	if err := ts.CreateShard(ctx, "test_keyspace", "10-20", shard); err != nil {
@@ -108,7 +109,8 @@ func TestHandlePathShard(t *testing.T) {
 
 	ctx := context.Background()
 	ts := memorytopo.New(cells...)
-	if err := ts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
+	tts := topo.Server{Impl: ts}
+	if err := tts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
 		t.Fatalf("CreateKeyspace error: %v", err)
 	}
 	if err := ts.CreateShard(ctx, "test_keyspace", "-80", shard); err != nil {
