@@ -792,6 +792,9 @@ var (
 		input:  "analyze table a",
 		output: "alter table a",
 	}, {
+		input:  "analyze table a, b",
+		output: "analyze table a, b",
+	}, {
 		input:  "show databases",
 		output: "show databases",
 	}, {

@@ -559,12 +559,11 @@ func (node *Set) WalkSubtree(visit Visit) error {
 // NewName is set for AlterStr, CreateStr, RenameStr.
 type DDL struct {
 	Action        string
-	Table         TableName
+	Tables        TableNames
 	NewName       TableName
 	IfExists      bool
 	TableSpec     *TableSpec
 	PartitionSpec *PartitionSpec
-	Tables        *TableNames
 }
 
 // DDL strings.
@@ -574,6 +573,7 @@ const (
 	DropStr     = "drop"
 	RenameStr   = "rename"
 	TruncateStr = "truncate"
+	AnalyzeStr  = "analyze"
 )
 
 // Format formats the node.
@@ -590,21 +590,19 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		if node.IfExists {
 			exists = " if exists"
 		}
-		if node.Tables != nil {
-			buf.Myprintf("%s table%s %v", node.Action, exists, node.Tables)
-		} else {
-			buf.Myprintf("%s table%s %v", node.Action, exists, node.Table)
-		}
+		buf.Myprintf("%s table%s %v", node.Action, exists, node.Tables)
+	case AnalyzeStr:
+		buf.Myprintf("%s table %v", node.Action, node.Tables)
 	case RenameStr:
-		buf.Myprintf("%s table %v %v", node.Action, node.Table, node.NewName)
+		buf.Myprintf("%s table %v %v", node.Action, node.Tables[0], node.NewName)
 	case AlterStr:
 		if node.PartitionSpec != nil {
-			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.PartitionSpec)
+			buf.Myprintf("%s table %v %v", node.Action, node.Tables[0], node.PartitionSpec)
 		} else {
-			buf.Myprintf("%s table %v", node.Action, node.Table)
+			buf.Myprintf("%s table %v", node.Action, node.Tables[0])
 		}
 	default:
-		buf.Myprintf("%s table %v", node.Action, node.Table)
+		buf.Myprintf("%s table %v", node.Action, node.Tables[0])
 	}
 }
 
