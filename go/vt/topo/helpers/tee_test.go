@@ -69,4 +69,32 @@ func TestTee(t *testing.T) {
 	if !reflect.DeepEqual(expected, toKeyspaces) {
 		t.Errorf("toKeyspaces mismatch, got %+v, want %+v", toKeyspaces, expected)
 	}
+
+	// Read the keyspace from the tee, update it, and make sure
+	// both sides have the updated value.
+	lockCtx, unlock, err := teeTTS.LockKeyspace(ctx, "test_keyspace", "fake-action")
+	if err != nil {
+		t.Fatalf("LockKeyspaceForAction: %v", err)
+	}
+	ki, err := teeTTS.GetKeyspace(ctx, "test_keyspace")
+	if err != nil {
+		t.Fatalf("tee.GetKeyspace(test_keyspace) failed: %v", err)
+	}
+	ki.Keyspace.ShardingColumnName = "toChangeIt"
+	if err := teeTTS.UpdateKeyspace(lockCtx, ki); err != nil {
+		t.Fatalf("tee.UpdateKeyspace(test_keyspace) failed: %v", err)
+	}
+	unlock(&err)
+	if err != nil {
+		t.Fatalf("unlock(test_keyspace): %v", err)
+	}
+
+	fromKi, err := fromTTS.GetKeyspace(ctx, "test_keyspace")
+	if err != nil || fromKi.Keyspace.ShardingColumnName != "toChangeIt" {
+		t.Errorf("invalid keyspace data in fromTTS: %v %v", fromKi, err)
+	}
+	toKi, err := toTTS.GetKeyspace(ctx, "test_keyspace")
+	if err != nil || toKi.Keyspace.ShardingColumnName != "toChangeIt" {
+		t.Errorf("invalid keyspace data in toTTS: %v %v", toKi, err)
+	}
 }

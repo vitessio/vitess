@@ -134,7 +134,7 @@ func (tee *Tee) Create(ctx context.Context, cell, filePath string, contents []by
 func (tee *Tee) Update(ctx context.Context, cell, filePath string, contents []byte, version topo.Version) (topo.Version, error) {
 	primaryVersion, err := tee.primary.Update(ctx, cell, filePath, contents, version)
 	if err != nil {
-		// failed on primary, not updating secondary
+		// Failed on primary, not updating secondary.
 		return nil, err
 	}
 
