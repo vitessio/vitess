@@ -99,14 +99,14 @@ func checkKeyspace(t *testing.T, ts topo.Server) {
 	storedKI.Keyspace.ShardingColumnName = "other_id"
 	lockCtx, unlock, err := ts.LockKeyspace(ctx, "test_keyspace2", "fake-action")
 	if err != nil {
-		t.Fatalf("LockKeyspaceForAction: %v", err)
+		t.Fatalf("LockKeyspace: %v", err)
 	}
 	if err := ts.UpdateKeyspace(lockCtx, storedKI); err != nil {
 		t.Fatalf("UpdateKeyspace: %v", err)
 	}
 	unlock(&err)
 	if err != nil {
-		t.Fatalf("unlock(test_keyspace): %v", err)
+		t.Fatalf("unlock(test_keyspace2): %v", err)
 	}
 
 	// And read again to make sure it's good.

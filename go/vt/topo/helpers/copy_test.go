@@ -31,6 +31,7 @@ import (
 func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 	fromTS := memorytopo.New("test_cell")
 	toTS := memorytopo.New("test_cell")
+	toTS.SetGenerationForTests(1000)
 	fromTTS := topo.Server{Impl: fromTS}
 
 	// create a keyspace and a couple tablets
