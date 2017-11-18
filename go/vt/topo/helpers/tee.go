@@ -22,7 +22,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -53,19 +52,8 @@ type Tee struct {
 	// protects the variables below this point
 	mu sync.Mutex
 
-	tabletVersionMapping map[string]versionMapping
-
 	keyspaceLockPaths map[string]string
 	shardLockPaths    map[string]string
-}
-
-// When reading a version from 'readFrom', we also read another version
-// from 'readFromSecond', and save the mapping to this map. We only keep one
-// mapping for a given object, no need to overdo it.
-// FIXME(alainjobart) remove this when topo API is all converted to Backend.
-type versionMapping struct {
-	readFromVersion       int64
-	readFromSecondVersion int64
 }
 
 // NewTee returns a new topo.Impl object
@@ -77,15 +65,14 @@ func NewTee(primary, secondary topo.Impl, reverseLockOrder bool) *Tee {
 		lockSecond = primary
 	}
 	return &Tee{
-		primary:              primary,
-		secondary:            secondary,
-		readFrom:             primary,
-		readFromSecond:       secondary,
-		lockFirst:            lockFirst,
-		lockSecond:           lockSecond,
-		tabletVersionMapping: make(map[string]versionMapping),
-		keyspaceLockPaths:    make(map[string]string),
-		shardLockPaths:       make(map[string]string),
+		primary:           primary,
+		secondary:         secondary,
+		readFrom:          primary,
+		readFromSecond:    secondary,
+		lockFirst:         lockFirst,
+		lockSecond:        lockSecond,
+		keyspaceLockPaths: make(map[string]string),
+		shardLockPaths:    make(map[string]string),
 	}
 }
 
@@ -176,117 +163,6 @@ func (tee *Tee) Watch(ctx context.Context, cell, filePath string) (*topo.WatchDa
 // GetKnownCells is part of the topo.Server interface
 func (tee *Tee) GetKnownCells(ctx context.Context) ([]string, error) {
 	return tee.readFrom.GetKnownCells(ctx)
-}
-
-//
-// Tablet management, per cell.
-//
-
-// CreateTablet is part of the topo.Server interface
-func (tee *Tee) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) error {
-	err := tee.primary.CreateTablet(ctx, tablet)
-	if err != nil && err != topo.ErrNodeExists {
-		return err
-	}
-
-	if err := tee.primary.CreateTablet(ctx, tablet); err != nil && err != topo.ErrNodeExists {
-		// not critical enough to fail
-		log.Warningf("secondary.CreateTablet(%v) failed: %v", tablet.Alias, err)
-	}
-	return err
-}
-
-// UpdateTablet is part of the topo.Server interface
-func (tee *Tee) UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet, existingVersion int64) (newVersion int64, err error) {
-	if newVersion, err = tee.primary.UpdateTablet(ctx, tablet, existingVersion); err != nil {
-		// failed on primary, not updating secondary
-		return
-	}
-
-	// if we have a mapping between tablet version in first topo
-	// and tablet version in second topo, replace the version number.
-	// if not, this will probably fail and log.
-	tabletAliasStr := topoproto.TabletAliasString(tablet.Alias)
-	tee.mu.Lock()
-	tvm, ok := tee.tabletVersionMapping[tabletAliasStr]
-	if ok && tvm.readFromVersion == existingVersion {
-		existingVersion = tvm.readFromSecondVersion
-		delete(tee.tabletVersionMapping, tabletAliasStr)
-	}
-	tee.mu.Unlock()
-	if newVersion2, serr := tee.secondary.UpdateTablet(ctx, tablet, existingVersion); serr != nil {
-		// not critical enough to fail
-		if serr == topo.ErrNoNode {
-			// the tablet doesn't exist on the secondary, let's
-			// just create it
-			if serr = tee.secondary.CreateTablet(ctx, tablet); serr != nil {
-				log.Warningf("secondary.CreateTablet(%v) failed (after UpdateTablet returned ErrNoNode): %v", tablet.Alias, serr)
-			} else {
-				log.Infof("secondary.UpdateTablet(%v) failed with ErrNoNode, CreateTablet then worked.", tablet.Alias)
-				_, v, gerr := tee.secondary.GetTablet(ctx, tablet.Alias)
-				if gerr != nil {
-					log.Warningf("Failed to re-read tablet(%v) after creating it on secondary: %v", tablet.Alias, gerr)
-				} else {
-					tee.mu.Lock()
-					tee.tabletVersionMapping[tabletAliasStr] = versionMapping{
-						readFromVersion:       newVersion,
-						readFromSecondVersion: v,
-					}
-					tee.mu.Unlock()
-				}
-			}
-		} else {
-			log.Warningf("secondary.UpdateTablet(%v) failed: %v", tablet.Alias, serr)
-		}
-	} else {
-		tee.mu.Lock()
-		tee.tabletVersionMapping[tabletAliasStr] = versionMapping{
-			readFromVersion:       newVersion,
-			readFromSecondVersion: newVersion2,
-		}
-		tee.mu.Unlock()
-	}
-	return
-}
-
-// DeleteTablet is part of the topo.Server interface
-func (tee *Tee) DeleteTablet(ctx context.Context, alias *topodatapb.TabletAlias) error {
-	if err := tee.primary.DeleteTablet(ctx, alias); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.DeleteTablet(ctx, alias); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.DeleteTablet(%v) failed: %v", alias, err)
-	}
-	return nil
-}
-
-// GetTablet is part of the topo.Server interface
-func (tee *Tee) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topodatapb.Tablet, int64, error) {
-	t, v, err := tee.readFrom.GetTablet(ctx, alias)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	_, v2, err := tee.readFromSecond.GetTablet(ctx, alias)
-	if err != nil {
-		// can't read from secondary, so we can's keep version map
-		return t, v, nil
-	}
-
-	tee.mu.Lock()
-	tee.tabletVersionMapping[topoproto.TabletAliasString(alias)] = versionMapping{
-		readFromVersion:       v,
-		readFromSecondVersion: v2,
-	}
-	tee.mu.Unlock()
-	return t, v, nil
-}
-
-// GetTabletsByCell is part of the topo.Server interface
-func (tee *Tee) GetTabletsByCell(ctx context.Context, cell string) ([]*topodatapb.TabletAlias, error) {
-	return tee.readFrom.GetTabletsByCell(ctx, cell)
 }
 
 //

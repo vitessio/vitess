@@ -43,6 +43,7 @@ const (
 const (
 	KeyspacesPath = "keyspaces"
 	ShardsPath    = "shards"
+	TabletsPath   = "tablets"
 )
 
 var (
@@ -106,37 +107,6 @@ type Impl interface {
 	// by then calling GetTabletsByCell on every cell, for instance.
 	// They shall be sorted.
 	GetKnownCells(ctx context.Context) ([]string, error)
-
-	//
-	// Tablet management, per cell.
-	//
-
-	// CreateTablet creates the given tablet, assuming it doesn't exist
-	// yet. It does *not* create the tablet replication paths.
-	// Can return ErrNodeExists if it already exists.
-	CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) error
-
-	// UpdateTablet updates a given tablet. The version is used
-	// for atomic updates. UpdateTablet will return ErrNoNode if
-	// the tablet doesn't exist and ErrBadVersion if the version
-	// has changed.
-	//
-	// Do not use directly, but instead use topo.UpdateTablet.
-	UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet, existingVersion int64) (newVersion int64, err error)
-
-	// DeleteTablet removes a tablet from the system.
-	// We assume no RPC is currently running to it.
-	// TODO(alainjobart) verify this assumption, link with RPC code.
-	// Can return ErrNoNode if the tablet doesn't exist.
-	DeleteTablet(ctx context.Context, alias *topodatapb.TabletAlias) error
-
-	// GetTablet returns the tablet data (includes the current version).
-	// Can return ErrNoNode if the tablet doesn't exist.
-	GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topodatapb.Tablet, int64, error)
-
-	// GetTabletsByCell returns all the tablets in the given cell.
-	// Can return ErrNoNode if no tablet was ever created in that cell.
-	GetTabletsByCell(ctx context.Context, cell string) ([]*topodatapb.TabletAlias, error)
 
 	//
 	// Replication graph management, per cell.

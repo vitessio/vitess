@@ -190,7 +190,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		}
 
 		// Then overwrite everything, ignoring version mismatch.
-		if err := agent.TopoServer.UpdateTablet(ctx, topo.NewTabletInfo(tablet, -1)); err != nil {
+		if err := agent.TopoServer.UpdateTablet(ctx, topo.NewTabletInfo(tablet, nil)); err != nil {
 			return fmt.Errorf("UpdateTablet failed: %v", err)
 		}
 	default:

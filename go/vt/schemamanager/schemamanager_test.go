@@ -21,7 +21,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -30,7 +32,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/faketmclient"
 	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
@@ -295,27 +296,6 @@ func newFakeTopo() topo.Server {
 	}
 }
 
-func (ts *fakeTopo) GetShard(ctx context.Context, keyspace string, shard string) (*topodatapb.Shard, int64, error) {
-	var masterAlias *topodatapb.TabletAlias
-	if !ts.WithEmptyMasterAlias {
-		masterAlias = &topodatapb.TabletAlias{
-			Cell: "test_cell",
-			Uid:  0,
-		}
-	}
-	value := &topodatapb.Shard{
-		MasterAlias: masterAlias,
-	}
-	return value, 0, nil
-}
-
-func (ts *fakeTopo) GetTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias) (*topodatapb.Tablet, int64, error) {
-	return &topodatapb.Tablet{
-		Alias:    tabletAlias,
-		Keyspace: "test_keyspace",
-	}, 0, nil
-}
-
 func (ts *fakeTopo) ListDir(ctx context.Context, cell, dirPath string) ([]string, error) {
 	// Check for the GetShardNames call.
 	if cell == topo.GlobalCell && dirPath == "keyspaces/test_keyspace/shards" {
@@ -336,6 +316,18 @@ func (ts *fakeTopo) Get(ctx context.Context, cell, filePath string) ([]byte, top
 		}
 		value := &topodatapb.Shard{
 			MasterAlias: masterAlias,
+		}
+		data, err := proto.Marshal(value)
+		return data, nil, err
+	}
+	// Check for GetTablet
+	if filePath == "tablets/test_cell-0000000000/Tablet" {
+		value := &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "test_cell",
+				Uid:  0,
+			},
+			Keyspace: "test_keyspace",
 		}
 		data, err := proto.Marshal(value)
 		return data, nil, err
