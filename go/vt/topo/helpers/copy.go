@@ -141,9 +141,8 @@ func CopyTablets(ctx context.Context, fromTS, toTS topo.Impl) {
 	if err != nil {
 		log.Fatalf("fromTS.GetKnownCells: %v", err)
 	}
-	tts := topo.Server{
-		Impl: toTS,
-	}
+	fromTTS := topo.Server{Impl: fromTS}
+	toTTS := topo.Server{Impl: toTS}
 
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
@@ -151,7 +150,7 @@ func CopyTablets(ctx context.Context, fromTS, toTS topo.Impl) {
 		wg.Add(1)
 		go func(cell string) {
 			defer wg.Done()
-			tabletAliases, err := fromTS.GetTabletsByCell(ctx, cell)
+			tabletAliases, err := fromTTS.GetTabletsByCell(ctx, cell)
 			if err != nil {
 				rec.RecordError(fmt.Errorf("GetTabletsByCell(%v): %v", cell, err))
 			} else {
@@ -161,19 +160,19 @@ func CopyTablets(ctx context.Context, fromTS, toTS topo.Impl) {
 						defer wg.Done()
 
 						// read the source tablet
-						tablet, _, err := fromTS.GetTablet(ctx, tabletAlias)
+						ti, err := fromTTS.GetTablet(ctx, tabletAlias)
 						if err != nil {
 							rec.RecordError(fmt.Errorf("GetTablet(%v): %v", tabletAlias, err))
 							return
 						}
 
 						// try to create the destination
-						err = toTS.CreateTablet(ctx, tablet)
+						err = toTTS.CreateTablet(ctx, ti.Tablet)
 						if err == topo.ErrNodeExists {
 							// update the destination tablet
 							log.Warningf("tablet %v already exists, updating it", tabletAlias)
-							_, err = tts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
-								*t = *tablet
+							_, err = toTTS.UpdateTabletFields(ctx, tabletAlias, func(t *topodatapb.Tablet) error {
+								*t = *ti.Tablet
 								return nil
 							})
 						}

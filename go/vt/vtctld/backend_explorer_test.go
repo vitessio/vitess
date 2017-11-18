@@ -147,7 +147,8 @@ func TestHandlePathTablet(t *testing.T) {
 
 	ctx := context.Background()
 	ts := memorytopo.New(cells...)
-	if err := ts.CreateTablet(ctx, tablet); err != nil {
+	tts := topo.Server{Impl: ts}
+	if err := tts.CreateTablet(ctx, tablet); err != nil {
 		t.Fatalf("CreateTablet error: %v", err)
 	}
 

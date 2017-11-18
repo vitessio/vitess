@@ -145,7 +145,7 @@ func TestBasic(t *testing.T) {
 
 	// check tablet copy
 	CopyTablets(ctx, fromTS, toTS)
-	tablets, err := toTS.GetTabletsByCell(ctx, "test_cell")
+	tablets, err := toTTS.GetTabletsByCell(ctx, "test_cell")
 	if err != nil {
 		t.Fatalf("toTS.GetTabletsByCell failed: %v", err)
 	}
