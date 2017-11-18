@@ -555,7 +555,7 @@ func (node *Set) WalkSubtree(visit Visit) error {
 }
 
 // DDL represents a CREATE, ALTER, DROP, RENAME or TRUNCATE statement.
-// Table is set for AlterStr, DropStr, RenameStr, TruncateStr
+// Table is set for AlterStr, DropStr, RenameStr, TruncateStr, AnalyzeStr
 // NewName is set for AlterStr, CreateStr, RenameStr.
 type DDL struct {
 	Action        string
@@ -576,7 +576,18 @@ const (
 	AnalyzeStr  = "analyze"
 )
 
+// GetFirstTableName returns the Name (as a string) of the first
+// element of Tables if there is one, otherwise empty string.
+func (node *DDL) GetFirstTableName() string {
+	if len(node.Tables) != 0 {
+		return node.Tables[0].Name.String()
+	}
+	return ""
+}
+
 // Format formats the node.
+// For some actions Tables is an array of length one, but we take
+// the first element here to be clear about that.
 func (node *DDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case CreateStr:
@@ -613,7 +624,7 @@ func (node *DDL) WalkSubtree(visit Visit) error {
 	}
 	return Walk(
 		visit,
-		node.Table,
+		node.Tables,
 		node.NewName,
 	)
 }

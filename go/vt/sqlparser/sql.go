@@ -3026,7 +3026,7 @@ yydefault:
 			if yyDollar[3].byt != 0 {
 				exists = true
 			}
-			yyVAL.statement = &DDL{Action: DropStr, Tables: &yyDollar[4].tableNames, IfExists: exists}
+			yyVAL.statement = &DDL{Action: DropStr, Tables: yyDollar[4].tableNames, IfExists: exists}
 		}
 	case 159:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -3061,7 +3061,7 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		//line sql.y:1017
 		{
-			yyVAL.statement = &DDL{Action: AlterStr, Tables: yyDollar[3].tableNames}
+			yyVAL.statement = &DDL{Action: AnalyzeStr, Tables: yyDollar[3].tableNames}
 		}
 	case 164:
 		yyDollar = yyS[yypt-1 : yypt+1]

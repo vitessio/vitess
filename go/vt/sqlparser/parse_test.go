@@ -790,7 +790,7 @@ var (
 		output: "alter table a",
 	}, {
 		input:  "analyze table a",
-		output: "alter table a",
+		output: "analyze table a",
 	}, {
 		input:  "analyze table a, b",
 		output: "analyze table a, b",

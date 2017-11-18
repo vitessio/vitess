@@ -987,7 +987,7 @@ drop_statement:
     if $3 != 0 {
       exists = true
     }
-    $$ = &DDL{Action: DropStr, Tables: &$4, IfExists: exists}
+    $$ = &DDL{Action: DropStr, Tables: $4, IfExists: exists}
   }
 | DROP INDEX ID ON table_name ddl_force_eof
   {

@@ -167,8 +167,12 @@ func TestDDLPlan(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error marshalling %v", plan)
 		}
+		tableName := "<nil>"
+		if len(plan.TableNames) != 0 {
+			tableName = sqlparser.String(plan.TableNames[0])
+		}
 		matchString(t, tcase.lineno, expected["Action"], plan.Action)
-		matchString(t, tcase.lineno, expected["TableName"], sqlparser.String(plan.TableName))
+		matchString(t, tcase.lineno, expected["TableName"], tableName)
 		matchString(t, tcase.lineno, expected["NewName"], sqlparser.String(plan.NewName))
 	}
 }
