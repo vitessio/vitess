@@ -212,6 +212,8 @@ var (
 	}, {
 		input: "select /* join on */ 1 from t1 join t2 on a = b",
 	}, {
+		input: "select /* join on */ 1 from t1 join t2 using (a)",
+	}, {
 		input:  "select /* inner join */ 1 from t1 inner join t2",
 		output: "select /* inner join */ 1 from t1 join t2",
 	}, {
@@ -224,13 +226,23 @@ var (
 	}, {
 		input: "select /* left join */ 1 from t1 left join t2 on a = b",
 	}, {
+		input: "select /* left join */ 1 from t1 left join t2 using (a)",
+	}, {
 		input:  "select /* left outer join */ 1 from t1 left outer join t2 on a = b",
 		output: "select /* left outer join */ 1 from t1 left join t2 on a = b",
 	}, {
+		input:  "select /* left outer join */ 1 from t1 left outer join t2 using (a)",
+		output: "select /* left outer join */ 1 from t1 left join t2 using (a)",
+	}, {
 		input: "select /* right join */ 1 from t1 right join t2 on a = b",
+	}, {
+		input: "select /* right join */ 1 from t1 right join t2 using (a)",
 	}, {
 		input:  "select /* right outer join */ 1 from t1 right outer join t2 on a = b",
 		output: "select /* right outer join */ 1 from t1 right join t2 on a = b",
+	}, {
+		input:  "select /* right outer join */ 1 from t1 right outer join t2 using (a)",
+		output: "select /* right outer join */ 1 from t1 right join t2 using (a)",
 	}, {
 		input: "select /* natural join */ 1 from t1 natural join t2",
 	}, {
@@ -245,6 +257,10 @@ var (
 		output: "select /* natural right outer join */ 1 from t1 natural right join t2",
 	}, {
 		input: "select /* join on */ 1 from t1 join t2 on a = b",
+	}, {
+		input: "select /* join using */ 1 from t1 join t2 using (a)",
+	}, {
+		input: "select /* join using (a, b, c) */ 1 from t1 join t2 using (a, b, c)",
 	}, {
 		input: "select /* s.t */ 1 from s.t",
 	}, {
@@ -1475,6 +1491,9 @@ var (
 		input:  "select * from a natural join b on c = d",
 		output: "syntax error at position 34 near 'on'",
 	}, {
+		input:  "select * from a natural join b using (c)",
+		output: "syntax error at position 37 near 'using'",
+	}, {
 		input:  "select next id from a",
 		output: "expecting value after next at position 15 near 'id'",
 	}, {
@@ -1510,6 +1529,9 @@ var (
 	}, {
 		input:  "select * from t where id = ((select a from t1 union select b from t2) order by a limit 1)",
 		output: "syntax error at position 76 near 'order'",
+	}, {
+		input:  "select /* straight_join using */ 1 from t1 straight_join t2 using (a)",
+		output: "syntax error at position 66 near 'using'",
 	}, {
 		input:        "select 'aa",
 		output:       "syntax error at position 11 near 'aa'",

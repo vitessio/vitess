@@ -54,6 +54,7 @@ type yySymType struct {
 	colName           *ColName
 	tableExprs        TableExprs
 	tableExpr         TableExpr
+	joinCondition     *JoinCondition
 	tableName         TableName
 	tableNames        TableNames
 	indexHints        *IndexHints
