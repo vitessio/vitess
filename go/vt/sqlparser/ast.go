@@ -1436,12 +1436,42 @@ func (node *ParenTableExpr) WalkSubtree(visit Visit) error {
 	)
 }
 
+type JoinCondition struct {
+	On    Expr
+	Using Columns
+}
+
+func (node *JoinCondition) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+
+	if node.On != nil {
+		buf.Myprintf(" on %v", node.On)
+	}
+	if node.Using != nil {
+		buf.Myprintf(" using %v", node.Using)
+	}
+}
+
+func (node *JoinCondition) WalkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+
+	return Walk(
+		visit,
+		node.On,
+		node.Using,
+	)
+}
+
 // JoinTableExpr represents a TableExpr that's a JOIN operation.
 type JoinTableExpr struct {
 	LeftExpr  TableExpr
 	Join      string
 	RightExpr TableExpr
-	On        Expr
+	Condition *JoinCondition
 }
 
 // JoinTableExpr.Join
@@ -1457,10 +1487,7 @@ const (
 
 // Format formats the node.
 func (node *JoinTableExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v %s %v", node.LeftExpr, node.Join, node.RightExpr)
-	if node.On != nil {
-		buf.Myprintf(" on %v", node.On)
-	}
+	buf.Myprintf("%v %s %v%v", node.LeftExpr, node.Join, node.RightExpr, node.Condition)
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -1472,7 +1499,7 @@ func (node *JoinTableExpr) WalkSubtree(visit Visit) error {
 		visit,
 		node.LeftExpr,
 		node.RightExpr,
-		node.On,
+		node.Condition,
 	)
 }
 
