@@ -130,12 +130,12 @@ func TestBasic(t *testing.T) {
 	}
 
 	// check ShardReplication copy
-	sr, err := fromTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
+	sr, err := fromTTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("fromTS.GetShardReplication failed: %v", err)
 	}
-	CopyShardReplications(ctx, fromTS, toTS)
-	sr, err = toTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
+	CopyShardReplications(ctx, fromTTS, toTTS)
+	sr, err = toTTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("toTS.GetShardReplication failed: %v", err)
 	}

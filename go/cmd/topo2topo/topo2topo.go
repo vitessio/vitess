@@ -71,7 +71,7 @@ func main() {
 		helpers.CopyShards(ctx, fromTS.Impl, toTS.Impl)
 	}
 	if *doShardReplications {
-		helpers.CopyShardReplications(ctx, fromTS.Impl, toTS.Impl)
+		helpers.CopyShardReplications(ctx, fromTS, toTS)
 	}
 	if *doTablets {
 		helpers.CopyTablets(ctx, fromTS.Impl, toTS.Impl)

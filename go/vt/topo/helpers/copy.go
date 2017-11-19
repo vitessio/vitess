@@ -193,14 +193,10 @@ func CopyTablets(ctx context.Context, fromTS, toTS topo.Impl) {
 
 // CopyShardReplications will create the ShardReplication objects in
 // the destination topo.
-func CopyShardReplications(ctx context.Context, fromTS, toTS topo.Impl) {
-	fromTTS := topo.Server{Impl: fromTS}
-	keyspaces, err := fromTTS.GetKeyspaces(ctx)
+func CopyShardReplications(ctx context.Context, fromTS, toTS topo.Server) {
+	keyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
 		log.Fatalf("fromTS.GetKeyspaces: %v", err)
-	}
-	tts := topo.Server{
-		Impl: toTS,
 	}
 
 	wg := sync.WaitGroup{}
@@ -209,7 +205,7 @@ func CopyShardReplications(ctx context.Context, fromTS, toTS topo.Impl) {
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
-			shards, err := fromTTS.GetShardNames(ctx, keyspace)
+			shards, err := fromTS.GetShardNames(ctx, keyspace)
 			if err != nil {
 				rec.RecordError(fmt.Errorf("GetShardNames(%v): %v", keyspace, err))
 				return
@@ -221,7 +217,7 @@ func CopyShardReplications(ctx context.Context, fromTS, toTS topo.Impl) {
 					defer wg.Done()
 
 					// read the source shard to get the cells
-					si, err := fromTTS.GetShard(ctx, keyspace, shard)
+					si, err := fromTS.GetShard(ctx, keyspace, shard)
 					if err != nil {
 						rec.RecordError(fmt.Errorf("GetShard(%v, %v): %v", keyspace, shard, err))
 						return
@@ -234,7 +230,7 @@ func CopyShardReplications(ctx context.Context, fromTS, toTS topo.Impl) {
 							continue
 						}
 
-						if err := tts.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(oldSR *topodatapb.ShardReplication) error {
+						if err := toTS.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(oldSR *topodatapb.ShardReplication) error {
 							*oldSR = *sri.ShardReplication
 							return nil
 						}); err != nil {
