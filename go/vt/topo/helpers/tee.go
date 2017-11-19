@@ -166,55 +166,6 @@ func (tee *Tee) GetKnownCells(ctx context.Context) ([]string, error) {
 }
 
 //
-// Shard replication graph management, local.
-//
-
-// UpdateShardReplicationFields is part of the topo.Server interface
-func (tee *Tee) UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*topodatapb.ShardReplication) error) error {
-	if err := tee.primary.UpdateShardReplicationFields(ctx, cell, keyspace, shard, update); err != nil {
-		// failed on primary, not updating secondary
-		return err
-	}
-
-	if err := tee.secondary.UpdateShardReplicationFields(ctx, cell, keyspace, shard, update); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.UpdateShardReplicationFields(%v, %v, %v) failed: %v", cell, keyspace, shard, err)
-	}
-	return nil
-}
-
-// GetShardReplication is part of the topo.Server interface
-func (tee *Tee) GetShardReplication(ctx context.Context, cell, keyspace, shard string) (*topo.ShardReplicationInfo, error) {
-	return tee.readFrom.GetShardReplication(ctx, cell, keyspace, shard)
-}
-
-// DeleteShardReplication is part of the topo.Server interface
-func (tee *Tee) DeleteShardReplication(ctx context.Context, cell, keyspace, shard string) error {
-	if err := tee.primary.DeleteShardReplication(ctx, cell, keyspace, shard); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.DeleteShardReplication(ctx, cell, keyspace, shard); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.DeleteShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err)
-	}
-	return nil
-}
-
-// DeleteKeyspaceReplication is part of the topo.Server interface
-func (tee *Tee) DeleteKeyspaceReplication(ctx context.Context, cell, keyspace string) error {
-	if err := tee.primary.DeleteKeyspaceReplication(ctx, cell, keyspace); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.DeleteKeyspaceReplication(ctx, cell, keyspace); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.DeleteKeyspaceReplication(%v, %v) failed: %v", cell, keyspace, err)
-	}
-	return nil
-}
-
-//
 // Serving Graph management, per cell.
 //
 

@@ -17,6 +17,9 @@ limitations under the License.
 package topo
 
 import (
+	"fmt"
+	"path"
+
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -156,4 +159,87 @@ func FixShardReplication(ctx context.Context, ts Server, logger logutil.Logger, 
 
 	logger.Infof("All entries in replication graph are valid")
 	return nil
+}
+
+// UpdateShardReplicationFields updates the fields inside a topo.ShardReplication object.
+func (ts Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*topodatapb.ShardReplication) error) error {
+	nodePath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard, ShardReplicationFile)
+
+	for {
+		data, version, err := ts.Get(ctx, cell, nodePath)
+		sr := &topodatapb.ShardReplication{}
+		switch err {
+		case ErrNoNode:
+			// Empty node, version is nil
+		case nil:
+			// Use any data we got.
+			if err = proto.Unmarshal(data, sr); err != nil {
+				return fmt.Errorf("bad ShardReplication data %v", err)
+			}
+		default:
+			return err
+		}
+
+		err = update(sr)
+		switch err {
+		case ErrNoUpdateNeeded:
+			return nil
+		case nil:
+			// keep going
+		default:
+			return err
+		}
+
+		// marshall and save
+		data, err = proto.Marshal(sr)
+		if err != nil {
+			return err
+		}
+		if version == nil {
+			// We have to create, and we catch ErrNodeExists.
+			_, err = ts.Create(ctx, cell, nodePath, data)
+			if err == ErrNodeExists {
+				// Node was created by another process, try
+				// again.
+				continue
+			}
+			return err
+		}
+
+		// We have to update, and we catch ErrBadVersion.
+		_, err = ts.Update(ctx, cell, nodePath, data, version)
+		if err == ErrBadVersion {
+			// Node was updated by another process, try again.
+			continue
+		}
+		return err
+	}
+}
+
+// GetShardReplication returns the ShardReplicationInfo object.
+func (ts Server) GetShardReplication(ctx context.Context, cell, keyspace, shard string) (*ShardReplicationInfo, error) {
+	nodePath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard, ShardReplicationFile)
+	data, _, err := ts.Get(ctx, cell, nodePath)
+	if err != nil {
+		return nil, err
+	}
+
+	sr := &topodatapb.ShardReplication{}
+	if err = proto.Unmarshal(data, sr); err != nil {
+		return nil, fmt.Errorf("bad ShardReplication data %v", err)
+	}
+
+	return NewShardReplicationInfo(sr, cell, keyspace, shard), nil
+}
+
+// DeleteShardReplication deletes a ShardReplication object.
+func (ts Server) DeleteShardReplication(ctx context.Context, cell, keyspace, shard string) error {
+	nodePath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard, ShardReplicationFile)
+	return ts.Delete(ctx, cell, nodePath, nil)
+}
+
+// DeleteKeyspaceReplication deletes all the ShardReplication objects for a cell/keyspace.
+func (ts Server) DeleteKeyspaceReplication(ctx context.Context, cell, keyspace string) error {
+	nodePath := path.Join(KeyspacesPath, keyspace)
+	return ts.Delete(ctx, cell, nodePath, nil)
 }

@@ -109,29 +109,6 @@ type Impl interface {
 	GetKnownCells(ctx context.Context) ([]string, error)
 
 	//
-	// Replication graph management, per cell.
-	//
-
-	// UpdateShardReplicationFields updates the current
-	// ShardReplication record with new values. If the
-	// ShardReplication object does not exist, an empty one will
-	// be passed to the update function. All necessary directories
-	// need to be created by this method, if applicable.
-	UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*topodatapb.ShardReplication) error) error
-
-	// GetShardReplication returns the replication data.
-	// Can return ErrNoNode if the object doesn't exist.
-	GetShardReplication(ctx context.Context, cell, keyspace, shard string) (*ShardReplicationInfo, error)
-
-	// DeleteShardReplication deletes the replication data.
-	// Can return ErrNoNode if the object doesn't exist.
-	DeleteShardReplication(ctx context.Context, cell, keyspace, shard string) error
-
-	// DeleteKeyspaceReplication deletes the replication data for all shards.
-	// Can return ErrNoNode if the object doesn't exist.
-	DeleteKeyspaceReplication(ctx context.Context, cell, keyspace string) error
-
-	//
 	// Serving Graph management, per cell.
 	//
 
