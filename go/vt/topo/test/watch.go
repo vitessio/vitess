@@ -67,6 +67,7 @@ func waitForInitialValue(t *testing.T, ts topo.Impl, cell string, srvKeyspace *t
 func checkWatch(t *testing.T, ts topo.Impl) {
 	ctx := context.Background()
 	cell := getLocalCell(ctx, t, ts)
+	tts := topo.Server{Impl: ts}
 
 	// start watching something that doesn't exist -> error
 	current, changes, cancel := ts.Watch(ctx, cell, "keyspaces/test_keyspace/SrvKeyspace")
@@ -78,7 +79,7 @@ func checkWatch(t *testing.T, ts topo.Impl) {
 	srvKeyspace := &topodatapb.SrvKeyspace{
 		ShardingColumnName: "user_id",
 	}
-	if err := ts.UpdateSrvKeyspace(ctx, cell, "test_keyspace", srvKeyspace); err != nil {
+	if err := tts.UpdateSrvKeyspace(ctx, cell, "test_keyspace", srvKeyspace); err != nil {
 		t.Fatalf("UpdateSrvKeyspace(1): %v", err)
 	}
 
@@ -88,7 +89,7 @@ func checkWatch(t *testing.T, ts topo.Impl) {
 
 	// change the data
 	srvKeyspace.ShardingColumnName = "new_user_id"
-	if err := ts.UpdateSrvKeyspace(ctx, cell, "test_keyspace", srvKeyspace); err != nil {
+	if err := tts.UpdateSrvKeyspace(ctx, cell, "test_keyspace", srvKeyspace); err != nil {
 		t.Fatalf("UpdateSrvKeyspace(2): %v", err)
 	}
 
@@ -120,7 +121,7 @@ func checkWatch(t *testing.T, ts topo.Impl) {
 	}
 
 	// remove the SrvKeyspace
-	if err := ts.DeleteSrvKeyspace(ctx, cell, "test_keyspace"); err != nil {
+	if err := tts.DeleteSrvKeyspace(ctx, cell, "test_keyspace"); err != nil {
 		t.Fatalf("DeleteSrvKeyspace: %v", err)
 	}
 
@@ -161,12 +162,13 @@ func checkWatch(t *testing.T, ts topo.Impl) {
 func checkWatchInterrupt(t *testing.T, ts topo.Impl) {
 	ctx := context.Background()
 	cell := getLocalCell(ctx, t, ts)
+	tts := topo.Server{Impl: ts}
 
 	// create some data
 	srvKeyspace := &topodatapb.SrvKeyspace{
 		ShardingColumnName: "user_id",
 	}
-	if err := ts.UpdateSrvKeyspace(ctx, cell, "test_keyspace", srvKeyspace); err != nil {
+	if err := tts.UpdateSrvKeyspace(ctx, cell, "test_keyspace", srvKeyspace); err != nil {
 		t.Fatalf("UpdateSrvKeyspace(1): %v", err)
 	}
 
