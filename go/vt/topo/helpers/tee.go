@@ -24,7 +24,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
@@ -163,65 +162,6 @@ func (tee *Tee) Watch(ctx context.Context, cell, filePath string) (*topo.WatchDa
 // GetKnownCells is part of the topo.Server interface
 func (tee *Tee) GetKnownCells(ctx context.Context) ([]string, error) {
 	return tee.readFrom.GetKnownCells(ctx)
-}
-
-//
-// Serving Graph management, per cell.
-//
-
-// GetSrvKeyspaceNames is part of the topo.Server interface
-func (tee *Tee) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
-	return tee.readFrom.GetSrvKeyspaceNames(ctx, cell)
-}
-
-// UpdateSrvKeyspace is part of the topo.Server interface
-func (tee *Tee) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error {
-	if err := tee.primary.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.UpdateSrvKeyspace(%v, %v) failed: %v", cell, keyspace, err)
-	}
-	return nil
-}
-
-// DeleteSrvKeyspace is part of the topo.Server interface
-func (tee *Tee) DeleteSrvKeyspace(ctx context.Context, cell, keyspace string) error {
-	err := tee.primary.DeleteSrvKeyspace(ctx, cell, keyspace)
-	if err != nil && err != topo.ErrNoNode {
-		return err
-	}
-
-	if err := tee.secondary.DeleteSrvKeyspace(ctx, cell, keyspace); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.DeleteSrvKeyspace(%v, %v) failed: %v", cell, keyspace, err)
-	}
-	return err
-}
-
-// GetSrvKeyspace is part of the topo.Server interface
-func (tee *Tee) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
-	return tee.readFrom.GetSrvKeyspace(ctx, cell, keyspace)
-}
-
-// UpdateSrvVSchema is part of the topo.Server interface
-func (tee *Tee) UpdateSrvVSchema(ctx context.Context, cell string, srvVSchema *vschemapb.SrvVSchema) error {
-	if err := tee.primary.UpdateSrvVSchema(ctx, cell, srvVSchema); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.UpdateSrvVSchema(ctx, cell, srvVSchema); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.UpdateSrvVSchema(%v) failed: %v", cell, err)
-	}
-	return nil
-}
-
-// GetSrvVSchema is part of the topo.Server interface
-func (tee *Tee) GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.SrvVSchema, error) {
-	return tee.readFrom.GetSrvVSchema(ctx, cell)
 }
 
 //

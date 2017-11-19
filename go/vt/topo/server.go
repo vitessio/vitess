@@ -109,32 +109,6 @@ type Impl interface {
 	GetKnownCells(ctx context.Context) ([]string, error)
 
 	//
-	// Serving Graph management, per cell.
-	//
-
-	// GetSrvKeyspaceNames returns the list of visible Keyspaces
-	// in this cell. They shall be sorted.
-	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
-
-	// UpdateSrvKeyspace updates the serving records for a cell, keyspace.
-	UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error
-
-	// DeleteSrvKeyspace deletes the cell-local serving records for a keyspace.
-	// Can return ErrNoNode.
-	DeleteSrvKeyspace(ctx context.Context, cell, keyspace string) error
-
-	// GetSrvKeyspace reads a SrvKeyspace record.
-	// Can return ErrNoNode.
-	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
-
-	// UpdateSrvVSchema updates the serving records for a cell.
-	UpdateSrvVSchema(ctx context.Context, cell string, srvVSchema *vschemapb.SrvVSchema) error
-
-	// GetSrvVSchema reads a SrvVSchema record.
-	// Can return ErrNoNode.
-	GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.SrvVSchema, error)
-
-	//
 	// Keyspace and Shard locks for actions, global.
 	//
 
