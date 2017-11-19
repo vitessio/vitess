@@ -24,7 +24,6 @@ import (
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
 // Filenames for all object types.
@@ -133,18 +132,6 @@ type Impl interface {
 
 	// UnlockShardForAction unlocks a shard.
 	UnlockShardForAction(ctx context.Context, keyspace, shard, lockPath, results string) error
-
-	//
-	// V3 Schema management, global
-	//
-
-	// SaveVSchema saves the provided schema in the topo server.
-	SaveVSchema(ctx context.Context, keyspace string, vschema *vschemapb.Keyspace) error
-
-	// GetVSchema retrieves the schema from the topo server.
-	//
-	// Can return ErrNoNode
-	GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error)
 }
 
 // Server is a wrapper type that can have extra methods.
@@ -153,10 +140,10 @@ type Server struct {
 	Impl
 }
 
-// SrvTopoServer is a subset of the Server API that only contains the serving
-// graph read-only calls used by clients to resolve serving addresses,
-// and how to get VSchema. It is mostly used by our discovery modules,
-// and by vtgate.
+// SrvTopoServer is a subset of the topo.Server API that only contains
+// the serving graph read-only calls used by clients to resolve
+// serving addresses, and how to get VSchema. It is mostly used by our
+// discovery modules, and by vtgate.
 type SrvTopoServer interface {
 	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)

@@ -23,8 +23,6 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
-
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
 // Tee is an implementation of topo.Server that uses a primary
@@ -264,25 +262,6 @@ func (tee *Tee) UnlockShardForAction(ctx context.Context, keyspace, shard, lockP
 		return serr
 	}
 	return perr
-}
-
-// SaveVSchema is part of the topo.Server interface
-func (tee *Tee) SaveVSchema(ctx context.Context, keyspace string, contents *vschemapb.Keyspace) error {
-	err := tee.primary.SaveVSchema(ctx, keyspace, contents)
-	if err != nil {
-		return err
-	}
-
-	if err := tee.secondary.SaveVSchema(ctx, keyspace, contents); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.SaveVSchema() failed: %v", err)
-	}
-	return err
-}
-
-// GetVSchema is part of the topo.Server interface
-func (tee *Tee) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error) {
-	return tee.readFrom.GetVSchema(ctx, keyspace)
 }
 
 // NewMasterParticipation is part of the topo.Server interface
