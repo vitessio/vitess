@@ -137,7 +137,6 @@ func main() {
 
 	// vtctld configuration and init
 	vtctld.InitVtctld(ts)
-	vtctld.HandleExplorer("memorytopo", vtctld.NewBackendExplorer(ts.Impl))
 
 	servenv.OnTerm(func() {
 		// FIXME(alainjobart): stop vtgate
