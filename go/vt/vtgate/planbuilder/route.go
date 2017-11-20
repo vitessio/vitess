@@ -125,6 +125,9 @@ func (rb *route) Join(rRoute *route, ajoin *sqlparser.JoinTableExpr) (builder, e
 	if rRoute.ERoute.Opcode == engine.SelectNext {
 		return nil, errors.New("unsupported: sequence join with another table")
 	}
+	if ajoin != nil && ajoin.Condition.Using != nil {
+		return nil, errors.New("unsupported: join with USING(column_list) clause")
+	}
 	if rb.ERoute.Keyspace.Name != rRoute.ERoute.Keyspace.Name {
 		return newJoin(rb, rRoute, ajoin)
 	}
@@ -148,7 +151,7 @@ func (rb *route) Join(rRoute *route, ajoin *sqlparser.JoinTableExpr) (builder, e
 	}
 
 	// Both route are sharded routes. Analyze join condition for merging.
-	for _, filter := range splitAndExpression(nil, ajoin.On) {
+	for _, filter := range splitAndExpression(nil, ajoin.Condition.On) {
 		if rb.isSameRoute(rRoute, filter) {
 			return rb.merge(rRoute, ajoin)
 		}
@@ -189,7 +192,10 @@ func (rb *route) merge(rhs *route, ajoin *sqlparser.JoinTableExpr) (builder, err
 	if ajoin == nil {
 		return rb, nil
 	}
-	for _, filter := range splitAndExpression(nil, ajoin.On) {
+	if ajoin.Condition.Using != nil {
+		return nil, errors.New("unsupported: join with USING(column_list) clause")
+	}
+	for _, filter := range splitAndExpression(nil, ajoin.Condition.On) {
 		// If VTGate evolves, this section should be rewritten
 		// to use processExpr.
 		_, err = findOrigin(filter, rb)
