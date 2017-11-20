@@ -228,7 +228,7 @@ func forceEOF(yylex interface{}) {
 %type <str> asc_desc_opt
 %type <limit> limit_opt
 %type <str> lock_opt
-%type <columns> ins_column_list
+%type <columns> ins_column_list using_column_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
 %type <bytes> charset_or_character_set
@@ -1244,6 +1244,16 @@ aliased_table_name:
 table_name as_opt_id index_hint_list
   {
     $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
+  }
+
+using_column_list:
+  sql_id
+  {
+    $$ = Columns{$1}
+  }
+| using_column_list ',' sql_id
+  {
+    $$ = append($$, $3)
   }
 
 // There is a grammar conflict here:
