@@ -1441,11 +1441,7 @@ type JoinCondition struct {
 	Using Columns
 }
 
-func (node *JoinCondition) Format(buf *TrackedBuffer) {
-	if node == nil {
-		return
-	}
-
+func (node JoinCondition) Format(buf *TrackedBuffer) {
 	if node.On != nil {
 		buf.Myprintf(" on %v", node.On)
 	}
@@ -1454,11 +1450,7 @@ func (node *JoinCondition) Format(buf *TrackedBuffer) {
 	}
 }
 
-func (node *JoinCondition) WalkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-
+func (node JoinCondition) WalkSubtree(visit Visit) error {
 	return Walk(
 		visit,
 		node.On,
@@ -1471,7 +1463,7 @@ type JoinTableExpr struct {
 	LeftExpr  TableExpr
 	Join      string
 	RightExpr TableExpr
-	Condition *JoinCondition
+	Condition JoinCondition
 }
 
 // JoinTableExpr.Join
