@@ -189,6 +189,8 @@ public class VitessVTGateManager {
                     ? connection.getKeyStore() : System.getProperty(Constants.Property.KEYSTORE_FULL);
             final String keyStorePassword = connection.getKeyStorePassword() != null
                     ? connection.getKeyStorePassword() : System.getProperty(Constants.Property.KEYSTORE_PASSWORD_FULL);
+            final String keyStoreType = connection.getKeyStoreType() != null
+                    ? connection.getKeyStoreType() : System.getProperty(Constants.Property.KEYSTORE_TYPE_FULL);
             final String keyAlias = connection.getKeyAlias() != null
                     ? connection.getKeyAlias() : System.getProperty(Constants.Property.KEY_ALIAS_FULL);
             final String keyPassword = connection.getKeyPassword() != null
@@ -197,16 +199,20 @@ public class VitessVTGateManager {
                     ? connection.getTrustStore() : System.getProperty(Constants.Property.TRUSTSTORE_FULL);
             final String trustStorePassword = connection.getTrustStorePassword() != null
                     ? connection.getTrustStorePassword() : System.getProperty(Constants.Property.TRUSTSTORE_PASSWORD_FULL);
+            final String trustStoreType = connection.getTrustStoreType() != null
+                ? connection.getTrustStoreType() : System.getProperty(Constants.Property.TRUSTSTORE_TYPE_FULL);
             final String trustAlias = connection.getTrustAlias() != null
                     ? connection.getTrustAlias() : System.getProperty(Constants.Property.TRUST_ALIAS_FULL);
 
             final TlsOptions tlsOptions = new TlsOptions()
                     .keyStorePath(keyStorePath)
+                    .keyStoreType(keyStoreType)
                     .keyStorePassword(keyStorePassword)
                     .keyAlias(keyAlias)
                     .keyPassword(keyPassword)
                     .trustStorePath(trustStorePath)
                     .trustStorePassword(trustStorePassword)
+                    .trustStoreType(trustStoreType)
                     .trustAlias(trustAlias);
 
             return new RefreshableVTGateConnection(
