@@ -162,7 +162,7 @@ func (w *Writer) initializeTables(cp *mysql.ConnParams) error {
 	}
 	defer conn.Close()
 	statements := []string{
-		sqlTurnoffBinlog,
+		// sqlTurnoffBinlog,   - disabled as the slaves will not pick up the create table statement otherwise.
 		fmt.Sprintf(sqlCreateSidecarDB, w.dbName),
 		fmt.Sprintf(sqlCreateHeartbeatTable, w.dbName),
 	}
