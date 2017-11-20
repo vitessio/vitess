@@ -41,9 +41,11 @@ import java.net.InetSocketAddress;
 public class TlsOptions {
   private File keyStore;
   private String keyStorePassword;
+  private String keyStoreType;
   private String keyAlias;
   private String keyPassword;
   private File trustStore;
+  private String trustStoreType;
   private String trustStorePassword;
   private String trustAlias;
 
@@ -56,6 +58,11 @@ public class TlsOptions {
 
   public TlsOptions keyStorePassword(String keyStorePassword) {
     this.keyStorePassword = keyStorePassword;
+    return this;
+  }
+
+  public TlsOptions keyStoreType(String keyStoreType) {
+    this.keyStoreType = keyStoreType;
     return this;
   }
 
@@ -81,6 +88,11 @@ public class TlsOptions {
     return this;
   }
 
+  public TlsOptions trustStoreType(String trustStoreType) {
+    this.trustStoreType = trustStoreType;
+    return this;
+  }
+
   public TlsOptions trustAlias(String trustAlias) {
     this.trustAlias = trustAlias;
     return this;
@@ -92,6 +104,10 @@ public class TlsOptions {
 
   public String getKeyStorePassword() {
     return keyStorePassword;
+  }
+
+  public String getKeyStoreType() {
+    return keyStoreType;
   }
 
   public String getKeyAlias() {
@@ -108,6 +124,10 @@ public class TlsOptions {
 
   public String getTrustStorePassword() {
     return trustStorePassword;
+  }
+
+  public String getTrustStoreType() {
+    return trustStoreType;
   }
 
   public String getTrustAlias() {
