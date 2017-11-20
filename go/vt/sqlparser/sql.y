@@ -67,7 +67,7 @@ func forceEOF(yylex interface{}) {
   colName       *ColName
   tableExprs    TableExprs
   tableExpr     TableExpr
-  joinCondition *JoinCondition
+  joinCondition JoinCondition
   tableName     TableName
   tableNames    TableNames
   indexHints    *IndexHints
@@ -1273,21 +1273,21 @@ join_table:
 
 join_condition:
   ON expression
-  { $$ = &JoinCondition{On: $2} }
-| USING '(' ins_column_list ')'
-  { $$ = &JoinCondition{Using: $3} }
+  { $$ = JoinCondition{On: $2} }
+| USING '(' using_column_list ')'
+  { $$ = JoinCondition{Using: $3} }
 
 join_condition_opt:
 %prec JOIN
-  { $$ = nil }
+  { }
 | join_condition
   { $$ = $1 }
 
 on_expression_opt:
 %prec JOIN
-  { $$ = nil }
+  { }
 | ON expression
-  { $$ = &JoinCondition{On: $2} }
+  { $$ = JoinCondition{On: $2} }
 
 as_opt:
   { $$ = struct{}{} }
