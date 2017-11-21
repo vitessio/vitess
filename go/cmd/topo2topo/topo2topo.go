@@ -68,12 +68,12 @@ func main() {
 		helpers.CopyKeyspaces(ctx, fromTS, toTS)
 	}
 	if *doShards {
-		helpers.CopyShards(ctx, fromTS.Impl, toTS.Impl)
+		helpers.CopyShards(ctx, fromTS, toTS)
 	}
 	if *doShardReplications {
 		helpers.CopyShardReplications(ctx, fromTS, toTS)
 	}
 	if *doTablets {
-		helpers.CopyTablets(ctx, fromTS.Impl, toTS.Impl)
+		helpers.CopyTablets(ctx, fromTS, toTS)
 	}
 }

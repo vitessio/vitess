@@ -79,10 +79,8 @@ func CopyKeyspaces(ctx context.Context, fromTS, toTS topo.Server) {
 }
 
 // CopyShards will create the shards in the destination topo.
-func CopyShards(ctx context.Context, fromTS, toTS topo.Impl) {
-	fromTTS := topo.Server{Impl: fromTS}
-	toTTS := topo.Server{Impl: toTS}
-	keyspaces, err := fromTTS.GetKeyspaces(ctx)
+func CopyShards(ctx context.Context, fromTS, toTS topo.Server) {
+	keyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
 		log.Fatalf("fromTS.GetKeyspaces: %v", err)
 	}
@@ -93,7 +91,7 @@ func CopyShards(ctx context.Context, fromTS, toTS topo.Impl) {
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
-			shards, err := fromTTS.GetShardNames(ctx, keyspace)
+			shards, err := fromTS.GetShardNames(ctx, keyspace)
 			if err != nil {
 				rec.RecordError(fmt.Errorf("GetShardNames(%v): %v", keyspace, err))
 				return
@@ -104,13 +102,13 @@ func CopyShards(ctx context.Context, fromTS, toTS topo.Impl) {
 				go func(keyspace, shard string) {
 					defer wg.Done()
 
-					si, err := fromTTS.GetShard(ctx, keyspace, shard)
+					si, err := fromTS.GetShard(ctx, keyspace, shard)
 					if err != nil {
 						rec.RecordError(fmt.Errorf("GetShard(%v, %v): %v", keyspace, shard, err))
 						return
 					}
 
-					if err := toTTS.CreateShard(ctx, keyspace, shard); err != nil {
+					if err := toTS.CreateShard(ctx, keyspace, shard); err != nil {
 						if err == topo.ErrNodeExists {
 							log.Warningf("shard %v/%v already exists", keyspace, shard)
 						} else {
@@ -118,7 +116,7 @@ func CopyShards(ctx context.Context, fromTS, toTS topo.Impl) {
 							return
 						}
 					}
-					if _, err := toTTS.UpdateShardFields(ctx, keyspace, shard, func(toSI *topo.ShardInfo) error {
+					if _, err := toTS.UpdateShardFields(ctx, keyspace, shard, func(toSI *topo.ShardInfo) error {
 						*toSI.Shard = *si.Shard
 						return nil
 					}); err != nil {
@@ -136,13 +134,11 @@ func CopyShards(ctx context.Context, fromTS, toTS topo.Impl) {
 }
 
 // CopyTablets will create the tablets in the destination topo.
-func CopyTablets(ctx context.Context, fromTS, toTS topo.Impl) {
+func CopyTablets(ctx context.Context, fromTS, toTS topo.Server) {
 	cells, err := fromTS.GetKnownCells(ctx)
 	if err != nil {
 		log.Fatalf("fromTS.GetKnownCells: %v", err)
 	}
-	fromTTS := topo.Server{Impl: fromTS}
-	toTTS := topo.Server{Impl: toTS}
 
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
@@ -150,7 +146,7 @@ func CopyTablets(ctx context.Context, fromTS, toTS topo.Impl) {
 		wg.Add(1)
 		go func(cell string) {
 			defer wg.Done()
-			tabletAliases, err := fromTTS.GetTabletsByCell(ctx, cell)
+			tabletAliases, err := fromTS.GetTabletsByCell(ctx, cell)
 			if err != nil {
 				rec.RecordError(fmt.Errorf("GetTabletsByCell(%v): %v", cell, err))
 			} else {
@@ -160,18 +156,18 @@ func CopyTablets(ctx context.Context, fromTS, toTS topo.Impl) {
 						defer wg.Done()
 
 						// read the source tablet
-						ti, err := fromTTS.GetTablet(ctx, tabletAlias)
+						ti, err := fromTS.GetTablet(ctx, tabletAlias)
 						if err != nil {
 							rec.RecordError(fmt.Errorf("GetTablet(%v): %v", tabletAlias, err))
 							return
 						}
 
 						// try to create the destination
-						err = toTTS.CreateTablet(ctx, ti.Tablet)
+						err = toTS.CreateTablet(ctx, ti.Tablet)
 						if err == topo.ErrNodeExists {
 							// update the destination tablet
 							log.Warningf("tablet %v already exists, updating it", tabletAlias)
-							_, err = toTTS.UpdateTabletFields(ctx, tabletAlias, func(t *topodatapb.Tablet) error {
+							_, err = toTS.UpdateTabletFields(ctx, tabletAlias, func(t *topodatapb.Tablet) error {
 								*t = *ti.Tablet
 								return nil
 							})

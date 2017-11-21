@@ -91,7 +91,8 @@ func checkKeyspace(t *testing.T, ts topo.Server) {
 		t.Errorf("GetKeyspaces: want %v, got %v", []string{"test_keyspace", "test_keyspace2"}, keyspaces)
 	}
 
-	// Re-read and update. Have to lock it.
+	// Re-read and update. Have to lock it, because UpdateKeyspace
+	// checks for the keyspace lock.
 	storedKI, err := ts.GetKeyspace(ctx, "test_keyspace2")
 	if err != nil {
 		t.Fatalf("GetKeyspace: %v", err)

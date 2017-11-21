@@ -29,7 +29,7 @@ import (
 // This file contains the utility methods to manage SrvKeyspace objects.
 
 func srvKeyspaceFileName(keyspace string) string {
-	return path.Join("keyspaces", keyspace, SrvKeyspaceFile)
+	return path.Join(KeyspacesPath, keyspace, SrvKeyspaceFile)
 }
 
 // WatchSrvKeyspaceData is returned / streamed by WatchSrvKeyspace.

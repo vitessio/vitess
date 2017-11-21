@@ -28,20 +28,22 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
-	fromTS := memorytopo.New("test_cell")
-	toTS := memorytopo.New("test_cell")
-	toTS.SetGenerationForTests(1000)
-	fromTTS := topo.Server{Impl: fromTS}
+func createSetup(ctx context.Context, t *testing.T) (topo.Server, topo.Server) {
+	// Create a source and destination TS, with different generations,
+	// so we test using the Version for both works as expected.
+	fromTS := topo.Server{Impl: memorytopo.New("test_cell")}
+	toTSImpl := memorytopo.New("test_cell")
+	toTSImpl.SetGenerationForTests(1000)
+	toTS := topo.Server{Impl: toTSImpl}
 
 	// create a keyspace and a couple tablets
-	if err := fromTTS.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
+	if err := fromTS.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("cannot create keyspace: %v", err)
 	}
-	if err := fromTTS.CreateShard(ctx, "test_keyspace", "0"); err != nil {
+	if err := fromTS.CreateShard(ctx, "test_keyspace", "0"); err != nil {
 		t.Fatalf("cannot create shard: %v", err)
 	}
-	if _, err := fromTTS.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
+	if _, err := fromTS.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
 		si.Cells = []string{"test_cell"}
 		return nil
 	}); err != nil {
@@ -65,7 +67,7 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 		KeyRange:       nil,
 	}
 	topoproto.SetMysqlPort(tablet1, 3306)
-	if err := fromTTS.CreateTablet(ctx, tablet1); err != nil {
+	if err := fromTS.CreateTablet(ctx, tablet1); err != nil {
 		t.Fatalf("cannot create master tablet: %v", err)
 	}
 	tablet2 := &topodatapb.Tablet{
@@ -87,7 +89,7 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 		KeyRange:       nil,
 	}
 	topoproto.SetMysqlPort(tablet2, 3306)
-	if err := fromTTS.CreateTablet(ctx, tablet2); err != nil {
+	if err := fromTS.CreateTablet(ctx, tablet2); err != nil {
 		t.Fatalf("cannot create slave tablet: %v", err)
 	}
 
@@ -99,21 +101,19 @@ func TestBasic(t *testing.T) {
 	fromTS, toTS := createSetup(ctx, t)
 
 	// check keyspace copy
-	fromTTS := topo.Server{Impl: fromTS}
-	toTTS := topo.Server{Impl: toTS}
-	CopyKeyspaces(ctx, fromTTS, toTTS)
-	keyspaces, err := toTTS.GetKeyspaces(ctx)
+	CopyKeyspaces(ctx, fromTS, toTS)
+	keyspaces, err := toTS.GetKeyspaces(ctx)
 	if err != nil {
 		t.Fatalf("toTS.GetKeyspaces failed: %v", err)
 	}
 	if len(keyspaces) != 1 || keyspaces[0] != "test_keyspace" {
 		t.Fatalf("unexpected keyspaces: %v", keyspaces)
 	}
-	CopyKeyspaces(ctx, fromTTS, toTTS)
+	CopyKeyspaces(ctx, fromTS, toTS)
 
 	// check shard copy
 	CopyShards(ctx, fromTS, toTS)
-	shards, err := toTTS.GetShardNames(ctx, "test_keyspace")
+	shards, err := toTS.GetShardNames(ctx, "test_keyspace")
 	if err != nil {
 		t.Fatalf("toTS.GetShardNames failed: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("unexpected shards: %v", shards)
 	}
 	CopyShards(ctx, fromTS, toTS)
-	si, err := toTTS.GetShard(ctx, "test_keyspace", "0")
+	si, err := toTS.GetShard(ctx, "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("cannot read shard: %v", err)
 	}
@@ -130,12 +130,12 @@ func TestBasic(t *testing.T) {
 	}
 
 	// check ShardReplication copy
-	sr, err := fromTTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
+	sr, err := fromTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("fromTS.GetShardReplication failed: %v", err)
 	}
-	CopyShardReplications(ctx, fromTTS, toTTS)
-	sr, err = toTTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
+	CopyShardReplications(ctx, fromTS, toTS)
+	sr, err = toTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("toTS.GetShardReplication failed: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestBasic(t *testing.T) {
 
 	// check tablet copy
 	CopyTablets(ctx, fromTS, toTS)
-	tablets, err := toTTS.GetTabletsByCell(ctx, "test_cell")
+	tablets, err := toTS.GetTabletsByCell(ctx, "test_cell")
 	if err != nil {
 		t.Fatalf("toTS.GetTabletsByCell failed: %v", err)
 	}

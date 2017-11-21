@@ -268,5 +268,3 @@ func (tee *Tee) UnlockShardForAction(ctx context.Context, keyspace, shard, lockP
 func (tee *Tee) NewMasterParticipation(name, id string) (topo.MasterParticipation, error) {
 	return tee.primary.NewMasterParticipation(name, id)
 }
-
-var _ topo.Impl = (*Tee)(nil) // compile-time interface check
