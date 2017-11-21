@@ -19,15 +19,15 @@ package schemamanager
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttablet/faketmclient"
 	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
@@ -57,7 +57,7 @@ func TestSchemaManagerControllerOpenFail(t *testing.T) {
 		[]string{"select * from test_db"}, true, false, false)
 	ctx := context.Background()
 
-	err := Run(ctx, controller, newFakeExecutor())
+	err := Run(ctx, controller, newFakeExecutor(t))
 	if err != errControllerOpen {
 		t.Fatalf("controller.Open fail, shoud get error: %v, but get error: %v",
 			errControllerOpen, err)
@@ -68,7 +68,7 @@ func TestSchemaManagerControllerReadFail(t *testing.T) {
 	controller := newFakeController(
 		[]string{"select * from test_db"}, false, true, false)
 	ctx := context.Background()
-	err := Run(ctx, controller, newFakeExecutor())
+	err := Run(ctx, controller, newFakeExecutor(t))
 	if err != errControllerRead {
 		t.Fatalf("controller.Read fail, shoud get error: %v, but get error: %v",
 			errControllerRead, err)
@@ -83,9 +83,9 @@ func TestSchemaManagerValidationFail(t *testing.T) {
 		[]string{"invalid sql"}, false, false, false)
 	ctx := context.Background()
 
-	err := Run(ctx, controller, newFakeExecutor())
-	if err == nil {
-		t.Fatalf("run schema change should fail due to executor.Validate fail")
+	err := Run(ctx, controller, newFakeExecutor(t))
+	if err == nil || !strings.Contains(err.Error(), "failed to parse sql") {
+		t.Fatalf("run schema change should fail due to executor.Validate fail, but got: %v", err)
 	}
 }
 
@@ -93,26 +93,26 @@ func TestSchemaManagerExecutorOpenFail(t *testing.T) {
 	controller := newFakeController(
 		[]string{"create table test_table (pk int);"}, false, false, false)
 	controller.SetKeyspace("unknown_keyspace")
-	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(), newFakeTabletManagerClient())
+	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(t), newFakeTabletManagerClient())
 	executor := NewTabletExecutor(wr, testWaitSlaveTimeout)
 	ctx := context.Background()
 
 	err := Run(ctx, controller, executor)
-	if err == nil {
-		t.Fatalf("run schema change should fail due to executor.Open fail")
+	if err == nil || !strings.Contains(err.Error(), "unknown_keyspace") {
+		t.Fatalf("run schema change should fail due to executor.Open fail, but got: %v", err)
 	}
 }
 
 func TestSchemaManagerExecutorExecuteFail(t *testing.T) {
 	controller := newFakeController(
 		[]string{"create table test_table (pk int);"}, false, false, false)
-	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(), newFakeTabletManagerClient())
+	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(t), newFakeTabletManagerClient())
 	executor := NewTabletExecutor(wr, testWaitSlaveTimeout)
 	ctx := context.Background()
 
 	err := Run(ctx, controller, executor)
-	if err == nil {
-		t.Fatalf("run schema change should fail due to executor.Execute fail")
+	if err == nil || !strings.Contains(err.Error(), "unknown database: vt_test_keyspace") {
+		t.Fatalf("run schema change should fail due to executor.Execute fail, but got: %v", err)
 	}
 }
 
@@ -137,7 +137,7 @@ func TestSchemaManagerRun(t *testing.T) {
 
 	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
 
-	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(), fakeTmc)
+	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(t), fakeTmc)
 	executor := NewTabletExecutor(wr, testWaitSlaveTimeout)
 
 	ctx := context.Background()
@@ -183,14 +183,14 @@ func TestSchemaManagerExecutorFail(t *testing.T) {
 
 	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
 	fakeTmc.EnableExecuteFetchAsDbaError = true
-	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(), fakeTmc)
+	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(t), fakeTmc)
 	executor := NewTabletExecutor(wr, testWaitSlaveTimeout)
 
 	ctx := context.Background()
 	err := Run(ctx, controller, executor)
 
-	if err == nil {
-		t.Fatalf("schema change should fail")
+	if err == nil || !strings.Contains(err.Error(), "Schema change failed") {
+		t.Fatalf("schema change should fail, but got err: %v", err)
 	}
 }
 
@@ -204,8 +204,8 @@ func TestSchemaManagerRegisterControllerFactory(t *testing.T) {
 		})
 
 	_, err := GetControllerFactory("unknown")
-	if err == nil {
-		t.Fatalf("controller factory is not registered, GetControllerFactory should return an error")
+	if err == nil || !strings.Contains(err.Error(), "there is no data sourcer factory") {
+		t.Fatalf("controller factory is not registered, GetControllerFactory should return an error, but got: %v", err)
 	}
 	_, err = GetControllerFactory("test_controller")
 	if err != nil {
@@ -227,8 +227,8 @@ func TestSchemaManagerRegisterControllerFactory(t *testing.T) {
 	}()
 }
 
-func newFakeExecutor() *TabletExecutor {
-	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(), newFakeTabletManagerClient())
+func newFakeExecutor(t *testing.T) *TabletExecutor {
+	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(t), newFakeTabletManagerClient())
 	return NewTabletExecutor(wr, testWaitSlaveTimeout)
 }
 
@@ -284,63 +284,39 @@ func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, ta
 	return client.TabletManagerClient.ExecuteFetchAsDba(ctx, tablet, usePool, query, maxRows, disableBinlogs, reloadSchema)
 }
 
-// FIXME(alainjobart) replace with a memorytopo.
-type fakeTopo struct {
-	faketopo.FakeTopo
-	WithEmptyMasterAlias bool
-}
-
-func newFakeTopo() topo.Server {
-	return topo.Server{
-		Impl: &fakeTopo{},
+// newFakeTopo returns a topo with:
+// - a keyspace named 'test_keyspace'.
+// - 3 shards named '1', '2', '3'.
+// - A master tablet for each shard.
+func newFakeTopo(t *testing.T) topo.Server {
+	ts := topo.Server{Impl: memorytopo.NewServer("test_cell")}
+	ctx := context.Background()
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
+		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
-}
-
-func (ts *fakeTopo) ListDir(ctx context.Context, cell, dirPath string) ([]string, error) {
-	// Check for the GetShardNames call.
-	if cell == topo.GlobalCell && dirPath == "keyspaces/test_keyspace/shards" {
-		return []string{"0", "1", "2"}, nil
-	}
-	return nil, fmt.Errorf("Unexpected ListDir for cell=%v and dirPath=%v", cell, dirPath)
-}
-
-func (ts *fakeTopo) Get(ctx context.Context, cell, filePath string) ([]byte, topo.Version, error) {
-	// Check the GetShard call.
-	if cell == topo.GlobalCell && (filePath == "keyspaces/test_keyspace/shards/0/Shard" || filePath == "keyspaces/test_keyspace/shards/1/Shard" || filePath == "keyspaces/test_keyspace/shards/2/Shard") {
-		var masterAlias *topodatapb.TabletAlias
-		if !ts.WithEmptyMasterAlias {
-			masterAlias = &topodatapb.TabletAlias{
-				Cell: "test_cell",
-				Uid:  0,
-			}
+	for i, shard := range []string{"0", "1", "2"} {
+		if err := ts.CreateShard(ctx, "test_keyspace", shard); err != nil {
+			t.Fatalf("CreateShard(%v) failed: %v", shard, err)
 		}
-		value := &topodatapb.Shard{
-			MasterAlias: masterAlias,
-		}
-		data, err := proto.Marshal(value)
-		return data, nil, err
-	}
-	// Check for GetTablet
-	if filePath == "tablets/test_cell-0000000000/Tablet" {
-		value := &topodatapb.Tablet{
+		tablet := &topodatapb.Tablet{
 			Alias: &topodatapb.TabletAlias{
 				Cell: "test_cell",
-				Uid:  0,
+				Uid:  uint32(i + 1),
 			},
 			Keyspace: "test_keyspace",
+			Shard:    shard,
 		}
-		data, err := proto.Marshal(value)
-		return data, nil, err
+		if err := ts.CreateTablet(ctx, tablet); err != nil {
+			t.Fatalf("CreateTablet failed: %v", err)
+		}
+		if _, err := ts.UpdateShardFields(ctx, "test_keyspace", shard, func(si *topo.ShardInfo) error {
+			si.Shard.MasterAlias = tablet.Alias
+			return nil
+		}); err != nil {
+			t.Fatalf("UpdateShardFields failed: %v", err)
+		}
 	}
-	return nil, nil, fmt.Errorf("Unexpected Get for cell=%v and filePath=%v", cell, filePath)
-}
-
-func (ts *fakeTopo) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {
-	return "", nil
-}
-
-func (ts *fakeTopo) UnlockKeyspaceForAction(ctx context.Context, keyspace, lockPath, results string) error {
-	return nil
+	return ts
 }
 
 type fakeController struct {
