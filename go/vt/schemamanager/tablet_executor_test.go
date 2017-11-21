@@ -66,7 +66,7 @@ func TestTabletExecutorOpenWithEmptyMasterAlias(t *testing.T) {
 	}
 	// This will create the Keyspace, Shard and Tablet record.
 	// Since this is a replica tablet, the Shard will have no master.
-	if err := wr.InitTablet(ctx, tablet /*allowMasterOverride=*/, false /*createShardAndKeyspace=*/, true /*allowUpdate*/, false); err != nil {
+	if err := wr.InitTablet(ctx, tablet, false /*allowMasterOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
 	executor := NewTabletExecutor(wr, testWaitSlaveTimeout)

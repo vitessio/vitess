@@ -72,7 +72,7 @@ func TopoServerTestSuite(t *testing.T, factory func() topo.Impl) {
 
 	t.Log("=== checkShardReplication")
 	ts = factory()
-	checkShardReplication(t, ts)
+	checkShardReplication(t, topo.Server{Impl: ts})
 	ts.Close()
 
 	t.Log("=== checkSrvKeyspace")
