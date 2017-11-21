@@ -47,7 +47,7 @@ type backendExplorer struct {
 }
 
 // Result is what the backendExplorer returns. It represents one directory node.
-// It is exported to the JSON encoder can print it.
+// It is exported so the JSON encoder can print it.
 type Result struct {
 	Data     string
 	Children []string

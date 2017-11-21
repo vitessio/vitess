@@ -31,14 +31,12 @@ func TestTee(t *testing.T) {
 
 	// create the setup, copy the data
 	fromTS, toTS := createSetup(ctx, t)
-	fromTTS := topo.Server{Impl: fromTS}
-	toTTS := topo.Server{Impl: toTS}
-	CopyKeyspaces(ctx, fromTTS, toTTS)
+	CopyKeyspaces(ctx, fromTS, toTS)
 	CopyShards(ctx, fromTS, toTS)
 	CopyTablets(ctx, fromTS, toTS)
 
-	// create a tee and check it implements the interface
-	tee := NewTee(fromTS, toTS, true)
+	// create a tee and check it implements the interface.
+	tee := NewTee(fromTS.Impl, toTS.Impl, true)
 	teeTTS := topo.Server{Impl: tee}
 
 	// create a keyspace, make sure it is on both sides
@@ -53,7 +51,7 @@ func TestTee(t *testing.T) {
 	if !reflect.DeepEqual(expected, teeKeyspaces) {
 		t.Errorf("teeKeyspaces mismatch, got %+v, want %+v", teeKeyspaces, expected)
 	}
-	fromKeyspaces, err := fromTTS.GetKeyspaces(ctx)
+	fromKeyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
 		t.Fatalf("fromTS.GetKeyspaces() failed: %v", err)
 	}
@@ -61,7 +59,7 @@ func TestTee(t *testing.T) {
 	if !reflect.DeepEqual(expected, fromKeyspaces) {
 		t.Errorf("fromKeyspaces mismatch, got %+v, want %+v", fromKeyspaces, expected)
 	}
-	toKeyspaces, err := toTTS.GetKeyspaces(ctx)
+	toKeyspaces, err := toTS.GetKeyspaces(ctx)
 	if err != nil {
 		t.Fatalf("toTS.GetKeyspaces() failed: %v", err)
 	}
@@ -89,11 +87,11 @@ func TestTee(t *testing.T) {
 		t.Fatalf("unlock(test_keyspace): %v", err)
 	}
 
-	fromKi, err := fromTTS.GetKeyspace(ctx, "test_keyspace")
+	fromKi, err := fromTS.GetKeyspace(ctx, "test_keyspace")
 	if err != nil || fromKi.Keyspace.ShardingColumnName != "toChangeIt" {
 		t.Errorf("invalid keyspace data in fromTTS: %v %v", fromKi, err)
 	}
-	toKi, err := toTTS.GetKeyspace(ctx, "test_keyspace")
+	toKi, err := toTS.GetKeyspace(ctx, "test_keyspace")
 	if err != nil || toKi.Keyspace.ShardingColumnName != "toChangeIt" {
 		t.Errorf("invalid keyspace data in toTTS: %v %v", toKi, err)
 	}
