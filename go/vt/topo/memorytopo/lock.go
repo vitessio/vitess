@@ -38,29 +38,24 @@ func convertError(err error) error {
 // memoryTopoLockDescriptor implements topo.LockDescriptor.
 type memoryTopoLockDescriptor struct {
 	mt       *MemoryTopo
+	cell     string
 	nodePath string
 }
 
 // Lock is part of the topo.Backend interface.
 func (mt *MemoryTopo) Lock(ctx context.Context, cell string, dirPath string) (topo.LockDescriptor, error) {
-	_, err := mt.lock(ctx, dirPath, "new Lock")
-	if err != nil {
-		return nil, err
-	}
-	return &memoryTopoLockDescriptor{
-		mt:       mt,
-		nodePath: dirPath,
-	}, nil
+	return mt.lock(ctx, cell, dirPath, "Lock")
 }
 
-func (mt *MemoryTopo) lock(ctx context.Context, nodePath string, contents string) (string, error) {
+// lock is used by both Lock() and master election.
+func (mt *MemoryTopo) lock(ctx context.Context, cell, nodePath, contents string) (topo.LockDescriptor, error) {
 	for {
 		mt.mu.Lock()
 
-		n := mt.nodeByPath(topo.GlobalCell, nodePath)
+		n := mt.nodeByPath(cell, nodePath)
 		if n == nil {
 			mt.mu.Unlock()
-			return "", topo.ErrNoNode
+			return nil, topo.ErrNoNode
 		}
 
 		if l := n.lock; l != nil {
@@ -72,7 +67,7 @@ func (mt *MemoryTopo) lock(ctx context.Context, nodePath string, contents string
 				continue
 			case <-ctx.Done():
 				// Done waiting
-				return "", convertError(ctx.Err())
+				return nil, convertError(ctx.Err())
 			}
 		}
 
@@ -80,24 +75,25 @@ func (mt *MemoryTopo) lock(ctx context.Context, nodePath string, contents string
 		n.lock = make(chan struct{})
 		n.lockContents = contents
 		mt.mu.Unlock()
-		return nodePath, nil
+		return &memoryTopoLockDescriptor{
+			mt:       mt,
+			cell:     cell,
+			nodePath: nodePath,
+		}, nil
 	}
 }
 
 // Unlock is part of the topo.LockDescriptor interface.
 func (ld *memoryTopoLockDescriptor) Unlock(ctx context.Context) error {
-	return ld.mt.unlock(ctx, ld.nodePath, ld.nodePath)
+	return ld.mt.unlock(ctx, ld.cell, ld.nodePath)
 }
 
-func (mt *MemoryTopo) unlock(ctx context.Context, nodePath, actionPath string) error {
-	if nodePath != actionPath {
-		return fmt.Errorf("invalid actionPath %v was expecting %v", actionPath, nodePath)
-	}
-
+// unlock is used by Unlock().
+func (mt *MemoryTopo) unlock(ctx context.Context, cell, nodePath string) error {
 	mt.mu.Lock()
 	defer mt.mu.Unlock()
 
-	n := mt.nodeByPath(topo.GlobalCell, nodePath)
+	n := mt.nodeByPath(cell, nodePath)
 	if n == nil {
 		return topo.ErrNoNode
 	}

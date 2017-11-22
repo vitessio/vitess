@@ -32,41 +32,28 @@ import (
 // zsLockDescriptor implements topo.LockDescriptor.
 type zsLockDescriptor struct {
 	zs       *Server
+	cell     string
 	lockPath string
 }
 
 // Lock is part of the topo.Backend interface.
 func (zs *Server) Lock(ctx context.Context, cell string, dirPath string) (topo.LockDescriptor, error) {
-	locksDir := path.Join(dirPath, locksPath)
-	lockPath, err := zs.lockForAction(ctx, locksDir, "new Lock")
+	conn, root, err := zs.connForCell(ctx, cell)
 	if err != nil {
 		return nil, err
-	}
-	return &zsLockDescriptor{
-		zs:       zs,
-		lockPath: lockPath,
-	}, nil
-}
-
-// lockForAction creates the locks node in zookeeper, waits for the
-// queue lock, displays a nice error message if it cant get it.
-func (zs *Server) lockForAction(ctx context.Context, locksDir, contents string) (string, error) {
-	conn, root, err := zs.connForCell(ctx, topo.GlobalCell)
-	if err != nil {
-		return "", err
 	}
 
 	// Lock paths end in a trailing slash to that when we create
 	// sequential nodes, they are created as children, not siblings.
-	locksDir = path.Join(root, locksDir) + "/"
+	locksDir := path.Join(root, dirPath, locksPath) + "/"
 
 	// Create the locks path, possibly creating the parent.
-	locksPath, err := CreateRecursive(ctx, conn, locksDir, []byte(contents), zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(PermFile), 1)
+	lockPath, err := CreateRecursive(ctx, conn, locksDir, []byte("lock"), zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(PermFile), 1)
 	if err != nil {
-		return "", convertError(err)
+		return nil, convertError(err)
 	}
 
-	err = obtainQueueLock(ctx, conn, locksPath)
+	err = obtainQueueLock(ctx, conn, lockPath)
 	if err != nil {
 		var errToReturn error
 		switch err {
@@ -75,49 +62,48 @@ func (zs *Server) lockForAction(ctx context.Context, locksDir, contents string) 
 		case context.Canceled:
 			errToReturn = topo.ErrInterrupted
 		default:
-			errToReturn = fmt.Errorf("failed to obtain action lock: %v %v", locksPath, err)
+			errToReturn = fmt.Errorf("failed to obtain action lock: %v %v", lockPath, err)
 		}
 
 		// Regardless of the reason, try to cleanup.
 		log.Warningf("Failed to obtain action lock: %v", err)
-		conn.Delete(ctx, locksPath, -1)
+		conn.Delete(ctx, lockPath, -1)
 
 		// Show the other locks in the directory
-		dir := path.Dir(locksPath)
+		dir := path.Dir(lockPath)
 		children, _, err := conn.Children(ctx, dir)
 		if err != nil {
 			log.Warningf("Failed to get children of %v: %v", dir, err)
-			return "", errToReturn
+			return nil, errToReturn
 		}
 
 		if len(children) == 0 {
 			log.Warningf("No other locks present, you may just try again now.")
-			return "", errToReturn
+			return nil, errToReturn
 		}
 
 		childPath := path.Join(dir, children[0])
 		data, _, err := conn.Get(ctx, childPath)
 		if err != nil {
 			log.Warningf("Failed to get first locks node %v (may have just ended): %v", childPath, err)
-			return "", errToReturn
+			return nil, errToReturn
 		}
 
 		log.Warningf("------ Most likely blocking lock: %v\n%v", childPath, string(data))
-		return "", errToReturn
+		return nil, errToReturn
 	}
 
 	// Remove the root prefix from the file. So when we delete it,
 	// it's a relative file.
-	locksPath = locksPath[len(root):]
-	return locksPath, nil
+	lockPath = lockPath[len(root):]
+	return &zsLockDescriptor{
+		zs:       zs,
+		cell:     cell,
+		lockPath: lockPath,
+	}, nil
 }
 
 // Unlock is part of the topo.LockDescriptor interface.
 func (ld *zsLockDescriptor) Unlock(ctx context.Context) error {
-	return ld.zs.unlockForAction(ctx, ld.lockPath, "results")
-}
-
-func (zs *Server) unlockForAction(ctx context.Context, lockPath, results string) error {
-	// Just delete the file.
-	return zs.Delete(ctx, topo.GlobalCell, lockPath, nil)
+	return ld.zs.Delete(ctx, ld.cell, ld.lockPath, nil)
 }

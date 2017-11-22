@@ -68,8 +68,8 @@ func (mp *etcdMasterParticipation) WaitForMastership() (context.Context, error) 
 	default:
 	}
 
-	electionPath := path.Join(mp.s.global.root, electionsPath, mp.name)
-	lockPath := ""
+	electionPath := path.Join(electionsPath, mp.name)
+	var ld topo.LockDescriptor
 
 	// We use a cancelable context here. If stop is closed,
 	// we just cancel that context.
@@ -77,9 +77,9 @@ func (mp *etcdMasterParticipation) WaitForMastership() (context.Context, error) 
 	go func() {
 		select {
 		case <-mp.stop:
-			if lockPath != "" {
-				if err := mp.s.unlock(context.Background(), electionPath, lockPath); err != nil {
-					log.Errorf("failed to delete lockPath %v for election %v: %v", lockPath, mp.name, err)
+			if ld != nil {
+				if err := ld.Unlock(context.Background()); err != nil {
+					log.Errorf("failed to unlock electionPath %v: %v", electionPath, err)
 				}
 			}
 			lockCancel()
@@ -89,7 +89,7 @@ func (mp *etcdMasterParticipation) WaitForMastership() (context.Context, error) 
 
 	// Try to get the mastership, by getting a lock.
 	var err error
-	lockPath, err = mp.s.lock(lockCtx, electionPath, mp.id)
+	ld, err = mp.s.lock(lockCtx, topo.GlobalCell, electionPath, mp.id)
 	if err != nil {
 		// It can be that we were interrupted.
 		return nil, err
