@@ -22,11 +22,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
-
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
 // Tee is an implementation of topo.Server that uses a primary
@@ -53,21 +49,8 @@ type Tee struct {
 	// protects the variables below this point
 	mu sync.Mutex
 
-	keyspaceVersionMapping map[string]versionMapping
-	shardVersionMapping    map[string]versionMapping
-	tabletVersionMapping   map[string]versionMapping
-
 	keyspaceLockPaths map[string]string
 	shardLockPaths    map[string]string
-}
-
-// When reading a version from 'readFrom', we also read another version
-// from 'readFromSecond', and save the mapping to this map. We only keep one
-// mapping for a given object, no need to overdo it.
-// FIXME(alainjobart) remove this when topo API is all converted to Backend.
-type versionMapping struct {
-	readFromVersion       int64
-	readFromSecondVersion int64
 }
 
 // NewTee returns a new topo.Impl object
@@ -79,17 +62,14 @@ func NewTee(primary, secondary topo.Impl, reverseLockOrder bool) *Tee {
 		lockSecond = primary
 	}
 	return &Tee{
-		primary:                primary,
-		secondary:              secondary,
-		readFrom:               primary,
-		readFromSecond:         secondary,
-		lockFirst:              lockFirst,
-		lockSecond:             lockSecond,
-		keyspaceVersionMapping: make(map[string]versionMapping),
-		shardVersionMapping:    make(map[string]versionMapping),
-		tabletVersionMapping:   make(map[string]versionMapping),
-		keyspaceLockPaths:      make(map[string]string),
-		shardLockPaths:         make(map[string]string),
+		primary:           primary,
+		secondary:         secondary,
+		readFrom:          primary,
+		readFromSecond:    secondary,
+		lockFirst:         lockFirst,
+		lockSecond:        lockSecond,
+		keyspaceLockPaths: make(map[string]string),
+		shardLockPaths:    make(map[string]string),
 	}
 }
 
@@ -136,7 +116,7 @@ func (tee *Tee) Create(ctx context.Context, cell, filePath string, contents []by
 func (tee *Tee) Update(ctx context.Context, cell, filePath string, contents []byte, version topo.Version) (topo.Version, error) {
 	primaryVersion, err := tee.primary.Update(ctx, cell, filePath, contents, version)
 	if err != nil {
-		// failed on primary, not updating secondary
+		// Failed on primary, not updating secondary.
 		return nil, err
 	}
 
@@ -180,447 +160,6 @@ func (tee *Tee) Watch(ctx context.Context, cell, filePath string) (*topo.WatchDa
 // GetKnownCells is part of the topo.Server interface
 func (tee *Tee) GetKnownCells(ctx context.Context) ([]string, error) {
 	return tee.readFrom.GetKnownCells(ctx)
-}
-
-//
-// Keyspace management, global.
-//
-
-// CreateKeyspace is part of the topo.Server interface
-func (tee *Tee) CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error {
-	if err := tee.primary.CreateKeyspace(ctx, keyspace, value); err != nil {
-		return err
-	}
-
-	// this is critical enough that we want to fail
-	if err := tee.secondary.CreateKeyspace(ctx, keyspace, value); err != nil {
-		return err
-	}
-	return nil
-}
-
-// UpdateKeyspace is part of the topo.Server interface
-func (tee *Tee) UpdateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace, existingVersion int64) (newVersion int64, err error) {
-	if newVersion, err = tee.primary.UpdateKeyspace(ctx, keyspace, value, existingVersion); err != nil {
-		// failed on primary, not updating secondary
-		return
-	}
-
-	// if we have a mapping between keyspace version in first topo
-	// and keyspace version in second topo, replace the version number.
-	// if not, this will probably fail and log.
-	tee.mu.Lock()
-	kvm, ok := tee.keyspaceVersionMapping[keyspace]
-	if ok && kvm.readFromVersion == existingVersion {
-		existingVersion = kvm.readFromSecondVersion
-		delete(tee.keyspaceVersionMapping, keyspace)
-	}
-	tee.mu.Unlock()
-	if newVersion2, serr := tee.secondary.UpdateKeyspace(ctx, keyspace, value, existingVersion); serr != nil {
-		// not critical enough to fail
-		if serr == topo.ErrNoNode {
-			// the keyspace doesn't exist on the secondary, let's
-			// just create it
-			if serr = tee.secondary.CreateKeyspace(ctx, keyspace, value); serr != nil {
-				log.Warningf("secondary.CreateKeyspace(%v) failed (after UpdateKeyspace returned ErrNoNode): %v", keyspace, serr)
-			} else {
-				log.Infof("secondary.UpdateKeyspace(%v) failed with ErrNoNode, CreateKeyspace then worked.", keyspace)
-				_, secondaryVersion, gerr := tee.secondary.GetKeyspace(ctx, keyspace)
-				if gerr != nil {
-					log.Warningf("Failed to re-read keyspace(%v) after creating it on secondary: %v", keyspace, gerr)
-				} else {
-					tee.mu.Lock()
-					tee.keyspaceVersionMapping[keyspace] = versionMapping{
-						readFromVersion:       newVersion,
-						readFromSecondVersion: secondaryVersion,
-					}
-					tee.mu.Unlock()
-				}
-			}
-		} else {
-			log.Warningf("secondary.UpdateKeyspace(%v) failed: %v", keyspace, serr)
-		}
-	} else {
-		tee.mu.Lock()
-		tee.keyspaceVersionMapping[keyspace] = versionMapping{
-			readFromVersion:       newVersion,
-			readFromSecondVersion: newVersion2,
-		}
-		tee.mu.Unlock()
-	}
-	return
-}
-
-// DeleteKeyspace is part of the topo.Server interface
-func (tee *Tee) DeleteKeyspace(ctx context.Context, keyspace string) error {
-	err := tee.primary.DeleteKeyspace(ctx, keyspace)
-	if err != nil && err != topo.ErrNoNode {
-		return err
-	}
-
-	if err := tee.secondary.DeleteKeyspace(ctx, keyspace); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.DeleteKeyspace(%v) failed: %v", keyspace, err)
-	}
-	return err
-}
-
-// GetKeyspace is part of the topo.Server interface
-func (tee *Tee) GetKeyspace(ctx context.Context, keyspace string) (*topodatapb.Keyspace, int64, error) {
-	k, version, err := tee.readFrom.GetKeyspace(ctx, keyspace)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	_, version2, err := tee.readFromSecond.GetKeyspace(ctx, keyspace)
-	if err != nil {
-		// can't read from secondary, so we can's keep version map
-		return k, version, nil
-	}
-
-	tee.mu.Lock()
-	tee.keyspaceVersionMapping[keyspace] = versionMapping{
-		readFromVersion:       version,
-		readFromSecondVersion: version2,
-	}
-	tee.mu.Unlock()
-	return k, version, nil
-}
-
-// GetKeyspaces is part of the topo.Server interface
-func (tee *Tee) GetKeyspaces(ctx context.Context) ([]string, error) {
-	return tee.readFrom.GetKeyspaces(ctx)
-}
-
-//
-// Shard management, global.
-//
-
-// CreateShard is part of the topo.Server interface
-func (tee *Tee) CreateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard) error {
-	err := tee.primary.CreateShard(ctx, keyspace, shard, value)
-	if err != nil && err != topo.ErrNodeExists {
-		return err
-	}
-
-	serr := tee.secondary.CreateShard(ctx, keyspace, shard, value)
-	if serr != nil && serr != topo.ErrNodeExists {
-		// not critical enough to fail
-		log.Warningf("secondary.CreateShard(%v,%v) failed: %v", keyspace, shard, err)
-	}
-	return err
-}
-
-// UpdateShard is part of the topo.Server interface
-func (tee *Tee) UpdateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard, existingVersion int64) (newVersion int64, err error) {
-	if newVersion, err = tee.primary.UpdateShard(ctx, keyspace, shard, value, existingVersion); err != nil {
-		// failed on primary, not updating secondary
-		return
-	}
-
-	// if we have a mapping between shard version in first topo
-	// and shard version in second topo, replace the version number.
-	// if not, this will probably fail and log.
-	tee.mu.Lock()
-	svm, ok := tee.shardVersionMapping[keyspace+"/"+shard]
-	if ok && svm.readFromVersion == existingVersion {
-		existingVersion = svm.readFromSecondVersion
-		delete(tee.shardVersionMapping, keyspace+"/"+shard)
-	}
-	tee.mu.Unlock()
-	if newVersion2, serr := tee.secondary.UpdateShard(ctx, keyspace, shard, value, existingVersion); serr != nil {
-		// not critical enough to fail
-		if serr == topo.ErrNoNode {
-			// the shard doesn't exist on the secondary, let's
-			// just create it
-			if serr = tee.secondary.CreateShard(ctx, keyspace, shard, value); serr != nil {
-				log.Warningf("secondary.CreateShard(%v,%v) failed (after UpdateShard returned ErrNoNode): %v", keyspace, shard, serr)
-			} else {
-				log.Infof("secondary.UpdateShard(%v, %v) failed with ErrNoNode, CreateShard then worked.", keyspace, shard)
-				_, v, gerr := tee.secondary.GetShard(ctx, keyspace, shard)
-				if gerr != nil {
-					log.Warningf("Failed to re-read shard(%v, %v) after creating it on secondary: %v", keyspace, shard, gerr)
-				} else {
-					tee.mu.Lock()
-					tee.shardVersionMapping[keyspace+"/"+shard] = versionMapping{
-						readFromVersion:       newVersion,
-						readFromSecondVersion: v,
-					}
-					tee.mu.Unlock()
-				}
-			}
-		} else {
-			log.Warningf("secondary.UpdateShard(%v, %v) failed: %v", keyspace, shard, serr)
-		}
-	} else {
-		tee.mu.Lock()
-		tee.shardVersionMapping[keyspace+"/"+shard] = versionMapping{
-			readFromVersion:       newVersion,
-			readFromSecondVersion: newVersion2,
-		}
-		tee.mu.Unlock()
-	}
-	return
-}
-
-// GetShard is part of the topo.Server interface
-func (tee *Tee) GetShard(ctx context.Context, keyspace, shard string) (*topodatapb.Shard, int64, error) {
-	s, v, err := tee.readFrom.GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	_, v2, err := tee.readFromSecond.GetShard(ctx, keyspace, shard)
-	if err != nil {
-		// can't read from secondary, so we can's keep version map
-		return s, v, nil
-	}
-
-	tee.mu.Lock()
-	tee.shardVersionMapping[keyspace+"/"+shard] = versionMapping{
-		readFromVersion:       v,
-		readFromSecondVersion: v2,
-	}
-	tee.mu.Unlock()
-	return s, v, nil
-}
-
-// GetShardNames is part of the topo.Server interface
-func (tee *Tee) GetShardNames(ctx context.Context, keyspace string) ([]string, error) {
-	return tee.readFrom.GetShardNames(ctx, keyspace)
-}
-
-// DeleteShard is part of the topo.Server interface
-func (tee *Tee) DeleteShard(ctx context.Context, keyspace, shard string) error {
-	err := tee.primary.DeleteShard(ctx, keyspace, shard)
-	if err != nil && err != topo.ErrNoNode {
-		return err
-	}
-
-	if err := tee.secondary.DeleteShard(ctx, keyspace, shard); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.DeleteShard(%v, %v) failed: %v", keyspace, shard, err)
-	}
-	return err
-}
-
-//
-// Tablet management, per cell.
-//
-
-// CreateTablet is part of the topo.Server interface
-func (tee *Tee) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) error {
-	err := tee.primary.CreateTablet(ctx, tablet)
-	if err != nil && err != topo.ErrNodeExists {
-		return err
-	}
-
-	if err := tee.primary.CreateTablet(ctx, tablet); err != nil && err != topo.ErrNodeExists {
-		// not critical enough to fail
-		log.Warningf("secondary.CreateTablet(%v) failed: %v", tablet.Alias, err)
-	}
-	return err
-}
-
-// UpdateTablet is part of the topo.Server interface
-func (tee *Tee) UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet, existingVersion int64) (newVersion int64, err error) {
-	if newVersion, err = tee.primary.UpdateTablet(ctx, tablet, existingVersion); err != nil {
-		// failed on primary, not updating secondary
-		return
-	}
-
-	// if we have a mapping between tablet version in first topo
-	// and tablet version in second topo, replace the version number.
-	// if not, this will probably fail and log.
-	tabletAliasStr := topoproto.TabletAliasString(tablet.Alias)
-	tee.mu.Lock()
-	tvm, ok := tee.tabletVersionMapping[tabletAliasStr]
-	if ok && tvm.readFromVersion == existingVersion {
-		existingVersion = tvm.readFromSecondVersion
-		delete(tee.tabletVersionMapping, tabletAliasStr)
-	}
-	tee.mu.Unlock()
-	if newVersion2, serr := tee.secondary.UpdateTablet(ctx, tablet, existingVersion); serr != nil {
-		// not critical enough to fail
-		if serr == topo.ErrNoNode {
-			// the tablet doesn't exist on the secondary, let's
-			// just create it
-			if serr = tee.secondary.CreateTablet(ctx, tablet); serr != nil {
-				log.Warningf("secondary.CreateTablet(%v) failed (after UpdateTablet returned ErrNoNode): %v", tablet.Alias, serr)
-			} else {
-				log.Infof("secondary.UpdateTablet(%v) failed with ErrNoNode, CreateTablet then worked.", tablet.Alias)
-				_, v, gerr := tee.secondary.GetTablet(ctx, tablet.Alias)
-				if gerr != nil {
-					log.Warningf("Failed to re-read tablet(%v) after creating it on secondary: %v", tablet.Alias, gerr)
-				} else {
-					tee.mu.Lock()
-					tee.tabletVersionMapping[tabletAliasStr] = versionMapping{
-						readFromVersion:       newVersion,
-						readFromSecondVersion: v,
-					}
-					tee.mu.Unlock()
-				}
-			}
-		} else {
-			log.Warningf("secondary.UpdateTablet(%v) failed: %v", tablet.Alias, serr)
-		}
-	} else {
-		tee.mu.Lock()
-		tee.tabletVersionMapping[tabletAliasStr] = versionMapping{
-			readFromVersion:       newVersion,
-			readFromSecondVersion: newVersion2,
-		}
-		tee.mu.Unlock()
-	}
-	return
-}
-
-// DeleteTablet is part of the topo.Server interface
-func (tee *Tee) DeleteTablet(ctx context.Context, alias *topodatapb.TabletAlias) error {
-	if err := tee.primary.DeleteTablet(ctx, alias); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.DeleteTablet(ctx, alias); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.DeleteTablet(%v) failed: %v", alias, err)
-	}
-	return nil
-}
-
-// GetTablet is part of the topo.Server interface
-func (tee *Tee) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topodatapb.Tablet, int64, error) {
-	t, v, err := tee.readFrom.GetTablet(ctx, alias)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	_, v2, err := tee.readFromSecond.GetTablet(ctx, alias)
-	if err != nil {
-		// can't read from secondary, so we can's keep version map
-		return t, v, nil
-	}
-
-	tee.mu.Lock()
-	tee.tabletVersionMapping[topoproto.TabletAliasString(alias)] = versionMapping{
-		readFromVersion:       v,
-		readFromSecondVersion: v2,
-	}
-	tee.mu.Unlock()
-	return t, v, nil
-}
-
-// GetTabletsByCell is part of the topo.Server interface
-func (tee *Tee) GetTabletsByCell(ctx context.Context, cell string) ([]*topodatapb.TabletAlias, error) {
-	return tee.readFrom.GetTabletsByCell(ctx, cell)
-}
-
-//
-// Shard replication graph management, local.
-//
-
-// UpdateShardReplicationFields is part of the topo.Server interface
-func (tee *Tee) UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*topodatapb.ShardReplication) error) error {
-	if err := tee.primary.UpdateShardReplicationFields(ctx, cell, keyspace, shard, update); err != nil {
-		// failed on primary, not updating secondary
-		return err
-	}
-
-	if err := tee.secondary.UpdateShardReplicationFields(ctx, cell, keyspace, shard, update); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.UpdateShardReplicationFields(%v, %v, %v) failed: %v", cell, keyspace, shard, err)
-	}
-	return nil
-}
-
-// GetShardReplication is part of the topo.Server interface
-func (tee *Tee) GetShardReplication(ctx context.Context, cell, keyspace, shard string) (*topo.ShardReplicationInfo, error) {
-	return tee.readFrom.GetShardReplication(ctx, cell, keyspace, shard)
-}
-
-// DeleteShardReplication is part of the topo.Server interface
-func (tee *Tee) DeleteShardReplication(ctx context.Context, cell, keyspace, shard string) error {
-	if err := tee.primary.DeleteShardReplication(ctx, cell, keyspace, shard); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.DeleteShardReplication(ctx, cell, keyspace, shard); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.DeleteShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err)
-	}
-	return nil
-}
-
-// DeleteKeyspaceReplication is part of the topo.Server interface
-func (tee *Tee) DeleteKeyspaceReplication(ctx context.Context, cell, keyspace string) error {
-	if err := tee.primary.DeleteKeyspaceReplication(ctx, cell, keyspace); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.DeleteKeyspaceReplication(ctx, cell, keyspace); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.DeleteKeyspaceReplication(%v, %v) failed: %v", cell, keyspace, err)
-	}
-	return nil
-}
-
-//
-// Serving Graph management, per cell.
-//
-
-// GetSrvKeyspaceNames is part of the topo.Server interface
-func (tee *Tee) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
-	return tee.readFrom.GetSrvKeyspaceNames(ctx, cell)
-}
-
-// UpdateSrvKeyspace is part of the topo.Server interface
-func (tee *Tee) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error {
-	if err := tee.primary.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.UpdateSrvKeyspace(%v, %v) failed: %v", cell, keyspace, err)
-	}
-	return nil
-}
-
-// DeleteSrvKeyspace is part of the topo.Server interface
-func (tee *Tee) DeleteSrvKeyspace(ctx context.Context, cell, keyspace string) error {
-	err := tee.primary.DeleteSrvKeyspace(ctx, cell, keyspace)
-	if err != nil && err != topo.ErrNoNode {
-		return err
-	}
-
-	if err := tee.secondary.DeleteSrvKeyspace(ctx, cell, keyspace); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.DeleteSrvKeyspace(%v, %v) failed: %v", cell, keyspace, err)
-	}
-	return err
-}
-
-// GetSrvKeyspace is part of the topo.Server interface
-func (tee *Tee) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
-	return tee.readFrom.GetSrvKeyspace(ctx, cell, keyspace)
-}
-
-// UpdateSrvVSchema is part of the topo.Server interface
-func (tee *Tee) UpdateSrvVSchema(ctx context.Context, cell string, srvVSchema *vschemapb.SrvVSchema) error {
-	if err := tee.primary.UpdateSrvVSchema(ctx, cell, srvVSchema); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.UpdateSrvVSchema(ctx, cell, srvVSchema); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.UpdateSrvVSchema(%v) failed: %v", cell, err)
-	}
-	return nil
-}
-
-// GetSrvVSchema is part of the topo.Server interface
-func (tee *Tee) GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.SrvVSchema, error) {
-	return tee.readFrom.GetSrvVSchema(ctx, cell)
 }
 
 //
@@ -725,28 +264,7 @@ func (tee *Tee) UnlockShardForAction(ctx context.Context, keyspace, shard, lockP
 	return perr
 }
 
-// SaveVSchema is part of the topo.Server interface
-func (tee *Tee) SaveVSchema(ctx context.Context, keyspace string, contents *vschemapb.Keyspace) error {
-	err := tee.primary.SaveVSchema(ctx, keyspace, contents)
-	if err != nil {
-		return err
-	}
-
-	if err := tee.secondary.SaveVSchema(ctx, keyspace, contents); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.SaveVSchema() failed: %v", err)
-	}
-	return err
-}
-
-// GetVSchema is part of the topo.Server interface
-func (tee *Tee) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error) {
-	return tee.readFrom.GetVSchema(ctx, keyspace)
-}
-
 // NewMasterParticipation is part of the topo.Server interface
 func (tee *Tee) NewMasterParticipation(name, id string) (topo.MasterParticipation, error) {
 	return tee.primary.NewMasterParticipation(name, id)
 }
-
-var _ topo.Impl = (*Tee)(nil) // compile-time interface check

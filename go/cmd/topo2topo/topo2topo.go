@@ -65,15 +65,15 @@ func main() {
 	ctx := context.Background()
 
 	if *doKeyspaces {
-		helpers.CopyKeyspaces(ctx, fromTS.Impl, toTS.Impl)
+		helpers.CopyKeyspaces(ctx, fromTS, toTS)
 	}
 	if *doShards {
-		helpers.CopyShards(ctx, fromTS.Impl, toTS.Impl)
+		helpers.CopyShards(ctx, fromTS, toTS)
 	}
 	if *doShardReplications {
-		helpers.CopyShardReplications(ctx, fromTS.Impl, toTS.Impl)
+		helpers.CopyShardReplications(ctx, fromTS, toTS)
 	}
 	if *doTablets {
-		helpers.CopyTablets(ctx, fromTS.Impl, toTS.Impl)
+		helpers.CopyTablets(ctx, fromTS, toTS)
 	}
 }

@@ -17,19 +17,50 @@ limitations under the License.
 package topo
 
 import (
+	"fmt"
+	"path"
+
 	"golang.org/x/net/context"
 
+	"github.com/golang/protobuf/proto"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
-// SaveVSchema first validates the VSchema, then sends it to the underlying
-// Impl.
+// SaveVSchema first validates the VSchema, then saves it.
+// If the VSchema is empty, just remove it.
 func (ts Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vschemapb.Keyspace) error {
 	err := vindexes.ValidateKeyspace(vschema)
 	if err != nil {
 		return err
 	}
 
-	return ts.Impl.SaveVSchema(ctx, keyspace, vschema)
+	nodePath := path.Join(KeyspacesPath, keyspace, VSchemaFile)
+	data, err := proto.Marshal(vschema)
+	if err != nil {
+		return err
+	}
+
+	if len(data) == 0 {
+		// No vschema, remove it. So we can remove the keyspace.
+		return ts.Delete(ctx, GlobalCell, nodePath, nil)
+	}
+
+	_, err = ts.Update(ctx, GlobalCell, nodePath, data, nil)
+	return err
+}
+
+// GetVSchema fetches the vschema from the topo.
+func (ts Server) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error) {
+	nodePath := path.Join(KeyspacesPath, keyspace, VSchemaFile)
+	data, _, err := ts.Get(ctx, GlobalCell, nodePath)
+	if err != nil {
+		return nil, err
+	}
+	var vs vschemapb.Keyspace
+	err = proto.Unmarshal(data, &vs)
+	if err != nil {
+		return nil, fmt.Errorf("bad vschema data (%v): %q", err, data)
+	}
+	return &vs, nil
 }

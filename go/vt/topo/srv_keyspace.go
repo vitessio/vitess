@@ -29,7 +29,7 @@ import (
 // This file contains the utility methods to manage SrvKeyspace objects.
 
 func srvKeyspaceFileName(keyspace string) string {
-	return path.Join("keyspaces", keyspace, SrvKeyspaceFile)
+	return path.Join(KeyspacesPath, keyspace, SrvKeyspaceFile)
 }
 
 // WatchSrvKeyspaceData is returned / streamed by WatchSrvKeyspace.
@@ -91,4 +91,48 @@ func (ts Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (*
 	}()
 
 	return &WatchSrvKeyspaceData{Value: value}, changes, cancel
+}
+
+// GetSrvKeyspaceNames returns the SrvKeyspace objects for a cell.
+func (ts Server) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
+	children, err := ts.ListDir(ctx, cell, KeyspacesPath)
+	switch err {
+	case nil:
+		return children, nil
+	case ErrNoNode:
+		return nil, nil
+	default:
+		return nil, err
+	}
+}
+
+// UpdateSrvKeyspace saves a new SrvKeyspace. It is a blind write.
+func (ts Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error {
+	nodePath := srvKeyspaceFileName(keyspace)
+	data, err := proto.Marshal(srvKeyspace)
+	if err != nil {
+		return err
+	}
+	_, err = ts.Update(ctx, cell, nodePath, data, nil)
+	return err
+}
+
+// DeleteSrvKeyspace deletes a SrvKeyspace.
+func (ts Server) DeleteSrvKeyspace(ctx context.Context, cell, keyspace string) error {
+	nodePath := srvKeyspaceFileName(keyspace)
+	return ts.Delete(ctx, cell, nodePath, nil)
+}
+
+// GetSrvKeyspace returns the SrvKeyspace for a cell/keyspace.
+func (ts Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
+	nodePath := srvKeyspaceFileName(keyspace)
+	data, _, err := ts.Get(ctx, cell, nodePath)
+	if err != nil {
+		return nil, err
+	}
+	srvKeyspace := &topodatapb.SrvKeyspace{}
+	if err := proto.Unmarshal(data, srvKeyspace); err != nil {
+		return nil, fmt.Errorf("SrvKeyspace unmarshal failed: %v %v", data, err)
+	}
+	return srvKeyspace, nil
 }

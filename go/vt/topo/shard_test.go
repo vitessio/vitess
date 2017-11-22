@@ -90,7 +90,7 @@ func lockedKeyspaceContext(keyspace string) context.Context {
 func TestUpdateSourceBlacklistedTables(t *testing.T) {
 	si := NewShardInfo("ks", "sh", &topodatapb.Shard{
 		Cells: []string{"first", "second", "third"},
-	}, 1)
+	}, nil)
 
 	// check we enforce the keyspace lock
 	ctx := context.Background()
@@ -164,7 +164,7 @@ func TestUpdateSourceBlacklistedTables(t *testing.T) {
 func TestUpdateDisableQueryService(t *testing.T) {
 	si := NewShardInfo("ks", "sh", &topodatapb.Shard{
 		Cells: []string{"first", "second", "third"},
-	}, 1)
+	}, nil)
 
 	// check we enforce the keyspace lock
 	ctx := context.Background()
@@ -235,7 +235,7 @@ func TestUpdateDisableQueryService(t *testing.T) {
 func TestUpdateServedTypesMap(t *testing.T) {
 	si := NewShardInfo("ks", "sh", &topodatapb.Shard{
 		Cells: []string{"first", "second", "third"},
-	}, 1)
+	}, nil)
 
 	// add all cells for rdonly
 	if err := si.UpdateServedTypesMap(topodatapb.TabletType_RDONLY, nil, false); err != nil || !reflect.DeepEqual(si.ServedTypes, []*topodatapb.Shard_ServedType{

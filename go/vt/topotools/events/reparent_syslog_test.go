@@ -29,7 +29,7 @@ import (
 func TestReparentSyslog(t *testing.T) {
 	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123/shard-123 [reparent cell-0000012345 -> cell-0000054321] status (123-456-789)"
 	tc := &Reparent{
-		ShardInfo: *topo.NewShardInfo("keyspace-123", "shard-123", nil, -1),
+		ShardInfo: *topo.NewShardInfo("keyspace-123", "shard-123", nil, nil),
 		OldMaster: topodatapb.Tablet{
 			Alias: &topodatapb.TabletAlias{
 				Cell: "cell",
