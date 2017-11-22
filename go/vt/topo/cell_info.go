@@ -159,3 +159,11 @@ func (ts Server) DeleteCellInfo(ctx context.Context, cell string) error {
 	filePath := pathForCellInfo(cell)
 	return ts.Delete(ctx, GlobalCell, filePath, nil)
 }
+
+// GetKnownCells returns the list of known cells.
+// For now, it just lists the 'cells' directory in the global topology server.
+// TODO(alainjobart) once the cell map is migrated to this generic
+// package, we can do better than this.
+func (ts Server) GetKnownCells(ctx context.Context) ([]string, error) {
+	return ts.ListDir(ctx, GlobalCell, cellsPath)
+}

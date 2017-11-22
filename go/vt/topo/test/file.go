@@ -35,7 +35,8 @@ func checkFile(t *testing.T, ts topo.Impl) {
 	checkFileInCell(t, ts, topo.GlobalCell)
 
 	// local cell
-	cell := getLocalCell(ctx, t, ts)
+	tts := topo.Server{Impl: ts}
+	cell := getLocalCell(ctx, t, tts)
 	checkFileInCell(t, ts, cell)
 }
 

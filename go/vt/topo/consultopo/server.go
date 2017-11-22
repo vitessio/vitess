@@ -20,11 +20,7 @@ Package consultopo implements topo.Server with consul as the backend.
 package consultopo
 
 import (
-	"path"
-	"strings"
 	"sync"
-
-	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -58,35 +54,6 @@ func (s *Server) Close() {
 
 	s.global.close()
 	s.global = nil
-}
-
-// GetKnownCells implements topo.Server.GetKnownCells.
-func (s *Server) GetKnownCells(ctx context.Context) ([]string, error) {
-	nodePath := path.Join(s.global.root, cellsPath) + "/"
-
-	keys, _, err := s.global.kv.Keys(nodePath, "", nil)
-	if err != nil {
-		return nil, err
-	}
-	if len(keys) == 0 {
-		// No key starts with this prefix, means the directory
-		// doesn't exist.
-		return nil, topo.ErrNoNode
-	}
-
-	prefixLen := len(nodePath)
-	suffix := "/" + topo.CellInfoFile
-	suffixLen := len(suffix)
-
-	var result []string
-	for _, p := range keys {
-		if strings.HasPrefix(p, nodePath) && strings.HasSuffix(p, suffix) {
-			p = p[prefixLen : len(p)-suffixLen]
-			result = append(result, p)
-		}
-	}
-
-	return result, nil
 }
 
 // NewServer returns a new consultopo.Server.

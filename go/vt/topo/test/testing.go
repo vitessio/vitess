@@ -38,7 +38,7 @@ func newKeyRange(value string) *topodatapb.KeyRange {
 	return result
 }
 
-func getLocalCell(ctx context.Context, t *testing.T, ts topo.Impl) string {
+func getLocalCell(ctx context.Context, t *testing.T, ts topo.Server) string {
 	cells, err := ts.GetKnownCells(ctx)
 	if err != nil {
 		t.Fatalf("GetKnownCells: %v", err)
