@@ -147,28 +147,29 @@ func testKeyspaceLock(t *testing.T, ts *Server) {
 	defer ts.Close()
 
 	tts := topo.Server{Impl: ts}
+	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace")
 	if err := tts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
 	// Long TTL, unlock before lease runs out.
 	*leaseTTL = 1000
-	actionPath, err := ts.LockKeyspaceForAction(ctx, "test_keyspace", "contents")
+	lockDescriptor, err := ts.Lock(ctx, topo.GlobalCell, keyspacePath)
 	if err != nil {
-		t.Fatalf("LockKeyspaceForAction failed: %v", err)
+		t.Fatalf("Lock failed: %v", err)
 	}
-	if err := ts.UnlockKeyspaceForAction(ctx, "test_keyspace", actionPath, "results"); err != nil {
-		t.Fatalf("UnlockKeyspaceForAction failed: %v", err)
+	if err := lockDescriptor.Unlock(ctx); err != nil {
+		t.Fatalf("Unlock failed: %v", err)
 	}
 
 	// Short TTL, make sure it doesn't expire.
 	*leaseTTL = 1
-	actionPath, err = ts.LockKeyspaceForAction(ctx, "test_keyspace", "contents")
+	lockDescriptor, err = ts.Lock(ctx, topo.GlobalCell, keyspacePath)
 	if err != nil {
-		t.Fatalf("LockKeyspaceForAction failed: %v", err)
+		t.Fatalf("Lock failed: %v", err)
 	}
 	time.Sleep(2 * time.Second)
-	if err := ts.UnlockKeyspaceForAction(ctx, "test_keyspace", actionPath, "results"); err != nil {
-		t.Fatalf("UnlockKeyspaceForAction failed: %v", err)
+	if err := lockDescriptor.Unlock(ctx); err != nil {
+		t.Fatalf("Unlock failed: %v", err)
 	}
 }

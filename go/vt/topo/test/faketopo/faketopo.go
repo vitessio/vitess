@@ -198,6 +198,11 @@ func (ft FakeTopo) GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.S
 	return nil, errNotImplemented
 }
 
+// Lock is part of the topo.Backend interface.
+func (ft FakeTopo) Lock(ctx context.Context, cell string, dirPath string) (topo.LockDescriptor, error) {
+	return nil, errNotImplemented
+}
+
 // LockKeyspaceForAction is part of the topo.Server interface.
 func (ft FakeTopo) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {
 	return "", errNotImplemented

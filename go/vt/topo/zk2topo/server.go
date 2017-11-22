@@ -33,9 +33,6 @@ const (
 	// Path elements
 
 	cellsPath     = "cells"
-	keyspacesPath = "keyspaces"
-	shardsPath    = "shards"
-	tabletsPath   = "tablets"
 	locksPath     = "locks"
 	electionsPath = "elections"
 )

@@ -36,9 +36,6 @@ import (
 
 const (
 	// Path components
-	keyspacesPath = "keyspaces"
-	shardsPath    = "shards"
-	tabletsPath   = "tablets"
 	electionsPath = "elections"
 )
 

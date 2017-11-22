@@ -110,30 +110,17 @@ func (mr *MockImplMockRecorder) ListDir(arg0, arg1, arg2 interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListDir", reflect.TypeOf((*MockImpl)(nil).ListDir), arg0, arg1, arg2)
 }
 
-// LockKeyspaceForAction mocks base method
-func (m *MockImpl) LockKeyspaceForAction(arg0 context.Context, arg1, arg2 string) (string, error) {
-	ret := m.ctrl.Call(m, "LockKeyspaceForAction", arg0, arg1, arg2)
-	ret0, _ := ret[0].(string)
+// Lock mocks base method
+func (m *MockImpl) Lock(arg0 context.Context, arg1, arg2 string) (topo.LockDescriptor, error) {
+	ret := m.ctrl.Call(m, "Lock", arg0, arg1, arg2)
+	ret0, _ := ret[0].(topo.LockDescriptor)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// LockKeyspaceForAction indicates an expected call of LockKeyspaceForAction
-func (mr *MockImplMockRecorder) LockKeyspaceForAction(arg0, arg1, arg2 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockKeyspaceForAction", reflect.TypeOf((*MockImpl)(nil).LockKeyspaceForAction), arg0, arg1, arg2)
-}
-
-// LockShardForAction mocks base method
-func (m *MockImpl) LockShardForAction(arg0 context.Context, arg1, arg2, arg3 string) (string, error) {
-	ret := m.ctrl.Call(m, "LockShardForAction", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// LockShardForAction indicates an expected call of LockShardForAction
-func (mr *MockImplMockRecorder) LockShardForAction(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockShardForAction", reflect.TypeOf((*MockImpl)(nil).LockShardForAction), arg0, arg1, arg2, arg3)
+// Lock indicates an expected call of Lock
+func (mr *MockImplMockRecorder) Lock(arg0, arg1, arg2 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Lock", reflect.TypeOf((*MockImpl)(nil).Lock), arg0, arg1, arg2)
 }
 
 // NewMasterParticipation mocks base method
@@ -147,30 +134,6 @@ func (m *MockImpl) NewMasterParticipation(arg0, arg1 string) (topo.MasterPartici
 // NewMasterParticipation indicates an expected call of NewMasterParticipation
 func (mr *MockImplMockRecorder) NewMasterParticipation(arg0, arg1 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewMasterParticipation", reflect.TypeOf((*MockImpl)(nil).NewMasterParticipation), arg0, arg1)
-}
-
-// UnlockKeyspaceForAction mocks base method
-func (m *MockImpl) UnlockKeyspaceForAction(arg0 context.Context, arg1, arg2, arg3 string) error {
-	ret := m.ctrl.Call(m, "UnlockKeyspaceForAction", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// UnlockKeyspaceForAction indicates an expected call of UnlockKeyspaceForAction
-func (mr *MockImplMockRecorder) UnlockKeyspaceForAction(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnlockKeyspaceForAction", reflect.TypeOf((*MockImpl)(nil).UnlockKeyspaceForAction), arg0, arg1, arg2, arg3)
-}
-
-// UnlockShardForAction mocks base method
-func (m *MockImpl) UnlockShardForAction(arg0 context.Context, arg1, arg2, arg3, arg4 string) error {
-	ret := m.ctrl.Call(m, "UnlockShardForAction", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// UnlockShardForAction indicates an expected call of UnlockShardForAction
-func (mr *MockImplMockRecorder) UnlockShardForAction(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnlockShardForAction", reflect.TypeOf((*MockImpl)(nil).UnlockShardForAction), arg0, arg1, arg2, arg3, arg4)
 }
 
 // Update mocks base method

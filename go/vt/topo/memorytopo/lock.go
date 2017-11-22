@@ -18,9 +18,7 @@ package memorytopo
 
 import (
 	"fmt"
-	"path"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
@@ -35,6 +33,24 @@ func convertError(err error) error {
 		return topo.ErrTimeout
 	}
 	return err
+}
+
+// memoryTopoLockDescriptor implements topo.LockDescriptor.
+type memoryTopoLockDescriptor struct {
+	mt       *MemoryTopo
+	nodePath string
+}
+
+// Lock is part of the topo.Backend interface.
+func (mt *MemoryTopo) Lock(ctx context.Context, cell string, dirPath string) (topo.LockDescriptor, error) {
+	_, err := mt.lock(ctx, dirPath, "new Lock")
+	if err != nil {
+		return nil, err
+	}
+	return &memoryTopoLockDescriptor{
+		mt:       mt,
+		nodePath: dirPath,
+	}, nil
 }
 
 func (mt *MemoryTopo) lock(ctx context.Context, nodePath string, contents string) (string, error) {
@@ -68,6 +84,11 @@ func (mt *MemoryTopo) lock(ctx context.Context, nodePath string, contents string
 	}
 }
 
+// Unlock is part of the topo.LockDescriptor interface.
+func (ld *memoryTopoLockDescriptor) Unlock(ctx context.Context) error {
+	return ld.mt.unlock(ctx, ld.nodePath, ld.nodePath)
+}
+
 func (mt *MemoryTopo) unlock(ctx context.Context, nodePath, actionPath string) error {
 	if nodePath != actionPath {
 		return fmt.Errorf("invalid actionPath %v was expecting %v", actionPath, nodePath)
@@ -87,30 +108,4 @@ func (mt *MemoryTopo) unlock(ctx context.Context, nodePath, actionPath string) e
 	n.lock = nil
 	n.lockContents = ""
 	return nil
-}
-
-// LockKeyspaceForAction implements topo.Server.
-func (mt *MemoryTopo) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {
-	keyspacePath := path.Join(keyspacesPath, keyspace)
-	return mt.lock(ctx, keyspacePath, contents)
-}
-
-// UnlockKeyspaceForAction implements topo.Server.
-func (mt *MemoryTopo) UnlockKeyspaceForAction(ctx context.Context, keyspace, actionPath, results string) error {
-	keyspacePath := path.Join(keyspacesPath, keyspace)
-	log.Infof("results of %v: %v", actionPath, results)
-	return mt.unlock(ctx, keyspacePath, actionPath)
-}
-
-// LockShardForAction implements topo.Server.
-func (mt *MemoryTopo) LockShardForAction(ctx context.Context, keyspace, shard, contents string) (string, error) {
-	shardPath := path.Join(keyspacesPath, keyspace, shardsPath, shard)
-	return mt.lock(ctx, shardPath, contents)
-}
-
-// UnlockShardForAction implements topo.Server.
-func (mt *MemoryTopo) UnlockShardForAction(ctx context.Context, keyspace, shard, actionPath, results string) error {
-	shardPath := path.Join(keyspacesPath, keyspace, shardsPath, shard)
-	log.Infof("results of %v: %v", actionPath, results)
-	return mt.unlock(ctx, shardPath, actionPath)
 }
