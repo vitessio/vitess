@@ -28,6 +28,7 @@ import (
 // consulLockDescriptor implements topo.LockDescriptor.
 type consulLockDescriptor struct {
 	s        *Server
+	c        *cellClient
 	lockPath string
 }
 
@@ -41,24 +42,19 @@ func (s *Server) Lock(ctx context.Context, cell string, dirPath string) (topo.Lo
 		return nil, fmt.Errorf("cannot ListDir(%v,%v) before locking", cell, dirPath)
 	}
 
-	lockPath, err := s.lock(ctx, s.global, path.Join(s.global.root, dirPath, locksFilename), "new lock")
+	c, err := s.clientForCell(ctx, cell)
 	if err != nil {
 		return nil, err
 	}
-	return &consulLockDescriptor{
-		s:        s,
-		lockPath: lockPath,
-	}, nil
-}
+	lockPath := path.Join(c.root, dirPath, locksFilename)
 
-func (s *Server) lock(ctx context.Context, c *cellClient, lockPath, contents string) (string, error) {
 	// Build the lock structure.
-	l, err := s.global.client.LockOpts(&api.LockOptions{
+	l, err := c.client.LockOpts(&api.LockOptions{
 		Key:   lockPath,
-		Value: []byte(contents),
+		Value: []byte("lock"),
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// Wait until we are the only ones in this client trying to
@@ -70,7 +66,7 @@ func (s *Server) lock(ctx context.Context, c *cellClient, lockPath, contents str
 		c.mu.Unlock()
 		select {
 		case <-ctx.Done():
-			return "", convertError(ctx.Err())
+			return nil, convertError(ctx.Err())
 		case <-li.done:
 		}
 
@@ -98,26 +94,24 @@ func (s *Server) lock(ctx context.Context, c *cellClient, lockPath, contents str
 		c.mu.Unlock()
 		close(li.done)
 
-		return "", err
+		return nil, err
 	}
 
 	// We got the lock, we're good.
-	return lockPath, nil
+	return &consulLockDescriptor{
+		s:        s,
+		c:        c,
+		lockPath: lockPath,
+	}, nil
 }
 
 // Unlock is part of the topo.LockDescriptor interface.
 func (ld *consulLockDescriptor) Unlock(ctx context.Context) error {
-	return ld.s.unlock(ctx, ld.s.global, ld.lockPath, ld.lockPath)
+	return ld.s.unlock(ctx, ld.c, ld.lockPath)
 }
 
 // unlock releases a lock acquired by lock() on the given directory.
-// The string returned by lock() should be passed as the actionPath.
-func (s *Server) unlock(ctx context.Context, c *cellClient, lockPath, actionPath string) error {
-	// Sanity check.
-	if lockPath != actionPath {
-		return fmt.Errorf("unlock: actionPath doesn't match directory being unlocked: %q != %q", lockPath, actionPath)
-	}
-
+func (s *Server) unlock(ctx context.Context, c *cellClient, lockPath string) error {
 	c.mu.Lock()
 	li, ok := c.locks[lockPath]
 	c.mu.Unlock()
