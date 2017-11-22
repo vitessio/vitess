@@ -143,15 +143,6 @@ func (tee *Tee) Watch(ctx context.Context, cell, filePath string) (*topo.WatchDa
 }
 
 //
-// Cell management, global
-//
-
-// GetKnownCells is part of the topo.Server interface
-func (tee *Tee) GetKnownCells(ctx context.Context) ([]string, error) {
-	return tee.readFrom.GetKnownCells(ctx)
-}
-
-//
 // Lock management.
 //
 

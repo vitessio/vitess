@@ -35,15 +35,10 @@ import (
 )
 
 // backendExplorer is a class that uses the Backend interface of a
-// server Impl to display content. It is separated in its own class
+// topo.Server to display content. It is separated in its own class
 // now for easier testing.
-//
-// FIXME(alainjobart) GetKnownCells is only on topo.Impl at the moment.
-// Soon, when all topo implementations use the 'cells' subdirectory,
-// then we can use topo.Backend, as intended.
 type backendExplorer struct {
-	// backend is of type topo.Impl now, but will switch to topo.Backend.
-	backend topo.Impl
+	ts topo.Server
 }
 
 // Result is what the backendExplorer returns. It represents one directory node.
@@ -54,10 +49,9 @@ type Result struct {
 	Error    string
 }
 
-// newBackendExplorer returns an Explorer implementation for topo.Backend.
-func newBackendExplorer(backend topo.Impl) *backendExplorer {
+func newBackendExplorer(ts topo.Server) *backendExplorer {
 	return &backendExplorer{
-		backend: backend,
+		ts: ts,
 	}
 }
 
@@ -68,7 +62,7 @@ func (ex *backendExplorer) HandlePath(nodePath string, r *http.Request) *Result 
 
 	// Handle toplevel display: global, then one line per cell.
 	if nodePath == "/" {
-		cells, err := ex.backend.GetKnownCells(ctx)
+		cells, err := ex.ts.GetKnownCells(ctx)
 		if err != nil {
 			result.Error = err.Error()
 			return result
@@ -88,7 +82,7 @@ func (ex *backendExplorer) HandlePath(nodePath string, r *http.Request) *Result 
 	relativePath := nodePath[len(cell)+1:]
 
 	// Get the file contents, if any.
-	data, _, err := ex.backend.Get(ctx, cell, relativePath)
+	data, _, err := ex.ts.Get(ctx, cell, relativePath)
 	switch err {
 	case nil:
 		if len(data) > 0 {
@@ -109,7 +103,7 @@ func (ex *backendExplorer) HandlePath(nodePath string, r *http.Request) *Result 
 	}
 
 	// Get the children, if any.
-	children, err := ex.backend.ListDir(ctx, cell, relativePath)
+	children, err := ex.ts.ListDir(ctx, cell, relativePath)
 	if err != nil {
 		// It failed as a directory, let's just return what it did
 		// as a file.
@@ -206,7 +200,7 @@ func handleExplorerRedirect(ctx context.Context, ts topo.Server, r *http.Request
 // initExplorer initializes the redirects for explorer
 func initExplorer(ts topo.Server) {
 	// Main backend explorer functions.
-	be := newBackendExplorer(ts.Impl)
+	be := newBackendExplorer(ts)
 	handleCollection("topodata", func(r *http.Request) (interface{}, error) {
 		return be.HandlePath(path.Clean("/"+getItemPath(r.URL.Path)), r), nil
 	})

@@ -77,7 +77,7 @@ func TestHandlePathRoot(t *testing.T) {
 	cells := []string{"cell1", "cell2", "cell3"}
 	want := []string{topo.GlobalCell, "cell1", "cell2", "cell3"}
 
-	ts := memorytopo.New(cells...)
+	ts := memorytopo.NewServer(cells...)
 	ex := newBackendExplorer(ts)
 	result := ex.HandlePath(input, nil)
 	if got := result.Children; !reflect.DeepEqual(got, want) {
@@ -95,15 +95,14 @@ func TestHandlePathKeyspace(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	ts := memorytopo.New(cells...)
-	tts := topo.Server{Impl: ts}
-	if err := tts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
+	ts := memorytopo.NewServer(cells...)
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
 		t.Fatalf("CreateKeyspace error: %v", err)
 	}
-	if err := tts.CreateShard(ctx, "test_keyspace", "10-20"); err != nil {
+	if err := ts.CreateShard(ctx, "test_keyspace", "10-20"); err != nil {
 		t.Fatalf("CreateShard error: %v", err)
 	}
-	if err := tts.CreateShard(ctx, "test_keyspace", "20-30"); err != nil {
+	if err := ts.CreateShard(ctx, "test_keyspace", "20-30"); err != nil {
 		t.Fatalf("CreateShard error: %v", err)
 	}
 
@@ -145,15 +144,14 @@ func TestHandlePathShard(t *testing.T) {
 	want := "cells: \"cell1\"\ncells: \"cell2\"\ncells: \"cell3\"\n"
 
 	ctx := context.Background()
-	ts := memorytopo.New(cells...)
-	tts := topo.Server{Impl: ts}
-	if err := tts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
+	ts := memorytopo.NewServer(cells...)
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
 		t.Fatalf("CreateKeyspace error: %v", err)
 	}
-	if err := tts.CreateShard(ctx, "test_keyspace", "-80"); err != nil {
+	if err := ts.CreateShard(ctx, "test_keyspace", "-80"); err != nil {
 		t.Fatalf("CreateShard error: %v", err)
 	}
-	if _, err := tts.UpdateShardFields(ctx, "test_keyspace", "-80", func(si *topo.ShardInfo) error {
+	if _, err := ts.UpdateShardFields(ctx, "test_keyspace", "-80", func(si *topo.ShardInfo) error {
 		// Set cells, reset other fields so printout is easier to compare.
 		si.Shard.Cells = cells
 		si.ServedTypes = nil
@@ -187,9 +185,8 @@ func TestHandlePathTablet(t *testing.T) {
 	want := "alias: <\n  cell: \"cell1\"\n  uid: 123\n>\nhostname: \"example.com\"\nport_map: <\n  key: \"vt\"\n  value: 4321\n>\n"
 
 	ctx := context.Background()
-	ts := memorytopo.New(cells...)
-	tts := topo.Server{Impl: ts}
-	if err := tts.CreateTablet(ctx, tablet); err != nil {
+	ts := memorytopo.NewServer(cells...)
+	if err := ts.CreateTablet(ctx, tablet); err != nil {
 		t.Fatalf("CreateTablet error: %v", err)
 	}
 
@@ -212,7 +209,8 @@ func TestHandleBadPath(t *testing.T) {
 	want := "node doesn't exist"
 
 	ts := memorytopo.New(cells...)
-	ex := newBackendExplorer(ts)
+	tts := topo.Server{Impl: ts}
+	ex := newBackendExplorer(tts)
 	result := ex.HandlePath(input, nil)
 	if got := result.Error; !reflect.DeepEqual(got, want) {
 		t.Errorf("HandlePath(%q) = %v, want %v", input, got, want)
