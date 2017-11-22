@@ -24,7 +24,6 @@ import (
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
 // Filenames for all object types.
@@ -37,6 +36,13 @@ const (
 	TabletFile           = "Tablet"
 	SrvVSchemaFile       = "SrvVSchema"
 	SrvKeyspaceFile      = "SrvKeyspace"
+)
+
+// Path for all object types.
+const (
+	KeyspacesPath = "keyspaces"
+	ShardsPath    = "shards"
+	TabletsPath   = "tablets"
 )
 
 var (
@@ -102,144 +108,6 @@ type Impl interface {
 	GetKnownCells(ctx context.Context) ([]string, error)
 
 	//
-	// Keyspace management, global.
-	//
-
-	// CreateKeyspace creates the given keyspace, assuming it doesn't exist
-	// yet. Can return ErrNodeExists if it already exists.
-	CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error
-
-	// UpdateKeyspace updates the keyspace information
-	// pointed at by ki.keyspace to the *ki value.
-	// This will only be called with a lock on the keyspace.
-	// Can return ErrNoNode if the keyspace doesn't exist yet,
-	// or ErrBadVersion if the version has changed.
-	//
-	// Do not use directly, but instead use Server.UpdateKeyspace.
-	UpdateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace, existingVersion int64) (newVersion int64, err error)
-
-	// DeleteKeyspace deletes the specified keyspace.
-	// Can return ErrNoNode if the keyspace doesn't exist.
-	DeleteKeyspace(ctx context.Context, keyspace string) error
-
-	// GetKeyspace reads a keyspace and returns it, along with its version.
-	// Can return ErrNoNode
-	GetKeyspace(ctx context.Context, keyspace string) (*topodatapb.Keyspace, int64, error)
-
-	// GetKeyspaces returns the known keyspace names. They shall be sorted.
-	GetKeyspaces(ctx context.Context) ([]string, error)
-
-	//
-	// Shard management, global.
-	//
-
-	// CreateShard creates a shard, assuming it doesn't exist yet.
-	// Can return ErrNodeExists if it already exists.
-	CreateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard) error
-
-	// UpdateShard updates the shard information
-	// pointed at by si.keyspace / si.shard to the *si value.
-	// Can return ErrNoNode if the shard doesn't exist yet,
-	// or ErrBadVersion if the version has changed.
-	//
-	// Do not use directly, but instead use topo.UpdateShardFields.
-	UpdateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard, existingVersion int64) (newVersion int64, err error)
-
-	// GetShard reads a shard and returns it, along with its version.
-	// Can return ErrNoNode
-	GetShard(ctx context.Context, keyspace, shard string) (*topodatapb.Shard, int64, error)
-
-	// GetShardNames returns the known shards in a keyspace.
-	// Can return ErrNoNode if the keyspace wasn't created.
-	// Will return an empty list if the keyspace has no shard.
-	// They shall be sorted.
-	GetShardNames(ctx context.Context, keyspace string) ([]string, error)
-
-	// DeleteShard deletes the provided shard.
-	// Can return ErrNoNode if the shard doesn't exist.
-	DeleteShard(ctx context.Context, keyspace, shard string) error
-
-	//
-	// Tablet management, per cell.
-	//
-
-	// CreateTablet creates the given tablet, assuming it doesn't exist
-	// yet. It does *not* create the tablet replication paths.
-	// Can return ErrNodeExists if it already exists.
-	CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) error
-
-	// UpdateTablet updates a given tablet. The version is used
-	// for atomic updates. UpdateTablet will return ErrNoNode if
-	// the tablet doesn't exist and ErrBadVersion if the version
-	// has changed.
-	//
-	// Do not use directly, but instead use topo.UpdateTablet.
-	UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet, existingVersion int64) (newVersion int64, err error)
-
-	// DeleteTablet removes a tablet from the system.
-	// We assume no RPC is currently running to it.
-	// TODO(alainjobart) verify this assumption, link with RPC code.
-	// Can return ErrNoNode if the tablet doesn't exist.
-	DeleteTablet(ctx context.Context, alias *topodatapb.TabletAlias) error
-
-	// GetTablet returns the tablet data (includes the current version).
-	// Can return ErrNoNode if the tablet doesn't exist.
-	GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topodatapb.Tablet, int64, error)
-
-	// GetTabletsByCell returns all the tablets in the given cell.
-	// Can return ErrNoNode if no tablet was ever created in that cell.
-	GetTabletsByCell(ctx context.Context, cell string) ([]*topodatapb.TabletAlias, error)
-
-	//
-	// Replication graph management, per cell.
-	//
-
-	// UpdateShardReplicationFields updates the current
-	// ShardReplication record with new values. If the
-	// ShardReplication object does not exist, an empty one will
-	// be passed to the update function. All necessary directories
-	// need to be created by this method, if applicable.
-	UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*topodatapb.ShardReplication) error) error
-
-	// GetShardReplication returns the replication data.
-	// Can return ErrNoNode if the object doesn't exist.
-	GetShardReplication(ctx context.Context, cell, keyspace, shard string) (*ShardReplicationInfo, error)
-
-	// DeleteShardReplication deletes the replication data.
-	// Can return ErrNoNode if the object doesn't exist.
-	DeleteShardReplication(ctx context.Context, cell, keyspace, shard string) error
-
-	// DeleteKeyspaceReplication deletes the replication data for all shards.
-	// Can return ErrNoNode if the object doesn't exist.
-	DeleteKeyspaceReplication(ctx context.Context, cell, keyspace string) error
-
-	//
-	// Serving Graph management, per cell.
-	//
-
-	// GetSrvKeyspaceNames returns the list of visible Keyspaces
-	// in this cell. They shall be sorted.
-	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
-
-	// UpdateSrvKeyspace updates the serving records for a cell, keyspace.
-	UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error
-
-	// DeleteSrvKeyspace deletes the cell-local serving records for a keyspace.
-	// Can return ErrNoNode.
-	DeleteSrvKeyspace(ctx context.Context, cell, keyspace string) error
-
-	// GetSrvKeyspace reads a SrvKeyspace record.
-	// Can return ErrNoNode.
-	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
-
-	// UpdateSrvVSchema updates the serving records for a cell.
-	UpdateSrvVSchema(ctx context.Context, cell string, srvVSchema *vschemapb.SrvVSchema) error
-
-	// GetSrvVSchema reads a SrvVSchema record.
-	// Can return ErrNoNode.
-	GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.SrvVSchema, error)
-
-	//
 	// Keyspace and Shard locks for actions, global.
 	//
 
@@ -264,18 +132,6 @@ type Impl interface {
 
 	// UnlockShardForAction unlocks a shard.
 	UnlockShardForAction(ctx context.Context, keyspace, shard, lockPath, results string) error
-
-	//
-	// V3 Schema management, global
-	//
-
-	// SaveVSchema saves the provided schema in the topo server.
-	SaveVSchema(ctx context.Context, keyspace string, vschema *vschemapb.Keyspace) error
-
-	// GetVSchema retrieves the schema from the topo server.
-	//
-	// Can return ErrNoNode
-	GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error)
 }
 
 // Server is a wrapper type that can have extra methods.
@@ -284,10 +140,10 @@ type Server struct {
 	Impl
 }
 
-// SrvTopoServer is a subset of the Server API that only contains the serving
-// graph read-only calls used by clients to resolve serving addresses,
-// and how to get VSchema. It is mostly used by our discovery modules,
-// and by vtgate.
+// SrvTopoServer is a subset of the topo.Server API that only contains
+// the serving graph read-only calls used by clients to resolve
+// serving addresses, and how to get VSchema. It is mostly used by our
+// discovery modules, and by vtgate.
 type SrvTopoServer interface {
 	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)

@@ -119,6 +119,13 @@ func NewServer(cells ...string) topo.Server {
 	return topo.Server{Impl: New(cells...)}
 }
 
+// SetGenerationForTests is used by tests that have more than one
+// MemoryTopo, to make sure they don't use one set of Version objects
+// from one topo in the other. Has to be called right after New().
+func (mt *MemoryTopo) SetGenerationForTests(generation uint64) {
+	mt.generation = generation
+}
+
 // Close is part of the topo.Impl interface.
 func (mt *MemoryTopo) Close() {
 }

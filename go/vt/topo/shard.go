@@ -19,6 +19,7 @@ package topo
 import (
 	"encoding/hex"
 	"fmt"
+	"path"
 	"reflect"
 	"sort"
 	"strings"
@@ -27,6 +28,7 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/trace"
@@ -122,14 +124,14 @@ func ValidateShardName(shard string) (string, *topodatapb.KeyRange, error) {
 type ShardInfo struct {
 	keyspace  string
 	shardName string
-	version   int64
+	version   Version
 	*topodatapb.Shard
 }
 
 // NewShardInfo returns a ShardInfo basing on shard with the
 // keyspace / shard. This function should be only used by Server
 // implementations.
-func NewShardInfo(keyspace, shard string, value *topodatapb.Shard, version int64) *ShardInfo {
+func NewShardInfo(keyspace, shard string, value *topodatapb.Shard, version Version) *ShardInfo {
 	return &ShardInfo{
 		keyspace:  keyspace,
 		shardName: shard,
@@ -149,7 +151,7 @@ func (si *ShardInfo) ShardName() string {
 }
 
 // Version returns the shard version from last time it was read or updated.
-func (si *ShardInfo) Version() int64 {
+func (si *ShardInfo) Version() Version {
 	return si.version
 }
 
@@ -172,9 +174,15 @@ func (ts Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardIn
 	span.Annotate("shard", shard)
 	defer span.Finish()
 
-	value, version, err := ts.Impl.GetShard(ctx, keyspace, shard)
+	shardPath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard, ShardFile)
+	data, version, err := ts.Get(ctx, GlobalCell, shardPath)
 	if err != nil {
 		return nil, err
+	}
+
+	value := &topodatapb.Shard{}
+	if err = proto.Unmarshal(data, value); err != nil {
+		return nil, fmt.Errorf("bad shard data: %v", err)
 	}
 	return &ShardInfo{
 		keyspace:  keyspace,
@@ -182,11 +190,6 @@ func (ts Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardIn
 		version:   version,
 		Shard:     value,
 	}, nil
-}
-
-// UpdateShard masks ts.Impl.UpdateShard so nobody is tempted to use it.
-func (ts Server) UpdateShard() error {
-	panic("do not call this function directly, use UpdateShardFields instead")
 }
 
 // updateShard updates the shard data, with the right version.
@@ -198,7 +201,12 @@ func (ts Server) updateShard(ctx context.Context, si *ShardInfo) error {
 	span.Annotate("shard", si.shardName)
 	defer span.Finish()
 
-	newVersion, err := ts.Impl.UpdateShard(ctx, si.keyspace, si.shardName, si.Shard, si.version)
+	data, err := proto.Marshal(si.Shard)
+	if err != nil {
+		return err
+	}
+	shardPath := path.Join(KeyspacesPath, si.keyspace, ShardsPath, si.shardName, ShardFile)
+	newVersion, err := ts.Update(ctx, GlobalCell, shardPath, data, si.version)
 	if err != nil {
 		return err
 	}
@@ -290,8 +298,14 @@ func (ts Server) CreateShard(ctx context.Context, keyspace, shard string) (err e
 		})
 	}
 
-	if err := ts.Impl.CreateShard(ctx, keyspace, name, value); err != nil {
-		// return error as is, we need to propagate
+	// Marshal and save.
+	data, err := proto.Marshal(value)
+	if err != nil {
+		return err
+	}
+	shardPath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard, ShardFile)
+	if _, err := ts.Create(ctx, GlobalCell, shardPath, data); err != nil {
+		// Return error as is, we need to propagate
 		// ErrNodeExists for instance.
 		return err
 	}
@@ -331,7 +345,8 @@ func (ts Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) (
 // DeleteShard wraps the underlying Impl.DeleteShard
 // and dispatches the event.
 func (ts Server) DeleteShard(ctx context.Context, keyspace, shard string) error {
-	if err := ts.Impl.DeleteShard(ctx, keyspace, shard); err != nil {
+	shardPath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard, ShardFile)
+	if err := ts.Delete(ctx, GlobalCell, shardPath, nil); err != nil {
 		return err
 	}
 	event.Dispatch(&events.ShardChange{

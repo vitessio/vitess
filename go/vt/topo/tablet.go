@@ -18,11 +18,13 @@ package topo
 
 import (
 	"fmt"
+	"path"
 	"sync"
 
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/trace"
@@ -169,7 +171,7 @@ func TabletEquality(left, right *topodatapb.Tablet) bool {
 
 // TabletInfo is the container for a Tablet, read from the topology server.
 type TabletInfo struct {
-	version int64 // node version - used to prevent stomping concurrent writes
+	version Version // node version - used to prevent stomping concurrent writes
 	*topodatapb.Tablet
 }
 
@@ -201,7 +203,7 @@ func (ti *TabletInfo) DbName() string {
 
 // Version returns the version of this tablet from last time it was read or
 // updated.
-func (ti *TabletInfo) Version() int64 {
+func (ti *TabletInfo) Version() Version {
 	return ti.version
 }
 
@@ -218,7 +220,7 @@ func (ti *TabletInfo) IsSlaveType() bool {
 // NewTabletInfo returns a TabletInfo basing on tablet with the
 // version set. This function should be only used by Server
 // implementations.
-func NewTabletInfo(tablet *topodatapb.Tablet, version int64) *TabletInfo {
+func NewTabletInfo(tablet *topodatapb.Tablet, version Version) *TabletInfo {
 	return &TabletInfo{version: version, Tablet: tablet}
 }
 
@@ -230,37 +232,43 @@ func (ts Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (
 	span.Annotate("tablet", topoproto.TabletAliasString(alias))
 	defer span.Finish()
 
-	value, version, err := ts.Impl.GetTablet(ctx, alias)
+	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(alias), TabletFile)
+	data, version, err := ts.Get(ctx, alias.Cell, tabletPath)
 	if err != nil {
 		return nil, err
 	}
+	tablet := &topodatapb.Tablet{}
+	if err := proto.Unmarshal(data, tablet); err != nil {
+		return nil, err
+	}
+
 	return &TabletInfo{
 		version: version,
-		Tablet:  value,
+		Tablet:  tablet,
 	}, nil
 }
 
 // UpdateTablet updates the tablet data only - not associated replication paths.
 // It also uses a span, and sends the event.
-func (ts Server) UpdateTablet(ctx context.Context, tablet *TabletInfo) error {
+func (ts Server) UpdateTablet(ctx context.Context, ti *TabletInfo) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateTablet")
-	span.Annotate("tablet", topoproto.TabletAliasString(tablet.Alias))
+	span.Annotate("tablet", topoproto.TabletAliasString(ti.Alias))
 	defer span.Finish()
 
-	var version int64 = -1
-	if tablet.version != 0 {
-		version = tablet.version
-	}
-
-	newVersion, err := ts.Impl.UpdateTablet(ctx, tablet.Tablet, version)
+	data, err := proto.Marshal(ti.Tablet)
 	if err != nil {
 		return err
 	}
-	tablet.version = newVersion
+	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(ti.Tablet.Alias), TabletFile)
+	newVersion, err := ts.Update(ctx, ti.Tablet.Alias.Cell, tabletPath, data, ti.version)
+	if err != nil {
+		return err
+	}
+	ti.version = newVersion
 
 	event.Dispatch(&events.TabletChange{
-		Tablet: *tablet.Tablet,
+		Tablet: *ti.Tablet,
 		Status: "updated",
 	})
 	return nil
@@ -322,9 +330,12 @@ func Validate(ctx context.Context, ts Server, tabletAlias *topodatapb.TabletAlia
 // CreateTablet creates a new tablet and all associated paths for the
 // replication graph.
 func (ts Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) error {
-	// Have the Server create the tablet
-	err := ts.Impl.CreateTablet(ctx, tablet)
-	if err != nil && err != ErrNodeExists {
+	data, err := proto.Marshal(tablet)
+	if err != nil {
+		return err
+	}
+	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(tablet.Alias), TabletFile)
+	if _, err = ts.Create(ctx, tablet.Alias.Cell, tabletPath, data); err != nil && err != ErrNodeExists {
 		return err
 	}
 
@@ -350,9 +361,10 @@ func (ts Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) er
 // and dispatches the event.
 func (ts Server) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias) error {
 	// get the current tablet record, if any, to log the deletion
-	tablet, _, tErr := ts.Impl.GetTablet(ctx, tabletAlias)
+	ti, tErr := ts.GetTablet(ctx, tabletAlias)
 
-	if err := ts.Impl.DeleteTablet(ctx, tabletAlias); err != nil {
+	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(tabletAlias), TabletFile)
+	if err := ts.Delete(ctx, tabletAlias.Cell, tabletPath, nil); err != nil {
 		return err
 	}
 
@@ -362,8 +374,8 @@ func (ts Server) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Table
 		event.Dispatch(&events.TabletChange{
 			Tablet: topodatapb.Tablet{
 				Alias:    tabletAlias,
-				Keyspace: tablet.Keyspace,
-				Shard:    tablet.Shard,
+				Keyspace: ti.Tablet.Keyspace,
+				Shard:    ti.Tablet.Shard,
 			},
 			Status: "deleted",
 		})
@@ -419,4 +431,37 @@ func (ts Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.T
 	}
 	wg.Wait()
 	return tabletMap, someError
+}
+
+// GetTabletsByCell returns all the tablets in a cell.
+// It returns ErrNode if the cell doesn't exist.
+// It returns (nil, nil) if the cell exists, but there are no tablets.
+func (ts Server) GetTabletsByCell(ctx context.Context, cell string) ([]*topodatapb.TabletAlias, error) {
+	// First make sure the cell exists, otherwise we need to return an error.
+	cells, err := ts.GetKnownCells(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !InCellList(cell, cells) {
+		return nil, ErrNoNode
+	}
+
+	// List the directory, and parse the aliases
+	children, err := ts.ListDir(ctx, cell, TabletsPath)
+	if err != nil {
+		if err == ErrNoNode {
+			// directory doesn't exist, empty list, no error.
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	result := make([]*topodatapb.TabletAlias, len(children))
+	for i, child := range children {
+		result[i], err = topoproto.ParseTabletAlias(child)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
 }

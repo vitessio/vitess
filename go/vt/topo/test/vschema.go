@@ -28,16 +28,13 @@ import (
 )
 
 // checkVSchema runs the tests on the VSchema part of the API
-func checkVSchema(t *testing.T, ts topo.Impl) {
+func checkVSchema(t *testing.T, ts topo.Server) {
 	ctx := context.Background()
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
-	shard := &topodatapb.Shard{
-		KeyRange: newKeyRange("b0-c0"),
-	}
-	if err := ts.CreateShard(ctx, "test_keyspace", "b0-c0", shard); err != nil {
+	if err := ts.CreateShard(ctx, "test_keyspace", "b0-c0"); err != nil {
 		t.Fatalf("CreateShard: %v", err)
 	}
 
@@ -48,36 +45,12 @@ func checkVSchema(t *testing.T, ts topo.Impl) {
 	}
 
 	err = ts.SaveVSchema(ctx, "test_keyspace", &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"stfu1": {
-				Type: "stfu",
-				Params: map[string]string{
-					"stfu1": "1",
-				},
-				Owner: "t1",
-			},
-			"stln1": {
-				Type:  "stln",
-				Owner: "t1",
-			},
-		},
 		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{
-					{
-						Column: "c1",
-						Name:   "stfu1",
-					}, {
-						Column: "c2",
-						Name:   "stln1",
-					},
-				},
-			},
+			"unsharded": {},
 		},
 	})
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	got, err = ts.GetVSchema(ctx, "test_keyspace")
@@ -85,32 +58,8 @@ func checkVSchema(t *testing.T, ts topo.Impl) {
 		t.Error(err)
 	}
 	want = &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"stfu1": {
-				Type: "stfu",
-				Params: map[string]string{
-					"stfu1": "1",
-				},
-				Owner: "t1",
-			},
-			"stln1": {
-				Type:  "stln",
-				Owner: "t1",
-			},
-		},
 		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{
-					{
-						Column: "c1",
-						Name:   "stfu1",
-					}, {
-						Column: "c2",
-						Name:   "stln1",
-					},
-				},
-			},
+			"unsharded": {},
 		},
 	}
 	if !proto.Equal(got, want) {

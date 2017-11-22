@@ -28,7 +28,7 @@ import (
 )
 
 // checkSrvKeyspace tests the SrvKeyspace methods (other than watch).
-func checkSrvKeyspace(t *testing.T, ts topo.Impl) {
+func checkSrvKeyspace(t *testing.T, ts topo.Server) {
 	ctx := context.Background()
 	cell := getLocalCell(ctx, t, ts)
 
@@ -92,7 +92,7 @@ func checkSrvKeyspace(t *testing.T, ts topo.Impl) {
 }
 
 // checkSrvVSchema tests the SrvVSchema methods (other than watch).
-func checkSrvVSchema(t *testing.T, ts topo.Impl) {
+func checkSrvVSchema(t *testing.T, ts topo.Server) {
 	ctx := context.Background()
 	cell := getLocalCell(ctx, t, ts)
 

@@ -57,32 +57,32 @@ func TopoServerTestSuite(t *testing.T, factory func() topo.Impl) {
 
 	t.Log("=== checkKeyspace")
 	ts = factory()
-	checkKeyspace(t, ts)
+	checkKeyspace(t, topo.Server{Impl: ts})
 	ts.Close()
 
 	t.Log("=== checkShard")
 	ts = factory()
-	checkShard(t, ts)
+	checkShard(t, topo.Server{Impl: ts})
 	ts.Close()
 
 	t.Log("=== checkTablet")
 	ts = factory()
-	checkTablet(t, ts)
+	checkTablet(t, topo.Server{Impl: ts})
 	ts.Close()
 
 	t.Log("=== checkShardReplication")
 	ts = factory()
-	checkShardReplication(t, ts)
+	checkShardReplication(t, topo.Server{Impl: ts})
 	ts.Close()
 
 	t.Log("=== checkSrvKeyspace")
 	ts = factory()
-	checkSrvKeyspace(t, ts)
+	checkSrvKeyspace(t, topo.Server{Impl: ts})
 	ts.Close()
 
 	t.Log("=== checkSrvVSchema")
 	ts = factory()
-	checkSrvVSchema(t, ts)
+	checkSrvVSchema(t, topo.Server{Impl: ts})
 	ts.Close()
 
 	t.Log("=== checkKeyspaceLock")
@@ -97,7 +97,7 @@ func TopoServerTestSuite(t *testing.T, factory func() topo.Impl) {
 
 	t.Log("=== checkVSchema")
 	ts = factory()
-	checkVSchema(t, ts)
+	checkVSchema(t, topo.Server{Impl: ts})
 	ts.Close()
 
 	t.Log("=== checkElection")

@@ -84,3 +84,28 @@ func (ts Server) WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVSc
 
 	return &WatchSrvVSchemaData{Value: value}, changes, cancel
 }
+
+// UpdateSrvVSchema updates the SrvVSchema file for a cell.
+func (ts Server) UpdateSrvVSchema(ctx context.Context, cell string, srvVSchema *vschemapb.SrvVSchema) error {
+	nodePath := SrvVSchemaFile
+	data, err := proto.Marshal(srvVSchema)
+	if err != nil {
+		return err
+	}
+	_, err = ts.Update(ctx, cell, nodePath, data, nil)
+	return err
+}
+
+// GetSrvVSchema returns the SrvVSchema for a cell.
+func (ts Server) GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.SrvVSchema, error) {
+	nodePath := SrvVSchemaFile
+	data, _, err := ts.Get(ctx, cell, nodePath)
+	if err != nil {
+		return nil, err
+	}
+	srvVSchema := &vschemapb.SrvVSchema{}
+	if err := proto.Unmarshal(data, srvVSchema); err != nil {
+		return nil, fmt.Errorf("SrvVSchema unmarshal failed: %v %v", data, err)
+	}
+	return srvVSchema, nil
+}
