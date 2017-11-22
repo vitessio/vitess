@@ -29,6 +29,25 @@ import (
 
 // This file contains the lock management code for zktopo.Server.
 
+// zsLockDescriptor implements topo.LockDescriptor.
+type zsLockDescriptor struct {
+	zs       *Server
+	lockPath string
+}
+
+// Lock is part of the topo.Backend interface.
+func (zs *Server) Lock(ctx context.Context, cell string, dirPath string) (topo.LockDescriptor, error) {
+	locksDir := path.Join(dirPath, locksPath)
+	lockPath, err := zs.lockForAction(ctx, locksDir, "new Lock")
+	if err != nil {
+		return nil, err
+	}
+	return &zsLockDescriptor{
+		zs:       zs,
+		lockPath: lockPath,
+	}, nil
+}
+
 // lockForAction creates the locks node in zookeeper, waits for the
 // queue lock, displays a nice error message if it cant get it.
 func (zs *Server) lockForAction(ctx context.Context, locksDir, contents string) (string, error) {
@@ -93,29 +112,12 @@ func (zs *Server) lockForAction(ctx context.Context, locksDir, contents string) 
 	return locksPath, nil
 }
 
+// Unlock is part of the topo.LockDescriptor interface.
+func (ld *zsLockDescriptor) Unlock(ctx context.Context) error {
+	return ld.zs.unlockForAction(ctx, ld.lockPath, "results")
+}
+
 func (zs *Server) unlockForAction(ctx context.Context, lockPath, results string) error {
 	// Just delete the file.
 	return zs.Delete(ctx, topo.GlobalCell, lockPath, nil)
-}
-
-// LockKeyspaceForAction is part of topo.Server interface
-func (zs *Server) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {
-	locksDir := path.Join(keyspacesPath, keyspace, locksPath)
-	return zs.lockForAction(ctx, locksDir, contents)
-}
-
-// UnlockKeyspaceForAction is part of topo.Server interface
-func (zs *Server) UnlockKeyspaceForAction(ctx context.Context, keyspace, lockPath, results string) error {
-	return zs.unlockForAction(ctx, lockPath, results)
-}
-
-// LockShardForAction is part of topo.Server interface
-func (zs *Server) LockShardForAction(ctx context.Context, keyspace, shard, contents string) (string, error) {
-	locksDir := path.Join(keyspacesPath, keyspace, shardsPath, shard, locksPath)
-	return zs.lockForAction(ctx, locksDir, contents)
-}
-
-// UnlockShardForAction is part of topo.Server interface
-func (zs *Server) UnlockShardForAction(ctx context.Context, keyspace, shard, lockPath, results string) error {
-	return zs.unlockForAction(ctx, lockPath, results)
 }
