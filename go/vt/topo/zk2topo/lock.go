@@ -29,11 +29,11 @@ import (
 
 // This file contains the lock management code for zktopo.Server.
 
-// zsLockDescriptor implements topo.LockDescriptor.
-type zsLockDescriptor struct {
+// zkLockDescriptor implements topo.LockDescriptor.
+type zkLockDescriptor struct {
 	zs       *Server
 	cell     string
-	lockPath string
+	nodePath string
 }
 
 // Lock is part of the topo.Backend interface.
@@ -48,12 +48,12 @@ func (zs *Server) Lock(ctx context.Context, cell string, dirPath string) (topo.L
 	locksDir := path.Join(root, dirPath, locksPath) + "/"
 
 	// Create the locks path, possibly creating the parent.
-	lockPath, err := CreateRecursive(ctx, conn, locksDir, []byte("lock"), zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(PermFile), 1)
+	nodePath, err := CreateRecursive(ctx, conn, locksDir, []byte("lock"), zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(PermFile), 1)
 	if err != nil {
 		return nil, convertError(err)
 	}
 
-	err = obtainQueueLock(ctx, conn, lockPath)
+	err = obtainQueueLock(ctx, conn, nodePath)
 	if err != nil {
 		var errToReturn error
 		switch err {
@@ -62,15 +62,15 @@ func (zs *Server) Lock(ctx context.Context, cell string, dirPath string) (topo.L
 		case context.Canceled:
 			errToReturn = topo.ErrInterrupted
 		default:
-			errToReturn = fmt.Errorf("failed to obtain action lock: %v %v", lockPath, err)
+			errToReturn = fmt.Errorf("failed to obtain action lock: %v %v", nodePath, err)
 		}
 
 		// Regardless of the reason, try to cleanup.
 		log.Warningf("Failed to obtain action lock: %v", err)
-		conn.Delete(ctx, lockPath, -1)
+		conn.Delete(ctx, nodePath, -1)
 
 		// Show the other locks in the directory
-		dir := path.Dir(lockPath)
+		dir := path.Dir(nodePath)
 		children, _, err := conn.Children(ctx, dir)
 		if err != nil {
 			log.Warningf("Failed to get children of %v: %v", dir, err)
@@ -95,15 +95,15 @@ func (zs *Server) Lock(ctx context.Context, cell string, dirPath string) (topo.L
 
 	// Remove the root prefix from the file. So when we delete it,
 	// it's a relative file.
-	lockPath = lockPath[len(root):]
-	return &zsLockDescriptor{
+	nodePath = nodePath[len(root):]
+	return &zkLockDescriptor{
 		zs:       zs,
 		cell:     cell,
-		lockPath: lockPath,
+		nodePath: nodePath,
 	}, nil
 }
 
 // Unlock is part of the topo.LockDescriptor interface.
-func (ld *zsLockDescriptor) Unlock(ctx context.Context) error {
-	return ld.zs.Delete(ctx, ld.cell, ld.lockPath, nil)
+func (ld *zkLockDescriptor) Unlock(ctx context.Context) error {
+	return ld.zs.Delete(ctx, ld.cell, ld.nodePath, nil)
 }

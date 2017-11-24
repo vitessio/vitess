@@ -88,7 +88,6 @@ func (ld *memoryTopoLockDescriptor) Unlock(ctx context.Context) error {
 	return ld.mt.unlock(ctx, ld.cell, ld.nodePath)
 }
 
-// unlock is used by Unlock().
 func (mt *MemoryTopo) unlock(ctx context.Context, cell, nodePath string) error {
 	mt.mu.Lock()
 	defer mt.mu.Unlock()

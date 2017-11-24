@@ -108,10 +108,9 @@ func (s *Server) waitOnLastRev(ctx context.Context, cli *clientv3.Client, nodePa
 	return false, nil
 }
 
-// ectdLockDescriptor implements topo.LockDescriptor.
-type ectdLockDescriptor struct {
-	s       *Server
-	cell    string
+// etcdLockDescriptor implements topo.LockDescriptor.
+type etcdLockDescriptor struct {
+	c       *cellClient
 	leaseID clientv3.LeaseID
 }
 
@@ -128,7 +127,7 @@ func (s *Server) Lock(ctx context.Context, cell string, dirPath string) (topo.Lo
 	return s.lock(ctx, cell, dirPath, "lock")
 }
 
-// lock is used by both Lock()  and master election.
+// lock is used by both Lock() and master election.
 func (s *Server) lock(ctx context.Context, cell, nodePath, contents string) (topo.LockDescriptor, error) {
 	// Find our cell.
 	c, err := s.clientForCell(ctx, cell)
@@ -171,9 +170,8 @@ func (s *Server) lock(ctx context.Context, cell, nodePath, contents string) (top
 		}
 		if done {
 			// No more older nodes, we're it!
-			return &ectdLockDescriptor{
-				s:       s,
-				cell:    cell,
+			return &etcdLockDescriptor{
+				c:       c,
 				leaseID: lease.ID,
 			}, nil
 		}
@@ -181,21 +179,8 @@ func (s *Server) lock(ctx context.Context, cell, nodePath, contents string) (top
 }
 
 // Unlock is part of the topo.LockDescriptor interface.
-func (ld *ectdLockDescriptor) Unlock(ctx context.Context) error {
-	return ld.s.unlock(ctx, ld.cell, ld.leaseID)
-}
-
-// unlock releases a lock acquired by lock() on the given directory.
-// The string returned by lock() should be passed as the actionPath.
-func (s *Server) unlock(ctx context.Context, cell string, leaseID clientv3.LeaseID) error {
-	// Find our cell.
-	c, err := s.clientForCell(ctx, cell)
-	if err != nil {
-		return err
-	}
-
-	// Revoke the lease, will delete the node.
-	_, err = c.cli.Revoke(ctx, leaseID)
+func (ld *etcdLockDescriptor) Unlock(ctx context.Context) error {
+	_, err := ld.c.cli.Revoke(ctx, ld.leaseID)
 	if err != nil {
 		return convertError(err)
 	}

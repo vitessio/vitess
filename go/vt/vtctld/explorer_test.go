@@ -208,9 +208,8 @@ func TestHandleBadPath(t *testing.T) {
 	cells := []string{"cell1", "cell2", "cell3"}
 	want := "node doesn't exist"
 
-	ts := memorytopo.New(cells...)
-	tts := topo.Server{Impl: ts}
-	ex := newBackendExplorer(tts)
+	ts := memorytopo.NewServer(cells...)
+	ex := newBackendExplorer(ts)
 	result := ex.HandlePath(input, nil)
 	if got := result.Error; !reflect.DeepEqual(got, want) {
 		t.Errorf("HandlePath(%q) = %v, want %v", input, got, want)
