@@ -154,7 +154,7 @@ func testKeyspaceLock(t *testing.T, ts *Server) {
 
 	// Long TTL, unlock before lease runs out.
 	*leaseTTL = 1000
-	lockDescriptor, err := ts.Lock(ctx, topo.GlobalCell, keyspacePath)
+	lockDescriptor, err := ts.Lock(ctx, topo.GlobalCell, keyspacePath, "ttl")
 	if err != nil {
 		t.Fatalf("Lock failed: %v", err)
 	}
@@ -164,7 +164,7 @@ func testKeyspaceLock(t *testing.T, ts *Server) {
 
 	// Short TTL, make sure it doesn't expire.
 	*leaseTTL = 1
-	lockDescriptor, err = ts.Lock(ctx, topo.GlobalCell, keyspacePath)
+	lockDescriptor, err = ts.Lock(ctx, topo.GlobalCell, keyspacePath, "short ttl")
 	if err != nil {
 		t.Fatalf("Lock failed: %v", err)
 	}

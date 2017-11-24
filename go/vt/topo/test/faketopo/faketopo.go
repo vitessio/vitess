@@ -66,7 +66,7 @@ func (ft FakeTopo) Watch(ctx context.Context, cell string, path string) (*topo.W
 }
 
 // Lock is part of the topo.Backend interface.
-func (ft FakeTopo) Lock(ctx context.Context, cell string, dirPath string) (topo.LockDescriptor, error) {
+func (ft FakeTopo) Lock(ctx context.Context, cell, dirPath, contents string) (topo.LockDescriptor, error) {
 	return nil, errNotImplemented
 }
 

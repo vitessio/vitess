@@ -52,14 +52,14 @@ func checkLock(t *testing.T, ts topo.Server) {
 
 func checkLockTimeout(ctx context.Context, t *testing.T, ts topo.Server) {
 	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace")
-	lockDescriptor, err := ts.Lock(ctx, topo.GlobalCell, keyspacePath)
+	lockDescriptor, err := ts.Lock(ctx, topo.GlobalCell, keyspacePath, "")
 	if err != nil {
 		t.Fatalf("Lock: %v", err)
 	}
 
 	// test we can't take the lock again
 	fastCtx, cancel := context.WithTimeout(ctx, timeUntilLockIsTaken)
-	if _, err := ts.Lock(fastCtx, topo.GlobalCell, keyspacePath); err != topo.ErrTimeout {
+	if _, err := ts.Lock(fastCtx, topo.GlobalCell, keyspacePath, "again"); err != topo.ErrTimeout {
 		t.Fatalf("Lock(again): %v", err)
 	}
 	cancel()
@@ -70,7 +70,7 @@ func checkLockTimeout(ctx context.Context, t *testing.T, ts topo.Server) {
 		time.Sleep(timeUntilLockIsTaken)
 		cancel()
 	}()
-	if _, err := ts.Lock(interruptCtx, topo.GlobalCell, keyspacePath); err != topo.ErrInterrupted {
+	if _, err := ts.Lock(interruptCtx, topo.GlobalCell, keyspacePath, "interrupted"); err != topo.ErrInterrupted {
 		t.Fatalf("Lock(interrupted): %v", err)
 	}
 
@@ -87,7 +87,7 @@ func checkLockTimeout(ctx context.Context, t *testing.T, ts topo.Server) {
 // checkLockMissing makes sure we can't lock a non-existing directory.
 func checkLockMissing(ctx context.Context, t *testing.T, ts topo.Impl) {
 	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace_666")
-	if _, err := ts.Lock(ctx, topo.GlobalCell, keyspacePath); err == nil {
+	if _, err := ts.Lock(ctx, topo.GlobalCell, keyspacePath, "missing"); err == nil {
 		t.Fatalf("Lock(test_keyspace_666) worked for non-existing keyspace")
 	}
 }
@@ -102,7 +102,7 @@ func checkLockUnblocks(ctx context.Context, t *testing.T, ts topo.Impl) {
 	// As soon as we're unblocked, we try to lock the keyspace.
 	go func() {
 		<-unblock
-		lockDescriptor, err := ts.Lock(ctx, topo.GlobalCell, keyspacePath)
+		lockDescriptor, err := ts.Lock(ctx, topo.GlobalCell, keyspacePath, "unblocks")
 		if err != nil {
 			t.Fatalf("Lock(test_keyspace) failed: %v", err)
 		}
@@ -113,7 +113,7 @@ func checkLockUnblocks(ctx context.Context, t *testing.T, ts topo.Impl) {
 	}()
 
 	// Lock the keyspace.
-	lockDescriptor2, err := ts.Lock(ctx, topo.GlobalCell, keyspacePath)
+	lockDescriptor2, err := ts.Lock(ctx, topo.GlobalCell, keyspacePath, "")
 	if err != nil {
 		t.Fatalf("Lock(test_keyspace) failed: %v", err)
 	}

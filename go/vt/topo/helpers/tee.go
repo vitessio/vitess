@@ -156,15 +156,15 @@ type teeTopoLockDescriptor struct {
 }
 
 // Lock is part of the topo.Backend interface.
-func (tee *Tee) Lock(ctx context.Context, cell string, dirPath string) (topo.LockDescriptor, error) {
+func (tee *Tee) Lock(ctx context.Context, cell, dirPath, contents string) (topo.LockDescriptor, error) {
 	// Lock lockFirst.
-	fLD, err := tee.lockFirst.Lock(ctx, cell, dirPath)
+	fLD, err := tee.lockFirst.Lock(ctx, cell, dirPath, contents)
 	if err != nil {
 		return nil, err
 	}
 
 	// Lock lockSecond.
-	sLD, err := tee.lockSecond.Lock(ctx, cell, dirPath)
+	sLD, err := tee.lockSecond.Lock(ctx, cell, dirPath, contents)
 	if err != nil {
 		if err := fLD.Unlock(ctx); err != nil {
 			log.Warningf("Failed to unlock lockFirst after failed lockSecond lock for %v %v: %v", cell, dirPath, err)

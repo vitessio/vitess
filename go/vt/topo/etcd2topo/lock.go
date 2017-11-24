@@ -115,7 +115,7 @@ type etcdLockDescriptor struct {
 }
 
 // Lock is part of the topo.Backend interface.
-func (s *Server) Lock(ctx context.Context, cell string, dirPath string) (topo.LockDescriptor, error) {
+func (s *Server) Lock(ctx context.Context, cell, dirPath, contents string) (topo.LockDescriptor, error) {
 	// We list the directory first to make sure it exists.
 	if _, err := s.ListDir(ctx, cell, dirPath); err != nil {
 		if err == topo.ErrNoNode {
@@ -124,7 +124,7 @@ func (s *Server) Lock(ctx context.Context, cell string, dirPath string) (topo.Lo
 		return nil, fmt.Errorf("cannot ListDir(%v,%v) before locking", cell, dirPath)
 	}
 
-	return s.lock(ctx, cell, dirPath, "lock")
+	return s.lock(ctx, cell, dirPath, contents)
 }
 
 // lock is used by both Lock() and master election.
