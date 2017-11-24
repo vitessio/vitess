@@ -70,6 +70,21 @@ clean:
 clean_pkg:
 	rm -rf ../../../../pkg Godeps/_workspace/pkg
 
+# Remove everything including stuff pulled down by bootstrap.sh
+cleanall:
+	# symlinks
+	for f in config data py-vtdb; do test -L ../../../../$$f && rm ../../../../$$f; done
+	# directories created by bootstrap.sh
+	# - exclude vtdataroot and vthook as they may have data we want
+	rm -rf ../../../../bin ../../../../dist ../../../../lib ../../../../pkg
+	# keep the vendor.json file but nothing else under the vendor directory as it's not actually part of the Vitess repo
+	rm -rf vendor/cloud.google.com vendor/github.com vendor/golang.org vendor/google.golang.org vendor/gopkg.in
+	# other stuff in the go hierarchy that is not under vendor/
+	rm -rf ../../../golang.org ../../../honnef.co
+	rm -rf ../../../github.com/golang ../../../github.com/kardianos ../../../github.com/kisielk
+	# Remind people to run bootstrap.sh again
+	echo "Please run boottsrap.sh again to setup your environment"
+
 unit_test: build
 	echo $$(date): Running unit tests
 	go test $(VT_GO_PARALLEL) ./go/...
