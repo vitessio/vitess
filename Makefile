@@ -83,7 +83,7 @@ cleanall:
 	rm -rf ../../../golang.org ../../../honnef.co
 	rm -rf ../../../github.com/golang ../../../github.com/kardianos ../../../github.com/kisielk
 	# Remind people to run bootstrap.sh again
-	echo "Please run boottsrap.sh again to setup your environment"
+	echo "Please run bootstrap.sh again to setup your environment"
 
 unit_test: build
 	echo $$(date): Running unit tests
