@@ -149,6 +149,7 @@ func (tee *Tee) Watch(ctx context.Context, cell, filePath string) (*topo.WatchDa
 // teeTopoLockDescriptor implements the topo.LockDescriptor interface.
 type teeTopoLockDescriptor struct {
 	tee                  *Tee
+	cell                 string
 	dirPath              string
 	firstLockDescriptor  topo.LockDescriptor
 	secondLockDescriptor topo.LockDescriptor
@@ -166,7 +167,7 @@ func (tee *Tee) Lock(ctx context.Context, cell string, dirPath string) (topo.Loc
 	sLD, err := tee.lockSecond.Lock(ctx, cell, dirPath)
 	if err != nil {
 		if err := fLD.Unlock(ctx); err != nil {
-			log.Warningf("Failed to unlock lockFirst after failed lockSecond lock for %v %v", cell, dirPath)
+			log.Warningf("Failed to unlock lockFirst after failed lockSecond lock for %v %v: %v", cell, dirPath, err)
 		}
 		return nil, err
 	}
@@ -174,6 +175,7 @@ func (tee *Tee) Lock(ctx context.Context, cell string, dirPath string) (topo.Loc
 	// Remember both locks in teeTopoLockDescriptor.
 	return &teeTopoLockDescriptor{
 		tee:                  tee,
+		cell:                 cell,
 		dirPath:              dirPath,
 		firstLockDescriptor:  fLD,
 		secondLockDescriptor: sLD,
@@ -188,7 +190,7 @@ func (ld *teeTopoLockDescriptor) Unlock(ctx context.Context) error {
 
 	if serr != nil {
 		if ferr != nil {
-			log.Warningf("First Unlock(%v) failed: %v", ld.dirPath, ferr)
+			log.Warningf("First Unlock(%v, %v) failed: %v", ld.cell, ld.dirPath, ferr)
 		}
 		return serr
 	}

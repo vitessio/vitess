@@ -181,7 +181,7 @@ type Version interface {
 // LockDescriptor is an interface that describes a lock.
 // It will be returned by Lock(). It contains the Unlock method.
 type LockDescriptor interface {
-	// Unlock frees the lock.
+	// Unlock releases the lock.
 	Unlock(ctx context.Context) error
 }
 

@@ -39,7 +39,7 @@ func (s *Server) Lock(ctx context.Context, cell string, dirPath string) (topo.Lo
 		if err == topo.ErrNoNode {
 			return nil, err
 		}
-		return nil, fmt.Errorf("cannot ListDir(%v,%v) before locking", cell, dirPath)
+		return nil, fmt.Errorf("cannot ListDir(%v, %v) before locking: %v", cell, dirPath, err)
 	}
 
 	c, err := s.clientForCell(ctx, cell)
@@ -110,7 +110,7 @@ func (ld *consulLockDescriptor) Unlock(ctx context.Context) error {
 	return ld.s.unlock(ctx, ld.c, ld.lockPath)
 }
 
-// unlock releases a lock acquired by lock() on the given directory.
+// unlock releases a lock acquired by Lock() on the given directory.
 func (s *Server) unlock(ctx context.Context, c *cellClient, lockPath string) error {
 	c.mu.Lock()
 	li, ok := c.locks[lockPath]
