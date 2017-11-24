@@ -102,11 +102,13 @@ type Backend interface {
 	// a Keyspace or a Shard. It is not a file location.
 	// (this means the implementation can for instance create a
 	// file in this directory to materialize the lock).
+	// contents describes the lock holder and purpose, but has no other
+	// meaning, so it can be used as a lock file contents, for instance.
 	// Returns ErrNoNode if the directory doesn't exist (meaning
 	//   there is no existing file under that directory).
 	// Returns ErrTimeout if ctx expires.
 	// Returns ErrInterrupted if ctx is canceled.
-	Lock(ctx context.Context, cell string, dirPath string) (LockDescriptor, error)
+	Lock(ctx context.Context, cell, dirPath, contents string) (LockDescriptor, error)
 
 	//
 	// Watches

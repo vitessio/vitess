@@ -33,7 +33,7 @@ type consulLockDescriptor struct {
 }
 
 // Lock is part of the topo.Backend interface.
-func (s *Server) Lock(ctx context.Context, cell string, dirPath string) (topo.LockDescriptor, error) {
+func (s *Server) Lock(ctx context.Context, cell, dirPath, contents string) (topo.LockDescriptor, error) {
 	// We list the directory first to make sure it exists.
 	if _, err := s.ListDir(ctx, cell, dirPath); err != nil {
 		if err == topo.ErrNoNode {
@@ -51,7 +51,7 @@ func (s *Server) Lock(ctx context.Context, cell string, dirPath string) (topo.Lo
 	// Build the lock structure.
 	l, err := c.client.LockOpts(&api.LockOptions{
 		Key:   lockPath,
-		Value: []byte("lock"),
+		Value: []byte(contents),
 	})
 	if err != nil {
 		return nil, err

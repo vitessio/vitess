@@ -17,6 +17,7 @@ limitations under the License.
 package topo
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -45,6 +46,7 @@ var (
 )
 
 // Lock describes a long-running lock on a keyspace or a shard.
+// It needs to be public as we JSON-serialize it.
 type Lock struct {
 	// Action and the following fields are set at construction time.
 	Action   string
@@ -72,6 +74,15 @@ func newLock(action string) *Lock {
 		l.UserName = u.Username
 	}
 	return l
+}
+
+// ToJSON returns a JSON representation of the object.
+func (l *Lock) ToJSON() (string, error) {
+	data, err := json.MarshalIndent(l, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("cannot JSON-marshal node: %v", err)
+	}
+	return string(data), nil
 }
 
 // lockInfo is an individual info structure for a lock
@@ -208,7 +219,11 @@ func (l *Lock) lockKeyspace(ctx context.Context, ts Server, keyspace string) (Lo
 	defer span.Finish()
 
 	keyspacePath := path.Join(KeyspacesPath, keyspace)
-	return ts.Lock(ctx, GlobalCell, keyspacePath)
+	j, err := l.ToJSON()
+	if err != nil {
+		return nil, err
+	}
+	return ts.Lock(ctx, GlobalCell, keyspacePath, j)
 }
 
 // unlockKeyspace unlocks a previously locked keyspace.
@@ -349,7 +364,11 @@ func (l *Lock) lockShard(ctx context.Context, ts Server, keyspace, shard string)
 	defer span.Finish()
 
 	shardPath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard)
-	return ts.Lock(ctx, GlobalCell, shardPath)
+	j, err := l.ToJSON()
+	if err != nil {
+		return nil, err
+	}
+	return ts.Lock(ctx, GlobalCell, shardPath, j)
 }
 
 // unlockShard unlocks a previously locked shard.

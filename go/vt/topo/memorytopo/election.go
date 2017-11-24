@@ -97,7 +97,7 @@ func (mp *mtMasterParticipation) WaitForMastership() (context.Context, error) {
 
 	// Try to get the mastership, by getting a lock.
 	var err error
-	ld, err = mp.mt.lock(lockCtx, topo.GlobalCell, electionPath, mp.id)
+	ld, err = mp.mt.Lock(lockCtx, topo.GlobalCell, electionPath, mp.id)
 	if err != nil {
 		// It can be that we were interrupted.
 		return nil, err

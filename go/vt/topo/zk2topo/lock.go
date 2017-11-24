@@ -37,7 +37,7 @@ type zkLockDescriptor struct {
 }
 
 // Lock is part of the topo.Backend interface.
-func (zs *Server) Lock(ctx context.Context, cell string, dirPath string) (topo.LockDescriptor, error) {
+func (zs *Server) Lock(ctx context.Context, cell, dirPath, contents string) (topo.LockDescriptor, error) {
 	conn, root, err := zs.connForCell(ctx, cell)
 	if err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func (zs *Server) Lock(ctx context.Context, cell string, dirPath string) (topo.L
 	locksDir := path.Join(root, dirPath, locksPath) + "/"
 
 	// Create the locks path, possibly creating the parent.
-	nodePath, err := CreateRecursive(ctx, conn, locksDir, []byte("lock"), zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(PermFile), 1)
+	nodePath, err := CreateRecursive(ctx, conn, locksDir, []byte(contents), zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(PermFile), 1)
 	if err != nil {
 		return nil, convertError(err)
 	}
