@@ -109,14 +109,18 @@ func newJoin(lhs, rhs builder, ajoin *sqlparser.JoinTableExpr) (*join, error) {
 	if ajoin == nil {
 		return jb, nil
 	}
+	if ajoin.Condition.Using != nil {
+		return nil, errors.New("unsupported: join with USING(column_list) clause")
+	}
+
 	if opcode == engine.LeftJoin {
-		err := pushFilter(ajoin.On, rhs, sqlparser.WhereStr)
+		err := pushFilter(ajoin.Condition.On, rhs, sqlparser.WhereStr)
 		if err != nil {
 			return nil, err
 		}
 		return jb, nil
 	}
-	err = pushFilter(ajoin.On, jb, sqlparser.WhereStr)
+	err = pushFilter(ajoin.Condition.On, jb, sqlparser.WhereStr)
 	if err != nil {
 		return nil, err
 	}

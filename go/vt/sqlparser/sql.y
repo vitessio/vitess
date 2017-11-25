@@ -67,6 +67,7 @@ func forceEOF(yylex interface{}) {
   colName       *ColName
   tableExprs    TableExprs
   tableExpr     TableExpr
+  joinCondition JoinCondition
   tableName     TableName
   tableNames    TableNames
   indexHints    *IndexHints
@@ -112,7 +113,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> NEXT VALUE SHARE MODE
 %token <bytes> SQL_NO_CACHE SQL_CACHE
 %left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
-%left <bytes> ON
+%left <bytes> ON USING
 %token <empty> '(' ',' ')'
 %token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
 %token <bytes> NULL TRUE FALSE
@@ -145,7 +146,7 @@ func forceEOF(yylex interface{}) {
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE
-%token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING PRIMARY
+%token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN
 
@@ -195,8 +196,9 @@ func forceEOF(yylex interface{}) {
 %type <expr> expression
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
+%type <joinCondition> join_condition join_condition_opt on_expression_opt
 %type <tableNames> table_name_list
-%type <str> inner_join outer_join natural_join
+%type <str> inner_join outer_join straight_join natural_join
 %type <tableName> table_name into_table_name
 %type <aliasedTableName> aliased_table_name
 %type <indexHints> index_hint_list
@@ -226,7 +228,7 @@ func forceEOF(yylex interface{}) {
 %type <str> asc_desc_opt
 %type <limit> limit_opt
 %type <str> lock_opt
-%type <columns> ins_column_list
+%type <columns> ins_column_list using_column_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
 %type <bytes> charset_or_character_set
@@ -1244,6 +1246,16 @@ table_name as_opt_id index_hint_list
     $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
   }
 
+using_column_list:
+  sql_id
+  {
+    $$ = Columns{$1}
+  }
+| using_column_list ',' sql_id
+  {
+    $$ = append($$, $3)
+  }
+
 // There is a grammar conflict here:
 // 1: INSERT INTO a SELECT * FROM b JOIN c ON b.i = c.i
 // 2: INSERT INTO a SELECT * FROM b JOIN c ON DUPLICATE KEY UPDATE a.i = 1
@@ -1252,22 +1264,40 @@ table_name as_opt_id index_hint_list
 // first construct, which automatically makes the second construct a
 // syntax error. This is the same behavior as MySQL.
 join_table:
-  table_reference inner_join table_factor %prec JOIN
+  table_reference inner_join table_factor join_condition_opt
   {
-    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3}
+    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, Condition: $4}
   }
-| table_reference inner_join table_factor ON expression
+| table_reference straight_join table_factor on_expression_opt
   {
-    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, On: $5}
+    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, Condition: $4}
   }
-| table_reference outer_join table_reference ON expression
+| table_reference outer_join table_reference join_condition
   {
-    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, On: $5}
+    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, Condition: $4}
   }
 | table_reference natural_join table_factor
   {
     $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3}
   }
+
+join_condition:
+  ON expression
+  { $$ = JoinCondition{On: $2} }
+| USING '(' using_column_list ')'
+  { $$ = JoinCondition{Using: $3} }
+
+join_condition_opt:
+%prec JOIN
+  { }
+| join_condition
+  { $$ = $1 }
+
+on_expression_opt:
+%prec JOIN
+  { }
+| ON expression
+  { $$ = JoinCondition{On: $2} }
 
 as_opt:
   { $$ = struct{}{} }
@@ -1307,7 +1337,9 @@ inner_join:
   {
     $$ = JoinStr
   }
-| STRAIGHT_JOIN
+
+straight_join:
+  STRAIGHT_JOIN
   {
     $$ = StraightJoinStr
   }
