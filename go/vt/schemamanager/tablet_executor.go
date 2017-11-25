@@ -153,10 +153,10 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 	}
 	for _, ddl := range parsedDDLs {
 		switch ddl.Action {
-		case sqlparser.DropStr, sqlparser.CreateStr, sqlparser.TruncateStr:
+		case sqlparser.DropStr, sqlparser.CreateStr, sqlparser.TruncateStr, sqlparser.AnalyzeStr:
 			continue
 		}
-		tableName := ddl.Table.Name.String()
+		tableName := ddl.GetFirstTableName()
 		if rowCount, ok := tableWithCount[tableName]; ok {
 			if rowCount > 100000 && ddl.Action == sqlparser.AlterStr {
 				return true, fmt.Errorf(

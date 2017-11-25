@@ -440,7 +440,7 @@ create_statement:
 | CREATE constraint_opt INDEX ID using_opt ON table_name ddl_force_eof
   {
     // Change this to an alter statement
-    $$ = &DDL{Action: AlterStr, Table: $7, NewName:$7}
+    $$ = &DDL{Action: AlterStr, Tables: TableNames{$7}, NewName:$7}
   }
 | CREATE VIEW table_name ddl_force_eof
   {
@@ -927,25 +927,25 @@ table_opt_value:
 alter_statement:
   ALTER ignore_opt TABLE table_name non_rename_operation force_eof
   {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+    $$ = &DDL{Action: AlterStr, Tables: TableNames{$4}, NewName: $4}
   }
 | ALTER ignore_opt TABLE table_name RENAME to_opt table_name
   {
     // Change this to a rename statement
-    $$ = &DDL{Action: RenameStr, Table: $4, NewName: $7}
+    $$ = &DDL{Action: RenameStr, Tables: TableNames{$4}, NewName: $7}
   }
 | ALTER ignore_opt TABLE table_name RENAME index_opt force_eof
   {
     // Rename an index can just be an alter
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+    $$ = &DDL{Action: AlterStr, Tables: TableNames{$4}, NewName: $4}
   }
 | ALTER VIEW table_name ddl_force_eof
   {
-    $$ = &DDL{Action: AlterStr, Table: $3.ToViewName(), NewName: $3.ToViewName()}
+    $$ = &DDL{Action: AlterStr, Tables: TableNames{$3.ToViewName()}, NewName: $3.ToViewName()}
   }
 | ALTER ignore_opt TABLE table_name partition_operation
   {
-    $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
+    $$ = &DDL{Action: AlterStr, Tables: TableNames{$4}, PartitionSpec: $5}
   }
 
 partition_operation:
@@ -977,22 +977,22 @@ partition_definition:
 rename_statement:
   RENAME TABLE table_name TO table_name
   {
-    $$ = &DDL{Action: RenameStr, Table: $3, NewName: $5}
+    $$ = &DDL{Action: RenameStr, Tables: TableNames{$3}, NewName: $5}
   }
 
 drop_statement:
-  DROP TABLE exists_opt table_name
+  DROP TABLE exists_opt table_name_list
   {
     var exists bool
     if $3 != 0 {
       exists = true
     }
-    $$ = &DDL{Action: DropStr, Table: $4, IfExists: exists}
+    $$ = &DDL{Action: DropStr, Tables: $4, IfExists: exists}
   }
 | DROP INDEX ID ON table_name ddl_force_eof
   {
     // Change this to an alter statement
-    $$ = &DDL{Action: AlterStr, Table: $5, NewName: $5}
+    $$ = &DDL{Action: AlterStr, Tables: TableNames{$5}, NewName: $5}
   }
 | DROP VIEW exists_opt table_name ddl_force_eof
   {
@@ -1000,22 +1000,22 @@ drop_statement:
         if $3 != 0 {
           exists = true
         }
-    $$ = &DDL{Action: DropStr, Table: $4.ToViewName(), IfExists: exists}
+    $$ = &DDL{Action: DropStr, Tables: TableNames{$4.ToViewName()}, IfExists: exists}
   }
 
 truncate_statement:
   TRUNCATE TABLE table_name
   {
-    $$ = &DDL{Action: TruncateStr, Table: $3}
+    $$ = &DDL{Action: TruncateStr, Tables: TableNames{$3}}
   }
 | TRUNCATE table_name
   {
-    $$ = &DDL{Action: TruncateStr, Table: $2}
+    $$ = &DDL{Action: TruncateStr, Tables: TableNames{$2}}
   }
 analyze_statement:
-  ANALYZE TABLE table_name
+  ANALYZE TABLE table_name_list
   {
-    $$ = &DDL{Action: AlterStr, Table: $3, NewName: $3}
+    $$ = &DDL{Action: AnalyzeStr, Tables: $3}
   }
 
 show_statement_type:

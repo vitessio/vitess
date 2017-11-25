@@ -775,8 +775,10 @@ var (
 		input:  "drop view a",
 		output: "drop table a",
 	}, {
-		input:  "drop table a",
-		output: "drop table a",
+		input: "drop table a",
+	}, {
+		input:  "drop table a, b",
+		output: "drop table a, b",
 	}, {
 		input:  "drop table if exists a",
 		output: "drop table if exists a",
@@ -788,7 +790,10 @@ var (
 		output: "alter table a",
 	}, {
 		input:  "analyze table a",
-		output: "alter table a",
+		output: "analyze table a",
+	}, {
+		input:  "analyze table a, b",
+		output: "analyze table a, b",
 	}, {
 		input:  "show databases",
 		output: "show databases",
