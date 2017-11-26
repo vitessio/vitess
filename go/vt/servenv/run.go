@@ -34,16 +34,16 @@ var (
 // Run starts listening for RPC and HTTP requests,
 // and blocks until it the process gets a signal.
 func Run(port int) {
+	l, err := proc.Listen(fmt.Sprintf("%v", port))
+	if err != nil {
+		log.Fatal(err)
+	}
 	populateListeningURL()
 	createGRPCServer()
 	onRunHooks.Fire()
 	serveGRPC()
 	serveSocketFile()
 
-	l, err := proc.Listen(fmt.Sprintf("%v", port))
-	if err != nil {
-		log.Fatal(err)
-	}
 	go http.Serve(l, nil)
 
 	proc.Wait()
