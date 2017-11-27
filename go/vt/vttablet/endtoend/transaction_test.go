@@ -106,7 +106,7 @@ func TestCommit(t *testing.T) {
 		tag:  "Transactions/TotalCount",
 		diff: 2,
 	}, {
-		tag:  "Transactions/Histograms/Completed/Count",
+		tag:  "Transactions/Histograms/commit/Count",
 		diff: 2,
 	}, {
 		tag:  "Queries/TotalCount",
@@ -187,7 +187,7 @@ func TestRollback(t *testing.T) {
 		tag:  "Transactions/TotalCount",
 		diff: 1,
 	}, {
-		tag:  "Transactions/Histograms/Aborted/Count",
+		tag:  "Transactions/Histograms/rollback/Count",
 		diff: 1,
 	}, {
 		tag:  "Queries/Histograms/BEGIN/Count",
@@ -269,7 +269,7 @@ func TestAutoCommit(t *testing.T) {
 		tag:  "Transactions/TotalCount",
 		diff: 2,
 	}, {
-		tag:  "Transactions/Histograms/Completed/Count",
+		tag:  "Transactions/Histograms/commit/Count",
 		diff: 2,
 	}, {
 		tag:  "Queries/TotalCount",
