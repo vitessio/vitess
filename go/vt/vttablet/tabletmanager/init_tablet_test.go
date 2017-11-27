@@ -59,9 +59,12 @@ func TestInitTablet(t *testing.T) {
 
 	// 1. Initialize the tablet as REPLICA.
 	// This will create the respective topology records.
+	// We use a capitalized shard name here, to make sure the
+	// Keyrange computation works, fills in the KeyRange, and converts
+	// it to lower case.
 	*tabletHostname = "localhost"
 	*initKeyspace = "test_keyspace"
-	*initShard = "-80"
+	*initShard = "-C0"
 	*initTabletType = "replica"
 	tabletAlias = &topodatapb.TabletAlias{
 		Cell: "cell1",
@@ -71,7 +74,7 @@ func TestInitTablet(t *testing.T) {
 	if err := agent.InitTablet(port, gRPCPort); err != nil {
 		t.Fatalf("InitTablet(type) failed: %v", err)
 	}
-	si, err := ts.GetShard(ctx, "test_keyspace", "-80")
+	si, err := ts.GetShard(ctx, "test_keyspace", "-c0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
@@ -94,6 +97,12 @@ func TestInitTablet(t *testing.T) {
 	if ti.PortMap["grpc"] != gRPCPort {
 		t.Errorf("wrong gRPC port for tablet: %v", ti.PortMap["grpc"])
 	}
+	if ti.Shard != "-c0" {
+		t.Errorf("wrong shard for tablet: %v", ti.Shard)
+	}
+	if string(ti.KeyRange.Start) != "" || string(ti.KeyRange.End) != "\xc0" {
+		t.Errorf("wrong KeyRange for tablet: %v", ti.KeyRange)
+	}
 	if got := agent._tabletExternallyReparentedTime; !got.IsZero() {
 		t.Fatalf("REPLICA tablet should not have an ExternallyReparentedTimestamp set: %v", got)
 	}
@@ -102,7 +111,7 @@ func TestInitTablet(t *testing.T) {
 	// (This simulates the case where the MasterAlias in the shard record says
 	// that we are the master but the tablet record says otherwise. In that case,
 	// we assume we are not the MASTER.)
-	si, err = agent.TopoServer.UpdateShardFields(ctx, "test_keyspace", "-80", func(si *topo.ShardInfo) error {
+	si, err = agent.TopoServer.UpdateShardFields(ctx, "test_keyspace", "-c0", func(si *topo.ShardInfo) error {
 		si.MasterAlias = tabletAlias
 		return nil
 	})
