@@ -39,12 +39,14 @@ import (
 // If a tablet is created as master, and there is already a different
 // master in the shard, allowMasterOverride must be set.
 func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, allowMasterOverride, createShardAndKeyspace, allowUpdate bool) error {
-	if err := topo.TabletComplete(tablet); err != nil {
+	shard, kr, err := topo.ValidateShardName(tablet.Shard)
+	if err != nil {
 		return err
 	}
+	tablet.Shard = shard
+	tablet.KeyRange = kr
 
 	// get the shard, possibly creating it
-	var err error
 	var si *topo.ShardInfo
 
 	if createShardAndKeyspace {
