@@ -5,12 +5,11 @@
 package txthrottler
 
 import (
+	reflect "reflect"
+
 	gomock "github.com/golang/mock/gomock"
-	topodata "github.com/youtube/vitess/go/vt/proto/topodata"
-	vschema "github.com/youtube/vitess/go/vt/proto/vschema"
 	topo "github.com/youtube/vitess/go/vt/topo"
 	context "golang.org/x/net/context"
-	reflect "reflect"
 )
 
 // MockImpl is a mock of Impl interface
@@ -59,42 +58,6 @@ func (mr *MockImplMockRecorder) Create(arg0, arg1, arg2, arg3 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockImpl)(nil).Create), arg0, arg1, arg2, arg3)
 }
 
-// CreateKeyspace mocks base method
-func (m *MockImpl) CreateKeyspace(arg0 context.Context, arg1 string, arg2 *topodata.Keyspace) error {
-	ret := m.ctrl.Call(m, "CreateKeyspace", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// CreateKeyspace indicates an expected call of CreateKeyspace
-func (mr *MockImplMockRecorder) CreateKeyspace(arg0, arg1, arg2 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateKeyspace", reflect.TypeOf((*MockImpl)(nil).CreateKeyspace), arg0, arg1, arg2)
-}
-
-// CreateShard mocks base method
-func (m *MockImpl) CreateShard(arg0 context.Context, arg1, arg2 string, arg3 *topodata.Shard) error {
-	ret := m.ctrl.Call(m, "CreateShard", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// CreateShard indicates an expected call of CreateShard
-func (mr *MockImplMockRecorder) CreateShard(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateShard", reflect.TypeOf((*MockImpl)(nil).CreateShard), arg0, arg1, arg2, arg3)
-}
-
-// CreateTablet mocks base method
-func (m *MockImpl) CreateTablet(arg0 context.Context, arg1 *topodata.Tablet) error {
-	ret := m.ctrl.Call(m, "CreateTablet", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// CreateTablet indicates an expected call of CreateTablet
-func (mr *MockImplMockRecorder) CreateTablet(arg0, arg1 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTablet", reflect.TypeOf((*MockImpl)(nil).CreateTablet), arg0, arg1)
-}
-
 // Delete mocks base method
 func (m *MockImpl) Delete(arg0 context.Context, arg1, arg2 string, arg3 topo.Version) error {
 	ret := m.ctrl.Call(m, "Delete", arg0, arg1, arg2, arg3)
@@ -105,78 +68,6 @@ func (m *MockImpl) Delete(arg0 context.Context, arg1, arg2 string, arg3 topo.Ver
 // Delete indicates an expected call of Delete
 func (mr *MockImplMockRecorder) Delete(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockImpl)(nil).Delete), arg0, arg1, arg2, arg3)
-}
-
-// DeleteKeyspace mocks base method
-func (m *MockImpl) DeleteKeyspace(arg0 context.Context, arg1 string) error {
-	ret := m.ctrl.Call(m, "DeleteKeyspace", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteKeyspace indicates an expected call of DeleteKeyspace
-func (mr *MockImplMockRecorder) DeleteKeyspace(arg0, arg1 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteKeyspace", reflect.TypeOf((*MockImpl)(nil).DeleteKeyspace), arg0, arg1)
-}
-
-// DeleteKeyspaceReplication mocks base method
-func (m *MockImpl) DeleteKeyspaceReplication(arg0 context.Context, arg1, arg2 string) error {
-	ret := m.ctrl.Call(m, "DeleteKeyspaceReplication", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteKeyspaceReplication indicates an expected call of DeleteKeyspaceReplication
-func (mr *MockImplMockRecorder) DeleteKeyspaceReplication(arg0, arg1, arg2 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteKeyspaceReplication", reflect.TypeOf((*MockImpl)(nil).DeleteKeyspaceReplication), arg0, arg1, arg2)
-}
-
-// DeleteShard mocks base method
-func (m *MockImpl) DeleteShard(arg0 context.Context, arg1, arg2 string) error {
-	ret := m.ctrl.Call(m, "DeleteShard", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteShard indicates an expected call of DeleteShard
-func (mr *MockImplMockRecorder) DeleteShard(arg0, arg1, arg2 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteShard", reflect.TypeOf((*MockImpl)(nil).DeleteShard), arg0, arg1, arg2)
-}
-
-// DeleteShardReplication mocks base method
-func (m *MockImpl) DeleteShardReplication(arg0 context.Context, arg1, arg2, arg3 string) error {
-	ret := m.ctrl.Call(m, "DeleteShardReplication", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteShardReplication indicates an expected call of DeleteShardReplication
-func (mr *MockImplMockRecorder) DeleteShardReplication(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteShardReplication", reflect.TypeOf((*MockImpl)(nil).DeleteShardReplication), arg0, arg1, arg2, arg3)
-}
-
-// DeleteSrvKeyspace mocks base method
-func (m *MockImpl) DeleteSrvKeyspace(arg0 context.Context, arg1, arg2 string) error {
-	ret := m.ctrl.Call(m, "DeleteSrvKeyspace", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteSrvKeyspace indicates an expected call of DeleteSrvKeyspace
-func (mr *MockImplMockRecorder) DeleteSrvKeyspace(arg0, arg1, arg2 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSrvKeyspace", reflect.TypeOf((*MockImpl)(nil).DeleteSrvKeyspace), arg0, arg1, arg2)
-}
-
-// DeleteTablet mocks base method
-func (m *MockImpl) DeleteTablet(arg0 context.Context, arg1 *topodata.TabletAlias) error {
-	ret := m.ctrl.Call(m, "DeleteTablet", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteTablet indicates an expected call of DeleteTablet
-func (mr *MockImplMockRecorder) DeleteTablet(arg0, arg1 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTablet", reflect.TypeOf((*MockImpl)(nil).DeleteTablet), arg0, arg1)
 }
 
 // Get mocks base method
@@ -193,33 +84,6 @@ func (mr *MockImplMockRecorder) Get(arg0, arg1, arg2 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockImpl)(nil).Get), arg0, arg1, arg2)
 }
 
-// GetKeyspace mocks base method
-func (m *MockImpl) GetKeyspace(arg0 context.Context, arg1 string) (*topodata.Keyspace, int64, error) {
-	ret := m.ctrl.Call(m, "GetKeyspace", arg0, arg1)
-	ret0, _ := ret[0].(*topodata.Keyspace)
-	ret1, _ := ret[1].(int64)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
-}
-
-// GetKeyspace indicates an expected call of GetKeyspace
-func (mr *MockImplMockRecorder) GetKeyspace(arg0, arg1 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetKeyspace", reflect.TypeOf((*MockImpl)(nil).GetKeyspace), arg0, arg1)
-}
-
-// GetKeyspaces mocks base method
-func (m *MockImpl) GetKeyspaces(arg0 context.Context) ([]string, error) {
-	ret := m.ctrl.Call(m, "GetKeyspaces", arg0)
-	ret0, _ := ret[0].([]string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetKeyspaces indicates an expected call of GetKeyspaces
-func (mr *MockImplMockRecorder) GetKeyspaces(arg0 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetKeyspaces", reflect.TypeOf((*MockImpl)(nil).GetKeyspaces), arg0)
-}
-
 // GetKnownCells mocks base method
 func (m *MockImpl) GetKnownCells(arg0 context.Context) ([]string, error) {
 	ret := m.ctrl.Call(m, "GetKnownCells", arg0)
@@ -231,125 +95,6 @@ func (m *MockImpl) GetKnownCells(arg0 context.Context) ([]string, error) {
 // GetKnownCells indicates an expected call of GetKnownCells
 func (mr *MockImplMockRecorder) GetKnownCells(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetKnownCells", reflect.TypeOf((*MockImpl)(nil).GetKnownCells), arg0)
-}
-
-// GetShard mocks base method
-func (m *MockImpl) GetShard(arg0 context.Context, arg1, arg2 string) (*topodata.Shard, int64, error) {
-	ret := m.ctrl.Call(m, "GetShard", arg0, arg1, arg2)
-	ret0, _ := ret[0].(*topodata.Shard)
-	ret1, _ := ret[1].(int64)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
-}
-
-// GetShard indicates an expected call of GetShard
-func (mr *MockImplMockRecorder) GetShard(arg0, arg1, arg2 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetShard", reflect.TypeOf((*MockImpl)(nil).GetShard), arg0, arg1, arg2)
-}
-
-// GetShardNames mocks base method
-func (m *MockImpl) GetShardNames(arg0 context.Context, arg1 string) ([]string, error) {
-	ret := m.ctrl.Call(m, "GetShardNames", arg0, arg1)
-	ret0, _ := ret[0].([]string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetShardNames indicates an expected call of GetShardNames
-func (mr *MockImplMockRecorder) GetShardNames(arg0, arg1 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetShardNames", reflect.TypeOf((*MockImpl)(nil).GetShardNames), arg0, arg1)
-}
-
-// GetShardReplication mocks base method
-func (m *MockImpl) GetShardReplication(arg0 context.Context, arg1, arg2, arg3 string) (*topo.ShardReplicationInfo, error) {
-	ret := m.ctrl.Call(m, "GetShardReplication", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(*topo.ShardReplicationInfo)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetShardReplication indicates an expected call of GetShardReplication
-func (mr *MockImplMockRecorder) GetShardReplication(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetShardReplication", reflect.TypeOf((*MockImpl)(nil).GetShardReplication), arg0, arg1, arg2, arg3)
-}
-
-// GetSrvKeyspace mocks base method
-func (m *MockImpl) GetSrvKeyspace(arg0 context.Context, arg1, arg2 string) (*topodata.SrvKeyspace, error) {
-	ret := m.ctrl.Call(m, "GetSrvKeyspace", arg0, arg1, arg2)
-	ret0, _ := ret[0].(*topodata.SrvKeyspace)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetSrvKeyspace indicates an expected call of GetSrvKeyspace
-func (mr *MockImplMockRecorder) GetSrvKeyspace(arg0, arg1, arg2 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSrvKeyspace", reflect.TypeOf((*MockImpl)(nil).GetSrvKeyspace), arg0, arg1, arg2)
-}
-
-// GetSrvKeyspaceNames mocks base method
-func (m *MockImpl) GetSrvKeyspaceNames(arg0 context.Context, arg1 string) ([]string, error) {
-	ret := m.ctrl.Call(m, "GetSrvKeyspaceNames", arg0, arg1)
-	ret0, _ := ret[0].([]string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetSrvKeyspaceNames indicates an expected call of GetSrvKeyspaceNames
-func (mr *MockImplMockRecorder) GetSrvKeyspaceNames(arg0, arg1 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSrvKeyspaceNames", reflect.TypeOf((*MockImpl)(nil).GetSrvKeyspaceNames), arg0, arg1)
-}
-
-// GetSrvVSchema mocks base method
-func (m *MockImpl) GetSrvVSchema(arg0 context.Context, arg1 string) (*vschema.SrvVSchema, error) {
-	ret := m.ctrl.Call(m, "GetSrvVSchema", arg0, arg1)
-	ret0, _ := ret[0].(*vschema.SrvVSchema)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetSrvVSchema indicates an expected call of GetSrvVSchema
-func (mr *MockImplMockRecorder) GetSrvVSchema(arg0, arg1 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSrvVSchema", reflect.TypeOf((*MockImpl)(nil).GetSrvVSchema), arg0, arg1)
-}
-
-// GetTablet mocks base method
-func (m *MockImpl) GetTablet(arg0 context.Context, arg1 *topodata.TabletAlias) (*topodata.Tablet, int64, error) {
-	ret := m.ctrl.Call(m, "GetTablet", arg0, arg1)
-	ret0, _ := ret[0].(*topodata.Tablet)
-	ret1, _ := ret[1].(int64)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
-}
-
-// GetTablet indicates an expected call of GetTablet
-func (mr *MockImplMockRecorder) GetTablet(arg0, arg1 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTablet", reflect.TypeOf((*MockImpl)(nil).GetTablet), arg0, arg1)
-}
-
-// GetTabletsByCell mocks base method
-func (m *MockImpl) GetTabletsByCell(arg0 context.Context, arg1 string) ([]*topodata.TabletAlias, error) {
-	ret := m.ctrl.Call(m, "GetTabletsByCell", arg0, arg1)
-	ret0, _ := ret[0].([]*topodata.TabletAlias)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetTabletsByCell indicates an expected call of GetTabletsByCell
-func (mr *MockImplMockRecorder) GetTabletsByCell(arg0, arg1 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTabletsByCell", reflect.TypeOf((*MockImpl)(nil).GetTabletsByCell), arg0, arg1)
-}
-
-// GetVSchema mocks base method
-func (m *MockImpl) GetVSchema(arg0 context.Context, arg1 string) (*vschema.Keyspace, error) {
-	ret := m.ctrl.Call(m, "GetVSchema", arg0, arg1)
-	ret0, _ := ret[0].(*vschema.Keyspace)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetVSchema indicates an expected call of GetVSchema
-func (mr *MockImplMockRecorder) GetVSchema(arg0, arg1 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVSchema", reflect.TypeOf((*MockImpl)(nil).GetVSchema), arg0, arg1)
 }
 
 // ListDir mocks base method
@@ -404,18 +149,6 @@ func (mr *MockImplMockRecorder) NewMasterParticipation(arg0, arg1 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewMasterParticipation", reflect.TypeOf((*MockImpl)(nil).NewMasterParticipation), arg0, arg1)
 }
 
-// SaveVSchema mocks base method
-func (m *MockImpl) SaveVSchema(arg0 context.Context, arg1 string, arg2 *vschema.Keyspace) error {
-	ret := m.ctrl.Call(m, "SaveVSchema", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SaveVSchema indicates an expected call of SaveVSchema
-func (mr *MockImplMockRecorder) SaveVSchema(arg0, arg1, arg2 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveVSchema", reflect.TypeOf((*MockImpl)(nil).SaveVSchema), arg0, arg1, arg2)
-}
-
 // UnlockKeyspaceForAction mocks base method
 func (m *MockImpl) UnlockKeyspaceForAction(arg0 context.Context, arg1, arg2, arg3 string) error {
 	ret := m.ctrl.Call(m, "UnlockKeyspaceForAction", arg0, arg1, arg2, arg3)
@@ -451,81 +184,6 @@ func (m *MockImpl) Update(arg0 context.Context, arg1, arg2 string, arg3 []byte, 
 // Update indicates an expected call of Update
 func (mr *MockImplMockRecorder) Update(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockImpl)(nil).Update), arg0, arg1, arg2, arg3, arg4)
-}
-
-// UpdateKeyspace mocks base method
-func (m *MockImpl) UpdateKeyspace(arg0 context.Context, arg1 string, arg2 *topodata.Keyspace, arg3 int64) (int64, error) {
-	ret := m.ctrl.Call(m, "UpdateKeyspace", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(int64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpdateKeyspace indicates an expected call of UpdateKeyspace
-func (mr *MockImplMockRecorder) UpdateKeyspace(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateKeyspace", reflect.TypeOf((*MockImpl)(nil).UpdateKeyspace), arg0, arg1, arg2, arg3)
-}
-
-// UpdateShard mocks base method
-func (m *MockImpl) UpdateShard(arg0 context.Context, arg1, arg2 string, arg3 *topodata.Shard, arg4 int64) (int64, error) {
-	ret := m.ctrl.Call(m, "UpdateShard", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].(int64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpdateShard indicates an expected call of UpdateShard
-func (mr *MockImplMockRecorder) UpdateShard(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateShard", reflect.TypeOf((*MockImpl)(nil).UpdateShard), arg0, arg1, arg2, arg3, arg4)
-}
-
-// UpdateShardReplicationFields mocks base method
-func (m *MockImpl) UpdateShardReplicationFields(arg0 context.Context, arg1, arg2, arg3 string, arg4 func(*topodata.ShardReplication) error) error {
-	ret := m.ctrl.Call(m, "UpdateShardReplicationFields", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// UpdateShardReplicationFields indicates an expected call of UpdateShardReplicationFields
-func (mr *MockImplMockRecorder) UpdateShardReplicationFields(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateShardReplicationFields", reflect.TypeOf((*MockImpl)(nil).UpdateShardReplicationFields), arg0, arg1, arg2, arg3, arg4)
-}
-
-// UpdateSrvKeyspace mocks base method
-func (m *MockImpl) UpdateSrvKeyspace(arg0 context.Context, arg1, arg2 string, arg3 *topodata.SrvKeyspace) error {
-	ret := m.ctrl.Call(m, "UpdateSrvKeyspace", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// UpdateSrvKeyspace indicates an expected call of UpdateSrvKeyspace
-func (mr *MockImplMockRecorder) UpdateSrvKeyspace(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSrvKeyspace", reflect.TypeOf((*MockImpl)(nil).UpdateSrvKeyspace), arg0, arg1, arg2, arg3)
-}
-
-// UpdateSrvVSchema mocks base method
-func (m *MockImpl) UpdateSrvVSchema(arg0 context.Context, arg1 string, arg2 *vschema.SrvVSchema) error {
-	ret := m.ctrl.Call(m, "UpdateSrvVSchema", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// UpdateSrvVSchema indicates an expected call of UpdateSrvVSchema
-func (mr *MockImplMockRecorder) UpdateSrvVSchema(arg0, arg1, arg2 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSrvVSchema", reflect.TypeOf((*MockImpl)(nil).UpdateSrvVSchema), arg0, arg1, arg2)
-}
-
-// UpdateTablet mocks base method
-func (m *MockImpl) UpdateTablet(arg0 context.Context, arg1 *topodata.Tablet, arg2 int64) (int64, error) {
-	ret := m.ctrl.Call(m, "UpdateTablet", arg0, arg1, arg2)
-	ret0, _ := ret[0].(int64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpdateTablet indicates an expected call of UpdateTablet
-func (mr *MockImplMockRecorder) UpdateTablet(arg0, arg1, arg2 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTablet", reflect.TypeOf((*MockImpl)(nil).UpdateTablet), arg0, arg1, arg2)
 }
 
 // Watch mocks base method
