@@ -18,6 +18,7 @@ limitations under the License.
 package streamlog
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -120,4 +121,22 @@ func (logger *StreamLogger) ServeLogs(url string, messageFmt func(url.Values, in
 		}
 	})
 	log.Infof("Streaming logs from %s at %v.", logger.Name(), url)
+}
+
+// Formatter is a simple interface for objects that expose a Format function
+// as needed for streamlog.
+type Formatter interface {
+	Format(url.Values) string
+}
+
+// GetFormatter returns a formatter function for objects conforming to the
+// Formatter interface
+func GetFormatter(logger *StreamLogger) func(url.Values, interface{}) string {
+	return func(params url.Values, val interface{}) string {
+		fmter, ok := val.(Formatter)
+		if !ok {
+			return fmt.Sprintf("Error: unexpected value of type %T in %s!", val, logger.Name())
+		}
+		return fmter.Format(params)
+	}
 }
