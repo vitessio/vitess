@@ -20,7 +20,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"net/url"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -94,11 +93,11 @@ func init() {
 // Init must be called after flag.Parse, and before doing any other operations.
 func Init() {
 	if *queryLogHandler != "" {
-		StatsLogger.ServeLogs(*queryLogHandler, buildFmter(StatsLogger))
+		StatsLogger.ServeLogs(*queryLogHandler, streamlog.GetFormatter(StatsLogger))
 	}
 
 	if *txLogHandler != "" {
-		TxLogger.ServeLogs(*txLogHandler, buildFmter(TxLogger))
+		TxLogger.ServeLogs(*txLogHandler, streamlog.GetFormatter(TxLogger))
 	}
 }
 
@@ -238,18 +237,4 @@ func VerifyConfig() error {
 		return fmt.Errorf("-hot_row_protection_concurrent_transactions must be > 0 (specified value: %v)", v)
 	}
 	return nil
-}
-
-func buildFmter(logger *streamlog.StreamLogger) func(url.Values, interface{}) string {
-	type formatter interface {
-		Format(url.Values) string
-	}
-
-	return func(params url.Values, val interface{}) string {
-		fmter, ok := val.(formatter)
-		if !ok {
-			return fmt.Sprintf("Error: unexpected value of type %T in %s!", val, logger.Name())
-		}
-		return fmter.Format(params)
-	}
 }
