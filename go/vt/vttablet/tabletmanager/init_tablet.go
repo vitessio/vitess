@@ -71,7 +71,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 	}
 
 	// parse and validate shard name
-	shard, _, err := topo.ValidateShardName(*initShard)
+	shard, keyRange, err := topo.ValidateShardName(*initShard)
 	if err != nil {
 		return fmt.Errorf("cannot validate shard name %v: %v", *initShard, err)
 	}
@@ -155,7 +155,8 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		Hostname:       hostname,
 		PortMap:        make(map[string]int32),
 		Keyspace:       *initKeyspace,
-		Shard:          *initShard,
+		Shard:          shard,
+		KeyRange:       keyRange,
 		Type:           tabletType,
 		DbNameOverride: *initDbNameOverride,
 		Tags:           initTags,
@@ -165,9 +166,6 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 	}
 	if gRPCPort != 0 {
 		tablet.PortMap["grpc"] = gRPCPort
-	}
-	if err := topo.TabletComplete(tablet); err != nil {
-		return fmt.Errorf("InitTablet TabletComplete failed: %v", err)
 	}
 
 	// Now try to create the record (it will also fix up the
