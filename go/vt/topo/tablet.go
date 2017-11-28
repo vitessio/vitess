@@ -115,18 +115,6 @@ func IsSlaveType(tt topodatapb.TabletType) bool {
 	return true
 }
 
-// TabletComplete validates and normalizes the tablet. If the shard name
-// contains a '-' it is going to try to infer the keyrange from it.
-func TabletComplete(tablet *topodatapb.Tablet) error {
-	shard, kr, err := ValidateShardName(tablet.Shard)
-	if err != nil {
-		return err
-	}
-	tablet.Shard = shard
-	tablet.KeyRange = kr
-	return nil
-}
-
 // NewTablet create a new Tablet record with the given id, cell, and hostname.
 func NewTablet(uid uint32, cell, host string) *topodatapb.Tablet {
 	return &topodatapb.Tablet{
