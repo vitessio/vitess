@@ -167,7 +167,7 @@ func (tee *Tee) Lock(ctx context.Context, cell, dirPath, contents string) (topo.
 	sLD, err := tee.lockSecond.Lock(ctx, cell, dirPath, contents)
 	if err != nil {
 		if err := fLD.Unlock(ctx); err != nil {
-			log.Warningf("Failed to unlock lockFirst after failed lockSecond lock for %v %v: %v", cell, dirPath, err)
+			log.Warningf("Failed to unlock lockFirst after failed lockSecond lock for %v, %v: %v", cell, dirPath, err)
 		}
 		return nil, err
 	}
