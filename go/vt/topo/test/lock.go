@@ -41,16 +41,16 @@ func checkLock(t *testing.T, ts topo.Server) {
 	}
 
 	t.Log("===      checkLockTimeout")
-	checkLockTimeout(ctx, t, ts)
+	checkLockTimeout(ctx, t, ts.Impl)
 
 	t.Log("===      checkLockMissing")
-	checkLockMissing(ctx, t, ts)
+	checkLockMissing(ctx, t, ts.Impl)
 
 	t.Log("===      checkLockUnblocks")
-	checkLockUnblocks(ctx, t, ts)
+	checkLockUnblocks(ctx, t, ts.Impl)
 }
 
-func checkLockTimeout(ctx context.Context, t *testing.T, ts topo.Server) {
+func checkLockTimeout(ctx context.Context, t *testing.T, ts topo.Impl) {
 	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace")
 	lockDescriptor, err := ts.Lock(ctx, topo.GlobalCell, keyspacePath, "")
 	if err != nil {
