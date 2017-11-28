@@ -236,9 +236,9 @@ func (ts Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) (
 			si, err := ts.GetShard(ctx, keyspace, shard)
 			if err != nil {
 				if err == ErrNoNode {
-					log.Warningf("GetShard(%v,%v) returned ErrNoNode, consider checking the topology.", keyspace, shard)
+					log.Warningf("GetShard(%v, %v) returned ErrNoNode, consider checking the topology.", keyspace, shard)
 				} else {
-					rec.RecordError(fmt.Errorf("GetShard(%v,%v) failed: %v", keyspace, shard, err))
+					rec.RecordError(fmt.Errorf("GetShard(%v, %v) failed: %v", keyspace, shard, err))
 				}
 				return
 			}

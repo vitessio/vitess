@@ -121,7 +121,7 @@ func (s *Server) Lock(ctx context.Context, cell, dirPath, contents string) (topo
 		if err == topo.ErrNoNode {
 			return nil, err
 		}
-		return nil, fmt.Errorf("cannot ListDir(%v,%v) before locking", cell, dirPath)
+		return nil, fmt.Errorf("cannot ListDir(%v, %v) before locking", cell, dirPath)
 	}
 
 	return s.lock(ctx, cell, dirPath, contents)

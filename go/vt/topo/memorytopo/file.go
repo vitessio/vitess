@@ -89,7 +89,7 @@ func (mt *MemoryTopo) Update(ctx context.Context, cell, filePath string, content
 
 	// Check if it's a directory.
 	if n.isDirectory() {
-		return nil, fmt.Errorf("Update(%v,%v) failed: it's a directory", cell, filePath)
+		return nil, fmt.Errorf("Update(%v, %v) failed: it's a directory", cell, filePath)
 	}
 
 	// Check the version.
@@ -149,7 +149,7 @@ func (mt *MemoryTopo) Delete(ctx context.Context, cell, filePath string, version
 
 	// Check if it's a directory.
 	if n.isDirectory() {
-		return fmt.Errorf("Delete(%v,%v) failed: it's a directory", cell, filePath)
+		return fmt.Errorf("Delete(%v, %v) failed: it's a directory", cell, filePath)
 	}
 
 	// Check the version.
