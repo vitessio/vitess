@@ -29,25 +29,31 @@ import (
 
 // This file contains the lock management code for zktopo.Server.
 
-// lockForAction creates the locks node in zookeeper, waits for the
-// queue lock, displays a nice error message if it cant get it.
-func (zs *Server) lockForAction(ctx context.Context, locksDir, contents string) (string, error) {
-	conn, root, err := zs.connForCell(ctx, topo.GlobalCell)
+// zkLockDescriptor implements topo.LockDescriptor.
+type zkLockDescriptor struct {
+	zs       *Server
+	cell     string
+	nodePath string
+}
+
+// Lock is part of the topo.Backend interface.
+func (zs *Server) Lock(ctx context.Context, cell, dirPath, contents string) (topo.LockDescriptor, error) {
+	conn, root, err := zs.connForCell(ctx, cell)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// Lock paths end in a trailing slash to that when we create
 	// sequential nodes, they are created as children, not siblings.
-	locksDir = path.Join(root, locksDir) + "/"
+	locksDir := path.Join(root, dirPath, locksPath) + "/"
 
 	// Create the locks path, possibly creating the parent.
-	locksPath, err := CreateRecursive(ctx, conn, locksDir, []byte(contents), zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(PermFile), 1)
+	nodePath, err := CreateRecursive(ctx, conn, locksDir, []byte(contents), zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(PermFile), 1)
 	if err != nil {
-		return "", convertError(err)
+		return nil, convertError(err)
 	}
 
-	err = obtainQueueLock(ctx, conn, locksPath)
+	err = obtainQueueLock(ctx, conn, nodePath)
 	if err != nil {
 		var errToReturn error
 		switch err {
@@ -56,66 +62,48 @@ func (zs *Server) lockForAction(ctx context.Context, locksDir, contents string) 
 		case context.Canceled:
 			errToReturn = topo.ErrInterrupted
 		default:
-			errToReturn = fmt.Errorf("failed to obtain action lock: %v %v", locksPath, err)
+			errToReturn = fmt.Errorf("failed to obtain action lock: %v %v", nodePath, err)
 		}
 
 		// Regardless of the reason, try to cleanup.
 		log.Warningf("Failed to obtain action lock: %v", err)
-		conn.Delete(ctx, locksPath, -1)
+		conn.Delete(ctx, nodePath, -1)
 
 		// Show the other locks in the directory
-		dir := path.Dir(locksPath)
+		dir := path.Dir(nodePath)
 		children, _, err := conn.Children(ctx, dir)
 		if err != nil {
 			log.Warningf("Failed to get children of %v: %v", dir, err)
-			return "", errToReturn
+			return nil, errToReturn
 		}
 
 		if len(children) == 0 {
 			log.Warningf("No other locks present, you may just try again now.")
-			return "", errToReturn
+			return nil, errToReturn
 		}
 
 		childPath := path.Join(dir, children[0])
 		data, _, err := conn.Get(ctx, childPath)
 		if err != nil {
 			log.Warningf("Failed to get first locks node %v (may have just ended): %v", childPath, err)
-			return "", errToReturn
+			return nil, errToReturn
 		}
 
 		log.Warningf("------ Most likely blocking lock: %v\n%v", childPath, string(data))
-		return "", errToReturn
+		return nil, errToReturn
 	}
 
 	// Remove the root prefix from the file. So when we delete it,
 	// it's a relative file.
-	locksPath = locksPath[len(root):]
-	return locksPath, nil
+	nodePath = nodePath[len(root):]
+	return &zkLockDescriptor{
+		zs:       zs,
+		cell:     cell,
+		nodePath: nodePath,
+	}, nil
 }
 
-func (zs *Server) unlockForAction(ctx context.Context, lockPath, results string) error {
-	// Just delete the file.
-	return zs.Delete(ctx, topo.GlobalCell, lockPath, nil)
-}
-
-// LockKeyspaceForAction is part of topo.Server interface
-func (zs *Server) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {
-	locksDir := path.Join(keyspacesPath, keyspace, locksPath)
-	return zs.lockForAction(ctx, locksDir, contents)
-}
-
-// UnlockKeyspaceForAction is part of topo.Server interface
-func (zs *Server) UnlockKeyspaceForAction(ctx context.Context, keyspace, lockPath, results string) error {
-	return zs.unlockForAction(ctx, lockPath, results)
-}
-
-// LockShardForAction is part of topo.Server interface
-func (zs *Server) LockShardForAction(ctx context.Context, keyspace, shard, contents string) (string, error) {
-	locksDir := path.Join(keyspacesPath, keyspace, shardsPath, shard, locksPath)
-	return zs.lockForAction(ctx, locksDir, contents)
-}
-
-// UnlockShardForAction is part of topo.Server interface
-func (zs *Server) UnlockShardForAction(ctx context.Context, keyspace, shard, lockPath, results string) error {
-	return zs.unlockForAction(ctx, lockPath, results)
+// Unlock is part of the topo.LockDescriptor interface.
+func (ld *zkLockDescriptor) Unlock(ctx context.Context) error {
+	return ld.zs.Delete(ctx, ld.cell, ld.nodePath, nil)
 }

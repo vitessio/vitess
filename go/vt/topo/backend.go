@@ -93,8 +93,22 @@ type Backend interface {
 	// Locks
 	//
 
-	//	NYI: Lock(ctx context.Context, cell string, dirPath string) (LockDescriptor, error)
-	//	NYI: Unlock(ctx context.Context, descriptor LockDescriptor) error
+	// Lock takes a lock on the given directory.
+	// It does not prevent any modification to any file in the topology.
+	// It just prevents two concurrent processes (wherever they are)
+	// to run concurrently. It is used for instance to make sure only
+	// one reparent operation is running on a Shard at a given time.
+	// dirPath is the directory associated with a resource, for instance
+	// a Keyspace or a Shard. It is not a file location.
+	// (this means the implementation can for instance create a
+	// file in this directory to materialize the lock).
+	// contents describes the lock holder and purpose, but has no other
+	// meaning, so it can be used as a lock file contents, for instance.
+	// Returns ErrNoNode if the directory doesn't exist (meaning
+	//   there is no existing file under that directory).
+	// Returns ErrTimeout if ctx expires.
+	// Returns ErrInterrupted if ctx is canceled.
+	Lock(ctx context.Context, cell, dirPath, contents string) (LockDescriptor, error)
 
 	//
 	// Watches
@@ -167,9 +181,10 @@ type Version interface {
 }
 
 // LockDescriptor is an interface that describes a lock.
+// It will be returned by Lock(). It contains the Unlock method.
 type LockDescriptor interface {
-	// String returns a text representation of the lock.
-	String() string
+	// Unlock releases the lock.
+	Unlock(ctx context.Context) error
 }
 
 // CancelFunc is returned by the Watch method.

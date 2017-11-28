@@ -17,9 +17,6 @@ limitations under the License.
 package helpers
 
 import (
-	"fmt"
-	"sync"
-
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
@@ -45,12 +42,6 @@ type Tee struct {
 
 	lockFirst  topo.Impl
 	lockSecond topo.Impl
-
-	// protects the variables below this point
-	mu sync.Mutex
-
-	keyspaceLockPaths map[string]string
-	shardLockPaths    map[string]string
 }
 
 // NewTee returns a new topo.Impl object
@@ -62,14 +53,12 @@ func NewTee(primary, secondary topo.Impl, reverseLockOrder bool) *Tee {
 		lockSecond = primary
 	}
 	return &Tee{
-		primary:           primary,
-		secondary:         secondary,
-		readFrom:          primary,
-		readFromSecond:    secondary,
-		lockFirst:         lockFirst,
-		lockSecond:        lockSecond,
-		keyspaceLockPaths: make(map[string]string),
-		shardLockPaths:    make(map[string]string),
+		primary:        primary,
+		secondary:      secondary,
+		readFrom:       primary,
+		readFromSecond: secondary,
+		lockFirst:      lockFirst,
+		lockSecond:     lockSecond,
 	}
 }
 
@@ -154,114 +143,58 @@ func (tee *Tee) Watch(ctx context.Context, cell, filePath string) (*topo.WatchDa
 }
 
 //
-// Cell management, global
+// Lock management.
 //
 
-// GetKnownCells is part of the topo.Server interface
-func (tee *Tee) GetKnownCells(ctx context.Context) ([]string, error) {
-	return tee.readFrom.GetKnownCells(ctx)
+// teeTopoLockDescriptor implements the topo.LockDescriptor interface.
+type teeTopoLockDescriptor struct {
+	tee                  *Tee
+	cell                 string
+	dirPath              string
+	firstLockDescriptor  topo.LockDescriptor
+	secondLockDescriptor topo.LockDescriptor
 }
 
-//
-// Keyspace and Shard locks for actions, global.
-//
-
-// LockKeyspaceForAction is part of the topo.Server interface
-func (tee *Tee) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {
-	// lock lockFirst
-	pLockPath, err := tee.lockFirst.LockKeyspaceForAction(ctx, keyspace, contents)
+// Lock is part of the topo.Backend interface.
+func (tee *Tee) Lock(ctx context.Context, cell, dirPath, contents string) (topo.LockDescriptor, error) {
+	// Lock lockFirst.
+	fLD, err := tee.lockFirst.Lock(ctx, cell, dirPath, contents)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	// lock lockSecond
-	sLockPath, err := tee.lockSecond.LockKeyspaceForAction(ctx, keyspace, contents)
+	// Lock lockSecond.
+	sLD, err := tee.lockSecond.Lock(ctx, cell, dirPath, contents)
 	if err != nil {
-		if err := tee.lockFirst.UnlockKeyspaceForAction(ctx, keyspace, pLockPath, "{}"); err != nil {
-			log.Warningf("Failed to unlock lockFirst keyspace after failed lockSecond lock for %v", keyspace)
+		if err := fLD.Unlock(ctx); err != nil {
+			log.Warningf("Failed to unlock lockFirst after failed lockSecond lock for %v, %v: %v", cell, dirPath, err)
 		}
-		return "", err
+		return nil, err
 	}
 
-	// remember both locks, keyed by lockFirst lock path
-	tee.mu.Lock()
-	tee.keyspaceLockPaths[pLockPath] = sLockPath
-	tee.mu.Unlock()
-	return pLockPath, nil
+	// Remember both locks in teeTopoLockDescriptor.
+	return &teeTopoLockDescriptor{
+		tee:                  tee,
+		cell:                 cell,
+		dirPath:              dirPath,
+		firstLockDescriptor:  fLD,
+		secondLockDescriptor: sLD,
+	}, nil
 }
 
-// UnlockKeyspaceForAction is part of the topo.Server interface
-func (tee *Tee) UnlockKeyspaceForAction(ctx context.Context, keyspace, lockPath, results string) error {
-	// get from map
-	tee.mu.Lock() // not using defer for unlock, to minimize lock time
-	sLockPath, ok := tee.keyspaceLockPaths[lockPath]
-	if !ok {
-		tee.mu.Unlock()
-		return fmt.Errorf("no lockPath %v in keyspaceLockPaths", lockPath)
-	}
-	delete(tee.keyspaceLockPaths, lockPath)
-	tee.mu.Unlock()
-
-	// unlock lockSecond, then lockFirst
-	serr := tee.lockSecond.UnlockKeyspaceForAction(ctx, keyspace, sLockPath, results)
-	perr := tee.lockFirst.UnlockKeyspaceForAction(ctx, keyspace, lockPath, results)
+// Unlock is part of the topo.LockDescriptor interface.
+func (ld *teeTopoLockDescriptor) Unlock(ctx context.Context) error {
+	// Unlock lockSecond, then lockFirst.
+	serr := ld.secondLockDescriptor.Unlock(ctx)
+	ferr := ld.firstLockDescriptor.Unlock(ctx)
 
 	if serr != nil {
-		if perr != nil {
-			log.Warningf("Secondary UnlockKeyspaceForAction(%v, %v) failed: %v", keyspace, sLockPath, serr)
+		if ferr != nil {
+			log.Warningf("First Unlock(%v, %v) failed: %v", ld.cell, ld.dirPath, ferr)
 		}
 		return serr
 	}
-	return perr
-}
-
-// LockShardForAction is part of the topo.Server interface
-func (tee *Tee) LockShardForAction(ctx context.Context, keyspace, shard, contents string) (string, error) {
-	// lock lockFirst
-	pLockPath, err := tee.lockFirst.LockShardForAction(ctx, keyspace, shard, contents)
-	if err != nil {
-		return "", err
-	}
-
-	// lock lockSecond
-	sLockPath, err := tee.lockSecond.LockShardForAction(ctx, keyspace, shard, contents)
-	if err != nil {
-		if err := tee.lockFirst.UnlockShardForAction(ctx, keyspace, shard, pLockPath, "{}"); err != nil {
-			log.Warningf("Failed to unlock lockFirst shard after failed lockSecond lock for %v/%v", keyspace, shard)
-		}
-		return "", err
-	}
-
-	// remember both locks, keyed by lockFirst lock path
-	tee.mu.Lock()
-	tee.shardLockPaths[pLockPath] = sLockPath
-	tee.mu.Unlock()
-	return pLockPath, nil
-}
-
-// UnlockShardForAction is part of the topo.Server interface
-func (tee *Tee) UnlockShardForAction(ctx context.Context, keyspace, shard, lockPath, results string) error {
-	// get from map
-	tee.mu.Lock() // not using defer for unlock, to minimize lock time
-	sLockPath, ok := tee.shardLockPaths[lockPath]
-	if !ok {
-		tee.mu.Unlock()
-		return fmt.Errorf("no lockPath %v in shardLockPaths", lockPath)
-	}
-	delete(tee.shardLockPaths, lockPath)
-	tee.mu.Unlock()
-
-	// unlock lockSecond, then lockFirst
-	serr := tee.lockSecond.UnlockShardForAction(ctx, keyspace, shard, sLockPath, results)
-	perr := tee.lockFirst.UnlockShardForAction(ctx, keyspace, shard, lockPath, results)
-
-	if serr != nil {
-		if perr != nil {
-			log.Warningf("Secondary UnlockShardForAction(%v/%v, %v) failed: %v", keyspace, shard, sLockPath, serr)
-		}
-		return serr
-	}
-	return perr
+	return ferr
 }
 
 // NewMasterParticipation is part of the topo.Server interface
