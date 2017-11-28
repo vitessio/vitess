@@ -28,6 +28,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
+	"github.com/youtube/vitess/go/vt/servenv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
@@ -202,7 +203,7 @@ func (stats *LogStats) Format(params url.Values) string {
 	rewrittenSQL := "[REDACTED]"
 	formattedBindVars := "[REDACTED]"
 
-	if !*RedactDebugUIQueries {
+	if !*servenv.RedactDebugUIQueries {
 		_, fullBindParams := params["full"]
 		rewrittenSQL = stats.RewrittenSQL()
 		formattedBindVars = stats.FmtBindVariables(fullBindParams)

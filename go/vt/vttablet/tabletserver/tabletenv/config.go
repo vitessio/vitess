@@ -33,9 +33,6 @@ var (
 	queryLogHandler = flag.String("query-log-stream-handler", "/debug/querylog", "URL handler for streaming queries log")
 	txLogHandler    = flag.String("transaction-log-stream-handler", "/debug/txlog", "URL handler for streaming transactions log")
 
-	// RedactDebugUIQueries controls whether full queries and bind variables are suppressed from debug UIs.
-	RedactDebugUIQueries = flag.Bool("redact-debug-ui-queries", false, "redact full queries and bind variables from debug UI")
-
 	// TxLogger can be used to enable logging of transactions.
 	// Call TxLogger.ServeLogs in your main program to enable logging.
 	// The log format can be inferred by looking at TxConnection.Format.

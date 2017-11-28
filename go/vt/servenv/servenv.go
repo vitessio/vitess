@@ -58,6 +58,9 @@ var (
 	onTermTimeout  = flag.Duration("onterm_timeout", 10*time.Second, "wait no more than this for OnTermSync handlers before stopping")
 	memProfileRate = flag.Int("mem-profile-rate", 512*1024, "profile every n bytes allocated")
 
+	// RedactDebugUIQueries controls whether full queries and bind variables are suppressed from debug UIs.
+	RedactDebugUIQueries = flag.Bool("redact-debug-ui-queries", false, "redact full queries and bind variables from debug UI")
+
 	// mutex used to protect the Init function
 	mu sync.Mutex
 
