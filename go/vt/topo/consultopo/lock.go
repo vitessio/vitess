@@ -20,20 +20,41 @@ import (
 	"fmt"
 	"path"
 
-	log "github.com/golang/glog"
 	"github.com/hashicorp/consul/api"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 )
 
-func (s *Server) lock(ctx context.Context, c *cellClient, lockPath, contents string) (string, error) {
+// consulLockDescriptor implements topo.LockDescriptor.
+type consulLockDescriptor struct {
+	s        *Server
+	c        *cellClient
+	lockPath string
+}
+
+// Lock is part of the topo.Backend interface.
+func (s *Server) Lock(ctx context.Context, cell, dirPath, contents string) (topo.LockDescriptor, error) {
+	// We list the directory first to make sure it exists.
+	if _, err := s.ListDir(ctx, cell, dirPath); err != nil {
+		if err == topo.ErrNoNode {
+			return nil, err
+		}
+		return nil, fmt.Errorf("cannot ListDir(%v, %v) before locking: %v", cell, dirPath, err)
+	}
+
+	c, err := s.clientForCell(ctx, cell)
+	if err != nil {
+		return nil, err
+	}
+	lockPath := path.Join(c.root, dirPath, locksFilename)
+
 	// Build the lock structure.
-	l, err := s.global.client.LockOpts(&api.LockOptions{
+	l, err := c.client.LockOpts(&api.LockOptions{
 		Key:   lockPath,
 		Value: []byte(contents),
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// Wait until we are the only ones in this client trying to
@@ -45,7 +66,7 @@ func (s *Server) lock(ctx context.Context, c *cellClient, lockPath, contents str
 		c.mu.Unlock()
 		select {
 		case <-ctx.Done():
-			return "", convertError(ctx.Err())
+			return nil, convertError(ctx.Err())
 		case <-li.done:
 		}
 
@@ -73,21 +94,24 @@ func (s *Server) lock(ctx context.Context, c *cellClient, lockPath, contents str
 		c.mu.Unlock()
 		close(li.done)
 
-		return "", err
+		return nil, err
 	}
 
 	// We got the lock, we're good.
-	return lockPath, nil
+	return &consulLockDescriptor{
+		s:        s,
+		c:        c,
+		lockPath: lockPath,
+	}, nil
 }
 
-// unlock releases a lock acquired by lock() on the given directory.
-// The string returned by lock() should be passed as the actionPath.
-func (s *Server) unlock(ctx context.Context, c *cellClient, lockPath, actionPath string) error {
-	// Sanity check.
-	if lockPath != actionPath {
-		return fmt.Errorf("unlock: actionPath doesn't match directory being unlocked: %q != %q", lockPath, actionPath)
-	}
+// Unlock is part of the topo.LockDescriptor interface.
+func (ld *consulLockDescriptor) Unlock(ctx context.Context) error {
+	return ld.s.unlock(ctx, ld.c, ld.lockPath)
+}
 
+// unlock releases a lock acquired by Lock() on the given directory.
+func (s *Server) unlock(ctx context.Context, c *cellClient, lockPath string) error {
 	c.mu.Lock()
 	li, ok := c.locks[lockPath]
 	c.mu.Unlock()
@@ -104,39 +128,4 @@ func (s *Server) unlock(ctx context.Context, c *cellClient, lockPath, actionPath
 	close(li.done)
 
 	return unlockErr
-}
-
-// LockKeyspaceForAction implements topo.Server.
-func (s *Server) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {
-	// Check the keyspace exists first.
-	keyspacePath := path.Join(keyspacesPath, keyspace, topo.KeyspaceFile)
-	_, _, err := s.Get(ctx, topo.GlobalCell, keyspacePath)
-	if err != nil {
-		return "", err
-	}
-
-	return s.lock(ctx, s.global, path.Join(s.global.root, keyspacesPath, keyspace, locksFilename), contents)
-}
-
-// UnlockKeyspaceForAction implements topo.Server.
-func (s *Server) UnlockKeyspaceForAction(ctx context.Context, keyspace, actionPath, results string) error {
-	log.Infof("results of %v: %v", actionPath, results)
-	return s.unlock(ctx, s.global, path.Join(s.global.root, keyspacesPath, keyspace, locksFilename), actionPath)
-}
-
-// LockShardForAction implements topo.Server.
-func (s *Server) LockShardForAction(ctx context.Context, keyspace, shard, contents string) (string, error) {
-	shardPath := path.Join(keyspacesPath, keyspace, shardsPath, shard, topo.ShardFile)
-	_, _, err := s.Get(ctx, topo.GlobalCell, shardPath)
-	if err != nil {
-		return "", err
-	}
-
-	return s.lock(ctx, s.global, path.Join(s.global.root, keyspacesPath, keyspace, shardsPath, shard, locksFilename), contents)
-}
-
-// UnlockShardForAction implements topo.Server.
-func (s *Server) UnlockShardForAction(ctx context.Context, keyspace, shard, actionPath, results string) error {
-	log.Infof("results of %v: %v", actionPath, results)
-	return s.unlock(ctx, s.global, path.Join(s.global.root, keyspacesPath, keyspace, shardsPath, shard, locksFilename), actionPath)
 }

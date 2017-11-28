@@ -34,12 +34,7 @@ We follow these conventions within this package:
 package etcd2topo
 
 import (
-	"path"
-	"strings"
 	"sync"
-
-	"github.com/coreos/etcd/clientv3"
-	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -73,33 +68,6 @@ func (s *Server) Close() {
 
 	s.global.close()
 	s.global = nil
-}
-
-// GetKnownCells implements topo.Server.GetKnownCells.
-func (s *Server) GetKnownCells(ctx context.Context) ([]string, error) {
-	nodePath := path.Join(s.global.root, cellsPath) + "/"
-	resp, err := s.global.cli.Get(ctx, nodePath,
-		clientv3.WithPrefix(),
-		clientv3.WithSort(clientv3.SortByKey, clientv3.SortAscend),
-		clientv3.WithKeysOnly())
-	if err != nil {
-		return nil, convertError(err)
-	}
-
-	prefixLen := len(nodePath)
-	suffix := "/" + topo.CellInfoFile
-	suffixLen := len(suffix)
-
-	var result []string
-	for _, ev := range resp.Kvs {
-		p := string(ev.Key)
-		if strings.HasPrefix(p, nodePath) && strings.HasSuffix(p, suffix) {
-			p = p[prefixLen : len(p)-suffixLen]
-			result = append(result, p)
-		}
-	}
-
-	return result, nil
 }
 
 // NewServer returns a new etcdtopo.Server.

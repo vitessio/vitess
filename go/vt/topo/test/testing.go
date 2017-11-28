@@ -38,7 +38,7 @@ func newKeyRange(value string) *topodatapb.KeyRange {
 	return result
 }
 
-func getLocalCell(ctx context.Context, t *testing.T, ts topo.Impl) string {
+func getLocalCell(ctx context.Context, t *testing.T, ts topo.Server) string {
 	cells, err := ts.GetKnownCells(ctx)
 	if err != nil {
 		t.Fatalf("GetKnownCells: %v", err)
@@ -85,14 +85,9 @@ func TopoServerTestSuite(t *testing.T, factory func() topo.Impl) {
 	checkSrvVSchema(t, topo.Server{Impl: ts})
 	ts.Close()
 
-	t.Log("=== checkKeyspaceLock")
+	t.Log("=== checkLock")
 	ts = factory()
-	checkKeyspaceLock(t, ts)
-	ts.Close()
-
-	t.Log("=== checkShardLock")
-	ts = factory()
-	checkShardLock(t, ts)
+	checkLock(t, topo.Server{Impl: ts})
 	ts.Close()
 
 	t.Log("=== checkVSchema")

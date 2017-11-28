@@ -96,42 +96,6 @@ type Impl interface {
 
 	// topo.Server management interface.
 	Close()
-
-	//
-	// Cell management, global
-	//
-
-	// GetKnownCells returns the list of known cells running our processes.
-	// It is possible to find all tablets in the entire system
-	// by then calling GetTabletsByCell on every cell, for instance.
-	// They shall be sorted.
-	GetKnownCells(ctx context.Context) ([]string, error)
-
-	//
-	// Keyspace and Shard locks for actions, global.
-	//
-
-	// LockKeyspaceForAction locks the keyspace in order to
-	// perform the action described by contents. It will wait for
-	// the lock until at most ctx.Done(). The wait can be interrupted
-	// by cancelling the context. It returns the lock path.
-	//
-	// Can return ErrTimeout or ErrInterrupted
-	LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error)
-
-	// UnlockKeyspaceForAction unlocks a keyspace.
-	UnlockKeyspaceForAction(ctx context.Context, keyspace, lockPath, results string) error
-
-	// LockShardForAction locks the shard in order to
-	// perform the action described by contents. It will wait for
-	// the lock until at most ctx.Done(). The wait can be interrupted
-	// by cancelling the context. It returns the lock path.
-	//
-	// Can return ErrTimeout or ErrInterrupted
-	LockShardForAction(ctx context.Context, keyspace, shard, contents string) (string, error)
-
-	// UnlockShardForAction unlocks a shard.
-	UnlockShardForAction(ctx context.Context, keyspace, shard, lockPath, results string) error
 }
 
 // Server is a wrapper type that can have extra methods.

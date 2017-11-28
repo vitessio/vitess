@@ -22,7 +22,6 @@ limitations under the License.
 package memorytopo
 
 import (
-	"sort"
 	"strings"
 	"sync"
 
@@ -36,9 +35,6 @@ import (
 
 const (
 	// Path components
-	keyspacesPath = "keyspaces"
-	shardsPath    = "shards"
-	tabletsPath   = "tablets"
 	electionsPath = "elections"
 )
 
@@ -217,19 +213,4 @@ func (mt *MemoryTopo) recursiveDelete(n *node) {
 	if len(parent.children) == 0 {
 		mt.recursiveDelete(parent)
 	}
-}
-
-// GetKnownCells is part of the topo.Server interface.
-func (mt *MemoryTopo) GetKnownCells(ctx context.Context) ([]string, error) {
-	mt.mu.Lock()
-	defer mt.mu.Unlock()
-
-	var result []string
-	for c := range mt.cells {
-		if c != topo.GlobalCell {
-			result = append(result, c)
-		}
-	}
-	sort.Strings(result)
-	return result, nil
 }
