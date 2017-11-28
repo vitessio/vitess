@@ -51,9 +51,16 @@ func IsReplicationLagVeryHigh(tabletStats *TabletStats) bool {
 // - If one tablet is removed, run above steps again in case there are two tablets with high replication lag. (It should cover most cases.)
 // For example, lags of (5s, 10s, 15s, 120s) return the first three;
 // lags of (30m, 35m, 40m, 45m) return all.
+//
+// One thing to know about this code: vttablet also has a couple flags that impact the logic here:
+// * unhealthy_threshold: if replication lag is higher than this, a tablet will be reported as unhealhty.
+//   The default for this is 2h, same as the discovery_high_replication_lag_minimum_serving here.
+// * degraded_threshold: this is only used by vttablet for display. It should match
+//   discovery_low_replication_lag here, so the vttablet status display matches what vtgate will do of it.
 func FilterByReplicationLag(tabletStatsList []*TabletStats) []*TabletStats {
 	res := filterByLag(tabletStatsList)
-	// run the filter again if exact one tablet is removed.
+	// run the filter again if exactly one tablet is removed,
+	// and we have spare tablets.
 	if len(res) > *minNumTablets && len(res) == len(tabletStatsList)-1 {
 		res = filterByLag(res)
 	}
@@ -103,6 +110,20 @@ func filterByLag(tabletStatsList []*TabletStats) []*TabletStats {
 	snapshots := make([]tabletLagSnapshot, 0, len(list))
 	for _, ts := range list {
 		if !IsReplicationLagVeryHigh(ts) {
+			snapshots = append(snapshots, tabletLagSnapshot{
+				ts:     ts,
+				replag: ts.Stats.SecondsBehindMaster})
+		}
+	}
+	if len(snapshots) == 0 {
+		// We get here if all tablets are over the high
+		// replication lag threshold, and their lag is
+		// different enough that the 70% mean computation up
+		// there didn't find them all in a group. For
+		// instance, if *minNumTablets = 2, and we have two
+		// tablets with lag of 3h and 30h.  In that case, we
+		// just use them all.
+		for _, ts := range list {
 			snapshots = append(snapshots, tabletLagSnapshot{
 				ts:     ts,
 				replag: ts.Stats.SecondsBehindMaster})
