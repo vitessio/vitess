@@ -30,8 +30,8 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -282,7 +282,7 @@ func (t *TxSerializer) Pending(key string) int {
 
 // ServeHTTP lists the most recent, cached queries and their count.
 func (t *TxSerializer) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	if *tabletenv.RedactDebugUIQueries {
+	if *servenv.RedactDebugUIQueries {
 		response.Write([]byte(`
 	<!DOCTYPE html>
 	<html>

@@ -27,8 +27,8 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -67,9 +67,9 @@ func TestTxSerializer_NoHotRow(t *testing.T) {
 
 func TestTxSerializerRedactDebugUI(t *testing.T) {
 	resetVariables()
-	*tabletenv.RedactDebugUIQueries = true
+	*servenv.RedactDebugUIQueries = true
 	defer func() {
-		*tabletenv.RedactDebugUIQueries = false
+		*servenv.RedactDebugUIQueries = false
 	}()
 
 	txs := New(false, 1, 1, 5)

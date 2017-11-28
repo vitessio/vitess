@@ -27,6 +27,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -140,9 +141,9 @@ func TestSyslog(t *testing.T) {
 // when redaction is enabled.
 func TestSyslogRedacted(t *testing.T) {
 	// Overwrite the usual syslog writer and StatsLogger subscription channel with mocks
-	*tabletenv.RedactDebugUIQueries = true
+	*servenv.RedactDebugUIQueries = true
 	defer func() {
-		*tabletenv.RedactDebugUIQueries = false
+		*servenv.RedactDebugUIQueries = false
 	}()
 	mock := newFakeWriter()
 	writer = mock
