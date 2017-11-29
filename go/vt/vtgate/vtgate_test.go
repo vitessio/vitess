@@ -32,7 +32,6 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/sandboxconn"
 
@@ -65,7 +64,10 @@ func init() {
 `
 	hcVTGateTest = discovery.NewFakeHealthCheck()
 	*transactionMode = "MULTI"
-	Init(context.Background(), hcVTGateTest, &topo.Server{}, new(sandboxTopo), "aa", 10, nil)
+	// The topo.Server is used to start watching the cells described
+	// in '-cells_to_watch' command line parameter, which is
+	// empty by default. So it's unused in this test, set to nil.
+	Init(context.Background(), hcVTGateTest, nil /*topo.Server*/, new(sandboxTopo), "aa", 10, nil)
 
 	*mysqlServerPort = 0
 	*mysqlAuthServerImpl = "none"
