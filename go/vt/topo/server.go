@@ -98,6 +98,13 @@ type Impl interface {
 	Close()
 }
 
+// Factory is a factory interface to create Impl objects.
+// Topo implementations will provide an implementation for this.
+type Factory interface {
+	// Create creates topo.Impl object.
+	Create(serverAddr, root string) (Impl, error)
+}
+
 // Server is a wrapper type that can have extra methods.
 // Outside modules should just use the Server object.
 type Server struct {
@@ -113,9 +120,6 @@ type SrvTopoServer interface {
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
 	WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVSchemaData, <-chan *WatchSrvVSchemaData, CancelFunc)
 }
-
-// Factory is a factory method to create Impl objects.
-type Factory func(serverAddr, root string) (Impl, error)
 
 var (
 	// topoImplementation is the flag for which implementation to use.
@@ -151,7 +155,7 @@ func OpenServer(implementation, serverAddress, root string) (*Server, error) {
 		return nil, ErrNoNode
 	}
 
-	impl, err := factory(serverAddress, root)
+	impl, err := factory.Create(serverAddress, root)
 	if err != nil {
 		return nil, err
 	}

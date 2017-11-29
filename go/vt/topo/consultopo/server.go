@@ -25,6 +25,14 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
+// Factory is the consul topo.Factory implementation.
+type Factory struct{}
+
+// Create is part of the topo.Factory interface.
+func (f Factory) Create(serverAddr, root string) (topo.Impl, error) {
+	return NewServer(serverAddr, root)
+}
+
 // Server is the implementation of topo.Server for consul.
 type Server struct {
 	// global is a client configured to talk to a list of consul instances
@@ -69,7 +77,5 @@ func NewServer(serverAddr, root string) (*Server, error) {
 }
 
 func init() {
-	topo.RegisterFactory("consul", func(serverAddr, root string) (topo.Impl, error) {
-		return NewServer(serverAddr, root)
-	})
+	topo.RegisterFactory("consul", Factory{})
 }
