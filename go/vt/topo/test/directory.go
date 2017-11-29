@@ -29,15 +29,11 @@ import (
 // It does not use the pre-Backend API paths, to really
 // test the new functions.
 func checkDirectory(t *testing.T, ts topo.Impl) {
-	ctx := context.Background()
-
 	// global cell
 	checkDirectoryInCell(t, ts, topo.GlobalCell)
 
 	// local cell
-	tts := &topo.Server{Impl: ts}
-	cell := getLocalCell(ctx, t, tts)
-	checkDirectoryInCell(t, ts, cell)
+	checkDirectoryInCell(t, ts, LocalCellName)
 }
 
 // entriesWithoutCells removes 'cells' from the global directory.

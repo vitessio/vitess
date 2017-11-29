@@ -29,15 +29,11 @@ import (
 // It does not use the pre-Backend API paths, to really
 // test the new functions.
 func checkFile(t *testing.T, ts topo.Impl) {
-	ctx := context.Background()
-
 	// global cell
 	checkFileInCell(t, ts, topo.GlobalCell)
 
 	// local cell
-	tts := &topo.Server{Impl: ts}
-	cell := getLocalCell(ctx, t, tts)
-	checkFileInCell(t, ts, cell)
+	checkFileInCell(t, ts, LocalCellName)
 }
 
 func checkFileInCell(t *testing.T, ts topo.Impl, cell string) {

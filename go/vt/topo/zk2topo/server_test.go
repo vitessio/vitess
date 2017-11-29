@@ -21,7 +21,6 @@ import (
 	"path"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
 
@@ -38,9 +37,9 @@ func TestZk2Topo(t *testing.T) {
 	zkd, serverAddr := zkctl.StartLocalZk(testfiles.GoVtTopoZk2topoZkID, testfiles.GoVtTopoZk2topoPort)
 	defer zkd.Teardown()
 
-	// This function will create a toplevel directory for a new test.
+	// Run the test suite.
 	testIndex := 0
-	newServer := func(cells ...string) *Server {
+	test.TopoServerTestSuite(t, func() *topo.Server {
 		// Each test will use its own sub-directories.
 		testRoot := fmt.Sprintf("/test-%v", testIndex)
 		testIndex++
@@ -50,44 +49,26 @@ func TestZk2Topo(t *testing.T) {
 		if _, err := c.Create(ctx, testRoot, nil, 0, zk.WorldACL(PermDirectory)); err != nil {
 			t.Fatalf("Create(%v) failed: %v", testRoot, err)
 		}
-		globalRoot := path.Join(testRoot, "global")
+		globalRoot := path.Join(testRoot, topo.GlobalCell)
 		if _, err := c.Create(ctx, globalRoot, nil, 0, zk.WorldACL(PermDirectory)); err != nil {
 			t.Fatalf("Create(%v) failed: %v", globalRoot, err)
 		}
-		cellsDir := path.Join(globalRoot, cellsPath)
-		if _, err := c.Create(ctx, cellsDir, nil, 0, zk.WorldACL(PermDirectory)); err != nil {
-			t.Fatalf("Create(%v) failed: %v", cellsDir, err)
+		cellRoot := path.Join(testRoot, test.LocalCellName)
+		if _, err := c.Create(ctx, cellRoot, nil, 0, zk.WorldACL(PermDirectory)); err != nil {
+			t.Fatalf("Create(%v) failed: %v", cellRoot, err)
 		}
 
-		for _, cell := range cells {
-			cellRoot := path.Join(testRoot, cell)
-			if _, err := c.Create(ctx, cellRoot, nil, 0, zk.WorldACL(PermDirectory)); err != nil {
-				t.Fatalf("Create(%v) failed: %v", cellRoot, err)
-			}
-
-			// Create the CellInfo for the cell.
-			ci := &topodatapb.CellInfo{
-				ServerAddress: serverAddr,
-				Root:          cellRoot,
-			}
-			data, err := proto.Marshal(ci)
-			if err != nil {
-				t.Fatalf("cannot proto.Marshal CellInfo: %v", err)
-			}
-			cellDir := path.Join(cellsDir, cell)
-			if _, err := c.Create(ctx, cellDir, nil, 0, zk.WorldACL(PermDirectory)); err != nil {
-				t.Fatalf("Create(%v) failed: %v", cellDir, err)
-			}
-			nodePath := path.Join(cellDir, topo.CellInfoFile)
-			if _, err := c.Create(ctx, nodePath, data, 0, zk.WorldACL(PermFile)); err != nil {
-				t.Fatalf("Create(%v) failed: %v", nodePath, err)
-			}
+		ts, err := topo.OpenServer("zk2", serverAddr, globalRoot)
+		if err != nil {
+			t.Fatalf("OpenServer() failed: %v", err)
+		}
+		if err := ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
+			ServerAddress: serverAddr,
+			Root:          cellRoot,
+		}); err != nil {
+			t.Fatalf("CreateCellInfo() failed: %v", err)
 		}
 
-		return NewServer(serverAddr, globalRoot)
-	}
-
-	test.TopoServerTestSuite(t, func() topo.Impl {
-		return newServer("test")
+		return ts
 	})
 }

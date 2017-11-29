@@ -22,8 +22,10 @@ limitations under the License.
 package memorytopo
 
 import (
+	"math/rand"
 	"strings"
 	"sync"
+	"time"
 
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
@@ -55,7 +57,8 @@ type MemoryTopo struct {
 	// generation is used to generate unique incrementing version
 	// numbers.  We want a global counter so when creating a file,
 	// then deleting it, then re-creating it, we don't restart the
-	// version at 1.
+	// version at 1. It is initialized with a random number,
+	// so if we have two implementations, the numbers won't match.
 	generation uint64
 }
 
@@ -93,19 +96,20 @@ func (n *node) isDirectory() bool {
 // of a problem.
 func New(cells ...string) *MemoryTopo {
 	mt := &MemoryTopo{
-		cells: make(map[string]*node),
+		cells:      make(map[string]*node),
+		generation: uint64(rand.Int63n(2 ^ 60)),
 	}
 	mt.cells[topo.GlobalCell] = mt.newDirectory(topo.GlobalCell, nil)
 
 	ctx := context.Background()
 	ts := &topo.Server{Impl: mt}
 	for _, cell := range cells {
+		mt.cells[cell] = mt.newDirectory(cell, nil)
 		if err := ts.CreateCellInfo(ctx, cell, &topodatapb.CellInfo{
 			Root: "/",
 		}); err != nil {
 			log.Fatalf("ts.CreateCellInfo(%v) failed: %v", cell, err)
 		}
-		mt.cells[cell] = mt.newDirectory(cell, nil)
 	}
 	return mt
 }
@@ -113,13 +117,6 @@ func New(cells ...string) *MemoryTopo {
 // NewServer returns a topo.Server based on a MemoryTopo.
 func NewServer(cells ...string) *topo.Server {
 	return &topo.Server{Impl: New(cells...)}
-}
-
-// SetGenerationForTests is used by tests that have more than one
-// MemoryTopo, to make sure they don't use one set of Version objects
-// from one topo in the other. Has to be called right after New().
-func (mt *MemoryTopo) SetGenerationForTests(generation uint64) {
-	mt.generation = generation
 }
 
 // Close is part of the topo.Impl interface.
@@ -213,4 +210,8 @@ func (mt *MemoryTopo) recursiveDelete(n *node) {
 	if len(parent.children) == 0 {
 		mt.recursiveDelete(parent)
 	}
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
 }
