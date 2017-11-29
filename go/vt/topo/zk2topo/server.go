@@ -44,6 +44,14 @@ type instance struct {
 	conn Conn
 }
 
+// Factory is the zookeeper topo.Factory implementation.
+type Factory struct{}
+
+// Create is part of the topo.Factory interface.
+func (f Factory) Create(serverAddr, root string) (topo.Impl, error) {
+	return NewServer(serverAddr, root), nil
+}
+
 // Server is the zookeeper topo.Impl implementation.
 type Server struct {
 	// mu protects the following fields.
@@ -65,9 +73,7 @@ func NewServer(serverAddr, root string) *Server {
 }
 
 func init() {
-	topo.RegisterFactory("zk2", func(serverAddr, root string) (topo.Impl, error) {
-		return NewServer(serverAddr, root), nil
-	})
+	topo.RegisterFactory("zk2", Factory{})
 }
 
 // connForCell returns the Conn and root for a cell. It creates it if
