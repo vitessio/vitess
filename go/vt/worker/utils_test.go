@@ -106,10 +106,10 @@ func sourceRdonlyFakeDB(t *testing.T, dbName, tableName string, min, max int) *f
 // using the provided topo server.
 type fakeTMCTopo struct {
 	tmclient.TabletManagerClient
-	server topo.Server
+	server *topo.Server
 }
 
-func newFakeTMCTopo(ts topo.Server) tmclient.TabletManagerClient {
+func newFakeTMCTopo(ts *topo.Server) tmclient.TabletManagerClient {
 	return &fakeTMCTopo{
 		TabletManagerClient: faketmclient.NewFakeTabletManagerClient(),
 		server:              ts,

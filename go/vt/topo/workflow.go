@@ -45,7 +45,7 @@ type WorkflowInfo struct {
 
 // GetWorkflowNames returns the names of the existing
 // workflows. They are sorted by uuid.
-func (ts Server) GetWorkflowNames(ctx context.Context) ([]string, error) {
+func (ts *Server) GetWorkflowNames(ctx context.Context) ([]string, error) {
 	entries, err := ts.ListDir(ctx, GlobalCell, workflowsPath)
 	switch err {
 	case ErrNoNode:
@@ -59,7 +59,7 @@ func (ts Server) GetWorkflowNames(ctx context.Context) ([]string, error) {
 
 // CreateWorkflow creates the given workflow, and returns the initial
 // WorkflowInfo.
-func (ts Server) CreateWorkflow(ctx context.Context, w *workflowpb.Workflow) (*WorkflowInfo, error) {
+func (ts *Server) CreateWorkflow(ctx context.Context, w *workflowpb.Workflow) (*WorkflowInfo, error) {
 	// Pack the content.
 	contents, err := proto.Marshal(w)
 	if err != nil {
@@ -79,7 +79,7 @@ func (ts Server) CreateWorkflow(ctx context.Context, w *workflowpb.Workflow) (*W
 }
 
 // GetWorkflow reads a workflow from the Backend.
-func (ts Server) GetWorkflow(ctx context.Context, uuid string) (*WorkflowInfo, error) {
+func (ts *Server) GetWorkflow(ctx context.Context, uuid string) (*WorkflowInfo, error) {
 	// Read the file.
 	filePath := pathForWorkflow(uuid)
 	contents, version, err := ts.Get(ctx, GlobalCell, filePath)
@@ -101,7 +101,7 @@ func (ts Server) GetWorkflow(ctx context.Context, uuid string) (*WorkflowInfo, e
 
 // SaveWorkflow saves the WorkflowInfo object. If the version is not
 // good any more, ErrBadVersion is returned.
-func (ts Server) SaveWorkflow(ctx context.Context, wi *WorkflowInfo) error {
+func (ts *Server) SaveWorkflow(ctx context.Context, wi *WorkflowInfo) error {
 	// Pack the content.
 	contents, err := proto.Marshal(wi.Workflow)
 	if err != nil {
@@ -122,7 +122,7 @@ func (ts Server) SaveWorkflow(ctx context.Context, wi *WorkflowInfo) error {
 
 // DeleteWorkflow deletes the specified workflow.  After this, the
 // WorkflowInfo object should not be used any more.
-func (ts Server) DeleteWorkflow(ctx context.Context, wi *WorkflowInfo) error {
+func (ts *Server) DeleteWorkflow(ctx context.Context, wi *WorkflowInfo) error {
 	filePath := pathForWorkflow(wi.Uuid)
 	return ts.Delete(ctx, GlobalCell, filePath, wi.version)
 }

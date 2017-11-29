@@ -38,7 +38,7 @@ import (
 // topo.Server to display content. It is separated in its own class
 // now for easier testing.
 type backendExplorer struct {
-	ts topo.Server
+	ts *topo.Server
 }
 
 // Result is what the backendExplorer returns. It represents one directory node.
@@ -49,7 +49,7 @@ type Result struct {
 	Error    string
 }
 
-func newBackendExplorer(ts topo.Server) *backendExplorer {
+func newBackendExplorer(ts *topo.Server) *backendExplorer {
 	return &backendExplorer{
 		ts: ts,
 	}
@@ -152,7 +152,7 @@ func DecodeContent(filename string, data []byte) (string, error) {
 }
 
 // handleExplorerRedirect returns the redirect target URL.
-func handleExplorerRedirect(ctx context.Context, ts topo.Server, r *http.Request) (string, error) {
+func handleExplorerRedirect(ctx context.Context, ts *topo.Server, r *http.Request) (string, error) {
 	keyspace := r.FormValue("keyspace")
 	shard := r.FormValue("shard")
 	cell := r.FormValue("cell")
@@ -198,7 +198,7 @@ func handleExplorerRedirect(ctx context.Context, ts topo.Server, r *http.Request
 }
 
 // initExplorer initializes the redirects for explorer
-func initExplorer(ts topo.Server) {
+func initExplorer(ts *topo.Server) {
 	// Main backend explorer functions.
 	be := newBackendExplorer(ts)
 	handleCollection("topodata", func(r *http.Request) (interface{}, error) {

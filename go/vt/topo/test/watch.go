@@ -66,7 +66,7 @@ func waitForInitialValue(t *testing.T, ts topo.Impl, cell string, srvKeyspace *t
 // We can't just use the full API yet, so use SrvKeyspace for now.
 func checkWatch(t *testing.T, ts topo.Impl) {
 	ctx := context.Background()
-	tts := topo.Server{Impl: ts}
+	tts := &topo.Server{Impl: ts}
 	cell := getLocalCell(ctx, t, tts)
 
 	// start watching something that doesn't exist -> error
@@ -161,7 +161,7 @@ func checkWatch(t *testing.T, ts topo.Impl) {
 // checkWatchInterrupt tests we can interrupt a watch.
 func checkWatchInterrupt(t *testing.T, ts topo.Impl) {
 	ctx := context.Background()
-	tts := topo.Server{Impl: ts}
+	tts := &topo.Server{Impl: ts}
 	cell := getLocalCell(ctx, t, tts)
 
 	// create some data

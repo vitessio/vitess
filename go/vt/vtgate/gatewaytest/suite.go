@@ -42,7 +42,7 @@ import (
 )
 
 // CreateFakeServers returns the servers to use for these tests
-func CreateFakeServers(t *testing.T) (*tabletconntest.FakeQueryService, topo.Server, string) {
+func CreateFakeServers(t *testing.T) (*tabletconntest.FakeQueryService, *topo.Server, string) {
 	cell := "local"
 
 	// the FakeServer is just slightly modified

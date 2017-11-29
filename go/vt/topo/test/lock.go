@@ -34,7 +34,7 @@ var timeUntilLockIsTaken = 10 * time.Millisecond
 
 // checkLock checks we can lock / unlock as expected. It's using a keyspace
 // as the lock target.
-func checkLock(t *testing.T, ts topo.Server) {
+func checkLock(t *testing.T, ts *topo.Server) {
 	ctx := context.Background()
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)

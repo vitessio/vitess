@@ -43,7 +43,7 @@ func TestDisabledThrottler(t *testing.T) {
 	oldConfig := tabletenv.Config
 	defer func() { tabletenv.Config = oldConfig }()
 	tabletenv.Config.EnableTxThrottler = false
-	throttler := CreateTxThrottlerFromTabletConfig(topo.Server{})
+	throttler := CreateTxThrottlerFromTabletConfig(&topo.Server{})
 	if err := throttler.Open("keyspace", "shard"); err != nil {
 		t.Fatalf("want: nil, got: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestEnabledThrottler(t *testing.T) {
 	hcCall2.After(hcCall1)
 	healthCheckFactory = func() discovery.HealthCheck { return mockHealthCheck }
 
-	topologyWatcherFactory = func(topoServer topo.Server, tr discovery.TabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
+	topologyWatcherFactory = func(topoServer *topo.Server, tr discovery.TabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
 		if mockTopoServer.Impl != topoServer.Impl {
 			t.Errorf("want: %v, got: %v", mockTopoServer, topoServer)
 		}

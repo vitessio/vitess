@@ -145,22 +145,22 @@ func RegisterFactory(name string, factory Factory) {
 
 // OpenServer returns a Server using the provided implementation,
 // address and root.
-func OpenServer(implementation, serverAddress, root string) (Server, error) {
+func OpenServer(implementation, serverAddress, root string) (*Server, error) {
 	factory, ok := factories[implementation]
 	if !ok {
-		return Server{}, ErrNoNode
+		return nil, ErrNoNode
 	}
 
 	impl, err := factory(serverAddress, root)
 	if err != nil {
-		return Server{}, err
+		return nil, err
 	}
-	return Server{Impl: impl}, nil
+	return &Server{Impl: impl}, nil
 }
 
 // Open returns a Server using the command line parameter flags
 // for implementation, address and root. It log.Fatals out if an error occurs.
-func Open() Server {
+func Open() *Server {
 	ts, err := OpenServer(*topoImplementation, *topoGlobalServerAddress, *topoGlobalRoot)
 	if err != nil {
 		log.Fatalf("Failed to open topo server (%v,%v,%v): %v", *topoImplementation, *topoGlobalServerAddress, *topoGlobalRoot, err)

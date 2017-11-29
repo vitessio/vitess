@@ -40,7 +40,7 @@ func RegisterKeyspaceValidator() {
 type KeyspaceValidator struct{}
 
 // Audit is part of the Validator interface.
-func (kv *KeyspaceValidator) Audit(ctx context.Context, ts topo.Server, w *Workflow) error {
+func (kv *KeyspaceValidator) Audit(ctx context.Context, ts *topo.Server, w *Workflow) error {
 	keyspaces, err := ts.GetKeyspaces(ctx)
 	if err != nil {
 		return err
@@ -60,7 +60,7 @@ func (kv *KeyspaceValidator) Audit(ctx context.Context, ts topo.Server, w *Workf
 
 // KeyspaceFixer implements Fixer.
 type KeyspaceFixer struct {
-	ts       topo.Server
+	ts       *topo.Server
 	keyspace string
 }
 

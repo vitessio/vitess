@@ -29,7 +29,7 @@ import (
 
 // SaveVSchema first validates the VSchema, then saves it.
 // If the VSchema is empty, just remove it.
-func (ts Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vschemapb.Keyspace) error {
+func (ts *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vschemapb.Keyspace) error {
 	err := vindexes.ValidateKeyspace(vschema)
 	if err != nil {
 		return err
@@ -51,7 +51,7 @@ func (ts Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vsch
 }
 
 // GetVSchema fetches the vschema from the topo.
-func (ts Server) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error) {
+func (ts *Server) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error) {
 	nodePath := path.Join(KeyspacesPath, keyspace, VSchemaFile)
 	data, _, err := ts.Get(ctx, GlobalCell, nodePath)
 	if err != nil {

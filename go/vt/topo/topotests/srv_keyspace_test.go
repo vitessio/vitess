@@ -32,7 +32,7 @@ import (
 
 // waitForInitialSrvKeyspace waits for the initial SrvKeyspace to
 // appear, and match the provided srvKeyspace.
-func waitForInitialSrvKeyspace(t *testing.T, ts topo.Server, cell, keyspace string) (current *topo.WatchSrvKeyspaceData, changes <-chan *topo.WatchSrvKeyspaceData, cancel topo.CancelFunc) {
+func waitForInitialSrvKeyspace(t *testing.T, ts *topo.Server, cell, keyspace string) (current *topo.WatchSrvKeyspaceData, changes <-chan *topo.WatchSrvKeyspaceData, cancel topo.CancelFunc) {
 	ctx := context.Background()
 	start := time.Now()
 	for {
@@ -58,7 +58,7 @@ func TestWatchSrvKeyspaceNoNode(t *testing.T) {
 	keyspace := "ks1"
 	ctx := context.Background()
 	mt := memorytopo.New(cell)
-	ts := topo.Server{Impl: mt}
+	ts := &topo.Server{Impl: mt}
 
 	// No SrvKeyspace -> ErrNoNode
 	current, _, _ := ts.WatchSrvKeyspace(ctx, cell, keyspace)
@@ -73,7 +73,7 @@ func TestWatchSrvKeyspace(t *testing.T) {
 	keyspace := "ks1"
 	ctx := context.Background()
 	mt := memorytopo.New(cell)
-	ts := topo.Server{Impl: mt}
+	ts := &topo.Server{Impl: mt}
 
 	// Create initial value
 	if _, err := mt.Create(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", []byte{}); err != nil {
@@ -195,7 +195,7 @@ func TestWatchSrvKeyspaceCancel(t *testing.T) {
 	keyspace := "ks1"
 	ctx := context.Background()
 	mt := memorytopo.New(cell)
-	ts := topo.Server{Impl: mt}
+	ts := &topo.Server{Impl: mt}
 
 	// No SrvKeyspace -> ErrNoNode
 	current, changes, cancel := ts.WatchSrvKeyspace(ctx, cell, keyspace)

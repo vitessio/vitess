@@ -106,7 +106,7 @@ func (m *UpdateStreamControlMock) IsEnabled() bool {
 // and UpdateStreamControl
 type UpdateStreamImpl struct {
 	// the following variables are set at construction time
-	ts       topo.Server
+	ts       *topo.Server
 	keyspace string
 	cell     string
 	mysqld   mysqlctl.MysqlDaemon
@@ -171,7 +171,7 @@ type RegisterUpdateStreamServiceFunc func(UpdateStream)
 var RegisterUpdateStreamServices []RegisterUpdateStreamServiceFunc
 
 // NewUpdateStream returns a new UpdateStreamImpl object
-func NewUpdateStream(ts topo.Server, keyspace string, cell string, mysqld mysqlctl.MysqlDaemon, se *schema.Engine, dbname string) *UpdateStreamImpl {
+func NewUpdateStream(ts *topo.Server, keyspace string, cell string, mysqld mysqlctl.MysqlDaemon, se *schema.Engine, dbname string) *UpdateStreamImpl {
 	return &UpdateStreamImpl{
 		ts:       ts,
 		keyspace: keyspace,

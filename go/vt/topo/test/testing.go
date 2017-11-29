@@ -38,7 +38,7 @@ func newKeyRange(value string) *topodatapb.KeyRange {
 	return result
 }
 
-func getLocalCell(ctx context.Context, t *testing.T, ts topo.Server) string {
+func getLocalCell(ctx context.Context, t *testing.T, ts *topo.Server) string {
 	cells, err := ts.GetKnownCells(ctx)
 	if err != nil {
 		t.Fatalf("GetKnownCells: %v", err)
@@ -57,42 +57,42 @@ func TopoServerTestSuite(t *testing.T, factory func() topo.Impl) {
 
 	t.Log("=== checkKeyspace")
 	ts = factory()
-	checkKeyspace(t, topo.Server{Impl: ts})
+	checkKeyspace(t, &topo.Server{Impl: ts})
 	ts.Close()
 
 	t.Log("=== checkShard")
 	ts = factory()
-	checkShard(t, topo.Server{Impl: ts})
+	checkShard(t, &topo.Server{Impl: ts})
 	ts.Close()
 
 	t.Log("=== checkTablet")
 	ts = factory()
-	checkTablet(t, topo.Server{Impl: ts})
+	checkTablet(t, &topo.Server{Impl: ts})
 	ts.Close()
 
 	t.Log("=== checkShardReplication")
 	ts = factory()
-	checkShardReplication(t, topo.Server{Impl: ts})
+	checkShardReplication(t, &topo.Server{Impl: ts})
 	ts.Close()
 
 	t.Log("=== checkSrvKeyspace")
 	ts = factory()
-	checkSrvKeyspace(t, topo.Server{Impl: ts})
+	checkSrvKeyspace(t, &topo.Server{Impl: ts})
 	ts.Close()
 
 	t.Log("=== checkSrvVSchema")
 	ts = factory()
-	checkSrvVSchema(t, topo.Server{Impl: ts})
+	checkSrvVSchema(t, &topo.Server{Impl: ts})
 	ts.Close()
 
 	t.Log("=== checkLock")
 	ts = factory()
-	checkLock(t, topo.Server{Impl: ts})
+	checkLock(t, &topo.Server{Impl: ts})
 	ts.Close()
 
 	t.Log("=== checkVSchema")
 	ts = factory()
-	checkVSchema(t, topo.Server{Impl: ts})
+	checkVSchema(t, &topo.Server{Impl: ts})
 	ts.Close()
 
 	t.Log("=== checkElection")

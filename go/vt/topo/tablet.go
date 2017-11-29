@@ -214,7 +214,7 @@ func NewTabletInfo(tablet *topodatapb.Tablet, version Version) *TabletInfo {
 
 // GetTablet is a high level function to read tablet data.
 // It generates trace spans.
-func (ts Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*TabletInfo, error) {
+func (ts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*TabletInfo, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.GetTablet")
 	span.Annotate("tablet", topoproto.TabletAliasString(alias))
@@ -238,7 +238,7 @@ func (ts Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (
 
 // UpdateTablet updates the tablet data only - not associated replication paths.
 // It also uses a span, and sends the event.
-func (ts Server) UpdateTablet(ctx context.Context, ti *TabletInfo) error {
+func (ts *Server) UpdateTablet(ctx context.Context, ti *TabletInfo) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateTablet")
 	span.Annotate("tablet", topoproto.TabletAliasString(ti.Alias))
@@ -268,7 +268,7 @@ func (ts Server) UpdateTablet(ctx context.Context, ti *TabletInfo) error {
 // If the update succeeds, it returns the updated tablet.
 // If the update method returns ErrNoUpdateNeeded, nothing is written,
 // and nil,nil is returned.
-func (ts Server) UpdateTabletFields(ctx context.Context, alias *topodatapb.TabletAlias, update func(*topodatapb.Tablet) error) (*topodatapb.Tablet, error) {
+func (ts *Server) UpdateTabletFields(ctx context.Context, alias *topodatapb.TabletAlias, update func(*topodatapb.Tablet) error) (*topodatapb.Tablet, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateTabletFields")
 	span.Annotate("tablet", topoproto.TabletAliasString(alias))
@@ -292,7 +292,7 @@ func (ts Server) UpdateTabletFields(ctx context.Context, alias *topodatapb.Table
 }
 
 // Validate makes sure a tablet is represented correctly in the topology server.
-func Validate(ctx context.Context, ts Server, tabletAlias *topodatapb.TabletAlias) error {
+func Validate(ctx context.Context, ts *Server, tabletAlias *topodatapb.TabletAlias) error {
 	// read the tablet record, make sure it parses
 	tablet, err := ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
@@ -317,7 +317,7 @@ func Validate(ctx context.Context, ts Server, tabletAlias *topodatapb.TabletAlia
 
 // CreateTablet creates a new tablet and all associated paths for the
 // replication graph.
-func (ts Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) error {
+func (ts *Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) error {
 	data, err := proto.Marshal(tablet)
 	if err != nil {
 		return err
@@ -347,7 +347,7 @@ func (ts Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) er
 
 // DeleteTablet wraps the underlying Impl.DeleteTablet
 // and dispatches the event.
-func (ts Server) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias) error {
+func (ts *Server) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias) error {
 	// get the current tablet record, if any, to log the deletion
 	ti, tErr := ts.GetTablet(ctx, tabletAlias)
 
@@ -373,12 +373,12 @@ func (ts Server) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Table
 
 // UpdateTabletReplicationData creates or updates the replication
 // graph data for a tablet
-func UpdateTabletReplicationData(ctx context.Context, ts Server, tablet *topodatapb.Tablet) error {
+func UpdateTabletReplicationData(ctx context.Context, ts *Server, tablet *topodatapb.Tablet) error {
 	return UpdateShardReplicationRecord(ctx, ts, tablet.Keyspace, tablet.Shard, tablet.Alias)
 }
 
 // DeleteTabletReplicationData deletes replication data.
-func DeleteTabletReplicationData(ctx context.Context, ts Server, tablet *topodatapb.Tablet) error {
+func DeleteTabletReplicationData(ctx context.Context, ts *Server, tablet *topodatapb.Tablet) error {
 	return RemoveShardReplicationRecord(ctx, ts, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard, tablet.Alias)
 }
 
@@ -387,7 +387,7 @@ func DeleteTabletReplicationData(ctx context.Context, ts Server, tablet *topodat
 // If error is ErrPartialResult, the results in the dictionary are
 // incomplete, meaning some tablets couldn't be read.
 // The map is indexed by topoproto.TabletAliasString(tablet alias).
-func (ts Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.TabletAlias) (map[string]*TabletInfo, error) {
+func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.TabletAlias) (map[string]*TabletInfo, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("topo.GetTabletMap")
 	span.Annotate("num_tablets", len(tabletAliases))
@@ -424,7 +424,7 @@ func (ts Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.T
 // GetTabletsByCell returns all the tablets in a cell.
 // It returns ErrNode if the cell doesn't exist.
 // It returns (nil, nil) if the cell exists, but there are no tablets.
-func (ts Server) GetTabletsByCell(ctx context.Context, cell string) ([]*topodatapb.TabletAlias, error) {
+func (ts *Server) GetTabletsByCell(ctx context.Context, cell string) ([]*topodatapb.TabletAlias, error) {
 	// First make sure the cell exists, otherwise we need to return an error.
 	cells, err := ts.GetKnownCells(ctx)
 	if err != nil {

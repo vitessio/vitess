@@ -564,7 +564,7 @@ func TestShuffleQueryParts(t *testing.T) {
 }
 
 func newTestScatterConn(hc discovery.HealthCheck, serv topo.SrvTopoServer, cell string) *ScatterConn {
-	gw := gateway.GetCreator()(hc, topo.Server{}, serv, cell, 3)
+	gw := gateway.GetCreator()(hc, &topo.Server{}, serv, cell, 3)
 	tc := NewTxConn(gw, vtgatepb.TransactionMode_TWOPC)
 	return NewScatterConn("", tc, gw)
 }

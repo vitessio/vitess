@@ -47,7 +47,7 @@ func pathForCellInfo(cell string) string {
 
 // GetCellInfoNames returns the names of the existing cells. They are
 // sorted by name.
-func (ts Server) GetCellInfoNames(ctx context.Context) ([]string, error) {
+func (ts *Server) GetCellInfoNames(ctx context.Context) ([]string, error) {
 	entries, err := ts.ListDir(ctx, GlobalCell, cellsPath)
 	switch err {
 	case ErrNoNode:
@@ -60,7 +60,7 @@ func (ts Server) GetCellInfoNames(ctx context.Context) ([]string, error) {
 }
 
 // GetCellInfo reads a CellInfo from the Backend.
-func (ts Server) GetCellInfo(ctx context.Context, cell string) (*topodatapb.CellInfo, error) {
+func (ts *Server) GetCellInfo(ctx context.Context, cell string) (*topodatapb.CellInfo, error) {
 	// Read the file.
 	filePath := pathForCellInfo(cell)
 	contents, _, err := ts.Get(ctx, GlobalCell, filePath)
@@ -77,7 +77,7 @@ func (ts Server) GetCellInfo(ctx context.Context, cell string) (*topodatapb.Cell
 }
 
 // CreateCellInfo creates a new CellInfo with the provided content.
-func (ts Server) CreateCellInfo(ctx context.Context, cell string, ci *topodatapb.CellInfo) error {
+func (ts *Server) CreateCellInfo(ctx context.Context, cell string, ci *topodatapb.CellInfo) error {
 	// Pack the content.
 	contents, err := proto.Marshal(ci)
 	if err != nil {
@@ -95,7 +95,7 @@ func (ts Server) CreateCellInfo(ctx context.Context, cell string, ci *topodatapb
 // a version mismatch, it will re-read the record and retry the update.
 // If the update method returns ErrNoUpdateNeeded, nothing is written,
 // and nil is returned.
-func (ts Server) UpdateCellInfoFields(ctx context.Context, cell string, update func(*topodatapb.CellInfo) error) error {
+func (ts *Server) UpdateCellInfoFields(ctx context.Context, cell string, update func(*topodatapb.CellInfo) error) error {
 	filePath := pathForCellInfo(cell)
 	for {
 		ci := &topodatapb.CellInfo{}
@@ -135,7 +135,7 @@ func (ts Server) UpdateCellInfoFields(ctx context.Context, cell string, update f
 
 // DeleteCellInfo deletes the specified CellInfo.
 // We first make sure no Shard record points to the cell.
-func (ts Server) DeleteCellInfo(ctx context.Context, cell string) error {
+func (ts *Server) DeleteCellInfo(ctx context.Context, cell string) error {
 	// Get all keyspaces.
 	keyspaces, err := ts.GetKeyspaces(ctx)
 	if err != nil {
@@ -164,6 +164,6 @@ func (ts Server) DeleteCellInfo(ctx context.Context, cell string) error {
 // For now, it just lists the 'cells' directory in the global topology server.
 // TODO(alainjobart) once the cell map is migrated to this generic
 // package, we can do better than this.
-func (ts Server) GetKnownCells(ctx context.Context) ([]string, error) {
+func (ts *Server) GetKnownCells(ctx context.Context) ([]string, error) {
 	return ts.ListDir(ctx, GlobalCell, cellsPath)
 }

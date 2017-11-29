@@ -33,7 +33,7 @@ import (
 func TestCellInfo(t *testing.T) {
 	cell := "cell1"
 	ctx := context.Background()
-	ts := topo.Server{Impl: memorytopo.New(cell)}
+	ts := &topo.Server{Impl: memorytopo.New(cell)}
 
 	// Check GetCellInfo returns what memorytopo created.
 	ci, err := ts.GetCellInfo(ctx, cell)

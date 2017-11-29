@@ -26,7 +26,7 @@ import (
 )
 
 // checkShardReplication tests ShardReplication objects
-func checkShardReplication(t *testing.T, ts topo.Server) {
+func checkShardReplication(t *testing.T, ts *topo.Server) {
 	ctx := context.Background()
 	cell := getLocalCell(ctx, t, ts)
 	if _, err := ts.GetShardReplication(ctx, cell, "test_keyspace", "-10"); err != topo.ErrNoNode {

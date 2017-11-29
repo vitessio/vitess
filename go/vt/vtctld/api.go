@@ -121,7 +121,7 @@ func unmarshalRequest(r *http.Request, v interface{}) error {
 	return json.Unmarshal(data, v)
 }
 
-func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, realtimeStats *realtimeStats) {
+func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, realtimeStats *realtimeStats) {
 	tabletHealthCache := newTabletHealthCache(ts)
 	tmClient := tmclient.NewTabletManagerClient()
 

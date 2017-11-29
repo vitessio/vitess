@@ -35,7 +35,7 @@ func checkDirectory(t *testing.T, ts topo.Impl) {
 	checkDirectoryInCell(t, ts, topo.GlobalCell)
 
 	// local cell
-	tts := topo.Server{Impl: ts}
+	tts := &topo.Server{Impl: ts}
 	cell := getLocalCell(ctx, t, tts)
 	checkDirectoryInCell(t, ts, cell)
 }

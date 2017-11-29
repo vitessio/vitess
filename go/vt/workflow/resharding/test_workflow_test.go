@@ -150,7 +150,7 @@ func (*TestWorkflowFactory) Instantiate(m *workflow.Manager, w *workflowpb.Workf
 type TestWorkflow struct {
 	ctx        context.Context
 	manager    *workflow.Manager
-	topoServer topo.Server
+	topoServer *topo.Server
 	wi         *topo.WorkflowInfo
 	logger     *logutil.MemoryLogger
 

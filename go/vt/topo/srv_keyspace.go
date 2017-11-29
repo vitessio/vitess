@@ -42,7 +42,7 @@ type WatchSrvKeyspaceData struct {
 // WatchSrvKeyspace will set a watch on the SrvKeyspace object.
 // It has the same contract as Backend.Watch, but it also unpacks the
 // contents into a SrvKeyspace object.
-func (ts Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (*WatchSrvKeyspaceData, <-chan *WatchSrvKeyspaceData, CancelFunc) {
+func (ts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (*WatchSrvKeyspaceData, <-chan *WatchSrvKeyspaceData, CancelFunc) {
 	filePath := srvKeyspaceFileName(keyspace)
 
 	current, wdChannel, cancel := ts.Watch(ctx, cell, filePath)
@@ -94,7 +94,7 @@ func (ts Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (*
 }
 
 // GetSrvKeyspaceNames returns the SrvKeyspace objects for a cell.
-func (ts Server) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
+func (ts *Server) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
 	children, err := ts.ListDir(ctx, cell, KeyspacesPath)
 	switch err {
 	case nil:
@@ -107,7 +107,7 @@ func (ts Server) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string
 }
 
 // UpdateSrvKeyspace saves a new SrvKeyspace. It is a blind write.
-func (ts Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error {
+func (ts *Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error {
 	nodePath := srvKeyspaceFileName(keyspace)
 	data, err := proto.Marshal(srvKeyspace)
 	if err != nil {
@@ -118,13 +118,13 @@ func (ts Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, s
 }
 
 // DeleteSrvKeyspace deletes a SrvKeyspace.
-func (ts Server) DeleteSrvKeyspace(ctx context.Context, cell, keyspace string) error {
+func (ts *Server) DeleteSrvKeyspace(ctx context.Context, cell, keyspace string) error {
 	nodePath := srvKeyspaceFileName(keyspace)
 	return ts.Delete(ctx, cell, nodePath, nil)
 }
 
 // GetSrvKeyspace returns the SrvKeyspace for a cell/keyspace.
-func (ts Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
+func (ts *Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	nodePath := srvKeyspaceFileName(keyspace)
 	data, _, err := ts.Get(ctx, cell, nodePath)
 	if err != nil {

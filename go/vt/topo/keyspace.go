@@ -153,7 +153,7 @@ func (ki *KeyspaceInfo) ComputeCellServedFrom(cell string) []*topodatapb.SrvKeys
 
 // CreateKeyspace wraps the underlying Impl.CreateKeyspace
 // and dispatches the event.
-func (ts Server) CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error {
+func (ts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error {
 	data, err := proto.Marshal(value)
 	if err != nil {
 		return err
@@ -172,7 +172,7 @@ func (ts Server) CreateKeyspace(ctx context.Context, keyspace string, value *top
 }
 
 // GetKeyspace reads the given keyspace and returns it
-func (ts Server) GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceInfo, error) {
+func (ts *Server) GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceInfo, error) {
 	keyspacePath := path.Join(KeyspacesPath, keyspace, KeyspaceFile)
 	data, version, err := ts.Impl.Get(ctx, GlobalCell, keyspacePath)
 	if err != nil {
@@ -192,7 +192,7 @@ func (ts Server) GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceInf
 }
 
 // UpdateKeyspace updates the keyspace data. It checks the keyspace is locked.
-func (ts Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
+func (ts *Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 	// make sure it is locked first
 	if err := CheckKeyspaceLocked(ctx, ki.keyspace); err != nil {
 		return err
@@ -219,7 +219,7 @@ func (ts Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 
 // FindAllShardsInKeyspace reads and returns all the existing shards in
 // a keyspace. It doesn't take any lock.
-func (ts Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) (map[string]*ShardInfo, error) {
+func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) (map[string]*ShardInfo, error) {
 	shards, err := ts.GetShardNames(ctx, keyspace)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get list of shards for keyspace '%v': %v", keyspace, err)
@@ -256,7 +256,7 @@ func (ts Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) (
 
 // DeleteKeyspace wraps the underlying Impl.DeleteKeyspace
 // and dispatches the event.
-func (ts Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
+func (ts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
 	keyspacePath := path.Join(KeyspacesPath, keyspace, KeyspaceFile)
 	if err := ts.Impl.Delete(ctx, GlobalCell, keyspacePath, nil); err != nil {
 		return err
@@ -270,7 +270,7 @@ func (ts Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
 }
 
 // GetKeyspaces returns the list of keyspaces in the topology.
-func (ts Server) GetKeyspaces(ctx context.Context) ([]string, error) {
+func (ts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
 	children, err := ts.Impl.ListDir(ctx, GlobalCell, KeyspacesPath)
 	switch err {
 	case nil:
@@ -283,7 +283,7 @@ func (ts Server) GetKeyspaces(ctx context.Context) ([]string, error) {
 }
 
 // GetShardNames returns the list of shards in a keyspace.
-func (ts Server) GetShardNames(ctx context.Context, keyspace string) ([]string, error) {
+func (ts *Server) GetShardNames(ctx context.Context, keyspace string) ([]string, error) {
 	shardsPath := path.Join(KeyspacesPath, keyspace, ShardsPath)
 	children, err := ts.ListDir(ctx, GlobalCell, shardsPath)
 	if err == ErrNoNode {

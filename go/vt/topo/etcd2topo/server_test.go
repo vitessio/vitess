@@ -146,7 +146,7 @@ func testKeyspaceLock(t *testing.T, ts *Server) {
 	ctx := context.Background()
 	defer ts.Close()
 
-	tts := topo.Server{Impl: ts}
+	tts := &topo.Server{Impl: ts}
 	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace")
 	if err := tts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)

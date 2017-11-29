@@ -81,7 +81,7 @@ type l2VTGateGateway struct {
 	statusAggregators map[string]*TabletStatusAggregator
 }
 
-func createL2VTGateGateway(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int) Gateway {
+func createL2VTGateGateway(hc discovery.HealthCheck, topoServer *topo.Server, serv topo.SrvTopoServer, cell string, retryCount int) Gateway {
 	lg := &l2VTGateGateway{
 		retryCount:        retryCount,
 		connMap:           make(map[string][]*l2VTGateConn),
