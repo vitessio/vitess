@@ -98,7 +98,7 @@ func New(cells ...string) *MemoryTopo {
 	mt.cells[topo.GlobalCell] = mt.newDirectory(topo.GlobalCell, nil)
 
 	ctx := context.Background()
-	ts := topo.Server{Impl: mt}
+	ts := &topo.Server{Impl: mt}
 	for _, cell := range cells {
 		if err := ts.CreateCellInfo(ctx, cell, &topodatapb.CellInfo{
 			Root: "/",
@@ -111,8 +111,8 @@ func New(cells ...string) *MemoryTopo {
 }
 
 // NewServer returns a topo.Server based on a MemoryTopo.
-func NewServer(cells ...string) topo.Server {
-	return topo.Server{Impl: New(cells...)}
+func NewServer(cells ...string) *topo.Server {
+	return &topo.Server{Impl: New(cells...)}
 }
 
 // SetGenerationForTests is used by tests that have more than one

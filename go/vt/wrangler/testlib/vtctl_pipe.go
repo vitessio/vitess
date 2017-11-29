@@ -51,7 +51,7 @@ type VtctlPipe struct {
 }
 
 // NewVtctlPipe creates a new VtctlPipe based on the given topo server.
-func NewVtctlPipe(t *testing.T, ts topo.Server) *VtctlPipe {
+func NewVtctlPipe(t *testing.T, ts *topo.Server) *VtctlPipe {
 	// Register all vtctl commands
 	servenvInitialized.Do(func() {
 		// make sure we use the right protocol

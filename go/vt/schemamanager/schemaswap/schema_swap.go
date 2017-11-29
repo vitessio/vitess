@@ -95,7 +95,7 @@ type Swap struct {
 	swapID uint64
 
 	// topoServer is the topo server implementation used to discover the topology of the keyspace.
-	topoServer topo.Server
+	topoServer *topo.Server
 	// tabletClient is the client implementation used by the schema swap process to control
 	// all tablets in the keyspace.
 	tabletClient tmclient.TabletManagerClient

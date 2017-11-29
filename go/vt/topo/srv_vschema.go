@@ -37,7 +37,7 @@ type WatchSrvVSchemaData struct {
 // WatchSrvVSchema will set a watch on the SrvVSchema object.
 // It has the same contract as Backend.Watch, but it also unpacks the
 // contents into a SrvVSchema object.
-func (ts Server) WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVSchemaData, <-chan *WatchSrvVSchemaData, CancelFunc) {
+func (ts *Server) WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVSchemaData, <-chan *WatchSrvVSchemaData, CancelFunc) {
 	current, wdChannel, cancel := ts.Watch(ctx, cell, SrvVSchemaFile)
 	if current.Err != nil {
 		return &WatchSrvVSchemaData{Err: current.Err}, nil, nil
@@ -86,7 +86,7 @@ func (ts Server) WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVSc
 }
 
 // UpdateSrvVSchema updates the SrvVSchema file for a cell.
-func (ts Server) UpdateSrvVSchema(ctx context.Context, cell string, srvVSchema *vschemapb.SrvVSchema) error {
+func (ts *Server) UpdateSrvVSchema(ctx context.Context, cell string, srvVSchema *vschemapb.SrvVSchema) error {
 	nodePath := SrvVSchemaFile
 	data, err := proto.Marshal(srvVSchema)
 	if err != nil {
@@ -97,7 +97,7 @@ func (ts Server) UpdateSrvVSchema(ctx context.Context, cell string, srvVSchema *
 }
 
 // GetSrvVSchema returns the SrvVSchema for a cell.
-func (ts Server) GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.SrvVSchema, error) {
+func (ts *Server) GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.SrvVSchema, error) {
 	nodePath := SrvVSchemaFile
 	data, _, err := ts.Get(ctx, cell, nodePath)
 	if err != nil {

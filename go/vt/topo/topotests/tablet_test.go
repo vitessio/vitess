@@ -36,7 +36,7 @@ func TestCreateTablet(t *testing.T) {
 	keyspace := "ks1"
 	shard := "shard1"
 	ctx := context.Background()
-	ts := topo.Server{Impl: memorytopo.New(cell)}
+	ts := &topo.Server{Impl: memorytopo.New(cell)}
 
 	// Create a tablet.
 	alias := &topodatapb.TabletAlias{

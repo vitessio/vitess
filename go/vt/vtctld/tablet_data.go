@@ -88,7 +88,7 @@ func (th *tabletHealth) lastAccessed() time.Time {
 	return th.accessed
 }
 
-func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias) (err error) {
+func (th *tabletHealth) stream(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias) (err error) {
 	defer func() {
 		th.mu.Lock()
 		th.err = err
@@ -126,7 +126,7 @@ func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias 
 }
 
 type tabletHealthCache struct {
-	ts topo.Server
+	ts *topo.Server
 
 	// mu protects the map.
 	mu sync.Mutex
@@ -135,7 +135,7 @@ type tabletHealthCache struct {
 	tabletMap map[string]*tabletHealth
 }
 
-func newTabletHealthCache(ts topo.Server) *tabletHealthCache {
+func newTabletHealthCache(ts *topo.Server) *tabletHealthCache {
 	return &tabletHealthCache{
 		ts:        ts,
 		tabletMap: make(map[string]*tabletHealth),

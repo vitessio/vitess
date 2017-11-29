@@ -43,7 +43,7 @@ func init() {
 	flag.Var(&workflowManagerDisable, "workflow_manager_disable", "comma separated list of workflow types to disable")
 }
 
-func initWorkflowManager(ts topo.Server) {
+func initWorkflowManager(ts *topo.Server) {
 	if *workflowManagerInit {
 		// Uncomment this line to register the UI test validator.
 		// topovalidator.RegisterUITestValidator()
@@ -89,7 +89,7 @@ func runWorkflowManagerAlone() {
 	servenv.OnTermSync(cancel)
 }
 
-func runWorkflowManagerElection(ts topo.Server) {
+func runWorkflowManagerElection(ts *topo.Server) {
 	var mp topo.MasterParticipation
 
 	// We use servenv.ListeningURL which is only populated during Run,

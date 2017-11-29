@@ -29,7 +29,7 @@ import (
 )
 
 // checkTablet verifies the topo server API is correct for managing tablets.
-func checkTablet(t *testing.T, ts topo.Server) {
+func checkTablet(t *testing.T, ts *topo.Server) {
 	ctx := context.Background()
 
 	cell := getLocalCell(ctx, t, ts)

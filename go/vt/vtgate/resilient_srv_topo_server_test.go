@@ -148,7 +148,7 @@ func (ft *fakeTopo) Watch(ctx context.Context, cell, filePath string) (*topo.Wat
 // TestGetSrvKeyspace will test we properly return updated SrvKeyspace.
 func TestGetSrvKeyspace(t *testing.T) {
 	ft := newFakeTopo()
-	rsts := NewResilientSrvTopoServer(topo.Server{Impl: ft}, "TestGetSrvKeyspace")
+	rsts := NewResilientSrvTopoServer(&topo.Server{Impl: ft}, "TestGetSrvKeyspace")
 
 	// Ask for a not-yet-created keyspace
 	_, err := rsts.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
@@ -230,7 +230,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 // the topo server upon failure.
 func TestSrvKeyspaceCachedError(t *testing.T) {
 	ft := newFakeTopo()
-	rsts := NewResilientSrvTopoServer(topo.Server{Impl: ft}, "TestSrvKeyspaceCachedErrors")
+	rsts := NewResilientSrvTopoServer(&topo.Server{Impl: ft}, "TestSrvKeyspaceCachedErrors")
 
 	// ask for an unknown keyspace, should get an error
 	_, err := rsts.GetSrvKeyspace(context.Background(), "test_cell", "unknown_ks")
@@ -255,7 +255,7 @@ func TestSrvKeyspaceCachedError(t *testing.T) {
 // value if the SrvKeyspace already exists.
 func TestGetSrvKeyspaceCreated(t *testing.T) {
 	ft := newFakeTopo()
-	rsts := NewResilientSrvTopoServer(topo.Server{Impl: ft}, "TestGetSrvKeyspaceCreated")
+	rsts := NewResilientSrvTopoServer(&topo.Server{Impl: ft}, "TestGetSrvKeyspaceCreated")
 
 	// Set SrvKeyspace with value
 	want := &topodatapb.SrvKeyspace{

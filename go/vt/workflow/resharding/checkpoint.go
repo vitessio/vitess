@@ -29,7 +29,7 @@ import (
 
 // CheckpointWriter saves the checkpoint data into topology server.
 type CheckpointWriter struct {
-	topoServer topo.Server
+	topoServer *topo.Server
 
 	// checkpointMu is used for protecting data access during checkpointing.
 	mu         sync.Mutex
@@ -38,7 +38,7 @@ type CheckpointWriter struct {
 }
 
 // NewCheckpointWriter creates a CheckpointWriter.
-func NewCheckpointWriter(ts topo.Server, checkpoint *workflowpb.WorkflowCheckpoint, wi *topo.WorkflowInfo) *CheckpointWriter {
+func NewCheckpointWriter(ts *topo.Server, checkpoint *workflowpb.WorkflowCheckpoint, wi *topo.WorkflowInfo) *CheckpointWriter {
 	return &CheckpointWriter{
 		topoServer: ts,
 		checkpoint: checkpoint,

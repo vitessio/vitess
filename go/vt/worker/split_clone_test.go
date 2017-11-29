@@ -65,7 +65,7 @@ var (
 type splitCloneTestCase struct {
 	t *testing.T
 
-	ts      topo.Server
+	ts      *topo.Server
 	wi      *Instance
 	tablets []*testlib.FakeTablet
 
