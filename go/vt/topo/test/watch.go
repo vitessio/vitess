@@ -67,10 +67,9 @@ func waitForInitialValue(t *testing.T, ts topo.Impl, cell string, srvKeyspace *t
 func checkWatch(t *testing.T, ts topo.Impl) {
 	ctx := context.Background()
 	tts := &topo.Server{Impl: ts}
-	cell := getLocalCell(ctx, t, tts)
 
 	// start watching something that doesn't exist -> error
-	current, changes, cancel := ts.Watch(ctx, cell, "keyspaces/test_keyspace/SrvKeyspace")
+	current, changes, cancel := ts.Watch(ctx, LocalCellName, "keyspaces/test_keyspace/SrvKeyspace")
 	if current.Err != topo.ErrNoNode {
 		t.Errorf("watch on missing node didn't return ErrNoNode: %v %v", current, changes)
 	}
@@ -79,17 +78,17 @@ func checkWatch(t *testing.T, ts topo.Impl) {
 	srvKeyspace := &topodatapb.SrvKeyspace{
 		ShardingColumnName: "user_id",
 	}
-	if err := tts.UpdateSrvKeyspace(ctx, cell, "test_keyspace", srvKeyspace); err != nil {
+	if err := tts.UpdateSrvKeyspace(ctx, LocalCellName, "test_keyspace", srvKeyspace); err != nil {
 		t.Fatalf("UpdateSrvKeyspace(1): %v", err)
 	}
 
 	// start watching again, it should work
-	changes, cancel = waitForInitialValue(t, ts, cell, srvKeyspace)
+	changes, cancel = waitForInitialValue(t, ts, LocalCellName, srvKeyspace)
 	defer cancel()
 
 	// change the data
 	srvKeyspace.ShardingColumnName = "new_user_id"
-	if err := tts.UpdateSrvKeyspace(ctx, cell, "test_keyspace", srvKeyspace); err != nil {
+	if err := tts.UpdateSrvKeyspace(ctx, LocalCellName, "test_keyspace", srvKeyspace); err != nil {
 		t.Fatalf("UpdateSrvKeyspace(2): %v", err)
 	}
 
@@ -121,7 +120,7 @@ func checkWatch(t *testing.T, ts topo.Impl) {
 	}
 
 	// remove the SrvKeyspace
-	if err := tts.DeleteSrvKeyspace(ctx, cell, "test_keyspace"); err != nil {
+	if err := tts.DeleteSrvKeyspace(ctx, LocalCellName, "test_keyspace"); err != nil {
 		t.Fatalf("DeleteSrvKeyspace: %v", err)
 	}
 
@@ -162,18 +161,17 @@ func checkWatch(t *testing.T, ts topo.Impl) {
 func checkWatchInterrupt(t *testing.T, ts topo.Impl) {
 	ctx := context.Background()
 	tts := &topo.Server{Impl: ts}
-	cell := getLocalCell(ctx, t, tts)
 
 	// create some data
 	srvKeyspace := &topodatapb.SrvKeyspace{
 		ShardingColumnName: "user_id",
 	}
-	if err := tts.UpdateSrvKeyspace(ctx, cell, "test_keyspace", srvKeyspace); err != nil {
+	if err := tts.UpdateSrvKeyspace(ctx, LocalCellName, "test_keyspace", srvKeyspace); err != nil {
 		t.Fatalf("UpdateSrvKeyspace(1): %v", err)
 	}
 
 	// Start watching, it should work.
-	changes, cancel := waitForInitialValue(t, ts, cell, srvKeyspace)
+	changes, cancel := waitForInitialValue(t, ts, LocalCellName, srvKeyspace)
 
 	// Now cancel the watch.
 	cancel()

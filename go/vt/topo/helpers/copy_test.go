@@ -29,12 +29,11 @@ import (
 )
 
 func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server) {
-	// Create a source and destination TS, with different generations,
-	// so we test using the Version for both works as expected.
+	// Create a source and destination TS. They will have
+	// different generations, so we test using the Version for
+	// both works as expected.
 	fromTS := memorytopo.NewServer("test_cell")
-	toTSImpl := memorytopo.New("test_cell")
-	toTSImpl.SetGenerationForTests(1000)
-	toTS := &topo.Server{Impl: toTSImpl}
+	toTS := memorytopo.NewServer("test_cell")
 
 	// create a keyspace and a couple tablets
 	if err := fromTS.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {

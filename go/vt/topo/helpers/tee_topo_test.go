@@ -25,13 +25,13 @@ import (
 )
 
 func newFakeTeeServer(t *testing.T) topo.Impl {
-	s1 := memorytopo.New("test")
-	s2 := memorytopo.New("test")
+	s1 := memorytopo.New(test.LocalCellName)
+	s2 := memorytopo.New(test.LocalCellName)
 	return NewTee(s1, s2, false)
 }
 
 func TestTeeTopo(t *testing.T) {
-	test.TopoServerTestSuite(t, func() topo.Impl {
-		return newFakeTeeServer(t)
+	test.TopoServerTestSuite(t, func() *topo.Server {
+		return &topo.Server{Impl: newFakeTeeServer(t)}
 	})
 }

@@ -25,10 +25,12 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/topo"
-	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
+
+// LocalCellName is the cell name used by this test suite.
+const LocalCellName = "test"
 
 func newKeyRange(value string) *topodatapb.KeyRange {
 	_, result, err := topo.ValidateShardName(value)
@@ -38,81 +40,73 @@ func newKeyRange(value string) *topodatapb.KeyRange {
 	return result
 }
 
-func getLocalCell(ctx context.Context, t *testing.T, ts *topo.Server) string {
-	cells, err := ts.GetKnownCells(ctx)
-	if err != nil {
-		t.Fatalf("GetKnownCells: %v", err)
-	}
-	if len(cells) < 1 {
-		t.Fatalf("provided topo.Impl doesn't have enough cells (need at least 1): %v", cells)
-	}
-	return cells[0]
-}
-
 // TopoServerTestSuite runs the full topo.Impl test suite.
-// The factory method should return a topo server that has a single cell
-// called 'test'.
-func TopoServerTestSuite(t *testing.T, factory func() topo.Impl) {
-	var ts topo.Impl
+// The factory method should return a topo.Server that has a single cell
+// called LocalCellName.
+// Note some tests operate on the topo.Server itself (when we also test
+// the higher level methods of topo.Server), or on the underlying
+// Impl object (when we only test the topo.Backend interface).
+func TopoServerTestSuite(t *testing.T, factory func() *topo.Server) {
+	var ts *topo.Server
 
 	t.Log("=== checkKeyspace")
 	ts = factory()
-	checkKeyspace(t, &topo.Server{Impl: ts})
+	checkKeyspace(t, ts)
 	ts.Close()
 
 	t.Log("=== checkShard")
 	ts = factory()
-	checkShard(t, &topo.Server{Impl: ts})
+	checkShard(t, ts)
 	ts.Close()
 
 	t.Log("=== checkTablet")
 	ts = factory()
-	checkTablet(t, &topo.Server{Impl: ts})
+	checkTablet(t, ts)
 	ts.Close()
 
 	t.Log("=== checkShardReplication")
 	ts = factory()
-	checkShardReplication(t, &topo.Server{Impl: ts})
+	checkShardReplication(t, ts)
 	ts.Close()
 
 	t.Log("=== checkSrvKeyspace")
 	ts = factory()
-	checkSrvKeyspace(t, &topo.Server{Impl: ts})
+	checkSrvKeyspace(t, ts)
 	ts.Close()
 
 	t.Log("=== checkSrvVSchema")
 	ts = factory()
-	checkSrvVSchema(t, &topo.Server{Impl: ts})
+	checkSrvVSchema(t, ts)
 	ts.Close()
 
 	t.Log("=== checkLock")
 	ts = factory()
-	checkLock(t, &topo.Server{Impl: ts})
+	checkLock(t, ts)
 	ts.Close()
 
 	t.Log("=== checkVSchema")
 	ts = factory()
-	checkVSchema(t, &topo.Server{Impl: ts})
+	checkVSchema(t, ts)
 	ts.Close()
 
 	t.Log("=== checkElection")
 	ts = factory()
-	checkElection(t, ts)
+	checkElection(t, ts.Impl)
 	ts.Close()
 
 	t.Log("=== checkDirectory")
 	ts = factory()
-	checkDirectory(t, ts)
+	checkDirectory(t, ts.Impl)
 	ts.Close()
 
 	t.Log("=== checkFile")
 	ts = factory()
-	checkFile(t, ts)
+	checkFile(t, ts.Impl)
 	ts.Close()
 
 	t.Log("=== checkWatch")
 	ts = factory()
-	checkWatch(t, ts)
-	checkWatchInterrupt(t, ts)
+	checkWatch(t, ts.Impl)
+	checkWatchInterrupt(t, ts.Impl)
 	ts.Close()
 }
