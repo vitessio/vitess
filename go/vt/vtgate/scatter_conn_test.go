@@ -564,7 +564,10 @@ func TestShuffleQueryParts(t *testing.T) {
 }
 
 func newTestScatterConn(hc discovery.HealthCheck, serv topo.SrvTopoServer, cell string) *ScatterConn {
-	gw := gateway.GetCreator()(hc, &topo.Server{}, serv, cell, 3)
+	// The topo.Server is used to start watching the cells described
+	// in '-cells_to_watch' command line parameter, which is
+	// empty by default. So it's unused in this test, set to nil.
+	gw := gateway.GetCreator()(hc, nil /*topo.Server*/, serv, cell, 3)
 	tc := NewTxConn(gw, vtgatepb.TransactionMode_TWOPC)
 	return NewScatterConn("", tc, gw)
 }

@@ -188,10 +188,10 @@ func NewServer(topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletSer
 
 var tsOnce sync.Once
 
-// NewTabletServerWithNilTopoServer is typically used in tests that don't need a topoSever
-// member.
+// NewTabletServerWithNilTopoServer is typically used in tests that
+// don't need a topoServer member.
 func NewTabletServerWithNilTopoServer(config tabletenv.TabletConfig) *TabletServer {
-	return NewTabletServer(config, &topo.Server{}, topodatapb.TabletAlias{})
+	return NewTabletServer(config, nil, topodatapb.TabletAlias{})
 }
 
 // NewTabletServer creates an instance of TabletServer. Only the first

@@ -104,7 +104,7 @@ func TestDiscoveryGatewayGetTablets(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"
 	hc := discovery.NewFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, &topo.Server{}, nil, "local", 2).(*discoveryGateway)
+	dg := createDiscoveryGateway(hc, nil, nil, "local", 2).(*discoveryGateway)
 
 	// replica should only use local ones
 	hc.Reset()
@@ -137,7 +137,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 		TabletType: tabletType,
 	}
 	hc := discovery.NewFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, &topo.Server{}, nil, "cell", 2).(*discoveryGateway)
+	dg := createDiscoveryGateway(hc, nil, nil, "cell", 2).(*discoveryGateway)
 
 	// no tablet
 	hc.Reset()
@@ -228,7 +228,7 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 		TabletType: tabletType,
 	}
 	hc := discovery.NewFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, &topo.Server{}, nil, "cell", 2).(*discoveryGateway)
+	dg := createDiscoveryGateway(hc, nil, nil, "cell", 2).(*discoveryGateway)
 
 	// retry error - no retry
 	hc.Reset()

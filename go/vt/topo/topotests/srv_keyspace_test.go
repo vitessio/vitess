@@ -57,8 +57,7 @@ func TestWatchSrvKeyspaceNoNode(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
 	ctx := context.Background()
-	mt := memorytopo.New(cell)
-	ts := &topo.Server{Impl: mt}
+	ts := memorytopo.NewServer(cell)
 
 	// No SrvKeyspace -> ErrNoNode
 	current, _, _ := ts.WatchSrvKeyspace(ctx, cell, keyspace)
@@ -72,11 +71,10 @@ func TestWatchSrvKeyspace(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
 	ctx := context.Background()
-	mt := memorytopo.New(cell)
-	ts := &topo.Server{Impl: mt}
+	ts := memorytopo.NewServer(cell)
 
 	// Create initial value
-	if _, err := mt.Create(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", []byte{}); err != nil {
+	if _, err := ts.Create(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", []byte{}); err != nil {
 		t.Fatalf("Update(/keyspaces/ks1/SrvKeyspace) failed: %v", err)
 	}
 
@@ -94,7 +92,7 @@ func TestWatchSrvKeyspace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("proto.Marshal(wanted) failed: %v", err)
 	}
-	if _, err := mt.Update(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", contents, nil); err != nil {
+	if _, err := ts.Update(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", contents, nil); err != nil {
 		t.Fatalf("Update(/keyspaces/ks1/SrvKeyspace) failed: %v", err)
 	}
 	for {
@@ -115,7 +113,7 @@ func TestWatchSrvKeyspace(t *testing.T) {
 	}
 
 	// Update the value with bad data, wait until error.
-	if _, err := mt.Update(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", []byte("BAD PROTO DATA"), nil); err != nil {
+	if _, err := ts.Update(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", []byte("BAD PROTO DATA"), nil); err != nil {
 		t.Fatalf("Update(/keyspaces/ks1/SrvKeyspace) failed: %v", err)
 	}
 	for {
@@ -145,7 +143,7 @@ func TestWatchSrvKeyspace(t *testing.T) {
 	}
 
 	// Update content, wait until Watch works again
-	if _, err := mt.Update(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", contents, nil); err != nil {
+	if _, err := ts.Update(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", contents, nil); err != nil {
 		t.Fatalf("Update(/keyspaces/ks1/SrvKeyspace) failed: %v", err)
 	}
 	start := time.Now()
@@ -169,7 +167,7 @@ func TestWatchSrvKeyspace(t *testing.T) {
 	}
 
 	// Delete node, wait for error (skip any duplicate).
-	if err := mt.Delete(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", nil); err != nil {
+	if err := ts.Delete(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", nil); err != nil {
 		t.Fatalf("Delete(/keyspaces/ks1/SrvKeyspace) failed: %v", err)
 	}
 	for {
@@ -194,8 +192,7 @@ func TestWatchSrvKeyspaceCancel(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
 	ctx := context.Background()
-	mt := memorytopo.New(cell)
-	ts := &topo.Server{Impl: mt}
+	ts := memorytopo.NewServer(cell)
 
 	// No SrvKeyspace -> ErrNoNode
 	current, changes, cancel := ts.WatchSrvKeyspace(ctx, cell, keyspace)
@@ -211,7 +208,7 @@ func TestWatchSrvKeyspaceCancel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("proto.Marshal(wanted) failed: %v", err)
 	}
-	if _, err := mt.Create(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", contents); err != nil {
+	if _, err := ts.Create(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", contents); err != nil {
 		t.Fatalf("Update(/keyspaces/ks1/SrvKeyspace) failed: %v", err)
 	}
 
