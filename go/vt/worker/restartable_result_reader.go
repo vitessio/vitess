@@ -80,14 +80,32 @@ func NewRestartableResultReader(ctx context.Context, logger logutil.Logger, tp t
 		allowMultipleRetries: allowMultipleRetries,
 	}
 
-	// If the initial connection fails, we do not restart.
-	if _ /* retryable */, err := r.getTablet(); err != nil {
-		return nil, fmt.Errorf("tablet=unknown: %v", err)
+	retryCtx, retryCancel := context.WithTimeout(r.ctx, *retryDuration)
+	defer retryCancel()
+
+	attempt := 0
+	for {
+		attempt++
+		// Don't retry if getTablet fails. For now, this is acceptable.
+		// If we later see transient failures here, we should add retries here also.
+		if _ /* retryable */, err := r.getTablet(); err != nil {
+			return nil, fmt.Errorf("tablet=unknown: %v", err)
+		}
+
+		// If we can't start a stream, pause & retry till retryDuration.
+		if err := r.startStream(); err != nil {
+			alias := topoproto.TabletAliasString(r.tablet.Alias)
+			statsStreamingQueryErrorsCounters.Add(alias, 1)
+
+			select {
+			case <-retryCtx.Done():
+				return nil, fmt.Errorf("%v: failed to start the streaming connection after %d attempts", r.tp.description(), attempt)
+			case <-time.After(*executeFetchRetryTime):
+			}
+			continue
+		}
+		return r, nil
 	}
-	if _ /* retryable */, err := r.startStream(); err != nil {
-		return nil, fmt.Errorf("tablet=%v: %v", topoproto.TabletAliasString(r.tablet.Alias), err)
-	}
-	return r, nil
 }
 
 // getTablet (re)sets the tablet which is used for the streaming query.
@@ -122,9 +140,7 @@ func (r *RestartableResultReader) getTablet() (bool, error) {
 
 // startStream assumes that getTablet() was succesfully called before and now
 // tries to connect to the set tablet and start the streaming query.
-// If the method returns an error, the first return value specifies if it is
-// okay to retry.
-func (r *RestartableResultReader) startStream() (bool, error) {
+func (r *RestartableResultReader) startStream() error {
 	// Start the streaming query.
 	r.generateQuery()
 	stream := queryservice.ExecuteWithStreamer(r.ctx, r.conn, &querypb.Target{
@@ -136,7 +152,7 @@ func (r *RestartableResultReader) startStream() (bool, error) {
 	// Read the fields information.
 	cols, err := stream.Recv()
 	if err != nil {
-		return true /* retryable */, fmt.Errorf("cannot read Fields for query '%v': %v", r.query, err)
+		return fmt.Errorf("cannot read Fields for query '%v': %v", r.query, err)
 	}
 	r.fields = cols.Fields
 	r.output = stream
@@ -144,7 +160,7 @@ func (r *RestartableResultReader) startStream() (bool, error) {
 	alias := topoproto.TabletAliasString(r.tablet.Alias)
 	statsStreamingQueryCounters.Add(alias, 1)
 	log.V(2).Infof("tablet=%v table=%v chunk=%v: Starting to stream rows using query '%v'.", alias, r.td.Name, r.chunk, r.query)
-	return false, nil
+	return nil
 }
 
 // Next returns the next result on the stream. It implements ResultReader.
@@ -174,6 +190,7 @@ func (r *RestartableResultReader) nextWithRetries() (*sqltypes.Result, error) {
 	attempt := 1
 	start := time.Now()
 	for {
+		// attempt will always be >= 2.
 		attempt++
 
 		var result *sqltypes.Result
@@ -196,16 +213,9 @@ func (r *RestartableResultReader) nextWithRetries() (*sqltypes.Result, error) {
 			}
 		}
 
-		if attempt > 1 {
-			// Restart streaming query.
-			retryable, err = r.startStream()
-			if err != nil {
-				if !retryable {
-					r.logger.Errorf("tablet=%v table=%v chunk=%v: Failed to restart streaming query (attempt %d) with query '%v' and stopped due to a non-retryable error: %v", topoproto.TabletAliasString(r.tablet.Alias), r.td.Name, r.chunk, attempt, r.query, err)
-					return nil, err
-				}
-				goto retry
-			}
+		// Restart streaming query.
+		if err := r.startStream(); err != nil {
+			goto retry
 		}
 
 		result, err = r.output.Recv()
