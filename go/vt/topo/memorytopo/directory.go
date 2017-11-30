@@ -25,20 +25,20 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// ListDir is part of the topo.Backend interface.
-func (mt *MemoryTopo) ListDir(ctx context.Context, cell, dirPath string) ([]string, error) {
-	mt.mu.Lock()
-	defer mt.mu.Unlock()
+// ListDir is part of the topo.Conn interface.
+func (c *Conn) ListDir(ctx context.Context, dirPath string) ([]string, error) {
+	c.factory.mu.Lock()
+	defer c.factory.mu.Unlock()
 
 	// Get the node to list.
-	n := mt.nodeByPath(cell, dirPath)
+	n := c.factory.nodeByPath(c.cell, dirPath)
 	if n == nil {
 		return nil, topo.ErrNoNode
 	}
 
 	// Check it's a directory.
 	if !n.isDirectory() {
-		return nil, fmt.Errorf("node %v in cell %v is not a directory", dirPath, cell)
+		return nil, fmt.Errorf("node %v in cell %v is not a directory", dirPath, c.cell)
 	}
 
 	var result []string

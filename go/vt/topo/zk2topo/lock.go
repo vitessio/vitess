@@ -32,28 +32,22 @@ import (
 // zkLockDescriptor implements topo.LockDescriptor.
 type zkLockDescriptor struct {
 	zs       *Server
-	cell     string
 	nodePath string
 }
 
-// Lock is part of the topo.Backend interface.
-func (zs *Server) Lock(ctx context.Context, cell, dirPath, contents string) (topo.LockDescriptor, error) {
-	conn, root, err := zs.connForCell(ctx, cell)
-	if err != nil {
-		return nil, err
-	}
-
+// Lock is part of the topo.Conn interface.
+func (zs *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	// Lock paths end in a trailing slash to that when we create
 	// sequential nodes, they are created as children, not siblings.
-	locksDir := path.Join(root, dirPath, locksPath) + "/"
+	locksDir := path.Join(zs.root, dirPath, locksPath) + "/"
 
 	// Create the locks path, possibly creating the parent.
-	nodePath, err := CreateRecursive(ctx, conn, locksDir, []byte(contents), zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(PermFile), 1)
+	nodePath, err := CreateRecursive(ctx, zs.conn, locksDir, []byte(contents), zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(PermFile), 1)
 	if err != nil {
 		return nil, convertError(err)
 	}
 
-	err = obtainQueueLock(ctx, conn, nodePath)
+	err = obtainQueueLock(ctx, zs.conn, nodePath)
 	if err != nil {
 		var errToReturn error
 		switch err {
@@ -67,11 +61,11 @@ func (zs *Server) Lock(ctx context.Context, cell, dirPath, contents string) (top
 
 		// Regardless of the reason, try to cleanup.
 		log.Warningf("Failed to obtain action lock: %v", err)
-		conn.Delete(ctx, nodePath, -1)
+		zs.conn.Delete(ctx, nodePath, -1)
 
 		// Show the other locks in the directory
 		dir := path.Dir(nodePath)
-		children, _, err := conn.Children(ctx, dir)
+		children, _, err := zs.conn.Children(ctx, dir)
 		if err != nil {
 			log.Warningf("Failed to get children of %v: %v", dir, err)
 			return nil, errToReturn
@@ -83,7 +77,7 @@ func (zs *Server) Lock(ctx context.Context, cell, dirPath, contents string) (top
 		}
 
 		childPath := path.Join(dir, children[0])
-		data, _, err := conn.Get(ctx, childPath)
+		data, _, err := zs.conn.Get(ctx, childPath)
 		if err != nil {
 			log.Warningf("Failed to get first locks node %v (may have just ended): %v", childPath, err)
 			return nil, errToReturn
@@ -95,15 +89,14 @@ func (zs *Server) Lock(ctx context.Context, cell, dirPath, contents string) (top
 
 	// Remove the root prefix from the file. So when we delete it,
 	// it's a relative file.
-	nodePath = nodePath[len(root):]
+	nodePath = nodePath[len(zs.root):]
 	return &zkLockDescriptor{
 		zs:       zs,
-		cell:     cell,
 		nodePath: nodePath,
 	}, nil
 }
 
 // Unlock is part of the topo.LockDescriptor interface.
 func (ld *zkLockDescriptor) Unlock(ctx context.Context) error {
-	return ld.zs.Delete(ctx, ld.cell, ld.nodePath, nil)
+	return ld.zs.Delete(ctx, ld.nodePath, nil)
 }

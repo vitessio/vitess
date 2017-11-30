@@ -22,7 +22,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-// Tee is an implementation of topo.Server that uses a primary
+// TeeFactory is an implementation of topo.Factory that uses a primary
 // underlying topo.Server for all changes, but also duplicates the
 // changes to a secondary topo.Server. It also locks both topo servers
 // when needed.  It is meant to be used during transitions from one
@@ -33,66 +33,81 @@ import (
 // - secondary: we write to it as well, but we usually don't fail.
 // - we lock primary/secondary if reverseLockOrder is False,
 // or secondary/primary if reverseLockOrder is True.
-type Tee struct {
-	primary   topo.Impl
-	secondary topo.Impl
-
-	readFrom       topo.Impl
-	readFromSecond topo.Impl
-
-	lockFirst  topo.Impl
-	lockSecond topo.Impl
+type TeeFactory struct {
+	primary          *topo.Server
+	secondary        *topo.Server
+	reverseLockOrder bool
 }
 
-// NewTee returns a new topo.Impl object
-func NewTee(primary, secondary topo.Impl, reverseLockOrder bool) *Tee {
-	lockFirst := primary
-	lockSecond := secondary
-	if reverseLockOrder {
-		lockFirst = secondary
-		lockSecond = primary
+// Create is part of the topo.Factory interface.
+func (f *TeeFactory) Create(cell, serverAddr, root string) (topo.Conn, error) {
+	ctx := context.Background()
+	primaryConn, err := f.primary.ConnForCell(ctx, cell)
+	if err != nil {
+		return nil, err
 	}
-	return &Tee{
-		primary:        primary,
-		secondary:      secondary,
-		readFrom:       primary,
-		readFromSecond: secondary,
-		lockFirst:      lockFirst,
-		lockSecond:     lockSecond,
+	secondaryConn, err := f.secondary.ConnForCell(ctx, cell)
+	if err != nil {
+		return nil, err
 	}
+
+	lockFirst := primaryConn
+	lockSecond := secondaryConn
+	if f.reverseLockOrder {
+		lockFirst = secondaryConn
+		lockSecond = primaryConn
+	}
+
+	return &TeeConn{
+		primary:    primaryConn,
+		secondary:  secondaryConn,
+		lockFirst:  lockFirst,
+		lockSecond: lockSecond,
+	}, nil
 }
 
-//
-// topo.Server management interface.
-//
-
-// Close is part of the topo.Server interface
-func (tee *Tee) Close() {
-	tee.primary.Close()
-	tee.secondary.Close()
+// NewTee returns a new topo.Server object. It uses a TeeFactory.
+func NewTee(primary, secondary *topo.Server, reverseLockOrder bool) (*topo.Server, error) {
+	f := &TeeFactory{
+		primary:          primary,
+		secondary:        secondary,
+		reverseLockOrder: reverseLockOrder,
+	}
+	return topo.NewWithFactory(f, "" /*serverAddress*/, "" /*root*/)
 }
 
-//
-// Backend API
-//
+// TeeConn implements the topo.Conn interface.
+type TeeConn struct {
+	primary   topo.Conn
+	secondary topo.Conn
 
-// ListDir is part of the topo.Backend interface.
-func (tee *Tee) ListDir(ctx context.Context, cell, dirPath string) ([]string, error) {
-	return tee.primary.ListDir(ctx, cell, dirPath)
+	lockFirst  topo.Conn
+	lockSecond topo.Conn
 }
 
-// Create is part of the topo.Backend interface.
-func (tee *Tee) Create(ctx context.Context, cell, filePath string, contents []byte) (topo.Version, error) {
-	primaryVersion, err := tee.primary.Create(ctx, cell, filePath, contents)
+// Close is part of the topo.Conn interface.
+func (c *TeeConn) Close() {
+	c.primary.Close()
+	c.secondary.Close()
+}
+
+// ListDir is part of the topo.Conn interface.
+func (c *TeeConn) ListDir(ctx context.Context, dirPath string) ([]string, error) {
+	return c.primary.ListDir(ctx, dirPath)
+}
+
+// Create is part of the topo.Conn interface.
+func (c *TeeConn) Create(ctx context.Context, filePath string, contents []byte) (topo.Version, error) {
+	primaryVersion, err := c.primary.Create(ctx, filePath, contents)
 	if err != nil {
 		return nil, err
 	}
 
 	// This is critical enough that we want to fail. However, we support
 	// an unconditional update if the file already exists.
-	_, err = tee.secondary.Create(ctx, cell, filePath, contents)
+	_, err = c.secondary.Create(ctx, filePath, contents)
 	if err == topo.ErrNodeExists {
-		_, err = tee.secondary.Update(ctx, cell, filePath, contents, nil)
+		_, err = c.secondary.Update(ctx, filePath, contents, nil)
 	}
 	if err != nil {
 		return nil, err
@@ -101,45 +116,45 @@ func (tee *Tee) Create(ctx context.Context, cell, filePath string, contents []by
 	return primaryVersion, nil
 }
 
-// Update is part of the topo.Backend interface.
-func (tee *Tee) Update(ctx context.Context, cell, filePath string, contents []byte, version topo.Version) (topo.Version, error) {
-	primaryVersion, err := tee.primary.Update(ctx, cell, filePath, contents, version)
+// Update is part of the topo.Conn interface.
+func (c *TeeConn) Update(ctx context.Context, filePath string, contents []byte, version topo.Version) (topo.Version, error) {
+	primaryVersion, err := c.primary.Update(ctx, filePath, contents, version)
 	if err != nil {
 		// Failed on primary, not updating secondary.
 		return nil, err
 	}
 
 	// Always do an unconditional update on secondary.
-	if _, err = tee.secondary.Update(ctx, cell, filePath, contents, nil); err != nil {
-		log.Warningf("secondary.Update(%v,%v,unconditonal) failed: %v", cell, filePath, err)
+	if _, err = c.secondary.Update(ctx, filePath, contents, nil); err != nil {
+		log.Warningf("secondary.Update(%v,unconditonal) failed: %v", filePath, err)
 	}
 	return primaryVersion, nil
 }
 
-// Get is part of the topo.Backend interface.
-func (tee *Tee) Get(ctx context.Context, cell, filePath string) ([]byte, topo.Version, error) {
-	return tee.primary.Get(ctx, cell, filePath)
+// Get is part of the topo.Conn interface.
+func (c *TeeConn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
+	return c.primary.Get(ctx, filePath)
 }
 
-// Delete is part of the topo.Backend interface.
-func (tee *Tee) Delete(ctx context.Context, cell, filePath string, version topo.Version) error {
+// Delete is part of the topo.Conn interface.
+func (c *TeeConn) Delete(ctx context.Context, filePath string, version topo.Version) error {
 	// If primary fails, no need to go further.
-	if err := tee.primary.Delete(ctx, cell, filePath, version); err != nil {
+	if err := c.primary.Delete(ctx, filePath, version); err != nil {
 		return err
 	}
 
 	// Always do an unconditonal delete on secondary.
-	if err := tee.secondary.Delete(ctx, cell, filePath, nil); err != nil && err != topo.ErrNoNode {
+	if err := c.secondary.Delete(ctx, filePath, nil); err != nil && err != topo.ErrNoNode {
 		// Secondary didn't work, and the node wasn't gone already.
-		log.Warningf("secondary.Delete(%v,%v) failed: %v", cell, filePath, err)
+		log.Warningf("secondary.Delete(%v) failed: %v", filePath, err)
 	}
 
 	return nil
 }
 
-// Watch is part of the topo.Backend interface
-func (tee *Tee) Watch(ctx context.Context, cell, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
-	return tee.primary.Watch(ctx, cell, filePath)
+// Watch is part of the topo.Conn interface
+func (c *TeeConn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
+	return c.primary.Watch(ctx, filePath)
 }
 
 //
@@ -148,34 +163,32 @@ func (tee *Tee) Watch(ctx context.Context, cell, filePath string) (*topo.WatchDa
 
 // teeTopoLockDescriptor implements the topo.LockDescriptor interface.
 type teeTopoLockDescriptor struct {
-	tee                  *Tee
-	cell                 string
+	c                    *TeeConn
 	dirPath              string
 	firstLockDescriptor  topo.LockDescriptor
 	secondLockDescriptor topo.LockDescriptor
 }
 
-// Lock is part of the topo.Backend interface.
-func (tee *Tee) Lock(ctx context.Context, cell, dirPath, contents string) (topo.LockDescriptor, error) {
+// Lock is part of the topo.Conn interface.
+func (c *TeeConn) Lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	// Lock lockFirst.
-	fLD, err := tee.lockFirst.Lock(ctx, cell, dirPath, contents)
+	fLD, err := c.lockFirst.Lock(ctx, dirPath, contents)
 	if err != nil {
 		return nil, err
 	}
 
 	// Lock lockSecond.
-	sLD, err := tee.lockSecond.Lock(ctx, cell, dirPath, contents)
+	sLD, err := c.lockSecond.Lock(ctx, dirPath, contents)
 	if err != nil {
 		if err := fLD.Unlock(ctx); err != nil {
-			log.Warningf("Failed to unlock lockFirst after failed lockSecond lock for %v, %v: %v", cell, dirPath, err)
+			log.Warningf("Failed to unlock lockFirst after failed lockSecond lock for %v: %v", dirPath, err)
 		}
 		return nil, err
 	}
 
 	// Remember both locks in teeTopoLockDescriptor.
 	return &teeTopoLockDescriptor{
-		tee:                  tee,
-		cell:                 cell,
+		c:                    c,
 		dirPath:              dirPath,
 		firstLockDescriptor:  fLD,
 		secondLockDescriptor: sLD,
@@ -190,14 +203,14 @@ func (ld *teeTopoLockDescriptor) Unlock(ctx context.Context) error {
 
 	if serr != nil {
 		if ferr != nil {
-			log.Warningf("First Unlock(%v, %v) failed: %v", ld.cell, ld.dirPath, ferr)
+			log.Warningf("First Unlock(%v) failed: %v", ld.dirPath, ferr)
 		}
 		return serr
 	}
 	return ferr
 }
 
-// NewMasterParticipation is part of the topo.Server interface
-func (tee *Tee) NewMasterParticipation(name, id string) (topo.MasterParticipation, error) {
-	return tee.primary.NewMasterParticipation(name, id)
+// NewMasterParticipation is part of the topo.Conn interface.
+func (c *TeeConn) NewMasterParticipation(name, id string) (topo.MasterParticipation, error) {
+	return c.primary.NewMasterParticipation(name, id)
 }

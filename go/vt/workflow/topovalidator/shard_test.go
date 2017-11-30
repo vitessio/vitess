@@ -49,7 +49,11 @@ func TestShard(t *testing.T) {
 
 	// Hack the zookeeper backend to create an error for GetShard.
 	// 'a' is not a valid proto-encoded value.
-	if _, err := ts.Impl.Update(ctx, topo.GlobalCell, path.Join("/keyspaces", keyspace, "shards", shard, "Shard"), []byte{'a'}, nil); err != nil {
+	conn, err := ts.ConnForCell(ctx, topo.GlobalCell)
+	if err != nil {
+		t.Fatalf("ConnForCell() failed: %v", err)
+	}
+	if _, err := conn.Update(ctx, path.Join("/keyspaces", keyspace, "shards", shard, "Shard"), []byte{'a'}, nil); err != nil {
 		t.Fatalf("failed to hack the shard: %v", err)
 	}
 

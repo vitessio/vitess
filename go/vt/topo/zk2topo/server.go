@@ -17,106 +17,42 @@ limitations under the License.
 package zk2topo
 
 import (
-	"fmt"
-	"path"
-	"sync"
-
-	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
-
 	"github.com/youtube/vitess/go/vt/topo"
-
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 const (
 	// Path elements
-
-	cellsPath     = "cells"
 	locksPath     = "locks"
 	electionsPath = "elections"
 )
-
-// instance is holding a Zookeeper connection, and the root directory
-// to use on it. It is used for the global cell, and for individual cells.
-type instance struct {
-	root string
-	conn Conn
-}
 
 // Factory is the zookeeper topo.Factory implementation.
 type Factory struct{}
 
 // Create is part of the topo.Factory interface.
-func (f Factory) Create(serverAddr, root string) (topo.Impl, error) {
+func (f Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
 	return NewServer(serverAddr, root), nil
 }
 
-// Server is the zookeeper topo.Impl implementation.
+// Server is the zookeeper topo.Conn implementation.
 type Server struct {
-	// mu protects the following fields.
-	mu sync.Mutex
-	// instances is a map of cell name to instance.
-	instances map[string]*instance
+	root string
+	conn Conn
 }
 
-// NewServer returns a Server connecting to real Zookeeper processes.
+// NewServer returns a topo.Conn connecting to real Zookeeper processes.
 func NewServer(serverAddr, root string) *Server {
 	return &Server{
-		instances: map[string]*instance{
-			topo.GlobalCell: {
-				root: root,
-				conn: newRealConn(serverAddr),
-			},
-		},
+		root: root,
+		conn: newRealConn(serverAddr),
 	}
 }
 
+// Close is part of topo.Conn interface.
+func (zs *Server) Close() {
+	zs.conn.Close()
+	zs.conn = nil
+}
 func init() {
 	topo.RegisterFactory("zk2", Factory{})
-}
-
-// connForCell returns the Conn and root for a cell. It creates it if
-// it doesn't exist.
-func (zs *Server) connForCell(ctx context.Context, cell string) (Conn, string, error) {
-	zs.mu.Lock()
-	defer zs.mu.Unlock()
-	ins, ok := zs.instances[cell]
-	if ok {
-		return ins.conn, ins.root, nil
-	}
-
-	// We do not have a connection yet, let's try to read the CellInfo.
-	// We can't use zs.Get() as we are holding the lock.
-	ins, ok = zs.instances[topo.GlobalCell]
-	if !ok {
-		// This should not happen, as we always create and
-		// keep the 'global' record entry.
-		return nil, "", fmt.Errorf("programming error: no global cell, cannot read CellInfo for cell %v", cell)
-	}
-	zkPath := path.Join(ins.root, cellsPath, cell, topo.CellInfoFile)
-	data, _, err := ins.conn.Get(ctx, zkPath)
-	if err != nil {
-		return nil, "", convertError(err)
-	}
-	ci := &topodatapb.CellInfo{}
-	if err := proto.Unmarshal(data, ci); err != nil {
-		return nil, "", fmt.Errorf("cannot Unmarshal CellInfo for cell %v: %v", cell, err)
-	}
-	ins = &instance{
-		root: ci.Root,
-		conn: Connect(ci.ServerAddress),
-	}
-	zs.instances[cell] = ins
-	return ins.conn, ins.root, nil
-}
-
-// Close is part of topo.Impl interface.
-func (zs *Server) Close() {
-	zs.mu.Lock()
-	defer zs.mu.Unlock()
-	for _, ins := range zs.instances {
-		ins.conn.Close()
-	}
-	zs.instances = nil
 }

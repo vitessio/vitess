@@ -14,11 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package memorytopo contains an implementation of the topo.Backend
-// API based on an in-process memory map.
-//
-// It also contains the plumbing to make it a topo.Impl as well.
-// Eventually we will ove the difference to go/vt/topo.
+// Package memorytopo contains an implementation of the topo.Factory /
+// topo.Conn interfaces based on an in-memory tree of data.
+// It is constructed with an immutable set of cells.
 package memorytopo
 
 import (
@@ -44,12 +42,15 @@ var (
 	nextWatchIndex = 0
 )
 
-// MemoryTopo is a memory-based implementation of topo.Backend.  It
+// Factory is a memory-based implementation of topo.Factory.  It
 // takes a file-system like approach, with directories at each level
 // being an actual directory node. This is meant to be closer to
 // file-system like servers, like ZooKeeper or Chubby. etcd or Consul
 // implementations would be closer to a node-based implementation.
-type MemoryTopo struct {
+//
+// It contains a single tree of nodes. Each cell topo.Conn will use
+// a sub-directory in that tree.
+type Factory struct {
 	// mu protects the following fields.
 	mu sync.Mutex
 	// cells is the toplevel map that has one entry per cell.
@@ -60,6 +61,32 @@ type MemoryTopo struct {
 	// version at 1. It is initialized with a random number,
 	// so if we have two implementations, the numbers won't match.
 	generation uint64
+}
+
+// Create is part of the topo.Factory interface.
+func (f *Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, ok := f.cells[cell]; !ok {
+		return nil, topo.ErrNoNode
+	}
+	return &Conn{
+		factory: f,
+		cell:    cell,
+	}, nil
+}
+
+// Conn implements the topo.Conn interface. It remembers the cell, and
+// points at the Factory that has all the data.
+type Conn struct {
+	factory *Factory
+	cell    string
+}
+
+// Close is part of the topo.Conn interface.
+// It nils out factory, so any subsequent call will panic.
+func (c *Conn) Close() {
+	c.factory = nil
 }
 
 // node contains a directory or a file entry.
@@ -91,64 +118,56 @@ func (n *node) isDirectory() bool {
 	return n.children != nil
 }
 
-// New returns a new MemoryTopo for all the cells. It will create one
+// NewServer returns a new MemoryTopo for all the cells. It will create one
 // cell for each parameter passed in.  It will log.Fatal out in case
 // of a problem.
-func New(cells ...string) *MemoryTopo {
-	mt := &MemoryTopo{
+func NewServer(cells ...string) *topo.Server {
+	f := &Factory{
 		cells:      make(map[string]*node),
 		generation: uint64(rand.Int63n(2 ^ 60)),
 	}
-	mt.cells[topo.GlobalCell] = mt.newDirectory(topo.GlobalCell, nil)
+	f.cells[topo.GlobalCell] = f.newDirectory(topo.GlobalCell, nil)
 
 	ctx := context.Background()
-	ts := &topo.Server{Impl: mt}
+	ts, err := topo.NewWithFactory(f, "" /*serverAddress*/, "" /*root*/)
+	if err != nil {
+		log.Fatalf("topo.NewWithFactory() failed: %v", err)
+	}
 	for _, cell := range cells {
-		mt.cells[cell] = mt.newDirectory(cell, nil)
-		if err := ts.CreateCellInfo(ctx, cell, &topodatapb.CellInfo{
-			Root: "/",
-		}); err != nil {
+		f.cells[cell] = f.newDirectory(cell, nil)
+		if err := ts.CreateCellInfo(ctx, cell, &topodatapb.CellInfo{}); err != nil {
 			log.Fatalf("ts.CreateCellInfo(%v) failed: %v", cell, err)
 		}
 	}
-	return mt
+	return ts
 }
 
-// NewServer returns a topo.Server based on a MemoryTopo.
-func NewServer(cells ...string) *topo.Server {
-	return &topo.Server{Impl: New(cells...)}
+func (f *Factory) getNextVersion() uint64 {
+	f.generation++
+	return f.generation
 }
 
-// Close is part of the topo.Impl interface.
-func (mt *MemoryTopo) Close() {
-}
-
-func (mt *MemoryTopo) getNextVersion() uint64 {
-	mt.generation++
-	return mt.generation
-}
-
-func (mt *MemoryTopo) newFile(name string, contents []byte, parent *node) *node {
+func (f *Factory) newFile(name string, contents []byte, parent *node) *node {
 	return &node{
 		name:     name,
-		version:  mt.getNextVersion(),
+		version:  f.getNextVersion(),
 		contents: contents,
 		parent:   parent,
 		watches:  make(map[int]chan *topo.WatchData),
 	}
 }
 
-func (mt *MemoryTopo) newDirectory(name string, parent *node) *node {
+func (f *Factory) newDirectory(name string, parent *node) *node {
 	return &node{
 		name:     name,
-		version:  mt.getNextVersion(),
+		version:  f.getNextVersion(),
 		children: make(map[string]*node),
 		parent:   parent,
 	}
 }
 
-func (mt *MemoryTopo) nodeByPath(cell, filePath string) *node {
-	n, ok := mt.cells[cell]
+func (f *Factory) nodeByPath(cell, filePath string) *node {
+	n, ok := f.cells[cell]
 	if !ok {
 		return nil
 	}
@@ -173,8 +192,8 @@ func (mt *MemoryTopo) nodeByPath(cell, filePath string) *node {
 	return n
 }
 
-func (mt *MemoryTopo) getOrCreatePath(cell, filePath string) *node {
-	n, ok := mt.cells[cell]
+func (f *Factory) getOrCreatePath(cell, filePath string) *node {
+	n, ok := f.cells[cell]
 	if !ok {
 		return nil
 	}
@@ -192,7 +211,7 @@ func (mt *MemoryTopo) getOrCreatePath(cell, filePath string) *node {
 		child, ok := n.children[part]
 		if !ok {
 			// Path doesn't exist, create it.
-			child = mt.newDirectory(part, n)
+			child = f.newDirectory(part, n)
 			n.children[part] = child
 		}
 		n = child
@@ -201,14 +220,14 @@ func (mt *MemoryTopo) getOrCreatePath(cell, filePath string) *node {
 }
 
 // recursiveDelete deletes a node and its parent directory if empty.
-func (mt *MemoryTopo) recursiveDelete(n *node) {
+func (f *Factory) recursiveDelete(n *node) {
 	parent := n.parent
 	if parent == nil {
 		return
 	}
 	delete(parent.children, n.name)
 	if len(parent.children) == 0 {
-		mt.recursiveDelete(parent)
+		f.recursiveDelete(parent)
 	}
 }
 

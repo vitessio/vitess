@@ -25,20 +25,20 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// Create is part of topo.Backend interface.
-func (mt *MemoryTopo) Create(ctx context.Context, cell, filePath string, contents []byte) (topo.Version, error) {
+// Create is part of topo.Conn interface.
+func (c *Conn) Create(ctx context.Context, filePath string, contents []byte) (topo.Version, error) {
 	if contents == nil {
 		contents = []byte{}
 	}
 
-	mt.mu.Lock()
-	defer mt.mu.Unlock()
+	c.factory.mu.Lock()
+	defer c.factory.mu.Unlock()
 
 	// Get the parent dir.
 	dir, file := path.Split(filePath)
-	p := mt.getOrCreatePath(cell, dir)
+	p := c.factory.getOrCreatePath(c.cell, dir)
 	if p == nil {
-		return nil, fmt.Errorf("trying to create file %v in cell %v in a path that contains files", filePath, cell)
+		return nil, fmt.Errorf("trying to create file %v in cell %v in a path that contains files", filePath, c.cell)
 	}
 
 	// Check the file doesn't already exist.
@@ -47,31 +47,31 @@ func (mt *MemoryTopo) Create(ctx context.Context, cell, filePath string, content
 	}
 
 	// Create the file.
-	n := mt.newFile(file, contents, p)
+	n := c.factory.newFile(file, contents, p)
 	p.children[file] = n
 	return NodeVersion(n.version), nil
 }
 
-// Update is part of topo.Backend interface.
-func (mt *MemoryTopo) Update(ctx context.Context, cell, filePath string, contents []byte, version topo.Version) (topo.Version, error) {
+// Update is part of topo.Conn interface.
+func (c *Conn) Update(ctx context.Context, filePath string, contents []byte, version topo.Version) (topo.Version, error) {
 	if contents == nil {
 		contents = []byte{}
 	}
 
-	mt.mu.Lock()
-	defer mt.mu.Unlock()
+	c.factory.mu.Lock()
+	defer c.factory.mu.Unlock()
 
 	// Get the parent dir, we'll need it in case of creation.
 	dir, file := path.Split(filePath)
-	p := mt.nodeByPath(cell, dir)
+	p := c.factory.nodeByPath(c.cell, dir)
 	if p == nil {
 		// Parent doesn't exist, let's create it if we need to.
 		if version != nil {
 			return nil, topo.ErrNoNode
 		}
-		p = mt.getOrCreatePath(cell, dir)
+		p = c.factory.getOrCreatePath(c.cell, dir)
 		if p == nil {
-			return nil, fmt.Errorf("trying to create file %v in cell %v in a path that contains files", filePath, cell)
+			return nil, fmt.Errorf("trying to create file %v in cell %v in a path that contains files", filePath, c.cell)
 		}
 	}
 
@@ -82,14 +82,14 @@ func (mt *MemoryTopo) Update(ctx context.Context, cell, filePath string, content
 		if version != nil {
 			return nil, topo.ErrNoNode
 		}
-		n = mt.newFile(file, contents, p)
+		n = c.factory.newFile(file, contents, p)
 		p.children[file] = n
 		return NodeVersion(n.version), nil
 	}
 
 	// Check if it's a directory.
 	if n.isDirectory() {
-		return nil, fmt.Errorf("Update(%v, %v) failed: it's a directory", cell, filePath)
+		return nil, fmt.Errorf("Update(%v, %v) failed: it's a directory", c.cell, filePath)
 	}
 
 	// Check the version.
@@ -98,7 +98,7 @@ func (mt *MemoryTopo) Update(ctx context.Context, cell, filePath string, content
 	}
 
 	// Now we can update.
-	n.version = mt.getNextVersion()
+	n.version = c.factory.getNextVersion()
 	n.contents = contents
 
 	// Call the watches
@@ -112,31 +112,31 @@ func (mt *MemoryTopo) Update(ctx context.Context, cell, filePath string, content
 	return NodeVersion(n.version), nil
 }
 
-// Get is part of topo.Backend interface.
-func (mt *MemoryTopo) Get(ctx context.Context, cell, filePath string) ([]byte, topo.Version, error) {
-	mt.mu.Lock()
-	defer mt.mu.Unlock()
+// Get is part of topo.Conn interface.
+func (c *Conn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
+	c.factory.mu.Lock()
+	defer c.factory.mu.Unlock()
 
 	// Get the node.
-	n := mt.nodeByPath(cell, filePath)
+	n := c.factory.nodeByPath(c.cell, filePath)
 	if n == nil {
 		return nil, nil, topo.ErrNoNode
 	}
 	if n.contents == nil {
 		// it's a directory
-		return nil, nil, fmt.Errorf("cannot Get() directory %v in cell %v", filePath, cell)
+		return nil, nil, fmt.Errorf("cannot Get() directory %v in cell %v", filePath, c.cell)
 	}
 	return n.contents, NodeVersion(n.version), nil
 }
 
-// Delete is part of topo.Backend interface.
-func (mt *MemoryTopo) Delete(ctx context.Context, cell, filePath string, version topo.Version) error {
-	mt.mu.Lock()
-	defer mt.mu.Unlock()
+// Delete is part of topo.Conn interface.
+func (c *Conn) Delete(ctx context.Context, filePath string, version topo.Version) error {
+	c.factory.mu.Lock()
+	defer c.factory.mu.Unlock()
 
 	// Get the parent dir.
 	dir, file := path.Split(filePath)
-	p := mt.nodeByPath(cell, dir)
+	p := c.factory.nodeByPath(c.cell, dir)
 	if p == nil {
 		return topo.ErrNoNode
 	}
@@ -149,7 +149,7 @@ func (mt *MemoryTopo) Delete(ctx context.Context, cell, filePath string, version
 
 	// Check if it's a directory.
 	if n.isDirectory() {
-		return fmt.Errorf("Delete(%v, %v) failed: it's a directory", cell, filePath)
+		return fmt.Errorf("Delete(%v, %v) failed: it's a directory", c.cell, filePath)
 	}
 
 	// Check the version.
@@ -158,7 +158,7 @@ func (mt *MemoryTopo) Delete(ctx context.Context, cell, filePath string, version
 	}
 
 	// Now we can delete.
-	mt.recursiveDelete(n)
+	c.factory.recursiveDelete(n)
 
 	// Call the watches
 	for _, w := range n.watches {

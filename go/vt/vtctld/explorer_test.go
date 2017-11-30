@@ -206,7 +206,7 @@ func TestHandlePathTablet(t *testing.T) {
 func TestHandleBadPath(t *testing.T) {
 	input := "/foo"
 	cells := []string{"cell1", "cell2", "cell3"}
-	want := "node doesn't exist"
+	want := "Invalid cell: node doesn't exist"
 
 	ts := memorytopo.NewServer(cells...)
 	ex := newBackendExplorer(ts)

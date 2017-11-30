@@ -151,7 +151,7 @@ func (ki *KeyspaceInfo) ComputeCellServedFrom(cell string) []*topodatapb.SrvKeys
 	return result
 }
 
-// CreateKeyspace wraps the underlying Impl.CreateKeyspace
+// CreateKeyspace wraps the underlying Conn.Create
 // and dispatches the event.
 func (ts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error {
 	data, err := proto.Marshal(value)
@@ -160,7 +160,7 @@ func (ts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *to
 	}
 
 	keyspacePath := path.Join(KeyspacesPath, keyspace, KeyspaceFile)
-	if _, err := ts.Impl.Create(ctx, GlobalCell, keyspacePath, data); err != nil {
+	if _, err := ts.globalCell.Create(ctx, keyspacePath, data); err != nil {
 		return err
 	}
 	event.Dispatch(&events.KeyspaceChange{
@@ -174,7 +174,7 @@ func (ts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *to
 // GetKeyspace reads the given keyspace and returns it
 func (ts *Server) GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceInfo, error) {
 	keyspacePath := path.Join(KeyspacesPath, keyspace, KeyspaceFile)
-	data, version, err := ts.Impl.Get(ctx, GlobalCell, keyspacePath)
+	data, version, err := ts.globalCell.Get(ctx, keyspacePath)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +203,7 @@ func (ts *Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 		return err
 	}
 	keyspacePath := path.Join(KeyspacesPath, ki.keyspace, KeyspaceFile)
-	version, err := ts.Impl.Update(ctx, GlobalCell, keyspacePath, data, ki.version)
+	version, err := ts.globalCell.Update(ctx, keyspacePath, data, ki.version)
 	if err != nil {
 		return err
 	}
@@ -254,11 +254,11 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) 
 	return result, nil
 }
 
-// DeleteKeyspace wraps the underlying Impl.DeleteKeyspace
+// DeleteKeyspace wraps the underlying Conn.Delete
 // and dispatches the event.
 func (ts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
 	keyspacePath := path.Join(KeyspacesPath, keyspace, KeyspaceFile)
-	if err := ts.Impl.Delete(ctx, GlobalCell, keyspacePath, nil); err != nil {
+	if err := ts.globalCell.Delete(ctx, keyspacePath, nil); err != nil {
 		return err
 	}
 	event.Dispatch(&events.KeyspaceChange{
@@ -271,7 +271,7 @@ func (ts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
 
 // GetKeyspaces returns the list of keyspaces in the topology.
 func (ts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
-	children, err := ts.Impl.ListDir(ctx, GlobalCell, KeyspacesPath)
+	children, err := ts.globalCell.ListDir(ctx, KeyspacesPath)
 	switch err {
 	case nil:
 		return children, nil
@@ -285,7 +285,7 @@ func (ts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
 // GetShardNames returns the list of shards in a keyspace.
 func (ts *Server) GetShardNames(ctx context.Context, keyspace string) ([]string, error) {
 	shardsPath := path.Join(KeyspacesPath, keyspace, ShardsPath)
-	children, err := ts.ListDir(ctx, GlobalCell, shardsPath)
+	children, err := ts.globalCell.ListDir(ctx, shardsPath)
 	if err == ErrNoNode {
 		// The directory doesn't exist, let's see if the keyspace
 		// is here or not.

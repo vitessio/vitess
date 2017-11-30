@@ -223,7 +223,7 @@ func (l *Lock) lockKeyspace(ctx context.Context, ts *Server, keyspace string) (L
 	if err != nil {
 		return nil, err
 	}
-	return ts.Lock(ctx, GlobalCell, keyspacePath, j)
+	return ts.globalCell.Lock(ctx, keyspacePath, j)
 }
 
 // unlockKeyspace unlocks a previously locked keyspace.
@@ -368,7 +368,7 @@ func (l *Lock) lockShard(ctx context.Context, ts *Server, keyspace, shard string
 	if err != nil {
 		return nil, err
 	}
-	return ts.Lock(ctx, GlobalCell, shardPath, j)
+	return ts.globalCell.Lock(ctx, shardPath, j)
 }
 
 // unlockShard unlocks a previously locked shard.

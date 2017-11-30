@@ -40,7 +40,7 @@ func TestCellInfo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetCellInfo failed: %v", err)
 	}
-	if ci.Root != "/" {
+	if ci.Root != "" {
 		t.Fatalf("unexpected CellInfo: %v", ci)
 	}
 

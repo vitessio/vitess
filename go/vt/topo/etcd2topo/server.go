@@ -34,8 +34,10 @@ We follow these conventions within this package:
 package etcd2topo
 
 import (
-	"sync"
+	"strings"
+	"time"
 
+	"github.com/coreos/etcd/clientv3"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -43,50 +45,40 @@ import (
 type Factory struct{}
 
 // Create is part of the topo.Factory interface.
-func (f Factory) Create(serverAddr, root string) (topo.Impl, error) {
+func (f Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
 	return NewServer(serverAddr, root)
 }
 
 // Server is the implementation of topo.Server for etcd.
 type Server struct {
-	// global is a client configured to talk to a list of etcd instances
-	// representing the global etcd cluster.
-	global *cellClient
+	// cli is the v3 client.
+	cli *clientv3.Client
 
-	// mu protects the cells variable.
-	mu sync.Mutex
-	// cells contains clients configured to talk to a list of
-	// etcd instances representing local etcd clusters. These
-	// should be accessed with the Server.clientForCell() method, which
-	// will read the list of addresses for that cell from the
-	// global cluster and create clients as needed.
-	cells map[string]*cellClient
+	// root is the root path for this client.
+	root string
 }
 
 // Close implements topo.Server.Close.
 // It will nil out the global and cells fields, so any attempt to
 // re-use this server will panic.
 func (s *Server) Close() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, c := range s.cells {
-		c.close()
-	}
-	s.cells = nil
-
-	s.global.close()
-	s.global = nil
+	s.cli.Close()
+	s.cli = nil
 }
 
 // NewServer returns a new etcdtopo.Server.
 func NewServer(serverAddr, root string) (*Server, error) {
-	global, err := newCellClient(serverAddr, root)
+	cli, err := clientv3.New(clientv3.Config{
+		Endpoints:   strings.Split(serverAddr, ","),
+		DialTimeout: 5 * time.Second,
+	})
 	if err != nil {
 		return nil, err
 	}
+
 	return &Server{
-		global: global,
-		cells:  make(map[string]*cellClient),
+		cli:  cli,
+		root: root,
 	}, nil
 }
 

@@ -95,8 +95,13 @@ func runWorkflowManagerElection(ts *topo.Server) {
 	// We use servenv.ListeningURL which is only populated during Run,
 	// so we have to start this with OnRun.
 	servenv.OnRun(func() {
-		var err error
-		mp, err = ts.NewMasterParticipation("vtctld", servenv.ListeningURL.Host)
+		ctx := context.Background()
+		conn, err := ts.ConnForCell(ctx, topo.GlobalCell)
+		if err != nil {
+			log.Errorf("Cannot get global cell topo connection, disabling workflow manager: %v", err)
+		}
+
+		mp, err = conn.NewMasterParticipation("vtctld", servenv.ListeningURL.Host)
 		if err != nil {
 			log.Errorf("Cannot start MasterParticipation, disabling workflow manager: %v", err)
 			return
