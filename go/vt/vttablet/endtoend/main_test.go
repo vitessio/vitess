@@ -30,6 +30,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vttest"
+
+	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
 )
 
 var (
@@ -42,25 +44,42 @@ func TestMain(m *testing.M) {
 	tabletenv.Init()
 
 	exitCode := func() int {
-		hdl, err := vttest.LaunchVitess(vttest.MySQLOnly("vttest"), vttest.Schema(testSchema), vttest.Verbose(testing.Verbose()))
-		if err != nil {
+		// Launch MySQL.
+		// We need a Keyspace in the topology, so the DbName is set.
+		// We need a Shard too, so the database 'vttest' is created.
+		cfg := vttest.Config{
+			Topology: &vttestpb.VTTestTopology{
+				Keyspaces: []*vttestpb.Keyspace{
+					{
+						Name: "vttest",
+						Shards: []*vttestpb.Shard{
+							{
+								Name:           "0",
+								DbNameOverride: "vttest",
+							},
+						},
+					},
+				},
+			},
+			OnlyMySQL: true,
+		}
+		if err := cfg.InitSchemas("vttest", testSchema, nil); err != nil {
+			fmt.Fprintf(os.Stderr, "InitSchemas failed: %v\n", err)
+			return 1
+		}
+		defer os.RemoveAll(cfg.SchemaDir)
+		cluster := vttest.LocalCluster{
+			Config: cfg,
+		}
+		if err := cluster.Setup(); err != nil {
 			fmt.Fprintf(os.Stderr, "could not launch mysql: %v\n", err)
 			return 1
 		}
-		defer hdl.TearDown()
-		connParams, err = hdl.MySQLConnParams()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "could not fetch mysql params: %v\n", err)
-			return 1
-		}
+		defer cluster.TearDown()
 
-		connAppDebugParams, err = hdl.MySQLAppDebugConnParams()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "could not fetch mysql appdebug params: %v\n", err)
-			return 1
-		}
-
-		err = framework.StartServer(connParams, connAppDebugParams)
+		connParams = cluster.MySQLConnParams()
+		connAppDebugParams = cluster.MySQLAppDebugConnParams()
+		err := framework.StartServer(connParams, connAppDebugParams)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1

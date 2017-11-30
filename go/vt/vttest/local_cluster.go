@@ -175,6 +175,15 @@ func (db *LocalCluster) MySQLConnParams() mysql.ConnParams {
 	return db.mysql.Params(db.DbName())
 }
 
+// MySQLAppDebugConnParams returns a mysql.ConnParams struct that can be used
+// to connect directly to the mysqld service in the self-contained cluster,
+// using the appdebug user. It's valid only if you used MySQLOnly option.
+func (db *LocalCluster) MySQLAppDebugConnParams() mysql.ConnParams {
+	connParams := db.MySQLConnParams()
+	connParams.Uname = "vt_appdebug"
+	return connParams
+}
+
 // Setup brings up the self-contained Vitess cluster by spinning up
 // MySQL and Vitess instances. The spawned processes will be running
 // until the TearDown() method is called.
