@@ -236,7 +236,9 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 }
 
 func executorExec(executor *Executor, sql string, bv map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return executor.Execute(context.Background(),
+	return executor.Execute(
+		context.Background(),
+		"TestExecute",
 		masterSession,
 		sql,
 		bv)

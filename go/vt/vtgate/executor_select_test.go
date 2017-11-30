@@ -59,6 +59,7 @@ func TestExecDBA(t *testing.T) {
 	query := "select * from INFORMATION_SCHEMA.foo"
 	_, err := executor.Execute(
 		context.Background(),
+		"TestExecDBA",
 		&vtgatepb.Session{TargetString: "TestExecutor"},
 		query,
 		map[string]*querypb.BindVariable{},
