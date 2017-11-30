@@ -30,6 +30,7 @@ func Dial(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(*grpccommon.MaxMessageSize),
 			grpc.MaxCallSendMsgSize(*grpccommon.MaxMessageSize),
+			grpc.FailFast(false),
 		),
 	}
 	newopts = append(newopts, opts...)
