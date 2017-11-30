@@ -30,6 +30,8 @@ import (
 	vtenv "github.com/youtube/vitess/go/vt/env"
 	"github.com/youtube/vitess/go/vt/tlstest"
 	"github.com/youtube/vitess/go/vt/vttest"
+
+	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
 )
 
 var (
@@ -162,25 +164,34 @@ ssl-key=%v/server-key.pem
 		}
 
 		// Launch MySQL.
-		hdl, err := vttest.LaunchVitess(
-			vttest.MySQLOnly("vttest"),
-			vttest.NoStderr(),
-			vttest.ExtraMyCnf(extraMyCnf))
-		if err != nil {
+		// We need a Keyspace in the topology, so the DbName is set.
+		// We need a Shard too, so the database 'vttest' is created.
+		cfg := vttest.Config{
+			Topology: &vttestpb.VTTestTopology{
+				Keyspaces: []*vttestpb.Keyspace{
+					{
+						Name: "vttest",
+						Shards: []*vttestpb.Shard{
+							{
+								Name:           "0",
+								DbNameOverride: "vttest",
+							},
+						},
+					},
+				},
+			},
+			OnlyMySQL:  true,
+			ExtraMyCnf: []string{extraMyCnf},
+		}
+		cluster := vttest.LocalCluster{
+			Config: cfg,
+		}
+		if err := cluster.Setup(); err != nil {
 			fmt.Fprintf(os.Stderr, "could not launch mysql: %v\n", err)
 			return 1
 		}
-		defer func() {
-			err = hdl.TearDown()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "hdl.TearDown failed: %v", err)
-			}
-		}()
-		connParams, err = hdl.MySQLConnParams()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "could not fetch mysql params: %v\n", err)
-			return 1
-		}
+		defer cluster.TearDown()
+		connParams = cluster.MySQLConnParams()
 
 		// Add the SSL parts, but they're not enabled until
 		// the flag is set.
@@ -189,7 +200,8 @@ ssl-key=%v/server-key.pem
 		connParams.SslKey = path.Join(root, "client-key.pem")
 
 		// Uncomment to sleep and be able to connect to MySQL
-		// fmt.Printf("Connect to MySQL using parameters: %v\n", connParams)
+		// fmt.Printf("Connect to MySQL using parameters:\n")
+		// json.NewEncoder(os.Stdout).Encode(connParams)
 		// time.Sleep(10 * time.Minute)
 
 		return m.Run()
