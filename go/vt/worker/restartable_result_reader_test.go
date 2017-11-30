@@ -30,10 +30,12 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
+	"github.com/youtube/vitess/go/vt/vttablet/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletconn"
 	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -184,11 +186,11 @@ func TestGenerateQuery(t *testing.T) {
 func TestNewRestartableResultReader(t *testing.T) {
 	wantErr := errors.New("restartable_result_reader_test.go: context canceled")
 
-	tabletconn.RegisterDialer("fake_dialer", func(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer("TestNewRestartableResultReader", func(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.QueryService, error) {
 		return nil, wantErr
 	})
 	protocol := flag.CommandLine.Lookup("tablet_protocol").Value.String()
-	flag.Set("tablet_protocol", "fake_dialer")
+	flag.Set("tablet_protocol", "TestNewRestartableResultReader")
 	// Restore the previous flag value after the test.
 	defer flag.Set("tablet_protocol", protocol)
 
@@ -213,5 +215,66 @@ func TestNewRestartableResultReader(t *testing.T) {
 	_, err := NewRestartableResultReader(ctx, wr.Logger(), tp, nil /* td */, chunk{}, false)
 	if err == nil || !strings.Contains(err.Error(), wantErr.Error()) {
 		t.Fatalf("NewRestartableResultReader() should have failed because the context is canceled: %v", err)
+	}
+}
+
+// tqsCallCount is for testing the failure mode for TestNewRestartableResultReaderRetry.
+var tqsCallCount int
+
+// testQueryServiceForRestartable is for testing the failure mode for TestNewRestartableResultReaderRetry.
+// It will fail the first call to StremExecute and succeed on subsequent ones.
+type testQueryServiceForRestartable struct {
+	queryservice.QueryService
+}
+
+func newTestQueryServiceForRestartable() *testQueryServiceForRestartable {
+	return &testQueryServiceForRestartable{QueryService: fakes.ErrorQueryService}
+}
+
+func (tqs *testQueryServiceForRestartable) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+	tqsCallCount++
+	if tqsCallCount == 1 {
+		return errors.New("failing first call")
+	}
+	return callback(&sqltypes.Result{})
+}
+
+func TestNewRestartableResultReaderRetry(t *testing.T) {
+	// Set a low retry time to speed up the test
+	saved := *executeFetchRetryTime
+	*executeFetchRetryTime = 1 * time.Millisecond
+	defer func() { *executeFetchRetryTime = saved }()
+
+	tabletconn.RegisterDialer("TestNewRestartableResultReaderRetry", func(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.QueryService, error) {
+		return newTestQueryServiceForRestartable(), nil
+	})
+	protocol := flag.CommandLine.Lookup("tablet_protocol").Value.String()
+	flag.Set("tablet_protocol", "TestNewRestartableResultReaderRetry")
+	// Restore the previous flag value after the test.
+	defer flag.Set("tablet_protocol", protocol)
+
+	// Create dependencies e.g. a "singleTabletProvider" instance.
+	ts := memorytopo.NewServer("cell1")
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell1",
+		Uid:  1,
+	}
+	tablet := &topodatapb.Tablet{
+		Keyspace: "ks1",
+		Shard:    "-80",
+		Alias:    alias,
+	}
+	ctx := context.Background()
+	if err := ts.CreateTablet(ctx, tablet); err != nil {
+		t.Fatalf("CreateTablet failed: %v", err)
+	}
+	tp := newSingleTabletProvider(ctx, ts, alias)
+
+	if _, err := NewRestartableResultReader(ctx, wr.Logger(), tp, &tabletmanagerdatapb.TableDefinition{}, chunk{}, false); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := tqsCallCount, 2; got != want {
+		t.Errorf("callCount: %d, want %d", got, want)
 	}
 }
