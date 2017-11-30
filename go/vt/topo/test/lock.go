@@ -40,26 +40,31 @@ func checkLock(t *testing.T, ts *topo.Server) {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
+	conn, err := ts.ConnForCell(context.Background(), topo.GlobalCell)
+	if err != nil {
+		t.Fatalf("ConnForCell(global) failed: %v", err)
+	}
+
 	t.Log("===      checkLockTimeout")
-	checkLockTimeout(ctx, t, ts.Impl)
+	checkLockTimeout(ctx, t, conn)
 
 	t.Log("===      checkLockMissing")
-	checkLockMissing(ctx, t, ts.Impl)
+	checkLockMissing(ctx, t, conn)
 
 	t.Log("===      checkLockUnblocks")
-	checkLockUnblocks(ctx, t, ts.Impl)
+	checkLockUnblocks(ctx, t, conn)
 }
 
-func checkLockTimeout(ctx context.Context, t *testing.T, ts topo.Impl) {
+func checkLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace")
-	lockDescriptor, err := ts.Lock(ctx, topo.GlobalCell, keyspacePath, "")
+	lockDescriptor, err := conn.Lock(ctx, keyspacePath, "")
 	if err != nil {
 		t.Fatalf("Lock: %v", err)
 	}
 
 	// test we can't take the lock again
 	fastCtx, cancel := context.WithTimeout(ctx, timeUntilLockIsTaken)
-	if _, err := ts.Lock(fastCtx, topo.GlobalCell, keyspacePath, "again"); err != topo.ErrTimeout {
+	if _, err := conn.Lock(fastCtx, keyspacePath, "again"); err != topo.ErrTimeout {
 		t.Fatalf("Lock(again): %v", err)
 	}
 	cancel()
@@ -70,7 +75,7 @@ func checkLockTimeout(ctx context.Context, t *testing.T, ts topo.Impl) {
 		time.Sleep(timeUntilLockIsTaken)
 		cancel()
 	}()
-	if _, err := ts.Lock(interruptCtx, topo.GlobalCell, keyspacePath, "interrupted"); err != topo.ErrInterrupted {
+	if _, err := conn.Lock(interruptCtx, keyspacePath, "interrupted"); err != topo.ErrInterrupted {
 		t.Fatalf("Lock(interrupted): %v", err)
 	}
 
@@ -85,16 +90,16 @@ func checkLockTimeout(ctx context.Context, t *testing.T, ts topo.Impl) {
 }
 
 // checkLockMissing makes sure we can't lock a non-existing directory.
-func checkLockMissing(ctx context.Context, t *testing.T, ts topo.Impl) {
+func checkLockMissing(ctx context.Context, t *testing.T, conn topo.Conn) {
 	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace_666")
-	if _, err := ts.Lock(ctx, topo.GlobalCell, keyspacePath, "missing"); err == nil {
+	if _, err := conn.Lock(ctx, keyspacePath, "missing"); err == nil {
 		t.Fatalf("Lock(test_keyspace_666) worked for non-existing keyspace")
 	}
 }
 
 // checkLockUnblocks makes sure that a routine waiting on a lock
 // is unblocked when another routine frees the lock
-func checkLockUnblocks(ctx context.Context, t *testing.T, ts topo.Impl) {
+func checkLockUnblocks(ctx context.Context, t *testing.T, conn topo.Conn) {
 	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace")
 	unblock := make(chan struct{})
 	finished := make(chan struct{})
@@ -102,7 +107,7 @@ func checkLockUnblocks(ctx context.Context, t *testing.T, ts topo.Impl) {
 	// As soon as we're unblocked, we try to lock the keyspace.
 	go func() {
 		<-unblock
-		lockDescriptor, err := ts.Lock(ctx, topo.GlobalCell, keyspacePath, "unblocks")
+		lockDescriptor, err := conn.Lock(ctx, keyspacePath, "unblocks")
 		if err != nil {
 			t.Fatalf("Lock(test_keyspace) failed: %v", err)
 		}
@@ -113,7 +118,7 @@ func checkLockUnblocks(ctx context.Context, t *testing.T, ts topo.Impl) {
 	}()
 
 	// Lock the keyspace.
-	lockDescriptor2, err := ts.Lock(ctx, topo.GlobalCell, keyspacePath, "")
+	lockDescriptor2, err := conn.Lock(ctx, keyspacePath, "")
 	if err != nil {
 		t.Fatalf("Lock(test_keyspace) failed: %v", err)
 	}

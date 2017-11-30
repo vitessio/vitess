@@ -29,8 +29,8 @@ import (
 // NewMasterParticipation is part of the topo.Server interface
 func (s *Server) NewMasterParticipation(name, id string) (topo.MasterParticipation, error) {
 	// Create the lock here.
-	electionPath := path.Join(s.global.root, electionsPath, name)
-	l, err := s.global.client.LockOpts(&api.LockOptions{
+	electionPath := path.Join(s.root, electionsPath, name)
+	l, err := s.client.LockOpts(&api.LockOptions{
 		Key:   electionPath,
 		Value: []byte(id),
 	})
@@ -123,8 +123,8 @@ func (mp *consulMasterParticipation) Stop() {
 
 // GetCurrentMasterID is part of the topo.MasterParticipation interface
 func (mp *consulMasterParticipation) GetCurrentMasterID(ctx context.Context) (string, error) {
-	electionPath := path.Join(mp.s.global.root, electionsPath, mp.name)
-	pair, _, err := mp.s.global.kv.Get(electionPath, nil)
+	electionPath := path.Join(mp.s.root, electionsPath, mp.name)
+	pair, _, err := mp.s.kv.Get(electionPath, nil)
 	if err != nil {
 		return "", err
 	}

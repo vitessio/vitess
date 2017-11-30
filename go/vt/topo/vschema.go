@@ -43,17 +43,17 @@ func (ts *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vsc
 
 	if len(data) == 0 {
 		// No vschema, remove it. So we can remove the keyspace.
-		return ts.Delete(ctx, GlobalCell, nodePath, nil)
+		return ts.globalCell.Delete(ctx, nodePath, nil)
 	}
 
-	_, err = ts.Update(ctx, GlobalCell, nodePath, data, nil)
+	_, err = ts.globalCell.Update(ctx, nodePath, data, nil)
 	return err
 }
 
 // GetVSchema fetches the vschema from the topo.
 func (ts *Server) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error) {
 	nodePath := path.Join(KeyspacesPath, keyspace, VSchemaFile)
-	data, _, err := ts.Get(ctx, GlobalCell, nodePath)
+	data, _, err := ts.globalCell.Get(ctx, nodePath)
 	if err != nil {
 		return nil, err
 	}

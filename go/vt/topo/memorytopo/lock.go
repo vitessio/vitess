@@ -37,25 +37,24 @@ func convertError(err error) error {
 
 // memoryTopoLockDescriptor implements topo.LockDescriptor.
 type memoryTopoLockDescriptor struct {
-	mt      *MemoryTopo
-	cell    string
+	c       *Conn
 	dirPath string
 }
 
-// Lock is part of the topo.Backend interface.
-func (mt *MemoryTopo) Lock(ctx context.Context, cell, dirPath, contents string) (topo.LockDescriptor, error) {
+// Lock is part of the topo.Conn interface.
+func (c *Conn) Lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	for {
-		mt.mu.Lock()
+		c.factory.mu.Lock()
 
-		n := mt.nodeByPath(cell, dirPath)
+		n := c.factory.nodeByPath(c.cell, dirPath)
 		if n == nil {
-			mt.mu.Unlock()
+			c.factory.mu.Unlock()
 			return nil, topo.ErrNoNode
 		}
 
 		if l := n.lock; l != nil {
 			// Someone else has the lock. Just wait for it.
-			mt.mu.Unlock()
+			c.factory.mu.Unlock()
 			select {
 			case <-l:
 				// Node was unlocked, try again to grab it.
@@ -69,10 +68,9 @@ func (mt *MemoryTopo) Lock(ctx context.Context, cell, dirPath, contents string) 
 		// Noone has the lock, grab it.
 		n.lock = make(chan struct{})
 		n.lockContents = contents
-		mt.mu.Unlock()
+		c.factory.mu.Unlock()
 		return &memoryTopoLockDescriptor{
-			mt:      mt,
-			cell:    cell,
+			c:       c,
 			dirPath: dirPath,
 		}, nil
 	}
@@ -80,14 +78,14 @@ func (mt *MemoryTopo) Lock(ctx context.Context, cell, dirPath, contents string) 
 
 // Unlock is part of the topo.LockDescriptor interface.
 func (ld *memoryTopoLockDescriptor) Unlock(ctx context.Context) error {
-	return ld.mt.unlock(ctx, ld.cell, ld.dirPath)
+	return ld.c.unlock(ctx, ld.dirPath)
 }
 
-func (mt *MemoryTopo) unlock(ctx context.Context, cell, dirPath string) error {
-	mt.mu.Lock()
-	defer mt.mu.Unlock()
+func (c *Conn) unlock(ctx context.Context, dirPath string) error {
+	c.factory.mu.Lock()
+	defer c.factory.mu.Unlock()
 
-	n := mt.nodeByPath(cell, dirPath)
+	n := c.factory.nodeByPath(c.cell, dirPath)
 	if n == nil {
 		return topo.ErrNoNode
 	}

@@ -25,41 +25,50 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// checkFile tests the file part of the Backend API.
-// It does not use the pre-Backend API paths, to really
-// test the new functions.
-func checkFile(t *testing.T, ts topo.Impl) {
+// checkFile tests the file part of the Conn API.
+func checkFile(t *testing.T, ts *topo.Server) {
+	ctx := context.Background()
+
 	// global cell
-	checkFileInCell(t, ts, topo.GlobalCell)
+	t.Logf("===   checkFileInCell global")
+	conn, err := ts.ConnForCell(ctx, topo.GlobalCell)
+	if err != nil {
+		t.Fatalf("ConnForCell(global) failed: %v", err)
+	}
+	checkFileInCell(t, conn)
 
 	// local cell
-	checkFileInCell(t, ts, LocalCellName)
+	t.Logf("===   checkFileInCell global")
+	conn, err = ts.ConnForCell(ctx, LocalCellName)
+	if err != nil {
+		t.Fatalf("ConnForCell(test) failed: %v", err)
+	}
+	checkFileInCell(t, conn)
 }
 
-func checkFileInCell(t *testing.T, ts topo.Impl, cell string) {
-	t.Logf("===   checkFileInCell %v", cell)
+func checkFileInCell(t *testing.T, conn topo.Conn) {
 	ctx := context.Background()
 
 	// ListDir root: nothing.
-	checkListDir(ctx, t, ts, cell, "/", nil)
+	checkListDir(ctx, t, conn, "/", nil)
 
 	// Get with no file -> ErrNoNode.
-	contents, version, err := ts.Get(ctx, cell, "/myfile")
+	contents, version, err := conn.Get(ctx, "/myfile")
 	if err != topo.ErrNoNode {
 		t.Errorf("Get(non-existent) didn't return ErrNoNode but: %v", err)
 	}
 
 	// Create a file.
-	version, err = ts.Create(ctx, cell, "/myfile", []byte{'a'})
+	version, err = conn.Create(ctx, "/myfile", []byte{'a'})
 	if err != nil {
 		t.Fatalf("Create('/myfile') failed: %v", err)
 	}
 
 	// See it in the listing now.
-	checkListDir(ctx, t, ts, cell, "/", []string{"myfile"})
+	checkListDir(ctx, t, conn, "/", []string{"myfile"})
 
 	// Get should work, get the right contents and version.
-	contents, getVersion, err := ts.Get(ctx, cell, "/myfile")
+	contents, getVersion, err := conn.Get(ctx, "/myfile")
 	if err != nil {
 		t.Errorf("Get('/myfile') returned an error: %v", err)
 	} else {
@@ -72,7 +81,7 @@ func checkFileInCell(t *testing.T, ts topo.Impl, cell string) {
 	}
 
 	// Update it, make sure version changes.
-	newVersion, err := ts.Update(ctx, cell, "/myfile", []byte{'b'}, version)
+	newVersion, err := conn.Update(ctx, "/myfile", []byte{'b'}, version)
 	if err != nil {
 		t.Fatalf("Update('/myfile') failed: %v", err)
 	}
@@ -81,7 +90,7 @@ func checkFileInCell(t *testing.T, ts topo.Impl, cell string) {
 	}
 
 	// Get should work, get the right contents and version.
-	contents, getVersion, err = ts.Get(ctx, cell, "/myfile")
+	contents, getVersion, err = conn.Get(ctx, "/myfile")
 	if err != nil {
 		t.Errorf("Get('/myfile') returned an error: %v", err)
 	} else {
@@ -94,18 +103,18 @@ func checkFileInCell(t *testing.T, ts topo.Impl, cell string) {
 	}
 
 	// Try to update again with wrong version, should fail.
-	if _, err = ts.Update(ctx, cell, "/myfile", []byte{'b'}, version); err != topo.ErrBadVersion {
+	if _, err = conn.Update(ctx, "/myfile", []byte{'b'}, version); err != topo.ErrBadVersion {
 		t.Errorf("Update(bad version) didn't return ErrBadVersion but: %v", err)
 	}
 
 	// Try to update again with nil version, should work.
-	newVersion, err = ts.Update(ctx, cell, "/myfile", []byte{'c'}, nil)
+	newVersion, err = conn.Update(ctx, "/myfile", []byte{'c'}, nil)
 	if err != nil {
 		t.Errorf("Update(nil version) should have worked but got: %v", err)
 	}
 
 	// Get should work, get the right contents and version.
-	contents, getVersion, err = ts.Get(ctx, cell, "/myfile")
+	contents, getVersion, err = conn.Get(ctx, "/myfile")
 	if err != nil {
 		t.Errorf("Get('/myfile') returned an error: %v", err)
 	} else {
@@ -118,41 +127,41 @@ func checkFileInCell(t *testing.T, ts topo.Impl, cell string) {
 	}
 
 	// Try to update again with empty content, should work.
-	newVersion, err = ts.Update(ctx, cell, "/myfile", nil, newVersion)
+	newVersion, err = conn.Update(ctx, "/myfile", nil, newVersion)
 	if err != nil {
 		t.Fatalf("Update(empty content) should have worked but got: %v", err)
 	}
-	contents, getVersion, err = ts.Get(ctx, cell, "/myfile")
+	contents, getVersion, err = conn.Get(ctx, "/myfile")
 	if err != nil || len(contents) != 0 || !reflect.DeepEqual(getVersion, newVersion) {
 		t.Errorf("Get('/myfile') expecting empty content got bad result: %v %v %v", contents, getVersion, err)
 	}
 
 	// Try to delete with wrong version, should fail.
-	if err = ts.Delete(ctx, cell, "/myfile", version); err != topo.ErrBadVersion {
+	if err = conn.Delete(ctx, "/myfile", version); err != topo.ErrBadVersion {
 		t.Errorf("Delete('/myfile', wrong version) returned bad error: %v", err)
 	}
 
 	// Now delete it.
-	if err = ts.Delete(ctx, cell, "/myfile", newVersion); err != nil {
+	if err = conn.Delete(ctx, "/myfile", newVersion); err != nil {
 		t.Fatalf("Delete('/myfile') failed: %v", err)
 	}
 
 	// ListDir root: nothing.
-	checkListDir(ctx, t, ts, cell, "/", nil)
+	checkListDir(ctx, t, conn, "/", nil)
 
 	// Try to delete again, should fail.
-	if err = ts.Delete(ctx, cell, "/myfile", newVersion); err != topo.ErrNoNode {
+	if err = conn.Delete(ctx, "/myfile", newVersion); err != topo.ErrNoNode {
 		t.Errorf("Delete(already gone) returned bad error: %v", err)
 	}
 
 	// Create again, with unconditional update.
-	version, err = ts.Update(ctx, cell, "/myfile", []byte{'d'}, nil)
+	version, err = conn.Update(ctx, "/myfile", []byte{'d'}, nil)
 	if err != nil {
 		t.Fatalf("Update('/myfile', nil) failed: %v", err)
 	}
 
 	// Check contents.
-	contents, getVersion, err = ts.Get(ctx, cell, "/myfile")
+	contents, getVersion, err = conn.Get(ctx, "/myfile")
 	if err != nil {
 		t.Errorf("Get('/myfile') returned an error: %v", err)
 	} else {
@@ -165,13 +174,13 @@ func checkFileInCell(t *testing.T, ts topo.Impl, cell string) {
 	}
 
 	// See it in the listing now.
-	checkListDir(ctx, t, ts, cell, "/", []string{"myfile"})
+	checkListDir(ctx, t, conn, "/", []string{"myfile"})
 
 	// Unconditional delete.
-	if err = ts.Delete(ctx, cell, "/myfile", nil); err != nil {
+	if err = conn.Delete(ctx, "/myfile", nil); err != nil {
 		t.Errorf("Delete('/myfile', nil) failed: %v", err)
 	}
 
 	// ListDir root: nothing.
-	checkListDir(ctx, t, ts, cell, "/", nil)
+	checkListDir(ctx, t, conn, "/", nil)
 }

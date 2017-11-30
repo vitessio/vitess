@@ -26,7 +26,7 @@ import (
 )
 
 // This file provides the utility methods to save / retrieve workflows
-// in the topology Backend.
+// in the topology global cell.
 
 const (
 	workflowsPath    = "workflows"
@@ -46,7 +46,7 @@ type WorkflowInfo struct {
 // GetWorkflowNames returns the names of the existing
 // workflows. They are sorted by uuid.
 func (ts *Server) GetWorkflowNames(ctx context.Context) ([]string, error) {
-	entries, err := ts.ListDir(ctx, GlobalCell, workflowsPath)
+	entries, err := ts.globalCell.ListDir(ctx, workflowsPath)
 	switch err {
 	case ErrNoNode:
 		return nil, nil
@@ -68,7 +68,7 @@ func (ts *Server) CreateWorkflow(ctx context.Context, w *workflowpb.Workflow) (*
 
 	// Save it.
 	filePath := pathForWorkflow(w.Uuid)
-	version, err := ts.Create(ctx, GlobalCell, filePath, contents)
+	version, err := ts.globalCell.Create(ctx, filePath, contents)
 	if err != nil {
 		return nil, err
 	}
@@ -78,11 +78,11 @@ func (ts *Server) CreateWorkflow(ctx context.Context, w *workflowpb.Workflow) (*
 	}, nil
 }
 
-// GetWorkflow reads a workflow from the Backend.
+// GetWorkflow reads a workflow from the global cell.
 func (ts *Server) GetWorkflow(ctx context.Context, uuid string) (*WorkflowInfo, error) {
 	// Read the file.
 	filePath := pathForWorkflow(uuid)
-	contents, version, err := ts.Get(ctx, GlobalCell, filePath)
+	contents, version, err := ts.globalCell.Get(ctx, filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +110,7 @@ func (ts *Server) SaveWorkflow(ctx context.Context, wi *WorkflowInfo) error {
 
 	// Save it.
 	filePath := pathForWorkflow(wi.Uuid)
-	version, err := ts.Update(ctx, GlobalCell, filePath, contents, wi.version)
+	version, err := ts.globalCell.Update(ctx, filePath, contents, wi.version)
 	if err != nil {
 		return err
 	}
@@ -124,5 +124,5 @@ func (ts *Server) SaveWorkflow(ctx context.Context, wi *WorkflowInfo) error {
 // WorkflowInfo object should not be used any more.
 func (ts *Server) DeleteWorkflow(ctx context.Context, wi *WorkflowInfo) error {
 	filePath := pathForWorkflow(wi.Uuid)
-	return ts.Delete(ctx, GlobalCell, filePath, wi.version)
+	return ts.globalCell.Delete(ctx, filePath, wi.version)
 }

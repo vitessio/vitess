@@ -25,17 +25,13 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// Create is part of the topo.Backend interface.
-func (s *Server) Create(ctx context.Context, cell, filePath string, contents []byte) (topo.Version, error) {
-	c, err := s.clientForCell(ctx, cell)
-	if err != nil {
-		return nil, err
-	}
-	nodePath := path.Join(c.root, filePath)
+// Create is part of the topo.Conn interface.
+func (s *Server) Create(ctx context.Context, filePath string, contents []byte) (topo.Version, error) {
+	nodePath := path.Join(s.root, filePath)
 
 	// We have to do a transaction, comparing existing version with 0.
 	// This means: if the file doesn't exist, create it.
-	txnresp, err := c.cli.Txn(ctx).
+	txnresp, err := s.cli.Txn(ctx).
 		If(clientv3.Compare(clientv3.Version(nodePath), "=", 0)).
 		Then(clientv3.OpPut(nodePath, string(contents))).
 		Commit()
@@ -48,18 +44,14 @@ func (s *Server) Create(ctx context.Context, cell, filePath string, contents []b
 	return EtcdVersion(txnresp.Header.Revision), nil
 }
 
-// Update is part of the topo.Backend interface.
-func (s *Server) Update(ctx context.Context, cell, filePath string, contents []byte, version topo.Version) (topo.Version, error) {
-	c, err := s.clientForCell(ctx, cell)
-	if err != nil {
-		return nil, err
-	}
-	nodePath := path.Join(c.root, filePath)
+// Update is part of the topo.Conn interface.
+func (s *Server) Update(ctx context.Context, filePath string, contents []byte, version topo.Version) (topo.Version, error) {
+	nodePath := path.Join(s.root, filePath)
 
 	if version != nil {
 		// We have to do a transaction. This means: if the
 		// current file revision is what we expect, save it.
-		txnresp, err := c.cli.Txn(ctx).
+		txnresp, err := s.cli.Txn(ctx).
 			If(clientv3.Compare(clientv3.ModRevision(nodePath), "=", int64(version.(EtcdVersion)))).
 			Then(clientv3.OpPut(nodePath, string(contents))).
 			Commit()
@@ -73,22 +65,18 @@ func (s *Server) Update(ctx context.Context, cell, filePath string, contents []b
 	}
 
 	// No version specified. We can use a simple unconditional Put.
-	resp, err := c.cli.Put(ctx, nodePath, string(contents))
+	resp, err := s.cli.Put(ctx, nodePath, string(contents))
 	if err != nil {
 		return nil, convertError(err)
 	}
 	return EtcdVersion(resp.Header.Revision), nil
 }
 
-// Get is part of the topo.Backend interface.
-func (s *Server) Get(ctx context.Context, cell, filePath string) ([]byte, topo.Version, error) {
-	c, err := s.clientForCell(ctx, cell)
-	if err != nil {
-		return nil, nil, err
-	}
-	nodePath := path.Join(c.root, filePath)
+// Get is part of the topo.Conn interface.
+func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
+	nodePath := path.Join(s.root, filePath)
 
-	resp, err := c.cli.Get(ctx, nodePath)
+	resp, err := s.cli.Get(ctx, nodePath)
 	if err != nil {
 		return nil, nil, convertError(err)
 	}
@@ -99,13 +87,9 @@ func (s *Server) Get(ctx context.Context, cell, filePath string) ([]byte, topo.V
 	return resp.Kvs[0].Value, EtcdVersion(resp.Kvs[0].ModRevision), nil
 }
 
-// Delete is part of the topo.Backend interface.
-func (s *Server) Delete(ctx context.Context, cell, filePath string, version topo.Version) error {
-	c, err := s.clientForCell(ctx, cell)
-	if err != nil {
-		return err
-	}
-	nodePath := path.Join(c.root, filePath)
+// Delete is part of the topo.Conn interface.
+func (s *Server) Delete(ctx context.Context, filePath string, version topo.Version) error {
+	nodePath := path.Join(s.root, filePath)
 
 	if version != nil {
 		// We have to do a transaction. This means: if the
@@ -114,7 +98,7 @@ func (s *Server) Delete(ctx context.Context, cell, filePath string, version topo
 		// succeed, we also ask for the value of the
 		// node. That way we'll know if it failed because it
 		// didn't exist, or because the version was wrong.
-		txnresp, err := c.cli.Txn(ctx).
+		txnresp, err := s.cli.Txn(ctx).
 			If(clientv3.Compare(clientv3.ModRevision(nodePath), "=", int64(version.(EtcdVersion)))).
 			Then(clientv3.OpDelete(nodePath)).
 			Else(clientv3.OpGet(nodePath)).
@@ -134,7 +118,7 @@ func (s *Server) Delete(ctx context.Context, cell, filePath string, version topo
 	}
 
 	// This is just a regular unconditional Delete here.
-	resp, err := c.cli.Delete(ctx, nodePath)
+	resp, err := s.cli.Delete(ctx, nodePath)
 	if err != nil {
 		return convertError(err)
 	}

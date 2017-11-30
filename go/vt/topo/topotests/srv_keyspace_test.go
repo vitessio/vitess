@@ -74,7 +74,7 @@ func TestWatchSrvKeyspace(t *testing.T) {
 	ts := memorytopo.NewServer(cell)
 
 	// Create initial value
-	if _, err := ts.Create(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", []byte{}); err != nil {
+	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, &topodatapb.SrvKeyspace{}); err != nil {
 		t.Fatalf("Update(/keyspaces/ks1/SrvKeyspace) failed: %v", err)
 	}
 
@@ -88,11 +88,7 @@ func TestWatchSrvKeyspace(t *testing.T) {
 
 	// Update the value with good data, wait until we see it
 	wanted.ShardingColumnName = "scn1"
-	contents, err := proto.Marshal(wanted)
-	if err != nil {
-		t.Fatalf("proto.Marshal(wanted) failed: %v", err)
-	}
-	if _, err := ts.Update(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", contents, nil); err != nil {
+	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, wanted); err != nil {
 		t.Fatalf("Update(/keyspaces/ks1/SrvKeyspace) failed: %v", err)
 	}
 	for {
@@ -113,7 +109,11 @@ func TestWatchSrvKeyspace(t *testing.T) {
 	}
 
 	// Update the value with bad data, wait until error.
-	if _, err := ts.Update(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", []byte("BAD PROTO DATA"), nil); err != nil {
+	conn, err := ts.ConnForCell(ctx, cell)
+	if err != nil {
+		t.Fatalf("ConnForCell failed: %v", err)
+	}
+	if _, err := conn.Update(ctx, "/keyspaces/"+keyspace+"/SrvKeyspace", []byte("BAD PROTO DATA"), nil); err != nil {
 		t.Fatalf("Update(/keyspaces/ks1/SrvKeyspace) failed: %v", err)
 	}
 	for {
@@ -143,8 +143,8 @@ func TestWatchSrvKeyspace(t *testing.T) {
 	}
 
 	// Update content, wait until Watch works again
-	if _, err := ts.Update(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", contents, nil); err != nil {
-		t.Fatalf("Update(/keyspaces/ks1/SrvKeyspace) failed: %v", err)
+	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, wanted); err != nil {
+		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
 	}
 	start := time.Now()
 	for {
@@ -167,8 +167,8 @@ func TestWatchSrvKeyspace(t *testing.T) {
 	}
 
 	// Delete node, wait for error (skip any duplicate).
-	if err := ts.Delete(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", nil); err != nil {
-		t.Fatalf("Delete(/keyspaces/ks1/SrvKeyspace) failed: %v", err)
+	if err := ts.DeleteSrvKeyspace(ctx, cell, keyspace); err != nil {
+		t.Fatalf("DeleteSrvKeyspace() failed: %v", err)
 	}
 	for {
 		wd, ok := <-changes
@@ -204,12 +204,8 @@ func TestWatchSrvKeyspaceCancel(t *testing.T) {
 	wanted := &topodatapb.SrvKeyspace{
 		ShardingColumnName: "scn2",
 	}
-	contents, err := proto.Marshal(wanted)
-	if err != nil {
-		t.Fatalf("proto.Marshal(wanted) failed: %v", err)
-	}
-	if _, err := ts.Create(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", contents); err != nil {
-		t.Fatalf("Update(/keyspaces/ks1/SrvKeyspace) failed: %v", err)
+	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, wanted); err != nil {
+		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
 	}
 
 	// Starting the watch should now work.

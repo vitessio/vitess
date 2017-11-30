@@ -175,7 +175,7 @@ func (ts *Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardI
 	defer span.Finish()
 
 	shardPath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard, ShardFile)
-	data, version, err := ts.Get(ctx, GlobalCell, shardPath)
+	data, version, err := ts.globalCell.Get(ctx, shardPath)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +206,7 @@ func (ts *Server) updateShard(ctx context.Context, si *ShardInfo) error {
 		return err
 	}
 	shardPath := path.Join(KeyspacesPath, si.keyspace, ShardsPath, si.shardName, ShardFile)
-	newVersion, err := ts.Update(ctx, GlobalCell, shardPath, data, si.version)
+	newVersion, err := ts.globalCell.Update(ctx, shardPath, data, si.version)
 	if err != nil {
 		return err
 	}
@@ -304,7 +304,7 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 		return err
 	}
 	shardPath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard, ShardFile)
-	if _, err := ts.Create(ctx, GlobalCell, shardPath, data); err != nil {
+	if _, err := ts.globalCell.Create(ctx, shardPath, data); err != nil {
 		// Return error as is, we need to propagate
 		// ErrNodeExists for instance.
 		return err
@@ -342,11 +342,11 @@ func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) 
 	return ts.GetShard(ctx, keyspace, shard)
 }
 
-// DeleteShard wraps the underlying Impl.DeleteShard
+// DeleteShard wraps the underlying conn.Delete
 // and dispatches the event.
 func (ts *Server) DeleteShard(ctx context.Context, keyspace, shard string) error {
 	shardPath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard, ShardFile)
-	if err := ts.Delete(ctx, GlobalCell, shardPath, nil); err != nil {
+	if err := ts.globalCell.Delete(ctx, shardPath, nil); err != nil {
 		return err
 	}
 	event.Dispatch(&events.ShardChange{

@@ -20,13 +20,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-const (
-	// GlobalCell is the name of the global cell.  It is special
-	// as it contains the global topology, and references the other cells.
-	GlobalCell = "global"
-)
-
-// Backend defines the interface that must be implemented by topology
+// Conn defines the interface that must be implemented by topology
 // plug-ins to be used with Vitess.
 //
 // Zookeeper is a good example of an implementation, as defined in
@@ -37,10 +31,8 @@ const (
 // children of a path. All paths sent through this API are relative
 // paths, from the root directory of the cell.
 //
-// FIXME(alainjobart) add all parts of the API, implement them all for
-// all our current systems, and convert the higher levels to talk to
-// this API. This is a long-term project.
-type Backend interface {
+// The Conn objects are created by the Factory implementations.
+type Conn interface {
 	//
 	// Directory support
 	//
@@ -49,7 +41,7 @@ type Backend interface {
 	// list should be sorted (by sort.Strings for instance).
 	// If there are no files under the provided path, returns ErrNoNode.
 	// dirPath is a path relative to the root directory of the cell.
-	ListDir(ctx context.Context, cell, dirPath string) ([]string, error)
+	ListDir(ctx context.Context, dirPath string) ([]string, error)
 
 	//
 	// File support
@@ -59,7 +51,7 @@ type Backend interface {
 	// Create creates the initial version of a file.
 	// Returns ErrNodeExists if the file exists.
 	// filePath is a path relative to the root directory of the cell.
-	Create(ctx context.Context, cell, filePath string, contents []byte) (Version, error)
+	Create(ctx context.Context, filePath string, contents []byte) (Version, error)
 
 	// Update updates the file with the provided filename with the
 	// new content.
@@ -68,12 +60,12 @@ type Backend interface {
 	// filePath is a path relative to the root directory of the cell.
 	// It returns the new Version of the file after update.
 	// Returns ErrBadVersion if the provided version is not current.
-	Update(ctx context.Context, cell, filePath string, contents []byte, version Version) (Version, error)
+	Update(ctx context.Context, filePath string, contents []byte, version Version) (Version, error)
 
 	// Get returns the content and version of a file.
 	// filePath is a path relative to the root directory of the cell.
 	// Can return ErrNoNode if the file doesn't exist.
-	Get(ctx context.Context, cell, filePath string) ([]byte, Version, error)
+	Get(ctx context.Context, filePath string) ([]byte, Version, error)
 
 	// Delete deletes the provided file.
 	// If version is nil, it is an unconditional delete.
@@ -87,7 +79,7 @@ type Backend interface {
 	// Delete will never be called on a directory.
 	// Returns ErrNodeExists if the file doesn't exist.
 	// Returns ErrBadVersion if the provided version is not current.
-	Delete(ctx context.Context, cell, filePath string, version Version) error
+	Delete(ctx context.Context, filePath string, version Version) error
 
 	//
 	// Locks
@@ -108,7 +100,7 @@ type Backend interface {
 	//   there is no existing file under that directory).
 	// Returns ErrTimeout if ctx expires.
 	// Returns ErrInterrupted if ctx is canceled.
-	Lock(ctx context.Context, cell, dirPath, contents string) (LockDescriptor, error)
+	Lock(ctx context.Context, dirPath, contents string) (LockDescriptor, error)
 
 	//
 	// Watches
@@ -136,7 +128,7 @@ type Backend interface {
 	//
 	// Note the 'changes' channel can return twice the same
 	// Version/Contents (for instance, if the watch is interrupted
-	// and restarted within the Backend implementation).
+	// and restarted within the Conn implementation).
 	// Similarly, the 'changes' channel may skip versions / changes
 	// (that is, if value goes [A, B, C, D, E, F], the watch may only
 	// receive [A, B, F]). This should only happen for rapidly
@@ -154,7 +146,7 @@ type Backend interface {
 	// being correct quickly, as long as it eventually gets there.
 	//
 	// filePath is a path relative to the root directory of the cell.
-	Watch(ctx context.Context, cell, filePath string) (current *WatchData, changes <-chan *WatchData, cancel CancelFunc)
+	Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, cancel CancelFunc)
 
 	//
 	// Master election methods. This is meant to have a small
@@ -172,6 +164,9 @@ type Backend interface {
 	// calling this, for a given name. Calling this function does
 	// not make the current process a candidate for the election.
 	NewMasterParticipation(name, id string) (MasterParticipation, error)
+
+	// Close closes the connection to the server.
+	Close()
 }
 
 // Version is an interface that describes a file version.

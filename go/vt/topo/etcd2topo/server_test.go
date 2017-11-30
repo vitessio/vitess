@@ -27,6 +27,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/coreos/etcd/clientv3"
 	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test"
@@ -63,7 +64,10 @@ func startEtcd(t *testing.T) (*exec.Cmd, string, string) {
 	}
 
 	// Create a client to connect to the created etcd.
-	c, err := newCellClient(clientAddr, "/")
+	cli, err := clientv3.New(clientv3.Config{
+		Endpoints:   []string{clientAddr},
+		DialTimeout: 5 * time.Second,
+	})
 	if err != nil {
 		t.Fatalf("newCellClient(%v) failed: %v", clientAddr, err)
 	}
@@ -73,7 +77,7 @@ func startEtcd(t *testing.T) (*exec.Cmd, string, string) {
 	defer cancel()
 	start := time.Now()
 	for {
-		if _, err := c.cli.Get(ctx, "/"); err == nil {
+		if _, err := cli.Get(ctx, "/"); err == nil {
 			break
 		}
 		if time.Now().Sub(start) > 10*time.Second {
@@ -138,9 +142,14 @@ func testKeyspaceLock(t *testing.T, ts *topo.Server) {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
+	conn, err := ts.ConnForCell(ctx, topo.GlobalCell)
+	if err != nil {
+		t.Fatalf("ConnForCell failed: %v", err)
+	}
+
 	// Long TTL, unlock before lease runs out.
 	*leaseTTL = 1000
-	lockDescriptor, err := ts.Impl.Lock(ctx, topo.GlobalCell, keyspacePath, "ttl")
+	lockDescriptor, err := conn.Lock(ctx, keyspacePath, "ttl")
 	if err != nil {
 		t.Fatalf("Lock failed: %v", err)
 	}
@@ -150,7 +159,7 @@ func testKeyspaceLock(t *testing.T, ts *topo.Server) {
 
 	// Short TTL, make sure it doesn't expire.
 	*leaseTTL = 1
-	lockDescriptor, err = ts.Impl.Lock(ctx, topo.GlobalCell, keyspacePath, "short ttl")
+	lockDescriptor, err = conn.Lock(ctx, keyspacePath, "short ttl")
 	if err != nil {
 		t.Fatalf("Lock failed: %v", err)
 	}

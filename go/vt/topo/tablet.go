@@ -215,13 +215,18 @@ func NewTabletInfo(tablet *topodatapb.Tablet, version Version) *TabletInfo {
 // GetTablet is a high level function to read tablet data.
 // It generates trace spans.
 func (ts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*TabletInfo, error) {
+	conn, err := ts.ConnForCell(ctx, alias.Cell)
+	if err != nil {
+		return nil, err
+	}
+
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.GetTablet")
 	span.Annotate("tablet", topoproto.TabletAliasString(alias))
 	defer span.Finish()
 
 	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(alias), TabletFile)
-	data, version, err := ts.Get(ctx, alias.Cell, tabletPath)
+	data, version, err := conn.Get(ctx, tabletPath)
 	if err != nil {
 		return nil, err
 	}
@@ -239,6 +244,11 @@ func (ts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) 
 // UpdateTablet updates the tablet data only - not associated replication paths.
 // It also uses a span, and sends the event.
 func (ts *Server) UpdateTablet(ctx context.Context, ti *TabletInfo) error {
+	conn, err := ts.ConnForCell(ctx, ti.Tablet.Alias.Cell)
+	if err != nil {
+		return err
+	}
+
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateTablet")
 	span.Annotate("tablet", topoproto.TabletAliasString(ti.Alias))
@@ -249,7 +259,7 @@ func (ts *Server) UpdateTablet(ctx context.Context, ti *TabletInfo) error {
 		return err
 	}
 	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(ti.Tablet.Alias), TabletFile)
-	newVersion, err := ts.Update(ctx, ti.Tablet.Alias.Cell, tabletPath, data, ti.version)
+	newVersion, err := conn.Update(ctx, tabletPath, data, ti.version)
 	if err != nil {
 		return err
 	}
@@ -318,12 +328,17 @@ func Validate(ctx context.Context, ts *Server, tabletAlias *topodatapb.TabletAli
 // CreateTablet creates a new tablet and all associated paths for the
 // replication graph.
 func (ts *Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) error {
+	conn, err := ts.ConnForCell(ctx, tablet.Alias.Cell)
+	if err != nil {
+		return err
+	}
+
 	data, err := proto.Marshal(tablet)
 	if err != nil {
 		return err
 	}
 	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(tablet.Alias), TabletFile)
-	if _, err = ts.Create(ctx, tablet.Alias.Cell, tabletPath, data); err != nil && err != ErrNodeExists {
+	if _, err = conn.Create(ctx, tabletPath, data); err != nil && err != ErrNodeExists {
 		return err
 	}
 
@@ -345,14 +360,19 @@ func (ts *Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) e
 	return err
 }
 
-// DeleteTablet wraps the underlying Impl.DeleteTablet
+// DeleteTablet wraps the underlying conn.Delete
 // and dispatches the event.
 func (ts *Server) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias) error {
+	conn, err := ts.ConnForCell(ctx, tabletAlias.Cell)
+	if err != nil {
+		return err
+	}
+
 	// get the current tablet record, if any, to log the deletion
 	ti, tErr := ts.GetTablet(ctx, tabletAlias)
 
 	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(tabletAlias), TabletFile)
-	if err := ts.Delete(ctx, tabletAlias.Cell, tabletPath, nil); err != nil {
+	if err := conn.Delete(ctx, tabletPath, nil); err != nil {
 		return err
 	}
 
@@ -425,17 +445,14 @@ func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.
 // It returns ErrNode if the cell doesn't exist.
 // It returns (nil, nil) if the cell exists, but there are no tablets.
 func (ts *Server) GetTabletsByCell(ctx context.Context, cell string) ([]*topodatapb.TabletAlias, error) {
-	// First make sure the cell exists, otherwise we need to return an error.
-	cells, err := ts.GetKnownCells(ctx)
+	// If the cell doesn't exist, this will return ErrNoNode.
+	conn, err := ts.ConnForCell(ctx, cell)
 	if err != nil {
 		return nil, err
 	}
-	if !InCellList(cell, cells) {
-		return nil, ErrNoNode
-	}
 
 	// List the directory, and parse the aliases
-	children, err := ts.ListDir(ctx, cell, TabletsPath)
+	children, err := conn.ListDir(ctx, TabletsPath)
 	if err != nil {
 		if err == ErrNoNode {
 			// directory doesn't exist, empty list, no error.

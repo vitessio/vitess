@@ -27,7 +27,7 @@ import (
 )
 
 // This file provides the utility methods to save / retrieve CellInfo
-// in the topology Backend.
+// in the topology server.
 //
 // CellInfo records are not meant to be changed while the system is
 // running.  In a running system, a CellInfo can be added, and
@@ -48,7 +48,7 @@ func pathForCellInfo(cell string) string {
 // GetCellInfoNames returns the names of the existing cells. They are
 // sorted by name.
 func (ts *Server) GetCellInfoNames(ctx context.Context) ([]string, error) {
-	entries, err := ts.ListDir(ctx, GlobalCell, cellsPath)
+	entries, err := ts.globalCell.ListDir(ctx, cellsPath)
 	switch err {
 	case ErrNoNode:
 		return nil, nil
@@ -59,11 +59,11 @@ func (ts *Server) GetCellInfoNames(ctx context.Context) ([]string, error) {
 	}
 }
 
-// GetCellInfo reads a CellInfo from the Backend.
+// GetCellInfo reads a CellInfo from the global Conn.
 func (ts *Server) GetCellInfo(ctx context.Context, cell string) (*topodatapb.CellInfo, error) {
 	// Read the file.
 	filePath := pathForCellInfo(cell)
-	contents, _, err := ts.Get(ctx, GlobalCell, filePath)
+	contents, _, err := ts.globalCell.Get(ctx, filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func (ts *Server) CreateCellInfo(ctx context.Context, cell string, ci *topodatap
 
 	// Save it.
 	filePath := pathForCellInfo(cell)
-	_, err = ts.Create(ctx, GlobalCell, filePath, contents)
+	_, err = ts.globalCell.Create(ctx, filePath, contents)
 	return err
 }
 
@@ -101,7 +101,7 @@ func (ts *Server) UpdateCellInfoFields(ctx context.Context, cell string, update 
 		ci := &topodatapb.CellInfo{}
 
 		// Read the file, unpack the contents.
-		contents, version, err := ts.Get(ctx, GlobalCell, filePath)
+		contents, version, err := ts.globalCell.Get(ctx, filePath)
 		switch err {
 		case nil:
 			if err := proto.Unmarshal(contents, ci); err != nil {
@@ -126,7 +126,7 @@ func (ts *Server) UpdateCellInfoFields(ctx context.Context, cell string, update 
 		if err != nil {
 			return err
 		}
-		if _, err = ts.Update(ctx, GlobalCell, filePath, contents, version); err != ErrBadVersion {
+		if _, err = ts.globalCell.Update(ctx, filePath, contents, version); err != ErrBadVersion {
 			// This includes the 'err=nil' case.
 			return err
 		}
@@ -157,7 +157,7 @@ func (ts *Server) DeleteCellInfo(ctx context.Context, cell string) error {
 	}
 
 	filePath := pathForCellInfo(cell)
-	return ts.Delete(ctx, GlobalCell, filePath, nil)
+	return ts.globalCell.Delete(ctx, filePath, nil)
 }
 
 // GetKnownCells returns the list of known cells.
@@ -165,5 +165,5 @@ func (ts *Server) DeleteCellInfo(ctx context.Context, cell string) error {
 // TODO(alainjobart) once the cell map is migrated to this generic
 // package, we can do better than this.
 func (ts *Server) GetKnownCells(ctx context.Context) ([]string, error) {
-	return ts.ListDir(ctx, GlobalCell, cellsPath)
+	return ts.globalCell.ListDir(ctx, cellsPath)
 }

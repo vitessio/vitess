@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package test contains utilities to test topo.Impl
+// Package test contains utilities to test topo.Conn
 // implementations. If you are testing your implementation, you will
 // want to call TopoServerTestSuite in your test method. For an
 // example, look at the tests in
@@ -40,12 +40,9 @@ func newKeyRange(value string) *topodatapb.KeyRange {
 	return result
 }
 
-// TopoServerTestSuite runs the full topo.Impl test suite.
+// TopoServerTestSuite runs the full topo.Server/Conn test suite.
 // The factory method should return a topo.Server that has a single cell
 // called LocalCellName.
-// Note some tests operate on the topo.Server itself (when we also test
-// the higher level methods of topo.Server), or on the underlying
-// Impl object (when we only test the topo.Backend interface).
 func TopoServerTestSuite(t *testing.T, factory func() *topo.Server) {
 	var ts *topo.Server
 
@@ -91,22 +88,22 @@ func TopoServerTestSuite(t *testing.T, factory func() *topo.Server) {
 
 	t.Log("=== checkElection")
 	ts = factory()
-	checkElection(t, ts.Impl)
+	checkElection(t, ts)
 	ts.Close()
 
 	t.Log("=== checkDirectory")
 	ts = factory()
-	checkDirectory(t, ts.Impl)
+	checkDirectory(t, ts)
 	ts.Close()
 
 	t.Log("=== checkFile")
 	ts = factory()
-	checkFile(t, ts.Impl)
+	checkFile(t, ts)
 	ts.Close()
 
 	t.Log("=== checkWatch")
 	ts = factory()
-	checkWatch(t, ts.Impl)
-	checkWatchInterrupt(t, ts.Impl)
+	checkWatch(t, ts)
+	checkWatchInterrupt(t, ts)
 	ts.Close()
 }
