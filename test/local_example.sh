@@ -28,12 +28,12 @@ exitcode=1
 num_tablets=2
 uid_base=100
 cell=test
-export TABLETS_UIDS=`seq 0 $[$num_tablets - 1]`
-tablet_tasks = $TABLET_UIDS
+TABLETS_UIDS="$(seq 0 $((num_tablets - 1)))"
+export TABLETS_UIDS
 
 teardown() {
   ./vtgate-down.sh &
-  ./vttablet-down.sh $tablet_tasks &
+  ./vttablet-down.sh "$TABLETS_UIDS" &
   ./vtctld-down.sh &
   ./zk-down.sh &
   wait
@@ -84,7 +84,7 @@ done
 # health check.
 echo "Running health check on tablets..."
 start=`date +%s`
-for uid_index in $tablet_tasks; do
+for uid_index in $TABLETS_UIDS; do
   uid=$[$uid_base + $uid_index]
   printf -v alias '%s-%010d' $cell $uid
   ./lvtctl.sh RunHealthCheck $alias

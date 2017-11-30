@@ -50,6 +50,7 @@ func (c *StaticAuthClientCreds) RequireTransportSecurity() bool {
 	return false
 }
 
+// GetAuthStaticClientCreds returns creds file location for the plugin
 func GetAuthStaticClientCreds() string {
 	return *credsFile
 }
