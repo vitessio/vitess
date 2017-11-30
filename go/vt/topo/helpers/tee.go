@@ -39,6 +39,11 @@ type TeeFactory struct {
 	reverseLockOrder bool
 }
 
+// HasGlobalReadOnlyCell is part of the topo.Factory interface.
+func (f *TeeFactory) HasGlobalReadOnlyCell(serverAddr, root string) bool {
+	return false
+}
+
 // Create is part of the topo.Factory interface.
 func (f *TeeFactory) Create(cell, serverAddr, root string) (topo.Conn, error) {
 	ctx := context.Background()

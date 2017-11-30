@@ -32,6 +32,10 @@ const (
 	// GlobalCell is the name of the global cell.  It is special
 	// as it contains the global topology, and references the other cells.
 	GlobalCell = "global"
+
+	// GlobalReadOnlyCell is the name of the global read-only cell
+	// connection cell name.
+	GlobalReadOnlyCell = "global-read-only"
 )
 
 // Filenames for all object types.
@@ -90,6 +94,17 @@ var (
 // Factory is a factory interface to create Conn objects.
 // Topo implementations will provide an implementation for this.
 type Factory interface {
+	// HasGlobalReadOnlyCell returns true if the global cell
+	// has read-only replicas of the topology data. The global topology
+	// is usually more expensive to read from / write to, as it is
+	// replicated over many cells. Some topology services provide
+	// more efficient way to read the data, like Observer servers
+	// for Zookeeper. If this returns true, we will maintain
+	// two connections for the global topology: the 'global' cell
+	// for consistent reads and writes, and the 'global-read-only'
+	// cell for reads only.
+	HasGlobalReadOnlyCell(serverAddr, root string) bool
+
 	// Create creates a topo.Conn object.
 	Create(cell, serverAddr, root string) (Conn, error)
 }
@@ -107,6 +122,11 @@ type Server struct {
 	// globalCell is the main connection to the global topo service.
 	// It is created once at construction time.
 	globalCell Conn
+
+	// globalReadOnlyCell is the read-only connection to the global
+	// topo service. It will be equal to globalCell if we don't distinguish
+	// the two.
+	globalReadOnlyCell Conn
 
 	// factory allows the creation of connections to various backends.
 	// It is set at construction time.
@@ -165,10 +185,22 @@ func NewWithFactory(factory Factory, serverAddress, root string) (*Server, error
 	if err != nil {
 		return nil, err
 	}
+
+	var connReadOnly Conn
+	if factory.HasGlobalReadOnlyCell(serverAddress, root) {
+		connReadOnly, err = factory.Create(GlobalReadOnlyCell, serverAddress, root)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		connReadOnly = conn
+	}
+
 	return &Server{
-		globalCell: conn,
-		factory:    factory,
-		cells:      make(map[string]Conn),
+		globalCell:         conn,
+		globalReadOnlyCell: connReadOnly,
+		factory:            factory,
+		cells:              make(map[string]Conn),
 	}, nil
 }
 
@@ -210,7 +242,8 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 
 	// Fetch cell cluster addresses from the global cluster.
 	// These can proceed concurrently (we've released the lock).
-	ci, err := ts.GetCellInfo(ctx, cell)
+	// We can use the GlobalReadOnlyCell for this call.
+	ci, err := ts.GetCellInfo(ctx, cell, false /*strongRead*/)
 	if err != nil {
 		return nil, err
 	}
@@ -236,11 +269,18 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 }
 
 // Close will close all connections to underlying topo Server.
+// It will nil all member variables, so any further access will panic.
 func (ts *Server) Close() {
 	ts.globalCell.Close()
+	if ts.globalReadOnlyCell != ts.globalCell {
+		ts.globalReadOnlyCell.Close()
+	}
+	ts.globalCell = nil
+	ts.globalReadOnlyCell = nil
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	for _, conn := range ts.cells {
 		conn.Close()
 	}
+	ts.cells = make(map[string]Conn)
 }
