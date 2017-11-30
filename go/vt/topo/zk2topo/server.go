@@ -17,6 +17,8 @@ limitations under the License.
 package zk2topo
 
 import (
+	"strings"
+
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -29,13 +31,48 @@ const (
 // Factory is the zookeeper topo.Factory implementation.
 type Factory struct{}
 
+// hasObservers checks the provided address to see if it has observers.
+// If so, it returns the voting server address, the observer address, and true.
+// Otherwise, it returns false.
+func hasObservers(serverAddr string) (string, string, bool) {
+	if i := strings.Index(serverAddr, "|"); i != -1 {
+		return serverAddr[:i], serverAddr[i+1:], true
+	}
+	return "", "", false
+}
+
 // HasGlobalReadOnlyCell is part of the topo.Factory interface.
+//
+// Further implementation design note: Zookeeper supports Observers:
+// https://zookeeper.apache.org/doc/trunk/zookeeperObservers.html
+// To use them, follow these instructions:
+// * setup your observer servers as described in the previous link.
+// * specify a second set of servers in serverAddr, after a '|', like:
+//   global1:port1,global2:port2|observer1:port1,observer2:port2
+// * if HasGlobalReadOnlyCell detects that the serverAddr has both lists,
+//   it returns true.
+// * the Create method below also splits the values, and if
+//   cell is GlobalCell, use the left side, if cell is GlobalReadOnlyCell,
+//   use the right side.
 func (f Factory) HasGlobalReadOnlyCell(serverAddr, root string) bool {
-	return false
+	_, _, ok := hasObservers(serverAddr)
+	return ok
 }
 
 // Create is part of the topo.Factory interface.
 func (f Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
+	if cell == topo.GlobalCell {
+		// For the global cell, extract the voting servers if we
+		// have observers.
+		newAddr, _, ok := hasObservers(serverAddr)
+		if ok {
+			serverAddr = newAddr
+		}
+	}
+	if cell == topo.GlobalReadOnlyCell {
+		// Use the observers as serverAddr.
+		_, serverAddr, _ = hasObservers(serverAddr)
+	}
 	return NewServer(serverAddr, root), nil
 }
 

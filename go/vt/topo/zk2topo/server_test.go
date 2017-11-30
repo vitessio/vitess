@@ -58,7 +58,9 @@ func TestZk2Topo(t *testing.T) {
 			t.Fatalf("Create(%v) failed: %v", cellRoot, err)
 		}
 
-		ts, err := topo.OpenServer("zk2", serverAddr, globalRoot)
+		// Note we exercise the observer feature here by passing in
+		// the same server twice, with a "|" separator.
+		ts, err := topo.OpenServer("zk2", serverAddr+"|"+serverAddr, globalRoot)
 		if err != nil {
 			t.Fatalf("OpenServer() failed: %v", err)
 		}
@@ -71,4 +73,16 @@ func TestZk2Topo(t *testing.T) {
 
 		return ts
 	})
+}
+
+func TestHasObservers(t *testing.T) {
+	s1, s2, ok := hasObservers("s1:p1,s2:p2")
+	if ok {
+		t.Errorf("hasObservers(s1:p1,s2:p2): got unexpected %v %v %v", s1, s2, ok)
+	}
+
+	s1, s2, ok = hasObservers("s1:p1,s2:p2|o1:p1,o2:p2")
+	if !ok || s1 != "s1:p1,s2:p2" || s2 != "o1:p1,o2:p2" {
+		t.Errorf("hasObservers(s1:p1,s2:p2|o1:p1,o2:p2): got unexpected %v %v %v", s1, s2, ok)
+	}
 }
