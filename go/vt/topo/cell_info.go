@@ -60,10 +60,14 @@ func (ts *Server) GetCellInfoNames(ctx context.Context) ([]string, error) {
 }
 
 // GetCellInfo reads a CellInfo from the global Conn.
-func (ts *Server) GetCellInfo(ctx context.Context, cell string) (*topodatapb.CellInfo, error) {
+func (ts *Server) GetCellInfo(ctx context.Context, cell string, strongRead bool) (*topodatapb.CellInfo, error) {
+	conn := ts.globalCell
+	if !strongRead {
+		conn = ts.globalReadOnlyCell
+	}
 	// Read the file.
 	filePath := pathForCellInfo(cell)
-	contents, _, err := ts.globalCell.Get(ctx, filePath)
+	contents, _, err := conn.Get(ctx, filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -165,5 +169,7 @@ func (ts *Server) DeleteCellInfo(ctx context.Context, cell string) error {
 // TODO(alainjobart) once the cell map is migrated to this generic
 // package, we can do better than this.
 func (ts *Server) GetKnownCells(ctx context.Context) ([]string, error) {
-	return ts.globalCell.ListDir(ctx, cellsPath)
+	// Note we use the global read-only cell here, as the result
+	// is not time sensitive.
+	return ts.globalReadOnlyCell.ListDir(ctx, cellsPath)
 }

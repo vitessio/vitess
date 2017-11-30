@@ -44,6 +44,11 @@ import (
 // Factory is the consul topo.Factory implementation.
 type Factory struct{}
 
+// HasGlobalReadOnlyCell is part of the topo.Factory interface.
+func (f Factory) HasGlobalReadOnlyCell(serverAddr, root string) bool {
+	return false
+}
+
 // Create is part of the topo.Factory interface.
 func (f Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
 	return NewServer(serverAddr, root)
