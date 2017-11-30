@@ -118,10 +118,12 @@ type etcdLockDescriptor struct {
 func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	// We list the directory first to make sure it exists.
 	if _, err := s.ListDir(ctx, dirPath); err != nil {
-		if err == topo.ErrNoNode {
-			return nil, err
-		}
-		return nil, fmt.Errorf("cannot ListDir(%v) before locking: %v", dirPath, err)
+		// We need to return the right error codes, like
+		// topo.ErrNoNode and topo.ErrInterrupted, and the
+		// easiest way to do this is to return convertError(err).
+		// It may lose some of the context, if this is an issue,
+		// maybe logging the error would work here.
+		return nil, convertError(err)
 	}
 
 	return s.lock(ctx, dirPath, contents)
