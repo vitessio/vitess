@@ -108,7 +108,7 @@ func NewExecutor(ctx context.Context, serv topo.SrvTopoServer, cell, statsName s
 }
 
 // Execute executes a non-streaming query.
-func (e *Executor) Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (e *Executor) Execute(ctx context.Context, method string, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	// Start an implicit transaction if necessary.
 	// TODO(sougou): deprecate legacyMode after all users are migrated out.
 	if !e.legacyAutocommit && !session.Autocommit && !session.InTransaction {

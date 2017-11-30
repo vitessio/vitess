@@ -97,8 +97,8 @@ func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
 }
 
 // Execute performs a V3 level execution of the query. It does not take any routing directives.
-func (vc *vcursorImpl) Execute(query string, BindVars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	qr, err := vc.executor.Execute(vc.ctx, vc.session, query+vc.trailingComments, BindVars)
+func (vc *vcursorImpl) Execute(method string, query string, BindVars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+	qr, err := vc.executor.Execute(vc.ctx, method, vc.session, query+vc.trailingComments, BindVars)
 	if err == nil {
 		vc.hasPartialDML = true
 	}
