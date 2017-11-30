@@ -33,13 +33,13 @@ func TestDialErrors(t *testing.T) {
 		address, err string
 	}{{
 		address: "badhost",
-		err:     "Unavailable",
+		err:     "DeadlineExceeded",
 	}, {
 		address: "badhost:123456",
-		err:     "Unavailable",
+		err:     "DeadlineExceeded",
 	}, {
 		address: "[::]:12346",
-		err:     "Unavailable",
+		err:     "DeadlineExceeded",
 	}}
 	for _, tcase := range tcases {
 		gconn, err := Dial(tcase.address, grpc.WithInsecure())
