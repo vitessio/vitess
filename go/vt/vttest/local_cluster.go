@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -29,10 +30,12 @@ import (
 	"strings"
 	"unicode"
 
+	log "github.com/golang/glog"
+
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 
-	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
 )
 
@@ -85,6 +88,51 @@ type Config struct {
 	// initialize the mysqld instance in the cluster. Note that some environments
 	// do not suppport initialization through snapshot files.
 	SnapshotFile string
+}
+
+// InitSchemas is a shortcut for tests that just want to setup a single
+// keyspace with a single SQL file, and/or a vschema.
+// It creates a temporary directory, and puts the schema/vschema in there.
+// It then sets the right value for cfg.SchemaDir.
+// At the end of the test, the caller should os.RemoveAll(cfg.SchemaDir).
+func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keyspace) error {
+	if cfg.SchemaDir != "" {
+		return fmt.Errorf("SchemaDir is already set to %v", cfg.SchemaDir)
+	}
+
+	// Create a base temporary directory.
+	tempSchemaDir, err := ioutil.TempDir("", "vttest")
+	if err != nil {
+		return err
+	}
+
+	// Write the schema if set.
+	if schema != "" {
+		ksDir := path.Join(tempSchemaDir, keyspace)
+		err = os.Mkdir(ksDir, os.ModeDir|0775)
+		if err != nil {
+			return err
+		}
+		fileName := path.Join(ksDir, "schema.sql")
+		err = ioutil.WriteFile(fileName, []byte(schema), 0666)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Write in the vschema if set.
+	if vschema != nil {
+		vschemaFilePath := path.Join(tempSchemaDir, "vschema.json")
+		vschemaJSON, err := json.Marshal(vschema)
+		if err != nil {
+			return err
+		}
+		if err := ioutil.WriteFile(vschemaFilePath, vschemaJSON, 0644); err != nil {
+			return err
+		}
+	}
+	cfg.SchemaDir = tempSchemaDir
+	return nil
 }
 
 // DbName returns the default name for a database in this cluster.
