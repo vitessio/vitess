@@ -42,8 +42,8 @@ type LogStats struct {
 	BindVariables map[string]*querypb.BindVariable
 	StartTime     time.Time
 	EndTime       time.Time
-	ShardQueries  int
-	RowsAffected  int
+	ShardQueries  int32
+	RowsAffected  int32
 	PlanTime      time.Duration
 	ExecuteTime   time.Duration
 	CommitTime    time.Duration
