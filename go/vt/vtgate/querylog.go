@@ -21,13 +21,13 @@ import (
 )
 
 var (
-	// Handler path for exposing query logs
-	queryLogHandler = "/debug/querylog"
+	// QueryLogHandler is the debug UI path for exposing query logs
+	QueryLogHandler = "/debug/querylog"
 
 	// QueryLogger enables streaming logging of queries
 	QueryLogger = streamlog.New("VTGate", 10)
 )
 
 func initQueryLogger() {
-	QueryLogger.ServeLogs(queryLogHandler, streamlog.GetFormatter(QueryLogger))
+	QueryLogger.ServeLogs(QueryLogHandler, streamlog.GetFormatter(QueryLogger))
 }

@@ -133,6 +133,8 @@ func main() {
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
 	}
+
+	vtgate.QueryLogHandler = "/debug/vtgate/querylog"
 	vtgate.Init(context.Background(), healthCheck, ts, resilientSrvTopoServer, tpb.Cells[0], 2 /*retryCount*/, tabletTypesToWait)
 
 	// vtctld configuration and init
