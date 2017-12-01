@@ -134,6 +134,7 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, BindVars map[string]*quer
 
 // StreamExeculteMulti is the streaming version of ExecuteMultiShard.
 func (vc *vcursorImpl) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
+	vc.logStats.ShardQueries += len(shardVars)
 	return vc.executor.scatterConn.StreamExecuteMulti(vc.ctx, query+vc.trailingComments, keyspace, shardVars, vc.target.TabletType, vc.session.Options, callback)
 }
 

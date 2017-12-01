@@ -254,6 +254,7 @@ func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err er
 	results := make(chan *sqltypes.Result, 100)
 	err = executor.StreamExecute(
 		context.Background(),
+		"TestExecuteStream",
 		masterSession,
 		sql,
 		nil,

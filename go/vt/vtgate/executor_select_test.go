@@ -192,6 +192,8 @@ func TestUnshardedComments(t *testing.T) {
 
 func TestStreamUnsharded(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
 
 	sql := "select id from music_user_map where id = 1"
 	result, err := executorStream(executor, sql)
@@ -202,6 +204,7 @@ func TestStreamUnsharded(t *testing.T) {
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", sql, 1)
 }
 
 func TestStreamBuffering(t *testing.T) {
@@ -226,6 +229,7 @@ func TestStreamBuffering(t *testing.T) {
 	results := make(chan *sqltypes.Result, 10)
 	err := executor.StreamExecute(
 		context.Background(),
+		"TestStreamBuffering",
 		masterSession,
 		"select id from music_user_map where id = 1",
 		nil,
@@ -1435,11 +1439,17 @@ func TestJoinComments(t *testing.T) {
 	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
 		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
 	}
+
+	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 2)
 }
 
 func TestSimpleJoinStream(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
-	result, err := executorStream(executor, "select u1.id, u2.id from user u1 join user u2 where u1.id = 1 and u2.id = 3")
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	sql := "select u1.id, u2.id from user u1 join user u2 where u1.id = 1 and u2.id = 3"
+	result, err := executorStream(executor, sql)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1473,6 +1483,8 @@ func TestSimpleJoinStream(t *testing.T) {
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
+
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", sql, 2)
 }
 
 func TestVarJoin(t *testing.T) {
@@ -1517,6 +1529,9 @@ func TestVarJoin(t *testing.T) {
 
 func TestVarJoinStream(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
@@ -1530,7 +1545,8 @@ func TestVarJoinStream(t *testing.T) {
 		}},
 	}}
 	sbc1.SetResults(result1)
-	_, err := executorStream(executor, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1")
+	sql := "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1"
+	_, err := executorStream(executor, sql)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1551,6 +1567,8 @@ func TestVarJoinStream(t *testing.T) {
 	if got != want {
 		t.Errorf("sbc2.Queries: %s, want %s\n", got, want)
 	}
+
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", sql, 2)
 }
 
 func TestLeftJoin(t *testing.T) {

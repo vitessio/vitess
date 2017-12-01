@@ -533,8 +533,8 @@ func (e *Executor) handleOther(ctx context.Context, session *vtgatepb.Session, s
 }
 
 // StreamExecute executes a streaming query.
-func (e *Executor) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, callback func(*sqltypes.Result) error) error {
-	logStats := NewLogStats(ctx, "StreamExecute", sqlparser.StmtType(sqlparser.Preview(sql)))
+func (e *Executor) StreamExecute(ctx context.Context, method string, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, callback func(*sqltypes.Result) error) error {
+	logStats := NewLogStats(ctx, method, sqlparser.StmtType(sqlparser.Preview(sql)))
 	defer logStats.Send()
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
@@ -553,6 +553,10 @@ func (e *Executor) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 		logStats.Error = err
 		return err
 	}
+
+	execStart := time.Now()
+	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+
 	// Some of the underlying primitives may send results one row at a time.
 	// So, we need the ability to consolidate those into reasonable chunks.
 	// The callback wrapper below accumulates rows and sends them as chunks
@@ -594,6 +598,9 @@ func (e *Executor) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 			return err
 		}
 	}
+
+	logStats.ExecuteTime = time.Since(execStart)
+
 	return err
 }
 
