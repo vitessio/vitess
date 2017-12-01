@@ -311,6 +311,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 	} else {
 		err = vtg.executor.StreamExecute(
 			ctx,
+			"StreamExecute",
 			session,
 			sql,
 			bindVariables,
