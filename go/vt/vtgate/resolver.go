@@ -123,7 +123,7 @@ func (res *Resolver) Execute(
 		return nil, err
 	}
 	if logStats != nil {
-		logStats.ShardQueries = len(shards)
+		logStats.ShardQueries = int32(len(shards))
 	}
 	for {
 		qr, err := res.scatterConn.Execute(
