@@ -38,6 +38,7 @@ type vcursorImpl struct {
 	target           querypb.Target
 	trailingComments string
 	executor         *Executor
+	logStats         *LogStats
 	// hasPartialDML is set to true if any DML was successfully
 	// executed. If there was a subsequent failure, the transaction
 	// must be forced to rollback.
@@ -48,13 +49,14 @@ type vcursorImpl struct {
 // the query and supply it here. Trailing comments are typically sent by the application for various reasons,
 // including as identifying markers. So, they have to be added back to all queries that are executed
 // on behalf of the original query.
-func newVCursorImpl(ctx context.Context, session *vtgatepb.Session, target querypb.Target, trailingComments string, executor *Executor) *vcursorImpl {
+func newVCursorImpl(ctx context.Context, session *vtgatepb.Session, target querypb.Target, trailingComments string, executor *Executor, logStats *LogStats) *vcursorImpl {
 	return &vcursorImpl{
 		ctx:              ctx,
 		session:          session,
 		target:           target,
 		trailingComments: trailingComments,
 		executor:         executor,
+		logStats:         logStats,
 	}
 }
 
@@ -107,6 +109,7 @@ func (vc *vcursorImpl) Execute(method string, query string, BindVars map[string]
 
 // ExecuteMultiShard executes different queries on different shards and returns the combined result.
 func (vc *vcursorImpl) ExecuteMultiShard(keyspace string, shardQueries map[string]*querypb.BoundQuery, isDML bool) (*sqltypes.Result, error) {
+	vc.logStats.ShardQueries += len(shardQueries)
 	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, commentedShardQueries(shardQueries, vc.trailingComments), vc.target.TabletType, NewSafeSession(vc.session), false, vc.session.Options)
 	if err == nil {
 		vc.hasPartialDML = true

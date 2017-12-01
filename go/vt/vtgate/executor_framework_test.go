@@ -17,7 +17,13 @@ limitations under the License.
 package vtgate
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
+	"testing"
+
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/vttablet/sandboxconn"
 	"golang.org/x/net/context"
@@ -272,4 +278,61 @@ func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err er
 		qr.Rows = append(qr.Rows, r.Rows...)
 	}
 	return qr, nil
+}
+
+func testNonZeroDuration(t *testing.T, what, d string) {
+	time, _ := strconv.ParseFloat(d, 64)
+	if time == 0 {
+		t.Errorf("querylog %s want non-zero duration got %s (%v)", what, d, time)
+	}
+}
+
+func getQueryLog(logChan chan interface{}) *LogStats {
+	var log interface{}
+
+	select {
+	case log = <-logChan:
+		return log.(*LogStats)
+	default:
+		return nil
+	}
+}
+
+func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql string, shardQueries int) *LogStats {
+	logStats := getQueryLog(logChan)
+	if logStats == nil {
+		t.Errorf("logstats: no querylog in channel, want sql %s", sql)
+		return nil
+	}
+
+	log := streamlog.GetFormatter(QueryLogger)(nil, logStats)
+	fields := strings.Split(log, "\t")
+
+	if method != fields[0] {
+		t.Errorf("logstats: method want %q got %q", method, fields[0])
+	}
+
+	testNonZeroDuration(t, "TotalTime", fields[7])
+	testNonZeroDuration(t, "PlanTime", fields[8])
+	testNonZeroDuration(t, "ExecuteTime", fields[9])
+
+	// fields[10] is CommitTime which is set only in autocommit mode and
+	// tested separately
+
+	if stmtType != fields[11] {
+		t.Errorf("logstats: stmtType want %q got %q", stmtType, fields[11])
+	}
+
+	wantSQL := fmt.Sprintf("%q", sql)
+	if wantSQL != fields[12] {
+		t.Errorf("logstats: SQL want %s got %s", wantSQL, fields[12])
+	}
+
+	// fields[13] contains the formatted bind vars
+
+	if fmt.Sprintf("%v", shardQueries) != fields[14] {
+		t.Errorf("logstats: ShardQueries want %v got %v", shardQueries, fields[14])
+	}
+
+	return logStats
 }

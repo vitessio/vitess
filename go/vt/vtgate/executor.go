@@ -125,10 +125,16 @@ func (e *Executor) Execute(ctx context.Context, method string, session *vtgatepb
 		bindVars = make(map[string]*querypb.BindVariable)
 	}
 
-	switch sqlparser.Preview(sql) {
+	stmtType := sqlparser.Preview(sql)
+	switch stmtType {
 	case sqlparser.StmtSelect:
-		return e.handleExec(ctx, session, sql, bindVars, target)
+		logStats := NewLogStats(ctx, method, "SELECT")
+		defer logStats.Send()
+		return e.handleExec(ctx, session, sql, bindVars, target, logStats)
 	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
+		logStats := NewLogStats(ctx, method, sqlparser.StmtType(stmtType))
+		defer logStats.Send()
+
 		// In legacy mode, we ignore autocommit settings.
 		if e.legacyAutocommit {
 			return e.handleExec(ctx, session, sql, bindVars, target)
@@ -146,19 +152,24 @@ func (e *Executor) Execute(ctx context.Context, method string, session *vtgatepb
 			defer e.txConn.Rollback(ctx, nsf)
 		}
 
-		qr, err := e.handleExec(ctx, session, sql, bindVars, target)
+		qr, err := e.handleExec(ctx, session, sql, bindVars, target, logStats)
 		if err != nil {
 			return nil, err
 		}
 
 		if autocommit {
+			commitStart := time.Now()
 			if err := e.txConn.Commit(ctx, nsf); err != nil {
 				return nil, err
 			}
+			logStats.CommitTime = time.Since(commitStart)
 		}
 		return qr, nil
 	case sqlparser.StmtDDL:
-		return e.handleDDL(ctx, session, sql, bindVars, target)
+		logStats := NewLogStats(ctx, method, "DDL")
+		defer logStats.Send()
+
+		return e.handleDDL(ctx, session, sql, bindVars, target, logStats)
 	case sqlparser.StmtBegin:
 		if target.TabletType != topodatapb.TabletType_MASTER {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", target.TabletType)
@@ -174,16 +185,20 @@ func (e *Executor) Execute(ctx context.Context, method string, session *vtgatepb
 	case sqlparser.StmtSet:
 		return e.handleSet(ctx, session, sql, bindVars)
 	case sqlparser.StmtShow:
-		return e.handleShow(ctx, session, sql, bindVars, target)
+		logStats := NewLogStats(ctx, method, "SHOW")
+		defer logStats.Send()
+		return e.handleShow(ctx, session, sql, bindVars, target, logStats)
 	case sqlparser.StmtUse:
 		return e.handleUse(ctx, session, sql, bindVars)
 	case sqlparser.StmtOther:
-		return e.handleOther(ctx, session, sql, bindVars, target)
+		logStats := NewLogStats(ctx, method, "OTHER")
+		defer logStats.Send()
+		return e.handleOther(ctx, session, sql, bindVars, target, logStats)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
 
-func (e *Executor) handleExec(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target) (*sqltypes.Result, error) {
+func (e *Executor) handleExec(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
 	if target.Shard != "" {
 		// V1 mode or V3 mode with a forced shard target
 		sql = sqlannotation.AnnotateIfDML(sql, nil)
@@ -198,21 +213,41 @@ func (e *Executor) handleExec(ctx context.Context, session *vtgatepb.Session, sq
 			normalized := sqlparser.String(stmt)
 			sql = normalized + comments
 		}
-		return e.shardExec(ctx, session, sql, bindVars, target)
+
+		logStats.SQL = sql
+		logStats.BindVariables = bindVars
+
+		execStart := time.Now()
+		logStats.PlanTime = execStart.Sub(logStats.StartTime)
+
+		result, err := e.shardExec(ctx, session, sql, bindVars, target, logStats)
+		logStats.ExecuteTime = time.Now().Sub(execStart)
+
+		logStats.ShardQueries = 1
+
+		return result, err
 	}
 
 	// V3 mode.
 	query, comments := sqlparser.SplitTrailingComments(sql)
-	vcursor := newVCursorImpl(ctx, session, target, comments, e)
-	plan, err := e.getPlan(vcursor,
+	vcursor := newVCursorImpl(ctx, session, target, comments, e, logStats)
+	plan, err := e.getPlan(
+		vcursor,
 		query,
+		comments,
 		bindVars,
 		skipQueryPlanCache(session),
+		logStats,
 	)
+	execStart := time.Now()
+	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+
 	if err != nil {
+		logStats.Error = err
 		return nil, err
 	}
 	qr, err := plan.Instructions.Execute(vcursor, bindVars, make(map[string]*querypb.BindVariable), true)
+	logStats.ExecuteTime = time.Since(execStart)
 	// Check if there was partial DML execution. If so, rollback the transaction.
 	if err != nil && session.InTransaction && vcursor.hasPartialDML {
 		_ = e.txConn.Rollback(ctx, NewSafeSession(session))
@@ -221,14 +256,14 @@ func (e *Executor) handleExec(ctx context.Context, session *vtgatepb.Session, sq
 	return qr, err
 }
 
-func (e *Executor) shardExec(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target) (*sqltypes.Result, error) {
+func (e *Executor) shardExec(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
 	f := func(keyspace string) (string, []string, error) {
 		return keyspace, []string{target.Shard}, nil
 	}
-	return e.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, session, f, false /* notInTransaction */, session.Options)
+	return e.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, session, f, false /* notInTransaction */, session.Options, logStats)
 }
 
-func (e *Executor) handleDDL(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target) (*sqltypes.Result, error) {
+func (e *Executor) handleDDL(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
 	if target.Keyspace == "" {
 		return nil, errNoKeyspace
 	}
@@ -252,7 +287,7 @@ func (e *Executor) handleDDL(ctx context.Context, session *vtgatepb.Session, sql
 		}
 		return keyspace, shards, nil
 	}
-	return e.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, session, f, false /* notInTransaction */, session.Options)
+	return e.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, session, f, false /* notInTransaction */, session.Options, logStats)
 }
 
 func (e *Executor) handleSet(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
@@ -381,7 +416,7 @@ func (e *Executor) handleSet(ctx context.Context, session *vtgatepb.Session, sql
 	return &sqltypes.Result{}, nil
 }
 
-func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target) (*sqltypes.Result, error) {
+func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
@@ -462,7 +497,7 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 	}
 
 	// Any other show statement is passed through
-	return e.handleOther(ctx, session, sql, bindVars, target)
+	return e.handleOther(ctx, session, sql, bindVars, target, logStats)
 }
 
 func (e *Executor) handleUse(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
@@ -483,7 +518,7 @@ func (e *Executor) handleUse(ctx context.Context, session *vtgatepb.Session, sql
 	return &sqltypes.Result{}, nil
 }
 
-func (e *Executor) handleOther(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target) (*sqltypes.Result, error) {
+func (e *Executor) handleOther(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
 	if target.Keyspace == "" {
 		return nil, errNoKeyspace
 	}
@@ -494,26 +529,30 @@ func (e *Executor) handleOther(ctx context.Context, session *vtgatepb.Session, s
 			return nil, err
 		}
 	}
-	return e.shardExec(ctx, session, sql, bindVars, target)
+	return e.shardExec(ctx, session, sql, bindVars, target, logStats)
 }
 
 // StreamExecute executes a streaming query.
 func (e *Executor) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, callback func(*sqltypes.Result) error) error {
+	logStats := NewLogStats(ctx, "StreamExecute", sqlparser.StmtType(sqlparser.Preview(sql)))
+	defer logStats.Send()
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
 	}
 	query, comments := sqlparser.SplitTrailingComments(sql)
-	vcursor := newVCursorImpl(ctx, session, target, comments, e)
+	vcursor := newVCursorImpl(ctx, session, target, comments, e, logStats)
 	plan, err := e.getPlan(
 		vcursor,
 		query,
+		comments,
 		bindVars,
 		skipQueryPlanCache(session),
+		logStats,
 	)
 	if err != nil {
+		logStats.Error = err
 		return err
 	}
-
 	// Some of the underlying primitives may send results one row at a time.
 	// So, we need the ability to consolidate those into reasonable chunks.
 	// The callback wrapper below accumulates rows and sends them as chunks
@@ -574,6 +613,7 @@ func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []
 		},
 		"",
 		e,
+		nil,
 	)
 
 	newKeyspace, _, allShards, err := getKeyspaceShards(ctx, e.serv, e.cell, table.Keyspace.Name, topodatapb.TabletType_MASTER)
@@ -778,7 +818,12 @@ func (e *Executor) ParseTarget(targetString string) querypb.Target {
 
 // getPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
-func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool) (*engine.Plan, error) {
+func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments string, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool, logStats *LogStats) (*engine.Plan, error) {
+	if logStats != nil {
+		logStats.SQL = sql + comments
+		logStats.BindVariables = bindVars
+	}
+
 	if e.VSchema() == nil {
 		return nil, errors.New("vschema not initialized")
 	}
@@ -807,6 +852,12 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, bindVars map[string
 	}
 	sqlparser.Normalize(stmt, bindVars, "vtg")
 	normalized := sqlparser.String(stmt)
+
+	if logStats != nil {
+		logStats.SQL = normalized + comments
+		logStats.BindVariables = bindVars
+	}
+
 	normkey := normalized
 	if keyspace != "" {
 		normkey = keyspace + ":" + normalized
