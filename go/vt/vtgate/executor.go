@@ -137,7 +137,7 @@ func (e *Executor) Execute(ctx context.Context, method string, session *vtgatepb
 
 		// In legacy mode, we ignore autocommit settings.
 		if e.legacyAutocommit {
-			return e.handleExec(ctx, session, sql, bindVars, target)
+			return e.handleExec(ctx, session, sql, bindVars, target, logStats)
 		}
 
 		nsf := NewSafeSession(session)
