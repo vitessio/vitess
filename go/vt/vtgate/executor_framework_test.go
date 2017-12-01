@@ -281,6 +281,7 @@ func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err er
 }
 
 func testNonZeroDuration(t *testing.T, what, d string) {
+	t.Helper()
 	time, _ := strconv.ParseFloat(d, 64)
 	if time == 0 {
 		t.Errorf("querylog %s want non-zero duration got %s (%v)", what, d, time)
@@ -298,7 +299,16 @@ func getQueryLog(logChan chan interface{}) *LogStats {
 	}
 }
 
+// Queries can hit the plan cache in less than a microsecond, which makes them
+// appear to take 0.000000 time in the query log. To mitigate this in tests,
+// keep an in-memory record of queries that we know have been planned during
+// the current test execution and skip testing for non-zero plan time if this
+// is a repeat query.
+var testPlannedQueries = map[string]bool{}
+
 func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql string, shardQueries int) *LogStats {
+	t.Helper()
+
 	logStats := getQueryLog(logChan)
 	if logStats == nil {
 		t.Errorf("logstats: no querylog in channel, want sql %s", sql)
@@ -313,7 +323,12 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 	}
 
 	testNonZeroDuration(t, "TotalTime", fields[7])
-	testNonZeroDuration(t, "PlanTime", fields[8])
+
+	if testPlannedQueries[sql] == false {
+		testNonZeroDuration(t, "PlanTime", fields[8])
+	}
+	testPlannedQueries[sql] = true
+
 	testNonZeroDuration(t, "ExecuteTime", fields[9])
 
 	// fields[10] is CommitTime which is set only in autocommit mode and
