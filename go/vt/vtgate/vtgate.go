@@ -202,6 +202,8 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server
 		}
 	})
 	vtgateOnce.Do(rpcVTGate.registerDebugHealthHandler)
+	initQueryLogger()
+
 	return rpcVTGate
 }
 
@@ -360,6 +362,7 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables 
 		},
 		notInTransaction,
 		options,
+		nil,
 	)
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))

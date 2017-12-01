@@ -284,7 +284,11 @@ func TestShardFail(t *testing.T) {
 func TestSelectBindvars(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 
-	_, err := executorExec(executor, "select id from user where id = :id", map[string]*querypb.BindVariable{
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	sql := "select id from user where id = :id"
+	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{
 		"id": sqltypes.Int64BindVariable(1),
 	})
 	if err != nil {
@@ -301,8 +305,10 @@ func TestSelectBindvars(t *testing.T) {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 	sbc1.Queries = nil
+	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
 
-	_, err = executorExec(executor, "select id from user where name in (:name1, :name2)", map[string]*querypb.BindVariable{
+	sql = "select id from user where name in (:name1, :name2)"
+	_, err = executorExec(executor, sql, map[string]*querypb.BindVariable{
 		"name1": sqltypes.StringBindVariable("foo1"),
 		"name2": sqltypes.StringBindVariable("foo2"),
 	})
@@ -321,8 +327,12 @@ func TestSelectBindvars(t *testing.T) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
 	sbc1.Queries = nil
+	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select user_id from name_user_map where name = :name", 1)
+	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select user_id from name_user_map where name = :name", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
 
-	_, err = executorExec(executor, "select id from user where name in (:name1, :name2)", map[string]*querypb.BindVariable{
+	sql = "select id from user where name in (:name1, :name2)"
+	_, err = executorExec(executor, sql, map[string]*querypb.BindVariable{
 		"name1": sqltypes.BytesBindVariable([]byte("foo1")),
 		"name2": sqltypes.BytesBindVariable([]byte("foo2")),
 	})
@@ -340,6 +350,10 @@ func TestSelectBindvars(t *testing.T) {
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
+
+	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select user_id from name_user_map where name = :name", 1)
+	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select user_id from name_user_map where name = :name", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
 }
 
 func TestSelectEqual(t *testing.T) {
@@ -823,6 +837,9 @@ func TestSelectScatter(t *testing.T) {
 	}
 	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize, false)
 
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
 	_, err := executorExec(executor, "select id from user", nil)
 	if err != nil {
 		t.Error(err)
@@ -836,6 +853,7 @@ func TestSelectScatter(t *testing.T) {
 			t.Errorf("conn.Queries = %#v, want %#v", conn.Queries, wantQueries)
 		}
 	}
+	testQueryLog(t, logChan, "TestExecute", "SELECT", wantQueries[0].Sql, 8)
 }
 
 func TestStreamSelectScatter(t *testing.T) {

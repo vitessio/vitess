@@ -38,6 +38,9 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := &vtgatepb.Session{TargetString: "@master"}
 
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
 	// begin.
 	_, err := executor.Execute(context.Background(), "TestExecute", session, "begin", nil)
 	if err != nil {
@@ -51,11 +54,22 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 		t.Errorf("want 0, got %d", commitCount)
 	}
 
+	// begin doesn't put anything in the query log
+	logStats := getQueryLog(logChan)
+	if logStats != nil {
+		t.Errorf("begin unexpectedly created a logStats record")
+	}
+
 	// commit.
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "select id from main1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	logStats = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	if logStats.CommitTime != 0 {
+		t.Errorf("logstats: expected zero CommitTime")
+	}
+
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "commit", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -66,6 +80,10 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	}
 	if commitCount := sbclookup.CommitCount.Get(); commitCount != 1 {
 		t.Errorf("want 1, got %d", commitCount)
+	}
+	logStats = getQueryLog(logChan)
+	if logStats != nil {
+		t.Errorf("commit unexpectedly created a logStats record")
 	}
 
 	// rollback.
@@ -117,6 +135,9 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := &vtgatepb.Session{TargetString: "@master", Autocommit: true}
 
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
 	// begin.
 	_, err := executor.Execute(context.Background(), "TestExecute", session, "begin", nil)
 	if err != nil {
@@ -145,6 +166,11 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	}
 	if commitCount := sbclookup.CommitCount.Get(); commitCount != 1 {
 		t.Errorf("want 1, got %d", commitCount)
+	}
+
+	logStats := testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	if logStats.CommitTime != 0 {
+		t.Errorf("logstats: expected zero CommitTime")
 	}
 
 	// rollback.
@@ -307,6 +333,9 @@ func TestExecutorAutocommit(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := &vtgatepb.Session{TargetString: "@master"}
 
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
 	// autocommit = 0
 	startCount := sbclookup.CommitCount.Get()
 	_, err := executor.Execute(context.Background(), "TestExecute", session, "select id from main1", nil)
@@ -318,6 +347,11 @@ func TestExecutorAutocommit(t *testing.T) {
 	testSession.ShardSessions = nil
 	if !proto.Equal(&testSession, wantSession) {
 		t.Errorf("autocommit=0: %v, want %v", testSession, wantSession)
+	}
+
+	logStats := testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	if logStats.CommitTime != 0 {
+		t.Errorf("logstats: expected zero CommitTime")
 	}
 
 	// autocommit = 1
@@ -343,6 +377,11 @@ func TestExecutorAutocommit(t *testing.T) {
 		t.Errorf("Commit count: %d, want %d", got, want)
 	}
 
+	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id=1", 1)
+	if logStats.CommitTime == 0 {
+		t.Errorf("logstats: expected non-zero CommitTime")
+	}
+
 	// autocommit = 1, "begin"
 	startCount = sbclookup.CommitCount.Get()
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "begin", nil)
@@ -362,6 +401,12 @@ func TestExecutorAutocommit(t *testing.T) {
 	if got, want := sbclookup.CommitCount.Get(), startCount; got != want {
 		t.Errorf("Commit count: %d, want %d", got, want)
 	}
+
+	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id=1", 1)
+	if logStats.CommitTime != 0 {
+		t.Errorf("logstats: expected zero CommitTime")
+	}
+
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "commit", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -764,15 +809,22 @@ func TestVSchemaStats(t *testing.T) {
 
 func TestGetPlanUnnormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
-	emptyvc := newVCursorImpl(context.Background(), nil, querypb.Target{}, "", r)
-	unshardedvc := newVCursorImpl(context.Background(), nil, querypb.Target{Keyspace: KsTestUnsharded}, "", r)
+	emptyvc := newVCursorImpl(context.Background(), nil, querypb.Target{}, "", r, nil)
+	unshardedvc := newVCursorImpl(context.Background(), nil, querypb.Target{Keyspace: KsTestUnsharded}, "", r, nil)
 
+	logStats1 := NewLogStats(nil, "Test", "")
 	query1 := "select * from music_user_map where id = 1"
-	plan1, err := r.getPlan(emptyvc, query1, map[string]*querypb.BindVariable{}, false)
+	plan1, err := r.getPlan(emptyvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, false, logStats1)
 	if err != nil {
 		t.Error(err)
 	}
-	plan2, err := r.getPlan(emptyvc, query1, map[string]*querypb.BindVariable{}, false)
+	wantSQL := query1 + " /* comment */"
+	if logStats1.SQL != wantSQL {
+		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
+	}
+
+	logStats2 := NewLogStats(nil, "Test", "")
+	plan2, err := r.getPlan(emptyvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, false, logStats2)
 	if err != nil {
 		t.Error(err)
 	}
@@ -785,14 +837,22 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
 		t.Errorf("Plan keys: %s, want %s", keys, want)
 	}
-	plan3, err := r.getPlan(unshardedvc, query1, map[string]*querypb.BindVariable{}, false)
+	if logStats2.SQL != wantSQL {
+		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
+	}
+	logStats3 := NewLogStats(nil, "Test", "")
+	plan3, err := r.getPlan(unshardedvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, false, logStats3)
 	if err != nil {
 		t.Error(err)
 	}
 	if plan1 == plan3 {
 		t.Errorf("getPlan(query1, ks): plans must not be equal: %p %p", plan1, plan3)
 	}
-	plan4, err := r.getPlan(unshardedvc, query1, map[string]*querypb.BindVariable{}, false)
+	if logStats3.SQL != wantSQL {
+		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats3.SQL)
+	}
+	logStats4 := NewLogStats(nil, "Test", "")
+	plan4, err := r.getPlan(unshardedvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, false, logStats4)
 	if err != nil {
 		t.Error(err)
 	}
@@ -806,63 +866,87 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
 		t.Errorf("Plan keys: %s, want %s", keys, want)
 	}
+	if logStats4.SQL != wantSQL {
+		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats4.SQL)
+	}
 }
 
 func TestGetPlanCacheUnnormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
-	emptyvc := newVCursorImpl(context.Background(), nil, querypb.Target{}, "", r)
+	emptyvc := newVCursorImpl(context.Background(), nil, querypb.Target{}, "", r, nil)
 	query1 := "select * from music_user_map where id = 1"
-	_, err := r.getPlan(emptyvc, query1, map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */)
+	logStats1 := NewLogStats(nil, "Test", "")
+	_, err := r.getPlan(emptyvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
 	if err != nil {
 		t.Error(err)
 	}
 	if r.plans.Size() != 0 {
 		t.Errorf("getPlan() expected cache to have size 0, but got: %b", r.plans.Size())
 	}
-	_, err = r.getPlan(emptyvc, query1, map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */)
+	wantSQL := query1 + " /* comment */"
+	if logStats1.SQL != wantSQL {
+		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
+	}
+	logStats2 := NewLogStats(nil, "Test", "")
+	_, err = r.getPlan(emptyvc, query1, " /* comment 2 */", map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */, logStats2)
 	if err != nil {
 		t.Error(err)
 	}
 	if r.plans.Size() != 1 {
 		t.Errorf("getPlan() expected cache to have size 1, but got: %b", r.plans.Size())
+	}
+	wantSQL = query1 + " /* comment 2 */"
+	if logStats2.SQL != wantSQL {
+		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
 	}
 }
 
 func TestGetPlanCacheNormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
 	r.normalize = true
-	emptyvc := newVCursorImpl(context.Background(), nil, querypb.Target{}, "", r)
+	emptyvc := newVCursorImpl(context.Background(), nil, querypb.Target{}, "", r, nil)
 	query1 := "select * from music_user_map where id = 1"
-	_, err := r.getPlan(emptyvc, query1, map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */)
+	logStats1 := NewLogStats(nil, "Test", "")
+	_, err := r.getPlan(emptyvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
 	if err != nil {
 		t.Error(err)
 	}
 	if r.plans.Size() != 0 {
 		t.Errorf("getPlan() expected cache to have size 0, but got: %b", r.plans.Size())
 	}
-	_, err = r.getPlan(emptyvc, query1, map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */)
+	wantSQL := "select * from music_user_map where id = :vtg1 /* comment */"
+	if logStats1.SQL != wantSQL {
+		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
+	}
+	logStats2 := NewLogStats(nil, "Test", "")
+	_, err = r.getPlan(emptyvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */, logStats2)
 	if err != nil {
 		t.Error(err)
 	}
 	if r.plans.Size() != 1 {
 		t.Errorf("getPlan() expected cache to have size 1, but got: %b", r.plans.Size())
 	}
+	if logStats2.SQL != wantSQL {
+		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
+	}
 }
 
 func TestGetPlanNormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
 	r.normalize = true
-	emptyvc := newVCursorImpl(context.Background(), nil, querypb.Target{}, "", r)
-	unshardedvc := newVCursorImpl(context.Background(), nil, querypb.Target{Keyspace: KsTestUnsharded}, "", r)
+	emptyvc := newVCursorImpl(context.Background(), nil, querypb.Target{}, "", r, nil)
+	unshardedvc := newVCursorImpl(context.Background(), nil, querypb.Target{Keyspace: KsTestUnsharded}, "", r, nil)
 
 	query1 := "select * from music_user_map where id = 1"
 	query2 := "select * from music_user_map where id = 2"
 	normalized := "select * from music_user_map where id = :vtg1"
-	plan1, err := r.getPlan(emptyvc, query1, map[string]*querypb.BindVariable{}, false)
+	logStats1 := NewLogStats(nil, "Test", "")
+	plan1, err := r.getPlan(emptyvc, query1, " /* comment 1 */", map[string]*querypb.BindVariable{}, false, logStats1)
 	if err != nil {
 		t.Error(err)
 	}
-	plan2, err := r.getPlan(emptyvc, query1, map[string]*querypb.BindVariable{}, false)
+	logStats2 := NewLogStats(nil, "Test", "")
+	plan2, err := r.getPlan(emptyvc, query1, " /* comment 2 */", map[string]*querypb.BindVariable{}, false, logStats2)
 	if err != nil {
 		t.Error(err)
 	}
@@ -875,29 +959,57 @@ func TestGetPlanNormalized(t *testing.T) {
 	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
 		t.Errorf("Plan keys: %s, want %s", keys, want)
 	}
-	plan3, err := r.getPlan(emptyvc, query2, map[string]*querypb.BindVariable{}, false)
+
+	wantSQL := normalized + " /* comment 1 */"
+	if logStats1.SQL != wantSQL {
+		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
+	}
+	wantSQL = normalized + " /* comment 2 */"
+	if logStats2.SQL != wantSQL {
+		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
+	}
+
+	logStats3 := NewLogStats(nil, "Test", "")
+	plan3, err := r.getPlan(emptyvc, query2, " /* comment 3 */", map[string]*querypb.BindVariable{}, false, logStats3)
 	if err != nil {
 		t.Error(err)
 	}
 	if plan1 != plan3 {
 		t.Errorf("getPlan(query2): plans must be equal: %p %p", plan1, plan3)
 	}
-	plan4, err := r.getPlan(emptyvc, normalized, map[string]*querypb.BindVariable{}, false)
+	wantSQL = normalized + " /* comment 3 */"
+	if logStats3.SQL != wantSQL {
+		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats3.SQL)
+	}
+
+	logStats4 := NewLogStats(nil, "Test", "")
+	plan4, err := r.getPlan(emptyvc, normalized, " /* comment 4 */", map[string]*querypb.BindVariable{}, false, logStats4)
 	if err != nil {
 		t.Error(err)
 	}
 	if plan1 != plan4 {
 		t.Errorf("getPlan(normalized): plans must be equal: %p %p", plan1, plan4)
 	}
+	wantSQL = normalized + " /* comment 4 */"
+	if logStats4.SQL != wantSQL {
+		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats4.SQL)
+	}
 
-	plan3, err = r.getPlan(unshardedvc, query1, map[string]*querypb.BindVariable{}, false)
+	logStats5 := NewLogStats(nil, "Test", "")
+	plan3, err = r.getPlan(unshardedvc, query1, " /* comment 5 */", map[string]*querypb.BindVariable{}, false, logStats5)
 	if err != nil {
 		t.Error(err)
 	}
 	if plan1 == plan3 {
 		t.Errorf("getPlan(query1, ks): plans must not be equal: %p %p", plan1, plan3)
 	}
-	plan4, err = r.getPlan(unshardedvc, query1, map[string]*querypb.BindVariable{}, false)
+	wantSQL = normalized + " /* comment 5 */"
+	if logStats5.SQL != wantSQL {
+		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats5.SQL)
+	}
+
+	logStats6 := NewLogStats(nil, "Test", "")
+	plan4, err = r.getPlan(unshardedvc, query1, " /* comment 6 */", map[string]*querypb.BindVariable{}, false, logStats6)
 	if err != nil {
 		t.Error(err)
 	}
@@ -913,12 +1025,14 @@ func TestGetPlanNormalized(t *testing.T) {
 	}
 
 	// Errors
-	_, err = r.getPlan(emptyvc, "syntax", map[string]*querypb.BindVariable{}, false)
+	logStats7 := NewLogStats(nil, "Test", "")
+	_, err = r.getPlan(emptyvc, "syntax", "", map[string]*querypb.BindVariable{}, false, logStats7)
 	wantErr := "syntax error at position 7 near 'syntax'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("getPlan(syntax): %v, want %s", err, wantErr)
 	}
-	_, err = r.getPlan(emptyvc, "create table a(id int)", map[string]*querypb.BindVariable{}, false)
+	logStats8 := NewLogStats(nil, "Test", "")
+	_, err = r.getPlan(emptyvc, "create table a(id int)", "", map[string]*querypb.BindVariable{}, false, logStats8)
 	wantErr = "unsupported construct: ddl"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("getPlan(syntax): %v, want %s", err, wantErr)
