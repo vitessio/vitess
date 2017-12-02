@@ -140,7 +140,7 @@ for uid_index in $uids; do
     -service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
     -pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
     -vtctld_addr http://$hostname:$vtctld_web_port/ \
-    "$optional_auth_args" \
+    $optional_auth_args \
     $dbconfig_flags \
     > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
