@@ -20,24 +20,12 @@ from urlparse import urlparse
 from vtdb import prefer_vtroot_imports  # pylint: disable=unused-import
 
 import grpc
-import json
 
 import vtctl_client
 
 from vtproto import vtctldata_pb2
 from vtproto import vtctlservice_pb2
-
-
-class StaticAuthClientCreds():
-    """Metadata wrapper for StaticAuthClientCreds."""
-
-    def __init__(self, auth_static_client_creds):
-        self._credentials = auth_static_client_creds
-        with open(self._credentials) as data_file:
-          self._data = json.load(data_file)
-
-    def metadata(self):
-        return (('username', self._data['Username']), ('password', self._data['Password']),)
+from util import static_auth_client
 
 class GRPCVtctlClient(vtctl_client.VtctlClient):
   """GRPCVtctlClient is the gRPC implementation of VtctlClient.
@@ -75,8 +63,8 @@ class GRPCVtctlClient(vtctl_client.VtctlClient):
         action_timeout=long(action_timeout * 1e9))
 
     if self.auth_static_client_creds is not None:
-        auth_plugin = StaticAuthClientCreds(self.auth_static_client_creds)
-        it = self.stub.ExecuteVtctlCommand(req, action_timeout, metadata = auth_plugin.metadata())
+        auth_plugin = static_auth_client.StaticAuthClientCreds(self.auth_static_client_creds)
+        it = self.stub.ExecuteVtctlCommand(req, action_timeout, metadata=auth_plugin.metadata())
     else:
         it = self.stub.ExecuteVtctlCommand(req, action_timeout)
 
