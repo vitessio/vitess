@@ -47,7 +47,6 @@ class GRPCVtctlClient(vtctl_client.VtctlClient):
       self.stub.close()
 
     p = urlparse('http://' + self.addr)
-
     channel = grpc.insecure_channel('%s:%s' % (p.hostname, p.port))
     self.stub = vtctlservice_pb2.VtctlStub(channel)
 
@@ -61,7 +60,6 @@ class GRPCVtctlClient(vtctl_client.VtctlClient):
     req = vtctldata_pb2.ExecuteVtctlCommandRequest(
         args=args,
         action_timeout=long(action_timeout * 1e9))
-
     if self.auth_static_client_creds is not None:
         auth_plugin = static_auth_client.StaticAuthClientCreds(self.auth_static_client_creds)
         it = self.stub.ExecuteVtctlCommand(req, action_timeout, metadata=auth_plugin.metadata())
