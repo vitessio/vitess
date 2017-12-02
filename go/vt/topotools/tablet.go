@@ -61,7 +61,7 @@ func ConfigureTabletHook(hk *hook.Hook, tabletAlias *topodatapb.TabletAlias) {
 // transitions need to be forced from time to time.
 //
 // If successful, the updated tablet record is returned.
-func ChangeType(ctx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias, newType topodatapb.TabletType) (*topodatapb.Tablet, error) {
+func ChangeType(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, newType topodatapb.TabletType) (*topodatapb.Tablet, error) {
 	return ts.UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
 		tablet.Type = newType
 		return nil
@@ -87,7 +87,7 @@ func CheckOwnership(oldTablet, newTablet *topodatapb.Tablet) error {
 // DeleteTablet removes a tablet record from the topology:
 // - the replication data record if any
 // - the tablet record
-func DeleteTablet(ctx context.Context, ts topo.Server, tablet *topodatapb.Tablet) error {
+func DeleteTablet(ctx context.Context, ts *topo.Server, tablet *topodatapb.Tablet) error {
 	// try to remove replication data, no fatal if we fail
 	if err := topo.DeleteTabletReplicationData(ctx, ts, tablet); err != nil {
 		if err == topo.ErrNoNode {

@@ -96,7 +96,7 @@ const (
 // - limit the QPS to the underlying topo.Server
 // - return the last known value of the data if there is an error
 type ResilientSrvTopoServer struct {
-	topoServer topo.Server
+	topoServer *topo.Server
 	cacheTTL   time.Duration
 	counts     *stats.Counters
 
@@ -151,7 +151,7 @@ type srvKeyspaceEntry struct {
 
 // NewResilientSrvTopoServer creates a new ResilientSrvTopoServer
 // based on the provided topo.Server.
-func NewResilientSrvTopoServer(base topo.Server, counterPrefix string) *ResilientSrvTopoServer {
+func NewResilientSrvTopoServer(base *topo.Server, counterPrefix string) *ResilientSrvTopoServer {
 	return &ResilientSrvTopoServer{
 		topoServer: base,
 		cacheTTL:   *srvTopoCacheTTL,

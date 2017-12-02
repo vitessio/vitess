@@ -145,8 +145,11 @@ func commandGetCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return fmt.Errorf("the <cell> argument is required for the GetCellInfo command")
 	}
 
+	// We use a strong read, because users using this command want the
+	// latest data, and this is user-generated, not used in any
+	// automated process.
 	cell := subFlags.Arg(0)
-	ci, err := wr.TopoServer().GetCellInfo(ctx, cell)
+	ci, err := wr.TopoServer().GetCellInfo(ctx, cell, true /*strongRead*/)
 	if err != nil {
 		return err
 	}

@@ -34,7 +34,7 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-func checkShardServedTypes(t *testing.T, ts topo.Server, shard string, expected int) {
+func checkShardServedTypes(t *testing.T, ts *topo.Server, shard string, expected int) {
 	ctx := context.Background()
 	si, err := ts.GetShard(ctx, "ks", shard)
 	if err != nil {
@@ -45,7 +45,7 @@ func checkShardServedTypes(t *testing.T, ts topo.Server, shard string, expected 
 	}
 }
 
-func checkShardSourceShards(t *testing.T, ts topo.Server, shard string, expected int) {
+func checkShardSourceShards(t *testing.T, ts *topo.Server, shard string, expected int) {
 	ctx := context.Background()
 	si, err := ts.GetShard(ctx, "ks", shard)
 	if err != nil {

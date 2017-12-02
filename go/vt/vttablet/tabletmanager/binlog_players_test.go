@@ -148,7 +148,7 @@ func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*quer
 
 // createSourceTablet is a helper method to create the source tablet
 // in the given keyspace/shard.
-func createSourceTablet(t *testing.T, name string, ts topo.Server, keyspace, shard string) {
+func createSourceTablet(t *testing.T, name string, ts *topo.Server, keyspace, shard string) {
 	vshard, kr, err := topo.ValidateShardName(shard)
 	if err != nil {
 		t.Fatalf("ValidateShardName(%v) failed: %v", shard, err)

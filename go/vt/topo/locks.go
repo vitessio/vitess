@@ -126,7 +126,7 @@ var locksKey locksKeyType
 //   * 'vtctl SetShardTabletControl' emergency operations
 //   * 'vtctl SourceShardAdd' and 'vtctl SourceShardDelete' emergency operations
 // * keyspace-wide schema changes
-func (ts Server) LockKeyspace(ctx context.Context, keyspace, action string) (context.Context, func(*error), error) {
+func (ts *Server) LockKeyspace(ctx context.Context, keyspace, action string) (context.Context, func(*error), error) {
 	i, ok := ctx.Value(locksKey).(*locksInfo)
 	if !ok {
 		i = &locksInfo{
@@ -206,7 +206,7 @@ func CheckKeyspaceLocked(ctx context.Context, keyspace string) error {
 
 // lockKeyspace will lock the keyspace in the topology server.
 // unlockKeyspace should be called if this returns no error.
-func (l *Lock) lockKeyspace(ctx context.Context, ts Server, keyspace string) (LockDescriptor, error) {
+func (l *Lock) lockKeyspace(ctx context.Context, ts *Server, keyspace string) (LockDescriptor, error) {
 	log.Infof("Locking keyspace %v for action %v", keyspace, l.Action)
 
 	ctx, cancel := context.WithTimeout(ctx, *LockTimeout)
@@ -223,11 +223,11 @@ func (l *Lock) lockKeyspace(ctx context.Context, ts Server, keyspace string) (Lo
 	if err != nil {
 		return nil, err
 	}
-	return ts.Lock(ctx, GlobalCell, keyspacePath, j)
+	return ts.globalCell.Lock(ctx, keyspacePath, j)
 }
 
 // unlockKeyspace unlocks a previously locked keyspace.
-func (l *Lock) unlockKeyspace(ctx context.Context, ts Server, keyspace string, lockDescriptor LockDescriptor, actionError error) error {
+func (l *Lock) unlockKeyspace(ctx context.Context, ts *Server, keyspace string, lockDescriptor LockDescriptor, actionError error) error {
 	// Detach from the parent timeout, but copy the trace span.
 	// We need to still release the lock even if the parent
 	// context timed out.
@@ -268,7 +268,7 @@ func (l *Lock) unlockKeyspace(ctx context.Context, ts Server, keyspace string, l
 // * operations that we don't want to conflict with re-parenting:
 //   * DeleteTablet when it's the shard's current master
 //
-func (ts Server) LockShard(ctx context.Context, keyspace, shard, action string) (context.Context, func(*error), error) {
+func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string) (context.Context, func(*error), error) {
 	i, ok := ctx.Value(locksKey).(*locksInfo)
 	if !ok {
 		i = &locksInfo{
@@ -350,7 +350,7 @@ func CheckShardLocked(ctx context.Context, keyspace, shard string) error {
 
 // lockShard will lock the shard in the topology server.
 // UnlockShard should be called if this returns no error.
-func (l *Lock) lockShard(ctx context.Context, ts Server, keyspace, shard string) (LockDescriptor, error) {
+func (l *Lock) lockShard(ctx context.Context, ts *Server, keyspace, shard string) (LockDescriptor, error) {
 	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, l.Action)
 
 	ctx, cancel := context.WithTimeout(ctx, *LockTimeout)
@@ -368,11 +368,11 @@ func (l *Lock) lockShard(ctx context.Context, ts Server, keyspace, shard string)
 	if err != nil {
 		return nil, err
 	}
-	return ts.Lock(ctx, GlobalCell, shardPath, j)
+	return ts.globalCell.Lock(ctx, shardPath, j)
 }
 
 // unlockShard unlocks a previously locked shard.
-func (l *Lock) unlockShard(ctx context.Context, ts Server, keyspace, shard string, lockDescriptor LockDescriptor, actionError error) error {
+func (l *Lock) unlockShard(ctx context.Context, ts *Server, keyspace, shard string, lockDescriptor LockDescriptor, actionError error) error {
 	// Detach from the parent timeout, but copy the trace span.
 	// We need to still release the lock even if the parent context timed out.
 	ctx = trace.CopySpan(context.TODO(), ctx)

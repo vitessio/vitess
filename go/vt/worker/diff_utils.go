@@ -56,7 +56,7 @@ type QueryResultReader struct {
 
 // NewQueryResultReaderForTablet creates a new QueryResultReader for
 // the provided tablet / sql query
-func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias, sql string) (*QueryResultReader, error) {
+func NewQueryResultReaderForTablet(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, sql string) (*QueryResultReader, error) {
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	tablet, err := ts.GetTablet(shortCtx, tabletAlias)
 	cancel()
@@ -189,7 +189,7 @@ func uint64FromKeyspaceID(keyspaceID []byte) uint64 {
 // TableScan returns a QueryResultReader that gets all the rows from a
 // table, ordered by Primary Key. The returned columns are ordered
 // with the Primary Key columns in front.
-func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *topodatapb.TabletAlias, td *tabletmanagerdatapb.TableDefinition) (*QueryResultReader, error) {
+func TableScan(ctx context.Context, log logutil.Logger, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, td *tabletmanagerdatapb.TableDefinition) (*QueryResultReader, error) {
 	sql := fmt.Sprintf("SELECT %v FROM %v", strings.Join(escapeAll(orderedColumns(td)), ", "), sqlescape.EscapeID(td.Name))
 	if len(td.PrimaryKeyColumns) > 0 {
 		sql += fmt.Sprintf(" ORDER BY %v", strings.Join(escapeAll(td.PrimaryKeyColumns), ", "))
@@ -205,7 +205,7 @@ func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAl
 // If keyspaceSchema is passed in, we go into v3 mode, and we ask for all
 // source data, and filter here. Otherwise we stick with v2 mode, where we can
 // ask the source tablet to do the filtering.
-func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *topodatapb.TabletAlias, td *tabletmanagerdatapb.TableDefinition, keyRange *topodatapb.KeyRange, keyspaceSchema *vindexes.KeyspaceSchema, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType) (*QueryResultReader, error) {
+func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, td *tabletmanagerdatapb.TableDefinition, keyRange *topodatapb.KeyRange, keyspaceSchema *vindexes.KeyspaceSchema, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType) (*QueryResultReader, error) {
 	if keyspaceSchema != nil {
 		// switch to v3 mode.
 		keyResolver, err := newV3ResolverFromColumnList(keyspaceSchema, td.Name, orderedColumns(td))

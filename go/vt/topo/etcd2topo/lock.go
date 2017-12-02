@@ -110,38 +110,35 @@ func (s *Server) waitOnLastRev(ctx context.Context, cli *clientv3.Client, nodePa
 
 // etcdLockDescriptor implements topo.LockDescriptor.
 type etcdLockDescriptor struct {
-	c       *cellClient
+	s       *Server
 	leaseID clientv3.LeaseID
 }
 
-// Lock is part of the topo.Backend interface.
-func (s *Server) Lock(ctx context.Context, cell, dirPath, contents string) (topo.LockDescriptor, error) {
+// Lock is part of the topo.Conn interface.
+func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	// We list the directory first to make sure it exists.
-	if _, err := s.ListDir(ctx, cell, dirPath); err != nil {
-		if err == topo.ErrNoNode {
-			return nil, err
-		}
-		return nil, fmt.Errorf("cannot ListDir(%v, %v) before locking", cell, dirPath)
+	if _, err := s.ListDir(ctx, dirPath); err != nil {
+		// We need to return the right error codes, like
+		// topo.ErrNoNode and topo.ErrInterrupted, and the
+		// easiest way to do this is to return convertError(err).
+		// It may lose some of the context, if this is an issue,
+		// maybe logging the error would work here.
+		return nil, convertError(err)
 	}
 
-	return s.lock(ctx, cell, dirPath, contents)
+	return s.lock(ctx, dirPath, contents)
 }
 
 // lock is used by both Lock() and master election.
-func (s *Server) lock(ctx context.Context, cell, nodePath, contents string) (topo.LockDescriptor, error) {
-	// Find our cell.
-	c, err := s.clientForCell(ctx, cell)
-	if err != nil {
-		return nil, err
-	}
-	nodePath = path.Join(c.root, nodePath, locksPath)
+func (s *Server) lock(ctx context.Context, nodePath, contents string) (topo.LockDescriptor, error) {
+	nodePath = path.Join(s.root, nodePath, locksPath)
 
 	// Get a lease, set its KeepAlive.
-	lease, err := c.cli.Grant(ctx, int64(*leaseTTL))
+	lease, err := s.cli.Grant(ctx, int64(*leaseTTL))
 	if err != nil {
 		return nil, convertError(err)
 	}
-	leaseKA, err := c.cli.KeepAlive(ctx, lease.ID)
+	leaseKA, err := s.cli.KeepAlive(ctx, lease.ID)
 	if err != nil {
 		return nil, convertError(err)
 	}
@@ -151,7 +148,7 @@ func (s *Server) lock(ctx context.Context, cell, nodePath, contents string) (top
 	}()
 
 	// Create an ephemeral node in the locks directory.
-	_, revision, err := s.newUniqueEphemeralKV(ctx, c.cli, lease.ID, nodePath, contents)
+	_, revision, err := s.newUniqueEphemeralKV(ctx, s.cli, lease.ID, nodePath, contents)
 	if err != nil {
 		return nil, err
 	}
@@ -159,11 +156,11 @@ func (s *Server) lock(ctx context.Context, cell, nodePath, contents string) (top
 
 	// Wait until all older nodes in the locks directory are gone.
 	for {
-		done, err := s.waitOnLastRev(ctx, c.cli, nodePath, revision)
+		done, err := s.waitOnLastRev(ctx, s.cli, nodePath, revision)
 		if err != nil {
 			// We had an error waiting on the last node.
 			// Revoke our lease, this will delete the file.
-			if _, rerr := c.cli.Revoke(context.Background(), lease.ID); rerr != nil {
+			if _, rerr := s.cli.Revoke(context.Background(), lease.ID); rerr != nil {
 				log.Warningf("Revoke(%d) failed, may have left %v behind: %v", lease.ID, key, rerr)
 			}
 			return nil, err
@@ -171,7 +168,7 @@ func (s *Server) lock(ctx context.Context, cell, nodePath, contents string) (top
 		if done {
 			// No more older nodes, we're it!
 			return &etcdLockDescriptor{
-				c:       c,
+				s:       s,
 				leaseID: lease.ID,
 			}, nil
 		}
@@ -180,7 +177,7 @@ func (s *Server) lock(ctx context.Context, cell, nodePath, contents string) (top
 
 // Unlock is part of the topo.LockDescriptor interface.
 func (ld *etcdLockDescriptor) Unlock(ctx context.Context) error {
-	_, err := ld.c.cli.Revoke(ctx, ld.leaseID)
+	_, err := ld.s.cli.Revoke(ctx, ld.leaseID)
 	if err != nil {
 		return convertError(err)
 	}

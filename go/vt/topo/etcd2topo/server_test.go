@@ -25,9 +25,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
+	"github.com/coreos/etcd/clientv3"
 	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test"
@@ -64,7 +64,10 @@ func startEtcd(t *testing.T) (*exec.Cmd, string, string) {
 	}
 
 	// Create a client to connect to the created etcd.
-	c, err := newCellClient(clientAddr, "/")
+	cli, err := clientv3.New(clientv3.Config{
+		Endpoints:   []string{clientAddr},
+		DialTimeout: 5 * time.Second,
+	})
 	if err != nil {
 		t.Fatalf("newCellClient(%v) failed: %v", clientAddr, err)
 	}
@@ -74,7 +77,7 @@ func startEtcd(t *testing.T) (*exec.Cmd, string, string) {
 	defer cancel()
 	start := time.Now()
 	for {
-		if _, err := c.cli.Get(ctx, "/"); err == nil {
+		if _, err := cli.Get(ctx, "/"); err == nil {
 			break
 		}
 		if time.Now().Sub(start) > 10*time.Second {
@@ -95,66 +98,58 @@ func TestEtcd2Topo(t *testing.T) {
 		os.RemoveAll(dataDir)
 	}()
 
-	// This function will create a toplevel directory for a new test.
 	testIndex := 0
-	newServer := func() (*Server, string) {
+	newServer := func() *topo.Server {
 		// Each test will use its own sub-directories.
 		testRoot := fmt.Sprintf("/test-%v", testIndex)
 		testIndex++
 
 		// Create the server on the new root.
-		s, err := NewServer(clientAddr, path.Join(testRoot, "global"))
+		ts, err := topo.OpenServer("etcd2", clientAddr, path.Join(testRoot, topo.GlobalCell))
 		if err != nil {
-			t.Fatalf("NewServer() failed: %v", err)
+			t.Fatalf("OpenServer() failed: %v", err)
 		}
 
-		return s, testRoot
+		// Create the CellInfo.
+		if err := ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
+			ServerAddress: clientAddr,
+			Root:          path.Join(testRoot, test.LocalCellName),
+		}); err != nil {
+			t.Fatalf("CreateCellInfo() failed: %v", err)
+		}
+
+		return ts
 	}
 
 	// Run the TopoServerTestSuite tests.
-	test.TopoServerTestSuite(t, func() topo.Impl {
-		s, testRoot := newServer()
-
-		// Create the CellInfo.
-		ctx := context.Background()
-		cell := "test"
-		ci := &topodatapb.CellInfo{
-			ServerAddress: clientAddr,
-			Root:          path.Join(testRoot, cell),
-		}
-		data, err := proto.Marshal(ci)
-		if err != nil {
-			t.Fatalf("cannot proto.Marshal CellInfo: %v", err)
-		}
-		nodePath := path.Join(s.global.root, cellsPath, cell, topo.CellInfoFile)
-		if _, err := s.global.cli.Put(ctx, nodePath, string(data)); err != nil {
-			t.Fatalf("s.global.cli.Put(%v) failed: %v", nodePath, err)
-		}
-
-		return s
+	test.TopoServerTestSuite(t, func() *topo.Server {
+		return newServer()
 	})
 
 	// Run etcd-specific tests.
-	s, _ := newServer()
-	testKeyspaceLock(t, s)
+	ts := newServer()
+	testKeyspaceLock(t, ts)
+	ts.Close()
 }
 
 // testKeyspaceLock tests etcd-specific heartbeat (TTL).
 // Note TTL granularity is in seconds, even though the API uses time.Duration.
 // So we have to wait a long time in these tests.
-func testKeyspaceLock(t *testing.T, ts *Server) {
+func testKeyspaceLock(t *testing.T, ts *topo.Server) {
 	ctx := context.Background()
-	defer ts.Close()
-
-	tts := topo.Server{Impl: ts}
 	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace")
-	if err := tts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
+	}
+
+	conn, err := ts.ConnForCell(ctx, topo.GlobalCell)
+	if err != nil {
+		t.Fatalf("ConnForCell failed: %v", err)
 	}
 
 	// Long TTL, unlock before lease runs out.
 	*leaseTTL = 1000
-	lockDescriptor, err := ts.Lock(ctx, topo.GlobalCell, keyspacePath, "ttl")
+	lockDescriptor, err := conn.Lock(ctx, keyspacePath, "ttl")
 	if err != nil {
 		t.Fatalf("Lock failed: %v", err)
 	}
@@ -164,7 +159,7 @@ func testKeyspaceLock(t *testing.T, ts *Server) {
 
 	// Short TTL, make sure it doesn't expire.
 	*leaseTTL = 1
-	lockDescriptor, err = ts.Lock(ctx, topo.GlobalCell, keyspacePath, "short ttl")
+	lockDescriptor, err = conn.Lock(ctx, keyspacePath, "short ttl")
 	if err != nil {
 		t.Fatalf("Lock failed: %v", err)
 	}

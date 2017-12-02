@@ -49,7 +49,7 @@ const (
 )
 
 // InitVtctld initializes all the vtctld functionnality.
-func InitVtctld(ts topo.Server) {
+func InitVtctld(ts *topo.Server) {
 	actionRepo := NewActionRepository(ts)
 
 	// keyspace actions

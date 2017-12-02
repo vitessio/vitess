@@ -18,7 +18,6 @@ package consultopo
 
 import (
 	"flag"
-	"fmt"
 	"path"
 	"time"
 
@@ -32,16 +31,11 @@ var (
 	watchPollDuration = flag.Duration("topo_consul_watch_poll_duration", 30*time.Second, "time of the long poll for watch queries. Interrupting a watch may wait for up to that time.")
 )
 
-// Watch is part of the topo.Backend interface.
-func (s *Server) Watch(ctx context.Context, cell, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
+// Watch is part of the topo.Conn interface.
+func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
 	// Initial get.
-	c, err := s.clientForCell(ctx, cell)
-	if err != nil {
-		return &topo.WatchData{Err: fmt.Errorf("Watch cannot get cell: %v", err)}, nil, nil
-	}
-	nodePath := path.Join(c.root, filePath)
-
-	pair, _, err := c.kv.Get(nodePath, nil)
+	nodePath := path.Join(s.root, filePath)
+	pair, _, err := s.kv.Get(nodePath, nil)
 	if err != nil {
 		return &topo.WatchData{Err: err}, nil, nil
 	}
@@ -71,7 +65,7 @@ func (s *Server) Watch(ctx context.Context, cell, filePath string) (*topo.WatchD
 			// if it didn't change. So we just check for that
 			// and swallow the notifications when version matches.
 			waitIndex := pair.ModifyIndex
-			pair, _, err = c.kv.Get(nodePath, &api.QueryOptions{
+			pair, _, err = s.kv.Get(nodePath, &api.QueryOptions{
 				WaitIndex: waitIndex,
 				WaitTime:  *watchPollDuration,
 			})

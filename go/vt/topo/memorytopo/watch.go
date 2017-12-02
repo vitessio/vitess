@@ -24,18 +24,18 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// Watch is part of the topo.Backend interface.
-func (mt *MemoryTopo) Watch(ctx context.Context, cell string, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
-	mt.mu.Lock()
-	defer mt.mu.Unlock()
+// Watch is part of the topo.Conn interface.
+func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
+	c.factory.mu.Lock()
+	defer c.factory.mu.Unlock()
 
-	n := mt.nodeByPath(cell, filePath)
+	n := c.factory.nodeByPath(c.cell, filePath)
 	if n == nil {
 		return &topo.WatchData{Err: topo.ErrNoNode}, nil, nil
 	}
 	if n.contents == nil {
 		// it's a directory
-		return &topo.WatchData{Err: fmt.Errorf("cannot watch directory %v in cell %v", filePath, cell)}, nil, nil
+		return &topo.WatchData{Err: fmt.Errorf("cannot watch directory %v in cell %v", filePath, c.cell)}, nil, nil
 	}
 	current := &topo.WatchData{
 		Contents: n.contents,
@@ -50,10 +50,10 @@ func (mt *MemoryTopo) Watch(ctx context.Context, cell string, filePath string) (
 	cancel := func() {
 		// This function can be called at any point, so we first need
 		// to make sure the watch is still valid.
-		mt.mu.Lock()
-		defer mt.mu.Unlock()
+		c.factory.mu.Lock()
+		defer c.factory.mu.Unlock()
 
-		n := mt.nodeByPath(cell, filePath)
+		n := c.factory.nodeByPath(c.cell, filePath)
 		if n == nil {
 			return
 		}

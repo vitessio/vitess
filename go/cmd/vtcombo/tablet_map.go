@@ -72,7 +72,7 @@ var tabletMap map[uint32]*tablet
 
 // createTablet creates an individual tablet, with its agent, and adds
 // it to the map. If it's a master tablet, it also issues a TER.
-func createTablet(ctx context.Context, ts topo.Server, cell string, uid uint32, keyspace, shard, dbname string, tabletType topodatapb.TabletType, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs) error {
+func createTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32, keyspace, shard, dbname string, tabletType topodatapb.TabletType, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs) error {
 	alias := &topodatapb.TabletAlias{
 		Cell: cell,
 		Uid:  uid,
@@ -105,7 +105,7 @@ func createTablet(ctx context.Context, ts topo.Server, cell string, uid uint32, 
 
 // initTabletMap creates the action agents and associated data structures
 // for all tablets, based on the vttest proto parameter.
-func initTabletMap(ts topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, schemaDir string, mycnf *mysqlctl.Mycnf) error {
+func initTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, schemaDir string, mycnf *mysqlctl.Mycnf) error {
 	tabletMap = make(map[uint32]*tablet)
 
 	ctx := context.Background()
