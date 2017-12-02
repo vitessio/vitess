@@ -43,9 +43,13 @@ func TestKeyspace(t *testing.T) {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
-	// Hack the zookeeper backend to create an error for GetKeyspace.
+	// Hack the topology backend to create an error for GetKeyspace.
 	// 'a' is not a valid proto-encoded value.
-	if _, err := ts.Impl.Update(ctx, topo.GlobalCell, path.Join("/keyspaces", keyspace, "Keyspace"), []byte{'a'}, nil); err != nil {
+	conn, err := ts.ConnForCell(ctx, topo.GlobalCell)
+	if err != nil {
+		t.Fatalf("ConnForCell() failed: %v", err)
+	}
+	if _, err := conn.Update(ctx, path.Join("/keyspaces", keyspace, "Keyspace"), []byte{'a'}, nil); err != nil {
 		t.Fatalf("failed to hack the keyspace: %v", err)
 	}
 

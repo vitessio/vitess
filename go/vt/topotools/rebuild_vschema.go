@@ -30,7 +30,7 @@ import (
 
 // RebuildVSchema rebuilds the SrvVSchema for the provided cell list
 // (or all cells if cell list is empty).
-func RebuildVSchema(ctx context.Context, log logutil.Logger, ts topo.Server, cells []string) error {
+func RebuildVSchema(ctx context.Context, log logutil.Logger, ts *topo.Server, cells []string) error {
 	// get the actual list of cells
 	if len(cells) == 0 {
 		var err error

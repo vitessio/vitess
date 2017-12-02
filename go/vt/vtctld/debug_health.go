@@ -28,7 +28,7 @@ import (
 )
 
 // RegisterDebugHealthHandler register a debug health http endpoint for a vtcld server
-func RegisterDebugHealthHandler(ts topo.Server) {
+func RegisterDebugHealthHandler(ts *topo.Server) {
 	http.HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
 			acl.SendError(w, err)
@@ -43,7 +43,7 @@ func RegisterDebugHealthHandler(ts topo.Server) {
 	})
 }
 
-func isHealthy(ts topo.Server) error {
+func isHealthy(ts *topo.Server) error {
 	_, err := ts.GetKeyspaces(context.Background())
 	return err
 }

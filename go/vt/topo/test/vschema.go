@@ -28,7 +28,7 @@ import (
 )
 
 // checkVSchema runs the tests on the VSchema part of the API
-func checkVSchema(t *testing.T, ts topo.Server) {
+func checkVSchema(t *testing.T, ts *topo.Server) {
 	ctx := context.Background()
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)

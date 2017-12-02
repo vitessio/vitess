@@ -64,7 +64,7 @@ type discoveryGateway struct {
 	queryservice.QueryService
 	hc            discovery.HealthCheck
 	tsc           *discovery.TabletStatsCache
-	topoServer    topo.Server
+	topoServer    *topo.Server
 	srvTopoServer topo.SrvTopoServer
 	localCell     string
 	retryCount    int
@@ -83,7 +83,7 @@ type discoveryGateway struct {
 	buffer *buffer.Buffer
 }
 
-func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int) Gateway {
+func createDiscoveryGateway(hc discovery.HealthCheck, topoServer *topo.Server, serv topo.SrvTopoServer, cell string, retryCount int) Gateway {
 	dg := &discoveryGateway{
 		hc:                hc,
 		tsc:               discovery.NewTabletStatsCacheDoNotSetListener(cell),

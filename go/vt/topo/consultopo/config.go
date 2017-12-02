@@ -18,7 +18,6 @@ package consultopo
 
 const (
 	// Path components
-	cellsPath     = "cells"
 	locksFilename = "Lock"
 	electionsPath = "elections"
 )

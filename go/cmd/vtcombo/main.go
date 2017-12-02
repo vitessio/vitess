@@ -51,7 +51,7 @@ var (
 
 	schemaDir = flag.String("schema_dir", "", "Schema base directory. Should contain one directory per keyspace, with a vschema.json file if necessary.")
 
-	ts topo.Server
+	ts *topo.Server
 )
 
 func init() {

@@ -38,7 +38,7 @@ func RegisterShardValidator() {
 type ShardValidator struct{}
 
 // Audit is part of the Validator interface.
-func (kv *ShardValidator) Audit(ctx context.Context, ts topo.Server, w *Workflow) error {
+func (kv *ShardValidator) Audit(ctx context.Context, ts *topo.Server, w *Workflow) error {
 	keyspaces, err := ts.GetKeyspaces(ctx)
 	if err != nil {
 		return err
@@ -65,7 +65,7 @@ func (kv *ShardValidator) Audit(ctx context.Context, ts topo.Server, w *Workflow
 
 // ShardFixer implements Fixer.
 type ShardFixer struct {
-	ts       topo.Server
+	ts       *topo.Server
 	keyspace string
 	shard    string
 }

@@ -89,7 +89,7 @@ func (mp *etcdMasterParticipation) WaitForMastership() (context.Context, error) 
 
 	// Try to get the mastership, by getting a lock.
 	var err error
-	ld, err = mp.s.lock(lockCtx, topo.GlobalCell, electionPath, mp.id)
+	ld, err = mp.s.lock(lockCtx, electionPath, mp.id)
 	if err != nil {
 		// It can be that we were interrupted.
 		return nil, err
@@ -108,10 +108,10 @@ func (mp *etcdMasterParticipation) Stop() {
 
 // GetCurrentMasterID is part of the topo.MasterParticipation interface
 func (mp *etcdMasterParticipation) GetCurrentMasterID(ctx context.Context) (string, error) {
-	electionPath := path.Join(mp.s.global.root, electionsPath, mp.name)
+	electionPath := path.Join(mp.s.root, electionsPath, mp.name)
 
 	// Get the keys in the directory, older first.
-	resp, err := mp.s.global.cli.Get(ctx, electionPath+"/",
+	resp, err := mp.s.cli.Get(ctx, electionPath+"/",
 		clientv3.WithPrefix(),
 		clientv3.WithSort(clientv3.SortByModRevision, clientv3.SortAscend),
 		clientv3.WithLimit(1))

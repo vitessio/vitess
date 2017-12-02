@@ -36,7 +36,7 @@ func RegisterUITestValidator() {
 type UITestValidator struct{}
 
 // Audit is part of the Validator interface.
-func (kv *UITestValidator) Audit(ctx context.Context, ts topo.Server, w *Workflow) error {
+func (kv *UITestValidator) Audit(ctx context.Context, ts *topo.Server, w *Workflow) error {
 	w.AddFixer("UITest Fixer", "UI Test Fixer", &UITestFixer{}, []string{"Success", "Error"})
 	return nil
 }

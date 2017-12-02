@@ -40,12 +40,16 @@ type WatchSrvKeyspaceData struct {
 }
 
 // WatchSrvKeyspace will set a watch on the SrvKeyspace object.
-// It has the same contract as Backend.Watch, but it also unpacks the
+// It has the same contract as Conn.Watch, but it also unpacks the
 // contents into a SrvKeyspace object.
-func (ts Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (*WatchSrvKeyspaceData, <-chan *WatchSrvKeyspaceData, CancelFunc) {
-	filePath := srvKeyspaceFileName(keyspace)
+func (ts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (*WatchSrvKeyspaceData, <-chan *WatchSrvKeyspaceData, CancelFunc) {
+	conn, err := ts.ConnForCell(ctx, cell)
+	if err != nil {
+		return &WatchSrvKeyspaceData{Err: err}, nil, nil
+	}
 
-	current, wdChannel, cancel := ts.Watch(ctx, cell, filePath)
+	filePath := srvKeyspaceFileName(keyspace)
+	current, wdChannel, cancel := conn.Watch(ctx, filePath)
 	if current.Err != nil {
 		return &WatchSrvKeyspaceData{Err: current.Err}, nil, nil
 	}
@@ -94,8 +98,13 @@ func (ts Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (*
 }
 
 // GetSrvKeyspaceNames returns the SrvKeyspace objects for a cell.
-func (ts Server) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
-	children, err := ts.ListDir(ctx, cell, KeyspacesPath)
+func (ts *Server) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
+	conn, err := ts.ConnForCell(ctx, cell)
+	if err != nil {
+		return nil, err
+	}
+
+	children, err := conn.ListDir(ctx, KeyspacesPath)
 	switch err {
 	case nil:
 		return children, nil
@@ -107,26 +116,41 @@ func (ts Server) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string
 }
 
 // UpdateSrvKeyspace saves a new SrvKeyspace. It is a blind write.
-func (ts Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error {
+func (ts *Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error {
+	conn, err := ts.ConnForCell(ctx, cell)
+	if err != nil {
+		return err
+	}
+
 	nodePath := srvKeyspaceFileName(keyspace)
 	data, err := proto.Marshal(srvKeyspace)
 	if err != nil {
 		return err
 	}
-	_, err = ts.Update(ctx, cell, nodePath, data, nil)
+	_, err = conn.Update(ctx, nodePath, data, nil)
 	return err
 }
 
 // DeleteSrvKeyspace deletes a SrvKeyspace.
-func (ts Server) DeleteSrvKeyspace(ctx context.Context, cell, keyspace string) error {
+func (ts *Server) DeleteSrvKeyspace(ctx context.Context, cell, keyspace string) error {
+	conn, err := ts.ConnForCell(ctx, cell)
+	if err != nil {
+		return err
+	}
+
 	nodePath := srvKeyspaceFileName(keyspace)
-	return ts.Delete(ctx, cell, nodePath, nil)
+	return conn.Delete(ctx, nodePath, nil)
 }
 
 // GetSrvKeyspace returns the SrvKeyspace for a cell/keyspace.
-func (ts Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
+func (ts *Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
+	conn, err := ts.ConnForCell(ctx, cell)
+	if err != nil {
+		return nil, err
+	}
+
 	nodePath := srvKeyspaceFileName(keyspace)
-	data, _, err := ts.Get(ctx, cell, nodePath)
+	data, _, err := conn.Get(ctx, nodePath)
 	if err != nil {
 		return nil, err
 	}

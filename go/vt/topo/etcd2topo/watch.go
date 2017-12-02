@@ -27,16 +27,12 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// Watch is part of the topo.Backend interface
-func (s *Server) Watch(ctx context.Context, cell, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
-	c, err := s.clientForCell(ctx, cell)
-	if err != nil {
-		return &topo.WatchData{Err: fmt.Errorf("Watch cannot get cell: %v", err)}, nil, nil
-	}
-	nodePath := path.Join(c.root, filePath)
+// Watch is part of the topo.Conn interface.
+func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
+	nodePath := path.Join(s.root, filePath)
 
 	// Get the initial version of the file
-	initial, err := c.cli.Get(ctx, nodePath)
+	initial, err := s.cli.Get(ctx, nodePath)
 	if err != nil {
 		// Generic error.
 		return &topo.WatchData{Err: convertError(err)}, nil, nil
@@ -56,7 +52,7 @@ func (s *Server) Watch(ctx context.Context, cell, filePath string) (*topo.WatchD
 	// Create the Watcher.  We start watching from the response we
 	// got, not from the file original version, as the server may
 	// not have that much history.
-	watcher := c.cli.Watch(watchCtx, nodePath, clientv3.WithRev(initial.Header.Revision))
+	watcher := s.cli.Watch(watchCtx, nodePath, clientv3.WithRev(initial.Header.Revision))
 	if watcher == nil {
 		return &topo.WatchData{Err: fmt.Errorf("Watch failed")}, nil, nil
 	}

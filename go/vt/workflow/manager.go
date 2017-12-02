@@ -70,7 +70,7 @@ type Factory interface {
 // Its management API allows it to create, start and stop workflows.
 type Manager struct {
 	// ts is the topo server to use for all topo operations.
-	ts topo.Server
+	ts *topo.Server
 
 	// nodeManager is the NodeManager for UI display.
 	nodeManager *NodeManager
@@ -124,7 +124,7 @@ type runningWorkflow struct {
 }
 
 // NewManager creates an initialized Manager.
-func NewManager(ts topo.Server) *Manager {
+func NewManager(ts *topo.Server) *Manager {
 	return &Manager{
 		ts:          ts,
 		nodeManager: NewNodeManager(),
@@ -140,7 +140,7 @@ func (m *Manager) SetRedirectFunc(rf func() (string, error)) {
 
 // TopoServer returns the topo.Server used by the Manager.
 // It is meant to be used by the running workflows.
-func (m *Manager) TopoServer() topo.Server {
+func (m *Manager) TopoServer() *topo.Server {
 	return m.ts
 }
 

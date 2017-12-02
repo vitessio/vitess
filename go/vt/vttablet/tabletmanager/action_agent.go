@@ -85,7 +85,7 @@ type ActionAgent struct {
 	QueryServiceControl tabletserver.Controller
 	UpdateStream        binlog.UpdateStreamControl
 	HealthReporter      health.Reporter
-	TopoServer          topo.Server
+	TopoServer          *topo.Server
 	TabletAlias         *topodatapb.TabletAlias
 	MysqlDaemon         mysqlctl.MysqlDaemon
 	DBConfigs           dbconfigs.DBConfigs
@@ -203,7 +203,7 @@ type ActionAgent struct {
 // it spawns.
 func NewActionAgent(
 	batchCtx context.Context,
-	ts topo.Server,
+	ts *topo.Server,
 	mysqld mysqlctl.MysqlDaemon,
 	queryServiceControl tabletserver.Controller,
 	tabletAlias *topodatapb.TabletAlias,
@@ -321,7 +321,7 @@ func NewActionAgent(
 
 // NewTestActionAgent creates an agent for test purposes. Only a
 // subset of features are supported now, but we'll add more over time.
-func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, mysqlDaemon mysqlctl.MysqlDaemon, preStart func(*ActionAgent)) *ActionAgent {
+func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, mysqlDaemon mysqlctl.MysqlDaemon, preStart func(*ActionAgent)) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: tabletservermock.NewController(),
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -359,7 +359,7 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *t
 // NewComboActionAgent creates an agent tailored specifically to run
 // within the vtcombo binary. It cannot be called concurrently,
 // as it changes the flags.
-func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
+func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: queryServiceControl,
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),

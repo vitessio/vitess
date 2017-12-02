@@ -156,7 +156,7 @@ type TabletServer struct {
 
 	// txThrottler is used to throttle transactions based on the observed replication lag.
 	txThrottler *txthrottler.TxThrottler
-	topoServer  topo.Server
+	topoServer  *topo.Server
 
 	// streamHealthMutex protects all the following fields
 	streamHealthMutex        sync.Mutex
@@ -182,21 +182,21 @@ type RegisterFunction func(Controller)
 var RegisterFunctions []RegisterFunction
 
 // NewServer creates a new TabletServer based on the command line flags.
-func NewServer(topoServer topo.Server, alias topodatapb.TabletAlias) *TabletServer {
+func NewServer(topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
 	return NewTabletServer(tabletenv.Config, topoServer, alias)
 }
 
 var tsOnce sync.Once
 
-// NewTabletServerWithNilTopoServer is typically used in tests that don't need a topoSever
-// member.
+// NewTabletServerWithNilTopoServer is typically used in tests that
+// don't need a topoServer member.
 func NewTabletServerWithNilTopoServer(config tabletenv.TabletConfig) *TabletServer {
-	return NewTabletServer(config, topo.Server{}, topodatapb.TabletAlias{})
+	return NewTabletServer(config, nil, topodatapb.TabletAlias{})
 }
 
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
-func NewTabletServer(config tabletenv.TabletConfig, topoServer topo.Server, alias topodatapb.TabletAlias) *TabletServer {
+func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
 	tsv := &TabletServer{
 		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
 		BeginTimeout:           sync2.NewAtomicDuration(time.Duration(config.TxPoolTimeout * 1e9)),

@@ -23,15 +23,11 @@ import (
 	"golang.org/x/net/context"
 )
 
-// ListDir is part of the topo.Backend interface.
-func (zs *Server) ListDir(ctx context.Context, cell, dirPath string) ([]string, error) {
-	conn, root, err := zs.connForCell(ctx, cell)
-	if err != nil {
-		return nil, err
-	}
-	zkPath := path.Join(root, dirPath)
+// ListDir is part of the topo.Conn interface.
+func (zs *Server) ListDir(ctx context.Context, dirPath string) ([]string, error) {
+	zkPath := path.Join(zs.root, dirPath)
 
-	children, _, err := conn.Children(ctx, zkPath)
+	children, _, err := zs.conn.Children(ctx, zkPath)
 	if err != nil {
 		return nil, convertError(err)
 	}

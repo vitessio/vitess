@@ -25,19 +25,25 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// checkDirectory tests the directory part of the Backend API.
-// It does not use the pre-Backend API paths, to really
-// test the new functions.
-func checkDirectory(t *testing.T, ts topo.Impl) {
+// checkDirectory tests the directory part of the topo.Conn API.
+func checkDirectory(t *testing.T, ts *topo.Server) {
 	ctx := context.Background()
 
 	// global cell
-	checkDirectoryInCell(t, ts, topo.GlobalCell)
+	t.Logf("===   checkDirectoryInCell global")
+	conn, err := ts.ConnForCell(ctx, topo.GlobalCell)
+	if err != nil {
+		t.Fatalf("ConnForCell(global) failed: %v", err)
+	}
+	checkDirectoryInCell(t, conn)
 
 	// local cell
-	tts := topo.Server{Impl: ts}
-	cell := getLocalCell(ctx, t, tts)
-	checkDirectoryInCell(t, ts, cell)
+	t.Logf("===   checkDirectoryInCell test")
+	conn, err = ts.ConnForCell(ctx, LocalCellName)
+	if err != nil {
+		t.Fatalf("ConnForCell(test) failed: %v", err)
+	}
+	checkDirectoryInCell(t, conn)
 }
 
 // entriesWithoutCells removes 'cells' from the global directory.
@@ -52,8 +58,8 @@ func entriesWithoutCells(entries []string) []string {
 	return result
 }
 
-func checkListDir(ctx context.Context, t *testing.T, ts topo.Impl, cell string, dirPath string, expected []string) {
-	entries, err := ts.ListDir(ctx, cell, dirPath)
+func checkListDir(ctx context.Context, t *testing.T, conn topo.Conn, dirPath string, expected []string) {
+	entries, err := conn.ListDir(ctx, dirPath)
 	switch err {
 	case topo.ErrNoNode:
 		if len(expected) != 0 {
@@ -73,65 +79,64 @@ func checkListDir(ctx context.Context, t *testing.T, ts topo.Impl, cell string, 
 	}
 }
 
-func checkDirectoryInCell(t *testing.T, ts topo.Impl, cell string) {
-	t.Logf("===   checkDirectoryInCell %v", cell)
+func checkDirectoryInCell(t *testing.T, conn topo.Conn) {
 	ctx := context.Background()
 
 	// ListDir root: nothing
-	checkListDir(ctx, t, ts, cell, "/", nil)
+	checkListDir(ctx, t, conn, "/", nil)
 
 	// Create a topolevel entry
-	version, err := ts.Create(ctx, cell, "/MyFile", []byte{'a'})
+	version, err := conn.Create(ctx, "/MyFile", []byte{'a'})
 	if err != nil {
 		t.Fatalf("cannot create toplevel file: %v", err)
 	}
 
 	// ListDir should return it.
-	checkListDir(ctx, t, ts, cell, "/", []string{"MyFile"})
+	checkListDir(ctx, t, conn, "/", []string{"MyFile"})
 
 	// Delete it, it should be gone.
-	if err := ts.Delete(ctx, cell, "/MyFile", version); err != nil {
+	if err := conn.Delete(ctx, "/MyFile", version); err != nil {
 		t.Fatalf("cannot delete toplevel file: %v", err)
 	}
-	checkListDir(ctx, t, ts, cell, "/", nil)
+	checkListDir(ctx, t, conn, "/", nil)
 
 	// Create a file 3 layers down.
-	version, err = ts.Create(ctx, cell, "/types/name/MyFile", []byte{'a'})
+	version, err = conn.Create(ctx, "/types/name/MyFile", []byte{'a'})
 	if err != nil {
 		t.Fatalf("cannot create deep file: %v", err)
 	}
 
 	// Check listing at all levels.
-	checkListDir(ctx, t, ts, cell, "/", []string{"types"})
-	checkListDir(ctx, t, ts, cell, "/types/", []string{"name"})
-	checkListDir(ctx, t, ts, cell, "/types/name/", []string{"MyFile"})
+	checkListDir(ctx, t, conn, "/", []string{"types"})
+	checkListDir(ctx, t, conn, "/types/", []string{"name"})
+	checkListDir(ctx, t, conn, "/types/name/", []string{"MyFile"})
 
 	// Add a second file
-	version2, err := ts.Create(ctx, cell, "/types/othername/MyFile", []byte{'a'})
+	version2, err := conn.Create(ctx, "/types/othername/MyFile", []byte{'a'})
 	if err != nil {
 		t.Fatalf("cannot create deep file2: %v", err)
 	}
 
 	// Check entries at all levels
-	checkListDir(ctx, t, ts, cell, "/", []string{"types"})
-	checkListDir(ctx, t, ts, cell, "/types/", []string{"name", "othername"})
-	checkListDir(ctx, t, ts, cell, "/types/name/", []string{"MyFile"})
-	checkListDir(ctx, t, ts, cell, "/types/othername/", []string{"MyFile"})
+	checkListDir(ctx, t, conn, "/", []string{"types"})
+	checkListDir(ctx, t, conn, "/types/", []string{"name", "othername"})
+	checkListDir(ctx, t, conn, "/types/name/", []string{"MyFile"})
+	checkListDir(ctx, t, conn, "/types/othername/", []string{"MyFile"})
 
 	// Delete the first file, expect all lists to return the second one.
-	if err := ts.Delete(ctx, cell, "/types/name/MyFile", version); err != nil {
+	if err := conn.Delete(ctx, "/types/name/MyFile", version); err != nil {
 		t.Fatalf("cannot delete deep file: %v", err)
 	}
-	checkListDir(ctx, t, ts, cell, "/", []string{"types"})
-	checkListDir(ctx, t, ts, cell, "/types/", []string{"othername"})
-	checkListDir(ctx, t, ts, cell, "/types/name/", nil)
-	checkListDir(ctx, t, ts, cell, "/types/othername/", []string{"MyFile"})
+	checkListDir(ctx, t, conn, "/", []string{"types"})
+	checkListDir(ctx, t, conn, "/types/", []string{"othername"})
+	checkListDir(ctx, t, conn, "/types/name/", nil)
+	checkListDir(ctx, t, conn, "/types/othername/", []string{"MyFile"})
 
 	// Delete the second file, expect all lists to return nothing.
-	if err := ts.Delete(ctx, cell, "/types/othername/MyFile", version2); err != nil {
+	if err := conn.Delete(ctx, "/types/othername/MyFile", version2); err != nil {
 		t.Fatalf("cannot delete second deep file: %v", err)
 	}
 	for _, dir := range []string{"/", "/types/", "/types/name/", "/types/othername/"} {
-		checkListDir(ctx, t, ts, cell, dir, nil)
+		checkListDir(ctx, t, conn, dir, nil)
 	}
 }
