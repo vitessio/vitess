@@ -44,6 +44,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
 
   def __init__(self, addr, timeout,
                root_certificates=None, private_key=None, certificate_chain=None,
+               auth_static_client_creds = None,
                **kwargs):
     """Creates a new GRPCVTGateConnection.
 
@@ -60,6 +61,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
     self.root_certificates = root_certificates
     self.private_key = private_key
     self.certificate_chain = certificate_chain
+    self.auth_static_client_creds = auth_static_client_creds
     self.logger_object = vtdb_logger.get_logger()
 
   def dial(self):
@@ -103,7 +105,11 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
   def begin(self, effective_caller_id=None, single_db=False):
     try:
       request = self.begin_request(effective_caller_id, single_db)
-      response = self.stub.Begin(request, self.timeout)
+      if self.auth_static_client_creds is not None:
+        auth_plugin = static_auth_client.StaticAuthClientCreds(self.auth_static_client_creds)
+        response = self.stub.Begin(request, self.timeout, metadata=auth_plugin.metadata())
+      else:
+        response = self.stub.Begin(request, self.timeout)
       self.update_session(response)
     except (grpc.RpcError, vtgate_utils.VitessError) as e:
       raise _convert_exception(e, 'Begin')
@@ -111,7 +117,11 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
   def commit(self, twopc=False):
     try:
       request = self.commit_request(twopc)
-      self.stub.Commit(request, self.timeout)
+      if self.auth_static_client_creds is not None:
+        auth_plugin = static_auth_client.StaticAuthClientCreds(self.auth_static_client_creds)
+        self.stub.Commit(request, self.timeout, metadata=auth_plugin.metadata())
+      else:
+        self.stub.Commit(request, self.timeout)
     except (grpc.RpcError, vtgate_utils.VitessError) as e:
       raise _convert_exception(e, 'Commit')
     finally:
@@ -120,7 +130,11 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
   def rollback(self):
     try:
       request = self.rollback_request()
-      self.stub.Rollback(request, self.timeout)
+      if self.auth_static_client_creds is not None:
+        auth_plugin = static_auth_client.StaticAuthClientCreds(self.auth_static_client_creds)
+        self.stub.Rollback(request, self.timeout, metadata=auth_plugin.metadata())
+      else:
+        self.stub.Rollback(request, self.timeout)
     except (grpc.RpcError, vtgate_utils.VitessError) as e:
       raise _convert_exception(e, 'Rollback')
     finally:
@@ -146,7 +160,11 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
           not_in_transaction, effective_caller_id, include_event_token,
           compare_event_token)
       method = getattr(self.stub, method_name)
-      response = method(request, self.timeout)
+      if self.auth_static_client_creds is not None:
+        auth_plugin = static_auth_client.StaticAuthClientCreds(self.auth_static_client_creds)
+        response = method(request, self.timeout, metadata=auth_plugin.metadata())
+      else:
+        response = method(request, self.timeout)
       return self.process_execute_response(method_name, response)
 
     except (grpc.RpcError, vtgate_utils.VitessError) as e:
@@ -198,7 +216,11 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
               keyranges,
               effective_caller_id))
       method = getattr(self.stub, method_name)
-      it = method(request, self.timeout)
+      if self.auth_static_client_creds is not None:
+        auth_plugin = static_auth_client.StaticAuthClientCreds(self.auth_static_client_creds)
+        it = method(request, self.timeout, metadata=auth_plugin.metadata())
+      else:
+        it = method(request, self.timeout)
       first_response = it.next()
     except (grpc.RpcError, vtgate_utils.VitessError) as e:
       self.logger_object.log_private_data(bind_variables)
@@ -225,7 +247,11 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       request = vtgate_pb2.GetSrvKeyspaceRequest(
           keyspace=name,
       )
-      response = self.stub.GetSrvKeyspace(request, self.timeout)
+      if self.auth_static_client_creds is not None:
+        auth_plugin = static_auth_client.StaticAuthClientCreds(self.auth_static_client_creds)
+        response = self.stub.GetSrvKeyspace(request, self.timeout, metadata=auth_plugin.metadata())
+      else:
+        response = self.stub.GetSrvKeyspace(request, self.timeout)
       return self.keyspace_from_response(name, response)
 
     except (grpc.RpcError, vtgate_utils.VitessError) as e:
@@ -244,7 +270,11 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       request = self.update_stream_request(
           keyspace_name, shard, key_range, tablet_type,
           timestamp, event, effective_caller_id)
-      it = self.stub.UpdateStream(request, self.timeout)
+      if self.auth_static_client_creds is not None:
+        auth_plugin = static_auth_client.StaticAuthClientCreds(self.auth_static_client_creds)
+        it = self.stub.UpdateStream(request, self.timeout, metadata=auth_plugin.metadata())
+      else:
+        it = self.stub.UpdateStream(request, self.timeout)
     except (grpc.RpcError, vtgate_utils.VitessError) as e:
       raise _convert_exception(
           e, 'UpdateStream',
@@ -271,7 +301,11 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       request = self.message_stream_request(
           keyspace, shard, key_range,
           name, effective_caller_id)
-      it = self.stub.MessageStream(request, self.timeout)
+      if self.auth_static_client_creds is not None:
+        auth_plugin = static_auth_client.StaticAuthClientCreds(self.auth_static_client_creds)
+        it = self.stub.MessageStream(request, self.timeout, metadata=auth_plugin.metadata())
+      else:
+        it = self.stub.MessageStream(request, self.timeout)
       first_response = it.next()
     except (grpc.RpcError, vtgate_utils.VitessError) as e:
       raise _convert_exception(
@@ -302,7 +336,11 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
     try:
       request = self.message_ack_request(
           keyspace, name, ids, effective_caller_id)
-      response = self.stub.MessageAck(request, self.timeout)
+      if self.auth_static_client_creds is not None:
+        auth_plugin = static_auth_client.StaticAuthClientCreds(self.auth_static_client_creds)
+        response = self.stub.MessageAck(request, self.timeout, metadata=auth_plugin.metadata())
+      else:
+        response = self.stub.MessageAck(request, self.timeout)
     except (grpc.RpcError, vtgate_utils.VitessError) as e:
       raise _convert_exception(
           e, 'MessageAck', name=name, ids=ids,
