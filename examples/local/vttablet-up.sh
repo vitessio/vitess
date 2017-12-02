@@ -121,6 +121,7 @@ for uid_index in $uids; do
   fi
 
   echo "Starting vttablet for $alias..."
+  # shellcheck disable=SC2086
   $VTROOT/bin/vttablet \
     $TOPOLOGY_FLAGS \
     -log_dir $VTDATAROOT/tmp \
