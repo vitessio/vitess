@@ -25,7 +25,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -971,7 +970,7 @@ func CreateFakeServer(t *testing.T) vtgateservice.VTGateService {
 
 // RegisterTestDialProtocol registers a vtgateconn implementation under the "test" protocol
 func RegisterTestDialProtocol(impl vtgateconn.Impl) {
-	vtgateconn.RegisterDialer("test", func(ctx context.Context, address string, timeout time.Duration) (vtgateconn.Impl, error) {
+	vtgateconn.RegisterDialer("test", func(ctx context.Context, address string) (vtgateconn.Impl, error) {
 		return impl, nil
 	})
 }
@@ -987,10 +986,10 @@ func (f *fakeVTGateService) HandlePanic(err *error) {
 
 // TestSuite runs all the tests
 func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGateService) {
-	vtgateconn.RegisterDialer("test", func(ctx context.Context, address string, timeout time.Duration) (vtgateconn.Impl, error) {
+	vtgateconn.RegisterDialer("test", func(ctx context.Context, address string) (vtgateconn.Impl, error) {
 		return impl, nil
 	})
-	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "", 0)
+	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "")
 	if err != nil {
 		t.Fatalf("Got err: %v from vtgateconn.DialProtocol", err)
 	}
@@ -1050,7 +1049,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 
 // TestErrorSuite runs all the tests that expect errors
 func TestErrorSuite(t *testing.T, fakeServer vtgateservice.VTGateService) {
-	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "", 0)
+	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "")
 	if err != nil {
 		t.Fatalf("Got err: %v from vtgateconn.DialProtocol", err)
 	}

@@ -20,7 +20,6 @@ package vtworkerclient
 import (
 	"flag"
 	"fmt"
-	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -41,7 +40,7 @@ type Client interface {
 }
 
 // Factory functions are registered by client implementations.
-type Factory func(addr string, connectTimeout time.Duration) (Client, error)
+type Factory func(addr string) (Client, error)
 
 var factories = make(map[string]Factory)
 
@@ -65,10 +64,10 @@ func UnregisterFactoryForTest(name string) {
 }
 
 // New allows a user of the client library to get its implementation.
-func New(addr string, connectTimeout time.Duration) (Client, error) {
+func New(addr string) (Client, error) {
 	factory, ok := factories[*protocol]
 	if !ok {
 		return nil, fmt.Errorf("unknown vtworker client protocol: %v", *protocol)
 	}
-	return factory(addr, connectTimeout)
+	return factory(addr)
 }

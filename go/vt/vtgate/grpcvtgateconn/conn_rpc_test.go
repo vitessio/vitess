@@ -19,7 +19,6 @@ package grpcvtgateconn
 import (
 	"net"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 
@@ -46,7 +45,7 @@ func TestGRPCVTGateConn(t *testing.T) {
 
 	// Create a Go RPC client connecting to the server
 	ctx := context.Background()
-	client, err := dial(ctx, listener.Addr().String(), 30*time.Second)
+	client, err := dial(ctx, listener.Addr().String())
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}

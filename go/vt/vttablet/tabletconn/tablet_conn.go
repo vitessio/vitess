@@ -18,10 +18,10 @@ package tabletconn
 
 import (
 	"flag"
-	"time"
 
 	log "github.com/golang/glog"
 
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 
@@ -51,7 +51,7 @@ var (
 // timeout represents the connection timeout. If set to 0, this
 // connection should be established in the background and the
 // TabletDialer should return right away.
-type TabletDialer func(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.QueryService, error)
+type TabletDialer func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error)
 
 var dialers = make(map[string]TabletDialer)
 

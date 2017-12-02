@@ -19,7 +19,6 @@ package grpcvtworkerclient
 
 import (
 	"flag"
-	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -47,13 +46,13 @@ type gRPCVtworkerClient struct {
 	c  vtworkerservicepb.VtworkerClient
 }
 
-func gRPCVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworkerclient.Client, error) {
+func gRPCVtworkerClientFactory(addr string) (vtworkerclient.Client, error) {
 	// create the RPC client
 	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
 	if err != nil {
 		return nil, err
 	}
-	cc, err := grpcclient.Dial(addr, opt, grpc.WithTimeout(dialTimeout))
+	cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "grpcclient.Dial() err: %v", err)
 	}

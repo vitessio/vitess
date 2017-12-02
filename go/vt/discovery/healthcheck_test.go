@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/status"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -56,7 +57,7 @@ func TestHealthCheck(t *testing.T) {
 	createFakeConn(tablet, input)
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	l := newListener()
-	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, time.Hour).(*HealthCheckImpl)
+	hc := NewHealthCheck(1*time.Millisecond, time.Hour).(*HealthCheckImpl)
 	hc.SetListener(l, true)
 	hc.AddTablet(tablet, "")
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
@@ -237,7 +238,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 	fc.errCh = make(chan error)
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	l := newListener()
-	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, time.Hour).(*HealthCheckImpl)
+	hc := NewHealthCheck(1*time.Millisecond, time.Hour).(*HealthCheckImpl)
 	hc.SetListener(l, true)
 	hc.AddTablet(tablet, "")
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
@@ -309,7 +310,7 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 
 	l := newListener()
-	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, time.Hour).(*HealthCheckImpl)
+	hc := NewHealthCheck(1*time.Millisecond, time.Hour).(*HealthCheckImpl)
 	hc.SetListener(l, false)
 	hc.AddTablet(tablet, "")
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
@@ -375,7 +376,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 
 	l := newListener()
-	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, time.Hour).(*HealthCheckImpl)
+	hc := NewHealthCheck(1*time.Millisecond, time.Hour).(*HealthCheckImpl)
 	hc.SetListener(l, false)
 	hc.AddTablet(tablet, "")
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
@@ -470,7 +471,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 	fc := createFakeConn(tablet, input)
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	l := newListener()
-	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, timeout).(*HealthCheckImpl)
+	hc := NewHealthCheck(1*time.Millisecond, timeout).(*HealthCheckImpl)
 	hc.SetListener(l, false)
 	hc.AddTablet(tablet, "")
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
@@ -596,7 +597,7 @@ func createFakeConn(tablet *topodatapb.Tablet, c chan *querypb.StreamHealthRespo
 	return conn
 }
 
-func discoveryDialer(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.QueryService, error) {
+func discoveryDialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 	key := TabletToMapKey(tablet)
 	return connMap[key], nil
 }

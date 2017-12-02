@@ -373,7 +373,7 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 	}
 
 	// Initialize healthcheck and add destination shards to it.
-	scw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
+	scw.healthCheck = discovery.NewHealthCheck(*healthcheckRetryDelay, *healthCheckTimeout)
 	scw.tsc = discovery.NewTabletStatsCache(scw.healthCheck, scw.cell)
 	for _, si := range scw.destinationShards {
 		watcher := discovery.NewShardReplicationWatcher(scw.wr.TopoServer(), scw.healthCheck,

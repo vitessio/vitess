@@ -20,7 +20,6 @@ import (
 	"flag"
 	"io"
 	"sync"
-	"time"
 
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -61,7 +60,7 @@ type gRPCQueryClient struct {
 }
 
 // DialTablet creates and initializes gRPCQueryClient.
-func DialTablet(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.QueryService, error) {
+func DialTablet(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 	// create the RPC client
 	addr := ""
 	if grpcPort, ok := tablet.PortMap["grpc"]; ok {
@@ -73,11 +72,7 @@ func DialTablet(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.
 	if err != nil {
 		return nil, err
 	}
-	opts := []grpc.DialOption{opt}
-	if timeout > 0 {
-		opts = append(opts, grpc.WithTimeout(timeout))
-	}
-	cc, err := grpcclient.Dial(addr, opts...)
+	cc, err := grpcclient.Dial(addr, failFast, opt)
 	if err != nil {
 		return nil, err
 	}

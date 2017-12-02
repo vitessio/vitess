@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net"
 	"testing"
-	"time"
 
 	"github.com/youtube/vitess/go/vt/worker/grpcvtworkerserver"
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclienttest"
@@ -46,7 +45,7 @@ func TestVtworkerServer(t *testing.T) {
 	go server.Serve(listener)
 
 	// Create a VtworkerClient gRPC client to talk to the vtworker.
-	client, err := gRPCVtworkerClientFactory(fmt.Sprintf("localhost:%v", port), 30*time.Second)
+	client, err := gRPCVtworkerClientFactory(fmt.Sprintf("localhost:%v", port))
 	if err != nil {
 		t.Fatalf("Cannot create client: %v", err)
 	}
