@@ -47,7 +47,7 @@ func factory(addr string) (throttlerclient.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	conn, err := grpcclient.Dial(addr, opt)
+	conn, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
 	if err != nil {
 		return nil, err
 	}

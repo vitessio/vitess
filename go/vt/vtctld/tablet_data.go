@@ -24,6 +24,7 @@ import (
 
 	log "github.com/golang/glog"
 
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletconn"
@@ -101,7 +102,7 @@ func (th *tabletHealth) stream(ctx context.Context, ts *topo.Server, tabletAlias
 		return err
 	}
 
-	conn, err := tabletconn.GetDialer()(ti.Tablet, 30*time.Second)
+	conn, err := tabletconn.GetDialer()(ti.Tablet, grpcclient.FailFast(true))
 	if err != nil {
 		return err
 	}

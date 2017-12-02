@@ -117,7 +117,7 @@ type BinlogPlayerController struct {
 // Once stopped, you should call Close() to stop and free resources e.g. the
 // healthcheck instance.
 func newBinlogPlayerController(ts *topo.Server, vtClientFactory func() binlogplayer.VtClient, mysqld mysqlctl.MysqlDaemon, cell string, keyRange *topodatapb.KeyRange, sourceShard *topodatapb.Shard_SourceShard, dbName string) *BinlogPlayerController {
-	healthCheck := discovery.NewHealthCheck(*binlogplayer.BinlogPlayerConnTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
+	healthCheck := discovery.NewHealthCheck(*healthcheckRetryDelay, *healthCheckTimeout)
 	return &BinlogPlayerController{
 		ts:                ts,
 		vtClientFactory:   vtClientFactory,

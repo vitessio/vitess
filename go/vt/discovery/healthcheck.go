@@ -53,6 +53,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
@@ -70,9 +71,8 @@ var (
 
 // See the documentation for NewHealthCheck below for an explanation of these parameters.
 const (
-	DefaultHealthCheckConnTimeout = 1 * time.Minute
-	DefaultHealthCheckRetryDelay  = 5 * time.Second
-	DefaultHealthCheckTimeout     = 1 * time.Minute
+	DefaultHealthCheckRetryDelay = 5 * time.Second
+	DefaultHealthCheckTimeout    = 1 * time.Minute
 )
 
 const (
@@ -258,7 +258,6 @@ type HealthCheckImpl struct {
 	// Immutable fields set at construction time.
 	listener           HealthCheckStatsListener
 	sendDownEvents     bool
-	connTimeout        time.Duration
 	retryDelay         time.Duration
 	healthCheckTimeout time.Duration
 	closeChan          chan struct{} // signals the process gorouting to terminate
@@ -279,15 +278,11 @@ type HealthCheckImpl struct {
 
 // NewDefaultHealthCheck creates a new HealthCheck object with a default configuration.
 func NewDefaultHealthCheck() HealthCheck {
-	return NewHealthCheck(
-		DefaultHealthCheckConnTimeout, DefaultHealthCheckRetryDelay, DefaultHealthCheckTimeout)
+	return NewHealthCheck(DefaultHealthCheckRetryDelay, DefaultHealthCheckTimeout)
 }
 
 // NewHealthCheck creates a new HealthCheck object.
 // Parameters:
-// connTimeout.
-//   The duration to wait until a health-check streaming connection is up.
-//   0 means it should establish the connection in the background and return immediately.
 // retryDelay.
 //   The duration to wait before retrying to connect (e.g. after a failed connection
 //   attempt).
@@ -295,10 +290,9 @@ func NewDefaultHealthCheck() HealthCheck {
 //   The duration for which we consider a health check response to be 'fresh'. If we don't get
 //   a health check response from a tablet for more than this duration, we consider the tablet
 //   not healthy.
-func NewHealthCheck(connTimeout, retryDelay, healthCheckTimeout time.Duration) HealthCheck {
+func NewHealthCheck(retryDelay, healthCheckTimeout time.Duration) HealthCheck {
 	hc := &HealthCheckImpl{
 		addrToConns:        make(map[string]*healthCheckConn),
-		connTimeout:        connTimeout,
 		retryDelay:         retryDelay,
 		healthCheckTimeout: healthCheckTimeout,
 		closeChan:          make(chan struct{}),
@@ -443,7 +437,7 @@ func (hcc *healthCheckConn) stream(ctx context.Context, hc *HealthCheckImpl, cal
 
 	if conn == nil {
 		var err error
-		conn, err = tabletconn.GetDialer()(hcc.tabletStats.Tablet, hc.connTimeout)
+		conn, err = tabletconn.GetDialer()(hcc.tabletStats.Tablet, grpcclient.FailFast(true))
 		if err != nil {
 			hcc.mu.Lock()
 			hcc.tabletStats.LastError = err

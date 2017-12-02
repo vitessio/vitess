@@ -554,7 +554,6 @@ class VtGate(object):
 
   def start(self, cell='test_nj', retry_count=2,
             topo_impl=None, cache_ttl='1s',
-            healthcheck_conn_timeout='2s',
             extra_args=None, tablets=None,
             tablet_types_to_wait='MASTER,REPLICA',
             l2vtgates=None):
@@ -577,7 +576,6 @@ class VtGate(object):
       ])
     else:
       args.extend([
-          '-healthcheck_conn_timeout', healthcheck_conn_timeout,
           '-gateway_implementation', vtgate_gateway_flavor().flavor(),
       ])
       args.extend(vtgate_gateway_flavor().flags(cell=cell, tablets=tablets))
@@ -798,7 +796,6 @@ class L2VtGate(object):
 
   def start(self, cell='test_nj', retry_count=2,
             topo_impl=None, cache_ttl='1s',
-            healthcheck_conn_timeout='2s',
             extra_args=None, tablets=None,
             tablet_types_to_wait='MASTER,REPLICA',
             tablet_filters=None):
@@ -810,7 +807,6 @@ class L2VtGate(object):
         '-retry-count', str(retry_count),
         '-log_dir', environment.vtlogroot,
         '-srv_topo_cache_ttl', cache_ttl,
-        '-healthcheck_conn_timeout', healthcheck_conn_timeout,
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
         '-gateway_implementation', vtgate_gateway_flavor().flavor(),
     ]
