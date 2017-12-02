@@ -505,7 +505,7 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout, initialWait time.Duration) error {
 
 	// Create the healthheck module, with a cache.
-	hc := discovery.NewHealthCheck(healthCheckTimeout /* connectTimeout */, healthcheckRetryDelay, healthCheckTimeout)
+	hc := discovery.NewHealthCheck(healthcheckRetryDelay, healthCheckTimeout)
 	defer hc.Close()
 	tsc := discovery.NewTabletStatsCache(hc, cell)
 
@@ -708,11 +708,7 @@ func (wr *Wrangler) replicaMigrateServedFrom(ctx context.Context, ki *topo.Keysp
 	// Now refresh the source servers so they reload their
 	// blacklisted table list
 	event.DispatchUpdate(ev, "refreshing sources tablets state so they update their blacklisted tables")
-	if err := wr.RefreshTabletsByShard(ctx, sourceShard, []topodatapb.TabletType{servedType}, cells); err != nil {
-		return err
-	}
-
-	return nil
+	return wr.RefreshTabletsByShard(ctx, sourceShard, []topodatapb.TabletType{servedType}, cells)
 }
 
 // masterMigrateServedFrom handles the master migration. The ordering is
@@ -789,11 +785,7 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 	// Invoking a remote action will also make the tablet stop filtered
 	// replication.
 	event.DispatchUpdate(ev, "setting destination shard masters read-write")
-	if err := wr.refreshMasters(ctx, []*topo.ShardInfo{destinationShard}); err != nil {
-		return err
-	}
-
-	return nil
+	return wr.refreshMasters(ctx, []*topo.ShardInfo{destinationShard})
 }
 
 // SetKeyspaceServedFrom locks a keyspace and changes its ServerFromMap

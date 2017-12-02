@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net"
 	"testing"
-	"time"
 
 	"github.com/youtube/vitess/go/vt/vtctl/grpcvtctlserver"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclienttest"
@@ -47,7 +46,7 @@ func TestVtctlServer(t *testing.T) {
 	go server.Serve(listener)
 
 	// Create a VtctlClient gRPC client to talk to the fake server
-	client, err := gRPCVtctlClientFactory(fmt.Sprintf("localhost:%v", port), 30*time.Second)
+	client, err := gRPCVtctlClientFactory(fmt.Sprintf("localhost:%v", port))
 	if err != nil {
 		t.Fatalf("Cannot create client: %v", err)
 	}

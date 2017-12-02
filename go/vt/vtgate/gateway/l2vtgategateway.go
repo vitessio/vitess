@@ -29,6 +29,7 @@ import (
 
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/vt/discovery"
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -128,7 +129,7 @@ func (lg *l2VTGateGateway) addL2VTGateConn(addr, keyspace, shard string) error {
 		// Dial in the background, as specified by timeout=0.
 		conn, err = tabletconn.GetDialer()(&topodatapb.Tablet{
 			Hostname: addr,
-		}, 0)
+		}, grpcclient.FailFast(true))
 		if err != nil {
 			return err
 		}

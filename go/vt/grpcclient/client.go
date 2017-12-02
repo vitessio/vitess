@@ -24,12 +24,18 @@ import (
 	"github.com/youtube/vitess/go/vt/vttls"
 )
 
+// FailFast is a self-documenting type for the grpc.FailFast.
+type FailFast bool
+
 // Dial creates a grpc connection to the given target.
-func Dial(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+// failFast is a non-optional parameter because callers are required to specify
+// what that should be.
+func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	newopts := []grpc.DialOption{
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(*grpccommon.MaxMessageSize),
 			grpc.MaxCallSendMsgSize(*grpccommon.MaxMessageSize),
+			grpc.FailFast(bool(failFast)),
 		),
 	}
 	newopts = append(newopts, opts...)

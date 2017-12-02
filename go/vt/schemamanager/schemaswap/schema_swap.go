@@ -682,8 +682,7 @@ func (shardSwap *shardSchemaSwap) writeFinishedSwap() error {
 func (shardSwap *shardSchemaSwap) startHealthWatchers() error {
 	shardSwap.allTablets = make(map[string]*discovery.TabletStats)
 
-	shardSwap.tabletHealthCheck = discovery.NewHealthCheck(
-		*vtctl.HealthCheckTopologyRefresh, *vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
+	shardSwap.tabletHealthCheck = discovery.NewHealthCheck(*vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
 	shardSwap.tabletHealthCheck.SetListener(shardSwap, true /* sendDownEvents */)
 
 	topoServer := shardSwap.parent.topoServer

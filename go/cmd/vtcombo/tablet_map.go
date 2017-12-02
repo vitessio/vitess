@@ -29,6 +29,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -265,7 +266,7 @@ func initTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 //
 
 // dialer is our tabletconn.Dialer
-func dialer(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.QueryService, error) {
+func dialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
 		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "connection refused")

@@ -21,7 +21,6 @@ package binlogplayer
 
 import (
 	"encoding/hex"
-	"flag"
 	"fmt"
 	"sync"
 	"time"
@@ -41,10 +40,6 @@ import (
 )
 
 var (
-	// BinlogPlayerConnTimeout is the flag for binlog player connection
-	// timeout. It is public so the discovery module can also use it.
-	BinlogPlayerConnTimeout = flag.Duration("binlog_player_conn_timeout", 5*time.Second, "binlog player connection timeout")
-
 	// SlowQueryThreshold will cause we logging anything that's higher than it.
 	SlowQueryThreshold = time.Duration(100 * time.Millisecond)
 
@@ -362,7 +357,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 		return fmt.Errorf("no binlog player client factory named %v", *binlogPlayerProtocol)
 	}
 	blplClient := clientFactory()
-	err = blplClient.Dial(blp.tablet, *BinlogPlayerConnTimeout)
+	err = blplClient.Dial(blp.tablet)
 	if err != nil {
 		err := fmt.Errorf("error dialing binlog server: %v", err)
 		log.Error(err)

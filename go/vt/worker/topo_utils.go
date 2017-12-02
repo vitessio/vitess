@@ -49,7 +49,7 @@ var (
 func FindHealthyRdonlyTablet(ctx context.Context, wr *wrangler.Wrangler, tsc *discovery.TabletStatsCache, cell, keyspace, shard string, minHealthyRdonlyTablets int) (*topodatapb.TabletAlias, error) {
 	if tsc == nil {
 		// No healthcheck instance provided. Create one.
-		healthCheck := discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
+		healthCheck := discovery.NewHealthCheck(*healthcheckRetryDelay, *healthCheckTimeout)
 		tsc = discovery.NewTabletStatsCache(healthCheck, cell)
 		watcher := discovery.NewShardReplicationWatcher(wr.TopoServer(), healthCheck, cell, keyspace, shard, *healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
 		defer watcher.Stop()

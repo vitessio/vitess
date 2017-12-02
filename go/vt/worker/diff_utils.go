@@ -31,6 +31,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/sqlescape"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -64,7 +65,7 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts *topo.Server, tabletA
 		return nil, err
 	}
 
-	conn, err := tabletconn.GetDialer()(tablet.Tablet, *remoteActionsTimeout)
+	conn, err := tabletconn.GetDialer()(tablet.Tablet, grpcclient.FailFast(false))
 	if err != nil {
 		return nil, err
 	}
