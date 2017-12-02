@@ -18,7 +18,6 @@ package vtworkerclient
 
 import (
 	"io"
-	"time"
 
 	"golang.org/x/net/context"
 
@@ -35,7 +34,7 @@ func RunCommandAndWait(ctx context.Context, server string, args []string, recv f
 		panic("no function closure for Event stream specified")
 	}
 	// create the client
-	client, err := New(server, 30*time.Second /* dialTimeout */)
+	client, err := New(server)
 	if err != nil {
 		return vterrors.Wrapf(err, "cannot dial to server %v", server)
 	}

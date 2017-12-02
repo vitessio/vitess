@@ -23,6 +23,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletconn"
@@ -101,7 +102,7 @@ func (wr *Wrangler) WaitForFilteredReplication(ctx context.Context, keyspace, sh
 		return fmt.Errorf("failed to run explicit healthcheck on tablet: %v err: %v", tabletInfo, err)
 	}
 
-	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, 30*time.Second)
+	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, grpcclient.FailFast(false))
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", alias, err)
 	}

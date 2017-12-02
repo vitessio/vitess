@@ -167,9 +167,9 @@ type conn struct {
 func (c *conn) dial() error {
 	var err error
 	if c.Protocol == "" {
-		c.conn, err = vtgateconn.Dial(context.Background(), c.Address, c.Timeout)
+		c.conn, err = vtgateconn.Dial(context.Background(), c.Address)
 	} else {
-		c.conn, err = vtgateconn.DialProtocol(context.Background(), c.Protocol, c.Address, c.Timeout)
+		c.conn, err = vtgateconn.DialProtocol(context.Background(), c.Protocol, c.Address)
 	}
 	if err != nil {
 		return err

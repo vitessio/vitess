@@ -130,7 +130,7 @@ func TestWaitForTablets(t *testing.T) {
 	input := make(chan *querypb.StreamHealthResponse)
 	createFakeConn(tablet, input)
 
-	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, 1*time.Hour)
+	hc := NewHealthCheck(1*time.Millisecond, 1*time.Hour)
 	tsc := NewTabletStatsCache(hc, "cell")
 	hc.AddTablet(tablet, "")
 

@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -224,7 +223,7 @@ func (fake *FakeBinlogStreamer) HandlePanic(err *error) {
 
 // Run runs the test suite
 func Run(t *testing.T, bpc binlogplayer.Client, tablet *topodatapb.Tablet, fake *FakeBinlogStreamer) {
-	if err := bpc.Dial(tablet, 30*time.Second); err != nil {
+	if err := bpc.Dial(tablet); err != nil {
 		t.Fatalf("Dial failed: %v", err)
 	}
 

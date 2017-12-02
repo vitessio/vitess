@@ -17,8 +17,6 @@ limitations under the License.
 package grpcbinlogplayer
 
 import (
-	"time"
-
 	"golang.org/x/net/context"
 
 	"google.golang.org/grpc"
@@ -38,10 +36,10 @@ type client struct {
 	c  binlogservicepb.UpdateStreamClient
 }
 
-func (client *client) Dial(tablet *topodatapb.Tablet, connTimeout time.Duration) error {
+func (client *client) Dial(tablet *topodatapb.Tablet) error {
 	addr := netutil.JoinHostPort(tablet.Hostname, tablet.PortMap["grpc"])
 	var err error
-	client.cc, err = grpcclient.Dial(addr, grpc.WithInsecure(), grpc.WithTimeout(connTimeout))
+	client.cc, err = grpcclient.Dial(addr, grpcclient.FailFast(false), grpc.WithInsecure())
 	if err != nil {
 		return err
 	}

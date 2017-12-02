@@ -22,11 +22,11 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
@@ -184,7 +184,7 @@ func TestGenerateQuery(t *testing.T) {
 func TestNewRestartableResultReader(t *testing.T) {
 	wantErr := errors.New("restartable_result_reader_test.go: context canceled")
 
-	tabletconn.RegisterDialer("fake_dialer", func(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer("fake_dialer", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		return nil, wantErr
 	})
 	protocol := flag.CommandLine.Lookup("tablet_protocol").Value.String()

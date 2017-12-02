@@ -34,7 +34,7 @@ type realtimeStats struct {
 }
 
 func newRealtimeStats(ts *topo.Server) (*realtimeStats, error) {
-	hc := discovery.NewHealthCheck(*vtctl.HealthCheckTimeout, *vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
+	hc := discovery.NewHealthCheck(*vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
 	tabletStatsCache := newTabletStatsCache()
 	// sendDownEvents is set to true here, as we want to receive
 	// Up=False events for a tablet.

@@ -226,7 +226,7 @@ func newClient(master *master, replica *replica) *client {
 		log.Fatal(err)
 	}
 
-	healthCheck := discovery.NewHealthCheck(1*time.Minute, 5*time.Second, 1*time.Minute)
+	healthCheck := discovery.NewHealthCheck(5*time.Second, 1*time.Minute)
 	c := &client{
 		master:      master,
 		healthCheck: healthCheck,
