@@ -46,7 +46,7 @@ $VTROOT/bin/vtctld \
   -port $vtctld_web_port \
   -grpc_port $grpc_port \
   -pid_file $VTDATAROOT/tmp/vtctld.pid \
-  "$optional_auth_args" \
+  $optional_auth_args \
   > $VTDATAROOT/tmp/vtctld.out 2>&1 &
 disown -a
 
