@@ -99,6 +99,7 @@ func runWorkflowManagerElection(ts *topo.Server) {
 		conn, err := ts.ConnForCell(ctx, topo.GlobalCell)
 		if err != nil {
 			log.Errorf("Cannot get global cell topo connection, disabling workflow manager: %v", err)
+			return
 		}
 
 		mp, err = conn.NewMasterParticipation("vtctld", servenv.ListeningURL.Host)
