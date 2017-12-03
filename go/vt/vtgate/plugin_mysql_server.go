@@ -147,12 +147,12 @@ func initMySQLProtocol() {
 	if *mysqlServerPort >= 0 {
 		mysqlListener, err = mysql.NewListener("tcp", net.JoinHostPort(*mysqlServerBindAddress, fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh)
 		if err != nil {
-			log.Fatalf("mysql.NewListener failed: %v", err)
+			log.Exitf("mysql.NewListener failed: %v", err)
 		}
 		if *mysqlSslCert != "" && *mysqlSslKey != "" {
 			mysqlListener.TLSConfig, err = vttls.ServerConfig(*mysqlSslCert, *mysqlSslKey, *mysqlSslCa)
 			if err != nil {
-				log.Fatalf("grpcutils.TLSServerConfig failed: %v", err)
+				log.Exitf("grpcutils.TLSServerConfig failed: %v", err)
 				return
 			}
 		}
@@ -174,7 +174,7 @@ func initMySQLProtocol() {
 		mysqlUnixListener, err = newMysqlUnixSocket(*mysqlServerSocketPath, authServer, vh)
 		_ = syscall.Umask(oldMask)
 		if err != nil {
-			log.Fatalf("mysql.NewListener failed: %v", err)
+			log.Exitf("mysql.NewListener failed: %v", err)
 			return
 		}
 		// Listen for unix socket

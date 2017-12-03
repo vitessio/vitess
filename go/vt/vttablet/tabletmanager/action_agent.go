@@ -290,7 +290,7 @@ func NewActionAgent(
 			// (same as if it was triggered remotely)
 			if err := agent.RestoreData(batchCtx, logutil.NewConsoleLogger(), false /* deleteBeforeRestore */); err != nil {
 				println(fmt.Sprintf("RestoreFromBackup failed: %v", err))
-				log.Fatalf("RestoreFromBackup failed: %v", err)
+				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
 
 			// after the restore is done, start health check

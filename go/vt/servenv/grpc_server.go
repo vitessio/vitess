@@ -97,7 +97,7 @@ func createGRPCServer() {
 	if GRPCPort != nil && *GRPCCert != "" && *GRPCKey != "" {
 		config, err := vttls.ServerConfig(*GRPCCert, *GRPCKey, *GRPCCA)
 		if err != nil {
-			log.Fatalf("Failed to log gRPC cert/key/ca: %v", err)
+			log.Exitf("Failed to log gRPC cert/key/ca: %v", err)
 		}
 
 		// create the creds server options
@@ -138,7 +138,7 @@ func serveGRPC() {
 	log.Infof("Listening for gRPC calls on port %v", *GRPCPort)
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", *GRPCPort))
 	if err != nil {
-		log.Fatalf("Cannot listen on port %v for gRPC: %v", *GRPCPort, err)
+		log.Exitf("Cannot listen on port %v for gRPC: %v", *GRPCPort, err)
 	}
 
 	// and serve on it

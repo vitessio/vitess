@@ -109,7 +109,7 @@ func createDiscoveryGateway(hc discovery.HealthCheck, topoServer *topo.Server, s
 		if len(tabletFilters) > 0 {
 			fbs, err := discovery.NewFilterByShard(dg.hc, tabletFilters)
 			if err != nil {
-				log.Fatalf("Cannot parse tablet_filters parameter: %v", err)
+				log.Exitf("Cannot parse tablet_filters parameter: %v", err)
 			}
 			tr = fbs
 		}
