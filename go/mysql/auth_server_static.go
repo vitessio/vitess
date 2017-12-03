@@ -68,7 +68,7 @@ func InitAuthServerStatic() {
 	}
 	if *mysqlAuthServerStaticFile != "" && *mysqlAuthServerStaticString != "" {
 		// Both parameters specified, can only use one.
-		log.Fatalf("Both mysql_auth_server_static_file and mysql_auth_server_static_string specified, can only use one.")
+		log.Exitf("Both mysql_auth_server_static_file and mysql_auth_server_static_string specified, can only use one.")
 	}
 
 	// Create and register auth server.
@@ -85,7 +85,7 @@ func NewAuthServerStatic() *AuthServerStatic {
 
 // RegisterAuthServerStaticFromParams creates and registers a new
 // AuthServerStatic, loaded for a JSON file or string. If file is set,
-// it uses file. Otherwise, load the string. It log.Fatals out in case
+// it uses file. Otherwise, load the string. It log.Exits out in case
 // of error.
 func RegisterAuthServerStaticFromParams(file, str string) {
 	authServerStatic := NewAuthServerStatic()
@@ -93,14 +93,14 @@ func RegisterAuthServerStaticFromParams(file, str string) {
 	if file != "" {
 		data, err := ioutil.ReadFile(file)
 		if err != nil {
-			log.Fatalf("Failed to read mysql_auth_server_static_file file: %v", err)
+			log.Exitf("Failed to read mysql_auth_server_static_file file: %v", err)
 		}
 		jsonConfig = data
 	}
 
 	// Parse JSON config.
 	if err := parseConfig(jsonConfig, &authServerStatic.Entries); err != nil {
-		log.Fatalf("Error parsing auth server config: %v", err)
+		log.Exitf("Error parsing auth server config: %v", err)
 	}
 
 	// And register the server.
@@ -108,14 +108,11 @@ func RegisterAuthServerStaticFromParams(file, str string) {
 }
 
 func parseConfig(jsonConfig []byte, config *map[string][]*AuthServerStaticEntry) error {
-	if err := json.Unmarshal(jsonConfig, config); err == nil {
-		if err := validateConfig(*config); err != nil {
-			return err
-		}
-		return nil
+	if err := json.Unmarshal(jsonConfig, config); err != nil {
+		// Couldn't parse, will try to parse with legacy config
+		return parseLegacyConfig(jsonConfig, config)
 	}
-	// Couldn't parse, will try to parse with legacy config
-	return parseLegacyConfig(jsonConfig, config)
+	return validateConfig(*config)
 }
 
 func parseLegacyConfig(jsonConfig []byte, config *map[string][]*AuthServerStaticEntry) error {

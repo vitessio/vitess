@@ -50,16 +50,16 @@ func main() {
 	args := flag.Args()
 	if len(args) != 0 {
 		flag.Usage()
-		log.Fatalf("topo2topo doesn't take any parameter.")
+		log.Exitf("topo2topo doesn't take any parameter.")
 	}
 
 	fromTS, err := topo.OpenServer(*fromImplementation, *fromServerAddress, *fromRoot)
 	if err != nil {
-		log.Fatalf("Cannot open 'from' topo %v: %v", *fromImplementation, err)
+		log.Exitf("Cannot open 'from' topo %v: %v", *fromImplementation, err)
 	}
 	toTS, err := topo.OpenServer(*toImplementation, *toServerAddress, *toRoot)
 	if err != nil {
-		log.Fatalf("Cannot open 'to' topo %v: %v", *toImplementation, err)
+		log.Exitf("Cannot open 'to' topo %v: %v", *toImplementation, err)
 	}
 
 	ctx := context.Background()
