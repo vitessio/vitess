@@ -21,6 +21,7 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 
@@ -90,7 +91,7 @@ type MysqlDaemon interface {
 	FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error)
 
 	// NewSlaveConnection returns a SlaveConnection to the database.
-	NewSlaveConnection() (*SlaveConnection, error)
+	NewSlaveConnection() (binlog.SlaveConnection, error)
 
 	// EnableBinlogPlayback enables playback of binlog events
 	EnableBinlogPlayback() error

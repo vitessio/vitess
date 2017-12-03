@@ -27,7 +27,6 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 
@@ -109,7 +108,7 @@ type UpdateStreamImpl struct {
 	ts       *topo.Server
 	keyspace string
 	cell     string
-	mysqld   mysqlctl.MysqlDaemon
+	mysqld   MysqlDaemon
 	dbname   string
 	se       *schema.Engine
 
@@ -171,7 +170,7 @@ type RegisterUpdateStreamServiceFunc func(UpdateStream)
 var RegisterUpdateStreamServices []RegisterUpdateStreamServiceFunc
 
 // NewUpdateStream returns a new UpdateStreamImpl object
-func NewUpdateStream(ts *topo.Server, keyspace string, cell string, mysqld mysqlctl.MysqlDaemon, se *schema.Engine, dbname string) *UpdateStreamImpl {
+func NewUpdateStream(ts *topo.Server, keyspace string, cell string, mysqld MysqlDaemon, se *schema.Engine, dbname string) *UpdateStreamImpl {
 	return &UpdateStreamImpl{
 		ts:       ts,
 		keyspace: keyspace,
