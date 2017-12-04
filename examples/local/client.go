@@ -43,10 +43,8 @@ func main() {
 	flag.Parse()
 	rand.Seed(time.Now().UnixNano())
 
-	timeout := 10 * time.Second
-
 	// Connect to vtgate.
-	db, err := vitessdriver.Open(*server, "@master", timeout)
+	db, err := vitessdriver.Open(*server, "@master")
 	if err != nil {
 		fmt.Printf("client error: %v\n", err)
 		os.Exit(1)
@@ -99,7 +97,7 @@ func main() {
 	// Note that this may be behind master due to replication lag.
 	fmt.Println("Reading from replica...")
 
-	dbr, err := vitessdriver.Open(*server, "@replica", timeout)
+	dbr, err := vitessdriver.Open(*server, "@replica")
 	if err != nil {
 		fmt.Printf("client error: %v\n", err)
 		os.Exit(1)
