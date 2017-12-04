@@ -33,7 +33,7 @@ import (
 var (
 	credsFile = flag.String("grpc_auth_static_password_file", "", "JSON File to read the users/passwords from.")
 	// StaticAuthPlugin implements AuthPlugin interface
-	_ AuthPlugin = (*StaticAuthPlugin)(nil)
+	_ Authenticator = (*StaticAuthPlugin)(nil)
 )
 
 // StaticAuthConfigEntry is the container for server side credentials. Current implementation matches the
@@ -70,7 +70,7 @@ func (sa *StaticAuthPlugin) Authenticate(ctx context.Context, fullMethod string)
 	return nil, grpc.Errorf(codes.Unauthenticated, "username and password must be provided")
 }
 
-func staticAuthPluginInitializer() (AuthPlugin, error) {
+func staticAuthPluginInitializer() (Authenticator, error) {
 	entries := make([]StaticAuthConfigEntry, 0)
 	if *credsFile == "" {
 		err := fmt.Errorf("failed to load static auth plugin. Plugin configured but grpc_server_auth_static_file not provided")

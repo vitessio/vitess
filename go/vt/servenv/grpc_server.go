@@ -73,7 +73,7 @@ var (
 	// connections are forcibly closed.
 	GRPCMaxConnectionAgeGrace = flag.Duration("grpc_max_connection_age_grace", time.Duration(math.MaxInt64), "Additional grace period after grpc_max_connection_age, after which connections are forcibly closed.")
 
-	authPlugin AuthPlugin
+	authPlugin Authenticator
 )
 
 // isGRPCEnabled returns true if gRPC server is set
@@ -133,7 +133,7 @@ func createGRPCServer() {
 
 	if *GRPCAuth != "" {
 		log.Infof("enabling auth plugin %v", *GRPCAuth)
-		pluginInitializer := GetAuthPlugin(*GRPCAuth)
+		pluginInitializer := GetAuthenticator(*GRPCAuth)
 		authPluginImpl, err := pluginInitializer()
 		if err != nil {
 			log.Fatalf("Failed to load auth plugin: %v", err)

@@ -65,9 +65,8 @@ func SecureDialOption(cert, key, ca, name string) (grpc.DialOption, error) {
 	return grpc.WithTransportCredentials(creds), nil
 }
 
-// StaticAuthDialOption returns the gRPC auth dial option to use for the
-// given client connection. Only grpc_vitess_static_auth supported at the moment.
-func StaticAuthDialOption(opts []grpc.DialOption, staticAuthClientConfig string) ([]grpc.DialOption, error) {
+// AppendStaticAuth optionally appends static auth credentials if provided.
+func AppendStaticAuth(opts []grpc.DialOption, staticAuthClientConfig string) ([]grpc.DialOption, error) {
 	if staticAuthClientConfig == "" {
 		return opts, nil
 	}
