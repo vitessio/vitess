@@ -22,11 +22,11 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/health"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/mysqlctl/fakemysqldaemon"
 )
 
 func TestBasicMySQLReplicationLag(t *testing.T) {
-	mysqld := mysqlctl.NewFakeMysqlDaemon(nil)
+	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 	mysqld.Replicating = true
 	mysqld.SecondsBehindMaster = 10
 	slaveStopped := true
@@ -42,7 +42,7 @@ func TestBasicMySQLReplicationLag(t *testing.T) {
 }
 
 func TestNoKnownMySQLReplicationLag(t *testing.T) {
-	mysqld := mysqlctl.NewFakeMysqlDaemon(nil)
+	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 	mysqld.Replicating = false
 	slaveStopped := true
 
@@ -57,7 +57,7 @@ func TestNoKnownMySQLReplicationLag(t *testing.T) {
 }
 
 func TestExtrapolatedMySQLReplicationLag(t *testing.T) {
-	mysqld := mysqlctl.NewFakeMysqlDaemon(nil)
+	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 	mysqld.Replicating = true
 	mysqld.SecondsBehindMaster = 10
 	slaveStopped := true
@@ -85,7 +85,7 @@ func TestExtrapolatedMySQLReplicationLag(t *testing.T) {
 }
 
 func TestNoExtrapolatedMySQLReplicationLag(t *testing.T) {
-	mysqld := mysqlctl.NewFakeMysqlDaemon(nil)
+	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 	mysqld.Replicating = true
 	mysqld.SecondsBehindMaster = 10
 	slaveStopped := true
