@@ -26,25 +26,25 @@ import (
 	log "github.com/golang/glog"
 )
 
-// AuthPlugin provides an interface to implement auth in Vitess in
+// Authenticator provides an interface to implement auth in Vitess in
 // grpc server
-type AuthPlugin interface {
+type Authenticator interface {
 	Authenticate(ctx context.Context, fullMethod string) (context.Context, error)
 }
 
 // authPlugins is a registry of AuthPlugin initializers.
-var authPlugins = make(map[string]func() (AuthPlugin, error))
+var authPlugins = make(map[string]func() (Authenticator, error))
 
 // RegisterAuthPlugin registers an implementation of AuthServer.
-func RegisterAuthPlugin(name string, authPlugin func() (AuthPlugin, error)) {
+func RegisterAuthPlugin(name string, authPlugin func() (Authenticator, error)) {
 	if _, ok := authPlugins[name]; ok {
 		log.Fatalf("AuthPlugin named %v already exists", name)
 	}
 	authPlugins[name] = authPlugin
 }
 
-// GetAuthPlugin returns an AuthPlugin by name, or log.Fatalf.
-func GetAuthPlugin(name string) func() (AuthPlugin, error) {
+// GetAuthenticator returns an AuthPlugin by name, or log.Fatalf.
+func GetAuthenticator(name string) func() (Authenticator, error) {
 	authPlugin, ok := authPlugins[name]
 	if !ok {
 		log.Fatalf("no AuthPlugin name %v registered", name)
