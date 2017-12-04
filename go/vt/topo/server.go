@@ -241,11 +241,11 @@ func OpenServer(implementation, serverAddress, root string) (*Server, error) {
 }
 
 // Open returns a Server using the command line parameter flags
-// for implementation, address and root. It log.Fatals out if an error occurs.
+// for implementation, address and root. It log.Exits out if an error occurs.
 func Open() *Server {
 	ts, err := OpenServer(*topoImplementation, *topoGlobalServerAddress, *topoGlobalRoot)
 	if err != nil {
-		log.Fatalf("Failed to open topo server (%v,%v,%v): %v", *topoImplementation, *topoGlobalServerAddress, *topoGlobalRoot, err)
+		log.Exitf("Failed to open topo server (%v,%v,%v): %v", *topoImplementation, *topoGlobalServerAddress, *topoGlobalRoot, err)
 	}
 	return ts
 }

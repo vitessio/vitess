@@ -234,7 +234,7 @@ func RegisterTabletManagerClientFactory(name string, factory TabletManagerClient
 func NewTabletManagerClient() TabletManagerClient {
 	f, ok := tabletManagerClientFactories[*TabletManagerProtocol]
 	if !ok {
-		log.Fatalf("No TabletManagerProtocol registered with name %s", *TabletManagerProtocol)
+		log.Exitf("No TabletManagerProtocol registered with name %s", *TabletManagerProtocol)
 	}
 
 	return f()

@@ -149,7 +149,7 @@ func main() {
 	args = args[1:]
 	cmd, ok := cmdMap[cmdName]
 	if !ok {
-		log.Fatalf("Unknown command %v", cmdName)
+		log.Exitf("Unknown command %v", cmdName)
 	}
 	subFlags := flag.NewFlagSet(cmdName, flag.ExitOnError)
 

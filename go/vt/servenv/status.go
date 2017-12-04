@@ -197,7 +197,7 @@ func init() {
 	var err error
 	hostname, err = os.Hostname()
 	if err != nil {
-		log.Fatalf("os.Hostname: %v", err)
+		log.Exitf("os.Hostname: %v", err)
 	}
 	http.HandleFunc("/debug/status", statusHandler)
 }
