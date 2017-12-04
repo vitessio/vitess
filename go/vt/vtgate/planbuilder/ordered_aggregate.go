@@ -83,7 +83,12 @@ func checkAggregates(sel *sqlparser.Select, bldr builder) (builder, error) {
 	if !hasAggregates {
 		return bldr, nil
 	}
-	if hasAggregates && !isRoute {
+
+	// The query has aggregates. We can proceed only
+	// if the underlying primitive is a route because
+	// we need the ability to push down group by and
+	// order by clauses.
+	if !isRoute {
 		return bldr, errors.New("unsupported: cross-shard query with aggregates")
 	}
 
