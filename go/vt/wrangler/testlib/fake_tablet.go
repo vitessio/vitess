@@ -31,7 +31,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttablet/grpctmserver"
@@ -63,7 +63,7 @@ type FakeTablet struct {
 	// We also create the RPCServer, so users can register more services
 	// before calling StartActionLoop().
 	Tablet          *topodatapb.Tablet
-	FakeMysqlDaemon *mysqlctl.FakeMysqlDaemon
+	FakeMysqlDaemon *fakemysqldaemon.FakeMysqlDaemon
 	RPCServer       *grpc.Server
 
 	// The following fields are created when we start the event loop for
@@ -150,7 +150,7 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	}
 
 	// create a FakeMysqlDaemon with the right information by default
-	fakeMysqlDaemon := mysqlctl.NewFakeMysqlDaemon(db)
+	fakeMysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(db)
 	fakeMysqlDaemon.MysqlPort = mysqlPort
 
 	return &FakeTablet{
