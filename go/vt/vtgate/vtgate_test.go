@@ -222,6 +222,7 @@ func TestVTGateExecute(t *testing.T) {
 	_, qr, err := rpcVTGate.Execute(
 		context.Background(),
 		&vtgatepb.Session{
+			Autocommit:   true,
 			TargetString: "@master",
 			Options:      executeOptions,
 		},
@@ -689,9 +690,18 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 }
 
 func TestVTGateExecuteBatch(t *testing.T) {
+	// TODO(sougou): using masterSession as global has some bugs
+	// which requires us to reset it here. This needs to be fixed.
+	masterSession = &vtgatepb.Session{
+		TargetString: "@master",
+	}
+
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
 	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+
+	startCommit := sbc.CommitCount.Get()
+	startRollback := sbc.RollbackCount.Get()
 
 	sqlList := []string{
 		"begin",
@@ -722,11 +732,11 @@ func TestVTGateExecuteBatch(t *testing.T) {
 	if len(session.ShardSessions) != 1 {
 		t.Errorf("want 1, got %d", len(session.ShardSessions))
 	}
-	if commitCount := sbc.CommitCount.Get(); commitCount != 2 {
-		t.Errorf("want 2, got %d", commitCount)
+	if got, want := sbc.CommitCount.Get(), startCommit+3; got != want {
+		t.Errorf("got %d, want %d", got, want)
 	}
-	if rollbackCount := sbc.RollbackCount.Get(); rollbackCount != 1 {
-		t.Errorf("want 1, got %d", rollbackCount)
+	if got, want := sbc.RollbackCount.Get(), startRollback+2; got != want {
+		t.Errorf("got %d, want %d", got, want)
 	}
 }
 

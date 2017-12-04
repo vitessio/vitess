@@ -1000,8 +1000,8 @@ func TestInsertFail(t *testing.T) {
 	sbclookup.SetResults([]*sqltypes.Result{{}})
 	_, err = executorExec(executor, "insert into music_extra_reversed(music_id, user_id) values (1, 1)", nil)
 	want = "execInsertSharded: getInsertShardedRoute: could not map INT64(1) to a keyspace id"
-	if err == nil || err.Error() != want {
-		t.Errorf("paramsSelectEqual: executorExec: %v, want %v", err, want)
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("paramsSelectEqual: executorExec: %v, must contain %v", err, want)
 	}
 
 	getSandbox("TestExecutor").SrvKeyspaceMustFail = 1
@@ -1014,8 +1014,8 @@ func TestInsertFail(t *testing.T) {
 	getSandbox("TestExecutor").ShardSpec = "80-"
 	_, err = executorExec(executor, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
 	want = "execInsertSharded: getInsertShardedRoute: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("executorExec: %v, want prefix %v", err, want)
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("executorExec: %v, must contain %v", err, want)
 	}
 	getSandbox("TestExecutor").ShardSpec = DefaultShardSpec
 
@@ -1041,21 +1041,21 @@ func TestInsertFail(t *testing.T) {
 
 	_, err = executorExec(executor, "insert into music_extra_reversed(music_id, user_id) values (1, 'aa')", nil)
 	want = `execInsertSharded: getInsertShardedRoute: hash.Verify: could not parse value: aa`
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("executorExec: %v, must contain %v", err, want)
 	}
 
 	_, err = executorExec(executor, "insert into music_extra_reversed(music_id, user_id) values (1, 3)", nil)
 	want = "execInsertSharded: getInsertShardedRoute: values [INT64(3)] for column user_id does not map to keyspaceids"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("executorExec: %v, must contain %v", err, want)
 	}
 
 	sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = executorExec(executor, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
 	want = "execInsertSharded: target: TestExecutor.-20.master"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("executorExec: %v, want prefix %v", err, want)
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("executorExec: %v, must contain %v", err, want)
 	}
 
 	_, err = executorExec(executor, "insert into noauto_table(id) values (null)", nil)
