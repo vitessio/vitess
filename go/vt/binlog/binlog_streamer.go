@@ -29,7 +29,6 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 
@@ -129,13 +128,28 @@ type tableCacheEntry struct {
 	pkIndexes []int
 }
 
+// MysqlDaemon is the interface to mysql needed to set up replication
+type MysqlDaemon interface {
+	// NewSlaveConnection returns a SlaveConnection to the database.
+	NewSlaveConnection() (SlaveConnection, error)
+}
+
+// SlaveConnection is the interface to mysql used for a slave connection
+type SlaveConnection interface {
+	Close()
+	GetCharset() (*binlogdatapb.Charset, error)
+	StartBinlogDumpFromCurrent(ctx context.Context) (mysql.Position, <-chan mysql.BinlogEvent, error)
+	StartBinlogDumpFromPosition(ctx context.Context, startPos mysql.Position) (<-chan mysql.BinlogEvent, error)
+	StartBinlogDumpFromBinlogBeforeTimestamp(ctx context.Context, timestamp int64) (<-chan mysql.BinlogEvent, error)
+}
+
 // Streamer streams binlog events from MySQL by connecting as a slave.
 // A Streamer should only be used once. To start another stream, call
 // NewStreamer() again.
 type Streamer struct {
 	// The following fields at set at creation and immutable.
 	dbname          string
-	mysqld          mysqlctl.MysqlDaemon
+	mysqld          MysqlDaemon
 	se              *schema.Engine
 	resolverFactory keyspaceIDResolverFactory
 	extractPK       bool
@@ -146,7 +160,7 @@ type Streamer struct {
 	sendTransaction  sendTransactionFunc
 	usePreviousGTIDs bool
 
-	conn *mysqlctl.SlaveConnection
+	conn SlaveConnection
 }
 
 // NewStreamer creates a binlog Streamer.
@@ -157,7 +171,7 @@ type Streamer struct {
 // startPos is the position to start streaming at. Incompatible with timestamp.
 // timestamp is the timestamp to start streaming at. Incompatible with startPos.
 // sendTransaction is called each time a transaction is committed or rolled back.
-func NewStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, se *schema.Engine, clientCharset *binlogdatapb.Charset, startPos mysql.Position, timestamp int64, sendTransaction sendTransactionFunc) *Streamer {
+func NewStreamer(dbname string, mysqld MysqlDaemon, se *schema.Engine, clientCharset *binlogdatapb.Charset, startPos mysql.Position, timestamp int64, sendTransaction sendTransactionFunc) *Streamer {
 	return &Streamer{
 		dbname:          dbname,
 		mysqld:          mysqld,
@@ -178,9 +192,9 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 	}
 	stopPos := bls.startPos
 	defer func() {
-		if err != nil && err != mysqlctl.ErrBinlogUnavailable {
-			err = fmt.Errorf("stream error @ %v: %v", stopPos, err)
-		}
+		//		if err != nil && err != mysqlctl.ErrBinlogUnavailable {
+		//			err = fmt.Errorf("stream error @ %v: %v", stopPos, err)
+		//		}
 		log.Infof("stream ended @ %v, err = %v", stopPos, err)
 	}()
 
@@ -197,7 +211,7 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 	// general doesn't support servers with different default charsets, so we
 	// treat it as a configuration error.
 	if bls.clientCharset != nil {
-		cs, err := mysql.GetCharset(bls.conn.Conn)
+		cs, err := bls.conn.GetCharset()
 		if err != nil {
 			return fmt.Errorf("can't get charset to check binlog stream: %v", err)
 		}

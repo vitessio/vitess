@@ -28,7 +28,6 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/binlog/eventtoken"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -41,7 +40,7 @@ import (
 // and it will trigger schema reloads if a DDL is encountered.
 type ReplicationWatcher struct {
 	dbconfigs dbconfigs.DBConfigs
-	mysqld    mysqlctl.MysqlDaemon
+	mysqld    binlog.MysqlDaemon
 
 	// Life cycle management vars
 	isOpen bool
@@ -81,7 +80,7 @@ func NewReplicationWatcher(se *schema.Engine, config tabletenv.TabletConfig) *Re
 }
 
 // InitDBConfig must be called before Open.
-func (rpw *ReplicationWatcher) InitDBConfig(dbcfgs dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) {
+func (rpw *ReplicationWatcher) InitDBConfig(dbcfgs dbconfigs.DBConfigs, mysqld binlog.MysqlDaemon) {
 	rpw.dbconfigs = dbcfgs
 	rpw.mysqld = mysqld
 }
@@ -109,7 +108,7 @@ func (rpw *ReplicationWatcher) Close() {
 }
 
 // Process processes the replication stream.
-func (rpw *ReplicationWatcher) Process(ctx context.Context, dbconfigs dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) {
+func (rpw *ReplicationWatcher) Process(ctx context.Context, dbconfigs dbconfigs.DBConfigs, mysqld binlog.MysqlDaemon) {
 	defer func() {
 		tabletenv.LogError()
 		rpw.wg.Done()

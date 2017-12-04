@@ -25,7 +25,10 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/pools"
+	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 var (
@@ -53,7 +56,7 @@ type SlaveConnection struct {
 // 1) No other processes are making fake slave connections to our mysqld.
 // 2) No real slave servers will have IDs in the range 1-N where N is the peak
 //    number of concurrent fake slave connections we will ever make.
-func (mysqld *Mysqld) NewSlaveConnection() (*SlaveConnection, error) {
+func (mysqld *Mysqld) NewSlaveConnection() (binlog.SlaveConnection, error) {
 	conn, err := mysqld.connectForReplication()
 	if err != nil {
 		return nil, err
@@ -92,6 +95,11 @@ func (mysqld *Mysqld) connectForReplication() (*mysql.Conn, error) {
 
 // slaveIDPool is the IDPool for server IDs used to connect as a slave.
 var slaveIDPool = pools.NewIDPool()
+
+// GetCharset returns the character set for this connection
+func (sc *SlaveConnection) GetCharset() (*binlogdatapb.Charset, error) {
+	return mysql.GetCharset(sc.Conn)
+}
 
 // StartBinlogDumpFromCurrent requests a replication binlog dump from
 // the current position.

@@ -50,7 +50,7 @@ func (util *testUtils) checkEqual(t *testing.T, expected interface{}, result int
 	}
 }
 
-func (util *testUtils) newMysqld(dbcfgs *dbconfigs.DBConfigs) mysqlctl.MysqlDaemon {
+func (util *testUtils) newMysqld(dbcfgs *dbconfigs.DBConfigs) binlog.MysqlDaemon {
 	cnf := mysqlctl.NewMycnf(11111, 6802)
 	// Assigning ServerID to be different from tablet UID to make sure that there are no
 	// assumptions in the code that those IDs are the same.
