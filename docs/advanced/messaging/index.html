@@ -385,7 +385,7 @@ asynchronously.</li>
 <p>The current implementation requires a fixed schema. This will be made more
 flexible in the future. There will also be a custom DDL syntax. For now, a
 message table must be created like this:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>create table my_message(
+<div class="highlight"><pre><code class="language-text" data-lang="text">create table my_message(
   time_scheduled bigint,
   id bigint,
   time_next bigint,
@@ -431,7 +431,7 @@ operation will be allowed on a table that has failed to load.</p>
 <h2 id="enqueuing-messages">Enqueuing messages</h2>
 
 <p>The application can enqueue messages using an insert statement:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>insert into my_message(id, message) values(1, &#39;hello world&#39;)
+<div class="highlight"><pre><code class="language-text" data-lang="text">insert into my_message(id, message) values(1, &#39;hello world&#39;)
 </code></pre></div>
 <p>These inserts can be part of a regular transaction. Multiple messages can be
 inserted to different tables. Avoid accumulating too many big messages within a
@@ -439,7 +439,7 @@ transaction as it consumes memory on the VTTablet side. At the time of commit,
 memory permitting, all messages are instantly enqueued to be sent.</p>
 
 <p>Messages can also be created to be sent in the future:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>insert into my_message(id, message, time_scheduled) values(1, &#39;hello world&#39;, :future_time)
+<div class="highlight"><pre><code class="language-text" data-lang="text">insert into my_message(id, message, time_scheduled) values(1, &#39;hello world&#39;, :future_time)
 </code></pre></div>
 <p><code class="prettyprint">future_time</code> must be the unix time expressed in nanoseconds.</p>
 
@@ -502,11 +502,11 @@ exceeds the time period specified by <code class="prettyprint">vt_purge_after</c
 <p>The <code class="prettyprint">MessageAck</code> functionality is currently an API call and cannot be used
 inside a transaction. However, you can ack messages using a regular DML. It
 should look like this:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>update my_message set time_acked = :time_acked, time_next = null where id in ::ids and time_acked is null
+<div class="highlight"><pre><code class="language-text" data-lang="text">update my_message set time_acked = :time_acked, time_next = null where id in ::ids and time_acked is null
 </code></pre></div>
 <p>You can manually change the schedule of existing messages with a statement like
 this:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>update my_message set time_next = :time_next, epoch = :epoch where id in ::ids and time_acked is null
+<div class="highlight"><pre><code class="language-text" data-lang="text">update my_message set time_next = :time_next, epoch = :epoch where id in ::ids and time_acked is null
 </code></pre></div>
 <p>This comes in handy if a bunch of messages had chronic failures and got
 postponed to the distant future. If the root cause of the problem was fixed,
