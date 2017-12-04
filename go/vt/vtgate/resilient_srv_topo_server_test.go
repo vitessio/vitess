@@ -134,7 +134,8 @@ func TestSrvKeyspaceCachedError(t *testing.T) {
 
 	// Ask again with a different context, should get an error and
 	// save that context.
-	ctx, _ = context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	_, err2 := rsts.GetSrvKeyspace(ctx, "test_cell", "unknown_ks")
 	if err2 == nil {
 		t.Fatalf("Second GetSrvKeyspace didn't return an error")

@@ -14,6 +14,32 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Package topo is the module responsible for interacting with the topology
+service. It uses one Conn connection to the global topo service (with
+possibly another one to a read-only version of the global topo service),
+and one to each cell topo service.
+
+It contains the plug-in interfaces Conn, Factory and Version that topo
+implementations will use. We support Zookeeper, etcd, consul as real
+topo servers, and in-memory, tee as test and utility topo servers.
+Implementations are in sub-directories here.
+
+In tests, we do not mock this package. Instead, we just use a memorytopo.
+
+We also support copying data across topo servers (using helpers/copy.go
+and the topo2topo cmd binary), and writing to two topo servers at the same
+time (using helpers/tee.go). This is to facilitate migrations between
+topo servers.
+
+There are two test sub-packages associated with this code:
+- test/ contains a test suite that is run against all of our implementations.
+  It just performs a bunch of common topo server activities (create, list,
+  delete various objects, ...). If a topo implementation passes all these
+  tests, it most likely will work as expected in a real deployment.
+- topotests/ contains tests that use a memorytopo to test the code in this
+  package.
+*/
 package topo
 
 import (

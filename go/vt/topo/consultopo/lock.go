@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"path"
 
+	log "github.com/golang/glog"
 	"github.com/hashicorp/consul/api"
 	"golang.org/x/net/context"
 
@@ -123,6 +124,16 @@ func (s *Server) unlock(ctx context.Context, lockPath string) error {
 	delete(s.locks, lockPath)
 	s.mu.Unlock()
 	close(li.done)
+
+	// Then try to remove the lock entirely. This will only work if
+	// noone else has the lock.
+	if err := li.lock.Destroy(); err != nil {
+		// If someone else has the lock, we can't remove it,
+		// but we don't need to.
+		if err != api.ErrLockInUse {
+			log.Warningf("failed to clean up lock file %v: %v", lockPath, err)
+		}
+	}
 
 	return unlockErr
 }
