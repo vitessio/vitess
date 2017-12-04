@@ -40,7 +40,7 @@ var (
 // among actual slaves in the topology.
 type SlaveConnection struct {
 	*mysql.Conn
-	mysqld  *Mysqld
+	cp      *mysql.ConnParams
 	slaveID uint32
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
@@ -54,14 +54,25 @@ type SlaveConnection struct {
 // 2) No real slave servers will have IDs in the range 1-N where N is the peak
 //    number of concurrent fake slave connections we will ever make.
 func (mysqld *Mysqld) NewSlaveConnection() (*SlaveConnection, error) {
-	conn, err := mysqld.connectForReplication()
+	// TODO(demmer) Move this entire file to go/vt/binlog.
+	// Pass in 'cp *mysql.ConnParams' in the NewSlaveConnection above.
+	// Then in tabletserver, we already have the DBA config,
+	// just wire that in, by replacing the current dbname/mysqld parameters
+	// NewStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, ...
+	// with just a *mysql.ConnParams. Then the caller:
+	// streamer := binlog.NewStreamer(dbconfigs.App.DbName, mysqld, ...
+	// becomes:
+	// streamer := binlog.NewStreamer(dbconfigs.App, ...
+	// Then NewSlaveConnection can be removed from mysqlctl.MysqlDaemon.
+	cp := &mysqld.dbcfgs.Dba
+	conn, err := connectForReplication(cp)
 	if err != nil {
 		return nil, err
 	}
 
 	sc := &SlaveConnection{
 		Conn:    conn,
-		mysqld:  mysqld,
+		cp:      cp,
 		slaveID: slaveIDPool.Get(),
 	}
 	log.Infof("new slave connection: slaveID=%d", sc.slaveID)
@@ -69,8 +80,8 @@ func (mysqld *Mysqld) NewSlaveConnection() (*SlaveConnection, error) {
 }
 
 // connectForReplication create a MySQL connection ready to use for replication.
-func (mysqld *Mysqld) connectForReplication() (*mysql.Conn, error) {
-	params, err := dbconfigs.WithCredentials(&mysqld.dbcfgs.Dba)
+func connectForReplication(cp *mysql.ConnParams) (*mysql.Conn, error) {
+	params, err := dbconfigs.WithCredentials(cp)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +109,7 @@ var slaveIDPool = pools.NewIDPool()
 func (sc *SlaveConnection) StartBinlogDumpFromCurrent(ctx context.Context) (mysql.Position, <-chan mysql.BinlogEvent, error) {
 	ctx, sc.cancel = context.WithCancel(ctx)
 
-	masterPosition, err := sc.mysqld.MasterPosition()
+	masterPosition, err := sc.Conn.MasterPosition()
 	if err != nil {
 		return mysql.Position{}, nil, fmt.Errorf("failed to get master position: %v", err)
 	}
@@ -273,7 +284,7 @@ func (sc *SlaveConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context.
 		// The timestamp is higher, we need to try the older files.
 		// Close and re-open our connection.
 		sc.Conn.Close()
-		conn, err := sc.mysqld.connectForReplication()
+		conn, err := connectForReplication(sc.cp)
 		if err != nil {
 			return nil, err
 		}
