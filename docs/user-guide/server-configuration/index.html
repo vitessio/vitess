@@ -661,7 +661,7 @@ the binlogs in <code class="prettyprint">/mnt/bin-logs</code>:</p>
 <h5 id="queries-as-described-in-debug-vars-section">Queries (as described in /debug/vars section)</h5>
 
 <p>Vitess has a structured way of exporting certain performance stats. The most common one is the Histogram structure, which is used by Queries:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>  &quot;Queries&quot;: {
+<div class="highlight"><pre><code class="language-text" data-lang="text">  &quot;Queries&quot;: {
     &quot;Histograms&quot;: {
       &quot;PASS_SELECT&quot;: {
         &quot;1000000&quot;: 1138196,
@@ -706,7 +706,7 @@ the binlogs in <code class="prettyprint">/mnt/bin-logs</code>:</p>
 </ul>
 
 <h5 id="results">Results</h5>
-<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>  &quot;Results&quot;: {
+<div class="highlight"><pre><code class="language-text" data-lang="text">  &quot;Results&quot;: {
     &quot;0&quot;: 0,
     &quot;1&quot;: 0,
     &quot;10&quot;: 1138326,
@@ -741,7 +741,7 @@ the binlogs in <code class="prettyprint">/mnt/bin-logs</code>:</p>
 <p>This variable used to report connection pool waits, but a refactor moved those variables out into the pool related vars.</p>
 
 <h5 id="errors">Errors</h5>
-<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>  &quot;Errors&quot;: {
+<div class="highlight"><pre><code class="language-text" data-lang="text">  &quot;Errors&quot;: {
     &quot;Deadlock&quot;: 0,
     &quot;Fail&quot;: 1,
     &quot;NotInTx&quot;: 0,
@@ -755,7 +755,7 @@ the binlogs in <code class="prettyprint">/mnt/bin-logs</code>:</p>
 <p>VTTablet also exports an InfoErrors variable that tracks inconsequential errors that don’t signify any kind of problem with the system. For example, a dup key on insert is considered normal because apps tend to use that error to instead update an existing row. So, no monitoring is needed for that variable.</p>
 
 <h5 id="internalerrors">InternalErrors</h5>
-<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>  &quot;InternalErrors&quot;: {
+<div class="highlight"><pre><code class="language-text" data-lang="text">  &quot;InternalErrors&quot;: {
     &quot;HungQuery&quot;: 0,
     &quot;Invalidation&quot;: 0,
     &quot;MemcacheStats&quot;: 0,
@@ -769,7 +769,7 @@ the binlogs in <code class="prettyprint">/mnt/bin-logs</code>:</p>
 <p>An internal error is an unexpected situation in code that may possibly point to a bug. Such errors may not cause outages, but even a single error needs be escalated for root cause analysis.</p>
 
 <h5 id="kills">Kills</h5>
-<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>  &quot;Kills&quot;: {
+<div class="highlight"><pre><code class="language-text" data-lang="text">  &quot;Kills&quot;: {
     &quot;Queries&quot;: 2,
     &quot;Transactions&quot;: 0
   },
@@ -779,7 +779,7 @@ the binlogs in <code class="prettyprint">/mnt/bin-logs</code>:</p>
 <h5 id="transactionpool">TransactionPool*</h5>
 
 <p>There are a few variables with the above prefix:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>  &quot;TransactionPoolAvailable&quot;: 300,
+<div class="highlight"><pre><code class="language-text" data-lang="text">  &quot;TransactionPoolAvailable&quot;: 300,
   &quot;TransactionPoolCapacity&quot;: 300,
   &quot;TransactionPoolIdleTimeout&quot;: 600000000000,
   &quot;TransactionPoolMaxCap&quot;: 300,
@@ -991,7 +991,7 @@ We pass this information by telling Orchestrator to execute certain
 queries that return local metadata from a non-replicated table,
 as seen in our sample
 <a href="https://github.com/youtube/vitess/blob/master/docker/orchestrator/orchestrator.conf.json">orchestrator.conf.json</a>:</p>
-<div class="highlight"><pre><code class="language-json" data-lang="json"><span></span>  <span class="s2">&quot;DetectClusterAliasQuery&quot;</span><span class="err">:</span> <span class="s2">&quot;SELECT value FROM _vt.local_metadata WHERE name=&#39;ClusterAlias&#39;&quot;</span><span class="err">,</span>
+<div class="highlight"><pre><code class="language-json" data-lang="json">  <span class="s2">&quot;DetectClusterAliasQuery&quot;</span><span class="err">:</span> <span class="s2">&quot;SELECT value FROM _vt.local_metadata WHERE name=&#39;ClusterAlias&#39;&quot;</span><span class="err">,</span>
   <span class="s2">&quot;DetectInstanceAliasQuery&quot;</span><span class="err">:</span> <span class="s2">&quot;SELECT value FROM _vt.local_metadata WHERE name=&#39;Alias&#39;&quot;</span><span class="err">,</span>
   <span class="s2">&quot;DetectPromotionRuleQuery&quot;</span><span class="err">:</span> <span class="s2">&quot;SELECT value FROM _vt.local_metadata WHERE name=&#39;PromotionRule&#39;&quot;</span><span class="err">,</span>
   <span class="s2">&quot;DetectSemiSyncEnforcedQuery&quot;</span><span class="err">:</span> <span class="s2">&quot;SELECT @@global.rpl_semi_sync_master_wait_no_slave AND @@global.rpl_semi_sync_master_timeout &gt; 1000000&quot;</span><span class="err">,</span>
@@ -1009,7 +1009,7 @@ source of truth, and expect it to send a top-down signal to Vitess.</p>
 Vitess of the change in mastership via the
 <a href="/reference/vtctl/#tabletexternallyreparented">TabletExternallyReparented</a>
 command.</p>
-<div class="highlight"><pre><code class="language-json" data-lang="json"><span></span>  <span class="s2">&quot;PostMasterFailoverProcesses&quot;</span><span class="err">:</span> <span class="p">[</span>
+<div class="highlight"><pre><code class="language-json" data-lang="json">  <span class="s2">&quot;PostMasterFailoverProcesses&quot;</span><span class="err">:</span> <span class="p">[</span>
     <span class="s2">&quot;echo &#39;Recovered from {failureType} on {failureCluster}. Failed: {failedHost}:{failedPort}; Promoted: {successorHost}:{successorPort}&#39; &gt;&gt; /tmp/recovery.log&quot;</span><span class="p">,</span>
     <span class="s2">&quot;vtctlclient -server vtctld:15999 TabletExternallyReparented {successorAlias}&quot;</span>
   <span class="p">]</span><span class="err">,</span>

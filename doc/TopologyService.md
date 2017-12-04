@@ -203,13 +203,13 @@ This part describes the two implementations we have, and their specific
 behavior.
 
 If starting from scratch, please use the `zk2`, `etcd2` or `consul`
-implementations, as we are deprecating the old `zookeeper` and `etcd`
+implementations. We deprecated the old `zookeeper` and `etcd`
 implementations. See the migration section below if you want to migrate.
 
-### Zookeeper `zk2` Implementation (new version of `zookeeper`)
+### Zookeeper `zk2` Implementation
 
-This is the recommended implementation when using Zookeeper. The old `zookeeper`
-implementation is deprecated, see next section.
+This is the current implementation when using Zookeeper. (The old `zookeeper`
+implementation is deprecated, see next section)
 
 The global cell typically has around 5 servers, distributed one in each
 cell. The local cells typically have 3 or 5 servers, in different server racks /
@@ -252,6 +252,13 @@ vtctl $TOPOLOGY AddCellInfo \
 If only one cell is used, the same Zookeeper instance can be used for both
 global and local data. A local cell record still needs to be created, just use
 the same server address, and very importantly a *different* root directory.
+
+[Zookeeper
+Observers](https://zookeeper.apache.org/doc/trunk/zookeeperObservers.html) can
+also be used to limit the load on the global Zookeeper.  They are configured by
+specifying the adresses of the observers in the server address, after a `|`,
+for instance:
+`global_server1:p1,global_server2:p2|observer1:po1,observer2:po2`.
 
 #### Implementation Details
 
@@ -300,53 +307,6 @@ served_types: <
   tablet_type: RDONLY
 >
 cells: "test_nj"
-```
-
-### Old Zookeeper `zookeeper` Implementaion (deprecated, use `zk2` instead)
-
-This old `zookeeper` topology service is deprecated, and will be removed in
-Vitess version 2.2. Please use `zk2` instead, and see the `topo2topo` section
-below for migration.
-
-Our Zookeeper implementation is based on a configuration file that describes
-where the global and each local cell ZK instances are. When adding a cell, all
-processes that may access that cell should be restarted with the new
-configuration file.
-
-The global cell typically has around 5 servers, distributed one in each
-cell. The local cells typically have 3 or 5 servers, in different server racks /
-sub-networks for higher resilience. For our integration tests, we use a single
-ZK server that serves both global and local cells.
-
-We sometimes store both data and sub-directories in a path (for a keyspace for
-instance). We use JSON to encode the data.
-
-For locking, we use an auto-incrementing file name in the `/action` subdirectory
-of the object directory. We also move them to `/actionlogs` when the lock is
-released. And we have a purge process to clear the old locks (which should be
-run on a crontab, typically).
-
-Note the paths used to store global and per-cell data do not overlap, so a
-single ZK can be used for both global and local ZKs. This is however not
-recommended, for reliability reasons.
-
-* Keyspace: `/zk/global/vt/keyspaces/<keyspace>`
-* Shard: `/zk/global/vt/keyspaces/<keyspace>/shards/<shard>`
-* Tablet: `/zk/<cell>/vt/tablets/<uid>`
-* Replication Graph: `/zk/<cell>/vt/replication/<keyspace>/<shard>`
-* SrvKeyspace: `/zk/<cell>/vt/ns/<keyspace>`
-* SrvVSchema: `/zk/<cell>/vt/vschema`
-
-We provide the 'zk' utility for easy access to the topology data in
-Zookeeper. For instance:
-
-``` sh
-# NOTE: We do not set the ZK_CLIENT_CONFIG environment variable here,
-# as the zk tool connects to a specific server. 
-$ zk -server <server address> ls /zk/global/vt/keyspaces/user
-action
-actionlog
-shards
 ```
 
 ### etcd `etcd2` Implementation (new version of `etcd`)
