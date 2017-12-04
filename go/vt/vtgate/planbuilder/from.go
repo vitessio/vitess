@@ -76,26 +76,7 @@ func processTableExpr(tableExpr sqlparser.TableExpr, vschema VSchema) (builder, 
 func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema) (builder, error) {
 	switch expr := tableExpr.Expr.(type) {
 	case sqlparser.TableName:
-		eroute, table, err := buildERoute(expr, vschema)
-		if err != nil {
-			return nil, err
-		}
-		rb := newRoute(
-			&sqlparser.Select{From: sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr})},
-			eroute,
-			nil,
-			vschema,
-		)
-		if table != nil {
-			alias := expr
-			if !tableExpr.As.IsEmpty() {
-				alias = sqlparser.TableName{Name: tableExpr.As}
-			}
-
-			// AddVindexTable can never fail because symtab is empty.
-			_ = rb.symtab.AddVindexTable(alias, table, rb)
-		}
-		return rb, nil
+		return buildTablePrimitive(tableExpr, expr, vschema)
 	case *sqlparser.Subquery:
 		var err error
 		var subplan builder
@@ -153,27 +134,44 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 	panic(fmt.Sprintf("BUG: unexpected table expression type: %T", tableExpr.Expr))
 }
 
-// buildERoute produces the initial engine.Route for the specified TableName.
-// It also returns the associated vschema info (*Table) so that
-// it can be used to create the symbol table entry.
-func buildERoute(tableName sqlparser.TableName, vschema VSchema) (*engine.Route, *vindexes.Table, error) {
+// buildTablePrimitive builds a primitive based on the table name.
+func buildTablePrimitive(tableExpr *sqlparser.AliasedTableExpr, tableName sqlparser.TableName, vschema VSchema) (builder, error) {
+	alias := tableName
+	if !tableExpr.As.IsEmpty() {
+		alias = sqlparser.TableName{Name: tableExpr.As}
+	}
+	rb := newRoute(
+		&sqlparser.Select{From: sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr})},
+		nil,
+		nil,
+		vschema,
+	)
 	if systemTable(tableName.Qualifier.String()) {
 		ks, err := vschema.DefaultKeyspace()
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
-		return engine.NewRoute(engine.ExecDBA, ks), nil, nil
+		rb.ERoute = engine.NewRoute(engine.ExecDBA, ks)
+		return rb, nil
 	}
 
-	table, err := vschema.Find(tableName)
+	table, vindex, err := vschema.FindTableOrVindex(tableName)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
+	if vindex != nil {
+		return newVindexFunc(alias, vindex, vschema), nil
+	}
+	// AddVindexTable can never fail because symtab is empty.
+	_ = rb.symtab.AddVindexTable(alias, table, rb)
+
 	if !table.Keyspace.Sharded {
-		return engine.NewRoute(engine.SelectUnsharded, table.Keyspace), table, nil
+		rb.ERoute = engine.NewRoute(engine.SelectUnsharded, table.Keyspace)
+		return rb, nil
 	}
 	if table.Pinned == nil {
-		return engine.NewRoute(engine.SelectScatter, table.Keyspace), table, nil
+		rb.ERoute = engine.NewRoute(engine.SelectScatter, table.Keyspace)
+		return rb, nil
 	}
 	// Pinned tables have their keyspace ids already assigned.
 	// Use the Binary vindex, which is the identity function
@@ -181,7 +179,8 @@ func buildERoute(tableName sqlparser.TableName, vschema VSchema) (*engine.Route,
 	route := engine.NewRoute(engine.SelectEqualUnique, table.Keyspace)
 	route.Vindex, _ = vindexes.NewBinary("binary", nil)
 	route.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, table.Pinned)}}
-	return route, table, nil
+	rb.ERoute = route
+	return rb, nil
 }
 
 // processJoin produces a builder subtree for the given Join.
