@@ -31,7 +31,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/health"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -154,7 +154,7 @@ func createTestAgent(ctx context.Context, t *testing.T, preStart func(*ActionAge
 		t.Fatalf("CreateTablet failed: %v", err)
 	}
 
-	mysqlDaemon := &mysqlctl.FakeMysqlDaemon{MysqlPort: 3306}
+	mysqlDaemon := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
 	agent := NewTestActionAgent(ctx, ts, tabletAlias, port, 0, mysqlDaemon, preStart)
 
 	vtClientMocksChannel := make(chan *binlogplayer.VtClientMock, 1)

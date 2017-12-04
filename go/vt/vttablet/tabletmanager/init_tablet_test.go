@@ -24,7 +24,7 @@ import (
 
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 
@@ -45,7 +45,7 @@ func TestInitTablet(t *testing.T) {
 	// start with a tablet record that doesn't exist
 	port := int32(1234)
 	gRPCPort := int32(3456)
-	mysqlDaemon := mysqlctl.NewFakeMysqlDaemon(nil)
+	mysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 	agent := &ActionAgent{
 		TopoServer:      ts,
 		TabletAlias:     tabletAlias,
