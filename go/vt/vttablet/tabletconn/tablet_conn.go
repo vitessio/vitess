@@ -68,7 +68,7 @@ func RegisterDialer(name string, dialer TabletDialer) {
 func GetDialer() TabletDialer {
 	td, ok := dialers[*TabletProtocol]
 	if !ok {
-		log.Fatalf("No dialer registered for tablet protocol %s", *TabletProtocol)
+		log.Exitf("No dialer registered for tablet protocol %s", *TabletProtocol)
 	}
 	return td
 }

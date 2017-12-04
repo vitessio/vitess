@@ -86,11 +86,11 @@ func RegisterAuthServerImpl(name string, authServer AuthServer) {
 	authServers[name] = authServer
 }
 
-// GetAuthServer returns an AuthServer by name, or log.Fatalf.
+// GetAuthServer returns an AuthServer by name, or log.Exitf.
 func GetAuthServer(name string) AuthServer {
 	authServer, ok := authServers[name]
 	if !ok {
-		log.Fatalf("no AuthServer name %v registered", name)
+		log.Exitf("no AuthServer name %v registered", name)
 	}
 	return authServer
 }

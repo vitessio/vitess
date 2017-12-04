@@ -19,12 +19,12 @@ package gateway
 import (
 	"flag"
 	"fmt"
-	"log"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/flagutil"
@@ -93,11 +93,11 @@ func createL2VTGateGateway(hc discovery.HealthCheck, topoServer *topo.Server, se
 	for _, a := range l2VTGateGatewayAddrs {
 		parts := strings.Split(a, "|")
 		if len(parts) != 3 {
-			log.Fatalf("invalid l2vtgategateway_addrs parameter: %v", a)
+			log.Exitf("invalid l2vtgategateway_addrs parameter: %v", a)
 		}
 
 		if err := lg.addL2VTGateConn(parts[0], parts[1], parts[2]); err != nil {
-			log.Fatalf("error adding l2vtgategateway_addrs value %v: %v", a, err)
+			log.Exitf("error adding l2vtgategateway_addrs value %v: %v", a, err)
 		}
 	}
 	lg.QueryService = queryservice.Wrap(nil, lg.withRetry)

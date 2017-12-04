@@ -124,7 +124,7 @@ func (n *node) isDirectory() bool {
 }
 
 // NewServer returns a new MemoryTopo for all the cells. It will create one
-// cell for each parameter passed in.  It will log.Fatal out in case
+// cell for each parameter passed in.  It will log.Exit out in case
 // of a problem.
 func NewServer(cells ...string) *topo.Server {
 	f := &Factory{
@@ -136,12 +136,12 @@ func NewServer(cells ...string) *topo.Server {
 	ctx := context.Background()
 	ts, err := topo.NewWithFactory(f, "" /*serverAddress*/, "" /*root*/)
 	if err != nil {
-		log.Fatalf("topo.NewWithFactory() failed: %v", err)
+		log.Exitf("topo.NewWithFactory() failed: %v", err)
 	}
 	for _, cell := range cells {
 		f.cells[cell] = f.newDirectory(cell, nil)
 		if err := ts.CreateCellInfo(ctx, cell, &topodatapb.CellInfo{}); err != nil {
-			log.Fatalf("ts.CreateCellInfo(%v) failed: %v", cell, err)
+			log.Exitf("ts.CreateCellInfo(%v) failed: %v", cell, err)
 		}
 	}
 	return ts
