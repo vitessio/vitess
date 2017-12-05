@@ -68,27 +68,29 @@ type Executor struct {
 	scatterConn *ScatterConn
 	txConn      *TxConn
 
-	mu           sync.Mutex
-	vschema      *vindexes.VSchema
-	normalize    bool
-	streamSize   int
-	plans        *cache.LRUCache
-	vschemaStats *VSchemaStats
+	mu               sync.Mutex
+	vschema          *vindexes.VSchema
+	normalize        bool
+	streamSize       int
+	legacyAutocommit bool
+	plans            *cache.LRUCache
+	vschemaStats     *VSchemaStats
 }
 
 var executorOnce sync.Once
 
 // NewExecutor creates a new Executor.
-func NewExecutor(ctx context.Context, serv topo.SrvTopoServer, cell, statsName string, resolver *Resolver, normalize bool, streamSize int, queryPlanCacheSize int64) *Executor {
+func NewExecutor(ctx context.Context, serv topo.SrvTopoServer, cell, statsName string, resolver *Resolver, normalize bool, streamSize int, queryPlanCacheSize int64, legacyAutocommit bool) *Executor {
 	e := &Executor{
-		serv:        serv,
-		cell:        cell,
-		resolver:    resolver,
-		scatterConn: resolver.scatterConn,
-		txConn:      resolver.scatterConn.txConn,
-		plans:       cache.NewLRUCache(queryPlanCacheSize),
-		normalize:   normalize,
-		streamSize:  streamSize,
+		serv:             serv,
+		cell:             cell,
+		resolver:         resolver,
+		scatterConn:      resolver.scatterConn,
+		txConn:           resolver.scatterConn.txConn,
+		plans:            cache.NewLRUCache(queryPlanCacheSize),
+		normalize:        normalize,
+		streamSize:       streamSize,
+		legacyAutocommit: legacyAutocommit,
 	}
 	e.watchSrvVSchema(ctx, cell)
 	executorOnce.Do(func() {
@@ -106,6 +108,14 @@ func NewExecutor(ctx context.Context, serv topo.SrvTopoServer, cell, statsName s
 
 // Execute executes a non-streaming query.
 func (e *Executor) Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	// Start an implicit transaction if necessary.
+	// TODO(sougou): deprecate legacyMode after all users are migrated out.
+	if !e.legacyAutocommit && !session.Autocommit && !session.InTransaction {
+		if err := e.txConn.Begin(ctx, NewSafeSession(session)); err != nil {
+			return nil, err
+		}
+	}
+
 	target := e.ParseTarget(session.TargetString)
 	if session.InTransaction && target.TabletType != topodatapb.TabletType_MASTER {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", target.TabletType)
@@ -118,6 +128,11 @@ func (e *Executor) Execute(ctx context.Context, session *vtgatepb.Session, sql s
 	case sqlparser.StmtSelect:
 		return e.handleExec(ctx, session, sql, bindVars, target)
 	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
+		// In legacy mode, we ignore autocommit settings.
+		if e.legacyAutocommit {
+			return e.handleExec(ctx, session, sql, bindVars, target)
+		}
+
 		nsf := NewSafeSession(session)
 		autocommit := false
 		if session.Autocommit && !session.InTransaction {

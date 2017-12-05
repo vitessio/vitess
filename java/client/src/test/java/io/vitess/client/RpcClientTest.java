@@ -144,7 +144,7 @@ public abstract class RpcClientTest {
 
   private static final String SESSION_ECHO = "in_transaction:true ";
 
-  private static final String NONTX_V3_SESSION_ECHO = "target_string:\"test_keyspace@replica\" options:<included_fields:ALL > ";
+  private static final String NONTX_V3_SESSION_ECHO = "autocommit:true target_string:\"test_keyspace@replica\" options:<included_fields:ALL > ";
 
   private static final String V3_SESSION_ECHO = "in_transaction:true target_string:\"test_keyspace@replica\" options:<included_fields:ALL > ";
 
