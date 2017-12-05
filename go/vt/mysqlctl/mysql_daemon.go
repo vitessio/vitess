@@ -89,9 +89,6 @@ type MysqlDaemon interface {
 	// FetchSuperQuery executes one query, returns the result
 	FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error)
 
-	// NewSlaveConnection returns a SlaveConnection to the database.
-	NewSlaveConnection() (*SlaveConnection, error)
-
 	// EnableBinlogPlayback enables playback of binlog events
 	EnableBinlogPlayback() error
 

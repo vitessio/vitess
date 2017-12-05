@@ -26,7 +26,6 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/vtgate/fakerpcvtgateconn"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver"
@@ -66,12 +65,6 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams) error {
 		SidecarDBName: "_vt",
 	}
 
-	mysqld := mysqlctl.NewMysqld(
-		&mysqlctl.Mycnf{},
-		&dbcfgs,
-		dbconfigs.AppConfig,
-	)
-
 	config := tabletenv.DefaultQsConfig
 	config.EnableAutoCommit = true
 	config.StrictTableACL = true
@@ -88,7 +81,7 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams) error {
 
 	Server = tabletserver.NewTabletServerWithNilTopoServer(config)
 	Server.Register()
-	err := Server.StartService(Target, dbcfgs, mysqld)
+	err := Server.StartService(Target, dbcfgs)
 	if err != nil {
 		return fmt.Errorf("could not start service: %v", err)
 	}
