@@ -591,11 +591,13 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 		}
 	}
 
-	// create and register the RPC services from UpdateStream
+	// Create and register the RPC services from UpdateStream.
 	// (it needs the dbname, so it has to be delayed up to here,
 	// but it has to be before updateState below that may use it)
 	if initUpdateStream {
-		us := binlog.NewUpdateStream(agent.TopoServer, agent.initialTablet.Keyspace, agent.TabletAlias.Cell, &agent.DBConfigs.App, agent.QueryServiceControl.SchemaEngine())
+		cp := agent.DBConfigs.Dba
+		cp.DbName = agent.DBConfigs.App.DbName
+		us := binlog.NewUpdateStream(agent.TopoServer, agent.initialTablet.Keyspace, agent.TabletAlias.Cell, &cp, agent.QueryServiceControl.SchemaEngine())
 		agent.UpdateStream = us
 		servenv.OnRun(func() {
 			us.RegisterService()
