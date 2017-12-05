@@ -56,6 +56,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       root_certificates: PEM_encoded root certificates.
       private_key: PEM-encoded private key.
       certificate_chain: PEM-encoded certificate chain.
+      auth_static_client_creds: basic auth credentials file path.
       **kwargs: passed up.
     """
     super(GRPCVTGateConnection, self).__init__(addr, timeout, **kwargs)
