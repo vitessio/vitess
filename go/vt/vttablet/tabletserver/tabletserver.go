@@ -1736,7 +1736,9 @@ func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Targe
 	}
 	defer tsv.endRequest(false)
 
-	s := binlog.NewEventStreamer(&tsv.dbconfigs.App, tsv.se, p, timestamp, callback)
+	cp := tsv.dbconfigs.Dba
+	cp.DbName = tsv.dbconfigs.App.DbName
+	s := binlog.NewEventStreamer(&cp, tsv.se, p, timestamp, callback)
 
 	// Create a cancelable wrapping context.
 	streamCtx, streamCancel := context.WithCancel(ctx)
