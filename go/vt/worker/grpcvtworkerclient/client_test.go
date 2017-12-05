@@ -98,7 +98,7 @@ func TestVtworkerServerAuth(t *testing.T) {
 
 	// Create a VtworkerClient gRPC client to talk to the vtworker.
 	flag.Set("grpc_auth_static_client_creds", f.Name())
-	client, err := gRPCVtworkerClientFactory(fmt.Sprintf("localhost:%v", port), 30*time.Second)
+	client, err := gRPCVtworkerClientFactory(fmt.Sprintf("localhost:%v", port))
 	if err != nil {
 		t.Fatalf("Cannot create client: %v", err)
 	}

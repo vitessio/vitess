@@ -102,7 +102,7 @@ func TestVtctlAuthClient(t *testing.T) {
 	flag.Set("grpc_auth_static_client_creds", f.Name())
 
 	// Create a VtctlClient gRPC client to talk to the fake server
-	client, err := gRPCVtctlClientFactory(fmt.Sprintf("localhost:%v", port), 30*time.Second)
+	client, err := gRPCVtctlClientFactory(fmt.Sprintf("localhost:%v", port))
 	if err != nil {
 		t.Fatalf("Cannot create client: %v", err)
 	}
