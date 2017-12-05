@@ -1887,7 +1887,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	testUtils := newTestUtils()
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
+	tsv.StartService(target, dbconfigs)
 	return tsv
 }
 

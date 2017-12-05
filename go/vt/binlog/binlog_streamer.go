@@ -29,7 +29,6 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 
@@ -134,8 +133,7 @@ type tableCacheEntry struct {
 // NewStreamer() again.
 type Streamer struct {
 	// The following fields at set at creation and immutable.
-	dbname          string
-	mysqld          mysqlctl.MysqlDaemon
+	cp              *mysql.ConnParams
 	se              *schema.Engine
 	resolverFactory keyspaceIDResolverFactory
 	extractPK       bool
@@ -146,7 +144,7 @@ type Streamer struct {
 	sendTransaction  sendTransactionFunc
 	usePreviousGTIDs bool
 
-	conn *mysqlctl.SlaveConnection
+	conn *SlaveConnection
 }
 
 // NewStreamer creates a binlog Streamer.
@@ -157,10 +155,9 @@ type Streamer struct {
 // startPos is the position to start streaming at. Incompatible with timestamp.
 // timestamp is the timestamp to start streaming at. Incompatible with startPos.
 // sendTransaction is called each time a transaction is committed or rolled back.
-func NewStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, se *schema.Engine, clientCharset *binlogdatapb.Charset, startPos mysql.Position, timestamp int64, sendTransaction sendTransactionFunc) *Streamer {
+func NewStreamer(cp *mysql.ConnParams, se *schema.Engine, clientCharset *binlogdatapb.Charset, startPos mysql.Position, timestamp int64, sendTransaction sendTransactionFunc) *Streamer {
 	return &Streamer{
-		dbname:          dbname,
-		mysqld:          mysqld,
+		cp:              cp,
 		se:              se,
 		clientCharset:   clientCharset,
 		startPos:        startPos,
@@ -178,13 +175,13 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 	}
 	stopPos := bls.startPos
 	defer func() {
-		if err != nil && err != mysqlctl.ErrBinlogUnavailable {
+		if err != nil && err != ErrBinlogUnavailable {
 			err = fmt.Errorf("stream error @ %v: %v", stopPos, err)
 		}
 		log.Infof("stream ended @ %v, err = %v", stopPos, err)
 	}()
 
-	if bls.conn, err = bls.mysqld.NewSlaveConnection(); err != nil {
+	if bls.conn, err = NewSlaveConnection(bls.cp); err != nil {
 		return err
 	}
 	defer bls.conn.Close()
@@ -395,7 +392,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 					return pos, err
 				}
 			default: // BL_DDL, BL_SET, BL_INSERT, BL_UPDATE, BL_DELETE, BL_UNRECOGNIZED
-				if q.Database != "" && q.Database != bls.dbname {
+				if q.Database != "" && q.Database != bls.cp.DbName {
 					// Skip cross-db statements.
 					continue
 				}
@@ -460,7 +457,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 
 			// Check we're in the right database, and if so, fill
 			// in more data.
-			if tm.Database != "" && tm.Database != bls.dbname {
+			if tm.Database != "" && tm.Database != bls.cp.DbName {
 				continue
 			}
 

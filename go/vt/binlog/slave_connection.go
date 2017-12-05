@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mysqlctl
+package binlog
 
 import (
 	"fmt"
@@ -53,18 +53,7 @@ type SlaveConnection struct {
 // 1) No other processes are making fake slave connections to our mysqld.
 // 2) No real slave servers will have IDs in the range 1-N where N is the peak
 //    number of concurrent fake slave connections we will ever make.
-func (mysqld *Mysqld) NewSlaveConnection() (*SlaveConnection, error) {
-	// TODO(demmer) Move this entire file to go/vt/binlog.
-	// Pass in 'cp *mysql.ConnParams' in the NewSlaveConnection above.
-	// Then in tabletserver, we already have the DBA config,
-	// just wire that in, by replacing the current dbname/mysqld parameters
-	// NewStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, ...
-	// with just a *mysql.ConnParams. Then the caller:
-	// streamer := binlog.NewStreamer(dbconfigs.App.DbName, mysqld, ...
-	// becomes:
-	// streamer := binlog.NewStreamer(dbconfigs.App, ...
-	// Then NewSlaveConnection can be removed from mysqlctl.MysqlDaemon.
-	cp := &mysqld.dbcfgs.Dba
+func NewSlaveConnection(cp *mysql.ConnParams) (*SlaveConnection, error) {
 	conn, err := connectForReplication(cp)
 	if err != nil {
 		return nil, err
