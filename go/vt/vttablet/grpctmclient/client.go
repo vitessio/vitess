@@ -96,7 +96,6 @@ func (client *Client) dialPool(tablet *topodatapb.Tablet) (tabletmanagerservicep
 	if err != nil {
 		return nil, err
 	}
-	opts := []grpc.DialOption{opt}
 	if err != nil {
 		return nil, err
 	}
