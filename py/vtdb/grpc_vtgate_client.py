@@ -50,7 +50,6 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
                **kwargs):
     """Creates a new GRPCVTGateConnection.
 
-
     Args:
       addr: address to connect to.
       timeout: connection time out.
@@ -384,15 +383,5 @@ def _prune_integrity_error(msg, exc_args):
   pruned_msg = msg[:msg.find(parts[2])]
   exc_args = (pruned_msg,) + tuple(exc_args[1:])
   return dbexceptions.IntegrityError(exc_args)
-
-def _metadata_wrapper(method):
-  """Attaches metadata information to the request"""
-  response = self.stub.Begin(request, self.timeout)
-
-  pruned_msg = msg[:msg.find(parts[2])]
-  exc_args = (pruned_msg,) + tuple(exc_args[1:])
-  return dbexceptions.IntegrityError(exc_args)
-
-
 
 vtgate_client.register_conn_class('grpc', GRPCVTGateConnection)
