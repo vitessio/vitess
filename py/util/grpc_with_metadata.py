@@ -24,7 +24,11 @@ class GRPCWithMetadataCallable:
         self.callable = callable
         self.getMetadata = getMetadata
 
-    def __call__(self, request, timeout=None, metadata=None, credentials=None):
+    def __call__(self,
+                 request,
+                 timeout=None,
+                 metadata=None,
+                 credentials=None):
       call_metadata = self.getMetadata()
       if metadata is not None and call_metadata is not None:
         call_metadata = metadata + call_metadata
@@ -42,26 +46,30 @@ class GRPCWithMetadataChannel:
                     method,
                     request_serializer=None,
                     response_deserializer=None):
-      callable = self.channel.unary_unary(method, request_serializer, response_deserializer)
-      return GRPCWithMetadataCallable(callable, self.getMetadata)
+      return GRPCWithMetadataCallable(
+          self.channel.unary_unary(method, request_serializer, response_deserializer),
+          self.getMetadata)
 
     def unary_stream(self,
                      method,
                      request_serializer=None,
                      response_deserializer=None):
-      callable = self.channel.unary_unary(method, request_serializer, response_deserializer)
-      return GRPCWithMetadataCallable(callable, self.getMetadata)
+      return GRPCWithMetadataCallable(
+          self.channel.unary_stream(method, request_serializer, response_deserializer),
+          self.getMetadata)
 
     def stream_unary(self,
                      method,
                      request_serializer=None,
                      response_deserializer=None):
-      callable = self.channel.unary_unary(method, request_serializer, response_deserializer)
-      return GRPCWithMetadataCallable(callable, self.getMetadata)
+      return GRPCWithMetadataCallable(
+          self.channel.stream_unary(method, request_serializer, response_deserializer),
+          self.getMetadata)
 
     def stream_stream(self,
                       method,
                       request_serializer=None,
                       response_deserializer=None):
-      callable = self.channel.unary_unary(method, request_serializer, response_deserializer)
-      return GRPCWithMetadataCallable(callable, self.getMetadata)
+      return GRPCWithMetadataCallable(
+          self.channel.stream_stream(method, request_serializer, response_deserializer),
+          self.getMetadata)
