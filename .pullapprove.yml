@@ -12,17 +12,12 @@ groups:
     required: 1
     users:
       - alainjobart
-      - alainjobart-bot
       - AndyDiamondstein
       - bbeaudreault
       - demmer
       - enisoc
-      - enisoc-bot
-      - harshit-gangal
       - mberlin-bot
       - michael-berlin
       - pivanof
-      - pivanof-bot
       - sougou
-      - sougou-bot
 
