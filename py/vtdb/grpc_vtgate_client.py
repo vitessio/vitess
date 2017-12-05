@@ -79,7 +79,8 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       channel = grpc.secure_channel(target, creds)
     else:
       channel = grpc.insecure_channel(target)
-    channel = grpc_with_metadata.GRPCWithMetadataChannel(channel, self.get_auth_static_client_creds)
+    if self.auth_static_client_creds is not None:
+      channel = grpc_with_metadata.GRPCWithMetadataChannel(channel, self.get_auth_static_client_creds)
     self.stub = vtgateservice_pb2.VitessStub(channel)
 
   def close(self):
@@ -102,10 +103,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
     return self.stub is None
 
   def get_auth_static_client_creds(self):
-    if self.auth_static_client_creds is not None:
-      return static_auth_client.StaticAuthClientCreds(self.auth_static_client_creds).metadata()
-    else:
-      return None
+    return static_auth_client.StaticAuthClientCreds(self.auth_static_client_creds).metadata()
 
   def cursor(self, *pargs, **kwargs):
     cursorclass = kwargs.pop('cursorclass', None) or vtgate_cursor.VTGateCursor

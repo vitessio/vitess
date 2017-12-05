@@ -49,7 +49,8 @@ class GRPCVtctlClient(vtctl_client.VtctlClient):
 
     p = urlparse('http://' + self.addr)
     channel = grpc.insecure_channel('%s:%s' % (p.hostname, p.port))
-    channel = grpc_with_metadata.GRPCWithMetadataChannel(channel, get_auth_static_client_creds)
+    if self.auth_static_client_creds is not None:
+      channel = grpc_with_metadata.GRPCWithMetadataChannel(channel, self.get_auth_static_client_creds)
     self.stub = vtctlservice_pb2.VtctlStub(channel)
 
   def close(self):
@@ -59,10 +60,7 @@ class GRPCVtctlClient(vtctl_client.VtctlClient):
     return self.stub is None
 
   def get_auth_static_client_creds(self):
-    if self.auth_static_client_creds is not None:
-      return static_auth_client.StaticAuthClientCreds(self.auth_static_client_creds).metadata()
-    else:
-      return None
+    return static_auth_client.StaticAuthClientCreds(self.auth_static_client_creds).metadata()
 
   def execute_vtctl_command(self, args, action_timeout=30.0):
     req = vtctldata_pb2.ExecuteVtctlCommandRequest(
