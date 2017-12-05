@@ -17,18 +17,25 @@ limitations under the License.
 package grpcclient
 
 import (
-	"encoding/json"
-	"io/ioutil"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
 	"github.com/youtube/vitess/go/vt/grpccommon"
 	"github.com/youtube/vitess/go/vt/vttls"
+
+	log "github.com/golang/glog"
 )
 
 // FailFast is a self-documenting type for the grpc.FailFast.
 type FailFast bool
+
+// grpcDialOptions is a registry of functions that append grpcDialOption to use when dialing a service
+var grpcDialOptions []func(opts []grpc.DialOption) ([]grpc.DialOption, error)
+
+// RegisterGRPCDialOptions registers an implementation of AuthServer.
+func RegisterGRPCDialOptions(grpcDialOptionsFunc func(opts []grpc.DialOption) ([]grpc.DialOption, error)) {
+	grpcDialOptions = append(grpcDialOptions, grpcDialOptionsFunc)
+}
 
 // Dial creates a grpc connection to the given target.
 // failFast is a non-optional parameter because callers are required to specify
@@ -42,6 +49,13 @@ func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.Clie
 		),
 	}
 	newopts = append(newopts, opts...)
+	var err error
+	for _, grpcDialOptionInitializer := range grpcDialOptions {
+		newopts, err = grpcDialOptionInitializer(newopts)
+		if err != nil {
+			log.Fatalf("There was an error initializing client grpc.DialOption: %v", err)
+		}
+	}
 	return grpc.Dial(target, newopts...)
 }
 
@@ -63,23 +77,4 @@ func SecureDialOption(cert, key, ca, name string) (grpc.DialOption, error) {
 	// Create the creds server options.
 	creds := credentials.NewTLS(config)
 	return grpc.WithTransportCredentials(creds), nil
-}
-
-// AppendStaticAuth optionally appends static auth credentials if provided.
-func AppendStaticAuth(opts []grpc.DialOption, staticAuthClientConfig string) ([]grpc.DialOption, error) {
-	if staticAuthClientConfig == "" {
-		return opts, nil
-	}
-	data, err := ioutil.ReadFile(staticAuthClientConfig)
-	if err != nil {
-		return nil, err
-	}
-	clientCreds := &StaticAuthClientCreds{}
-	err = json.Unmarshal(data, clientCreds)
-	if err != nil {
-		return nil, err
-	}
-	creds := grpc.WithPerRPCCredentials(clientCreds)
-	opts = append(opts, creds)
-	return opts, nil
 }

@@ -17,9 +17,13 @@ limitations under the License.
 package grpcclient
 
 import (
+	"encoding/json"
 	"flag"
+	"io/ioutil"
 
 	"golang.org/x/net/context"
+
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
 
@@ -50,7 +54,25 @@ func (c *StaticAuthClientCreds) RequireTransportSecurity() bool {
 	return false
 }
 
-// GetAuthStaticClientCreds returns creds file location for the plugin
-func GetAuthStaticClientCreds() string {
-	return *credsFile
+// AppendStaticAuth optionally appends static auth credentials if provided.
+func AppendStaticAuth(opts []grpc.DialOption) ([]grpc.DialOption, error) {
+	if *credsFile == "" {
+		return opts, nil
+	}
+	data, err := ioutil.ReadFile(*credsFile)
+	if err != nil {
+		return nil, err
+	}
+	clientCreds := &StaticAuthClientCreds{}
+	err = json.Unmarshal(data, clientCreds)
+	if err != nil {
+		return nil, err
+	}
+	creds := grpc.WithPerRPCCredentials(clientCreds)
+	opts = append(opts, creds)
+	return opts, nil
+}
+
+func init() {
+	RegisterGRPCDialOptions(AppendStaticAuth)
 }
