@@ -97,7 +97,6 @@ func (client *Client) dialPool(tablet *topodatapb.Tablet) (tabletmanagerservicep
 		return nil, err
 	}
 	opts := []grpc.DialOption{opt}
-	opts, err = grpcclient.AppendStaticAuth(opts, grpcclient.GetAuthStaticClientCreds())
 	if err != nil {
 		return nil, err
 	}
