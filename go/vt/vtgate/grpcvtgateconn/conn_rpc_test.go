@@ -106,7 +106,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	// Create a Go RPC client connecting to the server
 	ctx := context.Background()
 	flag.Set("grpc_auth_static_client_creds", f.Name())
-	client, err := dial(ctx, listener.Addr().String(), 30*time.Second)
+	client, err := dial(ctx, listener.Addr().String())
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
@@ -139,12 +139,12 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	// Create a Go RPC client connecting to the server
 	ctx = context.Background()
 	flag.Set("grpc_auth_static_client_creds", f.Name())
-	client, err = dial(ctx, listener.Addr().String(), 30*time.Second)
+	client, err = dial(ctx, listener.Addr().String())
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
 	vtgateconntest.RegisterTestDialProtocol(client)
-	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "", 0)
+	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "")
 	// run the test suite
 	_, err = conn.Begin(context.Background())
 	want := "rpc error: code = Unauthenticated desc = username and password must be provided"
