@@ -69,7 +69,6 @@ class GRPCVtctlClient(vtctl_client.VtctlClient):
         args=args,
         action_timeout=long(action_timeout * 1e9))
     it = self.stub.ExecuteVtctlCommand(req, action_timeout)
-
     for response in it:
       t = datetime.datetime.utcfromtimestamp(response.event.time.seconds)
       yield vtctl_client.Event(t, response.event.level, response.event.file,
