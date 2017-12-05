@@ -342,11 +342,6 @@ func (fmd *FakeMysqlDaemon) FetchSuperQuery(ctx context.Context, query string) (
 	return qr, nil
 }
 
-// NewSlaveConnection is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) NewSlaveConnection() (*mysqlctl.SlaveConnection, error) {
-	panic(fmt.Errorf("not implemented on FakeMysqlDaemon"))
-}
-
 // EnableBinlogPlayback is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) EnableBinlogPlayback() error {
 	if fmd.BinlogPlayerEnabled {

@@ -254,7 +254,7 @@ func TestStreamerParseRBREvents(t *testing.T) {
 		})
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, se, nil, mysql.Position{}, 0, sendTransaction)
+	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, se, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events)
@@ -494,7 +494,7 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 		})
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, se, nil, mysql.Position{}, 0, sendTransaction)
+	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, se, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events)

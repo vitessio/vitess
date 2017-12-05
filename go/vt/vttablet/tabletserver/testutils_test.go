@@ -25,7 +25,6 @@ import (
 
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -48,18 +47,6 @@ func (util *testUtils) checkEqual(t *testing.T, expected interface{}, result int
 	if !reflect.DeepEqual(expected, result) {
 		t.Fatalf("expect to get: %v, but got: %v", expected, result)
 	}
-}
-
-func (util *testUtils) newMysqld(dbcfgs *dbconfigs.DBConfigs) mysqlctl.MysqlDaemon {
-	cnf := mysqlctl.NewMycnf(11111, 6802)
-	// Assigning ServerID to be different from tablet UID to make sure that there are no
-	// assumptions in the code that those IDs are the same.
-	cnf.ServerID = 22222
-	return mysqlctl.NewMysqld(
-		cnf,
-		dbcfgs,
-		dbconfigs.AppConfig, // These tests only use the app pool.
-	)
 }
 
 func (util *testUtils) newDBConfigs(db *fakesqldb.DB) dbconfigs.DBConfigs {
