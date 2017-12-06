@@ -20,9 +20,12 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"sync"
+
+	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/fileutil"
-	"golang.org/x/net/context"
 )
 
 // ResolveKeyspaceWildcard will resolve keyspace wildcards.
@@ -135,4 +138,153 @@ func (ts *Server) ResolveShardWildcard(ctx context.Context, param string) ([]Key
 		}
 	}
 	return result, nil
+}
+
+// ResolveWildcards resolves paths like:
+// /keyspaces/*/Keyspace
+// into real existing paths
+//
+// If you send paths that don't contain any wildcard and
+// don't exist, this function will return an empty array.
+func (ts *Server) ResolveWildcards(ctx context.Context, cell string, paths []string) ([]string, error) {
+	results := make([][]string, len(paths))
+	wg := &sync.WaitGroup{}
+	mu := &sync.Mutex{}
+	var firstError error
+
+	for i, p := range paths {
+		wg.Add(1)
+		parts := strings.Split(p, "/")
+		go func(i int) {
+			defer wg.Done()
+			subResult, err := ts.resolveRecursive(ctx, cell, parts, true)
+			if err != nil {
+				mu.Lock()
+				if firstError != nil {
+					log.Infof("Multiple error: %v", err)
+				} else {
+					firstError = err
+				}
+				mu.Unlock()
+			} else {
+				results[i] = subResult
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	if firstError != nil {
+		return nil, firstError
+	}
+
+	result := make([]string, 0, 32)
+	for i := 0; i < len(paths); i++ {
+		subResult := results[i]
+		if subResult != nil {
+			result = append(result, subResult...)
+		}
+	}
+
+	return result, nil
+}
+
+func (ts *Server) resolveRecursive(ctx context.Context, cell string, parts []string, toplevel bool) ([]string, error) {
+	conn, err := ts.ConnForCell(ctx, cell)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, part := range parts {
+		if fileutil.HasWildcard(part) {
+			var children []string
+			var err error
+			parentPath := strings.Join(parts[:i], "/")
+			children, err = conn.ListDir(ctx, parentPath)
+			if err != nil {
+				// we asked for something like
+				// /keyspaces/aaa/* and
+				// /keyspaces/aaa doesn't exist
+				// -> return empty list, no error
+				if err == ErrNoNode {
+					return nil, nil
+				}
+				// otherwise we return the error
+				return nil, err
+			}
+
+			results := make([][]string, len(children))
+			wg := &sync.WaitGroup{}
+			mu := &sync.Mutex{}
+			var firstError error
+
+			for j, child := range children {
+				matched, err := path.Match(part, child)
+				if err != nil {
+					return nil, err
+				}
+				if matched {
+					// we have a match!
+					wg.Add(1)
+					newParts := make([]string, len(parts))
+					copy(newParts, parts)
+					newParts[i] = child
+					go func(j int) {
+						defer wg.Done()
+						subResult, err := ts.resolveRecursive(ctx, cell, newParts, false)
+						if err != nil {
+							mu.Lock()
+							if firstError != nil {
+								log.Infof("Multiple error: %v", err)
+							} else {
+								firstError = err
+							}
+							mu.Unlock()
+						} else {
+							results[j] = subResult
+						}
+					}(j)
+				}
+			}
+
+			wg.Wait()
+			if firstError != nil {
+				return nil, firstError
+			}
+
+			result := make([]string, 0, 32)
+			for j := 0; j < len(children); j++ {
+				subResult := results[j]
+				if subResult != nil {
+					result = append(result, subResult...)
+				}
+			}
+
+			// we found a part that is a wildcard, we
+			// added the children already, we're done
+			return result, nil
+		}
+	}
+
+	// no part contains a wildcard, add the path if it exists, and done
+	p := strings.Join(parts, "/")
+	if toplevel {
+		// for whatever the user typed at the toplevel, we don't
+		// check it exists or not, we just return it
+		return []string{p}, nil
+	}
+
+	// This is an expanded path, we need to check if it exists.
+	if _, err = conn.ListDir(ctx, p); err == nil {
+		// The path exists as a directory, return it.
+		return []string{p}, nil
+	}
+	_, _, err = conn.Get(ctx, p)
+	if err == nil {
+		// The path exists as a file, return it.
+		return []string{p}, nil
+	} else if err == ErrNoNode {
+		// The path doesn't exist, don't return anything.
+		return nil, nil
+	}
+	return nil, err
 }
