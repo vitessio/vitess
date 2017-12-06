@@ -73,7 +73,7 @@ func validateKeyspaceWildcard(t *testing.T, l *topoLayout, param string, expecte
 	}
 }
 
-func TestKeyspaceWildcards(t *testing.T) {
+func TestResolveKeyspaceWildcard(t *testing.T) {
 	l := &topoLayout{
 		keyspaces: []string{"aaaaa", "aabbb", "bbbbb"},
 	}
@@ -109,7 +109,7 @@ func validateShardWildcard(t *testing.T, l *topoLayout, param string, expected [
 	}
 }
 
-func TestShardWildcards(t *testing.T) {
+func TestResolveShardWildcard(t *testing.T) {
 	l := &topoLayout{
 		keyspaces: []string{"aaaaa", "bbbbb"},
 		shards: map[string][]string{
@@ -179,4 +179,67 @@ func TestShardWildcards(t *testing.T) {
 		keyspaces: []string{},
 	}
 	validateShardWildcard(t, l, "*/s1", []topo.KeyspaceShard{})
+}
+
+func validateWildcards(t *testing.T, l *topoLayout, param string, expected []string) {
+	ts := memorytopo.NewServer()
+	l.initTopo(t, ts)
+
+	ctx := context.Background()
+	r, err := ts.ResolveWildcards(ctx, topo.GlobalCell, []string{param})
+	if err != nil {
+		if expected != nil {
+			t.Errorf("was not expecting an error but got: %v", err)
+		}
+		return
+	}
+
+	if len(r) != len(expected) {
+		t.Errorf("got wrong result: %v\nexpected: %v", r, expected)
+		return
+	}
+	for i, e := range expected {
+		if r[i] != e {
+			t.Errorf("got wrong result[%v]: %v", i, r)
+		}
+	}
+}
+
+func TestResolveWildcards(t *testing.T) {
+	l := &topoLayout{
+		keyspaces: []string{"aaaaa", "bbbbb"},
+		shards: map[string][]string{
+			"aaaaa": {"s0", "s1"},
+			"bbbbb": {"-40", "40-80", "80-c0", "c0-"},
+		},
+	}
+	// The end path is a wildcard.
+	validateWildcards(t, l, "/keyspaces/*", []string{
+		"/keyspaces/aaaaa",
+		"/keyspaces/bbbbb",
+	})
+	// The end path is a directory.
+	validateWildcards(t, l, "/keyspaces/*/shards", []string{
+		"/keyspaces/aaaaa/shards",
+		"/keyspaces/bbbbb/shards",
+	})
+	// The end path is a file.
+	validateWildcards(t, l, "/keyspaces/*/Keyspace", []string{
+		"/keyspaces/aaaaa/Keyspace",
+		"/keyspaces/bbbbb/Keyspace",
+	})
+	// Double wildcards.
+	validateWildcards(t, l, "/keyspaces/*/shards/*", []string{
+		"/keyspaces/aaaaa/shards/s0",
+		"/keyspaces/aaaaa/shards/s1",
+		"/keyspaces/bbbbb/shards/-40",
+		"/keyspaces/bbbbb/shards/40-80",
+		"/keyspaces/bbbbb/shards/80-c0",
+		"/keyspaces/bbbbb/shards/c0-",
+	})
+	// Double wildcards, subset of matches.
+	validateWildcards(t, l, "/keyspaces/*/shards/s*", []string{
+		"/keyspaces/aaaaa/shards/s0",
+		"/keyspaces/aaaaa/shards/s1",
+	})
 }
