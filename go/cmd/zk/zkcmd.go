@@ -40,7 +40,7 @@ import (
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo/zk2topo"
-	"github.com/youtube/vitess/go/vt/vtctld"
+	"github.com/youtube/vitess/go/vt/vtctl"
 )
 
 var doc = `
@@ -536,7 +536,7 @@ func cmdCat(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 		}
 		decoded := ""
 		if *decodeProto {
-			decoded, err = vtctld.DecodeContent(zkPath, data)
+			decoded, err = vtctl.DecodeContent(zkPath, data)
 			if err != nil {
 				log.Warningf("cat: cannot proto decode %v: %v", zkPath, err)
 				decoded = string(data)

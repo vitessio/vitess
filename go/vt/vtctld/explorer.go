@@ -26,12 +26,9 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
-
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
+	"github.com/youtube/vitess/go/vt/vtctl"
 )
 
 // backendExplorer is a class that uses the Backend interface of a
@@ -92,7 +89,7 @@ func (ex *backendExplorer) HandlePath(nodePath string, r *http.Request) *Result 
 	case nil:
 		if len(data) > 0 {
 			// It has contents, we just use it if possible.
-			decoded, err := DecodeContent(relativePath, data)
+			decoded, err := vtctl.DecodeContent(relativePath, data)
 			if err != nil {
 				result.Error = err.Error()
 			} else {
@@ -119,41 +116,6 @@ func (ex *backendExplorer) HandlePath(nodePath string, r *http.Request) *Result 
 	result.Error = ""
 	result.Children = children
 	return result
-}
-
-// DecodeContent uses the filename to imply a type, and proto-decodes
-// the right object, then echoes it as a string.  It is exported so
-// custom apps that display the content of a file can use it, like the
-// 'zk cat' command.
-func DecodeContent(filename string, data []byte) (string, error) {
-	name := path.Base(filename)
-
-	var p proto.Message
-	switch name {
-	case topo.CellInfoFile:
-		p = new(topodatapb.CellInfo)
-	case topo.KeyspaceFile:
-		p = new(topodatapb.Keyspace)
-	case topo.ShardFile:
-		p = new(topodatapb.Shard)
-	case topo.VSchemaFile:
-		p = new(vschemapb.Keyspace)
-	case topo.ShardReplicationFile:
-		p = new(topodatapb.ShardReplication)
-	case topo.TabletFile:
-		p = new(topodatapb.Tablet)
-	case topo.SrvVSchemaFile:
-		p = new(vschemapb.SrvVSchema)
-	case topo.SrvKeyspaceFile:
-		p = new(topodatapb.SrvKeyspace)
-	default:
-		return string(data), nil
-	}
-
-	if err := proto.Unmarshal(data, p); err != nil {
-		return string(data), err
-	}
-	return proto.MarshalTextString(p), nil
 }
 
 // handleExplorerRedirect returns the redirect target URL.

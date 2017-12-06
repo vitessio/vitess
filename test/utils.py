@@ -342,21 +342,6 @@ def validate_topology(ping_tablets=False):
     run_vtctl(['Validate'])
 
 
-def zk_ls(path):
-  out, _ = run(environment.binary_argstr('zk')+' ls '+path, trap_output=True)
-  return sorted(out.splitlines())
-
-
-def zk_cat(path):
-  out, _ = run(environment.binary_argstr('zk')+' cat '+path, trap_output=True)
-  return out
-
-
-def zk_cat_json(path):
-  data = zk_cat(path)
-  return json.loads(data)
-
-
 # wait_step is a helper for looping until a condition is true.
 # use as follow:
 #    timeout = 10
