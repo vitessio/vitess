@@ -54,7 +54,15 @@ then
     optional_tls_args="-grpc_cert $cert_dir/server-cert.pem -grpc_key $cert_dir/server-key.pem -grpc_ca $cert_dir/ca-cert.pem"
 fi
 
+optional_auth_args=''
+if [ "$1" = "--enable-grpc-static-auth" ];
+then
+	  echo "Enabling Auth with static authentication in grpc"
+    optional_auth_args='-grpc_auth_static_client_creds ./grpc_static_client_auth.json'
+fi
+
 # Start vtgate.
+# shellcheck disable=SC2086
 $VTROOT/bin/vtgate \
   $TOPOLOGY_FLAGS \
   -log_dir $VTDATAROOT/tmp \
@@ -69,6 +77,7 @@ $VTROOT/bin/vtgate \
   -gateway_implementation discoverygateway \
   -service_map 'grpc-vtgateservice' \
   -pid_file $VTDATAROOT/tmp/vtgate.pid \
+  $optional_auth_args \
   $optional_tls_args \
   > $VTDATAROOT/tmp/vtgate.out 2>&1 &
 
