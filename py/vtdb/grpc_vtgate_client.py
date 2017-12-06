@@ -32,6 +32,8 @@ from vtdb import vtdb_logger
 from vtdb import vtgate_client
 from vtdb import vtgate_cursor
 from vtdb import vtgate_utils
+from util import static_auth_client
+from util import grpc_with_metadata
 
 
 _errno_pattern = re.compile(r'\(errno (\d+)\)', re.IGNORECASE)
@@ -44,6 +46,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
 
   def __init__(self, addr, timeout,
                root_certificates=None, private_key=None, certificate_chain=None,
+               auth_static_client_creds = None,
                **kwargs):
     """Creates a new GRPCVTGateConnection.
 
@@ -53,6 +56,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       root_certificates: PEM_encoded root certificates.
       private_key: PEM-encoded private key.
       certificate_chain: PEM-encoded certificate chain.
+      auth_static_client_creds: basic auth credentials file path.
       **kwargs: passed up.
     """
     super(GRPCVTGateConnection, self).__init__(addr, timeout, **kwargs)
@@ -60,6 +64,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
     self.root_certificates = root_certificates
     self.private_key = private_key
     self.certificate_chain = certificate_chain
+    self.auth_static_client_creds = auth_static_client_creds
     self.logger_object = vtdb_logger.get_logger()
 
   def dial(self):
@@ -75,6 +80,8 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       channel = grpc.secure_channel(target, creds)
     else:
       channel = grpc.insecure_channel(target)
+    if self.auth_static_client_creds is not None:
+      channel = grpc_with_metadata.GRPCWithMetadataChannel(channel, self.get_auth_static_client_creds)
     self.stub = vtgateservice_pb2.VitessStub(channel)
 
   def close(self):
@@ -95,6 +102,9 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
 
   def is_closed(self):
     return self.stub is None
+
+  def get_auth_static_client_creds(self):
+    return static_auth_client.StaticAuthClientCreds(self.auth_static_client_creds).metadata()
 
   def cursor(self, *pargs, **kwargs):
     cursorclass = kwargs.pop('cursorclass', None) or vtgate_cursor.VTGateCursor
@@ -372,6 +382,5 @@ def _prune_integrity_error(msg, exc_args):
   pruned_msg = msg[:msg.find(parts[2])]
   exc_args = (pruned_msg,) + tuple(exc_args[1:])
   return dbexceptions.IntegrityError(exc_args)
-
 
 vtgate_client.register_conn_class('grpc', GRPCVTGateConnection)

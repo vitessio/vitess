@@ -96,6 +96,9 @@ func (client *Client) dialPool(tablet *topodatapb.Tablet) (tabletmanagerservicep
 	if err != nil {
 		return nil, err
 	}
+	if err != nil {
+		return nil, err
+	}
 
 	client.mu.Lock()
 	if client.rpcClientMap == nil {
