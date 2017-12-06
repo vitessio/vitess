@@ -156,16 +156,15 @@ esac
 #
 # TODO(mberlin): Copy vendor/vendor.json file such that we can run a diff against the file on the image.
 # Copy the full source tree except:
-# - php/vendor
 # - vendor
 # That's because these directories are already part of the image.
 #
-# Note that we're using the Bash extended Glob support "(!php|vendor)" on
+# Note that we're using the Bash extended Glob support "!(vendor)" on
 # purpose here to minimize the size of the cache image: With this trick,
 # we do not move or overwrite the existing files while copying the other
 # directories. Therefore, the existing files do not count as changed and will
 # not be part of the new Docker layer of the cache image.
-copy_src_cmd="cp -R /tmp/src/!(php|vendor) . && cp -R /tmp/src/php/!(vendor) php/"
+copy_src_cmd="cp -R /tmp/src/!(vendor) ."
 # Copy the .git directory because travis/check_make_proto.sh needs a working
 # Git repository.
 copy_src_cmd=$(append_cmd "$copy_src_cmd" "cp -R /tmp/src/.git .")
