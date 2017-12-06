@@ -531,7 +531,7 @@ func keyspaceParamsToKeyspaces(ctx context.Context, wr *wrangler.Wrangler, param
 		} else {
 			// this is not a path, so assume a keyspace name,
 			// possibly with wildcards
-			keyspaces, err := topo.ResolveKeyspaceWildcard(ctx, wr.TopoServer(), param)
+			keyspaces, err := wr.TopoServer().ResolveKeyspaceWildcard(ctx, param)
 			if err != nil {
 				return nil, fmt.Errorf("Failed to resolve keyspace wildcard %v: %v", param, err)
 			}
@@ -561,7 +561,7 @@ func shardParamsToKeyspaceShards(ctx context.Context, wr *wrangler.Wrangler, par
 		} else {
 			// this is not a path, so assume a keyspace
 			// name / shard name, each possibly with wildcards
-			keyspaceShards, err := topo.ResolveShardWildcard(ctx, wr.TopoServer(), param)
+			keyspaceShards, err := wr.TopoServer().ResolveShardWildcard(ctx, param)
 			if err != nil {
 				return nil, fmt.Errorf("Failed to resolve keyspace/shard wildcard %v: %v", param, err)
 			}
