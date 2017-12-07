@@ -104,6 +104,11 @@ func (l *limit) PushOrderByNull() {
 	panic("BUG: unreachable")
 }
 
+// PushOrderByRand satisfies the builder interface.
+func (l *limit) PushOrderByRand() {
+	panic("BUG: unreachable")
+}
+
 // SetLimit sets the limit for the primitive. It calls the underlying
 // primitive's SetUpperLimit, which is an optimization hint that informs
 // the underlying primitive that it doesn't need to return more rows than

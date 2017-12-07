@@ -75,6 +75,11 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 		if _, ok := orderBy[0].Expr.(*sqlparser.NullVal); ok {
 			bldr.PushOrderByNull()
 			return nil
+		} else if f, ok := orderBy[0].Expr.(*sqlparser.FuncExpr); ok {
+			if f.Name.Lowered() == "rand" {
+				bldr.PushOrderByRand()
+				return nil
+			}
 		}
 	}
 

@@ -201,6 +201,12 @@ func (jb *join) PushOrderByNull() {
 	jb.Right.PushOrderByNull()
 }
 
+// PushOrderByRand satisfies the builder interface.
+func (jb *join) PushOrderByRand() {
+	jb.Left.PushOrderByRand()
+	jb.Right.PushOrderByRand()
+}
+
 // SetUpperLimit satisfies the builder interface.
 // The call is ignored because results get multiplied
 // as they join with others. So, it's hard to reliably

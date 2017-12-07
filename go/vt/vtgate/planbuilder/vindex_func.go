@@ -182,6 +182,10 @@ func (vf *vindexFunc) PushSelect(expr *sqlparser.AliasedExpr, _ columnOriginator
 func (vf *vindexFunc) PushOrderByNull() {
 }
 
+// PushOrderByRand satisfies the builder interface.
+func (vf *vindexFunc) PushOrderByRand() {
+}
+
 // SetUpperLimit satisfies the builder interface.
 func (vf *vindexFunc) SetUpperLimit(_ *sqlparser.SQLVal) {
 }
