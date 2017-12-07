@@ -95,7 +95,7 @@ type Swap struct {
 	swapID uint64
 
 	// topoServer is the topo server implementation used to discover the topology of the keyspace.
-	topoServer topo.Server
+	topoServer *topo.Server
 	// tabletClient is the client implementation used by the schema swap process to control
 	// all tablets in the keyspace.
 	tabletClient tmclient.TabletManagerClient
@@ -682,8 +682,7 @@ func (shardSwap *shardSchemaSwap) writeFinishedSwap() error {
 func (shardSwap *shardSchemaSwap) startHealthWatchers() error {
 	shardSwap.allTablets = make(map[string]*discovery.TabletStats)
 
-	shardSwap.tabletHealthCheck = discovery.NewHealthCheck(
-		*vtctl.HealthCheckTopologyRefresh, *vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
+	shardSwap.tabletHealthCheck = discovery.NewHealthCheck(*vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
 	shardSwap.tabletHealthCheck.SetListener(shardSwap, true /* sendDownEvents */)
 
 	topoServer := shardSwap.parent.topoServer

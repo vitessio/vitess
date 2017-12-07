@@ -28,11 +28,12 @@ exitcode=1
 num_tablets=2
 uid_base=100
 cell=test
-tablet_tasks=`seq 0 $[$num_tablets - 1]`
+TABLETS_UIDS="$(seq 0 $((num_tablets - 1)))"
+export TABLETS_UIDS
 
 teardown() {
   ./vtgate-down.sh &
-  ./vttablet-down.sh $tablet_tasks &
+  ./vttablet-down.sh "$TABLETS_UIDS" &
   ./vtctld-down.sh &
   ./zk-down.sh &
   wait
@@ -43,7 +44,7 @@ trap teardown SIGTERM SIGINT EXIT
 # Set up servers.
 timeout $timeout ./zk-up.sh || teardown
 timeout $timeout ./vtctld-up.sh || teardown
-timeout $timeout ./vttablet-up.sh $tablet_tasks || teardown
+timeout $timeout ./vttablet-up.sh || teardown
 
 # Retry loop function
 retry_with_timeout() {
@@ -83,7 +84,7 @@ done
 # health check.
 echo "Running health check on tablets..."
 start=`date +%s`
-for uid_index in $tablet_tasks; do
+for uid_index in $TABLETS_UIDS; do
   uid=$[$uid_base + $uid_index]
   printf -v alias '%s-%010d' $cell $uid
   ./lvtctl.sh RunHealthCheck $alias
@@ -109,11 +110,6 @@ start=`date +%s`
 until ./client.sh ; do
   retry_with_timeout
 done
-
-# TODO: uncomment when php crashing on Travis is fixed
-# echo "Run PHP client script..."
-# We don't need to retry anymore, because we've established that vtgate is ready.
-# php client.php --server=localhost:15991 || teardown
 
 echo "Run Go client script..."
 go run client.go -server=localhost:15991 || teardown

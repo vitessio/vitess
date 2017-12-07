@@ -14,16 +14,54 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Package topo is the module responsible for interacting with the topology
+service. It uses one Conn connection to the global topo service (with
+possibly another one to a read-only version of the global topo service),
+and one to each cell topo service.
+
+It contains the plug-in interfaces Conn, Factory and Version that topo
+implementations will use. We support Zookeeper, etcd, consul as real
+topo servers, and in-memory, tee as test and utility topo servers.
+Implementations are in sub-directories here.
+
+In tests, we do not mock this package. Instead, we just use a memorytopo.
+
+We also support copying data across topo servers (using helpers/copy.go
+and the topo2topo cmd binary), and writing to two topo servers at the same
+time (using helpers/tee.go). This is to facilitate migrations between
+topo servers.
+
+There are two test sub-packages associated with this code:
+- test/ contains a test suite that is run against all of our implementations.
+  It just performs a bunch of common topo server activities (create, list,
+  delete various objects, ...). If a topo implementation passes all these
+  tests, it most likely will work as expected in a real deployment.
+- topotests/ contains tests that use a memorytopo to test the code in this
+  package.
+*/
 package topo
 
 import (
 	"errors"
 	"flag"
+	"fmt"
+	"sync"
 
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+)
+
+const (
+	// GlobalCell is the name of the global cell.  It is special
+	// as it contains the global topology, and references the other cells.
+	GlobalCell = "global"
+
+	// GlobalReadOnlyCell is the name of the global read-only cell
+	// connection cell name.
+	GlobalReadOnlyCell = "global-read-only"
 )
 
 // Filenames for all object types.
@@ -79,65 +117,55 @@ var (
 	ErrNoUpdateNeeded = errors.New("no update needed")
 )
 
-// Impl is the interface used to talk to a persistent
-// backend storage server and locking service.
-//
-// Zookeeper is a good example of this, and go/vt/topo/zk2topo contains the
-// implementation for this using zookeeper.
-//
-// Inside Google, we use Chubby.
-//
-// FIXME(alainjobart) we are deprecating this interface, to be
-// replaced with a lower level interface defined by Backend.
-type Impl interface {
-	// Impl will eventually be entirely replaced with Backend, and
-	// just disappear.
-	Backend
+// Factory is a factory interface to create Conn objects.
+// Topo implementations will provide an implementation for this.
+type Factory interface {
+	// HasGlobalReadOnlyCell returns true if the global cell
+	// has read-only replicas of the topology data. The global topology
+	// is usually more expensive to read from / write to, as it is
+	// replicated over many cells. Some topology services provide
+	// more efficient way to read the data, like Observer servers
+	// for Zookeeper. If this returns true, we will maintain
+	// two connections for the global topology: the 'global' cell
+	// for consistent reads and writes, and the 'global-read-only'
+	// cell for reads only.
+	HasGlobalReadOnlyCell(serverAddr, root string) bool
 
-	// topo.Server management interface.
-	Close()
-
-	//
-	// Cell management, global
-	//
-
-	// GetKnownCells returns the list of known cells running our processes.
-	// It is possible to find all tablets in the entire system
-	// by then calling GetTabletsByCell on every cell, for instance.
-	// They shall be sorted.
-	GetKnownCells(ctx context.Context) ([]string, error)
-
-	//
-	// Keyspace and Shard locks for actions, global.
-	//
-
-	// LockKeyspaceForAction locks the keyspace in order to
-	// perform the action described by contents. It will wait for
-	// the lock until at most ctx.Done(). The wait can be interrupted
-	// by cancelling the context. It returns the lock path.
-	//
-	// Can return ErrTimeout or ErrInterrupted
-	LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error)
-
-	// UnlockKeyspaceForAction unlocks a keyspace.
-	UnlockKeyspaceForAction(ctx context.Context, keyspace, lockPath, results string) error
-
-	// LockShardForAction locks the shard in order to
-	// perform the action described by contents. It will wait for
-	// the lock until at most ctx.Done(). The wait can be interrupted
-	// by cancelling the context. It returns the lock path.
-	//
-	// Can return ErrTimeout or ErrInterrupted
-	LockShardForAction(ctx context.Context, keyspace, shard, contents string) (string, error)
-
-	// UnlockShardForAction unlocks a shard.
-	UnlockShardForAction(ctx context.Context, keyspace, shard, lockPath, results string) error
+	// Create creates a topo.Conn object.
+	Create(cell, serverAddr, root string) (Conn, error)
 }
 
-// Server is a wrapper type that can have extra methods.
-// Outside modules should just use the Server object.
+// Server is the main topo.Server object. We support two ways of creating one:
+// 1. From an implementation, server address, and root path.
+//    This uses a plugin mechanism, and we have implementations for
+//    etcd, zookeeper and consul.
+// 2. Specific implementations may have higher level creation methods
+//    (in which case they may provide a more complex Factory).
+//    We support memorytopo (for tests and processes that only need an
+//    in-memory server), and tee (a helper implementation to transition
+//    between one server implementation and another).
 type Server struct {
-	Impl
+	// globalCell is the main connection to the global topo service.
+	// It is created once at construction time.
+	globalCell Conn
+
+	// globalReadOnlyCell is the read-only connection to the global
+	// topo service. It will be equal to globalCell if we don't distinguish
+	// the two.
+	globalReadOnlyCell Conn
+
+	// factory allows the creation of connections to various backends.
+	// It is set at construction time.
+	factory Factory
+
+	// mu protects the following fields.
+	mu sync.Mutex
+	// cells contains clients configured to talk to a list of
+	// topo instances representing local topo clusters. These
+	// should be accessed with the ConnForCell() method, which
+	// will read the list of addresses for that cell from the
+	// global cluster and create clients as needed.
+	cells map[string]Conn
 }
 
 // SrvTopoServer is a subset of the topo.Server API that only contains
@@ -149,9 +177,6 @@ type SrvTopoServer interface {
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
 	WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVSchemaData, <-chan *WatchSrvVSchemaData, CancelFunc)
 }
-
-// Factory is a factory method to create Impl objects.
-type Factory func(serverAddr, root string) (Impl, error)
 
 var (
 	// topoImplementation is the flag for which implementation to use.
@@ -165,7 +190,7 @@ var (
 	// server.
 	topoGlobalRoot = flag.String("topo_global_root", "", "the path of the global topology data in the global topology server")
 
-	// factories has the factories for the Impl objects.
+	// factories has the factories for the Conn objects.
 	factories = make(map[string]Factory)
 )
 
@@ -179,27 +204,109 @@ func RegisterFactory(name string, factory Factory) {
 	factories[name] = factory
 }
 
-// OpenServer returns a Server using the provided implementation,
-// address and root.
-func OpenServer(implementation, serverAddress, root string) (Server, error) {
-	factory, ok := factories[implementation]
-	if !ok {
-		return Server{}, ErrNoNode
+// NewWithFactory creates a new Server based on the given Factory.
+// It also opens the global cell connection.
+func NewWithFactory(factory Factory, serverAddress, root string) (*Server, error) {
+	conn, err := factory.Create(GlobalCell, serverAddress, root)
+	if err != nil {
+		return nil, err
 	}
 
-	impl, err := factory(serverAddress, root)
-	if err != nil {
-		return Server{}, err
+	var connReadOnly Conn
+	if factory.HasGlobalReadOnlyCell(serverAddress, root) {
+		connReadOnly, err = factory.Create(GlobalReadOnlyCell, serverAddress, root)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		connReadOnly = conn
 	}
-	return Server{Impl: impl}, nil
+
+	return &Server{
+		globalCell:         conn,
+		globalReadOnlyCell: connReadOnly,
+		factory:            factory,
+		cells:              make(map[string]Conn),
+	}, nil
+}
+
+// OpenServer returns a Server using the provided implementation,
+// address and root for the global server.
+func OpenServer(implementation, serverAddress, root string) (*Server, error) {
+	factory, ok := factories[implementation]
+	if !ok {
+		return nil, ErrNoNode
+	}
+	return NewWithFactory(factory, serverAddress, root)
 }
 
 // Open returns a Server using the command line parameter flags
-// for implementation, address and root. It log.Fatals out if an error occurs.
-func Open() Server {
+// for implementation, address and root. It log.Exits out if an error occurs.
+func Open() *Server {
 	ts, err := OpenServer(*topoImplementation, *topoGlobalServerAddress, *topoGlobalRoot)
 	if err != nil {
-		log.Fatalf("Failed to open topo server (%v,%v,%v): %v", *topoImplementation, *topoGlobalServerAddress, *topoGlobalRoot, err)
+		log.Exitf("Failed to open topo server (%v,%v,%v): %v", *topoImplementation, *topoGlobalServerAddress, *topoGlobalRoot, err)
 	}
 	return ts
+}
+
+// ConnForCell returns a Conn object for the given cell.
+// It caches Conn objects from previously requested cells.
+func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
+	// Global cell is the easy case.
+	if cell == GlobalCell {
+		return ts.globalCell, nil
+	}
+
+	// Return a cached client if present.
+	ts.mu.Lock()
+	conn, ok := ts.cells[cell]
+	ts.mu.Unlock()
+	if ok {
+		return conn, nil
+	}
+
+	// Fetch cell cluster addresses from the global cluster.
+	// These can proceed concurrently (we've released the lock).
+	// We can use the GlobalReadOnlyCell for this call.
+	ci, err := ts.GetCellInfo(ctx, cell, false /*strongRead*/)
+	if err != nil {
+		return nil, err
+	}
+
+	// Connect to the cell topo server, while holding the lock.
+	// This ensures only one connection is established at any given time.
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+
+	// Check if another goroutine beat us to creating a client for
+	// this cell.
+	if conn, ok = ts.cells[cell]; ok {
+		return conn, nil
+	}
+
+	// Create the connection.
+	conn, err = ts.factory.Create(cell, ci.ServerAddress, ci.Root)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create topo connection to %v, %v: %v", ci.ServerAddress, ci.Root, err)
+	}
+	ts.cells[cell] = conn
+	return conn, nil
+}
+
+// Close will close all connections to underlying topo Server.
+// It will nil all member variables, so any further access will panic.
+func (ts *Server) Close() {
+	ts.globalCell.Close()
+	if ts.globalReadOnlyCell != ts.globalCell {
+		ts.globalReadOnlyCell.Close()
+	}
+	ts.globalCell = nil
+	ts.globalReadOnlyCell = nil
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	for _, conn := range ts.cells {
+		conn.Close()
+	}
+	ts.cells = make(map[string]Conn)
 }

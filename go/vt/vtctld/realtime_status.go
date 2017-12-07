@@ -33,8 +33,8 @@ type realtimeStats struct {
 	cellWatchers []*discovery.TopologyWatcher
 }
 
-func newRealtimeStats(ts topo.Server) (*realtimeStats, error) {
-	hc := discovery.NewHealthCheck(*vtctl.HealthCheckTimeout, *vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
+func newRealtimeStats(ts *topo.Server) (*realtimeStats, error) {
+	hc := discovery.NewHealthCheck(*vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
 	tabletStatsCache := newTabletStatsCache()
 	// sendDownEvents is set to true here, as we want to receive
 	// Up=False events for a tablet.

@@ -44,13 +44,13 @@ type gRPCVtctlClient struct {
 	c  vtctlservicepb.VtctlClient
 }
 
-func gRPCVtctlClientFactory(addr string, dialTimeout time.Duration) (vtctlclient.VtctlClient, error) {
+func gRPCVtctlClientFactory(addr string) (vtctlclient.VtctlClient, error) {
 	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
 	if err != nil {
 		return nil, err
 	}
 	// create the RPC client
-	cc, err := grpcclient.Dial(addr, opt, grpc.WithTimeout(dialTimeout))
+	cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
 	if err != nil {
 		return nil, err
 	}

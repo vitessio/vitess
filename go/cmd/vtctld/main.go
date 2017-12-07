@@ -31,7 +31,7 @@ func init() {
 
 // used at runtime by plug-ins
 var (
-	ts topo.Server
+	ts *topo.Server
 )
 
 func main() {

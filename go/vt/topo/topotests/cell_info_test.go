@@ -33,14 +33,14 @@ import (
 func TestCellInfo(t *testing.T) {
 	cell := "cell1"
 	ctx := context.Background()
-	ts := topo.Server{Impl: memorytopo.New(cell)}
+	ts := memorytopo.NewServer(cell)
 
 	// Check GetCellInfo returns what memorytopo created.
-	ci, err := ts.GetCellInfo(ctx, cell)
+	ci, err := ts.GetCellInfo(ctx, cell, true /*strongRead*/)
 	if err != nil {
 		t.Fatalf("GetCellInfo failed: %v", err)
 	}
-	if ci.Root != "/" {
+	if ci.Root != "" {
 		t.Fatalf("unexpected CellInfo: %v", ci)
 	}
 
@@ -51,7 +51,7 @@ func TestCellInfo(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpdateCellInfoFields failed: %v", err)
 	}
-	ci, err = ts.GetCellInfo(ctx, cell)
+	ci, err = ts.GetCellInfo(ctx, cell, true /*strongRead*/)
 	if err != nil {
 		t.Fatalf("GetCellInfo failed: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestCellInfo(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpdateCellInfoFields failed: %v", err)
 	}
-	ci, err = ts.GetCellInfo(ctx, cell)
+	ci, err = ts.GetCellInfo(ctx, cell, true /*strongRead*/)
 	if err != nil {
 		t.Fatalf("GetCellInfo failed: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestCellInfo(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpdateCellInfoFields failed: %v", err)
 	}
-	ci, err = ts.GetCellInfo(ctx, newCell)
+	ci, err = ts.GetCellInfo(ctx, newCell, true /*strongRead*/)
 	if err != nil {
 		t.Fatalf("GetCellInfo failed: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestCellInfo(t *testing.T) {
 	if err := ts.DeleteCellInfo(ctx, newCell); err != nil {
 		t.Fatalf("DeleteCellInfo failed: %v", err)
 	}
-	if _, err := ts.GetCellInfo(ctx, newCell); err != topo.ErrNoNode {
+	if _, err := ts.GetCellInfo(ctx, newCell, true /*strongRead*/); err != topo.ErrNoNode {
 		t.Fatalf("GetCellInfo(non-existing cell) failed: %v", err)
 	}
 }

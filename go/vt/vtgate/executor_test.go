@@ -190,10 +190,10 @@ func TestExecutorSet(t *testing.T) {
 		err: "unexpected value for autocommit: 2",
 	}, {
 		in:  "set client_found_rows=1",
-		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
 	}, {
 		in:  "set client_found_rows=0",
-		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{}},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set client_found_rows='aa'",
 		err: "unexpected value type for client_found_rows: string",
@@ -202,16 +202,16 @@ func TestExecutorSet(t *testing.T) {
 		err: "unexpected value for client_found_rows: 2",
 	}, {
 		in:  "set transaction_mode = 'unspecified'",
-		out: &vtgatepb.Session{TransactionMode: vtgatepb.TransactionMode_UNSPECIFIED},
+		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_UNSPECIFIED},
 	}, {
 		in:  "set transaction_mode = 'single'",
-		out: &vtgatepb.Session{TransactionMode: vtgatepb.TransactionMode_SINGLE},
+		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_SINGLE},
 	}, {
 		in:  "set transaction_mode = 'multi'",
-		out: &vtgatepb.Session{TransactionMode: vtgatepb.TransactionMode_MULTI},
+		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_MULTI},
 	}, {
 		in:  "set transaction_mode = 'twopc'",
-		out: &vtgatepb.Session{TransactionMode: vtgatepb.TransactionMode_TWOPC},
+		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
 	}, {
 		in:  "set transaction_mode = 'aa'",
 		err: "invalid transaction_mode: aa",
@@ -220,16 +220,16 @@ func TestExecutorSet(t *testing.T) {
 		err: "unexpected value type for transaction_mode: int64",
 	}, {
 		in:  "set workload = 'unspecified'",
-		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_UNSPECIFIED}},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_UNSPECIFIED}},
 	}, {
 		in:  "set workload = 'oltp'",
-		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLTP}},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLTP}},
 	}, {
 		in:  "set workload = 'olap'",
-		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLAP}},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLAP}},
 	}, {
 		in:  "set workload = 'dba'",
-		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_DBA}},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_DBA}},
 	}, {
 		in:  "set workload = 'aa'",
 		err: "invalid workload: aa",
@@ -241,10 +241,10 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
 	}, {
 		in:  "set sql_select_limit = 5",
-		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{SqlSelectLimit: 5}},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SqlSelectLimit: 5}},
 	}, {
 		in:  "set sql_select_limit = DEFAULT",
-		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{SqlSelectLimit: 0}},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SqlSelectLimit: 0}},
 	}, {
 		in:  "set sql_select_limit = 'asdfasfd'",
 		err: "unexpected string value for sql_select_limit: asdfasfd",
@@ -253,7 +253,7 @@ func TestExecutorSet(t *testing.T) {
 		err: "invalid syntax: 1 + 1",
 	}, {
 		in:  "set character_set_results=null",
-		out: &vtgatepb.Session{},
+		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set character_set_results='abcd'",
 		err: "disallowed value for character_set_results: abcd",
@@ -262,34 +262,34 @@ func TestExecutorSet(t *testing.T) {
 		err: "unsupported construct: set foo=1",
 	}, {
 		in:  "set names utf8",
-		out: &vtgatepb.Session{},
+		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set names ascii",
 		err: "unexpected value for charset: ascii",
 	}, {
 		in:  "set charset utf8",
-		out: &vtgatepb.Session{},
+		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set character set default",
-		out: &vtgatepb.Session{},
+		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set character set ascii",
 		err: "unexpected value for charset: ascii",
 	}, {
 		in:  "set net_write_timeout = 600",
-		out: &vtgatepb.Session{},
+		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set net_read_timeout = 600",
-		out: &vtgatepb.Session{},
+		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set skip_query_plan_cache = 1",
-		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{SkipQueryPlanCache: true}},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SkipQueryPlanCache: true}},
 	}, {
 		in:  "set skip_query_plan_cache = 0",
-		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{}},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}}
 	for _, tcase := range testcases {
-		session := &vtgatepb.Session{}
+		session := &vtgatepb.Session{Autocommit: true}
 		_, err := executor.Execute(context.Background(), session, tcase.in, nil)
 		if err != nil {
 			if err.Error() != tcase.err {
@@ -308,13 +308,16 @@ func TestExecutorAutocommit(t *testing.T) {
 	session := &vtgatepb.Session{TargetString: "@master"}
 
 	// autocommit = 0
+	startCount := sbclookup.CommitCount.Get()
 	_, err := executor.Execute(context.Background(), session, "select id from main1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession := &vtgatepb.Session{TargetString: "@master"}
-	if !proto.Equal(session, wantSession) {
-		t.Errorf("autocommit=0: %v, want %v", session, wantSession)
+	wantSession := &vtgatepb.Session{TargetString: "@master", InTransaction: true}
+	testSession := *session
+	testSession.ShardSessions = nil
+	if !proto.Equal(&testSession, wantSession) {
+		t.Errorf("autocommit=0: %v, want %v", testSession, wantSession)
 	}
 
 	// autocommit = 1
@@ -322,6 +325,12 @@ func TestExecutorAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Setting autocommit=1 commits existing transaction.
+	if got, want := sbclookup.CommitCount.Get(), startCount+1; got != want {
+		t.Errorf("Commit count: %d, want %d", got, want)
+	}
+
+	startCount = sbclookup.CommitCount.Get()
 	_, err = executor.Execute(context.Background(), session, "update main1 set id=1", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -330,12 +339,12 @@ func TestExecutorAutocommit(t *testing.T) {
 	if !proto.Equal(session, wantSession) {
 		t.Errorf("autocommit=1: %v, want %v", session, wantSession)
 	}
-	if commitCount := sbclookup.CommitCount.Get(); commitCount != 1 {
-		t.Errorf("want 1, got %d", commitCount)
+	if got, want := sbclookup.CommitCount.Get(), startCount+1; got != want {
+		t.Errorf("Commit count: %d, want %d", got, want)
 	}
 
 	// autocommit = 1, "begin"
-	startCount := sbclookup.CommitCount.Get()
+	startCount = sbclookup.CommitCount.Get()
 	_, err = executor.Execute(context.Background(), session, "begin", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -345,7 +354,7 @@ func TestExecutorAutocommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@master"}
-	testSession := *session
+	testSession = *session
 	testSession.ShardSessions = nil
 	if !proto.Equal(&testSession, wantSession) {
 		t.Errorf("autocommit=1: %v, want %v", &testSession, wantSession)
@@ -389,6 +398,32 @@ func TestExecutorAutocommit(t *testing.T) {
 	}
 	if got, want := sbclookup.CommitCount.Get(), startCount+1; got != want {
 		t.Errorf("Commit count: %d, want %d", got, want)
+	}
+}
+
+func TestExecutorLegacyAutocommit(t *testing.T) {
+	executor, _, _, sbclookup := createExecutorEnv()
+	session := &vtgatepb.Session{TargetString: "@master", Autocommit: false}
+
+	// If legacy is on, there should be no implicit transaction.
+	executor.legacyAutocommit = true
+	startCount := sbclookup.BeginCount.Get()
+	_, err := executor.Execute(context.Background(), session, "update main1 set id=1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := sbclookup.BeginCount.Get(), startCount; got != want {
+		t.Errorf("Begin count: %d, want %d", got, want)
+	}
+
+	// If legacy is off, there should be an implicit begin.
+	executor.legacyAutocommit = false
+	_, err = executor.Execute(context.Background(), session, "update main1 set id=1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := sbclookup.BeginCount.Get(), startCount+1; got != want {
+		t.Errorf("Begin count: %d, want %d", got, want)
 	}
 }
 
@@ -499,7 +534,7 @@ func TestExecutorShow(t *testing.T) {
 
 func TestExecutorUse(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
-	session := &vtgatepb.Session{TargetString: "@master"}
+	session := &vtgatepb.Session{Autocommit: true, TargetString: "@master"}
 
 	stmts := []string{
 		"use db",
@@ -514,7 +549,7 @@ func TestExecutorUse(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		wantSession := &vtgatepb.Session{TargetString: want[i]}
+		wantSession := &vtgatepb.Session{Autocommit: true, TargetString: want[i]}
 		if !proto.Equal(session, wantSession) {
 			t.Errorf("%s: %v, want %v", stmt, session, wantSession)
 		}

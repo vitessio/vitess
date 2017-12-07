@@ -26,10 +26,9 @@ import (
 )
 
 // checkShardReplication tests ShardReplication objects
-func checkShardReplication(t *testing.T, ts topo.Server) {
+func checkShardReplication(t *testing.T, ts *topo.Server) {
 	ctx := context.Background()
-	cell := getLocalCell(ctx, t, ts)
-	if _, err := ts.GetShardReplication(ctx, cell, "test_keyspace", "-10"); err != topo.ErrNoNode {
+	if _, err := ts.GetShardReplication(ctx, LocalCellName, "test_keyspace", "-10"); err != topo.ErrNoNode {
 		t.Errorf("GetShardReplication(not there): %v", err)
 	}
 
@@ -43,19 +42,19 @@ func checkShardReplication(t *testing.T, ts topo.Server) {
 			},
 		},
 	}
-	if err := ts.UpdateShardReplicationFields(ctx, cell, "test_keyspace", "-10", func(oldSr *topodatapb.ShardReplication) error {
+	if err := ts.UpdateShardReplicationFields(ctx, LocalCellName, "test_keyspace", "-10", func(oldSr *topodatapb.ShardReplication) error {
 		return topo.ErrNoUpdateNeeded
 	}); err != nil {
 		t.Fatalf("UpdateShardReplicationFields() failed: %v", err)
 	}
-	if err := ts.UpdateShardReplicationFields(ctx, cell, "test_keyspace", "-10", func(oldSr *topodatapb.ShardReplication) error {
+	if err := ts.UpdateShardReplicationFields(ctx, LocalCellName, "test_keyspace", "-10", func(oldSr *topodatapb.ShardReplication) error {
 		*oldSr = *sr
 		return nil
 	}); err != nil {
 		t.Fatalf("UpdateShardReplicationFields() failed: %v", err)
 	}
 
-	if sri, err := ts.GetShardReplication(ctx, cell, "test_keyspace", "-10"); err != nil {
+	if sri, err := ts.GetShardReplication(ctx, LocalCellName, "test_keyspace", "-10"); err != nil {
 		t.Errorf("GetShardReplication(new guy) failed: %v", err)
 	} else {
 		if len(sri.Nodes) != 1 ||
@@ -65,7 +64,7 @@ func checkShardReplication(t *testing.T, ts topo.Server) {
 		}
 	}
 
-	if err := ts.UpdateShardReplicationFields(ctx, cell, "test_keyspace", "-10", func(sr *topodatapb.ShardReplication) error {
+	if err := ts.UpdateShardReplicationFields(ctx, LocalCellName, "test_keyspace", "-10", func(sr *topodatapb.ShardReplication) error {
 		sr.Nodes = append(sr.Nodes, &topodatapb.ShardReplication_Node{
 			TabletAlias: &topodatapb.TabletAlias{
 				Cell: "c3",
@@ -77,7 +76,7 @@ func checkShardReplication(t *testing.T, ts topo.Server) {
 		t.Errorf("UpdateShardReplicationFields() failed: %v", err)
 	}
 
-	if sri, err := ts.GetShardReplication(ctx, cell, "test_keyspace", "-10"); err != nil {
+	if sri, err := ts.GetShardReplication(ctx, LocalCellName, "test_keyspace", "-10"); err != nil {
 		t.Errorf("GetShardReplication(after append) failed: %v", err)
 	} else {
 		if len(sri.Nodes) != 2 ||
@@ -89,19 +88,19 @@ func checkShardReplication(t *testing.T, ts topo.Server) {
 		}
 	}
 
-	if err := ts.DeleteShardReplication(ctx, cell, "test_keyspace", "-10"); err != nil {
+	if err := ts.DeleteShardReplication(ctx, LocalCellName, "test_keyspace", "-10"); err != nil {
 		t.Errorf("DeleteShardReplication(existing) failed: %v", err)
 	}
-	if err := ts.DeleteShardReplication(ctx, cell, "test_keyspace", "-10"); err != topo.ErrNoNode {
+	if err := ts.DeleteShardReplication(ctx, LocalCellName, "test_keyspace", "-10"); err != topo.ErrNoNode {
 		t.Errorf("DeleteShardReplication(again) returned: %v", err)
 	}
 
 	// Some implementations may already remove the directory if not data is in there, so we ignore topo.ErrNoNode.
-	if err := ts.DeleteKeyspaceReplication(ctx, cell, "test_keyspace"); err != nil && err != topo.ErrNoNode {
+	if err := ts.DeleteKeyspaceReplication(ctx, LocalCellName, "test_keyspace"); err != nil && err != topo.ErrNoNode {
 		t.Errorf("DeleteKeyspaceReplication(existing) failed: %v", err)
 	}
 	// The second time though, it should be gone.
-	if err := ts.DeleteKeyspaceReplication(ctx, cell, "test_keyspace"); err != topo.ErrNoNode {
+	if err := ts.DeleteKeyspaceReplication(ctx, LocalCellName, "test_keyspace"); err != topo.ErrNoNode {
 		t.Errorf("DeleteKeyspaceReplication(again) returned: %v", err)
 	}
 }

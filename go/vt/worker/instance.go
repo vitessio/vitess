@@ -61,13 +61,13 @@ type Instance struct {
 	lastRunError        error
 	lastRunStopTime     time.Time
 
-	topoServer             topo.Server
+	topoServer             *topo.Server
 	cell                   string
 	commandDisplayInterval time.Duration
 }
 
 // NewInstance creates a new Instance.
-func NewInstance(ts topo.Server, cell string, commandDisplayInterval time.Duration) *Instance {
+func NewInstance(ts *topo.Server, cell string, commandDisplayInterval time.Duration) *Instance {
 	wi := &Instance{topoServer: ts, cell: cell, commandDisplayInterval: commandDisplayInterval}
 	// Note: setAndStartWorker() also adds a MemoryLogger for the webserver.
 	wi.wr = wi.CreateWrangler(logutil.NewConsoleLogger())

@@ -27,7 +27,6 @@ import (
 	"reflect"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
@@ -95,7 +94,7 @@ func RegisterFakeVTGateConnDialer() (*FakeVTGateConn, string) {
 		execMap:       make(map[string]*queryResponse),
 		splitQueryMap: make(map[string]*splitQueryResponse),
 	}
-	vtgateconn.RegisterDialer(protocol, func(ctx context.Context, address string, timeout time.Duration) (vtgateconn.Impl, error) {
+	vtgateconn.RegisterDialer(protocol, func(ctx context.Context, address string) (vtgateconn.Impl, error) {
 		return impl, nil
 	})
 	return impl, protocol

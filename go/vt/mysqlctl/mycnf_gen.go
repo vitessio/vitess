@@ -156,8 +156,8 @@ func (cnf *Mycnf) fillMycnfTemplate(tmplSrc string) (string, error) {
 // The value assigned to ServerID will be in the range [100, 2^31):
 // - It avoids 0 because that's reserved for mysqlbinlog dumps.
 // - It also avoids 1-99 because low numbers are used for fake slave
-// connections.  See NewSlaveConnection() in slave_connection.go for
-// more on that.
+// connections.  See NewSlaveConnection() in binlog/slave_connection.go
+// for more on that.
 // - It avoids the 2^31 - 2^32-1 range, as there seems to be some
 // confusion there. The main MySQL documentation at:
 // http://dev.mysql.com/doc/refman/5.7/en/replication-options.html

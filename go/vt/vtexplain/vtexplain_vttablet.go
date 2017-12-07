@@ -93,18 +93,13 @@ func newTablet(t *topodatapb.Tablet) *explainTablet {
 	}
 	cnf := mysqlctl.NewMycnf(22222, 6802)
 	cnf.ServerID = 33333
-	mysqld := mysqlctl.NewMysqld(
-		cnf,
-		&dbcfgs,
-		dbconfigs.AppConfig, // These tests only use the app pool.
-	)
 
 	target := querypb.Target{
 		Keyspace:   t.Keyspace,
 		Shard:      t.Shard,
 		TabletType: topodatapb.TabletType_MASTER,
 	}
-	tsv.StartService(target, dbcfgs, mysqld)
+	tsv.StartService(target, dbcfgs)
 
 	// clear all the schema initialization queries out of the tablet
 	// to avoid clutttering the output

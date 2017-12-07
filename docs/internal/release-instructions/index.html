@@ -408,7 +408,7 @@ minor release.</li>
 that release is declared, after which point only bugfix PRs should be
 cherrypicked onto the branch. All other activity on <code class="prettyprint">master</code> will go out with a
 subsequent minor release.</p>
-<div class="highlight"><pre><code class="language-bash" data-lang="bash"><span></span>git checkout master
+<div class="highlight"><pre><code class="language-bash" data-lang="bash">git checkout master
 git pull --ff-only upstream master
 
 git checkout -b release-X.Y
@@ -427,7 +427,7 @@ name to a different hash, we must never do this.</p>
 <p>Since a tag represents a particular point in time, only patch releases (X.Y.Z)
 have tags. These should be defined as <a href="https://git-scm.com/book/en/v2/Git-Basics-Tagging#Annotated-Tags">annotated tags</a> from the
 associated release branch, after all cherrypicks have been applied and tested.</p>
-<div class="highlight"><pre><code class="language-bash" data-lang="bash"><span></span>git checkout release-X.Y
+<div class="highlight"><pre><code class="language-bash" data-lang="bash">git checkout release-X.Y
 git pull --ff-only upstream release-X.Y
 
 git cherry-pick &lt;commit&gt; ...
@@ -445,7 +445,7 @@ pushing to upstream, you must increment the version number and create a new tag
 
 <p>Note: You&#39;ll require an account on Docker Hub to execute the <code class="prettyprint">docker push</code>
 command.</p>
-<div class="highlight"><pre><code class="language-bash" data-lang="bash"><span></span><span class="c1"># Rebuild all dependent images locally. Full chain: common-&gt;mysql57-&gt;base-&gt;lite.</span>
+<div class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="c"># Rebuild all dependent images locally. Full chain: common-&gt;mysql57-&gt;base-&gt;lite.</span>
 make docker_bootstrap <span class="nv">DOCKER_IMAGES</span><span class="o">=</span><span class="s2">&quot;common mysql57&quot;</span>
 make docker_base
 
@@ -455,21 +455,21 @@ make docker_guestbook
 <span class="nv">MINOR</span><span class="o">=</span>vX.Y
 <span class="nv">PATCH</span><span class="o">=</span>vX.Y.Z
 
-<span class="c1"># Tag the new PATCH version.</span>
+<span class="c"># Tag the new PATCH version.</span>
 docker tag vitess/lite vitess/lite:<span class="nv">$PATCH</span>
 docker tag vitess/guestbook vitess/guestbook:<span class="nv">$PATCH</span>
 
-<span class="c1"># NOTE: Skip these two steps for pre-releases (e.g. alpha.1, rc.1 releases).</span>
-<span class="c1"># Update the MINOR Docker tag to point to the latest PATCH version.</span>
+<span class="c"># NOTE: Skip these two steps for pre-releases (e.g. alpha.1, rc.1 releases).</span>
+<span class="c"># Update the MINOR Docker tag to point to the latest PATCH version.</span>
 docker tag -f vitess/lite vitess/lite:<span class="nv">$MINOR</span>
 docker tag -f vitess/guestbook vitess/guestbook:<span class="nv">$MINOR</span>
 
-<span class="c1"># Push the tags and images to Docker Hub.</span>
+<span class="c"># Push the tags and images to Docker Hub.</span>
 docker push vitess/lite:<span class="nv">$PATCH</span>
 docker push vitess/lite:latest
 docker push vitess/guestbook:<span class="nv">$PATCH</span>
 docker push vitess/guestbook:latest
-<span class="c1"># NOTE: Skip the next two steps for pre-releases (e.g. alpha.1, rc.1 releases).</span>
+<span class="c"># NOTE: Skip the next two steps for pre-releases (e.g. alpha.1, rc.1 releases).</span>
 docker push vitess/lite:<span class="nv">$MINOR</span>
 docker push vitess/guestbook:<span class="nv">$MINOR</span>
 </code></pre></div>
@@ -491,7 +491,7 @@ is not broken.</p>
 should have the same commands as the tutorial. You can use our <code class="prettyprint">test.go</code> test
 runner to run the test for all MySQL flavors. <code class="prettyprint">-parallel=2</code> will run two tests
 in parallel to shorten the test duration.</p>
-<div class="highlight"><pre><code class="language-bash" data-lang="bash"><span></span>./test.go -flavor<span class="o">=</span>all -pull<span class="o">=</span><span class="nb">false</span> -parallel<span class="o">=</span><span class="m">2</span> local_example
+<div class="highlight"><pre><code class="language-bash" data-lang="bash">./test.go -flavor<span class="o">=</span>all -pull<span class="o">=</span><span class="nb">false</span> -parallel<span class="o">=</span><span class="m">2</span> local_example
 </code></pre></div>
 <h3 id="kubernetes-tutorial">Kubernetes Tutorial</h3>
 
@@ -533,24 +533,24 @@ Therefore, file a JIRA ticket with Sonatype to get added (<a href="https://issue
 <ol>
 <li><p>Make sure you are in the release branch.</p></li>
 <li><p>Change the version number in all <code class="prettyprint">pom.xml</code> files with the &quot;versions&quot; plugin:</p>
-<div class="highlight"><pre><code class="language-bash" data-lang="bash"><span></span><span class="c1"># The Java version must not have the leading &quot;v&quot;.</span>
-<span class="c1"># Example: 2.1.0 and not v2.1.0.</span>
-<span class="c1"># Use Bash substitution to remove the leading &quot;v&quot;.</span>
-<span class="nv">JAVA_VERSION</span><span class="o">=</span><span class="si">${</span><span class="nv">PATCH</span><span class="p">/v/</span><span class="si">}</span>
-<span class="nb">cd</span> java
+<div class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="c"># The Java version must not have the leading &quot;v&quot;.</span>
+<span class="c"># Example: 2.1.0 and not v2.1.0.</span>
+<span class="c"># Use Bash substitution to remove the leading &quot;v&quot;.</span>
+<span class="nv">JAVA_VERSION</span><span class="o">=</span><span class="k">${</span><span class="nv">PATCH</span><span class="p">/v/</span><span class="k">}</span>
+<span class="nb">cd </span>java
 mvn versions:set -DnewVersion<span class="o">=</span><span class="nv">$JAVA_VERSION</span>
 </code></pre></div></li>
 <li><p>Run <code class="prettyprint">git diff java/</code> to double check that the version was updated correctly.</p></li>
 <li><p>Create a Git commit with the version change while you are in the <strong>release</strong> branch (not master). You will push it later.</p></li>
 <li><p>Run <code class="prettyprint">gpg-agent</code> to avoid that Maven will constantly prompt you for the password of your private key.</p>
-<div class="highlight"><pre><code class="language-bash" data-lang="bash"><span></span><span class="nb">eval</span> <span class="k">$(</span>gpg-agent --daemon --no-grab --write-env-file <span class="nv">$HOME</span>/.gpg-agent-info<span class="k">)</span>
-<span class="nb">export</span> <span class="nv">GPG_TTY</span><span class="o">=</span><span class="k">$(</span>tty<span class="k">)</span>
-<span class="nb">export</span> GPG_AGENT_INFO
+<div class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="nb">eval</span> <span class="k">$(</span>gpg-agent --daemon --no-grab --write-env-file <span class="nv">$HOME</span>/.gpg-agent-info<span class="k">)</span>
+<span class="nb">export </span><span class="nv">GPG_TTY</span><span class="o">=</span><span class="k">$(</span>tty<span class="k">)</span>
+<span class="nb">export </span>GPG_AGENT_INFO
 </code></pre></div></li>
 <li><p>Deploy (upload) the Java code to the oss.sonatype.org repository:</p>
 
 <p class="warning"><b>Warning:</b> After the deployment, the Java packages will be automatically released. Once released, you cannot delete them. The only option is to upload a newer version (e.g. increment the patch level).</p>
-<div class="highlight"><pre><code class="language-bash" data-lang="bash"><span></span>mvn clean deploy -P release
+<div class="highlight"><pre><code class="language-bash" data-lang="bash">mvn clean deploy -P release
 <span class="nb">cd</span> ..
 </code></pre></div></li>
 </ol>
@@ -565,9 +565,9 @@ mvn versions:set -DnewVersion<span class="o">=</span><span class="nv">$JAVA_VERS
 back, since tags don't get updated if someone else has fetched them already.
 If you need to re-tag after this point, you MUST increment the version number.
 </p>
-<div class="highlight"><pre><code class="language-bash" data-lang="bash"><span></span><span class="c1"># release branch</span>
+<div class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="c"># release branch</span>
 git push upstream release-X.Y
-<span class="c1"># release tag</span>
+<span class="c"># release tag</span>
 git push upstream vX.Y.Z
 </code></pre></div>
 <h2 id="add-release-notes-and-send-announcement">Add release notes and send announcement</h2>
@@ -584,19 +584,19 @@ to see all the commits since the last release.</p>
 For example, if you just released <code class="prettyprint">2.1.0</code>, you could bump it to <code class="prettyprint">2.1.1-SNAPSHOT</code>.</p>
 
 <p>Change the SNAPSHOT version as follows:</p>
-<div class="highlight"><pre><code class="language-bash" data-lang="bash"><span></span>git checkout master
+<div class="highlight"><pre><code class="language-bash" data-lang="bash">git checkout master
 git pull --ff-only upstream master
 
-<span class="c1"># Example:</span>
-<span class="c1"># (Note that there is no leading &quot;v&quot;.)</span>
-<span class="nv">JAVA_VERSION</span><span class="o">=</span><span class="m">2</span>.1.1-SNAPSHOT
-<span class="nb">cd</span> java
+<span class="c"># Example:</span>
+<span class="c"># (Note that there is no leading &quot;v&quot;.)</span>
+<span class="nv">JAVA_VERSION</span><span class="o">=</span>2.1.1-SNAPSHOT
+<span class="nb">cd </span>java
 mvn versions:set -DnewVersion<span class="o">=</span><span class="nv">$JAVA_VERSION</span>
 
-<span class="c1"># Verify diff.</span>
+<span class="c"># Verify diff.</span>
 git diff
 
-git commit -a -m <span class="s2">&quot;java: Bump SNAPSHOT version to </span><span class="nv">$JAVA_VERSION</span><span class="s2"> after Vitess release </span><span class="nv">$PATCH</span><span class="s2">.&quot;</span>
+git commit -a -m <span class="s2">&quot;java: Bump SNAPSHOT version to $JAVA_VERSION after Vitess release $PATCH.&quot;</span>
 
 git push upstream master
 </code></pre></div>

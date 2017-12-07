@@ -30,6 +30,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/grpccommon"
 	"github.com/youtube/vitess/go/vt/vttls"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc/keepalive"
 )
 
@@ -58,6 +59,9 @@ var (
 	// GRPCCA is the CA to use if TLS is enabled
 	GRPCCA = flag.String("grpc_ca", "", "ca to use, requires TLS, and enforces client cert check")
 
+	// GRPCAuth which auth plugin to use (at the moment now only static is supported)
+	GRPCAuth = flag.String("grpc_auth_mode", "", "Which auth plugin implementation to use (eg: static)")
+
 	// GRPCServer is the global server to serve gRPC.
 	GRPCServer *grpc.Server
 
@@ -68,6 +72,8 @@ var (
 	// GRPCMaxConnectionAgeGrace is an additional grace period after GRPCMaxConnectionAge, after which
 	// connections are forcibly closed.
 	GRPCMaxConnectionAgeGrace = flag.Duration("grpc_max_connection_age_grace", time.Duration(math.MaxInt64), "Additional grace period after grpc_max_connection_age, after which connections are forcibly closed.")
+
+	authPlugin Authenticator
 )
 
 // isGRPCEnabled returns true if gRPC server is set
@@ -97,7 +103,7 @@ func createGRPCServer() {
 	if GRPCPort != nil && *GRPCCert != "" && *GRPCKey != "" {
 		config, err := vttls.ServerConfig(*GRPCCert, *GRPCKey, *GRPCCA)
 		if err != nil {
-			log.Fatalf("Failed to log gRPC cert/key/ca: %v", err)
+			log.Exitf("Failed to log gRPC cert/key/ca: %v", err)
 		}
 
 		// create the creds server options
@@ -125,6 +131,18 @@ func createGRPCServer() {
 		opts = append(opts, grpc.KeepaliveParams(ka))
 	}
 
+	if *GRPCAuth != "" {
+		log.Infof("enabling auth plugin %v", *GRPCAuth)
+		pluginInitializer := GetAuthenticator(*GRPCAuth)
+		authPluginImpl, err := pluginInitializer()
+		if err != nil {
+			log.Fatalf("Failed to load auth plugin: %v", err)
+		}
+		authPlugin = authPluginImpl
+		opts = append(opts, grpc.StreamInterceptor(streamInterceptor))
+		opts = append(opts, grpc.UnaryInterceptor(unaryInterceptor))
+	}
+
 	GRPCServer = grpc.NewServer(opts...)
 }
 
@@ -138,7 +156,7 @@ func serveGRPC() {
 	log.Infof("Listening for gRPC calls on port %v", *GRPCPort)
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", *GRPCPort))
 	if err != nil {
-		log.Fatalf("Cannot listen on port %v for gRPC: %v", *GRPCPort, err)
+		log.Exitf("Cannot listen on port %v for gRPC: %v", *GRPCPort, err)
 	}
 
 	// and serve on it
@@ -167,4 +185,44 @@ func GRPCCheckServiceMap(name string) bool {
 
 	// then check ServiceMap
 	return CheckServiceMap("grpc", name)
+}
+
+func streamInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	newCtx, err := authPlugin.Authenticate(stream.Context(), info.FullMethod)
+
+	if err != nil {
+		return err
+	}
+
+	wrapped := WrapServerStream(stream)
+	wrapped.WrappedContext = newCtx
+	return handler(srv, wrapped)
+}
+
+func unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	newCtx, err := authPlugin.Authenticate(ctx, info.FullMethod)
+	if err != nil {
+		return nil, err
+	}
+
+	return handler(newCtx, req)
+}
+
+// WrappedServerStream is based on the service stream wrapper from: https://github.com/grpc-ecosystem/go-grpc-middleware
+type WrappedServerStream struct {
+	grpc.ServerStream
+	WrappedContext context.Context
+}
+
+// Context returns the wrapper's WrappedContext, overwriting the nested grpc.ServerStream.Context()
+func (w *WrappedServerStream) Context() context.Context {
+	return w.WrappedContext
+}
+
+// WrapServerStream returns a ServerStream that has the ability to overwrite context.
+func WrapServerStream(stream grpc.ServerStream) *WrappedServerStream {
+	if existing, ok := stream.(*WrappedServerStream); ok {
+		return existing
+	}
+	return &WrappedServerStream{ServerStream: stream, WrappedContext: stream.Context()}
 }

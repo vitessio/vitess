@@ -17,103 +17,84 @@ limitations under the License.
 package zk2topo
 
 import (
-	"fmt"
-	"path"
-	"sync"
-
-	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
+	"strings"
 
 	"github.com/youtube/vitess/go/vt/topo"
-
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 const (
 	// Path elements
-
-	cellsPath     = "cells"
-	keyspacesPath = "keyspaces"
-	shardsPath    = "shards"
-	tabletsPath   = "tablets"
 	locksPath     = "locks"
 	electionsPath = "elections"
 )
 
-// instance is holding a Zookeeper connection, and the root directory
-// to use on it. It is used for the global cell, and for individual cells.
-type instance struct {
+// Factory is the zookeeper topo.Factory implementation.
+type Factory struct{}
+
+// hasObservers checks the provided address to see if it has observers.
+// If so, it returns the voting server address, the observer address, and true.
+// Otherwise, it returns false.
+func hasObservers(serverAddr string) (string, string, bool) {
+	if i := strings.Index(serverAddr, "|"); i != -1 {
+		return serverAddr[:i], serverAddr[i+1:], true
+	}
+	return "", "", false
+}
+
+// HasGlobalReadOnlyCell is part of the topo.Factory interface.
+//
+// Further implementation design note: Zookeeper supports Observers:
+// https://zookeeper.apache.org/doc/trunk/zookeeperObservers.html
+// To use them, follow these instructions:
+// * setup your observer servers as described in the previous link.
+// * specify a second set of servers in serverAddr, after a '|', like:
+//   global1:port1,global2:port2|observer1:port1,observer2:port2
+// * if HasGlobalReadOnlyCell detects that the serverAddr has both lists,
+//   it returns true.
+// * the Create method below also splits the values, and if
+//   cell is GlobalCell, use the left side, if cell is GlobalReadOnlyCell,
+//   use the right side.
+func (f Factory) HasGlobalReadOnlyCell(serverAddr, root string) bool {
+	_, _, ok := hasObservers(serverAddr)
+	return ok
+}
+
+// Create is part of the topo.Factory interface.
+func (f Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
+	if cell == topo.GlobalCell {
+		// For the global cell, extract the voting servers if we
+		// have observers.
+		newAddr, _, ok := hasObservers(serverAddr)
+		if ok {
+			serverAddr = newAddr
+		}
+	}
+	if cell == topo.GlobalReadOnlyCell {
+		// Use the observers as serverAddr.
+		_, serverAddr, _ = hasObservers(serverAddr)
+	}
+	return NewServer(serverAddr, root), nil
+}
+
+// Server is the zookeeper topo.Conn implementation.
+type Server struct {
 	root string
 	conn Conn
 }
 
-// Server is the zookeeper topo.Impl implementation.
-type Server struct {
-	// mu protects the following fields.
-	mu sync.Mutex
-	// instances is a map of cell name to instance.
-	instances map[string]*instance
-}
-
-// NewServer returns a Server connecting to real Zookeeper processes.
+// NewServer returns a topo.Conn connecting to real Zookeeper processes.
 func NewServer(serverAddr, root string) *Server {
 	return &Server{
-		instances: map[string]*instance{
-			topo.GlobalCell: {
-				root: root,
-				conn: newRealConn(serverAddr),
-			},
-		},
+		root: root,
+		conn: newRealConn(serverAddr),
 	}
 }
 
-func init() {
-	topo.RegisterFactory("zk2", func(serverAddr, root string) (topo.Impl, error) {
-		return NewServer(serverAddr, root), nil
-	})
-}
-
-// connForCell returns the Conn and root for a cell. It creates it if
-// it doesn't exist.
-func (zs *Server) connForCell(ctx context.Context, cell string) (Conn, string, error) {
-	zs.mu.Lock()
-	defer zs.mu.Unlock()
-	ins, ok := zs.instances[cell]
-	if ok {
-		return ins.conn, ins.root, nil
-	}
-
-	// We do not have a connection yet, let's try to read the CellInfo.
-	// We can't use zs.Get() as we are holding the lock.
-	ins, ok = zs.instances[topo.GlobalCell]
-	if !ok {
-		// This should not happen, as we always create and
-		// keep the 'global' record entry.
-		return nil, "", fmt.Errorf("programming error: no global cell, cannot read CellInfo for cell %v", cell)
-	}
-	zkPath := path.Join(ins.root, cellsPath, cell, topo.CellInfoFile)
-	data, _, err := ins.conn.Get(ctx, zkPath)
-	if err != nil {
-		return nil, "", convertError(err)
-	}
-	ci := &topodatapb.CellInfo{}
-	if err := proto.Unmarshal(data, ci); err != nil {
-		return nil, "", fmt.Errorf("cannot Unmarshal CellInfo for cell %v: %v", cell, err)
-	}
-	ins = &instance{
-		root: ci.Root,
-		conn: Connect(ci.ServerAddress),
-	}
-	zs.instances[cell] = ins
-	return ins.conn, ins.root, nil
-}
-
-// Close is part of topo.Impl interface.
+// Close is part of topo.Conn interface.
 func (zs *Server) Close() {
-	zs.mu.Lock()
-	defer zs.mu.Unlock()
-	for _, ins := range zs.instances {
-		ins.conn.Close()
-	}
-	zs.instances = nil
+	zs.conn.Close()
+	zs.conn = nil
+}
+func init() {
+	topo.RegisterFactory("zk2", Factory{})
 }

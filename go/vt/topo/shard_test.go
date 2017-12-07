@@ -80,9 +80,8 @@ func lockedKeyspaceContext(keyspace string) context.Context {
 	ctx := context.Background()
 	return context.WithValue(ctx, locksKey, &locksInfo{
 		info: map[string]*lockInfo{
-			keyspace: {
-				lockPath: "path",
-			},
+			// An empty entry is good enough for this.
+			keyspace: {},
 		},
 	})
 }

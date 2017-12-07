@@ -17,9 +17,9 @@ limitations under the License.
 package engine
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
-
 	"strconv"
 	"strings"
 
@@ -233,36 +233,27 @@ const (
 	NumCodes
 )
 
-// routeName must exactly match order of opcode constants.
-var routeName = [NumCodes]string{
-	"Error",
-	"SelectUnsharded",
-	"SelectEqualUnique",
-	"SelectEqual",
-	"SelectIN",
-	"SelectScatter",
-	"SelectNext",
-	"ExecDBA",
-	"UpdateUnsharded",
-	"UpdateEqual",
-	"DeleteUnsharded",
-	"DeleteEqual",
-	"InsertUnsharded",
-	"InsertSharded",
-	"InsertShardedIgnore",
-}
-
-func (code RouteOpcode) String() string {
-	if code < 0 || code >= NumCodes {
-		return ""
-	}
-	return routeName[code]
+var routeName = map[RouteOpcode]string{
+	SelectUnsharded:     "SelectUnsharded",
+	SelectEqualUnique:   "SelectEqualUnique",
+	SelectEqual:         "SelectEqual",
+	SelectIN:            "SelectIN",
+	SelectScatter:       "SelectScatter",
+	SelectNext:          "SelectNext",
+	ExecDBA:             "ExecDBA",
+	UpdateUnsharded:     "UpdateUnsharded",
+	UpdateEqual:         "UpdateEqual",
+	DeleteUnsharded:     "DeleteUnsharded",
+	DeleteEqual:         "DeleteEqual",
+	InsertUnsharded:     "InsertUnsharded",
+	InsertSharded:       "InsertSharded",
+	InsertShardedIgnore: "InsertShardedIgnore",
 }
 
 // MarshalJSON serializes the RouteOpcode as a JSON string.
 // It's used for testing and diagnostics.
 func (code RouteOpcode) MarshalJSON() ([]byte, error) {
-	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
+	return json.Marshal(routeName[code])
 }
 
 type scatterParams struct {

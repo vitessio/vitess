@@ -77,7 +77,7 @@ func (sri *ShardReplicationInfo) GetShardReplicationNode(tabletAlias *topodatapb
 
 // UpdateShardReplicationRecord is a low level function to add / update an
 // entry to the ShardReplication object.
-func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shard string, tabletAlias *topodatapb.TabletAlias) error {
+func UpdateShardReplicationRecord(ctx context.Context, ts *Server, keyspace, shard string, tabletAlias *topodatapb.TabletAlias) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateShardReplicationFields")
 	span.Annotate("keyspace", keyspace)
@@ -116,7 +116,7 @@ func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shar
 
 // RemoveShardReplicationRecord is a low level function to remove an
 // entry from the ShardReplication object.
-func RemoveShardReplicationRecord(ctx context.Context, ts Server, cell, keyspace, shard string, tabletAlias *topodatapb.TabletAlias) error {
+func RemoveShardReplicationRecord(ctx context.Context, ts *Server, cell, keyspace, shard string, tabletAlias *topodatapb.TabletAlias) error {
 	err := ts.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(sr *topodatapb.ShardReplication) error {
 		nodes := make([]*topodatapb.ShardReplication_Node, 0, len(sr.Nodes))
 		for _, node := range sr.Nodes {
@@ -132,7 +132,7 @@ func RemoveShardReplicationRecord(ctx context.Context, ts Server, cell, keyspace
 
 // FixShardReplication will fix the first problem it encounters within
 // a ShardReplication object.
-func FixShardReplication(ctx context.Context, ts Server, logger logutil.Logger, cell, keyspace, shard string) error {
+func FixShardReplication(ctx context.Context, ts *Server, logger logutil.Logger, cell, keyspace, shard string) error {
 	sri, err := ts.GetShardReplication(ctx, cell, keyspace, shard)
 	if err != nil {
 		return err
@@ -162,11 +162,16 @@ func FixShardReplication(ctx context.Context, ts Server, logger logutil.Logger, 
 }
 
 // UpdateShardReplicationFields updates the fields inside a topo.ShardReplication object.
-func (ts Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*topodatapb.ShardReplication) error) error {
+func (ts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*topodatapb.ShardReplication) error) error {
 	nodePath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard, ShardReplicationFile)
 
+	conn, err := ts.ConnForCell(ctx, cell)
+	if err != nil {
+		return err
+	}
+
 	for {
-		data, version, err := ts.Get(ctx, cell, nodePath)
+		data, version, err := conn.Get(ctx, nodePath)
 		sr := &topodatapb.ShardReplication{}
 		switch err {
 		case ErrNoNode:
@@ -197,7 +202,7 @@ func (ts Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspac
 		}
 		if version == nil {
 			// We have to create, and we catch ErrNodeExists.
-			_, err = ts.Create(ctx, cell, nodePath, data)
+			_, err = conn.Create(ctx, nodePath, data)
 			if err == ErrNodeExists {
 				// Node was created by another process, try
 				// again.
@@ -207,7 +212,7 @@ func (ts Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspac
 		}
 
 		// We have to update, and we catch ErrBadVersion.
-		_, err = ts.Update(ctx, cell, nodePath, data, version)
+		_, err = conn.Update(ctx, nodePath, data, version)
 		if err == ErrBadVersion {
 			// Node was updated by another process, try again.
 			continue
@@ -217,9 +222,14 @@ func (ts Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspac
 }
 
 // GetShardReplication returns the ShardReplicationInfo object.
-func (ts Server) GetShardReplication(ctx context.Context, cell, keyspace, shard string) (*ShardReplicationInfo, error) {
+func (ts *Server) GetShardReplication(ctx context.Context, cell, keyspace, shard string) (*ShardReplicationInfo, error) {
+	conn, err := ts.ConnForCell(ctx, cell)
+	if err != nil {
+		return nil, err
+	}
+
 	nodePath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard, ShardReplicationFile)
-	data, _, err := ts.Get(ctx, cell, nodePath)
+	data, _, err := conn.Get(ctx, nodePath)
 	if err != nil {
 		return nil, err
 	}
@@ -233,13 +243,23 @@ func (ts Server) GetShardReplication(ctx context.Context, cell, keyspace, shard 
 }
 
 // DeleteShardReplication deletes a ShardReplication object.
-func (ts Server) DeleteShardReplication(ctx context.Context, cell, keyspace, shard string) error {
+func (ts *Server) DeleteShardReplication(ctx context.Context, cell, keyspace, shard string) error {
+	conn, err := ts.ConnForCell(ctx, cell)
+	if err != nil {
+		return err
+	}
+
 	nodePath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard, ShardReplicationFile)
-	return ts.Delete(ctx, cell, nodePath, nil)
+	return conn.Delete(ctx, nodePath, nil)
 }
 
 // DeleteKeyspaceReplication deletes all the ShardReplication objects for a cell/keyspace.
-func (ts Server) DeleteKeyspaceReplication(ctx context.Context, cell, keyspace string) error {
+func (ts *Server) DeleteKeyspaceReplication(ctx context.Context, cell, keyspace string) error {
+	conn, err := ts.ConnForCell(ctx, cell)
+	if err != nil {
+		return err
+	}
+
 	nodePath := path.Join(KeyspacesPath, keyspace)
-	return ts.Delete(ctx, cell, nodePath, nil)
+	return conn.Delete(ctx, nodePath, nil)
 }

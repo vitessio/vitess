@@ -35,7 +35,7 @@ func RunCommandAndWait(ctx context.Context, server string, args []string, action
 		return errors.New("No function closure for Event stream specified")
 	}
 	// create the client
-	client, err := New(server, 30*time.Second /* dialTimeout */)
+	client, err := New(server)
 	if err != nil {
 		return fmt.Errorf("Cannot dial to server %v: %v", server, err)
 	}

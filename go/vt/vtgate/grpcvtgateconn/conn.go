@@ -20,7 +20,6 @@ package grpcvtgateconn
 import (
 	"flag"
 	"io"
-	"time"
 
 	"google.golang.org/grpc"
 
@@ -53,12 +52,12 @@ type vtgateConn struct {
 	c  vtgateservicepb.VitessClient
 }
 
-func dial(ctx context.Context, addr string, timeout time.Duration) (vtgateconn.Impl, error) {
+func dial(ctx context.Context, addr string) (vtgateconn.Impl, error) {
 	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
 	if err != nil {
 		return nil, err
 	}
-	cc, err := grpcclient.Dial(addr, opt, grpc.WithTimeout(timeout))
+	cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
 	if err != nil {
 		return nil, err
 	}

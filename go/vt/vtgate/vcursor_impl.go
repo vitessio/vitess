@@ -63,14 +63,23 @@ func (vc *vcursorImpl) Context() context.Context {
 	return vc.ctx
 }
 
-// Find finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
+// FindTable finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
 // Otherwise, the keyspace from the request is used, if one was provided.
-func (vc *vcursorImpl) Find(name sqlparser.TableName) (table *vindexes.Table, err error) {
+func (vc *vcursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, error) {
 	ks := name.Qualifier.String()
 	if ks == "" {
 		ks = vc.target.Keyspace
 	}
-	return vc.executor.VSchema().Find(ks, name.Name.String())
+	return vc.executor.VSchema().FindTable(ks, name.Name.String())
+}
+
+// FindTableOrVindex finds the specified table or vindex.
+func (vc *vcursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, error) {
+	ks := name.Qualifier.String()
+	if ks == "" {
+		ks = vc.target.Keyspace
+	}
+	return vc.executor.VSchema().FindTableOrVindex(ks, name.Name.String())
 }
 
 // DefaultKeyspace returns the default keyspace of the current request

@@ -24,6 +24,7 @@ import (
 
 	log "github.com/golang/glog"
 
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletconn"
@@ -88,7 +89,7 @@ func (th *tabletHealth) lastAccessed() time.Time {
 	return th.accessed
 }
 
-func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias) (err error) {
+func (th *tabletHealth) stream(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias) (err error) {
 	defer func() {
 		th.mu.Lock()
 		th.err = err
@@ -101,7 +102,7 @@ func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias 
 		return err
 	}
 
-	conn, err := tabletconn.GetDialer()(ti.Tablet, 30*time.Second)
+	conn, err := tabletconn.GetDialer()(ti.Tablet, grpcclient.FailFast(true))
 	if err != nil {
 		return err
 	}
@@ -126,7 +127,7 @@ func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias 
 }
 
 type tabletHealthCache struct {
-	ts topo.Server
+	ts *topo.Server
 
 	// mu protects the map.
 	mu sync.Mutex
@@ -135,7 +136,7 @@ type tabletHealthCache struct {
 	tabletMap map[string]*tabletHealth
 }
 
-func newTabletHealthCache(ts topo.Server) *tabletHealthCache {
+func newTabletHealthCache(ts *topo.Server) *tabletHealthCache {
 	return &tabletHealthCache{
 		ts:        ts,
 		tabletMap: make(map[string]*tabletHealth),

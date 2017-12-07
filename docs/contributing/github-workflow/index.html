@@ -351,12 +351,12 @@ Eventually, we will merge your pull request back into the <em>upstream</em> repo
 
 <p>Since you should have cloned the repository from your fork, the <code class="prettyprint">origin</code> remote
 should look like this:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>$ git remote -v
+<div class="highlight"><pre><code class="language-text" data-lang="text">$ git remote -v
 origin  git@github.com:&lt;yourname&gt;/vitess.git (fetch)
 origin  git@github.com:&lt;yourname&gt;/vitess.git (push)
 </code></pre></div>
 <p>To help you keep your fork in sync with the main repo, add an <code class="prettyprint">upstream</code> remote:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>$ git remote add upstream git@github.com:youtube/vitess.git
+<div class="highlight"><pre><code class="language-text" data-lang="text">$ git remote add upstream git@github.com:youtube/vitess.git
 $ git remote -v
 origin  git@github.com:&lt;yourname&gt;/vitess.git (fetch)
 origin  git@github.com:&lt;yourname&gt;/vitess.git (push)
@@ -364,7 +364,7 @@ upstream        git@github.com:youtube/vitess.git (fetch)
 upstream        git@github.com:youtube/vitess.git (push)
 </code></pre></div>
 <p>Now to sync your local <code class="prettyprint">master</code> branch, do this:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>$ git checkout master
+<div class="highlight"><pre><code class="language-text" data-lang="text">$ git checkout master
 (master) $ git pull upstream master
 </code></pre></div>
 <p>Note: In the example output above we prefixed the prompt with <code class="prettyprint">(master)</code> to
@@ -373,15 +373,15 @@ stress the fact that the command must be run from the branch <code class="pretty
 <p>You can omit the <code class="prettyprint">upstream master</code> from the <code class="prettyprint">git pull</code> command when you let your
 <code class="prettyprint">master</code> branch always track the main <code class="prettyprint">youtube/vitess</code> repository. To achieve
 this, run this command once:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>(master) $ git branch --set-upstream-to=upstream/master
+<div class="highlight"><pre><code class="language-text" data-lang="text">(master) $ git branch --set-upstream-to=upstream/master
 </code></pre></div>
 <p>Now the following command syncs your local <code class="prettyprint">master</code> branch as well:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>(master) $ git pull
+<div class="highlight"><pre><code class="language-text" data-lang="text">(master) $ git pull
 </code></pre></div>
 <h2 id="topic-branches">Topic Branches</h2>
 
 <p>Before you start working on changes, create a topic branch:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>$ git checkout master
+<div class="highlight"><pre><code class="language-text" data-lang="text">$ git checkout master
 (master) $ git pull
 (master) $ git checkout -b new-feature
 (new-feature) $ # You are now in the new-feature branch.
@@ -401,11 +401,11 @@ These results will be linked on your pull request.</p>
 <h2 id="sending-pull-requests">Sending Pull Requests</h2>
 
 <p>Push your branch to the repository (and set it to track with <code class="prettyprint">-u</code>):</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>(new-feature) $ git push -u origin new-feature
+<div class="highlight"><pre><code class="language-text" data-lang="text">(new-feature) $ git push -u origin new-feature
 </code></pre></div>
 <p>You can omit <code class="prettyprint">origin</code> and <code class="prettyprint">-u new-feature</code> parameters from the <code class="prettyprint">git push</code>
 command with the following two Git configuration changes:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>$ git config remote.pushdefault origin
+<div class="highlight"><pre><code class="language-text" data-lang="text">$ git config remote.pushdefault origin
 $ git config push.default current
 </code></pre></div>
 <p>The first setting saves you from typing <code class="prettyprint">origin</code> every time. And with the second
@@ -413,7 +413,7 @@ setting, Git assumes that the remote branch on the GitHub side will have the
 same name as your local branch.</p>
 
 <p>After this change, you can run <code class="prettyprint">git push</code> without arguments:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>(new-feature) $ git push
+<div class="highlight"><pre><code class="language-text" data-lang="text">(new-feature) $ git push
 </code></pre></div>
 <p>Then go to the <a href="https://github.com/youtube/vitess">repository page</a> and it
 should prompt you to create a Pull Request from a branch you recently pushed.
@@ -423,7 +423,7 @@ You can also <a href="https://github.com/youtube/vitess/compare">choose a branch
 
 <p>If you need to make changes in response to the reviewer&#39;s comments, just make
 another commit on your branch and then push it again:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>$ git checkout new-feature
+<div class="highlight"><pre><code class="language-text" data-lang="text">$ git checkout new-feature
 (new-feature) $ git commit
 (new-feature) $ git push
 </code></pre></div>

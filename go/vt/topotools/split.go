@@ -65,7 +65,7 @@ func OverlappingShardsForShard(os []*OverlappingShards, shardName string) *Overl
 // having 40-80, 40-60 and 40-50 in the same keyspace is not supported and
 // will return an error).
 // If shards don't perfectly overlap, they are not returned.
-func FindOverlappingShards(ctx context.Context, ts topo.Server, keyspace string) ([]*OverlappingShards, error) {
+func FindOverlappingShards(ctx context.Context, ts *topo.Server, keyspace string) ([]*OverlappingShards, error) {
 	shardMap, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
 	if err != nil {
 		return nil, err

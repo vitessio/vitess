@@ -62,7 +62,7 @@ func Init() {
 		return
 	}
 	if *ldapAuthMethod != mysql.MysqlClearPassword && *ldapAuthMethod != mysql.MysqlDialog {
-		log.Fatalf("Invalid mysql_ldap_auth_method value: only support mysql_clear_password or dialog")
+		log.Exitf("Invalid mysql_ldap_auth_method value: only support mysql_clear_password or dialog")
 	}
 	ldapAuthServer := &AuthServerLdap{
 		Client:       &ClientImpl{},
@@ -75,11 +75,11 @@ func Init() {
 		var err error
 		data, err = ioutil.ReadFile(*ldapAuthConfigFile)
 		if err != nil {
-			log.Fatalf("Failed to read mysql_ldap_auth_config_file: %v", err)
+			log.Exitf("Failed to read mysql_ldap_auth_config_file: %v", err)
 		}
 	}
 	if err := json.Unmarshal(data, ldapAuthServer); err != nil {
-		log.Fatalf("Error parsing AuthServerLdap config: %v", err)
+		log.Exitf("Error parsing AuthServerLdap config: %v", err)
 	}
 	mysql.RegisterAuthServerImpl("ldap", ldapAuthServer)
 }

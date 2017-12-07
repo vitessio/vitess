@@ -83,7 +83,7 @@ func (client *Client) dial(tablet *topodatapb.Tablet) (*grpc.ClientConn, tabletm
 	if err != nil {
 		return nil, nil, err
 	}
-	cc, err := grpcclient.Dial(addr, opt)
+	cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -93,6 +93,9 @@ func (client *Client) dial(tablet *topodatapb.Tablet) (*grpc.ClientConn, tabletm
 func (client *Client) dialPool(tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, error) {
 	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
 	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
+	if err != nil {
+		return nil, err
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +111,7 @@ func (client *Client) dialPool(tablet *topodatapb.Tablet) (tabletmanagerservicep
 		client.mu.Unlock()
 
 		for i := 0; i < cap(c); i++ {
-			cc, err := grpcclient.Dial(addr, opt)
+			cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
 			if err != nil {
 				return nil, err
 			}
