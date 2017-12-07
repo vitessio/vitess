@@ -87,6 +87,31 @@ func TestMigrateServedTypesSyslogForward(t *testing.T) {
 	}
 }
 
+func TestMigrateServedTypesSyslogForwardWithNil(t *testing.T) {
+	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-1 [migrate served-types {src1, } -> {, dst2}] status"
+	ev := &MigrateServedTypes{
+		KeyspaceName: "keyspace-1",
+		SourceShards: []*topo.ShardInfo{
+			topo.NewShardInfo("keyspace-1", "src1", nil, nil),
+			nil,
+		},
+		DestinationShards: []*topo.ShardInfo{
+			nil,
+			topo.NewShardInfo("keyspace-1", "dst2", nil, nil),
+		},
+		Reverse:       false,
+		StatusUpdater: base.StatusUpdater{Status: "status"},
+	}
+	gotSev, gotMsg := ev.Syslog()
+
+	if gotSev != wantSev {
+		t.Errorf("wrong severity: got %v, want %v", gotSev, wantSev)
+	}
+	if gotMsg != wantMsg {
+		t.Errorf("wrong message: got %v, want %v", gotMsg, wantMsg)
+	}
+}
+
 func TestMigrateServedTypesSyslogReverse(t *testing.T) {
 	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-1 [migrate served-types {src1, src2} <- {dst1, dst2}] status"
 	ev := &MigrateServedTypes{

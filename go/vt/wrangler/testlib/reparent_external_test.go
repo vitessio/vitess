@@ -138,8 +138,8 @@ func TestTabletExternallyReparented(t *testing.T) {
 	// Second test: reparent to a replica, and pretend the old
 	// master is still good to go.
 
-	// This tests a bad case; the new designated master is a slave,
-	// but we should do what we're told anyway
+	// This tests a bad case: the new designated master is a slave,
+	// but we should do what we're told anyway.
 	ti, err = ts.GetTablet(ctx, goodSlave1.Tablet.Alias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
@@ -148,7 +148,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 	if err := tmc.TabletExternallyReparented(context.Background(), ti.Tablet, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(slave) error: %v", err)
 	}
-	waitForExternalReparent(t, waitID)
+	waitForExternalReparent(t, "TestTabletExternallyReparented: slave designated as master", waitID)
 
 	// This tests the good case, where everything works as planned
 	t.Logf("TabletExternallyReparented(new master) expecting success")
@@ -160,7 +160,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 	if err := tmc.TabletExternallyReparented(context.Background(), ti.Tablet, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
 	}
-	waitForExternalReparent(t, waitID)
+	waitForExternalReparent(t, "TestTabletExternallyReparented: good case", waitID)
 }
 
 // TestTabletExternallyReparentedWithDifferentMysqlPort makes sure
@@ -209,7 +209,7 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	if err := tmc.TabletExternallyReparented(context.Background(), ti.Tablet, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
 	}
-	waitForExternalReparent(t, waitID)
+	waitForExternalReparent(t, "TestTabletExternallyReparentedWithDifferentMysqlPort: good case", waitID)
 }
 
 // TestTabletExternallyReparentedContinueOnUnexpectedMaster makes sure
@@ -253,11 +253,14 @@ func TestTabletExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 	if err := tmc.TabletExternallyReparented(context.Background(), ti.Tablet, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
 	}
-	waitForExternalReparent(t, waitID)
+	waitForExternalReparent(t, "TestTabletExternallyReparentedContinueOnUnexpectedMaster: good case", waitID)
 }
 
 func TestTabletExternallyReparentedFailedOldMaster(t *testing.T) {
-	tabletmanager.SetReparentFlags(time.Minute /* finalizeTimeout */)
+	// The 'RefreshState' clal on the old master will timeout on
+	// this value, so it has to be smaller than the 10s of the
+	// wait for the 'finished' state of waitForExternalReparent.
+	tabletmanager.SetReparentFlags(2 * time.Second /* finalizeTimeout */)
 
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1", "cell2")
@@ -271,13 +274,12 @@ func TestTabletExternallyReparentedFailedOldMaster(t *testing.T) {
 	// Reparent to a replica, and pretend the old master is not responding.
 
 	// On the elected master, we will respond to
-	// TabletActionSlaveWasPromoted
+	// TabletActionSlaveWasPromoted.
 	newMaster.StartActionLoop(t, wr)
 	defer newMaster.StopActionLoop(t)
 
-	// On the old master, we will only get a
-	// TabletActionSlaveWasRestarted call, let's just not
-	// respond to it at all
+	// On the old master, we will only get a RefreshState call,
+	// let's just not respond to it at all, and let it timeout.
 
 	// On the good slave, we will respond to
 	// TabletActionSlaveWasRestarted.
@@ -285,7 +287,6 @@ func TestTabletExternallyReparentedFailedOldMaster(t *testing.T) {
 	defer goodSlave.StopActionLoop(t)
 
 	// The reparent should work as expected here
-	t.Logf("TabletExternallyReparented(new master) expecting success")
 	tmc := tmclient.NewTabletManagerClient()
 	ti, err := ts.GetTablet(ctx, newMaster.Tablet.Alias)
 	if err != nil {
@@ -295,7 +296,7 @@ func TestTabletExternallyReparentedFailedOldMaster(t *testing.T) {
 	if err := tmc.TabletExternallyReparented(context.Background(), ti.Tablet, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
 	}
-	waitForExternalReparent(t, waitID)
+	waitForExternalReparent(t, "TestTabletExternallyReparentedFailedOldMaster: good case", waitID)
 
 	// check the old master was converted to replica
 	tablet, err := ts.GetTablet(ctx, oldMaster.Tablet.Alias)
@@ -342,7 +343,7 @@ func init() {
 // new master is visible in the serving graph. Before checking things like
 // replica endpoints and old master status, we should wait for the finalize
 // stage, which happens in the background.
-func waitForExternalReparent(t *testing.T, externalID string) {
+func waitForExternalReparent(t *testing.T, name, externalID string) {
 	timer := time.NewTimer(10 * time.Second)
 	defer timer.Stop()
 
@@ -354,6 +355,6 @@ func waitForExternalReparent(t *testing.T, externalID string) {
 	case <-c:
 		return
 	case <-timer.C:
-		t.Fatalf("deadline exceeded waiting for finalized external reparent %q", externalID)
+		t.Fatalf("deadline exceeded waiting for finalized external reparent %q for test %v", externalID, name)
 	}
 }

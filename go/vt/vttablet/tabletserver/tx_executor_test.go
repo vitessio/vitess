@@ -484,7 +484,7 @@ func TestExecutorResolveTransaction(t *testing.T) {
 	save, *vtgateconn.VtgateProtocol = *vtgateconn.VtgateProtocol, protocol
 	defer func() { *vtgateconn.VtgateProtocol = save }()
 
-	vtgateconn.RegisterDialer(protocol, func(context.Context, string, time.Duration) (vtgateconn.Impl, error) {
+	vtgateconn.RegisterDialer(protocol, func(context.Context, string) (vtgateconn.Impl, error) {
 		return &FakeVTGateConn{
 			FakeVTGateConn: fakerpcvtgateconn.FakeVTGateConn{},
 		}, nil

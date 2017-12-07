@@ -20,7 +20,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -36,14 +35,13 @@ func TestTee(t *testing.T) {
 	CopyTablets(ctx, fromTS, toTS)
 
 	// create a tee and check it implements the interface.
-	tee := NewTee(fromTS.Impl, toTS.Impl, true)
-	teeTTS := topo.Server{Impl: tee}
+	teeTS, err := NewTee(fromTS, toTS, true)
 
 	// create a keyspace, make sure it is on both sides
-	if err := teeTTS.CreateKeyspace(ctx, "keyspace2", &topodatapb.Keyspace{}); err != nil {
+	if err := teeTS.CreateKeyspace(ctx, "keyspace2", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("tee.CreateKeyspace(keyspace2) failed: %v", err)
 	}
-	teeKeyspaces, err := teeTTS.GetKeyspaces(ctx)
+	teeKeyspaces, err := teeTS.GetKeyspaces(ctx)
 	if err != nil {
 		t.Fatalf("tee.GetKeyspaces() failed: %v", err)
 	}
@@ -70,16 +68,16 @@ func TestTee(t *testing.T) {
 
 	// Read the keyspace from the tee, update it, and make sure
 	// both sides have the updated value.
-	lockCtx, unlock, err := teeTTS.LockKeyspace(ctx, "test_keyspace", "fake-action")
+	lockCtx, unlock, err := teeTS.LockKeyspace(ctx, "test_keyspace", "fake-action")
 	if err != nil {
 		t.Fatalf("LockKeyspaceForAction: %v", err)
 	}
-	ki, err := teeTTS.GetKeyspace(ctx, "test_keyspace")
+	ki, err := teeTS.GetKeyspace(ctx, "test_keyspace")
 	if err != nil {
 		t.Fatalf("tee.GetKeyspace(test_keyspace) failed: %v", err)
 	}
 	ki.Keyspace.ShardingColumnName = "toChangeIt"
-	if err := teeTTS.UpdateKeyspace(lockCtx, ki); err != nil {
+	if err := teeTS.UpdateKeyspace(lockCtx, ki); err != nil {
 		t.Fatalf("tee.UpdateKeyspace(test_keyspace) failed: %v", err)
 	}
 	unlock(&err)

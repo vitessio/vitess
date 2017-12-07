@@ -74,15 +74,6 @@ func parseISOTime(tstr string, loc *time.Location, minLen, maxLen int) (t time.T
 	return time.ParseInLocation(isoTimeFormat[:tlen], tstr, loc)
 }
 
-func checkTimeFormat(t string) (err error) {
-	// Valid format string offsets for any ISO time from MySQL:
-	//  |DATETIME |10      |19+
-	//  |---------|--------|
-	// "2006-01-02 15:04:05.999999"
-	_, err = parseISOTime(t, time.UTC, 10, isoTimeLength)
-	return
-}
-
 // DatetimeToNative converts a Datetime Value into a time.Time
 func DatetimeToNative(v sqltypes.Value, loc *time.Location) (time.Time, error) {
 	// Valid format string offsets for a DATETIME

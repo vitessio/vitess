@@ -51,7 +51,7 @@ type keyspaceIDResolverFactory func(*schema.Table) (int, keyspaceIDResolver, err
 
 // newKeyspaceIDResolverFactory creates a new
 // keyspaceIDResolverFactory for the provided keyspace and cell.
-func newKeyspaceIDResolverFactory(ctx context.Context, ts topo.Server, keyspace string, cell string) (keyspaceIDResolverFactory, error) {
+func newKeyspaceIDResolverFactory(ctx context.Context, ts *topo.Server, keyspace string, cell string) (keyspaceIDResolverFactory, error) {
 	if *useV3ReshardingMode {
 		return newKeyspaceIDResolverFactoryV3(ctx, ts, keyspace, cell)
 	}
@@ -61,7 +61,7 @@ func newKeyspaceIDResolverFactory(ctx context.Context, ts topo.Server, keyspace 
 
 // newKeyspaceIDResolverFactoryV2 finds the ShardingColumnName / Type
 // from the keyspace, and uses it to find the column name.
-func newKeyspaceIDResolverFactoryV2(ctx context.Context, ts topo.Server, keyspace string) (keyspaceIDResolverFactory, error) {
+func newKeyspaceIDResolverFactoryV2(ctx context.Context, ts *topo.Server, keyspace string) (keyspaceIDResolverFactory, error) {
 	ki, err := ts.GetKeyspace(ctx, keyspace)
 	if err != nil {
 		return nil, err
@@ -114,7 +114,7 @@ func (r *keyspaceIDResolverFactoryV2) keyspaceID(v sqltypes.Value) ([]byte, erro
 
 // newKeyspaceIDResolverFactoryV3 finds the SrvVSchema in the cell,
 // gets the keyspace part, and uses it to find the column name.
-func newKeyspaceIDResolverFactoryV3(ctx context.Context, ts topo.Server, keyspace string, cell string) (keyspaceIDResolverFactory, error) {
+func newKeyspaceIDResolverFactoryV3(ctx context.Context, ts *topo.Server, keyspace string, cell string) (keyspaceIDResolverFactory, error) {
 	srvVSchema, err := ts.GetSrvVSchema(ctx, cell)
 	if err != nil {
 		return nil, err

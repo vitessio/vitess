@@ -28,8 +28,9 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
@@ -82,7 +83,7 @@ func newFakeBinlogClient(t *testing.T, expectedDialUID uint32) *fakeBinlogClient
 }
 
 // Dial is part of the binlogplayer.Client interface
-func (fbc *fakeBinlogClient) Dial(tablet *topodatapb.Tablet, connTimeout time.Duration) error {
+func (fbc *fakeBinlogClient) Dial(tablet *topodatapb.Tablet) error {
 	if fbc.expectedDialUID != tablet.Alias.Uid {
 		fbc.t.Errorf("fakeBinlogClient.Dial expected uid %v got %v", fbc.expectedDialUID, tablet.Alias.Uid)
 	}
@@ -148,7 +149,7 @@ func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*quer
 
 // createSourceTablet is a helper method to create the source tablet
 // in the given keyspace/shard.
-func createSourceTablet(t *testing.T, name string, ts topo.Server, keyspace, shard string) {
+func createSourceTablet(t *testing.T, name string, ts *topo.Server, keyspace, shard string) {
 	vshard, kr, err := topo.ValidateShardName(shard)
 	if err != nil {
 		t.Fatalf("ValidateShardName(%v) failed: %v", shard, err)
@@ -174,7 +175,7 @@ func createSourceTablet(t *testing.T, name string, ts topo.Server, keyspace, sha
 
 	// register a tablet conn dialer that will return the instance
 	// we want
-	tabletconn.RegisterDialer(name, func(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer(name, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		return &fakeTabletConn{
 			QueryService: fakes.ErrorQueryService,
 			tablet:       tablet,
@@ -261,7 +262,7 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 	// create the BinlogPlayerMap on the local tablet
 	// (note that local tablet is never in the topology, we don't
 	// need it there at all)
-	mysqlDaemon := &mysqlctl.FakeMysqlDaemon{MysqlPort: 3306}
+	mysqlDaemon := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
 	vtClientSyncChannel := make(chan *binlogplayer.VtClientMock)
 	bpm := NewBinlogPlayerMap(ts, mysqlDaemon, func() binlogplayer.VtClient {
 		return <-vtClientSyncChannel
@@ -447,7 +448,7 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 	// create the BinlogPlayerMap on the local tablet
 	// (note that local tablet is never in the topology, we don't
 	// need it there at all)
-	mysqlDaemon := &mysqlctl.FakeMysqlDaemon{MysqlPort: 3306}
+	mysqlDaemon := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
 	vtClientSyncChannel := make(chan *binlogplayer.VtClientMock)
 	bpm := NewBinlogPlayerMap(ts, mysqlDaemon, func() binlogplayer.VtClient {
 		return <-vtClientSyncChannel
@@ -641,7 +642,7 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 	// (note that local tablet is never in the topology, we don't
 	// need it there at all)
 	// The schema will be used to resolve the table wildcards.
-	mysqlDaemon := &mysqlctl.FakeMysqlDaemon{
+	mysqlDaemon := &fakemysqldaemon.FakeMysqlDaemon{
 		MysqlPort: 3306,
 		Schema: &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "",

@@ -83,7 +83,7 @@ func Init() {
 	// Once you run as root, you pretty much destroy the chances of a
 	// non-privileged user starting the program correctly.
 	if uid := os.Getuid(); uid == 0 {
-		log.Fatalf("servenv.Init: running this as root makes no sense")
+		log.Exitf("servenv.Init: running this as root makes no sense")
 	}
 
 	runtime.MemProfileRate = *memProfileRate
@@ -108,7 +108,7 @@ func populateListeningURL() {
 	if err != nil {
 		host, err = os.Hostname()
 		if err != nil {
-			log.Fatalf("os.Hostname() failed: %v", err)
+			log.Exitf("os.Hostname() failed: %v", err)
 		}
 	}
 	ListeningURL = url.URL{

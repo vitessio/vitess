@@ -41,7 +41,6 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -137,7 +136,6 @@ type TabletServer struct {
 	// The following variables should be initialized only once
 	// before starting the tabletserver.
 	dbconfigs dbconfigs.DBConfigs
-	mysqld    mysqlctl.MysqlDaemon
 
 	// The following variables should only be accessed within
 	// the context of a startRequest-endRequest.
@@ -156,7 +154,7 @@ type TabletServer struct {
 
 	// txThrottler is used to throttle transactions based on the observed replication lag.
 	txThrottler *txthrottler.TxThrottler
-	topoServer  topo.Server
+	topoServer  *topo.Server
 
 	// streamHealthMutex protects all the following fields
 	streamHealthMutex        sync.Mutex
@@ -182,21 +180,21 @@ type RegisterFunction func(Controller)
 var RegisterFunctions []RegisterFunction
 
 // NewServer creates a new TabletServer based on the command line flags.
-func NewServer(topoServer topo.Server, alias topodatapb.TabletAlias) *TabletServer {
+func NewServer(topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
 	return NewTabletServer(tabletenv.Config, topoServer, alias)
 }
 
 var tsOnce sync.Once
 
-// NewTabletServerWithNilTopoServer is typically used in tests that don't need a topoSever
-// member.
+// NewTabletServerWithNilTopoServer is typically used in tests that
+// don't need a topoServer member.
 func NewTabletServerWithNilTopoServer(config tabletenv.TabletConfig) *TabletServer {
-	return NewTabletServer(config, topo.Server{}, topodatapb.TabletAlias{})
+	return NewTabletServer(config, nil, topodatapb.TabletAlias{})
 }
 
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
-func NewTabletServer(config tabletenv.TabletConfig, topoServer topo.Server, alias topodatapb.TabletAlias) *TabletServer {
+func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
 	tsv := &TabletServer{
 		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
 		BeginTimeout:           sync2.NewAtomicDuration(time.Duration(config.TxPoolTimeout * 1e9)),
@@ -303,7 +301,7 @@ func (tsv *TabletServer) IsServing() bool {
 
 // InitDBConfig inititalizes the db config variables for TabletServer. You must call this function before
 // calling SetServingType.
-func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) error {
+func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs dbconfigs.DBConfigs) error {
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	if tsv.state != StateNotConnected {
@@ -318,7 +316,6 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs dbconfigs.DB
 		tsv.dbconfigs.Dba.Uname = n
 		tsv.dbconfigs.Dba.Pass = p
 	}
-	tsv.mysqld = mysqld
 
 	tsv.se.InitDBConfig(tsv.dbconfigs)
 	tsv.qe.InitDBConfig(tsv.dbconfigs)
@@ -326,16 +323,16 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs dbconfigs.DB
 	tsv.hw.InitDBConfig(tsv.dbconfigs)
 	tsv.hr.InitDBConfig(tsv.dbconfigs)
 	tsv.messager.InitDBConfig(tsv.dbconfigs)
-	tsv.watcher.InitDBConfig(tsv.dbconfigs, mysqld)
+	tsv.watcher.InitDBConfig(tsv.dbconfigs)
 	return nil
 }
 
 // StartService is a convenience function for InitDBConfig->SetServingType
 // with serving=true.
-func (tsv *TabletServer) StartService(target querypb.Target, dbcfgs dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) (err error) {
+func (tsv *TabletServer) StartService(target querypb.Target, dbcfgs dbconfigs.DBConfigs) (err error) {
 	// Save tablet type away to prevent data races
 	tabletType := target.TabletType
-	err = tsv.InitDBConfig(target, dbcfgs, mysqld)
+	err = tsv.InitDBConfig(target, dbcfgs)
 	if err != nil {
 		return err
 	}
@@ -1739,7 +1736,9 @@ func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Targe
 	}
 	defer tsv.endRequest(false)
 
-	s := binlog.NewEventStreamer(tsv.dbconfigs.App.DbName, tsv.mysqld, tsv.se, p, timestamp, callback)
+	cp := tsv.dbconfigs.Dba
+	cp.DbName = tsv.dbconfigs.App.DbName
+	s := binlog.NewEventStreamer(&cp, tsv.se, p, timestamp, callback)
 
 	// Create a cancelable wrapping context.
 	streamCtx, streamCancel := context.WithCancel(ctx)
@@ -1749,7 +1748,7 @@ func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Targe
 	// And stream with it.
 	err = s.Stream(streamCtx)
 	switch err {
-	case mysqlctl.ErrBinlogUnavailable:
+	case binlog.ErrBinlogUnavailable:
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%v", err)
 	case nil, io.EOF:
 		return nil

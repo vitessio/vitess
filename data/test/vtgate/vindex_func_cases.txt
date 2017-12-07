@@ -1,0 +1,296 @@
+# vindex func read
+"select id, keyspace_id, id from user_index where id = :id"
+{
+  "Original": "select id, keyspace_id, id from user_index where id = :id",
+  "Instructions": {
+    "Opcode": "VindexMap",
+    "Fields": [
+      {
+        "name": "id",
+        "type": 10262
+      },
+      {
+        "name": "keyspace_id",
+        "type": 10262
+      },
+      {
+        "name": "id",
+        "type": 10262
+      }
+    ],
+    "Cols": [0, 1, 0],
+    "Vindex": "user_index",
+    "Value": ":id"
+  }
+}
+
+# ambiguous vindex reference
+"select id, keyspace_id, id from hash_dup where id = :id"
+"ambiguous vindex reference: hash_dup"
+
+# disambiguated vindex reference
+"select id, keyspace_id, id from second_user.hash_dup where id = :id"
+{
+  "Original": "select id, keyspace_id, id from second_user.hash_dup where id = :id",
+  "Instructions": {
+    "Opcode": "VindexMap",
+    "Fields": [
+      {
+        "name": "id",
+        "type": 10262
+      },
+      {
+        "name": "keyspace_id",
+        "type": 10262
+      },
+      {
+        "name": "id",
+        "type": 10262
+      }
+    ],
+    "Cols": [
+      0,
+      1,
+      0
+    ],
+    "Vindex": "hash_dup",
+    "Value": ":id"
+  }
+}
+
+
+# You can even join with a vindexFunc primitive
+"select user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id"
+{
+  "Original": "select user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "VindexMap",
+      "Fields": [
+        {
+          "name": "keyspace_id",
+          "type": 10262
+        }
+      ],
+      "Cols": [1],
+      "Vindex": "user_index",
+      "Value": ":id"
+    },
+    "Right": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select unsharded.id from unsharded",
+      "FieldQuery": "select unsharded.id from unsharded where 1 != 1"
+    },
+    "Cols": [-1, 1]
+  }
+}
+
+# Join vindexFunc on RHS
+"select user_index.keyspace_id, unsharded.id from unsharded join user_index where user_index.id = :id"
+{
+  "Original": "select user_index.keyspace_id, unsharded.id from unsharded join user_index where user_index.id = :id",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select unsharded.id from unsharded",
+      "FieldQuery": "select unsharded.id from unsharded where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "VindexMap",
+      "Fields": [
+        {
+          "name": "keyspace_id",
+          "type": 10262
+        }
+      ],
+      "Cols": [
+        1
+      ],
+      "Vindex": "user_index",
+      "Value": ":id"
+    },
+    "Cols": [
+      1,
+      -1
+    ]
+  }
+}
+
+# Join with vindexFunc on a column of it, already present in select list
+"select user_index.id, user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id and unsharded.id = user_index.id"
+{
+  "Original": "select user_index.id, user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id and unsharded.id = user_index.id",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "VindexMap",
+      "Fields": [
+        {
+          "name": "id",
+          "type": 10262
+        },
+        {
+          "name": "keyspace_id",
+          "type": 10262
+        }
+      ],
+      "Cols": [
+        0,
+        1
+      ],
+      "Vindex": "user_index",
+      "Value": ":id"
+    },
+    "Right": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id",
+      "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+      "JoinVars": {
+        "user_index_id": {}
+      }
+    },
+    "Cols": [
+      -1,
+      -2,
+      1
+    ],
+    "Vars": {
+      "user_index_id": 0
+    }
+  }
+}
+
+# Join with vindexFunc on a column of it, not present in select list
+"select user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id and unsharded.id = user_index.id"
+{
+  "Original": "select user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id and unsharded.id = user_index.id",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "VindexMap",
+      "Fields": [
+        {
+          "name": "keyspace_id",
+          "type": 10262
+        },
+        {
+          "name": "id",
+          "type": 10262
+        }
+      ],
+      "Cols": [
+        1,
+        0
+      ],
+      "Vindex": "user_index",
+      "Value": ":id"
+    },
+    "Right": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id",
+      "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+      "JoinVars": {
+        "user_index_id": {}
+      }
+    },
+    "Cols": [
+      -1,
+      1
+    ],
+    "Vars": {
+      "user_index_id": 1
+    }
+  }
+}
+
+# Join with aliased table name
+"select ui.keyspace_id, unsharded.id from user_index ui join unsharded where ui.id = :id and unsharded.id = ui.id"
+{
+  "Original": "select ui.keyspace_id, unsharded.id from user_index ui join unsharded where ui.id = :id and unsharded.id = ui.id",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "VindexMap",
+      "Fields": [
+        {
+          "name": "keyspace_id",
+          "type": 10262
+        },
+        {
+          "name": "id",
+          "type": 10262
+        }
+      ],
+      "Cols": [
+        1,
+        0
+      ],
+      "Vindex": "user_index",
+      "Value": ":id"
+    },
+    "Right": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select unsharded.id from unsharded where unsharded.id = :ui_id",
+      "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+      "JoinVars": {
+        "ui_id": {}
+      }
+    },
+    "Cols": [
+      -1,
+      1
+    ],
+    "Vars": {
+      "ui_id": 1
+    }
+  }
+}
+
+# limit and order by null clauses
+"select keyspace_id from user_index where id = :id order by null limit 1"
+{
+  "Original": "select keyspace_id from user_index where id = :id order by null limit 1",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": 1,
+    "Input": {
+      "Opcode": "VindexMap",
+      "Fields": [
+        {
+          "name": "keyspace_id",
+          "type": 10262
+        }
+      ],
+      "Cols": [
+        1
+      ],
+      "Vindex": "user_index",
+      "Value": ":id"
+    }
+  }
+}
+
+"select none from user_index where id = :id"
+"unrecognized column none for vindex: user_index"

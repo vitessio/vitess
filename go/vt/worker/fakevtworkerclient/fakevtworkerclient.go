@@ -18,8 +18,6 @@ limitations under the License.
 package fakevtworkerclient
 
 import (
-	"time"
-
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -41,7 +39,7 @@ func NewFakeVtworkerClient() *FakeVtworkerClient {
 
 // FakeVtworkerClientFactory returns the current instance and stores the
 // dialed server address in an outer struct.
-func (f *FakeVtworkerClient) FakeVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworkerclient.Client, error) {
+func (f *FakeVtworkerClient) FakeVtworkerClientFactory(addr string) (vtworkerclient.Client, error) {
 	return &perAddrFakeVtworkerClient{f, addr}, nil
 }
 

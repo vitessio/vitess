@@ -26,19 +26,15 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// ListDir is part of the topo.Backend interface.
-func (s *Server) ListDir(ctx context.Context, cell, dirPath string) ([]string, error) {
-	c, err := s.clientForCell(ctx, cell)
-	if err != nil {
-		return nil, err
-	}
-	nodePath := path.Join(c.root, dirPath) + "/"
+// ListDir is part of the topo.Conn interface.
+func (s *Server) ListDir(ctx context.Context, dirPath string) ([]string, error) {
+	nodePath := path.Join(s.root, dirPath) + "/"
 	if nodePath == "//" {
-		// Special case where c.root is "/", dirPath is empty,
+		// Special case where s.root is "/", dirPath is empty,
 		// we would end up with "//". in that case, we want "/".
 		nodePath = "/"
 	}
-	resp, err := c.cli.Get(ctx, nodePath,
+	resp, err := s.cli.Get(ctx, nodePath,
 		clientv3.WithPrefix(),
 		clientv3.WithSort(clientv3.SortByKey, clientv3.SortAscend),
 		clientv3.WithKeysOnly())

@@ -52,12 +52,12 @@ func init() {
 }
 
 // CreateTopoServer returns the test topo server properly configured
-func CreateTopoServer(t *testing.T) topo.Server {
+func CreateTopoServer(t *testing.T) *topo.Server {
 	return memorytopo.NewServer("cell1")
 }
 
 // TestSuite runs the test suite on the given topo server and client
-func TestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
+func TestSuite(t *testing.T, ts *topo.Server, client vtctlclient.VtctlClient) {
 	ctx := context.Background()
 
 	// Create a fake tablet

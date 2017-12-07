@@ -26,10 +26,10 @@ package gatewaytest
 
 import (
 	"testing"
-	"time"
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
@@ -42,7 +42,7 @@ import (
 )
 
 // CreateFakeServers returns the servers to use for these tests
-func CreateFakeServers(t *testing.T) (*tabletconntest.FakeQueryService, topo.Server, string) {
+func CreateFakeServers(t *testing.T) (*tabletconntest.FakeQueryService, *topo.Server, string) {
 	cell := "local"
 
 	// the FakeServer is just slightly modified
@@ -96,7 +96,7 @@ func TestSuite(t *testing.T, name string, g gateway.Gateway, f *tabletconntest.F
 
 	protocolName := "gateway-test-" + name
 
-	tabletconn.RegisterDialer(protocolName, func(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer(protocolName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		return &gatewayAdapter{Gateway: g}, nil
 	})
 
@@ -104,5 +104,5 @@ func TestSuite(t *testing.T, name string, g gateway.Gateway, f *tabletconntest.F
 		Keyspace: tabletconntest.TestTarget.Keyspace,
 		Shard:    tabletconntest.TestTarget.Shard,
 		Type:     tabletconntest.TestTarget.TabletType,
-	}, f)
+	}, f, nil)
 }

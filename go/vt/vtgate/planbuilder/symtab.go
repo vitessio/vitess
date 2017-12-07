@@ -439,7 +439,8 @@ type column struct {
 	name   sqlparser.ColIdent
 	table  *table
 
-	// colnum is set only if it originates from a subquery.
+	// colnum is set only for primitives that can return a
+	// subset of their internal result like subquery or vindexFunc.
 	colnum int
 }
 

@@ -26,7 +26,7 @@ import (
 )
 
 // checkKeyspace tests the keyspace part of the API
-func checkKeyspace(t *testing.T, ts topo.Server) {
+func checkKeyspace(t *testing.T, ts *topo.Server) {
 	ctx := context.Background()
 	keyspaces, err := ts.GetKeyspaces(ctx)
 	if err != nil {

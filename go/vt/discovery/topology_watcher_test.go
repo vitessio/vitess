@@ -22,7 +22,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"golang.org/x/net/context"
 )
@@ -36,7 +35,7 @@ func TestShardReplicationWatcher(t *testing.T) {
 }
 
 func checkWatcher(t *testing.T, cellTablets bool) {
-	ts := topo.Server{Impl: memorytopo.NewServer("aa")}
+	ts := memorytopo.NewServer("aa")
 	fhc := NewFakeHealthCheck()
 	var tw *TopologyWatcher
 	if cellTablets {

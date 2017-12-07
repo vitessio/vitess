@@ -231,7 +231,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	executor = NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor = NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize, false)
 	return executor, sbc1, sbc2, sbclookup
 }
 

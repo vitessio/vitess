@@ -85,7 +85,7 @@ type ActionAgent struct {
 	QueryServiceControl tabletserver.Controller
 	UpdateStream        binlog.UpdateStreamControl
 	HealthReporter      health.Reporter
-	TopoServer          topo.Server
+	TopoServer          *topo.Server
 	TabletAlias         *topodatapb.TabletAlias
 	MysqlDaemon         mysqlctl.MysqlDaemon
 	DBConfigs           dbconfigs.DBConfigs
@@ -203,7 +203,7 @@ type ActionAgent struct {
 // it spawns.
 func NewActionAgent(
 	batchCtx context.Context,
-	ts topo.Server,
+	ts *topo.Server,
 	mysqld mysqlctl.MysqlDaemon,
 	queryServiceControl tabletserver.Controller,
 	tabletAlias *topodatapb.TabletAlias,
@@ -290,7 +290,7 @@ func NewActionAgent(
 			// (same as if it was triggered remotely)
 			if err := agent.RestoreData(batchCtx, logutil.NewConsoleLogger(), false /* deleteBeforeRestore */); err != nil {
 				println(fmt.Sprintf("RestoreFromBackup failed: %v", err))
-				log.Fatalf("RestoreFromBackup failed: %v", err)
+				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
 
 			// after the restore is done, start health check
@@ -321,7 +321,7 @@ func NewActionAgent(
 
 // NewTestActionAgent creates an agent for test purposes. Only a
 // subset of features are supported now, but we'll add more over time.
-func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, mysqlDaemon mysqlctl.MysqlDaemon, preStart func(*ActionAgent)) *ActionAgent {
+func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, mysqlDaemon mysqlctl.MysqlDaemon, preStart func(*ActionAgent)) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: tabletservermock.NewController(),
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -359,7 +359,7 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *t
 // NewComboActionAgent creates an agent tailored specifically to run
 // within the vtcombo binary. It cannot be called concurrently,
 // as it changes the flags.
-func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
+func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: queryServiceControl,
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -591,11 +591,13 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 		}
 	}
 
-	// create and register the RPC services from UpdateStream
+	// Create and register the RPC services from UpdateStream.
 	// (it needs the dbname, so it has to be delayed up to here,
 	// but it has to be before updateState below that may use it)
 	if initUpdateStream {
-		us := binlog.NewUpdateStream(agent.TopoServer, agent.initialTablet.Keyspace, agent.TabletAlias.Cell, agent.MysqlDaemon, agent.QueryServiceControl.SchemaEngine(), agent.DBConfigs.App.DbName)
+		cp := agent.DBConfigs.Dba
+		cp.DbName = agent.DBConfigs.App.DbName
+		us := binlog.NewUpdateStream(agent.TopoServer, agent.initialTablet.Keyspace, agent.TabletAlias.Cell, &cp, agent.QueryServiceControl.SchemaEngine())
 		agent.UpdateStream = us
 		servenv.OnRun(func() {
 			us.RegisterService()
@@ -615,7 +617,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 		Keyspace:   agent.initialTablet.Keyspace,
 		Shard:      agent.initialTablet.Shard,
 		TabletType: agent.initialTablet.Type,
-	}, agent.DBConfigs, agent.MysqlDaemon); err != nil {
+	}, agent.DBConfigs); err != nil {
 		return fmt.Errorf("failed to InitDBConfig: %v", err)
 	}
 

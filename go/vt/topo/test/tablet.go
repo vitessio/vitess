@@ -29,12 +29,14 @@ import (
 )
 
 // checkTablet verifies the topo server API is correct for managing tablets.
-func checkTablet(t *testing.T, ts topo.Server) {
+func checkTablet(t *testing.T, ts *topo.Server) {
 	ctx := context.Background()
 
-	cell := getLocalCell(ctx, t, ts)
 	tablet := &topodatapb.Tablet{
-		Alias:         &topodatapb.TabletAlias{Cell: cell, Uid: 1},
+		Alias: &topodatapb.TabletAlias{
+			Cell: LocalCellName,
+			Uid:  1,
+		},
 		Hostname:      "localhost",
 		MysqlHostname: "localhost",
 		PortMap: map[string]int32{
@@ -54,7 +56,10 @@ func checkTablet(t *testing.T, ts topo.Server) {
 		t.Fatalf("CreateTablet(again): %v", err)
 	}
 
-	if _, err := ts.GetTablet(ctx, &topodatapb.TabletAlias{Cell: cell, Uid: 666}); err != topo.ErrNoNode {
+	if _, err := ts.GetTablet(ctx, &topodatapb.TabletAlias{
+		Cell: LocalCellName,
+		Uid:  666,
+	}); err != topo.ErrNoNode {
 		t.Fatalf("GetTablet(666): %v", err)
 	}
 
@@ -70,7 +75,7 @@ func checkTablet(t *testing.T, ts topo.Server) {
 		t.Errorf("GetTabletsByCell(666): %v", err)
 	}
 
-	inCell, err := ts.GetTabletsByCell(ctx, cell)
+	inCell, err := ts.GetTabletsByCell(ctx, LocalCellName)
 	if err != nil {
 		t.Fatalf("GetTabletsByCell: %v", err)
 	}

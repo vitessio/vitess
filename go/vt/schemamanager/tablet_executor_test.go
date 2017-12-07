@@ -27,7 +27,6 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -53,7 +52,7 @@ func TestTabletExecutorOpen(t *testing.T) {
 
 func TestTabletExecutorOpenWithEmptyMasterAlias(t *testing.T) {
 	ctx := context.Background()
-	ts := topo.Server{Impl: memorytopo.NewServer("test_cell")}
+	ts := memorytopo.NewServer("test_cell")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, newFakeTabletManagerClient())
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{

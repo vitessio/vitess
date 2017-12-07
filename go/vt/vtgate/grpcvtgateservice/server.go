@@ -105,7 +105,7 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 	// Handle backward compatibility.
 	session := request.Session
 	if session == nil {
-		session = &vtgatepb.Session{}
+		session = &vtgatepb.Session{Autocommit: true}
 	}
 	if session.TargetString == "" && request.TabletType != topodatapb.TabletType_UNKNOWN {
 		session.TargetString = request.KeyspaceShard + "@" + topoproto.TabletTypeLString(request.TabletType)
@@ -135,7 +135,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 	// Handle backward compatibility.
 	session := request.Session
 	if session == nil {
-		session = &vtgatepb.Session{}
+		session = &vtgatepb.Session{Autocommit: true}
 	}
 	if session.TargetString == "" {
 		session.TargetString = request.KeyspaceShard + "@" + topoproto.TabletTypeLString(request.TabletType)
@@ -159,7 +159,7 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 	// Handle backward compatibility.
 	session := request.Session
 	if session == nil {
-		session = &vtgatepb.Session{}
+		session = &vtgatepb.Session{Autocommit: true}
 	}
 	if session.TargetString == "" {
 		session.TargetString = request.KeyspaceShard + "@" + topoproto.TabletTypeLString(request.TabletType)

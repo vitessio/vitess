@@ -15,13 +15,9 @@ limitations under the License.
 */
 
 // Package topotests contains all the unit tests for the topo.Server code
-// that is based on topo.Backend.
+// that is based on topo.Conn.
 //
-// These tests cannot be in topo.Server yet, as they depend on
-// memorytopo, which depends on topo.Backend, which is inside
+// These tests cannot be in topo.Server, as they depend on
+// memorytopo, which depends on topo.Conn/Factory, which are inside
 // topo.Server.
-//
-// Once the conversion to topo.Backend is complete, we will move topo.Backend
-// into its own interface package, break all the conflicting dependencies,
-// and move these unit tests back into go/vt/topo.
 package topotests

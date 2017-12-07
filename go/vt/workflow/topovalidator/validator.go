@@ -55,7 +55,7 @@ func Register() {
 // Typically, it looks for something wrong, and if it finds anything, it registers a Fixer in the workflow.
 type Validator interface {
 	// Audit is called by the Workflow. It can add Fixer objects to the Workflow.
-	Audit(ctx context.Context, ts topo.Server, w *Workflow) error
+	Audit(ctx context.Context, ts *topo.Server, w *Workflow) error
 }
 
 // Fixer is the interface to implement to register a job capable of

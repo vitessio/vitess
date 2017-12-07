@@ -64,13 +64,13 @@ func initVtgateExecutor(vSchemaStr string, opts *Options) error {
 
 	streamSize := 10
 	queryPlanCacheSize := int64(10)
-	vtgateExecutor = vtgate.NewExecutor(context.Background(), explainTopo, vtexplainCell, "", resolver, opts.Normalize, streamSize, queryPlanCacheSize)
+	vtgateExecutor = vtgate.NewExecutor(context.Background(), explainTopo, vtexplainCell, "", resolver, opts.Normalize, streamSize, queryPlanCacheSize, false /* legacyAutocommit */)
 
 	return nil
 }
 
 func newFakeResolver(hc discovery.HealthCheck, serv topo.SrvTopoServer, cell string) *vtgate.Resolver {
-	gw := gateway.GetCreator()(hc, topo.Server{}, serv, cell, 3)
+	gw := gateway.GetCreator()(hc, nil, serv, cell, 3)
 	gw.WaitForTablets(context.Background(), []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
 	tc := vtgate.NewTxConn(gw, vtgatepb.TransactionMode_MULTI)
 	sc := vtgate.NewScatterConn("", tc, gw)

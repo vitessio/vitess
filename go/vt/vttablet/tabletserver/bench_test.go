@@ -70,7 +70,7 @@ func BenchmarkExecuteVarBinary(b *testing.B) {
 	tsv := NewTabletServerWithNilTopoServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	if err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs)); err != nil {
+	if err := tsv.StartService(target, dbconfigs); err != nil {
 		panic(err)
 	}
 	defer tsv.StopService()
@@ -102,7 +102,7 @@ func BenchmarkExecuteExpression(b *testing.B) {
 	tsv := NewTabletServerWithNilTopoServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	if err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs)); err != nil {
+	if err := tsv.StartService(target, dbconfigs); err != nil {
 		panic(err)
 	}
 	defer tsv.StopService()

@@ -29,20 +29,14 @@ import (
 )
 
 func TestDialErrors(t *testing.T) {
-	tcases := []struct {
-		address, err string
-	}{{
-		address: "badhost",
-		err:     "Unavailable",
-	}, {
-		address: "badhost:123456",
-		err:     "Unavailable",
-	}, {
-		address: "[::]:12346",
-		err:     "Unavailable",
-	}}
-	for _, tcase := range tcases {
-		gconn, err := Dial(tcase.address, grpc.WithInsecure())
+	addresses := []string{
+		"badhost",
+		"badhost:123456",
+		"[::]:12346",
+	}
+	wantErr := "Unavailable"
+	for _, address := range addresses {
+		gconn, err := Dial(address, FailFast(true), grpc.WithInsecure())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -50,8 +44,25 @@ func TestDialErrors(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		_, err = vtg.Execute(ctx, &vtgatepb.ExecuteRequest{})
 		cancel()
-		if err == nil || !strings.Contains(err.Error(), tcase.err) {
-			t.Errorf("Dial(%s): %v, must contain %s", tcase.address, err, tcase.err)
+		gconn.Close()
+		if err == nil || !strings.Contains(err.Error(), wantErr) {
+			t.Errorf("Dial(%s, FailFast=true): %v, must contain %s", address, err, wantErr)
+		}
+	}
+
+	wantErr = "DeadlineExceeded"
+	for _, address := range addresses {
+		gconn, err := Dial(address, FailFast(false), grpc.WithInsecure())
+		if err != nil {
+			t.Fatal(err)
+		}
+		vtg := vtgateservicepb.NewVitessClient(gconn)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		_, err = vtg.Execute(ctx, &vtgatepb.ExecuteRequest{})
+		cancel()
+		gconn.Close()
+		if err == nil || !strings.Contains(err.Error(), wantErr) {
+			t.Errorf("Dial(%s, FailFast=false): %v, must contain %s", address, err, wantErr)
 		}
 	}
 }

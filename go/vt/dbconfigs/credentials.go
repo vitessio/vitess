@@ -64,7 +64,7 @@ var AllCredentialsServers = make(map[string]CredentialsServer)
 func GetCredentialsServer() CredentialsServer {
 	cs, ok := AllCredentialsServers[*dbCredentialsServer]
 	if !ok {
-		log.Fatalf("Invalid credential server: %v", *dbCredentialsServer)
+		log.Exitf("Invalid credential server: %v", *dbCredentialsServer)
 	}
 	return cs
 }

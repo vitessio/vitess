@@ -63,7 +63,7 @@ func init() {
 // BinlogPlayerController controls one player.
 type BinlogPlayerController struct {
 	// Configuration parameters (set at construction, immutable).
-	ts              topo.Server
+	ts              *topo.Server
 	vtClientFactory func() binlogplayer.VtClient
 	mysqld          mysqlctl.MysqlDaemon
 
@@ -116,8 +116,8 @@ type BinlogPlayerController struct {
 // Use Start() and Stop() to start and stop it.
 // Once stopped, you should call Close() to stop and free resources e.g. the
 // healthcheck instance.
-func newBinlogPlayerController(ts topo.Server, vtClientFactory func() binlogplayer.VtClient, mysqld mysqlctl.MysqlDaemon, cell string, keyRange *topodatapb.KeyRange, sourceShard *topodatapb.Shard_SourceShard, dbName string) *BinlogPlayerController {
-	healthCheck := discovery.NewHealthCheck(*binlogplayer.BinlogPlayerConnTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
+func newBinlogPlayerController(ts *topo.Server, vtClientFactory func() binlogplayer.VtClient, mysqld mysqlctl.MysqlDaemon, cell string, keyRange *topodatapb.KeyRange, sourceShard *topodatapb.Shard_SourceShard, dbName string) *BinlogPlayerController {
+	healthCheck := discovery.NewHealthCheck(*healthcheckRetryDelay, *healthCheckTimeout)
 	return &BinlogPlayerController{
 		ts:                ts,
 		vtClientFactory:   vtClientFactory,
@@ -391,7 +391,7 @@ func (bpc *BinlogPlayerController) BlpPosition(vtClient binlogplayer.VtClient) (
 // It can be stopped and restarted.
 type BinlogPlayerMap struct {
 	// Immutable, set at construction time.
-	ts              topo.Server
+	ts              *topo.Server
 	vtClientFactory func() binlogplayer.VtClient
 	mysqld          mysqlctl.MysqlDaemon
 
@@ -409,7 +409,7 @@ const (
 )
 
 // NewBinlogPlayerMap creates a new map of players.
-func NewBinlogPlayerMap(ts topo.Server, mysqld mysqlctl.MysqlDaemon, vtClientFactory func() binlogplayer.VtClient) *BinlogPlayerMap {
+func NewBinlogPlayerMap(ts *topo.Server, mysqld mysqlctl.MysqlDaemon, vtClientFactory func() binlogplayer.VtClient) *BinlogPlayerMap {
 	return &BinlogPlayerMap{
 		ts:              ts,
 		vtClientFactory: vtClientFactory,

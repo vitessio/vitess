@@ -64,7 +64,7 @@ type discoveryGateway struct {
 	queryservice.QueryService
 	hc            discovery.HealthCheck
 	tsc           *discovery.TabletStatsCache
-	topoServer    topo.Server
+	topoServer    *topo.Server
 	srvTopoServer topo.SrvTopoServer
 	localCell     string
 	retryCount    int
@@ -83,7 +83,7 @@ type discoveryGateway struct {
 	buffer *buffer.Buffer
 }
 
-func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int) Gateway {
+func createDiscoveryGateway(hc discovery.HealthCheck, topoServer *topo.Server, serv topo.SrvTopoServer, cell string, retryCount int) Gateway {
 	dg := &discoveryGateway{
 		hc:                hc,
 		tsc:               discovery.NewTabletStatsCacheDoNotSetListener(cell),
@@ -109,7 +109,7 @@ func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, se
 		if len(tabletFilters) > 0 {
 			fbs, err := discovery.NewFilterByShard(dg.hc, tabletFilters)
 			if err != nil {
-				log.Fatalf("Cannot parse tablet_filters parameter: %v", err)
+				log.Exitf("Cannot parse tablet_filters parameter: %v", err)
 			}
 			tr = fbs
 		}
