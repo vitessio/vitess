@@ -294,6 +294,28 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 	return conn, nil
 }
 
+// CellToRegionMapper function is a wrapper around topo.Server#GetRegionByCell with caching and error handling
+func (ts *Server) CellToRegionMapper() func(cell string) string {
+
+	memoize := make(map[string]string)
+	ctx := context.Background()
+
+	return func(cell string) string {
+		if ts == nil {
+			return cell
+		}
+		if region, ok := memoize[cell]; ok {
+			return region
+		}
+		if region, err := ts.GetRegionByCell(ctx, cell); err == nil {
+			memoize[cell] = region
+			return region
+		}
+		// for backward compatibility, when region isn't available, it's the same as given cell
+		return cell
+	}
+}
+
 // Close will close all connections to underlying topo Server.
 // It will nil all member variables, so any further access will panic.
 func (ts *Server) Close() {

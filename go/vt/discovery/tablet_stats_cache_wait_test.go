@@ -131,7 +131,7 @@ func TestWaitForTablets(t *testing.T) {
 	createFakeConn(tablet, input)
 
 	hc := NewHealthCheck(1*time.Millisecond, 1*time.Hour)
-	tsc := NewTabletStatsCache(hc, "cell")
+	tsc := NewTabletStatsCache(hc, "cell", func(cell string) string { return cell })
 	hc.AddTablet(tablet, "")
 
 	// this should time out

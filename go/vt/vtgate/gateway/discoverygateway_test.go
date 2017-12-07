@@ -127,6 +127,30 @@ func TestDiscoveryGatewayGetTablets(t *testing.T) {
 	}
 }
 
+func TestDiscoveryGatewayGetTabletsWithRegion(t *testing.T) {
+	keyspace := "ks"
+	shard := "0"
+	hc := discovery.NewFakeHealthCheck()
+	dg := createDiscoveryGateway(hc, nil, nil, "local", 2).(*discoveryGateway)
+	dg.tsc.UpdateCellsToRegions(map[string]string{
+		"local-west": "local",
+		"local-east": "local",
+		"local":      "local",
+		"remote":     "remote",
+	})
+
+	// replica should only use local ones
+	hc.Reset()
+	dg.tsc.ResetForTesting()
+	hc.AddTestTablet("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil)
+	ep1 := hc.AddTestTablet("local-west", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil).Tablet()
+	ep2 := hc.AddTestTablet("local-east", "3.3.3.3", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil).Tablet()
+	tsl := dg.tsc.GetHealthyTabletStats(keyspace, shard, topodatapb.TabletType_REPLICA)
+	if len(tsl) != 2 || (!topo.TabletEquality(tsl[0].Tablet, ep1) && !topo.TabletEquality(tsl[0].Tablet, ep2)) {
+		t.Errorf("want %+v or %+v, got %+v", ep1, ep2, tsl)
+	}
+}
+
 func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway, target *querypb.Target) error) {
 	keyspace := "ks"
 	shard := "0"
