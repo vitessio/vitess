@@ -86,7 +86,7 @@ type discoveryGateway struct {
 func createDiscoveryGateway(hc discovery.HealthCheck, topoServer *topo.Server, serv topo.SrvTopoServer, cell string, retryCount int) Gateway {
 	dg := &discoveryGateway{
 		hc:                hc,
-		tsc:               discovery.NewTabletStatsCacheDoNotSetListener(cell),
+		tsc:               discovery.NewTabletStatsCacheDoNotSetListener(cell, topoServer.CellToRegionMapper()),
 		topoServer:        topoServer,
 		srvTopoServer:     serv,
 		localCell:         cell,
@@ -228,7 +228,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 			err = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no valid tablet")
 			break
 		}
-		shuffleTablets(tablets)
+		shuffleTablets(dg.localCell, tablets)
 
 		// skip tablets we tried before
 		var ts *discovery.TabletStats
@@ -273,13 +273,51 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 	return NewShardError(err, target, tabletLastUsed, inTransaction)
 }
 
-func shuffleTablets(tablets []discovery.TabletStats) {
-	index := 0
+func shuffleTablets(cell string, tablets []discovery.TabletStats) {
+	sameCell, diffCell, sameCellMax := 0, 0, -1
 	length := len(tablets)
-	for i := length - 1; i > 0; i-- {
-		index = rand.Intn(i + 1)
-		tablets[i], tablets[index] = tablets[index], tablets[i]
+
+	//move all same cell tablets to the front, this is O(n)
+	for {
+		sameCellMax = diffCell - 1
+		sameCell := nextTablet(cell, tablets, sameCell, length, true)
+		diffCell := nextTablet(cell, tablets, diffCell, length, false)
+		// either no more diffs or no more same cells should stop the iteration
+		if sameCell < 0 || diffCell < 0 {
+			break
+		}
+
+		if sameCell < diffCell {
+			// fast forward the `sameCell` lookup to `diffCell + 1`, `diffCell` unchanged
+			sameCell = diffCell + 1
+		} else {
+			// sameCell > diffCell, swap needed
+			tablets[sameCell], tablets[diffCell] = tablets[diffCell], tablets[sameCell]
+			sameCell++
+			diffCell++
+		}
 	}
+
+	//shuffle in same cell tablets
+	for i := sameCellMax; i > 0; i-- {
+		swap := rand.Intn(i + 1)
+		tablets[i], tablets[swap] = tablets[swap], tablets[i]
+	}
+
+	//shuffle in diff cell tablets
+	for i, diffCellMin := length-1, sameCellMax+1; i > diffCellMin; i-- {
+		swap := rand.Intn(i-sameCellMax) + diffCellMin
+		tablets[i], tablets[swap] = tablets[swap], tablets[i]
+	}
+}
+
+func nextTablet(cell string, tablets []discovery.TabletStats, offset, length int, sameCell bool) int {
+	for ; offset < length; offset++ {
+		if (tablets[offset].Tablet.Alias.Cell == cell) == sameCell {
+			return offset
+		}
+	}
+	return -1
 }
 
 func (dg *discoveryGateway) updateStats(target *querypb.Target, startTime time.Time, err error) {
