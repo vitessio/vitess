@@ -307,7 +307,7 @@ func (ts *Server) CellToRegionMapper() func(cell string) string {
 		if region, ok := memoize[cell]; ok {
 			return region
 		}
-		if region, err := ts.GetRegionByCell(ctx, cell); err == nil {
+		if region, err := ts.GetRegionByCell(ctx, cell); err == nil && region != "" {
 			memoize[cell] = region
 			return region
 		}
