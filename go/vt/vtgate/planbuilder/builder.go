@@ -73,6 +73,10 @@ type builder interface {
 	// just on optimization hint.
 	PushOrderByNull()
 
+	// PushOrderByRand pushes the special case ORDER BY RAND() to
+	// all primitives.
+	PushOrderByRand()
+
 	// SetUpperLimit is an optimization hint that tells that primitive
 	// that it does not need to return more than the specified number of rows.
 	// A primitive that cannot perform this can ignore the request.

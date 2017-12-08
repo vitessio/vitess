@@ -140,6 +140,10 @@ func (sq *subquery) PushSelect(expr *sqlparser.AliasedExpr, _ columnOriginator) 
 func (sq *subquery) PushOrderByNull() {
 }
 
+// PushOrderByRand satisfies the builder interface.
+func (sq *subquery) PushOrderByRand() {
+}
+
 // SetUpperLimit satisfies the builder interface.
 // For now, the call is ignored because the
 // repercussions of pushing this limit down

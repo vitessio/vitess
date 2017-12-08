@@ -450,6 +450,11 @@ func (rb *route) PushOrderByNull() {
 	rb.Select.(*sqlparser.Select).OrderBy = sqlparser.OrderBy{&sqlparser.Order{Expr: &sqlparser.NullVal{}}}
 }
 
+// PushOrderByRand satisfies the builder interface.
+func (rb *route) PushOrderByRand() {
+	rb.Select.(*sqlparser.Select).OrderBy = sqlparser.OrderBy{&sqlparser.Order{Expr: &sqlparser.FuncExpr{Name: sqlparser.NewColIdent("rand")}}}
+}
+
 // SetLimit adds a LIMIT clause to the route.
 func (rb *route) SetLimit(limit *sqlparser.Limit) {
 	rb.Select.SetLimit(limit)
