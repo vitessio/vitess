@@ -24,8 +24,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/workflow"
-	"github.com/youtube/vitess/go/vt/workflow/resharding"
-	"github.com/youtube/vitess/go/vt/workflow/topovalidator"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
@@ -42,11 +40,6 @@ var (
 )
 
 func init() {
-	// Register the various workflow factories to enable the WorkflowShow
-	// introspection commands to function
-	topovalidator.Register()
-	resharding.Register()
-
 	addCommandGroup(workflowsGroupName)
 
 	addCommand(workflowsGroupName, command{
