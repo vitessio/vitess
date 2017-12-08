@@ -36,6 +36,19 @@ $ mysql --port=15306 --host=127.0.0.1
 vitess/examples/compose$ ./lvtctl.sh Help
 ```
 
+## Exploring
+
+- vtctld web ui:
+  http://localhost:15000
+
+- vttablets web ui:
+  http://localhost:15001/debug/status
+  http://localhost:15002/debug/status
+  http://localhost:15003/debug/status
+
+- vtgate web ui:
+  http://localhost:15099/debug/status
+  
 
 ## Troubleshooting
 If the cluster gets in a bad state, you most likely will have to stop and kill the containers. Note: you will lose all the data.
