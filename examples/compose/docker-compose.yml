@@ -111,3 +111,20 @@ services:
     command: ["sh", "-c", "/script/vttablet-up.sh 2"]
     depends_on:
       - vtctld
+  vttablet3:
+    image: vitess/base
+    ports:
+      - "15003:$WEB_PORT"
+      - "$GRPC_PORT"
+      - "3306"
+    volumes:
+      - ".:/script"
+    environment:
+      - TOPOLOGY_FLAGS
+      - WEB_PORT
+      - GRPC_PORT
+      - CELL
+      - KEYSPACE
+    command: ["sh", "-c", "/script/vttablet-up.sh 3"]
+    depends_on:
+      - vtctld
