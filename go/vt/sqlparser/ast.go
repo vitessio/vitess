@@ -2566,6 +2566,13 @@ func (node *Order) Format(buf *TrackedBuffer) {
 		buf.Myprintf("%v", node)
 		return
 	}
+	if node, ok := node.Expr.(*FuncExpr); ok {
+		if node.Name.Lowered() == "rand" {
+			buf.Myprintf("%v", node)
+			return
+		}
+	}
+
 	buf.Myprintf("%v %s", node.Expr, node.Direction)
 }
 
