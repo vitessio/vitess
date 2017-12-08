@@ -57,8 +57,9 @@ services:
   vtgate:
     image: vitess/base
     ports:
-      - "15306:$MYSQL_PORT"
+      - "15099:$WEB_PORT"
       - "$GRPC_PORT"
+      - "15306:$MYSQL_PORT"
     command: ["sh", "-c", "$$VTROOT/bin/vtgate \
         $TOPOLOGY_FLAGS \
         -logtostderr=true \
