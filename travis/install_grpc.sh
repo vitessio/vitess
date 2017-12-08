@@ -66,7 +66,7 @@ fi
 # clone the repository, setup the submodules
 git clone https://github.com/grpc/grpc.git
 cd grpc
-git checkout v1.7.0
+git checkout $grpc_ver
 git submodule update --init
 
 # OSX specific setting + dependencies
