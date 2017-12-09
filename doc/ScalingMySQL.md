@@ -12,17 +12,16 @@ Vitess sits between your application and your MySQL database. It looks at incomi
 
 While Vitess is designed to manage large, multi-instance databases, it offers features that simplify database setup and management at all stages of your product's lifecycle. 
 
-Starting out, our first step is getting a simple, reliable, durable database cluster in place with a master instance and a couple of replicas. In Vitess terminology, that's a single-shard, single-keyspace database. Once that building block is in place, we can focus on replicating it to scale up.
+Starting out, our first step is getting a simple, reliable, durable database cluster in place with a master instance and a couple of replicas. In Vitess terminology, that's a single-shard, single-keyspace database. Once that building block is in place, we can focus on scaling it up.
 
 ### Planning for scale
 
 We recommend a number of best practices to facilitate scaling your database as your product evolves. You might not experience the benefits of these actions immediately, but adopting these practices from day one will make it much easier for your database and product to grow:
 
 * Always keep your database schema under source control and provide unit test coverage of that schema. Also check schema changes into source control and run unit tests against the newly modified schema.
-* Think about appropriate sharding keys for your data and structure that data accordingly. Usually, sharding keys are obvious -- e.g. a user ID. However, having your key(s) in place ahead of time is much easier than needing to retrofit your data before you can actually shard it.
-* Group tables that share the same sharding key. Similarly, split tables that don’t share the same sharding key into different keyspaces.
-* Avoid cross-shard queries (scatter queries). Instead, use MapReduce for offline queries and build Spark data processing pipelines for online queries. Usually, it is faster to extract raw data and then post-process it in the MapReduce framework.
-* Plan to have data in multiple data centers and regions. It is easier to migrate to multiple data centers if you've planned for incoming queries to be routed to a region or application server pool that, in turn, connects to the right database pool.
+* Think about code paths that can read from a replica vs. always choosing to read from the master. This will let you to scale your reads by just adding more replicas. Additionally, this will make it easy to expand into other data centers across the world.
+* Avoid complicated data relationships. Although RDBMS systems can handle them very well, such relationships hinder scaling in the future. When the time comes, it will be easier to shard the data.
+* Avoid pushing too much logic into the database in the form of stored procedures, foreign keys, or triggers. Such operations overly tax the database and hinder scaling.
 
 ## Step 1: Setting up a database cluster
 
@@ -40,7 +39,7 @@ Vitess has several components that keep this complexity out of your application:
 
 * Each MySQL instance is paired with a **vttablet** process, which provides features like connection pooling, query rewriting, and query de-duping.
 * Your application sends queries to **vtgate**, a light proxy that routes traffic to the correct vttablet(s) and then returns consolidated results to the application.
-* The **Topology Service** -- Vitess supports Zookeeper and etcd -- maintains configuration data for the database system. Vitess relies on the service to know where to route queries based on both the sharding scheme and the availability of individual MySQL instances.
+* The **Topology Service** -- Vitess supports Zookeeper, etcd and Consul -- maintains configuration data for the database system. Vitess relies on the service to know where to route queries based on both the sharding scheme and the availability of individual MySQL instances.
 * The **vtctl** and **vtctld** tools offer command-line and web interfaces to the system.
 
 <div style="overflow-x: scroll">
@@ -71,16 +70,7 @@ Setting up these components directly -- for example, writing your own topology s
 
 Obviously, your application needs to be able to call your database. So, we'll jump straight to explaining how you'd modify your application to connect to your database through vtgate.
 
-### Using the Vitess connector
-
-The main protocol for connecting to Vitess is [gRPC](http://www.grpc.io/). The connection lets the application see the database and send queries to it. The queries are virtually identical to the ones the application would send directly to MySQL.
-
-Vitess supports connections for several languages:
-
-* **Go**: We provide a sql/database driver.
-* **Java**: We provide a library that wraps the gRPC code and a JDBC driver.
-* **PHP**: We provide a library that wraps the gRPC code and a PDO driver.
-* **Python**: We provide a library that wraps the gRPC code and a PEP-compliant driver.
+As of Release 2.1, VTGate supports the MySQL protocol. So, the application only needs to change where it connects to. For those using Java or Go, we additionally provide libraries that can communicate to VTGate using [gRPC](http://www.grpc.io/). Using the provided libraries allow you to send queries with bind variables, which is not inherently possible through the MySQL protocol.
 
 #### Unit testing database interactions
 
@@ -94,9 +84,10 @@ Another, more complicated approach, is a live migration, which requires your app
 
 Note that this path is highly dependent on the source setup. Thus, while Vitess provides helper tools, it does not offer a generic way to support this type of migration.
 
+The final option is to deploy Vitess directly onto the existing MySQL instances and slowly migrate the application traffic to move over to using Vitess.
+
 **Related Vitess documentation:**
 
-* [Vitess API Reference]({% link reference/vitess-api.md %})
 * [Schema Management]({% link user-guide/schema-management.md %})
 * [Transport Security Model]({% link user-guide/transport-security-model.md %})
 
@@ -106,8 +97,7 @@ Typically, the first step in scaling up is vertical sharding, in which you ident
 
 The benefit of splitting tables into multiple keyspaces is to parallelize access to the data (increased performance), and to prepare each smaller keyspace for horizontal sharding. And, in separating data into multiple keyspaces, you should aim to reach a point where:
 
-* All data inside a keyspace scales the same way. For example, in an e-commerce application, user data and product data don’t scale the same way. But user preferences and shopping cart data usually scale with the number of users.
-* You can choose a sharding key inside a keyspace and associate each row of every table with a value of the sharding key. Step 4 talks more about choosing a sharding key.
+* All tables inside a keyspace share a common key. This will make it more convenient to horizontally shard in the future as described in step 4.
 * Joins are primarily within keyspaces. (Joins between keyspaces are costly.)
 * Transactions involving data in multiple keyspaces, which are also expensive, are uncommon.
 
@@ -123,24 +113,13 @@ Several vtctl functions -- vtctl is Vitess' command-line tool for managing your 
 
 The next step in scaling your data is horizontal sharding, the process of partitioning your data to improve scalability and performance. A shard is a horizontal partition of the data within a keyspace. Each shard has a master instance and replica instances, but data does not overlap between shards.
 
-In general, database sharding is most effective when the assigned keyspace IDs are evenly distributed among shards. Keyspace IDs identify the primary entity of a keyspace. For example, a keyspace ID might identify a user, a product, or a purchase.
-
-Since vanilla MySQL lacks native sharding support, you'd typically need to write sharding code and embed sharding logic in your application to shard your data.
-
-### Sharding options in Vitess
-
-A keyspace in Vitess can have three sharding schemes:
-
-* **Not sharded** (or **unsharded**). The keyspace has one shard, which contains all of the data.
-* **Custom**: The keyspace has multiple shards, each of which can be targeted by a different connection pool. The application needs to target statements to the right shards.
-* **Range-based**: The application provides a sharding key for each record, and each shard contains a range of sharding keys. Vitess uses the sharding key values to route queries to the right shards and also supports advanced features like dynamic resharding.
-
-A prerequisite for sharding a keyspace in Vitess is that all of the tables in the keyspace contain a keyspace ID, which is a hashed version of the sharding key. Having all of the tables in a keyspace share a keyspace ID was one of the goals mentioned in section 3, but it's a requirement once you're ready to shard your data.
+In order to perform horizontal sharding, you need to identify the column that will be used to decide the target shard for each table. This is known as the Primary Vindex, which is similar to a NoSQL sharding key, but provides additional flexibility. The decision on such primary vindexes and other sharding metadata is stored in the VSchema.
 
 Vitess offers robust resharding support, which involves updating the sharding scheme for a keyspace and dynamically reorganizing data to match the new scheme. During resharding, Vitess copies, verifies, and keeps data up-to-date on new shards while existing shards continue serving live read and write traffic. When you're ready to switch over, the migration occurs with just a few seconds of read-only downtime.
 
 **Related Vitess documentation:**
 
+* [VSchema Reference guide]({% link user-guide/vschema.md %})
 * [Sharding]({% link user-guide/sharding.md %})
 * [Horizontal sharding (Codelab)]({% link user-guide/horizontal-sharding.md %})
 * [Sharding in Kubernetes (Codelab)]({% link user-guide/sharding-kubernetes.md %})
