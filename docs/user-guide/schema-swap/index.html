@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
         <!-- Webfont -->
-    <link href='http://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
+    <link href='https://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
     
     <!--<link rel="shortcut icon" type="image/png" href="/favicon.png">-->
 
@@ -23,9 +23,7 @@
     <!-- Styles -->
     <link rel="stylesheet" type="text/css" href="/css/site.css" />
     <!-- Font Awesome icons -->
-    <link href="/libs/font-awesome-4.4.0/css/font-awesome.min.css"
-          rel="stylesheet"
-          type="text/css">
+    <script src="https://use.fontawesome.com/44456bc286.js"></script>
     
     <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
@@ -412,7 +410,7 @@ messages ADD views BIGINT(20) UNSIGNED NULL&quot;.</li>
 </ol>
 
 <p>Another way to start the schema swap is to execute vtctlclient command:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./lvtctl.sh WorkflowCreate schema_swap -keyspace<span class="o">=</span>test_keyspace -sql<span class="o">=</span><span class="s1">&#39;SQL statement&#39;</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess/examples/local$ ./lvtctl.sh WorkflowCreate schema_swap -keyspace<span class="o">=</span>test_keyspace -sql<span class="o">=</span><span class="s1">&#39;SQL statement&#39;</span>
 </code></pre></div>
 <p>From this point on all you need to do is watch how the schema swap process is
 progressing. Try expanding the displayed nodes in vtctld UI and look at the logs
