@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
         <!-- Webfont -->
-    <link href='http://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
+    <link href='https://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
     
     <!--<link rel="shortcut icon" type="image/png" href="/favicon.png">-->
 
@@ -23,9 +23,7 @@
     <!-- Styles -->
     <link rel="stylesheet" type="text/css" href="/css/site.css" />
     <!-- Font Awesome icons -->
-    <link href="/libs/font-awesome-4.4.0/css/font-awesome.min.css"
-          rel="stylesheet"
-          type="text/css">
+    <script src="https://use.fontawesome.com/44456bc286.js"></script>
     
     <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
@@ -354,8 +352,8 @@ for the <a href="/getting-started/">Vitess on Kubernetes</a> guide.</p></li>
 
 <p>For example, you can directly run <code class="prettyprint">vitess/base</code>, and Docker will download the
 image for you:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>sudo docker run -ti vitess/base bash
-vitess@32f187ef9351:/vt/src/github.com/youtube/vitess<span class="nv">$ </span>make build
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>$ sudo docker run -ti vitess/base bash
+vitess@32f187ef9351:/vt/src/github.com/youtube/vitess$ make build
 </code></pre></div>
 <p>Now you can proceed to <a href="#start-a-vitess-cluster">start a Vitess cluster</a> inside
 the Docker container you just started. Note that if you want to access the
@@ -364,9 +362,9 @@ in the <a href="https://docs.docker.com/engine/reference/run/#/expose-incoming-p
 
 <p>For local testing, you can also access the servers on the local IP address
 created for the container by Docker:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>docker inspect 32f187ef9351 <span class="p">|</span> grep IPAddress
-<span class="c">### example output:</span>
-<span class="c">#    &quot;IPAddress&quot;: &quot;172.17.3.1&quot;,</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>$ docker inspect 32f187ef9351 <span class="p">|</span> grep IPAddress
+<span class="c1">### example output:</span>
+<span class="c1">#    &quot;IPAddress&quot;: &quot;172.17.3.1&quot;,</span>
 </code></pre></div>
 <h3 id="custom-docker-image">Custom Docker Image</h3>
 
@@ -378,10 +376,10 @@ The <a href="https://github.com/youtube/vitess/tree/master/docker">docker</a>
 subdirectory contains scripts for building other images, such as <code class="prettyprint">vitess/lite</code>.</p>
 
 <p>Our <code class="prettyprint">Makefile</code> also contains rules to build the images. For example:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="c"># Create vitess/bootstrap, which prepares everything up to ./bootstrap.sh</span>
-vitess<span class="nv">$ </span>make docker_bootstrap
-<span class="c"># Create vitess/base from vitess/bootstrap by copying in your local working directory.</span>
-vitess<span class="nv">$ </span>make docker_base
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="c1"># Create vitess/bootstrap, which prepares everything up to ./bootstrap.sh</span>
+vitess$ make docker_bootstrap
+<span class="c1"># Create vitess/base from vitess/bootstrap by copying in your local working directory.</span>
+vitess$ make docker_base
 </code></pre></div>
 <h2 id="manual-build">Manual Build</h2>
 
@@ -416,7 +414,7 @@ directly from <a href="https://downloads.mariadb.org/mariadb/">mariadb.org</a>.<
 missing a file too, <code class="prettyprint">/usr/share/mysql/my-default.cnf</code>. It would show as an
 error like <code class="prettyprint">Could not find my-default.cnf</code>. If you run into this, just add
 it with the following contents:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text">[mysqld]
+<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>[mysqld]
 sql_mode=NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES
 </code></pre></div></li>
 <li><p>Select a lock service from the options listed below. It is technically
@@ -451,11 +449,11 @@ on your path.</li>
 </ul>
 
 <p>These can be installed with the following apt-get command:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>sudo apt-get install make automake libtool python-dev python-virtualenv python-mysqldb libssl-dev g++ git pkg-config bison curl unzip
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>$ sudo apt-get install make automake libtool python-dev python-virtualenv python-mysqldb libssl-dev g++ git pkg-config bison curl unzip
 </code></pre></div></li>
 <li><p>If you decided to use ZooKeeper in step 3, you also need to install a
 Java Runtime, such as OpenJDK.</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>sudo apt-get install openjdk-7-jre
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>$ sudo apt-get install openjdk-7-jre
 </code></pre></div></li>
 </ol>
 
@@ -466,17 +464,17 @@ Java Runtime, such as OpenJDK.</p>
 it will be 
 <a href="https://github.com/Homebrew/homebrew/blob/master/share/doc/homebrew/El_Capitan_and_Homebrew.md">mandatory</a> 
 to run the following command:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">sudo chown -R <span class="k">$(</span>whoami<span class="k">)</span>:admin /usr/local
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>sudo chown -R <span class="k">$(</span>whoami<span class="k">)</span>:admin /usr/local
 </code></pre></div></li>
 <li><p>On OS X, MySQL 5.6 has to be used, MariaDB doesn&#39;t work for some reason yet. It should be installed from Homebrew
 (install steps are below).</p></li>
 <li><p>If Xcode is installed (with Console tools, which should be bundled automatically since the 7.1 version), all 
 the dev dependencies should be satisfied in this step. If no Xcode is present, it is necessery to install pkg-config.</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">brew install pkg-config
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>brew install pkg-config
 </code></pre></div></li>
 <li><p>ZooKeeper is used as lock service.</p></li>
 <li><p>Run the following commands:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">brew install go automake libtool python git bison curl wget homebrew/versions/mysql56
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>brew install go automake libtool python git bison curl wget homebrew/versions/mysql56
 pip install --upgrade pip setuptools
 pip install virtualenv
 pip install MySQL-python
@@ -487,8 +485,8 @@ Apple only supports Java 6. If you need to install a newer version, this link mi
 <a href="http://osxdaily.com/2015/10/17/how-to-install-java-in-os-x-el-capitan/">http://osxdaily.com/2015/10/17/how-to-install-java-in-os-x-el-capitan/</a></p></li>
 <li><p>The Vitess bootstrap script makes some checks for the go runtime, so it is recommended to have the following
 commands in your ~/.profile or ~/.bashrc or ~/.zshrc:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nb">export </span><span class="nv">PATH</span><span class="o">=</span>/usr/local/opt/go/libexec/bin:<span class="nv">$PATH</span>
-<span class="nb">export </span><span class="nv">GOROOT</span><span class="o">=</span>/usr/local/opt/go/libexec
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="nb">export</span> <span class="nv">PATH</span><span class="o">=</span>/usr/local/opt/go/libexec/bin:<span class="nv">$PATH</span>
+<span class="nb">export</span> <span class="nv">GOROOT</span><span class="o">=</span>/usr/local/opt/go/libexec
 </code></pre></div></li>
 <li><p>There is a problem with installing the enum34 Python package using pip, so the following file has to be edited:
 <code class="prettyprint">
@@ -496,10 +494,10 @@ commands in your ~/.profile or ~/.bashrc or ~/.zshrc:</p>
 </code></p>
 
 <p>and this line:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text">prefix=/usr/local
+<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>prefix=/usr/local
 </code></pre></div>
 <p>has to be commented out:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text"># prefix=/usr/local
+<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span># prefix=/usr/local
 </code></pre></div>
 <p>After running the ./bootstrap.sh script from the next step, you can revert the change.</p></li>
 <li><p>For the Vitess hostname resolving functions to work correctly, a new entry has to be added into the /etc/hosts file
@@ -508,7 +506,7 @@ typing the &#39;hostname&#39; command in the terminal.</p>
 
 <p>It is also a good idea to put the following line to <a href="https://golang.org/doc/go1.5#net">force the Go DNS resolver</a> 
 in your ~/.profile or ~/.bashrc or ~/.zshrc:</p>
-<div class="highlight"><pre><code class="language-text" data-lang="text">export GODEBUG=netdns=go
+<div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>export GODEBUG=netdns=go
 </code></pre></div></li>
 </ol>
 
@@ -518,25 +516,25 @@ in your ~/.profile or ~/.bashrc or ~/.zshrc:</p>
 <li><p>Navigate to the directory where you want to download the Vitess
 source code and clone the Vitess Github repo. After doing so,
 navigate to the <code class="prettyprint">src/github.com/youtube/vitess</code> directory.</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nb">cd</span> <span class="nv">$WORKSPACE</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="nb">cd</span> <span class="nv">$WORKSPACE</span>
 git clone https://github.com/youtube/vitess.git <span class="se">\</span>
     src/github.com/youtube/vitess
-<span class="nb">cd </span>src/github.com/youtube/vitess
+<span class="nb">cd</span> src/github.com/youtube/vitess
 </code></pre></div></li>
 <li><p>Set the <code class="prettyprint">MYSQL_FLAVOR</code> environment variable. Choose the appropriate
 value for your database. This value is case-sensitive.</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nb">export </span><span class="nv">MYSQL_FLAVOR</span><span class="o">=</span>MariaDB
-<span class="c"># or (mandatory for OS X)</span>
-<span class="c"># export MYSQL_FLAVOR=MySQL56</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="nb">export</span> <span class="nv">MYSQL_FLAVOR</span><span class="o">=</span>MariaDB
+<span class="c1"># or (mandatory for OS X)</span>
+<span class="c1"># export MYSQL_FLAVOR=MySQL56</span>
 </code></pre></div></li>
 <li><p>If your selected database installed in a location other than <code class="prettyprint">/usr/bin</code>,
 set the <code class="prettyprint">VT_MYSQL_ROOT</code> variable to the root directory of your
 MariaDB installation. For example, if MariaDB is installed in
 <code class="prettyprint">/usr/local/mysql</code>, run the following command.</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nb">export </span><span class="nv">VT_MYSQL_ROOT</span><span class="o">=</span>/usr/local/mysql
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="nb">export</span> <span class="nv">VT_MYSQL_ROOT</span><span class="o">=</span>/usr/local/mysql
 
-<span class="c"># on OS X, this is the correct value:</span>
-<span class="c"># export VT_MYSQL_ROOT=/usr/local/opt/mysql56</span>
+<span class="c1"># on OS X, this is the correct value:</span>
+<span class="c1"># export VT_MYSQL_ROOT=/usr/local/opt/mysql56</span>
 </code></pre></div>
 <p>Note that the command indicates that the <code class="prettyprint">mysql</code> executable should
 be found at <code class="prettyprint">/usr/local/mysql/bin/mysql</code>.</p></li>
@@ -550,15 +548,15 @@ to set the usual environment variables (e.g. <code class="prettyprint">http_prox
 <code class="prettyprint">https_proxy</code>, <code class="prettyprint">no_proxy</code>).</p>
 
 <p>Run the boostrap.sh script:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">./bootstrap.sh
-<span class="c">### example output:</span>
-<span class="c"># skipping zookeeper build</span>
-<span class="c"># go install golang.org/x/tools/cmd/cover ...</span>
-<span class="c"># Found MariaDB installation in ...</span>
-<span class="c"># creating git pre-commit hooks</span>
-<span class="c">#</span>
-<span class="c"># source dev.env in your shell before building</span>
-</code></pre></div><div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="c"># Remaining commands to build Vitess</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>./bootstrap.sh
+<span class="c1">### example output:</span>
+<span class="c1"># skipping zookeeper build</span>
+<span class="c1"># go install golang.org/x/tools/cmd/cover ...</span>
+<span class="c1"># Found MariaDB installation in ...</span>
+<span class="c1"># creating git pre-commit hooks</span>
+<span class="c1">#</span>
+<span class="c1"># source dev.env in your shell before building</span>
+</code></pre></div><div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="c1"># Remaining commands to build Vitess</span>
 . ./dev.env
 make build
 </code></pre></div></li>
@@ -567,10 +565,10 @@ make build
 <h3 id="run-tests">Run Tests</h3>
 
 <p><strong>Note:</strong> If you are using etcd, set the following environment variable:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nb">export </span><span class="nv">VT_TEST_FLAGS</span><span class="o">=</span><span class="s1">&#39;--topo-server-flavor=etcd2&#39;</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="nb">export</span> <span class="nv">VT_TEST_FLAGS</span><span class="o">=</span><span class="s1">&#39;--topo-server-flavor=etcd2&#39;</span>
 </code></pre></div>
 <p><strong>Note:</strong> If you are using consul, set the following environment variable:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nb">export </span><span class="nv">VT_TEST_FLAGS</span><span class="o">=</span><span class="err">&#39;</span>--topo-server-flavor<span class="o">=</span>consul
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="nb">export</span> <span class="nv">VT_TEST_FLAGS</span><span class="o">=</span><span class="err">&#39;</span>--topo-server-flavor<span class="o">=</span>consul
 </code></pre></div>
 <p>The default targets when running <code class="prettyprint">make test</code> contain a full set of
 tests intended to help Vitess developers to verify code changes. Those tests
@@ -580,7 +578,7 @@ and SSD is recommended to run the tests.</p>
 
 <p>If you want only to check that Vitess is working in your environment,
 you can run a lighter set of tests:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">make site_test
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>make site_test
 </code></pre></div>
 <h4 id="common-test-issues">Common Test Issues</h4>
 
@@ -596,8 +594,8 @@ discussion forum.</p>
 <p>A failed test can leave orphaned processes. If you use the default
 settings, you can use the following commands to identify and kill
 those processes:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">pgrep -f -l <span class="s1">&#39;(vtdataroot|VTDATAROOT)&#39;</span> <span class="c"># list Vitess processes</span>
-pkill -f <span class="s1">&#39;(vtdataroot|VTDATAROOT)&#39;</span> <span class="c"># kill Vitess processes</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>pgrep -f -l <span class="s1">&#39;(vtdataroot|VTDATAROOT)&#39;</span> <span class="c1"># list Vitess processes</span>
+pkill -f <span class="s1">&#39;(vtdataroot|VTDATAROOT)&#39;</span> <span class="c1"># kill Vitess processes</span>
 </code></pre></div>
 <h5 id="too-many-connections-to-mysql-or-other-timeouts">Too many connections to MySQL, or other timeouts</h5>
 
@@ -650,22 +648,22 @@ variables required before running the scripts are <code class="prettyprint">VTRO
 <p>Set <code class="prettyprint">VTROOT</code> to the parent of the Vitess source tree. For example, if you
 ran <code class="prettyprint">make build</code> while in <code class="prettyprint">$HOME/vt/src/github.com/youtube/vitess</code>,
 then you should set:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nb">export </span><span class="nv">VTROOT</span><span class="o">=</span><span class="nv">$HOME</span>/vt
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="nb">export</span> <span class="nv">VTROOT</span><span class="o">=</span><span class="nv">$HOME</span>/vt
 </code></pre></div>
 <p>Set <code class="prettyprint">VTDATAROOT</code> to the directory where you want data files and logs to
 be stored. For example:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nb">export </span><span class="nv">VTDATAROOT</span><span class="o">=</span><span class="nv">$HOME</span>/vtdataroot
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="nb">export</span> <span class="nv">VTDATAROOT</span><span class="o">=</span><span class="nv">$HOME</span>/vtdataroot
 </code></pre></div></li>
 <li><p><strong>Start ZooKeeper</strong></p>
 
 <p>Servers in a Vitess cluster find each other by looking for
 dynamic configuration data stored in a distributed lock
 service. The following script creates a small ZooKeeper cluster:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span><span class="nb">cd</span> <span class="nv">$VTROOT</span>/src/github.com/youtube/vitess/examples/local
-vitess/examples/local<span class="nv">$ </span>./zk-up.sh
-<span class="c">### example output:</span>
-<span class="c"># Starting zk servers...</span>
-<span class="c"># Waiting for zk servers to be ready...</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>$ <span class="nb">cd</span> <span class="nv">$VTROOT</span>/src/github.com/youtube/vitess/examples/local
+vitess/examples/local$ ./zk-up.sh
+<span class="c1">### example output:</span>
+<span class="c1"># Starting zk servers...</span>
+<span class="c1"># Waiting for zk servers to be ready...</span>
 </code></pre></div>
 <p>After the ZooKeeper cluster is running, we only need to tell each
 Vitess process how to connect to ZooKeeper. Then, each process can
@@ -679,10 +677,10 @@ they are both hosted in the same ZooKeeper service.</p></li>
 
 <p>The <em>vtctld</em> server provides a web interface that
 displays all of the coordination information stored in ZooKeeper.</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./vtctld-up.sh
-<span class="c"># Starting vtctld</span>
-<span class="c"># Access vtctld web UI at http://localhost:15000</span>
-<span class="c"># Send commands with: vtctlclient -server localhost:15999 ...</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess/examples/local$ ./vtctld-up.sh
+<span class="c1"># Starting vtctld</span>
+<span class="c1"># Access vtctld web UI at http://localhost:15000</span>
+<span class="c1"># Send commands with: vtctlclient -server localhost:15999 ...</span>
 </code></pre></div>
 <p>Open <code class="prettyprint">http://localhost:15000</code> to verify that
 <em>vtctld</em> is running. There won&#39;t be any information
@@ -697,25 +695,25 @@ in <code class="prettyprint">vtctld-up.sh</code>.</p>
 
 <p>For convenience, we&#39;ll use the <code class="prettyprint">lvtctl.sh</code> script in example commands,
 to avoid having to type the <em>vtctld</em> address every time.</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="c"># List available commands</span>
-vitess/examples/local<span class="nv">$ </span>./lvtctl.sh <span class="nb">help</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="c1"># List available commands</span>
+vitess/examples/local$ ./lvtctl.sh <span class="nb">help</span>
 </code></pre></div></li>
 <li><p><strong>Start vttablets</strong></p>
 
 <p>The <code class="prettyprint">vttablet-up.sh</code> script brings up three vttablets, and assigns them to
 a <a href="/overview/concepts/#keyspace">keyspace</a> and <a href="/overview/concepts/#shard">shard</a> according to the variables
 set at the top of the script file.</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./vttablet-up.sh
-<span class="c"># Output from vttablet-up.sh is below</span>
-<span class="c"># Starting MySQL for tablet test-0000000100...</span>
-<span class="c"># Starting vttablet for test-0000000100...</span>
-<span class="c"># Access tablet test-0000000100 at http://localhost:15100/debug/status</span>
-<span class="c"># Starting MySQL for tablet test-0000000101...</span>
-<span class="c"># Starting vttablet for test-0000000101...</span>
-<span class="c"># Access tablet test-0000000101 at http://localhost:15101/debug/status</span>
-<span class="c"># Starting MySQL for tablet test-0000000102...</span>
-<span class="c"># Starting vttablet for test-0000000102...</span>
-<span class="c"># Access tablet test-0000000102 at http://localhost:15102/debug/status</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess/examples/local$ ./vttablet-up.sh
+<span class="c1"># Output from vttablet-up.sh is below</span>
+<span class="c1"># Starting MySQL for tablet test-0000000100...</span>
+<span class="c1"># Starting vttablet for test-0000000100...</span>
+<span class="c1"># Access tablet test-0000000100 at http://localhost:15100/debug/status</span>
+<span class="c1"># Starting MySQL for tablet test-0000000101...</span>
+<span class="c1"># Starting vttablet for test-0000000101...</span>
+<span class="c1"># Access tablet test-0000000101 at http://localhost:15101/debug/status</span>
+<span class="c1"># Starting MySQL for tablet test-0000000102...</span>
+<span class="c1"># Starting vttablet for test-0000000102...</span>
+<span class="c1"># Access tablet test-0000000102 at http://localhost:15102/debug/status</span>
 </code></pre></div>
 <p>After this command completes, refresh the <em>vtctld</em> web UI, and you should
 see a keyspace named <code class="prettyprint">test_keyspace</code> with a single shard named <code class="prettyprint">0</code>.
@@ -735,10 +733,10 @@ Vitess will automatically connect the other slaves&#39; mysqld instances so
 that they start replicating from the master&#39;s mysqld.
 This is also when the default database is created. Since our keyspace is
 named <code class="prettyprint">test_keyspace</code>, the MySQL database will be named <code class="prettyprint">vt_test_keyspace</code>.</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./lvtctl.sh InitShardMaster -force test_keyspace/0 <span class="nb">test</span>-100
-<span class="c">### example output:</span>
-<span class="c"># master-elect tablet test-0000000100 is not the shard master, proceeding anyway as -force was used</span>
-<span class="c"># master-elect tablet test-0000000100 is not a master in the shard, proceeding anyway as -force was used</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess/examples/local$ ./lvtctl.sh InitShardMaster -force test_keyspace/0 test-100
+<span class="c1">### example output:</span>
+<span class="c1"># master-elect tablet test-0000000100 is not the shard master, proceeding anyway as -force was used</span>
+<span class="c1"># master-elect tablet test-0000000100 is not a master in the shard, proceeding anyway as -force was used</span>
 </code></pre></div>
 <p><strong>Note:</strong> Since this is the first time the shard has been started,
 the tablets are not already doing any replication, and there is no
@@ -752,24 +750,24 @@ page, you should see that one <em>vttablet</em> is the master,
 two are replicas and two are rdonly.</p>
 
 <p>You can also see this on the command line:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./lvtctl.sh ListAllTablets <span class="nb">test</span>
-<span class="c">### example output:</span>
-<span class="c"># test-0000000100 test_keyspace 0 master localhost:15100 localhost:17100 []</span>
-<span class="c"># test-0000000101 test_keyspace 0 replica localhost:15101 localhost:17101 []</span>
-<span class="c"># test-0000000102 test_keyspace 0 replica localhost:15102 localhost:17102 []</span>
-<span class="c"># test-0000000103 test_keyspace 0 rdonly localhost:15103 localhost:17103 []</span>
-<span class="c"># test-0000000104 test_keyspace 0 rdonly localhost:15104 localhost:17104 []</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess/examples/local$ ./lvtctl.sh ListAllTablets <span class="nb">test</span>
+<span class="c1">### example output:</span>
+<span class="c1"># test-0000000100 test_keyspace 0 master localhost:15100 localhost:17100 []</span>
+<span class="c1"># test-0000000101 test_keyspace 0 replica localhost:15101 localhost:17101 []</span>
+<span class="c1"># test-0000000102 test_keyspace 0 replica localhost:15102 localhost:17102 []</span>
+<span class="c1"># test-0000000103 test_keyspace 0 rdonly localhost:15103 localhost:17103 []</span>
+<span class="c1"># test-0000000104 test_keyspace 0 rdonly localhost:15104 localhost:17104 []</span>
 </code></pre></div></li>
 <li><p><strong>Create a table</strong></p>
 
 <p>The <code class="prettyprint">vtctlclient</code> tool can be used to apply the database schema across all
 tablets in a keyspace. The following command creates the table defined in
 the <code class="prettyprint">create_test_table.sql</code> file:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="c"># Make sure to run this from the examples/local dir, so it finds the file.</span>
-vitess/examples/local<span class="nv">$ </span>./lvtctl.sh ApplySchema -sql <span class="s2">&quot;$(cat create_test_table.sql)&quot;</span> test_keyspace
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="c1"># Make sure to run this from the examples/local dir, so it finds the file.</span>
+vitess/examples/local$ ./lvtctl.sh ApplySchema -sql <span class="s2">&quot;</span><span class="k">$(</span>cat create_test_table.sql<span class="k">)</span><span class="s2">&quot;</span> test_keyspace
 </code></pre></div>
 <p>The SQL to create the table is shown below:</p>
-<div class="highlight"><pre><code class="language-sql" data-lang="sql"><span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">messages</span> <span class="p">(</span>
+<div class="highlight"><pre><code class="language-sql" data-lang="sql"><span></span><span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">messages</span> <span class="p">(</span>
   <span class="n">page</span> <span class="nb">BIGINT</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span> <span class="n">UNSIGNED</span><span class="p">,</span>
   <span class="n">time_created_ns</span> <span class="nb">BIGINT</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span> <span class="n">UNSIGNED</span><span class="p">,</span>
   <span class="n">message</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">10000</span><span class="p">),</span>
@@ -784,12 +782,12 @@ will be used to automatically restore any additional replicas that you run,
 before they connect themselves to the master and catch up on replication.
 If an existing tablet goes down and comes back up without its data, it will
 also automatically restore from the latest backup and then resume replication.</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./lvtctl.sh Backup <span class="nb">test</span>-0000000102
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess/examples/local$ ./lvtctl.sh Backup test-0000000102
 </code></pre></div>
 <p>After the backup completes, you can list available backups for the shard:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./lvtctl.sh ListBackups test_keyspace/0
-<span class="c">### example output:</span>
-<span class="c"># 2016-05-06.072724.test-0000000102</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess/examples/local$ ./lvtctl.sh ListBackups test_keyspace/0
+<span class="c1">### example output:</span>
+<span class="c1"># 2016-05-06.072724.test-0000000102</span>
 </code></pre></div>
 <p><strong>Note:</strong> In this single-server example setup, backups are stored at
 <code class="prettyprint">$VTDATAROOT/backups</code>. In a multi-server deployment, you would usually mount
@@ -801,7 +799,7 @@ in <code class="prettyprint">vtctld-up.sh</code> and <code class="prettyprint">v
 <p>In the examples, we are just using a single database with no specific
 configuration. So we just need to make that (empty) configuration visible
 for serving. This is done by running the following command:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./lvtctl.sh RebuildVSchemaGraph
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess/examples/local$ ./lvtctl.sh RebuildVSchemaGraph
 </code></pre></div>
 <p>(As it works, this command will not display any output.)</p></li>
 <li><p><strong>Start vtgate</strong></p>
@@ -811,7 +809,7 @@ the correct <em>vttablet</em>. This local example runs a
 single <em>vtgate</em> instance, though a real deployment
 would likely run multiple <em>vtgate</em> instances to share
 the load.</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./vtgate-up.sh
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess/examples/local$ ./vtgate-up.sh
 </code></pre></div></li>
 </ol>
 
@@ -827,14 +825,14 @@ To run it, you need to either:</p>
 <p>or</p></li>
 <li><p>Use the <code class="prettyprint">client.sh</code> wrapper script, which temporarily
 sets up the environment and then runs <code class="prettyprint">client.py</code>.</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./client.sh
-<span class="c">### example output:</span>
-<span class="c"># Inserting into master...</span>
-<span class="c"># Reading from master...</span>
-<span class="c"># (5L, 1462510331910124032L, &#39;V is for speed&#39;)</span>
-<span class="c"># (15L, 1462519383758071808L, &#39;V is for speed&#39;)</span>
-<span class="c"># (42L, 1462510369213753088L, &#39;V is for speed&#39;)</span>
-<span class="c"># ...</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess/examples/local$ ./client.sh
+<span class="c1">### example output:</span>
+<span class="c1"># Inserting into master...</span>
+<span class="c1"># Reading from master...</span>
+<span class="c1"># (5L, 1462510331910124032L, &#39;V is for speed&#39;)</span>
+<span class="c1"># (15L, 1462519383758071808L, &#39;V is for speed&#39;)</span>
+<span class="c1"># (42L, 1462510369213753088L, &#39;V is for speed&#39;)</span>
+<span class="c1"># ...</span>
 </code></pre></div></li>
 </ul>
 
@@ -855,15 +853,15 @@ If not, continue to the clean-up steps below.</p>
 <h3 id="tear-down-the-cluster">Tear down the cluster</h3>
 
 <p>Each <code class="prettyprint">-up.sh</code> script has a corresponding <code class="prettyprint">-down.sh</code> script to stop the servers.</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./vtgate-down.sh
-vitess/examples/local<span class="nv">$ </span>./vttablet-down.sh
-vitess/examples/local<span class="nv">$ </span>./vtctld-down.sh
-vitess/examples/local<span class="nv">$ </span>./zk-down.sh
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>vitess/examples/local$ ./vtgate-down.sh
+vitess/examples/local$ ./vttablet-down.sh
+vitess/examples/local$ ./vtctld-down.sh
+vitess/examples/local$ ./zk-down.sh
 </code></pre></div>
 <p>Note that the <code class="prettyprint">-down.sh</code> scripts will leave behind any data files created.
 If you&#39;re done with this example data, you can clear out the contents of <code class="prettyprint">VTDATAROOT</code>:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span><span class="nb">cd</span> <span class="nv">$VTDATAROOT</span>
-/path/to/vtdataroot<span class="nv">$ </span>rm -rf *
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span>$ <span class="nb">cd</span> <span class="nv">$VTDATAROOT</span>
+/path/to/vtdataroot$ rm -rf *
 </code></pre></div>
 <h2 id="troubleshooting">Troubleshooting</h2>
 
