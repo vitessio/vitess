@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
         <!-- Webfont -->
-    <link href='http://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
+    <link href='https://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
     
     <!--<link rel="shortcut icon" type="image/png" href="/favicon.png">-->
 
@@ -23,9 +23,7 @@
     <!-- Styles -->
     <link rel="stylesheet" type="text/css" href="/css/site.css" />
     <!-- Font Awesome icons -->
-    <link href="/libs/font-awesome-4.4.0/css/font-awesome.min.css"
-          rel="stylesheet"
-          type="text/css">
+    <script src="https://use.fontawesome.com/44456bc286.js"></script>
     
     <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
@@ -336,7 +334,7 @@
 <p>This document describes the Topology Service, a key part of the Vitess
 architecture. This service is exposed to all Vitess processes, and is used to
 store small pieces of configuration data about the Vitess cluster, and provide
-cluster-wide locks. It also supports watches, which we will use soon.</p>
+cluster-wide locks. It also supports watches, and master election.</p>
 
 <p>Concretely, the Topology Service features are implemented by
 a <a href="http://en.wikipedia.org/wiki/Distributed_lock_manager">Lock Server</a>, referred
@@ -344,7 +342,7 @@ to as Topology Server in the rest of this document. We use a plug-in
 implementation and we support multiple Lock Servers (Zookeeper, etcd, Consul, …)
 as backends for the service.</p>
 
-<h2 id="requirements-and-usage">Requirements and Usage</h2>
+<h2 id="requirements-and-usage">Requirements and usage</h2>
 
 <p>The Topology Service is used to store information about the Keyspaces, the
 Shards, the Tablets, the Replication Graph, and the Serving Graph. We store
@@ -362,7 +360,7 @@ serve every query.</p>
 conditions occur on a node. This is used for instance to know when keyspaces
 topology changes (for resharding for instance).</p>
 
-<h3 id="global-vs-local">Global vs Local</h3>
+<h3 id="global-vs-local">Global vs local</h3>
 
 <p>We differentiate two instances of the Topology Server: the Global instance, and
 the per-cell Local instance:</p>
@@ -399,7 +397,7 @@ topology records (but they won’t lose any MySQL data).</p>
 problem. All the Keyspace / Shard objects have to be re-created. Then the cells
 should recover.</p>
 
-<h2 id="global-data">Global Data</h2>
+<h2 id="global-data">Global data</h2>
 
 <p>This section describes the data structures stored in the global instance of the
 topology server.</p>
@@ -420,27 +418,27 @@ guarantee only one operation changes the keyspace data concurrently.</p>
 global topology contains:</p>
 
 <ul>
-<li>the MySQL Master tablet alias for this shard</li>
-<li>the sharding key range covered by this Shard inside the Keyspace</li>
+<li>the Master tablet alias for this shard (that has the MySQL master).</li>
+<li>the sharding key range covered by this Shard inside the Keyspace.</li>
 <li>the tablet types this Shard is serving (master, replica, batch, …), per cell
 if necessary.</li>
 <li>if during filtered replication, the source shards this shard is replicating
-from</li>
-<li>the list of cells that have tablets in this shard</li>
+from.</li>
+<li>the list of cells that have tablets in this shard.</li>
 <li>shard-global tablet controls, like blacklisted tables no tablet should serve
-in this shard</li>
+in this shard.</li>
 </ul>
 
 <p>A Shard can be locked. We use this during operations that affect either the
 Shard record, or multiple tablets within a Shard (like reparenting), so multiple
 jobs don’t concurrently alter the data.</p>
 
-<h3 id="vschema-data">VSchema Data</h3>
+<h3 id="vschema-data">VSchema data</h3>
 
 <p>The VSchema data contains sharding and routing information for
 the <a href="https://github.com/youtube/vitess/blob/master/doc/VTGateV3Features.md">VTGate V3</a> API.</p>
 
-<h2 id="local-data">Local Data</h2>
+<h2 id="local-data">Local data</h2>
 
 <p>This section describes the data structures stored in the local instance (per
 cell) of the topology server.</p>
@@ -451,35 +449,35 @@ cell) of the topology server.</p>
 running inside a tablet (along with the MySQL process):</p>
 
 <ul>
-<li>the Tablet Alias (cell+unique id) that uniquely identifies the Tablet</li>
-<li>the Hostname, IP address and port map of the Tablet</li>
-<li>the current Tablet type (master, replica, batch, spare, …)</li>
-<li>which Keyspace / Shard the tablet is part of</li>
-<li>the sharding Key Range served by this Tablet</li>
-<li>user-specified tag map (to store per installation data for instance)</li>
+<li>the Tablet Alias (cell+unique id) that uniquely identifies the Tablet.</li>
+<li>the Hostname, IP address and port map of the Tablet.</li>
+<li>the current Tablet type (master, replica, batch, spare, …).</li>
+<li>which Keyspace / Shard the tablet is part of.</li>
+<li>the sharding Key Range served by this Tablet.</li>
+<li>user-specified tag map (to store per installation data for instance).</li>
 </ul>
 
 <p>A Tablet record is created before a tablet can be running (either by <code class="prettyprint">vtctl
-InitTablet</code> or by passing the <code class="prettyprint">init_*</code> parameters to vttablet). The only way a
-Tablet record will be updated is one of:</p>
+InitTablet</code> or by passing the <code class="prettyprint">init_*</code> parameters to the vttablet process).
+The only way a Tablet record will be updated is one of:</p>
 
 <ul>
 <li>The vttablet process itself owns the record while it is running, and can
 change it.</li>
-<li>At init time, before the tablet starts</li>
+<li>At init time, before the tablet starts.</li>
 <li>After shutdown, when the tablet gets deleted.</li>
 <li>If a tablet becomes unresponsive, it may be forced to spare to make it
 unhealthy when it restarts.</li>
 </ul>
 
-<h3 id="replication-graph">Replication Graph</h3>
+<h3 id="replication-graph">Replication graph</h3>
 
 <p>The Replication Graph allows us to find Tablets in a given Cell / Keyspace /
 Shard. It used to contain information about which Tablet is replicating from
 which other Tablet, but that was too complicated to maintain. Now it is just a
 list of Tablets.</p>
 
-<h3 id="serving-graph">Serving Graph</h3>
+<h3 id="serving-graph">Serving graph</h3>
 
 <p>The Serving Graph is what the clients use to find the per-cell topology of a
 Keyspace. It is a roll-up of global data (Keyspace + Shard). vtgates only open a
@@ -510,7 +508,7 @@ keyspaces in a single object.</p>
 <p>It can be rebuilt by running <code class="prettyprint">vtctl RebuildVSchemaGraph</code>. It is automatically
 rebuilt when using <code class="prettyprint">vtctl ApplyVSchema</code> (unless prevented by flags).</p>
 
-<h2 id="workflows-involving-the-topology-server">Workflows Involving the Topology Server</h2>
+<h2 id="workflows-involving-the-topology-server">Workflows involving the Topology Server</h2>
 
 <p>The Topology Server is involved in many Vitess workflows.</p>
 
@@ -537,22 +535,60 @@ will change the global Shard records, and the local SrvKeyspace records. A
 vertical split will change the global Keyspace records, and the local
 SrvKeyspace records.</p>
 
+<h2 id="exploring-the-data-in-a-topology-server">Exploring the data in a Topology Server</h2>
+
+<p>We store the proto3 binary data for each object.</p>
+
+<p>We use the following paths for the data, in all implementations:</p>
+
+<p><em>Global Cell</em>:</p>
+
+<ul>
+<li>CellInfo path: <code class="prettyprint">cells/&lt;cell name&gt;/CellInfo</code></li>
+<li>Keyspace: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/Keyspace</code></li>
+<li>Shard: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/shards/&lt;shard&gt;/Shard</code></li>
+<li>VSchema: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/VSchema</code></li>
+</ul>
+
+<p><em>Local Cell</em>:</p>
+
+<ul>
+<li>Tablet: <code class="prettyprint">tablets/&lt;cell&gt;-&lt;uid&gt;/Tablet</code></li>
+<li>Replication Graph: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/shards/&lt;shard&gt;/ShardReplication</code></li>
+<li>SrvKeyspace: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/SrvKeyspace</code></li>
+<li>SrvVSchema: <code class="prettyprint">SvrVSchema</code></li>
+</ul>
+
+<p>The <code class="prettyprint">vtctl TopoCat</code> utility can decode these files when using the
+<code class="prettyprint">-decode_proto</code> option:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="nv">TOPOLOGY</span><span class="o">=</span><span class="s2">&quot;-topo_implementation zk2 -topo_global_server_address global_server1,global_server2 -topo_global_root /vitess/global&quot;</span>
+
+$ vtctl <span class="nv">$TOPOLOGY</span> TopoCat -decode_proto -long /keyspaces/*/Keyspace
+<span class="nv">path</span><span class="o">=</span>/keyspaces/ks1/Keyspace <span class="nv">version</span><span class="o">=</span><span class="m">53</span>
+sharding_column_name: <span class="s2">&quot;col1&quot;</span>
+<span class="nv">path</span><span class="o">=</span>/keyspaces/ks2/Keyspace <span class="nv">version</span><span class="o">=</span><span class="m">55</span>
+sharding_column_name: <span class="s2">&quot;col2&quot;</span>
+</code></pre></div>
+<p>The <code class="prettyprint">vtctld</code> web tool also contains a topology browser (use the <code class="prettyprint">Topology</code>
+tab on the left side). It will display the various proto files, decoded.</p>
+
 <h2 id="implementations">Implementations</h2>
 
-<p>The Topology Server interface is defined in our code in <code class="prettyprint">go/vt/topo/server.go</code>
-and we also have a set of unit tests for it in <code class="prettyprint">go/vt/topo/test</code>.</p>
+<p>The Topology Server interfaces are defined in our code in <code class="prettyprint">go/vt/topo/</code>,
+specific implementations are in <code class="prettyprint">go/vt/topo/&lt;name&gt;</code>, and we also have
+a set of unit tests for it in <code class="prettyprint">go/vt/topo/test</code>.</p>
 
-<p>This part describes the two implementations we have, and their specific
+<p>This part describes the implementations we have, and their specific
 behavior.</p>
 
 <p>If starting from scratch, please use the <code class="prettyprint">zk2</code>, <code class="prettyprint">etcd2</code> or <code class="prettyprint">consul</code>
 implementations. We deprecated the old <code class="prettyprint">zookeeper</code> and <code class="prettyprint">etcd</code>
 implementations. See the migration section below if you want to migrate.</p>
 
-<h3 id="zookeeper-zk2-implementation">Zookeeper <code class="prettyprint">zk2</code> Implementation</h3>
+<h3 id="zookeeper-zk2-implementation">Zookeeper <code class="prettyprint">zk2</code> implementation</h3>
 
 <p>This is the current implementation when using Zookeeper. (The old <code class="prettyprint">zookeeper</code>
-implementation is deprecated, see next section)</p>
+implementation is deprecated).</p>
 
 <p>The global cell typically has around 5 servers, distributed one in each
 cell. The local cells typically have 3 or 5 servers, in different server racks /
@@ -568,19 +604,19 @@ vtctld UI can also be used to see the contents of the topology data.</p>
 service. It is described by the addresses of the servers (comma separated list),
 and by the root directory to put the Vitess data in. For instance, assuming we
 want to use servers <code class="prettyprint">global_server1,global_server2</code> in path <code class="prettyprint">/vitess/global</code>:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="c"># First create the directory in the global server:</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="c1"># First create the directory in the global server:</span>
 zk -server global_server1,global_server2 touch -p /vitess/global
 
-<span class="c"># Set the following flags to let Vitess use this global server:</span>
-<span class="c"># -topo_implementation zk2</span>
-<span class="c"># -topo_global_server_address global_server1,global_server2</span>
-<span class="c"># -topo_global_root /vitess/global</span>
+<span class="c1"># Set the following flags to let Vitess use this global server:</span>
+<span class="c1"># -topo_implementation zk2</span>
+<span class="c1"># -topo_global_server_address global_server1,global_server2</span>
+<span class="c1"># -topo_global_root /vitess/global</span>
 </code></pre></div>
 <p>Then to add a cell whose local topology servers <code class="prettyprint">cell1_server1,cell1_server2</code>
 will store their data under the directory <code class="prettyprint">/vitess/cell1</code>:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">TOPOLOGY</span><span class="o">=</span><span class="s2">&quot;-topo_implementation zk2 -topo_global_server_address global_server1,global_server2 -topo_global_root /vitess/global&quot;</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="nv">TOPOLOGY</span><span class="o">=</span><span class="s2">&quot;-topo_implementation zk2 -topo_global_server_address global_server1,global_server2 -topo_global_root /vitess/global&quot;</span>
 
-<span class="c"># Reference cell1 in the global topology service:</span>
+<span class="c1"># Reference cell1 in the global topology service:</span>
 vtctl <span class="nv">$TOPOLOGY</span> AddCellInfo <span class="se">\</span>
   -server_address cell1_server1,cell1_server2 <span class="se">\</span>
   -root /vitess/cell1 <span class="se">\</span>
@@ -597,57 +633,21 @@ specifying the adresses of the observers in the server address, after a <code cl
 for instance:
 <code class="prettyprint">global_server1:p1,global_server2:p2|observer1:po1,observer2:po2</code>.</p>
 
-<h4 id="implementation-details">Implementation Details</h4>
+<h4 id="implementation-details">Implementation details</h4>
 
-<p>We use the following paths:</p>
-
-<p><em>Global Cell</em>:</p>
-
-<ul>
-<li>Election path: <code class="prettyprint">elections/&lt;name&gt;</code></li>
-<li>CellInfo path: <code class="prettyprint">cells/&lt;cell name&gt;/CellInfo</code></li>
-<li>Keyspace: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/Keyspace</code></li>
-<li>Shard: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/shards/&lt;shard&gt;/Shard</code></li>
-<li>VSchema: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/VSchema</code></li>
-</ul>
-
-<p><em>Local Cell</em>:</p>
+<p>We use the following paths for Zookeeper specific data, in addition to the
+regular files:</p>
 
 <ul>
-<li>Tablet: <code class="prettyprint">tablets/&lt;cell&gt;-&lt;uid&gt;/Tablet</code></li>
-<li>Replication Graph: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/shards/&lt;shard&gt;/ShardReplication</code></li>
-<li>SrvKeyspace: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/SrvKeyspace</code></li>
-<li>SrvVSchema: <code class="prettyprint">SvrVSchema</code></li>
+<li>Locks sub-directory: <code class="prettyprint">locks/</code> (for instance:
+<code class="prettyprint">keyspaces/&lt;keyspace&gt;/Keyspace/locks/</code> for a keyspace)</li>
+<li>Master election path: <code class="prettyprint">elections/&lt;name&gt;</code></li>
 </ul>
-
-<p>For locks, we create a subdirectory called <code class="prettyprint">locks</code> under either the keyspace
-directory or the shard directory.</p>
 
 <p>Both locks and master election are implemented using ephemeral, sequential files
 which are stored in their respective directory.</p>
 
-<p>We store the proto3 binary data for each object. The <code class="prettyprint">zk</code> utility can decode
-these files when using the <code class="prettyprint">-p</code> option of the <code class="prettyprint">cat</code> command:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>zk --server localhost:15014 cat -p /global/keyspaces/test_keyspace/shards/-80/Shard
-master_alias: &lt;
-  cell: <span class="s2">&quot;test_nj&quot;</span>
-  uid: 62344
-&gt;
-key_range: &lt;
-  end: <span class="s2">&quot;\200&quot;</span>
-&gt;
-served_types: &lt;
-  tablet_type: MASTER
-&gt;
-served_types: &lt;
-  tablet_type: REPLICA
-&gt;
-served_types: &lt;
-  tablet_type: RDONLY
-&gt;
-cells: <span class="s2">&quot;test_nj&quot;</span>
-</code></pre></div>
-<h3 id="etcd-etcd2-implementation-new-version-of-etcd">etcd <code class="prettyprint">etcd2</code> Implementation (new version of <code class="prettyprint">etcd</code>)</h3>
+<h3 id="etcd-etcd2-implementation-new-version-of-etcd">etcd <code class="prettyprint">etcd2</code> implementation (new version of <code class="prettyprint">etcd</code>)</h3>
 
 <p>This topology service plugin is meant to use etcd clusters as storage backend
 for the topology data. This topology service supports version 3 and up of the
@@ -663,18 +663,18 @@ service. It is described by the addresses of the servers (comma separated list),
 and by the root directory to put the Vitess data in. For instance, assuming we
 want to use servers <code class="prettyprint">http://global_server1,http://global_server2</code> in path
 <code class="prettyprint">/vitess/global</code>:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="c"># Set the following flags to let Vitess use this global server,</span>
-<span class="c"># and simplify the example below:</span>
-<span class="c"># -topo_implementation etcd2</span>
-<span class="c"># -topo_global_server_address http://global_server1,http://global_server2</span>
-<span class="c"># -topo_global_root /vitess/global</span>
-<span class="nv">TOPOLOGY</span><span class="o">=</span><span class="err">&quot;</span>-topo_implementation etcd2 -topo_global_server_address http://global_server1,http://global_server2 -topo_global_root /vitess/global
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="c1"># Set the following flags to let Vitess use this global server,</span>
+<span class="c1"># and simplify the example below:</span>
+<span class="c1"># -topo_implementation etcd2</span>
+<span class="c1"># -topo_global_server_address http://global_server1,http://global_server2</span>
+<span class="c1"># -topo_global_root /vitess/global</span>
+<span class="nv">TOPOLOGY</span><span class="o">=</span><span class="s2">&quot;-topo_implementation etcd2 -topo_global_server_address http://global_server1,http://global_server2 -topo_global_root /vitess/global</span>
 </code></pre></div>
 <p>Then to add a cell whose local topology servers
 <code class="prettyprint">http://cell1_server1,http://cell1_server2</code> will store their data under the
 directory <code class="prettyprint">/vitess/cell1</code>:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="c"># Reference cell1 in the global topology service:</span>
-<span class="c"># (the TOPOLOGY variable is defined in the previous section)</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="c1"># Reference cell1 in the global topology service:</span>
+<span class="c1"># (the TOPOLOGY variable is defined in the previous section)</span>
 vtctl <span class="nv">$TOPOLOGY</span> AddCellInfo <span class="se">\</span>
   -server_address http://cell1_server1,http://cell1_server2 <span class="se">\</span>
   -root /vitess/cell1 <span class="se">\</span>
@@ -684,28 +684,7 @@ vtctl <span class="nv">$TOPOLOGY</span> AddCellInfo <span class="se">\</span>
 global and local data. A local cell record still needs to be created, just use
 the same server address and, very importantly, a <em>different</em> root directory.</p>
 
-<h4 id="implementation-details">Implementation Details</h4>
-
-<p>We use the following paths:</p>
-
-<p><em>Global Cell</em>:</p>
-
-<ul>
-<li>Election path: <code class="prettyprint">elections/&lt;name&gt;</code></li>
-<li>CellInfo path: <code class="prettyprint">cells/&lt;cell name&gt;/CellInfo</code></li>
-<li>Keyspace: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/Keyspace</code></li>
-<li>Shard: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/shards/&lt;shard&gt;/Shard</code></li>
-<li>VSchema: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/VSchema</code></li>
-</ul>
-
-<p><em>Local Cell</em>:</p>
-
-<ul>
-<li>Tablet: <code class="prettyprint">tablets/&lt;cell&gt;-&lt;uid&gt;/Tablet</code></li>
-<li>Replication Graph: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/shards/&lt;shard&gt;/ShardReplication</code></li>
-<li>SrvKeyspace: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/SrvKeyspace</code></li>
-<li>SrvVSchema: <code class="prettyprint">SvrVSchema</code></li>
-</ul>
+<h4 id="implementation-details">Implementation details</h4>
 
 <p>For locks, we use a subdirectory named <code class="prettyprint">locks</code> in the directory to lock, and an
 ephemeral file in that subdirectory (it is associated with a lease, whose TTL
@@ -718,34 +697,7 @@ a similar method as the locks, with ephemeral files.</p>
 
 <p>We store the proto3 binary data for each object (as the v3 API allows us to store binary data).</p>
 
-<h3 id="old-etcd-etcd-implementaion-deprecated-use-etcd2-instead">Old etcd <code class="prettyprint">etcd</code> Implementaion (deprecated, use <code class="prettyprint">etcd2</code> instead)</h3>
-
-<p>This old <code class="prettyprint">etcd</code> topology service is deprecated, and will be removed in
-Vitess version 2.2. Please use <code class="prettyprint">etcd2</code> instead, and see the <code class="prettyprint">topo2topo</code> section
-below for migration.</p>
-
-<p>Our etcd implementation is based on a command-line parameter that gives the
-location(s) of the global etcd server. Then we query the path <code class="prettyprint">/vt/cells</code> and
-each file in there is named after a cell, and contains the list of etcd servers
-for that cell. Each cell server files are stored in <code class="prettyprint">/vt/</code>.</p>
-
-<p>We use the <code class="prettyprint">_Data</code> filename to store the data, JSON encoded.</p>
-
-<p>For locking, we store a <code class="prettyprint">_Lock</code> file with various contents in the directory that
-contains the object to lock.</p>
-
-<p>We use the following paths:</p>
-
-<ul>
-<li>Keyspace: <code class="prettyprint">/vt/keyspaces/&lt;keyspace&gt;/_Data</code></li>
-<li>Shard: <code class="prettyprint">/vt/keyspaces/&lt;keyspace&gt;/&lt;shard&gt;/_Data</code></li>
-<li>Tablet: <code class="prettyprint">/vt/tablets/&lt;cell&gt;-&lt;uid&gt;/_Data</code></li>
-<li>Replication Graph: <code class="prettyprint">/vt/replication/&lt;keyspace&gt;/&lt;shard&gt;/_Data</code></li>
-<li>SrvKeyspace: <code class="prettyprint">/vt/ns/&lt;keyspace&gt;/_Data</code></li>
-<li>SrvVSchema: <code class="prettyprint">/vt/ns/_VSchema</code></li>
-</ul>
-
-<h3 id="consul-consul-implementation">Consul <code class="prettyprint">consul</code> Implementation</h3>
+<h3 id="consul-consul-implementation">Consul <code class="prettyprint">consul</code> implementation</h3>
 
 <p>This topology service plugin is meant to use Consul clusters as storage backend
 for the topology data.</p>
@@ -755,18 +707,18 @@ service. It is described by the address of a server,
 and by the root node path to put the Vitess data in (it cannot start with <code class="prettyprint">/</code>). For instance, assuming we
 want to use servers <code class="prettyprint">global_server:global_port</code> with node path
 <code class="prettyprint">vitess/global</code>:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="c"># Set the following flags to let Vitess use this global server,</span>
-<span class="c"># and simplify the example below:</span>
-<span class="c"># -topo_implementation consul</span>
-<span class="c"># -topo_global_server_address global_server:global_port</span>
-<span class="c"># -topo_global_root vitess/global</span>
-<span class="nv">TOPOLOGY</span><span class="o">=</span><span class="err">&quot;</span>-topo_implementation consul -topo_global_server_address global_server:global_port -topo_global_root vitess/global
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="c1"># Set the following flags to let Vitess use this global server,</span>
+<span class="c1"># and simplify the example below:</span>
+<span class="c1"># -topo_implementation consul</span>
+<span class="c1"># -topo_global_server_address global_server:global_port</span>
+<span class="c1"># -topo_global_root vitess/global</span>
+<span class="nv">TOPOLOGY</span><span class="o">=</span><span class="s2">&quot;-topo_implementation consul -topo_global_server_address global_server:global_port -topo_global_root vitess/global</span>
 </code></pre></div>
 <p>Then to add a cell whose local topology server
 <code class="prettyprint">cell1_server1:cell1_port</code> will store their data under the
 directory <code class="prettyprint">vitess/cell1</code>:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="c"># Reference cell1 in the global topology service:</span>
-<span class="c"># (the TOPOLOGY variable is defined in the previous section)</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="c1"># Reference cell1 in the global topology service:</span>
+<span class="c1"># (the TOPOLOGY variable is defined in the previous section)</span>
 vtctl <span class="nv">$TOPOLOGY</span> AddCellInfo <span class="se">\</span>
   -server_address cell1_server1:cell1_port <span class="se">\</span>
   -root vitess/cell1 <span class="se">\</span>
@@ -776,28 +728,7 @@ vtctl <span class="nv">$TOPOLOGY</span> AddCellInfo <span class="se">\</span>
 global and local data. A local cell record still needs to be created, just use
 the same server address and, very importantly, a <em>different</em> root node path.</p>
 
-<h4 id="implementation-details">Implementation Details</h4>
-
-<p>We use the following paths:</p>
-
-<p><em>Global Cell</em>:</p>
-
-<ul>
-<li>Election path: <code class="prettyprint">elections/&lt;name&gt;</code></li>
-<li>CellInfo path: <code class="prettyprint">cells/&lt;cell name&gt;/CellInfo</code></li>
-<li>Keyspace: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/Keyspace</code></li>
-<li>Shard: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/shards/&lt;shard&gt;/Shard</code></li>
-<li>VSchema: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/VSchema</code></li>
-</ul>
-
-<p><em>Local Cell</em>:</p>
-
-<ul>
-<li>Tablet: <code class="prettyprint">tablets/&lt;cell&gt;-&lt;uid&gt;/Tablet</code></li>
-<li>Replication Graph: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/shards/&lt;shard&gt;/ShardReplication</code></li>
-<li>SrvKeyspace: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/SrvKeyspace</code></li>
-<li>SrvVSchema: <code class="prettyprint">SvrVSchema</code></li>
-</ul>
+<h4 id="implementation-details">Implementation details</h4>
 
 <p>For locks, we use a file named <code class="prettyprint">Lock</code> in the directory to lock, and the regular
 Consul Lock API.</p>
@@ -806,13 +737,11 @@ Consul Lock API.</p>
 Consul Lock API. The contents of the lock file is the ID of the current master.</p>
 
 <p>Watches use the Consul long polling Get call. They cannot be interrupted, so we
-use a long poll whose duration is set by the <code class="prettyprint">-topo_consul_watch_poll_duration</code>
-flag. Canceling a watch may have to wait until the end of a polling cycle with
-that duration before returning.</p>
+use a long poll whose duration is set by the
+<code class="prettyprint">-topo_consul_watch_poll_duration</code> flag. Canceling a watch may have to
+wait until the end of a polling cycle with that duration before returning.</p>
 
-<p>We store the proto3 binary data for each object.</p>
-
-<h2 id="running-in-only-one-cell">Running In Only One Cell</h2>
+<h2 id="running-in-only-one-cell">Running in only one cell</h2>
 
 <p>The topology service is meant to be distributed across multiple cells, and
 survive single cell outages. However, one common usage is to run a Vitess
@@ -829,7 +758,7 @@ cell as well. Let&#39;s use a short cell name, like <code class="prettyprint">lo
 that topology server will later on be moved to a different topology service,
 which will have the real cell name.</p>
 
-<h3 id="extending-to-more-cells">Extending To More Cells</h3>
+<h3 id="extending-to-more-cells">Extending to more cells</h3>
 
 <p>To then run in multiple cells, the current topology service needs to be split
 into a global instance and one local instance per cell. Whereas, the initial
@@ -842,9 +771,9 @@ cell and run <code class="prettyprint">vtctl AddCellinfo</code> as was done for 
 vtgates can now be started in the second cell, and used normally.</p>
 
 <p>vtgate can then be configured with a list of cells to watch for tablets using
-the <code class="prettyprint">-cells_to_watch</code> command line parameter. It can then use all tablets in all
-cells to route traffic. Note this is necessary to access the master in another
-cell.</p>
+the <code class="prettyprint">-cells_to_watch</code> command line parameter. It can then use all tablets in
+all cells to route traffic. Note this is necessary to access the master in
+another cell.</p>
 
 <p>After the extension to two cells, the original topo service contains both the
 global topology data, and the first cell topology data. The more symetrical
@@ -880,7 +809,7 @@ contains local topology data about Tablets, and roll-ups of global data for
 efficient access. Typically, it has 3 servers in each cell.</li>
 </ul>
 
-<h2 id="migration-between-implementations">Migration Between Implementations</h2>
+<h2 id="migration-between-implementations">Migration between implementations</h2>
 
 <p>We provide the <code class="prettyprint">topo2topo</code> binary file to migrate between one implementation
 and another of the topology service.</p>
@@ -910,57 +839,83 @@ the UI also shows the new data.</li>
 
 <p>Sample commands to migrate from deprecated <code class="prettyprint">zookeeper</code> to <code class="prettyprint">zk2</code>
 topology would be:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="c"># Let&#39;s assume the zookeeper client config file is already</span>
-<span class="c"># exported in $ZK_CLIENT_CONFIG, and it contains a global record</span>
-<span class="c"># pointing to: global_server1,global_server2</span>
-<span class="c"># an a local cell cell1 pointing to cell1_server1,cell1_server2</span>
-<span class="c">#</span>
-<span class="c"># The existing directories created by Vitess are:</span>
-<span class="c"># /zk/global/vt/...</span>
-<span class="c"># /zk/cell1/vt/...</span>
-<span class="c">#</span>
-<span class="c"># The new zk2 implementation can use any root, so we will use:</span>
-<span class="c"># /vitess/global in the global topology service, and:</span>
-<span class="c"># /vitess/cell1 in the local topology service.</span>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="c1"># Let&#39;s assume the zookeeper client config file is already</span>
+<span class="c1"># exported in $ZK_CLIENT_CONFIG, and it contains a global record</span>
+<span class="c1"># pointing to: global_server1,global_server2</span>
+<span class="c1"># an a local cell cell1 pointing to cell1_server1,cell1_server2</span>
+<span class="c1">#</span>
+<span class="c1"># The existing directories created by Vitess are:</span>
+<span class="c1"># /zk/global/vt/...</span>
+<span class="c1"># /zk/cell1/vt/...</span>
+<span class="c1">#</span>
+<span class="c1"># The new zk2 implementation can use any root, so we will use:</span>
+<span class="c1"># /vitess/global in the global topology service, and:</span>
+<span class="c1"># /vitess/cell1 in the local topology service.</span>
 
-<span class="c"># Create the new topology service roots in global and local cell.</span>
+<span class="c1"># Create the new topology service roots in global and local cell.</span>
 zk -server global_server1,global_server2 touch -p /vitess/global
 zk -server cell1_server1,cell1_server2 touch -p /vitess/cell1
 
-<span class="c"># Store the flags in a shell variable to simplify the example below.</span>
+<span class="c1"># Store the flags in a shell variable to simplify the example below.</span>
 <span class="nv">TOPOLOGY</span><span class="o">=</span><span class="s2">&quot;-topo_implementation zk2 -topo_global_server_address global_server1,global_server2 -topo_global_root /vitess/global&quot;</span>
 
-<span class="c"># Reference cell1 in the global topology service:</span>
+<span class="c1"># Reference cell1 in the global topology service:</span>
 vtctl <span class="nv">$TOPOLOGY</span> AddCellInfo <span class="se">\</span>
   -server_address cell1_server1,cell1_server2 <span class="se">\</span>
   -root /vitess/cell1 <span class="se">\</span>
   cell1
 
-<span class="c"># Now copy the topology. Note the old zookeeper implementation doesn&#39;t need</span>
-<span class="c"># any server or root parameter, as it reads ZK_CLIENT_CONFIG.</span>
+<span class="c1"># Now copy the topology. Note the old zookeeper implementation doesn&#39;t need</span>
+<span class="c1"># any server or root parameter, as it reads ZK_CLIENT_CONFIG.</span>
 topo2topo <span class="se">\</span>
   -from_implementation zookeeper <span class="se">\</span>
   -to_implementation zk2 <span class="se">\</span>
   -to_server global_server1,global_server2 <span class="se">\</span>
   -to_root /vitess/global <span class="se">\</span>
 
-<span class="c"># Rebuild SvrKeyspace objects in new service, for each keyspace.</span>
+<span class="c1"># Rebuild SvrKeyspace objects in new service, for each keyspace.</span>
 vtctl <span class="nv">$TOPOLOGY</span> RebuildKeyspaceGraph keyspace1
 vtctl <span class="nv">$TOPOLOGY</span> RebuildKeyspaceGraph keyspace2
 
-<span class="c"># Rebuild SrvVSchema objects in new service.</span>
+<span class="c1"># Rebuild SrvVSchema objects in new service.</span>
 vtctl <span class="nv">$TOPOLOGY</span> RebuildVSchemaGraph
 
-<span class="c"># Now restart all vtgate, vttablet, vtctld processes replacing:</span>
-<span class="c"># -topo_implementation zookeeper</span>
-<span class="c"># With:</span>
-<span class="c"># -topo_implementation zk2</span>
-<span class="c"># -topo_global_server_address global_server1,global_server2</span>
-<span class="c"># -topo_global_root /vitess/global</span>
-<span class="c">#</span>
-<span class="c"># After this, the ZK_CLIENT_CONF file and environment variables are not needed</span>
-<span class="c"># any more.</span>
+<span class="c1"># Now restart all vtgate, vttablet, vtctld processes replacing:</span>
+<span class="c1"># -topo_implementation zookeeper</span>
+<span class="c1"># With:</span>
+<span class="c1"># -topo_implementation zk2</span>
+<span class="c1"># -topo_global_server_address global_server1,global_server2</span>
+<span class="c1"># -topo_global_root /vitess/global</span>
+<span class="c1">#</span>
+<span class="c1"># After this, the ZK_CLIENT_CONF file and environment variables are not needed</span>
+<span class="c1"># any more.</span>
 </code></pre></div>
+<h3 id="migration-using-the-tee-implementation">Migration using the <code class="prettyprint">Tee</code> implementation</h3>
+
+<p>If your migration is more complex, or has special requirements, we also support
+a &#39;tee&#39; implementation of the topo service interface. It is defined in
+<code class="prettyprint">go/vt/topo/helpers/tee.go</code>. It allows communicating to two topo services,
+and the migration uses multiple phases:</p>
+
+<ul>
+<li>Start with the old topo service implementation we want to replace.</li>
+<li>Bring up the new topo service, with the same cells.</li>
+<li>Use <code class="prettyprint">topo2topo</code> to copy the current data from the old to the new topo.</li>
+<li>Configure a Tee topo implementation to maintain both services.
+
+<ul>
+<li>Note we don&#39;t expose a plugin for this, so a small code change is necessary.</li>
+<li>all updates will go to both services.</li>
+<li>the <code class="prettyprint">primary</code> topo service is the one we will get errors from, if any.</li>
+<li>the <code class="prettyprint">secondary</code> topo service is just kept in sync.</li>
+<li>at first, use the old topo service as <code class="prettyprint">primary</code>, and the new one as
+<code class="prettyprint">secondary</code>.</li>
+<li>then, change the configuration to use the new one as <code class="prettyprint">primary</code>, and the
+old one as <code class="prettyprint">secondary</code>. Reverse the lock order here.</li>
+<li>then rollout a configuration to just use the new service.</li>
+</ul></li>
+</ul>
+
       </div>
     </div>
   </div>
