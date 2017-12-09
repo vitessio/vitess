@@ -50,7 +50,6 @@ Vitess client libraries follow these core principles:
   database drivers. For example, current languages implement the following:
   * Go: [database/sql package](http://golang.org/pkg/database/sql/)
   * Java: [JDBC](https://docs.oracle.com/javase/tutorial/jdbc/index.html)
-  * PHP: [PHP Data Objects \(PDO\)](http://php.net/manual/en/intro.pdo.php)
   * Python: [PEP 0249 DB API](https://www.python.org/dev/peps/pep-0249/)
 * Libraries provide a thin wrapper around the proto3 service definitions.
   Those wrappers could be extended with adapters to higher level libraries
@@ -98,10 +97,6 @@ test your application against an actual instance.
 ### Java
 
 * [Java client](https://github.com/youtube/vitess/blob/master/java/client/src/main/java/io/vitess/client/VTGateConn.java)
-
-### PHP
-
-* [PHP client](https://github.com/youtube/vitess/tree/master/php)
 
 ### Python
 
