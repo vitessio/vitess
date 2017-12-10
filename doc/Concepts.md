@@ -56,7 +56,7 @@ lag). The slaves can serve read-only traffic (with eventual consistency guarante
 execute long-running data analysis tools, or perform administrative tasks
 (backup, restore, diff, etc.).
 
-An unsharded keyspace has effecitvely one shard.
+An unsharded keyspace has effectively one shard.
 Vitess names the shard `0` by convention. When sharded, a keyspace has `N`
 shards with non-overlapping data.
 
