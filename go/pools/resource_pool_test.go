@@ -408,6 +408,9 @@ func TestIdleTimeout(t *testing.T) {
 	if count.Get() != 1 {
 		t.Errorf("Expecting 1, received %d", count.Get())
 	}
+	if p.IdleClosed() != 0 {
+		t.Errorf("Expecting 0, received %d", p.IdleClosed())
+	}
 	p.Put(r)
 	if lastID.Get() != 1 {
 		t.Errorf("Expecting 1, received %d", count.Get())
@@ -415,10 +418,16 @@ func TestIdleTimeout(t *testing.T) {
 	if count.Get() != 1 {
 		t.Errorf("Expecting 1, received %d", count.Get())
 	}
+	if p.IdleClosed() != 0 {
+		t.Errorf("Expecting 0, received %d", p.IdleClosed())
+	}
 	time.Sleep(20 * time.Millisecond)
 
 	if count.Get() != 0 {
 		t.Errorf("Expecting 0, received %d", count.Get())
+	}
+	if p.IdleClosed() != 1 {
+		t.Errorf("Expecting 1, received %d", p.IdleClosed())
 	}
 	r, err = p.Get(ctx)
 	if err != nil {
@@ -429,6 +438,9 @@ func TestIdleTimeout(t *testing.T) {
 	}
 	if count.Get() != 1 {
 		t.Errorf("Expecting 1, received %d", count.Get())
+	}
+	if p.IdleClosed() != 1 {
+		t.Errorf("Expecting 1, received %d", p.IdleClosed())
 	}
 
 	// sleep to let the idle closer run while all resources are in use
@@ -440,7 +452,9 @@ func TestIdleTimeout(t *testing.T) {
 	if count.Get() != 1 {
 		t.Errorf("Expecting 1, received %d", count.Get())
 	}
-
+	if p.IdleClosed() != 1 {
+		t.Errorf("Expecting 1, received %d", p.IdleClosed())
+	}
 	p.Put(r)
 	r, err = p.Get(ctx)
 	if err != nil {
@@ -451,6 +465,9 @@ func TestIdleTimeout(t *testing.T) {
 	}
 	if count.Get() != 1 {
 		t.Errorf("Expecting 1, received %d", count.Get())
+	}
+	if p.IdleClosed() != 1 {
+		t.Errorf("Expecting 1, received %d", p.IdleClosed())
 	}
 
 	// the idle close thread wakes up every 1/100 of the idle time, so ensure
@@ -465,6 +482,9 @@ func TestIdleTimeout(t *testing.T) {
 	if count.Get() != 1 {
 		t.Errorf("Expecting 1, received %d", count.Get())
 	}
+	if p.IdleClosed() != 1 {
+		t.Errorf("Expecting 1, received %d", p.IdleClosed())
+	}
 
 	p.SetIdleTimeout(10 * time.Millisecond)
 	time.Sleep(20 * time.Millisecond)
@@ -474,7 +494,9 @@ func TestIdleTimeout(t *testing.T) {
 	if count.Get() != 0 {
 		t.Errorf("Expecting 1, received %d", count.Get())
 	}
-
+	if p.IdleClosed() != 2 {
+		t.Errorf("Expecting 2, received %d", p.IdleClosed())
+	}
 }
 
 func TestCreateFail(t *testing.T) {
