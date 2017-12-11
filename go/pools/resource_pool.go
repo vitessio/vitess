@@ -53,6 +53,8 @@ type ResourcePool struct {
 	idleTimeout sync2.AtomicDuration
 
 	// stats
+	active     sync2.AtomicInt64
+	inUse      sync2.AtomicInt64
 	waitCount  sync2.AtomicInt64
 	waitTime   sync2.AtomicDuration
 	idleClosed sync2.AtomicInt64
@@ -152,7 +154,9 @@ func (rp *ResourcePool) idleCloser() {
 					wrapper.resource.Close()
 					wrapper.resource = nil
 					rp.idleClosed.Add(1)
+					rp.active.Add(-1)
 				}
+
 				rp.resources <- wrapper
 			}
 		}
@@ -201,8 +205,11 @@ func (rp *ResourcePool) get(ctx context.Context, wait bool) (resource Resource, 
 		wrapper.resource, err = rp.factory()
 		if err != nil {
 			rp.resources <- resourceWrapper{}
+			return nil, err
 		}
+		rp.active.Add(1)
 	}
+	rp.inUse.Add(1)
 	return wrapper.resource, err
 }
 
@@ -214,12 +221,15 @@ func (rp *ResourcePool) Put(resource Resource) {
 	var wrapper resourceWrapper
 	if resource != nil {
 		wrapper = resourceWrapper{resource, time.Now()}
+	} else {
+		rp.active.Add(-1)
 	}
 	select {
 	case rp.resources <- wrapper:
 	default:
 		panic(errors.New("attempt to Put into a full ResourcePool"))
 	}
+	rp.inUse.Add(-1)
 }
 
 // SetCapacity changes the capacity of the pool.
@@ -254,6 +264,7 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 			wrapper := <-rp.resources
 			if wrapper.resource != nil {
 				wrapper.resource.Close()
+				rp.active.Add(-1)
 			}
 		}
 	} else {
@@ -279,13 +290,17 @@ func (rp *ResourcePool) SetIdleTimeout(idleTimeout time.Duration) {
 
 // StatsJSON returns the stats in JSON format.
 func (rp *ResourcePool) StatsJSON() string {
-	c, a, mx, wc, wt, it := rp.Stats()
-	return fmt.Sprintf(`{"Capacity": %v, "Available": %v, "MaxCapacity": %v, "WaitCount": %v, "WaitTime": %v, "IdleTimeout": %v}`, c, a, mx, wc, int64(wt), int64(it))
-}
-
-// Stats returns the stats.
-func (rp *ResourcePool) Stats() (capacity, available, maxCap, waitCount int64, waitTime, idleTimeout time.Duration) {
-	return rp.Capacity(), rp.Available(), rp.MaxCap(), rp.WaitCount(), rp.WaitTime(), rp.IdleTimeout()
+	return fmt.Sprintf(`{"Capacity": %v, "Available": %v, "Active": %v, "InUse": %v, "MaxCapacity": %v, "WaitCount": %v, "WaitTime": %v, "IdleTimeout": %v, "IdleClosed": %v}`,
+		rp.Capacity(),
+		rp.Available(),
+		rp.Active(),
+		rp.InUse(),
+		rp.MaxCap(),
+		rp.WaitCount(),
+		rp.WaitTime().Nanoseconds(),
+		rp.IdleTimeout().Nanoseconds(),
+		rp.IdleClosed(),
+	)
 }
 
 // Capacity returns the capacity.
@@ -293,9 +308,20 @@ func (rp *ResourcePool) Capacity() int64 {
 	return rp.capacity.Get()
 }
 
-// Available returns the number of currently unused resources.
+// Available returns the number of currently unused and available resources.
 func (rp *ResourcePool) Available() int64 {
 	return int64(len(rp.resources))
+}
+
+// Active returns the number of active (i.e. non-nil) resources either in the
+// pool or claimed for use
+func (rp *ResourcePool) Active() int64 {
+	return rp.active.Get()
+}
+
+// InUse returns the number of claimed resources from the pool
+func (rp *ResourcePool) InUse() int64 {
+	return rp.inUse.Get()
 }
 
 // MaxCap returns the max capacity.
