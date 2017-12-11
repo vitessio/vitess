@@ -71,6 +71,7 @@ func NewConnectionPool(name string, capacity int, idleTimeout time.Duration) *Co
 	stats.Publish(name+"WaitCount", stats.IntFunc(cp.WaitCount))
 	stats.Publish(name+"WaitTime", stats.DurationFunc(cp.WaitTime))
 	stats.Publish(name+"IdleTimeout", stats.DurationFunc(cp.IdleTimeout))
+	stats.Publish(name+"IdleClosed", stats.IntFunc(cp.IdleClosed))
 	return cp
 }
 
@@ -240,4 +241,13 @@ func (cp *ConnectionPool) IdleTimeout() time.Duration {
 		return 0
 	}
 	return p.IdleTimeout()
+}
+
+// IdleClosed returns the number of closed connections for the pool.
+func (cp *ConnectionPool) IdleClosed() int64 {
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.IdleClosed()
 }
