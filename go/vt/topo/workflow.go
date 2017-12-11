@@ -51,7 +51,7 @@ func (ts *Server) GetWorkflowNames(ctx context.Context) ([]string, error) {
 	case ErrNoNode:
 		return nil, nil
 	case nil:
-		return entries, nil
+		return DirEntriesToStringArray(entries), nil
 	default:
 		return nil, err
 	}

@@ -114,7 +114,7 @@ func (ex *backendExplorer) HandlePath(nodePath string, r *http.Request) *Result 
 
 	// It worked as a directory, clear any file error.
 	result.Error = ""
-	result.Children = children
+	result.Children = topo.DirEntriesToStringArray(children)
 	return result
 }
 

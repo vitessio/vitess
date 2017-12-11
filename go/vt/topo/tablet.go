@@ -463,7 +463,7 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cell string) ([]*topodat
 
 	result := make([]*topodatapb.TabletAlias, len(children))
 	for i, child := range children {
-		result[i], err = topoproto.ParseTabletAlias(child)
+		result[i], err = topoproto.ParseTabletAlias(child.Name)
 		if err != nil {
 			return nil, err
 		}

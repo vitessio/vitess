@@ -274,7 +274,7 @@ func (ts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
 	children, err := ts.globalCell.ListDir(ctx, KeyspacesPath)
 	switch err {
 	case nil:
-		return children, nil
+		return DirEntriesToStringArray(children), nil
 	case ErrNoNode:
 		return nil, nil
 	default:
@@ -296,5 +296,5 @@ func (ts *Server) GetShardNames(ctx context.Context, keyspace string) ([]string,
 		}
 		return nil, err
 	}
-	return children, err
+	return DirEntriesToStringArray(children), err
 }

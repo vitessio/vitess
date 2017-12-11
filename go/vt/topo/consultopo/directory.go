@@ -26,7 +26,7 @@ import (
 )
 
 // ListDir is part of the topo.Conn interface.
-func (s *Server) ListDir(ctx context.Context, dirPath string) ([]string, error) {
+func (s *Server) ListDir(ctx context.Context, dirPath string) ([]topo.DirEntry, error) {
 	nodePath := path.Join(s.root, dirPath) + "/"
 	if nodePath == "//" {
 		// Special case where c.root is "/", dirPath is empty,
@@ -45,7 +45,7 @@ func (s *Server) ListDir(ctx context.Context, dirPath string) ([]string, error) 
 	}
 
 	prefixLen := len(nodePath)
-	var result []string
+	var result []topo.DirEntry
 	for _, p := range keys {
 		// Remove the prefix, base path.
 		if !strings.HasPrefix(p, nodePath) {
@@ -59,8 +59,10 @@ func (s *Server) ListDir(ctx context.Context, dirPath string) ([]string, error) 
 		}
 
 		// Remove duplicates, add to list.
-		if len(result) == 0 || result[len(result)-1] != p {
-			result = append(result, p)
+		if len(result) == 0 || result[len(result)-1].Name != p {
+			result = append(result, topo.DirEntry{
+				Name: p,
+			})
 		}
 	}
 

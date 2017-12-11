@@ -20,11 +20,12 @@ import (
 	"path"
 	"sort"
 
+	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 )
 
 // ListDir is part of the topo.Conn interface.
-func (zs *Server) ListDir(ctx context.Context, dirPath string) ([]string, error) {
+func (zs *Server) ListDir(ctx context.Context, dirPath string) ([]topo.DirEntry, error) {
 	zkPath := path.Join(zs.root, dirPath)
 
 	children, _, err := zs.conn.Children(ctx, zkPath)
@@ -32,5 +33,12 @@ func (zs *Server) ListDir(ctx context.Context, dirPath string) ([]string, error)
 		return nil, convertError(err)
 	}
 	sort.Strings(children)
-	return children, nil
+
+	result := make([]topo.DirEntry, len(children))
+	for i, child := range children {
+		result[i] = topo.DirEntry{
+			Name: child,
+		}
+	}
+	return result, nil
 }
