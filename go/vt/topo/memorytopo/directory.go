@@ -18,7 +18,6 @@ package memorytopo
 
 import (
 	"fmt"
-	"sort"
 
 	"golang.org/x/net/context"
 
@@ -26,7 +25,7 @@ import (
 )
 
 // ListDir is part of the topo.Conn interface.
-func (c *Conn) ListDir(ctx context.Context, dirPath string) ([]string, error) {
+func (c *Conn) ListDir(ctx context.Context, dirPath string) ([]topo.DirEntry, error) {
 	c.factory.mu.Lock()
 	defer c.factory.mu.Unlock()
 
@@ -41,10 +40,12 @@ func (c *Conn) ListDir(ctx context.Context, dirPath string) ([]string, error) {
 		return nil, fmt.Errorf("node %v in cell %v is not a directory", dirPath, c.cell)
 	}
 
-	var result []string
+	var result []topo.DirEntry
 	for n := range n.children {
-		result = append(result, n)
+		result = append(result, topo.DirEntry{
+			Name: n,
+		})
 	}
-	sort.Strings(result)
+	topo.DirEntriesSortByName(result)
 	return result, nil
 }

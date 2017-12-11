@@ -17,6 +17,8 @@ limitations under the License.
 package topo
 
 import (
+	"sort"
+
 	"golang.org/x/net/context"
 )
 
@@ -38,10 +40,10 @@ type Conn interface {
 	//
 
 	// ListDir returns the entries in a directory.  The returned
-	// list should be sorted (by sort.Strings for instance).
+	// list should be sorted by entry.Name.
 	// If there are no files under the provided path, returns ErrNoNode.
 	// dirPath is a path relative to the root directory of the cell.
-	ListDir(ctx context.Context, dirPath string) ([]string, error)
+	ListDir(ctx context.Context, dirPath string) ([]DirEntry, error)
 
 	//
 	// File support
@@ -167,6 +169,53 @@ type Conn interface {
 
 	// Close closes the connection to the server.
 	Close()
+}
+
+// DirEntryType is the type of an entry in a directory.
+type DirEntryType int
+
+const (
+	// TypeDirectory describes a directory.
+	TypeDirectory DirEntryType = iota
+
+	// TypeFile describes a file.
+	TypeFile
+)
+
+// DirEntry is an entry in a directory, as returned by ListDir.
+type DirEntry struct {
+	// Name is the name of the entry.
+	Name string
+
+	// Type is the DirEntryType of the entry.
+	Type DirEntryType
+
+	// Ephemeral is set if the directory / file only contains
+	// data that was not set by the file API, like lock files
+	// or master-election related files.
+	Ephemeral bool
+}
+
+// DirEntriesToStringArray is a helper method to extract the names
+// from an []DirEntry
+func DirEntriesToStringArray(entries []DirEntry) []string {
+	result := make([]string, len(entries))
+	for i, e := range entries {
+		result[i] = e.Name
+	}
+	return result
+}
+
+// dirEntries is used for sorting.
+type dirEntries []DirEntry
+
+func (e dirEntries) Len() int           { return len(e) }
+func (e dirEntries) Swap(i, j int)      { e[i], e[j] = e[j], e[i] }
+func (e dirEntries) Less(i, j int) bool { return e[i].Name < e[j].Name }
+
+// DirEntriesSortByName sorts a slice of DirEntry objects by Name.
+func DirEntriesSortByName(entries []DirEntry) {
+	sort.Sort(dirEntries(entries))
 }
 
 // Version is an interface that describes a file version.

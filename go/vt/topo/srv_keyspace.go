@@ -107,7 +107,7 @@ func (ts *Server) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]strin
 	children, err := conn.ListDir(ctx, KeyspacesPath)
 	switch err {
 	case nil:
-		return children, nil
+		return DirEntriesToStringArray(children), nil
 	case ErrNoNode:
 		return nil, nil
 	default:

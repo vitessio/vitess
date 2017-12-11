@@ -53,7 +53,7 @@ func (ts *Server) GetCellInfoNames(ctx context.Context) ([]string, error) {
 	case ErrNoNode:
 		return nil, nil
 	case nil:
-		return entries, nil
+		return DirEntriesToStringArray(entries), nil
 	default:
 		return nil, err
 	}
@@ -171,5 +171,9 @@ func (ts *Server) DeleteCellInfo(ctx context.Context, cell string) error {
 func (ts *Server) GetKnownCells(ctx context.Context) ([]string, error) {
 	// Note we use the global read-only cell here, as the result
 	// is not time sensitive.
-	return ts.globalReadOnlyCell.ListDir(ctx, cellsPath)
+	entries, err := ts.globalReadOnlyCell.ListDir(ctx, cellsPath)
+	if err != nil {
+		return nil, err
+	}
+	return DirEntriesToStringArray(entries), nil
 }

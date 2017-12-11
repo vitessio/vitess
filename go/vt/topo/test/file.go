@@ -35,7 +35,7 @@ func checkFile(t *testing.T, ts *topo.Server) {
 	if err != nil {
 		t.Fatalf("ConnForCell(global) failed: %v", err)
 	}
-	checkFileInCell(t, conn)
+	checkFileInCell(t, conn, true /*hasCells*/)
 
 	// local cell
 	t.Logf("===   checkFileInCell global")
@@ -43,14 +43,20 @@ func checkFile(t *testing.T, ts *topo.Server) {
 	if err != nil {
 		t.Fatalf("ConnForCell(test) failed: %v", err)
 	}
-	checkFileInCell(t, conn)
+	checkFileInCell(t, conn, false /*hasCells*/)
 }
 
-func checkFileInCell(t *testing.T, conn topo.Conn) {
+func checkFileInCell(t *testing.T, conn topo.Conn, hasCells bool) {
 	ctx := context.Background()
 
 	// ListDir root: nothing.
-	checkListDir(ctx, t, conn, "/", nil)
+	var expected []topo.DirEntry
+	if hasCells {
+		expected = append(expected, topo.DirEntry{
+			Name: "cells",
+		})
+	}
+	checkListDir(ctx, t, conn, "/", expected)
 
 	// Get with no file -> ErrNoNode.
 	contents, version, err := conn.Get(ctx, "/myfile")
@@ -65,7 +71,10 @@ func checkFileInCell(t *testing.T, conn topo.Conn) {
 	}
 
 	// See it in the listing now.
-	checkListDir(ctx, t, conn, "/", []string{"myfile"})
+	expected = append(expected, topo.DirEntry{
+		Name: "myfile",
+	})
+	checkListDir(ctx, t, conn, "/", expected)
 
 	// Get should work, get the right contents and version.
 	contents, getVersion, err := conn.Get(ctx, "/myfile")
@@ -147,7 +156,8 @@ func checkFileInCell(t *testing.T, conn topo.Conn) {
 	}
 
 	// ListDir root: nothing.
-	checkListDir(ctx, t, conn, "/", nil)
+	expected = expected[:len(expected)-1]
+	checkListDir(ctx, t, conn, "/", expected)
 
 	// Try to delete again, should fail.
 	if err = conn.Delete(ctx, "/myfile", newVersion); err != topo.ErrNoNode {
@@ -174,7 +184,10 @@ func checkFileInCell(t *testing.T, conn topo.Conn) {
 	}
 
 	// See it in the listing now.
-	checkListDir(ctx, t, conn, "/", []string{"myfile"})
+	expected = append(expected, topo.DirEntry{
+		Name: "myfile",
+	})
+	checkListDir(ctx, t, conn, "/", expected)
 
 	// Unconditional delete.
 	if err = conn.Delete(ctx, "/myfile", nil); err != nil {
@@ -182,5 +195,6 @@ func checkFileInCell(t *testing.T, conn topo.Conn) {
 	}
 
 	// ListDir root: nothing.
-	checkListDir(ctx, t, conn, "/", nil)
+	expected = expected[:len(expected)-1]
+	checkListDir(ctx, t, conn, "/", expected)
 }
