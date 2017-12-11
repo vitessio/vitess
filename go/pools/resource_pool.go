@@ -53,8 +53,9 @@ type ResourcePool struct {
 	idleTimeout sync2.AtomicDuration
 
 	// stats
-	waitCount sync2.AtomicInt64
-	waitTime  sync2.AtomicDuration
+	waitCount  sync2.AtomicInt64
+	waitTime   sync2.AtomicDuration
+	idleClosed sync2.AtomicInt64
 
 	// idle manager
 	idleCtx    context.Context
@@ -150,6 +151,7 @@ func (rp *ResourcePool) idleCloser() {
 				if wrapper.resource != nil && idleTimeout > 0 && wrapper.timeUsed.Add(idleTimeout).Sub(time.Now()) < 0 {
 					wrapper.resource.Close()
 					wrapper.resource = nil
+					rp.idleClosed.Add(1)
 				}
 				rp.resources <- wrapper
 			}
@@ -314,4 +316,9 @@ func (rp *ResourcePool) WaitTime() time.Duration {
 // IdleTimeout returns the idle timeout.
 func (rp *ResourcePool) IdleTimeout() time.Duration {
 	return rp.idleTimeout.Get()
+}
+
+// IdleClosed returns the count of resources closed due to idle timeout.
+func (rp *ResourcePool) IdleClosed() int64 {
+	return rp.idleClosed.Get()
 }
