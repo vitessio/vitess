@@ -55,6 +55,10 @@ type ResourcePool struct {
 	// stats
 	waitCount sync2.AtomicInt64
 	waitTime  sync2.AtomicDuration
+
+	// idle manager
+	idleCtx    context.Context
+	idleCancel context.CancelFunc
 }
 
 type resourceWrapper struct {
@@ -63,7 +67,7 @@ type resourceWrapper struct {
 }
 
 // NewResourcePool creates a new ResourcePool pool.
-// capacity is the number of active resources in the pool:
+// capacity is the number of possible resources in the pool:
 // there can be up to 'capacity' of these at a given time.
 // maxCap specifies the extent to which the pool can be resized
 // in the future through the SetCapacity function.
@@ -83,6 +87,10 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 	for i := 0; i < capacity; i++ {
 		rp.resources <- resourceWrapper{}
 	}
+
+	if idleTimeout != 0 {
+		rp.startIdleCloser(idleTimeout)
+	}
 	return rp
 }
 
@@ -91,12 +99,62 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 // It waits for all resources to be returned (Put).
 // After a Close, Get is not allowed.
 func (rp *ResourcePool) Close() {
+	if rp.idleCancel != nil {
+		rp.idleCancel()
+	}
 	_ = rp.SetCapacity(0)
 }
 
 // IsClosed returns true if the resource pool is closed.
 func (rp *ResourcePool) IsClosed() (closed bool) {
 	return rp.capacity.Get() == 0
+}
+
+// startIdleCloser will kick off a goroutine to periodically sweep for idle
+// connections
+func (rp *ResourcePool) startIdleCloser(idleTimeout time.Duration) {
+	if rp.idleCancel != nil {
+		panic("idle closer already running")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	rp.idleCtx = ctx
+	rp.idleCancel = cancel
+
+	go rp.idleCloser()
+}
+
+// idleCloser runs in a goroutine and periodically sweeps the channel for
+// idle resources
+func (rp *ResourcePool) idleCloser() {
+	for {
+		idleTimeout := rp.idleTimeout.Get()
+		select {
+		case <-rp.idleCtx.Done():
+			return
+
+		// sleep for 1/100 the idle timeout
+		case <-time.After(idleTimeout / 100):
+			available := int(rp.Available())
+
+		IdleScanLoop:
+			for i := 0; i < available; i++ {
+				var wrapper resourceWrapper
+				select {
+				case wrapper, _ = <-rp.resources:
+				default:
+					// stop early if we don't get anything new from the pool
+					break IdleScanLoop
+				}
+
+				if wrapper.resource != nil && idleTimeout > 0 && wrapper.timeUsed.Add(idleTimeout).Sub(time.Now()) < 0 {
+					wrapper.resource.Close()
+					wrapper.resource = nil
+				}
+				rp.resources <- wrapper
+			}
+		}
+	}
 }
 
 // Get will return the next available resource. If capacity
@@ -137,11 +195,6 @@ func (rp *ResourcePool) get(ctx context.Context, wait bool) (resource Resource, 
 	}
 
 	// Unwrap
-	idleTimeout := rp.idleTimeout.Get()
-	if wrapper.resource != nil && idleTimeout > 0 && wrapper.timeUsed.Add(idleTimeout).Sub(time.Now()) < 0 {
-		wrapper.resource.Close()
-		wrapper.resource = nil
-	}
 	if wrapper.resource == nil {
 		wrapper.resource, err = rp.factory()
 		if err != nil {

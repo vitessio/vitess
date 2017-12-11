@@ -405,6 +405,9 @@ func TestIdleTimeout(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unexpected error %v", err)
 	}
+	if count.Get() != 1 {
+		t.Errorf("Expecting 1, received %d", count.Get())
+	}
 	p.Put(r)
 	if lastID.Get() != 1 {
 		t.Errorf("Expecting 1, received %d", count.Get())
@@ -413,6 +416,10 @@ func TestIdleTimeout(t *testing.T) {
 		t.Errorf("Expecting 1, received %d", count.Get())
 	}
 	time.Sleep(20 * time.Millisecond)
+
+	if count.Get() != 0 {
+		t.Errorf("Expecting 0, received %d", count.Get())
+	}
 	r, err = p.Get(ctx)
 	if err != nil {
 		t.Errorf("Unexpected error %v", err)
@@ -423,7 +430,51 @@ func TestIdleTimeout(t *testing.T) {
 	if count.Get() != 1 {
 		t.Errorf("Expecting 1, received %d", count.Get())
 	}
+
+	// sleep to let the idle closer run while all resources are in use
+	// then make sure things are still as we expect
+	time.Sleep(20 * time.Millisecond)
+	if lastID.Get() != 2 {
+		t.Errorf("Expecting 2, received %d", count.Get())
+	}
+	if count.Get() != 1 {
+		t.Errorf("Expecting 1, received %d", count.Get())
+	}
+
 	p.Put(r)
+	r, err = p.Get(ctx)
+	if err != nil {
+		t.Errorf("Unexpected error %v", err)
+	}
+	if lastID.Get() != 2 {
+		t.Errorf("Expecting 2, received %d", count.Get())
+	}
+	if count.Get() != 1 {
+		t.Errorf("Expecting 1, received %d", count.Get())
+	}
+
+	// the idle close thread wakes up every 1/100 of the idle time, so ensure
+	// the timeout change applies to newly added resources
+	p.SetIdleTimeout(1000 * time.Millisecond)
+	p.Put(r)
+
+	time.Sleep(20 * time.Millisecond)
+	if lastID.Get() != 2 {
+		t.Errorf("Expecting 2, received %d", count.Get())
+	}
+	if count.Get() != 1 {
+		t.Errorf("Expecting 1, received %d", count.Get())
+	}
+
+	p.SetIdleTimeout(10 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
+	if lastID.Get() != 2 {
+		t.Errorf("Expecting 2, received %d", count.Get())
+	}
+	if count.Get() != 0 {
+		t.Errorf("Expecting 1, received %d", count.Get())
+	}
+
 }
 
 func TestCreateFail(t *testing.T) {
