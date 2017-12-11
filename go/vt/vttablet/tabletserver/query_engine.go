@@ -220,6 +220,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		stats.Publish("QueryCacheLength", stats.IntFunc(qe.plans.Length))
 		stats.Publish("QueryCacheSize", stats.IntFunc(qe.plans.Size))
 		stats.Publish("QueryCacheCapacity", stats.IntFunc(qe.plans.Capacity))
+		stats.Publish("QueryCacheEvictions", stats.IntFunc(qe.plans.Evictions))
 		stats.Publish("QueryCacheOldest", stats.StringFunc(func() string {
 			return fmt.Sprintf("%v", qe.plans.Oldest())
 		}))
