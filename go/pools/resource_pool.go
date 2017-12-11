@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/timer"
 	"golang.org/x/net/context"
 )
 
@@ -51,6 +52,7 @@ type ResourcePool struct {
 	factory     Factory
 	capacity    sync2.AtomicInt64
 	idleTimeout sync2.AtomicDuration
+	idleTimer   *timer.Timer
 
 	// stats
 	available  sync2.AtomicInt64
@@ -59,10 +61,6 @@ type ResourcePool struct {
 	waitCount  sync2.AtomicInt64
 	waitTime   sync2.AtomicDuration
 	idleClosed sync2.AtomicInt64
-
-	// idle manager
-	idleCtx    context.Context
-	idleCancel context.CancelFunc
 }
 
 type resourceWrapper struct {
@@ -94,7 +92,8 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 	}
 
 	if idleTimeout != 0 {
-		rp.startIdleCloser(idleTimeout)
+		rp.idleTimer = timer.NewTimer(idleTimeout / 10)
+		rp.idleTimer.Start(func() { rp.closeIdleResources() })
 	}
 	return rp
 }
@@ -104,8 +103,8 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 // It waits for all resources to be returned (Put).
 // After a Close, Get is not allowed.
 func (rp *ResourcePool) Close() {
-	if rp.idleCancel != nil {
-		rp.idleCancel()
+	if rp.idleTimer != nil {
+		rp.idleTimer.Stop()
 	}
 	_ = rp.SetCapacity(0)
 }
@@ -115,53 +114,28 @@ func (rp *ResourcePool) IsClosed() (closed bool) {
 	return rp.capacity.Get() == 0
 }
 
-// startIdleCloser will kick off a goroutine to periodically sweep for idle
-// connections
-func (rp *ResourcePool) startIdleCloser(idleTimeout time.Duration) {
-	if rp.idleCancel != nil {
-		panic("idle closer already running")
-	}
+// closeIdleResources scans the pool for idle resources
+func (rp *ResourcePool) closeIdleResources() {
+	available := int(rp.Available())
+	idleTimeout := rp.IdleTimeout()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	rp.idleCtx = ctx
-	rp.idleCancel = cancel
-
-	go rp.idleCloser()
-}
-
-// idleCloser runs in a goroutine and periodically sweeps the channel for
-// idle resources
-func (rp *ResourcePool) idleCloser() {
-	for {
-		idleTimeout := rp.idleTimeout.Get()
+	for i := 0; i < available; i++ {
+		var wrapper resourceWrapper
 		select {
-		case <-rp.idleCtx.Done():
+		case wrapper, _ = <-rp.resources:
+		default:
+			// stop early if we don't get anything new from the pool
 			return
-
-		// sleep for 1/100 the idle timeout
-		case <-time.After(idleTimeout / 100):
-			available := int(rp.Available())
-
-		IdleScanLoop:
-			for i := 0; i < available; i++ {
-				var wrapper resourceWrapper
-				select {
-				case wrapper, _ = <-rp.resources:
-				default:
-					// stop early if we don't get anything new from the pool
-					break IdleScanLoop
-				}
-
-				if wrapper.resource != nil && idleTimeout > 0 && wrapper.timeUsed.Add(idleTimeout).Sub(time.Now()) < 0 {
-					wrapper.resource.Close()
-					wrapper.resource = nil
-					rp.idleClosed.Add(1)
-					rp.active.Add(-1)
-				}
-
-				rp.resources <- wrapper
-			}
 		}
+
+		if wrapper.resource != nil && idleTimeout > 0 && wrapper.timeUsed.Add(idleTimeout).Sub(time.Now()) < 0 {
+			wrapper.resource.Close()
+			wrapper.resource = nil
+			rp.idleClosed.Add(1)
+			rp.active.Add(-1)
+		}
+
+		rp.resources <- wrapper
 	}
 }
 
@@ -289,9 +263,15 @@ func (rp *ResourcePool) recordWait(start time.Time) {
 	rp.waitTime.Add(time.Now().Sub(start))
 }
 
-// SetIdleTimeout sets the idle timeout.
+// SetIdleTimeout sets the idle timeout. It can only be used if there was an
+// idle timeout set when the pool was created.
 func (rp *ResourcePool) SetIdleTimeout(idleTimeout time.Duration) {
+	if rp.idleTimer == nil {
+		panic("SetIdleTimeout called when timer not initialized")
+	}
+
 	rp.idleTimeout.Set(idleTimeout)
+	rp.idleTimer.SetInterval(idleTimeout / 10)
 }
 
 // StatsJSON returns the stats in JSON format.
