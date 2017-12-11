@@ -19,6 +19,14 @@
 # as root in the image.
 set -ex
 
+# Import prepend_path function.
+dir="$(dirname "${BASH_SOURCE[0]}")"
+source "${dir}/../tools/shell_functions.inc"
+if [ $? -ne 0 ]; then
+      echo "failed to load ../tools/shell_functions.inc"
+      return 1
+fi
+
 # grpc_dist can be empty, in which case we just install to the default paths
 grpc_dist="$1"
 if [ -n "$grpc_dist" ]; then
@@ -47,6 +55,52 @@ if [ -n "$grpc_dist" ]; then
   PIP=$grpc_dist/usr/local/bin/pip
   $PIP install --upgrade pip
   $PIP install --upgrade --ignore-installed virtualenv
+else
+  PIP=pip
+  $PIP install --upgrade pip
+  # System wide installations require an explicit upgrade of
+  # certain gRPC Python dependencies e.g. "six" on Debian Jessie.
+  $PIP install --upgrade --ignore-installed six
+fi
+
+# clone the repository, setup the submodules
+git clone https://github.com/grpc/grpc.git
+cd grpc
+git checkout $grpc_ver
+git submodule update --init
+
+# OSX specific setting + dependencies
+if [ `uname -s` == "Darwin" ]; then
+     export GRPC_PYTHON_BUILD_WITH_CYTHON=1
+     $PIP install Cython
+
+     # Work-around macOS Sierra blocker, see: https://github.com/youtube/vitess/issues/2115
+     # TODO(mberlin): Remove this when the underlying issue is fixed and available
+     #                in the gRPC version used by Vitess.
+     #                See: https://github.com/google/protobuf/issues/2182
+     export CPPFLAGS="-Wno-deprecated-declarations"
+fi
+
+# build everything
+make
+
+cd third_party/protobuf
+# install protobuf side (it was already built by the 'make' earlier)
+if [ -n "$grpc_dist" ]; then
+    make install prefix=$grpc_dist/usr/local
+else
+    make install
+fi
+
+cd ../..
+# now install grpc itself
+if [ -n "$grpc_dist" ]; then
+  make install prefix=$grpc_dist/usr/local
+  # Add bin directory to the path such that gRPC python won't complain that
+  # it cannot find "grpc_python_plugin".
+  export PATH=$(prepend_path $PATH $grpc_dist/usr/local/bin)
+else
+  make install
 fi
 
 # Install gRPC python libraries from PyPI.
