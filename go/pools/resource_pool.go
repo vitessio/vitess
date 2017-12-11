@@ -53,6 +53,7 @@ type ResourcePool struct {
 	idleTimeout sync2.AtomicDuration
 
 	// stats
+	available  sync2.AtomicInt64
 	active     sync2.AtomicInt64
 	inUse      sync2.AtomicInt64
 	waitCount  sync2.AtomicInt64
@@ -84,6 +85,7 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 	rp := &ResourcePool{
 		resources:   make(chan resourceWrapper, maxCap),
 		factory:     factory,
+		available:   sync2.NewAtomicInt64(int64(capacity)),
 		capacity:    sync2.NewAtomicInt64(int64(capacity)),
 		idleTimeout: sync2.NewAtomicDuration(idleTimeout),
 	}
@@ -209,6 +211,7 @@ func (rp *ResourcePool) get(ctx context.Context, wait bool) (resource Resource, 
 		}
 		rp.active.Add(1)
 	}
+	rp.available.Add(-1)
 	rp.inUse.Add(1)
 	return wrapper.resource, err
 }
@@ -230,6 +233,7 @@ func (rp *ResourcePool) Put(resource Resource) {
 		panic(errors.New("attempt to Put into a full ResourcePool"))
 	}
 	rp.inUse.Add(-1)
+	rp.available.Add(1)
 }
 
 // SetCapacity changes the capacity of the pool.
@@ -266,10 +270,12 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 				wrapper.resource.Close()
 				rp.active.Add(-1)
 			}
+			rp.available.Add(-1)
 		}
 	} else {
 		for i := 0; i < capacity-oldcap; i++ {
 			rp.resources <- resourceWrapper{}
+			rp.available.Add(1)
 		}
 	}
 	if capacity == 0 {
@@ -310,7 +316,7 @@ func (rp *ResourcePool) Capacity() int64 {
 
 // Available returns the number of currently unused and available resources.
 func (rp *ResourcePool) Available() int64 {
-	return int64(len(rp.resources))
+	return rp.available.Get()
 }
 
 // Active returns the number of active (i.e. non-nil) resources either in the
