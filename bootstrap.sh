@@ -48,24 +48,6 @@ mkdir -p $VTROOT/vthook
 echo "Updating git submodules..."
 git submodule update --init
 
-# Install "protoc" protobuf compiler binary.
-protoc_version=3.4.0
-protoc_dist=$VTROOT/dist/protoc
-protoc_version_file=$protoc_dist/version
-if [[ -f $protoc_version_file && "$(cat $protoc_version_file)" == "$protoc_version" ]]; then
-  echo "skipping protoc install. remove $protoc_version_file to force re-install."
-else
-  rm -rf $protoc_dist
-  mkdir -p $protoc_dist
-  download_url=https://github.com/google/protobuf/releases/download/v${protoc_version}/protoc-${protoc_version}-linux-x86_64.zip
-  (cd $protoc_dist && \
-    wget $download_url && \
-    unzip protoc-${protoc_version}-linux-x86_64.zip)
-  [ $? -eq 0 ] || fail "protoc download failed"
-  echo "$protoc_version" > $protoc_version_file
-fi
-ln -snf $protoc_dist/bin/protoc $VTROOT/bin/protoc
-
 # install zookeeper
 # TODO(sougou): when version changes, see if we can drop the 'zip -d' hack to get the fatjars working.
 zk_ver=3.4.10
@@ -124,7 +106,7 @@ ln -snf $consul_dist/consul $VTROOT/bin/consul
 # install gRPC C++ base, so we can install the python adapters.
 # this also installs protobufs
 grpc_dist=$VTROOT/dist/grpc
-grpc_ver=v1.7.0
+grpc_ver=v1.7.1
 if [ $SKIP_ROOT_INSTALLS == "True" ]; then
   echo "skipping grpc build, as root version was already installed."
 elif [[ -f $grpc_dist/.build_finished && "$(cat $grpc_dist/.build_finished)" == "$grpc_ver" ]]; then
