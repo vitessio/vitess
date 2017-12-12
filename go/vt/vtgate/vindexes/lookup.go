@@ -24,16 +24,83 @@ import (
 )
 
 var (
-	_ NonUnique = (*LookupNonUnique)(nil)
-	_ Lookup    = (*LookupNonUnique)(nil)
-	_ Unique    = (*LookupUnique)(nil)
-	_ Lookup    = (*LookupUnique)(nil)
+	_ NonUnique         = (*LookupNonUnique)(nil)
+	_ Lookup            = (*LookupNonUnique)(nil)
+	_ Unique            = (*LookupUnique)(nil)
+	_ Lookup            = (*LookupUnique)(nil)
+	_ NonUnique         = (*MultiColLookupNonUnique)(nil)
+	_ MultiColumnLookup = (*MultiColLookupNonUnique)(nil)
 )
 
 func init() {
 	Register("lookup", NewLookup)
 	Register("lookup_unique", NewLookupUnique)
+	Register("multicol_lookup", NewMultiColLookup)
 }
+
+// MultiColLookupNonUnique defines a vindex that uses a lookup table and create a mapping between from ids and KeyspaceId.
+//It's NonUnique and a MultiColLookup.
+type MultiColLookupNonUnique struct {
+	name string
+	lkp  multiColLookupInternal
+}
+
+// NewMultiColLookup creates a LookupNonUnique vindex.
+func NewMultiColLookup(name string, m map[string]string) (Vindex, error) {
+	lookup := &MultiColLookupNonUnique{name: name}
+	lookup.lkp.Init(m)
+	return lookup, nil
+}
+
+// String returns the name of the vindex.
+func (ln *MultiColLookupNonUnique) String() string {
+	return ln.name
+}
+
+// Cost returns the cost of this vindex as 20.
+func (ln *MultiColLookupNonUnique) Cost() int {
+	//TODO @rafael
+	return 20
+}
+
+// Map returns the corresponding KeyspaceId values for the given ids.
+func (ln *MultiColLookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][][]byte, error) {
+	out := make([][][]byte, 0, len(ids))
+	results, err := ln.lkp.Lookup(vcursor, ids)
+	if err != nil {
+		return nil, err
+	}
+	for _, result := range results {
+		ksids := make([][]byte, 0, len(result.Rows))
+		for _, row := range result.Rows {
+			ksids = append(ksids, row[0].ToBytes())
+		}
+		out = append(out, ksids)
+	}
+	return out, nil
+}
+
+// Verify returns true if ids maps to ksids.
+func (ln *MultiColLookupNonUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	return ln.lkp.Verify(vcursor, ids, ksidsToValues(ksids))
+}
+
+// Create reserves the id by inserting it into the vindex table.
+func (ln *MultiColLookupNonUnique) Create(vcursor VCursor, fromIds [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
+	return ln.lkp.Create(vcursor, fromIds, ksidsToValues(ksids), ignoreMode)
+}
+
+// Delete deletes the entry from the vindex table.
+func (ln *MultiColLookupNonUnique) Delete(vcursor VCursor, ids []sqltypes.Value, ksid []byte) error {
+	return ln.lkp.Delete(vcursor, ids, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid))
+}
+
+// MarshalJSON returns a JSON representation of LookupHash.
+func (ln *MultiColLookupNonUnique) MarshalJSON() ([]byte, error) {
+	return json.Marshal(ln.lkp)
+}
+
+//====================================================================
 
 // LookupNonUnique defines a vindex that uses a lookup table and create a mapping between id and KeyspaceId.
 //It's NonUnique and a Lookup.
