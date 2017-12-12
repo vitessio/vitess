@@ -127,12 +127,82 @@ func TestDiscoveryGatewayGetTablets(t *testing.T) {
 	}
 }
 
+func TestShuffleTablets(t *testing.T) {
+	defer topo.UpdateCellsToRegions(map[string]string{})
+	topo.UpdateCellsToRegions(map[string]string{
+		"cell1": "region1",
+		"cell2": "region2",
+	})
+
+	ts1 := discovery.TabletStats{
+		Key:     "t1",
+		Tablet:  topo.NewTablet(10, "cell1", "host1"),
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Up:      true,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+
+	ts2 := discovery.TabletStats{
+		Key:     "t2",
+		Tablet:  topo.NewTablet(10, "cell1", "host2"),
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Up:      true,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+
+	ts3 := discovery.TabletStats{
+		Key:     "t3",
+		Tablet:  topo.NewTablet(10, "cell2", "host3"),
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Up:      true,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+
+	ts4 := discovery.TabletStats{
+		Key:     "t4",
+		Tablet:  topo.NewTablet(10, "cell2", "host4"),
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Up:      true,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+
+	tablets := []discovery.TabletStats{ts1, ts2, ts3, ts4}
+	// repeat shuffling 10 times and everytime the same cell tablets should be in the front
+	for i := 0; i < 10; i++ {
+		shuffleTablets("cell1", tablets)
+
+		if len(tablets) != 4 {
+			t.Errorf("should have 4 tablets, got %+v", tablets)
+		}
+
+		if tablets[0].Key != "t1" && tablets[0].Key != "t2" {
+			t.Errorf("should have same cell tablets in the front")
+		}
+
+		if tablets[1].Key != "t1" && tablets[1].Key != "t2" {
+			t.Errorf("should have same cell tablets in the front")
+		}
+
+		if tablets[2].Key != "t3" && tablets[2].Key != "t4" {
+			t.Errorf("should have diff cell tablets in the rear")
+		}
+
+		if tablets[3].Key != "t3" && tablets[3].Key != "t4" {
+			t.Errorf("should have diff cell tablets in the rear")
+		}
+	}
+}
+
 func TestDiscoveryGatewayGetTabletsWithRegion(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"
 	hc := discovery.NewFakeHealthCheck()
 	dg := createDiscoveryGateway(hc, nil, nil, "local", 2).(*discoveryGateway)
-	dg.tsc.UpdateCellsToRegions(map[string]string{
+	topo.UpdateCellsToRegions(map[string]string{
 		"local-west": "local",
 		"local-east": "local",
 		"local":      "local",
