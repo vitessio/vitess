@@ -22,6 +22,7 @@ import (
 	log "github.com/golang/glog"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 )
 
@@ -40,10 +41,6 @@ type TabletStatsCache struct {
 	// cell is the cell we are keeping all tablets for.
 	// Note we keep track of all master tablets in all cells.
 	cell string
-
-	// cell to region mapping function
-	cellToRegion func(cell string) string
-
 	// mu protects the entries map. It does not protect individual
 	// entries in the map.
 	mu sync.RWMutex
@@ -68,8 +65,8 @@ type tabletStatsCacheEntry struct {
 // Note we do the registration in this code to guarantee we call
 // SetListener with sendDownEvents=true, as we need these events
 // to maintain the integrity of our cache.
-func NewTabletStatsCache(hc HealthCheck, cell string, cellToRegion func(cell string) string) *TabletStatsCache {
-	return newTabletStatsCache(hc, cell, cellToRegion, true /* setListener */)
+func NewTabletStatsCache(hc HealthCheck, cell string) *TabletStatsCache {
+	return newTabletStatsCache(hc, cell, true /* setListener */)
 }
 
 // NewTabletStatsCacheDoNotSetListener is identical to NewTabletStatsCache
@@ -79,22 +76,14 @@ func NewTabletStatsCache(hc HealthCheck, cell string, cellToRegion func(cell str
 // When the caller sets its own listener on "hc", they must make sure that they
 // set the parameter  "sendDownEvents" to "true" or this cache won't properly
 // remove tablets whose tablet type changes.
-func NewTabletStatsCacheDoNotSetListener(cell string, cellToRegion func(cell string) string) *TabletStatsCache {
-	return newTabletStatsCache(nil, cell, cellToRegion, false /* setListener */)
+func NewTabletStatsCacheDoNotSetListener(cell string) *TabletStatsCache {
+	return newTabletStatsCache(nil, cell, false /* setListener */)
 }
 
-// UpdateCellsToRegions is mainly for testing purpose, the `cellsToRegions` mapping should be provided in the constructor
-func (tc *TabletStatsCache) UpdateCellsToRegions(cellsToRegions map[string]string) {
-	tc.cellToRegion = func(cell string) string {
-		return cellsToRegions[cell]
-	}
-}
-
-func newTabletStatsCache(hc HealthCheck, cell string, cellToRegion func(cell string) string, setListener bool) *TabletStatsCache {
+func newTabletStatsCache(hc HealthCheck, cell string, setListener bool) *TabletStatsCache {
 	tc := &TabletStatsCache{
-		cell:         cell,
-		cellToRegion: cellToRegion,
-		entries:      make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry),
+		cell:    cell,
+		entries: make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry),
 	}
 
 	if setListener {
@@ -155,7 +144,7 @@ func (tc *TabletStatsCache) getOrCreateEntry(target *querypb.Target) *tabletStat
 
 // StatsUpdate is part of the HealthCheckStatsListener interface.
 func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
-	if ts.Target.TabletType != topodatapb.TabletType_MASTER && ts.Tablet.Alias.Cell != tc.cell && tc.cellToRegion(ts.Tablet.Alias.Cell) != tc.cellToRegion(tc.cell) {
+	if ts.Target.TabletType != topodatapb.TabletType_MASTER && ts.Tablet.Alias.Cell != tc.cell && topo.GetRegionByCell(ts.Tablet.Alias.Cell) != topo.GetRegionByCell(tc.cell) {
 		// this is for a non-master tablet in a different cell and a different region, drop it
 		return
 	}
