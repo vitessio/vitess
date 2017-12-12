@@ -96,12 +96,19 @@ In addition, Vitess requires the software and libraries listed below.
     ```
 	[mysqld]
 	sql_mode=NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES
-	```
+    ```
 
-3.  Select a lock service from the options listed below. It is technically
+3.  Uninstall or disable `AppArmor`. Some versions of MySQL come with default
+    AppArmor configurations that the Vitess tools don't recognize yet. This causes
+    various permission failures when Vitess initializes MySQL instances through
+    the `mysqlctl` tool. This is only an issue for a test environment. If AppArmor
+    is necessary in production, you can configure the MySQL instances appropriately
+    without going through mysqlctl. (TODO(sougou): provide exact instructions).
+
+4.  Select a lock service from the options listed below. It is technically
     possible to use another lock server, but plugins currently exist only
     for ZooKeeper, etcd and consul.
-    - ZooKeeper 3.3.5 is included by default. 
+    - ZooKeeper 3.4.10 is included by default. 
     - [Install etcd v3.0+](https://github.com/coreos/etcd/releases).
       If you use etcd, remember to include the `etcd` command
       on your path.
@@ -109,7 +116,7 @@ In addition, Vitess requires the software and libraries listed below.
       If you use consul, remember to include the `consul` command
       on your path.
 
-4.  Install the following other tools needed to build and run Vitess:
+5.  Install the following other tools needed to build and run Vitess:
     - make
     - automake
     - libtool
@@ -130,7 +137,7 @@ In addition, Vitess requires the software and libraries listed below.
     $ sudo apt-get install make automake libtool python-dev python-virtualenv python-mysqldb libssl-dev g++ git pkg-config bison curl unzip
     ```
 
-5.  If you decided to use ZooKeeper in step 3, you also need to install a
+6.  If you decided to use ZooKeeper in step 3, you also need to install a
     Java Runtime, such as OpenJDK.
 
     ``` sh
