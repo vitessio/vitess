@@ -37,18 +37,14 @@ import (
 // available cells, if necessary. A CellInfo can only be removed if no
 // Shard record references the corresponding cell in its Cells list.
 
-const (
-	cellsPath = "cells"
-)
-
 func pathForCellInfo(cell string) string {
-	return path.Join(cellsPath, cell, CellInfoFile)
+	return path.Join(CellsPath, cell, CellInfoFile)
 }
 
 // GetCellInfoNames returns the names of the existing cells. They are
 // sorted by name.
 func (ts *Server) GetCellInfoNames(ctx context.Context) ([]string, error) {
-	entries, err := ts.globalCell.ListDir(ctx, cellsPath)
+	entries, err := ts.globalCell.ListDir(ctx, CellsPath, false /*full*/)
 	switch err {
 	case ErrNoNode:
 		return nil, nil
@@ -171,7 +167,7 @@ func (ts *Server) DeleteCellInfo(ctx context.Context, cell string) error {
 func (ts *Server) GetKnownCells(ctx context.Context) ([]string, error) {
 	// Note we use the global read-only cell here, as the result
 	// is not time sensitive.
-	entries, err := ts.globalReadOnlyCell.ListDir(ctx, cellsPath)
+	entries, err := ts.globalReadOnlyCell.ListDir(ctx, CellsPath, false /*full*/)
 	if err != nil {
 		return nil, err
 	}

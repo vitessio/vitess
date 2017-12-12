@@ -43,7 +43,11 @@ type Conn interface {
 	// list should be sorted by entry.Name.
 	// If there are no files under the provided path, returns ErrNoNode.
 	// dirPath is a path relative to the root directory of the cell.
-	ListDir(ctx context.Context, dirPath string) ([]DirEntry, error)
+	// If full is set, we want all the fields in DirEntry to be filled in.
+	// If full is not set, only Name will be used. This is intended for
+	// implementations where getting more than the names is more expensive,
+	// as in most cases only the names are needed.
+	ListDir(ctx context.Context, dirPath string, full bool) ([]DirEntry, error)
 
 	//
 	// File support
@@ -185,14 +189,17 @@ const (
 // DirEntry is an entry in a directory, as returned by ListDir.
 type DirEntry struct {
 	// Name is the name of the entry.
+	// Always filled in.
 	Name string
 
 	// Type is the DirEntryType of the entry.
+	// Only filled in if full is true.
 	Type DirEntryType
 
 	// Ephemeral is set if the directory / file only contains
 	// data that was not set by the file API, like lock files
 	// or master-election related files.
+	// Only filled in if full is true.
 	Ephemeral bool
 }
 

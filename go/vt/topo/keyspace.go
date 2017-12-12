@@ -271,7 +271,7 @@ func (ts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
 
 // GetKeyspaces returns the list of keyspaces in the topology.
 func (ts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
-	children, err := ts.globalCell.ListDir(ctx, KeyspacesPath)
+	children, err := ts.globalCell.ListDir(ctx, KeyspacesPath, false /*full*/)
 	switch err {
 	case nil:
 		return DirEntriesToStringArray(children), nil
@@ -285,7 +285,7 @@ func (ts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
 // GetShardNames returns the list of shards in a keyspace.
 func (ts *Server) GetShardNames(ctx context.Context, keyspace string) ([]string, error) {
 	shardsPath := path.Join(KeyspacesPath, keyspace, ShardsPath)
-	children, err := ts.globalCell.ListDir(ctx, shardsPath)
+	children, err := ts.globalCell.ListDir(ctx, shardsPath, false /*full*/)
 	if err == ErrNoNode {
 		// The directory doesn't exist, let's see if the keyspace
 		// is here or not.

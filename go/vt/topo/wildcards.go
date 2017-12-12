@@ -199,7 +199,7 @@ func (ts *Server) resolveRecursive(ctx context.Context, cell string, parts []str
 			var children []DirEntry
 			var err error
 			parentPath := strings.Join(parts[:i], "/")
-			children, err = conn.ListDir(ctx, parentPath)
+			children, err = conn.ListDir(ctx, parentPath, false /*full*/)
 			if err != nil {
 				// we asked for something like
 				// /keyspaces/aaa/* and
@@ -274,7 +274,7 @@ func (ts *Server) resolveRecursive(ctx context.Context, cell string, parts []str
 	}
 
 	// This is an expanded path, we need to check if it exists.
-	if _, err = conn.ListDir(ctx, p); err == nil {
+	if _, err = conn.ListDir(ctx, p, false /*full*/); err == nil {
 		// The path exists as a directory, return it.
 		return []string{p}, nil
 	}

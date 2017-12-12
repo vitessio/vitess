@@ -62,6 +62,35 @@ func checkLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 		t.Fatalf("Lock: %v", err)
 	}
 
+	// We have the lock, list the keyspace directory.
+	// It should not contain anything, except Ephemeral files.
+	entries, err := conn.ListDir(ctx, keyspacePath, true /*full*/)
+	if err != nil {
+		t.Fatalf("Listdir(%v) failed: %v", keyspacePath, err)
+	}
+	for _, e := range entries {
+		if e.Name == "Keyspace" {
+			continue
+		}
+		if e.Ephemeral {
+			t.Logf("skipping ephemeral node %v in %v", e, keyspacePath)
+			continue
+		}
+		// Non-ephemeral entries better have only ephemeral children.
+		p := path.Join(keyspacePath, e.Name)
+		entries, err := conn.ListDir(ctx, p, true /*full*/)
+		if err != nil {
+			t.Fatalf("Listdir(%v) failed: %v", p, err)
+		}
+		for _, e := range entries {
+			if e.Ephemeral {
+				t.Logf("skipping ephemeral node %v in %v", e, p)
+			} else {
+				t.Errorf("Entry in %v has non-ephemeral DirEntry: %v", p, e)
+			}
+		}
+	}
+
 	// test we can't take the lock again
 	fastCtx, cancel := context.WithTimeout(ctx, timeUntilLockIsTaken)
 	if _, err := conn.Lock(fastCtx, keyspacePath, "again"); err != topo.ErrTimeout {
