@@ -452,7 +452,7 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cell string) ([]*topodat
 	}
 
 	// List the directory, and parse the aliases
-	children, err := conn.ListDir(ctx, TabletsPath)
+	children, err := conn.ListDir(ctx, TabletsPath, false /*full*/)
 	if err != nil {
 		if err == ErrNoNode {
 			// directory doesn't exist, empty list, no error.

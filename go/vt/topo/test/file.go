@@ -54,6 +54,7 @@ func checkFileInCell(t *testing.T, conn topo.Conn, hasCells bool) {
 	if hasCells {
 		expected = append(expected, topo.DirEntry{
 			Name: "cells",
+			Type: topo.TypeDirectory,
 		})
 	}
 	checkListDir(ctx, t, conn, "/", expected)
@@ -73,6 +74,7 @@ func checkFileInCell(t *testing.T, conn topo.Conn, hasCells bool) {
 	// See it in the listing now.
 	expected = append(expected, topo.DirEntry{
 		Name: "myfile",
+		Type: topo.TypeFile,
 	})
 	checkListDir(ctx, t, conn, "/", expected)
 
@@ -186,6 +188,7 @@ func checkFileInCell(t *testing.T, conn topo.Conn, hasCells bool) {
 	// See it in the listing now.
 	expected = append(expected, topo.DirEntry{
 		Name: "myfile",
+		Type: topo.TypeFile,
 	})
 	checkListDir(ctx, t, conn, "/", expected)
 
