@@ -277,7 +277,7 @@ func shuffleTablets(cell string, tablets []discovery.TabletStats) {
 	sameCell, diffCell, sameCellMax := 0, 0, -1
 	length := len(tablets)
 
-	//move all same cell tablets to the front, this is O(n)
+	// move all same cell tablets to the front, this is O(n)
 	for {
 		sameCellMax = diffCell - 1
 		sameCell = nextTablet(cell, tablets, sameCell, length, true)
