@@ -12,6 +12,7 @@ Commands are listed in the following groups:
 * [Serving Graph](#serving-graph)
 * [Shards](#shards)
 * [Tablets](#tablets)
+* [Topo](#topo)
 * [Workflows](#workflows)
 
 
@@ -118,7 +119,6 @@ Updates the content of a CellInfo with the provided parameters. If a value is em
 
 * [ListAllTablets](#listalltablets)
 * [ListTablets](#listtablets)
-* [PruneActionLogs](#pruneactionlogs)
 * [Validate](#validate)
 
 ### ListAllTablets
@@ -153,32 +153,6 @@ Lists specified tablets in an awk-friendly way.
 #### Errors
 
 * the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;ListTablets&gt;</code> command This error occurs if the command is not called with at least one argument.
-
-
-### PruneActionLogs
-
-(requires zktopo.Server)<br><br>e.g. PruneActionLogs -keep-count=10 /zk/global/vt/keyspaces/my_keyspace/shards/0/actionlog<br><br>Removes older actionlog entries until at most &lt;count to keep&gt; are left.
-
-#### Example
-
-<pre class="command-example">PruneActionLogs [-keep-count=&lt;count to keep&gt;] &lt;zk actionlog path&gt; ...</pre>
-
-#### Flags
-
-| Name | Type | Definition |
-| :-------- | :--------- | :--------- |
-| keep-count | Int | count to keep |
-
-
-#### Arguments
-
-* <code>&lt;zk actionlog path&gt;</code> &ndash; Required. To specify multiple values for this argument, separate individual values with a space.
-
-#### Errors
-
-* action <code>&lt;PruneActionLogs&gt;</code> requires <code>&lt;zk action log path&gt;</code> [...] This error occurs if the command is not called with at least one argument.
-* <code>&lt;PruneActionLogs&gt;</code> requires a zktopo.Server
-* some errors occurred, check the log
 
 
 ### Validate
@@ -417,7 +391,7 @@ Rebuilds the serving data for the keyspace. This command may trigger an update t
 
 ### RemoveKeyspaceCell
 
-Removes the cell from the Cells list for all shards in the keyspace.
+Removes the cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.
 
 #### Example
 
@@ -596,18 +570,16 @@ Executes the given SQL query with the provided bound variables against the vtgat
 
 #### Example
 
-<pre class="command-example">VtGateExecute -server &lt;vtgate&gt; [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-keyspace &lt;default keyspace&gt;] [-tablet_type &lt;tablet type&gt;] [-options &lt;proto text options&gt;] [-json] &lt;sql&gt;</pre>
+<pre class="command-example">VtGateExecute -server &lt;vtgate&gt; [-bind_variables &lt;JSON map&gt;] [-keyspace &lt;default keyspace&gt;] [-tablet_type &lt;tablet type&gt;] [-options &lt;proto text options&gt;] [-json] &lt;sql&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
-| connect_timeout | Duration | Connection timeout for vtgate client |
 | json | Boolean | Output JSON instead of human-readable table |
-| keyspace | string | default keyspace to use |
 | options | string | execute options values as a text encoded proto of the ExecuteOptions structure |
 | server | string | VtGate server to connect to |
-| tablet_type | string | tablet type to query |
+| target | string | keyspace:shard@tablet_type |
 
 
 #### Arguments
@@ -618,6 +590,7 @@ Executes the given SQL query with the provided bound variables against the vtgat
 #### Errors
 
 * the <code>&lt;sql&gt;</code> argument is required for the <code>&lt;VtGateExecute&gt;</code> command This error occurs if the command is not called with exactly one argument.
+* query commands are disabled (set the -enable_queries flag to enable)
 * error connecting to vtgate '%v': %v
 * Execute failed: %v
 
@@ -628,13 +601,12 @@ Executes the given SQL query with the provided bound variables against the vtgat
 
 #### Example
 
-<pre class="command-example">VtGateExecuteKeyspaceIds -server &lt;vtgate&gt; -keyspace &lt;keyspace&gt; -keyspace_ids &lt;ks1 in hex&gt;,&lt;k2 in hex&gt;,... [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-tablet_type &lt;tablet type&gt;] [-options &lt;proto text options&gt;] [-json] &lt;sql&gt;</pre>
+<pre class="command-example">VtGateExecuteKeyspaceIds -server &lt;vtgate&gt; -keyspace &lt;keyspace&gt; -keyspace_ids &lt;ks1 in hex&gt;,&lt;k2 in hex&gt;,... [-bind_variables &lt;JSON map&gt;] [-tablet_type &lt;tablet type&gt;] [-options &lt;proto text options&gt;] [-json] &lt;sql&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
-| connect_timeout | Duration | Connection timeout for vtgate client |
 | json | Boolean | Output JSON instead of human-readable table |
 | keyspace | string | keyspace to send query to |
 | keyspace_ids | string | comma-separated list of keyspace ids (in hex) that will map into shards to send query to |
@@ -653,6 +625,7 @@ Executes the given SQL query with the provided bound variables against the vtgat
 #### Errors
 
 * the <code>&lt;sql&gt;</code> argument is required for the <code>&lt;VtGateExecuteKeyspaceIds&gt;</code> command This error occurs if the command is not called with exactly one argument.
+* query commands are disabled (set the -enable_queries flag to enable)
 * cannot hex-decode value %v '%v': %v
 * error connecting to vtgate '%v': %v
 * Execute failed: %v
@@ -664,13 +637,12 @@ Executes the given SQL query with the provided bound variables against the vtgat
 
 #### Example
 
-<pre class="command-example">VtGateExecuteShards -server &lt;vtgate&gt; -keyspace &lt;keyspace&gt; -shards &lt;shard0&gt;,&lt;shard1&gt;,... [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-tablet_type &lt;tablet type&gt;] [-options &lt;proto text options&gt;] [-json] &lt;sql&gt;</pre>
+<pre class="command-example">VtGateExecuteShards -server &lt;vtgate&gt; -keyspace &lt;keyspace&gt; -shards &lt;shard0&gt;,&lt;shard1&gt;,... [-bind_variables &lt;JSON map&gt;] [-tablet_type &lt;tablet type&gt;] [-options &lt;proto text options&gt;] [-json] &lt;sql&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
-| connect_timeout | Duration | Connection timeout for vtgate client |
 | json | Boolean | Output JSON instead of human-readable table |
 | keyspace | string | keyspace to send query to |
 | options | string | execute options values as a text encoded proto of the ExecuteOptions structure |
@@ -689,6 +661,7 @@ Executes the given SQL query with the provided bound variables against the vtgat
 #### Errors
 
 * the <code>&lt;sql&gt;</code> argument is required for the <code>&lt;VtGateExecuteShards&gt;</code> command This error occurs if the command is not called with exactly one argument.
+* query commands are disabled (set the -enable_queries flag to enable)
 * error connecting to vtgate '%v': %v
 * Execute failed: %v
 
@@ -699,14 +672,13 @@ Executes the SplitQuery computation for the given SQL query with the provided bo
 
 #### Example
 
-<pre class="command-example">VtGateSplitQuery -server &lt;vtgate&gt; -keyspace &lt;keyspace&gt; [-split_column &lt;split_column&gt;] -split_count &lt;split_count&gt; [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] &lt;sql&gt;</pre>
+<pre class="command-example">VtGateSplitQuery -server &lt;vtgate&gt; -keyspace &lt;keyspace&gt; [-split_column &lt;split_column&gt;] -split_count &lt;split_count&gt; [-bind_variables &lt;JSON map&gt;] &lt;sql&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
 | algorithm | string | The algorithm to |
-| connect_timeout | Duration | Connection timeout for vtgate client |
 | keyspace | string | keyspace to send query to |
 | server | string | VtGate server to connect to |
 | split_count | Int64 | number of splits to generate. |
@@ -722,9 +694,11 @@ Executes the SplitQuery computation for the given SQL query with the provided bo
 #### Errors
 
 * the <code>&lt;sql&gt;</code> argument is required for the <code>&lt;VtGateSplitQuery&gt;</code> command This error occurs if the command is not called with exactly one argument.
+* query commands are disabled (set the -enable_queries flag to enable)
 * Exactly one of <code>&lt;split_count&gt;</code> or num_rows_per_query_part
 * Unknown split-query <code>&lt;algorithm&gt;</code>: %v
 * error connecting to vtgate '%v': %v
+* Execute failed: %v
 * SplitQuery failed: %v
 
 
@@ -734,13 +708,12 @@ Starts a transaction on the provided server.
 
 #### Example
 
-<pre class="command-example">VtTabletBegin [-username &lt;TableACL user&gt;] [-connect_timeout &lt;connect timeout&gt;] &lt;tablet alias&gt;</pre>
+<pre class="command-example">VtTabletBegin [-username &lt;TableACL user&gt;] &lt;tablet alias&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
-| connect_timeout | Duration | Connection timeout for vttablet client |
 | username | string | If set, value is set as immediate caller id in the request and used by vttablet for TableACL check |
 
 
@@ -752,6 +725,7 @@ Starts a transaction on the provided server.
 #### Errors
 
 * the <code>&lt;tablet_alias&gt;</code> argument is required for the <code>&lt;VtTabletBegin&gt;</code> command This error occurs if the command is not called with exactly one argument.
+* query commands are disabled (set the -enable_queries flag to enable)
 * cannot connect to tablet %v: %v
 * Begin failed: %v
 
@@ -762,13 +736,12 @@ Commits the given transaction on the provided server.
 
 #### Example
 
-<pre class="command-example">VtTabletCommit [-username &lt;TableACL user&gt;] [-connect_timeout &lt;connect timeout&gt;] &lt;transaction_id&gt;</pre>
+<pre class="command-example">VtTabletCommit [-username &lt;TableACL user&gt;] &lt;transaction_id&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
-| connect_timeout | Duration | Connection timeout for vttablet client |
 | username | string | If set, value is set as immediate caller id in the request and used by vttablet for TableACL check |
 
 
@@ -780,6 +753,7 @@ Commits the given transaction on the provided server.
 #### Errors
 
 * the <code>&lt;tablet_alias&gt;</code> and <code>&lt;transaction_id&gt;</code> arguments are required for the <code>&lt;VtTabletCommit&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
+* query commands are disabled (set the -enable_queries flag to enable)
 * cannot connect to tablet %v: %v
 
 
@@ -789,13 +763,12 @@ Executes the given query on the given tablet. -transaction_id is optional. Use V
 
 #### Example
 
-<pre class="command-example">VtTabletExecute [-username &lt;TableACL user&gt;] [-connect_timeout &lt;connect timeout&gt;] [-transaction_id &lt;transaction_id&gt;] [-options &lt;proto text options&gt;] [-json] &lt;tablet alias&gt; &lt;sql&gt;</pre>
+<pre class="command-example">VtTabletExecute [-username &lt;TableACL user&gt;] [-transaction_id &lt;transaction_id&gt;] [-options &lt;proto text options&gt;] [-json] &lt;tablet alias&gt; &lt;sql&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
-| connect_timeout | Duration | Connection timeout for vttablet client |
 | json | Boolean | Output JSON instead of human-readable table |
 | options | string | execute options values as a text encoded proto of the ExecuteOptions structure |
 | transaction_id | Int | transaction id to use, if inside a transaction. |
@@ -811,6 +784,7 @@ Executes the given query on the given tablet. -transaction_id is optional. Use V
 #### Errors
 
 * the <code>&lt;tablet_alias&gt;</code> and <code>&lt;sql&gt;</code> arguments are required for the <code>&lt;VtTabletExecute&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
+* query commands are disabled (set the -enable_queries flag to enable)
 * cannot connect to tablet %v: %v
 * Execute failed: %v
 
@@ -821,13 +795,12 @@ Rollbacks the given transaction on the provided server.
 
 #### Example
 
-<pre class="command-example">VtTabletRollback [-username &lt;TableACL user&gt;] [-connect_timeout &lt;connect timeout&gt;] &lt;tablet alias&gt; &lt;transaction_id&gt;</pre>
+<pre class="command-example">VtTabletRollback [-username &lt;TableACL user&gt;] &lt;tablet alias&gt; &lt;transaction_id&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
-| connect_timeout | Duration | Connection timeout for vttablet client |
 | username | string | If set, value is set as immediate caller id in the request and used by vttablet for TableACL check |
 
 
@@ -840,6 +813,7 @@ Rollbacks the given transaction on the provided server.
 #### Errors
 
 * the <code>&lt;tablet_alias&gt;</code> and <code>&lt;transaction_id&gt;</code> arguments are required for the <code>&lt;VtTabletRollback&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
+* query commands are disabled (set the -enable_queries flag to enable)
 * cannot connect to tablet %v: %v
 
 
@@ -849,13 +823,12 @@ Executes the StreamHealth streaming query to a vttablet process. Will stop after
 
 #### Example
 
-<pre class="command-example">VtTabletStreamHealth [-count &lt;count, default 1&gt;] [-connect_timeout &lt;connect timeout&gt;] &lt;tablet alias&gt;</pre>
+<pre class="command-example">VtTabletStreamHealth [-count &lt;count, default 1&gt;] &lt;tablet alias&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
-| connect_timeout | Duration | Connection timeout for vttablet client |
 | count | Int | number of responses to wait for |
 
 
@@ -867,6 +840,7 @@ Executes the StreamHealth streaming query to a vttablet process. Will stop after
 #### Errors
 
 * the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;VtTabletStreamHealth&gt;</code> command This error occurs if the command is not called with exactly one argument.
+* query commands are disabled (set the -enable_queries flag to enable)
 * cannot connect to tablet %v: %v
 
 
@@ -876,13 +850,12 @@ Executes the UpdateStream streaming query to a vttablet process. Will stop after
 
 #### Example
 
-<pre class="command-example">VtTabletUpdateStream [-count &lt;count, default 1&gt;] [-connect_timeout &lt;connect timeout&gt;] [-position &lt;position&gt;] [-timestamp &lt;timestamp&gt;] &lt;tablet alias&gt;</pre>
+<pre class="command-example">VtTabletUpdateStream [-count &lt;count, default 1&gt;] [-position &lt;position&gt;] [-timestamp &lt;timestamp&gt;] &lt;tablet alias&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
-| connect_timeout | Duration | Connection timeout for vttablet client |
 | count | Int | number of responses to wait for |
 | position | string | position to start the stream from |
 | timestamp | Int | timestamp to start the stream from |
@@ -896,6 +869,7 @@ Executes the UpdateStream streaming query to a vttablet process. Will stop after
 #### Errors
 
 * the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;VtTabletUpdateStream&gt;</code> command This error occurs if the command is not called with exactly one argument.
+* query commands are disabled (set the -enable_queries flag to enable)
 * cannot connect to tablet %v: %v
 
 
@@ -1583,6 +1557,7 @@ Reparents the shard to the new master. Assumes the old master is dead and not re
 #### Errors
 
 * action <code>&lt;EmergencyReparentShard&gt;</code> requires -keyspace_shard=<code>&lt;keyspace/shard&gt;</code> -new_master=<code>&lt;tablet alias&gt;</code> This error occurs if the command is not called with exactly 0 arguments.
+* active reparent commands disabled (unset the -disable_active_reparents flag to enable)
 * cannot use legacy syntax and flag -<code>&lt;new_master&gt;</code> for action <code>&lt;EmergencyReparentShard&gt;</code> at the same time
 
 
@@ -1627,6 +1602,7 @@ Sets the initial master for a shard. Will make all other tablets in the shard sl
 #### Errors
 
 * action <code>&lt;InitShardMaster&gt;</code> requires <code>&lt;keyspace/shard&gt;</code> <code>&lt;tablet alias&gt;</code> This error occurs if the command is not called with exactly 2 arguments.
+* active reparent commands disabled (unset the -disable_active_reparents flag to enable)
 
 
 ### ListBackups
@@ -1680,6 +1656,7 @@ Reparents the shard to the new master, or away from old master. Both old and new
 #### Errors
 
 * action <code>&lt;PlannedReparentShard&gt;</code> requires -keyspace_shard=<code>&lt;keyspace/shard&gt;</code> [-new_master=<code>&lt;tablet alias&gt;</code>] [-avoid_master=<code>&lt;tablet alias&gt;</code>] This error occurs if the command is not called with exactly 0 arguments.
+* active reparent commands disabled (unset the -disable_active_reparents flag to enable)
 * cannot use legacy syntax and flags -<code>&lt;keyspace_shard&gt;</code> and -<code>&lt;new_master&gt;</code> for action <code>&lt;PlannedReparentShard&gt;</code> at the same time
 
 
@@ -2161,7 +2138,8 @@ Initializes a tablet in the topology.<br><br>
 | grpc_port | Int | The gRPC port for the vttablet process |
 | hostname | string | The server on which the tablet is running |
 | keyspace | string | The keyspace to which this tablet belongs |
-| mysql_port | Int | The mysql port for the mysql daemon |
+| mysql_host | string | The mysql host for the mysql server |
+| mysql_port | Int | The mysql port for the mysql server |
 | parent | Boolean | Creates the parent shard and keyspace if they don't yet exist |
 | port | Int | The main port for the vttablet process |
 | shard | string | The shard to which this tablet belongs |
@@ -2262,6 +2240,7 @@ Reparent a tablet to the current master in the shard. This only works if the cur
 #### Errors
 
 * action <code>&lt;ReparentTablet&gt;</code> requires <code>&lt;tablet alias&gt;</code> This error occurs if the command is not called with exactly one argument.
+* active reparent commands disabled (unset the -disable_active_reparents flag to enable)
 
 
 ### RestoreFromBackup
@@ -2398,8 +2377,8 @@ Updates the IP address and port numbers of a tablet.
 | :-------- | :--------- | :--------- |
 | grpc-port | Int | The gRPC port for the vttablet process |
 | hostname | string | The fully qualified host name of the server on which the tablet is running. |
-| ip-addr | string | IP address |
 | mysql-port | Int | The mysql port for the mysql daemon |
+| mysql_host | string | The mysql host for the mysql server |
 | vt-port | Int | The main port for the vttablet process |
 
 
@@ -2410,7 +2389,40 @@ Updates the IP address and port numbers of a tablet.
 #### Errors
 
 * the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;UpdateTabletAddrs&gt;</code> command This error occurs if the command is not called with exactly one argument.
-* malformed address: %v
+
+
+## Topo
+
+* [TopoCat](#topocat)
+
+### TopoCat
+
+Retrieves the file(s) at &lt;path&gt; from the topo service, and displays it. It can resolve wildcards, and decode the proto-encoded data.
+
+#### Example
+
+<pre class="command-example">TopoCat [-cell &lt;cell&gt;] [-decode_proto] [-long] &lt;path&gt; [&lt;path&gt;...]</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| cell | string | topology cell to cat the file from. Defaults to global cell. |
+| decode_proto | Boolean | decode proto files and display them as text |
+| long | Boolean | long listing. |
+
+
+#### Arguments
+
+* <code>&lt;cell&gt;</code> &ndash; Required. A cell is a location for a service. Generally, a cell resides in only one cluster. In Vitess, the terms "cell" and "data center" are interchangeable. The argument value is a string that does not contain whitespace.
+* <code>&lt;path&gt;</code> &ndash; Required.
+* <code>&lt;path&gt;</code>. &ndash; Optional.
+
+#### Errors
+
+* <code>&lt;TopoCat&gt;</code>: no path specified This error occurs if the command is not called with at least one argument.
+* <code>&lt;TopoCat&gt;</code>: invalid wildcards: %v
+* <code>&lt;TopoCat&gt;</code>: some paths had errors
 
 
 ## Workflows
