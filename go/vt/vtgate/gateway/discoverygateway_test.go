@@ -131,7 +131,7 @@ func TestShuffleTablets(t *testing.T) {
 	defer topo.UpdateCellsToRegions(map[string]string{})
 	topo.UpdateCellsToRegions(map[string]string{
 		"cell1": "region1",
-		"cell2": "region2",
+		"cell2": "region1",
 	})
 
 	ts1 := discovery.TabletStats{
@@ -170,29 +170,38 @@ func TestShuffleTablets(t *testing.T) {
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 
-	tablets := []discovery.TabletStats{ts1, ts2, ts3, ts4}
+	sameCellTablets := []discovery.TabletStats{ts1, ts2}
+	diffCellTablets := []discovery.TabletStats{ts3, ts4}
+	mixedTablets := []discovery.TabletStats{ts1, ts2, ts3, ts4}
 	// repeat shuffling 10 times and everytime the same cell tablets should be in the front
 	for i := 0; i < 10; i++ {
-		shuffleTablets("cell1", tablets)
-
-		if len(tablets) != 4 {
-			t.Errorf("should have 4 tablets, got %+v", tablets)
+		shuffleTablets("cell1", sameCellTablets)
+		if (len(sameCellTablets) != 2) ||
+			(sameCellTablets[0].Key != "t1" && sameCellTablets[0].Key != "t2") ||
+			(sameCellTablets[1].Key != "t1" && sameCellTablets[1].Key != "t2") {
+			t.Errorf("should shuffle in only same cell tablets, got %+v", sameCellTablets)
 		}
 
-		if tablets[0].Key != "t1" && tablets[0].Key != "t2" {
-			t.Errorf("should have same cell tablets in the front")
+		shuffleTablets("cell1", diffCellTablets)
+		if (len(diffCellTablets) != 2) ||
+			(diffCellTablets[0].Key != "t3" && diffCellTablets[0].Key != "t4") ||
+			(diffCellTablets[1].Key != "t3" && diffCellTablets[1].Key != "t4") {
+			t.Errorf("should shuffle in only diff cell tablets, got %+v", diffCellTablets)
 		}
 
-		if tablets[1].Key != "t1" && tablets[1].Key != "t2" {
-			t.Errorf("should have same cell tablets in the front")
+		shuffleTablets("cell1", mixedTablets)
+		if len(mixedTablets) != 4 {
+			t.Errorf("should have 4 tablets, got %+v", mixedTablets)
 		}
 
-		if tablets[2].Key != "t3" && tablets[2].Key != "t4" {
-			t.Errorf("should have diff cell tablets in the rear")
+		if (mixedTablets[0].Key != "t1" && mixedTablets[0].Key != "t2") ||
+			(mixedTablets[1].Key != "t1" && mixedTablets[1].Key != "t2") {
+			t.Errorf("should have same cell tablets in the front, got %+v", mixedTablets)
 		}
 
-		if tablets[3].Key != "t3" && tablets[3].Key != "t4" {
-			t.Errorf("should have diff cell tablets in the rear")
+		if (mixedTablets[2].Key != "t3" && mixedTablets[2].Key != "t4") ||
+			(mixedTablets[3].Key != "t3" && mixedTablets[3].Key != "t4") {
+			t.Errorf("should have diff cell tablets in the rear, got %+v", mixedTablets)
 		}
 	}
 }
