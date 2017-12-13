@@ -47,7 +47,7 @@ const zkCustomRuleSource string = "ZK_CUSTOM_RULE"
 // ZkCustomRule is Zookeeper backed implementation of CustomRuleManager
 type ZkCustomRule struct {
 	// Zookeeper connection. Set at construction time.
-	zconn zk2topo.Conn
+	zconn *zk2topo.ZkConn
 
 	// Path of the rules files. Set at construction time.
 	path string
