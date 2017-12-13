@@ -26,7 +26,7 @@ import (
 	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test"
-	"github.com/youtube/vitess/go/zk/zkctl"
+	"github.com/youtube/vitess/go/vt/zkctl"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
