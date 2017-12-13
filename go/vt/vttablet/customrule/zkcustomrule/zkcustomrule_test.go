@@ -28,7 +28,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/zk2topo"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/rules"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletservermock"
-	"github.com/youtube/vitess/go/zk/zkctl"
+	"github.com/youtube/vitess/go/vt/zkctl"
 )
 
 var customRule1 = `
