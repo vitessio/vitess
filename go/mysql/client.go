@@ -622,8 +622,5 @@ func (c *Conn) writeClearTextPassword(params *ConnParams) error {
 	if pos != len(data) {
 		return fmt.Errorf("error building ClearTextPassword packet: got %v bytes expected %v", pos, len(data))
 	}
-	if err := c.writeEphemeralPacket(true); err != nil {
-		return err
-	}
-	return nil
+	return c.writeEphemeralPacket(true)
 }
