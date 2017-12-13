@@ -93,7 +93,7 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 
 	if idleTimeout != 0 {
 		rp.idleTimer = timer.NewTimer(idleTimeout / 10)
-		rp.idleTimer.Start(func() { rp.closeIdleResources() })
+		rp.idleTimer.Start(rp.closeIdleResources)
 	}
 	return rp
 }
