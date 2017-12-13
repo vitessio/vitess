@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"fmt"
 	"path"
-	"strings"
 
 	"github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
@@ -30,11 +29,9 @@ import (
 
 // Create is part of the topo.Conn interface.
 func (zs *Server) Create(ctx context.Context, filePath string, contents []byte) (topo.Version, error) {
-	filePath = path.Clean(filePath)
-	depth := strings.Count(filePath, "/")
 	zkPath := path.Join(zs.root, filePath)
 
-	pathCreated, err := CreateRecursive(ctx, zs.conn, zkPath, contents, 0, zk.WorldACL(PermFile), depth)
+	pathCreated, err := CreateRecursive(ctx, zs.conn, zkPath, contents, 0, zk.WorldACL(PermFile), -1)
 	if err != nil {
 		return nil, convertError(err)
 	}

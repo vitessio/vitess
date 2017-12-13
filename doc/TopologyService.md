@@ -264,8 +264,9 @@ and by the root directory to put the Vitess data in. For instance, assuming we
 want to use servers `global_server1,global_server2` in path `/vitess/global`:
 
 ``` sh
-# First create the directory in the global server:
-zk -server global_server1,global_server2 touch -p /vitess/global
+# The root directory in the global server will be created
+# automatically, same as when running this command:
+# zk -server global_server1,global_server2 touch -p /vitess/global
 
 # Set the following flags to let Vitess use this global server:
 # -topo_implementation zk2

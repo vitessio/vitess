@@ -33,8 +33,9 @@ import (
 // CreateRecursive is a helper function on top of Create. It will
 // create a path and any pieces required, think mkdir -p.
 // Intermediate znodes are always created empty.
-func CreateRecursive(ctx context.Context, conn Conn, zkPath string, value []byte, flags int32, aclv []zk.ACL, maxCreationDepth int) (pathCreated string, err error) {
-	pathCreated, err = conn.Create(ctx, zkPath, value, flags, aclv)
+// Pass maxCreationDepth=-1 to create all nodes to the top.
+func CreateRecursive(ctx context.Context, conn Conn, zkPath string, value []byte, flags int32, aclv []zk.ACL, maxCreationDepth int) (string, error) {
+	pathCreated, err := conn.Create(ctx, zkPath, value, flags, aclv)
 	if err == zk.ErrNoNode {
 		if maxCreationDepth == 0 {
 			return "", zk.ErrNoNode
@@ -54,7 +55,7 @@ func CreateRecursive(ctx context.Context, conn Conn, zkPath string, value []byte
 		}
 		pathCreated, err = conn.Create(ctx, zkPath, value, flags, aclv)
 	}
-	return
+	return pathCreated, err
 }
 
 // ChildrenRecursive returns the relative path of all the children of
