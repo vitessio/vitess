@@ -67,10 +67,13 @@ func NewConnectionPool(name string, capacity int, idleTimeout time.Duration) *Co
 	usedNames[name] = true
 	stats.Publish(name+"Capacity", stats.IntFunc(cp.Capacity))
 	stats.Publish(name+"Available", stats.IntFunc(cp.Available))
+	stats.Publish(name+"Active", stats.IntFunc(cp.Active))
+	stats.Publish(name+"InUse", stats.IntFunc(cp.InUse))
 	stats.Publish(name+"MaxCap", stats.IntFunc(cp.MaxCap))
 	stats.Publish(name+"WaitCount", stats.IntFunc(cp.WaitCount))
 	stats.Publish(name+"WaitTime", stats.DurationFunc(cp.WaitTime))
 	stats.Publish(name+"IdleTimeout", stats.DurationFunc(cp.IdleTimeout))
+	stats.Publish(name+"IdleClosed", stats.IntFunc(cp.IdleClosed))
 	return cp
 }
 
@@ -206,6 +209,24 @@ func (cp *ConnectionPool) Available() int64 {
 	return p.Available()
 }
 
+// Active returns the number of active connections in the pool
+func (cp *ConnectionPool) Active() int64 {
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.Active()
+}
+
+// InUse returns the number of in-use connections in the pool
+func (cp *ConnectionPool) InUse() int64 {
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.InUse()
+}
+
 // MaxCap returns the maximum size of the pool
 func (cp *ConnectionPool) MaxCap() int64 {
 	p := cp.pool()
@@ -240,4 +261,13 @@ func (cp *ConnectionPool) IdleTimeout() time.Duration {
 		return 0
 	}
 	return p.IdleTimeout()
+}
+
+// IdleClosed returns the number of closed connections for the pool.
+func (cp *ConnectionPool) IdleClosed() int64 {
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.IdleClosed()
 }
