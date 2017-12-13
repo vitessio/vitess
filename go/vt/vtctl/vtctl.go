@@ -14,7 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package vtctl contains the implementation of all the Vitess management
+// commands.
+package vtctl
+
 // The following comment section contains definitions for command arguments.
+// It is parsed to generate the vtctl documentation automatically.
 /*
 COMMAND ARGUMENT DEFINITIONS
 
@@ -84,8 +89,6 @@ COMMAND ARGUMENT DEFINITIONS
   -- spare: A slaved copy of data that is ready but not serving query traffic.
             The data could be a potential master tablet.
 */
-
-package vtctl
 
 import (
 	"bytes"
