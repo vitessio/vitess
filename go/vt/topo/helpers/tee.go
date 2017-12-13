@@ -97,8 +97,8 @@ func (c *TeeConn) Close() {
 }
 
 // ListDir is part of the topo.Conn interface.
-func (c *TeeConn) ListDir(ctx context.Context, dirPath string) ([]string, error) {
-	return c.primary.ListDir(ctx, dirPath)
+func (c *TeeConn) ListDir(ctx context.Context, dirPath string, full bool) ([]topo.DirEntry, error) {
+	return c.primary.ListDir(ctx, dirPath, full)
 }
 
 // Create is part of the topo.Conn interface.

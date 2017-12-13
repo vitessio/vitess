@@ -105,7 +105,7 @@ func (ex *backendExplorer) HandlePath(nodePath string, r *http.Request) *Result 
 	}
 
 	// Get the children, if any.
-	children, err := conn.ListDir(ctx, relativePath)
+	children, err := conn.ListDir(ctx, relativePath, false /*full*/)
 	if err != nil {
 		// It failed as a directory, let's just return what it did
 		// as a file.
@@ -114,7 +114,7 @@ func (ex *backendExplorer) HandlePath(nodePath string, r *http.Request) *Result 
 
 	// It worked as a directory, clear any file error.
 	result.Error = ""
-	result.Children = children
+	result.Children = topo.DirEntriesToStringArray(children)
 	return result
 }
 

@@ -78,6 +78,7 @@ const (
 
 // Path for all object types.
 const (
+	CellsPath     = "cells"
 	KeyspacesPath = "keyspaces"
 	ShardsPath    = "shards"
 	TabletsPath   = "tablets"

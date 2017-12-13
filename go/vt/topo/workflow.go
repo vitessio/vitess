@@ -46,12 +46,12 @@ type WorkflowInfo struct {
 // GetWorkflowNames returns the names of the existing
 // workflows. They are sorted by uuid.
 func (ts *Server) GetWorkflowNames(ctx context.Context) ([]string, error) {
-	entries, err := ts.globalCell.ListDir(ctx, workflowsPath)
+	entries, err := ts.globalCell.ListDir(ctx, workflowsPath, false /*full*/)
 	switch err {
 	case ErrNoNode:
 		return nil, nil
 	case nil:
-		return entries, nil
+		return DirEntriesToStringArray(entries), nil
 	default:
 		return nil, err
 	}
