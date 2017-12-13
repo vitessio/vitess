@@ -27,7 +27,7 @@ import (
 )
 
 // ListDir is part of the topo.Conn interface.
-func (s *Server) ListDir(ctx context.Context, dirPath string) ([]string, error) {
+func (s *Server) ListDir(ctx context.Context, dirPath string, full bool) ([]topo.DirEntry, error) {
 	nodePath := path.Join(s.root, dirPath) + "/"
 	if nodePath == "//" {
 		// Special case where s.root is "/", dirPath is empty,
@@ -48,7 +48,7 @@ func (s *Server) ListDir(ctx context.Context, dirPath string) ([]string, error) 
 	}
 
 	prefixLen := len(nodePath)
-	var result []string
+	var result []topo.DirEntry
 	for _, ev := range resp.Kvs {
 		p := string(ev.Key)
 
@@ -59,13 +59,25 @@ func (s *Server) ListDir(ctx context.Context, dirPath string) ([]string, error) 
 		p = p[prefixLen:]
 
 		// Keep only the part until the first '/'.
+		t := topo.TypeFile
 		if i := strings.Index(p, "/"); i >= 0 {
 			p = p[:i]
+			t = topo.TypeDirectory
 		}
 
 		// Remove duplicates, add to list.
-		if len(result) == 0 || result[len(result)-1] != p {
-			result = append(result, p)
+		if len(result) == 0 || result[len(result)-1].Name != p {
+			e := topo.DirEntry{
+				Name: p,
+			}
+			if full {
+				e.Type = t
+				if ev.Lease != 0 {
+					// Only locks have a lease associated with them.
+					e.Ephemeral = true
+				}
+			}
+			result = append(result, e)
 		}
 	}
 
