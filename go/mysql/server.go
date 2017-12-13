@@ -69,6 +69,12 @@ type Handler interface {
 	// ConnectionClosed is called when a connection is closed.
 	ConnectionClosed(c *Conn)
 
+	// Called when authorization is completed, but before the OK packet is sent
+	// This can be used to verify that the connection and all resources are valid
+	// before accepting the connection.  If error is returned, the connection is
+	// closed.
+	ConnectionNegotiated(c *Conn) error
+
 	// ComQuery is called when a connection receives a query.
 	// Note the contents of the query slice may change after
 	// the first call to callback. So the Handler should not
@@ -276,6 +282,12 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		}
 		c.User = user
 		c.UserData = userData
+	}
+
+	// Verify with the handler that this connection is valid
+	if err = l.handler.ConnectionNegotiated(c); err != nil {
+		c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "%v", err)
+		return
 	}
 
 	// Negotiation worked, send OK packet.

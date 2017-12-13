@@ -314,6 +314,10 @@ func (db *DB) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Resu
 	return db.Handler.HandleQuery(c, query, callback)
 }
 
+func (db *DB) ConnectionNegotiated(c *mysql.Conn) error {
+	return nil
+}
+
 // HandleQuery is the default implementation of the QueryHandler interface
 func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	if db.AllowAll {

@@ -75,6 +75,10 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	}
 }
 
+func (vh *vtgateHandler) ConnectionNegotiated(c *mysql.Conn) error {
+	return nil
+}
+
 func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	// FIXME(alainjobart): Add some kind of timeout to the context.
 	ctx := context.Background()

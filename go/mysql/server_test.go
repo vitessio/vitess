@@ -69,6 +69,10 @@ func (th *testHandler) NewConnection(c *Conn) {
 	th.lastConn = c
 }
 
+func (vh *testHandler) ConnectionNegotiated(c *Conn) error {
+	return nil
+}
+
 func (th *testHandler) ConnectionClosed(c *Conn) {
 }
 
