@@ -608,6 +608,11 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 		}
 	}
 
+	// The JDBC driver sometimes sends an empty string as the auth method when it wants to use mysql_native_password
+	if authMethod == "" {
+		authMethod = MysqlNativePassword
+	}
+
 	// FIXME(alainjobart) Add CLIENT_CONNECT_ATTRS parsing if we need it.
 
 	return username, authMethod, authResponse, nil
