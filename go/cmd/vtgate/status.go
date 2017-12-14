@@ -28,6 +28,9 @@ import (
 var onStatusRegistered func()
 
 func addStatusParts(vtg *vtgate.VTGate) {
+	servenv.AddStatusPart("Executor", vtgate.ExecutorTemplate, func() interface{} {
+		return nil
+	})
 	servenv.AddStatusPart("VSchema", vtgate.VSchemaTemplate, func() interface{} {
 		return vtg.VSchemaStats()
 	})
