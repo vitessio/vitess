@@ -135,6 +135,7 @@ func main() {
 	}
 
 	vtgate.QueryLogHandler = "/debug/vtgate/querylog"
+	vtgate.QueryLogzHandler = "/debug/vtgate/querylogz"
 	vtgate.Init(context.Background(), healthCheck, ts, resilientSrvTopoServer, tpb.Cells[0], 2 /*retryCount*/, tabletTypesToWait)
 
 	// vtctld configuration and init
