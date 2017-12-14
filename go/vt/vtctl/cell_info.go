@@ -39,13 +39,13 @@ func init() {
 	addCommand(cellsGroupName, command{
 		"AddCellInfo",
 		commandAddCellInfo,
-		"[-server_address <addr>] [-root <root>] <cell>",
+		"[-server_address <addr>] [-root <root>] [-region <region>] <cell>",
 		"Registers a local topology service in a new cell by creating the CellInfo with the provided parameters. The address will be used to connect to the topology service, and we'll put Vitess data starting at the provided root."})
 
 	addCommand(cellsGroupName, command{
 		"UpdateCellInfo",
 		commandUpdateCellInfo,
-		"[-server_address <addr>] [-root <root>] <cell>",
+		"[-server_address <addr>] [-root <root>] [-region <region>] <cell>",
 		"Updates the content of a CellInfo with the provided parameters. If a value is empty, it is not updated. The CellInfo will be created if it doesn't exist."})
 
 	addCommand(cellsGroupName, command{
