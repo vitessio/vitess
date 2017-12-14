@@ -82,7 +82,7 @@ var (
 )
 
 func init() {
-	http.HandleFunc("/debug/querylogz", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc(QueryLogzHandler, func(w http.ResponseWriter, r *http.Request) {
 		ch := QueryLogger.Subscribe("querylogz")
 		defer QueryLogger.Unsubscribe(ch)
 		querylogzHandler(ch, w, r)

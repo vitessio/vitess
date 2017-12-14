@@ -24,6 +24,9 @@ var (
 	// QueryLogHandler is the debug UI path for exposing query logs
 	QueryLogHandler = "/debug/querylog"
 
+	// QueryLogzHandler is the debug UI path for exposing query logs
+	QueryLogzHandler = "/debug/querylogz"
+
 	// QueryLogger enables streaming logging of queries
 	QueryLogger = streamlog.New("VTGate", 10)
 )
