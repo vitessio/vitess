@@ -128,12 +128,17 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 	}
 
 	for _, colVindex := range eRoute.Table.ColumnVindexes {
-		pos := findOrAddColumn(ins, colVindex.Column)
-		swappedValues, err := swapBindVariables(rows, pos, ":_"+colVindex.Column.CompliantName())
-		if err != nil {
-			return nil, err
+		var colVindexValues []sqltypes.PlanValue
+		for _, col := range colVindex.Columns {
+			pos := findOrAddColumn(ins, col)
+			swappedValues, err := swapBindVariables(rows, pos, ":_"+col.CompliantName())
+			if err != nil {
+				return nil, err
+			}
+			colVindexValues = append(colVindexValues, swappedValues)
 		}
-		eRoute.Values = append(eRoute.Values, swappedValues)
+		fmt.Printf("WHY me - no entender %v", colVindexValues)
+		eRoute.Values = append(eRoute.Values, colVindexValues)
 	}
 
 	eRoute.Query = generateQuery(ins)
@@ -213,8 +218,10 @@ func findOrAddColumn(ins *sqlparser.Insert, col sqlparser.ColIdent) int {
 func isVindexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.ColumnVindex) bool {
 	for _, assignment := range setClauses {
 		for _, vcol := range colVindexes {
-			if vcol.Column.Equal(assignment.Name.Name) {
-				return true
+			for _, col := range vcol.Columns {
+				if col.Equal(assignment.Name.Name) {
+					return true
+				}
 			}
 		}
 	}

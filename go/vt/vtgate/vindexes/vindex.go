@@ -102,16 +102,6 @@ type Functional interface {
 type Lookup interface {
 	// Create creates an association between ids and ksids. If ignoreMode
 	// is true, then the Create should ignore dup key errors.
-	Create(vc VCursor, ids []sqltypes.Value, ksids [][]byte, ignoreMode bool) error
-	Delete(VCursor, []sqltypes.Value, []byte) error
-}
-
-// A MultiColumnLookup vindex is similar to the Lookup one, but
-// can multiple columns mapping to a keyspace id.
-// e.g (from: column_a, column_b, to: primary_vindex_id)
-type MultiColumnLookup interface {
-	// Create creates an association between a list of column ids and ksids. If ignoreMode
-	// is true, then the Create should ignore dup key errors.
 	Create(vc VCursor, columnKeyIds [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error
 	Delete(VCursor, []sqltypes.Value, []byte) error
 }

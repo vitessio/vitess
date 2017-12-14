@@ -111,13 +111,13 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 			// Check if a colvindex of the same name already exists.
 			// Dups are not allowed in subqueries in this situation.
 			for _, colVindex := range table.ColumnVindexes {
-				if colVindex.Column.Equal(rc.alias) {
+				if colVindex.Columns[0].Equal(rc.alias) {
 					return nil, fmt.Errorf("duplicate column aliases: %v", rc.alias)
 				}
 			}
 			table.ColumnVindexes = append(table.ColumnVindexes, &vindexes.ColumnVindex{
-				Column: rc.alias,
-				Vindex: rc.column.Vindex,
+				Columns: []sqlparser.ColIdent{rc.alias},
+				Vindex:  rc.column.Vindex,
 			})
 		}
 		rb := newRoute(
@@ -178,7 +178,7 @@ func buildTablePrimitive(tableExpr *sqlparser.AliasedTableExpr, tableName sqlpar
 	// for keyspace id. Currently only dual tables are pinned.
 	route := engine.NewRoute(engine.SelectEqualUnique, table.Keyspace)
 	route.Vindex, _ = vindexes.NewBinary("binary", nil)
-	route.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, table.Pinned)}}
+	route.Values = [][]sqltypes.PlanValue{[]sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, table.Pinned)}}}
 	rb.ERoute = route
 	return rb, nil
 }
