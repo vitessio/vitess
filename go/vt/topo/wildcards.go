@@ -196,10 +196,10 @@ func (ts *Server) resolveRecursive(ctx context.Context, cell string, parts []str
 
 	for i, part := range parts {
 		if fileutil.HasWildcard(part) {
-			var children []string
+			var children []DirEntry
 			var err error
 			parentPath := strings.Join(parts[:i], "/")
-			children, err = conn.ListDir(ctx, parentPath)
+			children, err = conn.ListDir(ctx, parentPath, false /*full*/)
 			if err != nil {
 				// we asked for something like
 				// /keyspaces/aaa/* and
@@ -218,7 +218,7 @@ func (ts *Server) resolveRecursive(ctx context.Context, cell string, parts []str
 			var firstError error
 
 			for j, child := range children {
-				matched, err := path.Match(part, child)
+				matched, err := path.Match(part, child.Name)
 				if err != nil {
 					return nil, err
 				}
@@ -227,7 +227,7 @@ func (ts *Server) resolveRecursive(ctx context.Context, cell string, parts []str
 					wg.Add(1)
 					newParts := make([]string, len(parts))
 					copy(newParts, parts)
-					newParts[i] = child
+					newParts[i] = child.Name
 					go func(j int) {
 						defer wg.Done()
 						subResult, err := ts.resolveRecursive(ctx, cell, newParts, false)
@@ -274,7 +274,7 @@ func (ts *Server) resolveRecursive(ctx context.Context, cell string, parts []str
 	}
 
 	// This is an expanded path, we need to check if it exists.
-	if _, err = conn.ListDir(ctx, p); err == nil {
+	if _, err = conn.ListDir(ctx, p, false /*full*/); err == nil {
 		// The path exists as a directory, return it.
 		return []string{p}, nil
 	}

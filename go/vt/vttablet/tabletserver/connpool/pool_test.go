@@ -191,13 +191,32 @@ func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
 	if connPool.Available() != 100 {
 		t.Fatalf("pool available connections should be 100")
 	}
+	if connPool.Active() != 0 {
+		t.Fatalf("pool active connections should be 0")
+	}
+	if connPool.InUse() != 0 {
+		t.Fatalf("pool inUse connections should be 0")
+	}
 	dbConn, _ := connPool.Get(context.Background())
 	if connPool.Available() != 99 {
 		t.Fatalf("pool available connections should be 99")
 	}
+	if connPool.Active() != 1 {
+		t.Fatalf("pool active connections should be 1")
+	}
+	if connPool.InUse() != 1 {
+		t.Fatalf("pool inUse connections should be 1")
+	}
+
 	dbConn.Recycle()
 	if connPool.Available() != 100 {
 		t.Fatalf("pool available connections should be 100")
+	}
+	if connPool.Active() != 1 {
+		t.Fatalf("pool active connections should be 1")
+	}
+	if connPool.InUse() != 0 {
+		t.Fatalf("pool inUse connections should be 0")
 	}
 }
 

@@ -36,7 +36,7 @@ type consulLockDescriptor struct {
 // Lock is part of the topo.Conn interface.
 func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	// We list the directory first to make sure it exists.
-	if _, err := s.ListDir(ctx, dirPath); err != nil {
+	if _, err := s.ListDir(ctx, dirPath, false /*full*/); err != nil {
 		// We need to return the right error codes, like
 		// topo.ErrNoNode and topo.ErrInterrupted, and the
 		// easiest way to do this is to return convertError(err).

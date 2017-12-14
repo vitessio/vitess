@@ -21,6 +21,7 @@ set properly.
 """
 
 
+import socket
 import unittest
 
 import MySQLdb
@@ -143,7 +144,9 @@ class TestMySQL(unittest.TestCase):
     utils.VtGate(mysql_server=True).start(
         extra_args=['-mysql_auth_server_impl', 'static',
                     '-mysql_auth_server_static_file', mysql_auth_server_static])
-    params = dict(host='::',
+    # We use gethostbyname('localhost') so we don't presume
+    # of the IP format (travis is only IP v4, really).
+    params = dict(host=socket.gethostbyname('localhost'),
                   port=utils.vtgate.mysql_port,
                   user='testuser1',
                   passwd='testpassword1',

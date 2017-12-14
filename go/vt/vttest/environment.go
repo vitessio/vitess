@@ -24,6 +24,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	// we use gRPC everywhere, so import the vtgate client.
 	_ "github.com/youtube/vitess/go/vt/vtgate/grpcvtgateconn"
@@ -270,6 +271,10 @@ func NewLocalTestEnv(flavor string, basePort int) (*LocalTestEnv, error) {
 
 func defaultEnvFactory() (Environment, error) {
 	return NewLocalTestEnv("", 0)
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
 }
 
 // NewDefaultEnv is an user-configurable callback that returns a new Environment

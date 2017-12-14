@@ -70,6 +70,20 @@ func checkElection(t *testing.T, ts *topo.Server) {
 		t.Fatalf("mp1 cannot become master: %v", err)
 	}
 
+	// A lot of implementations use a toplevel directory for their elections.
+	// Make sure it is marked as 'Ephemeral'.
+	entries, err := conn.ListDir(context.Background(), "/", true /*full*/)
+	if err != nil {
+		t.Fatalf("ListDir(/) failed: %v", err)
+	}
+	for _, e := range entries {
+		if e.Name != topo.CellsPath {
+			if !e.Ephemeral {
+				t.Errorf("toplevel directory that is not ephemeral: %v", e)
+			}
+		}
+	}
+
 	// get the current master name, better be id1
 	waitForMasterID(t, mp1, id1)
 
