@@ -1,0 +1,1 @@
+../../vt/zkctl/zksrv.sh
