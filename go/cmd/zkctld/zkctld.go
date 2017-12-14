@@ -28,13 +28,13 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/zk/zkctl"
+	"github.com/youtube/vitess/go/vt/zkctl"
 )
 
 var (
 	zkCfg = flag.String("zk.cfg", "6@<hostname>:3801:3802:3803",
 		"zkid@server1:leaderPort1:electionPort1:clientPort1,...)")
-	myId = flag.Uint("zk.myid", 0,
+	myID = flag.Uint("zk.myid", 0,
 		"which server do you want to be? only needed when running multiple instance on one box, otherwise myid is implied by hostname")
 )
 
@@ -44,7 +44,7 @@ func main() {
 
 	flag.Parse()
 
-	zkConfig := zkctl.MakeZkConfigFromString(*zkCfg, uint32(*myId))
+	zkConfig := zkctl.MakeZkConfigFromString(*zkCfg, uint32(*myID))
 	zkd := zkctl.NewZkd(zkConfig)
 
 	if zkd.Inited() {
