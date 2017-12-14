@@ -30,7 +30,7 @@ import (
 // multiColLookupInternal implements the functions for the Lookup vindexes.
 type multiColLookupInternal struct {
 	Table         string   `json:"table"`
-	From          []string `json:"ordered_from"`
+	FromColumns   []string `json:"ordered_from"`
 	To            string   `json:"to"`
 	sel, ver, del string
 }
@@ -42,12 +42,12 @@ func (lkp *multiColLookupInternal) Init(lookupQueryParams map[string]string) {
 	for _, from := range strings.Split(lookupQueryParams["from_columns"], ",") {
 		fromColumns = append(fromColumns, strings.TrimSpace(from))
 	}
-	lkp.From = fromColumns
+	lkp.FromColumns = fromColumns
 
 	// TODO
-	lkp.sel = fmt.Sprintf("select %s from %s where %s = :%s", lkp.To, lkp.Table, lkp.From, lkp.From)
-	lkp.ver = fmt.Sprintf("select %s from %s where %s = :%s and %s = :%s", lkp.From, lkp.Table, lkp.From, lkp.From, lkp.To, lkp.To)
-	lkp.del = fmt.Sprintf("delete from %s where %s = :%s and %s = :%s", lkp.Table, lkp.From, lkp.From, lkp.To, lkp.To)
+	lkp.sel = fmt.Sprintf("select %s from %s where %s = :%s", lkp.To, lkp.Table, lkp.FromColumns, lkp.FromColumns)
+	lkp.ver = fmt.Sprintf("select %s from %s where %s = :%s and %s = :%s", lkp.FromColumns, lkp.Table, lkp.FromColumns, lkp.FromColumns, lkp.To, lkp.To)
+	lkp.del = fmt.Sprintf("delete from %s where %s = :%s and %s = :%s", lkp.Table, lkp.FromColumns, lkp.FromColumns, lkp.To, lkp.To)
 }
 
 // Lookup performs a lookup for the ids.
@@ -55,7 +55,7 @@ func (lkp *multiColLookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value)
 	results := make([]*sqltypes.Result, 0, len(ids))
 	for _, id := range ids {
 		bindVars := map[string]*querypb.BindVariable{
-			lkp.From[0]: sqltypes.ValueBindVariable(id),
+			lkp.FromColumns[0]: sqltypes.ValueBindVariable(id),
 		}
 		result, err := vcursor.Execute(lkp.sel, bindVars, false /* isDML */)
 		if err != nil {
@@ -72,8 +72,8 @@ func (lkp *multiColLookupInternal) Verify(vcursor VCursor, ids, values []sqltype
 	for i, id := range ids {
 		bindVars := map[string]*querypb.BindVariable{
 			// TODO think
-			lkp.From[0]: sqltypes.ValueBindVariable(id),
-			lkp.To:      sqltypes.ValueBindVariable(values[i]),
+			lkp.FromColumns[0]: sqltypes.ValueBindVariable(id),
+			lkp.To:             sqltypes.ValueBindVariable(values[i]),
 		}
 		result, err := vcursor.Execute(lkp.ver, bindVars, true /* isDML */)
 		if err != nil {
@@ -90,9 +90,9 @@ func (lkp *multiColLookupInternal) Create(vcursor VCursor, fromIds [][]sqltypes.
 	if ignoreMode {
 		fmt.Fprintf(&insBuffer, "insert ignore into %s(", lkp.Table)
 	} else {
-		fmt.Fprintf(&insBuffer, "insert into %s", lkp.Table)
+		fmt.Fprintf(&insBuffer, "insert into %s(", lkp.Table)
 	}
-	for _, col := range lkp.From {
+	for _, col := range lkp.FromColumns {
 		fmt.Fprintf(&insBuffer, "%s, ", col)
 
 	}
@@ -104,13 +104,15 @@ func (lkp *multiColLookupInternal) Create(vcursor VCursor, fromIds [][]sqltypes.
 		}
 		toStr := lkp.To + strconv.Itoa(i)
 		for _, colId := range colIds {
-			fromStr := lkp.From[i] + strconv.Itoa(i)
+			fromStr := lkp.FromColumns[i] + strconv.Itoa(i)
 			bindVars[fromStr] = sqltypes.ValueBindVariable(colId)
 			insBuffer.WriteString("(:" + fromStr + ", ")
 		}
 		insBuffer.WriteString(":" + toStr + ")")
 		bindVars[toStr] = sqltypes.ValueBindVariable(toValues[i])
 	}
+	fmt.Println("THIIIIS IS THE QUERY")
+	fmt.Println(insBuffer.String())
 	_, err := vcursor.Execute(insBuffer.String(), bindVars, true /* isDML */)
 	if err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
@@ -122,8 +124,8 @@ func (lkp *multiColLookupInternal) Create(vcursor VCursor, fromIds [][]sqltypes.
 func (lkp *multiColLookupInternal) Delete(vcursor VCursor, ids []sqltypes.Value, value sqltypes.Value) error {
 	for _, id := range ids {
 		bindVars := map[string]*querypb.BindVariable{
-			lkp.From[0]: sqltypes.ValueBindVariable(id),
-			lkp.To:      sqltypes.ValueBindVariable(value),
+			lkp.FromColumns[0]: sqltypes.ValueBindVariable(id),
+			lkp.To:             sqltypes.ValueBindVariable(value),
 		}
 		if _, err := vcursor.Execute(lkp.del, bindVars, true /* isDML */); err != nil {
 			return fmt.Errorf("lookup.Delete: %v", err)

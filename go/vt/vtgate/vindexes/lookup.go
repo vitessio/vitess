@@ -19,17 +19,16 @@ package vindexes
 import (
 	"encoding/json"
 	"fmt"
-
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
 var (
-	_ NonUnique         = (*LookupNonUnique)(nil)
-	_ Lookup            = (*LookupNonUnique)(nil)
-	_ Unique            = (*LookupUnique)(nil)
-	_ Lookup            = (*LookupUnique)(nil)
-	_ NonUnique         = (*MultiColLookupNonUnique)(nil)
-	_ MultiColumnLookup = (*MultiColLookupNonUnique)(nil)
+	_ NonUnique = (*LookupNonUnique)(nil)
+	_ Lookup    = (*LookupNonUnique)(nil)
+	_ Unique    = (*LookupUnique)(nil)
+	_ Lookup    = (*LookupUnique)(nil)
+	_ NonUnique = (*MultiColLookupNonUnique)(nil)
+	_ Lookup    = (*MultiColLookupNonUnique)(nil)
 )
 
 func init() {
@@ -87,6 +86,7 @@ func (ln *MultiColLookupNonUnique) Verify(vcursor VCursor, ids []sqltypes.Value,
 
 // Create reserves the id by inserting it into the vindex table.
 func (ln *MultiColLookupNonUnique) Create(vcursor VCursor, fromIds [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
+	fmt.Printf("This is the thing %v, %v", fromIds, ksids)
 	return ln.lkp.Create(vcursor, fromIds, ksidsToValues(ksids), ignoreMode)
 }
 
@@ -149,8 +149,10 @@ func (ln *LookupNonUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (ln *LookupNonUnique) Create(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
-	return ln.lkp.Create(vcursor, ids, ksidsToValues(ksids), ignoreMode)
+func (ln *LookupNonUnique) Create(vcursor VCursor, ids [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
+	fmt.Printf("This is the thing %v, %v", ids, ksids)
+	// In the non multicolumn case, ids is always a slice with 1 element.
+	return ln.lkp.Create(vcursor, ids[0], ksidsToValues(ksids), ignoreMode)
 }
 
 // Delete deletes the entry from the vindex table.
@@ -224,8 +226,9 @@ func (lu *LookupUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (lu *LookupUnique) Create(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
-	return lu.lkp.Create(vcursor, ids, ksidsToValues(ksids), ignoreMode)
+func (lu *LookupUnique) Create(vcursor VCursor, ids [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
+	// In the non multicolumn case, ids is always a slice with 1 element.
+	return lu.lkp.Create(vcursor, ids[0], ksidsToValues(ksids), ignoreMode)
 }
 
 // Delete deletes the entry from the vindex table.

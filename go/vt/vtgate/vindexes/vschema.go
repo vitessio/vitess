@@ -59,11 +59,11 @@ type Keyspace struct {
 
 // ColumnVindex contains the index info for each index of a table.
 type ColumnVindex struct {
-	Column sqlparser.ColIdent `json:"column"`
-	Type   string             `json:"type"`
-	Name   string             `json:"name"`
-	Owned  bool               `json:"owned,omitempty"`
-	Vindex Vindex             `json:"vindex"`
+	Columns []sqlparser.ColIdent `json:"columns"`
+	Type    string               `json:"type"`
+	Name    string               `json:"name"`
+	Owned   bool                 `json:"owned,omitempty"`
+	Vindex  Vindex               `json:"vindex"`
 }
 
 // Column describes a column.
@@ -238,12 +238,23 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 				if _, ok := vindex.(Lookup); ok && vindexInfo.Owner == tname {
 					owned = true
 				}
+				var columns []sqlparser.ColIdent
+				if ind.Column != "" && len(ind.Columns) > 0 {
+					return fmt.Errorf("Can't use column and columns at the same time in index %s for table %s", ind.Name, tname)
+				}
+				if ind.Column != "" {
+					columns = []sqlparser.ColIdent{sqlparser.NewColIdent(ind.Column)}
+				} else {
+					for _, indCol := range ind.Columns {
+						columns = append(columns, sqlparser.NewColIdent(indCol))
+					}
+				}
 				columnVindex := &ColumnVindex{
-					Column: sqlparser.NewColIdent(ind.Column),
-					Type:   vindexInfo.Type,
-					Name:   ind.Name,
-					Owned:  owned,
-					Vindex: vindex,
+					Columns: columns,
+					Type:    vindexInfo.Type,
+					Name:    ind.Name,
+					Owned:   owned,
+					Vindex:  vindex,
 				}
 				if i == 0 {
 					// Perform Primary vindex check.
@@ -280,7 +291,7 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) error 
 			}
 			t.AutoIncrement.Sequence = seq
 			for i, cv := range t.ColumnVindexes {
-				if t.AutoIncrement.Column.Equal(cv.Column) {
+				if t.AutoIncrement.Column.Equal(cv.Columns[0]) {
 					t.AutoIncrement.ColumnVindexNum = i
 					break
 				}

@@ -98,12 +98,12 @@ func (lh *LookupHash) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]by
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (lh *LookupHash) Create(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
+func (lh *LookupHash) Create(vcursor VCursor, ids [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
 	values, err := unhashList(ksids)
 	if err != nil {
 		return fmt.Errorf("lookup.Create.vunhash: %v", err)
 	}
-	return lh.lkp.Create(vcursor, ids, values, ignoreMode)
+	return lh.lkp.Create(vcursor, ids[0], values, ignoreMode)
 }
 
 // Delete deletes the entry from the vindex table.
@@ -197,12 +197,12 @@ func (lhu *LookupHashUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (lhu *LookupHashUnique) Create(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
+func (lhu *LookupHashUnique) Create(vcursor VCursor, ids [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
 	values, err := unhashList(ksids)
 	if err != nil {
 		return fmt.Errorf("lookup.Create.vunhash: %v", err)
 	}
-	return lhu.lkp.Create(vcursor, ids, values, ignoreMode)
+	return lhu.lkp.Create(vcursor, ids[0], values, ignoreMode)
 }
 
 // Delete deletes the entry from the vindex table.
