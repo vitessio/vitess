@@ -2367,6 +2367,50 @@ func TestTabletServerSplitQuery(t *testing.T) {
 	}
 }
 
+func TestTabletServerSplitQueryKeywords(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	db.AddQuery("SELECT MIN(`by`), MAX(`by`) FROM `order`", &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.Int32},
+			{Type: sqltypes.Int32},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.NewInt32(1),
+				sqltypes.NewInt32(100),
+			},
+		},
+	})
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	tsv := NewTabletServerWithNilTopoServer(config)
+	dbcfgs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_RDONLY}
+	err := tsv.StartService(target, dbcfgs)
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	ctx := context.Background()
+	sql := "select * from `order` where `value` > :count"
+	splits, err := tsv.SplitQuery(
+		ctx,
+		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
+		&querypb.BoundQuery{Sql: sql},
+		[]string{}, /* splitColumns */
+		10,         /* splitCount */
+		0,          /* numRowsPerQueryPart */
+		querypb.SplitQueryRequest_EQUAL_SPLITS)
+	if err != nil {
+		t.Fatalf("TabletServer.SplitQuery should succeed: %v, but get error: %v", sql, err)
+	}
+	if len(splits) != 10 {
+		t.Fatalf("got: %v, want: %v.\nsplits: %+v", len(splits), 10, splits)
+	}
+}
+
 func TestTabletServerSplitQueryInvalidQuery(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
@@ -2865,6 +2909,15 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				sqltypes.NewVarBinary("STATEMENT"),
 			}},
 		},
+		mysql.BaseShowTables: {
+			Fields:       mysql.BaseShowTablesFields,
+			RowsAffected: 2,
+			Rows: [][]sqltypes.Value{
+				mysql.BaseShowTablesRow("test_table", false, ""),
+				mysql.BaseShowTablesRow("order", false, ""),
+				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+			},
+		},
 		"select * from test_table where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "pk",
@@ -2880,14 +2933,6 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				Type: sqltypes.VarChar,
 			}},
 		},
-		mysql.BaseShowTables: {
-			Fields:       mysql.BaseShowTablesFields,
-			RowsAffected: 2,
-			Rows: [][]sqltypes.Value{
-				mysql.BaseShowTablesRow("test_table", false, ""),
-				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
-			},
-		},
 		"describe test_table": {
 			Fields:       mysql.DescribeTableFields,
 			RowsAffected: 4,
@@ -2898,6 +2943,13 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				mysql.DescribeTableRow("name_string", "varchar(10)", false, "", "foo"),
 			},
 		},
+		mysql.BaseShowTablesForTable("test_table"): {
+			Fields:       mysql.BaseShowTablesFields,
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				mysql.BaseShowTablesRow("test_table", false, ""),
+			},
+		},
 		// for SplitQuery because it needs a primary key column
 		"show index from test_table": {
 			Fields:       mysql.ShowIndexFromTableFields,
@@ -2906,6 +2958,38 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false),
 				mysql.ShowIndexFromTableRow("test_table", false, "index", 1, "name", true),
 				mysql.ShowIndexFromTableRow("test_table", false, "name_string_INDEX", 1, "name_string", true),
+			},
+		},
+		// Define table that uses keywords to test SplitQuery escaping.
+		"select * from `order` where 1 != 1": {
+			Fields: []*querypb.Field{{
+				Name: "by",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "value",
+				Type: sqltypes.Int32,
+			}},
+		},
+		"describe `order`": {
+			Fields:       mysql.DescribeTableFields,
+			RowsAffected: 4,
+			Rows: [][]sqltypes.Value{
+				mysql.DescribeTableRow("by", "int(11)", false, "PRI", "0"),
+				mysql.DescribeTableRow("value", "int(11)", false, "", "0"),
+			},
+		},
+		mysql.BaseShowTablesForTable("order"): {
+			Fields:       mysql.BaseShowTablesFields,
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				mysql.BaseShowTablesRow("order", false, ""),
+			},
+		},
+		"show index from `order`": {
+			Fields:       mysql.ShowIndexFromTableFields,
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				mysql.ShowIndexFromTableRow("order", true, "PRIMARY", 1, "by", false),
 			},
 		},
 		"select * from msg where 1 != 1": {
@@ -2963,13 +3047,6 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 		"begin":    {},
 		"commit":   {},
 		"rollback": {},
-		mysql.BaseShowTablesForTable("test_table"): {
-			Fields:       mysql.BaseShowTablesFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysql.BaseShowTablesRow("test_table", false, ""),
-			},
-		},
 		fmt.Sprintf(sqlReadAllRedo, "`_vt`", "`_vt`"): {},
 	}
 }
