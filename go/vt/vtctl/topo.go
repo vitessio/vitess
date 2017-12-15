@@ -19,6 +19,7 @@ package vtctl
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"path"
 
 	"github.com/golang/protobuf/proto"
@@ -44,6 +45,11 @@ func init() {
 		"[-cell <cell>] [-decode_proto] [-long] <path> [<path>...]",
 		"Retrieves the file(s) at <path> from the topo service, and displays it. It can resolve wildcards, and decode the proto-encoded data."})
 
+	addCommand(topoGroupName, command{
+		"TopoCp",
+		commandTopoCp,
+		"[-cell <cell>] [-to_topo] <src> <dst>",
+		"Copies a file from topo to local file structure, or the other way around"})
 }
 
 // DecodeContent uses the filename to imply a type, and proto-decodes
@@ -132,4 +138,44 @@ func commandTopoCat(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 	}
 	return nil
 
+}
+
+func commandTopoCp(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	cell := subFlags.String("cell", topo.GlobalCell, "topology cell to use for the copy. Defaults to global cell.")
+	toTopo := subFlags.Bool("to_topo", false, "copies from local server to topo instead (reverse direction).")
+	subFlags.Parse(args)
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("TopoCp: need source and destination")
+	}
+	from := subFlags.Arg(0)
+	to := subFlags.Arg(1)
+	if *toTopo {
+		return copyFileToTopo(ctx, wr.TopoServer(), *cell, from, to)
+	}
+	return copyFileFromTopo(ctx, wr.TopoServer(), *cell, from, to)
+}
+
+func copyFileFromTopo(ctx context.Context, ts *topo.Server, cell, from, to string) error {
+	conn, err := ts.ConnForCell(ctx, cell)
+	if err != nil {
+		return err
+	}
+	data, _, err := conn.Get(ctx, from)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(to, data, 0644)
+}
+
+func copyFileToTopo(ctx context.Context, ts *topo.Server, cell, from, to string) error {
+	conn, err := ts.ConnForCell(ctx, cell)
+	if err != nil {
+		return err
+	}
+	data, err := ioutil.ReadFile(from)
+	if err != nil {
+		return err
+	}
+	_, err = conn.Update(ctx, to, data, nil)
+	return err
 }
