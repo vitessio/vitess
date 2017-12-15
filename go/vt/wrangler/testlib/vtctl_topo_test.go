@@ -17,11 +17,15 @@ limitations under the License.
 package testlib
 
 import (
+	"io/ioutil"
+	"os"
+	"path"
 	"strings"
 	"testing"
 
 	"golang.org/x/net/context"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -59,10 +63,48 @@ func TestVtctlTopoCommands(t *testing.T) {
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
+	tmp, err := ioutil.TempDir("", "vtctltopotest")
+	if err != nil {
+		t.Fatalf("TempDir failed: %v", err)
+	}
+	defer os.RemoveAll(tmp)
+
 	// Test TopoCat.
 	testVtctlTopoCommand(t, vp, []string{"TopoCat", "-long", "-decode_proto", "/keyspaces/*/Keyspace"}, `path=/keyspaces/ks1/Keyspace version=V
 sharding_column_name: "col1"
 path=/keyspaces/ks2/Keyspace version=V
 sharding_column_name: "col2"
 `)
+
+	// Test TopoCp from topo to disk.
+	ksFile := path.Join(tmp, "Keyspace")
+	_, err = vp.RunAndOutput([]string{"TopoCp", "/keyspaces/ks1/Keyspace", ksFile})
+	if err != nil {
+		t.Fatalf("TopoCp(/keyspaces/ks1/Keyspace) failed: %v", err)
+	}
+	contents, err := ioutil.ReadFile(ksFile)
+	if err != nil {
+		t.Fatalf("copy failed: %v", err)
+	}
+	expected := &topodatapb.Keyspace{ShardingColumnName: "col1"}
+	got := &topodatapb.Keyspace{}
+	if err = proto.Unmarshal(contents, got); err != nil {
+		t.Fatalf("bad keyspace data %v", err)
+	}
+	if !proto.Equal(got, expected) {
+		t.Fatalf("bad proto data: Got %v expected %v", got, expected)
+	}
+
+	// Test TopoCp from disk to topo.
+	_, err = vp.RunAndOutput([]string{"TopoCp", "-to_topo", ksFile, "/keyspaces/ks3/Keyspace"})
+	if err != nil {
+		t.Fatalf("TopoCp(/keyspaces/ks3/Keyspace) failed: %v", err)
+	}
+	ks3, err := ts.GetKeyspace(context.Background(), "ks3")
+	if err != nil {
+		t.Fatalf("copy from disk to topo failed: %v", err)
+	}
+	if !proto.Equal(ks3.Keyspace, expected) {
+		t.Fatalf("copy data to topo failed, got %v expected %v", ks3.Keyspace, expected)
+	}
 }
