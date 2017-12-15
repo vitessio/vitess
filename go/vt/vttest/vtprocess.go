@@ -243,10 +243,15 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 	}
 
 	vtcomboMysqlPort := env.PortForProtocol("vtcombo_mysql_port", "")
+	vtcomboMysqlBindAddress := "localhost"
+	if args.MySQLBindHost != "" {
+		vtcomboMysqlBindAddress = args.MySQLBindHost
+	}
+
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
 		"-mysql_auth_server_impl", "none",
 		"-mysql_server_port", fmt.Sprintf("%d", vtcomboMysqlPort),
-		"-mysql_server_bind_address", "localhost",
+		"-mysql_server_bind_address", vtcomboMysqlBindAddress,
 	}...)
 
 	return vt
