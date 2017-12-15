@@ -566,7 +566,7 @@ class TestTabletManager(unittest.TestCase):
     health = utils.run_vtctl_json(['VtTabletStreamHealth',
                                    '-count', '1',
                                    tablet_62044.tablet_alias])
-    self.assertTrue('seconds_behind_master' in health['realtime_stats'])
+    self.assertIn('seconds_behind_master', health['realtime_stats'])
     self.assertEqual(health['realtime_stats']['seconds_behind_master'], 7200)
     self.assertIn('serving', health)
 
@@ -745,6 +745,62 @@ class TestTabletManager(unittest.TestCase):
     # Shutdown.
     for t in tablets:
       t.kill_vttablet()
+
+  def test_topocustomrule(self):
+    # Empty rule file.
+    topocustomrule_file = environment.tmproot+'/rules.json'
+    with open(topocustomrule_file, 'w') as fd:
+      fd.write('[]\n')
+
+    # Start up a master mysql and vttablet
+    utils.run_vtctl(['CreateKeyspace', '-force', 'test_keyspace'])
+    utils.run_vtctl(['createshard', '-force', 'test_keyspace/0'])
+    tablet_62344.init_tablet('master', 'test_keyspace', '0', parent=False)
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'])
+    utils.validate_topology()
+
+    # Copy config file into topo.
+    topocustomrule_path = '/keyspaces/test_keyspace/configs/CustomRules'
+    utils.run_vtctl(['TopoCp', '-to_topo', topocustomrule_file,
+                     topocustomrule_path])
+
+    # Put some data in, start master.
+    tablet_62344.populate('vt_test_keyspace', self._create_vt_select_test,
+                          self._populate_vt_select_test)
+    tablet_62344.start_vttablet(topocustomrule_path=topocustomrule_path)
+
+    # make sure the query service is working
+    qr = tablet_62344.execute('select id, msg from vt_select_test')
+    self.assertEqual(len(qr['rows']), 4,
+                     'expected 4 rows in vt_select_test: %s' % str(qr))
+
+    # Now update the topocustomrule file.
+    with open(topocustomrule_file, 'w') as fd:
+      fd.write('''
+        [{
+          "Name": "rule1",
+          "Description": "disallow select on table vt_select_test",
+          "TableNames" : ["vt_select_test"],
+          "Query" : "(select)|(SELECT)"
+        }]''')
+    utils.run_vtctl(['TopoCp', '-to_topo', topocustomrule_file,
+                     topocustomrule_path])
+
+    # And wait until the query fails with the right error.
+    timeout = 10.0
+    while True:
+      try:
+        tablet_62344.execute('select id, msg from vt_select_test')
+        timeout = utils.wait_step('query rule in place', timeout)
+      except Exception as e:
+        print e
+        expected = ('disallowed due to rule: disallow select'
+                    ' on table vt_select_test')
+        self.assertIn(expected, str(e))
+        break
+
+    # Cleanup.
+    tablet_62344.kill_vttablet()
 
 
 if __name__ == '__main__':
