@@ -1714,6 +1714,11 @@ func (tsv *TabletServer) HeartbeatLag() (time.Duration, error) {
 	return tsv.hr.GetLatest()
 }
 
+// TopoServer returns the topo server.
+func (tsv *TabletServer) TopoServer() *topo.Server {
+	return tsv.topoServer
+}
+
 // UpdateStream streams binlog events.
 func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
 	// Parse the position if needed.
