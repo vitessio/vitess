@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/rules"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
@@ -71,6 +72,9 @@ type Controller struct {
 	// SetServingTypeError is the return value for SetServingType.
 	SetServingTypeError error
 
+	// TS is the return value for TopoServer.
+	TS *topo.Server
+
 	// mu protects the next fields in this structure. They are
 	// accessed by both the methods in this interface, and the
 	// background health check.
@@ -81,6 +85,9 @@ type Controller struct {
 
 	// isInLameduck is a state variable.
 	isInLameduck bool
+
+	// queryRulesMap has the latest query rules.
+	queryRulesMap map[string]*rules.Rules
 }
 
 // NewController returns a mock of tabletserver.Controller
@@ -89,6 +96,7 @@ func NewController() *Controller {
 		queryServiceEnabled: false,
 		BroadcastData:       make(chan *BroadcastData, 10),
 		StateChanges:        make(chan *StateChange, 10),
+		queryRulesMap:       make(map[string]*rules.Rules),
 	}
 }
 
@@ -162,6 +170,9 @@ func (tqsc *Controller) UnRegisterQueryRuleSource(ruleSource string) {
 
 // SetQueryRules is part of the tabletserver.Controller interface
 func (tqsc *Controller) SetQueryRules(ruleSource string, qrs *rules.Rules) error {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+	tqsc.queryRulesMap[ruleSource] = qrs
 	return nil
 }
 
@@ -192,6 +203,11 @@ func (tqsc *Controller) HeartbeatLag() (time.Duration, error) {
 	return 0, nil
 }
 
+// TopoServer is part of the tabletserver.Controller interface.
+func (tqsc *Controller) TopoServer() *topo.Server {
+	return tqsc.TS
+}
+
 // EnterLameduck implements tabletserver.Controller.
 func (tqsc *Controller) EnterLameduck() {
 	tqsc.mu.Lock()
@@ -206,4 +222,11 @@ func (tqsc *Controller) SetQueryServiceEnabledForTests(enabled bool) {
 	defer tqsc.mu.Unlock()
 
 	tqsc.queryServiceEnabled = enabled
+}
+
+// GetQueryRules allows a test to check what was set.
+func (tqsc *Controller) GetQueryRules(ruleSource string) *rules.Rules {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+	return tqsc.queryRulesMap[ruleSource]
 }
