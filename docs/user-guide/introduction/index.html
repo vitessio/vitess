@@ -337,23 +337,23 @@ Other Linux distributions should work as well.</p>
 <h2 id="database-support">Database support</h2>
 
 <p>Vitess supports <a href="http://dev.mysql.com/doc/refman/5.6/en/">MySQL 5.6</a>,
-<a href="http://dev.mysql.com/doc/refman/5.7/en/">MySQL 5.7</a>,
-and <a href="https://downloads.mariadb.org/mariadb/10.0.21/">MariaDB 10.0</a>.</p>
+<a href="https://downloads.mariadb.org/mariadb/10.0.21/">MariaDB 10.0</a>, and any
+newer versions like MySQL 5.7, etc. Vitess also supports Percona&#39;s
+variations of these versions.</p>
 
-<h3 id="data-types-and-sql-support">Data types and SQL support</h3>
+<h3 id="relational-capabilities">Relational capabilities</h3>
 
-<p>In Vitess, database tables are like MySQL relational tables, and you
-can use relational modeling schemes (normalization) to structure your
-schema. Vitess supports both primary and secondary indexes.</p>
+<p>Vitess attempts to leverage the capabilities of the underlying MySQL
+instances to the fullest extent. In this respect, any query that can
+be passed through to a single keyspace, shard or set of shards will
+be sent to the MySQL servers as is.</p>
 
-<p>Vitess supports almost all MySQL scalar data types.
-It also provides full SQL support within a
-<a href="/overview/concepts/#shard">shard</a>, including JOIN statements.</p>
+<p>This approach allows you to exploit the full capabilities of MySQL
+as long as the relationships and constraints are within one shard (or
+unsharded keyspace).</p>
 
-<p>Vitess does not currently support encoded protobufs or protocol buffer
-querying. (The latter is also known as cracking.) Protocol buffers can
-be stored as a blob in MySQL, but must be decoded and interpreted at
-the application layer.</p>
+<p>For relationships that go beyond shards, Vitess provides 
+support through the <a href="/user-guide/vschema/">VSchema</a>.</p>
 
 <h3 id="schema-management">Schema management</h3>
 
@@ -380,41 +380,29 @@ section of this guide for more information.</p>
 
 <h2 id="supported-clients">Supported clients</h2>
 
-<p>You can access your Vitess cluster using a variety of clients and
-programming languages.</p>
+<p>The VTGate server is the main entry point that applications use
+to connect to Vitess.</p>
 
-<p>Vitess&#39; service is exposed through a
-<a href="https://developers.google.com/protocol-buffers/docs/proto3">proto3</a>
-service definition. Vitess supports <a href="http://www.grpc.io/">gRPC</a>,
-and you can use the 
-<a href="https://developers.google.com/protocol-buffers/docs/proto?hl=en#generating">proto compiler</a>
-to generate stubs that can call the API in any language that the
-gRPC framework supports.</p>
+<p>VTGate understands the MySQL binary protocol. So, any client that
+can directly talk to MySQL can also use Vitess.</p>
 
-<h3 id="client-libraries">Client libraries</h3>
+<p>Additionally, VTGate exposes its functionality through a
+<a href="http://www.grpc.io/">gRPC</a> API which has support for multiple languages.</p>
 
-<p>Client libraries that support a richer set of functionality are
-available for some languages. Client libraries help your application
-to more easily talk to your storage system to query data.</p>
+<p>Accessing Vitess through gRPC has some minor advantages over the MySQL
+protocol:</p>
 
-<p>The following table lists those
-client libraries and other clients that Vitess supports.</p>
+<ul>
+<li>You can send requests with bind variables, which is slightly more
+efficient and secure than building the full text query.</li>
+<li>You can exploit the statelessness of connections. For example, you
+can start a transaction using one VTGate server, and complete it
+using another.</li>
+</ul>
 
-<table><thead>
-<tr>
-<th style="text-align: left">Type</th>
-<th style="text-align: left">Options</th>
-</tr>
-</thead><tbody>
-<tr>
-<td style="text-align: left">Client library</td>
-<td style="text-align: left"><a href="http://www.grpc.io/">gRPC</a><br class="bigbreak">Go<br class="bigbreak">Java<br class="bigbreak">Python<br class="bigbreak">PHP</td>
-</tr>
-<tr>
-<td style="text-align: left">MapReduce</td>
-<td style="text-align: left"><a href="https://hadoop.apache.org/docs/r2.7.0/api/org/apache/hadoop/mapreduce/InputFormat.html">Hadoop input</a></td>
-</tr>
-</tbody></table>
+<p>Vitess currently provides gRPC based connectors for Java (JDBC) and Go
+(database/sql). All others can use the native MySQL drivers instead. The
+native MySQL drivers for Java and Go should also work.</p>
 
 <h2 id="backups">Backups</h2>
 
