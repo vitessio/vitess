@@ -604,8 +604,9 @@ vtctld UI can also be used to see the contents of the topology data.</p>
 service. It is described by the addresses of the servers (comma separated list),
 and by the root directory to put the Vitess data in. For instance, assuming we
 want to use servers <code class="prettyprint">global_server1,global_server2</code> in path <code class="prettyprint">/vitess/global</code>:</p>
-<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="c1"># First create the directory in the global server:</span>
-zk -server global_server1,global_server2 touch -p /vitess/global
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span></span><span class="c1"># The root directory in the global server will be created</span>
+<span class="c1"># automatically, same as when running this command:</span>
+<span class="c1"># zk -server global_server1,global_server2 touch -p /vitess/global</span>
 
 <span class="c1"># Set the following flags to let Vitess use this global server:</span>
 <span class="c1"># -topo_implementation zk2</span>
