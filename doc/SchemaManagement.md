@@ -1,7 +1,12 @@
-Your MySQL database schema lists the tables in your database and
-contains table definitions that explain how to create those tables.
-Table definitions identify table names, column names, column types,
-primary key information, and so forth.
+Uisng Vitess requires you to work with two different types of schemas:
+
+1. The MySQL database schema. This is the schema of the individual MySQL instances.
+2. The [VSchema]({% link user-guide/vschema.md %}), which describes all the keyspaces and how they're sharded.
+
+The workflow for the <code>VSchema</code> is as follows:
+
+1. Apply the VSchema for each keyspace using the <code>ApplyVschema</code> command. This saves the VSchemas in the global topo server.
+2. Execute <code>RebuildVSchemaGraph</code> for each cell (or all cells). This command propagates a denormalized version of the combined VSchema to all the specified cells. The main purpose for this propagation is to minimize the dependency of each cell from the global topology. The ability to push a change to only specific cells allows you to canary the change to make sure that it's good before deploying it everywhere.
 
 This document describes the <code>[vtctl]({% link reference/vtctl.md %})</code>
 commands that you can use to [review](#reviewing-your-schema) or
@@ -16,6 +21,8 @@ This section describes the following <code>vtctl</code> commands, which let you 
 * [GetSchema](#getschema)
 * [ValidateSchemaShard](#validateschemashard)
 * [ValidateSchemaKeyspace](#validateschemakeyspace)
+* [GetVSchema](#getvschema)
+* [GetSrvVSchema](#getsrvvschema)
 
 ### GetSchema
 
@@ -71,11 +78,27 @@ same schema as the master tablet in shard <code>0</code> for the
 ValidateSchemaKeyspace user
 ```
 
+### GetVSchema
+
+The <code>[GetVSchema]({% link reference/vtctl.md %}#getvschema)</code>
+command displays the global VSchema for the specified keyspace.
+
+### GetSrvVSchema
+
+The <code>[GetSrvVSchema]({% link reference/vtctl.md %}#getsrvvschema)</code>
+command displays the combined VSchema for a given cell.
+
 ## Changing your schema
 
-This section describes the <code>vtctl ApplySchema</code> command, which
-supports schema modifications. Vitess' schema modification functionality
-is designed the following goals in mind:
+This section describes the following commands:
+
+* [ApplySchema](#applyschema)
+* [ApplyVSchema](#applyvschema)
+* [RebuildVSchemaGraph](#rebuildvschemagraph)
+
+### ApplySchema
+
+Vitess' schema modification functionality is designed the following goals in mind:
 
 * Enable simple updates that propagate to your entire fleet of servers.
 * Require minimal human interaction.
@@ -88,8 +111,6 @@ Note that, at this time, Vitess only supports
 that create, modify, or delete database tables.
 For instance, <code>ApplySchema</code> does not affect stored procedures
 or grants.
-
-### ApplySchema
 
 The <code>[ApplySchema]({% link reference/vtctl.md %}#applyschema)</code>
 command applies a schema change to the specified keyspace on every
@@ -156,3 +177,14 @@ impact of a potential change:
 
 If a schema change gets rejected because it affects too many rows, you can specify the flag `-allow_long_unavailability` to tell `ApplySchema` to skip this check.
 However, we do not recommend this. Instead, you should apply large schema changes by following the [schema swap process]({% link user-guide/schema-swap.md %}).
+
+### ApplyVSchema
+
+The <code>[ApplyVSchema]({% link reference/vtctl.md %}#applyvschema)</code>
+command applies the specified VSchema to the keyspace. The VSchema can be specified
+as a string or in a file.
+
+### RebuildVSchemaGraph
+
+The <code>[RebuildVSchemaGraph]({% link reference/vtctl.md %}#rebuildvschemagraph)</code>
+command propagates the global VSchema to a specific cell or the list of specified cells.
