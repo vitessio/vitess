@@ -180,8 +180,6 @@ type SrvTopoServer interface {
 
 type cellsToRegionsMap struct {
 	mu sync.Mutex
-	// topo server in use
-	ts *Server
 	// cellsToRegions contains all cell->region mappings
 	cellsToRegions map[string]string
 }
@@ -259,9 +257,6 @@ func Open() *Server {
 	if err != nil {
 		log.Exitf("Failed to open topo server (%v,%v,%v): %v", *topoImplementation, *topoGlobalServerAddress, *topoGlobalRoot, err)
 	}
-	regions.mu.Lock()
-	defer regions.mu.Unlock()
-	regions.ts = ts
 	return ts
 }
 
@@ -310,21 +305,21 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 }
 
 // GetRegionByCell returns the region group this `cell` belongs to, if there's none, it returns the `cell` as region.
-func GetRegionByCell(cell string) string {
+func GetRegionByCell(ctx context.Context, ts *Server, cell string) string {
 	regions.mu.Lock()
 	defer regions.mu.Unlock()
 	if region, ok := regions.cellsToRegions[cell]; ok {
 		return region
 	}
-	// lazily get the region from cell info if `regions.ts` is available
-	ctx := context.Background()
-	if regions.ts != nil {
-		info, err := regions.ts.GetCellInfo(ctx, cell, false)
+	if ts != nil {
+		// lazily get the region from cell info if `regions.ts` is available
+		info, err := ts.GetCellInfo(ctx, cell, false)
 		if err == nil && info.Region != "" {
 			regions.cellsToRegions[cell] = info.Region
 			return info.Region
 		}
 	}
+	// for backward compatability
 	return cell
 }
 

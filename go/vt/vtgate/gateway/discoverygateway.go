@@ -86,7 +86,7 @@ type discoveryGateway struct {
 func createDiscoveryGateway(hc discovery.HealthCheck, topoServer *topo.Server, serv topo.SrvTopoServer, cell string, retryCount int) Gateway {
 	dg := &discoveryGateway{
 		hc:                hc,
-		tsc:               discovery.NewTabletStatsCacheDoNotSetListener(cell),
+		tsc:               discovery.NewTabletStatsCacheDoNotSetListener(cell, topoServer),
 		topoServer:        topoServer,
 		srvTopoServer:     serv,
 		localCell:         cell,
