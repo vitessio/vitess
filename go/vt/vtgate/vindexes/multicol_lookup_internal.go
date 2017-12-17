@@ -96,23 +96,23 @@ func (lkp *multiColLookupInternal) Create(vcursor VCursor, fromIds [][]sqltypes.
 		fmt.Fprintf(&insBuffer, "%s, ", col)
 
 	}
-	fmt.Fprintf(&insBuffer, "%s) values", lkp.To)
+
+	fmt.Fprintf(&insBuffer, "%s) values(", lkp.To)
 	bindVars := make(map[string]*querypb.BindVariable, 2*len(fromIds))
-	for i, colIds := range fromIds {
-		if i != 0 {
-			insBuffer.WriteString(", ")
+	for rowIdx, _ := range toValues {
+		colIds := fromIds[rowIdx]
+		if rowIdx != 0 {
+			insBuffer.WriteString(", (")
 		}
-		toStr := lkp.To + strconv.Itoa(i)
-		for _, colId := range colIds {
-			fromStr := lkp.FromColumns[i] + strconv.Itoa(i)
+		for colIdx, colId := range colIds {
+			fromStr := lkp.FromColumns[colIdx] + strconv.Itoa(rowIdx)
 			bindVars[fromStr] = sqltypes.ValueBindVariable(colId)
-			insBuffer.WriteString("(:" + fromStr + ", ")
+			insBuffer.WriteString(":" + fromStr + ", ")
 		}
+		toStr := lkp.To + strconv.Itoa(rowIdx)
 		insBuffer.WriteString(":" + toStr + ")")
-		bindVars[toStr] = sqltypes.ValueBindVariable(toValues[i])
+		bindVars[toStr] = sqltypes.ValueBindVariable(toValues[rowIdx])
 	}
-	fmt.Println("THIIIIS IS THE QUERY")
-	fmt.Println(insBuffer.String())
 	_, err := vcursor.Execute(insBuffer.String(), bindVars, true /* isDML */)
 	if err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
