@@ -30,8 +30,8 @@ const (
 
 <td width="50%" style="padding: 20px;">
   <a href="/debug/health">Health</a><br>
-  <a href="/debug/queryz">Query Log Stats</a><br>
   <a href="/debug/querylogz">Current Query Log</a><br>
+  <a href="/debug/queryz">Query Plan Stats</a><br>
   <a href="/debug/query_plans">Query Plans</a><br>
 </td>
 </tr>
