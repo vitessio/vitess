@@ -17,6 +17,8 @@ limitations under the License.
 package vtgate
 
 import (
+	"net/http"
+
 	"github.com/youtube/vitess/go/streamlog"
 )
 
@@ -27,10 +29,24 @@ var (
 	// QueryLogzHandler is the debug UI path for exposing query logs
 	QueryLogzHandler = "/debug/querylogz"
 
+	// QueryzHandler is the debug UI path for exposing query plan stats
+	QueryzHandler = "/debug/queryz"
+
 	// QueryLogger enables streaming logging of queries
 	QueryLogger = streamlog.New("VTGate", 10)
 )
 
-func initQueryLogger() {
+func initQueryLogger(vtg *VTGate) {
 	QueryLogger.ServeLogs(QueryLogHandler, streamlog.GetFormatter(QueryLogger))
+
+	http.HandleFunc(QueryLogzHandler, func(w http.ResponseWriter, r *http.Request) {
+		ch := QueryLogger.Subscribe("querylogz")
+		defer QueryLogger.Unsubscribe(ch)
+		querylogzHandler(ch, w, r)
+	})
+
+	http.HandleFunc(QueryzHandler, func(w http.ResponseWriter, r *http.Request) {
+		queryzHandler(vtg.executor, w, r)
+	})
+
 }

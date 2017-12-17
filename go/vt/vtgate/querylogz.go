@@ -81,14 +81,6 @@ var (
 	`))
 )
 
-func init() {
-	http.HandleFunc(QueryLogzHandler, func(w http.ResponseWriter, r *http.Request) {
-		ch := QueryLogger.Subscribe("querylogz")
-		defer QueryLogger.Unsubscribe(ch)
-		querylogzHandler(ch, w, r)
-	})
-}
-
 // querylogzHandler serves a human readable snapshot of the
 // current query log.
 func querylogzHandler(ch chan interface{}, w http.ResponseWriter, r *http.Request) {
