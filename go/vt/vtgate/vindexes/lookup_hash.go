@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
@@ -36,7 +37,7 @@ func init() {
 }
 
 //====================================================================
-
+// Warning: This Vindex is being depcreated in favor of Lookup
 // LookupHash defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
 // NonUnique and a Lookup.
@@ -47,6 +48,7 @@ type LookupHash struct {
 
 // NewLookupHash creates a LookupHash vindex.
 func NewLookupHash(name string, m map[string]string) (Vindex, error) {
+	log.Warningf("LookupHash index (%q) it's being deprecated. Please use Lookup", name)
 	lh := &LookupHash{name: name}
 	lh.lkp.Init(m)
 	return lh, nil
@@ -132,6 +134,7 @@ func unhashList(ksids [][]byte) ([]sqltypes.Value, error) {
 
 //====================================================================
 
+// Warning: This Vindex is being depcreated in favor of LookupUnique
 // LookupHashUnique defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
 // Unique and a Lookup.
@@ -142,6 +145,7 @@ type LookupHashUnique struct {
 
 // NewLookupHashUnique creates a LookupHashUnique vindex.
 func NewLookupHashUnique(name string, m map[string]string) (Vindex, error) {
+	log.Warningf("LookupHashUnique index (%q) it's being deprecated. Please use LookupUnique", name)
 	lhu := &LookupHashUnique{name: name}
 	lhu.lkp.Init(m)
 	return lhu, nil

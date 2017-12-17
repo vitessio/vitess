@@ -8,7 +8,7 @@
       "type": "unicode_loose_md5"
     },
     "name_user_idx": {
-      "type": "lookup_hash",
+      "type": "lookup",
       "params": {
         "table": "name_user_idx",
         "from": "name",
@@ -17,7 +17,7 @@
       "owner": "user"
     },
     "music_user_idx": {
-      "type": "lookup_hash_unique",
+      "type": "lookup_unique",
       "params": {
         "table": "music_user_idx",
         "from": "music_id",
