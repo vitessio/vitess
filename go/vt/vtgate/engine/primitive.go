@@ -17,6 +17,9 @@ limitations under the License.
 package engine
 
 import (
+	"sync"
+	"time"
+
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -58,12 +61,47 @@ type Plan struct {
 	// Instructions contains the instructions needed to
 	// fulfil the query.
 	Instructions Primitive `json:",omitempty"`
+	// Mutex to protect the stats
+	mu sync.Mutex
+	// Count of times this plan was executed
+	ExecCount int64
+	// Total execution time
+	ExecTime time.Duration
+	// Total number of shard queries
+	ShardQueries int64
+	// Total number of rows
+	Rows int64
+	// Total number of errors
+	Errors int64
+}
+
+// AddStats updates the plan execution statistics
+func (p *Plan) AddStats(execCount int64, execTime time.Duration, shardQueries, rows, errors int64) {
+	p.mu.Lock()
+	p.ExecCount += execCount
+	p.ExecTime += execTime
+	p.ShardQueries += shardQueries
+	p.Rows += rows
+	p.Errors += errors
+	p.mu.Unlock()
+}
+
+// Stats returns a copy of the plan execution statistics
+func (p *Plan) Stats() (execCount int64, execTime time.Duration, shardQueries, rows, errors int64) {
+	p.mu.Lock()
+	execCount = p.ExecCount
+	execTime = p.ExecTime
+	shardQueries = p.ShardQueries
+	rows = p.Rows
+	errors = p.Errors
+	p.mu.Unlock()
+	return
 }
 
 // Size is defined so that Plan can be given to a cache.LRUCache.
 // VTGate needs to maintain a cache of plans. It uses LRUCache, which
 // in turn requires its objects to define a Size function.
-func (pln *Plan) Size() int {
+func (p *Plan) Size() int {
 	return 1
 }
 
