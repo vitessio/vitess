@@ -131,7 +131,7 @@ func newBinlogPlayerController(ts *topo.Server, vtClientFactory func() binlogpla
 		// of whether the BinlogPlayerController is Start()'d or Stop()'d.
 		// Use Close() after Stop() to finally close them and free their resources.
 		healthCheck:             healthCheck,
-		tabletStatsCache:        discovery.NewTabletStatsCache(healthCheck, cell, ts),
+		tabletStatsCache:        discovery.NewTabletStatsCache(healthCheck, ts, cell),
 		shardReplicationWatcher: discovery.NewShardReplicationWatcher(ts, healthCheck, cell, sourceShard.Keyspace, sourceShard.Shard, *healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency),
 	}
 }

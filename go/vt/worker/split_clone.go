@@ -555,7 +555,7 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 
 	// Initialize healthcheck and add destination shards to it.
 	scw.healthCheck = discovery.NewHealthCheck(*healthcheckRetryDelay, *healthCheckTimeout)
-	scw.tsc = discovery.NewTabletStatsCacheDoNotSetListener(scw.cell, scw.wr.TopoServer())
+	scw.tsc = discovery.NewTabletStatsCacheDoNotSetListener(scw.wr.TopoServer(), scw.cell)
 	// We set sendDownEvents=true because it's required by TabletStatsCache.
 	scw.healthCheck.SetListener(scw, true /* sendDownEvents */)
 
