@@ -486,7 +486,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 			if err != nil {
 				return err
 			}
-			rb.ERoute.Values = [][]sqltypes.PlanValue{[]sqltypes.PlanValue{pv}}
+			rb.ERoute.Values = []sqltypes.PlanValue{pv}
 			vals.Right = sqlparser.ListArg("::" + engine.ListVarName)
 		case nil:
 			// no-op.
@@ -495,7 +495,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 			if err != nil {
 				return err
 			}
-			rb.ERoute.Values = [][]sqltypes.PlanValue{[]sqltypes.PlanValue{pv}}
+			rb.ERoute.Values = []sqltypes.PlanValue{pv}
 		}
 	}
 

@@ -127,20 +127,30 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 		}
 	}
 
-	for _, colVindex := range eRoute.Table.ColumnVindexes {
-		var colVindexValues []sqltypes.PlanValue
-		for _, col := range colVindex.Columns {
-			pos := findOrAddColumn(ins, col)
-			swappedValues, err := swapBindVariables(rows, pos, ":_"+col.CompliantName())
-			if err != nil {
-				return nil, err
-			}
-			colVindexValues = append(colVindexValues, swappedValues)
-		}
-		fmt.Printf("WHY me - no entender %v", colVindexValues)
-		eRoute.Values = append(eRoute.Values, colVindexValues)
+	routeValues := make([]sqltypes.PlanValue, len(eRoute.Table.ColumnVindexes))
+	// Initialize each table vindex with the number of rows per insert.
+	// There will be a plan value for each row.
+	for colIdx, _ := range routeValues {
+		routeValues[colIdx].Values = make([]sqltypes.PlanValue, len(rows))
 	}
-
+	// What's going in here?
+	// For each vindex, we compute the Values for each column in the vindex.
+	for colIdx, colVindex := range eRoute.Table.ColumnVindexes {
+		for _, col := range colVindex.Columns {
+			colNum := findOrAddColumn(ins, col)
+			// swap bind variables
+			baseName := ":_" + col.CompliantName()
+			for rowNum, row := range rows {
+				innerpv, err := sqlparser.NewPlanValue(row[colNum])
+				if err != nil {
+					return nil, fmt.Errorf("could not compute value for vindex or auto-inc column: %v", err)
+				}
+				routeValues[colIdx].Values[rowNum].Values = append(routeValues[colIdx].Values[rowNum].Values, innerpv)
+				row[colNum] = sqlparser.NewValArg([]byte(baseName + strconv.Itoa(rowNum)))
+			}
+		}
+	}
+	eRoute.Values = routeValues
 	eRoute.Query = generateQuery(ins)
 	generateInsertShardedQuery(ins, eRoute, rows)
 	return eRoute, nil

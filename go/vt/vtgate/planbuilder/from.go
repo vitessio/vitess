@@ -178,7 +178,7 @@ func buildTablePrimitive(tableExpr *sqlparser.AliasedTableExpr, tableName sqlpar
 	// for keyspace id. Currently only dual tables are pinned.
 	route := engine.NewRoute(engine.SelectEqualUnique, table.Keyspace)
 	route.Vindex, _ = vindexes.NewBinary("binary", nil)
-	route.Values = [][]sqltypes.PlanValue{[]sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, table.Pinned)}}}
+	route.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, table.Pinned)}}
 	rb.ERoute = route
 	return rb, nil
 }

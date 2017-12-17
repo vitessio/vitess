@@ -86,7 +86,6 @@ func (ln *MultiColLookupNonUnique) Verify(vcursor VCursor, ids []sqltypes.Value,
 
 // Create reserves the id by inserting it into the vindex table.
 func (ln *MultiColLookupNonUnique) Create(vcursor VCursor, fromIds [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
-	fmt.Printf("This is the thing %v, %v", fromIds, ksids)
 	return ln.lkp.Create(vcursor, fromIds, ksidsToValues(ksids), ignoreMode)
 }
 
@@ -150,7 +149,6 @@ func (ln *LookupNonUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [
 
 // Create reserves the id by inserting it into the vindex table.
 func (ln *LookupNonUnique) Create(vcursor VCursor, ids [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
-	fmt.Printf("This is the thing %v, %v", ids, ksids)
 	// In the non multicolumn case, ids is always a slice with 1 element.
 	return ln.lkp.Create(vcursor, ids[0], ksidsToValues(ksids), ignoreMode)
 }

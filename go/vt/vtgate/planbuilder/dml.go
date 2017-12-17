@@ -235,7 +235,7 @@ func getDMLRouting(where *sqlparser.Where, route *engine.Route) error {
 		}
 		if pv, ok := getMatch(where.Expr, index.Columns[0]); ok {
 			route.Vindex = index.Vindex
-			route.Values = [][]sqltypes.PlanValue{[]sqltypes.PlanValue{pv}}
+			route.Values = []sqltypes.PlanValue{pv}
 			return nil
 		}
 	}
