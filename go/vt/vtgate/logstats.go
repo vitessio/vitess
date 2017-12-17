@@ -42,12 +42,11 @@ type LogStats struct {
 	BindVariables map[string]*querypb.BindVariable
 	StartTime     time.Time
 	EndTime       time.Time
-	ShardQueries  int32
-	RowsAffected  int32
+	ShardQueries  uint32
+	RowsAffected  uint64
 	PlanTime      time.Duration
 	ExecuteTime   time.Duration
 	CommitTime    time.Duration
-	Rows          [][]sqltypes.Value
 	Error         error
 }
 
@@ -91,22 +90,6 @@ func (stats *LogStats) EventTime() time.Time {
 // TotalTime returns how long this query has been running
 func (stats *LogStats) TotalTime() time.Duration {
 	return stats.EndTime.Sub(stats.StartTime)
-}
-
-// SizeOfResponse returns the approximate size of the response in
-// bytes (this does not take in account protocol encoding). It will return
-// 0 for streaming requests.
-func (stats *LogStats) SizeOfResponse() int {
-	if stats.Rows == nil {
-		return 0
-	}
-	size := 0
-	for _, row := range stats.Rows {
-		for _, field := range row {
-			size += field.Len()
-		}
-	}
-	return size
 }
 
 // FmtBindVariables returns the map of bind variables as JSON. For
@@ -167,7 +150,7 @@ func (stats *LogStats) Format(params url.Values) string {
 	// TODO: remove username here we fully enforce immediate caller id
 	remoteAddr, username := stats.RemoteAddrUsername()
 	return fmt.Sprintf(
-		"%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%.6f\t%.6f\t%.6f\t%v\t%q\t%v\t%v\t%v\t%v\t%q\t\n",
+		"%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%.6f\t%.6f\t%.6f\t%v\t%q\t%v\t%v\t%v\t%q\t\n",
 		stats.Method,
 		remoteAddr,
 		username,
@@ -184,7 +167,6 @@ func (stats *LogStats) Format(params url.Values) string {
 		formattedBindVars,
 		stats.ShardQueries,
 		stats.RowsAffected,
-		stats.SizeOfResponse(),
 		stats.ErrorStr(),
 	)
 }

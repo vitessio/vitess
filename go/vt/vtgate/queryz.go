@@ -70,11 +70,11 @@ type queryzRow struct {
 	Table        string
 	Plan         planbuilder.PlanType
 	Reason       planbuilder.ReasonType
-	Count        int64
+	Count        uint64
 	tm           time.Duration
-	ShardQueries int64
-	Rows         int64
-	Errors       int64
+	ShardQueries uint64
+	Rows         uint64
+	Errors       uint64
 	Color        string
 }
 
@@ -141,12 +141,12 @@ func queryzHandler(e *Executor, w http.ResponseWriter, r *http.Request) {
 		}
 		plan := result.(*engine.Plan)
 		Value := &queryzRow{
-			Query: logz.Wrappable(sqlparser.TruncateForUI(v)),
+			Query: logz.Wrappable(sqlparser.TruncateForUI(plan.Original)),
 		}
 		Value.Count, Value.tm, Value.ShardQueries, Value.Rows, Value.Errors = plan.Stats()
 		var timepq time.Duration
 		if Value.Count != 0 {
-			timepq = time.Duration(int64(Value.tm) / Value.Count)
+			timepq = time.Duration(uint64(Value.tm) / Value.Count)
 		}
 		if timepq < 10*time.Millisecond {
 			Value.Color = "low"
