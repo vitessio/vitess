@@ -22,8 +22,6 @@ replicate from that master.
 
 ## MySQL requirements
 
-Vitess supports [MySQL 5.6](https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-howto.html), [MySQL 5.7](https://dev.mysql.com/doc/refman/5.7/en/replication-gtids-howto.html) and [MariaDB 10.0](https://mariadb.com/kb/en/mariadb/global-transaction-id/) implementations.
-
 ### GTIDs
 Vitess requires the use of global transaction identifiers
 ([GTIDs](https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-concepts.html)) for its operations:
@@ -48,13 +46,12 @@ Larger Vitess deployments typically do implement semisynchronous replication.
 You can use the following <code>[vtctl]({% link reference/vtctl.md %})</code>
 commands to perform reparenting operations:
 
-* <code>[PlannedReparentShard](#plannedreparentshard:-planned-reparenting)</code>
-* <code>[EmergencyReparentShard](#emergencyreparentshard:-emergency-reparenting)</code>
+* <code>PlannedReparentShard</code>
+* <code>EmergencyReparentShard</code>
 
-Both commands lock the shard for write operations. The two commands
+Both commands lock the Shard record in the global topology server. The two commands
 cannot run in parallel, nor can either command run in parallel with the
-<code>[InitShardMaster]({% link reference/vtctl.md %}#initshardmaster)</code>
-command.
+<code>InitShardMaster</code> command.
 
 The two commands are both dependent on the global topology server being
 available, and they both insert rows in the topology server's
