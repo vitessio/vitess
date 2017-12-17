@@ -323,8 +323,8 @@ func GetRegionByCell(ctx context.Context, ts *Server, cell string) string {
 	return cell
 }
 
-// UpdateCellsToRegions overwrites the global map built by topo server init, and is meant for testing purpose only.
-func UpdateCellsToRegions(cellsToRegions map[string]string) {
+// UpdateCellsToRegionsForTests overwrites the global map built by topo server init, and is meant for testing purpose only.
+func UpdateCellsToRegionsForTests(cellsToRegions map[string]string) {
 	regions.mu.Lock()
 	defer regions.mu.Unlock()
 	regions.cellsToRegions = cellsToRegions

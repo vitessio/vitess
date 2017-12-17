@@ -68,8 +68,8 @@ type tabletStatsCacheEntry struct {
 // Note we do the registration in this code to guarantee we call
 // SetListener with sendDownEvents=true, as we need these events
 // to maintain the integrity of our cache.
-func NewTabletStatsCache(hc HealthCheck, cell string, ts *topo.Server) *TabletStatsCache {
-	return newTabletStatsCache(hc, cell, ts, true /* setListener */)
+func NewTabletStatsCache(hc HealthCheck, ts *topo.Server, cell string) *TabletStatsCache {
+	return newTabletStatsCache(hc, ts, cell, true /* setListener */)
 }
 
 // NewTabletStatsCacheDoNotSetListener is identical to NewTabletStatsCache
@@ -79,11 +79,11 @@ func NewTabletStatsCache(hc HealthCheck, cell string, ts *topo.Server) *TabletSt
 // When the caller sets its own listener on "hc", they must make sure that they
 // set the parameter  "sendDownEvents" to "true" or this cache won't properly
 // remove tablets whose tablet type changes.
-func NewTabletStatsCacheDoNotSetListener(cell string, ts *topo.Server) *TabletStatsCache {
-	return newTabletStatsCache(nil, cell, ts, false /* setListener */)
+func NewTabletStatsCacheDoNotSetListener(ts *topo.Server, cell string) *TabletStatsCache {
+	return newTabletStatsCache(nil, ts, cell, false /* setListener */)
 }
 
-func newTabletStatsCache(hc HealthCheck, cell string, ts *topo.Server, setListener bool) *TabletStatsCache {
+func newTabletStatsCache(hc HealthCheck, ts *topo.Server, cell string, setListener bool) *TabletStatsCache {
 	tc := &TabletStatsCache{
 		cell:    cell,
 		ts:      ts,
