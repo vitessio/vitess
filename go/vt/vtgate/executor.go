@@ -249,12 +249,12 @@ func (e *Executor) handleExec(ctx context.Context, session *vtgatepb.Session, sq
 
 	qr, err := plan.Instructions.Execute(vcursor, bindVars, make(map[string]*querypb.BindVariable), true)
 	logStats.ExecuteTime = time.Since(execStart)
-	var errCount int64
+	var errCount uint64
 	if err != nil {
 		logStats.Error = err
 		errCount = 1
 	} else {
-		logStats.Rows = qr.Rows
+		logStats.RowsAffected = qr.RowsAffected
 	}
 
 	// Check if there was partial DML execution. If so, rollback the transaction.
@@ -263,7 +263,7 @@ func (e *Executor) handleExec(ctx context.Context, session *vtgatepb.Session, sq
 		err = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction rolled back due to partial DML execution: %v", err)
 	}
 
-	plan.AddStats(1, time.Since(logStats.StartTime), int64(logStats.ShardQueries), int64(len(logStats.Rows)), errCount)
+	plan.AddStats(1, time.Since(logStats.StartTime), uint64(logStats.ShardQueries), logStats.RowsAffected, errCount)
 
 	return qr, err
 }

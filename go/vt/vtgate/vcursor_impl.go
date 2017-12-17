@@ -111,7 +111,7 @@ func (vc *vcursorImpl) Execute(method string, query string, BindVars map[string]
 
 // ExecuteMultiShard executes different queries on different shards and returns the combined result.
 func (vc *vcursorImpl) ExecuteMultiShard(keyspace string, shardQueries map[string]*querypb.BoundQuery, isDML bool) (*sqltypes.Result, error) {
-	atomic.AddInt32(&vc.logStats.ShardQueries, int32(len(shardQueries)))
+	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(shardQueries)))
 	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, commentedShardQueries(shardQueries, vc.trailingComments), vc.target.TabletType, NewSafeSession(vc.session), false, vc.session.Options)
 	if err == nil {
 		vc.hasPartialDML = true
@@ -136,7 +136,7 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, BindVars map[string]*quer
 
 // StreamExeculteMulti is the streaming version of ExecuteMultiShard.
 func (vc *vcursorImpl) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
-	atomic.AddInt32(&vc.logStats.ShardQueries, int32(len(shardVars)))
+	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(shardVars)))
 	return vc.executor.scatterConn.StreamExecuteMulti(vc.ctx, query+vc.trailingComments, keyspace, shardVars, vc.target.TabletType, vc.session.Options, callback)
 }
 

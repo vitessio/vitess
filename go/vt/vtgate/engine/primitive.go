@@ -64,19 +64,19 @@ type Plan struct {
 	// Mutex to protect the stats
 	mu sync.Mutex
 	// Count of times this plan was executed
-	ExecCount int64
+	ExecCount uint64
 	// Total execution time
 	ExecTime time.Duration
 	// Total number of shard queries
-	ShardQueries int64
+	ShardQueries uint64
 	// Total number of rows
-	Rows int64
+	Rows uint64
 	// Total number of errors
-	Errors int64
+	Errors uint64
 }
 
 // AddStats updates the plan execution statistics
-func (p *Plan) AddStats(execCount int64, execTime time.Duration, shardQueries, rows, errors int64) {
+func (p *Plan) AddStats(execCount uint64, execTime time.Duration, shardQueries, rows, errors uint64) {
 	p.mu.Lock()
 	p.ExecCount += execCount
 	p.ExecTime += execTime
@@ -87,7 +87,7 @@ func (p *Plan) AddStats(execCount int64, execTime time.Duration, shardQueries, r
 }
 
 // Stats returns a copy of the plan execution statistics
-func (p *Plan) Stats() (execCount int64, execTime time.Duration, shardQueries, rows, errors int64) {
+func (p *Plan) Stats() (execCount uint64, execTime time.Duration, shardQueries, rows, errors uint64) {
 	p.mu.Lock()
 	execCount = p.ExecCount
 	execTime = p.ExecTime
