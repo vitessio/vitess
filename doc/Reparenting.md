@@ -49,7 +49,7 @@ commands to perform reparenting operations:
 * <code>PlannedReparentShard</code>
 * <code>EmergencyReparentShard</code>
 
-Both commands lock the shard for write operations. The two commands
+Both commands lock the Shard record in the global topology server. The two commands
 cannot run in parallel, nor can either command run in parallel with the
 <code>InitShardMaster</code> command.
 
