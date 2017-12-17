@@ -115,7 +115,6 @@
           <h4 class="arrow-r">User Guide</h4>
           <ul style="display: none">
             <li><a href="/user-guide/introduction/">Introduction</a>
-            <li><a href="/user-guide/client-libraries/">Client Libraries</a>
             <li><a href="/user-guide/backup-and-restore/">Backing Up Data</a>
             <li><a href="/user-guide/reparenting/">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management/">Schema Management</a></li>
@@ -240,7 +239,6 @@
           <h4 class="arrow-r">User Guide</h4>
           <ul style="display: none">
             <li><a href="/user-guide/introduction/">Introduction</a>
-            <li><a href="/user-guide/client-libraries/">Client Libraries</a>
             <li><a href="/user-guide/backup-and-restore/">Backing Up Data</a>
             <li><a href="/user-guide/reparenting/">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management/">Schema Management</a></li>
@@ -355,8 +353,6 @@ replicate from that master.</p>
 
 <h2 id="mysql-requirements">MySQL requirements</h2>
 
-<p>Vitess supports <a href="https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-howto.html">MySQL 5.6</a>, <a href="https://dev.mysql.com/doc/refman/5.7/en/replication-gtids-howto.html">MySQL 5.7</a> and <a href="https://mariadb.com/kb/en/mariadb/global-transaction-id/">MariaDB 10.0</a> implementations.</p>
-
 <h3 id="gtids">GTIDs</h3>
 
 <p>Vitess requires the use of global transaction identifiers
@@ -385,14 +381,13 @@ Larger Vitess deployments typically do implement semisynchronous replication.</p
 commands to perform reparenting operations:</p>
 
 <ul>
-<li><code><a href="#plannedreparentshard:-planned-reparenting">PlannedReparentShard</a></code></li>
-<li><code><a href="#emergencyreparentshard:-emergency-reparenting">EmergencyReparentShard</a></code></li>
+<li><code>PlannedReparentShard</code></li>
+<li><code>EmergencyReparentShard</code></li>
 </ul>
 
-<p>Both commands lock the shard for write operations. The two commands
+<p>Both commands lock the Shard record in the global topology server. The two commands
 cannot run in parallel, nor can either command run in parallel with the
-<code><a href="/reference/vtctl/#initshardmaster">InitShardMaster</a></code>
-command.</p>
+<code>InitShardMaster</code> command.</p>
 
 <p>The two commands are both dependent on the global topology server being
 available, and they both insert rows in the topology server&#39;s
