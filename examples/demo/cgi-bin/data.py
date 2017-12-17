@@ -51,12 +51,23 @@ def exec_query(conn, title, query, response, keyspace=None, kr=None):  # pylint:
       cursor.begin()
       cursor.execute(query, {})
       cursor.commit()
+    # sanatize results (index columns are binary blobs)
+    sanatized_results = list(
+      map(
+        lambda row:
+        list(
+          map(
+            lambda column:
+            str(column).decode('unicode_escape').encode('ascii','replace'),
+            row)),
+        cursor.results)
+    )
     response[title] = {
         "title": title,
         "description": cursor.description,
         "rowcount": cursor.rowcount,
         "lastrowid": cursor.lastrowid,
-        "results": cursor.results,
+        "results": sanatized_results,
         }
     cursor.close()
   except Exception as e:  # pylint: disable=broad-except
