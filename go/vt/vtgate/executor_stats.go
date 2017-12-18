@@ -55,7 +55,7 @@ function drawQPSChart() {
   var chart = new google.visualization.LineChart(div);
 
   var options = {
-    title: "QPS By Keyspace",
+    title: "QPS By DB Type",
     focusTarget: 'category',
     vAxis: {
       viewWindow: {min: 0},
@@ -73,7 +73,7 @@ function drawQPSChart() {
   var redraw = function() {
     $.getJSON(vars_url, function(input_data) {
       var now = new Date();
-      var qps = input_data.QPSByKeyspace;
+      var qps = input_data.QPSByDbType;
       var planTypes = Object.keys(qps);
       if (planTypes.length === 0) {
         planTypes = ["All"];
