@@ -319,29 +319,42 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 	log := streamlog.GetFormatter(QueryLogger)(nil, logStats)
 	fields := strings.Split(log, "\t")
 
+	// fields[0] is the method
 	if method != fields[0] {
 		t.Errorf("logstats: method want %q got %q", method, fields[0])
 	}
 
-	testNonZeroDuration(t, "TotalTime", fields[7])
+	// fields[1] - fields[6] are the caller id, start/end times, etc
 
-	if testPlannedQueries[sql] == false {
-		testNonZeroDuration(t, "PlanTime", fields[8])
+	// only test the durations if there is no error (fields[16])
+	if fields[16] == "\"\"" {
+		// fields[7] is the total execution time
+		testNonZeroDuration(t, "TotalTime", fields[7])
+
+		// fields[8] is the planner time. keep track of the planned queries to
+		// avoid the case where we hit the plan in cache and it takes less than
+		// a microsecond to plan it
+		if testPlannedQueries[sql] == false {
+			testNonZeroDuration(t, "PlanTime", fields[8])
+		}
+		testPlannedQueries[sql] = true
+
+		// fields[9] is ExecuteTime which is not set for certain statements SET,
+		// BEGIN, COMMIT, ROLLBACK, etc
+		if stmtType != "BEGIN" && stmtType != "COMMIT" && stmtType != "ROLLBACK" && stmtType != "SET" {
+			testNonZeroDuration(t, "ExecuteTime", fields[9])
+		}
+
+		// fields[10] is CommitTime which is set only in autocommit mode and
+		// tested separately
 	}
-	testPlannedQueries[sql] = true
 
-	// fields[9] is ExecuteTime which is not set for certain statements SET, BEGIN, COMMIT, ROLLBACK, etc
-	if stmtType != "BEGIN" && stmtType != "COMMIT" && stmtType != "ROLLBACK" && stmtType != "SET" {
-		testNonZeroDuration(t, "ExecuteTime", fields[9])
-	}
-
-	// fields[10] is CommitTime which is set only in autocommit mode and
-	// tested separately
-
+	// fields[11] is the statement type
 	if stmtType != fields[11] {
 		t.Errorf("logstats: stmtType want %q got %q", stmtType, fields[11])
 	}
 
+	// fields[12] is the original sql
 	wantSQL := fmt.Sprintf("%q", sql)
 	if wantSQL != fields[12] {
 		t.Errorf("logstats: SQL want %s got %s", wantSQL, fields[12])
@@ -349,6 +362,7 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 
 	// fields[13] contains the formatted bind vars
 
+	// fields[14] is the count of shard queries
 	if fmt.Sprintf("%v", shardQueries) != fields[14] {
 		t.Errorf("logstats: ShardQueries want %v got %v", shardQueries, fields[14])
 	}

@@ -294,6 +294,7 @@ func (e *Executor) handleDDL(ctx context.Context, session *vtgatepb.Session, sql
 	}
 
 	execStart := time.Now()
+	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	result, err := e.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, session, f, false /* notInTransaction */, session.Options, logStats)
 	logStats.ExecuteTime = time.Since(execStart)
 	return result, err
