@@ -22,7 +22,9 @@ import (
 	log "github.com/golang/glog"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"golang.org/x/net/context"
 )
 
 // TabletStatsCache is a HealthCheckStatsListener that keeps both the
@@ -40,10 +42,11 @@ type TabletStatsCache struct {
 	// cell is the cell we are keeping all tablets for.
 	// Note we keep track of all master tablets in all cells.
 	cell string
-
 	// mu protects the entries map. It does not protect individual
 	// entries in the map.
 	mu sync.RWMutex
+	// ts is the topo server in use.
+	ts *topo.Server
 	// entries maps from keyspace/shard/tabletType to our cache.
 	entries map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry
 }
@@ -65,8 +68,8 @@ type tabletStatsCacheEntry struct {
 // Note we do the registration in this code to guarantee we call
 // SetListener with sendDownEvents=true, as we need these events
 // to maintain the integrity of our cache.
-func NewTabletStatsCache(hc HealthCheck, cell string) *TabletStatsCache {
-	return newTabletStatsCache(hc, cell, true /* setListener */)
+func NewTabletStatsCache(hc HealthCheck, ts *topo.Server, cell string) *TabletStatsCache {
+	return newTabletStatsCache(hc, ts, cell, true /* setListener */)
 }
 
 // NewTabletStatsCacheDoNotSetListener is identical to NewTabletStatsCache
@@ -76,13 +79,14 @@ func NewTabletStatsCache(hc HealthCheck, cell string) *TabletStatsCache {
 // When the caller sets its own listener on "hc", they must make sure that they
 // set the parameter  "sendDownEvents" to "true" or this cache won't properly
 // remove tablets whose tablet type changes.
-func NewTabletStatsCacheDoNotSetListener(cell string) *TabletStatsCache {
-	return newTabletStatsCache(nil, cell, false /* setListener */)
+func NewTabletStatsCacheDoNotSetListener(ts *topo.Server, cell string) *TabletStatsCache {
+	return newTabletStatsCache(nil, ts, cell, false /* setListener */)
 }
 
-func newTabletStatsCache(hc HealthCheck, cell string, setListener bool) *TabletStatsCache {
+func newTabletStatsCache(hc HealthCheck, ts *topo.Server, cell string, setListener bool) *TabletStatsCache {
 	tc := &TabletStatsCache{
 		cell:    cell,
+		ts:      ts,
 		entries: make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry),
 	}
 
@@ -142,10 +146,14 @@ func (tc *TabletStatsCache) getOrCreateEntry(target *querypb.Target) *tabletStat
 	return e
 }
 
+func (tc *TabletStatsCache) getRegionByCell(cell string) string {
+	return topo.GetRegionByCell(context.Background(), tc.ts, cell)
+}
+
 // StatsUpdate is part of the HealthCheckStatsListener interface.
 func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
-	if ts.Target.TabletType != topodatapb.TabletType_MASTER && ts.Tablet.Alias.Cell != tc.cell {
-		// this is for a non-master tablet in a different cell, drop it
+	if ts.Target.TabletType != topodatapb.TabletType_MASTER && ts.Tablet.Alias.Cell != tc.cell && tc.getRegionByCell(ts.Tablet.Alias.Cell) != tc.getRegionByCell(tc.cell) {
+		// this is for a non-master tablet in a different cell and a different region, drop it
 		return
 	}
 

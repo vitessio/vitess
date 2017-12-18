@@ -27,6 +27,13 @@ import (
 
 // TestTabletStatsCache tests the functionality of the TabletStatsCache class.
 func TestTabletStatsCache(t *testing.T) {
+	defer topo.UpdateCellsToRegionsForTests(map[string]string{})
+	topo.UpdateCellsToRegionsForTests(map[string]string{
+		"cell":  "region1",
+		"cell1": "region1",
+		"cell2": "region2",
+	})
+
 	// We want to unit test TabletStatsCache without a full-blown
 	// HealthCheck object, so we can't call NewTabletStatsCache.
 	// So we just construct this object here.
@@ -205,6 +212,48 @@ func TestTabletStatsCache(t *testing.T) {
 	tsc.StatsUpdate(ts2)
 	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_MASTER)
 	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
+		t.Errorf("unexpected result: %v", a)
+	}
+
+	// add a third tablet as slave in diff cell, same region
+	tablet3 := topo.NewTablet(12, "cell1", "host3")
+	ts3 := &TabletStats{
+		Key:     "t3",
+		Tablet:  tablet3,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Up:      true,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+	}
+	tsc.StatsUpdate(ts3)
+	// check it's there
+	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_REPLICA)
+	if len(a) != 1 {
+		t.Errorf("unexpected result: %v", a)
+	}
+	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA)
+	if len(a) != 1 {
+		t.Errorf("unexpected result: %v", a)
+	}
+
+	// add a 4th slave tablet in a diff cell, diff region
+	tablet4 := topo.NewTablet(13, "cell2", "host4")
+	ts4 := &TabletStats{
+		Key:     "t4",
+		Tablet:  tablet4,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Up:      true,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+	}
+	tsc.StatsUpdate(ts4)
+	// check it's *NOT* there
+	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_REPLICA)
+	if len(a) != 1 {
+		t.Errorf("unexpected result: %v", a)
+	}
+	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA)
+	if len(a) != 1 {
 		t.Errorf("unexpected result: %v", a)
 	}
 }
