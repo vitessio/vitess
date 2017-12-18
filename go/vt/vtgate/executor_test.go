@@ -353,6 +353,9 @@ func TestExecutorAutocommit(t *testing.T) {
 	if logStats.CommitTime != 0 {
 		t.Errorf("logstats: expected zero CommitTime")
 	}
+	if logStats.RowsAffected == 0 {
+		t.Errorf("logstats: expected non-zero RowsAffected")
+	}
 
 	// autocommit = 1
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "set autocommit=1", nil)
@@ -383,6 +386,9 @@ func TestExecutorAutocommit(t *testing.T) {
 	if logStats.CommitTime == 0 {
 		t.Errorf("logstats: expected non-zero CommitTime")
 	}
+	if logStats.RowsAffected == 0 {
+		t.Errorf("logstats: expected non-zero RowsAffected")
+	}
 
 	// autocommit = 1, "begin"
 	startCount = sbclookup.CommitCount.Get()
@@ -409,6 +415,9 @@ func TestExecutorAutocommit(t *testing.T) {
 	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id=1", 1)
 	if logStats.CommitTime != 0 {
 		t.Errorf("logstats: expected zero CommitTime")
+	}
+	if logStats.RowsAffected == 0 {
+		t.Errorf("logstats: expected non-zero RowsAffected")
 	}
 
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "commit", nil)
@@ -663,6 +672,9 @@ func TestExecutorOther(t *testing.T) {
 }
 
 func TestExecutorDDL(t *testing.T) {
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
 	stmts := []string{
@@ -686,6 +698,7 @@ func TestExecutorDDL(t *testing.T) {
 		if !reflect.DeepEqual(gotCount, wantCount) {
 			t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
 		}
+		testQueryLog(t, logChan, "TestExecute", "DDL", stmt, 1)
 
 		_, err = executor.Execute(context.Background(), "TestExecute", &vtgatepb.Session{TargetString: "TestExecutor"}, stmt, nil)
 		if err != nil {
@@ -701,6 +714,7 @@ func TestExecutorDDL(t *testing.T) {
 		if !reflect.DeepEqual(gotCount, wantCount) {
 			t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
 		}
+		testQueryLog(t, logChan, "TestExecute", "DDL", stmt, 8)
 
 		_, err = executor.Execute(context.Background(), "TestExecute", &vtgatepb.Session{TargetString: "TestExecutor/-20"}, stmt, nil)
 		if err != nil {
@@ -715,6 +729,7 @@ func TestExecutorDDL(t *testing.T) {
 		if !reflect.DeepEqual(gotCount, wantCount) {
 			t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
 		}
+		testQueryLog(t, logChan, "TestExecute", "DDL", stmt, 1)
 	}
 
 	_, err := executor.Execute(context.Background(), "TestExecute", &vtgatepb.Session{}, "create", nil)
@@ -722,6 +737,7 @@ func TestExecutorDDL(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema_tables: %v, want %v", err, want)
 	}
+	testQueryLog(t, logChan, "TestExecute", "DDL", "create", 0)
 }
 
 func TestExecutorUnrecognized(t *testing.T) {
