@@ -143,13 +143,13 @@ def main():
         conn, "name_info1",
         "select * from name_info", response, keyspace="user", kr="80-")
 
-    # music_user_idx table
+    # music_keyspace_idx table
     exec_query(
-        conn, "music_user_idx0",
-        "select * from music_user_idx", response, keyspace="user", kr="-80")
+        conn, "music_keyspace_idx0",
+        "select music_id, hex(keyspace_id) from music_keyspace_idx", response, keyspace="user", kr="-80")
     exec_query(
-        conn, "music_user_idx1",
-        "select * from music_user_idx", response, keyspace="user", kr="80-")
+        conn, "music_keyspace_idx1",
+        "select music_id, hex(keyspace_id) from music_keyspace_idx", response, keyspace="user", kr="80-")
 
     # lookup tables
     exec_query(
@@ -159,7 +159,7 @@ def main():
         conn, "music_seq", "select * from music_seq", response,
         keyspace="lookup", kr="-")
     exec_query(
-        conn, "name_user_idx", "select * from name_user_idx", response,
+        conn, "name_keyspace_idx", "select name, hex(keyspace_id) from name_keyspace_idx", response,
         keyspace="lookup", kr="-")
 
     print json.dumps(response, default=decimal_default)

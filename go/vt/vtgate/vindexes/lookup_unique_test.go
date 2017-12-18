@@ -62,7 +62,7 @@ func TestLookupUniqueMap(t *testing.T) {
 
 	vc.numRows = 2
 	_, err = lookupUnique.(Unique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
-	wantErr := "LookupHash.Map: unexpected multiple results from vindex t: INT64(1)"
+	wantErr := "Lookup.Map: unexpected multiple results from vindex t: INT64(1)"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("lookupUnique(query fail) err: %v, want %s", err, wantErr)
 	}

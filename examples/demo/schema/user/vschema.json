@@ -7,21 +7,21 @@
     "unicode_loose_md5": {
       "type": "unicode_loose_md5"
     },
-    "name_user_idx": {
-      "type": "lookup_hash",
+    "name_keyspace_idx": {
+      "type": "lookup",
       "params": {
-        "table": "name_user_idx",
+        "table": "name_keyspace_idx",
         "from": "name",
-        "to": "user_id"
+        "to": "keyspace_id"
       },
       "owner": "user"
     },
-    "music_user_idx": {
-      "type": "lookup_hash_unique",
+    "music_keyspace_idx": {
+      "type": "lookup_unique",
       "params": {
-        "table": "music_user_idx",
+        "table": "music_keyspace_idx",
         "from": "music_id",
-        "to": "user_id"
+        "to": "keyspace_id"
       },
       "owner": "music"
     },
@@ -38,7 +38,7 @@
         },
         {
           "column": "name",
-          "name": "name_user_idx"
+          "name": "name_keyspace_idx"
         }
       ],
       "auto_increment": {
@@ -62,7 +62,7 @@
         },
         {
           "column": "music_id",
-          "name": "music_user_idx"
+          "name": "music_keyspace_idx"
         }
       ],
       "auto_increment": {
@@ -74,7 +74,7 @@
       "column_vindexes": [
         {
           "column": "music_id",
-          "name": "music_user_idx"
+          "name": "music_keyspace_idx"
         },
         {
           "column": "keyspace_id",
@@ -90,7 +90,7 @@
         }
       ]
     },
-    "music_user_idx": {
+    "music_keyspace_idx": {
       "column_vindexes": [
         {
           "column": "music_id",
