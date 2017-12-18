@@ -37,6 +37,7 @@ func init() {
 }
 
 //====================================================================
+
 // LookupHash defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
 // NonUnique and a Lookup.
