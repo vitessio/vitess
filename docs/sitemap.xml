@@ -10,6 +10,9 @@
 <loc>http://vitess.io/overview/concepts/</loc>
 </url>
 <url>
+<loc>http://vitess.io/resources/design-docs/</loc>
+</url>
+<url>
 <loc>http://vitess.io/getting-started/docker-build/</loc>
 </url>
 <url>
@@ -47,9 +50,6 @@
 </url>
 <url>
 <loc>http://vitess.io/user-guide/introduction/</loc>
-</url>
-<url>
-<loc>http://vitess.io/user-guide/launching/</loc>
 </url>
 <url>
 <loc>http://vitess.io/getting-started/local-instance/</loc>
