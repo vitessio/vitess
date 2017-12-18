@@ -1,7 +1,6 @@
 ---
 layout: doc
-title: "Launching Vitess"
-redirect_from: /user-guide/launching.html
+title: "Design Docs"
 description:
 modified:
 excerpt:
@@ -14,4 +13,4 @@ toc: true
 share: false
 ---
 
-{% include doc/LaunchingVitess.md %}
+{% include doc/DesignDocs.md %}
