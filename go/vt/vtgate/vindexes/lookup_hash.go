@@ -37,10 +37,10 @@ func init() {
 }
 
 //====================================================================
-// Warning: This Vindex is being depcreated in favor of Lookup
 // LookupHash defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
 // NonUnique and a Lookup.
+// Warning: This Vindex is being depcreated in favor of Lookup
 type LookupHash struct {
 	name string
 	lkp  lookupInternal
@@ -134,10 +134,10 @@ func unhashList(ksids [][]byte) ([]sqltypes.Value, error) {
 
 //====================================================================
 
-// Warning: This Vindex is being depcreated in favor of LookupUnique
 // LookupHashUnique defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
 // Unique and a Lookup.
+// Warning: This Vindex is being depcreated in favor of LookupUnique
 type LookupHashUnique struct {
 	name string
 	lkp  lookupInternal

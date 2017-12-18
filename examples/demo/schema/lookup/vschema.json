@@ -7,6 +7,6 @@
     "music_seq": {
       "type": "sequence"
     },
-    "name_user_idx": {}
+    "name_keyspace_idx": {}
   }
 }
