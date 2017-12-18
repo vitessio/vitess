@@ -101,6 +101,22 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	if rollbackCount := sbclookup.RollbackCount.Get(); rollbackCount != 1 {
 		t.Errorf("want 1, got %d", rollbackCount)
 	}
+	logStats = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	logStats = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	logStats = testQueryLog(t, logChan, "TestExecute", "ROLLBACK", "rollback", 1)
+	if logStats.CommitTime == 0 {
+		t.Errorf("logstats: expected non-zero CommitTime")
+	}
+
+	// rollback doesn't emit a logstats record when it doesn't do anything
+	_, err = executor.Execute(context.Background(), "TestExecute", session, "rollback", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logStats = getQueryLog(logChan)
+	if logStats != nil {
+		t.Errorf("logstats: expected no record for no-op rollback, got %v", logStats)
+	}
 
 	// Prevent transactions on non-master.
 	session = &vtgatepb.Session{TargetString: "@replica", InTransaction: true}

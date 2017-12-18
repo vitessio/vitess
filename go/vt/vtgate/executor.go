@@ -112,7 +112,13 @@ func (e *Executor) Execute(ctx context.Context, method string, session *vtgatepb
 	logStats := NewLogStats(ctx, method, sql, bindVars)
 	result, err = e.execute(ctx, method, session, sql, bindVars, logStats)
 	logStats.Error = err
-	logStats.Send()
+
+	// The mysql plugin runs an implicit rollback whenever a connection closes.
+	// To avoid spamming the log with no-op rollback records, ignore it if
+	// it was a no-op record (i.e. didn't issue any queries)
+	if !(logStats.StmtType == "ROLLBACK" && logStats.ShardQueries == 0) {
+		logStats.Send()
+	}
 	return result, err
 }
 
