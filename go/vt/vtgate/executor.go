@@ -108,7 +108,15 @@ func NewExecutor(ctx context.Context, serv topo.SrvTopoServer, cell, statsName s
 }
 
 // Execute executes a non-streaming query.
-func (e *Executor) Execute(ctx context.Context, method string, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (e *Executor) Execute(ctx context.Context, method string, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (result *sqltypes.Result, err error) {
+	logStats := NewLogStats(ctx, method, sql, bindVars)
+	result, err = e.execute(ctx, method, session, sql, bindVars, logStats)
+	logStats.Error = err
+	logStats.Send()
+	return result, err
+}
+
+func (e *Executor) execute(ctx context.Context, method string, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (*sqltypes.Result, error) {
 	// Start an implicit transaction if necessary.
 	// TODO(sougou): deprecate legacyMode after all users are migrated out.
 	if !e.legacyAutocommit && !session.Autocommit && !session.InTransaction {
@@ -126,15 +134,12 @@ func (e *Executor) Execute(ctx context.Context, method string, session *vtgatepb
 	}
 
 	stmtType := sqlparser.Preview(sql)
+	logStats.StmtType = sqlparser.StmtType(stmtType)
+
 	switch stmtType {
 	case sqlparser.StmtSelect:
-		logStats := NewLogStats(ctx, method, "SELECT")
-		defer logStats.Send()
 		return e.handleExec(ctx, session, sql, bindVars, target, logStats)
 	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
-		logStats := NewLogStats(ctx, method, sqlparser.StmtType(stmtType))
-		defer logStats.Send()
-
 		// In legacy mode, we ignore autocommit settings.
 		if e.legacyAutocommit {
 			return e.handleExec(ctx, session, sql, bindVars, target, logStats)
@@ -159,40 +164,27 @@ func (e *Executor) Execute(ctx context.Context, method string, session *vtgatepb
 
 		if autocommit {
 			commitStart := time.Now()
-			if err := e.txConn.Commit(ctx, nsf); err != nil {
+			if err = e.txConn.Commit(ctx, nsf); err != nil {
 				return nil, err
 			}
 			logStats.CommitTime = time.Since(commitStart)
 		}
 		return qr, nil
 	case sqlparser.StmtDDL:
-		logStats := NewLogStats(ctx, method, "DDL")
-		defer logStats.Send()
-
 		return e.handleDDL(ctx, session, sql, bindVars, target, logStats)
 	case sqlparser.StmtBegin:
-		if target.TabletType != topodatapb.TabletType_MASTER {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", target.TabletType)
-		}
-		err := e.txConn.Begin(ctx, NewSafeSession(session))
-		return &sqltypes.Result{}, err
+		return e.handleBegin(ctx, session, sql, bindVars, target, logStats)
 	case sqlparser.StmtCommit:
-		err := e.txConn.Commit(ctx, NewSafeSession(session))
-		return &sqltypes.Result{}, err
+		return e.handleCommit(ctx, session, sql, bindVars, target, logStats)
 	case sqlparser.StmtRollback:
-		err := e.txConn.Rollback(ctx, NewSafeSession(session))
-		return &sqltypes.Result{}, err
+		return e.handleRollback(ctx, session, sql, bindVars, target, logStats)
 	case sqlparser.StmtSet:
-		return e.handleSet(ctx, session, sql, bindVars)
+		return e.handleSet(ctx, session, sql, bindVars, logStats)
 	case sqlparser.StmtShow:
-		logStats := NewLogStats(ctx, method, "SHOW")
-		defer logStats.Send()
 		return e.handleShow(ctx, session, sql, bindVars, target, logStats)
 	case sqlparser.StmtUse:
 		return e.handleUse(ctx, session, sql, bindVars)
 	case sqlparser.StmtOther:
-		logStats := NewLogStats(ctx, method, "OTHER")
-		defer logStats.Send()
 		return e.handleOther(ctx, session, sql, bindVars, target, logStats)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
@@ -297,13 +289,53 @@ func (e *Executor) handleDDL(ctx context.Context, session *vtgatepb.Session, sql
 		} else {
 			shards = []string{target.Shard}
 		}
+		logStats.ShardQueries = uint32(len(shards))
 		return keyspace, shards, nil
 	}
-	return e.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, session, f, false /* notInTransaction */, session.Options, logStats)
+
+	execStart := time.Now()
+	result, err := e.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, session, f, false /* notInTransaction */, session.Options, logStats)
+	logStats.ExecuteTime = time.Since(execStart)
+	return result, err
 }
 
-func (e *Executor) handleSet(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (e *Executor) handleBegin(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
+	if target.TabletType != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", target.TabletType)
+	}
+	execStart := time.Now()
+	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+	err := e.txConn.Begin(ctx, NewSafeSession(session))
+	logStats.ExecuteTime = time.Since(execStart)
+	return &sqltypes.Result{}, err
+}
+
+func (e *Executor) handleCommit(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
+	execStart := time.Now()
+	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+	logStats.ShardQueries = uint32(len(session.ShardSessions))
+	err := e.txConn.Commit(ctx, NewSafeSession(session))
+	logStats.CommitTime = time.Since(execStart)
+	return &sqltypes.Result{}, err
+}
+
+func (e *Executor) handleRollback(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
+	execStart := time.Now()
+	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+	logStats.ShardQueries = uint32(len(session.ShardSessions))
+	err := e.txConn.Rollback(ctx, NewSafeSession(session))
+	logStats.CommitTime = time.Since(execStart)
+	return &sqltypes.Result{}, err
+}
+
+func (e *Executor) handleSet(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (*sqltypes.Result, error) {
 	vals, charset, err := sqlparser.ExtractSetValues(sql)
+	execStart := time.Now()
+	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+	defer func() {
+		logStats.ExecuteTime = time.Since(execStart)
+	}()
+
 	if err != nil {
 		return &sqltypes.Result{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
 	}
@@ -438,6 +470,8 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 		// This code is unreachable.
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unrecognized SHOW statement: %v", sql)
 	}
+	execStart := time.Now()
+	defer func() { logStats.ExecuteTime = time.Since(execStart) }()
 
 	switch show.Type {
 	case sqlparser.ShowDatabasesStr, sqlparser.ShowKeyspacesStr:
@@ -541,13 +575,18 @@ func (e *Executor) handleOther(ctx context.Context, session *vtgatepb.Session, s
 			return nil, err
 		}
 	}
-	return e.shardExec(ctx, session, sql, bindVars, target, logStats)
+	execStart := time.Now()
+	result, err := e.shardExec(ctx, session, sql, bindVars, target, logStats)
+	logStats.ExecuteTime = time.Since(execStart)
+	return result, err
 }
 
 // StreamExecute executes a streaming query.
-func (e *Executor) StreamExecute(ctx context.Context, method string, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, callback func(*sqltypes.Result) error) error {
-	logStats := NewLogStats(ctx, method, sqlparser.StmtType(sqlparser.Preview(sql)))
+func (e *Executor) StreamExecute(ctx context.Context, method string, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, callback func(*sqltypes.Result) error) (err error) {
+	logStats := NewLogStats(ctx, method, sql, bindVars)
+	logStats.StmtType = sqlparser.StmtType(sqlparser.Preview(sql))
 	defer logStats.Send()
+
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
 	}

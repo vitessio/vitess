@@ -52,12 +52,13 @@ type LogStats struct {
 
 // NewLogStats constructs a new LogStats with supplied Method and ctx
 // field values, and the StartTime field set to the present time.
-func NewLogStats(ctx context.Context, methodName, stmtType string) *LogStats {
+func NewLogStats(ctx context.Context, methodName, sql string, bindVars map[string]*querypb.BindVariable) *LogStats {
 	return &LogStats{
-		Ctx:       ctx,
-		Method:    methodName,
-		StmtType:  stmtType,
-		StartTime: time.Now(),
+		Ctx:           ctx,
+		Method:        methodName,
+		SQL:           sql,
+		BindVariables: bindVars,
+		StartTime:     time.Now(),
 	}
 }
 

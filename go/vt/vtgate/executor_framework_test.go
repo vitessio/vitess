@@ -330,7 +330,10 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 	}
 	testPlannedQueries[sql] = true
 
-	testNonZeroDuration(t, "ExecuteTime", fields[9])
+	// fields[9] is ExecuteTime which is not set for certain statements SET, BEGIN, COMMIT, ROLLBACK, etc
+	if stmtType != "BEGIN" && stmtType != "COMMIT" && stmtType != "ROLLBACK" && stmtType != "SET" {
+		testNonZeroDuration(t, "ExecuteTime", fields[9])
+	}
 
 	// fields[10] is CommitTime which is set only in autocommit mode and
 	// tested separately

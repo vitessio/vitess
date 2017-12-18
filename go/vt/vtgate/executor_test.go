@@ -53,12 +53,7 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	if commitCount := sbclookup.CommitCount.Get(); commitCount != 0 {
 		t.Errorf("want 0, got %d", commitCount)
 	}
-
-	// begin doesn't put anything in the query log
-	logStats := getQueryLog(logChan)
-	if logStats != nil {
-		t.Errorf("begin unexpectedly created a logStats record")
-	}
+	logStats := testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
 
 	// commit.
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "select id from main1", nil)
@@ -81,9 +76,9 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	if commitCount := sbclookup.CommitCount.Get(); commitCount != 1 {
 		t.Errorf("want 1, got %d", commitCount)
 	}
-	logStats = getQueryLog(logChan)
-	if logStats != nil {
-		t.Errorf("commit unexpectedly created a logStats record")
+	logStats = testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 1)
+	if logStats.CommitTime == 0 {
+		t.Errorf("logstats: expected non-zero CommitTime")
 	}
 
 	// rollback.
@@ -150,6 +145,7 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	if commitCount := sbclookup.CommitCount.Get(); commitCount != 0 {
 		t.Errorf("want 0, got %d", commitCount)
 	}
+	logStats := testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
 
 	// commit.
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "select id from main1", nil)
@@ -168,9 +164,13 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 		t.Errorf("want 1, got %d", commitCount)
 	}
 
-	logStats := testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	logStats = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	if logStats.CommitTime != 0 {
 		t.Errorf("logstats: expected zero CommitTime")
+	}
+	logStats = testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 1)
+	if logStats.CommitTime == 0 {
+		t.Errorf("logstats: expected non-zero CommitTime")
 	}
 
 	// rollback.
@@ -359,6 +359,8 @@ func TestExecutorAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	logStats = testQueryLog(t, logChan, "TestExecute", "SET", "set autocommit=1", 0)
+
 	// Setting autocommit=1 commits existing transaction.
 	if got, want := sbclookup.CommitCount.Get(), startCount+1; got != want {
 		t.Errorf("Commit count: %d, want %d", got, want)
@@ -388,6 +390,8 @@ func TestExecutorAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	logStats = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "update main1 set id=1", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -418,6 +422,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	if got, want := sbclookup.CommitCount.Get(), startCount+1; got != want {
 		t.Errorf("Commit count: %d, want %d", got, want)
 	}
+	logStats = testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 1)
 
 	// transition autocommit from 0 to 1 in the middle of a transaction.
 	startCount = sbclookup.CommitCount.Get()
@@ -812,7 +817,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	emptyvc := newVCursorImpl(context.Background(), nil, querypb.Target{}, "", r, nil)
 	unshardedvc := newVCursorImpl(context.Background(), nil, querypb.Target{Keyspace: KsTestUnsharded}, "", r, nil)
 
-	logStats1 := NewLogStats(nil, "Test", "")
+	logStats1 := NewLogStats(nil, "Test", "", nil)
 	query1 := "select * from music_user_map where id = 1"
 	plan1, err := r.getPlan(emptyvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, false, logStats1)
 	if err != nil {
@@ -823,7 +828,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
 	}
 
-	logStats2 := NewLogStats(nil, "Test", "")
+	logStats2 := NewLogStats(nil, "Test", "", nil)
 	plan2, err := r.getPlan(emptyvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, false, logStats2)
 	if err != nil {
 		t.Error(err)
@@ -840,7 +845,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	if logStats2.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
 	}
-	logStats3 := NewLogStats(nil, "Test", "")
+	logStats3 := NewLogStats(nil, "Test", "", nil)
 	plan3, err := r.getPlan(unshardedvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, false, logStats3)
 	if err != nil {
 		t.Error(err)
@@ -851,7 +856,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	if logStats3.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats3.SQL)
 	}
-	logStats4 := NewLogStats(nil, "Test", "")
+	logStats4 := NewLogStats(nil, "Test", "", nil)
 	plan4, err := r.getPlan(unshardedvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, false, logStats4)
 	if err != nil {
 		t.Error(err)
@@ -875,7 +880,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
 	emptyvc := newVCursorImpl(context.Background(), nil, querypb.Target{}, "", r, nil)
 	query1 := "select * from music_user_map where id = 1"
-	logStats1 := NewLogStats(nil, "Test", "")
+	logStats1 := NewLogStats(nil, "Test", "", nil)
 	_, err := r.getPlan(emptyvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
 	if err != nil {
 		t.Error(err)
@@ -887,7 +892,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	if logStats1.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
 	}
-	logStats2 := NewLogStats(nil, "Test", "")
+	logStats2 := NewLogStats(nil, "Test", "", nil)
 	_, err = r.getPlan(emptyvc, query1, " /* comment 2 */", map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */, logStats2)
 	if err != nil {
 		t.Error(err)
@@ -906,7 +911,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	r.normalize = true
 	emptyvc := newVCursorImpl(context.Background(), nil, querypb.Target{}, "", r, nil)
 	query1 := "select * from music_user_map where id = 1"
-	logStats1 := NewLogStats(nil, "Test", "")
+	logStats1 := NewLogStats(nil, "Test", "", nil)
 	_, err := r.getPlan(emptyvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
 	if err != nil {
 		t.Error(err)
@@ -918,7 +923,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	if logStats1.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
 	}
-	logStats2 := NewLogStats(nil, "Test", "")
+	logStats2 := NewLogStats(nil, "Test", "", nil)
 	_, err = r.getPlan(emptyvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */, logStats2)
 	if err != nil {
 		t.Error(err)
@@ -940,12 +945,12 @@ func TestGetPlanNormalized(t *testing.T) {
 	query1 := "select * from music_user_map where id = 1"
 	query2 := "select * from music_user_map where id = 2"
 	normalized := "select * from music_user_map where id = :vtg1"
-	logStats1 := NewLogStats(nil, "Test", "")
+	logStats1 := NewLogStats(nil, "Test", "", nil)
 	plan1, err := r.getPlan(emptyvc, query1, " /* comment 1 */", map[string]*querypb.BindVariable{}, false, logStats1)
 	if err != nil {
 		t.Error(err)
 	}
-	logStats2 := NewLogStats(nil, "Test", "")
+	logStats2 := NewLogStats(nil, "Test", "", nil)
 	plan2, err := r.getPlan(emptyvc, query1, " /* comment 2 */", map[string]*querypb.BindVariable{}, false, logStats2)
 	if err != nil {
 		t.Error(err)
@@ -969,7 +974,7 @@ func TestGetPlanNormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
 	}
 
-	logStats3 := NewLogStats(nil, "Test", "")
+	logStats3 := NewLogStats(nil, "Test", "", nil)
 	plan3, err := r.getPlan(emptyvc, query2, " /* comment 3 */", map[string]*querypb.BindVariable{}, false, logStats3)
 	if err != nil {
 		t.Error(err)
@@ -982,7 +987,7 @@ func TestGetPlanNormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats3.SQL)
 	}
 
-	logStats4 := NewLogStats(nil, "Test", "")
+	logStats4 := NewLogStats(nil, "Test", "", nil)
 	plan4, err := r.getPlan(emptyvc, normalized, " /* comment 4 */", map[string]*querypb.BindVariable{}, false, logStats4)
 	if err != nil {
 		t.Error(err)
@@ -995,7 +1000,7 @@ func TestGetPlanNormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats4.SQL)
 	}
 
-	logStats5 := NewLogStats(nil, "Test", "")
+	logStats5 := NewLogStats(nil, "Test", "", nil)
 	plan3, err = r.getPlan(unshardedvc, query1, " /* comment 5 */", map[string]*querypb.BindVariable{}, false, logStats5)
 	if err != nil {
 		t.Error(err)
@@ -1008,7 +1013,7 @@ func TestGetPlanNormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats5.SQL)
 	}
 
-	logStats6 := NewLogStats(nil, "Test", "")
+	logStats6 := NewLogStats(nil, "Test", "", nil)
 	plan4, err = r.getPlan(unshardedvc, query1, " /* comment 6 */", map[string]*querypb.BindVariable{}, false, logStats6)
 	if err != nil {
 		t.Error(err)
@@ -1025,13 +1030,13 @@ func TestGetPlanNormalized(t *testing.T) {
 	}
 
 	// Errors
-	logStats7 := NewLogStats(nil, "Test", "")
+	logStats7 := NewLogStats(nil, "Test", "", nil)
 	_, err = r.getPlan(emptyvc, "syntax", "", map[string]*querypb.BindVariable{}, false, logStats7)
 	wantErr := "syntax error at position 7 near 'syntax'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("getPlan(syntax): %v, want %s", err, wantErr)
 	}
-	logStats8 := NewLogStats(nil, "Test", "")
+	logStats8 := NewLogStats(nil, "Test", "", nil)
 	_, err = r.getPlan(emptyvc, "create table a(id int)", "", map[string]*querypb.BindVariable{}, false, logStats8)
 	wantErr = "unsupported construct: ddl"
 	if err == nil || err.Error() != wantErr {
