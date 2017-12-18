@@ -43,8 +43,8 @@ func TestQuerylogzHandlerInvalidLogStats(t *testing.T) {
 
 func TestQuerylogzHandlerFormatting(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
-	logStats := NewLogStats(context.Background(), "Execute", "select")
-	logStats.SQL = "select name from test_table limit 1000"
+	logStats := NewLogStats(context.Background(), "Execute", "select name from test_table limit 1000", nil)
+	logStats.StmtType = "select"
 	logStats.RowsAffected = 1000
 	logStats.ShardQueries = 1
 	logStats.StartTime, _ = time.Parse("Jan 2 15:04:05", "Nov 29 13:33:09")
