@@ -41,7 +41,7 @@ Relying on replication also allows you to loosen some of the disk-based durabili
 
 Before sharding or moving tables to different keyspaces, the application needs to be verified (or changed) such that it can tolerate the following changes:
 
-* Cross-shard reads may not be consistent with each other. Conversely, the sharding decision should also attempt to minimize such occurences because cross-shard reads are more expensive.
+* Cross-shard reads may not be consistent with each other. Conversely, the sharding decision should also attempt to minimize such occurrences because cross-shard reads are more expensive.
 * In "best-effort mode", cross-shard transactions can fail in the middle and result in partial commits. You could instead use "2PC mode" transactions that give you distributed atomic guarantees. However, choosing this option increases the write cost by approximately 50%.
 
 Single shard transactions continue to remain ACID, just like MySQL supports it.
@@ -228,7 +228,7 @@ allow you to execute some of these statements as pass-through.
 
 If your application previously connected to master or replica
 instances through different hosts and ports, those parts will
-have to be changed to connect to a sinlge load-balanced IP.
+have to be changed to connect to a single load-balanced IP.
 
 Instead, the database type will be specified as part of the
 db name. For example, to connect to a master, you would specify
