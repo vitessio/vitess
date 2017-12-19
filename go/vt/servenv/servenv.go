@@ -61,6 +61,9 @@ var (
 	// RedactDebugUIQueries controls whether full queries and bind variables are suppressed from debug UIs.
 	RedactDebugUIQueries = flag.Bool("redact-debug-ui-queries", false, "redact full queries and bind variables from debug UI")
 
+	// QueryLogFormat controls the format of the query log (either text or json)
+	QueryLogFormat = flag.String("querylog-format", "text", "format for query logs (\"text\" or \"json\")")
+
 	// mutex used to protect the Init function
 	mu sync.Mutex
 
@@ -87,6 +90,13 @@ func Init() {
 	// non-privileged user starting the program correctly.
 	if uid := os.Getuid(); uid == 0 {
 		log.Exitf("servenv.Init: running this as root makes no sense")
+	}
+
+	switch *QueryLogFormat {
+	case "text":
+	case "json":
+	default:
+		log.Exitf("servenv.Init: Invalid querylog-format value %v: must be either text or json")
 	}
 
 	runtime.MemProfileRate = *memProfileRate
