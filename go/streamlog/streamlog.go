@@ -22,7 +22,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
@@ -121,6 +124,36 @@ func (logger *StreamLogger) ServeLogs(url string, messageFmt func(url.Values, in
 		}
 	})
 	log.Infof("Streaming logs from %s at %v.", logger.Name(), url)
+}
+
+// LogToFile starts logging to the specified file path and will reopen the
+// file in response to SIGUSR1
+func (logger *StreamLogger) LogToFile(path string, messageFmt func(url.Values, interface{}) string) error {
+	rotateChan := make(chan os.Signal, 1)
+	signal.Notify(rotateChan, syscall.SIGUSR1)
+
+	logChan := logger.Subscribe("FileLog")
+	formatParams := map[string][]string{"full": {}}
+
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		for {
+			select {
+			case record, _ := <-logChan:
+				formatted := messageFmt(formatParams, record)
+				f.WriteString(formatted)
+			case _, _ = <-rotateChan:
+				f.Close()
+				f, _ = os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+			}
+		}
+	}()
+
+	return nil
 }
 
 // Formatter is a simple interface for objects that expose a Format function
