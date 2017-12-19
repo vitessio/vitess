@@ -79,14 +79,14 @@ func (f Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
 // Server is the zookeeper topo.Conn implementation.
 type Server struct {
 	root string
-	conn Conn
+	conn *ZkConn
 }
 
 // NewServer returns a topo.Conn connecting to real Zookeeper processes.
 func NewServer(serverAddr, root string) *Server {
 	return &Server{
 		root: root,
-		conn: newRealConn(serverAddr),
+		conn: Connect(serverAddr),
 	}
 }
 

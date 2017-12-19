@@ -583,7 +583,9 @@ class VtGate(object):
       args.extend(['-mysql_server_port', str(self.mysql_port)])
 
     self.proc = run_bg(args)
-    wait_for_vars('vtgate', self.port)
+    # We use a longer timeout here, as we may be waiting for the initial
+    # state of a few tablets.
+    wait_for_vars('vtgate', self.port, timeout=20.0)
 
     global vtgate
     if not vtgate:
@@ -812,7 +814,9 @@ class L2VtGate(object):
       args.extend(extra_args)
 
     self.proc = run_bg(args)
-    wait_for_vars('l2vtgate', self.port)
+    # We use a longer timeout here, as we may be waiting for the initial
+    # state of a few tablets.
+    wait_for_vars('l2vtgate', self.port, timeout=20.0)
 
   def kill(self):
     """Terminates the l2vtgate process, and waits for it to exit.

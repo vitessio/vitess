@@ -26,7 +26,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/zk/zkctl"
+	"github.com/youtube/vitess/go/vt/zkctl"
 )
 
 var usage = `

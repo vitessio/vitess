@@ -183,7 +183,7 @@ govendor sync || fail "Failed to download/update dependencies with govendor. Ple
 ln -snf $VTTOP/config $VTROOT/config
 ln -snf $VTTOP/data $VTROOT/data
 ln -snf $VTTOP/py $VTROOT/py-vtdb
-ln -snf $VTTOP/go/zk/zkctl/zksrv.sh $VTROOT/bin/zksrv.sh
+ln -snf $VTTOP/go/vt/zkctl/zksrv.sh $VTROOT/bin/zksrv.sh
 ln -snf $VTTOP/test/vthook-test.sh $VTROOT/vthook/test.sh
 ln -snf $VTTOP/test/vthook-test_backup_error $VTROOT/vthook/test_backup_error
 ln -snf $VTTOP/test/vthook-test_backup_transform $VTROOT/vthook/test_backup_transform

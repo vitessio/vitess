@@ -115,7 +115,6 @@
           <h4 class="arrow-r">User Guide</h4>
           <ul style="display: none">
             <li><a href="/user-guide/introduction/">Introduction</a>
-            <li><a href="/user-guide/client-libraries/">Client Libraries</a>
             <li><a href="/user-guide/backup-and-restore/">Backing Up Data</a>
             <li><a href="/user-guide/reparenting/">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management/">Schema Management</a></li>
@@ -131,14 +130,9 @@
                 <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes/">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
-            <li><a href="/user-guide/vitess-sequences/">Vitess Sequences</a></li>
-            <li><a href="/user-guide/mysql-server-protocol/">MySQL Server Protocol</a></li>
-            <li><a href="/user-guide/vitess-replication/">Vitess and Replication</a></li>
-            <li><a href="/user-guide/update-stream/">Update Stream</a></li>
-            <li><a href="/user-guide/row-based-replication/">Row Based Replication</a></li>
             <li><a href="/user-guide/topology-service/">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model/">Transport Security Model</a></li>
-            <li style="padding-bottom: 0"><a href="/user-guide/launching/">Launching</a>
+            <h5 class="arrow-r">Launching</h4>
               <ul style="display: block">
                 <li><a href="/user-guide/scalability-philosophy/">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning/">Production Planning</a></li>
@@ -170,6 +164,14 @@
             <li><a href="/resources/presentations/">Presentations</a>
             <li><a href="http://blog.vitess.io/">Blog</a>
             <li><a href="/resources/roadmap/">Roadmap</a>
+            <li><a href="/resources/design-docs/">Design Docs</a>
+              <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vitess-sequences/">Vitess Sequences</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/mysql-server-protocol/">MySQL Server Protocol</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/vitess-replication/">Vitess and Replication</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/update-stream/">Update Stream</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/row-based-replication/">Row Based Replication</a></li>
+              </ul>
           </ul>
         </li>
         <li class="submenu">
@@ -240,7 +242,6 @@
           <h4 class="arrow-r">User Guide</h4>
           <ul style="display: none">
             <li><a href="/user-guide/introduction/">Introduction</a>
-            <li><a href="/user-guide/client-libraries/">Client Libraries</a>
             <li><a href="/user-guide/backup-and-restore/">Backing Up Data</a>
             <li><a href="/user-guide/reparenting/">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management/">Schema Management</a></li>
@@ -256,14 +257,9 @@
                 <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes/">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
-            <li><a href="/user-guide/vitess-sequences/">Vitess Sequences</a></li>
-            <li><a href="/user-guide/mysql-server-protocol/">MySQL Server Protocol</a></li>
-            <li><a href="/user-guide/vitess-replication/">Vitess and Replication</a></li>
-            <li><a href="/user-guide/update-stream/">Update Stream</a></li>
-            <li><a href="/user-guide/row-based-replication/">Row Based Replication</a></li>
             <li><a href="/user-guide/topology-service/">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model/">Transport Security Model</a></li>
-            <li style="padding-bottom: 0"><a href="/user-guide/launching/">Launching</a>
+            <h5 class="arrow-r">Launching</h4>
               <ul style="display: block">
                 <li><a href="/user-guide/scalability-philosophy/">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning/">Production Planning</a></li>
@@ -295,6 +291,14 @@
             <li><a href="/resources/presentations/">Presentations</a>
             <li><a href="http://blog.vitess.io/">Blog</a>
             <li><a href="/resources/roadmap/">Roadmap</a>
+            <li><a href="/resources/design-docs/">Design Docs</a>
+              <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vitess-sequences/">Vitess Sequences</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/mysql-server-protocol/">MySQL Server Protocol</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/vitess-replication/">Vitess and Replication</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/update-stream/">Update Stream</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/row-based-replication/">Row Based Replication</a></li>
+              </ul>
           </ul>
         </li>
         <li class="submenu">
@@ -329,10 +333,19 @@
     </div>
     <div class="col-md-7" id="centerCol">
       <div id="centerTextCol">
-        <p>Your MySQL database schema lists the tables in your database and
-contains table definitions that explain how to create those tables.
-Table definitions identify table names, column names, column types,
-primary key information, and so forth.</p>
+        <p>Uisng Vitess requires you to work with two different types of schemas:</p>
+
+<ol>
+<li>The MySQL database schema. This is the schema of the individual MySQL instances.</li>
+<li>The <a href="/user-guide/vschema/">VSchema</a>, which describes all the keyspaces and how they&#39;re sharded.</li>
+</ol>
+
+<p>The workflow for the <code>VSchema</code> is as follows:</p>
+
+<ol>
+<li>Apply the VSchema for each keyspace using the <code>ApplyVschema</code> command. This saves the VSchemas in the global topo server.</li>
+<li>Execute <code>RebuildVSchemaGraph</code> for each cell (or all cells). This command propagates a denormalized version of the combined VSchema to all the specified cells. The main purpose for this propagation is to minimize the dependency of each cell from the global topology. The ability to push a change to only specific cells allows you to canary the change to make sure that it&#39;s good before deploying it everywhere.</li>
+</ol>
 
 <p>This document describes the <code><a href="/reference/vtctl/">vtctl</a></code>
 commands that you can use to <a href="#reviewing-your-schema">review</a> or
@@ -348,6 +361,8 @@ commands that you can use to <a href="#reviewing-your-schema">review</a> or
 <li><a href="#getschema">GetSchema</a></li>
 <li><a href="#validateschemashard">ValidateSchemaShard</a></li>
 <li><a href="#validateschemakeyspace">ValidateSchemaKeyspace</a></li>
+<li><a href="#getvschema">GetVSchema</a></li>
+<li><a href="#getsrvvschema">GetSrvVSchema</a></li>
 </ul>
 
 <h3 id="getschema">GetSchema</h3>
@@ -395,11 +410,29 @@ same schema as the master tablet in shard <code>0</code> for the
 <code>user</code> keyspace:</p>
 <div class="highlight"><pre><code class="language-text" data-lang="text"><span></span>ValidateSchemaKeyspace user
 </code></pre></div>
+<h3 id="getvschema">GetVSchema</h3>
+
+<p>The <code><a href="/reference/vtctl/#getvschema">GetVSchema</a></code>
+command displays the global VSchema for the specified keyspace.</p>
+
+<h3 id="getsrvvschema">GetSrvVSchema</h3>
+
+<p>The <code><a href="/reference/vtctl/#getsrvvschema">GetSrvVSchema</a></code>
+command displays the combined VSchema for a given cell.</p>
+
 <h2 id="changing-your-schema">Changing your schema</h2>
 
-<p>This section describes the <code>vtctl ApplySchema</code> command, which
-supports schema modifications. Vitess&#39; schema modification functionality
-is designed the following goals in mind:</p>
+<p>This section describes the following commands:</p>
+
+<ul>
+<li><a href="#applyschema">ApplySchema</a></li>
+<li><a href="#applyvschema">ApplyVSchema</a></li>
+<li><a href="#rebuildvschemagraph">RebuildVSchemaGraph</a></li>
+</ul>
+
+<h3 id="applyschema">ApplySchema</h3>
+
+<p>Vitess&#39; schema modification functionality is designed the following goals in mind:</p>
 
 <ul>
 <li>Enable simple updates that propagate to your entire fleet of servers.</li>
@@ -414,8 +447,6 @@ is designed the following goals in mind:</p>
 that create, modify, or delete database tables.
 For instance, <code>ApplySchema</code> does not affect stored procedures
 or grants.</p>
-
-<h3 id="applyschema">ApplySchema</h3>
 
 <p>The <code><a href="/reference/vtctl/#applyschema">ApplySchema</a></code>
 command applies a schema change to the specified keyspace on every
@@ -485,6 +516,17 @@ must have 2 million rows or less.</li>
 
 <p>If a schema change gets rejected because it affects too many rows, you can specify the flag <code class="prettyprint">-allow_long_unavailability</code> to tell <code class="prettyprint">ApplySchema</code> to skip this check.
 However, we do not recommend this. Instead, you should apply large schema changes by following the <a href="/user-guide/schema-swap/">schema swap process</a>.</p>
+
+<h3 id="applyvschema">ApplyVSchema</h3>
+
+<p>The <code><a href="/reference/vtctl/#applyvschema">ApplyVSchema</a></code>
+command applies the specified VSchema to the keyspace. The VSchema can be specified
+as a string or in a file.</p>
+
+<h3 id="rebuildvschemagraph">RebuildVSchemaGraph</h3>
+
+<p>The <code><a href="/reference/vtctl/#rebuildvschemagraph">RebuildVSchemaGraph</a></code>
+command propagates the global VSchema to a specific cell or the list of specified cells.</p>
 
       </div>
     </div>

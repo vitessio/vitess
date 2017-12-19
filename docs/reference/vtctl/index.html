@@ -115,7 +115,6 @@
           <h4 class="arrow-r">User Guide</h4>
           <ul style="display: none">
             <li><a href="/user-guide/introduction/">Introduction</a>
-            <li><a href="/user-guide/client-libraries/">Client Libraries</a>
             <li><a href="/user-guide/backup-and-restore/">Backing Up Data</a>
             <li><a href="/user-guide/reparenting/">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management/">Schema Management</a></li>
@@ -131,14 +130,9 @@
                 <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes/">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
-            <li><a href="/user-guide/vitess-sequences/">Vitess Sequences</a></li>
-            <li><a href="/user-guide/mysql-server-protocol/">MySQL Server Protocol</a></li>
-            <li><a href="/user-guide/vitess-replication/">Vitess and Replication</a></li>
-            <li><a href="/user-guide/update-stream/">Update Stream</a></li>
-            <li><a href="/user-guide/row-based-replication/">Row Based Replication</a></li>
             <li><a href="/user-guide/topology-service/">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model/">Transport Security Model</a></li>
-            <li style="padding-bottom: 0"><a href="/user-guide/launching/">Launching</a>
+            <h5 class="arrow-r">Launching</h4>
               <ul style="display: block">
                 <li><a href="/user-guide/scalability-philosophy/">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning/">Production Planning</a></li>
@@ -170,6 +164,14 @@
             <li><a href="/resources/presentations/">Presentations</a>
             <li><a href="http://blog.vitess.io/">Blog</a>
             <li><a href="/resources/roadmap/">Roadmap</a>
+            <li><a href="/resources/design-docs/">Design Docs</a>
+              <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vitess-sequences/">Vitess Sequences</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/mysql-server-protocol/">MySQL Server Protocol</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/vitess-replication/">Vitess and Replication</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/update-stream/">Update Stream</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/row-based-replication/">Row Based Replication</a></li>
+              </ul>
           </ul>
         </li>
         <li class="submenu">
@@ -240,7 +242,6 @@
           <h4 class="arrow-r">User Guide</h4>
           <ul style="display: none">
             <li><a href="/user-guide/introduction/">Introduction</a>
-            <li><a href="/user-guide/client-libraries/">Client Libraries</a>
             <li><a href="/user-guide/backup-and-restore/">Backing Up Data</a>
             <li><a href="/user-guide/reparenting/">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management/">Schema Management</a></li>
@@ -256,14 +257,9 @@
                 <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes/">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
-            <li><a href="/user-guide/vitess-sequences/">Vitess Sequences</a></li>
-            <li><a href="/user-guide/mysql-server-protocol/">MySQL Server Protocol</a></li>
-            <li><a href="/user-guide/vitess-replication/">Vitess and Replication</a></li>
-            <li><a href="/user-guide/update-stream/">Update Stream</a></li>
-            <li><a href="/user-guide/row-based-replication/">Row Based Replication</a></li>
             <li><a href="/user-guide/topology-service/">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model/">Transport Security Model</a></li>
-            <li style="padding-bottom: 0"><a href="/user-guide/launching/">Launching</a>
+            <h5 class="arrow-r">Launching</h4>
               <ul style="display: block">
                 <li><a href="/user-guide/scalability-philosophy/">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning/">Production Planning</a></li>
@@ -295,6 +291,14 @@
             <li><a href="/resources/presentations/">Presentations</a>
             <li><a href="http://blog.vitess.io/">Blog</a>
             <li><a href="/resources/roadmap/">Roadmap</a>
+            <li><a href="/resources/design-docs/">Design Docs</a>
+              <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vitess-sequences/">Vitess Sequences</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/mysql-server-protocol/">MySQL Server Protocol</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/vitess-replication/">Vitess and Replication</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/update-stream/">Update Stream</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/row-based-replication/">Row Based Replication</a></li>
+              </ul>
           </ul>
         </li>
         <li class="submenu">
@@ -344,6 +348,7 @@
 <li><a href="#serving-graph">Serving Graph</a></li>
 <li><a href="#shards">Shards</a></li>
 <li><a href="#tablets">Tablets</a></li>
+<li><a href="#topo">Topo</a></li>
 <li><a href="#workflows">Workflows</a></li>
 </ul>
 
@@ -488,7 +493,6 @@
 <ul>
 <li><a href="#listalltablets">ListAllTablets</a></li>
 <li><a href="#listtablets">ListTablets</a></li>
-<li><a href="#pruneactionlogs">PruneActionLogs</a></li>
 <li><a href="#validate">Validate</a></li>
 </ul>
 
@@ -530,44 +534,6 @@
 
 <ul>
 <li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;ListTablets&gt;</code> command This error occurs if the command is not called with at least one argument.</li>
-</ul>
-
-<h3 id="pruneactionlogs">PruneActionLogs</h3>
-
-<p>(requires zktopo.Server)<br><br>e.g. PruneActionLogs -keep-count=10 /zk/global/vt/keyspaces/my_keyspace/shards/0/actionlog<br><br>Removes older actionlog entries until at most &lt;count to keep&gt; are left.</p>
-
-<h4 id="example">Example</h4>
-
-<pre class="command-example">PruneActionLogs [-keep-count=&lt;count to keep&gt;] &lt;zk actionlog path&gt; ...</pre>
-
-<h4 id="flags">Flags</h4>
-
-<table><thead>
-<tr>
-<th style="text-align: left">Name</th>
-<th style="text-align: left">Type</th>
-<th style="text-align: left">Definition</th>
-</tr>
-</thead><tbody>
-<tr>
-<td style="text-align: left">keep-count</td>
-<td style="text-align: left">Int</td>
-<td style="text-align: left">count to keep</td>
-</tr>
-</tbody></table>
-
-<h4 id="arguments">Arguments</h4>
-
-<ul>
-<li><code>&lt;zk actionlog path&gt;</code> &ndash; Required. To specify multiple values for this argument, separate individual values with a space.</li>
-</ul>
-
-<h4 id="errors">Errors</h4>
-
-<ul>
-<li>action <code>&lt;PruneActionLogs&gt;</code> requires <code>&lt;zk action log path&gt;</code> [...] This error occurs if the command is not called with at least one argument.</li>
-<li><code>&lt;PruneActionLogs&gt;</code> requires a zktopo.Server</li>
-<li>some errors occurred, check the log</li>
 </ul>
 
 <h3 id="validate">Validate</h3>
@@ -909,7 +875,7 @@
 
 <h3 id="removekeyspacecell">RemoveKeyspaceCell</h3>
 
-<p>Removes the cell from the Cells list for all shards in the keyspace.</p>
+<p>Removes the cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.</p>
 
 <h4 id="example">Example</h4>
 
@@ -1172,7 +1138,7 @@
 
 <h4 id="example">Example</h4>
 
-<pre class="command-example">VtGateExecute -server &lt;vtgate&gt; [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-keyspace &lt;default keyspace&gt;] [-tablet_type &lt;tablet type&gt;] [-options &lt;proto text options&gt;] [-json] &lt;sql&gt;</pre>
+<pre class="command-example">VtGateExecute -server &lt;vtgate&gt; [-bind_variables &lt;JSON map&gt;] [-keyspace &lt;default keyspace&gt;] [-tablet_type &lt;tablet type&gt;] [-options &lt;proto text options&gt;] [-json] &lt;sql&gt;</pre>
 
 <h4 id="flags">Flags</h4>
 
@@ -1184,19 +1150,9 @@
 </tr>
 </thead><tbody>
 <tr>
-<td style="text-align: left">connect_timeout</td>
-<td style="text-align: left">Duration</td>
-<td style="text-align: left">Connection timeout for vtgate client</td>
-</tr>
-<tr>
 <td style="text-align: left">json</td>
 <td style="text-align: left">Boolean</td>
 <td style="text-align: left">Output JSON instead of human-readable table</td>
-</tr>
-<tr>
-<td style="text-align: left">keyspace</td>
-<td style="text-align: left">string</td>
-<td style="text-align: left">default keyspace to use</td>
 </tr>
 <tr>
 <td style="text-align: left">options</td>
@@ -1209,9 +1165,9 @@
 <td style="text-align: left">VtGate server to connect to</td>
 </tr>
 <tr>
-<td style="text-align: left">tablet_type</td>
+<td style="text-align: left">target</td>
 <td style="text-align: left">string</td>
-<td style="text-align: left">tablet type to query</td>
+<td style="text-align: left">keyspace:shard@tablet_type</td>
 </tr>
 </tbody></table>
 
@@ -1226,6 +1182,7 @@
 
 <ul>
 <li>the <code>&lt;sql&gt;</code> argument is required for the <code>&lt;VtGateExecute&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
+<li>query commands are disabled (set the -enable_queries flag to enable)</li>
 <li>error connecting to vtgate &#39;%v&#39;: %v</li>
 <li>Execute failed: %v</li>
 </ul>
@@ -1236,7 +1193,7 @@
 
 <h4 id="example">Example</h4>
 
-<pre class="command-example">VtGateExecuteKeyspaceIds -server &lt;vtgate&gt; -keyspace &lt;keyspace&gt; -keyspace_ids &lt;ks1 in hex&gt;,&lt;k2 in hex&gt;,... [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-tablet_type &lt;tablet type&gt;] [-options &lt;proto text options&gt;] [-json] &lt;sql&gt;</pre>
+<pre class="command-example">VtGateExecuteKeyspaceIds -server &lt;vtgate&gt; -keyspace &lt;keyspace&gt; -keyspace_ids &lt;ks1 in hex&gt;,&lt;k2 in hex&gt;,... [-bind_variables &lt;JSON map&gt;] [-tablet_type &lt;tablet type&gt;] [-options &lt;proto text options&gt;] [-json] &lt;sql&gt;</pre>
 
 <h4 id="flags">Flags</h4>
 
@@ -1247,11 +1204,6 @@
 <th style="text-align: left">Definition</th>
 </tr>
 </thead><tbody>
-<tr>
-<td style="text-align: left">connect_timeout</td>
-<td style="text-align: left">Duration</td>
-<td style="text-align: left">Connection timeout for vtgate client</td>
-</tr>
 <tr>
 <td style="text-align: left">json</td>
 <td style="text-align: left">Boolean</td>
@@ -1297,6 +1249,7 @@
 
 <ul>
 <li>the <code>&lt;sql&gt;</code> argument is required for the <code>&lt;VtGateExecuteKeyspaceIds&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
+<li>query commands are disabled (set the -enable_queries flag to enable)</li>
 <li>cannot hex-decode value %v &#39;%v&#39;: %v</li>
 <li>error connecting to vtgate &#39;%v&#39;: %v</li>
 <li>Execute failed: %v</li>
@@ -1308,7 +1261,7 @@
 
 <h4 id="example">Example</h4>
 
-<pre class="command-example">VtGateExecuteShards -server &lt;vtgate&gt; -keyspace &lt;keyspace&gt; -shards &lt;shard0&gt;,&lt;shard1&gt;,... [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-tablet_type &lt;tablet type&gt;] [-options &lt;proto text options&gt;] [-json] &lt;sql&gt;</pre>
+<pre class="command-example">VtGateExecuteShards -server &lt;vtgate&gt; -keyspace &lt;keyspace&gt; -shards &lt;shard0&gt;,&lt;shard1&gt;,... [-bind_variables &lt;JSON map&gt;] [-tablet_type &lt;tablet type&gt;] [-options &lt;proto text options&gt;] [-json] &lt;sql&gt;</pre>
 
 <h4 id="flags">Flags</h4>
 
@@ -1319,11 +1272,6 @@
 <th style="text-align: left">Definition</th>
 </tr>
 </thead><tbody>
-<tr>
-<td style="text-align: left">connect_timeout</td>
-<td style="text-align: left">Duration</td>
-<td style="text-align: left">Connection timeout for vtgate client</td>
-</tr>
 <tr>
 <td style="text-align: left">json</td>
 <td style="text-align: left">Boolean</td>
@@ -1369,6 +1317,7 @@
 
 <ul>
 <li>the <code>&lt;sql&gt;</code> argument is required for the <code>&lt;VtGateExecuteShards&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
+<li>query commands are disabled (set the -enable_queries flag to enable)</li>
 <li>error connecting to vtgate &#39;%v&#39;: %v</li>
 <li>Execute failed: %v</li>
 </ul>
@@ -1379,7 +1328,7 @@
 
 <h4 id="example">Example</h4>
 
-<pre class="command-example">VtGateSplitQuery -server &lt;vtgate&gt; -keyspace &lt;keyspace&gt; [-split_column &lt;split_column&gt;] -split_count &lt;split_count&gt; [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] &lt;sql&gt;</pre>
+<pre class="command-example">VtGateSplitQuery -server &lt;vtgate&gt; -keyspace &lt;keyspace&gt; [-split_column &lt;split_column&gt;] -split_count &lt;split_count&gt; [-bind_variables &lt;JSON map&gt;] &lt;sql&gt;</pre>
 
 <h4 id="flags">Flags</h4>
 
@@ -1394,11 +1343,6 @@
 <td style="text-align: left">algorithm</td>
 <td style="text-align: left">string</td>
 <td style="text-align: left">The algorithm to</td>
-</tr>
-<tr>
-<td style="text-align: left">connect_timeout</td>
-<td style="text-align: left">Duration</td>
-<td style="text-align: left">Connection timeout for vtgate client</td>
 </tr>
 <tr>
 <td style="text-align: left">keyspace</td>
@@ -1430,9 +1374,11 @@
 
 <ul>
 <li>the <code>&lt;sql&gt;</code> argument is required for the <code>&lt;VtGateSplitQuery&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
+<li>query commands are disabled (set the -enable_queries flag to enable)</li>
 <li>Exactly one of <code>&lt;split_count&gt;</code> or num_rows_per_query_part</li>
 <li>Unknown split-query <code>&lt;algorithm&gt;</code>: %v</li>
 <li>error connecting to vtgate &#39;%v&#39;: %v</li>
+<li>Execute failed: %v</li>
 <li>SplitQuery failed: %v</li>
 </ul>
 
@@ -1442,7 +1388,7 @@
 
 <h4 id="example">Example</h4>
 
-<pre class="command-example">VtTabletBegin [-username &lt;TableACL user&gt;] [-connect_timeout &lt;connect timeout&gt;] &lt;tablet alias&gt;</pre>
+<pre class="command-example">VtTabletBegin [-username &lt;TableACL user&gt;] &lt;tablet alias&gt;</pre>
 
 <h4 id="flags">Flags</h4>
 
@@ -1453,11 +1399,6 @@
 <th style="text-align: left">Definition</th>
 </tr>
 </thead><tbody>
-<tr>
-<td style="text-align: left">connect_timeout</td>
-<td style="text-align: left">Duration</td>
-<td style="text-align: left">Connection timeout for vttablet client</td>
-</tr>
 <tr>
 <td style="text-align: left">username</td>
 <td style="text-align: left">string</td>
@@ -1476,6 +1417,7 @@
 
 <ul>
 <li>the <code>&lt;tablet_alias&gt;</code> argument is required for the <code>&lt;VtTabletBegin&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
+<li>query commands are disabled (set the -enable_queries flag to enable)</li>
 <li>cannot connect to tablet %v: %v</li>
 <li>Begin failed: %v</li>
 </ul>
@@ -1486,7 +1428,7 @@
 
 <h4 id="example">Example</h4>
 
-<pre class="command-example">VtTabletCommit [-username &lt;TableACL user&gt;] [-connect_timeout &lt;connect timeout&gt;] &lt;transaction_id&gt;</pre>
+<pre class="command-example">VtTabletCommit [-username &lt;TableACL user&gt;] &lt;transaction_id&gt;</pre>
 
 <h4 id="flags">Flags</h4>
 
@@ -1497,11 +1439,6 @@
 <th style="text-align: left">Definition</th>
 </tr>
 </thead><tbody>
-<tr>
-<td style="text-align: left">connect_timeout</td>
-<td style="text-align: left">Duration</td>
-<td style="text-align: left">Connection timeout for vttablet client</td>
-</tr>
 <tr>
 <td style="text-align: left">username</td>
 <td style="text-align: left">string</td>
@@ -1520,6 +1457,7 @@
 
 <ul>
 <li>the <code>&lt;tablet_alias&gt;</code> and <code>&lt;transaction_id&gt;</code> arguments are required for the <code>&lt;VtTabletCommit&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.</li>
+<li>query commands are disabled (set the -enable_queries flag to enable)</li>
 <li>cannot connect to tablet %v: %v</li>
 </ul>
 
@@ -1529,7 +1467,7 @@
 
 <h4 id="example">Example</h4>
 
-<pre class="command-example">VtTabletExecute [-username &lt;TableACL user&gt;] [-connect_timeout &lt;connect timeout&gt;] [-transaction_id &lt;transaction_id&gt;] [-options &lt;proto text options&gt;] [-json] &lt;tablet alias&gt; &lt;sql&gt;</pre>
+<pre class="command-example">VtTabletExecute [-username &lt;TableACL user&gt;] [-transaction_id &lt;transaction_id&gt;] [-options &lt;proto text options&gt;] [-json] &lt;tablet alias&gt; &lt;sql&gt;</pre>
 
 <h4 id="flags">Flags</h4>
 
@@ -1540,11 +1478,6 @@
 <th style="text-align: left">Definition</th>
 </tr>
 </thead><tbody>
-<tr>
-<td style="text-align: left">connect_timeout</td>
-<td style="text-align: left">Duration</td>
-<td style="text-align: left">Connection timeout for vttablet client</td>
-</tr>
 <tr>
 <td style="text-align: left">json</td>
 <td style="text-align: left">Boolean</td>
@@ -1579,6 +1512,7 @@
 
 <ul>
 <li>the <code>&lt;tablet_alias&gt;</code> and <code>&lt;sql&gt;</code> arguments are required for the <code>&lt;VtTabletExecute&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.</li>
+<li>query commands are disabled (set the -enable_queries flag to enable)</li>
 <li>cannot connect to tablet %v: %v</li>
 <li>Execute failed: %v</li>
 </ul>
@@ -1589,7 +1523,7 @@
 
 <h4 id="example">Example</h4>
 
-<pre class="command-example">VtTabletRollback [-username &lt;TableACL user&gt;] [-connect_timeout &lt;connect timeout&gt;] &lt;tablet alias&gt; &lt;transaction_id&gt;</pre>
+<pre class="command-example">VtTabletRollback [-username &lt;TableACL user&gt;] &lt;tablet alias&gt; &lt;transaction_id&gt;</pre>
 
 <h4 id="flags">Flags</h4>
 
@@ -1600,11 +1534,6 @@
 <th style="text-align: left">Definition</th>
 </tr>
 </thead><tbody>
-<tr>
-<td style="text-align: left">connect_timeout</td>
-<td style="text-align: left">Duration</td>
-<td style="text-align: left">Connection timeout for vttablet client</td>
-</tr>
 <tr>
 <td style="text-align: left">username</td>
 <td style="text-align: left">string</td>
@@ -1624,6 +1553,7 @@
 
 <ul>
 <li>the <code>&lt;tablet_alias&gt;</code> and <code>&lt;transaction_id&gt;</code> arguments are required for the <code>&lt;VtTabletRollback&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.</li>
+<li>query commands are disabled (set the -enable_queries flag to enable)</li>
 <li>cannot connect to tablet %v: %v</li>
 </ul>
 
@@ -1633,7 +1563,7 @@
 
 <h4 id="example">Example</h4>
 
-<pre class="command-example">VtTabletStreamHealth [-count &lt;count, default 1&gt;] [-connect_timeout &lt;connect timeout&gt;] &lt;tablet alias&gt;</pre>
+<pre class="command-example">VtTabletStreamHealth [-count &lt;count, default 1&gt;] &lt;tablet alias&gt;</pre>
 
 <h4 id="flags">Flags</h4>
 
@@ -1644,11 +1574,6 @@
 <th style="text-align: left">Definition</th>
 </tr>
 </thead><tbody>
-<tr>
-<td style="text-align: left">connect_timeout</td>
-<td style="text-align: left">Duration</td>
-<td style="text-align: left">Connection timeout for vttablet client</td>
-</tr>
 <tr>
 <td style="text-align: left">count</td>
 <td style="text-align: left">Int</td>
@@ -1667,6 +1592,7 @@
 
 <ul>
 <li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;VtTabletStreamHealth&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
+<li>query commands are disabled (set the -enable_queries flag to enable)</li>
 <li>cannot connect to tablet %v: %v</li>
 </ul>
 
@@ -1676,7 +1602,7 @@
 
 <h4 id="example">Example</h4>
 
-<pre class="command-example">VtTabletUpdateStream [-count &lt;count, default 1&gt;] [-connect_timeout &lt;connect timeout&gt;] [-position &lt;position&gt;] [-timestamp &lt;timestamp&gt;] &lt;tablet alias&gt;</pre>
+<pre class="command-example">VtTabletUpdateStream [-count &lt;count, default 1&gt;] [-position &lt;position&gt;] [-timestamp &lt;timestamp&gt;] &lt;tablet alias&gt;</pre>
 
 <h4 id="flags">Flags</h4>
 
@@ -1687,11 +1613,6 @@
 <th style="text-align: left">Definition</th>
 </tr>
 </thead><tbody>
-<tr>
-<td style="text-align: left">connect_timeout</td>
-<td style="text-align: left">Duration</td>
-<td style="text-align: left">Connection timeout for vttablet client</td>
-</tr>
 <tr>
 <td style="text-align: left">count</td>
 <td style="text-align: left">Int</td>
@@ -1720,6 +1641,7 @@
 
 <ul>
 <li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;VtTabletUpdateStream&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
+<li>query commands are disabled (set the -enable_queries flag to enable)</li>
 <li>cannot connect to tablet %v: %v</li>
 </ul>
 
@@ -2734,6 +2656,7 @@
 
 <ul>
 <li>action <code>&lt;EmergencyReparentShard&gt;</code> requires -keyspace_shard=<code>&lt;keyspace/shard&gt;</code> -new_master=<code>&lt;tablet alias&gt;</code> This error occurs if the command is not called with exactly 0 arguments.</li>
+<li>active reparent commands disabled (unset the -disable_active_reparents flag to enable)</li>
 <li>cannot use legacy syntax and flag -<code>&lt;new_master&gt;</code> for action <code>&lt;EmergencyReparentShard&gt;</code> at the same time</li>
 </ul>
 
@@ -2797,6 +2720,7 @@
 
 <ul>
 <li>action <code>&lt;InitShardMaster&gt;</code> requires <code>&lt;keyspace/shard&gt;</code> <code>&lt;tablet alias&gt;</code> This error occurs if the command is not called with exactly 2 arguments.</li>
+<li>active reparent commands disabled (unset the -disable_active_reparents flag to enable)</li>
 </ul>
 
 <h3 id="listbackups">ListBackups</h3>
@@ -2876,6 +2800,7 @@
 
 <ul>
 <li>action <code>&lt;PlannedReparentShard&gt;</code> requires -keyspace_shard=<code>&lt;keyspace/shard&gt;</code> [-new_master=<code>&lt;tablet alias&gt;</code>] [-avoid_master=<code>&lt;tablet alias&gt;</code>] This error occurs if the command is not called with exactly 0 arguments.</li>
+<li>active reparent commands disabled (unset the -disable_active_reparents flag to enable)</li>
 <li>cannot use legacy syntax and flags -<code>&lt;keyspace_shard&gt;</code> and -<code>&lt;new_master&gt;</code> for action <code>&lt;PlannedReparentShard&gt;</code> at the same time</li>
 </ul>
 
@@ -3557,9 +3482,14 @@
 <td style="text-align: left">The keyspace to which this tablet belongs</td>
 </tr>
 <tr>
+<td style="text-align: left">mysql_host</td>
+<td style="text-align: left">string</td>
+<td style="text-align: left">The mysql host for the mysql server</td>
+</tr>
+<tr>
 <td style="text-align: left">mysql_port</td>
 <td style="text-align: left">Int</td>
-<td style="text-align: left">The mysql port for the mysql daemon</td>
+<td style="text-align: left">The mysql port for the mysql server</td>
 </tr>
 <tr>
 <td style="text-align: left">parent</td>
@@ -3698,6 +3628,7 @@
 
 <ul>
 <li>action <code>&lt;ReparentTablet&gt;</code> requires <code>&lt;tablet alias&gt;</code> This error occurs if the command is not called with exactly one argument.</li>
+<li>active reparent commands disabled (unset the -disable_active_reparents flag to enable)</li>
 </ul>
 
 <h3 id="restorefrombackup">RestoreFromBackup</h3>
@@ -3867,14 +3798,14 @@
 <td style="text-align: left">The fully qualified host name of the server on which the tablet is running.</td>
 </tr>
 <tr>
-<td style="text-align: left">ip-addr</td>
-<td style="text-align: left">string</td>
-<td style="text-align: left">IP address</td>
-</tr>
-<tr>
 <td style="text-align: left">mysql-port</td>
 <td style="text-align: left">Int</td>
 <td style="text-align: left">The mysql port for the mysql daemon</td>
+</tr>
+<tr>
+<td style="text-align: left">mysql_host</td>
+<td style="text-align: left">string</td>
+<td style="text-align: left">The mysql host for the mysql server</td>
 </tr>
 <tr>
 <td style="text-align: left">vt-port</td>
@@ -3893,7 +3824,62 @@
 
 <ul>
 <li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;UpdateTabletAddrs&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
-<li>malformed address: %v</li>
+</ul>
+
+<h2 id="topo">Topo</h2>
+
+<ul>
+<li><a href="#topocat">TopoCat</a></li>
+</ul>
+
+<h3 id="topocat">TopoCat</h3>
+
+<p>Retrieves the file(s) at &lt;path&gt; from the topo service, and displays it. It can resolve wildcards, and decode the proto-encoded data.</p>
+
+<h4 id="example">Example</h4>
+
+<pre class="command-example">TopoCat [-cell &lt;cell&gt;] [-decode_proto] [-long] &lt;path&gt; [&lt;path&gt;...]</pre>
+
+<h4 id="flags">Flags</h4>
+
+<table><thead>
+<tr>
+<th style="text-align: left">Name</th>
+<th style="text-align: left">Type</th>
+<th style="text-align: left">Definition</th>
+</tr>
+</thead><tbody>
+<tr>
+<td style="text-align: left">cell</td>
+<td style="text-align: left">string</td>
+<td style="text-align: left">topology cell to cat the file from. Defaults to global cell.</td>
+</tr>
+<tr>
+<td style="text-align: left">decode_proto</td>
+<td style="text-align: left">Boolean</td>
+<td style="text-align: left">decode proto files and display them as text</td>
+</tr>
+<tr>
+<td style="text-align: left">long</td>
+<td style="text-align: left">Boolean</td>
+<td style="text-align: left">long listing.</td>
+</tr>
+</tbody></table>
+
+<h4 id="arguments">Arguments</h4>
+
+<ul>
+<li><code>&lt;cell&gt;</code> &ndash; Required. A cell is a location for a service. Generally, a cell resides in only one cluster. In Vitess, the terms &quot;cell&quot; and &quot;data center&quot; are interchangeable. The argument value is a string that does not contain whitespace.</li>
+<li><code>&lt;path&gt;</code> &ndash; Required.</li>
+<li><code>&lt;path&gt;</code>. &ndash; Optional.</li>
+</ul>
+
+<h4 id="errors">Errors</h4>
+
+<ul>
+<li><code>&lt;TopoCat&gt;</code>: no path specified This error occurs if the command is not called with at least one argument.</li>
+<li><code>&lt;TopoCat&gt;</code>: invalid wildcards: %v</li>
+<li><code>&lt;TopoCat&gt;</code>: some paths had errors</li>
 </ul>
 
 <h2 id="workflows">Workflows</h2>

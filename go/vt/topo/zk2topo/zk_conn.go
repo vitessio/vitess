@@ -52,31 +52,6 @@ var (
 	baseTimeout = flag.Duration("topo_zk_base_timeout", 30*time.Second, "zk base timeout (see zk.Connect)")
 )
 
-// Conn is really close to the Zookeeper library connection interface.
-// So refer to the Zookeeper docs for the conventions used here (for
-// instance, using -1 as version to specify any version)
-type Conn interface {
-	Get(ctx context.Context, path string) (data []byte, stat *zk.Stat, err error)
-	GetW(ctx context.Context, path string) (data []byte, stat *zk.Stat, watch <-chan zk.Event, err error)
-
-	Children(ctx context.Context, path string) (children []string, stat *zk.Stat, err error)
-	ChildrenW(ctx context.Context, path string) (children []string, stat *zk.Stat, watch <-chan zk.Event, err error)
-
-	Exists(ctx context.Context, path string) (exists bool, stat *zk.Stat, err error)
-	ExistsW(ctx context.Context, path string) (exists bool, stat *zk.Stat, watch <-chan zk.Event, err error)
-
-	Create(ctx context.Context, path string, value []byte, flags int32, aclv []zk.ACL) (pathCreated string, err error)
-
-	Set(ctx context.Context, path string, value []byte, version int32) (stat *zk.Stat, err error)
-
-	Delete(ctx context.Context, path string, version int32) (err error)
-
-	GetACL(ctx context.Context, path string) ([]zk.ACL, *zk.Stat, error)
-	SetACL(ctx context.Context, path string, aclv []zk.ACL, version int32) error
-
-	Close() error
-}
-
 // Time returns a time.Time from a ZK int64 milliseconds since Epoch time.
 func Time(i int64) time.Time {
 	return time.Unix(i/1000, i%1000*1000000)
@@ -87,12 +62,7 @@ func ZkTime(t time.Time) int64 {
 	return t.Unix()*1000 + int64(t.Nanosecond()/1000000)
 }
 
-// Connect returns a Conn connecting to a real Zookeeper server.
-func Connect(addr string) Conn {
-	return newRealConn(addr)
-}
-
-// connImpl is a class that implements the Conn interface using a zk.Conn.
+// ZkConn is a wrapper class on top of a zk.Conn.
 // It will do a few things for us:
 // - add the context parameter. However, we do not enforce its deadlines
 //   necessarily.
@@ -100,7 +70,7 @@ func Connect(addr string) Conn {
 //   want to make too many calls concurrently, to not take too many resources.
 // - retry some calls to Zookeeper. If we were disconnected from the
 //   server, we want to try connecting again before failing.
-type connImpl struct {
+type ZkConn struct {
 	// addr is set at construction time, and immutable.
 	addr string
 
@@ -112,15 +82,15 @@ type connImpl struct {
 	conn *zk.Conn
 }
 
-func newRealConn(addr string) *connImpl {
-	return &connImpl{
+func Connect(addr string) *ZkConn {
+	return &ZkConn{
 		addr: addr,
 		sem:  sync2.NewSemaphore(*maxConcurrency, 0),
 	}
 }
 
 // Get is part of the Conn interface.
-func (c *connImpl) Get(ctx context.Context, path string) (data []byte, stat *zk.Stat, err error) {
+func (c *ZkConn) Get(ctx context.Context, path string) (data []byte, stat *zk.Stat, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		data, stat, err = conn.Get(path)
 		return err
@@ -129,7 +99,7 @@ func (c *connImpl) Get(ctx context.Context, path string) (data []byte, stat *zk.
 }
 
 // GetW is part of the Conn interface.
-func (c *connImpl) GetW(ctx context.Context, path string) (data []byte, stat *zk.Stat, watch <-chan zk.Event, err error) {
+func (c *ZkConn) GetW(ctx context.Context, path string) (data []byte, stat *zk.Stat, watch <-chan zk.Event, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		data, stat, watch, err = conn.GetW(path)
 		return err
@@ -138,7 +108,7 @@ func (c *connImpl) GetW(ctx context.Context, path string) (data []byte, stat *zk
 }
 
 // Children is part of the Conn interface.
-func (c *connImpl) Children(ctx context.Context, path string) (children []string, stat *zk.Stat, err error) {
+func (c *ZkConn) Children(ctx context.Context, path string) (children []string, stat *zk.Stat, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		children, stat, err = conn.Children(path)
 		return err
@@ -147,7 +117,7 @@ func (c *connImpl) Children(ctx context.Context, path string) (children []string
 }
 
 // ChildrenW is part of the Conn interface.
-func (c *connImpl) ChildrenW(ctx context.Context, path string) (children []string, stat *zk.Stat, watch <-chan zk.Event, err error) {
+func (c *ZkConn) ChildrenW(ctx context.Context, path string) (children []string, stat *zk.Stat, watch <-chan zk.Event, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		children, stat, watch, err = conn.ChildrenW(path)
 		return err
@@ -156,7 +126,7 @@ func (c *connImpl) ChildrenW(ctx context.Context, path string) (children []strin
 }
 
 // Exists is part of the Conn interface.
-func (c *connImpl) Exists(ctx context.Context, path string) (exists bool, stat *zk.Stat, err error) {
+func (c *ZkConn) Exists(ctx context.Context, path string) (exists bool, stat *zk.Stat, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		exists, stat, err = conn.Exists(path)
 		return err
@@ -165,7 +135,7 @@ func (c *connImpl) Exists(ctx context.Context, path string) (exists bool, stat *
 }
 
 // ExistsW is part of the Conn interface.
-func (c *connImpl) ExistsW(ctx context.Context, path string) (exists bool, stat *zk.Stat, watch <-chan zk.Event, err error) {
+func (c *ZkConn) ExistsW(ctx context.Context, path string) (exists bool, stat *zk.Stat, watch <-chan zk.Event, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		exists, stat, watch, err = conn.ExistsW(path)
 		return err
@@ -174,7 +144,7 @@ func (c *connImpl) ExistsW(ctx context.Context, path string) (exists bool, stat 
 }
 
 // Create is part of the Conn interface.
-func (c *connImpl) Create(ctx context.Context, path string, value []byte, flags int32, aclv []zk.ACL) (pathCreated string, err error) {
+func (c *ZkConn) Create(ctx context.Context, path string, value []byte, flags int32, aclv []zk.ACL) (pathCreated string, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		pathCreated, err = conn.Create(path, value, flags, aclv)
 		return err
@@ -183,7 +153,7 @@ func (c *connImpl) Create(ctx context.Context, path string, value []byte, flags 
 }
 
 // Set is part of the Conn interface.
-func (c *connImpl) Set(ctx context.Context, path string, value []byte, version int32) (stat *zk.Stat, err error) {
+func (c *ZkConn) Set(ctx context.Context, path string, value []byte, version int32) (stat *zk.Stat, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		stat, err = conn.Set(path, value, version)
 		return err
@@ -192,14 +162,14 @@ func (c *connImpl) Set(ctx context.Context, path string, value []byte, version i
 }
 
 // Delete is part of the Conn interface.
-func (c *connImpl) Delete(ctx context.Context, path string, version int32) error {
+func (c *ZkConn) Delete(ctx context.Context, path string, version int32) error {
 	return c.withRetry(ctx, func(conn *zk.Conn) error {
 		return conn.Delete(path, version)
 	})
 }
 
 // GetACL is part of the Conn interface.
-func (c *connImpl) GetACL(ctx context.Context, path string) (aclv []zk.ACL, stat *zk.Stat, err error) {
+func (c *ZkConn) GetACL(ctx context.Context, path string) (aclv []zk.ACL, stat *zk.Stat, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		aclv, stat, err = conn.GetACL(path)
 		return err
@@ -208,7 +178,7 @@ func (c *connImpl) GetACL(ctx context.Context, path string) (aclv []zk.ACL, stat
 }
 
 // SetACL is part of the Conn interface.
-func (c *connImpl) SetACL(ctx context.Context, path string, aclv []zk.ACL, version int32) error {
+func (c *ZkConn) SetACL(ctx context.Context, path string, aclv []zk.ACL, version int32) error {
 	return c.withRetry(ctx, func(conn *zk.Conn) error {
 		_, err := conn.SetACL(path, aclv, version)
 		return err
@@ -216,7 +186,7 @@ func (c *connImpl) SetACL(ctx context.Context, path string, aclv []zk.ACL, versi
 }
 
 // Close is part of the Conn interface.
-func (c *connImpl) Close() error {
+func (c *ZkConn) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.conn != nil {
@@ -238,7 +208,7 @@ func (c *connImpl) Close() error {
 // higher levels.
 //
 // https://issues.apache.org/jira/browse/ZOOKEEPER-22
-func (c *connImpl) withRetry(ctx context.Context, action func(conn *zk.Conn) error) (err error) {
+func (c *ZkConn) withRetry(ctx context.Context, action func(conn *zk.Conn) error) (err error) {
 
 	// Handle concurrent access to a Zookeeper server here.
 	c.sem.Acquire()
@@ -280,7 +250,7 @@ func (c *connImpl) withRetry(ctx context.Context, action func(conn *zk.Conn) err
 
 // getConn returns the connection in a thread safe way. It will try to connect
 // if not connected yet.
-func (c *connImpl) getConn(ctx context.Context) (*zk.Conn, error) {
+func (c *ZkConn) getConn(ctx context.Context) (*zk.Conn, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -298,7 +268,7 @@ func (c *connImpl) getConn(ctx context.Context) (*zk.Conn, error) {
 // handleSessionEvents is processing events from the session channel.
 // When it detects that the connection is not working any more, it
 // clears out the connection record.
-func (c *connImpl) handleSessionEvents(conn *zk.Conn, session <-chan zk.Event) {
+func (c *ZkConn) handleSessionEvents(conn *zk.Conn, session <-chan zk.Event) {
 	for event := range session {
 		closeRequired := false
 
@@ -309,7 +279,7 @@ func (c *connImpl) handleSessionEvents(conn *zk.Conn, session <-chan zk.Event) {
 		case zk.StateDisconnected:
 			c.mu.Lock()
 			if c.conn == conn {
-				// The connImpl still references this
+				// The ZkConn still references this
 				// connection, let's nil it.
 				c.conn = nil
 			}

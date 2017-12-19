@@ -16,8 +16,8 @@ limitations under the License.
 
 package main
 
-// Imports and register the zookeeper custom rule source
+// Imports and register the topo custom rule source
 
 import (
-	_ "github.com/youtube/vitess/go/vt/vttablet/customrule/zkcustomrule"
+	_ "github.com/youtube/vitess/go/vt/vttablet/customrule/topocustomrule"
 )
