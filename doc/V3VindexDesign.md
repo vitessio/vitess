@@ -197,7 +197,7 @@ One of the results of the initial analysis of a query is whether it requires pos
 
 #### updates
 
-The routing of updates is similar to select. We use the same strategy. However, multi-keyspace-id updates are not allowed because our resharding tools cannot handle such statements. Also, VTGate will currently not allow you to modify a ColVindex column. This is because such changes could effectively require us to migrate a row from one shard to another. However, this is definitely something we can look at supporting in the future.
+The routing of updates is similar to select. We use the same strategy. However, multi-keyspace-id updates are not allowed because our resharding tools cannot handle such statements.
 
 #### inserts
 
