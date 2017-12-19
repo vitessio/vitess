@@ -115,7 +115,6 @@
           <h4 class="arrow-r">User Guide</h4>
           <ul style="display: none">
             <li><a href="/user-guide/introduction/">Introduction</a>
-            <li><a href="/user-guide/client-libraries/">Client Libraries</a>
             <li><a href="/user-guide/backup-and-restore/">Backing Up Data</a>
             <li><a href="/user-guide/reparenting/">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management/">Schema Management</a></li>
@@ -131,14 +130,9 @@
                 <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes/">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
-            <li><a href="/user-guide/vitess-sequences/">Vitess Sequences</a></li>
-            <li><a href="/user-guide/mysql-server-protocol/">MySQL Server Protocol</a></li>
-            <li><a href="/user-guide/vitess-replication/">Vitess and Replication</a></li>
-            <li><a href="/user-guide/update-stream/">Update Stream</a></li>
-            <li><a href="/user-guide/row-based-replication/">Row Based Replication</a></li>
             <li><a href="/user-guide/topology-service/">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model/">Transport Security Model</a></li>
-            <li style="padding-bottom: 0"><a href="/user-guide/launching/">Launching</a>
+            <h5 class="arrow-r">Launching</h4>
               <ul style="display: block">
                 <li><a href="/user-guide/scalability-philosophy/">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning/">Production Planning</a></li>
@@ -170,6 +164,14 @@
             <li><a href="/resources/presentations/">Presentations</a>
             <li><a href="http://blog.vitess.io/">Blog</a>
             <li><a href="/resources/roadmap/">Roadmap</a>
+            <li><a href="/resources/design-docs/">Design Docs</a>
+              <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vitess-sequences/">Vitess Sequences</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/mysql-server-protocol/">MySQL Server Protocol</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/vitess-replication/">Vitess and Replication</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/update-stream/">Update Stream</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/row-based-replication/">Row Based Replication</a></li>
+              </ul>
           </ul>
         </li>
         <li class="submenu">
@@ -240,7 +242,6 @@
           <h4 class="arrow-r">User Guide</h4>
           <ul style="display: none">
             <li><a href="/user-guide/introduction/">Introduction</a>
-            <li><a href="/user-guide/client-libraries/">Client Libraries</a>
             <li><a href="/user-guide/backup-and-restore/">Backing Up Data</a>
             <li><a href="/user-guide/reparenting/">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management/">Schema Management</a></li>
@@ -256,14 +257,9 @@
                 <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes/">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
-            <li><a href="/user-guide/vitess-sequences/">Vitess Sequences</a></li>
-            <li><a href="/user-guide/mysql-server-protocol/">MySQL Server Protocol</a></li>
-            <li><a href="/user-guide/vitess-replication/">Vitess and Replication</a></li>
-            <li><a href="/user-guide/update-stream/">Update Stream</a></li>
-            <li><a href="/user-guide/row-based-replication/">Row Based Replication</a></li>
             <li><a href="/user-guide/topology-service/">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model/">Transport Security Model</a></li>
-            <li style="padding-bottom: 0"><a href="/user-guide/launching/">Launching</a>
+            <h5 class="arrow-r">Launching</h4>
               <ul style="display: block">
                 <li><a href="/user-guide/scalability-philosophy/">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning/">Production Planning</a></li>
@@ -295,6 +291,14 @@
             <li><a href="/resources/presentations/">Presentations</a>
             <li><a href="http://blog.vitess.io/">Blog</a>
             <li><a href="/resources/roadmap/">Roadmap</a>
+            <li><a href="/resources/design-docs/">Design Docs</a>
+              <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vitess-sequences/">Vitess Sequences</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/mysql-server-protocol/">MySQL Server Protocol</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/vitess-replication/">Vitess and Replication</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/update-stream/">Update Stream</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/row-based-replication/">Row Based Replication</a></li>
+              </ul>
           </ul>
         </li>
         <li class="submenu">
@@ -335,10 +339,9 @@ sharding works in Vitess and the types of sharding that Vitess supports.</p>
 
 <h2 id="overview">Overview</h2>
 
-<p>In Vitess, a shard is a partition of a keyspace. In turn, the keyspace
-might be a partition of the whole database. For example, a database might
-have one keyspace for product data and another for user data. The shard
-contains a subset of records within its keyspace.</p>
+<p>A keyspace in Vitess can be sharded or unsharded. An unsharded keyspace
+maps directly to a MySQL database. If sharded, the rows of the keyspace
+are partitioned into different databases of identical schema.</p>
 
 <p>For example, if an application&#39;s &quot;user&quot; keyspace is split into two
 shards, each shard contains records for approximately half of the
@@ -368,23 +371,12 @@ move tables to different keyspaces (vertical split) and shard some or
 all of those keyspaces (horizontal split) without any real downtime
 for your application.</p>
 
-<h2 id="range-based-sharding">Range-based Sharding</h2>
+<h2 id="sharding-scheme">Sharding scheme</h2>
 
-<p>Vitess uses range-based sharding to manage data across multiple shards.
-(Vitess can also support a <a href="#custom-sharding">custom sharding</a> scheme.)</p>
-
-<p>In range-based sharding, each record in a keyspace is associated with
-a sharding key that is stored with the record. The sharding key value
-is also the primary key for sharded data. Records with the same sharding
-key are always collocated on the same shard.</p>
-
-<p><strong>Note:</strong> The API uses the term &quot;keyspace ID&quot; to refer to the sharding key.</p>
-
-<p>The full set of shards covers the range of possible sharding key values.
-To guarantee a balanced use of shards, the sharding scheme should
-ensure an even distribution of sharding keys across the keyspace&#39;s
-shards. That distribution makes it easier to reshard the keyspace
-at a later time using a more granular division of sharding keys.</p>
+<p>Vitess allows you to choose the type of sharding scheme by the choice of
+your Primary Vindex for the tables of a shard. Once you have chosen
+the Primary Vindex, you can choose the partitions depending on how the
+resulting keyspace IDs are distirbuted.</p>
 
 <p>Vitess calculates the sharding key or keys for each query and then
 routes that query to the appropriate shards. For example, a query
@@ -399,7 +391,7 @@ directed to one or more shards in the application&#39;s &quot;product&quot; keys
 particular query.</p>
 
 <ul>
-<li>A <strong>key range</strong> is a series of consecutive sharding key values. It
+<li>A <strong>key range</strong> is a series of consecutive keyspace ID values. It
 has starting and ending values. A key falls inside the range if
 it is equal to or greater than the start value and strictly less
 than the end value.</li>
@@ -407,8 +399,8 @@ than the end value.</li>
 space.</li>
 </ul>
 
-<p>When building the serving graph for a keyspace that uses range-based
-sharding, Vitess ensures that each shard is valid and that the shards
+<p>When building the serving graph for a sharded keyspace,
+Vitess ensures that each shard is valid and that the shards
 collectively constitute a full partition. In each keyspace, one shard
 must have a key range with an empty start value and one shard, which
 could be the same shard, must have a key range with an empty end value.</p>
@@ -420,10 +412,12 @@ greater than it.</li>
 value, and all values are strictly lower than it.</li>
 </ul>
 
-<p>Vitess always converts sharding keys to byte arrays before routing
-queries. The value [ 0x80 ] is the middle value for sharding keys.
-So, in a keyspace with two shards, sharding keys that have a byte-array
-value lower than 0x80 are assigned to one shard. Keys with a byte-array
+<p>Vitess always converts sharding keys to a left-justified binary string for
+computing a shard. This left-justification makes the right-most zeroes
+insignificant and optional. Therefore, the value <code>0x80</code> is
+always the middle value for sharding keys.
+So, in a keyspace with two shards, sharding keys that have a binary
+value lower than 0x80 are assigned to one shard. Keys with a binary
 value equal to or higher than 0x80 are assigned to the other shard.</p>
 
 <p>Several sample key ranges are shown below:</p>
@@ -436,9 +430,9 @@ value equal to or higher than 0x80 are assigned to the other shard.</p>
 <p>Two key ranges are consecutive if the end value of one range equals the
 start value of the other range.</p>
 
-<h3 id="shard-names-in-range-based-keyspaces">Shard Names in Range-Based Keyspaces</h3>
+<h3 id="shard-names">Shard Names</h3>
 
-<p>In range-based, sharded keyspaces, a shard&#39;s name identifies the start
+<p>A shard&#39;s name identifies the start
 and end of the shard&#39;s key range, printed in hexadecimal and separated
 by a hyphen. For instance, if a shard&#39;s key range is the array of bytes
 beginning with [ 0x80 ] and ending, noninclusively, with [ 0xc0], then
@@ -454,7 +448,7 @@ full partition:</p>
 <li>c0-</li>
 </ul>
 
-<p>Shards do not need to handle the same size portion of the key space. For example, the following five shards would also be a valid full partition, albeit with a highly uneven distribution of keys.</p>
+<p>Shards do not need to handle the same size portion of the key space. For example, the following five shards would also be a valid full partition, possibly with a highly uneven distribution of keys.</p>
 
 <ul>
 <li>-80</li>
@@ -466,7 +460,7 @@ full partition:</p>
 
 <h2 id="resharding">Resharding</h2>
 
-<p>In Vitess, resharding describes the process of updating the sharding
+<p>Resharding describes the process of updating the sharding
 scheme for a keyspace and dynamically reorganizing data to match the
 new scheme. During resharding, Vitess copies, verifies, and keeps
 data up-to-date on new shards while the existing shards continue to
@@ -511,8 +505,13 @@ would typically perform for different types of requirements:</p>
 <p>The cornerstone of resharding is replicating the right data. Vitess
 implements the following functions to support filtered replication,
 the process that ensures that the correct source tablet data is
-transferred to the proper destination tablets. Since MySQL does not
-support any filtering, this functionality is all specific to Vitess.</p>
+transferred to the proper destination tablets.</p>
+
+<h4 id="statement-based-replication">Statement-based Replication</h4>
+
+<p>If you&#39;ve configured the MySQL servers to use Statement-based Replication (SBR),
+then Vitess must be able to identify the destination for such statements during
+the filtered replication process. This performed the following way:</p>
 
 <ol>
 <li>The source tablet tags transactions with comments so that MySQL binlogs
@@ -524,6 +523,23 @@ stream the correct data to the destination tablet.</li>
 <li>A client process on the destination tablet applies the filtered logs,
 which are just regular SQL statements at this point.</li>
 </ol>
+
+<h4 id="row-based-replication">Row-based Replication</h4>
+
+<p>If MySQL is configured to use Row-based Replication (RBR), the filtered replication
+is performed the following way:</p>
+
+<ol>
+<li>The server process uses the primary vindex to compute the keyspace ID for every
+row coming throug the replication stream, and sends that row to the corresponding
+target shard.</li>
+<li>The target shard converts the row into the corresponding DML (Data Manipulation Languate)
+and applies the statement.</li>
+</ol>
+
+<p>If using RBR, it&#39;s generally required that you have full image turned on. However, if your
+Primary Vindex is also part of the Primary key, it&#39;s not required, because every RBR event
+will always contain the full primary key of its affected row.</p>
 
 <h3 id="additional-tools-and-processes">Additional Tools and Processes</h3>
 
@@ -537,33 +553,6 @@ functions for managing keyspaces, shards, tablets, and more.</li>
 fully utilizes key ranges to read data as quickly as possible,
 concurrently from all shards and all replicas.</li>
 </ul>
-
-<h2 id="custom-sharding">Custom Sharding</h2>
-
-<p>If your application already supports sharding or if you want to control
-exactly which shard handles each query, Vitess can support your custom
-sharding scheme. In that use case, each keyspace has a collection of
-shards, and the client code always specifies the shard to which it is
-directing a query.</p>
-
-<p>One example of a custom sharding scheme is lookup-based sharding. In
-lookup-based sharding, one keyspace is used as a lookup keyspace, and
-it contains the mapping between a record&#39;s identifying key and the name
-of the record&#39;s shard. To execute a query, the client first checks the
-lookup table to locate the correct shard name and then routes the query
-to that shard.</p>
-
-<p>In a custom sharding scheme, shards can use any name you choose, and
-they are always addressed by name. The vtgate API calls to use are
-<code>ExecuteShard</code>, <code>ExecuteBatchShard</code>, and
-<code>StreamExecuteShard</code>. None of the API calls for
-<strong>KeyspaceIds</strong>, <strong>KeyRanges</strong>, or <strong>EntityIds</strong> are compatible with
-a custom sharding scheme. Vitess&#39; tools and processes for automated
-resharding also do not support custom sharding schemes.</p>
-
-<p>If you use a custom sharding scheme, you can still use the
-<a href="https://github.com/youtube/vitess/tree/master/java/hadoop/src/main/java/io/vitess/hadoop">MapReduce framework</a>
-to iterate over the data on multiple shards.</p>
 
       </div>
     </div>

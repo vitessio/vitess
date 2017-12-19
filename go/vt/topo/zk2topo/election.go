@@ -133,7 +133,7 @@ func (mp *zkMasterParticipation) WaitForMastership() (context.Context, error) {
 //   it most likely means we lost the ZK session, so we want to stop
 //   being the master.
 // - wait for mp.stop.
-func (mp *zkMasterParticipation) watchMastership(ctx context.Context, conn Conn, proposal string, cancel context.CancelFunc) {
+func (mp *zkMasterParticipation) watchMastership(ctx context.Context, conn *ZkConn, proposal string, cancel context.CancelFunc) {
 	// any interruption of this routine means we're not master any more.
 	defer cancel()
 

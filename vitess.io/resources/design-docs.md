@@ -1,7 +1,6 @@
 ---
 layout: doc
-title: "Client Libraries"
-redirect_from: /user-guide/client-libraries.html
+title: "Design Docs"
 description:
 modified:
 excerpt:
@@ -14,4 +13,4 @@ toc: true
 share: false
 ---
 
-{% include doc/ClientLibraries.md %}
+{% include doc/DesignDocs.md %}

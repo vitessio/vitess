@@ -107,7 +107,7 @@ const (
 type cmdFunc func(ctx context.Context, subFlags *flag.FlagSet, args []string) error
 
 var cmdMap map[string]cmdFunc
-var zconn zk2topo.Conn
+var zconn *zk2topo.ZkConn
 
 func init() {
 	cmdMap = map[string]cmdFunc{

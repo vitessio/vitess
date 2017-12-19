@@ -21,13 +21,12 @@ import (
 	"path"
 	"testing"
 
-	"github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test"
-	"github.com/youtube/vitess/go/zk/zkctl"
+	"github.com/youtube/vitess/go/vt/zkctl"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -41,22 +40,12 @@ func TestZk2Topo(t *testing.T) {
 	testIndex := 0
 	test.TopoServerTestSuite(t, func() *topo.Server {
 		// Each test will use its own sub-directories.
+		// The directories will be created when used the first time.
 		testRoot := fmt.Sprintf("/test-%v", testIndex)
 		testIndex++
 
-		ctx := context.Background()
-		c := Connect(serverAddr)
-		if _, err := c.Create(ctx, testRoot, nil, 0, zk.WorldACL(PermDirectory)); err != nil {
-			t.Fatalf("Create(%v) failed: %v", testRoot, err)
-		}
 		globalRoot := path.Join(testRoot, topo.GlobalCell)
-		if _, err := c.Create(ctx, globalRoot, nil, 0, zk.WorldACL(PermDirectory)); err != nil {
-			t.Fatalf("Create(%v) failed: %v", globalRoot, err)
-		}
 		cellRoot := path.Join(testRoot, test.LocalCellName)
-		if _, err := c.Create(ctx, cellRoot, nil, 0, zk.WorldACL(PermDirectory)); err != nil {
-			t.Fatalf("Create(%v) failed: %v", cellRoot, err)
-		}
 
 		// Note we exercise the observer feature here by passing in
 		// the same server twice, with a "|" separator.

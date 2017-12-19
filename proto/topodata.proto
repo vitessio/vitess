@@ -323,4 +323,8 @@ message CellInfo {
   // Root is the path to store data in. It is only used when talking
   // to server_address.
   string root = 2;
+
+  // Region is a group this cell belongs to. Used by vtgate to route traffic to
+  // other cells (in same region) when there is no available tablet in the current cell.
+  string region = 3;
 }
