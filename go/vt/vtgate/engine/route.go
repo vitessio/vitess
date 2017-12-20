@@ -30,6 +30,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 
+	log "github.com/golang/glog"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -647,7 +648,7 @@ func (route *Route) updateChangedVindexes(subQueryResult *sqltypes.Result, vcurs
 			for _, row := range subQueryResult.Rows {
 				ids = append(ids, row[i])
 			}
-			if err := colVindex.Vindex.(vindexes.Lookup).Delete(vcursor, ids, ksid); err != nil {
+			if err := colVindex.Vindex.(vindexes.Lookup).Delete(vcursor, [][]sqltypes.Value{ids}, ksid); err != nil {
 				return err
 			}
 			if err := route.processOwned(vcursor, [][]sqltypes.Value{vindexColumnKeys}, colVindex, bindVars, [][]byte{ksid}); err != nil {
@@ -667,10 +668,13 @@ func (route *Route) deleteVindexEntries(vcursor VCursor, bindVars map[string]*qu
 		return nil
 	}
 	// Columns are selected by table.Owned order see generateDeleteSubquery for details
-	for i, colVindex := range route.Table.Owned {
-		ids := make([]sqltypes.Value, 0, len(result.Rows))
-		for _, row := range result.Rows {
-			ids = append(ids, row[i])
+	for tableIndex, colVindex := range route.Table.Owned {
+		ids := make([][]sqltypes.Value, len(result.Rows))
+		log.Warningf("This is the result of the subquery: %v subquery: %v\n", route.Subquery, result.Rows)
+		for rowIdx, row := range result.Rows {
+			for colIdx, _ := range colVindex.Columns {
+				ids[rowIdx] = append(ids[rowIdx], row[tableIndex+colIdx])
+			}
 		}
 		if err = colVindex.Vindex.(vindexes.Lookup).Delete(vcursor, ids, ksid); err != nil {
 			return err

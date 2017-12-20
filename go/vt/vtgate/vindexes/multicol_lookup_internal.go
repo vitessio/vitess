@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -44,10 +45,12 @@ func (lkp *multiColLookupInternal) Init(lookupQueryParams map[string]string) {
 	}
 	lkp.FromColumns = fromColumns
 
-	// TODO
-	lkp.sel = fmt.Sprintf("select %s from %s where %s = :%s", lkp.To, lkp.Table, lkp.FromColumns, lkp.FromColumns)
-	lkp.ver = fmt.Sprintf("select %s from %s where %s = :%s and %s = :%s", lkp.FromColumns, lkp.Table, lkp.FromColumns, lkp.FromColumns, lkp.To, lkp.To)
-	lkp.del = fmt.Sprintf("delete from %s where %s = :%s and %s = :%s", lkp.Table, lkp.FromColumns, lkp.FromColumns, lkp.To, lkp.To)
+	// TODO @rafael: update sel and ver to support multi column vindexes. This will be done
+	// as part of face 2 of https://github.com/youtube/vitess/issues/3481
+	// For now multi column behaves as a single column for Map and Verify operations
+	lkp.sel = fmt.Sprintf("select %s from %s where %s = :%s", lkp.To, lkp.Table, lkp.FromColumns[0], lkp.FromColumns[0])
+	lkp.ver = fmt.Sprintf("select %s from %s where %s = :%s and %s = :%s", lkp.FromColumns, lkp.Table, lkp.FromColumns[0], lkp.FromColumns[0], lkp.To, lkp.To)
+	lkp.del = lkp.initDelStm()
 }
 
 // Lookup performs a lookup for the ids.
@@ -113,6 +116,7 @@ func (lkp *multiColLookupInternal) Create(vcursor VCursor, fromIds [][]sqltypes.
 		insBuffer.WriteString(":" + toStr + ")")
 		bindVars[toStr] = sqltypes.ValueBindVariable(toValues[rowIdx])
 	}
+	log.Warningf("This is the insert query: %s, bindVars: %v\n", insBuffer.String(), bindVars)
 	_, err := vcursor.Execute(insBuffer.String(), bindVars, true /* isDML */)
 	if err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
@@ -121,15 +125,30 @@ func (lkp *multiColLookupInternal) Create(vcursor VCursor, fromIds [][]sqltypes.
 }
 
 // Delete deletes the association between ids and value.
-func (lkp *multiColLookupInternal) Delete(vcursor VCursor, ids []sqltypes.Value, value sqltypes.Value) error {
-	for _, id := range ids {
-		bindVars := map[string]*querypb.BindVariable{
-			lkp.FromColumns[0]: sqltypes.ValueBindVariable(id),
-			lkp.To:             sqltypes.ValueBindVariable(value),
+func (lkp *multiColLookupInternal) Delete(vcursor VCursor, columnIds [][]sqltypes.Value, value sqltypes.Value) error {
+	for _, column := range columnIds {
+		bindVars := make(map[string]*querypb.BindVariable, len(columnIds))
+		for colIdx, columnValue := range column {
+			bindVars[lkp.FromColumns[colIdx]] = sqltypes.ValueBindVariable(columnValue)
 		}
+		bindVars[lkp.To] = sqltypes.ValueBindVariable(value)
+		log.Warningf("This is the query: %s, bindVars: %v\n", lkp.del, bindVars)
 		if _, err := vcursor.Execute(lkp.del, bindVars, true /* isDML */); err != nil {
 			return fmt.Errorf("lookup.Delete: %v", err)
 		}
 	}
 	return nil
+}
+
+func (lkp *multiColLookupInternal) initDelStm() string {
+	var delBuffer bytes.Buffer
+	fmt.Fprintf(&delBuffer, "delete from %s where ", lkp.Table)
+	for colIdx, column := range lkp.FromColumns {
+		if colIdx != 0 {
+			delBuffer.WriteString(" and ")
+		}
+		delBuffer.WriteString(column + " = :" + column)
+	}
+	delBuffer.WriteString(" and " + lkp.To + " = :" + lkp.To)
+	return delBuffer.String()
 }
