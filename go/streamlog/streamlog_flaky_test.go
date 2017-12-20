@@ -229,7 +229,7 @@ func TestFile(t *testing.T) {
 
 	// Send the rotate signal which should reopen the original file path
 	// for new logs to go to
-	syscall.Kill(syscall.Getpid(), syscall.SIGUSR1)
+	syscall.Kill(syscall.Getpid(), syscall.SIGUSR2)
 	time.Sleep(10 * time.Millisecond)
 
 	logger.Send(&logMessage{"test 4"})

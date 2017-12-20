@@ -127,13 +127,13 @@ func (logger *StreamLogger) ServeLogs(url string, messageFmt func(url.Values, in
 }
 
 // LogToFile starts logging to the specified file path and will reopen the
-// file in response to SIGUSR1.
+// file in response to SIGUSR2.
 //
 // Returns the channel used for the subscription which can be used to close
 // it.
 func (logger *StreamLogger) LogToFile(path string, messageFmt func(url.Values, interface{}) string) (chan interface{}, error) {
 	rotateChan := make(chan os.Signal, 1)
-	signal.Notify(rotateChan, syscall.SIGUSR1)
+	signal.Notify(rotateChan, syscall.SIGUSR2)
 
 	logChan := logger.Subscribe("FileLog")
 	formatParams := map[string][]string{"full": {}}
