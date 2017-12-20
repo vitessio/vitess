@@ -60,6 +60,7 @@ func TestLogStatsFormat(t *testing.T) {
 	logStats.EndTime = time.Date(2017, time.January, 1, 1, 2, 4, 0, time.UTC)
 	logStats.OriginalSQL = "sql1"
 	logStats.AddRewrittenSQL("sql1", time.Now())
+	logStats.MysqlResponseTime = 0
 
 	logStats.Rows = [][]sqltypes.Value{{sqltypes.NewVarBinary("a")}}
 
