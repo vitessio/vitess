@@ -30,7 +30,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 
-	log "github.com/golang/glog"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -681,7 +680,6 @@ func (route *Route) deleteVindexEntries(vcursor VCursor, bindVars map[string]*qu
 	// Columns are selected by table.Owned order, see generateDeleteSubquery for details
 	for tIdx, colVindex := range route.Table.Owned {
 		ids := make([][]sqltypes.Value, len(result.Rows))
-		log.Warningf("This is the result of the subquery: %v subquery: %v\n", route.Subquery, result.Rows)
 		for rowIdx, row := range result.Rows {
 			for colIdx, _ := range colVindex.Columns {
 				// delete subQuery columns are added to the statement by tIdx + colIdx,
@@ -762,14 +760,20 @@ func (route *Route) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*
 		return "", nil, vterrors.Wrap(err, "getInsertShardedRoute")
 	}
 
-	allKeys := make([][][]sqltypes.Value, len(route.Values))
-	for colNum, colValues := range route.Values {
-		for _, x := range colValues.Values {
-			newValues, err := x.ResolveList(bindVars)
+	// allKeys contains an entry for each ColumnVindex
+	// For each columnVindex, it contains an entry for each row.
+	// For each row, we store the column values of the rows
+	// being inserted.
+	vindexRowsValues := make([][][]sqltypes.Value, len(route.Values))
+	// Insert plan inserts rows values for each vindex in the table.
+	// See buildInsertShardedPlan for more details.
+	for vIdx, vColValues := range route.Values {
+		for _, rowsValues := range vColValues.Values {
+			rowsResolvedValues, err := rowsValues.ResolveList(bindVars)
 			if err != nil {
 				return "", nil, vterrors.Wrap(err, "getInsertShardedRoute")
 			}
-			allKeys[colNum] = append(allKeys[colNum], newValues)
+			vindexRowsValues[vIdx] = append(vindexRowsValues[vIdx], rowsResolvedValues)
 		}
 	}
 
@@ -777,27 +781,27 @@ func (route *Route) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*
 	// keyspace ids. For regular inserts, a failure to find a route
 	// results in an error. For 'ignore' type inserts, the keyspace
 	// id is returned as nil, which is used later to drop such rows.
-	keyspaceIDs, err := route.processPrimary(vcursor, allKeys[0], route.Table.ColumnVindexes[0], bindVars)
+	keyspaceIDs, err := route.processPrimary(vcursor, vindexRowsValues[0], route.Table.ColumnVindexes[0], bindVars)
 	if err != nil {
 		return "", nil, vterrors.Wrap(err, "getInsertShardedRoute")
 	}
 
-	for colNum := 1; colNum < len(allKeys); colNum++ {
-		colVindex := route.Table.ColumnVindexes[colNum]
+	for vIdx := 1; vIdx < len(vindexRowsValues); vIdx++ {
+		colVindex := route.Table.ColumnVindexes[vIdx]
 		var err error
 		if colVindex.Owned {
 			switch route.Opcode {
 			case InsertSharded:
-				err = route.processOwned(vcursor, allKeys[colNum], colVindex, bindVars, keyspaceIDs)
+				err = route.processOwned(vcursor, vindexRowsValues[vIdx], colVindex, bindVars, keyspaceIDs)
 			case InsertShardedIgnore:
 				// For InsertShardedIgnore, the work is substantially different.
 				// So,, we use a separate function.
-				err = route.processOwnedIgnore(vcursor, allKeys[colNum], colVindex, bindVars, keyspaceIDs)
+				err = route.processOwnedIgnore(vcursor, vindexRowsValues[vIdx], colVindex, bindVars, keyspaceIDs)
 			default:
 				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected opcode: %v", route.Opcode)
 			}
 		} else {
-			err = route.processUnowned(vcursor, allKeys[colNum], colVindex, bindVars, keyspaceIDs)
+			err = route.processUnowned(vcursor, vindexRowsValues[vIdx], colVindex, bindVars, keyspaceIDs)
 		}
 		if err != nil {
 			return "", nil, vterrors.Wrap(err, "getInsertShardedRoute")
