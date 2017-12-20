@@ -130,7 +130,7 @@ func (lkp *multiColLookupInternal) Delete(vcursor VCursor, columnIds [][]sqltype
 			bindVars[lkp.FromColumns[colIdx]] = sqltypes.ValueBindVariable(columnValue)
 		}
 		bindVars[lkp.To] = sqltypes.ValueBindVariable(value)
-		res, err := vcursor.Execute(lkp.del, bindVars, true /* isDML */)
+		_, err := vcursor.Execute(lkp.del, bindVars, true /* isDML */)
 		if err != nil {
 			return fmt.Errorf("lookup.Delete: %v", err)
 		}
