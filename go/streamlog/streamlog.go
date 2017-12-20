@@ -127,8 +127,11 @@ func (logger *StreamLogger) ServeLogs(url string, messageFmt func(url.Values, in
 }
 
 // LogToFile starts logging to the specified file path and will reopen the
-// file in response to SIGUSR1
-func (logger *StreamLogger) LogToFile(path string, messageFmt func(url.Values, interface{}) string) error {
+// file in response to SIGUSR1.
+//
+// Returns the channel used for the subscription which can be used to close
+// it.
+func (logger *StreamLogger) LogToFile(path string, messageFmt func(url.Values, interface{}) string) (chan interface{}, error) {
 	rotateChan := make(chan os.Signal, 1)
 	signal.Notify(rotateChan, syscall.SIGUSR1)
 
@@ -137,7 +140,7 @@ func (logger *StreamLogger) LogToFile(path string, messageFmt func(url.Values, i
 
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	go func() {
@@ -153,7 +156,7 @@ func (logger *StreamLogger) LogToFile(path string, messageFmt func(url.Values, i
 		}
 	}()
 
-	return nil
+	return logChan, nil
 }
 
 // Formatter is a simple interface for objects that expose a Format function
