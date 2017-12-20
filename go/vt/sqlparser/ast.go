@@ -2223,10 +2223,8 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 	if !node.Qualifier.IsEmpty() {
 		buf.Myprintf("%v.", node.Qualifier)
 	}
-	// Function names should not be back-quoted even
-	// if they match a reserved word. So, print the
-	// name as is.
-	buf.Myprintf("%s(%s%v)", node.Name.String(), distinct, node.Exprs)
+	formatID(buf, node.Name.val, node.Name.Lowered(), false)
+	buf.Myprintf("(%s%v)", distinct, node.Exprs)
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -2718,7 +2716,7 @@ func NewColIdent(str string) ColIdent {
 
 // Format formats the node.
 func (node ColIdent) Format(buf *TrackedBuffer) {
-	formatID(buf, node.val, node.Lowered())
+	formatID(buf, node.val, node.Lowered(), true)
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -2797,7 +2795,7 @@ func NewTableIdent(str string) TableIdent {
 
 // Format formats the node.
 func (node TableIdent) Format(buf *TrackedBuffer) {
-	formatID(buf, node.v, strings.ToLower(node.v))
+	formatID(buf, node.v, strings.ToLower(node.v), true)
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -2840,7 +2838,7 @@ func (node *TableIdent) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func formatID(buf *TrackedBuffer, original, lowered string) {
+func formatID(buf *TrackedBuffer, original, lowered string, escapeKeywords bool) {
 	for i, c := range original {
 		if !isLetter(uint16(c)) {
 			if i == 0 || !isDigit(uint16(c)) {
@@ -2848,7 +2846,7 @@ func formatID(buf *TrackedBuffer, original, lowered string) {
 			}
 		}
 	}
-	if _, ok := keywords[lowered]; ok {
+	if _, ok := keywords[lowered]; ok && escapeKeywords {
 		goto mustEscape
 	}
 	buf.Myprintf("%s", original)
