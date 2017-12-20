@@ -106,9 +106,9 @@ func buildChangedVindexesValues(route *engine.Route, update *sqlparser.Update, c
 	changedVindexes := make(map[string][]sqltypes.PlanValue)
 	for _, assignment := range update.Exprs {
 		for i, vindex := range colVindexes {
-			// Column not changing, continue
 			for _, vcol := range vindex.Columns {
 				if !vcol.Equal(assignment.Name.Name) {
+					// Column not changing, continue
 					continue
 				}
 				if update.Limit != nil && len(update.OrderBy) == 0 {
@@ -134,12 +134,6 @@ func buildChangedVindexesValues(route *engine.Route, update *sqlparser.Update, c
 		}
 	}
 
-	for _, vindex := range colVindexes {
-		// We need to check that after building all the changed vindexes, that they contain all the columns required by vindex definition
-		if len(changedVindexes[vindex.Name]) != len(vindex.Columns) {
-			return changedVindexes, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: vindex is changing but not all the columns in the vindex are being provided in the statement: %v", vindex.Name)
-		}
-	}
 	return changedVindexes, nil
 }
 
@@ -213,11 +207,13 @@ func generateDeleteSubquery(del *sqlparser.Delete, table *vindexes.Table) string
 func generateUpdateSubquery(upd *sqlparser.Update, table *vindexes.Table) string {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.WriteString("select ")
-	for i, cv := range table.Owned {
-		if i == 0 {
-			buf.Myprintf("%v", cv.Columns[0])
-		} else {
-			buf.Myprintf(", %v", cv.Columns[0])
+	for _, cv := range table.Owned {
+		for i, column := range cv.Columns {
+			if i == 0 {
+				buf.Myprintf("%v", column)
+			} else {
+				buf.Myprintf(", %v", column)
+			}
 		}
 	}
 	buf.Myprintf(" from %v%v%v%v for update", table.Name, upd.Where, upd.OrderBy, upd.Limit)

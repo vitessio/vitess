@@ -19,6 +19,8 @@ package vindexes
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
@@ -34,7 +36,6 @@ var (
 func init() {
 	Register("lookup", NewLookup)
 	Register("lookup_unique", NewLookupUnique)
-	Register("multicol_lookup", NewMultiColLookup)
 }
 
 // MultiColLookupNonUnique defines a vindex that uses a lookup table and create a mapping between from ids and KeyspaceId.
@@ -42,13 +43,6 @@ func init() {
 type MultiColLookupNonUnique struct {
 	name string
 	lkp  multiColLookupInternal
-}
-
-// NewMultiColLookup creates a LookupNonUnique vindex.
-func NewMultiColLookup(name string, m map[string]string) (Vindex, error) {
-	lookup := &MultiColLookupNonUnique{name: name}
-	lookup.lkp.Init(m)
-	return lookup, nil
 }
 
 // String returns the name of the vindex.
@@ -110,9 +104,24 @@ type LookupNonUnique struct {
 
 // NewLookup creates a LookupNonUnique vindex.
 func NewLookup(name string, m map[string]string) (Vindex, error) {
-	lookup := &LookupNonUnique{name: name}
-	lookup.lkp.Init(m)
-	return lookup, nil
+	var fromColumns []string
+	for _, from := range strings.Split(m["from"], ",") {
+		fromColumns = append(fromColumns, strings.TrimSpace(from))
+	}
+	// In the future we can just use MultiColLookupNonUnique for everything.
+	// A vindex with only one column in a special case of the multicol lookup.
+	// However, to reduce risk and don't change so many things at the same time,
+	// I would like to keep the multicolumn implementation separete from the original
+	// one
+	if len(fromColumns) > 1 {
+		lookup := &MultiColLookupNonUnique{name: name}
+		lookup.lkp.Init(m)
+		return lookup, nil
+	} else {
+		lookup := &LookupNonUnique{name: name}
+		lookup.lkp.Init(m)
+		return lookup, nil
+	}
 }
 
 // String returns the name of the vindex.

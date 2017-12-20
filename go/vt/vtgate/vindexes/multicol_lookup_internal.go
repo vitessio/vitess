@@ -22,7 +22,6 @@ import (
 	"strconv"
 	"strings"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -40,7 +39,7 @@ func (lkp *multiColLookupInternal) Init(lookupQueryParams map[string]string) {
 	lkp.Table = lookupQueryParams["table"]
 	lkp.To = lookupQueryParams["to"]
 	var fromColumns []string
-	for _, from := range strings.Split(lookupQueryParams["from_columns"], ",") {
+	for _, from := range strings.Split(lookupQueryParams["from"], ",") {
 		fromColumns = append(fromColumns, strings.TrimSpace(from))
 	}
 	lkp.FromColumns = fromColumns
@@ -116,7 +115,6 @@ func (lkp *multiColLookupInternal) Create(vcursor VCursor, fromIds [][]sqltypes.
 		insBuffer.WriteString(":" + toStr + ")")
 		bindVars[toStr] = sqltypes.ValueBindVariable(toValues[rowIdx])
 	}
-	log.Warningf("This is the insert query: %s, bindVars: %v\n", insBuffer.String(), bindVars)
 	_, err := vcursor.Execute(insBuffer.String(), bindVars, true /* isDML */)
 	if err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
@@ -132,8 +130,8 @@ func (lkp *multiColLookupInternal) Delete(vcursor VCursor, columnIds [][]sqltype
 			bindVars[lkp.FromColumns[colIdx]] = sqltypes.ValueBindVariable(columnValue)
 		}
 		bindVars[lkp.To] = sqltypes.ValueBindVariable(value)
-		log.Warningf("This is the query: %s, bindVars: %v\n", lkp.del, bindVars)
-		if _, err := vcursor.Execute(lkp.del, bindVars, true /* isDML */); err != nil {
+		res, err := vcursor.Execute(lkp.del, bindVars, true /* isDML */)
+		if err != nil {
 			return fmt.Errorf("lookup.Delete: %v", err)
 		}
 	}

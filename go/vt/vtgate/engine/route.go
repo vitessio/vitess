@@ -628,13 +628,21 @@ func (route *Route) updateChangedVindexes(subQueryResult *sqltypes.Result, vcurs
 	if len(route.ChangedVindexValues) == 0 {
 		return nil
 	}
-	for i, colVindex := range route.Table.Owned {
+	if len(subQueryResult.Rows) == 0 {
+		// NOOP, there are no actual rows changing due to this statement
+		return nil
+	}
+	for _, colVindex := range route.Table.Owned {
 		if colValues, ok := route.ChangedVindexValues[colVindex.Name]; ok {
 			if len(subQueryResult.Rows) > 1 {
 				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update changes multiple columns in the vindex")
 			}
 
-			var ids []sqltypes.Value
+			if len(colValues) != len(colVindex.Columns) {
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update does not have values for all the columns in the vindex")
+			}
+
+			fromIds := make([][]sqltypes.Value, len(subQueryResult.Rows))
 			var vindexColumnKeys []sqltypes.Value
 			for _, colValue := range colValues {
 				resolvedVal, err := colValue.ResolveValue(bindVars)
@@ -645,10 +653,13 @@ func (route *Route) updateChangedVindexes(subQueryResult *sqltypes.Result, vcurs
 
 			}
 
-			for _, row := range subQueryResult.Rows {
-				ids = append(ids, row[i])
+			for rowIdx, row := range subQueryResult.Rows {
+				for colIdx, _ := range colVindex.Columns {
+					fromIds[rowIdx] = append(fromIds[rowIdx], row[rowIdx+colIdx])
+				}
 			}
-			if err := colVindex.Vindex.(vindexes.Lookup).Delete(vcursor, [][]sqltypes.Value{ids}, ksid); err != nil {
+
+			if err := colVindex.Vindex.(vindexes.Lookup).Delete(vcursor, fromIds, ksid); err != nil {
 				return err
 			}
 			if err := route.processOwned(vcursor, [][]sqltypes.Value{vindexColumnKeys}, colVindex, bindVars, [][]byte{ksid}); err != nil {
