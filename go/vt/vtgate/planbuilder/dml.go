@@ -197,12 +197,13 @@ func generateDeleteSubquery(del *sqlparser.Delete, table *vindexes.Table) string
 	}
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.WriteString("select ")
-	// TODO @rafael think
-	for i, cv := range table.Owned {
-		if i == 0 {
-			buf.Myprintf("%v", cv.Columns[0])
-		} else {
-			buf.Myprintf(", %v", cv.Columns[0])
+	for _, cv := range table.Owned {
+		for i, column := range cv.Columns {
+			if i == 0 {
+				buf.Myprintf("%v", column)
+			} else {
+				buf.Myprintf(", %v", column)
+			}
 		}
 	}
 	buf.Myprintf(" from %v%v for update", table.Name, del.Where)
