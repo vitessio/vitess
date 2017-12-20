@@ -92,7 +92,7 @@ func (lkp *multiColLookupInternal) Verify(vcursor VCursor, ids, values []sqltype
 // toValues contains the keyspace_id of each row being inserted.
 // Given a vindex with two columns and the following insert:
 //
-// INSERT INTO a (colum_a, column_b, column_c) VALUES (value_a1, value_b1, value_c1), (value_a2, value_b2, value_c2);
+// INSERT INTO table_a (colum_a, column_b, column_c) VALUES (value_a1, value_b1, value_c1), (value_a2, value_b2, value_c2);
 // If we assume that the primary vindex is on column_c. The call to create will look like this:
 // Create(vcursor, [[value_a1, value_b1,], [value_a2, value_b2]], [binary(value_c1), binary(value_c2)])
 // Notice that toValues contains the computed binary value of the keyspace_id.
