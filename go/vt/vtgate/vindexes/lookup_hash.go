@@ -98,13 +98,13 @@ func (lh *LookupHash) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]by
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (lh *LookupHash) Create(vcursor VCursor, columnIds [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
+func (lh *LookupHash) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
 	values, err := unhashList(ksids)
 	if err != nil {
 		return fmt.Errorf("lookup.Create.vunhash: %v", err)
 	}
 	var ids []sqltypes.Value
-	for _, vindexValues := range columnIds {
+	for _, vindexValues := range rowsColValues {
 		ids = append(ids, vindexValues[0])
 	}
 
@@ -112,13 +112,13 @@ func (lh *LookupHash) Create(vcursor VCursor, columnIds [][]sqltypes.Value, ksid
 }
 
 // Delete deletes the entry from the vindex table.
-func (lh *LookupHash) Delete(vcursor VCursor, columnIds [][]sqltypes.Value, ksid []byte) error {
+func (lh *LookupHash) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
 	v, err := vunhash(ksid)
 	if err != nil {
 		return fmt.Errorf("lookup.Delete.vunhash: %v", err)
 	}
 	var ids []sqltypes.Value
-	for _, vindexValues := range columnIds {
+	for _, vindexValues := range rowsColValues {
 		ids = append(ids, vindexValues[0])
 	}
 
@@ -207,13 +207,13 @@ func (lhu *LookupHashUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (lhu *LookupHashUnique) Create(vcursor VCursor, columnIds [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
+func (lhu *LookupHashUnique) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
 	values, err := unhashList(ksids)
 	if err != nil {
 		return fmt.Errorf("lookup.Create.vunhash: %v", err)
 	}
 	var ids []sqltypes.Value
-	for _, vindexValues := range columnIds {
+	for _, vindexValues := range rowsColValues {
 		ids = append(ids, vindexValues[0])
 	}
 
@@ -221,13 +221,13 @@ func (lhu *LookupHashUnique) Create(vcursor VCursor, columnIds [][]sqltypes.Valu
 }
 
 // Delete deletes the entry from the vindex table.
-func (lhu *LookupHashUnique) Delete(vcursor VCursor, columnIds [][]sqltypes.Value, ksid []byte) error {
+func (lhu *LookupHashUnique) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
 	v, err := vunhash(ksid)
 	if err != nil {
 		return fmt.Errorf("lookup.Delete.vunhash: %v", err)
 	}
 	var ids []sqltypes.Value
-	for _, vindexValues := range columnIds {
+	for _, vindexValues := range rowsColValues {
 		ids = append(ids, vindexValues[0])
 	}
 	return lhu.lkp.Delete(vcursor, ids, sqltypes.NewUint64(v))
