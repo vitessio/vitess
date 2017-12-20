@@ -194,7 +194,8 @@ func TestFile(t *testing.T) {
 	}
 
 	logPath := path.Join(dir, "test.log")
-	err = logger.LogToFile(logPath, func(params url.Values, x interface{}) string { return x.(*logMessage).Format(params) })
+	logChan, err := logger.LogToFile(logPath, func(params url.Values, x interface{}) string { return x.(*logMessage).Format(params) })
+	defer logger.Unsubscribe(logChan)
 	if err != nil {
 		t.Errorf("error enabling file logger: %v", err)
 	}
