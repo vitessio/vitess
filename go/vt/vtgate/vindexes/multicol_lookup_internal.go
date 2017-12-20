@@ -86,8 +86,17 @@ func (lkp *multiColLookupInternal) Verify(vcursor VCursor, ids, values []sqltype
 	return out, nil
 }
 
-// Create creates an association between fromIds and toValues by inserting rows in the vindex table.
-func (lkp *multiColLookupInternal) Create(vcursor VCursor, fromIds [][]sqltypes.Value, toValues []sqltypes.Value, ignoreMode bool) error {
+// Create creates an association between rowsColValues and toValues by inserting rows in the vindex table.
+// rowsColValues contains all the rows that are being inserted.
+// For each row, we store the value of each column defined in the vindex.
+// toValues contains the keyspace_id of each row being inserted.
+// Given a vindex with two columns and the following insert:
+//
+// INSERT INTO a (colum_a, column_b, column_c) VALUES (value_a1, value_b1, value_c1), (value_a2, value_b2, value_c2);
+// If we assume that the primary vindex is on column_c. The call to create will look like this:
+// Create(vcursor, [[value_a1, value_b1,], [value_a2, value_b2]], [binary(value_c1), binary(value_c2)])
+// Notice that toValues contains the computed binary value of the keyspace_id.
+func (lkp *multiColLookupInternal) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, toValues []sqltypes.Value, ignoreMode bool) error {
 	var insBuffer bytes.Buffer
 	if ignoreMode {
 		fmt.Fprintf(&insBuffer, "insert ignore into %s(", lkp.Table)
@@ -100,9 +109,9 @@ func (lkp *multiColLookupInternal) Create(vcursor VCursor, fromIds [][]sqltypes.
 	}
 
 	fmt.Fprintf(&insBuffer, "%s) values(", lkp.To)
-	bindVars := make(map[string]*querypb.BindVariable, 2*len(fromIds))
+	bindVars := make(map[string]*querypb.BindVariable, 2*len(rowsColValues))
 	for rowIdx, _ := range toValues {
-		colIds := fromIds[rowIdx]
+		colIds := rowsColValues[rowIdx]
 		if rowIdx != 0 {
 			insBuffer.WriteString(", (")
 		}
@@ -123,9 +132,23 @@ func (lkp *multiColLookupInternal) Create(vcursor VCursor, fromIds [][]sqltypes.
 }
 
 // Delete deletes the association between ids and value.
-func (lkp *multiColLookupInternal) Delete(vcursor VCursor, columnIds [][]sqltypes.Value, value sqltypes.Value) error {
-	for _, column := range columnIds {
-		bindVars := make(map[string]*querypb.BindVariable, len(columnIds))
+// rowsColValues contains all the rows that are being deleted.
+// For each row, we store the value of each column defined in the vindex.
+// value cointains the keyspace_id of the vindex entry being deleted.
+//
+// Given the following information in a vindex table with two columns:
+//
+//      +------------------+-----------+--------+
+//	| hex(keyspace_id) | a         | b      |
+//	+------------------+-----------+--------+
+//	| 52CB7B1B31B2222E | valuea    | valueb |
+//	+------------------+-----------+--------+
+//
+// A call to Delete would look like this:
+// Delete(vcursor, [[valuea, valueb]], 52CB7B1B31B2222E)
+func (lkp *multiColLookupInternal) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, value sqltypes.Value) error {
+	for _, column := range rowsColValues {
+		bindVars := make(map[string]*querypb.BindVariable, len(rowsColValues))
 		for colIdx, columnValue := range column {
 			bindVars[lkp.FromColumns[colIdx]] = sqltypes.ValueBindVariable(columnValue)
 		}

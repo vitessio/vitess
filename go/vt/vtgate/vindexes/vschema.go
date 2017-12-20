@@ -240,7 +240,10 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 				}
 				var columns []sqlparser.ColIdent
 				if ind.Column != "" && len(ind.Columns) > 0 {
-					return fmt.Errorf("Can't use column and columns at the same time in index %s for table %s", ind.Name, tname)
+					return fmt.Errorf("Can't use column and columns at the same time in vindex (%s) and table (%s)", ind.Name, tname)
+				}
+				if owned && len(columns) > 1 {
+					return fmt.Errorf("Can't have a multicolumn unowned vindex (%s) and table (%s)", ind.Name, tname)
 				}
 				if ind.Column != "" {
 					columns = []sqlparser.ColIdent{sqlparser.NewColIdent(ind.Column)}

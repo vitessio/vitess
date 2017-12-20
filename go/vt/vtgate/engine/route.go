@@ -678,13 +678,15 @@ func (route *Route) deleteVindexEntries(vcursor VCursor, bindVars map[string]*qu
 	if len(result.Rows) == 0 {
 		return nil
 	}
-	// Columns are selected by table.Owned order see generateDeleteSubquery for details
-	for tableIndex, colVindex := range route.Table.Owned {
+	// Columns are selected by table.Owned order, see generateDeleteSubquery for details
+	for tIdx, colVindex := range route.Table.Owned {
 		ids := make([][]sqltypes.Value, len(result.Rows))
 		log.Warningf("This is the result of the subquery: %v subquery: %v\n", route.Subquery, result.Rows)
 		for rowIdx, row := range result.Rows {
 			for colIdx, _ := range colVindex.Columns {
-				ids[rowIdx] = append(ids[rowIdx], row[tableIndex+colIdx])
+				// delete subQuery columns are added to the statement by tIdx + colIdx,
+				// hence the offset when finding in the result set.
+				ids[rowIdx] = append(ids[rowIdx], row[tIdx+colIdx])
 			}
 		}
 		if err = colVindex.Vindex.(vindexes.Lookup).Delete(vcursor, ids, ksid); err != nil {
@@ -873,7 +875,6 @@ func (route *Route) processOwned(vcursor VCursor, vindexColumnsKeys [][]sqltypes
 			bv[insertVarName(col, rowNum)] = sqltypes.ValueBindVariable(vindexKey)
 		}
 	}
-	// TODO @rafel THINK
 	return colVindex.Vindex.(vindexes.Lookup).Create(vcursor, vindexColumnsKeys, ksids, false /* ignoreMode */)
 }
 
@@ -929,14 +930,19 @@ func (route *Route) processOwnedIgnore(vcursor VCursor, vindexColumnsKeys [][]sq
 }
 
 // processUnowned either reverse maps or validates the values for an unowned column.
-// TODO: @rafael - processUnowned doesn't support multi column indexes yet. Fix in a future iteration
 func (route *Route) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltypes.Value, colVindex *vindexes.ColumnVindex, bv map[string]*querypb.BindVariable, ksids [][]byte) error {
 	var reverseIndexes []int
 	var reverseKsids [][]byte
 	var verifyIndexes []int
 	var verifyKeys []sqltypes.Value
 	var verifyKsids [][]byte
-	vindexKeys := vindexColumnsKeys[0]
+	var vindexKeys []sqltypes.Value
+	// TODO: @rafael - processUnowned doesn't support multi column indexes yet.
+	// The following code gets the first column from each value. In the future,
+	// processUnowned should handle multicolumn vindexes, the same way processOwned
+	for _, vindexValues := range vindexColumnsKeys {
+		vindexKeys = append(vindexKeys, vindexValues[0])
+	}
 
 	for rowNum, vindexKey := range vindexKeys {
 		if ksids[rowNum] == nil {
