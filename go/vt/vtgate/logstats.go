@@ -25,9 +25,9 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
-	"github.com/youtube/vitess/go/vt/servenv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
@@ -143,7 +143,7 @@ func (stats *LogStats) RemoteAddrUsername() (string, string) {
 func (stats *LogStats) Format(params url.Values) string {
 	formattedBindVars := "[REDACTED]"
 
-	if !*servenv.RedactDebugUIQueries {
+	if !*streamlog.RedactDebugUIQueries {
 		_, fullBindParams := params["full"]
 		formattedBindVars = stats.FmtBindVariables(fullBindParams)
 	}
