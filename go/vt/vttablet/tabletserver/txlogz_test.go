@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -71,10 +72,10 @@ func testHandler(req *http.Request, t *testing.T) {
 	tabletenv.TxLogger.Send(txConn)
 	txlogzHandler(response, req)
 	testNotRedacted(t, response)
-	*tabletenv.RedactDebugUIQueries = true
+	*streamlog.RedactDebugUIQueries = true
 	txlogzHandler(response, req)
 	testRedacted(t, response)
-	*tabletenv.RedactDebugUIQueries = false
+	*streamlog.RedactDebugUIQueries = false
 
 }
 
