@@ -653,7 +653,7 @@ func (route *Route) updateChangedVindexes(subQueryResult *sqltypes.Result, vcurs
 			}
 
 			for rowIdx, row := range subQueryResult.Rows {
-				for colIdx, _ := range colVindex.Columns {
+				for colIdx := range colVindex.Columns {
 					fromIds[rowIdx] = append(fromIds[rowIdx], row[rowIdx+colIdx])
 				}
 			}
@@ -681,7 +681,7 @@ func (route *Route) deleteVindexEntries(vcursor VCursor, bindVars map[string]*qu
 	for tIdx, colVindex := range route.Table.Owned {
 		ids := make([][]sqltypes.Value, len(result.Rows))
 		for rowIdx, row := range result.Rows {
-			for colIdx, _ := range colVindex.Columns {
+			for colIdx := range colVindex.Columns {
 				// delete subQuery columns are added to the statement by tIdx + colIdx,
 				// hence the offset when finding in the result set.
 				ids[rowIdx] = append(ids[rowIdx], row[tIdx+colIdx])

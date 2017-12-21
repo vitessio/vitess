@@ -130,7 +130,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 	routeValues := make([]sqltypes.PlanValue, len(eRoute.Table.ColumnVindexes))
 	// Initialize each table vindex with the number of rows per insert.
 	// There will be a plan value for each row.
-	for vIdx, _ := range routeValues {
+	for vIdx := range routeValues {
 		routeValues[vIdx].Values = make([]sqltypes.PlanValue, len(rows))
 	}
 	// What's going in here?

@@ -117,11 +117,10 @@ func NewLookup(name string, m map[string]string) (Vindex, error) {
 		lookup := &MultiColLookupNonUnique{name: name}
 		lookup.lkp.Init(m)
 		return lookup, nil
-	} else {
-		lookup := &LookupNonUnique{name: name}
-		lookup.lkp.Init(m)
-		return lookup, nil
 	}
+	lookup := &LookupNonUnique{name: name}
+	lookup.lkp.Init(m)
+	return lookup, nil
 }
 
 // String returns the name of the vindex.
