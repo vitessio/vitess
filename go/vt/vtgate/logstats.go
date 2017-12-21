@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"bytes"
 	"fmt"
 	"html/template"
 	"net/url"
@@ -97,6 +98,10 @@ func (stats *LogStats) TotalTime() time.Duration {
 // values that are strings or byte slices it only reports their type
 // and length.
 func (stats *LogStats) FmtBindVariables(full bool) string {
+	if *streamlog.RedactDebugUIQueries {
+		return "\"[REDACTED]\""
+	}
+
 	var out map[string]*querypb.BindVariable
 	if full {
 		out = stats.BindVariables
@@ -112,6 +117,27 @@ func (stats *LogStats) FmtBindVariables(full bool) string {
 			}
 		}
 	}
+
+	if *streamlog.QueryLogFormat == streamlog.QueryLogFormatJSON {
+		var buf bytes.Buffer
+		buf.WriteString("{")
+		first := true
+		for k, v := range out {
+			if !first {
+				buf.WriteString(", ")
+			} else {
+				first = false
+			}
+			if sqltypes.IsIntegral(v.Type) || sqltypes.IsFloat(v.Type) {
+				fmt.Fprintf(&buf, "%q: {\"type\": %q, \"value\": %v}", k, v.Type, string(v.Value))
+			} else {
+				fmt.Fprintf(&buf, "%q: {\"type\": %q, \"value\": %q}", k, v.Type, string(v.Value))
+			}
+		}
+		buf.WriteString("}")
+		return buf.String()
+	}
+
 	return fmt.Sprintf("%v", out)
 }
 
@@ -141,17 +167,22 @@ func (stats *LogStats) RemoteAddrUsername() (string, string) {
 
 // Format returns a tab separated list of logged fields.
 func (stats *LogStats) Format(params url.Values) string {
-	formattedBindVars := "[REDACTED]"
-
-	if !*streamlog.RedactDebugUIQueries {
-		_, fullBindParams := params["full"]
-		formattedBindVars = stats.FmtBindVariables(fullBindParams)
-	}
+	_, fullBindParams := params["full"]
+	formattedBindVars := stats.FmtBindVariables(fullBindParams)
 
 	// TODO: remove username here we fully enforce immediate caller id
 	remoteAddr, username := stats.RemoteAddrUsername()
+
+	var fmtString string
+	switch *streamlog.QueryLogFormat {
+	case streamlog.QueryLogFormatText:
+		fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%.6f\t%.6f\t%.6f\t%v\t%q\t%v\t%v\t%v\t%q\t\n"
+	case streamlog.QueryLogFormatJSON:
+		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanTime\": %v, \"ExecuteTime\": %v, \"CommitTime\": %v, \"StmtType\": %q, \"SQL\": %q, \"BindVars\": %v, \"ShardQueries\": %v, \"RowsAffected\": %v, \"Error\": %q}\n"
+	}
+
 	return fmt.Sprintf(
-		"%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%.6f\t%.6f\t%.6f\t%v\t%q\t%v\t%v\t%v\t%q\t\n",
+		fmtString,
 		stats.Method,
 		remoteAddr,
 		username,
