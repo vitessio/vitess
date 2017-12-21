@@ -102,7 +102,7 @@ type Functional interface {
 type Lookup interface {
 	// Create creates an association between ids and ksids. If ignoreMode
 	// is true, then the Create should ignore dup key errors.
-	Create(vc VCursor, columnKeyIds [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error
+	Create(vc VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error
 	Delete(VCursor, [][]sqltypes.Value, []byte) error
 }
 

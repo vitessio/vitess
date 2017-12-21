@@ -1044,7 +1044,7 @@ func TestInsertFail(t *testing.T) {
 	}
 
 	_, err = executorExec(executor, "insert into music_extra(user_id, music_id) values (1, null)", nil)
-	want = "execInsertSharded: getInsertShardedRoute: value must be supplied for column music_id"
+	want = "execInsertSharded: getInsertShardedRoute: value must be supplied for column [music_id]"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}
@@ -1056,7 +1056,7 @@ func TestInsertFail(t *testing.T) {
 	}
 
 	_, err = executorExec(executor, "insert into music_extra_reversed(music_id, user_id) values (1, 3)", nil)
-	want = "execInsertSharded: getInsertShardedRoute: values [INT64(3)] for column user_id does not map to keyspaceids"
+	want = "execInsertSharded: getInsertShardedRoute: values [[INT64(3)]] for column [user_id] does not map to keyspaceids"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("executorExec: %v, must contain %v", err, want)
 	}

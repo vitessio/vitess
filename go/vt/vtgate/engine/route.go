@@ -893,13 +893,13 @@ func (route *Route) processOwnedIgnore(vcursor VCursor, vindexColumnsKeys [][]sq
 			return fmt.Errorf("provided values for vindex columns does't no match vindex definition %v, %v", rowColumnKeys, colVindex.Columns)
 		}
 		var rowKeys []sqltypes.Value
+		if ksids[rowNum] == nil {
+			continue
+		}
 		createIndexes = append(createIndexes, rowNum)
 		createKsids = append(createKsids, ksids[rowNum])
-		for colIdx, vindexKey := range rowColumnKeys {
-			if ksids[rowNum] == nil {
-				continue
-			}
 
+		for colIdx, vindexKey := range rowColumnKeys {
 			if vindexKey.IsNull() {
 				return fmt.Errorf("value must be supplied for column %v", colVindex.Columns)
 			}
@@ -917,11 +917,14 @@ func (route *Route) processOwnedIgnore(vcursor VCursor, vindexColumnsKeys [][]sq
 	if err != nil {
 		return err
 	}
-
 	// After creation, verify that the keys map to the keyspace ids. If not, remove
 	// those that don't map.
-	// For now, only use the first column to verify
-	verified, err := colVindex.Vindex.Verify(vcursor, createKeys[0], createKsids)
+	// If values were supplied, we validate against keyspace id.
+	var ids []sqltypes.Value
+	for _, vindexValues := range createKeys {
+		ids = append(ids, vindexValues[0])
+	}
+	verified, err := colVindex.Vindex.Verify(vcursor, ids, createKsids)
 	if err != nil {
 		return err
 	}
@@ -938,52 +941,56 @@ func (route *Route) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltyp
 	var reverseIndexes []int
 	var reverseKsids [][]byte
 	var verifyIndexes []int
-	var verifyKeys []sqltypes.Value
+	var verifyKeys [][]sqltypes.Value
 	var verifyKsids [][]byte
-	var vindexKeys []sqltypes.Value
-	// TODO: @rafael - processUnowned doesn't support multi column indexes yet.
-	// The following code gets the first column from each value. In the future,
-	// processUnowned should handle multicolumn vindexes, the same way processOwned
-	for _, vindexValues := range vindexColumnsKeys {
-		vindexKeys = append(vindexKeys, vindexValues[0])
-	}
 
-	for rowNum, vindexKey := range vindexKeys {
-		if ksids[rowNum] == nil {
-			continue
+	for rowNum, rowColumnKeys := range vindexColumnsKeys {
+		if len(rowColumnKeys) != len(colVindex.Columns) {
+			return fmt.Errorf("provided values for vindex columns does't no match vindex definition %v, %v", rowColumnKeys, colVindex.Columns)
 		}
-		if vindexKey.IsNull() {
-			reverseIndexes = append(reverseIndexes, rowNum)
-			reverseKsids = append(reverseKsids, ksids[rowNum])
-		} else {
-			verifyIndexes = append(verifyIndexes, rowNum)
-			verifyKeys = append(verifyKeys, vindexKey)
-			verifyKsids = append(verifyKsids, ksids[rowNum])
+		var verifyRowKeys []sqltypes.Value
+		for _, vindexKey := range rowColumnKeys {
+			if ksids[rowNum] == nil {
+				continue
+			}
+			if vindexKey.IsNull() {
+				reverseIndexes = append(reverseIndexes, rowNum)
+				reverseKsids = append(reverseKsids, ksids[rowNum])
+			} else {
+				verifyIndexes = append(verifyIndexes, rowNum)
+				verifyRowKeys = append(verifyRowKeys, vindexKey)
+				verifyKsids = append(verifyKsids, ksids[rowNum])
+			}
+			verifyKeys = append(verifyKeys, verifyRowKeys)
 		}
-	}
 
-	// For cases where a value was not supplied, we reverse map it
-	// from the keyspace id, if possible.
-	if reverseKsids != nil {
-		reversible, ok := colVindex.Vindex.(vindexes.Reversible)
-		if !ok {
-			return fmt.Errorf("value must be supplied for column %v", colVindex.Columns)
-		}
-		reverseKeys, err := reversible.ReverseMap(vcursor, reverseKsids)
-		if err != nil {
-			return err
-		}
-		for i, reverseKey := range reverseKeys {
-			rowNum := reverseIndexes[i]
-			for _, col := range colVindex.Columns {
-				bv[insertVarName(col, rowNum)] = sqltypes.ValueBindVariable(reverseKey)
+		// For cases where a value was not supplied, we reverse map it
+		// from the keyspace id, if possible.
+		if reverseKsids != nil {
+			reversible, ok := colVindex.Vindex.(vindexes.Reversible)
+			if !ok {
+				return fmt.Errorf("value must be supplied for column %v", colVindex.Columns)
+			}
+			reverseKeys, err := reversible.ReverseMap(vcursor, reverseKsids)
+			if err != nil {
+				return err
+			}
+			for i, reverseKey := range reverseKeys {
+				rowNum := reverseIndexes[i]
+				for _, col := range colVindex.Columns {
+					bv[insertVarName(col, rowNum)] = sqltypes.ValueBindVariable(reverseKey)
+				}
 			}
 		}
 	}
 
-	// If values were supplied, we validate against keyspace id.
 	if verifyKsids != nil {
-		verified, err := colVindex.Vindex.Verify(vcursor, verifyKeys, verifyKsids)
+		// If values were supplied, we validate against keyspace id.
+		var ids []sqltypes.Value
+		for _, vindexValues := range verifyKeys {
+			ids = append(ids, vindexValues[0])
+		}
+		verified, err := colVindex.Vindex.Verify(vcursor, ids, verifyKsids)
 		if err != nil {
 			return err
 		}
@@ -991,14 +998,14 @@ func (route *Route) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltyp
 			rowNum := verifyIndexes[i]
 			if !v {
 				if route.Opcode != InsertShardedIgnore {
-					return fmt.Errorf("values %v for column %v does not map to keyspaceids", vindexKeys, colVindex.Columns)
+					return fmt.Errorf("values %v for column %v does not map to keyspaceids", vindexColumnsKeys, colVindex.Columns)
 				}
 				// InsertShardedIgnore: skip the row.
 				ksids[rowNum] = nil
 				continue
 			}
-			for _, col := range colVindex.Columns {
-				bv[insertVarName(col, rowNum)] = sqltypes.ValueBindVariable(vindexKeys[rowNum])
+			for colIdx, col := range colVindex.Columns {
+				bv[insertVarName(col, rowNum)] = sqltypes.ValueBindVariable(vindexColumnsKeys[rowNum][colIdx])
 			}
 		}
 	}
