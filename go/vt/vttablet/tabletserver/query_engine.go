@@ -31,12 +31,12 @@ import (
 	"github.com/youtube/vitess/go/cache"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	tacl "github.com/youtube/vitess/go/vt/tableacl/acl"
@@ -557,7 +557,7 @@ func (qe *QueryEngine) handleHTTPQueryRules(response http.ResponseWriter, reques
 
 // ServeHTTP lists the most recent, cached queries and their count.
 func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, request *http.Request) {
-	if *servenv.RedactDebugUIQueries {
+	if *streamlog.RedactDebugUIQueries {
 		response.Write([]byte(`
 	<!DOCTYPE html>
 	<html>

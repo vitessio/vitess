@@ -18,6 +18,7 @@ limitations under the License.
 package streamlog
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -33,6 +34,12 @@ import (
 )
 
 var (
+	// RedactDebugUIQueries controls whether full queries and bind variables are suppressed from debug UIs.
+	RedactDebugUIQueries = flag.Bool("redact-debug-ui-queries", false, "redact full queries and bind variables from debug UI")
+
+	// QueryLogFormat controls the format of the query log (either text or json)
+	QueryLogFormat = flag.String("querylog-format", "text", "format for query logs (\"text\" or \"json\")")
+
 	sendCount         = stats.NewCounters("StreamlogSend")
 	deliveredCount    = stats.NewMultiCounters("StreamlogDelivered", []string{"Log", "Subscriber"})
 	deliveryDropCount = stats.NewMultiCounters("StreamlogDeliveryDroppedMessages", []string{"Log", "Subscriber"})

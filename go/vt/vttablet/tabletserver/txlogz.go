@@ -25,9 +25,9 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
+	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/logz"
-	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -86,7 +86,7 @@ func txlogzHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if *servenv.RedactDebugUIQueries {
+	if *streamlog.RedactDebugUIQueries {
 		io.WriteString(w, `
 <!DOCTYPE html>
 <html>
