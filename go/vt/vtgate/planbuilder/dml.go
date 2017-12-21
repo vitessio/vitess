@@ -191,9 +191,9 @@ func generateDeleteSubquery(del *sqlparser.Delete, table *vindexes.Table) string
 	}
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.WriteString("select ")
-	for _, cv := range table.Owned {
-		for i, column := range cv.Columns {
-			if i == 0 {
+	for vIdx, cv := range table.Owned {
+		for cIdx, column := range cv.Columns {
+			if cIdx == 0 && vIdx == 0 {
 				buf.Myprintf("%v", column)
 			} else {
 				buf.Myprintf(", %v", column)
@@ -207,9 +207,9 @@ func generateDeleteSubquery(del *sqlparser.Delete, table *vindexes.Table) string
 func generateUpdateSubquery(upd *sqlparser.Update, table *vindexes.Table) string {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.WriteString("select ")
-	for _, cv := range table.Owned {
-		for i, column := range cv.Columns {
-			if i == 0 {
+	for vIdx, cv := range table.Owned {
+		for cIdx, column := range cv.Columns {
+			if cIdx == 0 && vIdx == 0 {
 				buf.Myprintf("%v", column)
 			} else {
 				buf.Myprintf(", %v", column)
