@@ -173,6 +173,14 @@ public class ConnectionProperties {
         Constants.Property.USE_SSL,
         "Whether this connection should use transport-layer security",
         false);
+    private BooleanConnectionProperty refreshConnection = new BooleanConnectionProperty(
+        "refreshConnection",
+        "When enabled, the driver will monitor for changes to the keystore and truststore files. If any are detected, SSL-enabled connections will be recreated.",
+        false);
+    private LongConnectionProperty refreshSeconds = new LongConnectionProperty(
+        "refreshSeconds",
+        "How often in seconds the driver will monitor for changes to the keystore and truststore files, when refreshConnection is enabled.",
+        60);
     private StringConnectionProperty keyStore = new StringConnectionProperty(
         Constants.Property.KEYSTORE,
         "The Java .JKS keystore file to use when TLS is enabled",
@@ -474,6 +482,22 @@ public class ConnectionProperties {
 
     public boolean getUseSSL() {
         return useSSL.getValueAsBoolean();
+    }
+
+    public boolean getRefreshConnection() {
+        return refreshConnection.getValueAsBoolean();
+    }
+
+    public void setRefreshConnection(boolean refreshConnection) {
+        this.refreshConnection.setValue(refreshConnection);
+    }
+
+    public long getRefreshSeconds() {
+        return refreshSeconds.getValueAsLong();
+    }
+
+    public void setRefreshSeconds(long refreshSeconds) {
+        this.refreshSeconds.setValue(refreshSeconds);
     }
 
     public String getKeyStore() {
