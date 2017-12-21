@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"time"
 
+	log "github.com/golang/glog"
+
 	"github.com/golang/protobuf/proto"
 
 	"github.com/youtube/vitess/go/flagutil"
@@ -89,6 +91,13 @@ func init() {
 
 // Init must be called after flag.Parse, and before doing any other operations.
 func Init() {
+	switch *streamlog.QueryLogFormat {
+	case "text":
+	case "json":
+	default:
+		log.Exitf("Invalid querylog-format value %v: must be either text or json")
+	}
+
 	if *queryLogHandler != "" {
 		StatsLogger.ServeLogs(*queryLogHandler, streamlog.GetFormatter(StatsLogger))
 	}

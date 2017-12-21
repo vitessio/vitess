@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -72,9 +72,9 @@ func TestFileLog(t *testing.T) {
 
 // TestFileLog sends a stream of five query records to the plugin, and verifies that they are logged.
 func TestFileLogRedacted(t *testing.T) {
-	*servenv.RedactDebugUIQueries = true
+	*streamlog.RedactDebugUIQueries = true
 	defer func() {
-		*servenv.RedactDebugUIQueries = false
+		*streamlog.RedactDebugUIQueries = false
 	}()
 
 	dir, err := ioutil.TempDir("", "filelogger_test")

@@ -26,9 +26,9 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
-	"github.com/youtube/vitess/go/vt/servenv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
@@ -203,7 +203,7 @@ func (stats *LogStats) Format(params url.Values) string {
 	rewrittenSQL := "[REDACTED]"
 	formattedBindVars := "[REDACTED]"
 
-	if !*servenv.RedactDebugUIQueries {
+	if !*streamlog.RedactDebugUIQueries {
 		_, fullBindParams := params["full"]
 		rewrittenSQL = stats.RewrittenSQL()
 		formattedBindVars = stats.FmtBindVariables(fullBindParams)
@@ -214,7 +214,7 @@ func (stats *LogStats) Format(params url.Values) string {
 
 	// Valid options for the QueryLogFormat are text or json
 	var fmtString string
-	switch *servenv.QueryLogFormat {
+	switch *streamlog.QueryLogFormat {
 	case "text":
 		fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%q\t\n"
 	case "json":
