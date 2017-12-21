@@ -110,14 +110,14 @@ func (lkp *multiColLookupInternal) Create(vcursor VCursor, rowsColValues [][]sql
 
 	fmt.Fprintf(&insBuffer, "%s) values(", lkp.To)
 	bindVars := make(map[string]*querypb.BindVariable, 2*len(rowsColValues))
-	for rowIdx, _ := range toValues {
+	for rowIdx := range toValues {
 		colIds := rowsColValues[rowIdx]
 		if rowIdx != 0 {
 			insBuffer.WriteString(", (")
 		}
-		for colIdx, colId := range colIds {
+		for colIdx, colID := range colIds {
 			fromStr := lkp.FromColumns[colIdx] + strconv.Itoa(rowIdx)
-			bindVars[fromStr] = sqltypes.ValueBindVariable(colId)
+			bindVars[fromStr] = sqltypes.ValueBindVariable(colID)
 			insBuffer.WriteString(":" + fromStr + ", ")
 		}
 		toStr := lkp.To + strconv.Itoa(rowIdx)
