@@ -7,6 +7,8 @@ engines:
     enabled: true
   shellcheck:
     enabled: true
+  duplication:
+    enabled: false
 
 ratings:
   paths:
