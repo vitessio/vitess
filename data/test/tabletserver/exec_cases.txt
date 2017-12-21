@@ -637,6 +637,17 @@
   "FullQuery": "replace into b select * from a"
 }
 
+# update limit with pk
+"update d set foo='foo' where name in ('a', 'b') limit 1"
+{
+  "PlanID": "DML_SUBQUERY",
+  "TableName": "d",
+  "FullQuery": "update d set foo = 'foo' where name in ('a', 'b') limit 1",
+  "OuterQuery": "update d set foo = 'foo' where :#pk",
+  "Subquery": "select name from d where name in ('a', 'b') limit 1 for update",
+  "WhereClause": " where name in ('a', 'b')"
+}
+
 # update cross-db
 "update b.a set name='foo' where eid=1 and id=1"
 {
@@ -841,6 +852,17 @@
   "OuterQuery": "update a set name = 'foo' where :#pk order by id desc",
   "Subquery": "select eid, id from a where eid = 1 order by id desc limit :#maxLimit for update",
   "WhereClause": " where eid = 1"
+}
+
+# delete limit with pk
+"delete from d where name in ('a', 'b') limit 1"
+{
+  "PlanID": "DML_SUBQUERY",
+  "TableName": "d",
+  "FullQuery": "delete from d where name in ('a', 'b') limit 1",
+  "OuterQuery": "delete from d where :#pk",
+  "Subquery": "select name from d where name in ('a', 'b') limit 1 for update",
+  "WhereClause": " where name in ('a', 'b')"
 }
 
 # delete cross-db

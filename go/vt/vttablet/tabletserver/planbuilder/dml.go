@@ -76,9 +76,12 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 	plan.OuterQuery = GenerateUpdateOuterQuery(upd, nil)
 
 	if pkValues := analyzeWhere(upd.Where, table.Indexes[0]); pkValues != nil {
-		plan.PlanID = PlanDMLPK
-		plan.PKValues = pkValues
-		return plan, nil
+		// Also, there should be no limit clause.
+		if upd.Limit == nil {
+			plan.PlanID = PlanDMLPK
+			plan.PKValues = pkValues
+			return plan, nil
+		}
 	}
 
 	plan.PlanID = PlanDMLSubquery
@@ -125,9 +128,12 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
 	plan.OuterQuery = GenerateDeleteOuterQuery(del)
 
 	if pkValues := analyzeWhere(del.Where, table.Indexes[0]); pkValues != nil {
-		plan.PlanID = PlanDMLPK
-		plan.PKValues = pkValues
-		return plan, nil
+		// Also, there should be no limit clause.
+		if del.Limit == nil {
+			plan.PlanID = PlanDMLPK
+			plan.PKValues = pkValues
+			return plan, nil
+		}
 	}
 
 	plan.PlanID = PlanDMLSubquery
