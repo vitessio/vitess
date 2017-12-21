@@ -96,7 +96,7 @@ func TestLookupUniqueVerify(t *testing.T) {
 
 func TestLookupUniqueCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := lookupUnique.(Lookup).Create(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("test")}, false /* ignoreMode */)
+	err := lookupUnique.(Lookup).Create(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}}, [][]byte{[]byte("test")}, false /* ignoreMode */)
 	if err != nil {
 		t.Error(err)
 	}
@@ -104,7 +104,7 @@ func TestLookupUniqueCreate(t *testing.T) {
 		t.Errorf("vc.queries length: %v, want %v", got, want)
 	}
 
-	err = lookuphashunique.(Lookup).Create(nil, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("test1test23")}, false /* ignoreMode */)
+	err = lookuphashunique.(Lookup).Create(nil, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}}, [][]byte{[]byte("test1test23")}, false /* ignoreMode */)
 	want := "lookup.Create.vunhash: invalid keyspace id: 7465737431746573743233"
 	if err.Error() != want {
 		t.Error(err)
@@ -113,7 +113,7 @@ func TestLookupUniqueCreate(t *testing.T) {
 
 func TestLookupUniqueDelete(t *testing.T) {
 	vc := &vcursor{}
-	err := lookupUnique.(Lookup).Delete(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, []byte("test"))
+	err := lookupUnique.(Lookup).Delete(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}}, []byte("test"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -122,7 +122,7 @@ func TestLookupUniqueDelete(t *testing.T) {
 	}
 
 	//Negative Test
-	err = lookuphashunique.(Lookup).Delete(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, []byte("test1test23"))
+	err = lookuphashunique.(Lookup).Delete(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}}, []byte("test1test23"))
 	want := "lookup.Delete.vunhash: invalid keyspace id: 7465737431746573743233"
 	if err.Error() != want {
 		t.Error(err)
