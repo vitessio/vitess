@@ -26,6 +26,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
 
@@ -202,7 +203,7 @@ func (stats *LogStats) Format(params url.Values) string {
 	rewrittenSQL := "[REDACTED]"
 	formattedBindVars := "[REDACTED]"
 
-	if !*RedactDebugUIQueries {
+	if !*streamlog.RedactDebugUIQueries {
 		_, fullBindParams := params["full"]
 		rewrittenSQL = stats.RewrittenSQL()
 		formattedBindVars = stats.FmtBindVariables(fullBindParams)
@@ -210,8 +211,18 @@ func (stats *LogStats) Format(params url.Values) string {
 
 	// TODO: remove username here we fully enforce immediate caller id
 	remoteAddr, username := stats.RemoteAddrUsername()
+
+	// Valid options for the QueryLogFormat are text or json
+	var fmtString string
+	switch *streamlog.QueryLogFormat {
+	case "text":
+		fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%q\t\n"
+	case "json":
+		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanType\": %q, \"OriginalSQL\": %q, \"BindVars\": \"%v\", \"Queries\": %v, \"RewrittenSQL\": %q, \"QuerySources\": %q, \"MysqlTime\": %.6f, \"ConnWaitTime\": %.6f, \"RowsAffected\": %v, \"ResponseSize\": %v, \"Error\": %q}\n"
+	}
+
 	return fmt.Sprintf(
-		"%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%q\t\n",
+		fmtString,
 		stats.Method,
 		remoteAddr,
 		username,

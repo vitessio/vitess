@@ -26,6 +26,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/callinfo/fakecallinfo"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -51,6 +52,33 @@ func TestLogStats(t *testing.T) {
 	params := map[string][]string{"full": {}}
 
 	logStats.Format(url.Values(params))
+}
+
+func TestLogStatsFormat(t *testing.T) {
+	logStats := NewLogStats(context.Background(), "test")
+	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
+	logStats.EndTime = time.Date(2017, time.January, 1, 1, 2, 4, 0, time.UTC)
+	logStats.OriginalSQL = "sql1"
+	logStats.AddRewrittenSQL("sql1", time.Now())
+	logStats.MysqlResponseTime = 0
+
+	logStats.Rows = [][]sqltypes.Value{{sqltypes.NewVarBinary("a")}}
+
+	params := map[string][]string{"full": {}}
+	got := logStats.Format(url.Values(params))
+	want := "test\t\t\t''\t''\tJan  1 01:02:03.000000\tJan  1 01:02:04.000000\t1.000000\t\t\"sql1\"\tmap[]\t1\t\"sql1\"\tmysql\t0.000000\t0.000000\t0\t1\t\"\"\t\n"
+	if got != want {
+		t.Errorf("logstats text format: got:\n%q\nwant:\n%q\n", got, want)
+	}
+
+	*streamlog.QueryLogFormat = "json"
+	got = logStats.Format(url.Values(params))
+	want = "{\"Method\": \"test\", \"RemoteAddr\": \"\", \"Username\": \"\", \"ImmediateCaller\": \"\", \"Effective Caller\": \"\", \"Start\": \"Jan  1 01:02:03.000000\", \"End\": \"Jan  1 01:02:04.000000\", \"TotalTime\": 1.000000, \"PlanType\": \"\", \"OriginalSQL\": \"sql1\", \"BindVars\": \"map[]\", \"Queries\": 1, \"RewrittenSQL\": \"sql1\", \"QuerySources\": \"mysql\", \"MysqlTime\": 0.000000, \"ConnWaitTime\": 0.000000, \"RowsAffected\": 0, \"ResponseSize\": 1, \"Error\": \"\"}\n"
+	if got != want {
+		t.Errorf("logstats text format: got:\n%v\nwant:\n%v\n", got, want)
+	}
+
+	*streamlog.QueryLogFormat = "text"
 }
 
 func TestLogStatsFormatBindVariables(t *testing.T) {
