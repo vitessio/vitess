@@ -93,8 +93,13 @@ func init() {
 
 // Init must be called after flag.Parse, and before doing any other operations.
 func Init() {
-	StatsLogger.ServeLogs(*queryLogHandler, buildFmter(StatsLogger))
-	TxLogger.ServeLogs(*txLogHandler, buildFmter(TxLogger))
+	if *queryLogHandler != "" {
+		StatsLogger.ServeLogs(*queryLogHandler, buildFmter(StatsLogger))
+	}
+
+	if *txLogHandler != "" {
+		TxLogger.ServeLogs(*txLogHandler, buildFmter(TxLogger))
+	}
 }
 
 // TabletConfig contains all the configuration for query service

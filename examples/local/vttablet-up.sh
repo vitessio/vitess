@@ -19,7 +19,7 @@
 set -e
 
 cell='test'
-keyspace='test_keyspace'
+keyspace=${KEYSPACE:-'test_keyspace'}
 shard=${SHARD:-'0'}
 uid_base=${UID_BASE:-'100'}
 port_base=$[15000 + $uid_base]

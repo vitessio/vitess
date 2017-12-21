@@ -8,11 +8,12 @@ Vitess recommends that instances be broken up to be even smaller, and not to shy
 
 There are fewer lock contentions to worry about, replication is a lot happier, production impact of outages become smaller, backups and restores run faster, and a lot more secondary advantages can be realized. For example, you can shuffle instances around to get better machine or rack diversity leading to even smaller production impact on outages, and improved resource usage.
 
-### Cluster orchestration
+### Cloud Vs Baremetal
 
-Vitess started on baremetal at YouTube, and some still choose to run it that way.
-But running Vitess in a cluster orchestration system is the key to achieving the
-benefits of small instances without adding management overhead for each new instance.
+Although Vitess is designed to run in the cloud, it is entirely possible to
+run it on baremetal configs, and many users still do. If deploying in a cloud,
+the assignment of servers and ports is abstracted away from the administrator.
+On baremetal, the operator still has these responsibilities.
 
 We provide sample configs to help you [get started on Kubernetes](/getting-started/)
 since it's the most similar to Borg (the [predecessor to Kubernetes](http://blog.kubernetes.io/2015/04/borg-predecessor-to-kubernetes.html)
@@ -34,14 +35,14 @@ The new approach to durability is achieved by copying the data to multiple machi
 
 Many of the workflows in Vitess have been built with this approach in mind. For example, turning on semi-sync replication is highly recommended. This allows Vitess to failover to a new replica when a master goes down, with no data loss. Vitess also recommends that you avoid recovering a crashed database. Instead, create a fresh one from a recent backup and let it catch up.
 
-Relying on replication also allows you to loosen some of the disk-based durability settings. For example, you can turn off sync_binlog, which greatly reduces the number of IOPS to the disk thereby increasing effective throughput.
+Relying on replication also allows you to loosen some of the disk-based durability settings. For example, you can turn off sync\_binlog, which greatly reduces the number of IOPS to the disk thereby increasing effective throughput.
 
 ## Consistency model
 
-Distributing your data has its tradeoffs. Before sharding or moving tables to different keyspaces, the application needs to be verified (or changed) such that it can tolerate the following changes:
+Before sharding or moving tables to different keyspaces, the application needs to be verified (or changed) such that it can tolerate the following changes:
 
-* Cross-shard reads may not be consistent with each other.
-* Cross-shard transactions can fail in the middle and result in partial commits. There is a proposal out to make distributed transactions complete atomically, and on Vitess’ roadmap; however, that is not implemented yet.
+* Cross-shard reads may not be consistent with each other. Conversely, the sharding decision should also attempt to minimize such occurrences because cross-shard reads are more expensive.
+* In "best-effort mode", cross-shard transactions can fail in the middle and result in partial commits. You could instead use "2PC mode" transactions that give you distributed atomic guarantees. However, choosing this option increases the write cost by approximately 50%.
 
 Single shard transactions continue to remain ACID, just like MySQL supports it.
 
@@ -54,8 +55,14 @@ For true snapshot, the queries must be sent to the master within a transaction. 
 To summarize, these are the various levels of consistency supported:
 
 * REPLICA/RDONLY read: Servers be scaled geographically. Local reads are fast, but can be stale depending on replica lag.
-* MASTER read: There is only one worldwide master per shard. Reads coming from remote locations will be subject to network latency and reliability, but the data will be up-to-date (read-after-write consistency). The isolation level is READ_COMMITTED.
-* MASTER transactions: These exhibit the same properties as MASTER reads. However, you get REPEATABLE_READ consistency and ACID writes for a single shard. Support is underway for cross-shard Atomic transactions.
+* MASTER read: There is only one worldwide master per shard. Reads coming from remote locations will be subject to network latency and reliability, but the data will be up-to-date (read-after-write consistency). The isolation level is READ\_COMMITTED.
+* MASTER transactions: These exhibit the same properties as MASTER reads. However, you get REPEATABLE\_READ consistency and ACID writes for a single shard. Support is underway for cross-shard Atomic transactions.
+
+As for atomicity, the following levels are supported:
+
+* SINGLE: disallow multi-db transactions.
+* MULTI: multi-db transactions with best effort commit.
+* TWOPC: multi-db transactions with 2pc commit.
 
 ### No multi-master
 
@@ -202,53 +209,31 @@ A few things to consider:
 Although Vitess strives to minimize the app changes required to scale,
 there are some important considerations for application queries.
 
-### Bind variables
+### Commands specific to single MySQL instances
 
-We strongly recommend using bind variables for all data values in a query.
-In addition to being more secure (you don't need to worry about escaping
-bind variable values), this allows Vitess to recognize queries that come from
-the same code path in your app. Vitess can then cache the execution plan for
-that query, instead of recomputing it every time you send different values.
+Since vitess represents a combined view of all MySQL instances, there
+are some operations it cannot reasonably perform in a backward compatible
+manner. For example:
 
-This is similar to prepared statements in MySQL, and in fact that's how you
-would use bind variables with Vitess through a connector like JDBC or PDO.
-The difference is that Vitess connectors do not communicate with the server
-to prepare a statement. They just create a client-side object that wraps the
-query and bind variables so they can be sent together over the Vitess RPC
-interface.
+* <code>SET GLOBAL</code>
+* <code>SHOW</code>
+* Binary log commands
+* Other single keyspace administrative commands
 
-Note that bind variables are required when sending binary data, since the
-Vitess RPC interface requires the query itself to be valid UTF-8.
+However, Vitess allows you to target a single MySQL instance through
+an extended syntax of the <code>USE</code> statement. If so, it will
+allow you to execute some of these statements as pass-through.
 
-### Tablet types
+### Connecting to Vitess
 
-Since Vitess handles query routing for you and lets you access any
-instance in the cluster from any single VTGate endpoint,
-the Vitess clients have an additional parameter for you to specify
-which [tablet type]({% link overview/concepts.md %}#tablet-types) you want
-to send your query to.
+If your application previously connected to master or replica
+instances through different hosts and ports, those parts will
+have to be changed to connect to a single load-balanced IP.
 
-Writes must be directed to a *master* type tablet, as well as reads
-that should remain part of a larger write transaction.
-You also may want to read from the master if there are queries that
-must return the most up-to-date value possible, such as when reading
-a row that was just modified.
-
-Reads that can tolerate a small amount of replication lag should
-target *replica* type tablets. This allows you to scale your read
-traffic separately from writes by adding more replicas without
-needing to add more shards. Tablets of the *replica* type are
-candidates for being promoted to master, so it's important to
-define an operational policy that prevents them from becoming so
-overloaded that they fall behind on replication by more than a
-few seconds (which would make failovers slow).
-
-The *rdonly* tablet type defines a separate pool of slaves
-that are ineligible to become master. The separation makes it
-safe to allow these instances to get behind on replication
-(such as while executing expensive analytic queries)
-or have replication stopped altogether (when taking backups
-or clones for resharding).
+Instead, the database type will be specified as part of the
+db name. For example, to connect to a master, you would specify
+the dbname as <code>db@master</code>. For a replica, it would be
+<code>db@replica</code>.
 
 ### Query support
 

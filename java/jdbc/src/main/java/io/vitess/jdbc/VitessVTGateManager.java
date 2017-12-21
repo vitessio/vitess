@@ -16,16 +16,26 @@
 
 package io.vitess.jdbc;
 
+import java.io.File;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
+import java.util.logging.Level;
+
+import com.google.common.io.Closeables;
 
 import io.vitess.client.Context;
 import io.vitess.client.RpcClient;
 import io.vitess.client.VTGateConnection;
+import io.vitess.client.RefreshableVTGateConnection;
 import io.vitess.client.grpc.GrpcClientFactory;
 import io.vitess.client.grpc.RetryingInterceptorConfig;
 import io.vitess.client.grpc.tls.TlsOptions;
@@ -35,12 +45,13 @@ import io.vitess.util.Constants;
  * Created by naveen.nahata on 24/02/16.
  */
 public class VitessVTGateManager {
+    private static Logger logger = Logger.getLogger(VitessVTGateManager.class.getName());
     /*
     Current implementation have one VTGateConn for ip-port-username combination
     */
     private static ConcurrentHashMap<String, VTGateConnection> vtGateConnHashMap =
         new ConcurrentHashMap<>();
-
+    private static Timer vtgateConnRefreshTimer = null;
 
     /**
      * VTGateConnections object consist of vtGateIdentifire list and return vtGate object in round robin.
@@ -54,12 +65,25 @@ public class VitessVTGateManager {
          *
          * @param connection
          */
-        public VTGateConnections(VitessConnection connection) {
-            for (VitessJDBCUrl.HostInfo hostInfo : connection.getUrl().getHostInfos()) {
+        public VTGateConnections(final VitessConnection connection) {
+            for (final VitessJDBCUrl.HostInfo hostInfo : connection.getUrl().getHostInfos()) {
                 String identifier = getIdentifer(hostInfo.getHostname(), hostInfo.getPort(), connection.getUsername(), connection.getTarget());
                 synchronized (VitessVTGateManager.class) {
                     if (!vtGateConnHashMap.containsKey(identifier)) {
                         updateVtGateConnHashMap(identifier, hostInfo, connection);
+                    }
+                    if (connection.getUseSSL() && connection.getRefreshConnection() && vtgateConnRefreshTimer == null) {
+                        logger.info("ssl vtgate connection detected -- installing connection refresh based on ssl keystore modification");
+                        vtgateConnRefreshTimer = new Timer("ssl-refresh-vtgate-conn", true);
+                        vtgateConnRefreshTimer.scheduleAtFixedRate(
+                            new TimerTask() {
+                                @Override
+                                public void run() {
+                                    refreshUpdatedSSLConnections(hostInfo, connection);
+                                }
+                            },
+                            TimeUnit.SECONDS.toMillis(connection.getRefreshSeconds()),
+                            TimeUnit.SECONDS.toMillis(connection.getRefreshSeconds()));
                     }
                 }
                 vtGateIdentifiers.add(identifier);
@@ -97,6 +121,29 @@ public class VitessVTGateManager {
         vtGateConnHashMap.put(identifier, getVtGateConn(hostInfo, connection));
     }
 
+    private static void refreshUpdatedSSLConnections(VitessJDBCUrl.HostInfo hostInfo, VitessConnection connection) {
+        synchronized (VitessVTGateManager.class) {
+            int updatedCount = 0;
+            for (Map.Entry<String, VTGateConnection> entry : vtGateConnHashMap.entrySet()) {
+                if (entry.getValue() instanceof RefreshableVTGateConnection) {
+                    RefreshableVTGateConnection existing = (RefreshableVTGateConnection) entry.getValue();
+                    if (existing.checkKeystoreUpdates()) {
+                        updatedCount++;
+                        VTGateConnection old = vtGateConnHashMap.replace(entry.getKey(), getVtGateConn(hostInfo, connection));
+                        try {
+                            old.close();
+                        } catch (IOException ioe) {
+                            logger.log(Level.WARNING, "Error closing VTGateConnection", ioe);
+                        }
+                    }
+                }
+            }
+            if (updatedCount > 0) {
+                logger.info("refreshed " + updatedCount + " vtgate connections due to keystore update");
+            }
+        }
+    }
+
     /**
      * Create vtGateConn object with given identifier.
      *
@@ -107,7 +154,6 @@ public class VitessVTGateManager {
     private static VTGateConnection getVtGateConn(VitessJDBCUrl.HostInfo hostInfo, VitessConnection connection) {
         final Context context = connection.createContext(connection.getTimeout());
         RetryingInterceptorConfig retryingConfig = getRetryingInterceptorConfig(connection);
-        RpcClient client;
         if (connection.getUseSSL()) {
             final String keyStorePath = connection.getKeyStore() != null
                     ? connection.getKeyStore() : System.getProperty(Constants.Property.KEYSTORE_FULL);
@@ -133,11 +179,13 @@ public class VitessVTGateManager {
                     .trustStorePassword(trustStorePassword)
                     .trustAlias(trustAlias);
 
-            client = new GrpcClientFactory(retryingConfig).createTls(context, hostInfo.toString(), tlsOptions);
+            return new RefreshableVTGateConnection(
+                new GrpcClientFactory(retryingConfig).createTls(context, hostInfo.toString(), tlsOptions),
+                keyStorePath,
+                trustStorePath);
         } else {
-            client = new GrpcClientFactory(retryingConfig).create(context, hostInfo.toString());
+            return new VTGateConnection(new GrpcClientFactory(retryingConfig).create(context, hostInfo.toString()));
         }
-        return (new VTGateConnection(client));
     }
 
     private static RetryingInterceptorConfig getRetryingInterceptorConfig(VitessConnection conn) {
