@@ -154,7 +154,7 @@
     "Vindex": "user_index",
     "Values": [1],
     "ChangedVindexValues": {
-      "email_user_map": "juan@vitess.io"
+      "email_user_map": ["juan@vitess.io"]
     },
     "Table": "user_metadata",
     "Subquery": "select email, address from user_metadata where user_id = 1 for update"
@@ -175,8 +175,8 @@
     "Vindex": "user_index",
     "Values": [1],
     "ChangedVindexValues": {
-      "address_user_map": "155 5th street",
-      "email_user_map": "juan@vitess.io"
+      "address_user_map": ["155 5th street"],
+      "email_user_map": ["juan@vitess.io"]
     },
     "Table": "user_metadata",
     "Subquery": "select email, address from user_metadata where user_id = 1 for update"
@@ -199,7 +199,7 @@
       1
     ],
     "ChangedVindexValues": {
-      "email_user_map": "juan@vitess.io"
+      "email_user_map": ["juan@vitess.io"]
     },
     "Table": "user_metadata",
     "Subquery": "select email, address from user_metadata where user_id = 1 order by user_id asc limit 10 for update"
@@ -599,11 +599,7 @@
       "Sharded": true
     },
     "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
-    "Values": [
-      [":__seq0"],
-      [null],
-      [null]
-    ],
+    "Values": [[[":__seq0"]],[[null]],[[null]]],
     "Table": "user",
     "Generate": {
       "Keyspace": {
@@ -629,11 +625,7 @@
       "Sharded": true
     },
     "Query": "insert ignore into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
-    "Values": [
-      [":__seq0"],
-      [null],
-      [null]
-    ],
+    "Values": [[[":__seq0"]],[[null]],[[null]]],
     "Table": "user",
     "Generate": {
       "Keyspace": {
@@ -659,17 +651,7 @@
       "Sharded": true
     },
     "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0) on duplicate key update col = 2",
-    "Values": [
-      [
-        ":__seq0"
-      ],
-      [
-        null
-      ],
-      [
-        null
-      ]
-    ],
+    "Values": [[[":__seq0"]],[[null]],[[null]]],
     "Table": "user",
     "Generate": {
       "Keyspace": {
@@ -700,11 +682,7 @@
       "Sharded": true
     },
     "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
-    "Values": [
-      [":__seq0"],
-      [null],
-      [null]
-    ],
+    "Values": [[[":__seq0"]],[[null]],[[null]]],
     "Table": "user",
     "Generate": {
       "Keyspace": {
@@ -734,11 +712,7 @@
       "Sharded": true
     },
     "Query": "insert into user(nonid, id, Name, Costly) values (2, :_Id0, :_Name0, :_Costly0)",
-    "Values": [
-      [":__seq0"],
-      [null],
-      [null]
-    ],
+    "Values": [[[":__seq0"]],[[null]],[[null]]],
     "Table": "user",
     "Generate": {
       "Keyspace": {
@@ -764,11 +738,7 @@
       "Sharded": true
     },
     "Query": "insert into user(nonid, id, Name, Costly) values (true, :_Id0, :_Name0, :_Costly0)",
-    "Values": [
-      [":__seq0"],
-      [null],
-      [null]
-    ],
+    "Values": [[[":__seq0"]],[[null]],[[null]]],
     "Table": "user",
     "Generate": {
       "Keyspace": {
@@ -794,11 +764,7 @@
       "Sharded": true
     },
     "Query": "insert into user(nonid, name, id, Costly) values (2, :_Name0, :_Id0, :_Costly0)",
-    "Values": [
-      [":__seq0"],
-      ["foo"],
-      [null]
-    ],
+    "Values": [[[":__seq0"]],[["foo"]],[[null]]],
     "Table": "user",
     "Generate": {
       "Keyspace": {
@@ -824,9 +790,7 @@
       "Sharded": true
     },
     "Query": "insert into user_extra(nonid, extra_id, user_id) values (2, :__seq0, :_user_id0)",
-    "Values": [[
-      null
-    ]],
+    "Values": [[[null]]],
     "Table": "user_extra",
     "Generate": {
       "Keyspace": {
@@ -852,11 +816,7 @@
       "Sharded": true
     },
     "Query": "insert into `weird``name`(`a``b*c`, `b*c`) values (:_a_b_c0, 2)",
-    "Values": [
-      [
-        1
-      ]
-    ],
+    "Values": [[[1]]],
     "Table": "weird`name",
     "Prefix": "insert into `weird``name`(`a``b*c`, `b*c`) values ",
     "Mid": [
@@ -907,20 +867,7 @@
       "Sharded": true
     },
     "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0), (:_Id1, :_Name1, :_Costly1)",
-    "Values": [
-      [
-        ":__seq0",
-        ":__seq1"
-      ],
-      [
-        null,
-        null
-      ],
-      [
-        null,
-        null
-      ]
-    ],
+    "Values": [[[":__seq0"],[":__seq1"]],[[null],[null]],[[null],[null]]],
     "Table": "user",
     "Generate": {
       "Keyspace": {
