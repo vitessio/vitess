@@ -45,6 +45,14 @@ var (
 	deliveryDropCount = stats.NewMultiCounters("StreamlogDeliveryDroppedMessages", []string{"Log", "Subscriber"})
 )
 
+const (
+	// QueryLogFormatText is the format specifier for text querylog output
+	QueryLogFormatText = "text"
+
+	// QueryLogFormatJSON is the format specifier for json querylog output
+	QueryLogFormatJSON = "json"
+)
+
 // StreamLogger is a non-blocking broadcaster of messages.
 // Subscribers can use channels or HTTP.
 type StreamLogger struct {

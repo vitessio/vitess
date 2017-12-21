@@ -92,8 +92,8 @@ func init() {
 // Init must be called after flag.Parse, and before doing any other operations.
 func Init() {
 	switch *streamlog.QueryLogFormat {
-	case "text":
-	case "json":
+	case streamlog.QueryLogFormatText:
+	case streamlog.QueryLogFormatJSON:
 	default:
 		log.Exitf("Invalid querylog-format value %v: must be either text or json")
 	}

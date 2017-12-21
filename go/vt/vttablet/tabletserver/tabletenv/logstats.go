@@ -17,6 +17,7 @@ limitations under the License.
 package tabletenv
 
 import (
+	"bytes"
 	"fmt"
 	"html/template"
 	"net/url"
@@ -132,10 +133,17 @@ func (stats *LogStats) SizeOfResponse() int {
 	return size
 }
 
-// FmtBindVariables returns the map of bind variables as JSON. For
-// values that are strings or byte slices it only reports their type
-// and length.
+// FmtBindVariables returns the map of bind variables as a string or a json
+// string depending on the streamlog.QueryLogFormat value. If RedactDebugUIQueries
+// is true then this returns the string "[REDACTED]"
+//
+// For values that are strings or byte slices it only reports their type
+// and length unless full is true.
 func (stats *LogStats) FmtBindVariables(full bool) string {
+	if *streamlog.RedactDebugUIQueries {
+		return "\"[REDACTED]\""
+	}
+
 	var out map[string]*querypb.BindVariable
 	if full {
 		out = stats.BindVariables
@@ -151,6 +159,27 @@ func (stats *LogStats) FmtBindVariables(full bool) string {
 			}
 		}
 	}
+
+	if *streamlog.QueryLogFormat == streamlog.QueryLogFormatJSON {
+		var buf bytes.Buffer
+		buf.WriteString("{")
+		first := true
+		for k, v := range out {
+			if !first {
+				buf.WriteString(", ")
+			} else {
+				first = false
+			}
+			if sqltypes.IsIntegral(v.Type) || sqltypes.IsFloat(v.Type) {
+				fmt.Fprintf(&buf, "%q: {\"type\": %q, \"value\": %v}", k, v.Type, string(v.Value))
+			} else {
+				fmt.Fprintf(&buf, "%q: {\"type\": %q, \"value\": %q}", k, v.Type, string(v.Value))
+			}
+		}
+		buf.WriteString("}")
+		return buf.String()
+	}
+
 	return fmt.Sprintf("%v", out)
 }
 
@@ -201,13 +230,12 @@ func (stats *LogStats) RemoteAddrUsername() (string, string) {
 // Format returns a tab separated list of logged fields.
 func (stats *LogStats) Format(params url.Values) string {
 	rewrittenSQL := "[REDACTED]"
-	formattedBindVars := "[REDACTED]"
-
 	if !*streamlog.RedactDebugUIQueries {
-		_, fullBindParams := params["full"]
 		rewrittenSQL = stats.RewrittenSQL()
-		formattedBindVars = stats.FmtBindVariables(fullBindParams)
 	}
+
+	_, fullBindParams := params["full"]
+	formattedBindVars := stats.FmtBindVariables(fullBindParams)
 
 	// TODO: remove username here we fully enforce immediate caller id
 	remoteAddr, username := stats.RemoteAddrUsername()
@@ -215,10 +243,10 @@ func (stats *LogStats) Format(params url.Values) string {
 	// Valid options for the QueryLogFormat are text or json
 	var fmtString string
 	switch *streamlog.QueryLogFormat {
-	case "text":
+	case streamlog.QueryLogFormatText:
 		fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%q\t\n"
-	case "json":
-		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanType\": %q, \"OriginalSQL\": %q, \"BindVars\": \"%v\", \"Queries\": %v, \"RewrittenSQL\": %q, \"QuerySources\": %q, \"MysqlTime\": %.6f, \"ConnWaitTime\": %.6f, \"RowsAffected\": %v, \"ResponseSize\": %v, \"Error\": %q}\n"
+	case streamlog.QueryLogFormatJSON:
+		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanType\": %q, \"OriginalSQL\": %q, \"BindVars\": %v, \"Queries\": %v, \"RewrittenSQL\": %q, \"QuerySources\": %q, \"MysqlTime\": %.6f, \"ConnWaitTime\": %.6f, \"RowsAffected\": %v, \"ResponseSize\": %v, \"Error\": %q}\n"
 	}
 
 	return fmt.Sprintf(
