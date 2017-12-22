@@ -544,6 +544,24 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("show databases:\n%+v, want\n%+v", qr, wantqr)
 	}
 
+	qr, err = executor.Execute(context.Background(), session, "show vindexes", nil)
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("TestExecutor", "idx1", "hash", "", ""),
+			buildVarCharRow("TestExecutor", "idx_noauto", "hash", "", "noauto_table"),
+			buildVarCharRow("TestExecutor", "insert_ignore_idx", "lookup_hash", "from=fromcol, table=ins_lookup, to=tocol", "insert_ignore_test"),
+			buildVarCharRow("TestExecutor", "keyspace_id", "numeric", "", ""),
+			buildVarCharRow("TestExecutor", "music_user_map", "lookup_hash_unique", "from=music_id, table=music_user_map, to=user_id", "music"),
+			buildVarCharRow("TestExecutor", "name_user_map", "lookup_hash", "from=name, table=name_user_map, to=user_id", "user"),
+			buildVarCharRow("TestExecutor", "user_index", "hash", "", ""),
+		},
+		RowsAffected: 7,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show vindexes:\n%+v, want\n%+v", qr, wantqr)
+	}
+
 	// Make sure it still works when one of the keyspaces is in a bad state
 	getSandbox("TestExecutor").SrvKeyspaceMustFail++
 	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vitess_shards", nil)
