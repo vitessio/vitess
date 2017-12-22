@@ -549,48 +549,86 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 			RowsAffected: uint64(len(rows)),
 		}, nil
 	case sqlparser.KeywordString(sqlparser.VINDEXES):
+		vschema := e.srvVschema
+		if vschema == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema not loaded")
+		}
+
+		rows := make([][]sqltypes.Value, 0, 16)
+
 		if show.HasOnTable() {
-			return &sqltypes.Result{}, nil
-		} else {
-			vschema := e.srvVschema
-			if vschema == nil {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema not loaded")
+			// If the table is fully qualified, then override the keyspace setting
+			// in the session. Otherwise require it to be able to resolve the table.
+			ksName := show.OnTable.Qualifier.String()
+			if ksName == "" {
+				ksName = target.Keyspace
 			}
 
-			rows := make([][]sqltypes.Value, 0, 16)
-
-			// For the query interface to be stable we need to sort
-			// for each of the map iterations
-			ksNames := make([]string, 0, len(vschema.Keyspaces))
-			for name := range vschema.Keyspaces {
-				ksNames = append(ksNames, name)
+			ks, ok := vschema.Keyspaces[ksName]
+			if !ok {
+				return nil, errNoKeyspace
 			}
-			sort.Strings(ksNames)
-			for _, ksName := range ksNames {
-				ks, _ := vschema.Keyspaces[ksName]
 
-				vindexNames := make([]string, 0, len(ks.Vindexes))
-				for name := range ks.Vindexes {
-					vindexNames = append(vindexNames, name)
-				}
-				sort.Strings(vindexNames)
-				for _, vindexName := range vindexNames {
-					vindex, _ := ks.Vindexes[vindexName]
+			tableName := show.OnTable.Name.String()
 
+			table, ok := ks.Tables[tableName]
+			if !ok {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table `%s` does not exist in keyspace `%s`", tableName, ksName)
+			}
+
+			for _, colVindex := range table.ColumnVindexes {
+				vindex, ok := ks.Vindexes[colVindex.GetName()]
+				if ok {
 					params := make([]string, 0, 4)
 					for k, v := range vindex.GetParams() {
 						params = append(params, fmt.Sprintf("%s=%s", k, v))
 					}
 					sort.Strings(params)
-					rows = append(rows, buildVarCharRow(ksName, vindexName, vindex.GetType(), strings.Join(params, ", "), vindex.GetOwner()))
+					rows = append(rows, buildVarCharRow(colVindex.GetColumn(), colVindex.GetName(), vindex.GetType(), strings.Join(params, ", "), vindex.GetOwner()))
+				} else {
+					rows = append(rows, buildVarCharRow(colVindex.GetColumn(), colVindex.GetName(), "", "", ""))
 				}
 			}
+
 			return &sqltypes.Result{
-				Fields:       buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
+				Fields:       buildVarCharFields("Column", "Name", "Type", "Params", "Owner"),
 				Rows:         rows,
 				RowsAffected: uint64(len(rows)),
 			}, nil
 		}
+
+		// For the query interface to be stable we need to sort
+		// for each of the map iterations
+		ksNames := make([]string, 0, len(vschema.Keyspaces))
+		for name := range vschema.Keyspaces {
+			ksNames = append(ksNames, name)
+		}
+		sort.Strings(ksNames)
+		for _, ksName := range ksNames {
+			ks, _ := vschema.Keyspaces[ksName]
+
+			vindexNames := make([]string, 0, len(ks.Vindexes))
+			for name := range ks.Vindexes {
+				vindexNames = append(vindexNames, name)
+			}
+			sort.Strings(vindexNames)
+			for _, vindexName := range vindexNames {
+				vindex, _ := ks.Vindexes[vindexName]
+
+				params := make([]string, 0, 4)
+				for k, v := range vindex.GetParams() {
+					params = append(params, fmt.Sprintf("%s=%s", k, v))
+				}
+				sort.Strings(params)
+				rows = append(rows, buildVarCharRow(ksName, vindexName, vindex.GetType(), strings.Join(params, ", "), vindex.GetOwner()))
+			}
+		}
+		return &sqltypes.Result{
+			Fields:       buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
+			Rows:         rows,
+			RowsAffected: uint64(len(rows)),
+		}, nil
+
 	}
 
 	// Any other show statement is passed through
