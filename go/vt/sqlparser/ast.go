@@ -1060,9 +1060,13 @@ type Show struct {
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
 	buf.Myprintf("show %s", node.Type)
-	if node.OnTable.Name.v != "" {
+	if node.HasOnTable() {
 		buf.Myprintf(" on %v", node.OnTable)
 	}
+}
+
+func (node *Show) HasOnTable() bool {
+	return node.OnTable.Name.v != ""
 }
 
 // WalkSubtree walks the nodes of the subtree.
