@@ -81,19 +81,3 @@ insert into user (id, name, nickname, address) values(2, 'bob', 'bobby', '123 ma
 5 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
-insert into user (id, name, nickname, address) values(2, 'bob', 'bobby', '123 main st'), (3, 'jane', 'janie', '456 elm st')on duplicate key update nickname=values(nickname), address=values(address)
-
-1 ks_sharded/-40: begin
-1 ks_sharded/-40: insert ignore into name_user_map(name, user_id) values ('jane', 3) /* vtgate:: keyspace_id:2833d31717650107c367cdd51cb7d90c */
-1 ks_sharded/c0-: begin
-1 ks_sharded/c0-: insert ignore into name_user_map(name, user_id) values ('bob', 2) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */
-2 ks_sharded/c0-: select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
-3 ks_sharded/-40: select name from name_user_map where name = 'jane' and user_id = 3 limit 10001
-4 ks_sharded/-40: insert into user(id, name, nickname, address) values (2, 'bob', 'bobby', '123 main st') on duplicate key update nickname = values(nickname), address = values(address) /* vtgate:: keyspace_id:06e7ea22ce92708f */
-4 ks_sharded/40-80: begin
-4 ks_sharded/40-80: insert into user(id, name, nickname, address) values (3, 'jane', 'janie', '456 elm st') on duplicate key update nickname = values(nickname), address = values(address) /* vtgate:: keyspace_id:4eb190c9a2fa169c */
-5 ks_sharded/c0-: commit
-6 ks_sharded/-40: commit
-7 ks_sharded/40-80: commit
-
-----------------------------------------------------------------------
