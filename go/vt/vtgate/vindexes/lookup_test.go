@@ -38,7 +38,7 @@ type vcursor struct {
 	queries  []*querypb.BoundQuery
 }
 
-func (vc *vcursor) Execute(query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+func (vc *vcursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
 	vc.queries = append(vc.queries, &querypb.BoundQuery{
 		Sql:           query,
 		BindVariables: bindvars,
