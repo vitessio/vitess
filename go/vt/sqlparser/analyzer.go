@@ -94,6 +94,40 @@ func Preview(sql string) int {
 	return StmtUnknown
 }
 
+// StmtType returns the statement type as a string
+func StmtType(stmtType int) string {
+	switch stmtType {
+	case StmtSelect:
+		return "SELECT"
+	case StmtInsert:
+		return "INSERT"
+	case StmtReplace:
+		return "REPLACE"
+	case StmtUpdate:
+		return "UPDATE"
+	case StmtDelete:
+		return "DELETE"
+	case StmtDDL:
+		return "DDL"
+	case StmtBegin:
+		return "BEGIN"
+	case StmtCommit:
+		return "COMMIT"
+	case StmtRollback:
+		return "ROLLBACK"
+	case StmtSet:
+		return "SET"
+	case StmtShow:
+		return "SHOW"
+	case StmtUse:
+		return "USE"
+	case StmtOther:
+		return "OTHER"
+	default:
+		return "UNKNOWN"
+	}
+}
+
 // IsDML returns true if the query is an INSERT, UPDATE or DELETE statement.
 func IsDML(sql string) bool {
 	switch Preview(sql) {

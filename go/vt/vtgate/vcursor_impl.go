@@ -17,6 +17,8 @@ limitations under the License.
 package vtgate
 
 import (
+	"sync/atomic"
+
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -38,6 +40,7 @@ type vcursorImpl struct {
 	target           querypb.Target
 	trailingComments string
 	executor         *Executor
+	logStats         *LogStats
 	// hasPartialDML is set to true if any DML was successfully
 	// executed. If there was a subsequent failure, the transaction
 	// must be forced to rollback.
@@ -48,13 +51,14 @@ type vcursorImpl struct {
 // the query and supply it here. Trailing comments are typically sent by the application for various reasons,
 // including as identifying markers. So, they have to be added back to all queries that are executed
 // on behalf of the original query.
-func newVCursorImpl(ctx context.Context, session *vtgatepb.Session, target querypb.Target, trailingComments string, executor *Executor) *vcursorImpl {
+func newVCursorImpl(ctx context.Context, session *vtgatepb.Session, target querypb.Target, trailingComments string, executor *Executor, logStats *LogStats) *vcursorImpl {
 	return &vcursorImpl{
 		ctx:              ctx,
 		session:          session,
 		target:           target,
 		trailingComments: trailingComments,
 		executor:         executor,
+		logStats:         logStats,
 	}
 }
 
@@ -97,8 +101,8 @@ func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
 }
 
 // Execute performs a V3 level execution of the query. It does not take any routing directives.
-func (vc *vcursorImpl) Execute(query string, BindVars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	qr, err := vc.executor.Execute(vc.ctx, vc.session, query+vc.trailingComments, BindVars)
+func (vc *vcursorImpl) Execute(method string, query string, BindVars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+	qr, err := vc.executor.Execute(vc.ctx, method, vc.session, query+vc.trailingComments, BindVars)
 	if err == nil {
 		vc.hasPartialDML = true
 	}
@@ -107,6 +111,7 @@ func (vc *vcursorImpl) Execute(query string, BindVars map[string]*querypb.BindVa
 
 // ExecuteMultiShard executes different queries on different shards and returns the combined result.
 func (vc *vcursorImpl) ExecuteMultiShard(keyspace string, shardQueries map[string]*querypb.BoundQuery, isDML bool) (*sqltypes.Result, error) {
+	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(shardQueries)))
 	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, commentedShardQueries(shardQueries, vc.trailingComments), vc.target.TabletType, NewSafeSession(vc.session), false, vc.session.Options)
 	if err == nil {
 		vc.hasPartialDML = true
@@ -131,6 +136,7 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, BindVars map[string]*quer
 
 // StreamExeculteMulti is the streaming version of ExecuteMultiShard.
 func (vc *vcursorImpl) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
+	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(shardVars)))
 	return vc.executor.scatterConn.StreamExecuteMulti(vc.ctx, query+vc.trailingComments, keyspace, shardVars, vc.target.TabletType, vc.session.Options, callback)
 }
 

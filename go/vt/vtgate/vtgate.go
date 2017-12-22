@@ -202,6 +202,8 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server
 		}
 	})
 	vtgateOnce.Do(rpcVTGate.registerDebugHealthHandler)
+	initQueryLogger(rpcVTGate)
+
 	return rpcVTGate
 }
 
@@ -237,7 +239,7 @@ func (vtg *VTGate) Execute(ctx context.Context, session *vtgatepb.Session, sql s
 		goto handleError
 	}
 
-	qr, err = vtg.executor.Execute(ctx, session, sql, bindVariables)
+	qr, err = vtg.executor.Execute(ctx, "Execute", session, sql, bindVariables)
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 		return session, qr, nil
@@ -309,6 +311,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 	} else {
 		err = vtg.executor.StreamExecute(
 			ctx,
+			"StreamExecute",
 			session,
 			sql,
 			bindVariables,
@@ -360,6 +363,7 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables 
 		},
 		notInTransaction,
 		options,
+		nil,
 	)
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
