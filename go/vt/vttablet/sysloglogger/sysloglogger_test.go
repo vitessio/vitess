@@ -27,6 +27,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -92,7 +93,7 @@ func expectedLogStatsText(originalSQL string) string {
 // when redaction is enabled.
 func expectedRedactedLogStatsText(originalSQL string) string {
 	return fmt.Sprintf("Execute\t\t\t''\t''\tJan  1 00:00:00.000000\tJan  1 00:00:00.000000\t0.000000\tPASS_SELECT\t"+
-		"\"%s\"\t%s\t1\t\"%s\"\tmysql\t0.000000\t0.000000\t0\t0\t\"\"", originalSQL, "[REDACTED]", "[REDACTED]")
+		"\"%s\"\t%q\t1\t\"%s\"\tmysql\t0.000000\t0.000000\t0\t0\t\"\"", originalSQL, "[REDACTED]", "[REDACTED]")
 }
 
 // TestSyslog sends a stream of five query records to the plugin, and verifies that they are logged.
@@ -140,9 +141,9 @@ func TestSyslog(t *testing.T) {
 // when redaction is enabled.
 func TestSyslogRedacted(t *testing.T) {
 	// Overwrite the usual syslog writer and StatsLogger subscription channel with mocks
-	*tabletenv.RedactDebugUIQueries = true
+	*streamlog.RedactDebugUIQueries = true
 	defer func() {
-		*tabletenv.RedactDebugUIQueries = false
+		*streamlog.RedactDebugUIQueries = false
 	}()
 	mock := newFakeWriter()
 	writer = mock

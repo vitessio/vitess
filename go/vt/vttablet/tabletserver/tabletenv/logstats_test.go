@@ -17,6 +17,7 @@ limitations under the License.
 package tabletenv
 
 import (
+	"encoding/json"
 	"errors"
 	"net/url"
 	"strings"
@@ -26,6 +27,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/callinfo/fakecallinfo"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -51,6 +53,97 @@ func TestLogStats(t *testing.T) {
 	params := map[string][]string{"full": {}}
 
 	logStats.Format(url.Values(params))
+}
+
+func TestLogStatsFormat(t *testing.T) {
+	logStats := NewLogStats(context.Background(), "test")
+	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
+	logStats.EndTime = time.Date(2017, time.January, 1, 1, 2, 4, 0, time.UTC)
+	logStats.OriginalSQL = "sql"
+	logStats.BindVariables = map[string]*querypb.BindVariable{"intVal": sqltypes.Int64BindVariable(1)}
+	logStats.AddRewrittenSQL("sql with pii", time.Now())
+	logStats.MysqlResponseTime = 0
+	logStats.Rows = [][]sqltypes.Value{{sqltypes.NewVarBinary("a")}}
+	params := map[string][]string{"full": {}}
+
+	*streamlog.RedactDebugUIQueries = false
+	*streamlog.QueryLogFormat = "text"
+	got := logStats.Format(url.Values(params))
+	want := "test\t\t\t''\t''\tJan  1 01:02:03.000000\tJan  1 01:02:04.000000\t1.000000\t\t\"sql\"\tmap[intVal:type:INT64 value:\"1\" ]\t1\t\"sql with pii\"\tmysql\t0.000000\t0.000000\t0\t1\t\"\"\t\n"
+	if got != want {
+		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
+	}
+
+	*streamlog.RedactDebugUIQueries = true
+	*streamlog.QueryLogFormat = "text"
+	got = logStats.Format(url.Values(params))
+	want = "test\t\t\t''\t''\tJan  1 01:02:03.000000\tJan  1 01:02:04.000000\t1.000000\t\t\"sql\"\t\"[REDACTED]\"\t1\t\"[REDACTED]\"\tmysql\t0.000000\t0.000000\t0\t1\t\"\"\t\n"
+	if got != want {
+		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
+	}
+
+	*streamlog.RedactDebugUIQueries = false
+	*streamlog.QueryLogFormat = "json"
+	got = logStats.Format(url.Values(params))
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(got), &parsed)
+	if err != nil {
+		t.Errorf("logstats format: error unmarshaling json: %v -- got:\n%v", err, got)
+	}
+	formatted, err := json.MarshalIndent(parsed, "", "    ")
+	if err != nil {
+		t.Errorf("logstats format: error marshaling json: %v -- got:\n%v", err, got)
+	}
+	want = "{\n    \"BindVars\": {\n        \"intVal\": {\n            \"type\": \"INT64\",\n            \"value\": 1\n        }\n    },\n    \"ConnWaitTime\": 0,\n    \"Effective Caller\": \"\",\n    \"End\": \"Jan  1 01:02:04.000000\",\n    \"Error\": \"\",\n    \"ImmediateCaller\": \"\",\n    \"Method\": \"test\",\n    \"MysqlTime\": 0,\n    \"OriginalSQL\": \"sql\",\n    \"PlanType\": \"\",\n    \"Queries\": 1,\n    \"QuerySources\": \"mysql\",\n    \"RemoteAddr\": \"\",\n    \"ResponseSize\": 1,\n    \"RewrittenSQL\": \"sql with pii\",\n    \"RowsAffected\": 0,\n    \"Start\": \"Jan  1 01:02:03.000000\",\n    \"TotalTime\": 1,\n    \"Username\": \"\"\n}"
+	if string(formatted) != want {
+		t.Errorf("logstats format: got:\n%q\nwant:\n%v\n", string(formatted), want)
+	}
+
+	*streamlog.RedactDebugUIQueries = true
+	*streamlog.QueryLogFormat = "json"
+	got = logStats.Format(url.Values(params))
+	err = json.Unmarshal([]byte(got), &parsed)
+	if err != nil {
+		t.Errorf("logstats format: error unmarshaling json: %v -- got:\n%v", err, got)
+	}
+	formatted, err = json.MarshalIndent(parsed, "", "    ")
+	if err != nil {
+		t.Errorf("logstats format: error marshaling json: %v -- got:\n%v", err, got)
+	}
+	want = "{\n    \"BindVars\": \"[REDACTED]\",\n    \"ConnWaitTime\": 0,\n    \"Effective Caller\": \"\",\n    \"End\": \"Jan  1 01:02:04.000000\",\n    \"Error\": \"\",\n    \"ImmediateCaller\": \"\",\n    \"Method\": \"test\",\n    \"MysqlTime\": 0,\n    \"OriginalSQL\": \"sql\",\n    \"PlanType\": \"\",\n    \"Queries\": 1,\n    \"QuerySources\": \"mysql\",\n    \"RemoteAddr\": \"\",\n    \"ResponseSize\": 1,\n    \"RewrittenSQL\": \"[REDACTED]\",\n    \"RowsAffected\": 0,\n    \"Start\": \"Jan  1 01:02:03.000000\",\n    \"TotalTime\": 1,\n    \"Username\": \"\"\n}"
+	if string(formatted) != want {
+		t.Errorf("logstats format: got:\n%q\nwant:\n%v\n", string(formatted), want)
+	}
+
+	*streamlog.RedactDebugUIQueries = false
+
+	// Make sure formatting works for string bind vars. We can't do this as part of a single
+	// map because the output ordering is undefined.
+	logStats.BindVariables = map[string]*querypb.BindVariable{"strVal": sqltypes.StringBindVariable("abc")}
+
+	*streamlog.QueryLogFormat = "text"
+	got = logStats.Format(url.Values(params))
+	want = "test\t\t\t''\t''\tJan  1 01:02:03.000000\tJan  1 01:02:04.000000\t1.000000\t\t\"sql\"\tmap[strVal:type:VARCHAR value:\"abc\" ]\t1\t\"sql with pii\"\tmysql\t0.000000\t0.000000\t0\t1\t\"\"\t\n"
+	if got != want {
+		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
+	}
+
+	*streamlog.QueryLogFormat = "json"
+	got = logStats.Format(url.Values(params))
+	err = json.Unmarshal([]byte(got), &parsed)
+	if err != nil {
+		t.Errorf("logstats format: error unmarshaling json: %v -- got:\n%v", err, got)
+	}
+	formatted, err = json.MarshalIndent(parsed, "", "    ")
+	if err != nil {
+		t.Errorf("logstats format: error marshaling json: %v -- got:\n%v", err, got)
+	}
+	want = "{\n    \"BindVars\": {\n        \"strVal\": {\n            \"type\": \"VARCHAR\",\n            \"value\": \"abc\"\n        }\n    },\n    \"ConnWaitTime\": 0,\n    \"Effective Caller\": \"\",\n    \"End\": \"Jan  1 01:02:04.000000\",\n    \"Error\": \"\",\n    \"ImmediateCaller\": \"\",\n    \"Method\": \"test\",\n    \"MysqlTime\": 0,\n    \"OriginalSQL\": \"sql\",\n    \"PlanType\": \"\",\n    \"Queries\": 1,\n    \"QuerySources\": \"mysql\",\n    \"RemoteAddr\": \"\",\n    \"ResponseSize\": 1,\n    \"RewrittenSQL\": \"sql with pii\",\n    \"RowsAffected\": 0,\n    \"Start\": \"Jan  1 01:02:03.000000\",\n    \"TotalTime\": 1,\n    \"Username\": \"\"\n}"
+	if string(formatted) != want {
+		t.Errorf("logstats format: got:\n%q\nwant:\n%v\n", string(formatted), want)
+	}
+
+	*streamlog.QueryLogFormat = "text"
 }
 
 func TestLogStatsFormatBindVariables(t *testing.T) {
