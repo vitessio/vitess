@@ -995,3 +995,163 @@
 # replace invalid table
 "replace into noexist(music_id, user_id) values(1, 18446744073709551616)"
 "table noexist not found"
+
+# insert a row in a multi column vindex table
+"insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4)"
+{
+  "Original": "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a0, :_column_b0, :_column_c0, :_kid0)",
+    "Values": [
+      [
+        [
+          4
+        ]
+      ],
+      [
+        [
+          1
+        ]
+      ],
+      [
+        [
+          2,
+          3
+        ]
+      ]
+    ],
+    "Table": "multicolvin",
+    "Prefix": "insert into multicolvin(column_a, column_b, column_c, kid) values ",
+    "Mid": [
+      "(:_column_a0, :_column_b0, :_column_c0, :_kid0)"
+    ]
+  }
+}
+
+# insert multiple rows in a multi column vindex table
+"insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4), (5,6,7,8)"
+{
+  "Original": "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4), (5,6,7,8)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a0, :_column_b0, :_column_c0, :_kid0), (:_column_a1, :_column_b1, :_column_c1, :_kid1)",
+    "Values": [
+      [
+        [
+          4
+        ],
+        [
+          8
+        ]
+      ],
+      [
+        [
+          1
+        ],
+        [
+          5
+        ]
+      ],
+      [
+        [
+          2,
+          3
+        ],
+        [
+          6,
+          7
+        ]
+      ]
+    ],
+    "Table": "multicolvin",
+    "Prefix": "insert into multicolvin(column_a, column_b, column_c, kid) values ",
+    "Mid": [
+      "(:_column_a0, :_column_b0, :_column_c0, :_kid0)",
+      "(:_column_a1, :_column_b1, :_column_c1, :_kid1)"
+    ]
+  }
+}
+
+# delete row in a multi column vindex table
+"delete from multicolvin where kid=1"
+{
+  "Original": "delete from multicolvin where kid=1",
+  "Instructions": {
+    "Opcode": "DeleteEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete from multicolvin where kid = 1",
+    "Vindex": "kid_index",
+    "Values": [
+      1
+    ],
+    "Table": "multicolvin",
+    "Subquery": "select column_a, column_b, column_c from multicolvin where kid = 1 for update"
+  }
+}
+
+# update columns of multi column vindex
+"update multicolvin set column_b = 1, column_c = 2 where kid = 1"
+{
+  "Original": "update multicolvin set column_b = 1, column_c = 2 where kid = 1",
+  "Instructions": {
+    "Opcode": "UpdateEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update multicolvin set column_b = 1, column_c = 2 where kid = 1",
+    "Vindex": "kid_index",
+    "Values": [
+      1
+    ],
+    "ChangedVindexValues": {
+      "cola_colb_map": [
+        1,
+        2
+      ]
+    },
+    "Table": "multicolvin",
+    "Subquery": "select column_a, column_b, column_c from multicolvin where kid = 1 for update"
+  }
+}
+
+# update multiple vindexes, with multi column vindex
+"update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1"
+{
+  "Original": "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1",
+  "Instructions": {
+    "Opcode": "UpdateEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1",
+    "Vindex": "kid_index",
+    "Values": [
+      1
+    ],
+    "ChangedVindexValues": {
+      "cola_colb_map": [
+        1,
+        2
+      ],
+      "cola_map": [
+        0
+      ]
+    },
+    "Table": "multicolvin",
+    "Subquery": "select column_a, column_b, column_c from multicolvin where kid = 1 for update"
+  }
+}
