@@ -61,6 +61,15 @@ address varchar(64),
 primary key (user_id)
 ) Engine=InnoDB'''
 
+create_vt_multicolvin = '''create table vt_multicolvin (
+kid bigint,
+cola varchar(64),
+colb varchar(64),
+colc varchar(64),
+primary key (kid)
+) Engine=InnoDB'''
+
+
 create_vt_music = '''create table vt_music (
 user_id bigint,
 id bigint,
@@ -146,6 +155,19 @@ user_id bigint,
 primary key (lastname, user_id)
 ) Engine=InnoDB'''
 
+create_cola_map = '''create table cola_map (
+cola varchar(64),
+kid binary(8),
+primary key (cola, kid)
+) Engine=InnoDB'''
+
+create_colb_colc_map = '''create table colb_colc_map (
+colb varchar(64),
+colc varchar(64),
+kid binary(8),
+primary key (colb, colc, kid)
+) Engine=InnoDB'''
+
 create_address_user_extra2_map = '''create table address_user_extra2_map (
 address varchar(64),
 user_id bigint,
@@ -186,7 +208,7 @@ vschema = {
     'user': '''{
       "sharded": true,
       "vindexes": {
-        "user_index": {
+        "hash_index": {
           "type": "hash"
         },
         "unicode_hash": {
@@ -209,6 +231,24 @@ vschema = {
             "to": "user_id"
           },
           "owner": "vt_user_extra2"
+        },
+        "cola_map": {
+          "type": "lookup",
+          "params": {
+            "table": "cola_map",
+            "from": "cola",
+            "to": "kid"
+          },
+          "owner": "vt_multicolvin"
+        },
+        "colb_colc_map": {
+          "type": "lookup",
+          "params": {
+            "table": "colb_colc_map",
+            "from": "colb,colc",
+            "to": "kid"
+          },
+          "owner": "vt_multicolvin"
         },
         "address_user_extra2_map": {
           "type": "lookup_hash_unique",
@@ -251,7 +291,7 @@ vschema = {
           "column_vindexes": [
             {
               "column": "id",
-              "name": "user_index"
+              "name": "hash_index"
             }
           ],
           "auto_increment": {
@@ -263,7 +303,7 @@ vschema = {
           "column_vindexes": [
             {
               "column": "id",
-              "name": "user_index"
+              "name": "hash_index"
             },
             {
               "column": "name",
@@ -275,7 +315,7 @@ vschema = {
           "column_vindexes": [
             {
               "column": "user_id",
-              "name": "user_index"
+              "name": "hash_index"
             }
           ]
         },
@@ -283,7 +323,7 @@ vschema = {
           "column_vindexes": [
             {
               "column": "user_id",
-              "name": "user_index"
+              "name": "hash_index"
             },
             {
               "column": "lastname",
@@ -299,7 +339,7 @@ vschema = {
           "column_vindexes": [
             {
               "column": "user_id",
-              "name": "user_index"
+              "name": "hash_index"
             },
             {
               "column": "id",
@@ -319,7 +359,23 @@ vschema = {
             },
             {
               "column": "user_id",
-              "name": "user_index"
+              "name": "hash_index"
+            }
+          ]
+        },
+        "vt_multicolvin": {
+          "column_vindexes": [
+            {
+              "column": "kid",
+              "name": "hash_index"
+            },
+            {
+              "column": "cola",
+              "name": "cola_map"
+            },
+            {
+              "columns": ["colb", "colc"],
+              "name": "colb_colc_map"
             }
           ]
         },
@@ -335,7 +391,7 @@ vschema = {
             },
             {
               "column": "user_id",
-              "name": "user_index"
+              "name": "hash_index"
             }
           ]
         },
@@ -343,7 +399,7 @@ vschema = {
           "column_vindexes": [
             {
               "column": "id",
-              "name": "user_index"
+              "name": "hash_index"
             }
           ]
         },
@@ -351,7 +407,7 @@ vschema = {
           "column_vindexes": [
             {
               "column": "user_id",
-              "name": "user_index"
+              "name": "hash_index"
             }
           ]
         },
@@ -367,7 +423,7 @@ vschema = {
           "column_vindexes": [
             {
               "column": "user_id",
-              "name": "user_index"
+              "name": "hash_index"
             }
           ]
         }
@@ -386,6 +442,8 @@ vschema = {
           "type": "sequence"
         },
         "music_user_map": {},
+        "cola_map": {},
+        "colb_colc_map": {},
         "name_user2_map": {},
         "lastname_user_extra2_map": {},
         "address_user_extra2_map": {},
@@ -422,6 +480,7 @@ def setUpModule():
             create_vt_user2,
             create_vt_user_extra,
             create_vt_user_extra2,
+            create_vt_multicolvin,
             create_vt_music,
             create_vt_music_extra,
             create_upsert,
@@ -443,6 +502,8 @@ def setUpModule():
             create_name_user2_map,
             create_lastname_user_extra2_map,
             create_address_user_extra2_map,
+            create_cola_map,
+            create_colb_colc_map,
             create_upsert_primary,
             create_upsert_owned,
             create_main,
@@ -1016,6 +1077,79 @@ class TestVTGateFunctions(unittest.TestCase):
          [('lastname', self.string_type),
           ('address', self.string_type)]))
 
+  def test_multicolvin(self):
+    # multicolvin tests a table with a multi column vindex
+    vtgate_conn = get_connection()
+    vtgate_conn.begin()
+    result = self.execute_on_master(
+        vtgate_conn,
+        'insert into vt_multicolvin (cola, colb, colc, kid) '
+        'values (:cola, :colb, :colc, :kid)',
+        {'kid': 5, 'cola': 'cola_value', 'colb': 'colb_value', 'colc': 'colc_value'})
+    self.assertEqual(result, ([], 1L, 0L, []))
+    vtgate_conn.commit()
+
+    # Updating both vindexes
+    vtgate_conn.begin()
+    result = self.execute_on_master(
+        vtgate_conn,
+        'update vt_multicolvin set cola = :cola, colb = :colb, colc = :colc where kid = :kid',
+        {'kid': 5, 'cola': 'cola_newvalue', 'colb': 'colb_newvalue', 'colc': 'colc_newvalue'})
+    self.assertEqual(result, ([], 1L, 0L, []))
+    vtgate_conn.commit()
+    result = self.execute_on_master(
+        vtgate_conn, 'select cola, colb, colc from vt_multicolvin where kid = 5', {})
+    self.assertEqual(
+        result,
+        ([('cola_newvalue', 'colb_newvalue', 'colc_newvalue')], 1, 0,
+         [('cola', self.string_type),
+          ('colb', self.string_type),
+          ('colc', self.string_type)]))
+    result = lookup_master.mquery(
+        'vt_lookup', 'select cola from cola_map')
+    self.assertEqual(
+        result,
+        (('cola_newvalue',),))
+    result = lookup_master.mquery(
+        'vt_lookup', 'select colb, colc from colb_colc_map')
+    self.assertEqual(
+        result,
+        (('colb_newvalue', 'colc_newvalue'),))
+
+    # Updating only one vindex
+    vtgate_conn.begin()
+    result = self.execute_on_master(
+        vtgate_conn,
+        'update vt_multicolvin set colb = :colb, colc = :colc where kid = :kid',
+        {'kid': 5, 'colb': 'colb_newvalue2', 'colc': 'colc_newvalue2'})
+    self.assertEqual(result, ([], 1L, 0L, []))
+    vtgate_conn.commit()
+    result = self.execute_on_master(
+        vtgate_conn, 'select colb, colc from vt_multicolvin where kid = 5', {})
+    self.assertEqual(
+        result,
+        ([('colb_newvalue2', 'colc_newvalue2')], 1, 0,
+         [('colb', self.string_type),
+          ('colc', self.string_type)]))
+    result = lookup_master.mquery(
+        'vt_lookup', 'select colb, colc from colb_colc_map')
+    self.assertEqual(
+        result,
+        (('colb_newvalue2', 'colc_newvalue2'),))
+
+    # Works when inserting multiple rows
+    vtgate_conn = get_connection()
+    vtgate_conn.begin()
+    result = self.execute_on_master(
+        vtgate_conn,
+        'insert into vt_multicolvin (cola, colb, colc, kid) '
+        'values (:cola0, :colb0, :colc0, :kid0), (:cola1, :colb1, :colc1, :kid1)',
+        {'kid0': 6, 'cola0': 'cola0_value', 'colb0': 'colb0_value', 'colc0': 'colc0_value',
+         'kid1': 7, 'cola1': 'cola1_value', 'colb1': 'colb1_value', 'colc1': 'colc1_value'
+        })
+    self.assertEqual(result, ([], 2L, 0L, []))
+    vtgate_conn.commit()
+
   def test_music(self):
     # music is for testing owned lookup index
     vtgate_conn = get_connection()
@@ -1440,7 +1574,7 @@ class TestVTGateFunctions(unittest.TestCase):
     vtgate_conn = get_connection()
     result = self.execute_on_master(
         vtgate_conn,
-        'select id, keyspace_id from user_index where id = :id',
+        'select id, keyspace_id from hash_index where id = :id',
         {'id': 1})
     self.assertEqual(
         result,
