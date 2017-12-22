@@ -344,6 +344,8 @@ var keywords = map[string]int{
 	"varcharacter":        UNUSED,
 	"varying":             UNUSED,
 	"virtual":             UNUSED,
+	"vindex":              VINDEX,
+	"vindexes":            VINDEXES,
 	"view":                VIEW,
 	"vitess_keyspaces":    VITESS_KEYSPACES,
 	"vitess_shards":       VITESS_SHARDS,
