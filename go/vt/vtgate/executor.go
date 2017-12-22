@@ -393,7 +393,7 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 	}
 
 	switch show.Type {
-	case sqlparser.ShowDatabasesStr, sqlparser.ShowKeyspacesStr:
+	case sqlparser.KeywordString(sqlparser.DATABASES), sqlparser.KeywordString(sqlparser.VITESS_KEYSPACES):
 		keyspaces, err := getAllKeyspaces(ctx, e.serv, e.cell)
 		if err != nil {
 			return nil, err
@@ -409,7 +409,7 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 			Rows:         rows,
 			RowsAffected: uint64(len(rows)),
 		}, nil
-	case sqlparser.ShowShardsStr:
+	case sqlparser.KeywordString(sqlparser.VITESS_SHARDS):
 		keyspaces, err := getAllKeyspaces(ctx, e.serv, e.cell)
 		if err != nil {
 			return nil, err
@@ -434,7 +434,7 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 			Rows:         rows,
 			RowsAffected: uint64(len(rows)),
 		}, nil
-	case sqlparser.ShowVSchemaTablesStr:
+	case sqlparser.KeywordString(sqlparser.VSCHEMA_TABLES):
 		if target.Keyspace == "" {
 			return nil, errNoKeyspace
 		}
