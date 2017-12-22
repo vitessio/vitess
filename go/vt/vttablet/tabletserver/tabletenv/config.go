@@ -95,7 +95,7 @@ func Init() {
 	case streamlog.QueryLogFormatText:
 	case streamlog.QueryLogFormatJSON:
 	default:
-		log.Exitf("Invalid querylog-format value %v: must be either text or json")
+		log.Exitf("Invalid querylog-format value %v: must be either text or json", *streamlog.QueryLogFormat)
 	}
 
 	if *queryLogHandler != "" {
