@@ -108,7 +108,7 @@ func forceEOF(yylex interface{}) {
 %token LEX_ERROR
 %left <bytes> UNION
 %token <bytes> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
-%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK
+%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK KEYS
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
 %token <bytes> SQL_NO_CACHE SQL_CACHE
@@ -148,7 +148,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE
 %token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
-%token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN
+%token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 
 // Type Tokens
 %token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
@@ -244,7 +244,6 @@ func forceEOF(yylex interface{}) {
 %type <empty> force_eof ddl_force_eof
 %type <str> charset
 %type <convertType> convert_type
-%type <str> show_statement_type
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type
 %type <optVal> length_opt column_default_opt column_comment_opt on_update_opt
@@ -1020,34 +1019,85 @@ analyze_statement:
     $$ = &DDL{Action: AlterStr, Table: $3, NewName: $3}
   }
 
-show_statement_type:
-  ID
-  {
-    $$ = ShowUnsupportedStr
-  }
-| reserved_keyword
-  {
-    switch v := string($1); v {
-    case ShowDatabasesStr, ShowTablesStr:
-      $$ = v
-    default:
-      $$ = ShowUnsupportedStr
-    }
-  }
-| non_reserved_keyword
-{
-    switch v := string($1); v {
-    case ShowKeyspacesStr, ShowShardsStr, ShowVSchemaTablesStr:
-      $$ = v
-    default:
-      $$ = ShowUnsupportedStr
-    }
-}
-
 show_statement:
-  SHOW show_statement_type force_eof
+  SHOW BINARY ID ddl_force_eof /* SHOW BINARY LOGS */
   {
-    $$ = &Show{Type: $2}
+    $$ = &Show{Type: string($2) + " " + string($3)}
+  }
+| SHOW CHARACTER SET ddl_force_eof
+  {
+    $$ = &Show{Type: string($2) + " " + string($3)}
+  }
+| SHOW CREATE DATABASE ddl_force_eof
+  {
+    $$ = &Show{Type: string($2) + " " + string($3)}
+  }
+/* Rule to handle SHOW CREATE EVENT, SHOW CREATE FUNCTION, etc. */
+| SHOW CREATE ID ddl_force_eof
+  {
+    $$ = &Show{Type: string($2) + " " + string($3)}
+  }
+| SHOW CREATE PROCEDURE ddl_force_eof
+  {
+    $$ = &Show{Type: string($2) + " " + string($3)}
+  }
+| SHOW CREATE TABLE ddl_force_eof
+  {
+    $$ = &Show{Type: string($2) + " " + string($3)}
+  }
+| SHOW CREATE TRIGGER ddl_force_eof
+  {
+    $$ = &Show{Type: string($2) + " " + string($3)}
+  }
+| SHOW CREATE VIEW ddl_force_eof
+  {
+    $$ = &Show{Type: string($2) + " " + string($3)}
+  }
+| SHOW DATABASES ddl_force_eof
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW INDEX ddl_force_eof
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW KEYS ddl_force_eof
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW PROCEDURE ddl_force_eof
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW TABLE ddl_force_eof
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW TABLES ddl_force_eof
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW VITESS_KEYSPACES
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW VITESS_SHARDS
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW VSCHEMA_TABLES
+  {
+    $$ = &Show{Type: string($2)}
+  }
+/*
+ * Catch-all for show statements without vitess keywords:
+ *
+ *  SHOW BINARY LOGS
+ *  SHOW INVALID
+ */
+| SHOW ID ddl_force_eof
+  {
+    $$ = &Show{Type: string($2)}
   }
 
 use_statement:
@@ -2506,6 +2556,7 @@ non_reserved_keyword:
 | INT
 | INTEGER
 | JSON
+| KEYS
 | LANGUAGE
 | LAST_INSERT_ID
 | LESS
@@ -2522,6 +2573,7 @@ non_reserved_keyword:
 | OPTIMIZE
 | PARTITION
 | PRIMARY
+| PROCEDURE
 | QUERY
 | REAL
 | REORGANIZE
@@ -2536,6 +2588,7 @@ non_reserved_keyword:
 | TINYBLOB
 | TINYINT
 | TINYTEXT
+| TRIGGER
 | UNSIGNED
 | UNUSED
 | VARBINARY
