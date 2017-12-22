@@ -188,11 +188,11 @@
                     },
                     {
                         "Time": 4,
-                        "SQL": "select id from user where name = 'billy' limit 10001 for update /* vtgate:: keyspace_id:166b40b44aba4bd6 */"
+                        "SQL": "delete from user where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */"
                     },
                     {
                         "Time": 4,
-                        "SQL": "delete from user where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */"
+                        "SQL": "select id from user where name = 'billy' limit 10001 for update /* vtgate:: keyspace_id:166b40b44aba4bd6 */"
                     },
                     {
                         "Time": 6,
