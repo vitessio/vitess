@@ -20,8 +20,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"net/url"
 	"time"
+
+	log "github.com/golang/glog"
 
 	"github.com/golang/protobuf/proto"
 
@@ -33,9 +34,6 @@ import (
 var (
 	queryLogHandler = flag.String("query-log-stream-handler", "/debug/querylog", "URL handler for streaming queries log")
 	txLogHandler    = flag.String("transaction-log-stream-handler", "/debug/txlog", "URL handler for streaming transactions log")
-
-	// RedactDebugUIQueries controls whether full queries and bind variables are suppressed from debug UIs.
-	RedactDebugUIQueries = flag.Bool("redact-debug-ui-queries", false, "redact full queries and bind variables from debug UI")
 
 	// TxLogger can be used to enable logging of transactions.
 	// Call TxLogger.ServeLogs in your main program to enable logging.
@@ -93,12 +91,19 @@ func init() {
 
 // Init must be called after flag.Parse, and before doing any other operations.
 func Init() {
+	switch *streamlog.QueryLogFormat {
+	case streamlog.QueryLogFormatText:
+	case streamlog.QueryLogFormatJSON:
+	default:
+		log.Exitf("Invalid querylog-format value %v: must be either text or json", *streamlog.QueryLogFormat)
+	}
+
 	if *queryLogHandler != "" {
-		StatsLogger.ServeLogs(*queryLogHandler, buildFmter(StatsLogger))
+		StatsLogger.ServeLogs(*queryLogHandler, streamlog.GetFormatter(StatsLogger))
 	}
 
 	if *txLogHandler != "" {
-		TxLogger.ServeLogs(*txLogHandler, buildFmter(TxLogger))
+		TxLogger.ServeLogs(*txLogHandler, streamlog.GetFormatter(TxLogger))
 	}
 }
 
@@ -238,18 +243,4 @@ func VerifyConfig() error {
 		return fmt.Errorf("-hot_row_protection_concurrent_transactions must be > 0 (specified value: %v)", v)
 	}
 	return nil
-}
-
-func buildFmter(logger *streamlog.StreamLogger) func(url.Values, interface{}) string {
-	type formatter interface {
-		Format(url.Values) string
-	}
-
-	return func(params url.Values, val interface{}) string {
-		fmter, ok := val.(formatter)
-		if !ok {
-			return fmt.Sprintf("Error: unexpected value of type %T in %s!", val, logger.Name())
-		}
-		return fmter.Format(params)
-	}
 }
