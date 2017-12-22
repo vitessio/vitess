@@ -631,7 +631,7 @@ func (route *Route) updateChangedVindexes(subQueryResult *sqltypes.Result, vcurs
 		// NOOP, there are no actual rows changing due to this statement
 		return nil
 	}
-	for _, colVindex := range route.Table.Owned {
+	for tIdx, colVindex := range route.Table.Owned {
 		if colValues, ok := route.ChangedVindexValues[colVindex.Name]; ok {
 			if len(subQueryResult.Rows) > 1 {
 				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update changes multiple columns in the vindex")
@@ -654,7 +654,7 @@ func (route *Route) updateChangedVindexes(subQueryResult *sqltypes.Result, vcurs
 
 			for rowIdx, row := range subQueryResult.Rows {
 				for colIdx := range colVindex.Columns {
-					fromIds[rowIdx] = append(fromIds[rowIdx], row[rowIdx+colIdx])
+					fromIds[rowIdx] = append(fromIds[rowIdx], row[tIdx+colIdx])
 				}
 			}
 
