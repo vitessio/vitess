@@ -562,6 +562,51 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("show vindexes:\n%+v, want\n%+v", qr, wantqr)
 	}
 
+	qr, err = executor.Execute(context.Background(), session, "show vindexes on TestExecutor.user", nil)
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Column", "Name", "Type", "Params", "Owner"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("Id", "user_index", "hash", "", ""),
+			buildVarCharRow("name", "name_user_map", "lookup_hash", "from=name, table=name_user_map, to=user_id", "user"),
+		},
+		RowsAffected: 2,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show vindexes on TestExecutor.user:\n%+v, want\n%+v", qr, wantqr)
+	}
+
+	qr, err = executor.Execute(context.Background(), session, "show vindexes on user", nil)
+	wantErr := errNoKeyspace.Error()
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("show vindexes on user: %v, want %v", err, wantErr)
+	}
+
+	qr, err = executor.Execute(context.Background(), session, "show vindexes on TestExecutor.garbage", nil)
+	wantErr = "table `garbage` does not exist in keyspace `TestExecutor`"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("show vindexes on user: %v, want %v", err, wantErr)
+	}
+
+	session.TargetString = "TestExecutor"
+	qr, err = executor.Execute(context.Background(), session, "show vindexes on user", nil)
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Column", "Name", "Type", "Params", "Owner"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("Id", "user_index", "hash", "", ""),
+			buildVarCharRow("name", "name_user_map", "lookup_hash", "from=name, table=name_user_map, to=user_id", "user"),
+		},
+		RowsAffected: 2,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show vindexes on user:\n%+v, want\n%+v", qr, wantqr)
+	}
+
+	qr, err = executor.Execute(context.Background(), session, "show vindexes on garbage", nil)
+	wantErr = "table `garbage` does not exist in keyspace `TestExecutor`"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("show vindexes on user: %v, want %v", err, wantErr)
+	}
+
 	// Make sure it still works when one of the keyspaces is in a bad state
 	getSandbox("TestExecutor").SrvKeyspaceMustFail++
 	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vitess_shards", nil)
