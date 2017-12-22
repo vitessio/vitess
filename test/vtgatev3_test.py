@@ -69,7 +69,6 @@ colc varchar(64),
 primary key (kid)
 ) Engine=InnoDB'''
 
-
 create_vt_music = '''create table vt_music (
 user_id bigint,
 id bigint,
