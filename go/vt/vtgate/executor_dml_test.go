@@ -92,6 +92,57 @@ func TestUpdateEqual(t *testing.T) {
 	if sbc1.Queries != nil {
 		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
 	}
+
+	sbc1.Queries = nil
+	sbc2.Queries = nil
+	sbclookup.Queries = nil
+	_, err = executorExec(executor, "update user2 set name='myname', lastname='mylastname' where id = 1", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []*querypb.BoundQuery{
+		{
+			Sql:           "select name, lastname from user2 where id = 1 for update",
+			BindVariables: map[string]*querypb.BindVariable{},
+		},
+		{
+			Sql: "update user2 set name = 'myname', lastname = 'mylastname' where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+			BindVariables: map[string]*querypb.BindVariable{
+				"_name0":     sqltypes.BytesBindVariable([]byte("myname")),
+				"_lastname0": sqltypes.BytesBindVariable([]byte("mylastname")),
+			},
+		},
+	}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+	}
+
+	wantQueries = []*querypb.BoundQuery{
+		{
+			Sql: "delete from name_lastname_user_map where name = :name and lastname = :lastname and user_id = :user_id",
+			BindVariables: map[string]*querypb.BindVariable{
+				"lastname": sqltypes.StringBindVariable("foo"),
+				"name":     sqltypes.Int32BindVariable(1),
+				"user_id":  sqltypes.BytesBindVariable([]byte("\026k@\264J\272K\326")),
+			},
+		},
+		{
+			Sql: "insert into name_lastname_user_map(name, lastname, user_id) values (:name0, :lastname0, :user_id0)",
+			BindVariables: map[string]*querypb.BindVariable{
+				"name0":     sqltypes.BytesBindVariable([]byte("myname")),
+				"lastname0": sqltypes.BytesBindVariable([]byte("mylastname")),
+				"user_id0":  sqltypes.BytesBindVariable([]byte("\026k@\264J\272K\326")),
+			},
+		},
+	}
+
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
+	}
+
 }
 
 func TestUpdateComments(t *testing.T) {
@@ -187,6 +238,12 @@ func TestUpdateEqualFail(t *testing.T) {
 		t.Errorf("executorExec: %v, want prefix %v", err, want)
 	}
 	s.ShardSpec = DefaultShardSpec
+
+	_, err = executorExec(executor, "update user2 set name='myname' where id = 1", nil)
+	want = "transaction rolled back due to partial DML execution: execUpdateEqual: unsupported: update does not have values for all the columns in the vindex"
+	if err == nil || err.Error() != want {
+		t.Errorf("executorExec: %v, want %v", err, want)
+	}
 }
 
 func TestDeleteEqual(t *testing.T) {
@@ -425,6 +482,23 @@ func TestInsertSharded(t *testing.T) {
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: \n%+v, want \n%+v\n", sbclookup.Queries, wantQueries)
+	}
+
+	sbc1.Queries = nil
+	_, err = executorExec(executor, "insert into user2(id, name, lastname) values (2, 'myname', 'mylastname')", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []*querypb.BoundQuery{{
+		Sql: "insert into user2(id, name, lastname) values (:_id0, :_name0, :_lastname0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+		BindVariables: map[string]*querypb.BindVariable{
+			"_id0":       sqltypes.Int64BindVariable(2),
+			"_name0":     sqltypes.BytesBindVariable([]byte("myname")),
+			"_lastname0": sqltypes.BytesBindVariable([]byte("mylastname")),
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
 	}
 }
 
@@ -1211,6 +1285,28 @@ func TestMultiInsertSharded(t *testing.T) {
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: \n%+v, want \n%+v\n", sbclookup.Queries, wantQueries)
+	}
+
+	// Insert multiple rows in a multi column vindex
+	sbc1.Queries = nil
+	sbc2.Queries = nil
+	_, err = executorExec(executor, "insert into user2(id, name, lastname) values (2, 'myname', 'mylastname'), (3, 'myname2', 'mylastname2')", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []*querypb.BoundQuery{{
+		Sql: "insert into user2(id, name, lastname) values (:_id0, :_name0, :_lastname0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+		BindVariables: map[string]*querypb.BindVariable{
+			"_id0":       sqltypes.Int64BindVariable(2),
+			"_name0":     sqltypes.BytesBindVariable([]byte("myname")),
+			"_lastname0": sqltypes.BytesBindVariable([]byte("mylastname")),
+			"_id1":       sqltypes.Int64BindVariable(3),
+			"_name1":     sqltypes.BytesBindVariable([]byte("myname2")),
+			"_lastname1": sqltypes.BytesBindVariable([]byte("mylastname2")),
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
 	}
 }
 

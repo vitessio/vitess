@@ -576,11 +576,12 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("ins_lookup"),
 			buildVarCharRow("main1"),
 			buildVarCharRow("music_user_map"),
+			buildVarCharRow("name_lastname_user_map"),
 			buildVarCharRow("name_user_map"),
 			buildVarCharRow("simple"),
 			buildVarCharRow("user_seq"),
 		},
-		RowsAffected: 7,
+		RowsAffected: 8,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
 		t.Errorf("show vschema_tables:\n%+v, want\n%+v", qr, wantqr)
