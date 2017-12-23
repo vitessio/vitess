@@ -59,7 +59,7 @@ func (lkp *multiColLookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value)
 		bindVars := map[string]*querypb.BindVariable{
 			lkp.FromColumns[0]: sqltypes.ValueBindVariable(id),
 		}
-		result, err := vcursor.Execute(lkp.sel, bindVars, false /* isDML */)
+		result, err := vcursor.Execute("VindexLookup", lkp.sel, bindVars, false /* isDML */)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
@@ -77,7 +77,7 @@ func (lkp *multiColLookupInternal) Verify(vcursor VCursor, ids, values []sqltype
 			lkp.FromColumns[0]: sqltypes.ValueBindVariable(id),
 			lkp.To:             sqltypes.ValueBindVariable(values[i]),
 		}
-		result, err := vcursor.Execute(lkp.ver, bindVars, true /* isDML */)
+		result, err := vcursor.Execute("VindexVerify", lkp.ver, bindVars, true /* isDML */)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Verify: %v", err)
 		}
@@ -124,7 +124,7 @@ func (lkp *multiColLookupInternal) Create(vcursor VCursor, rowsColValues [][]sql
 		insBuffer.WriteString(":" + toStr + ")")
 		bindVars[toStr] = sqltypes.ValueBindVariable(toValues[rowIdx])
 	}
-	_, err := vcursor.Execute(insBuffer.String(), bindVars, true /* isDML */)
+	_, err := vcursor.Execute("VindexCreate", insBuffer.String(), bindVars, true /* isDML */)
 	if err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
 	}
@@ -153,7 +153,7 @@ func (lkp *multiColLookupInternal) Delete(vcursor VCursor, rowsColValues [][]sql
 			bindVars[lkp.FromColumns[colIdx]] = sqltypes.ValueBindVariable(columnValue)
 		}
 		bindVars[lkp.To] = sqltypes.ValueBindVariable(value)
-		_, err := vcursor.Execute(lkp.del, bindVars, true /* isDML */)
+		_, err := vcursor.Execute("VindexDelete", lkp.del, bindVars, true /* isDML */)
 		if err != nil {
 			return fmt.Errorf("lookup.Delete: %v", err)
 		}
