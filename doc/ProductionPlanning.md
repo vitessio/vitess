@@ -52,7 +52,7 @@ parameters, they need to be specified for each Vitess process.
 
 For sizing purposes, the Vitess processes do not access the lock service very
 much. Each *vtgate* process keeps a few watches on a few local nodes (VSchema
-and SrvKeyspace). Each *vttablet* process will keep its on Tablet record up to
+and SrvKeyspace). Each *vttablet* process will keep its own Tablet record up to
 date, but it usually doesn't change. The *vtctld* process will access it a lot
 more, but only on demand to display web pages.
 
