@@ -33,7 +33,7 @@ rather than baking them into a custom container image.
 When a new instance is initialized with `mysqlctl init` (as opposed to
 restarting in a previously initialized data dir with `mysqlctl start`),
 the [init_db.sql](https://github.com/youtube/vitess/blob/master/config/init_db.sql)
-file is applied to the server immediatley after executing `mysql_install_db`.
+file is applied to the server immediately after executing `mysql_install_db`.
 By default, this file contains the equivalent of running
 [mysql_secure_installation](https://dev.mysql.com/doc/refman/5.7/en/mysql-secure-installation.html),
 as well as the necessary tables and grants for Vitess.
