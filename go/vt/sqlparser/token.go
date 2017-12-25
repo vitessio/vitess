@@ -206,7 +206,7 @@ var keywords = map[string]int{
 	"join":                JOIN,
 	"json":                JSON,
 	"key":                 KEY,
-	"keys":                UNUSED,
+	"keys":                KEYS,
 	"kill":                UNUSED,
 	"language":            LANGUAGE,
 	"last_insert_id":      LAST_INSERT_ID,
@@ -261,7 +261,7 @@ var keywords = map[string]int{
 	"partition":           PARTITION,
 	"precision":           UNUSED,
 	"primary":             PRIMARY,
-	"procedure":           UNUSED,
+	"procedure":           PROCEDURE,
 	"query":               QUERY,
 	"range":               UNUSED,
 	"read":                UNUSED,
@@ -323,7 +323,7 @@ var keywords = map[string]int{
 	"tinytext":            TINYTEXT,
 	"to":                  TO,
 	"trailing":            UNUSED,
-	"trigger":             UNUSED,
+	"trigger":             TRIGGER,
 	"true":                TRUE,
 	"truncate":            TRUNCATE,
 	"undo":                UNUSED,
@@ -369,6 +369,15 @@ func init() {
 		}
 		keywordStrings[id] = str
 	}
+}
+
+// KeywordString returns the string corresponding to the given keyword
+func KeywordString(id int) string {
+	str, ok := keywordStrings[id]
+	if !ok {
+		return ""
+	}
+	return str
 }
 
 // Lex returns the next token form the Tokenizer.

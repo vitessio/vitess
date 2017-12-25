@@ -22,6 +22,7 @@ package vtexplain
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
@@ -113,7 +114,7 @@ func buildTopology(vschemaStr string, numShardsPerKeyspace int) error {
 }
 
 func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error) {
-	_, err := vtgateExecutor.Execute(context.Background(), vtgateSession, sql, nil)
+	_, err := vtgateExecutor.Execute(context.Background(), "VtexplainExecute", vtgateSession, sql, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("vtexplain execute error: %v in %s", err, sql)
 	}
@@ -133,13 +134,17 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error
 			continue
 		}
 
-		tabletActions[shard] = &TabletActions{
+		actions := &TabletActions{
 			TabletQueries: tc.tabletQueries,
 			MysqlQueries:  tc.mysqlQueries,
 		}
 
 		tc.tabletQueries = nil
 		tc.mysqlQueries = nil
+
+		sort.Sort(actions.TabletQueries)
+		sort.Sort(actions.MysqlQueries)
+		tabletActions[shard] = actions
 	}
 
 	return plans, tabletActions, nil

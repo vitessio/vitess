@@ -35,6 +35,9 @@ import (
 func TestUpdateEqual(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
 	_, err := executorExec(executor, "update user set a=2 where id = 1", nil)
 	if err != nil {
 		t.Error(err)
@@ -49,6 +52,7 @@ func TestUpdateEqual(t *testing.T) {
 	if sbc2.Queries != nil {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
+	testQueryLog(t, logChan, "TestExecute", "UPDATE", "update user set a=2 where id = 1", 1)
 
 	sbc1.Queries = nil
 	_, err = executorExec(executor, "update user set a=2 where id = 3", nil)
@@ -357,6 +361,9 @@ func TestDeleteEqualFail(t *testing.T) {
 func TestInsertSharded(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
 	_, err := executorExec(executor, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
 	if err != nil {
 		t.Error(err)
@@ -385,6 +392,9 @@ func TestInsertSharded(t *testing.T) {
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: \n%+v, want \n%+v", sbclookup.Queries, wantQueries)
 	}
+
+	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(name, user_id) values(:name0, :user_id0)", 1)
+	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into user(id, v, name) values (1, 2, 'myname')", 1)
 
 	sbc1.Queries = nil
 	sbclookup.Queries = nil
@@ -1081,6 +1091,7 @@ func TestInsertPartialFail1(t *testing.T) {
 
 	_, err := executor.Execute(
 		context.Background(),
+		"TestExecute",
 		&vtgatepb.Session{InTransaction: true},
 		"insert into user(id, v, name) values (1, 2, 'myname')",
 		nil,
@@ -1102,6 +1113,7 @@ func TestInsertPartialFail2(t *testing.T) {
 
 	_, err := executor.Execute(
 		context.Background(),
+		"TestExecute",
 		&vtgatepb.Session{InTransaction: true},
 		"insert into user(id, v, name) values (1, 2, 'myname')",
 		nil,

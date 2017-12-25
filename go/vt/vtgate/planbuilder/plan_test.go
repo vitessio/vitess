@@ -30,6 +30,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -155,6 +156,13 @@ func (vw *vschemaWrapper) DefaultKeyspace() (*vindexes.Keyspace, error) {
 	return vw.v.Keyspaces["main"].Keyspace, nil
 }
 
+// For the purposes of this set of tests, just compare the actual plan
+// and ignore all the metrics.
+type testPlan struct {
+	Original     string           `json:",omitempty"`
+	Instructions engine.Primitive `json:",omitempty"`
+}
+
 func testFile(t *testing.T, filename string, vschema *vindexes.VSchema) {
 	for tcase := range iterateExecFile(filename) {
 		plan, err := Build(tcase.input, &vschemaWrapper{
@@ -164,7 +172,10 @@ func testFile(t *testing.T, filename string, vschema *vindexes.VSchema) {
 		if err != nil {
 			out = err.Error()
 		} else {
-			bout, _ := json.Marshal(plan)
+			bout, _ := json.Marshal(testPlan{
+				Original:     plan.Original,
+				Instructions: plan.Instructions,
+			})
 			out = string(bout)
 		}
 		if out != tcase.output {
