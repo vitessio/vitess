@@ -806,11 +806,149 @@ var (
 		input:  "analyze table a",
 		output: "alter table a",
 	}, {
+		input:  "show binary logs",
+		output: "show binary logs",
+	}, {
+		input:  "show binlog events",
+		output: "show binlog",
+	}, {
+		input:  "show character set",
+		output: "show character set",
+	}, {
+		input:  "show character set like '%foo'",
+		output: "show character set",
+	}, {
+		input:  "show collation",
+		output: "show collation",
+	}, {
+		input:  "show create database d",
+		output: "show create database",
+	}, {
+		input:  "show create event e",
+		output: "show create event",
+	}, {
+		input:  "show create function f",
+		output: "show create function",
+	}, {
+		input:  "show create procedure p",
+		output: "show create procedure",
+	}, {
+		input:  "show create table t",
+		output: "show create table",
+	}, {
+		input:  "show create trigger t",
+		output: "show create trigger",
+	}, {
+		input:  "show create user u",
+		output: "show create user",
+	}, {
+		input:  "show create view v",
+		output: "show create view",
+	}, {
 		input:  "show databases",
 		output: "show databases",
 	}, {
+		input:  "show engine INNODB",
+		output: "show engine",
+	}, {
+		input:  "show engines",
+		output: "show engines",
+	}, {
+		input:  "show storage engines",
+		output: "show storage",
+	}, {
+		input:  "show errors",
+		output: "show errors",
+	}, {
+		input:  "show events",
+		output: "show events",
+	}, {
+		input:  "show function code func",
+		output: "show function",
+	}, {
+		input:  "show function status",
+		output: "show function",
+	}, {
+		input:  "show grants for 'root@localhost'",
+		output: "show grants",
+	}, {
+		input:  "show index from table",
+		output: "show index",
+	}, {
+		input:  "show indexes from table",
+		output: "show indexes",
+	}, {
+		input:  "show keys from table",
+		output: "show keys",
+	}, {
+		input:  "show master status",
+		output: "show master",
+	}, {
+		input:  "show open tables",
+		output: "show open",
+	}, {
+		input:  "show plugins",
+		output: "show plugins",
+	}, {
+		input:  "show privileges",
+		output: "show privileges",
+	}, {
+		input:  "show procedure code p",
+		output: "show procedure",
+	}, {
+		input:  "show procedure status",
+		output: "show procedure",
+	}, {
+		input:  "show processlist",
+		output: "show processlist",
+	}, {
+		input:  "show full processlist",
+		output: "show full",
+	}, {
+		input:  "show profile cpu for query 1",
+		output: "show profile",
+	}, {
+		input:  "show profiles",
+		output: "show profiles",
+	}, {
+		input:  "show relaylog events",
+		output: "show relaylog",
+	}, {
+		input:  "show slave hosts",
+		output: "show slave",
+	}, {
+		input:  "show slave status",
+		output: "show slave",
+	}, {
+		input:  "show status",
+		output: "show status",
+	}, {
+		input:  "show global status",
+		output: "show global",
+	}, {
+		input:  "show session status",
+		output: "show session",
+	}, {
+		input:  "show table status",
+		output: "show table",
+	}, {
 		input:  "show tables",
 		output: "show tables",
+	}, {
+		input:  "show full tables",
+		output: "show full",
+	}, {
+		input:  "show triggers",
+		output: "show triggers",
+	}, {
+		input:  "show variables",
+		output: "show variables",
+	}, {
+		input:  "show global variables",
+		output: "show global",
+	}, {
+		input:  "show session variables",
+		output: "show session",
 	}, {
 		input:  "show vitess_keyspaces",
 		output: "show vitess_keyspaces",
@@ -821,11 +959,14 @@ var (
 		input:  "show vschema_tables",
 		output: "show vschema_tables",
 	}, {
-		input:  "show create database",
-		output: "show unsupported",
+		input:  "show warnings",
+		output: "show warnings",
 	}, {
 		input:  "show foobar",
-		output: "show unsupported",
+		output: "show foobar",
+	}, {
+		input:  "show foobar like select * from table where syntax is 'ignored'",
+		output: "show foobar",
 	}, {
 		input:  "use db",
 		output: "use db",

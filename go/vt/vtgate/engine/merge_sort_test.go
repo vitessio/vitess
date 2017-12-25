@@ -338,7 +338,7 @@ func (t *fakeVcursor) Context() context.Context {
 	return context.Background()
 }
 
-func (t *fakeVcursor) Execute(query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+func (t *fakeVcursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
 
