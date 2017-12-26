@@ -64,3 +64,10 @@ _test/
 /web/vtctld2/bower.json~
 /web/vtctld2/public/bower_components/
 
+bin/
+config/config
+data/data
+dist/
+lib/
+py-vtdb
+vthook/
