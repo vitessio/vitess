@@ -1,5 +1,5 @@
 {
-  "Keyspaces": {
+  "keyspaces": {
     "user": {
       "sharded": true,
       "vindexes": {
