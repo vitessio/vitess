@@ -124,3 +124,14 @@ func (ts *Server) GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.Sr
 	}
 	return srvVSchema, nil
 }
+
+// DeleteSrvVSchema deletes the SrvVSchema file for a cell.
+func (ts *Server) DeleteSrvVSchema(ctx context.Context, cell string) error {
+	conn, err := ts.ConnForCell(ctx, cell)
+	if err != nil {
+		return err
+	}
+
+	nodePath := SrvVSchemaFile
+	return conn.Delete(ctx, nodePath, nil)
+}
