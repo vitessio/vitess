@@ -2094,7 +2094,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 
-	b, err := json.MarshalIndent(&vs, "", "  ")
+	b, err := json2.MarshalIndentPB(&vs, "  ")
 	if err != nil {
 		wr.Logger().Errorf("Failed to marshal VSchema for display: %v", err)
 	} else {

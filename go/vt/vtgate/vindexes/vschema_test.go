@@ -24,9 +24,11 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
+	"github.com/youtube/vitess/go/json2"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
@@ -144,6 +146,92 @@ func TestUnshardedVSchema(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("BuildVSchema:\n%v, want\n%v", got, want)
+	}
+}
+
+func TestVSchemaColumns(t *testing.T) {
+	good := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Columns: []*vschemapb.Column{{
+							Name: "c1",
+						}, {
+							Name: "c2",
+							Type: sqltypes.VarChar,
+						}},
+					},
+				},
+			},
+		},
+	}
+	got, err := BuildVSchema(&good)
+	if err != nil {
+		t.Error(err)
+	}
+	ks := &Keyspace{
+		Name: "unsharded",
+	}
+	t1 := &Table{
+		Name:     sqlparser.NewTableIdent("t1"),
+		Keyspace: ks,
+		Columns: []Column{{
+			Name: sqlparser.NewColIdent("c1"),
+			Type: sqltypes.Null,
+		}, {
+			Name: sqlparser.NewColIdent("c2"),
+			Type: sqltypes.VarChar,
+		}},
+	}
+	dual := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ks,
+	}
+	want := &VSchema{
+		uniqueTables: map[string]*Table{
+			"t1":   t1,
+			"dual": dual,
+		},
+		uniqueVindexes: map[string]Vindex{},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"unsharded": {
+				Keyspace: ks,
+				Tables: map[string]*Table{
+					"t1":   t1,
+					"dual": dual,
+				},
+				Vindexes: map[string]Vindex{},
+			},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		gotb, _ := json.Marshal(got)
+		wantb, _ := json.Marshal(want)
+		t.Errorf("BuildVSchema:\n%s, want\n%s", gotb, wantb)
+	}
+}
+
+func TestVSchemaColumnsFail(t *testing.T) {
+	good := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Columns: []*vschemapb.Column{{
+							Name: "c1",
+						}, {
+							Name: "c1",
+						}},
+					},
+				},
+			},
+		},
+	}
+	_, err := BuildVSchema(&good)
+	want := "duplicate column name 'c1' for table: t1"
+	if err == nil || err.Error() != want {
+		t.Errorf("BuildVSchema(dup col): %v, want %v", err, want)
 	}
 }
 
@@ -1323,12 +1411,17 @@ func TestVSchemaPBJSON(t *testing.T) {
 					"sequence": "outside"
 				}
 			},
-			"t2": {}
+			"t2": {
+				"columns":[{
+					"name": "c1",
+					"type": "VARCHAR"
+				}]
+			}
 		}
 	}
 `
 	var got vschemapb.Keyspace
-	if err := json.Unmarshal([]byte(in), &got); err != nil {
+	if err := json2.Unmarshal([]byte(in), &got); err != nil {
 		t.Error(err)
 	}
 	want := vschemapb.Keyspace{
@@ -1349,12 +1442,17 @@ func TestVSchemaPBJSON(t *testing.T) {
 					Sequence: "outside",
 				},
 			},
-			"t2": {},
+			"t2": {
+				Columns: []*vschemapb.Column{{
+					Name: "c1",
+					Type: querypb.Type_VARCHAR,
+				}},
+			},
 		},
 	}
 	if !proto.Equal(&got, &want) {
-		gs, _ := json.Marshal(got)
-		ws, _ := json.Marshal(want)
+		gs, _ := json2.MarshalPB(&got)
+		ws, _ := json2.MarshalPB(&want)
 		t.Errorf("vschemapb.SrvVSchemaForKeyspace():\n%s, want\n%s", gs, ws)
 	}
 }
@@ -1373,6 +1471,12 @@ func TestVSchemaJSON(t *testing.T) {
 			Tables: map[string]*Table{
 				"t1": {
 					Name: sqlparser.NewTableIdent("n1"),
+					Columns: []Column{{
+						Name: sqlparser.NewColIdent("c1"),
+					}, {
+						Name: sqlparser.NewColIdent("c2"),
+						Type: sqltypes.VarChar,
+					}},
 				},
 				"t2": {
 					IsSequence: true,
@@ -1429,7 +1533,17 @@ func TestVSchemaJSON(t *testing.T) {
   "unsharded": {
     "tables": {
       "t1": {
-        "name": "n1"
+        "name": "n1",
+        "columns": [
+          {
+            "name": "c1",
+            "type": "NULL_TYPE"
+          },
+          {
+            "name": "c2",
+            "type": "VARCHAR"
+          }
+        ]
       },
       "t2": {
         "is_sequence": true,

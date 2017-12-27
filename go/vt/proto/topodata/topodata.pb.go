@@ -755,7 +755,8 @@ type CellInfo struct {
 	// Root is the path to store data in. It is only used when talking
 	// to server_address.
 	Root string `protobuf:"bytes,2,opt,name=root" json:"root,omitempty"`
-	// Region is a group this cell belongs to
+	// Region is a group this cell belongs to. Used by vtgate to route traffic to
+	// other cells (in same region) when there is no available tablet in the current cell.
 	Region string `protobuf:"bytes,3,opt,name=region" json:"region,omitempty"`
 }
 
