@@ -2,13 +2,13 @@
 # coding: utf-8
 
 # Copyright 2017 Google Inc.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -516,6 +516,19 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertIn('user', v['keyspaces'])
     self.assertIn('lookup', v['keyspaces'])
 
+    # Now deletes it.
+    utils.run_vtctl(['DeleteSrvVSchema', 'test_nj'])
+    _, stderr = utils.run_vtctl(['GetSrvVSchema', 'test_nj'],
+                                expect_fail=True)
+    self.assertIn('node doesn\'t exist', stderr)
+
+    # And rebuilds it.
+    utils.run_vtctl(['RebuildVSchemaGraph', '-cells=test_nj'])
+    v = utils.run_vtctl_json(['GetSrvVSchema', 'test_nj'])
+    self.assertEqual(len(v['keyspaces']), 2, 'wrong vschema: %s' % str(v))
+    self.assertIn('user', v['keyspaces'])
+    self.assertIn('lookup', v['keyspaces'])
+
   def test_user(self):
     count = 4
     vtgate_conn = get_connection()
@@ -579,13 +592,14 @@ class TestVTGateFunctions(unittest.TestCase):
     result = self.execute_on_master(
         vtgate_conn,
         'insert into vt_user (id, name) values (:id0, :name0), (:id1, :name1)',
-        {'id0': 5, 'name0': 'test 5','id1': 7, 'name1': 'test 7'})
+        {'id0': 5, 'name0': 'test 5', 'id1': 7, 'name1': 'test 7'})
     self.assertEqual(result, ([], 2L, 0L, []))
     vtgate_conn.commit()
 
     # Verify values in db
     result = shard_0_master.mquery('vt_user', 'select id, name from vt_user')
-    self.assertEqual(result, ((1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3'), (5L, 'test 5')))
+    self.assertEqual(result, ((1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3'),
+                              (5L, 'test 5')))
     result = shard_1_master.mquery('vt_user', 'select id, name from vt_user')
     self.assertEqual(result, ((4L, 'test 4'), (6L, 'test 6'), (7L, 'test 7')))
 
@@ -639,11 +653,11 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(
         sorted(rows_1),
         [(1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3'), (4L, 'test 4'),
-         (5L, 'test 5'),(6L, 'test 6'),(7L, 'test 7')])
+         (5L, 'test 5'), (6L, 'test 6'), (7L, 'test 7')])
     self.assertEqual(
         sorted(rows_2),
         [(1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3'), (4L, 'test 4'),
-         (5L, 'test 5'),(6L, 'test 6'),(7L, 'test 7')])
+         (5L, 'test 5'), (6L, 'test 6'), (7L, 'test 7')])
 
     # Test updates
     vtgate_conn.begin()
@@ -660,7 +674,8 @@ class TestVTGateFunctions(unittest.TestCase):
     vtgate_conn.commit()
     result = shard_0_master.mquery('vt_user', 'select id, name from vt_user')
     self.assertEqual(
-        result, ((1L, 'test one'), (2L, 'test 2'), (3L, 'test 3'), (5L, 'test 5')))
+        result, ((1L, 'test one'), (2L, 'test 2'), (3L, 'test 3'),
+                 (5L, 'test 5')))
     result = shard_1_master.mquery('vt_user', 'select id, name from vt_user')
     self.assertEqual(
         result, ((4L, 'test four'), (6L, 'test 6'), (7L, 'test 7')))
@@ -707,7 +722,7 @@ class TestVTGateFunctions(unittest.TestCase):
     result = self.execute_on_master(
         vtgate_conn,
         'insert into vt_user2 (id, name) values (:id0, :name0),(:id1, :name1)',
-        {'id0': 2, 'name0': 'name2','id1': 3, 'name1': 'name2'})
+        {'id0': 2, 'name0': 'name2', 'id1': 3, 'name1': 'name2'})
     self.assertEqual(result, ([], 2L, 0L, []))
     vtgate_conn.commit()
     result = shard_0_master.mquery('vt_user', 'select id, name from vt_user2')
@@ -716,7 +731,8 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(result, ((7L, 'name1'),))
     result = lookup_master.mquery(
         'vt_lookup', 'select name, user2_id from name_user2_map')
-    self.assertEqual(result, (('name1', 1L), ('name1', 7L), ('name2', 2L), ('name2', 3L)))
+    self.assertEqual(result, (('name1', 1L), ('name1', 7L), ('name2', 2L),
+                              ('name2', 3L)))
 
     # Test select by id
     result = self.execute_on_master(
@@ -804,7 +820,8 @@ class TestVTGateFunctions(unittest.TestCase):
         vtgate_conn,
         'select id, name from vt_user2 where id = :id', {'id': 1})
     self.assertEqual(
-        result, ([], 0L, 0, [('id', self.int_type), ('name', self.string_type)]))
+        result, ([], 0L, 0, [('id', self.int_type),
+                             ('name', self.string_type)]))
 
   def test_user_extra(self):
     # user_extra is for testing unowned functional vindex
@@ -901,12 +918,14 @@ class TestVTGateFunctions(unittest.TestCase):
     vtgate_conn.begin()
     result = self.execute_on_master(
         vtgate_conn,
-        'update vt_user_extra2 set lastname = :lastname, address = :address where user_id = :user_id',
+        'update vt_user_extra2 set lastname = :lastname,'
+        ' address = :address where user_id = :user_id',
         {'user_id': 5, 'lastname': 'buendia', 'address': 'macondo'})
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
     result = self.execute_on_master(
-        vtgate_conn, 'select lastname, address from vt_user_extra2 where user_id = 5', {})
+        vtgate_conn,
+        'select lastname, address from vt_user_extra2 where user_id = 5', {})
     self.assertEqual(
         result,
         ([('buendia', 'macondo')], 1, 0,
@@ -932,7 +951,8 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
     result = self.execute_on_master(
-        vtgate_conn, 'select lastname, address from vt_user_extra2 where user_id = 5', {})
+        vtgate_conn,
+        'select lastname, address from vt_user_extra2 where user_id = 5', {})
     self.assertEqual(
         result,
         ([('buendia', 'yoknapatawpha')], 1, 0,
@@ -958,7 +978,8 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(result, ([], 0L, 0L, []))
     vtgate_conn.commit()
     result = self.execute_on_master(
-        vtgate_conn, 'select lastname, address from vt_user_extra2 where user_id = 5', {})
+        vtgate_conn,
+        'select lastname, address from vt_user_extra2 where user_id = 5', {})
     self.assertEqual(
         result,
         ([('buendia', 'yoknapatawpha')], 1, 0,
@@ -977,14 +998,18 @@ class TestVTGateFunctions(unittest.TestCase):
 
     # you can find the record by either vindex
     result = self.execute_on_master(
-        vtgate_conn, 'select lastname, address from vt_user_extra2 where lastname = "buendia"', {})
+        vtgate_conn,
+        'select lastname, address from vt_user_extra2'
+        ' where lastname = "buendia"', {})
     self.assertEqual(
         result,
         ([('buendia', 'yoknapatawpha')], 1, 0,
          [('lastname', self.string_type),
           ('address', self.string_type)]))
     result = self.execute_on_master(
-        vtgate_conn, 'select lastname, address from vt_user_extra2 where address = "yoknapatawpha"', {})
+        vtgate_conn,
+        'select lastname, address from vt_user_extra2'
+        ' where address = "yoknapatawpha"', {})
     self.assertEqual(
         result,
         ([('buendia', 'yoknapatawpha')], 1, 0,
@@ -1027,7 +1052,8 @@ class TestVTGateFunctions(unittest.TestCase):
         vtgate_conn,
         'insert into vt_music (user_id, id, song) '
         'values (:user_id0, :id0, :song0), (:user_id1, :id1, :song1)',
-        {'user_id0': 5, 'id0': 6, 'song0': 'test 6','user_id1': 7, 'id1': 7, 'song1': 'test 7'})
+        {'user_id0': 5, 'id0': 6, 'song0': 'test 6', 'user_id1': 7, 'id1': 7,
+         'song1': 'test 7'})
     self.assertEqual(result, ([], 2L, 0L, []))
     vtgate_conn.commit()
     result = shard_0_master.mquery(
@@ -1105,7 +1131,8 @@ class TestVTGateFunctions(unittest.TestCase):
         vtgate_conn,
         'insert into vt_music_extra (music_id, artist) '
         'values (:music_id0, :artist0), (:music_id1, :artist1)',
-        {'music_id0': 6, 'artist0': 'test 6', 'music_id1': 7, 'artist1': 'test 7'})
+        {'music_id0': 6, 'artist0': 'test 6', 'music_id1': 7,
+         'artist1': 'test 7'})
     self.assertEqual(result, ([], 2L, 0L, []))
     vtgate_conn.commit()
     result = self.execute_on_master(
@@ -1192,7 +1219,7 @@ class TestVTGateFunctions(unittest.TestCase):
         ([(4, 'test 4')], 1, 0,
          [('id', self.int_type),
           ('val', self.string_type)]))
-    
+
     # Now test direct calls to sequence.
     result = self.execute_on_master(
         vtgate_conn, 'select next 1 values from vt_main_seq', {})
@@ -1272,7 +1299,6 @@ class TestVTGateFunctions(unittest.TestCase):
         result[0],
         [(1, 1, 1, 1), (3, 3, 3, 0), (4, 4, 4, 0),
          (5, 5, 5, 5), (6, 6, 6, 6), (7, 7, 7, 7)])
-
 
   def test_joins(self):
     vtgate_conn = get_connection()
@@ -1401,8 +1427,8 @@ class TestVTGateFunctions(unittest.TestCase):
     vtgate_conn = get_connection()
     try:
       vtgate_conn.begin()
-      with self.assertRaisesRegexp(
-          dbexceptions.DatabaseError, '.*could not map NULL to a keyspace id.*'):
+      with self.assertRaisesRegexp(dbexceptions.DatabaseError,
+                                   '.*could not map NULL to a keyspace id.*'):
         self.execute_on_master(
             vtgate_conn,
             'insert into vt_user_extra (email) values (:email)',
@@ -1584,12 +1610,18 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(second_half_queries, 1, 'invalid split %s' % str(s))
 
   def test_vschema_vars(self):
+    """Tests the variables exported by vtgate.
+
+    This test needs to run as the last test, as it depends on what happened
+    previously. The WatchError happens when we delete and re-create the
+    SrvVSchema.
+    """
     v = utils.vtgate.get_vars()
     self.assertIn('VtgateVSchemaCounts', v)
     self.assertIn('Reload', v['VtgateVSchemaCounts'])
-    self.assertTrue(v['VtgateVSchemaCounts']['Reload'] > 0)
+    self.assertGreater(v['VtgateVSchemaCounts']['Reload'], 0)
+    self.assertGreater(v['VtgateVSchemaCounts']['WatchError'], 0)
     self.assertNotIn('Parsing', v['VtgateVSchemaCounts'])
-    self.assertNotIn('WatchError', v['VtgateVSchemaCounts'])
 
 if __name__ == '__main__':
   utils.main()
