@@ -113,14 +113,15 @@ func TestPlan(t *testing.T) {
 	// column names are case-preserved, but treated as
 	// case-insensitive even if they come from the vschema.
 	testFile(t, "aggr_cases.txt", vschema)
+	testFile(t, "dml_cases.txt", vschema)
 	testFile(t, "from_cases.txt", vschema)
 	testFile(t, "filter_cases.txt", vschema)
-	testFile(t, "select_cases.txt", vschema)
 	testFile(t, "postprocess_cases.txt", vschema)
-	testFile(t, "wireup_cases.txt", vschema)
-	testFile(t, "dml_cases.txt", vschema)
-	testFile(t, "vindex_func_cases.txt", vschema)
+	testFile(t, "select_cases.txt", vschema)
+	testFile(t, "symtab_cases.txt", vschema)
 	testFile(t, "unsupported_cases.txt", vschema)
+	testFile(t, "vindex_func_cases.txt", vschema)
+	testFile(t, "wireup_cases.txt", vschema)
 }
 
 func TestOne(t *testing.T) {
