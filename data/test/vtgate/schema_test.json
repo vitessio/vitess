@@ -66,7 +66,15 @@
           "auto_increment": {
             "column": "id",
             "sequence": "seq"
-          }
+          },
+          "columns": [
+            {
+              "name": "predef1"
+            },
+            {
+              "name": "predef2"
+            }
+          ]
         },
         "user_metadata": {
           "column_vindexes": [
@@ -163,7 +171,16 @@
     },
     "main": {
       "tables": {
-        "unsharded": {},
+        "unsharded": {
+          "columns": [
+            {
+              "name": "predef1"
+            },
+            {
+              "name": "predef3"
+            }
+          ]
+        },
         "unsharded_a": {},
         "unsharded_b": {},
         "unsharded_auto": {
