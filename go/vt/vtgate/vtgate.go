@@ -234,25 +234,30 @@ func (vtg *VTGate) Execute(ctx context.Context, session *vtgatepb.Session, sql s
 	statsKey := []string{"Execute", target.Keyspace, topoproto.TabletTypeLString(target.TabletType)}
 	defer vtg.timings.Record(statsKey, time.Now())
 
+	defer func() {
+		newSession = session
+		if err != nil {
+			query := map[string]interface{}{
+				"Sql":           sql,
+				"BindVariables": bindVariables,
+				"Session":       session,
+			}
+			err = recordAndAnnotateError(err, statsKey, query, vtg.logExecute)
+		}
+	}()
+
 	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
-		goto handleError
+		return
 	}
 
 	qr, err = vtg.executor.Execute(ctx, "Execute", session, sql, bindVariables)
-	if err == nil {
-		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
-		return session, qr, nil
+	if err != nil {
+		return
 	}
 
-handleError:
-	query := map[string]interface{}{
-		"Sql":           sql,
-		"BindVariables": bindVariables,
-		"Session":       session,
-	}
-	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecute)
-	return session, nil, err
+	vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
+	return
 }
 
 // ExecuteBatch executes a batch of queries. This is a V3 function.
