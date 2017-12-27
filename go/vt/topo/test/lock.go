@@ -108,6 +108,10 @@ func checkLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 		t.Fatalf("Lock(interrupted): %v", err)
 	}
 
+	if err := lockDescriptor.Check(ctx); err != nil {
+		t.Errorf("Check(): %v", err)
+	}
+
 	if err := lockDescriptor.Unlock(ctx); err != nil {
 		t.Fatalf("Unlock(): %v", err)
 	}

@@ -31,6 +31,7 @@ import (
 type consulLockDescriptor struct {
 	s        *Server
 	lockPath string
+	lost     <-chan struct{}
 }
 
 // Lock is part of the topo.Conn interface.
@@ -81,10 +82,7 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 	s.mu.Unlock()
 
 	// We are the only ones trying to lock now.
-	// FIXME(alainjobart) We don't look at the 'lost' channel
-	// returned here. We need to fix this in our code base, to add
-	// APIs to make sure a lock is still held.
-	_, err = l.Lock(ctx.Done())
+	lost, err := l.Lock(ctx.Done())
 	if err != nil {
 		// Failed to lock, give up our slot in locks map.
 		// Close the channel to unblock anyone else.
@@ -100,7 +98,18 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 	return &consulLockDescriptor{
 		s:        s,
 		lockPath: lockPath,
+		lost:     lost,
 	}, nil
+}
+
+// Check is part of the topo.LockDescriptor interface.
+func (ld *consulLockDescriptor) Check(ctx context.Context) error {
+	select {
+	case <-ld.lost:
+		return fmt.Errorf("lost channel closed")
+	default:
+	}
+	return nil
 }
 
 // Unlock is part of the topo.LockDescriptor interface.
