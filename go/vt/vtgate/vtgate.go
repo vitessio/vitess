@@ -235,6 +235,7 @@ func (vtg *VTGate) Execute(ctx context.Context, session *vtgatepb.Session, sql s
 	defer vtg.timings.Record(statsKey, time.Now())
 
 	defer func() {
+		newSession = session
 		if err != nil {
 			query := map[string]interface{}{
 				"Sql":           sql,
