@@ -14,8 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package vtgate provides query routing rpc services
-// for vttablets.
 package vtgate
 
 import (
