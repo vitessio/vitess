@@ -576,7 +576,7 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("ins_lookup"),
 			buildVarCharRow("main1"),
 			buildVarCharRow("music_user_map"),
-			buildVarCharRow("name_lastname_user_map"),
+			buildVarCharRow("name_lastname_keyspace_id_map"),
 			buildVarCharRow("name_user_map"),
 			buildVarCharRow("simple"),
 			buildVarCharRow("user_seq"),

@@ -57,13 +57,13 @@ var executorVSchema = `
 				"to": "user_id"
 			}
 		},
-		"name_lastname_user_map": {
+		"name_lastname_keyspace_id_map": {
 			"type": "lookup",
 			"owner": "user2",
 			"params": {
-				"table": "name_lastname_user_map",
+				"table": "name_lastname_keyspace_id_map",
 				"from": "name,lastname",
-				"to": "user_id"
+				"to": "keyspace_id"
 			}
 		},
 		"insert_ignore_idx": {
@@ -111,7 +111,7 @@ var executorVSchema = `
 				},
 				{
 					"columns": ["name", "lastname"],
-					"name": "name_lastname_user_map"
+					"name": "name_lastname_keyspace_id_map"
 				}
 			]
 		},
@@ -216,7 +216,7 @@ var unshardedVSchema = `
 		},
 		"music_user_map": {},
 		"name_user_map": {},
-		"name_lastname_user_map": {},
+		"name_lastname_keyspace_id_map": {},
 		"ins_lookup": {},
 		"main1": {
 			"auto_increment": {
