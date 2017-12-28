@@ -122,19 +122,19 @@ func TestUpdateEqual(t *testing.T) {
 
 	wantQueries = []*querypb.BoundQuery{
 		{
-			Sql: "delete from name_lastname_user_map where name = :name and lastname = :lastname and user_id = :user_id",
+			Sql: "delete from name_lastname_keyspace_id_map where name = :name and lastname = :lastname and keyspace_id = :keyspace_id",
 			BindVariables: map[string]*querypb.BindVariable{
-				"lastname": sqltypes.StringBindVariable("foo"),
-				"name":     sqltypes.Int32BindVariable(1),
-				"user_id":  sqltypes.BytesBindVariable([]byte("\026k@\264J\272K\326")),
+				"lastname":    sqltypes.StringBindVariable("foo"),
+				"name":        sqltypes.Int32BindVariable(1),
+				"keyspace_id": sqltypes.BytesBindVariable([]byte("\026k@\264J\272K\326")),
 			},
 		},
 		{
-			Sql: "insert into name_lastname_user_map(name, lastname, user_id) values (:name0, :lastname0, :user_id0)",
+			Sql: "insert into name_lastname_keyspace_id_map(name, lastname, keyspace_id) values (:name0, :lastname0, :keyspace_id0)",
 			BindVariables: map[string]*querypb.BindVariable{
-				"name0":     sqltypes.BytesBindVariable([]byte("myname")),
-				"lastname0": sqltypes.BytesBindVariable([]byte("mylastname")),
-				"user_id0":  sqltypes.BytesBindVariable([]byte("\026k@\264J\272K\326")),
+				"name0":        sqltypes.BytesBindVariable([]byte("myname")),
+				"lastname0":    sqltypes.BytesBindVariable([]byte("mylastname")),
+				"keyspace_id0": sqltypes.BytesBindVariable([]byte("\026k@\264J\272K\326")),
 			},
 		},
 	}
@@ -366,11 +366,11 @@ func TestDeleteEqual(t *testing.T) {
 
 	wantQueries = []*querypb.BoundQuery{
 		{
-			Sql: "delete from name_lastname_user_map where name = :name and lastname = :lastname and user_id = :user_id",
+			Sql: "delete from name_lastname_keyspace_id_map where name = :name and lastname = :lastname and keyspace_id = :keyspace_id",
 			BindVariables: map[string]*querypb.BindVariable{
-				"lastname": sqltypes.StringBindVariable("foo"),
-				"name":     sqltypes.Int32BindVariable(1),
-				"user_id":  sqltypes.BytesBindVariable([]byte("\026k@\264J\272K\326")),
+				"lastname":    sqltypes.StringBindVariable("foo"),
+				"name":        sqltypes.Int32BindVariable(1),
+				"keyspace_id": sqltypes.BytesBindVariable([]byte("\026k@\264J\272K\326")),
 			},
 		},
 	}
