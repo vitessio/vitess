@@ -1001,9 +1001,8 @@ func TestSequence(t *testing.T) {
 			},
 		},
 		AutoIncrement: &AutoIncrement{
-			Column:          sqlparser.NewColIdent("c2"),
-			Sequence:        seq,
-			ColumnVindexNum: -1,
+			Column:   sqlparser.NewColIdent("c2"),
+			Sequence: seq,
 		},
 	}
 	t2.Ordered = []*ColumnVindex{

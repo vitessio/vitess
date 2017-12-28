@@ -107,9 +107,6 @@ func (ks *KeyspaceSchema) MarshalJSON() ([]byte, error) {
 type AutoIncrement struct {
 	Column   sqlparser.ColIdent `json:"column"`
 	Sequence *Table             `json:"sequence"`
-	// ColumnVindexNum is the index of the ColumnVindex
-	// if the column is also a ColumnVindex. Otherwise, it's -1.
-	ColumnVindexNum int `json:"column_vindex_num"`
 }
 
 // BuildVSchema builds a VSchema from a SrvVSchema.
@@ -287,18 +284,12 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) error 
 			if table.AutoIncrement == nil {
 				continue
 			}
-			t.AutoIncrement = &AutoIncrement{Column: sqlparser.NewColIdent(table.AutoIncrement.Column), ColumnVindexNum: -1}
+			t.AutoIncrement = &AutoIncrement{Column: sqlparser.NewColIdent(table.AutoIncrement.Column)}
 			seq, err := vschema.findQualified(table.AutoIncrement.Sequence)
 			if err != nil {
 				return fmt.Errorf("cannot resolve sequence %s: %v", table.AutoIncrement.Sequence, err)
 			}
 			t.AutoIncrement.Sequence = seq
-			for i, cv := range t.ColumnVindexes {
-				if t.AutoIncrement.Column.Equal(cv.Columns[0]) {
-					t.AutoIncrement.ColumnVindexNum = i
-					break
-				}
-			}
 		}
 	}
 	return nil
