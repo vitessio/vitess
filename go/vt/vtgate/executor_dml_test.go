@@ -1318,6 +1318,7 @@ func TestMultiInsertSharded(t *testing.T) {
 
 	// Insert multiple rows in a multi column vindex
 	sbc1.Queries = nil
+	sbclookup.Queries = nil
 	sbc2.Queries = nil
 	_, err = executorExec(executor, "insert into user2(id, name, lastname) values (2, 'myname', 'mylastname'), (3, 'myname2', 'mylastname2')", nil)
 	if err != nil {
@@ -1336,6 +1337,20 @@ func TestMultiInsertSharded(t *testing.T) {
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
+	}
+	wantQueries = []*querypb.BoundQuery{{
+		Sql: "insert into name_lastname_keyspace_id_map(name, lastname, keyspace_id) values (:name0, :lastname0, :keyspace_id0), (:name1, :lastname1, :keyspace_id1)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"name0":        sqltypes.BytesBindVariable([]byte("myname")),
+			"lastname0":    sqltypes.BytesBindVariable([]byte("mylastname")),
+			"keyspace_id0": sqltypes.BytesBindVariable([]byte("\006\347\352\"\316\222p\217")),
+			"name1":        sqltypes.BytesBindVariable([]byte("myname2")),
+			"lastname1":    sqltypes.BytesBindVariable([]byte("mylastname2")),
+			"keyspace_id1": sqltypes.BytesBindVariable([]byte("N\261\220\311\242\372\026\234")),
+		},
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: \n%+v, want \n%+v\n", sbclookup.Queries, wantQueries)
 	}
 }
 
