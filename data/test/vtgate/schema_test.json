@@ -22,7 +22,7 @@
           "type": "lookup_test",
           "owner": "multicolvin"
         },
-        "cola_colb_map": {
+        "colb_colc_map": {
           "type": "lookup_test",
           "owner": "multicolvin"
         },
@@ -124,7 +124,7 @@
             },
             {
               "columns": ["column_b", "column_c"],
-              "name": "cola_colb_map"
+              "name": "colb_colc_map"
             }
           ]
         },

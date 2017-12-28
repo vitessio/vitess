@@ -1117,7 +1117,7 @@
       1
     ],
     "ChangedVindexValues": {
-      "cola_colb_map": [
+      "colb_colc_map": [
         1,
         2
       ]
@@ -1143,12 +1143,12 @@
       1
     ],
     "ChangedVindexValues": {
-      "cola_colb_map": [
-        1,
-        2
-      ],
       "cola_map": [
         0
+      ],
+      "colb_colc_map": [
+        1,
+        2
       ]
     },
     "Table": "multicolvin",
