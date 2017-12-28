@@ -11,7 +11,6 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     g++ \
     git \
     libgconf-2-4 \
-    libssl-dev \
     libtool \
     make \
     openjdk-8-jdk \
@@ -27,23 +26,11 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     unzip \
     xvfb \
     zip \
-    # gRPC PHP requirements \
     libz-dev \
-    php-pear \
-    php7.0-cli \
-    php7.0-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PHP modules for running tests
-RUN export MAKEFLAGS="-j$(nproc)" && \
-    mkdir -p /vt/bin && \
-    curl -sL --connect-timeout 10 --retry 3 \
-        https://phar.phpunit.de/phpunit-4.8.9.phar > /vt/bin/phpunit && \
-    chmod +x /vt/bin/phpunit && \
-    curl -sL --connect-timeout 10 --retry 3 \
-        https://getcomposer.org/installer | php -- --install-dir=/vt/bin --filename=composer && \
-    pecl install xdebug && \
-    echo "zend_extension=$(pecl config-get ext_dir default)/xdebug.so" > /etc/php/7.0/cli/conf.d/20-xdebug.ini
+# Not sure if this is needed, but it was part of php init, which we don't do any more.
+RUN mkdir -p /vt/bin
 
 # Install Maven 3.1+
 RUN mkdir -p /vt/dist && \
@@ -72,34 +59,17 @@ COPY config /vt/src/github.com/youtube/vitess/config
 COPY third_party /vt/src/github.com/youtube/vitess/third_party
 COPY tools /vt/src/github.com/youtube/vitess/tools
 COPY travis /vt/src/github.com/youtube/vitess/travis
-COPY composer.json composer.lock /vt/src/github.com/youtube/vitess/
 COPY vendor/vendor.json /vt/src/github.com/youtube/vitess/vendor/
+
+# grpcio runtime is needed for python tests.
+RUN grpcio_ver="1.7.0" && \
+    pip install --upgrade grpcio==$grpcio_ver
 
 # Download vendored Go dependencies
 RUN cd /vt/src/github.com/youtube/vitess && \
     go get -u github.com/kardianos/govendor && \
     govendor sync && \
     rm -rf /vt/.cache
-
-# Install gRPC as root
-RUN export MAKEFLAGS="-j$(nproc)" && \
-    $VTTOP/travis/install_grpc.sh && \
-    rm -rf /vt/dist/grpc
-
-# Install gRPC PHP dependencies
-RUN export MAKEFLAGS="-j$(nproc)" && \
-    pecl install grpc && \
-    cd /vt/src/github.com/youtube/vitess && \
-    composer install && \
-    echo 'extension=grpc.so' > /etc/php/7.0/cli/conf.d/20-grpc.ini && \
-    find php/vendor/grpc/grpc -mindepth 1 -maxdepth 1 ! -name src | xargs rm -rf && \
-    find php/vendor/grpc/grpc/src -mindepth 1 -maxdepth 1 ! -name php | xargs rm -rf
-
-# Install PHP protobuf compiler plugin
-RUN cd /vt/src/github.com/youtube/vitess/php/vendor/stanley-cheung/protobuf-php && \
-    gem install rake ronn && \
-    rake pear:package version=1.0 && \
-    pear install Protobuf-1.0.tgz
 
 # Create vitess user
 RUN groupadd -r vitess && useradd -r -g vitess vitess && \
