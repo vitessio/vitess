@@ -343,6 +343,41 @@ func TestDeleteEqual(t *testing.T) {
 	if sbclookup.Queries != nil {
 		t.Errorf("sbc.Queries: %+v, want nil\n", sbc.Queries)
 	}
+
+	sbc.Queries = nil
+	sbclookup.Queries = nil
+	_, err = executorExec(executor, "delete from user2 where id = 1", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []*querypb.BoundQuery{
+		{
+			Sql:           "select name, lastname from user2 where id = 1 for update",
+			BindVariables: map[string]*querypb.BindVariable{},
+		},
+		{
+			Sql:           "delete from user2 where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+			BindVariables: map[string]*querypb.BindVariable{},
+		},
+	}
+	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
+		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
+	}
+
+	wantQueries = []*querypb.BoundQuery{
+		{
+			Sql: "delete from name_lastname_user_map where name = :name and lastname = :lastname and user_id = :user_id",
+			BindVariables: map[string]*querypb.BindVariable{
+				"lastname": sqltypes.StringBindVariable("foo"),
+				"name":     sqltypes.Int32BindVariable(1),
+				"user_id":  sqltypes.BytesBindVariable([]byte("\026k@\264J\272K\326")),
+			},
+		},
+	}
+
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
+	}
 }
 
 func TestDeleteComments(t *testing.T) {
