@@ -1523,7 +1523,9 @@ func TestVSchemaJSON(t *testing.T) {
             "owned": true,
             "vindex": {
               "table": "t",
-              "from": "f",
+              "from_columns": [
+                "f"
+              ],
               "to": "2"
             }
           }

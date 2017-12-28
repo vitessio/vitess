@@ -103,12 +103,7 @@ func (lh *LookupHash) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, 
 	if err != nil {
 		return fmt.Errorf("lookup.Create.vunhash: %v", err)
 	}
-	var ids []sqltypes.Value
-	for _, vindexValues := range rowsColValues {
-		ids = append(ids, vindexValues[0])
-	}
-
-	return lh.lkp.Create(vcursor, ids, values, ignoreMode)
+	return lh.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
 }
 
 // Delete deletes the entry from the vindex table.
@@ -117,12 +112,7 @@ func (lh *LookupHash) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, 
 	if err != nil {
 		return fmt.Errorf("lookup.Delete.vunhash: %v", err)
 	}
-	var ids []sqltypes.Value
-	for _, vindexValues := range rowsColValues {
-		ids = append(ids, vindexValues[0])
-	}
-
-	return lh.lkp.Delete(vcursor, ids, sqltypes.NewUint64(v))
+	return lh.lkp.Delete(vcursor, rowsColValues, sqltypes.NewUint64(v))
 }
 
 // MarshalJSON returns a JSON representation of LookupHash.
@@ -212,12 +202,7 @@ func (lhu *LookupHashUnique) Create(vcursor VCursor, rowsColValues [][]sqltypes.
 	if err != nil {
 		return fmt.Errorf("lookup.Create.vunhash: %v", err)
 	}
-	var ids []sqltypes.Value
-	for _, vindexValues := range rowsColValues {
-		ids = append(ids, vindexValues[0])
-	}
-
-	return lhu.lkp.Create(vcursor, ids, values, ignoreMode)
+	return lhu.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
 }
 
 // Delete deletes the entry from the vindex table.
@@ -226,11 +211,7 @@ func (lhu *LookupHashUnique) Delete(vcursor VCursor, rowsColValues [][]sqltypes.
 	if err != nil {
 		return fmt.Errorf("lookup.Delete.vunhash: %v", err)
 	}
-	var ids []sqltypes.Value
-	for _, vindexValues := range rowsColValues {
-		ids = append(ids, vindexValues[0])
-	}
-	return lhu.lkp.Delete(vcursor, ids, sqltypes.NewUint64(v))
+	return lhu.lkp.Delete(vcursor, rowsColValues, sqltypes.NewUint64(v))
 }
 
 // MarshalJSON returns a JSON representation of LookupHashUnique.
