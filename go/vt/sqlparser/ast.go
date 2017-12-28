@@ -600,6 +600,7 @@ func (node *Set) WalkSubtree(visit Visit) error {
 // DDL represents a CREATE, ALTER, DROP, RENAME or TRUNCATE statement.
 // Table is set for AlterStr, DropStr, RenameStr, TruncateStr
 // NewName is set for AlterStr, CreateStr, RenameStr.
+// VindexSpec is set for CreateVindexStr DropVindexStr
 type DDL struct {
 	Action        string
 	Table         TableName
@@ -607,15 +608,17 @@ type DDL struct {
 	IfExists      bool
 	TableSpec     *TableSpec
 	PartitionSpec *PartitionSpec
+	VindexSpec    *VindexSpec
 }
 
 // DDL strings.
 const (
-	CreateStr   = "create"
-	AlterStr    = "alter"
-	DropStr     = "drop"
-	RenameStr   = "rename"
-	TruncateStr = "truncate"
+	CreateStr       = "create"
+	AlterStr        = "alter"
+	DropStr         = "drop"
+	RenameStr       = "rename"
+	TruncateStr     = "truncate"
+	CreateVindexStr = "create vindex"
 )
 
 // Format formats the node.
@@ -641,6 +644,8 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		} else {
 			buf.Myprintf("%s table %v", node.Action, node.Table)
 		}
+	case CreateVindexStr:
+		buf.Myprintf("%s %v", node.Action, node.VindexSpec)
 	default:
 		buf.Myprintf("%s table %v", node.Action, node.Table)
 	}
@@ -1095,6 +1100,74 @@ const (
 	colKeyUniqueKey
 	colKey
 )
+
+// VindexSpec defines a vindex for a CREATE VINDEX or DROP VINDEX statement
+type VindexSpec struct {
+	Name   ColIdent
+	Type   ColIdent
+	Params []VindexParam
+	Owner  string
+}
+
+// Format formats the node. The "CREATE VINDEX" preamble was formatted in
+// the containing DDL node Format, so this just prints the type, any
+// parameters, and optionally the owner
+func (node *VindexSpec) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%v %v", node.Name, node.Type)
+	numParams := len(node.Params)
+	if numParams != 0 {
+		buf.Myprintf(" with ")
+		for i, p := range node.Params {
+			if i != 0 {
+				buf.Myprintf(", ")
+			}
+			buf.Myprintf("%v", p)
+		}
+	}
+
+	if node.Owner != "" {
+		buf.Myprintf("FROM %v", node.Owner)
+	}
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *VindexSpec) WalkSubtree(visit Visit) error {
+	err := Walk(visit,
+		node.Name,
+		node.Type,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	for _, p := range node.Params {
+		err := Walk(visit, p)
+
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// VindexParam defines a key/value parameter for a CREATE VINDEX statement
+type VindexParam struct {
+	Key ColIdent
+	Val string
+}
+
+// Format formats the node.
+func (node VindexParam) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%s=%s", node.Key.String(), node.Val)
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node VindexParam) WalkSubtree(visit Visit) error {
+	return Walk(visit,
+		node.Key,
+	)
+}
 
 // Show represents a show statement.
 type Show struct {
