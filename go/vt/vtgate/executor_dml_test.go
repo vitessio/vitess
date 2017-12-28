@@ -238,12 +238,6 @@ func TestUpdateEqualFail(t *testing.T) {
 		t.Errorf("executorExec: %v, want prefix %v", err, want)
 	}
 	s.ShardSpec = DefaultShardSpec
-
-	_, err = executorExec(executor, "update user2 set name='myname' where id = 1", nil)
-	want = "transaction rolled back due to partial DML execution: execUpdateEqual: unsupported: update does not have values for all the columns in the vindex"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
 }
 
 func TestDeleteEqual(t *testing.T) {

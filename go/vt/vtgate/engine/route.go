@@ -637,10 +637,6 @@ func (route *Route) updateChangedVindexes(subQueryResult *sqltypes.Result, vcurs
 				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update changes multiple columns in the vindex")
 			}
 
-			if len(colValues) != len(colVindex.Columns) {
-				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update does not have values for all the columns in the vindex")
-			}
-
 			fromIds := make([][]sqltypes.Value, len(subQueryResult.Rows))
 			var vindexColumnKeys []sqltypes.Value
 			for _, colValue := range colValues {
