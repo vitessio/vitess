@@ -336,16 +336,13 @@ func CheckShardLocked(ctx context.Context, keyspace, shard string) error {
 
 	// func the individual entry
 	mapKey := keyspace + "/" + shard
-	_, ok = i.info[mapKey]
+	li, ok := i.info[mapKey]
 	if !ok {
 		return fmt.Errorf("shard %v/%v is not locked (no lockInfo in map)", keyspace, shard)
 	}
 
-	// TODO(alainjobart): check the lock server implementation
-	// still holds the lock. Will need to look at the lockInfo struct.
-
-	// and we're good for now.
-	return nil
+	// Check the lock server implementation still holds the lock.
+	return li.lockDescriptor.Check(ctx)
 }
 
 // lockShard will lock the shard in the topology server.
