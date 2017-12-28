@@ -275,6 +275,7 @@ func forceEOF(yylex interface{}) {
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params
+%type <str> vindex_owner_opt
 
 %start any_command
 
@@ -496,12 +497,13 @@ create_statement:
   {
     $$ = &DDL{Action: CreateStr, NewName: $5.ToViewName()}
   }
-| CREATE VINDEX sql_id sql_id vindex_params
+| CREATE VINDEX sql_id sql_id vindex_params vindex_owner_opt
   {
     $$ = &DDL{Action: CreateVindexStr, VindexSpec: &VindexSpec{
         Name: $3,
         Type: $4,
         Params: $5,
+        Owner: $6,
     }}
   }
 
@@ -530,6 +532,15 @@ vindex_param:
   reserved_sql_id '=' table_opt_value
   {
     $$ = VindexParam{Key: $1, Val: $3}
+  }
+
+vindex_owner_opt:
+  {
+    $$ = ""
+  }
+| USING table_id
+  {
+    $$ = $2.String()
   }
 
 create_table_prefix:
