@@ -52,7 +52,6 @@ func (ln *MultiColLookupNonUnique) String() string {
 
 // Cost returns the cost of this vindex as 20.
 func (ln *MultiColLookupNonUnique) Cost() int {
-	//TODO @rafael
 	return 20
 }
 
