@@ -103,6 +103,8 @@ func forceEOF(yylex interface{}) {
   partDefs      []*PartitionDefinition
   partDef       *PartitionDefinition
   partSpec      *PartitionSpec
+  vindexParam   VindexParam
+  vindexParams  []VindexParam
 }
 
 %token LEX_ERROR
@@ -271,6 +273,8 @@ func forceEOF(yylex interface{}) {
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
+%type <vindexParam> vindex_param
+%type <vindexParams> vindex_param_list vindex_params
 
 %start any_command
 
@@ -491,6 +495,41 @@ create_statement:
 | CREATE OR REPLACE VIEW table_name ddl_force_eof
   {
     $$ = &DDL{Action: CreateStr, NewName: $5.ToViewName()}
+  }
+| CREATE VINDEX sql_id sql_id vindex_params
+  {
+    $$ = &DDL{Action: CreateVindexStr, VindexSpec: &VindexSpec{
+        Name: $3,
+        Type: $4,
+        Params: $5,
+    }}
+  }
+
+vindex_params:
+  {
+    var v []VindexParam
+    $$ = v
+  }
+| WITH vindex_param_list
+  {
+    $$ = $2
+  }
+
+vindex_param_list:
+  vindex_param
+  {
+    $$ = make([]VindexParam, 0, 4)
+    $$ = append($$, $1)
+  }
+| vindex_param_list ',' vindex_param
+  {
+    $$ = append($$, $3)
+  }
+
+vindex_param:
+  reserved_sql_id '=' table_opt_value
+  {
+    $$ = VindexParam{Key: $1, Val: $3}
   }
 
 create_table_prefix:

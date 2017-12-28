@@ -767,6 +767,12 @@ var (
 		input:  "create table a (a int, b char, c garbage)",
 		output: "create table a",
 	}, {
+		input: "create vindex hash_vdx hash",
+	}, {
+		input: "create vindex hash_vdx hash with table=name_user_idx, from=name, to=user_id",
+	}, {
+		input: "create vindex xyz_vdx xyz with param1=hello, param2='world', param3=123",
+	}, {
 		input:  "create index a on b",
 		output: "alter table b",
 	}, {
