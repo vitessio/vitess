@@ -36,7 +36,7 @@ var executorVSchema = `
 {
 	"sharded": true,
 	"vindexes": {
-		"user_index": {
+		"hash_index": {
 			"type": "hash"
 		},
 		"music_user_map": {
@@ -55,6 +55,15 @@ var executorVSchema = `
 				"table": "name_user_map",
 				"from": "name",
 				"to": "user_id"
+			}
+		},
+		"name_lastname_keyspace_id_map": {
+			"type": "lookup",
+			"owner": "user2",
+			"params": {
+				"table": "name_lastname_keyspace_id_map",
+				"from": "name,lastname",
+				"to": "keyspace_id"
 			}
 		},
 		"insert_ignore_idx": {
@@ -82,7 +91,7 @@ var executorVSchema = `
 			"column_vindexes": [
 				{
 					"column": "Id",
-					"name": "user_index"
+					"name": "hash_index"
 				},
 				{
 					"column": "name",
@@ -94,11 +103,23 @@ var executorVSchema = `
 				"sequence": "user_seq"
 			}
 		},
+		"user2": {
+			"column_vindexes": [
+				{
+					"column": "id",
+					"name": "hash_index"
+				},
+				{
+					"columns": ["name", "lastname"],
+					"name": "name_lastname_keyspace_id_map"
+				}
+			]
+		},
 		"user_extra": {
 			"column_vindexes": [
 				{
 					"column": "user_id",
-					"name": "user_index"
+					"name": "hash_index"
 				}
 			]
 		},
@@ -106,7 +127,7 @@ var executorVSchema = `
 			"column_vindexes": [
 				{
 					"column": "user_id",
-					"name": "user_index"
+					"name": "hash_index"
 				},
 				{
 					"column": "id",
@@ -122,7 +143,7 @@ var executorVSchema = `
 			"column_vindexes": [
 				{
 					"column": "user_id",
-					"name": "user_index"
+					"name": "hash_index"
 				},
 				{
 					"column": "music_id",
@@ -138,7 +159,7 @@ var executorVSchema = `
 				},
 				{
 					"column": "user_id",
-					"name": "user_index"
+					"name": "hash_index"
 				}
 			]
 		},
@@ -154,7 +175,7 @@ var executorVSchema = `
 				},
 				{
 					"column": "verify",
-					"name": "user_index"
+					"name": "hash_index"
 				}
 			]
 		},
@@ -195,6 +216,7 @@ var unshardedVSchema = `
 		},
 		"music_user_map": {},
 		"name_user_map": {},
+		"name_lastname_keyspace_id_map": {},
 		"ins_lookup": {},
 		"main1": {
 			"auto_increment": {

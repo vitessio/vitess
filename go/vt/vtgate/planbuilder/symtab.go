@@ -114,10 +114,10 @@ func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexe
 		c := &column{
 			origin: rb,
 			Vindex: cv.Vindex,
-			name:   cv.Column,
+			name:   cv.Columns[0],
 			table:  t,
 		}
-		t.columns[cv.Column.Lowered()] = c
+		t.columns[cv.Columns[0].Lowered()] = c
 	}
 	return st.AddTable(t)
 }
