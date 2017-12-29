@@ -103,7 +103,16 @@ In addition, Vitess requires the software and libraries listed below.
     various permission failures when Vitess initializes MySQL instances through
     the `mysqlctl` tool. This is only an issue for a test environment. If AppArmor
     is necessary in production, you can configure the MySQL instances appropriately
-    without going through mysqlctl. (TODO(sougou): provide exact instructions).
+    without going through mysqlctl.
+
+    ``` sh
+    $ sudo service apparmor stop
+    $ sudo service apparmor teardown
+    $ sudo update-rc.d -f apparmor remove
+    ```
+
+    Reboot, just to be sure that `AppArmor` is fully disabled.
+
 
 4.  Select a lock service from the options listed below. It is technically
     possible to use another lock server, but plugins currently exist only
