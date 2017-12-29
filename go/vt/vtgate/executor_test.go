@@ -544,7 +544,7 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("show databases:\n%+v, want\n%+v", qr, wantqr)
 	}
 
-	qr, err = executor.Execute(context.Background(), session, "show vindexes", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes", nil)
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
 		Rows: [][]sqltypes.Value{
@@ -562,7 +562,7 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("show vindexes:\n%+v, want\n%+v", qr, wantqr)
 	}
 
-	qr, err = executor.Execute(context.Background(), session, "show vindexes on TestExecutor.user", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.user", nil)
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Column", "Name", "Type", "Params", "Owner"),
 		Rows: [][]sqltypes.Value{
@@ -575,20 +575,20 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("show vindexes on TestExecutor.user:\n%+v, want\n%+v", qr, wantqr)
 	}
 
-	qr, err = executor.Execute(context.Background(), session, "show vindexes on user", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on user", nil)
 	wantErr := errNoKeyspace.Error()
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("show vindexes on user: %v, want %v", err, wantErr)
 	}
 
-	qr, err = executor.Execute(context.Background(), session, "show vindexes on TestExecutor.garbage", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.garbage", nil)
 	wantErr = "table `garbage` does not exist in keyspace `TestExecutor`"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("show vindexes on user: %v, want %v", err, wantErr)
 	}
 
 	session.TargetString = "TestExecutor"
-	qr, err = executor.Execute(context.Background(), session, "show vindexes on user", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on user", nil)
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Column", "Name", "Type", "Params", "Owner"),
 		Rows: [][]sqltypes.Value{
@@ -601,7 +601,7 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("show vindexes on user:\n%+v, want\n%+v", qr, wantqr)
 	}
 
-	qr, err = executor.Execute(context.Background(), session, "show vindexes on garbage", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on garbage", nil)
 	wantErr = "table `garbage` does not exist in keyspace `TestExecutor`"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("show vindexes on user: %v, want %v", err, wantErr)
