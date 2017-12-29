@@ -26,6 +26,7 @@ import (
 	"github.com/youtube/vitess/go/json2"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
@@ -46,6 +47,7 @@ type Table struct {
 	Ordered        []*ColumnVindex      `json:"ordered,omitempty"`
 	Owned          []*ColumnVindex      `json:"owned,omitempty"`
 	AutoIncrement  *AutoIncrement       `json:"auto_increment,omitempty"`
+	Columns        []Column             `json:"columns,omitempty"`
 	Pinned         []byte               `json:"pinned,omitempty"`
 }
 
@@ -62,6 +64,23 @@ type ColumnVindex struct {
 	Name   string             `json:"name"`
 	Owned  bool               `json:"owned,omitempty"`
 	Vindex Vindex             `json:"vindex"`
+}
+
+// Column describes a column.
+type Column struct {
+	Name sqlparser.ColIdent `json:"name"`
+	Type querypb.Type       `json:"type"`
+}
+
+// MarshalJSON returns a JSON representation of Column.
+func (col *Column) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Name string `json:"name"`
+		Type string `json:"type,omitempty"`
+	}{
+		Name: col.Name.String(),
+		Type: querypb.Type_name[int32(col.Type)],
+	})
 }
 
 // KeyspaceSchema contains the schema(table) for a keyspace.
@@ -196,6 +215,19 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 			if keyspace.Sharded && len(table.ColumnVindexes) == 0 {
 				return fmt.Errorf("missing primary col vindex for table: %s", tname)
 			}
+
+			// Initialize Columns.
+			colNames := make(map[string]bool)
+			for _, col := range table.Columns {
+				name := sqlparser.NewColIdent(col.Name)
+				if colNames[name.Lowered()] {
+					return fmt.Errorf("duplicate column name '%v' for table: %s", name, tname)
+				}
+				colNames[name.Lowered()] = true
+				t.Columns = append(t.Columns, Column{Name: name, Type: col.Type})
+			}
+
+			// Initialize ColumnVindexes.
 			for i, ind := range table.ColumnVindexes {
 				vindexInfo, ok := ks.Vindexes[ind.Name]
 				if !ok {

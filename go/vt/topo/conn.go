@@ -232,8 +232,14 @@ type Version interface {
 }
 
 // LockDescriptor is an interface that describes a lock.
-// It will be returned by Lock(). It contains the Unlock method.
+// It will be returned by Lock().
 type LockDescriptor interface {
+	// Check returns an error if the lock was lost.
+	// Some topology implementations use a keep-alive mechanism, and
+	// sometimes it fails. The users of the lock are responsible for
+	// checking on it when convenient.
+	Check(ctx context.Context) error
+
 	// Unlock releases the lock.
 	Unlock(ctx context.Context) error
 }

@@ -164,7 +164,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 		return err
 	}
 
-	// Check the master elect is in tabletMap
+	// Check the master elect is in tabletMap.
 	masterElectTabletAliasStr := topoproto.TabletAliasString(masterElectTabletAlias)
 	masterElectTabletInfo, ok := tabletMap[masterElectTabletAliasStr]
 	if !ok {
@@ -221,6 +221,11 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 		return err
 	}
 
+	// Check we still have the topology lock.
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return fmt.Errorf("lost topology lock, aborting: %v", err)
+	}
+
 	// Tell the new master to break its slaves, return its replication
 	// position
 	wr.logger.Infof("initializing master on %v", topoproto.TabletAliasString(masterElectTabletAlias))
@@ -228,6 +233,11 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 	rp, err := wr.tmc.InitMaster(ctx, masterElectTabletInfo.Tablet)
 	if err != nil {
 		return err
+	}
+
+	// Check we stil have the topology lock.
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return fmt.Errorf("lost topology lock, aborting: %v", err)
 	}
 
 	// Create a cancelable context for the following RPCs.
@@ -402,6 +412,11 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 	rp, err = wr.tmc.PromoteSlaveWhenCaughtUp(ctx, masterElectTabletInfo.Tablet, rp)
 	if err != nil {
 		return fmt.Errorf("master-elect tablet %v failed to catch up with replication or be upgraded to master: %v", masterElectTabletAliasStr, err)
+	}
+
+	// Check we stil have the topology lock.
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return fmt.Errorf("lost topology lock, aborting: %v", err)
 	}
 
 	// Create a cancelable context for the following RPCs.
@@ -657,6 +672,11 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	}
 	wg.Wait()
 
+	// Check we stil have the topology lock.
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return fmt.Errorf("lost topology lock, aborting: %v", err)
+	}
+
 	// Verify masterElect is alive and has the most advanced position
 	masterElectStatus, ok := statusMap[masterElectTabletAliasStr]
 	if !ok {
@@ -685,6 +705,11 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	rp, err := wr.tmc.PromoteSlave(ctx, masterElectTabletInfo.Tablet)
 	if err != nil {
 		return fmt.Errorf("master-elect tablet %v failed to be upgraded to master: %v", topoproto.TabletAliasString(masterElectTabletAlias), err)
+	}
+
+	// Check we stil have the topology lock.
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return fmt.Errorf("lost topology lock, aborting: %v", err)
 	}
 
 	// Create a cancelable context for the following RPCs.
