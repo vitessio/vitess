@@ -34,7 +34,6 @@ func TestTabletStatusAggregator(t *testing.T) {
 		Name:       "n",
 		Addr:       "a",
 	}
-	t.Logf("aggr = TabletStatusAggregator{k, s, replica, n, a}")
 	qi := &queryInfo{
 		aggr:       aggr,
 		addr:       "",
@@ -43,9 +42,7 @@ func TestTabletStatusAggregator(t *testing.T) {
 		hasError:   false,
 	}
 	aggr.processQueryInfo(qi)
-	t.Logf("aggr.processQueryInfo(, replica, 10ms, false)")
 	aggr.resetNextSlot()
-	t.Logf("aggr.resetNextSlot()")
 	qi = &queryInfo{
 		aggr:       aggr,
 		addr:       "",
@@ -54,7 +51,6 @@ func TestTabletStatusAggregator(t *testing.T) {
 		hasError:   false,
 	}
 	aggr.processQueryInfo(qi)
-	t.Logf("aggr.processQueryInfo(, replica, 8ms, false)")
 	qi = &queryInfo{
 		aggr:       aggr,
 		addr:       "",
@@ -63,7 +59,6 @@ func TestTabletStatusAggregator(t *testing.T) {
 		hasError:   true,
 	}
 	aggr.processQueryInfo(qi)
-	t.Logf("aggr.processQueryInfo(, replica, 3ms, true)")
 	want := &TabletCacheStatus{
 		Keyspace:   "k",
 		Shard:      "s",
@@ -72,18 +67,17 @@ func TestTabletStatusAggregator(t *testing.T) {
 		Addr:       "a",
 		QueryCount: 3,
 		QueryError: 1,
-		QPS:        0,
+		QPS:        0.05,
 		AvgLatency: 7,
 	}
 	got := aggr.GetCacheStatus()
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("aggr.GetCacheStatus() = %+v, want %+v", got, want)
+		t.Errorf("aggr.GetCacheStatus() =\n%+v, want =\n%+v", got, want)
 	}
 	// reset values in idx=0
 	for i := 0; i < 59; i++ {
 		aggr.resetNextSlot()
 	}
-	t.Logf("59 aggr.resetNextSlot()")
 	qi = &queryInfo{
 		aggr:       aggr,
 		addr:       "b",
@@ -92,7 +86,6 @@ func TestTabletStatusAggregator(t *testing.T) {
 		hasError:   false,
 	}
 	aggr.processQueryInfo(qi)
-	t.Logf("aggr.processQueryInfo(b, master, 9ms, false)")
 	qi = &queryInfo{
 		aggr:       aggr,
 		addr:       "",
@@ -101,7 +94,6 @@ func TestTabletStatusAggregator(t *testing.T) {
 		hasError:   true,
 	}
 	aggr.processQueryInfo(qi)
-	t.Logf("aggr.processQueryInfo(, master, 6ms, true)")
 	want = &TabletCacheStatus{
 		Keyspace:   "k",
 		Shard:      "s",
@@ -110,12 +102,12 @@ func TestTabletStatusAggregator(t *testing.T) {
 		Addr:       "b",
 		QueryCount: 2,
 		QueryError: 1,
-		QPS:        0,
+		QPS:        0.03333333333333333,
 		AvgLatency: 7.5,
 	}
 	got = aggr.GetCacheStatus()
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("aggr.GetCacheStatus() = %+v, want %+v", got, want)
+		t.Errorf("aggr.GetCacheStatus() =\n%+v, want =\n%+v", got, want)
 	}
 
 	// Make sure the HTML rendering of the cache works.

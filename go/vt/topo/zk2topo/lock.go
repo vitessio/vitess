@@ -96,6 +96,13 @@ func (zs *Server) Lock(ctx context.Context, dirPath, contents string) (topo.Lock
 	}, nil
 }
 
+// Check is part of the topo.LockDescriptor interface.
+func (ld *zkLockDescriptor) Check(ctx context.Context) error {
+	// TODO(alainjobart): check the connection has not been interrupted.
+	// We'd lose the ephemeral node in case of a session loss.
+	return nil
+}
+
 // Unlock is part of the topo.LockDescriptor interface.
 func (ld *zkLockDescriptor) Unlock(ctx context.Context) error {
 	return ld.zs.Delete(ctx, ld.nodePath, nil)
