@@ -148,7 +148,9 @@ func newKeyspaceIDResolverFactoryV3(ctx context.Context, ts *topo.Server, keyspa
 			return -1, nil, fmt.Errorf("primary vindex is not unique for table %v", table.Name)
 		}
 
-		shardingColumnName := colVindex.Column.String()
+		// TODO @rafael - when rewriting the mapping function, this will need to change.
+		// for now it's safe to assume the sharding key will be always on index 0.
+		shardingColumnName := colVindex.Columns[0].String()
 		for i, col := range table.Columns {
 			if col.Name.EqualString(shardingColumnName) {
 				// We found the column.
