@@ -37,17 +37,27 @@ var (
 	rejectionsDryRun = stats.NewCounters("TxLimiterRejectionsDryRun")
 )
 
+// TxLimiter is the transaction limiter interface.
 type TxLimiter interface {
 	Get(ctx context.Context) bool
 	Release(immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID)
 }
 
+// New creates a new TxLimiter.
+// slotCount: total slot count in transaction pool
+// maxPerUser: fraction of the pool that may be taken by single user
+// enabled: should the feature be enabled. If false, will return
+// "allow-all" limiter
+// dryRun: if true, does no limiting, but records stats of the decisions made
+// byXXX: whether given field from immediate/effective caller id should be taken
+// into account when deciding "user" identity for purposes of transaction
+// limiting.
 func New(slotCount int, maxPerUser float64, enabled, dryRun, byUsername, byPrincipal, byComponent, bySubcomponent bool) TxLimiter {
 	if !enabled {
 		return &TxAllowAll{}
 	}
 
-	return &TxLimiterImpl{
+	return &Impl{
 		maxPerUser:      int64(float64(slotCount) * maxPerUser),
 		dryRun:          dryRun,
 		byUsername:      byUsername,
@@ -59,17 +69,26 @@ func New(slotCount int, maxPerUser float64, enabled, dryRun, byUsername, byPrinc
 	}
 }
 
+// TxAllowAll is a TxLimiter that allows all Get requests and does no tracking.
+// Implements Txlimiter.
 type TxAllowAll struct{}
 
+// Get always returns true (allows all requests).
+// Implements TxLimiter.Get
 func (txa *TxAllowAll) Get(ctx context.Context) bool {
 	return true
 }
 
+// Release is noop, because TxAllowAll does no tracking.
+// Implements TxLimiter.Release
 func (txa *TxAllowAll) Release(immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID) {
 	// NOOP
 }
 
-type TxLimiterImpl struct {
+// Impl limits the total number of transactions a single user may use
+// concurrently.
+// Implements TxLimiter.
+type Impl struct {
 	maxPerUser int64
 	usageMap   map[string]int64
 	mu         sync.Mutex
@@ -82,7 +101,11 @@ type TxLimiterImpl struct {
 	byEffectiveUser bool
 }
 
-func (txl *TxLimiterImpl) Get(ctx context.Context) bool {
+// Get tells whether given user (identified by context.Context) is allowed
+// to use another transaction slot. If this method returns true, it's
+// necessary to call Release once transaction is returned to the pool.
+// Implements TxLimiter.Get
+func (txl *Impl) Get(ctx context.Context) bool {
 	key := txl.extractKeyFromContext(ctx)
 
 	txl.mu.Lock()
@@ -110,7 +133,10 @@ func (txl *TxLimiterImpl) Get(ctx context.Context) bool {
 	return false
 }
 
-func (txl *TxLimiterImpl) Release(immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID) {
+// Release marks that given user (identified by caller ID) is no longer using
+// a transaction slot.
+// Implements TxLimiter.Release
+func (txl *Impl) Release(immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID) {
 	key := txl.extractKeyFromCallers(immediate, effective)
 
 	txl.mu.Lock()
@@ -128,17 +154,19 @@ func (txl *TxLimiterImpl) Release(immediate *querypb.VTGateCallerID, effective *
 	txl.usageMap[key] = usage - 1
 }
 
-func (txl *TxLimiterImpl) extractKeyFromContext(ctx context.Context) string {
+func (txl *Impl) extractKeyFromContext(ctx context.Context) string {
 	return txl.extractKeyFromCallers(
 		callerid.ImmediateCallerIDFromContext(ctx),
 		callerid.EffectiveCallerIDFromContext(ctx))
 }
 
-func (txl *TxLimiterImpl) extractKeyFromCallers(immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID) string {
+// extractKeyFromCallers builds a string key used to differentiate users, based
+// on fields specified in configuration and their values from caller ID.
+func (txl *Impl) extractKeyFromCallers(immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID) string {
 	var parts []string
 	if txl.byUsername {
 		if immediate != nil {
-			parts = append(parts, immediate.Username)
+			parts = append(parts, callerid.GetUsername(immediate))
 		} else {
 			parts = append(parts, unknown)
 		}
@@ -146,13 +174,13 @@ func (txl *TxLimiterImpl) extractKeyFromCallers(immediate *querypb.VTGateCallerI
 	if txl.byEffectiveUser {
 		if effective != nil {
 			if txl.byPrincipal {
-				parts = append(parts, effective.Principal)
+				parts = append(parts, callerid.GetPrincipal(effective))
 			}
 			if txl.byComponent {
-				parts = append(parts, effective.Component)
+				parts = append(parts, callerid.GetComponent(effective))
 			}
 			if txl.bySubcomponent {
-				parts = append(parts, effective.Subcomponent)
+				parts = append(parts, callerid.GetSubcomponent(effective))
 			}
 		} else {
 			parts = append(parts, unknown)
