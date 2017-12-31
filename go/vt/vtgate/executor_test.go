@@ -548,15 +548,16 @@ func TestExecutorShow(t *testing.T) {
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
 		Rows: [][]sqltypes.Value{
+			buildVarCharRow("TestExecutor", "hash_index", "hash", "", ""),
 			buildVarCharRow("TestExecutor", "idx1", "hash", "", ""),
 			buildVarCharRow("TestExecutor", "idx_noauto", "hash", "", "noauto_table"),
 			buildVarCharRow("TestExecutor", "insert_ignore_idx", "lookup_hash", "from=fromcol, table=ins_lookup, to=tocol", "insert_ignore_test"),
 			buildVarCharRow("TestExecutor", "keyspace_id", "numeric", "", ""),
 			buildVarCharRow("TestExecutor", "music_user_map", "lookup_hash_unique", "from=music_id, table=music_user_map, to=user_id", "music"),
+			buildVarCharRow("TestExecutor", "name_lastname_keyspace_id_map", "lookup", "from=name,lastname, table=name_lastname_keyspace_id_map, to=keyspace_id", "user2"),
 			buildVarCharRow("TestExecutor", "name_user_map", "lookup_hash", "from=name, table=name_user_map, to=user_id", "user"),
-			buildVarCharRow("TestExecutor", "user_index", "hash", "", ""),
 		},
-		RowsAffected: 7,
+		RowsAffected: 8,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
 		t.Errorf("show vindexes:\n%+v, want\n%+v", qr, wantqr)
@@ -566,7 +567,7 @@ func TestExecutorShow(t *testing.T) {
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Column", "Name", "Type", "Params", "Owner"),
 		Rows: [][]sqltypes.Value{
-			buildVarCharRow("Id", "user_index", "hash", "", ""),
+			buildVarCharRow("Id", "hash_index", "hash", "", ""),
 			buildVarCharRow("name", "name_user_map", "lookup_hash", "from=name, table=name_user_map, to=user_id", "user"),
 		},
 		RowsAffected: 2,
@@ -592,7 +593,7 @@ func TestExecutorShow(t *testing.T) {
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Column", "Name", "Type", "Params", "Owner"),
 		Rows: [][]sqltypes.Value{
-			buildVarCharRow("Id", "user_index", "hash", "", ""),
+			buildVarCharRow("Id", "hash_index", "hash", "", ""),
 			buildVarCharRow("name", "name_user_map", "lookup_hash", "from=name, table=name_user_map, to=user_id", "user"),
 		},
 		RowsAffected: 2,
