@@ -13,7 +13,9 @@
                     "Query": "insert into name_user_map(name, user_id) values (:_name0, :user_id0)",
                     "Values": [
                         [
-                            ":name0"
+                            [
+                                ":name0"
+                            ]
                         ]
                     ],
                     "Table": "name_user_map",
@@ -21,7 +23,12 @@
                     "Mid": [
                         "(:_name0, :user_id0)"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             },
             {
                 "Original": "insert into user(id, name) values (:vtg1, :vtg2)",
@@ -34,10 +41,14 @@
                     "Query": "insert into user(id, name) values (:_id0, :_name0)",
                     "Values": [
                         [
-                            ":vtg1"
+                            [
+                                ":vtg1"
+                            ]
                         ],
                         [
-                            ":vtg2"
+                            [
+                                ":vtg2"
+                            ]
                         ]
                     ],
                     "Table": "user",
@@ -45,7 +56,12 @@
                     "Mid": [
                         "(:_id0, :_name0)"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -122,7 +138,9 @@
                     "Query": "insert into name_user_map(name, user_id) values (:_name0, :user_id0)",
                     "Values": [
                         [
-                            ":name0"
+                            [
+                                ":name0"
+                            ]
                         ]
                     ],
                     "Table": "name_user_map",
@@ -130,7 +148,12 @@
                     "Mid": [
                         "(:_name0, :user_id0)"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             },
             {
                 "Original": "insert into user(id, name) values (:vtg1, :vtg2)",
@@ -143,10 +166,14 @@
                     "Query": "insert into user(id, name) values (:_id0, :_name0)",
                     "Values": [
                         [
-                            ":vtg1"
+                            [
+                                ":vtg1"
+                            ]
                         ],
                         [
-                            ":vtg2"
+                            [
+                                ":vtg2"
+                            ]
                         ]
                     ],
                     "Table": "user",
@@ -154,7 +181,12 @@
                     "Mid": [
                         "(:_id0, :_name0)"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -234,7 +266,12 @@
                     "Values": [
                         ":name"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             },
             {
                 "Original": "insert ignore into name_user_map(name, user_id) values (:name0, :user_id0)",
@@ -247,7 +284,9 @@
                     "Query": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0)",
                     "Values": [
                         [
-                            ":name0"
+                            [
+                                ":name0"
+                            ]
                         ]
                     ],
                     "Table": "name_user_map",
@@ -255,7 +294,12 @@
                     "Mid": [
                         "(:_name0, :user_id0)"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             },
             {
                 "Original": "insert ignore into user(id, name) values (:vtg1, :vtg2)",
@@ -268,10 +312,14 @@
                     "Query": "insert ignore into user(id, name) values (:_id0, :_name0)",
                     "Values": [
                         [
-                            ":vtg1"
+                            [
+                                ":vtg1"
+                            ]
                         ],
                         [
-                            ":vtg2"
+                            [
+                                ":vtg2"
+                            ]
                         ]
                     ],
                     "Table": "user",
@@ -279,7 +327,12 @@
                     "Mid": [
                         "(:_id0, :_name0)"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -372,7 +425,12 @@
                     "Values": [
                         ":name"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             },
             {
                 "Original": "insert ignore into name_user_map(name, user_id) values (:name0, :user_id0)",
@@ -385,7 +443,9 @@
                     "Query": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0)",
                     "Values": [
                         [
-                            ":name0"
+                            [
+                                ":name0"
+                            ]
                         ]
                     ],
                     "Table": "name_user_map",
@@ -393,7 +453,12 @@
                     "Mid": [
                         "(:_name0, :user_id0)"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             },
             {
                 "Original": "insert ignore into user(id, name, nickname) values (:vtg1, :vtg2, :vtg3)",
@@ -406,10 +471,14 @@
                     "Query": "insert ignore into user(id, name, nickname) values (:_id0, :_name0, :vtg3)",
                     "Values": [
                         [
-                            ":vtg1"
+                            [
+                                ":vtg1"
+                            ]
                         ],
                         [
-                            ":vtg2"
+                            [
+                                ":vtg2"
+                            ]
                         ]
                     ],
                     "Table": "user",
@@ -417,7 +486,12 @@
                     "Mid": [
                         "(:_id0, :_name0, :vtg3)"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -511,7 +585,12 @@
                     "Values": [
                         ":name"
                     ]
-                }
+                },
+                "ExecCount": 2,
+                "ExecTime": 0,
+                "ShardQueries": 2,
+                "Rows": 2,
+                "Errors": 0
             },
             {
                 "Original": "insert ignore into name_user_map(name, user_id) values (:name0, :user_id0), (:name1, :user_id1)",
@@ -524,8 +603,12 @@
                     "Query": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0), (:_name1, :user_id1)",
                     "Values": [
                         [
-                            ":name0",
-                            ":name1"
+                            [
+                                ":name0"
+                            ],
+                            [
+                                ":name1"
+                            ]
                         ]
                     ],
                     "Table": "name_user_map",
@@ -534,7 +617,12 @@
                         "(:_name0, :user_id0)",
                         "(:_name1, :user_id1)"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 2,
+                "Rows": 2,
+                "Errors": 0
             },
             {
                 "Original": "insert ignore into user(id, name) values (:vtg1, :vtg2), (:vtg3, :vtg4)",
@@ -547,12 +635,20 @@
                     "Query": "insert ignore into user(id, name) values (:_id0, :_name0), (:_id1, :_name1)",
                     "Values": [
                         [
-                            ":vtg1",
-                            ":vtg3"
+                            [
+                                ":vtg1"
+                            ],
+                            [
+                                ":vtg3"
+                            ]
                         ],
                         [
-                            ":vtg2",
-                            ":vtg4"
+                            [
+                                ":vtg2"
+                            ],
+                            [
+                                ":vtg4"
+                            ]
                         ]
                     ],
                     "Table": "user",
@@ -561,7 +657,12 @@
                         "(:_id0, :_name0)",
                         "(:_id1, :_name1)"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 2,
+                "Rows": 2,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -738,7 +839,12 @@
                     "Values": [
                         ":name"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             },
             {
                 "Original": "insert ignore into name_user_map(name, user_id) values (:name0, :user_id0)",
@@ -751,7 +857,9 @@
                     "Query": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0)",
                     "Values": [
                         [
-                            ":name0"
+                            [
+                                ":name0"
+                            ]
                         ]
                     ],
                     "Table": "name_user_map",
@@ -759,7 +867,12 @@
                     "Mid": [
                         "(:_name0, :user_id0)"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             },
             {
                 "Original": "insert into user(id, name, nickname) values (:vtg1, :vtg2, :vtg3) on duplicate key update nickname = :vtg4",
@@ -772,10 +885,14 @@
                     "Query": "insert into user(id, name, nickname) values (:_id0, :_name0, :vtg3) on duplicate key update nickname = :vtg4",
                     "Values": [
                         [
-                            ":vtg1"
+                            [
+                                ":vtg1"
+                            ]
                         ],
                         [
-                            ":vtg2"
+                            [
+                                ":vtg2"
+                            ]
                         ]
                     ],
                     "Table": "user",
@@ -784,7 +901,12 @@
                         "(:_id0, :_name0, :vtg3)"
                     ],
                     "Suffix": " on duplicate key update nickname = :vtg4"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -879,7 +1001,12 @@
                     "Values": [
                         ":name"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             },
             {
                 "Original": "insert ignore into name_user_map(name, user_id) values (:name0, :user_id0)",
@@ -892,7 +1019,9 @@
                     "Query": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0)",
                     "Values": [
                         [
-                            ":name0"
+                            [
+                                ":name0"
+                            ]
                         ]
                     ],
                     "Table": "name_user_map",
@@ -900,7 +1029,12 @@
                     "Mid": [
                         "(:_name0, :user_id0)"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             },
             {
                 "Original": "insert into user(id, name, nickname, address) values (:vtg1, :vtg2, :vtg3, :vtg4) on duplicate key update nickname = values(nickname), address = values(address)",
@@ -913,10 +1047,14 @@
                     "Query": "insert into user(id, name, nickname, address) values (:_id0, :_name0, :vtg3, :vtg4) on duplicate key update nickname = values(nickname), address = values(address)",
                     "Values": [
                         [
-                            ":vtg1"
+                            [
+                                ":vtg1"
+                            ]
                         ],
                         [
-                            ":vtg2"
+                            [
+                                ":vtg2"
+                            ]
                         ]
                     ],
                     "Table": "user",
@@ -925,7 +1063,12 @@
                         "(:_id0, :_name0, :vtg3, :vtg4)"
                     ],
                     "Suffix": " on duplicate key update nickname = values(nickname), address = values(address)"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             }
         ],
         "TabletActions": {
