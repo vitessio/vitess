@@ -320,8 +320,11 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	var data []byte
 
 	for {
-		if l.shutdown && l.handler.SafeToClose(c) {
-			return
+		if l.shutdown {
+			if l.handler.SafeToClose(c) {
+				return
+			}
+			log.Infof("Listener is shutting down but connection ID %v is not safe to close yet", c.ConnectionID)
 		}
 		c.sequence = 0
 		go func() {
