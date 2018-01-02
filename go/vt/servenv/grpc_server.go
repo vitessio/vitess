@@ -99,6 +99,8 @@ func createGRPCServer() {
 		return
 	}
 
+	grpccommon.EnableTracingOpt()
+
 	var opts []grpc.ServerOption
 	if GRPCPort != nil && *GRPCCert != "" && *GRPCKey != "" {
 		config, err := vttls.ServerConfig(*GRPCCert, *GRPCKey, *GRPCCA)
