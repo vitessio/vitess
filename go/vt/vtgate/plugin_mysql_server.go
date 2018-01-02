@@ -49,9 +49,6 @@ var (
 	mysqlSslCa   = flag.String("mysql_server_ssl_ca", "", "Path to ssl CA for mysql server plugin SSL. If specified, server will require and validate client certs.")
 
 	mysqlSlowConnectWarnThreshold = flag.Duration("mysql_slow_connect_warn_threshold", 0, "Warn if it takes more than the given threshold for a mysql connection to establish")
-
-	activeQueries = sync.WaitGroup{}
-	draining      = false
 )
 
 // vtgateHandler implements the Listener interface.
@@ -79,13 +76,15 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	}
 }
 
-func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
-	if draining {
-		return mysql.NewSQLError(1053, "08S01", "vtgate is draining, try reconnecting")
+func (vh *vtgateHandler) SafeToClose(c *mysql.Conn) bool {
+	session, _ := c.ClientData.(*vtgatepb.Session)
+	if session == nil {
+		return true
 	}
-	activeQueries.Add(1)
-	defer activeQueries.Done()
+	return session.InTransaction
+}
 
+func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	// FIXME(alainjobart): Add some kind of timeout to the context.
 	ctx := context.Background()
 
@@ -227,19 +226,27 @@ func init() {
 	servenv.OnRun(initMySQLProtocol)
 
 	servenv.OnTermSync(func() {
-		draining = true
-		log.Info("Waiting for active queries to complete...")
-		activeQueries.Wait()
-		log.Info("Closing mysql listener(s)...")
+		wg := &sync.WaitGroup{}
 		if mysqlListener != nil {
-			mysqlListener.Close()
-			mysqlListener = nil
+			drainListener(mysqlListener, wg)
 		}
 		if mysqlUnixListener != nil {
-			mysqlUnixListener.Close()
-			mysqlUnixListener = nil
+			drainListener(mysqlUnixListener, wg)
 		}
+		log.Info("Waiting for mysql connections to drain...")
+		wg.Wait()
 	})
+}
+
+func drainListener(l *mysql.Listener, wg *sync.WaitGroup) {
+	wg.Add(1)
+	go func() {
+		l.Shutdown()
+		l.WaitForConnections()
+		l.Close()
+		l = nil
+		wg.Done()
+	}()
 }
 
 var pluginInitializers []func()
