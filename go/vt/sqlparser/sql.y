@@ -64,6 +64,7 @@ func forceEOF(yylex interface{}) {
   selectExprs   SelectExprs
   selectExpr    SelectExpr
   columns       Columns
+  partitions    Partitions
   colName       *ColName
   tableExprs    TableExprs
   tableExpr     TableExpr
@@ -86,7 +87,6 @@ func forceEOF(yylex interface{}) {
   updateExprs   UpdateExprs
   updateExpr    *UpdateExpr
   colIdent      ColIdent
-  colIdents     []ColIdent
   tableIdent    TableIdent
   convertType   *ConvertType
   aliasedTableName *AliasedTableExpr
@@ -202,7 +202,6 @@ func forceEOF(yylex interface{}) {
 %type <tableName> table_name into_table_name
 %type <aliasedTableName> aliased_table_name
 %type <indexHints> index_hint_list
-%type <colIdents> index_list
 %type <expr> where_expression_opt
 %type <expr> condition
 %type <boolVal> boolean_value
@@ -229,6 +228,7 @@ func forceEOF(yylex interface{}) {
 %type <limit> limit_opt
 %type <str> lock_opt
 %type <columns> ins_column_list using_column_list
+%type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
 %type <bytes> charset_or_character_set
@@ -345,26 +345,27 @@ union_rhs:
 
 
 insert_statement:
-  insert_or_replace comment_opt ignore_opt into_table_name insert_data on_dup_opt
+  insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data on_dup_opt
   {
     // insert_data returns a *Insert pre-filled with Columns & Values
-    ins := $5
+    ins := $6
     ins.Action = $1
     ins.Comments = $2
     ins.Ignore = $3
     ins.Table = $4
-    ins.OnDup = OnDup($6)
+    ins.Partitions = $5
+    ins.OnDup = OnDup($7)
     $$ = ins
   }
-| insert_or_replace comment_opt ignore_opt into_table_name SET update_list on_dup_opt
+| insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET update_list on_dup_opt
   {
-    cols := make(Columns, 0, len($6))
-    vals := make(ValTuple, 0, len($7))
-    for _, updateList := range $6 {
+    cols := make(Columns, 0, len($7))
+    vals := make(ValTuple, 0, len($8))
+    for _, updateList := range $7 {
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Action: $1, Comments: Comments($2), Ignore: $3, Table: $4, Columns: cols, Rows: Values{vals}, OnDup: OnDup($7)}
+    $$ = &Insert{Action: $1, Comments: Comments($2), Ignore: $3, Table: $4, Partitions: $5, Columns: cols, Rows: Values{vals}, OnDup: OnDup($8)}
   }
 
 insert_or_replace:
@@ -384,9 +385,9 @@ update_statement:
   }
 
 delete_statement:
-  DELETE comment_opt FROM table_name where_expression_opt order_by_opt limit_opt
+  DELETE comment_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: Comments($2), TableExprs:  TableExprs{&AliasedTableExpr{Expr:$4}}, Where: NewWhere(WhereStr, $5), OrderBy: $6, Limit: $7}
+    $$ = &Delete{Comments: Comments($2), TableExprs:  TableExprs{&AliasedTableExpr{Expr:$4}}, Partitions: $5, Where: NewWhere(WhereStr, $6), OrderBy: $7, Limit: $8}
   }
 | DELETE comment_opt table_name_list from_or_using table_references where_expression_opt
   {
@@ -405,6 +406,15 @@ table_name_list:
 | table_name_list ',' table_name
   {
     $$ = append($$, $3)
+  }
+
+opt_partition_clause:
+  {
+    $$ = nil
+  }
+| PARTITION openb partition_list closeb
+  {
+  $$ = $3
   }
 
 set_statement:
@@ -1295,6 +1305,10 @@ table_name as_opt_id index_hint_list
   {
     $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
   }
+| table_name PARTITION openb partition_list closeb as_opt_id index_hint_list
+  {
+    $$ = &AliasedTableExpr{Expr:$1, Partitions: $4, As: $6, Hints: $7}
+  }
 
 using_column_list:
   sql_id
@@ -1302,6 +1316,16 @@ using_column_list:
     $$ = Columns{$1}
   }
 | using_column_list ',' sql_id
+  {
+    $$ = append($$, $3)
+  }
+
+partition_list:
+  sql_id
+  {
+    $$ = Partitions{$1}
+  }
+| partition_list ',' sql_id
   {
     $$ = append($$, $3)
   }
@@ -1450,27 +1474,17 @@ index_hint_list:
   {
     $$ = nil
   }
-| USE INDEX openb index_list closeb
+| USE INDEX openb using_column_list closeb
   {
     $$ = &IndexHints{Type: UseStr, Indexes: $4}
   }
-| IGNORE INDEX openb index_list closeb
+| IGNORE INDEX openb using_column_list closeb
   {
     $$ = &IndexHints{Type: IgnoreStr, Indexes: $4}
   }
-| FORCE INDEX openb index_list closeb
+| FORCE INDEX openb using_column_list closeb
   {
     $$ = &IndexHints{Type: ForceStr, Indexes: $4}
-  }
-
-index_list:
-  sql_id
-  {
-    $$ = []ColIdent{$1}
-  }
-| index_list ',' sql_id
-  {
-    $$ = append($1, $3)
   }
 
 where_expression_opt:
