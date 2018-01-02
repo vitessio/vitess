@@ -78,7 +78,10 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 
 func (vh *vtgateHandler) SafeToClose(c *mysql.Conn) bool {
 	session, _ := c.ClientData.(*vtgatepb.Session)
-	return session == nil
+	if session == nil {
+		return true
+	}
+	return !session.InTransaction
 }
 
 func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
