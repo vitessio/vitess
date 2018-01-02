@@ -314,6 +314,11 @@ func (db *DB) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Resu
 	return db.Handler.HandleQuery(c, query, callback)
 }
 
+// SafeToClose is part of the mysql.Handler interface.
+func (db *DB) SafeToClose(c *mysql.Conn) bool {
+	return true // TODO(tpetr): make this configuratble
+}
+
 // HandleQuery is the default implementation of the QueryHandler interface
 func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	if db.AllowAll {
