@@ -235,6 +235,7 @@ func init() {
 		}
 		log.Info("Waiting for mysql connections to drain...")
 		wg.Wait()
+		log.Info("All mysql connections drained successfully!")
 	})
 }
 

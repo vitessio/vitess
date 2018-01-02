@@ -161,6 +161,7 @@ func (l *Listener) Accept() {
 		}
 
 		if l.shutdown {
+			log.Infof("Listener is shutting down -- refusing connection from %v", conn.RemoteAddr)
 			conn.Close()
 			continue
 		}
