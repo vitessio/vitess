@@ -12,7 +12,12 @@
                     },
                     "Query": "select * from user",
                     "FieldQuery": "select * from user where 1 != 1"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 4,
+                "Rows": 4,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -99,7 +104,12 @@
                     },
                     "Query": "select /* ; */ :vtg1 from user",
                     "FieldQuery": "select :vtg1 from user where 1 != 1"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 4,
+                "Rows": 4,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -190,7 +200,12 @@
                     },
                     "Query": "select :vtg1 from user where x = :vtg2",
                     "FieldQuery": "select :vtg1 from user where 1 != 1"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 4,
+                "Rows": 4,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -285,7 +300,12 @@
                     },
                     "Query": "select :vtg1 from user where x = :vtg2",
                     "FieldQuery": "select :vtg1 from user where 1 != 1"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 4,
+                "Rows": 4,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -380,7 +400,12 @@
                     },
                     "Query": "select :vtg1 from user where x = :vtg2",
                     "FieldQuery": "select :vtg1 from user where 1 != 1"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 4,
+                "Rows": 4,
+                "Errors": 0
             }
         ],
         "TabletActions": {
