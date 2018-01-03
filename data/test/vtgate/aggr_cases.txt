@@ -93,6 +93,49 @@
   }
 }
 
+# scatter group by a text column
+"select count(*), a, textcol1, b from user group by a, textcol1, b"
+{
+  "Original": "select count(*), a, textcol1, b from user group by a, textcol1, b",
+  "Instructions": {
+    "Aggregates": [
+      {
+        "Opcode": "count",
+        "Col": 0
+      }
+    ],
+    "Keys": [
+      1,
+      4,
+      3
+    ],
+    "TruncateColumnCount": 4,
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select count(*), a, textcol1, b, weight_string(textcol1) from user group by a, textcol1, b order by a asc, textcol1 asc, b asc",
+      "FieldQuery": "select count(*), a, textcol1, b, weight_string(textcol1) from user where 1 != 1 group by a, textcol1, b",
+      "OrderBy": [
+        {
+          "Col": 1,
+          "Desc": false
+        },
+        {
+          "Col": 4,
+          "Desc": false
+        },
+        {
+          "Col": 3,
+          "Desc": false
+        }
+      ]
+    }
+  }
+}
+
 # count aggregate
 "select count(*) from user"
 {

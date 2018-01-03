@@ -98,6 +98,41 @@ func CopyRow(r []Value) []Value {
 	return out
 }
 
+// Truncate returns a new Result with all the rows truncated
+// to the specified number of columns.
+func (result *Result) Truncate(l int) *Result {
+	if l == 0 {
+		return result
+	}
+
+	out := &Result{
+		InsertID:     result.InsertID,
+		RowsAffected: result.RowsAffected,
+	}
+	if result.Fields != nil {
+		out.Fields = result.Fields[:l]
+	}
+	if result.Rows != nil {
+		out.Rows = make([][]Value, 0, len(result.Rows))
+		for _, r := range result.Rows {
+			out.Rows = append(out.Rows, r[:l])
+		}
+	}
+	if result.Extras != nil {
+		out.Extras = &querypb.ResultExtras{
+			Fresher: result.Extras.Fresher,
+		}
+		if result.Extras.EventToken != nil {
+			out.Extras.EventToken = &querypb.EventToken{
+				Timestamp: result.Extras.EventToken.Timestamp,
+				Shard:     result.Extras.EventToken.Shard,
+				Position:  result.Extras.EventToken.Position,
+			}
+		}
+	}
+	return out
+}
+
 // FieldsEqual compares two arrays of fields.
 // reflect.DeepEqual shouldn't be used because of the protos.
 func FieldsEqual(f1, f2 []*querypb.Field) bool {
