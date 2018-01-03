@@ -135,6 +135,100 @@
   }
 }
 
+# ORDER BY on scatter with text column
+"select a, textcol1, b from user order by a, textcol1, b"
+{
+  "Original": "select a, textcol1, b from user order by a, textcol1, b",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select a, textcol1, b, weight_string(textcol1) from user order by a asc, textcol1 asc, b asc",
+    "FieldQuery": "select a, textcol1, b, weight_string(textcol1) from user where 1 != 1",
+    "OrderBy": [
+      {
+        "Col": 0,
+        "Desc": false
+      },
+      {
+        "Col": 3,
+        "Desc": false
+      },
+      {
+        "Col": 2,
+        "Desc": false
+      }
+    ],
+    "TruncateColumnCount": 3
+  }
+}
+
+# ORDER BY on scatter with text column, qualified name
+"select a, user.textcol1, b from user order by a, textcol1, b"
+{
+  "Original": "select a, user.textcol1, b from user order by a, textcol1, b",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select a, user.textcol1, b, weight_string(user.textcol1) from user order by a asc, textcol1 asc, b asc",
+    "FieldQuery": "select a, user.textcol1, b, weight_string(user.textcol1) from user where 1 != 1",
+    "OrderBy": [
+      {
+        "Col": 0,
+        "Desc": false
+      },
+      {
+        "Col": 3,
+        "Desc": false
+      },
+      {
+        "Col": 2,
+        "Desc": false
+      }
+    ],
+    "TruncateColumnCount": 3
+  }
+}
+
+# ORDER BY on scatter with multiple text columns
+"select a, textcol1, b, textcol2 from user order by a, textcol1, b, textcol2"
+{
+  "Original": "select a, textcol1, b, textcol2 from user order by a, textcol1, b, textcol2",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select a, textcol1, b, textcol2, weight_string(textcol1), weight_string(textcol2) from user order by a asc, textcol1 asc, b asc, textcol2 asc",
+    "FieldQuery": "select a, textcol1, b, textcol2, weight_string(textcol1), weight_string(textcol2) from user where 1 != 1",
+    "OrderBy": [
+      {
+        "Col": 0,
+        "Desc": false
+      },
+      {
+        "Col": 4,
+        "Desc": false
+      },
+      {
+        "Col": 2,
+        "Desc": false
+      },
+      {
+        "Col": 5,
+        "Desc": false
+      }
+    ],
+    "TruncateColumnCount": 4
+  }
+}
+
 # ORDER BY invalid col number on scatter
 "select col from user order by 2"
 "column number out of range: 2"

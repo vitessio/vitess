@@ -65,6 +65,50 @@ func TestOrderedAggregateExecute(t *testing.T) {
 	}
 }
 
+func TestOrderedAggregateExecuteTruncate(t *testing.T) {
+	tp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"col|count(*)|weight_string(col)",
+				"varchar|decimal|varbinary",
+			),
+			"a|1|A",
+			"A|1|A",
+			"b|2|B",
+			"C|3|C",
+			"c|4|C",
+		)},
+	}
+
+	oa := &OrderedAggregate{
+		Aggregates: []AggregateParams{{
+			Opcode: AggregateCount,
+			Col:    1,
+		}},
+		Keys:                []int{2},
+		TruncateColumnCount: 2,
+		Input:               tp,
+	}
+
+	result, err := oa.Execute(nil, nil, nil, false)
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"col|count(*)",
+			"varchar|decimal",
+		),
+		"a|2",
+		"b|2",
+		"C|7",
+	)
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("oa.Execute:\n%v, want\n%v", result, wantResult)
+	}
+}
+
 func TestOrderedAggregateStreamExecute(t *testing.T) {
 	fields := sqltypes.MakeTestFields(
 		"col|count(*)",
@@ -112,6 +156,56 @@ func TestOrderedAggregateStreamExecute(t *testing.T) {
 	}
 }
 
+func TestOrderedAggregateStreamExecuteTruncate(t *testing.T) {
+	tp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"col|count(*)|weight_string(col)",
+				"varchar|decimal|varbinary",
+			),
+			"a|1|A",
+			"A|1|A",
+			"b|2|B",
+			"C|3|C",
+			"c|4|C",
+		)},
+	}
+
+	oa := &OrderedAggregate{
+		Aggregates: []AggregateParams{{
+			Opcode: AggregateCount,
+			Col:    1,
+		}},
+		Keys:                []int{2},
+		TruncateColumnCount: 2,
+		Input:               tp,
+	}
+
+	var results []*sqltypes.Result
+	err := oa.StreamExecute(nil, nil, nil, false, func(qr *sqltypes.Result) error {
+		results = append(results, qr)
+		return nil
+	})
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantResults := sqltypes.MakeTestStreamingResults(
+		sqltypes.MakeTestFields(
+			"col|count(*)",
+			"varchar|decimal",
+		),
+		"a|2",
+		"---",
+		"b|2",
+		"---",
+		"C|7",
+	)
+	if !reflect.DeepEqual(results, wantResults) {
+		t.Errorf("oa.StreamExecute:\n%s, want\n%s", sqltypes.PrintResults(results), sqltypes.PrintResults(wantResults))
+	}
+}
+
 func TestOrderedAggregateGetFields(t *testing.T) {
 	result := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -129,6 +223,35 @@ func TestOrderedAggregateGetFields(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, result) {
 		t.Errorf("oa.GetFields:\n%v, want\n%v", got, result)
+	}
+}
+
+func TestOrderedAggregateGetFieldsTruncate(t *testing.T) {
+	result := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"col|count(*)|weight_string(col)",
+			"varchar|decimal|varbinary",
+		),
+	)
+	tp := &fakePrimitive{results: []*sqltypes.Result{result}}
+
+	oa := &OrderedAggregate{
+		TruncateColumnCount: 2,
+		Input:               tp,
+	}
+
+	got, err := oa.GetFields(nil, nil, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"col|count(*)",
+			"varchar|decimal",
+		),
+	)
+	if !reflect.DeepEqual(got, wantResult) {
+		t.Errorf("oa.GetFields:\n%v, want\n%v", got, wantResult)
 	}
 }
 

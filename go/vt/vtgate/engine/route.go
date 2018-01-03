@@ -68,6 +68,11 @@ type Route struct {
 	// merge-sorted.
 	OrderBy []OrderbyParams
 
+	// TruncateColumnCount specifies the number of columns to return
+	// in the final result. Rest of the columns are truncated
+	// from the result received. If 0, no truncation happens.
+	TruncateColumnCount int
+
 	// The following variables are only set for DMLs.
 
 	// Table sepcifies the table for the route.
@@ -123,6 +128,7 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		ChangedVindexValues map[string][]sqltypes.PlanValue `json:",omitempty"`
 		JoinVars            map[string]struct{}             `json:",omitempty"`
 		OrderBy             []OrderbyParams                 `json:",omitempty"`
+		TruncateColumnCount int                             `json:",omitempty"`
 		Table               string                          `json:",omitempty"`
 		Subquery            string                          `json:",omitempty"`
 		Generate            *Generate                       `json:",omitempty"`
@@ -139,6 +145,7 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		Values:              route.Values,
 		JoinVars:            route.JoinVars,
 		OrderBy:             route.OrderBy,
+		TruncateColumnCount: route.TruncateColumnCount,
 		Table:               tname,
 		Subquery:            route.Subquery,
 		Generate:            route.Generate,
@@ -275,6 +282,14 @@ func newScatterParams(ks string, bv map[string]*querypb.BindVariable, shards []s
 
 // Execute performs a non-streaming exec.
 func (route *Route) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	qr, err := route.execute(vcursor, bindVars, joinVars, wantfields)
+	if err != nil {
+		return nil, err
+	}
+	return qr.Truncate(route.TruncateColumnCount), nil
+}
+
+func (route *Route) execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	bindVars = combineVars(bindVars, joinVars)
 
 	switch route.Opcode {
@@ -353,11 +368,15 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars, joinVars map[string
 			route.Query,
 			params.ks,
 			params.shardVars,
-			callback,
+			func(qr *sqltypes.Result) error {
+				return callback(qr.Truncate(route.TruncateColumnCount))
+			},
 		)
 	}
 
-	return mergeSort(vcursor, route.Query, route.OrderBy, params, callback)
+	return mergeSort(vcursor, route.Query, route.OrderBy, params, func(qr *sqltypes.Result) error {
+		return callback(qr.Truncate(route.TruncateColumnCount))
+	})
 }
 
 // GetFields fetches the field info.
@@ -369,7 +388,11 @@ func (route *Route) GetFields(vcursor VCursor, bindVars, joinVars map[string]*qu
 		return nil, err
 	}
 
-	return route.execShard(vcursor, route.FieldQuery, bindVars, ks, shard, false /* isDML */)
+	qr, err := route.execShard(vcursor, route.FieldQuery, bindVars, ks, shard, false /* isDML */)
+	if err != nil {
+		return nil, err
+	}
+	return qr.Truncate(route.TruncateColumnCount), nil
 }
 
 func combineVars(bv1, bv2 map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {

@@ -995,6 +995,79 @@ func TestSelectScatterOrderBy(t *testing.T) {
 	}
 }
 
+// TestSelectScatterOrderByVarChar will run an ORDER BY query that will scatter out to 8 shards and return the 8 rows (one per shard) sorted.
+func TestSelectScatterOrderByVarChar(t *testing.T) {
+	// Special setup: Don't use createExecutorEnv.
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck()
+	s := createSandbox("TestExecutor")
+	s.VSchema = executorVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := new(sandboxTopo)
+	resolver := newTestResolver(hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	var conns []*sandboxconn.SandboxConn
+	for i, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc.SetResults([]*sqltypes.Result{{
+			Fields: []*querypb.Field{
+				{Name: "col1", Type: sqltypes.Int32},
+				{Name: "textcol", Type: sqltypes.VarChar},
+			},
+			RowsAffected: 1,
+			InsertID:     0,
+			Rows: [][]sqltypes.Value{{
+				sqltypes.NewInt32(1),
+				// i%4 ensures that there are duplicates across shards.
+				// This will allow us to test that cross-shard ordering
+				// still works correctly.
+				sqltypes.NewVarChar(fmt.Sprintf("%d", i%4)),
+				sqltypes.NewVarBinary(fmt.Sprintf("%d", i%4)),
+			}},
+		}})
+		conns = append(conns, sbc)
+	}
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize, false)
+
+	query := "select col1, textcol from user order by textcol desc"
+	gotResult, err := executorExec(executor, query, nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select col1, textcol, weight_string(textcol) from user order by textcol desc",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	for _, conn := range conns {
+		if !reflect.DeepEqual(conn.Queries, wantQueries) {
+			t.Errorf("conn.Queries = %#v, want %#v", conn.Queries, wantQueries)
+		}
+	}
+
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "col1", Type: sqltypes.Int32},
+			{Name: "textcol", Type: sqltypes.VarChar},
+		},
+		RowsAffected: 8,
+		InsertID:     0,
+	}
+	for i := 0; i < 4; i++ {
+		// There should be a duplicate for each row returned.
+		for j := 0; j < 2; j++ {
+			row := []sqltypes.Value{
+				sqltypes.NewInt32(1),
+				sqltypes.NewVarChar(fmt.Sprintf("%d", 3-i)),
+			}
+			wantResult.Rows = append(wantResult.Rows, row)
+		}
+	}
+	if !reflect.DeepEqual(gotResult, wantResult) {
+		t.Errorf("scatter order by:\n%v, want\n%v", gotResult, wantResult)
+	}
+}
+
 func TestStreamSelectScatterOrderBy(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
@@ -1050,6 +1123,70 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 		row := []sqltypes.Value{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(int32(3 - i)),
+		}
+		wantResult.Rows = append(wantResult.Rows, row, row)
+	}
+	if !reflect.DeepEqual(gotResult, wantResult) {
+		t.Errorf("scatter order by:\n%v, want\n%v", gotResult, wantResult)
+	}
+}
+
+func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
+	// Special setup: Don't use createExecutorEnv.
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck()
+	s := createSandbox("TestExecutor")
+	s.VSchema = executorVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := new(sandboxTopo)
+	resolver := newTestResolver(hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	var conns []*sandboxconn.SandboxConn
+	for i, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc.SetResults([]*sqltypes.Result{{
+			Fields: []*querypb.Field{
+				{Name: "id", Type: sqltypes.Int32},
+				{Name: "textcol", Type: sqltypes.VarChar},
+			},
+			RowsAffected: 1,
+			InsertID:     0,
+			Rows: [][]sqltypes.Value{{
+				sqltypes.NewInt32(1),
+				sqltypes.NewVarChar(fmt.Sprintf("%d", i%4)),
+				sqltypes.NewVarBinary(fmt.Sprintf("%d", i%4)),
+			}},
+		}})
+		conns = append(conns, sbc)
+	}
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize, false)
+
+	query := "select id, textcol from user order by textcol desc"
+	gotResult, err := executorStream(executor, query)
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select id, textcol, weight_string(textcol) from user order by textcol desc",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	for _, conn := range conns {
+		if !reflect.DeepEqual(conn.Queries, wantQueries) {
+			t.Errorf("conn.Queries = %#v, want %#v", conn.Queries, wantQueries)
+		}
+	}
+
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "textcol", Type: sqltypes.VarChar},
+		},
+	}
+	for i := 0; i < 4; i++ {
+		row := []sqltypes.Value{
+			sqltypes.NewInt32(1),
+			sqltypes.NewVarChar(fmt.Sprintf("%d", 3-i)),
 		}
 		wantResult.Rows = append(wantResult.Rows, row, row)
 	}

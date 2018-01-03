@@ -17,11 +17,11 @@ limitations under the License.
 package vtgate
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"sync"
 
+	"github.com/youtube/vitess/go/json2"
 	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -78,7 +78,9 @@ func getSandboxSrvVSchema() *vschemapb.SrvVSchema {
 	defer sandboxMu.Unlock()
 	for keyspace, sandbox := range ksToSandbox {
 		var vs vschemapb.Keyspace
-		_ = json.Unmarshal([]byte(sandbox.VSchema), &vs)
+		if err := json2.Unmarshal([]byte(sandbox.VSchema), &vs); err != nil {
+			panic(err)
+		}
 		result.Keyspaces[keyspace] = &vs
 	}
 	return result
