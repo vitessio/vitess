@@ -123,7 +123,7 @@ type Listener struct {
 
 	shutdownOnce      sync.Once
 	shutdown          bool
-	shutdownCh        chan struct{}
+	shutdownCh        chan bool
 	activeConnections sync.WaitGroup
 }
 
@@ -142,7 +142,7 @@ func NewListener(protocol, address string, authServer AuthServer, handler Handle
 		ServerVersion: DefaultServerVersion,
 		connectionID:  1,
 
-		shutdownCh: make(chan struct{}),
+		shutdownCh: make(chan bool),
 	}, nil
 }
 
@@ -315,9 +315,25 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		log.Warningf("Slow connection from %s: %v", c, connectTime)
 	}
 
-	packetCh := make(chan []byte)
+	packetCh := make(chan []byte, 1)
 	errorCh := make(chan error)
+	mu := sync.Mutex{}
 	var data []byte
+
+	go func() {
+		for {
+			mu.Lock()
+			c.sequence = 0
+			data, err := c.readEphemeralPacket()
+
+			if err != nil {
+				errorCh <- err
+				return
+			}
+
+			packetCh <- data
+		}
+	}()
 
 	for {
 		if l.shutdown {
@@ -326,19 +342,9 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			}
 			log.Infof("Listener is shutting down but connection ID %v is not safe to close yet", c.ConnectionID)
 		}
-		c.sequence = 0
-		go func() {
-			data, err := c.readEphemeralPacket()
-			if err != nil {
-				errorCh <- err
-			} else {
-				packetCh <- data
-			}
-		}()
-
 		select {
 		case <-l.shutdownCh:
-			continue
+			continue // jump to beginning of loop so we can attempt to proactively close the connection
 		case err := <-errorCh:
 			// Don't log EOF errors. They cause too much spam.
 			// Note the EOF detection is not 100%
@@ -407,6 +413,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 					log.Errorf("Error writing query error to %s: %v", c, werr)
 					return
 				}
+				mu.Unlock()
 				continue
 			}
 
@@ -443,6 +450,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			}
 
 		}
+		mu.Unlock()
 	}
 }
 
@@ -455,7 +463,7 @@ func (l *Listener) Close() {
 func (l *Listener) Shutdown() {
 	l.shutdownOnce.Do(func() {
 		l.shutdown = true
-		close(l.shutdownCh)
+		l.shutdownCh <- true
 	})
 }
 
