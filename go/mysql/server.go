@@ -142,7 +142,7 @@ func NewListener(protocol, address string, authServer AuthServer, handler Handle
 		ServerVersion: DefaultServerVersion,
 		connectionID:  1,
 
-		shutdownCh: make(chan bool),
+		shutdownCh: make(chan bool, 1),
 	}, nil
 }
 
