@@ -71,8 +71,8 @@ func (v *stLN) String() string                                           { retur
 func (*stLN) Cost() int                                                  { return 0 }
 func (*stLN) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error) { return []bool{}, nil }
 func (*stLN) Map(VCursor, []sqltypes.Value) ([][][]byte, error)          { return nil, nil }
-func (*stLN) Create(VCursor, []sqltypes.Value, [][]byte, bool) error     { return nil }
-func (*stLN) Delete(VCursor, []sqltypes.Value, []byte) error             { return nil }
+func (*stLN) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error   { return nil }
+func (*stLN) Delete(VCursor, [][]sqltypes.Value, []byte) error           { return nil }
 
 func NewSTLN(name string, params map[string]string) (Vindex, error) {
 	return &stLN{name: name, Params: params}, nil
@@ -88,8 +88,8 @@ func (v *stLU) String() string                                           { retur
 func (*stLU) Cost() int                                                  { return 2 }
 func (*stLU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error) { return []bool{}, nil }
 func (*stLU) Map(VCursor, []sqltypes.Value) ([][]byte, error)            { return nil, nil }
-func (*stLU) Create(VCursor, []sqltypes.Value, [][]byte, bool) error     { return nil }
-func (*stLU) Delete(VCursor, []sqltypes.Value, []byte) error             { return nil }
+func (*stLU) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error   { return nil }
+func (*stLU) Delete(VCursor, [][]sqltypes.Value, []byte) error           { return nil }
 
 func NewSTLU(name string, params map[string]string) (Vindex, error) {
 	return &stLU{name: name, Params: params}, nil
@@ -289,17 +289,17 @@ func TestShardedVSchemaOwned(t *testing.T) {
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Column: sqlparser.NewColIdent("c1"),
-				Type:   "stfu",
-				Name:   "stfu1",
-				Vindex: vindex1,
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:    "stfu",
+				Name:    "stfu1",
+				Vindex:  vindex1,
 			},
 			{
-				Column: sqlparser.NewColIdent("c2"),
-				Type:   "stln",
-				Name:   "stln1",
-				Owned:  true,
-				Vindex: vindex2,
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
+				Type:    "stln",
+				Name:    "stln1",
+				Owned:   true,
+				Vindex:  vindex2,
 			},
 		},
 	}
@@ -389,18 +389,18 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Column: sqlparser.NewColIdent("c1"),
-				Type:   "stlu",
-				Name:   "stlu1",
-				Owned:  false,
-				Vindex: vindex1,
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:    "stlu",
+				Name:    "stlu1",
+				Owned:   false,
+				Vindex:  vindex1,
 			},
 			{
-				Column: sqlparser.NewColIdent("c2"),
-				Type:   "stfu",
-				Name:   "stfu1",
-				Owned:  false,
-				Vindex: vindex2,
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
+				Type:    "stfu",
+				Name:    "stfu1",
+				Owned:   false,
+				Vindex:  vindex2,
 			},
 		},
 	}
@@ -733,11 +733,11 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 		Keyspace: ksa,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Column: sqlparser.NewColIdent("c1"),
-				Type:   "stlu",
-				Name:   "stlu1",
-				Owned:  false,
-				Vindex: vindex1,
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:    "stlu",
+				Name:    "stlu1",
+				Owned:   false,
+				Vindex:  vindex1,
 			},
 		},
 	}
@@ -749,11 +749,11 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 		Keyspace: ksb,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Column: sqlparser.NewColIdent("c1"),
-				Type:   "stlu",
-				Name:   "stlu1",
-				Owned:  false,
-				Vindex: vindex1,
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:    "stlu",
+				Name:    "stlu1",
+				Owned:   false,
+				Vindex:  vindex1,
 			},
 		},
 	}
@@ -975,10 +975,10 @@ func TestSequence(t *testing.T) {
 		Keyspace: kss,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Column: sqlparser.NewColIdent("c1"),
-				Type:   "stfu",
-				Name:   "stfu1",
-				Vindex: vindex1,
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:    "stfu",
+				Name:    "stfu1",
+				Vindex:  vindex1,
 			},
 		},
 		AutoIncrement: &AutoIncrement{
@@ -994,16 +994,15 @@ func TestSequence(t *testing.T) {
 		Keyspace: kss,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Column: sqlparser.NewColIdent("c1"),
-				Type:   "stfu",
-				Name:   "stfu1",
-				Vindex: vindex1,
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:    "stfu",
+				Name:    "stfu1",
+				Vindex:  vindex1,
 			},
 		},
 		AutoIncrement: &AutoIncrement{
-			Column:          sqlparser.NewColIdent("c2"),
-			Sequence:        seq,
-			ColumnVindexNum: -1,
+			Column:   sqlparser.NewColIdent("c2"),
+			Sequence: seq,
 		},
 	}
 	t2.Ordered = []*ColumnVindex{
@@ -1493,11 +1492,11 @@ func TestVSchemaJSON(t *testing.T) {
 				"t3": {
 					Name: sqlparser.NewTableIdent("n3"),
 					ColumnVindexes: []*ColumnVindex{{
-						Column: sqlparser.NewColIdent("aa"),
-						Type:   "vtype",
-						Name:   "vname",
-						Owned:  true,
-						Vindex: lkp,
+						Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("aa")},
+						Type:    "vtype",
+						Name:    "vname",
+						Owned:   true,
+						Vindex:  lkp,
 					}},
 				},
 			},
@@ -1516,13 +1515,17 @@ func TestVSchemaJSON(t *testing.T) {
         "name": "n3",
         "column_vindexes": [
           {
-            "column": "aa",
+            "columns": [
+              "aa"
+            ],
             "type": "vtype",
             "name": "vname",
             "owned": true,
             "vindex": {
               "table": "t",
-              "from": "f",
+              "from_columns": [
+                "f"
+              ],
               "to": "2"
             }
           }

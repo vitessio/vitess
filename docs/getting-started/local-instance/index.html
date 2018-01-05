@@ -426,7 +426,14 @@ AppArmor configurations that the Vitess tools don&#39;t recognize yet. This caus
 various permission failures when Vitess initializes MySQL instances through
 the <code class="prettyprint">mysqlctl</code> tool. This is only an issue for a test environment. If AppArmor
 is necessary in production, you can configure the MySQL instances appropriately
-without going through mysqlctl. (TODO(sougou): provide exact instructions).</p></li>
+without going through mysqlctl.
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">
+<span></span>$ sudo service apparmor stop
+<span></span>$ sudo service apparmor teardown
+<span></span>$ sudo update-rc.d -f apparmor remove
+</code></pre></div>
+Reboot, just to be sure that <code class="prettyprint">AppArmor</code> is fully disabled.
+</p></li>
 <li><p>Select a lock service from the options listed below. It is technically
 possible to use another lock server, but plugins currently exist only
 for ZooKeeper, etcd and consul.</p>

@@ -16,7 +16,12 @@
                         ":name"
                     ],
                     "Table": "name_user_map"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             },
             {
                 "Original": "delete from user where id = :vtg1",
@@ -33,7 +38,12 @@
                     ],
                     "Table": "user",
                     "Subquery": "select name from user where id = :vtg1 for update"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 2,
+                "Rows": 1,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -121,7 +131,12 @@
                         ":name"
                     ],
                     "Table": "name_user_map"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             },
             {
                 "Original": "select user_id from name_user_map where name = :name",
@@ -137,7 +152,12 @@
                     "Values": [
                         ":name"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             },
             {
                 "Original": "delete from user where name = :vtg1",
@@ -154,7 +174,12 @@
                     ],
                     "Table": "user",
                     "Subquery": "select name from user where name = :vtg1 for update"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 2,
+                "Rows": 1,
+                "Errors": 0
             }
         ],
         "TabletActions": {
