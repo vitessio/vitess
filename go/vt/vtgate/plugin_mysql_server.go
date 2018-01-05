@@ -84,10 +84,6 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	// FIXME(alainjobart): Add some kind of timeout to the context.
 	ctx := context.Background()
 
-	busyLock.Lock()
-	busy[c] = true
-	busyLock.Unlock()
-
 	// Fill in the ImmediateCallerID with the UserData returned by
 	// the AuthServer plugin for that user. If nothing was
 	// returned, use the User. This lets the plugin map a MySQL
@@ -112,6 +108,10 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 			session.Options.ClientFoundRows = true
 		}
 	}
+
+	busyLock.Lock()
+	busy[c] = true
+	busyLock.Unlock()
 	defer func() {
 		busyLock.Lock()
 		defer busyLock.Unlock()
@@ -121,6 +121,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 			busyCond.Broadcast()
 		}
 	}()
+
 	if c.SchemaName != "" {
 		session.TargetString = c.SchemaName
 	}
