@@ -20,8 +20,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"net/url"
 	"time"
+
+	log "github.com/golang/glog"
 
 	"github.com/golang/protobuf/proto"
 
@@ -48,13 +49,15 @@ func init() {
 	flag.IntVar(&Config.StreamPoolSize, "queryserver-config-stream-pool-size", DefaultQsConfig.StreamPoolSize, "query server stream connection pool size, stream pool is used by stream queries: queries that return results to client in a streaming fashion")
 	flag.IntVar(&Config.MessagePoolSize, "queryserver-config-message-conn-pool-size", DefaultQsConfig.MessagePoolSize, "query server message connection pool size, message pool is used by message managers: recommended value is one per message table")
 	flag.IntVar(&Config.TransactionCap, "queryserver-config-transaction-cap", DefaultQsConfig.TransactionCap, "query server transaction cap is the maximum number of transactions allowed to happen at any given point of a time for a single vttablet. E.g. by setting transaction cap to 100, there are at most 100 transactions will be processed by a vttablet and the 101th transaction will be blocked (and fail if it cannot get connection within specified timeout)")
+	flag.IntVar(&Config.MessagePostponeCap, "queryserver-config-message-postpone-cap", DefaultQsConfig.MessagePostponeCap, "query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem.")
 	flag.IntVar(&Config.FoundRowsPoolSize, "client-found-rows-pool-size", DefaultQsConfig.FoundRowsPoolSize, "size of a special pool that will be used if the client requests that statements be executed with the CLIENT_FOUND_ROWS option of MySQL.")
 	flag.Float64Var(&Config.TransactionTimeout, "queryserver-config-transaction-timeout", DefaultQsConfig.TransactionTimeout, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
 	flag.Float64Var(&Config.TxShutDownGracePeriod, "transaction_shutdown_grace_period", DefaultQsConfig.TxShutDownGracePeriod, "how long to wait (in seconds) for transactions to complete during graceful shutdown.")
 	flag.IntVar(&Config.MaxResultSize, "queryserver-config-max-result-size", DefaultQsConfig.MaxResultSize, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
+	flag.IntVar(&Config.WarnResultSize, "queryserver-config-warn-result-size", DefaultQsConfig.WarnResultSize, "query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this")
 	flag.IntVar(&Config.MaxDMLRows, "queryserver-config-max-dml-rows", DefaultQsConfig.MaxDMLRows, "query server max dml rows per statement, maximum number of rows allowed to return at a time for an upadte or delete with either 1) an equality where clauses on primary keys, or 2) a subselect statement. For update and delete statements in above two categories, vttablet will split the original query into multiple small queries based on this configuration value. ")
 	flag.IntVar(&Config.StreamBufferSize, "queryserver-config-stream-buffer-size", DefaultQsConfig.StreamBufferSize, "query server stream buffer size, the maximum number of bytes sent from vttablet for each stream call. It's recommended to keep this value in sync with vtgate's stream_buffer_size.")
-	flag.IntVar(&Config.QueryCacheSize, "queryserver-config-query-cache-size", DefaultQsConfig.QueryCacheSize, "query server query cache size, maximum number of queries to be cached. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
+	flag.IntVar(&Config.QueryPlanCacheSize, "queryserver-config-query-cache-size", DefaultQsConfig.QueryPlanCacheSize, "query server query cache size, maximum number of queries to be cached. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
 	flag.Float64Var(&Config.SchemaReloadTime, "queryserver-config-schema-reload-time", DefaultQsConfig.SchemaReloadTime, "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
 	flag.Float64Var(&Config.QueryTimeout, "queryserver-config-query-timeout", DefaultQsConfig.QueryTimeout, "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
 	flag.Float64Var(&Config.TxPoolTimeout, "queryserver-config-txpool-timeout", DefaultQsConfig.TxPoolTimeout, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
@@ -78,6 +81,7 @@ func init() {
 	flag.BoolVar(&Config.EnableHotRowProtectionDryRun, "enable_hot_row_protection_dry_run", DefaultQsConfig.EnableHotRowProtectionDryRun, "If true, hot row protection is not enforced but logs if transactions would have been queued.")
 	flag.IntVar(&Config.HotRowProtectionMaxQueueSize, "hot_row_protection_max_queue_size", DefaultQsConfig.HotRowProtectionMaxQueueSize, "Maximum number of BeginExecute RPCs which will be queued for the same row (range).")
 	flag.IntVar(&Config.HotRowProtectionMaxGlobalQueueSize, "hot_row_protection_max_global_queue_size", DefaultQsConfig.HotRowProtectionMaxGlobalQueueSize, "Global queue limit across all row (ranges). Useful to prevent that the queue can grow unbounded.")
+	flag.IntVar(&Config.HotRowProtectionConcurrentTransactions, "hot_row_protection_concurrent_transactions", DefaultQsConfig.HotRowProtectionConcurrentTransactions, "Number of concurrent transactions let through to the txpool/MySQL for the same hot row. Should be > 1 to have enough 'ready' transactions in MySQL and benefit from a pipelining effect.")
 
 	flag.BoolVar(&Config.HeartbeatEnable, "heartbeat_enable", DefaultQsConfig.HeartbeatEnable, "If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.")
 	flag.DurationVar(&Config.HeartbeatInterval, "heartbeat_interval", DefaultQsConfig.HeartbeatInterval, "How frequently to read and write replication heartbeat.")
@@ -87,8 +91,20 @@ func init() {
 
 // Init must be called after flag.Parse, and before doing any other operations.
 func Init() {
-	StatsLogger.ServeLogs(*queryLogHandler, buildFmter(StatsLogger))
-	TxLogger.ServeLogs(*txLogHandler, buildFmter(TxLogger))
+	switch *streamlog.QueryLogFormat {
+	case streamlog.QueryLogFormatText:
+	case streamlog.QueryLogFormatJSON:
+	default:
+		log.Exitf("Invalid querylog-format value %v: must be either text or json", *streamlog.QueryLogFormat)
+	}
+
+	if *queryLogHandler != "" {
+		StatsLogger.ServeLogs(*queryLogHandler, streamlog.GetFormatter(StatsLogger))
+	}
+
+	if *txLogHandler != "" {
+		TxLogger.ServeLogs(*txLogHandler, streamlog.GetFormatter(TxLogger))
+	}
 }
 
 // TabletConfig contains all the configuration for query service
@@ -97,13 +113,15 @@ type TabletConfig struct {
 	StreamPoolSize          int
 	MessagePoolSize         int
 	TransactionCap          int
+	MessagePostponeCap      int
 	FoundRowsPoolSize       int
 	TransactionTimeout      float64
 	TxShutDownGracePeriod   float64
 	MaxResultSize           int
+	WarnResultSize          int
 	MaxDMLRows              int
 	StreamBufferSize        int
-	QueryCacheSize          int
+	QueryPlanCacheSize      int
 	SchemaReloadTime        float64
 	QueryTimeout            float64
 	TxPoolTimeout           float64
@@ -123,10 +141,11 @@ type TabletConfig struct {
 	TxThrottlerConfig           string
 	TxThrottlerHealthCheckCells []string
 
-	EnableHotRowProtection             bool
-	EnableHotRowProtectionDryRun       bool
-	HotRowProtectionMaxQueueSize       int
-	HotRowProtectionMaxGlobalQueueSize int
+	EnableHotRowProtection                 bool
+	EnableHotRowProtectionDryRun           bool
+	HotRowProtectionMaxQueueSize           int
+	HotRowProtectionMaxGlobalQueueSize     int
+	HotRowProtectionConcurrentTransactions int
 
 	HeartbeatEnable   bool
 	HeartbeatInterval time.Duration
@@ -146,12 +165,14 @@ var DefaultQsConfig = TabletConfig{
 	StreamPoolSize:          200,
 	MessagePoolSize:         5,
 	TransactionCap:          20,
+	MessagePostponeCap:      4,
 	FoundRowsPoolSize:       20,
 	TransactionTimeout:      30,
 	TxShutDownGracePeriod:   0,
 	MaxResultSize:           10000,
+	WarnResultSize:          0,
 	MaxDMLRows:              500,
-	QueryCacheSize:          5000,
+	QueryPlanCacheSize:      5000,
 	SchemaReloadTime:        30 * 60,
 	QueryTimeout:            30,
 	TxPoolTimeout:           1,
@@ -177,6 +198,9 @@ var DefaultQsConfig = TabletConfig{
 	// Default value is the same as TransactionCap.
 	HotRowProtectionMaxQueueSize:       20,
 	HotRowProtectionMaxGlobalQueueSize: 1000,
+	// Allow more than 1 transaction for the same hot row through to have enough
+	// of them ready in MySQL and profit from a pipelining effect.
+	HotRowProtectionConcurrentTransactions: 5,
 
 	HeartbeatEnable:   false,
 	HeartbeatInterval: 1 * time.Second,
@@ -215,19 +239,8 @@ func VerifyConfig() error {
 	if globalSize, size := Config.HotRowProtectionMaxGlobalQueueSize, Config.HotRowProtectionMaxQueueSize; globalSize < size {
 		return fmt.Errorf("global queue size must be >= per row (range) queue size: -hot_row_protection_max_global_queue_size < hot_row_protection_max_queue_size (%v < %v)", globalSize, size)
 	}
+	if v := Config.HotRowProtectionConcurrentTransactions; v <= 0 {
+		return fmt.Errorf("-hot_row_protection_concurrent_transactions must be > 0 (specified value: %v)", v)
+	}
 	return nil
-}
-
-func buildFmter(logger *streamlog.StreamLogger) func(url.Values, interface{}) string {
-	type formatter interface {
-		Format(url.Values) string
-	}
-
-	return func(params url.Values, val interface{}) string {
-		fmter, ok := val.(formatter)
-		if !ok {
-			return fmt.Sprintf("Error: unexpected value of type %T in %s!", val, logger.Name())
-		}
-		return fmter.Format(params)
-	}
 }

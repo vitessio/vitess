@@ -1,6 +1,7 @@
 ---
 layout: doc
 title: "Vitess API Reference"
+redirect_from: /reference/vitess-api.html
 description:
 modified:
 excerpt:

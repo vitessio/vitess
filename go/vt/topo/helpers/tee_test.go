@@ -20,7 +20,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -35,15 +34,14 @@ func TestTee(t *testing.T) {
 	CopyShards(ctx, fromTS, toTS)
 	CopyTablets(ctx, fromTS, toTS)
 
-	// create a tee and check it implements the interface
-	tee := NewTee(fromTS, toTS, true)
-	var _ topo.Impl = tee
+	// create a tee and check it implements the interface.
+	teeTS, err := NewTee(fromTS, toTS, true)
 
 	// create a keyspace, make sure it is on both sides
-	if err := tee.CreateKeyspace(ctx, "keyspace2", &topodatapb.Keyspace{}); err != nil {
+	if err := teeTS.CreateKeyspace(ctx, "keyspace2", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("tee.CreateKeyspace(keyspace2) failed: %v", err)
 	}
-	teeKeyspaces, err := tee.GetKeyspaces(ctx)
+	teeKeyspaces, err := teeTS.GetKeyspaces(ctx)
 	if err != nil {
 		t.Fatalf("tee.GetKeyspaces() failed: %v", err)
 	}
@@ -66,5 +64,33 @@ func TestTee(t *testing.T) {
 	expected = []string{"keyspace2", "test_keyspace"}
 	if !reflect.DeepEqual(expected, toKeyspaces) {
 		t.Errorf("toKeyspaces mismatch, got %+v, want %+v", toKeyspaces, expected)
+	}
+
+	// Read the keyspace from the tee, update it, and make sure
+	// both sides have the updated value.
+	lockCtx, unlock, err := teeTS.LockKeyspace(ctx, "test_keyspace", "fake-action")
+	if err != nil {
+		t.Fatalf("LockKeyspaceForAction: %v", err)
+	}
+	ki, err := teeTS.GetKeyspace(ctx, "test_keyspace")
+	if err != nil {
+		t.Fatalf("tee.GetKeyspace(test_keyspace) failed: %v", err)
+	}
+	ki.Keyspace.ShardingColumnName = "toChangeIt"
+	if err := teeTS.UpdateKeyspace(lockCtx, ki); err != nil {
+		t.Fatalf("tee.UpdateKeyspace(test_keyspace) failed: %v", err)
+	}
+	unlock(&err)
+	if err != nil {
+		t.Fatalf("unlock(test_keyspace): %v", err)
+	}
+
+	fromKi, err := fromTS.GetKeyspace(ctx, "test_keyspace")
+	if err != nil || fromKi.Keyspace.ShardingColumnName != "toChangeIt" {
+		t.Errorf("invalid keyspace data in fromTTS: %v %v", fromKi, err)
+	}
+	toKi, err := toTS.GetKeyspace(ctx, "test_keyspace")
+	if err != nil || toKi.Keyspace.ShardingColumnName != "toChangeIt" {
+		t.Errorf("invalid keyspace data in toTTS: %v %v", toKi, err)
 	}
 }

@@ -19,16 +19,17 @@ package gateway
 import (
 	"flag"
 	"fmt"
-	"log"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/vt/discovery"
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -81,7 +82,7 @@ type l2VTGateGateway struct {
 	statusAggregators map[string]*TabletStatusAggregator
 }
 
-func createL2VTGateGateway(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int) Gateway {
+func createL2VTGateGateway(hc discovery.HealthCheck, topoServer *topo.Server, serv topo.SrvTopoServer, cell string, retryCount int) Gateway {
 	lg := &l2VTGateGateway{
 		retryCount:        retryCount,
 		connMap:           make(map[string][]*l2VTGateConn),
@@ -92,11 +93,11 @@ func createL2VTGateGateway(hc discovery.HealthCheck, topoServer topo.Server, ser
 	for _, a := range l2VTGateGatewayAddrs {
 		parts := strings.Split(a, "|")
 		if len(parts) != 3 {
-			log.Fatalf("invalid l2vtgategateway_addrs parameter: %v", a)
+			log.Exitf("invalid l2vtgategateway_addrs parameter: %v", a)
 		}
 
 		if err := lg.addL2VTGateConn(parts[0], parts[1], parts[2]); err != nil {
-			log.Fatalf("error adding l2vtgategateway_addrs value %v: %v", a, err)
+			log.Exitf("error adding l2vtgategateway_addrs value %v: %v", a, err)
 		}
 	}
 	lg.QueryService = queryservice.Wrap(nil, lg.withRetry)
@@ -128,7 +129,7 @@ func (lg *l2VTGateGateway) addL2VTGateConn(addr, keyspace, shard string) error {
 		// Dial in the background, as specified by timeout=0.
 		conn, err = tabletconn.GetDialer()(&topodatapb.Tablet{
 			Hostname: addr,
-		}, 0)
+		}, grpcclient.FailFast(true))
 		if err != nil {
 			return err
 		}

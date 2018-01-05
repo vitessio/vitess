@@ -18,9 +18,9 @@ MAKEFLAGS = -s
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build build_web test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test php_test reshard_tests
+.PHONY: all build build_web test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests
 
-all: build test
+all: build
 
 # Set a custom value for -p, the number of packages to be built/tested in parallel.
 # This is currently only used by our Travis CI test configuration.
@@ -70,6 +70,21 @@ clean:
 clean_pkg:
 	rm -rf ../../../../pkg Godeps/_workspace/pkg
 
+# Remove everything including stuff pulled down by bootstrap.sh
+cleanall:
+	# symlinks
+	for f in config data py-vtdb; do test -L ../../../../$$f && rm ../../../../$$f; done
+	# directories created by bootstrap.sh
+	# - exclude vtdataroot and vthook as they may have data we want
+	rm -rf ../../../../bin ../../../../dist ../../../../lib ../../../../pkg
+	# keep the vendor.json file but nothing else under the vendor directory as it's not actually part of the Vitess repo
+	rm -rf vendor/cloud.google.com vendor/github.com vendor/golang.org vendor/google.golang.org vendor/gopkg.in
+	# other stuff in the go hierarchy that is not under vendor/
+	rm -rf ../../../golang.org ../../../honnef.co
+	rm -rf ../../../github.com/golang ../../../github.com/kardianos ../../../github.com/kisielk
+	# Remind people to run bootstrap.sh again
+	echo "Please run bootstrap.sh again to setup your environment"
+
 unit_test: build
 	echo $$(date): Running unit tests
 	go test $(VT_GO_PARALLEL) ./go/...
@@ -98,10 +113,6 @@ java_test:
 	go install ./go/cmd/vtgateclienttest ./go/cmd/vtcombo
 	mvn -f java/pom.xml clean verify
 
-php_test:
-	go install ./go/cmd/vtgateclienttest
-	phpunit php/tests
-
 # TODO(mberlin): Remove the manual copy once govendor supports a way to
 # install vendor'd programs: https://github.com/kardianos/govendor/issues/117
 install_protoc-gen-go:
@@ -109,14 +120,13 @@ install_protoc-gen-go:
 	cp -a vendor/github.com/golang/protobuf $${GOPATH}/src/github.com/golang/
 	go install github.com/golang/protobuf/protoc-gen-go
 
-PROTOC_DIR := $(VTROOT)/dist/grpc/usr/local/bin
-PROTOC_EXISTS := $(shell type -p $(PROTOC_DIR)/protoc)
-ifeq (,$(PROTOC_EXISTS))
-  PROTOC_BINARY := $(shell which protoc)
-  ifeq (,$(PROTOC_BINARY))
-    $(error "Cannot find protoc binary. Did bootstrap.sh succeed, and did you execute 'source dev.env'?")
-  endif
-  PROTOC_DIR := $(dir $(PROTOC_BINARY))
+PROTOC_BINARY := $(shell type -p $(VTROOT)/dist/grpc/usr/local/bin/protoc)
+ifeq (,$(PROTOC_BINARY))
+	PROTOC_BINARY := $(shell which protoc)
+endif
+
+ifneq (,$(PROTOC_BINARY))
+	PROTOC_DIR := $(dir $(PROTOC_BINARY))
 endif
 
 PROTO_SRCS = $(wildcard proto/*.proto)
@@ -129,6 +139,10 @@ PROTO_GO_TEMPS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/.proto.tmp/$(name).pb
 proto: proto_banner $(PROTO_GO_OUTS) $(PROTO_PY_OUTS)
 
 proto_banner:
+ifeq (,$(PROTOC_DIR))
+	$(error "Cannot find protoc binary. Did bootstrap.sh succeed, and did you execute 'source dev.env'?")
+endif
+
 ifndef NOBANNER
 	echo $$(date): Compiling proto definitions
 endif
@@ -138,8 +152,8 @@ $(PROTO_PY_OUTS): py/vtproto/%_pb2.py: proto/%.proto
 
 $(PROTO_GO_OUTS): $(PROTO_GO_TEMPS)
 	for name in $(PROTO_SRC_NAMES); do \
-	  mkdir -p go/vt/proto/$${name}; \
-	  cp -a go/vt/.proto.tmp/$${name}.pb.go go/vt/proto/$${name}/$${name}.pb.go; \
+		mkdir -p go/vt/proto/$${name}; \
+		cp -a go/vt/.proto.tmp/$${name}.pb.go go/vt/proto/$${name}/$${name}.pb.go; \
 	done
 
 $(PROTO_GO_TEMPS): install_protoc-gen-go
@@ -148,15 +162,6 @@ $(PROTO_GO_TEMPS): go/vt/.proto.tmp/%.pb.go: proto/%.proto
 	mkdir -p go/vt/.proto.tmp
 	$(PROTOC_DIR)/protoc -Iproto $< --go_out=plugins=grpc:go/vt/.proto.tmp
 	sed -i -e 's,import \([a-z0-9_]*\) ".",import \1 "github.com/youtube/vitess/go/vt/proto/\1",g' $@
-
-# Generate the PHP proto files in a Docker container, and copy them back.
-php_proto:
-	docker run -ti --name=vitess_php-proto -v $$PWD/proto:/in vitess/bootstrap:common bash -c 'cd $$VTTOP && mkdir -p proto && cp -R /in/* proto/ && tools/proto-gen-php.sh'
-	docker cp vitess_php-proto:/vt/src/github.com/youtube/vitess/php/src/descriptor.php php/src/
-	docker cp vitess_php-proto:/vt/src/github.com/youtube/vitess/php/src/php.php php/src/
-	rm -r php/src/Vitess/Proto/*
-	docker cp vitess_php-proto:/vt/src/github.com/youtube/vitess/php/src/Vitess/Proto/. php/src/Vitess/Proto/
-	docker rm vitess_php-proto
 
 # Helper targets for building Docker images.
 # Please read docker/README.md to understand the different available images.
@@ -218,9 +223,6 @@ docker_lite_percona57:
 
 docker_guestbook:
 	cd examples/kubernetes/guestbook && ./build.sh
-
-docker_etcd:
-	cd docker/etcd-lite && ./build.sh
 
 docker_publish_site:
 	docker build -f docker/publish-site/Dockerfile -t vitess/publish-site .

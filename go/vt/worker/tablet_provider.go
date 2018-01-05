@@ -47,11 +47,11 @@ type tabletProvider interface {
 // returns the one tablet which was set at creation.
 type singleTabletProvider struct {
 	ctx   context.Context
-	ts    topo.Server
+	ts    *topo.Server
 	alias *topodatapb.TabletAlias
 }
 
-func newSingleTabletProvider(ctx context.Context, ts topo.Server, alias *topodatapb.TabletAlias) *singleTabletProvider {
+func newSingleTabletProvider(ctx context.Context, ts *topo.Server, alias *topodatapb.TabletAlias) *singleTabletProvider {
 	return &singleTabletProvider{ctx, ts, alias}
 }
 

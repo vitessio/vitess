@@ -72,7 +72,7 @@ func processSelect(sel *sqlparser.Select, vschema VSchema, outer builder) (build
 	if err != nil {
 		return nil, err
 	}
-	err = pushLimit(sel.Limit, bldr)
+	bldr, err = pushLimit(sel.Limit, bldr)
 	if err != nil {
 		return nil, err
 	}
@@ -127,8 +127,7 @@ func pushSelectExprs(sel *sqlparser.Select, bldr builder) (builder, error) {
 	}
 	bldr.Symtab().ResultColumns = resultColumns
 
-	bldr, err = pushGroupBy(sel, bldr)
-	if err != nil {
+	if err := pushGroupBy(sel, bldr); err != nil {
 		return nil, err
 	}
 	return bldr, nil

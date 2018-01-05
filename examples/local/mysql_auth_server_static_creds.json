@@ -1,0 +1,19 @@
+{
+  "mysql_user": [
+    {
+      "Password": "mysql_password",
+      "UserData": "mysql_user"
+    }
+  ],
+  "vt_appdebug": [
+    {
+      "Password": "vtappdebug_password",
+      "UserData": "vt_appdebug"
+    },
+    {
+      "SourceHost": "localhost",
+      "Password": "",
+      "UserData": "vt_appdebug"
+    }
+  ]
+}

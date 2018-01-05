@@ -3,7 +3,7 @@
 This document describes the Topology Service, a key part of the Vitess
 architecture. This service is exposed to all Vitess processes, and is used to
 store small pieces of configuration data about the Vitess cluster, and provide
-cluster-wide locks. It also supports watches, which we will use soon.
+cluster-wide locks. It also supports watches, and master election.
 
 Concretely, the Topology Service features are implemented by
 a [Lock Server](http://en.wikipedia.org/wiki/Distributed_lock_manager), referred
@@ -11,7 +11,7 @@ to as Topology Server in the rest of this document. We use a plug-in
 implementation and we support multiple Lock Servers (Zookeeper, etcd, Consul, …)
 as backends for the service.
 
-## Requirements and Usage
+## Requirements and usage
 
 The Topology Service is used to store information about the Keyspaces, the
 Shards, the Tablets, the Replication Graph, and the Serving Graph. We store
@@ -29,7 +29,7 @@ The Topology Server must also support a Watch interface, to signal when certain
 conditions occur on a node. This is used for instance to know when keyspaces
 topology changes (for resharding for instance).
 
-### Global vs Local
+### Global vs local
 
 We differentiate two instances of the Topology Server: the Global instance, and
 the per-cell Local instance:
@@ -64,7 +64,7 @@ If the global Topology Server dies and is not recoverable, this is more of a
 problem. All the Keyspace / Shard objects have to be re-created. Then the cells
 should recover.
 
-## Global Data
+## Global data
 
 This section describes the data structures stored in the global instance of the
 topology server.
@@ -84,26 +84,26 @@ guarantee only one operation changes the keyspace data concurrently.
 A Shard contains a subset of the data for a Keyspace. The Shard record in the
 global topology contains:
 
-* the MySQL Master tablet alias for this shard
-* the sharding key range covered by this Shard inside the Keyspace
+* the Master tablet alias for this shard (that has the MySQL master).
+* the sharding key range covered by this Shard inside the Keyspace.
 * the tablet types this Shard is serving (master, replica, batch, …), per cell
   if necessary.
 * if during filtered replication, the source shards this shard is replicating
-  from
-* the list of cells that have tablets in this shard
+  from.
+* the list of cells that have tablets in this shard.
 * shard-global tablet controls, like blacklisted tables no tablet should serve
-  in this shard
+  in this shard.
 
 A Shard can be locked. We use this during operations that affect either the
 Shard record, or multiple tablets within a Shard (like reparenting), so multiple
 jobs don’t concurrently alter the data.
 
-### VSchema Data
+### VSchema data
 
 The VSchema data contains sharding and routing information for
 the [VTGate V3](https://github.com/youtube/vitess/blob/master/doc/VTGateV3Features.md) API.
 
-## Local Data
+## Local data
 
 This section describes the data structures stored in the local instance (per
 cell) of the topology server.
@@ -113,32 +113,32 @@ cell) of the topology server.
 The Tablet record has a lot of information about a single vttablet process
 running inside a tablet (along with the MySQL process):
 
-* the Tablet Alias (cell+unique id) that uniquely identifies the Tablet
-* the Hostname, IP address and port map of the Tablet
-* the current Tablet type (master, replica, batch, spare, …)
-* which Keyspace / Shard the tablet is part of
-* the sharding Key Range served by this Tablet
-* user-specified tag map (to store per installation data for instance)
+* the Tablet Alias (cell+unique id) that uniquely identifies the Tablet.
+* the Hostname, IP address and port map of the Tablet.
+* the current Tablet type (master, replica, batch, spare, …).
+* which Keyspace / Shard the tablet is part of.
+* the sharding Key Range served by this Tablet.
+* user-specified tag map (to store per installation data for instance).
 
 A Tablet record is created before a tablet can be running (either by `vtctl
-InitTablet` or by passing the `init_*` parameters to vttablet). The only way a
-Tablet record will be updated is one of:
+InitTablet` or by passing the `init_*` parameters to the vttablet process).
+The only way a Tablet record will be updated is one of:
 
 * The vttablet process itself owns the record while it is running, and can
   change it.
-* At init time, before the tablet starts
+* At init time, before the tablet starts.
 * After shutdown, when the tablet gets deleted.
 * If a tablet becomes unresponsive, it may be forced to spare to make it
   unhealthy when it restarts.
 
-### Replication Graph
+### Replication graph
 
 The Replication Graph allows us to find Tablets in a given Cell / Keyspace /
 Shard. It used to contain information about which Tablet is replicating from
 which other Tablet, but that was too complicated to maintain. Now it is just a
 list of Tablets.
 
-### Serving Graph
+### Serving graph
 
 The Serving Graph is what the clients use to find the per-cell topology of a
 Keyspace. It is a roll-up of global data (Keyspace + Shard). vtgates only open a
@@ -167,7 +167,7 @@ keyspaces in a single object.
 It can be rebuilt by running `vtctl RebuildVSchemaGraph`. It is automatically
 rebuilt when using `vtctl ApplyVSchema` (unless prevented by flags).
 
-## Workflows Involving the Topology Server
+## Workflows involving the Topology Server
 
 The Topology Server is involved in many Vitess workflows.
 
@@ -194,22 +194,59 @@ will change the global Shard records, and the local SrvKeyspace records. A
 vertical split will change the global Keyspace records, and the local
 SrvKeyspace records.
 
+## Exploring the data in a Topology Server
+
+We store the proto3 binary data for each object.
+
+We use the following paths for the data, in all implementations:
+
+*Global Cell*:
+
+* CellInfo path: `cells/<cell name>/CellInfo`
+* Keyspace: `keyspaces/<keyspace>/Keyspace`
+* Shard: `keyspaces/<keyspace>/shards/<shard>/Shard`
+* VSchema: `keyspaces/<keyspace>/VSchema`
+
+*Local Cell*:
+
+* Tablet: `tablets/<cell>-<uid>/Tablet`
+* Replication Graph: `keyspaces/<keyspace>/shards/<shard>/ShardReplication`
+* SrvKeyspace: `keyspaces/<keyspace>/SrvKeyspace`
+* SrvVSchema: `SvrVSchema`
+
+The `vtctl TopoCat` utility can decode these files when using the
+`-decode_proto` option:
+
+``` sh
+TOPOLOGY="-topo_implementation zk2 -topo_global_server_address global_server1,global_server2 -topo_global_root /vitess/global"
+
+$ vtctl $TOPOLOGY TopoCat -decode_proto -long /keyspaces/*/Keyspace
+path=/keyspaces/ks1/Keyspace version=53
+sharding_column_name: "col1"
+path=/keyspaces/ks2/Keyspace version=55
+sharding_column_name: "col2"
+```
+
+The `vtctld` web tool also contains a topology browser (use the `Topology`
+tab on the left side). It will display the various proto files, decoded.
+
 ## Implementations
 
-The Topology Server interface is defined in our code in `go/vt/topo/server.go`
-and we also have a set of unit tests for it in `go/vt/topo/test`.
+The Topology Server interfaces are defined in our code in `go/vt/topo/`,
+specific implementations are in `go/vt/topo/<name>`, and we also have
+a set of unit tests for it in `go/vt/topo/test`.
 
-This part describes the two implementations we have, and their specific
+This part describes the implementations we have, and their specific
 behavior.
 
 If starting from scratch, please use the `zk2`, `etcd2` or `consul`
-implementations, as we are deprecating the old `zookeeper` and `etcd`
+implementations. We deprecated the old `zookeeper` and `etcd`
 implementations. See the migration section below if you want to migrate.
 
-### Zookeeper `zk2` Implementation (new version of `zookeeper`)
+### Zookeeper `zk2` implementation
 
-This is the recommended implementation when using Zookeeper. The old `zookeeper`
-implementation is deprecated, see next section.
+This is the current implementation when using Zookeeper. (The old `zookeeper`
+implementation is deprecated).
 
 The global cell typically has around 5 servers, distributed one in each
 cell. The local cells typically have 3 or 5 servers, in different server racks /
@@ -227,8 +264,9 @@ and by the root directory to put the Vitess data in. For instance, assuming we
 want to use servers `global_server1,global_server2` in path `/vitess/global`:
 
 ``` sh
-# First create the directory in the global server:
-zk -server global_server1,global_server2 touch -p /vitess/global
+# The root directory in the global server will be created
+# automatically, same as when running this command:
+# zk -server global_server1,global_server2 touch -p /vitess/global
 
 # Set the following flags to let Vitess use this global server:
 # -topo_implementation zk2
@@ -253,103 +291,26 @@ If only one cell is used, the same Zookeeper instance can be used for both
 global and local data. A local cell record still needs to be created, just use
 the same server address, and very importantly a *different* root directory.
 
-#### Implementation Details
+[Zookeeper
+Observers](https://zookeeper.apache.org/doc/trunk/zookeeperObservers.html) can
+also be used to limit the load on the global Zookeeper.  They are configured by
+specifying the adresses of the observers in the server address, after a `|`,
+for instance:
+`global_server1:p1,global_server2:p2|observer1:po1,observer2:po2`.
 
-We use the following paths:
+#### Implementation details
 
-*Global Cell*:
+We use the following paths for Zookeeper specific data, in addition to the
+regular files:
 
-* Election path: `elections/<name>`
-* CellInfo path: `cells/<cell name>/CellInfo`
-* Keyspace: `keyspaces/<keyspace>/Keyspace`
-* Shard: `keyspaces/<keyspace>/shards/<shard>/Shard`
-* VSchema: `keyspaces/<keyspace>/VSchema`
-
-*Local Cell*:
-
-* Tablet: `tablets/<cell>-<uid>/Tablet`
-* Replication Graph: `keyspaces/<keyspace>/shards/<shard>/ShardReplication`
-* SrvKeyspace: `keyspaces/<keyspace>/SrvKeyspace`
-* SrvVSchema: `SvrVSchema`
-
-For locks, we create a subdirectory called `locks` under either the keyspace
-directory or the shard directory.
+* Locks sub-directory: `locks/` (for instance:
+  `keyspaces/<keyspace>/Keyspace/locks/` for a keyspace)
+* Master election path: `elections/<name>`
 
 Both locks and master election are implemented using ephemeral, sequential files
 which are stored in their respective directory.
 
-We store the proto3 binary data for each object. The `zk` utility can decode
-these files when using the `-p` option of the `cat` command:
-
-``` sh
-$ zk --server localhost:15014 cat -p /global/keyspaces/test_keyspace/shards/-80/Shard
-master_alias: <
-  cell: "test_nj"
-  uid: 62344
->
-key_range: <
-  end: "\200"
->
-served_types: <
-  tablet_type: MASTER
->
-served_types: <
-  tablet_type: REPLICA
->
-served_types: <
-  tablet_type: RDONLY
->
-cells: "test_nj"
-```
-
-### Old Zookeeper `zookeeper` Implementaion (deprecated, use `zk2` instead)
-
-This old `zookeeper` topology service is deprecated, and will be removed in
-Vitess version 2.2. Please use `zk2` instead, and see the `topo2topo` section
-below for migration.
-
-Our Zookeeper implementation is based on a configuration file that describes
-where the global and each local cell ZK instances are. When adding a cell, all
-processes that may access that cell should be restarted with the new
-configuration file.
-
-The global cell typically has around 5 servers, distributed one in each
-cell. The local cells typically have 3 or 5 servers, in different server racks /
-sub-networks for higher resilience. For our integration tests, we use a single
-ZK server that serves both global and local cells.
-
-We sometimes store both data and sub-directories in a path (for a keyspace for
-instance). We use JSON to encode the data.
-
-For locking, we use an auto-incrementing file name in the `/action` subdirectory
-of the object directory. We also move them to `/actionlogs` when the lock is
-released. And we have a purge process to clear the old locks (which should be
-run on a crontab, typically).
-
-Note the paths used to store global and per-cell data do not overlap, so a
-single ZK can be used for both global and local ZKs. This is however not
-recommended, for reliability reasons.
-
-* Keyspace: `/zk/global/vt/keyspaces/<keyspace>`
-* Shard: `/zk/global/vt/keyspaces/<keyspace>/shards/<shard>`
-* Tablet: `/zk/<cell>/vt/tablets/<uid>`
-* Replication Graph: `/zk/<cell>/vt/replication/<keyspace>/<shard>`
-* SrvKeyspace: `/zk/<cell>/vt/ns/<keyspace>`
-* SrvVSchema: `/zk/<cell>/vt/vschema`
-
-We provide the 'zk' utility for easy access to the topology data in
-Zookeeper. For instance:
-
-``` sh
-# NOTE: We do not set the ZK_CLIENT_CONFIG environment variable here,
-# as the zk tool connects to a specific server. 
-$ zk -server <server address> ls /zk/global/vt/keyspaces/user
-action
-actionlog
-shards
-```
-
-### etcd `etcd2` Implementation (new version of `etcd`)
+### etcd `etcd2` implementation (new version of `etcd`)
 
 This topology service plugin is meant to use etcd clusters as storage backend
 for the topology data. This topology service supports version 3 and up of the
@@ -392,24 +353,7 @@ If only one cell is used, the same etcd instances can be used for both
 global and local data. A local cell record still needs to be created, just use
 the same server address and, very importantly, a *different* root directory.
 
-#### Implementation Details
-
-We use the following paths:
-
-*Global Cell*:
-
-* Election path: `elections/<name>`
-* CellInfo path: `cells/<cell name>/CellInfo`
-* Keyspace: `keyspaces/<keyspace>/Keyspace`
-* Shard: `keyspaces/<keyspace>/shards/<shard>/Shard`
-* VSchema: `keyspaces/<keyspace>/VSchema`
-
-*Local Cell*:
-
-* Tablet: `tablets/<cell>-<uid>/Tablet`
-* Replication Graph: `keyspaces/<keyspace>/shards/<shard>/ShardReplication`
-* SrvKeyspace: `keyspaces/<keyspace>/SrvKeyspace`
-* SrvVSchema: `SvrVSchema`
+#### Implementation details
 
 For locks, we use a subdirectory named `locks` in the directory to lock, and an
 ephemeral file in that subdirectory (it is associated with a lease, whose TTL
@@ -422,32 +366,7 @@ a similar method as the locks, with ephemeral files.
 
 We store the proto3 binary data for each object (as the v3 API allows us to store binary data).
 
-### Old etcd `etcd` Implementaion (deprecated, use `etcd2` instead)
-
-This old `etcd` topology service is deprecated, and will be removed in
-Vitess version 2.2. Please use `etcd2` instead, and see the `topo2topo` section
-below for migration.
-
-Our etcd implementation is based on a command-line parameter that gives the
-location(s) of the global etcd server. Then we query the path `/vt/cells` and
-each file in there is named after a cell, and contains the list of etcd servers
-for that cell. Each cell server files are stored in `/vt/`.
-
-We use the `_Data` filename to store the data, JSON encoded.
-
-For locking, we store a `_Lock` file with various contents in the directory that
-contains the object to lock.
-
-We use the following paths:
-
-* Keyspace: `/vt/keyspaces/<keyspace>/_Data`
-* Shard: `/vt/keyspaces/<keyspace>/<shard>/_Data`
-* Tablet: `/vt/tablets/<cell>-<uid>/_Data`
-* Replication Graph: `/vt/replication/<keyspace>/<shard>/_Data`
-* SrvKeyspace: `/vt/ns/<keyspace>/_Data`
-* SrvVSchema: `/vt/ns/_VSchema`
-
-### Consul `consul` Implementation
+### Consul `consul` implementation
 
 This topology service plugin is meant to use Consul clusters as storage backend
 for the topology data.
@@ -484,24 +403,7 @@ If only one cell is used, the same consul instances can be used for both
 global and local data. A local cell record still needs to be created, just use
 the same server address and, very importantly, a *different* root node path.
 
-#### Implementation Details
-
-We use the following paths:
-
-*Global Cell*:
-
-* Election path: `elections/<name>`
-* CellInfo path: `cells/<cell name>/CellInfo`
-* Keyspace: `keyspaces/<keyspace>/Keyspace`
-* Shard: `keyspaces/<keyspace>/shards/<shard>/Shard`
-* VSchema: `keyspaces/<keyspace>/VSchema`
-
-*Local Cell*:
-
-* Tablet: `tablets/<cell>-<uid>/Tablet`
-* Replication Graph: `keyspaces/<keyspace>/shards/<shard>/ShardReplication`
-* SrvKeyspace: `keyspaces/<keyspace>/SrvKeyspace`
-* SrvVSchema: `SvrVSchema`
+#### Implementation details
 
 For locks, we use a file named `Lock` in the directory to lock, and the regular
 Consul Lock API.
@@ -510,13 +412,11 @@ Master elections use a single lock file (the Election path) and the regular
 Consul Lock API. The contents of the lock file is the ID of the current master.
 
 Watches use the Consul long polling Get call. They cannot be interrupted, so we
-use a long poll whose duration is set by the `-topo_consul_watch_poll_duration`
-flag. Canceling a watch may have to wait until the end of a polling cycle with
-that duration before returning.
+use a long poll whose duration is set by the
+`-topo_consul_watch_poll_duration` flag. Canceling a watch may have to
+wait until the end of a polling cycle with that duration before returning.
 
-We store the proto3 binary data for each object.
-
-## Running In Only One Cell
+## Running in only one cell
 
 The topology service is meant to be distributed across multiple cells, and
 survive single cell outages. However, one common usage is to run a Vitess
@@ -533,7 +433,7 @@ cell as well. Let's use a short cell name, like `local`, as the local data in
 that topology server will later on be moved to a different topology service,
 which will have the real cell name.
 
-### Extending To More Cells
+### Extending to more cells
 
 To then run in multiple cells, the current topology service needs to be split
 into a global instance and one local instance per cell. Whereas, the initial
@@ -546,9 +446,9 @@ cell and run `vtctl AddCellinfo` as was done for the first cell. Tablets and
 vtgates can now be started in the second cell, and used normally.
 
 vtgate can then be configured with a list of cells to watch for tablets using
-the `-cells_to_watch` command line parameter. It can then use all tablets in all
-cells to route traffic. Note this is necessary to access the master in another
-cell.
+the `-cells_to_watch` command line parameter. It can then use all tablets in
+all cells to route traffic. Note this is necessary to access the master in
+another cell.
 
 After the extension to two cells, the original topo service contains both the
 global topology data, and the first cell topology data. The more symetrical
@@ -580,7 +480,7 @@ After this split, the configuration is completely symetrical:
   contains local topology data about Tablets, and roll-ups of global data for
   efficient access. Typically, it has 3 servers in each cell.
 
-## Migration Between Implementations
+## Migration between implementations
 
 We provide the `topo2topo` binary file to migrate between one implementation
 and another of the topology service.
@@ -661,3 +561,26 @@ vtctl $TOPOLOGY RebuildVSchemaGraph
 # After this, the ZK_CLIENT_CONF file and environment variables are not needed
 # any more.
 ```
+
+### Migration using the `Tee` implementation
+
+If your migration is more complex, or has special requirements, we also support
+a 'tee' implementation of the topo service interface. It is defined in
+`go/vt/topo/helpers/tee.go`. It allows communicating to two topo services,
+and the migration uses multiple phases:
+
+* Start with the old topo service implementation we want to replace.
+* Bring up the new topo service, with the same cells.
+* Use `topo2topo` to copy the current data from the old to the new topo.
+* Configure a Tee topo implementation to maintain both services.
+  * Note we don't expose a plugin for this, so a small code change is necessary.
+  * all updates will go to both services.
+  * the `primary` topo service is the one we will get errors from, if any.
+  * the `secondary` topo service is just kept in sync.
+  * at first, use the old topo service as `primary`, and the new one as
+    `secondary`.
+  * then, change the configuration to use the new one as `primary`, and the
+    old one as `secondary`. Reverse the lock order here.
+  * then rollout a configuration to just use the new service.
+
+  

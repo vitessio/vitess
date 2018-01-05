@@ -48,5 +48,5 @@ type GTIDSet interface {
 }
 
 // gtidSetParsers maps flavor names to parser functions. It is used by
-// ParseReplicationPosition().
+// ParsePosition().
 var gtidSetParsers = make(map[string]func(string) (GTIDSet, error))

@@ -27,8 +27,8 @@ import (
 
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/sqlescape"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -164,7 +164,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 		return err
 	}
 
-	// Check the master elect is in tabletMap
+	// Check the master elect is in tabletMap.
 	masterElectTabletAliasStr := topoproto.TabletAliasString(masterElectTabletAlias)
 	masterElectTabletInfo, ok := tabletMap[masterElectTabletAliasStr]
 	if !ok {
@@ -221,6 +221,11 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 		return err
 	}
 
+	// Check we still have the topology lock.
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return fmt.Errorf("lost topology lock, aborting: %v", err)
+	}
+
 	// Tell the new master to break its slaves, return its replication
 	// position
 	wr.logger.Infof("initializing master on %v", topoproto.TabletAliasString(masterElectTabletAlias))
@@ -228,6 +233,11 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 	rp, err := wr.tmc.InitMaster(ctx, masterElectTabletInfo.Tablet)
 	if err != nil {
 		return err
+	}
+
+	// Check we stil have the topology lock.
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return fmt.Errorf("lost topology lock, aborting: %v", err)
 	}
 
 	// Create a cancelable context for the following RPCs.
@@ -301,7 +311,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 	// assume that whatever data is on all the slaves is what they intended.
 	// If the database doesn't exist, it means the user intends for these tablets
 	// to begin serving with no data (i.e. first time initialization).
-	createDB := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlparser.Backtick(topoproto.TabletDbName(masterElectTabletInfo.Tablet)))
+	createDB := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlescape.EscapeID(topoproto.TabletDbName(masterElectTabletInfo.Tablet)))
 	if _, err := wr.tmc.ExecuteFetchAsDba(ctx, masterElectTabletInfo.Tablet, false, []byte(createDB), 1, false, true); err != nil {
 		return fmt.Errorf("failed to create database: %v", err)
 	}
@@ -402,6 +412,11 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 	rp, err = wr.tmc.PromoteSlaveWhenCaughtUp(ctx, masterElectTabletInfo.Tablet, rp)
 	if err != nil {
 		return fmt.Errorf("master-elect tablet %v failed to catch up with replication or be upgraded to master: %v", masterElectTabletAliasStr, err)
+	}
+
+	// Check we stil have the topology lock.
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return fmt.Errorf("lost topology lock, aborting: %v", err)
 	}
 
 	// Create a cancelable context for the following RPCs.
@@ -657,6 +672,11 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	}
 	wg.Wait()
 
+	// Check we stil have the topology lock.
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return fmt.Errorf("lost topology lock, aborting: %v", err)
+	}
+
 	// Verify masterElect is alive and has the most advanced position
 	masterElectStatus, ok := statusMap[masterElectTabletAliasStr]
 	if !ok {
@@ -685,6 +705,11 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	rp, err := wr.tmc.PromoteSlave(ctx, masterElectTabletInfo.Tablet)
 	if err != nil {
 		return fmt.Errorf("master-elect tablet %v failed to be upgraded to master: %v", topoproto.TabletAliasString(masterElectTabletAlias), err)
+	}
+
+	// Check we stil have the topology lock.
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return fmt.Errorf("lost topology lock, aborting: %v", err)
 	}
 
 	// Create a cancelable context for the following RPCs.

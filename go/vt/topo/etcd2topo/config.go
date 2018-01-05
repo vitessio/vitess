@@ -18,10 +18,6 @@ package etcd2topo
 
 const (
 	// Path components
-	cellsPath     = "cells"
-	keyspacesPath = "keyspaces"
-	shardsPath    = "shards"
-	tabletsPath   = "tablets"
 	locksPath     = "locks"
 	electionsPath = "elections"
 )

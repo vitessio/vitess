@@ -1,6 +1,7 @@
 ---
 layout: doc
 title: "Schema Management"
+redirect_from: /user-guide/schema-management.html
 description:
 modified:
 excerpt:

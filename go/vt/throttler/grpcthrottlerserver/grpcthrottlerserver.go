@@ -100,15 +100,15 @@ func (s *Server) ResetConfiguration(_ context.Context, request *throttlerdata.Re
 	}, nil
 }
 
-// StartServer registers the Server instance with the gRPC server.
-func StartServer(s *grpc.Server, m throttler.Manager) {
+// RegisterServer registers a new throttler server instance with the gRPC server.
+func RegisterServer(s *grpc.Server, m throttler.Manager) {
 	throttlerservice.RegisterThrottlerServer(s, NewServer(m))
 }
 
 func init() {
 	servenv.OnRun(func() {
 		if servenv.GRPCCheckServiceMap("throttler") {
-			StartServer(servenv.GRPCServer, throttler.GlobalManager)
+			RegisterServer(servenv.GRPCServer, throttler.GlobalManager)
 		}
 	})
 }

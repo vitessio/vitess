@@ -41,9 +41,9 @@ func TestResult(t *testing.T) {
 		InsertID:     1,
 		RowsAffected: 2,
 		Rows: [][]Value{{
-			testVal(VarChar, "aa"),
-			testVal(Int64, "1"),
-			testVal(Float64, "2"),
+			TestValue(VarChar, "aa"),
+			TestValue(Int64, "1"),
+			TestValue(Float64, "2"),
 		}, {
 			MakeTrusted(VarChar, []byte("bb")),
 			NULL,
@@ -88,7 +88,7 @@ func TestResult(t *testing.T) {
 
 	// Test custom fields.
 	fields[1].Type = VarBinary
-	sqlResult.Rows[0][1] = testVal(VarBinary, "1")
+	sqlResult.Rows[0][1] = TestValue(VarBinary, "1")
 	reverse = CustomProto3ToResult(fields, p3Result)
 	if !reverse.Equal(sqlResult) {
 		t.Errorf("reverse:\n%#v, want\n%#v", reverse, sqlResult)
@@ -121,9 +121,9 @@ func TestResults(t *testing.T) {
 		InsertID:     1,
 		RowsAffected: 2,
 		Rows: [][]Value{{
-			testVal(VarChar, "aa"),
-			testVal(Int64, "1"),
-			testVal(Float64, "2"),
+			TestValue(VarChar, "aa"),
+			TestValue(Int64, "1"),
+			TestValue(Float64, "2"),
 		}},
 		Extras: &querypb.ResultExtras{
 			EventToken: &querypb.EventToken{
@@ -137,9 +137,9 @@ func TestResults(t *testing.T) {
 		InsertID:     3,
 		RowsAffected: 4,
 		Rows: [][]Value{{
-			testVal(VarChar, "bb"),
-			testVal(Int64, "3"),
-			testVal(Float64, "4"),
+			TestValue(VarChar, "bb"),
+			TestValue(Int64, "3"),
+			TestValue(Float64, "4"),
 		}},
 		Extras: &querypb.ResultExtras{
 			EventToken: &querypb.EventToken{
@@ -220,9 +220,9 @@ func TestQueryReponses(t *testing.T) {
 				InsertID:     1,
 				RowsAffected: 2,
 				Rows: [][]Value{{
-					testVal(VarChar, "aa"),
-					testVal(Int64, "1"),
-					testVal(Float64, "2"),
+					TestValue(VarChar, "aa"),
+					TestValue(Int64, "1"),
+					TestValue(Float64, "2"),
 				}},
 				Extras: &querypb.ResultExtras{
 					EventToken: &querypb.EventToken{
@@ -239,9 +239,9 @@ func TestQueryReponses(t *testing.T) {
 				InsertID:     3,
 				RowsAffected: 4,
 				Rows: [][]Value{{
-					testVal(VarChar, "bb"),
-					testVal(Int64, "3"),
-					testVal(Float64, "4"),
+					TestValue(VarChar, "bb"),
+					TestValue(Int64, "3"),
+					TestValue(Float64, "4"),
 				}},
 				Extras: &querypb.ResultExtras{
 					EventToken: &querypb.EventToken{

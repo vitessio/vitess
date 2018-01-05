@@ -1,0 +1,130 @@
+version: "3"
+services:
+  consul1:
+    image: consul:latest
+    hostname: "consul1"
+    ports:
+      - "8400:8400"
+      - "8500:8500"
+      - "8600:8600"
+    command: "agent -server -bootstrap-expect 3 -ui -disable-host-node-id -client 0.0.0.0"
+  consul2:
+    image: consul:latest
+    hostname: "consul2"
+    expose:
+      - "8400"
+      - "8500"
+      - "8600"
+    command: "agent -server -retry-join consul1 -disable-host-node-id"
+    depends_on:
+      - consul1
+  consul3:
+    image: consul:latest
+    hostname: "consul3"
+    expose:
+      - "8400"
+      - "8500"
+      - "8600"
+    command: "agent -server -retry-join consul1 -disable-host-node-id"
+    depends_on:
+      - consul1
+
+  vtctld:
+    image: vitess/base
+    ports:
+      - "15000:$WEB_PORT"
+      - "$GRPC_PORT"
+    command: ["sh", "-c", " $$VTROOT/bin/vtctld \
+        $TOPOLOGY_FLAGS \
+        -cell $CELL \
+        -web_dir $$VTTOP/web/vtctld \
+        -web_dir2 $$VTTOP/web/vtctld2/app \
+        -workflow_manager_init \
+        -workflow_manager_use_election \
+        -service_map 'grpc-vtctl' \
+        -backup_storage_implementation file \
+        -file_backup_storage_root $$VTDATAROOT/backups \
+        -logtostderr=true \
+        -port $WEB_PORT \
+        -grpc_port $GRPC_PORT \
+        -pid_file $$VTDATAROOT/tmp/vtctld.pid
+        "]
+    depends_on:
+      - consul1
+      - consul2
+      - consul3
+
+  vtgate:
+    image: vitess/base
+    ports:
+      - "15099:$WEB_PORT"
+      - "$GRPC_PORT"
+      - "15306:$MYSQL_PORT"
+    command: ["sh", "-c", "$$VTROOT/bin/vtgate \
+        $TOPOLOGY_FLAGS \
+        -logtostderr=true \
+        -port $WEB_PORT \
+        -grpc_port $GRPC_PORT \
+        -mysql_server_port $MYSQL_PORT \
+        -mysql_auth_server_impl none \
+        -cell $CELL \
+        -cells_to_watch $CELL \
+        -tablet_types_to_wait MASTER,REPLICA \
+        -gateway_implementation discoverygateway \
+        -service_map 'grpc-vtgateservice' \
+        -pid_file $$VTDATAROOT/tmp/vtgate.pid \
+        "]
+    depends_on:
+      - vtctld
+
+  vttablet1:
+    image: vitess/base
+    ports:
+      - "15001:$WEB_PORT"
+      - "$GRPC_PORT"
+      - "3306"
+    volumes:
+      - ".:/script"
+    environment:
+      - TOPOLOGY_FLAGS
+      - WEB_PORT
+      - GRPC_PORT
+      - CELL
+      - KEYSPACE
+    command: ["sh", "-c", "/script/vttablet-up.sh 1"]
+    depends_on:
+      - vtctld
+  vttablet2:
+    image: vitess/base
+    ports:
+      - "15002:$WEB_PORT"
+      - "$GRPC_PORT"
+      - "3306"
+    volumes:
+      - ".:/script"
+    environment:
+      - TOPOLOGY_FLAGS
+      - WEB_PORT
+      - GRPC_PORT
+      - CELL
+      - KEYSPACE
+    command: ["sh", "-c", "/script/vttablet-up.sh 2"]
+    depends_on:
+      - vtctld
+  vttablet3:
+    image: vitess/base
+    ports:
+      - "15003:$WEB_PORT"
+      - "$GRPC_PORT"
+      - "3306"
+    volumes:
+      - ".:/script"
+    environment:
+      - TOPOLOGY_FLAGS
+      - WEB_PORT
+      - GRPC_PORT
+      - CELL
+      - KEYSPACE
+    command: ["sh", "-c", "/script/vttablet-up.sh 3"]
+    depends_on:
+      - vtctld

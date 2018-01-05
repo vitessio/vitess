@@ -27,8 +27,9 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/callerid"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -64,7 +65,9 @@ var (
 		vtrpcpb.Code_DATA_LOSS.String(),
 	)
 	// InternalErrors shows number of errors from internal components.
-	InternalErrors = stats.NewCounters("InternalErrors", "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection", "WatchdogFail")
+	InternalErrors = stats.NewCounters("InternalErrors", "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection", "WatchdogFail", "Messages")
+	// Warnings shows number of warnings
+	Warnings = stats.NewCounters("Warnings", "ResultsExceeded")
 	// Unresolved tracks unresolved items. For now it's just Prepares.
 	Unresolved = stats.NewCounters("Unresolved", "Prepares")
 	// UserTableQueryCount shows number of queries received for each CallerID/table combination.
@@ -83,6 +86,12 @@ var (
 	TableaclDenied = stats.NewMultiCounters("TableACLDenied", []string{"TableName", "TableGroup", "PlanID", "Username"})
 	// TableaclPseudoDenied tracks the number of pseudo denies.
 	TableaclPseudoDenied = stats.NewMultiCounters("TableACLPseudoDenied", []string{"TableName", "TableGroup", "PlanID", "Username"})
+	// Infof can be overridden during tests
+	Infof = log.Infof
+	// Warningf can be overridden during tests
+	Warningf = log.Warningf
+	// Errorf can be overridden during tests
+	Errorf = log.Errorf
 )
 
 // RecordUserQuery records the query data against the user.

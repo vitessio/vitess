@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/rules"
 )
@@ -173,14 +175,14 @@ func TestQueryRules(t *testing.T) {
 
 	client := framework.NewClient()
 	query := "select * from vitess_test where intval=:asdfg"
-	bv := map[string]interface{}{"asdfg": 1}
+	bv := map[string]*querypb.BindVariable{"asdfg": sqltypes.Int64BindVariable(1)}
 	_, err = client.Execute(query, bv)
-	want = "disallowed due to rule: disallow bindvar 'asdfg'"
+	want = "disallowed due to rule: disallow bindvar 'asdfg', CallerID: dev"
 	if err == nil || err.Error() != want {
 		t.Errorf("Error: %v, want %s", err, want)
 	}
 	_, err = client.StreamExecute(query, bv)
-	want = "disallowed due to rule: disallow bindvar 'asdfg'"
+	want = "disallowed due to rule: disallow bindvar 'asdfg', CallerID: dev"
 	if err == nil || err.Error() != want {
 		t.Errorf("Error: %v, want %s", err, want)
 	}

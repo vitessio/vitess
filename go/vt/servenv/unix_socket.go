@@ -42,13 +42,13 @@ func serveSocketFile() {
 	if _, err := os.Stat(name); err == nil {
 		err = os.Remove(name)
 		if err != nil {
-			log.Fatalf("Cannot remove socket file %v: %v", name, err)
+			log.Exitf("Cannot remove socket file %v: %v", name, err)
 		}
 	}
 
 	l, err := net.Listen("unix", name)
 	if err != nil {
-		log.Fatalf("Error listening on socket file %v: %v", name, err)
+		log.Exitf("Error listening on socket file %v: %v", name, err)
 	}
 	log.Infof("Listening on socket file %v for gRPC", name)
 	go GRPCServer.Serve(l)

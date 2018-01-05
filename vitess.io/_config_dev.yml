@@ -14,10 +14,12 @@ repo: https://github.com/youtube/vitess
 sass:
   sass_dir: _sass
   style: compressed
-permalink: /:categories/:title/
+permalink: pretty
 highlighter: pygments
-gems:
+plugins:
   - jekyll-sitemap
+  - jekyll-redirect-from
+  - jekyll-seo-tag
 
 markdown: redcarpet
 
@@ -36,3 +38,7 @@ owner:
 
 
 exclude: ["config.rb", ".sass-cache", "Capfile", "config", "log", "Rakefile", "Rakefile.rb", "tmp", "*.sublime-project", "*.sublime-workspace", "Gemfile", "Gemfile.lock", "README.md", "LICENSE", "node_modules", "Gruntfile.js", "package.json", "preview-site.sh", "publish-site.sh"]
+
+# Open up "jekyll serve" because the requests via the Docker forwarding are not
+# treated as incoming from "localhost".
+host: 0.0.0.0

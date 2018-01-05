@@ -6,23 +6,23 @@ Other Linux distributions should work as well.
 ## Database support
 
 Vitess supports [MySQL 5.6](http://dev.mysql.com/doc/refman/5.6/en/),
-[MySQL 5.7](http://dev.mysql.com/doc/refman/5.7/en/),
-and [MariaDB 10.0](https://downloads.mariadb.org/mariadb/10.0.21/).
+[MariaDB 10.0](https://downloads.mariadb.org/mariadb/10.0.21/), and any
+newer versions like MySQL 5.7, etc. Vitess also supports Percona's
+variations of these versions.
 
-### Data types and SQL support
+### Relational capabilities
 
-In Vitess, database tables are like MySQL relational tables, and you
-can use relational modeling schemes (normalization) to structure your
-schema. Vitess supports both primary and secondary indexes.
+Vitess attempts to leverage the capabilities of the underlying MySQL
+instances to the fullest extent. In this respect, any query that can
+be passed through to a single keyspace, shard or set of shards will
+be sent to the MySQL servers as is.
 
-Vitess supports almost all MySQL scalar data types.
-It also provides full SQL support within a
-[shard](/overview/concepts.html#shard), including JOIN statements.
+This approach allows you to exploit the full capabilities of MySQL
+as long as the relationships and constraints are within one shard (or
+unsharded keyspace).
 
-Vitess does not currently support encoded protobufs or protocol buffer
-querying. (The latter is also known as cracking.) Protocol buffers can
-be stored as a blob in MySQL, but must be decoded and interpreted at
-the application layer.
+For relationships that go beyond shards, Vitess provides 
+support through the [VSchema]({% link user-guide/vschema.md %}).
 
 ### Schema management
 
@@ -44,35 +44,32 @@ check to ensure that the update can be applied to your schema. In
 addition, to avoid reducing the availability of your entire system,
 Vitess rejects changes that exceed a certain scope.
 
-See the [Schema Management](/user-guide/schema-management.html)
+See the [Schema Management]({% link user-guide/schema-management.md %})
 section of this guide for more information.
 
 ## Supported clients
 
-You can access your Vitess cluster using a variety of clients and
-programming languages.
+The VTGate server is the main entry point that applications use
+to connect to Vitess.
 
-Vitess' service is exposed through a
-[proto3](https://developers.google.com/protocol-buffers/docs/proto3)
-service definition. Vitess supports [gRPC](http://www.grpc.io/),
-and you can use the 
-[proto compiler](https://developers.google.com/protocol-buffers/docs/proto?hl=en#generating)
-to generate stubs that can call the API in any language that the
-gRPC framework supports.
+VTGate understands the MySQL binary protocol. So, any client that
+can directly talk to MySQL can also use Vitess.
 
-### Client libraries
+Additionally, VTGate exposes its functionality through a
+[gRPC](http://www.grpc.io/) API which has support for multiple languages.
 
-Client libraries that support a richer set of functionality are
-available for some languages. Client libraries help your application
-to more easily talk to your storage system to query data.
+Accessing Vitess through gRPC has some minor advantages over the MySQL
+protocol:
 
-The following table lists those
-client libraries and other clients that Vitess supports.
+* You can send requests with bind variables, which is slightly more
+  efficient and secure than building the full text query.
+* You can exploit the statelessness of connections. For example, you
+  can start a transaction using one VTGate server, and complete it
+  using another.
 
-| Type | Options |
-| :-------- | :--------- |
-| Client library | [gRPC](http://www.grpc.io/)<br class="bigbreak">Go<br class="bigbreak">Java<br class="bigbreak">Python<br class="bigbreak">PHP |
-| MapReduce | [Hadoop input](https://hadoop.apache.org/docs/r2.7.0/api/org/apache/hadoop/mapreduce/InputFormat.html) |
+Vitess currently provides gRPC based connectors for Java (JDBC) and Go
+(database/sql). All others can use the native MySQL drivers instead. The
+native MySQL drivers for Java and Go should also work.
 
 ## Backups
 
@@ -81,6 +78,6 @@ Backup storage is implemented through a pluggable interface,
 and we currently have plugins available for Google Cloud Storage, Amazon S3,
 and Ceph.
 
-See the [Backing Up Data](/user-guide/backup-and-restore.html) section
+See the [Backing Up Data]({% link user-guide/backup-and-restore.md %}) section
 of this guide for more information about creating and restoring data
 backups with Vitess. 

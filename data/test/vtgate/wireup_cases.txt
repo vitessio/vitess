@@ -285,7 +285,7 @@
         "Query": "select 1 from user as u3 where u3.id = :u1_col",
         "FieldQuery": "select 1 from user as u3 where 1 != 1",
         "Vindex": "user_index",
-        "Values": ":u1_col",
+        "Values": [":u1_col"],
         "JoinVars": {
           "u1_col": {}
         }
@@ -345,7 +345,7 @@
         "Query": "select 1 from user as u2 where u2.id = :u1_col",
         "FieldQuery": "select 1 from user as u2 where 1 != 1",
         "Vindex": "user_index",
-        "Values": ":u1_col",
+        "Values": [":u1_col"],
         "JoinVars": {
           "u1_col": {}
         }
@@ -359,7 +359,7 @@
         "Query": "select 1 from user as u3 where u3.id = :u1_col",
         "FieldQuery": "select 1 from user as u3 where 1 != 1",
         "Vindex": "user_index",
-        "Values": ":u1_col",
+        "Values": [":u1_col"],
         "JoinVars": {
           "u1_col": {}
         }
@@ -443,6 +443,47 @@
     ],
     "Vars": {
       "weird_name_a_b_c": 0
+    }
+  }
+}
+
+# wire-up with limit primitive
+"select u.id, e.id from user u join user_extra e where e.id = u.col limit 10"
+{
+  "Original": "select u.id, e.id from user u join user_extra e where e.id = u.col limit 10",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": 10,
+    "Input": {
+      "Opcode": "Join",
+      "Left": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select u.id, u.col from user as u",
+        "FieldQuery": "select u.id, u.col from user as u where 1 != 1"
+      },
+      "Right": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select e.id from user_extra as e where e.id = :u_col",
+        "FieldQuery": "select e.id from user_extra as e where 1 != 1",
+        "JoinVars": {
+          "u_col": {}
+        }
+      },
+      "Cols": [
+        -1,
+        1
+      ],
+      "Vars": {
+        "u_col": 1
+      }
     }
   }
 }

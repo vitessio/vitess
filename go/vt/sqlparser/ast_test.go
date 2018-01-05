@@ -22,6 +22,8 @@ import (
 	"reflect"
 	"testing"
 	"unsafe"
+
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 func TestAppend(t *testing.T) {
@@ -199,6 +201,47 @@ func TestIsAggregate(t *testing.T) {
 	}
 }
 
+func TestExprFromValue(t *testing.T) {
+	tcases := []struct {
+		in  sqltypes.Value
+		out SQLNode
+		err string
+	}{{
+		in:  sqltypes.NULL,
+		out: &NullVal{},
+	}, {
+		in:  sqltypes.NewInt64(1),
+		out: NewIntVal([]byte("1")),
+	}, {
+		in:  sqltypes.NewFloat64(1.1),
+		out: NewFloatVal([]byte("1.1")),
+	}, {
+		in:  sqltypes.MakeTrusted(sqltypes.Decimal, []byte("1.1")),
+		out: NewFloatVal([]byte("1.1")),
+	}, {
+		in:  sqltypes.NewVarChar("aa"),
+		out: NewStrVal([]byte("aa")),
+	}, {
+		in:  sqltypes.MakeTrusted(sqltypes.Expression, []byte("rand()")),
+		err: "cannot convert value EXPRESSION(rand()) to AST",
+	}}
+	for _, tcase := range tcases {
+		got, err := ExprFromValue(tcase.in)
+		if tcase.err != "" {
+			if err == nil || err.Error() != tcase.err {
+				t.Errorf("ExprFromValue(%v) err: %v, want %s", tcase.in, err, tcase.err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Error(err)
+		}
+		if got, want := got, tcase.out; !reflect.DeepEqual(got, want) {
+			t.Errorf("ExprFromValue(%v): %v, want %s", tcase.in, got, want)
+		}
+	}
+}
+
 func TestColNameEqual(t *testing.T) {
 	var c1, c2 *ColName
 	if c1.Equal(c2) {
@@ -254,7 +297,9 @@ func TestColIdentMarshal(t *testing.T) {
 		t.Errorf("json.Marshal()= %s, want %s", got, want)
 	}
 	var out ColIdent
-	err = json.Unmarshal(b, &out)
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Errorf("Unmarshal err: %v, want nil", err)
+	}
 	if !reflect.DeepEqual(out, str) {
 		t.Errorf("Unmarshal: %v, want %v", out, str)
 	}
@@ -280,7 +325,9 @@ func TestTableIdentMarshal(t *testing.T) {
 		t.Errorf("json.Marshal()= %s, want %s", got, want)
 	}
 	var out TableIdent
-	err = json.Unmarshal(b, &out)
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Errorf("Unmarshal err: %v, want nil", err)
+	}
 	if !reflect.DeepEqual(out, str) {
 		t.Errorf("Unmarshal: %v, want %v", out, str)
 	}
@@ -340,24 +387,6 @@ func TestCompliantName(t *testing.T) {
 		out = NewTableIdent(tc.in).CompliantName()
 		if out != tc.out {
 			t.Errorf("TableIdent(%s).CompliantNamt: %s, want %s", tc.in, out, tc.out)
-		}
-	}
-}
-
-func TestEscape(t *testing.T) {
-	testcases := []struct {
-		in, out string
-	}{{
-		in:  "aa",
-		out: "`aa`",
-	}, {
-		in:  "a`a",
-		out: "`a``a`",
-	}}
-	for _, tc := range testcases {
-		out := Backtick(tc.in)
-		if out != tc.out {
-			t.Errorf("Escape(%s): %s, want %s", tc.in, out, tc.out)
 		}
 	}
 }

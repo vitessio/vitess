@@ -1,0 +1,88 @@
+{
+	"ks_unsharded": {
+		"Sharded": false,
+		"Tables": {
+			"t1": {},
+			"table_not_in_schema": {}
+		}
+	},
+	"ks_sharded": {
+		"Sharded": true,
+		"vindexes": {
+			"music_user_map": {
+				"type": "lookup_hash_unique",
+				"owner": "music",
+				"params": {
+					"table": "music_user_map",
+					"from": "music_id",
+					"to": "user_id"
+				}
+			},
+			"name_user_map": {
+				"type": "lookup_hash_unique",
+				"owner": "user",
+				"params": {
+					"table": "name_user_map",
+					"from": "name",
+					"to": "user_id"
+				}
+			},
+			"hash": {
+				"type": "hash"
+			},
+			"md5": {
+				"type": "unicode_loose_md5"
+			}
+		},
+		"tables": {
+			"user": {
+				"column_vindexes": [
+					{
+						"column": "id",
+						"name": "hash"
+					},
+					{
+						"column": "name",
+						"name": "name_user_map"
+					}
+				]
+			},
+			"music": {
+				"column_vindexes": [
+					{
+						"column": "user_id",
+						"name": "hash"
+					},
+					{
+						"column": "id",
+						"name": "music_user_map"
+					}
+				]
+			},
+			"music_extra": {
+				"column_vindexes": [
+					{
+						"column": "id",
+						"name": "hash"
+					}
+				]
+			},
+			"name_user_map": {
+				"column_vindexes": [
+					{
+						"column": "name",
+						"name": "md5"
+					}
+				]
+			},
+			"name_info": {
+				"column_vindexes": [
+					{
+						"column": "name",
+						"name": "md5"
+					}
+				]
+			}
+		}
+	}
+}

@@ -24,7 +24,15 @@ grpc_port=15999
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
+optional_auth_args=''
+if [ "$1" = "--enable-grpc-static-auth" ];
+then
+	  echo "Enabling Auth with static authentication in grpc"
+    optional_auth_args='-grpc_auth_static_client_creds ./grpc_static_client_auth.json '
+fi
+
 echo "Starting vtctld..."
+# shellcheck disable=SC2086
 $VTROOT/bin/vtctld \
   $TOPOLOGY_FLAGS \
   -cell $cell \
@@ -39,6 +47,7 @@ $VTROOT/bin/vtctld \
   -port $vtctld_web_port \
   -grpc_port $grpc_port \
   -pid_file $VTDATAROOT/tmp/vtctld.pid \
+  $optional_auth_args \
   > $VTDATAROOT/tmp/vtctld.out 2>&1 &
 disown -a
 

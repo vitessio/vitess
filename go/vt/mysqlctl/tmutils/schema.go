@@ -216,11 +216,11 @@ func DiffSchema(leftName string, left *tabletmanagerdatapb.SchemaDefinition, rig
 		return
 	}
 	if left == nil || right == nil {
-		er.RecordError(fmt.Errorf("%v and %v are different, %s: %v, %s: %v", leftName, rightName, leftName, left, rightName, right))
+		er.RecordError(fmt.Errorf("schemas are different:\n%s: %v, %s: %v", leftName, left, rightName, right))
 		return
 	}
 	if left.DatabaseSchema != right.DatabaseSchema {
-		er.RecordError(fmt.Errorf("%v and %v don't agree on database creation command:\n%v\n differs from:\n%v", leftName, rightName, left.DatabaseSchema, right.DatabaseSchema))
+		er.RecordError(fmt.Errorf("schemas are different:\n%s: %v\n differs from:\n%s: %v", leftName, left.DatabaseSchema, rightName, right.DatabaseSchema))
 	}
 
 	leftIndex := 0
@@ -242,11 +242,11 @@ func DiffSchema(leftName string, left *tabletmanagerdatapb.SchemaDefinition, rig
 
 		// same name, let's see content
 		if left.TableDefinitions[leftIndex].Schema != right.TableDefinitions[rightIndex].Schema {
-			er.RecordError(fmt.Errorf("%v and %v disagree on schema for table %v:\n%v\n differs from:\n%v", leftName, rightName, left.TableDefinitions[leftIndex].Name, left.TableDefinitions[leftIndex].Schema, right.TableDefinitions[rightIndex].Schema))
+			er.RecordError(fmt.Errorf("schemas differ on table %v:\n%s: %v\n differs from:\n%s: %v", left.TableDefinitions[leftIndex].Name, leftName, left.TableDefinitions[leftIndex].Schema, rightName, right.TableDefinitions[rightIndex].Schema))
 		}
 
 		if left.TableDefinitions[leftIndex].Type != right.TableDefinitions[rightIndex].Type {
-			er.RecordError(fmt.Errorf("%v and %v disagree on table type for table %v:\n%v\n differs from:\n%v", leftName, rightName, left.TableDefinitions[leftIndex].Name, left.TableDefinitions[leftIndex].Type, right.TableDefinitions[rightIndex].Type))
+			er.RecordError(fmt.Errorf("schemas differ on table type for table %v:\n%s: %v\n differs from:\n%s: %v", left.TableDefinitions[leftIndex].Name, leftName, left.TableDefinitions[leftIndex].Type, rightName, right.TableDefinitions[rightIndex].Type))
 		}
 
 		leftIndex++

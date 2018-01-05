@@ -69,21 +69,10 @@ func (result *Result) Copy() *Result {
 		out.Fields = fieldsp
 	}
 	if result.Rows != nil {
-		rows := make([][]Value, len(result.Rows))
-		for i, r := range result.Rows {
-			rows[i] = make([]Value, len(r))
-			totalLen := 0
-			for _, c := range r {
-				totalLen += len(c.val)
-			}
-			arena := make([]byte, 0, totalLen)
-			for j, c := range r {
-				start := len(arena)
-				arena = append(arena, c.val...)
-				rows[i][j] = MakeTrusted(c.typ, arena[start:start+len(c.val)])
-			}
+		out.Rows = make([][]Value, 0, len(result.Rows))
+		for _, r := range result.Rows {
+			out.Rows = append(out.Rows, CopyRow(r))
 		}
-		out.Rows = rows
 	}
 	if result.Extras != nil {
 		out.Extras = &querypb.ResultExtras{
@@ -97,6 +86,15 @@ func (result *Result) Copy() *Result {
 			}
 		}
 	}
+	return out
+}
+
+// CopyRow makes a copy of the row.
+func CopyRow(r []Value) []Value {
+	// The raw bytes of the values are supposed to be treated as read-only.
+	// So, there's no need to copy them.
+	out := make([]Value, len(r))
+	copy(out, r)
 	return out
 }
 

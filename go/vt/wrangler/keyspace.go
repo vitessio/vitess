@@ -34,6 +34,7 @@ import (
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
 const (
@@ -504,9 +505,9 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout, initialWait time.Duration) error {
 
 	// Create the healthheck module, with a cache.
-	hc := discovery.NewHealthCheck(healthCheckTimeout /* connectTimeout */, healthcheckRetryDelay, healthCheckTimeout)
+	hc := discovery.NewHealthCheck(healthcheckRetryDelay, healthCheckTimeout)
 	defer hc.Close()
-	tsc := discovery.NewTabletStatsCache(hc, cell)
+	tsc := discovery.NewTabletStatsCache(hc, wr.TopoServer(), cell)
 
 	// Create a tablet watcher.
 	watcher := discovery.NewShardReplicationWatcher(wr.TopoServer(), hc, cell, keyspace, shard, healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
@@ -707,11 +708,7 @@ func (wr *Wrangler) replicaMigrateServedFrom(ctx context.Context, ki *topo.Keysp
 	// Now refresh the source servers so they reload their
 	// blacklisted table list
 	event.DispatchUpdate(ev, "refreshing sources tablets state so they update their blacklisted tables")
-	if err := wr.RefreshTabletsByShard(ctx, sourceShard, []topodatapb.TabletType{servedType}, cells); err != nil {
-		return err
-	}
-
-	return nil
+	return wr.RefreshTabletsByShard(ctx, sourceShard, []topodatapb.TabletType{servedType}, cells)
 }
 
 // masterMigrateServedFrom handles the master migration. The ordering is
@@ -788,11 +785,7 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 	// Invoking a remote action will also make the tablet stop filtered
 	// replication.
 	event.DispatchUpdate(ev, "setting destination shard masters read-write")
-	if err := wr.refreshMasters(ctx, []*topo.ShardInfo{destinationShard}); err != nil {
-		return err
-	}
-
-	return nil
+	return wr.refreshMasters(ctx, []*topo.ShardInfo{destinationShard})
 }
 
 // SetKeyspaceServedFrom locks a keyspace and changes its ServerFromMap
@@ -834,6 +827,12 @@ func (wr *Wrangler) RefreshTabletsByShard(ctx context.Context, si *topo.ShardInf
 	wg := sync.WaitGroup{}
 	for _, ti := range tabletMap {
 		if tabletTypes != nil && !topoproto.IsTypeInList(ti.Type, tabletTypes) {
+			continue
+		}
+		if ti.Hostname == "" {
+			// The tablet is not running, we don't have the host
+			// name to connect to, so we just skip this tablet.
+			wr.Logger().Infof("Tablet %v has no hostname, skipping its RefreshState", ti.AliasString())
 			continue
 		}
 
@@ -895,6 +894,13 @@ func (wr *Wrangler) DeleteKeyspace(ctx context.Context, keyspace string, recursi
 		if err := wr.ts.DeleteSrvKeyspace(ctx, cell, keyspace); err != nil && err != topo.ErrNoNode {
 			wr.Logger().Warningf("Cannot delete SrvKeyspace in cell %v for %v: %v", cell, keyspace, err)
 		}
+	}
+
+	// Delete the cell-global VSchema path
+	// If not remove this, vtctld web page Dashboard will Display Error
+	vschema := &vschemapb.Keyspace{}
+	if err := wr.ts.SaveVSchema(ctx, keyspace, vschema); err != nil && err != topo.ErrNoNode {
+		return err
 	}
 
 	return wr.ts.DeleteKeyspace(ctx, keyspace)

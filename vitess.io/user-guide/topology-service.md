@@ -1,6 +1,7 @@
 ---
 layout: doc
 title: "Topology Service"
+redirect_from: /user-guide/topology-service.html
 description:
 modified:
 excerpt:

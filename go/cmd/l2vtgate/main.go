@@ -37,12 +37,11 @@ import (
 )
 
 var (
-	cell                   = flag.String("cell", "test_nj", "cell to use")
-	retryCount             = flag.Int("retry-count", 2, "retry count")
-	healthCheckConnTimeout = flag.Duration("healthcheck_conn_timeout", 3*time.Second, "healthcheck connection timeout")
-	healthCheckRetryDelay  = flag.Duration("healthcheck_retry_delay", 2*time.Millisecond, "health check retry delay")
-	healthCheckTimeout     = flag.Duration("healthcheck_timeout", time.Minute, "the health check timeout period")
-	tabletTypesToWait      = flag.String("tablet_types_to_wait", "", "wait till connected for specified tablet types during Gateway initialization")
+	cell                  = flag.String("cell", "test_nj", "cell to use")
+	retryCount            = flag.Int("retry-count", 2, "retry count")
+	healthCheckRetryDelay = flag.Duration("healthcheck_retry_delay", 2*time.Millisecond, "health check retry delay")
+	healthCheckTimeout    = flag.Duration("healthcheck_timeout", time.Minute, "the health check timeout period")
+	tabletTypesToWait     = flag.String("tablet_types_to_wait", "", "wait till connected for specified tablet types during Gateway initialization")
 )
 
 var resilientSrvTopoServer *vtgate.ResilientSrvTopoServer
@@ -69,7 +68,7 @@ func main() {
 
 	resilientSrvTopoServer = vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
 
-	healthCheck = discovery.NewHealthCheck(*healthCheckConnTimeout, *healthCheckRetryDelay, *healthCheckTimeout)
+	healthCheck = discovery.NewHealthCheck(*healthCheckRetryDelay, *healthCheckTimeout)
 	healthCheck.RegisterStats()
 
 	tabletTypes := make([]topodatapb.TabletType, 0, 1)

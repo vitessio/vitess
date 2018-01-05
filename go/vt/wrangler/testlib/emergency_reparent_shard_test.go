@@ -86,11 +86,10 @@ func TestEmergencyReparentShard(t *testing.T) {
 			Sequence: 455,
 		},
 	}
-	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = topoproto.MysqlAddr(newMaster.Tablet)
-	goodSlave1.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
+	goodSlave1.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	goodSlave1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
-		"set master cmd 1",
+		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	goodSlave1.StartActionLoop(t, wr)
@@ -106,11 +105,10 @@ func TestEmergencyReparentShard(t *testing.T) {
 			Sequence: 454,
 		},
 	}
-	goodSlave2.FakeMysqlDaemon.SetMasterCommandsInput = topoproto.MysqlAddr(newMaster.Tablet)
-	goodSlave2.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
+	goodSlave2.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	goodSlave2.StartActionLoop(t, wr)
 	goodSlave2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"set master cmd 1",
+		"FAKE SET MASTER",
 	}
 	defer goodSlave2.StopActionLoop(t)
 

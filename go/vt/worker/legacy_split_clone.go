@@ -30,6 +30,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/event"
+	"github.com/youtube/vitess/go/sqlescape"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/discovery"
@@ -372,8 +373,8 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 	}
 
 	// Initialize healthcheck and add destination shards to it.
-	scw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
-	scw.tsc = discovery.NewTabletStatsCache(scw.healthCheck, scw.cell)
+	scw.healthCheck = discovery.NewHealthCheck(*healthcheckRetryDelay, *healthCheckTimeout)
+	scw.tsc = discovery.NewTabletStatsCache(scw.healthCheck, scw.wr.TopoServer(), scw.cell)
 	for _, si := range scw.destinationShards {
 		watcher := discovery.NewShardReplicationWatcher(scw.wr.TopoServer(), scw.healthCheck,
 			scw.cell, si.Keyspace(), si.ShardName(),
@@ -567,13 +568,14 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 
 			for _, c := range chunks {
 				sourceWaitGroup.Add(1)
-				go func(td *tabletmanagerdatapb.TableDefinition, tableIndex int, chunk chunk) {
+				go func(td *tabletmanagerdatapb.TableDefinition, shardIndex, tableIndex int, chunk chunk) {
 					defer sourceWaitGroup.Done()
 
 					sema.Acquire()
 					defer sema.Release()
 
 					scw.tableStatusList.threadStarted(tableIndex)
+					defer scw.tableStatusList.threadDone(tableIndex)
 
 					// Start streaming from the source tablets.
 					tp := newSingleTabletProvider(ctx, scw.wr.TopoServer(), scw.sourceAliases[shardIndex])
@@ -593,8 +595,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 					if err := scw.processData(ctx, dbNames, td, tableIndex, rr, rowSplitter, insertChannels, scw.destinationPackCount); err != nil {
 						processError("processData failed: %v", err)
 					}
-					scw.tableStatusList.threadDone(tableIndex)
-				}(td, tableIndex, c)
+				}(td, shardIndex, tableIndex, c)
 			}
 		}
 	}
@@ -699,7 +700,7 @@ func (scw *LegacySplitCloneWorker) processData(ctx context.Context, dbNames []st
 	// different dbName.
 	baseCmds := make([]string, len(dbNames))
 	for i, dbName := range dbNames {
-		baseCmds[i] = "INSERT INTO " + escape(dbName) + "." + escape(td.Name) + " (" + strings.Join(escapeAll(td.Columns), ", ") + ") VALUES "
+		baseCmds[i] = "INSERT INTO " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID(td.Name) + " (" + strings.Join(escapeAll(td.Columns), ", ") + ") VALUES "
 	}
 	sr := rowSplitter.StartSplit()
 	packCount := 0

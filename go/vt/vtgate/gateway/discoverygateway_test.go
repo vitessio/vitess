@@ -25,8 +25,8 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -46,12 +46,12 @@ func TestDiscoveryGatewayExecute(t *testing.T) {
 
 func TestDiscoveryGatewayExecuteBatch(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, target *querypb.Target) error {
-		queries := []querytypes.BoundQuery{{Sql: "query", BindVariables: nil}}
+		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
 		_, err := dg.ExecuteBatch(context.Background(), target, queries, false, 0, nil)
 		return err
 	})
 	testDiscoveryGatewayTransact(t, false, func(dg Gateway, target *querypb.Target) error {
-		queries := []querytypes.BoundQuery{{Sql: "query", BindVariables: nil}}
+		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
 		_, err := dg.ExecuteBatch(context.Background(), target, queries, false, 1, nil)
 		return err
 	})
@@ -94,7 +94,7 @@ func TestDiscoveryGatewayBeginExecute(t *testing.T) {
 
 func TestDiscoveryGatewayBeginExecuteBatch(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, target *querypb.Target) error {
-		queries := []querytypes.BoundQuery{{Sql: "query", BindVariables: nil}}
+		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
 		_, _, err := dg.BeginExecuteBatch(context.Background(), target, queries, false, nil)
 		return err
 	})
@@ -104,7 +104,7 @@ func TestDiscoveryGatewayGetTablets(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"
 	hc := discovery.NewFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "local", 2).(*discoveryGateway)
+	dg := createDiscoveryGateway(hc, nil, nil, "local", 2).(*discoveryGateway)
 
 	// replica should only use local ones
 	hc.Reset()
@@ -127,6 +127,109 @@ func TestDiscoveryGatewayGetTablets(t *testing.T) {
 	}
 }
 
+func TestShuffleTablets(t *testing.T) {
+	defer topo.UpdateCellsToRegionsForTests(map[string]string{})
+	topo.UpdateCellsToRegionsForTests(map[string]string{
+		"cell1": "region1",
+		"cell2": "region1",
+	})
+
+	ts1 := discovery.TabletStats{
+		Key:     "t1",
+		Tablet:  topo.NewTablet(10, "cell1", "host1"),
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Up:      true,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+
+	ts2 := discovery.TabletStats{
+		Key:     "t2",
+		Tablet:  topo.NewTablet(10, "cell1", "host2"),
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Up:      true,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+
+	ts3 := discovery.TabletStats{
+		Key:     "t3",
+		Tablet:  topo.NewTablet(10, "cell2", "host3"),
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Up:      true,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+
+	ts4 := discovery.TabletStats{
+		Key:     "t4",
+		Tablet:  topo.NewTablet(10, "cell2", "host4"),
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Up:      true,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+
+	sameCellTablets := []discovery.TabletStats{ts1, ts2}
+	diffCellTablets := []discovery.TabletStats{ts3, ts4}
+	mixedTablets := []discovery.TabletStats{ts1, ts2, ts3, ts4}
+	// repeat shuffling 10 times and everytime the same cell tablets should be in the front
+	for i := 0; i < 10; i++ {
+		shuffleTablets("cell1", sameCellTablets)
+		if (len(sameCellTablets) != 2) ||
+			(sameCellTablets[0].Key != "t1" && sameCellTablets[0].Key != "t2") ||
+			(sameCellTablets[1].Key != "t1" && sameCellTablets[1].Key != "t2") {
+			t.Errorf("should shuffle in only same cell tablets, got %+v", sameCellTablets)
+		}
+
+		shuffleTablets("cell1", diffCellTablets)
+		if (len(diffCellTablets) != 2) ||
+			(diffCellTablets[0].Key != "t3" && diffCellTablets[0].Key != "t4") ||
+			(diffCellTablets[1].Key != "t3" && diffCellTablets[1].Key != "t4") {
+			t.Errorf("should shuffle in only diff cell tablets, got %+v", diffCellTablets)
+		}
+
+		shuffleTablets("cell1", mixedTablets)
+		if len(mixedTablets) != 4 {
+			t.Errorf("should have 4 tablets, got %+v", mixedTablets)
+		}
+
+		if (mixedTablets[0].Key != "t1" && mixedTablets[0].Key != "t2") ||
+			(mixedTablets[1].Key != "t1" && mixedTablets[1].Key != "t2") {
+			t.Errorf("should have same cell tablets in the front, got %+v", mixedTablets)
+		}
+
+		if (mixedTablets[2].Key != "t3" && mixedTablets[2].Key != "t4") ||
+			(mixedTablets[3].Key != "t3" && mixedTablets[3].Key != "t4") {
+			t.Errorf("should have diff cell tablets in the rear, got %+v", mixedTablets)
+		}
+	}
+}
+
+func TestDiscoveryGatewayGetTabletsWithRegion(t *testing.T) {
+	keyspace := "ks"
+	shard := "0"
+	hc := discovery.NewFakeHealthCheck()
+	dg := createDiscoveryGateway(hc, nil, nil, "local", 2).(*discoveryGateway)
+	topo.UpdateCellsToRegionsForTests(map[string]string{
+		"local-west": "local",
+		"local-east": "local",
+		"local":      "local",
+		"remote":     "remote",
+	})
+
+	// replica should only use local ones
+	hc.Reset()
+	dg.tsc.ResetForTesting()
+	hc.AddTestTablet("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil)
+	ep1 := hc.AddTestTablet("local-west", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil).Tablet()
+	ep2 := hc.AddTestTablet("local-east", "3.3.3.3", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil).Tablet()
+	tsl := dg.tsc.GetHealthyTabletStats(keyspace, shard, topodatapb.TabletType_REPLICA)
+	if len(tsl) != 2 || (!topo.TabletEquality(tsl[0].Tablet, ep1) && !topo.TabletEquality(tsl[0].Tablet, ep2)) {
+		t.Errorf("want %+v or %+v, got %+v", ep1, ep2, tsl)
+	}
+}
+
 func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway, target *querypb.Target) error) {
 	keyspace := "ks"
 	shard := "0"
@@ -137,7 +240,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 		TabletType: tabletType,
 	}
 	hc := discovery.NewFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "cell", 2).(*discoveryGateway)
+	dg := createDiscoveryGateway(hc, nil, nil, "cell", 2).(*discoveryGateway)
 
 	// no tablet
 	hc.Reset()
@@ -172,8 +275,8 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	ep1 = sc1.Tablet()
 	ep2 := sc2.Tablet()
 	wants := map[string]int{
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep1): 0,
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep2): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: %s, FAILED_PRECONDITION error`, topotools.TabletIdent(ep1)): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: %s, FAILED_PRECONDITION error`, topotools.TabletIdent(ep2)): 0,
 	}
 	err = f(dg, target)
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
@@ -190,8 +293,8 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	ep1 = sc1.Tablet()
 	ep2 = sc2.Tablet()
 	wants = map[string]int{
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep1): 0,
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep2): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: %s, FAILED_PRECONDITION error`, topotools.TabletIdent(ep1)): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: %s, FAILED_PRECONDITION error`, topotools.TabletIdent(ep2)): 0,
 	}
 	err = f(dg, target)
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
@@ -204,7 +307,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	ep1 = sc1.Tablet()
-	want = fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), INVALID_ARGUMENT error`, ep1)
+	want = fmt.Sprintf(`target: ks.0.replica, used tablet: %s, INVALID_ARGUMENT error`, topotools.TabletIdent(ep1))
 	err = f(dg, target)
 	verifyShardError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
 
@@ -228,7 +331,7 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 		TabletType: tabletType,
 	}
 	hc := discovery.NewFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "cell", 2).(*discoveryGateway)
+	dg := createDiscoveryGateway(hc, nil, nil, "cell", 2).(*discoveryGateway)
 
 	// retry error - no retry
 	hc.Reset()
@@ -240,8 +343,8 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 	ep1 := sc1.Tablet()
 	ep2 := sc2.Tablet()
 	wants := map[string]int{
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep1): 0,
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep2): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: %s, FAILED_PRECONDITION error`, topotools.TabletIdent(ep1)): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: %s, FAILED_PRECONDITION error`, topotools.TabletIdent(ep2)): 0,
 	}
 	err := f(dg, target)
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
@@ -254,7 +357,7 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	ep1 = sc1.Tablet()
-	want := fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), INVALID_ARGUMENT error`, ep1)
+	want := fmt.Sprintf(`target: ks.0.replica, used tablet: %s, INVALID_ARGUMENT error`, topotools.TabletIdent(ep1))
 	err = f(dg, target)
 	verifyShardError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
 }

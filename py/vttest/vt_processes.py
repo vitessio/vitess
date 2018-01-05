@@ -1,11 +1,11 @@
 # Copyright 2017 Google Inc.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -54,6 +54,7 @@ class VtProcess(object):
           self.binary,
           '-port', '%u' % self.port,
           '-log_dir', logs_subdirectory,
+          '-alsologtostderr',
           ]
       if environment.get_protocol() == 'grpc':
         cmd.extend(['-grpc_port', '%u' % self.grpc_port])
@@ -63,8 +64,7 @@ class VtProcess(object):
                             (self.name, self.port))
       self.stdout = open(stdout, 'w')
       self.process = subprocess.Popen(cmd,
-                                      stdout=self.stdout,
-                                      stderr=subprocess.STDOUT)
+                                      stdout=self.stdout)
       timeout = time.time() + 60.0
       while time.time() < timeout:
         if environment.process_is_healthy(
@@ -171,7 +171,8 @@ class VtcomboProcess(VtProcess):
     self.vtcombo_mysql_port = environment.get_port('vtcombo_mysql_port')
     self.extraparams.extend(
         ['-mysql_auth_server_impl', 'none',
-         '-mysql_server_port', str(self.vtcombo_mysql_port)])
+         '-mysql_server_port', str(self.vtcombo_mysql_port),
+         '-mysql_server_bind_address', 'localhost'])
 
 
 vtcombo_process = None

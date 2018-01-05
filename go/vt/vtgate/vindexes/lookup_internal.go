@@ -23,195 +23,152 @@ import (
 	"strings"
 
 	"github.com/youtube/vitess/go/sqltypes"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
-// lookup implements the functions for the Lookup vindexes.
-type lookup struct {
-	Table              string `json:"table"`
-	From               string `json:"from"`
-	To                 string `json:"to"`
-	sel, ver, ins, del string
-	isHashedIndex      bool
+// lookupInternal implements the functions for the Lookup vindexes.
+type lookupInternal struct {
+	Table         string   `json:"table"`
+	FromColumns   []string `json:"from_columns"`
+	To            string   `json:"to"`
+	sel, ver, del string
 }
 
-func (lkp *lookup) Init(lookupQueryParams map[string]string, isHashed bool) {
-	table := lookupQueryParams["table"]
-	fromCol := lookupQueryParams["from"]
-	toCol := lookupQueryParams["to"]
+func (lkp *lookupInternal) Init(lookupQueryParams map[string]string) {
+	lkp.Table = lookupQueryParams["table"]
+	lkp.To = lookupQueryParams["to"]
+	var fromColumns []string
+	for _, from := range strings.Split(lookupQueryParams["from"], ",") {
+		fromColumns = append(fromColumns, strings.TrimSpace(from))
+	}
+	lkp.FromColumns = fromColumns
 
-	lkp.Table = table
-	lkp.From = fromCol
-	lkp.To = toCol
-	lkp.sel = fmt.Sprintf("select %s from %s where %s = :%s", toCol, table, fromCol, fromCol)
-	lkp.ver = fmt.Sprintf("select %s from %s where %s = :%s and %s = :%s", fromCol, table, fromCol, fromCol, toCol, toCol)
-	lkp.ins = fmt.Sprintf("insert into %s(%s, %s) values", table, fromCol, toCol)
-	lkp.del = fmt.Sprintf("delete from %s where %s = :%s and %s = :%s", table, fromCol, fromCol, toCol, toCol)
-	lkp.isHashedIndex = isHashed
+	// TODO @rafael: update sel and ver to support multi column vindexes. This will be done
+	// as part of face 2 of https://github.com/youtube/vitess/issues/3481
+	// For now multi column behaves as a single column for Map and Verify operations
+	lkp.sel = fmt.Sprintf("select %s from %s where %s = :%s", lkp.To, lkp.Table, lkp.FromColumns[0], lkp.FromColumns[0])
+	lkp.ver = fmt.Sprintf("select %s from %s where %s = :%s and %s = :%s", lkp.FromColumns[0], lkp.Table, lkp.FromColumns[0], lkp.FromColumns[0], lkp.To, lkp.To)
+	lkp.del = lkp.initDelStm()
 }
 
-// MapUniqueLookup is for a Unique Vindex.
-func (lkp *lookup) MapUniqueLookup(vcursor VCursor, ids []interface{}) ([][]byte, error) {
-	out := make([][]byte, 0, len(ids))
+// Lookup performs a lookup for the ids.
+func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sqltypes.Result, error) {
+	results := make([]*sqltypes.Result, 0, len(ids))
 	for _, id := range ids {
-		result, err := vcursor.Execute(lkp.sel, map[string]interface{}{
-			lkp.From: id,
-		}, false /* isDML */)
+		bindVars := map[string]*querypb.BindVariable{
+			lkp.FromColumns[0]: sqltypes.ValueBindVariable(id),
+		}
+		result, err := vcursor.Execute("VindexLookup", lkp.sel, bindVars, false /* isDML */)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
-		if len(result.Rows) == 0 {
-			out = append(out, []byte{})
-			continue
+		results = append(results, result)
+	}
+	return results, nil
+}
+
+// Verify returns true if ids map to values.
+func (lkp *lookupInternal) Verify(vcursor VCursor, ids, values []sqltypes.Value) ([]bool, error) {
+	out := make([]bool, len(ids))
+	for i, id := range ids {
+		bindVars := map[string]*querypb.BindVariable{
+			lkp.FromColumns[0]: sqltypes.ValueBindVariable(id),
+			lkp.To:             sqltypes.ValueBindVariable(values[i]),
 		}
-		if len(result.Rows) != 1 {
-			return nil, fmt.Errorf("lookup.Map: unexpected multiple results from vindex %s: %v", lkp.Table, id)
+		result, err := vcursor.Execute("VindexVerify", lkp.ver, bindVars, true /* isDML */)
+		if err != nil {
+			return nil, fmt.Errorf("lookup.Verify: %v", err)
 		}
-		if lkp.isHashedIndex {
-			num, err := sqltypes.ConvertToUint64(result.Rows[0][0].ToNative())
-			if err != nil {
-				return nil, fmt.Errorf("lookup.Map: %v", err)
-			}
-			out = append(out, vhash(num))
-		} else {
-			out = append(out, result.Rows[0][0].Raw())
-		}
+		out[i] = (len(result.Rows) != 0)
 	}
 	return out, nil
 }
 
-// MapNonUniqueLookup is for a Non-Unique Vindex.
-func (lkp *lookup) MapNonUniqueLookup(vcursor VCursor, ids []interface{}) ([][][]byte, error) {
-	out := make([][][]byte, 0, len(ids))
-	for _, id := range ids {
-		result, err := vcursor.Execute(lkp.sel, map[string]interface{}{
-			lkp.From: id,
-		}, false /* isDML */)
-		if err != nil {
-			return nil, fmt.Errorf("lookup.Map: %v", err)
-		}
-		var ksids [][]byte
-		if lkp.isHashedIndex {
-			for _, row := range result.Rows {
-				num, err := sqltypes.ConvertToUint64(row[0].ToNative())
-				if err != nil {
-					return nil, fmt.Errorf("lookup.Map: %v", err)
-				}
-				ksids = append(ksids, vhash(num))
-			}
-		} else {
-			for _, row := range result.Rows {
-				ksids = append(ksids, row[0].Raw())
-			}
-		}
-		out = append(out, ksids)
-	}
-	return out, nil
-}
-
-// Verify returns true if ids maps to ksids.
-func (lkp *lookup) Verify(vcursor VCursor, ids []interface{}, ksids [][]byte) (bool, error) {
-	var colBuff bytes.Buffer
-	var err error
-	if len(ids) != len(ksids) {
-		return false, fmt.Errorf("lookup.Verify:length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
-	}
-	val := make([]interface{}, len(ksids))
-	bindVars := make(map[string]interface{}, 2*len(ids))
-	colBuff.WriteString("(")
-	for rowNum, keyspaceID := range ksids {
-		fromStr := lkp.From + strconv.Itoa(rowNum)
-		toStr := lkp.To + strconv.Itoa(rowNum)
-		colBuff.WriteString("(")
-		colBuff.WriteString(lkp.From)
-		colBuff.WriteString("=:")
-		colBuff.WriteString(fromStr)
-		colBuff.WriteString(" and ")
-		colBuff.WriteString(lkp.To)
-		colBuff.WriteString("=:")
-		colBuff.WriteString(toStr)
-		colBuff.WriteString(")or")
-		if lkp.isHashedIndex {
-			val[rowNum], err = vunhash(keyspaceID)
-			if err != nil {
-				return false, fmt.Errorf("lookup.Verify: %v", err)
-			}
-		} else {
-			val[rowNum] = keyspaceID
-		}
-		bindVars[fromStr] = ids[rowNum]
-		bindVars[toStr] = val[rowNum]
-	}
-	lkp.ver = fmt.Sprintf("select %s from %s where %s", lkp.From, lkp.Table, strings.Trim(colBuff.String(), "or")+")")
-	result, err := vcursor.Execute(lkp.ver, bindVars, false /* isDML */)
-	if err != nil {
-		return false, fmt.Errorf("lookup.Verify: %v", err)
-	}
-	if len(result.Rows) != len(ids) {
-		return false, nil
-	}
-	return true, nil
-}
-
-// Create creates an association between ids and ksids by inserting a row in the vindex table.
-func (lkp *lookup) Create(vcursor VCursor, ids []interface{}, ksids [][]byte) error {
+// Create creates an association between rowsColValues and toValues by inserting rows in the vindex table.
+// rowsColValues contains all the rows that are being inserted.
+// For each row, we store the value of each column defined in the vindex.
+// toValues contains the keyspace_id of each row being inserted.
+// Given a vindex with two columns and the following insert:
+//
+// INSERT INTO table_a (colum_a, column_b, column_c) VALUES (value_a1, value_b1, value_c1), (value_a2, value_b2, value_c2);
+// If we assume that the primary vindex is on column_c. The call to create will look like this:
+// Create(vcursor, [[value_a1, value_b1,], [value_a2, value_b2]], [binary(value_c1), binary(value_c2)])
+// Notice that toValues contains the computed binary value of the keyspace_id.
+func (lkp *lookupInternal) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, toValues []sqltypes.Value, ignoreMode bool) error {
 	var insBuffer bytes.Buffer
-	var err error
-	if len(ids) != len(ksids) {
-		return fmt.Errorf("lookup.Create:length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
+	if ignoreMode {
+		fmt.Fprintf(&insBuffer, "insert ignore into %s(", lkp.Table)
+	} else {
+		fmt.Fprintf(&insBuffer, "insert into %s(", lkp.Table)
 	}
-	val := make([]interface{}, len(ksids))
-	insBuffer.WriteString("insert into ")
-	insBuffer.WriteString(lkp.Table)
-	insBuffer.WriteString("(")
-	insBuffer.WriteString(lkp.From)
-	insBuffer.WriteString(",")
-	insBuffer.WriteString(lkp.To)
-	insBuffer.WriteString(") values")
-	bindVars := make(map[string]interface{}, 2*len(ids))
-	for rowNum, keyspaceID := range ksids {
-		fromStr := lkp.From + strconv.Itoa(rowNum)
-		toStr := lkp.To + strconv.Itoa(rowNum)
-		insBuffer.WriteString("(:")
-		insBuffer.WriteString(fromStr + ",:" + toStr)
-		insBuffer.WriteString("),")
-		if lkp.isHashedIndex {
-			val[rowNum], err = vunhash(keyspaceID)
-			if err != nil {
-				return fmt.Errorf("lookup.Create: %v", err)
-			}
-		} else {
-			val[rowNum] = keyspaceID
+	for _, col := range lkp.FromColumns {
+		fmt.Fprintf(&insBuffer, "%s, ", col)
+
+	}
+
+	fmt.Fprintf(&insBuffer, "%s) values(", lkp.To)
+	bindVars := make(map[string]*querypb.BindVariable, 2*len(rowsColValues))
+	for rowIdx := range toValues {
+		colIds := rowsColValues[rowIdx]
+		if rowIdx != 0 {
+			insBuffer.WriteString(", (")
 		}
-		bindVars[fromStr] = ids[rowNum]
-		bindVars[toStr] = val[rowNum]
+		for colIdx, colID := range colIds {
+			fromStr := lkp.FromColumns[colIdx] + strconv.Itoa(rowIdx)
+			bindVars[fromStr] = sqltypes.ValueBindVariable(colID)
+			insBuffer.WriteString(":" + fromStr + ", ")
+		}
+		toStr := lkp.To + strconv.Itoa(rowIdx)
+		insBuffer.WriteString(":" + toStr + ")")
+		bindVars[toStr] = sqltypes.ValueBindVariable(toValues[rowIdx])
 	}
-	lkp.ins = strings.Trim(insBuffer.String(), ",")
-	if _, err := vcursor.Execute(lkp.ins, bindVars, true /* isDML */); err != nil {
+	_, err := vcursor.Execute("VindexCreate", insBuffer.String(), bindVars, true /* isDML */)
+	if err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
 	}
-	return nil
+	return err
 }
 
-// Delete deletes the association between ids and ksid.
-func (lkp *lookup) Delete(vcursor VCursor, ids []interface{}, ksid []byte) error {
-	var val interface{}
-	var err error
-	if lkp.isHashedIndex {
-		val, err = vunhash(ksid)
+// Delete deletes the association between ids and value.
+// rowsColValues contains all the rows that are being deleted.
+// For each row, we store the value of each column defined in the vindex.
+// value cointains the keyspace_id of the vindex entry being deleted.
+//
+// Given the following information in a vindex table with two columns:
+//
+//      +------------------+-----------+--------+
+//	| hex(keyspace_id) | a         | b      |
+//	+------------------+-----------+--------+
+//	| 52CB7B1B31B2222E | valuea    | valueb |
+//	+------------------+-----------+--------+
+//
+// A call to Delete would look like this:
+// Delete(vcursor, [[valuea, valueb]], 52CB7B1B31B2222E)
+func (lkp *lookupInternal) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, value sqltypes.Value) error {
+	for _, column := range rowsColValues {
+		bindVars := make(map[string]*querypb.BindVariable, len(rowsColValues))
+		for colIdx, columnValue := range column {
+			bindVars[lkp.FromColumns[colIdx]] = sqltypes.ValueBindVariable(columnValue)
+		}
+		bindVars[lkp.To] = sqltypes.ValueBindVariable(value)
+		_, err := vcursor.Execute("VindexDelete", lkp.del, bindVars, true /* isDML */)
 		if err != nil {
 			return fmt.Errorf("lookup.Delete: %v", err)
 		}
-	} else {
-		val = ksid
-	}
-	bindvars := map[string]interface{}{
-		lkp.To: val,
-	}
-	for _, id := range ids {
-		bindvars[lkp.From] = id
-		if _, err := vcursor.Execute(lkp.del, bindvars, true /* isDML */); err != nil {
-			return fmt.Errorf("lookup.Delete: %v", err)
-		}
 	}
 	return nil
+}
+
+func (lkp *lookupInternal) initDelStm() string {
+	var delBuffer bytes.Buffer
+	fmt.Fprintf(&delBuffer, "delete from %s where ", lkp.Table)
+	for colIdx, column := range lkp.FromColumns {
+		if colIdx != 0 {
+			delBuffer.WriteString(" and ")
+		}
+		delBuffer.WriteString(column + " = :" + column)
+	}
+	delBuffer.WriteString(" and " + lkp.To + " = :" + lkp.To)
+	return delBuffer.String()
 }

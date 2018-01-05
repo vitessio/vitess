@@ -21,8 +21,8 @@ import (
 	"flag"
 	"fmt"
 	"sync"
-	"time"
 
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -107,9 +107,6 @@ type sandbox struct {
 	// DialMustFail specifies how often sandboxDialer must fail before succeeding
 	DialMustFail int
 
-	// DialMustTimeout specifies how often sandboxDialer must time out
-	DialMustTimeout int
-
 	// KeyspaceServedFrom specifies the served-from keyspace for vertical resharding
 	KeyspaceServedFrom string
 
@@ -131,7 +128,6 @@ func (s *sandbox) Reset() {
 	s.SrvKeyspaceMustFail = 0
 	s.DialCounter = 0
 	s.DialMustFail = 0
-	s.DialMustTimeout = 0
 	s.KeyspaceServedFrom = ""
 	s.ShardSpec = DefaultShardSpec
 	s.SrvKeyspaceCallback = nil
@@ -277,7 +273,7 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string) (*topo
 	}, make(chan *topo.WatchSrvVSchemaData), func() {}
 }
 
-func sandboxDialer(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.QueryService, error) {
+func sandboxDialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 	sand := getSandbox(tablet.Keyspace)
 	sand.sandmu.Lock()
 	defer sand.sandmu.Unlock()
@@ -285,11 +281,6 @@ func sandboxDialer(tablet *topodatapb.Tablet, timeout time.Duration) (queryservi
 	if sand.DialMustFail > 0 {
 		sand.DialMustFail--
 		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "conn error")
-	}
-	if sand.DialMustTimeout > 0 {
-		time.Sleep(timeout)
-		sand.DialMustTimeout--
-		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "conn unreachable")
 	}
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	return sbc, nil

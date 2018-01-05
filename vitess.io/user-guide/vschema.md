@@ -1,6 +1,7 @@
 ---
 layout: doc
 title: "VSchema User Guide"
+redirect_from: /user-guide/vschema.html
 description:
 modified:
 excerpt:

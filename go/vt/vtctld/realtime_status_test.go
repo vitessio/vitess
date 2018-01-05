@@ -57,10 +57,6 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 		testlib.TabletKeyspaceShard(t, keyspace, shard))
 	t2 := testlib.NewFakeTablet(t, wr, "cell2", 1, topodatapb.TabletType_REPLICA, nil,
 		testlib.TabletKeyspaceShard(t, keyspace, shard))
-	for _, ft := range []*(testlib.FakeTablet){t1, t2} {
-		ft.StartActionLoop(t, wr)
-		defer ft.StopActionLoop(t)
-	}
 
 	target := querypb.Target{
 		Keyspace:   keyspace,
@@ -71,6 +67,11 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 	fqs2 := fakes.NewStreamHealthQueryService(target)
 	grpcqueryservice.Register(t1.RPCServer, fqs1)
 	grpcqueryservice.Register(t2.RPCServer, fqs2)
+
+	for _, ft := range []*(testlib.FakeTablet){t1, t2} {
+		ft.StartActionLoop(t, wr)
+		defer ft.StopActionLoop(t)
+	}
 
 	fqs1.AddDefaultHealthResponse()
 

@@ -518,6 +518,21 @@
   }
 }
 
+# mergeable sharded join on unique vindex (parenthesized ON clause)
+"select user.col from user join user_extra on (user.id = user_extra.user_id)"
+{
+  "Original": "select user.col from user join user_extra on (user.id = user_extra.user_id)",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.col from user join user_extra on (user.id = user_extra.user_id)",
+    "FieldQuery": "select user.col from user join user_extra on (user.id = user_extra.user_id) where 1 != 1"
+  }
+}
+
 # mergeable sharded join on unique vindex, with a stray condition
 "select user.col from user join user_extra on user.col between 1 and 2 and user.id = user_extra.user_id"
 {
@@ -561,7 +576,7 @@
     "Query": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id",
     "FieldQuery": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id where 1 != 1",
     "Vindex": "user_index",
-    "Values": 5
+    "Values": [5]
   }
 }
 
@@ -616,7 +631,7 @@
       "Query": "select user.col from user where user.id = 5",
       "FieldQuery": "select user.col from user where 1 != 1",
       "Vindex": "user_index",
-      "Values": 5
+      "Values": [5]
     },
     "Right": {
       "Opcode": "SelectScatter",
@@ -648,7 +663,7 @@
       "Query": "select user.col from user where user.id = 5",
       "FieldQuery": "select user.col from user where 1 != 1",
       "Vindex": "user_index",
-      "Values": 5
+      "Values": [5]
     },
     "Right": {
       "Opcode": "SelectScatter",
@@ -725,7 +740,7 @@
       "Query": "select user.col from user where user.name = :user_extra_user_id",
       "FieldQuery": "select user.col from user where 1 != 1",
       "Vindex": "name_user_map",
-      "Values": ":user_extra_user_id",
+      "Values": [":user_extra_user_id"],
       "JoinVars": {
         "user_extra_user_id": {}
       }
@@ -752,7 +767,7 @@
     "Query": "select id from (select id, col from user where id = 5) as t",
     "FieldQuery": "select id from (select id, col from user where 1 != 1) as t where 1 != 1",
     "Vindex": "user_index",
-    "Values": 5
+    "Values": [5]
   }
 }
 
@@ -769,7 +784,7 @@
     "Query": "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.user_id",
     "FieldQuery": "select t.id from (select id from user where 1 != 1) as t join user_extra on t.id = user_extra.user_id where 1 != 1",
     "Vindex": "user_index",
-    "Values": 5
+    "Values": [5]
   }
 }
 
@@ -786,7 +801,7 @@
     "Query": "select t.id from (select user.id from user where user.id = 5) as t join user_extra on t.id = user_extra.user_id",
     "FieldQuery": "select t.id from (select user.id from user where 1 != 1) as t join user_extra on t.id = user_extra.user_id where 1 != 1",
     "Vindex": "user_index",
-    "Values": 5
+    "Values": [5]
   }
 }
 
@@ -824,7 +839,7 @@
       "Query": "select t.id from (select id from user where id = 5) as t",
       "FieldQuery": "select t.id from (select id from user where 1 != 1) as t where 1 != 1",
       "Vindex": "user_index",
-      "Values": 5
+      "Values": [5]
     },
     "Right": {
       "Opcode": "SelectScatter",
@@ -860,7 +875,7 @@
     "Query": "select u.col, e.col from (select col from user where id = 5) as u join (select col from user_extra where user_id = 5) as e",
     "FieldQuery": "select u.col, e.col from (select col from user where 1 != 1) as u join (select col from user_extra where 1 != 1) as e where 1 != 1",
     "Vindex": "user_index",
-    "Values": 5
+    "Values": [5]
   }
 }
 

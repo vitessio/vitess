@@ -25,7 +25,7 @@ function msg() {
   echo "$(date) $@"
 }
 
-PYLINT=/usr/bin/gpylint
+PYLINT=${PYLINT:-/usr/bin/gpylint}
 pylint_script=$VTTOP/tools/pylint.sh
 
 # This script does not handle file names that contain spaces.

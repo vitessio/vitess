@@ -30,6 +30,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
@@ -50,8 +51,8 @@ func toJSON(p *Plan) ([]byte, error) {
 		Subquery          *sqlparser.ParsedQuery `json:",omitempty"`
 		UpsertQuery       *sqlparser.ParsedQuery `json:",omitempty"`
 		ColumnNumbers     []int                  `json:",omitempty"`
-		PKValues          []interface{}          `json:",omitempty"`
-		SecondaryPKValues []interface{}          `json:",omitempty"`
+		PKValues          []sqltypes.PlanValue   `json:",omitempty"`
+		SecondaryPKValues []sqltypes.PlanValue   `json:",omitempty"`
 		WhereClause       *sqlparser.ParsedQuery `json:",omitempty"`
 		SubqueryPKColumns []int                  `json:",omitempty"`
 	}{
@@ -172,6 +173,39 @@ func TestDDLPlan(t *testing.T) {
 	}
 }
 
+func TestMessageStreamingPlan(t *testing.T) {
+	testSchema := loadSchema("schema_test.json")
+	plan, err := BuildMessageStreaming("msg", testSchema)
+	if err != nil {
+		t.Error(err)
+	}
+	bout, _ := toJSON(plan)
+	planJSON := string(bout)
+
+	wantPlan := &Plan{
+		PlanID: PlanMessageStream,
+		Table:  testSchema["msg"],
+	}
+	bout, _ = toJSON(wantPlan)
+	wantJSON := string(bout)
+
+	if planJSON != wantJSON {
+		t.Errorf("BuildMessageStreaming: \n%s, want\n%s", planJSON, wantJSON)
+	}
+
+	_, err = BuildMessageStreaming("absent", testSchema)
+	want := "table absent not found in schema"
+	if err == nil || err.Error() != want {
+		t.Errorf("BuildMessageStreaming(absent) error: %v, want %s", err, want)
+	}
+
+	_, err = BuildMessageStreaming("a", testSchema)
+	want = "'a' is not a message table"
+	if err == nil || err.Error() != want {
+		t.Errorf("BuildMessageStreaming(absent) error: %v, want %s", err, want)
+	}
+}
+
 func matchString(t *testing.T, line int, expected interface{}, actual string) {
 	if expected != nil {
 		if expected.(string) != actual {
@@ -185,7 +219,7 @@ func loadSchema(name string) map[string]*schema.Table {
 	if err != nil {
 		panic(err)
 	}
-	tables := make([]*schema.Table, 0, 8)
+	tables := make([]*schema.Table, 0, 10)
 	err = json.Unmarshal(b, &tables)
 	if err != nil {
 		panic(err)

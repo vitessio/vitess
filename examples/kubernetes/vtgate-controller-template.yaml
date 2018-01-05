@@ -36,8 +36,9 @@ spec:
               mkdir -p $VTDATAROOT/tmp &&
               chown -R vitess /vt &&
               su -p -c "/vt/bin/vtgate
-              -topo_implementation etcd
-              -etcd_global_addrs http://etcd-global:4001
+              -topo_implementation etcd2
+              -topo_global_server_address http://etcd-global-client:2379
+              -topo_global_root /global
               -log_dir $VTDATAROOT/tmp
               -alsologtostderr
               -port 15001

@@ -55,7 +55,7 @@ type Gateway interface {
 }
 
 // Creator is the factory method which can create the actual gateway object.
-type Creator func(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int) Gateway
+type Creator func(hc discovery.HealthCheck, topoServer *topo.Server, serv topo.SrvTopoServer, cell string, retryCount int) Gateway
 
 var creators = make(map[string]Creator)
 
@@ -71,7 +71,7 @@ func RegisterCreator(name string, gc Creator) {
 func GetCreator() Creator {
 	gc, ok := creators[*implementation]
 	if !ok {
-		log.Fatalf("No gateway registered as %s", *implementation)
+		log.Exitf("No gateway registered as %s", *implementation)
 	}
 	return gc
 }

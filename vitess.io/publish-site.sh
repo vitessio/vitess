@@ -19,6 +19,15 @@ if [[ -n "$1" ]]; then
   fi
 fi
 
+# Infer $VTTOP if it was not set.
+if [[ -z "$VTTOP" ]]; then
+  DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+  VTTOP="${DIR}/.."
+fi
+
+# Make sure we're within the Git repository before checking it.
+pushd $VTTOP >/dev/null
+
 if [[ -n "$(git status --porcelain)" ]]; then
   echo "ERROR: Your working directory is not clean."
   echo
@@ -63,6 +72,14 @@ if [ -n "$list" ]; then
 fi
 set -e
 
+if ! git remote | grep -q "^origin$"; then
+  echo
+  echo "INFO: Skipping 'git commit' because you have no git remote called 'origin'."
+  echo "      Most likely this is run as netlify.com build where git commit does not work"
+  echo "      and nothing else has to be done here."
+  exit 0
+fi
+
 # Commit new version.
 git add -A .
 git commit -m "publish site `date`"
@@ -75,4 +92,5 @@ echo "Please sanity-check the output: git diff HEAD~"
 echo
 echo "When you're ready to publish, create a pull request."
 
-popd >/dev/null
+popd >/dev/null # Leaving $website_path.
+popd >/dev/null # Leaving $VTTOP.

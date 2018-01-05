@@ -37,7 +37,7 @@ func TestFixShardReplication(t *testing.T) {
 	keyspace := "ks1"
 	shard := "shard1"
 	ctx := context.Background()
-	ts := topo.Server{Impl: memorytopo.New(cell)}
+	ts := memorytopo.NewServer(cell)
 
 	// Create a tablet.
 	alias := &topodatapb.TabletAlias{

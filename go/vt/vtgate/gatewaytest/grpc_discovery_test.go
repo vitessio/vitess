@@ -65,7 +65,7 @@ func TestGRPCDiscovery(t *testing.T) {
 
 	// VTGate: create the discovery healthcheck, and the gateway.
 	// Wait for the right tablets to be present.
-	hc := discovery.NewHealthCheck(30*time.Second, 10*time.Second, 2*time.Minute)
+	hc := discovery.NewHealthCheck(10*time.Second, 2*time.Minute)
 	dg := gateway.GetCreator()(hc, ts, ts, cell, 2)
 	hc.AddTablet(&topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -116,7 +116,7 @@ func TestL2VTGateDiscovery(t *testing.T) {
 
 	// L2VTGate: Create the discovery healthcheck, and the gateway.
 	// Wait for the right tablets to be present.
-	hc := discovery.NewHealthCheck(30*time.Second, 10*time.Second, 2*time.Minute)
+	hc := discovery.NewHealthCheck(10*time.Second, 2*time.Minute)
 	l2vtgate := l2vtgate.Init(hc, ts, ts, "", cell, 2, nil)
 	hc.AddTablet(&topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{

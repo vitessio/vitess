@@ -48,8 +48,10 @@ spec:
           chown -R vitess /vt
 
           su -p -s /bin/bash -c "/vt/bin/vttablet
-          -topo_implementation etcd
-          -etcd_global_addrs http://etcd-global:4001
+          -binlog_use_v3_resharding_mode
+          -topo_implementation etcd2
+          -topo_global_server_address http://etcd-global-client:2379
+          -topo_global_root /global
           -log_dir $VTDATAROOT/tmp
           -alsologtostderr
           -port {{port}}
@@ -79,6 +81,9 @@ spec:
           -orc_api_url http://orchestrator/api
           -orc_discover_interval 5m
           -restore_from_backup {{backup_flags}}" vitess
+      env:
+        - name: EXTRA_MY_CNF
+          value: /vt/config/mycnf/master_mysql56.cnf
     - name: mysql
       image: {{vitess_image}}
       volumeMounts:

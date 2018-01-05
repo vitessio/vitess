@@ -35,7 +35,7 @@ type Factory interface {
 // DenyAllACL implements ACL interface and alway deny access request.
 type DenyAllACL struct{}
 
-// IsMember implements ACL.IsMember and always return fasle.
+// IsMember implements ACL.IsMember and always return false.
 func (acl DenyAllACL) IsMember(principal *querypb.VTGateCallerID) bool {
 	return false
 }

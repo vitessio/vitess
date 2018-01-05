@@ -16,20 +16,13 @@ limitations under the License.
 
 package dbconnpool
 
-import (
-	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/stats"
-)
-
-// PooledDBConnection re-exposes DBConnection as a PoolConnection
+// PooledDBConnection re-exposes DBConnection to be used by ConnectionPool.
 type PooledDBConnection struct {
 	*DBConnection
-	info       *mysql.ConnParams
-	mysqlStats *stats.Timings
-	pool       *ConnectionPool
+	pool *ConnectionPool
 }
 
-// Recycle implements PoolConnection's Recycle
+// Recycle should be called to return the PooledDBConnection to the pool.
 func (pc *PooledDBConnection) Recycle() {
 	if pc.IsClosed() {
 		pc.pool.Put(nil)
@@ -38,39 +31,14 @@ func (pc *PooledDBConnection) Recycle() {
 	}
 }
 
-// Reconnect replaces the existing underlying connection
-// with a new one.
+// Reconnect replaces the existing underlying connection with a new one,
+// if possible. Recycle should still be called afterwards.
 func (pc *PooledDBConnection) Reconnect() error {
 	pc.DBConnection.Close()
-	newConn, err := NewDBConnection(pc.info, pc.mysqlStats)
+	newConn, err := NewDBConnection(pc.pool.info, pc.mysqlStats)
 	if err != nil {
 		return err
 	}
 	pc.DBConnection = newConn
 	return nil
-}
-
-// DBConnectionCreator is the wrapper function to use to create a pool
-// of DBConnection objects.
-//
-// For instance:
-// mysqlStats := stats.NewTimings("Mysql")
-// pool := dbconnpool.NewConnectionPool("name", 10, 30*time.Second)
-// pool.Open(dbconnpool.DBConnectionCreator(info, mysqlStats))
-// ...
-// conn, err := pool.Get()
-// ...
-func DBConnectionCreator(info *mysql.ConnParams, mysqlStats *stats.Timings) CreateConnectionFunc {
-	return func(pool *ConnectionPool) (PoolConnection, error) {
-		c, err := NewDBConnection(info, mysqlStats)
-		if err != nil {
-			return nil, err
-		}
-		return &PooledDBConnection{
-			DBConnection: c,
-			info:         info,
-			mysqlStats:   mysqlStats,
-			pool:         pool,
-		}, nil
-	}
 }

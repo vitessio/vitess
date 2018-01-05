@@ -52,10 +52,16 @@ func (ev *MigrateServedTypes) Syslog() (syslog.Priority, string) {
 
 	sourceShards := make([]string, len(ev.SourceShards))
 	for i, shard := range ev.SourceShards {
+		if shard == nil {
+			continue
+		}
 		sourceShards[i] = shard.ShardName()
 	}
 	destShards := make([]string, len(ev.DestinationShards))
 	for i, shard := range ev.DestinationShards {
+		if shard == nil {
+			continue
+		}
 		destShards[i] = shard.ShardName()
 	}
 

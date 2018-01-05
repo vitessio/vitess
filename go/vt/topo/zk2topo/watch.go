@@ -26,16 +26,12 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// Watch is part of the topo.Backend interface
-func (zs *Server) Watch(ctx context.Context, cell, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
-	conn, root, err := zs.connForCell(ctx, cell)
-	if err != nil {
-		return &topo.WatchData{Err: err}, nil, nil
-	}
-	zkPath := path.Join(root, filePath)
+// Watch is part of the topo.Conn interface.
+func (zs *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
+	zkPath := path.Join(zs.root, filePath)
 
 	// Get the initial value, set the initial watch
-	data, stats, watch, err := conn.GetW(ctx, zkPath)
+	data, stats, watch, err := zs.conn.GetW(ctx, zkPath)
 	if err != nil {
 		return &topo.WatchData{Err: convertError(err)}, nil, nil
 	}
@@ -87,7 +83,7 @@ func (zs *Server) Watch(ctx context.Context, cell, filePath string) (*topo.Watch
 			}
 
 			// Get the value again, and send it, or error.
-			data, stats, watch, err = conn.GetW(ctx, zkPath)
+			data, stats, watch, err = zs.conn.GetW(ctx, zkPath)
 			if err != nil {
 				c <- &topo.WatchData{Err: convertError(err)}
 				return

@@ -12,21 +12,12 @@ groups:
     required: 1
     users:
       - alainjobart
-      - alainjobart-bot
       - AndyDiamondstein
-      - dumbunny
+      - bbeaudreault
+      - demmer
       - enisoc
-      - enisoc-bot
-      - erzel
-      - erzel-bot
       - mberlin-bot
       - michael-berlin
-      - sougou
-      - sougou-bot
-      - thompsonja
-      - thompsonja-bot
       - pivanof
-      - pivanof-bot
-      - wangyipei01
-      - wangyipei01-bot
+      - sougou
 

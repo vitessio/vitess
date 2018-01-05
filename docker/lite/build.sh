@@ -17,6 +17,8 @@
 # This is the script to build the vitess/lite Docker image by extracting
 # the pre-built binaries from a vitess/base image.
 
+set -ex
+
 # Parse command line arguments.
 prompt_notice=true
 if [[ "$1" == "--prompt"* ]]; then
@@ -69,11 +71,17 @@ END
   read
 fi
 
+# cleanup both temporary folders when exiting, even in case of errors
+function cleanup {
+  rm -rf $PWD/base $PWD/lite
+}
+trap cleanup EXIT
+
 # Extract files from vitess/base image
 mkdir base
 # Ignore permission errors. They occur for directories we do not care e.g. ".git".
 # (Copying them fails because they are owned by root and not $UID and have stricter permissions.)
-docker run -ti --rm -v $PWD/base:/base -u $UID $base_image bash -c 'cp -R /vt /base/ 2>&1 | grep -v "Permission denied"'
+docker run --rm -v $PWD/base:/base -u $UID $base_image bash -c 'cp -R /vt /base/ 2>&1 | grep -v "Permission denied"' || true
 
 # Grab only what we need
 lite=$PWD/lite
@@ -81,7 +89,7 @@ vttop=vt/src/github.com/youtube/vitess
 mkdir -p $lite/vt/vtdataroot
 
 mkdir -p $lite/vt/bin
-(cd base/vt/bin; cp mysqlctld vtctld vtgate vttablet vtworker $lite/vt/bin/)
+(cd base/vt/bin; cp mysqlctld vtctld vtctlclient vtgate vttablet vtworker $lite/vt/bin/)
 
 mkdir -p $lite/$vttop/web
 cp -R base/$vttop/web/vtctld $lite/$vttop/web/
@@ -92,13 +100,11 @@ mkdir -p $lite/$vttop/config
 cp -R base/$vttop/config/* $lite/$vttop/config/
 ln -s /$vttop/config $lite/vt/config
 
-rm -rf base
+# remove the base folder now -- not needed for the final build
+rm -rf $PWD/base
 
 # Fix permissions for AUFS workaround
 chmod -R o=g lite
 
 # Build vitess/lite image
 docker build --no-cache -f $dockerfile -t $lite_image .
-
-# Clean up temporary files
-rm -rf lite

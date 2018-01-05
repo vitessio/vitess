@@ -10,6 +10,12 @@ if [[ -n "$1" ]]; then
   fi
 fi
 
+# Infer $VTTOP if it was not set.
+if [[ -z "$VTTOP" ]]; then
+  DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+  VTTOP="${DIR}/.."
+fi
+
 if [[ "$use_docker" == true ]]; then
   # Call this script from within the Docker container which has all dependencies installed.
   docker run -ti --rm -p 4000:4000 -v $VTTOP:/vttop -e VTTOP=/vttop vitess/publish-site /vttop/vitess.io/preview-site.sh --docker=false

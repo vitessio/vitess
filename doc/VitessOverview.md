@@ -1,22 +1,43 @@
-Vitess is a database solution for scaling MySQL. It's architected to run as
-effectively in a public or private cloud architecture as it does on dedicated
-hardware. It combines and extends many important MySQL features with the
-scalability of a NoSQL database. Vitess has been serving all YouTube database
-traffic since 2011.
+Vitess is a database solution for deploying, scaling and managing large clusters of MySQL instances.
+It's architected to run as effectively in a public or private cloud architecture as it does
+on dedicated hardware. It combines and extends many important MySQL features with the
+scalability of a NoSQL database. Vitess can help you with the following problems:
 
-## Vitess on Kubernetes
+1. Scaling a MySQL database by allowing you to shard it, while keeping application changes to a minimum.
+2. Migrating from baremetal to a private or public cloud.
+3. Deploying and managing a large number of MySQL instances.
 
-[Kubernetes](http://kubernetes.io/) is an open-source orchestration system for Docker containers, and Vitess can run as a Kubernetes-aware cloud native distributed database.
+Vitess includes compliant JDBC and Go database drivers using a native query protocol. Additionally, it implements the MySQL server protocol which is compatible with virtually any other language.
 
-Kubernetes handles scheduling onto nodes in a compute cluster, actively manages workloads on those nodes, and groups containers comprising an application for easy management and discovery.
-This provides an analogous open-source environment to the way Vitess runs in YouTube,
-on the [predecessor to Kubernetes](http://blog.kubernetes.io/2015/04/borg-predecessor-to-kubernetes.html).
+Vitess has been serving all YouTube database traffic since 2011, and has now been adopted by many enterprises for their production needs.
 
-<div style="text-align:center">
-<a class="btn btn-default btn-lg" href="/getting-started/" role="button" style="margin-bottom:16px">
-<img src="/images/kubernetes.svg" style="width:30px;height:30px;margin-top:-5px">
-Quickstart</a>
-</div>
+## Features
+
+* **Performance**
+  * Connection pooling - Multiplex front-end application queries onto a pool of MySQL connections to optimize performance.
+  * Query de-duping – Reuse results of an in-flight query for any identical requests received while the in-flight query was still executing.
+  * Transaction manager – Limit number of concurrent transactions and manage deadlines to optimize overall throughput.
+
+* **Protection**
+  * Query rewriting and sanitization – Add limits and avoid non-deterministic updates.
+  * Query blacklisting – Customize rules to prevent potentially problematic queries from hitting your database.
+  * Query killer – Terminate queries that take too long to return data.
+  * Table ACLs – Specify access control lists (ACLs) for tables based on the connected user.
+
+* **Monitoring**
+  * Performance analysis: Tools let you monitor, diagnose, and analyze your database performance.
+  * Query streaming – Use a list of incoming queries to serve OLAP workloads.
+  * Update stream – A server streams the list of rows changing in the database, which can be used as a mechanism to propagate changes to other data stores.
+
+* **Topology Management Tools**
+  * Master management tools (handles reparenting)
+  * Web-based management GUI
+  * Designed to work in multiple data centers / regions
+
+* **Sharding**
+  * Virtually seamless dynamic re-sharding
+  * Vertical and Horizontal sharding support
+  * Multiple sharding schemes, with the ability to plug-in custom ones
 
 ## Comparisons to other storage options
 
@@ -44,7 +65,7 @@ Vitess improves a vanilla MySQL implementation in several ways:
   </tr>
   <tr>
     <td>Sharding is a process of partitioning your data to improve scalability and performance. MySQL lacks native sharding support, requiring you to write sharding code and embed sharding logic in your application.</td>
-    <td>Vitess uses range-based sharding. It supports both horizontal and vertical resharding, completing most data transitions with just a few seconds of read-only downtime. Vitess can even accommodate a custom sharding scheme that you already have in place.</td>
+    <td>Vitess supports a variety of sharding schemes. It can also migrate tables into different databases and scale up or down the number of shards. These functions are performed non-intrusively, completing most data transitions with just a few seconds of read-only downtime.</td>
   </tr>
   <tr>
     <td>A MySQL cluster using replication for availability has a master database and a few replicas. If the master fails, a replica should become the new master. This requires you to manage the database lifecycle and communicate the current system state to your application.</td>
@@ -75,7 +96,7 @@ If you're considering a NoSQL solution primarily because of concerns about the s
   </tr>
   <tr>
     <td>NoSQL datastores do not support transactions.</td>
-    <td>Vitess supports transactions within a shard. We are also exploring the feasibility of supporting cross-shard transactions using 2PC.</td>
+    <td>Vitess supports transactions within a shard. For transactions that span multiple shards, it allows you to optionally enable 2PC.</td>
   </tr>
   <tr>
     <td>NoSQL solutions have custom APIs, leading to custom architectures, applications, and tools.</td>
@@ -87,36 +108,6 @@ If you're considering a NoSQL solution primarily because of concerns about the s
   </tr>
   </tbody>
 </table>
-
-## Features
-
-* **Performance**
-  * Connection pooling - Scale front-end connections while optimizing MySQL performance.
-  * Query de-duping – Reuse results of an in-flight query for any identical requests received while the in-flight query was still executing.
-  * Transaction manager – Limit number of concurrent transactions and manage deadlines to optimize overall throughput.
-
-* **Protection**
-
-  * Query rewriting and sanitation – Add limits and avoid non-deterministic updates.
-  * Query blacklisting – Customize rules to prevent potentially problematic queries from hitting your database.
-  * Query killer – Terminate queries that take too long to return data.
-  * Table ACLs – Specify access control lists (ACLs) for tables based on the connected user.
-
-* **Monitoring**
-  * Performance analysis: Tools let you monitor, diagnose, and analyze your database performance.
-  * Query streaming – Use a list of incoming queries to serve OLAP workloads.
-  * Update stream – A server streams the list of rows changing in the database, which can be used as a mechanism to propagate changes to other data stores.
-
-* **Topology Management Tools**
-  * Master management tools (handles reparenting)
-  * Web-based management GUI
-  * Designed to work in multiple data centers / regions
-
-* **Sharding**
-  * Virtually seamless dynamic re-sharding
-  * Vertical and Horizontal sharding support
-  * Built-in range-based, or application-defined sharding support
-
 
 ## Architecture
 
@@ -134,7 +125,7 @@ The diagram below illustrates Vitess' components:
 
 ### Topology
 
-The [Topology Service](/user-guide/topology-service.html) is a metadata store that contains information about running servers, the sharding scheme, and the replication graph.  The topology is backed by a consistent data store.  You can explore the topology using **vtctl** (command-line) and **vtctld** (web).
+The [Topology Service]({% link user-guide/topology-service.md %}) is a metadata store that contains information about running servers, the sharding scheme, and the replication graph.  The topology is backed by a consistent data store.  You can explore the topology using **vtctl** (command-line) and **vtctld** (web).
 
 In Kubernetes, the data store is [etcd](https://github.com/coreos/etcd).  Vitess source code also ships with [Apache ZooKeeper](http://zookeeper.apache.org/) support.
 
@@ -148,7 +139,7 @@ To route queries, vtgate considers the sharding scheme, required latency, and th
 
 **vttablet** is a proxy server that sits in front of a MySQL database. A Vitess implementation has one vttablet for each MySQL instance.
 
-vttablet performs tasks that attempt to maximize throughput as well as protect MySQL from harmful queries. Its features include connection pooling, query rewriting, and query de-duping. In addition, vttablet executes management tasks that vtctl initiates, and it provides streaming services that are used for [filtered replication](/user-guide/sharding.html#filtered-replication) and data exports.
+vttablet performs tasks that attempt to maximize throughput as well as protect MySQL from harmful queries. Its features include connection pooling, query rewriting, and query de-duping. In addition, vttablet executes management tasks that vtctl initiates, and it provides streaming services that are used for [filtered replication]({% link user-guide/sharding.md %}#filtered-replication) and data exports.
 
 A lightweight Vitess implementation uses vttablet as a smart connection proxy that serves queries for a single MySQL database. By running vttablet in front of your MySQL database and changing your app to use the Vitess client instead of your MySQL driver, your app benefits from vttablet's connection pooling, query rewriting, and query de-duping features.
 
@@ -176,8 +167,26 @@ vtworker also lets you easily add other validation procedures. You could do in-t
 Vitess also includes the following tools:
 
 * **mysqlctl**: Manage MySQL instances
+* **vtcombo**: A single binary that contains all components of Vitess. It can be used for testing queries in a Continuous Integration environment.
+* **vtexplain**: A command line tool that is used to explore how Vitess will handle queries based on a user-supplied schema and topology, without needing to set up a full cluster.
 * **zk**: Command-line ZooKeeper client and explorer
 * **zkctl**: Manage ZooKeeper instances
+
+## Vitess on Kubernetes
+
+[Kubernetes](http://kubernetes.io/) is an open-source orchestration system for Docker containers, and Vitess can run as a Kubernetes-aware cloud native distributed database.
+
+Kubernetes handles scheduling onto nodes in a compute cluster, actively manages workloads on those nodes, and groups containers comprising an application for easy management and discovery.
+This provides an analogous open-source environment to the way Vitess runs in YouTube,
+on the [predecessor to Kubernetes](http://blog.kubernetes.io/2015/04/borg-predecessor-to-kubernetes.html).
+
+The easiest way to run Vitess is via Kubernetes. However, it's not a requirement, and other types of deployment are used as well.
+
+<div style="text-align:center">
+<a class="btn btn-default btn-lg" href="/getting-started/" role="button" style="margin-bottom:16px">
+<img src="/images/kubernetes.svg" style="width:30px;height:30px;margin-top:-5px">
+Quickstart</a>
+</div>
 
 ## History
 

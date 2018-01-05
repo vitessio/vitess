@@ -18,16 +18,11 @@ package vterrors
 
 import (
 	"fmt"
-	"time"
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/tb"
-	"github.com/youtube/vitess/go/vt/logutil"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
-
-var logger = logutil.NewThrottledLogger("vterror", 5*time.Second)
 
 type vtError struct {
 	code vtrpcpb.Code
@@ -37,13 +32,22 @@ type vtError struct {
 // New creates a new error using the code and input string.
 func New(code vtrpcpb.Code, in string) error {
 	if code == vtrpcpb.Code_OK {
-		logger.Errorf("OK is an invalid code, using INTERNAL instead: %s\n%s", in, tb.Stack(2))
-		code = vtrpcpb.Code_INTERNAL
+		panic("OK is an invalid error code; use INTERNAL instead")
 	}
 	return &vtError{
 		code: code,
 		err:  in,
 	}
+}
+
+// Wrap wraps the given error, returning a new error with the given message as a prefix but with the same error code (if err was a vterror) and message of the passed error.
+func Wrap(err error, message string) error {
+	return New(Code(err), fmt.Sprintf("%v: %v", message, err.Error()))
+}
+
+// Wrapf wraps the given error, returning a new error with the given format string as a prefix but with the same error code (if err was a vterror) and message of the passed error.
+func Wrapf(err error, format string, args ...interface{}) error {
+	return Wrap(err, fmt.Sprintf(format, args...))
 }
 
 // Errorf returns a new error built using Printf style arguments.
@@ -72,4 +76,26 @@ func Code(err error) vtrpcpb.Code {
 		return vtrpcpb.Code_DEADLINE_EXCEEDED
 	}
 	return vtrpcpb.Code_UNKNOWN
+}
+
+// Equals returns true iff the error message and the code returned by Code()
+// is equal.
+func Equals(a, b error) bool {
+	if a == nil && b == nil {
+		// Both are nil.
+		return true
+	}
+
+	if a == nil && b != nil || a != nil && b == nil {
+		// One of the two is nil.
+		return false
+	}
+
+	return a.Error() == b.Error() && Code(a) == Code(b)
+}
+
+// Print is meant to print the vtError object in test failures.
+// For comparing two vterrors, use Equals() instead.
+func Print(err error) string {
+	return fmt.Sprintf("%v: %v", Code(err), err.Error())
 }

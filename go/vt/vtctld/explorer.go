@@ -21,46 +21,105 @@ import (
 	"fmt"
 	"net/http"
 	"path"
-	"sync"
+	"sort"
+	"strings"
 
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/vtctld/explorer"
+	"github.com/youtube/vitess/go/vt/vtctl"
 )
 
-var (
-	// explorerMutex protects against concurrent registration attempts (e.g. OnRun).
-	// Other than registration, the explorer should never change.
-	explorerMutex    sync.Mutex
-	explorerName     string
-	explorerInstance explorer.Explorer
-)
+// backendExplorer is a class that uses the Backend interface of a
+// topo.Server to display content. It is separated in its own class
+// now for easier testing.
+type backendExplorer struct {
+	ts *topo.Server
+}
 
-// HandleExplorer registers the Explorer under url, using the given template.
-// It should be called by a plugin either from init() or from servenv.OnRun().
-// Only one Explorer can be registered in a given instance of vtctld.
-func HandleExplorer(name string, exp explorer.Explorer) {
-	explorerMutex.Lock()
-	defer explorerMutex.Unlock()
+// Result is what the backendExplorer returns. It represents one directory node.
+// It is exported so the JSON encoder can print it.
+type Result struct {
+	Data     string
+	Children []string
+	Error    string
+}
 
-	if explorerInstance != nil {
-		panic(fmt.Sprintf("Only one Explorer can be registered in vtctld. Trying to register %q, but %q was already registered.", name, explorerName))
+func newBackendExplorer(ts *topo.Server) *backendExplorer {
+	return &backendExplorer{
+		ts: ts,
+	}
+}
+
+// HandlePath is the main function for this class.
+func (ex *backendExplorer) HandlePath(nodePath string, r *http.Request) *Result {
+	ctx := context.Background()
+	result := &Result{}
+
+	// Handle toplevel display: global, then one line per cell.
+	if nodePath == "/" {
+		cells, err := ex.ts.GetKnownCells(ctx)
+		if err != nil {
+			result.Error = err.Error()
+			return result
+		}
+		sort.Strings(cells)
+		result.Children = append([]string{topo.GlobalCell}, cells...)
+		return result
 	}
 
-	// Topo explorer API for client-side vtctld app.
-	handleCollection("topodata", func(r *http.Request) (interface{}, error) {
-		return exp.HandlePath(path.Clean("/"+getItemPath(r.URL.Path)), r), nil
-	})
+	// Now find the cell.
+	parts := strings.Split(nodePath, "/")
+	if parts[0] != "" || len(parts) < 2 {
+		result.Error = "Invalid path: " + nodePath
+		return result
+	}
+	cell := parts[1]
+	relativePath := nodePath[len(cell)+1:]
+	conn, err := ex.ts.ConnForCell(ctx, cell)
+	if err != nil {
+		result.Error = fmt.Sprintf("Invalid cell: %v", err)
+		return result
+	}
 
-	// save our instance
-	explorerInstance = exp
-	explorerName = name
+	// Get the file contents, if any.
+	data, _, err := conn.Get(ctx, relativePath)
+	switch err {
+	case nil:
+		if len(data) > 0 {
+			// It has contents, we just use it if possible.
+			decoded, err := vtctl.DecodeContent(relativePath, data)
+			if err != nil {
+				result.Error = err.Error()
+			} else {
+				result.Data = decoded
+			}
+
+			// With contents, it can't have children, so we're done.
+			return result
+		}
+	default:
+		// Something is wrong. Might not be a file.
+		result.Error = err.Error()
+	}
+
+	// Get the children, if any.
+	children, err := conn.ListDir(ctx, relativePath, false /*full*/)
+	if err != nil {
+		// It failed as a directory, let's just return what it did
+		// as a file.
+		return result
+	}
+
+	// It worked as a directory, clear any file error.
+	result.Error = ""
+	result.Children = topo.DirEntriesToStringArray(children)
+	return result
 }
 
 // handleExplorerRedirect returns the redirect target URL.
-func handleExplorerRedirect(ctx context.Context, ts topo.Server, r *http.Request) (string, error) {
+func handleExplorerRedirect(ctx context.Context, ts *topo.Server, r *http.Request) (string, error) {
 	keyspace := r.FormValue("keyspace")
 	shard := r.FormValue("shard")
 	cell := r.FormValue("cell")
@@ -106,13 +165,15 @@ func handleExplorerRedirect(ctx context.Context, ts topo.Server, r *http.Request
 }
 
 // initExplorer initializes the redirects for explorer
-func initExplorer(ts topo.Server) {
-	// redirects for explorers
+func initExplorer(ts *topo.Server) {
+	// Main backend explorer functions.
+	be := newBackendExplorer(ts)
+	handleCollection("topodata", func(r *http.Request) (interface{}, error) {
+		return be.HandlePath(path.Clean("/"+getItemPath(r.URL.Path)), r), nil
+	})
+
+	// Redirects for explorers.
 	http.HandleFunc("/explorers/redirect", func(w http.ResponseWriter, r *http.Request) {
-		if explorerInstance == nil {
-			http.Error(w, "no explorer configured", http.StatusInternalServerError)
-			return
-		}
 		if err := r.ParseForm(); err != nil {
 			httpErrorf(w, r, "cannot parse form: %s", err)
 			return

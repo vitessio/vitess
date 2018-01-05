@@ -44,6 +44,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -60,7 +61,7 @@ func ConfigureTabletHook(hk *hook.Hook, tabletAlias *topodatapb.TabletAlias) {
 // transitions need to be forced from time to time.
 //
 // If successful, the updated tablet record is returned.
-func ChangeType(ctx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias, newType topodatapb.TabletType) (*topodatapb.Tablet, error) {
+func ChangeType(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, newType topodatapb.TabletType) (*topodatapb.Tablet, error) {
 	return ts.UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
 		tablet.Type = newType
 		return nil
@@ -86,7 +87,7 @@ func CheckOwnership(oldTablet, newTablet *topodatapb.Tablet) error {
 // DeleteTablet removes a tablet record from the topology:
 // - the replication data record if any
 // - the tablet record
-func DeleteTablet(ctx context.Context, ts topo.Server, tablet *topodatapb.Tablet) error {
+func DeleteTablet(ctx context.Context, ts *topo.Server, tablet *topodatapb.Tablet) error {
 	// try to remove replication data, no fatal if we fail
 	if err := topo.DeleteTabletReplicationData(ctx, ts, tablet); err != nil {
 		if err == topo.ErrNoNode {
@@ -100,4 +101,21 @@ func DeleteTablet(ctx context.Context, ts topo.Server, tablet *topodatapb.Tablet
 
 	// then delete the tablet record
 	return ts.DeleteTablet(ctx, tablet.Alias)
+}
+
+// TabletIdent returns a concise string representation of this tablet.
+func TabletIdent(tablet *topodatapb.Tablet) string {
+	tagStr := ""
+	if tablet.Tags != nil {
+		for key, val := range tablet.Tags {
+			tagStr = tagStr + fmt.Sprintf(" %s=%s", key, val)
+		}
+	}
+
+	return fmt.Sprintf("%s-%d (%s%s)", tablet.Alias.Cell, tablet.Alias.Uid, tablet.Hostname, tagStr)
+}
+
+// TargetIdent returns a concise string representation of a query target
+func TargetIdent(target *querypb.Target) string {
+	return fmt.Sprintf("%s/%s (%s)", target.Keyspace, target.Shard, target.TabletType)
 }

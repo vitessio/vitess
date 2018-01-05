@@ -20,14 +20,15 @@ import static org.junit.Assert.assertEquals;
 
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
-import io.vitess.proto.Query;
-import io.vitess.proto.Vtgate.ExecuteEntityIdsRequest.EntityId;
 import java.util.Arrays;
 import java.util.Collection;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
+
+import io.vitess.proto.Query;
+import io.vitess.proto.Vtgate.ExecuteEntityIdsRequest.EntityId;
 
 @RunWith(value = Parameterized.class)
 public class EntityIdTest {

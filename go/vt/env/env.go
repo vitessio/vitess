@@ -74,3 +74,19 @@ func VtMysqlRoot() (string, error) {
 	}
 	return root, nil
 }
+
+// VtMysqlBaseDir returns the Mysql base directory, which
+// contains the fill_help_tables.sql script for instance
+func VtMysqlBaseDir() (string, error) {
+	// if the environment variable is set, use that
+	if root := os.Getenv("VT_MYSQL_BASEDIR"); root != "" {
+		return root, nil
+	}
+
+	// otherwise let's use VtMysqlRoot
+	root, err := VtMysqlRoot()
+	if err != nil {
+		return "", errors.New("VT_MYSQL_BASEDIR is not set. Please set $VT_MYSQL_BASEDIR.")
+	}
+	return root, nil
+}

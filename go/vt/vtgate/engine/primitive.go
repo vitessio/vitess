@@ -17,10 +17,16 @@ limitations under the License.
 package engine
 
 import (
+	"sync"
+	"time"
+
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/sqltypes"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // SeqVarName is a reserved bind var name for sequence values.
@@ -34,10 +40,12 @@ const ListVarName = "__vals"
 // VCursor defines the interface the engine will use
 // to execute routes.
 type VCursor interface {
-	Execute(query string, bindvars map[string]interface{}, isDML bool) (*sqltypes.Result, error)
-	ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery, isDML bool) (*sqltypes.Result, error)
-	ExecuteStandalone(query string, bindvars map[string]interface{}, keyspace, shard string) (*sqltypes.Result, error)
-	StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]interface{}, callback func(reply *sqltypes.Result) error) error
+	// Context returns the context of the current request.
+	Context() context.Context
+	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
+	ExecuteMultiShard(keyspace string, shardQueries map[string]*querypb.BoundQuery, isDML bool) (*sqltypes.Result, error)
+	ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, keyspace, shard string) (*sqltypes.Result, error)
+	StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error
 	GetKeyspaceShards(vkeyspace *vindexes.Keyspace) (string, []*topodatapb.ShardReference, error)
 	GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error)
 }
@@ -53,19 +61,54 @@ type Plan struct {
 	// Instructions contains the instructions needed to
 	// fulfil the query.
 	Instructions Primitive `json:",omitempty"`
+	// Mutex to protect the stats
+	mu sync.Mutex
+	// Count of times this plan was executed
+	ExecCount uint64
+	// Total execution time
+	ExecTime time.Duration
+	// Total number of shard queries
+	ShardQueries uint64
+	// Total number of rows
+	Rows uint64
+	// Total number of errors
+	Errors uint64
+}
+
+// AddStats updates the plan execution statistics
+func (p *Plan) AddStats(execCount uint64, execTime time.Duration, shardQueries, rows, errors uint64) {
+	p.mu.Lock()
+	p.ExecCount += execCount
+	p.ExecTime += execTime
+	p.ShardQueries += shardQueries
+	p.Rows += rows
+	p.Errors += errors
+	p.mu.Unlock()
+}
+
+// Stats returns a copy of the plan execution statistics
+func (p *Plan) Stats() (execCount uint64, execTime time.Duration, shardQueries, rows, errors uint64) {
+	p.mu.Lock()
+	execCount = p.ExecCount
+	execTime = p.ExecTime
+	shardQueries = p.ShardQueries
+	rows = p.Rows
+	errors = p.Errors
+	p.mu.Unlock()
+	return
 }
 
 // Size is defined so that Plan can be given to a cache.LRUCache.
 // VTGate needs to maintain a cache of plans. It uses LRUCache, which
 // in turn requires its objects to define a Size function.
-func (pln *Plan) Size() int {
+func (p *Plan) Size() int {
 	return 1
 }
 
 // Primitive is the interface that needs to be satisfied by
 // all primitives of a plan.
 type Primitive interface {
-	Execute(vcursor VCursor, bindVars, joinvars map[string]interface{}, wantfields bool) (*sqltypes.Result, error)
-	StreamExecute(vcursor VCursor, bindVars, joinvars map[string]interface{}, wantields bool, callback func(*sqltypes.Result) error) error
-	GetFields(vcursor VCursor, bindVars, joinvars map[string]interface{}) (*sqltypes.Result, error)
+	Execute(vcursor VCursor, bindVars, joinvars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
+	StreamExecute(vcursor VCursor, bindVars, joinvars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
+	GetFields(vcursor VCursor, bindVars, joinvars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 }

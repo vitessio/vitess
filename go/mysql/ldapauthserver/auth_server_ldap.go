@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"sync"
 	"time"
 
@@ -28,7 +29,7 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/netutil"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
+	"github.com/youtube/vitess/go/vt/vttls"
 	"gopkg.in/ldap.v2"
 )
 
@@ -61,7 +62,7 @@ func Init() {
 		return
 	}
 	if *ldapAuthMethod != mysql.MysqlClearPassword && *ldapAuthMethod != mysql.MysqlDialog {
-		log.Fatalf("Invalid mysql_ldap_auth_method value: only support mysql_clear_password or dialog")
+		log.Exitf("Invalid mysql_ldap_auth_method value: only support mysql_clear_password or dialog")
 	}
 	ldapAuthServer := &AuthServerLdap{
 		Client:       &ClientImpl{},
@@ -74,11 +75,11 @@ func Init() {
 		var err error
 		data, err = ioutil.ReadFile(*ldapAuthConfigFile)
 		if err != nil {
-			log.Fatalf("Failed to read mysql_ldap_auth_config_file: %v", err)
+			log.Exitf("Failed to read mysql_ldap_auth_config_file: %v", err)
 		}
 	}
 	if err := json.Unmarshal(data, ldapAuthServer); err != nil {
-		log.Fatalf("Error parsing AuthServerLdap config: %v", err)
+		log.Exitf("Error parsing AuthServerLdap config: %v", err)
 	}
 	mysql.RegisterAuthServerImpl("ldap", ldapAuthServer)
 }
@@ -94,12 +95,12 @@ func (asl *AuthServerLdap) Salt() ([]byte, error) {
 }
 
 // ValidateHash is unimplemented for AuthServerLdap.
-func (asl *AuthServerLdap) ValidateHash(salt []byte, user string, authResponse []byte) (mysql.Getter, error) {
+func (asl *AuthServerLdap) ValidateHash(salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (mysql.Getter, error) {
 	panic("unimplemented")
 }
 
 // Negotiate is part of the AuthServer interface.
-func (asl *AuthServerLdap) Negotiate(c *mysql.Conn, user string) (mysql.Getter, error) {
+func (asl *AuthServerLdap) Negotiate(c *mysql.Conn, user string, remoteAddr net.Addr) (mysql.Getter, error) {
 	// Finish the negotiation.
 	password, err := mysql.AuthServerNegotiateClearOrDialog(c, asl.Method)
 	if err != nil {
@@ -226,7 +227,7 @@ func (lci *ClientImpl) Connect(network string, config *ServerConfig) error {
 	if err != nil {
 		return err
 	}
-	tlsConfig, err := grpcutils.TLSClientConfig(config.LdapCert, config.LdapKey, config.LdapCA, serverName)
+	tlsConfig, err := vttls.ClientConfig(config.LdapCert, config.LdapKey, config.LdapCA, serverName)
 	if err != nil {
 		return err
 	}

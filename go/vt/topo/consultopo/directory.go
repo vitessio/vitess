@@ -25,15 +25,21 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// ListDir is part of the topo.Backend interface.
-func (s *Server) ListDir(ctx context.Context, cell, dirPath string) ([]string, error) {
-	c, err := s.clientForCell(ctx, cell)
-	if err != nil {
-		return nil, err
+// ListDir is part of the topo.Conn interface.
+func (s *Server) ListDir(ctx context.Context, dirPath string, full bool) ([]topo.DirEntry, error) {
+	nodePath := path.Join(s.root, dirPath) + "/"
+	if nodePath == "//" {
+		// Special case where c.root is "/", dirPath is empty,
+		// we would end up with "//". in that case, we want "/".
+		nodePath = "/"
 	}
-	nodePath := path.Join(c.root, dirPath) + "/"
 
-	keys, _, err := c.kv.Keys(nodePath, "", nil)
+	isRoot := false
+	if dirPath == "" || dirPath == "/" {
+		isRoot = true
+	}
+
+	keys, _, err := s.kv.Keys(nodePath, "", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +50,7 @@ func (s *Server) ListDir(ctx context.Context, cell, dirPath string) ([]string, e
 	}
 
 	prefixLen := len(nodePath)
-	var result []string
+	var result []topo.DirEntry
 	for _, p := range keys {
 		// Remove the prefix, base path.
 		if !strings.HasPrefix(p, nodePath) {
@@ -53,13 +59,30 @@ func (s *Server) ListDir(ctx context.Context, cell, dirPath string) ([]string, e
 		p = p[prefixLen:]
 
 		// Keep only the part until the first '/'.
+		t := topo.TypeFile
 		if i := strings.Index(p, "/"); i >= 0 {
 			p = p[:i]
+			t = topo.TypeDirectory
 		}
 
 		// Remove duplicates, add to list.
-		if len(result) == 0 || result[len(result)-1] != p {
-			result = append(result, p)
+		if len(result) == 0 || result[len(result)-1].Name != p {
+			e := topo.DirEntry{
+				Name: p,
+			}
+			if full {
+				e.Type = t
+				if isRoot && p == electionsPath {
+					e.Ephemeral = true
+				}
+				if p == locksFilename && t == topo.TypeFile {
+					// A file called 'Lock' is always ephemeral.
+					// (A directory called 'Lock' could be a keyspace or
+					// a shard named Lock).
+					e.Ephemeral = true
+				}
+			}
+			result = append(result, e)
 		}
 	}
 

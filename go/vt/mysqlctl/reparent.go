@@ -106,24 +106,16 @@ func (mysqld *Mysqld) DemoteMaster() (rp mysql.Position, err error) {
 
 // PromoteSlave will promote a slave to be the new master.
 func (mysqld *Mysqld) PromoteSlave(hookExtraEnv map[string]string) (mysql.Position, error) {
-	// we handle replication, just stop it
-	cmds := []string{SQLStopSlave}
+	// Since we handle replication, just stop it.
+	cmds := []string{
+		SQLStopSlave,
+		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
+	}
 
 	// Promote to master.
-	flavor, err := mysqld.flavor()
-	if err != nil {
-		err = fmt.Errorf("PromoteSlave needs flavor: %v", err)
-		return mysql.Position{}, err
-	}
-	cmds = append(cmds, flavor.PromoteSlaveCommands()...)
 	if err := mysqld.ExecuteSuperQueryList(context.TODO(), cmds); err != nil {
 		return mysql.Position{}, err
 	}
 
-	rp, err := mysqld.MasterPosition()
-	if err != nil {
-		return mysql.Position{}, err
-	}
-
-	return rp, nil
+	return mysqld.MasterPosition()
 }

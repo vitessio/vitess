@@ -352,7 +352,7 @@ func (scw *SplitCloneWorker) StatusAsText() string {
 	switch state {
 	case WorkerStateCloneOnline:
 		result += "Running:\n"
-		result += "Copying from: " + scw.formatOnlineSources() + "\n"
+		result += "Comparing source and destination using: " + scw.formatOnlineSources() + "\n"
 		statuses, eta := scw.tableStatusListOnline.format()
 		result += "ETA: " + eta.String() + "\n"
 		result += strings.Join(statuses, "\n")
@@ -554,8 +554,8 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 	}
 
 	// Initialize healthcheck and add destination shards to it.
-	scw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
-	scw.tsc = discovery.NewTabletStatsCacheDoNotSetListener(scw.cell)
+	scw.healthCheck = discovery.NewHealthCheck(*healthcheckRetryDelay, *healthCheckTimeout)
+	scw.tsc = discovery.NewTabletStatsCacheDoNotSetListener(scw.wr.TopoServer(), scw.cell)
 	// We set sendDownEvents=true because it's required by TabletStatsCache.
 	scw.healthCheck.SetListener(scw, true /* sendDownEvents */)
 
@@ -777,6 +777,11 @@ func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
 func (scw *SplitCloneWorker) waitForTablets(ctx context.Context, shardInfos []*topo.ShardInfo, timeout time.Duration) error {
 	var wg sync.WaitGroup
 	rec := concurrency.AllErrorRecorder{}
+
+	if len(shardInfos) > 0 {
+		scw.wr.Logger().Infof("Waiting %v for %d %s/%s RDONLY tablet(s)", timeout, scw.minHealthyRdonlyTablets, shardInfos[0].Keyspace(), shardInfos[0].ShardName())
+	}
+
 	for _, si := range shardInfos {
 		wg.Add(1)
 		go func(keyspace, shard string) {
@@ -854,10 +859,11 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 	var firstError error
 
 	ctx, cancelCopy := context.WithCancel(ctx)
+	defer cancelCopy()
 	processError := func(format string, args ...interface{}) {
-		scw.wr.Logger().Errorf(format, args...)
 		mu.Lock()
 		if firstError == nil {
+			scw.wr.Logger().Errorf(format, args...)
 			firstError = fmt.Errorf(format, args...)
 			cancelCopy()
 		}
@@ -931,13 +937,19 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				sema.Acquire()
 				defer sema.Release()
 
+				if err := checkDone(ctx); err != nil {
+					processError("%v: Context expired while this thread was waiting for its turn. Context error: %v", errPrefix, err)
+					return
+				}
+
 				tableStatusList.threadStarted(tableIndex)
+				defer tableStatusList.threadDone(tableIndex)
 
 				if state == WorkerStateCloneOnline {
 					// Wait for enough healthy tablets (they might have become unhealthy
 					// and their replication lag might have increased since we started.)
 					if err := scw.waitForTablets(ctx, scw.sourceShards, *retryDuration); err != nil {
-						processError("%v: No healthy source tablets found (gave up after %v): %v", errPrefix, *retryDuration, err)
+						processError("%v: No healthy source tablets found (gave up after %v): %v", errPrefix, time.Since(start), err)
 						return
 					}
 				}
@@ -962,7 +974,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					}
 					sourceResultReader, err := NewRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk, allowMultipleRetries)
 					if err != nil {
-						processError("%v: NewRestartableResultReader for source: %v failed", errPrefix, tp.description())
+						processError("%v: NewRestartableResultReader for source: %v failed: %v", errPrefix, tp.description(), err)
 						return
 					}
 					defer sourceResultReader.Close(ctx)
@@ -973,7 +985,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				// and their replication lag might have increased due to a previous
 				// chunk pipeline.)
 				if err := scw.waitForTablets(ctx, scw.destinationShards, *retryDuration); err != nil {
-					processError("%v: No healthy destination tablets found (gave up after %v): ", errPrefix, *retryDuration, err)
+					processError("%v: No healthy destination tablets found (gave up after %v): ", errPrefix, time.Since(start), err)
 					return
 				}
 
@@ -1028,8 +1040,6 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					processError("%v: RowDiffer2 failed: %v", errPrefix, err)
 					return
 				}
-
-				tableStatusList.threadDone(tableIndex)
 			}(td, tableIndex, c)
 		}
 	}

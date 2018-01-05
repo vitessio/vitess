@@ -29,8 +29,8 @@ func TestPrintQueryResult(t *testing.T) {
 	input := &sqltypes.Result{
 		Fields: []*querypb.Field{{Name: "a"}, {Name: "b"}},
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeString([]byte("1")), sqltypes.MakeString([]byte("2"))},
-			{sqltypes.MakeString([]byte("3")), sqltypes.MakeString([]byte("4"))},
+			{sqltypes.NewVarBinary("1"), sqltypes.NewVarBinary("2")},
+			{sqltypes.NewVarBinary("3"), sqltypes.NewVarBinary("4")},
 		},
 	}
 	// Use a simple example so we're not sensitive to alignment settings, etc.

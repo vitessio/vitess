@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"crypto/sha1"
 	"fmt"
+	"net"
 
 	log "github.com/golang/glog"
 )
@@ -59,7 +60,7 @@ type AuthServer interface {
 
 	// ValidateHash validates the data sent by the client matches
 	// what the server computes.  It also returns the user data.
-	ValidateHash(salt []byte, user string, authResponse []byte) (Getter, error)
+	ValidateHash(salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error)
 
 	// Negotiate is called if AuthMethod returns anything else
 	// than MysqlNativePassword. It is handed the connection after the
@@ -71,7 +72,7 @@ type AuthServer interface {
 	// - If the negotiation works, it should return the Getter,
 	// and no error. The framework is responsible for writing the
 	// OK packet.
-	Negotiate(c *Conn, user string) (Getter, error)
+	Negotiate(c *Conn, user string, remoteAddr net.Addr) (Getter, error)
 }
 
 // authServers is a registry of AuthServer implementations.
@@ -85,11 +86,11 @@ func RegisterAuthServerImpl(name string, authServer AuthServer) {
 	authServers[name] = authServer
 }
 
-// GetAuthServer returns an AuthServer by name, or log.Fatalf.
+// GetAuthServer returns an AuthServer by name, or log.Exitf.
 func GetAuthServer(name string) AuthServer {
 	authServer, ok := authServers[name]
 	if !ok {
-		log.Fatalf("no AuthServer name %v registered", name)
+		log.Exitf("no AuthServer name %v registered", name)
 	}
 	return authServer
 }

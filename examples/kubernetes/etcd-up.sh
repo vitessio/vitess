@@ -30,21 +30,26 @@ source $script_root/env.sh
 replicas=${ETCD_REPLICAS:-3}
 cells=`echo $CELLS | tr ',' ' '`
 
+# Check the installation for etcd-operator has been done.
+if ! kubectl get customresourcedefinitions | grep -q etcdclusters.etcd.database.coreos.com ; then
+  # Download and install etcd-operator
+  echo "Downloading and installing etcd-operator for first time use..."
+  cd /tmp
+  git clone https://github.com/coreos/etcd-operator
+  cd etcd-operator
+  kubectl create -f example/deployment.yaml
+
+  if ! kubectl get customresourcedefinitions | grep -q etcdclusters.etcd.database.coreos.com ; then
+    echo "etcd-operator installation failed."
+    exit 1
+    fi
+fi
+
 for cell in 'global' $cells; do
-  # Create the client service, which will load-balance across all replicas.
-  echo "Creating etcd service for $cell cell..."
-  cat etcd-service-template.yaml | \
-    sed -e "s/{{cell}}/$cell/g" | \
+  # Create the etcd cluster using etcd-operator
+  echo "Creating etcd service for '$cell' cell..."
+  sed -e "s/{{cell}}/$cell/g" -e "s/{{replicas}}/$replicas/g" \
+    etcd-service-template.yaml | \
     $KUBECTL $KUBECTL_OPTIONS create -f -
-
-  # Expand template variables
-  sed_script=""
-  for var in cell replicas; do
-    sed_script+="s,{{$var}},${!var},g;"
-  done
-
-  # Create the replication controller.
-  echo "Creating etcd replicationcontroller for $cell cell..."
-  cat etcd-controller-template.yaml | sed -e "$sed_script" | $KUBECTL $KUBECTL_OPTIONS create -f -
 done
 

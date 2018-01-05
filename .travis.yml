@@ -1,143 +1,61 @@
-# Use container-based infrastructure (see: http://docs.travis-ci.com/user/workers/container-based-infrastructure/).
-sudo: false
+# Travis CI configuration for Vitess.
+#
+# Note that we have our own test runner written in Go (test.go) which downloads
+# our bootstrap Docker image and runs all tests within Docker.
+# This solution is slower than running the tests natively, but has the
+# advantage that we do not have to install (and cache) any dependencies within
+# Travis itself.
+#
+# For the record, we expect the following overhead per Travis build:
+# - 20 seconds Travis starting up the VM.
+# - Up to 2 minutes to pull the Docker image.
+# - More than a minute to run "make build" and cache the result as temporary
+#   Docker image.
+#
+# In total, it will always take up to 4 minutes until the environment is
+# bootstrapped and the first test can be run.
+#
+# Open TODOs:
+# - Re-add travis/check_make_proto.sh, ideally as part of test/config.json.
+# - Add a presubmit which checks that vendor/vendor.json is the same as in the Docker image. This will prevent people from making changes to it without pushing new bootstrap Docker images.
+
+# sudo is required because we run Docker in our builds.
+# See: https://docs.travis-ci.com/user/docker/
+sudo: required
+
+services:
+  - docker
+
 language: go
 go:
-  - 1.8
-addons:
-  apt:
-    sources:
-      - ubuntu-toolchain-r-test
-    packages:
-      # NOTE: When you add a dependency, don't forget to add comment why it's necessary.
-      - automake
-      - libtool
-      - php5-cli
-      - php5-dev
-      - python-dev
-      - python-mysqldb
-      - python-pip
-      - libssl-dev
-      - g++-4.8
-      - gcc-4.8
-      - git
-      - pkg-config
-      - python-virtualenv
-      # installs libaio1 which is required by MariaDB 10.0 server package
-      - libaio-dev
-      # required by travis script below to measure CPU and memory usage
-      - time
-      # Optional dependency. Without a running syslog daemon, Vitess will keep complaining that it could not log events and spam the logs.
-      - rsyslog
-# Cache directories of dependencies which are built by bootstrap.sh
-cache:
-  directories:
-    # Cache downloaded and extracted MariaDB 10.0 packages.
-    - $MYSQL_ROOT
-    # Cache bootstrapped dependencies (e.g. protobuf and gRPC).
-    - $HOME/gopath/dist/etcd
-    - $HOME/gopath/dist/grpc/.build_finished
-    - $HOME/gopath/dist/grpc/usr/local
-    - $HOME/gopath/dist/py-mock-1.0.1/.build_finished
-    - $HOME/gopath/dist/py-mock-1.0.1/lib/python2.7/site-packages
-    - $HOME/gopath/dist/vt-zookeeper-3.4.6/.build_finished
-    - $HOME/gopath/dist/vt-zookeeper-3.4.6/lib
-    # Maven repository for Java dependencies.
-    - $HOME/.m2
-    - $HOME/.phpenv
-before_cache:
-  # Travis CI caching doesn't work with these symlinks. Just delete them.
-  - rm $HOME/gopath/bin/etcd
-  - rm $HOME/gopath/bin/zksrv.sh
-  # Delete these files because they keep changing (having the latest timestamp
-  # of an update) and trigger a lengthy update of the cache (~25 seconds).
-  - rm $HOME/.m2/repository/io/vitess/*/maven-metadata-local.xml
-  - rm $HOME/.m2/repository/io/vitess/*/*-SNAPSHOT/*-SNAPSHOT*.jar
-  - rm $HOME/.m2/repository/io/vitess/*/*-SNAPSHOT/_remote.repositories
-  - rm $HOME/.m2/repository/io/vitess/*/*-SNAPSHOT/maven-metadata-local.xml
-  - rm $HOME/.m2/repository/io/vitess/*/*-SNAPSHOT/resolver-status.properties
-  - rm $HOME/.m2/repository/io/grpc/grpc-core/resolver-status.properties
-  - rm $HOME/.m2/repository/io/grpc/protoc-gen-grpc-java/*/protoc-gen-grpc-java-*.pom.lastUpdated
-  - rm $HOME/.m2/repository/io/netty/netty-codec-http2/resolver-status.properties
-  # Don't cache unnecessary PHP files.
-  - rm $HOME/.phpenv/versions/*/sbin/*
-  - rm $HOME/.phpenv/versions/*/bin/php-cgi
-  - rm $HOME/.phpenv/shims/php-cgi
-  - find $HOME/.phpenv/vendor/grpc/grpc -mindepth 1 -maxdepth 1 ! -name src | xargs rm -rf
-  - find $HOME/.phpenv/vendor/grpc/grpc/src -mindepth 1 -maxdepth 1 ! -name php | xargs rm -rf
+  - 1.9
+go_import_path: github.com/youtube/vitess
 env:
   global:
-    - MYSQL_FLAVOR=MariaDB
-    - MYSQL_ROOT=$HOME/mysql
-    - VT_MYSQL_ROOT=$MYSQL_ROOT/usr
-    # Enable parallel compilation e.g. for gRPC.
-    # (The Travis CI worker is allowed to use up to 2 cores, but as of 07/2015 4 parallel compilations is actually faster.)
-    - MAKEFLAGS=-j4
     # Run go build and test with -p 4 (i.e. up to 4 packages are compiled/tested in parallel).
     # As of 07/2015 this value works best in a Travis CI container.
+    # TODO(mberlin): This will probably not be passed through to Docker. Verify and fix this.
     - VT_GO_PARALLEL_VALUE=4
-    - PATH="$HOME/.phpenv/bin:$PATH"
     # Note: The per test timeout must always be < 10 minutes because test.go
     #       does not produce any log output while running and Travis kills a
     #       build after 10 minutes without log output.
     #       See: https://docs.travis-ci.com/user/customizing-the-build#Build-Timeouts
     # To diagnose stuck tests, add "-follow" to TEST_FLAGS below. Then test.go
     # will print the test's output.
-    - TEST_FLAGS="-docker=false -timeout=8m -print-log -remote-stats=http://enisoc.com:15123/travis/stats"
-    - CC=gcc-4.8
-    - CXX=g++-4.8
-    # TODO: uncomment when php crashing is fixed
-    # - INSTALL_GRPC_PHP="$HOME/.phpenv/lib"
-    - SAUCE_USERNAME=vitess
+    - TEST_FLAGS="-docker -use_docker_cache -timeout=8m -print-log -remote-stats=http://enisoc.com:15123/travis/stats"
   matrix:
     # NOTE: Travis CI schedules up to 5 tests simultaneously.
     #       All our tests should be spread out as evenly as possible across these 5 slots.
-    #       We should always utilize all 5 slots because the cost of the setup is high (up to one minute).
-    # NOTE: Use "" if you specify a space separated list of multiple targets.
+    #       We should always utilize all 5 slots because the cost of the setup is high (up to four minutes).
     - TEST_MATRIX="-shard 0"
     - TEST_MATRIX="-shard 1"
     - TEST_MATRIX="-shard 2"
     - TEST_MATRIX="-shard 3"
     - TEST_MATRIX="-shard 4"
-before_install:
-  - travis/download_mariadb.sh
-  # TODO: uncomment when php crashing is fixed
-  # - travis/php_init.sh
-install:
-  # TODO: uncomment when php crashing is fixed
-  # - eval "$(phpenv init -)"
-  - ./bootstrap.sh
-before_script:
-  - source dev.env
-  # Travis only tests. Run only on the first shard.
-  # Part of "before_script" because in "script" the job would not fail immediately if a command fails.
-  - |
-    if [[ $TEST_MATRIX = *"-shard 0"* ]]; then
-      travis/check_make_proto.sh
-    fi
-  # Webdriver tests are only on the last shard for non PRs. Start Sauce Connect only on this shard.
-  - |
-    if [[ $TEST_MATRIX = *"-shard 4"* && $TRAVIS_PULL_REQUEST = "false" ]]; then
-      tools/sauce_connect_setup.sh
-    fi
 script:
-  # Log GOMAXPROCS (should be 2 as of 07/2015).
-  - go run travis/log_gomaxprocs.go
-  - |
-    if [[ $TRAVIS_PULL_REQUEST = "false" ]]; then
-      go run test.go $TEST_FLAGS $TEST_MATRIX
-    else
-      # Exclude webdriver tests on Travis PRs since the sauce addon does not work for PRs
-      go run test.go $TEST_FLAGS $TEST_MATRIX -exclude=webdriver
-    fi
-after_script:
-  # Stop Sauce Connect at the end
-  - |
-    if [[ $TEST_MATRIX = *"-shard 4"* && $TRAVIS_PULL_REQUEST = "false" ]]; then
-      tools/sauce_connect_teardown.sh
-    fi
-after_failure:
-  # In case of errors, output log files to make it easier to debug the error.
-  # List all available files.
-  - ls -alR $HOME/gopath/vtdataroot
-  # Output *.log* and *.stderr files. (Add -keep-data to TEST_FLAGS above or tests will delete their logs.)
-  - find $HOME/gopath/vtdataroot \( -name "*.log*" -or -name "*.stderr" \) -type f -print0 | xargs -0r --verbose --max-args=1 cat
+  - go run test.go $TEST_FLAGS $TEST_MATRIX
+  # Uncomment the next line to verify the GOMAXPROCS value (should be 2 as of 09/2017).
+  # - ./docker/test/run.sh mysql57 'go run travis/log_gomaxprocs.go'
+notifications:
+  slack:
+    secure: S9n4rVWuEvSaF9RZUIx3Nkc2ycpM254zmalyMMbT5EmV1Xz6Zww2FL39RR5d57zsZ2M8GVW5n9uB8Bx57mr+L/wClEltzknYr7MA2/yYNMo5iK83tdQtNNw5U+dZG9/Plhlm4n883lcw9aZOyotNcLg2zBsd48Y74olk4NdmSfo=

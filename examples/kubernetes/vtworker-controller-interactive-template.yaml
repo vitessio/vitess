@@ -30,8 +30,9 @@ spec:
               -port {{port}}
               -grpc_port {{grpc_port}}
               -service_map \"grpc-vtworker\"
-              -topo_implementation etcd
-              -etcd_global_addrs http://etcd-global:4001
+              -topo_implementation etcd2
+              -topo_global_server_address http://etcd-global-client:2379
+              -topo_global_root /global
               -cell {{cell}}
               -use_v3_resharding_mode" vitess
       volumes:

@@ -24,8 +24,11 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
+	"github.com/youtube/vitess/go/json2"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
@@ -35,10 +38,10 @@ type stFU struct {
 	Params map[string]string
 }
 
-func (v *stFU) String() string                                      { return v.name }
-func (*stFU) Cost() int                                             { return 1 }
-func (*stFU) Verify(VCursor, []interface{}, [][]byte) (bool, error) { return false, nil }
-func (*stFU) Map(VCursor, []interface{}) ([][]byte, error)          { return nil, nil }
+func (v *stFU) String() string                                           { return v.name }
+func (*stFU) Cost() int                                                  { return 1 }
+func (*stFU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error) { return []bool{}, nil }
+func (*stFU) Map(VCursor, []sqltypes.Value) ([][]byte, error)            { return nil, nil }
 
 func NewSTFU(name string, params map[string]string) (Vindex, error) {
 	return &stFU{name: name, Params: params}, nil
@@ -50,9 +53,9 @@ type stF struct {
 	Params map[string]string
 }
 
-func (v *stF) String() string                                      { return v.name }
-func (*stF) Cost() int                                             { return 0 }
-func (*stF) Verify(VCursor, []interface{}, [][]byte) (bool, error) { return false, nil }
+func (v *stF) String() string                                           { return v.name }
+func (*stF) Cost() int                                                  { return 0 }
+func (*stF) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error) { return []bool{}, nil }
 
 func NewSTF(name string, params map[string]string) (Vindex, error) {
 	return &stF{name: name, Params: params}, nil
@@ -64,12 +67,12 @@ type stLN struct {
 	Params map[string]string
 }
 
-func (v *stLN) String() string                                      { return v.name }
-func (*stLN) Cost() int                                             { return 0 }
-func (*stLN) Verify(VCursor, []interface{}, [][]byte) (bool, error) { return false, nil }
-func (*stLN) Map(VCursor, []interface{}) ([][][]byte, error)        { return nil, nil }
-func (*stLN) Create(VCursor, []interface{}, [][]byte) error         { return nil }
-func (*stLN) Delete(VCursor, []interface{}, []byte) error           { return nil }
+func (v *stLN) String() string                                           { return v.name }
+func (*stLN) Cost() int                                                  { return 0 }
+func (*stLN) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error) { return []bool{}, nil }
+func (*stLN) Map(VCursor, []sqltypes.Value) ([][][]byte, error)          { return nil, nil }
+func (*stLN) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error   { return nil }
+func (*stLN) Delete(VCursor, [][]sqltypes.Value, []byte) error           { return nil }
 
 func NewSTLN(name string, params map[string]string) (Vindex, error) {
 	return &stLN{name: name, Params: params}, nil
@@ -81,12 +84,12 @@ type stLU struct {
 	Params map[string]string
 }
 
-func (v *stLU) String() string                                      { return v.name }
-func (*stLU) Cost() int                                             { return 2 }
-func (*stLU) Verify(VCursor, []interface{}, [][]byte) (bool, error) { return false, nil }
-func (*stLU) Map(VCursor, []interface{}) ([][]byte, error)          { return nil, nil }
-func (*stLU) Create(VCursor, []interface{}, [][]byte) error         { return nil }
-func (*stLU) Delete(VCursor, []interface{}, []byte) error           { return nil }
+func (v *stLU) String() string                                           { return v.name }
+func (*stLU) Cost() int                                                  { return 2 }
+func (*stLU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error) { return []bool{}, nil }
+func (*stLU) Map(VCursor, []sqltypes.Value) ([][]byte, error)            { return nil, nil }
+func (*stLU) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error   { return nil }
+func (*stLU) Delete(VCursor, [][]sqltypes.Value, []byte) error           { return nil }
 
 func NewSTLU(name string, params map[string]string) (Vindex, error) {
 	return &stLU{name: name, Params: params}, nil
@@ -120,21 +123,115 @@ func TestUnshardedVSchema(t *testing.T) {
 		Name:     sqlparser.NewTableIdent("t1"),
 		Keyspace: ks,
 	}
+	dual := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ks,
+	}
 	want := &VSchema{
-		tables: map[string]*Table{
-			"t1": t1,
+		uniqueTables: map[string]*Table{
+			"t1":   t1,
+			"dual": dual,
 		},
+		uniqueVindexes: map[string]Vindex{},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"unsharded": {
 				Keyspace: ks,
 				Tables: map[string]*Table{
-					"t1": t1,
+					"t1":   t1,
+					"dual": dual,
 				},
+				Vindexes: map[string]Vindex{},
 			},
 		},
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("BuildVSchema:s\n%v, want\n%v", got, want)
+		t.Errorf("BuildVSchema:\n%v, want\n%v", got, want)
+	}
+}
+
+func TestVSchemaColumns(t *testing.T) {
+	good := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Columns: []*vschemapb.Column{{
+							Name: "c1",
+						}, {
+							Name: "c2",
+							Type: sqltypes.VarChar,
+						}},
+					},
+				},
+			},
+		},
+	}
+	got, err := BuildVSchema(&good)
+	if err != nil {
+		t.Error(err)
+	}
+	ks := &Keyspace{
+		Name: "unsharded",
+	}
+	t1 := &Table{
+		Name:     sqlparser.NewTableIdent("t1"),
+		Keyspace: ks,
+		Columns: []Column{{
+			Name: sqlparser.NewColIdent("c1"),
+			Type: sqltypes.Null,
+		}, {
+			Name: sqlparser.NewColIdent("c2"),
+			Type: sqltypes.VarChar,
+		}},
+	}
+	dual := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ks,
+	}
+	want := &VSchema{
+		uniqueTables: map[string]*Table{
+			"t1":   t1,
+			"dual": dual,
+		},
+		uniqueVindexes: map[string]Vindex{},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"unsharded": {
+				Keyspace: ks,
+				Tables: map[string]*Table{
+					"t1":   t1,
+					"dual": dual,
+				},
+				Vindexes: map[string]Vindex{},
+			},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		gotb, _ := json.Marshal(got)
+		wantb, _ := json.Marshal(want)
+		t.Errorf("BuildVSchema:\n%s, want\n%s", gotb, wantb)
+	}
+}
+
+func TestVSchemaColumnsFail(t *testing.T) {
+	good := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Columns: []*vschemapb.Column{{
+							Name: "c1",
+						}, {
+							Name: "c1",
+						}},
+					},
+				},
+			},
+		},
+	}
+	_, err := BuildVSchema(&good)
+	want := "duplicate column name 'c1' for table: t1"
+	if err == nil || err.Error() != want {
+		t.Errorf("BuildVSchema(dup col): %v, want %v", err, want)
 	}
 }
 
@@ -180,27 +277,29 @@ func TestShardedVSchemaOwned(t *testing.T) {
 		Name:    "sharded",
 		Sharded: true,
 	}
+	vindex1 := &stFU{
+		name: "stfu1",
+		Params: map[string]string{
+			"stfu1": "1",
+		},
+	}
+	vindex2 := &stLN{name: "stln1"}
 	t1 := &Table{
 		Name:     sqlparser.NewTableIdent("t1"),
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Column: sqlparser.NewColIdent("c1"),
-				Type:   "stfu",
-				Name:   "stfu1",
-				Vindex: &stFU{
-					name: "stfu1",
-					Params: map[string]string{
-						"stfu1": "1",
-					},
-				},
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:    "stfu",
+				Name:    "stfu1",
+				Vindex:  vindex1,
 			},
 			{
-				Column: sqlparser.NewColIdent("c2"),
-				Type:   "stln",
-				Name:   "stln1",
-				Owned:  true,
-				Vindex: &stLN{name: "stln1"},
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
+				Type:    "stln",
+				Name:    "stln1",
+				Owned:   true,
+				Vindex:  vindex2,
 			},
 		},
 	}
@@ -209,15 +308,30 @@ func TestShardedVSchemaOwned(t *testing.T) {
 		t1.ColumnVindexes[0],
 	}
 	t1.Owned = t1.ColumnVindexes[1:]
+	dual := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ks,
+		Pinned:   []byte{0},
+	}
 	want := &VSchema{
-		tables: map[string]*Table{
-			"t1": t1,
+		uniqueTables: map[string]*Table{
+			"t1":   t1,
+			"dual": dual,
+		},
+		uniqueVindexes: map[string]Vindex{
+			"stfu1": vindex1,
+			"stln1": vindex2,
 		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"sharded": {
 				Keyspace: ks,
 				Tables: map[string]*Table{
-					"t1": t1,
+					"t1":   t1,
+					"dual": dual,
+				},
+				Vindexes: map[string]Vindex{
+					"stfu1": vindex1,
+					"stln1": vindex2,
 				},
 			},
 		},
@@ -225,7 +339,7 @@ func TestShardedVSchemaOwned(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		gotjson, _ := json.Marshal(got)
 		wantjson, _ := json.Marshal(want)
-		t.Errorf("BuildVSchema:s\n%s, want\n%s", gotjson, wantjson)
+		t.Errorf("BuildVSchema:\n%s, want\n%s", gotjson, wantjson)
 	}
 }
 
@@ -268,23 +382,25 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 		Name:    "sharded",
 		Sharded: true,
 	}
+	vindex1 := &stLU{name: "stlu1"}
+	vindex2 := &stFU{name: "stfu1"}
 	t1 := &Table{
 		Name:     sqlparser.NewTableIdent("t1"),
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Column: sqlparser.NewColIdent("c1"),
-				Type:   "stlu",
-				Name:   "stlu1",
-				Owned:  false,
-				Vindex: &stLU{name: "stlu1"},
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:    "stlu",
+				Name:    "stlu1",
+				Owned:   false,
+				Vindex:  vindex1,
 			},
 			{
-				Column: sqlparser.NewColIdent("c2"),
-				Type:   "stfu",
-				Name:   "stfu1",
-				Owned:  false,
-				Vindex: &stFU{name: "stfu1"},
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
+				Type:    "stfu",
+				Name:    "stfu1",
+				Owned:   false,
+				Vindex:  vindex2,
 			},
 		},
 	}
@@ -292,21 +408,38 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 		t1.ColumnVindexes[1],
 		t1.ColumnVindexes[0],
 	}
+	dual := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ks,
+		Pinned:   []byte{0},
+	}
 	want := &VSchema{
-		tables: map[string]*Table{
-			"t1": t1,
+		uniqueTables: map[string]*Table{
+			"t1":   t1,
+			"dual": dual,
+		},
+		uniqueVindexes: map[string]Vindex{
+			"stlu1": vindex1,
+			"stfu1": vindex2,
 		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"sharded": {
 				Keyspace: ks,
 				Tables: map[string]*Table{
-					"t1": t1,
+					"t1":   t1,
+					"dual": dual,
+				},
+				Vindexes: map[string]Vindex{
+					"stlu1": vindex1,
+					"stfu1": vindex2,
 				},
 			},
 		},
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("BuildVSchema:s\n%v, want\n%v", got, want)
+		gotjson, _ := json.Marshal(got)
+		wantjson, _ := json.Marshal(want)
+		t.Errorf("BuildVSchema:s\n%s, want\n%s", gotjson, wantjson)
 	}
 }
 
@@ -334,7 +467,7 @@ func TestBuildVSchemaVindexNotFoundFail(t *testing.T) {
 		},
 	}
 	_, err := BuildVSchema(&bad)
-	want := "vindexType noexist not found"
+	want := `vindexType "noexist" not found`
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
@@ -387,7 +520,7 @@ func TestBuildVSchemaInvalidVindexFail(t *testing.T) {
 		},
 	}
 	_, err := BuildVSchema(&bad)
-	want := "vindex stf needs to be Unique or NonUnique"
+	want := `vindex "stf" needs to be Unique or NonUnique`
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
@@ -429,29 +562,43 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 		Keyspace:   ksb,
 		IsSequence: true,
 	}
+	duala := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ksa,
+	}
+	dualb := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ksb,
+	}
 	want := &VSchema{
-		tables: map[string]*Table{
-			"t1": nil,
+		uniqueTables: map[string]*Table{
+			"t1":   nil,
+			"dual": duala,
 		},
+		uniqueVindexes: map[string]Vindex{},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"ksa": {
 				Keyspace: ksa,
 				Tables: map[string]*Table{
-					"t1": t1a,
+					"t1":   t1a,
+					"dual": duala,
 				},
+				Vindexes: map[string]Vindex{},
 			},
 			"ksb": {
 				Keyspace: ksb,
 				Tables: map[string]*Table{
-					"t1": t1b,
+					"t1":   t1b,
+					"dual": dualb,
 				},
+				Vindexes: map[string]Vindex{},
 			},
 		},
 	}
 	if !reflect.DeepEqual(got, want) {
 		gotjson, _ := json.Marshal(got)
 		wantjson, _ := json.Marshal(want)
-		t.Errorf("BuildVSchema:s\n%s, want\n%s", gotjson, wantjson)
+		t.Errorf("BuildVSchema:\n%s, want\n%s", gotjson, wantjson)
 	}
 }
 
@@ -485,21 +632,171 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 		Name:     sqlparser.NewTableIdent("t1"),
 		Keyspace: ksb,
 	}
+	duala := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ksa,
+	}
+	dualb := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ksb,
+	}
 	want := &VSchema{
-		tables: map[string]*Table{
-			"t1": nil,
+		uniqueTables: map[string]*Table{
+			"t1":   nil,
+			"dual": duala,
+		},
+		uniqueVindexes: map[string]Vindex{},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"ksa": {
+				Keyspace: ksa,
+				Tables: map[string]*Table{
+					"t1":   t1a,
+					"dual": duala,
+				},
+				Vindexes: map[string]Vindex{},
+			},
+			"ksb": {
+				Keyspace: ksb,
+				Tables: map[string]*Table{
+					"t1":   t1b,
+					"dual": dualb,
+				},
+				Vindexes: map[string]Vindex{},
+			},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		gotjson, _ := json.Marshal(got)
+		wantjson, _ := json.Marshal(want)
+		t.Errorf("BuildVSchema:\n%s, want\n%s", gotjson, wantjson)
+	}
+}
+
+func TestBuildVSchemaDupVindex(t *testing.T) {
+	good := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ksa": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"stlu1": {
+						Type:  "stlu",
+						Owner: "",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c1",
+								Name:   "stlu1",
+							},
+						},
+					},
+				},
+			},
+			"ksb": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"stlu1": {
+						Type:  "stlu",
+						Owner: "",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c1",
+								Name:   "stlu1",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	got, err := BuildVSchema(&good)
+	if err != nil {
+		t.Error(err)
+	}
+	ksa := &Keyspace{
+		Name:    "ksa",
+		Sharded: true,
+	}
+	ksb := &Keyspace{
+		Name:    "ksb",
+		Sharded: true,
+	}
+	vindex1 := &stLU{name: "stlu1"}
+	t1 := &Table{
+		Name:     sqlparser.NewTableIdent("t1"),
+		Keyspace: ksa,
+		ColumnVindexes: []*ColumnVindex{
+			{
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:    "stlu",
+				Name:    "stlu1",
+				Owned:   false,
+				Vindex:  vindex1,
+			},
+		},
+	}
+	t1.Ordered = []*ColumnVindex{
+		t1.ColumnVindexes[0],
+	}
+	t2 := &Table{
+		Name:     sqlparser.NewTableIdent("t1"),
+		Keyspace: ksb,
+		ColumnVindexes: []*ColumnVindex{
+			{
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:    "stlu",
+				Name:    "stlu1",
+				Owned:   false,
+				Vindex:  vindex1,
+			},
+		},
+	}
+	t2.Ordered = []*ColumnVindex{
+		t2.ColumnVindexes[0],
+	}
+	duala := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ksa,
+		Pinned:   []byte{0},
+	}
+	dualb := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ksb,
+		Pinned:   []byte{0},
+	}
+	want := &VSchema{
+		uniqueTables: map[string]*Table{
+			"t1":   nil,
+			"dual": duala,
+		},
+		uniqueVindexes: map[string]Vindex{
+			"stlu1": nil,
 		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"ksa": {
 				Keyspace: ksa,
 				Tables: map[string]*Table{
-					"t1": t1a,
+					"t1":   t1,
+					"dual": duala,
+				},
+				Vindexes: map[string]Vindex{
+					"stlu1": vindex1,
 				},
 			},
 			"ksb": {
 				Keyspace: ksb,
 				Tables: map[string]*Table{
-					"t1": t1b,
+					"t1":   t2,
+					"dual": dualb,
+				},
+				Vindexes: map[string]Vindex{
+					"stlu1": vindex1,
 				},
 			},
 		},
@@ -507,7 +804,7 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		gotjson, _ := json.Marshal(got)
 		wantjson, _ := json.Marshal(want)
-		t.Errorf("BuildVSchema:s\n%s, want\n%s", gotjson, wantjson)
+		t.Errorf("BuildVSchema:\n%s, want\n%s", gotjson, wantjson)
 	}
 }
 
@@ -667,20 +964,21 @@ func TestSequence(t *testing.T) {
 		Keyspace:   ksu,
 		IsSequence: true,
 	}
+	vindex1 := &stFU{
+		name: "stfu1",
+		Params: map[string]string{
+			"stfu1": "1",
+		},
+	}
 	t1 := &Table{
 		Name:     sqlparser.NewTableIdent("t1"),
 		Keyspace: kss,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Column: sqlparser.NewColIdent("c1"),
-				Type:   "stfu",
-				Name:   "stfu1",
-				Vindex: &stFU{
-					name: "stfu1",
-					Params: map[string]string{
-						"stfu1": "1",
-					},
-				},
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:    "stfu",
+				Name:    "stfu1",
+				Vindex:  vindex1,
 			},
 		},
 		AutoIncrement: &AutoIncrement{
@@ -696,44 +994,57 @@ func TestSequence(t *testing.T) {
 		Keyspace: kss,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Column: sqlparser.NewColIdent("c1"),
-				Type:   "stfu",
-				Name:   "stfu1",
-				Vindex: &stFU{
-					name: "stfu1",
-					Params: map[string]string{
-						"stfu1": "1",
-					},
-				},
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:    "stfu",
+				Name:    "stfu1",
+				Vindex:  vindex1,
 			},
 		},
 		AutoIncrement: &AutoIncrement{
-			Column:          sqlparser.NewColIdent("c2"),
-			Sequence:        seq,
-			ColumnVindexNum: -1,
+			Column:   sqlparser.NewColIdent("c2"),
+			Sequence: seq,
 		},
 	}
 	t2.Ordered = []*ColumnVindex{
 		t2.ColumnVindexes[0],
 	}
+	duala := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ksu,
+	}
+	dualb := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: kss,
+		Pinned:   []byte{0},
+	}
 	want := &VSchema{
-		tables: map[string]*Table{
-			"seq": seq,
-			"t1":  t1,
-			"t2":  t2,
+		uniqueTables: map[string]*Table{
+			"seq":  seq,
+			"t1":   t1,
+			"t2":   t2,
+			"dual": dualb,
+		},
+		uniqueVindexes: map[string]Vindex{
+			"stfu1": vindex1,
 		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"unsharded": {
 				Keyspace: ksu,
 				Tables: map[string]*Table{
-					"seq": seq,
+					"seq":  seq,
+					"dual": duala,
 				},
+				Vindexes: map[string]Vindex{},
 			},
 			"sharded": {
 				Keyspace: kss,
 				Tables: map[string]*Table{
-					"t1": t1,
-					"t2": t2,
+					"t1":   t1,
+					"t2":   t2,
+					"dual": dualb,
+				},
+				Vindexes: map[string]Vindex{
+					"stfu1": vindex1,
 				},
 			},
 		},
@@ -741,7 +1052,7 @@ func TestSequence(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		gotjson, _ := json.Marshal(got)
 		wantjson, _ := json.Marshal(want)
-		t.Errorf("BuildVSchema:s\n%s, want\n%s", gotjson, wantjson)
+		t.Errorf("BuildVSchema:\n%s, want\n%s", gotjson, wantjson)
 	}
 }
 
@@ -813,7 +1124,7 @@ func TestBadSequenceName(t *testing.T) {
 	}
 }
 
-func TestFind(t *testing.T) {
+func TestFindTable(t *testing.T) {
 	input := vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"ksa": {
@@ -854,17 +1165,17 @@ func TestFind(t *testing.T) {
 		},
 	}
 	vschema, _ := BuildVSchema(&input)
-	_, err := vschema.Find("", "t1")
+	_, err := vschema.FindTable("", "t1")
 	wantErr := "ambiguous table reference: t1"
 	if err == nil || err.Error() != wantErr {
-		t.Errorf("Find(\"\"): %v, want %s", err, wantErr)
+		t.Errorf("FindTable(\"\"): %v, want %s", err, wantErr)
 	}
-	_, err = vschema.Find("", "none")
+	_, err = vschema.FindTable("", "none")
 	wantErr = "table none not found"
 	if err == nil || err.Error() != wantErr {
-		t.Errorf("Find(\"\"): %v, want %s", err, wantErr)
+		t.Errorf("FindTable(\"\"): %v, want %s", err, wantErr)
 	}
-	got, err := vschema.Find("", "ta")
+	got, err := vschema.FindTable("", "ta")
 	if err != nil {
 		t.Error(err)
 		return
@@ -876,11 +1187,11 @@ func TestFind(t *testing.T) {
 		},
 	}
 	if !reflect.DeepEqual(got, ta) {
-		t.Errorf("Find(\"t1a\"): %+v, want %+v", got, ta)
+		t.Errorf("FindTable(\"t1a\"): %+v, want %+v", got, ta)
 	}
-	got, err = vschema.Find("ksa", "ta")
+	got, err = vschema.FindTable("ksa", "ta")
 	if !reflect.DeepEqual(got, ta) {
-		t.Errorf("Find(\"t1a\"): %+v, want %+v", got, ta)
+		t.Errorf("FindTable(\"t1a\"): %+v, want %+v", got, ta)
 	}
 	none := &Table{
 		Name: sqlparser.NewTableIdent("none"),
@@ -888,19 +1199,120 @@ func TestFind(t *testing.T) {
 			Name: "ksa",
 		},
 	}
-	got, err = vschema.Find("ksa", "none")
+	got, err = vschema.FindTable("ksa", "none")
 	if !reflect.DeepEqual(got, none) {
-		t.Errorf("Find(\"t1a\"): %+v, want %+v", got, none)
+		t.Errorf("FindTable(\"t1a\"): %+v, want %+v", got, none)
 	}
-	_, err = vschema.Find("ksb", "none")
+	_, err = vschema.FindTable("ksb", "none")
 	wantErr = "table none not found"
 	if err == nil || err.Error() != wantErr {
-		t.Errorf("Find(\"\"): %v, want %s", err, wantErr)
+		t.Errorf("FindTable(\"\"): %v, want %s", err, wantErr)
 	}
-	_, err = vschema.Find("none", "aa")
+	_, err = vschema.FindTable("none", "aa")
 	wantErr = "keyspace none not found in vschema"
 	if err == nil || err.Error() != wantErr {
-		t.Errorf("Find(\"\"): %v, want %s", err, wantErr)
+		t.Errorf("FindTable(\"\"): %v, want %s", err, wantErr)
+	}
+}
+
+func TestFindTableOrVindex(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ksa": {
+				Tables: map[string]*vschemapb.Table{
+					"ta": {},
+					"t1": {},
+				},
+			},
+			"ksb": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"stfu1": {
+						Type: "stfu",
+					},
+					"dup": {
+						Type: "stfu",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c1",
+								Name:   "stfu1",
+							},
+						},
+					},
+				},
+			},
+			"ksc": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"dup": {
+						Type: "stfu",
+					},
+					"ta": {
+						Type: "stfu",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{},
+			},
+		},
+	}
+	vschema, _ := BuildVSchema(&input)
+
+	_, _, err := vschema.FindTableOrVindex("", "t1")
+	wantErr := "ambiguous table reference: t1"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
+	}
+
+	_, _, err = vschema.FindTableOrVindex("", "none")
+	wantErr = "table none not found"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
+	}
+
+	got, _, err := vschema.FindTableOrVindex("", "ta")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ta := &Table{
+		Name: sqlparser.NewTableIdent("ta"),
+		Keyspace: &Keyspace{
+			Name: "ksa",
+		},
+	}
+	if !reflect.DeepEqual(got, ta) {
+		t.Errorf("FindTableOrVindex(\"t1a\"): %+v, want %+v", got, ta)
+	}
+
+	_, vindex, err := vschema.FindTableOrVindex("", "stfu1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantVindex := &stFU{
+		name: "stfu1",
+	}
+	if !reflect.DeepEqual(vindex, wantVindex) {
+		t.Errorf("FindTableOrVindex(\"stfu1\"): %+v, want %+v", vindex, wantVindex)
+	}
+
+	_, vindex, err = vschema.FindTableOrVindex("ksc", "ta")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantVindex = &stFU{
+		name: "ta",
+	}
+	if !reflect.DeepEqual(vindex, wantVindex) {
+		t.Errorf("FindTableOrVindex(\"stfu1\"): %+v, want %+v", vindex, wantVindex)
+	}
+
+	_, _, err = vschema.FindTableOrVindex("", "dup")
+	wantErr = "ambiguous vindex reference: dup"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
 	}
 }
 
@@ -937,6 +1349,7 @@ func TestBuildKeyspaceSchema(t *testing.T) {
 			"t1": t1,
 			"t2": t2,
 		},
+		Vindexes: map[string]Vindex{},
 	}
 	if !reflect.DeepEqual(got, want) {
 		gs, _ := json.Marshal(got)
@@ -973,7 +1386,7 @@ func TestValidate(t *testing.T) {
 		},
 	}
 	err = ValidateKeyspace(bad)
-	want := "vindexType absent not found"
+	want := `vindexType "absent" not found`
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Validate: %v, must start with %s", err, want)
 	}
@@ -997,12 +1410,17 @@ func TestVSchemaPBJSON(t *testing.T) {
 					"sequence": "outside"
 				}
 			},
-			"t2": {}
+			"t2": {
+				"columns":[{
+					"name": "c1",
+					"type": "VARCHAR"
+				}]
+			}
 		}
 	}
 `
 	var got vschemapb.Keyspace
-	if err := json.Unmarshal([]byte(in), &got); err != nil {
+	if err := json2.Unmarshal([]byte(in), &got); err != nil {
 		t.Error(err)
 	}
 	want := vschemapb.Keyspace{
@@ -1023,12 +1441,17 @@ func TestVSchemaPBJSON(t *testing.T) {
 					Sequence: "outside",
 				},
 			},
-			"t2": {},
+			"t2": {
+				Columns: []*vschemapb.Column{{
+					Name: "c1",
+					Type: querypb.Type_VARCHAR,
+				}},
+			},
 		},
 	}
 	if !proto.Equal(&got, &want) {
-		gs, _ := json.Marshal(got)
-		ws, _ := json.Marshal(want)
+		gs, _ := json2.MarshalPB(&got)
+		ws, _ := json2.MarshalPB(&want)
 		t.Errorf("vschemapb.SrvVSchemaForKeyspace():\n%s, want\n%s", gs, ws)
 	}
 }
@@ -1047,6 +1470,12 @@ func TestVSchemaJSON(t *testing.T) {
 			Tables: map[string]*Table{
 				"t1": {
 					Name: sqlparser.NewTableIdent("n1"),
+					Columns: []Column{{
+						Name: sqlparser.NewColIdent("c1"),
+					}, {
+						Name: sqlparser.NewColIdent("c2"),
+						Type: sqltypes.VarChar,
+					}},
 				},
 				"t2": {
 					IsSequence: true,
@@ -1063,11 +1492,11 @@ func TestVSchemaJSON(t *testing.T) {
 				"t3": {
 					Name: sqlparser.NewTableIdent("n3"),
 					ColumnVindexes: []*ColumnVindex{{
-						Column: sqlparser.NewColIdent("aa"),
-						Type:   "vtype",
-						Name:   "vname",
-						Owned:  true,
-						Vindex: lkp,
+						Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("aa")},
+						Type:    "vtype",
+						Name:    "vname",
+						Owned:   true,
+						Vindex:  lkp,
 					}},
 				},
 			},
@@ -1086,13 +1515,17 @@ func TestVSchemaJSON(t *testing.T) {
         "name": "n3",
         "column_vindexes": [
           {
-            "column": "aa",
+            "columns": [
+              "aa"
+            ],
             "type": "vtype",
             "name": "vname",
             "owned": true,
             "vindex": {
               "table": "t",
-              "from": "f",
+              "from_columns": [
+                "f"
+              ],
               "to": "2"
             }
           }
@@ -1103,7 +1536,17 @@ func TestVSchemaJSON(t *testing.T) {
   "unsharded": {
     "tables": {
       "t1": {
-        "name": "n1"
+        "name": "n1",
+        "columns": [
+          {
+            "name": "c1",
+            "type": "NULL_TYPE"
+          },
+          {
+            "name": "c2",
+            "type": "VARCHAR"
+          }
+        ]
       },
       "t2": {
         "is_sequence": true,
@@ -1135,9 +1578,9 @@ func TestFindSingleKeyspace(t *testing.T) {
 			Name: "ksa",
 		},
 	}
-	got, _ := vschema.Find("", "none")
+	got, _ := vschema.FindTable("", "none")
 	if !reflect.DeepEqual(got, none) {
-		t.Errorf("Find(\"t1a\"): %+v, want %+v", got, none)
+		t.Errorf("FindTable(\"t1a\"): %+v, want %+v", got, none)
 	}
 	input = vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
@@ -1170,9 +1613,9 @@ func TestFindSingleKeyspace(t *testing.T) {
 		},
 	}
 	vschema, _ = BuildVSchema(&input)
-	_, err := vschema.Find("", "none")
+	_, err := vschema.FindTable("", "none")
 	wantErr := "table none not found"
 	if err == nil || err.Error() != wantErr {
-		t.Errorf("Find(\"\"): %v, want %s", err, wantErr)
+		t.Errorf("FindTable(\"\"): %v, want %s", err, wantErr)
 	}
 }

@@ -1,11 +1,11 @@
 # Copyright 2017 Google Inc.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -462,7 +462,7 @@ class Tablet(object):
 
   def start_vttablet(
       self, port=None,
-      wait_for_state='SERVING', filecustomrules=None, zkcustomrules=None,
+      wait_for_state='SERVING', topocustomrule_path=None,
       schema_override=None,
       repl_extra_flags=None, table_acl_config=None,
       lameduck_period=None, security_policy=None,
@@ -472,6 +472,7 @@ class Tablet(object):
       # TODO(mberlin): Assign the index automatically and remove this parameter.
       tablet_index=None,
       init_db_name_override=None,
+      binlog_use_v3_resharding_mode=True,
       supports_backups=True, grace_period='1s', enable_semi_sync=True):
     # pylint: disable=g-doc-args
     """Starts a vttablet process, and returns it.
@@ -561,18 +562,20 @@ class Tablet(object):
       else:
         self.dbname = 'vt_' + init_keyspace
 
+    # Default value for this flag is True. So, add it only if it's false.
+    if not binlog_use_v3_resharding_mode:
+      args.extend(['-binlog_use_v3_resharding_mode=false'])
+
     if supports_backups:
       args.extend(['-restore_from_backup'] + get_backup_storage_flags())
 
-      # When vttablet restores from backup, and if not using
-      # mysqlctld, it will re-generate the .cnf file.  So we need to
-      # have EXTRA_MY_CNF set properly.
-      if not self.use_mysqlctld:
-        all_extra_my_cnf = get_all_extra_my_cnf(None)
-        if all_extra_my_cnf:
-          if not extra_env:
-            extra_env = {}
-          extra_env['EXTRA_MY_CNF'] = ':'.join(all_extra_my_cnf)
+      # When vttablet restores from backup, it will re-generate the .cnf file.
+      # So we need to have EXTRA_MY_CNF set properly.
+      all_extra_my_cnf = get_all_extra_my_cnf(None)
+      if all_extra_my_cnf:
+        if not extra_env:
+          extra_env = {}
+        extra_env['EXTRA_MY_CNF'] = ':'.join(all_extra_my_cnf)
 
     if extra_args:
       args.extend(extra_args)
@@ -582,10 +585,8 @@ class Tablet(object):
 
     self._add_dbconfigs(self.default_db_config, args, repl_extra_flags)
 
-    if filecustomrules:
-      args.extend(['-filecustomrules', filecustomrules])
-    if zkcustomrules:
-      args.extend(['-zkcustomrules', zkcustomrules])
+    if topocustomrule_path:
+      args.extend(['-topocustomrule_path', topocustomrule_path])
 
     if schema_override:
       args.extend(['-schema-override', schema_override])
@@ -598,6 +599,8 @@ class Tablet(object):
       args.extend(['-service_map', ','.join(protocols_flavor().service_map())])
     if self.grpc_enabled():
       args.extend(['-grpc_port', str(self.grpc_port)])
+      args.extend(['-grpc_max_message_size',
+                   str(environment.grpc_max_message_size)])
     if lameduck_period:
       args.extend(environment.lameduck_flag(lameduck_period))
     if grace_period:

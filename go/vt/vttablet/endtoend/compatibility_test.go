@@ -17,7 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -81,10 +80,10 @@ func TestCharaterSet(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Float32, []byte("1.12345")),
-				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("\xc2\xa2")),
-				sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("\x00\xff")),
+				sqltypes.TestValue(sqltypes.Int32, "1"),
+				sqltypes.TestValue(sqltypes.Float32, "1.12345"),
+				sqltypes.TestValue(sqltypes.VarChar, "\xc2\xa2"),
+				sqltypes.TestValue(sqltypes.VarBinary, "\x00\xff"),
 			},
 		},
 	}
@@ -100,18 +99,18 @@ func TestInts(t *testing.T) {
 	_, err := client.Execute(
 		"insert into vitess_ints values(:tiny, :tinyu, :small, "+
 			":smallu, :medium, :mediumu, :normal, :normalu, :big, :bigu, :year)",
-		map[string]interface{}{
-			"tiny":    int32(-128),
-			"tinyu":   uint32(255),
-			"small":   int32(-32768),
-			"smallu":  uint32(65535),
-			"medium":  int32(-8388608),
-			"mediumu": uint32(16777215),
-			"normal":  int64(-2147483648),
-			"normalu": uint64(4294967295),
-			"big":     int64(-9223372036854775808),
-			"bigu":    uint64(18446744073709551615),
-			"year":    2012,
+		map[string]*querypb.BindVariable{
+			"tiny":    sqltypes.Int64BindVariable(-128),
+			"tinyu":   sqltypes.Uint64BindVariable(255),
+			"small":   sqltypes.Int64BindVariable(-32768),
+			"smallu":  sqltypes.Uint64BindVariable(65535),
+			"medium":  sqltypes.Int64BindVariable(-8388608),
+			"mediumu": sqltypes.Uint64BindVariable(16777215),
+			"normal":  sqltypes.Int64BindVariable(-2147483648),
+			"normalu": sqltypes.Uint64BindVariable(4294967295),
+			"big":     sqltypes.Int64BindVariable(-9223372036854775808),
+			"bigu":    sqltypes.Uint64BindVariable(18446744073709551615),
+			"year":    sqltypes.Int64BindVariable(2012),
 		},
 	)
 	if err != nil {
@@ -238,17 +237,17 @@ func TestInts(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int8, []byte("-128")),
-				sqltypes.MakeTrusted(sqltypes.Uint8, []byte("255")),
-				sqltypes.MakeTrusted(sqltypes.Int16, []byte("-32768")),
-				sqltypes.MakeTrusted(sqltypes.Uint16, []byte("65535")),
-				sqltypes.MakeTrusted(sqltypes.Int24, []byte("-8388608")),
-				sqltypes.MakeTrusted(sqltypes.Uint24, []byte("16777215")),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("-2147483648")),
-				sqltypes.MakeTrusted(sqltypes.Uint32, []byte("4294967295")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("-9223372036854775808")),
-				sqltypes.MakeTrusted(sqltypes.Uint64, []byte("18446744073709551615")),
-				sqltypes.MakeTrusted(sqltypes.Year, []byte("2012")),
+				sqltypes.TestValue(sqltypes.Int8, "-128"),
+				sqltypes.TestValue(sqltypes.Uint8, "255"),
+				sqltypes.TestValue(sqltypes.Int16, "-32768"),
+				sqltypes.TestValue(sqltypes.Uint16, "65535"),
+				sqltypes.TestValue(sqltypes.Int24, "-8388608"),
+				sqltypes.TestValue(sqltypes.Uint24, "16777215"),
+				sqltypes.TestValue(sqltypes.Int32, "-2147483648"),
+				sqltypes.TestValue(sqltypes.Uint32, "4294967295"),
+				sqltypes.TestValue(sqltypes.Int64, "-9223372036854775808"),
+				sqltypes.TestValue(sqltypes.Uint64, "18446744073709551615"),
+				sqltypes.TestValue(sqltypes.Year, "2012"),
 			},
 		},
 	}
@@ -275,7 +274,7 @@ func TestInts(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Uint64, []byte("18446744073709551615")),
+				sqltypes.TestValue(sqltypes.Uint64, "18446744073709551615"),
 			},
 		},
 	}
@@ -290,12 +289,12 @@ func TestFractionals(t *testing.T) {
 
 	_, err := client.Execute(
 		"insert into vitess_fracts values(:id, :deci, :num, :f, :d)",
-		map[string]interface{}{
-			"id":   1,
-			"deci": "1.99",
-			"num":  "2.99",
-			"f":    3.99,
-			"d":    4.99,
+		map[string]*querypb.BindVariable{
+			"id":   sqltypes.Int64BindVariable(1),
+			"deci": sqltypes.StringBindVariable("1.99"),
+			"num":  sqltypes.StringBindVariable("2.99"),
+			"f":    sqltypes.Float64BindVariable(3.99),
+			"d":    sqltypes.Float64BindVariable(4.99),
 		},
 	)
 	if err != nil {
@@ -366,11 +365,11 @@ func TestFractionals(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Decimal, []byte("1.99")),
-				sqltypes.MakeTrusted(sqltypes.Decimal, []byte("2.99")),
-				sqltypes.MakeTrusted(sqltypes.Float32, []byte("3.99")),
-				sqltypes.MakeTrusted(sqltypes.Float64, []byte("4.99")),
+				sqltypes.TestValue(sqltypes.Int32, "1"),
+				sqltypes.TestValue(sqltypes.Decimal, "1.99"),
+				sqltypes.TestValue(sqltypes.Decimal, "2.99"),
+				sqltypes.TestValue(sqltypes.Float32, "3.99"),
+				sqltypes.TestValue(sqltypes.Float64, "4.99"),
 			},
 		},
 	}
@@ -386,17 +385,17 @@ func TestStrings(t *testing.T) {
 	_, err := client.Execute(
 		"insert into vitess_strings values "+
 			"(:vb, :c, :vc, :b, :tb, :bl, :ttx, :tx, :en, :s)",
-		map[string]interface{}{
-			"vb":  "a",
-			"c":   "b",
-			"vc":  "c",
-			"b":   "d",
-			"tb":  "e",
-			"bl":  "f",
-			"ttx": "g",
-			"tx":  "h",
-			"en":  "a",
-			"s":   "a,b",
+		map[string]*querypb.BindVariable{
+			"vb":  sqltypes.StringBindVariable("a"),
+			"c":   sqltypes.StringBindVariable("b"),
+			"vc":  sqltypes.StringBindVariable("c"),
+			"b":   sqltypes.StringBindVariable("d"),
+			"tb":  sqltypes.StringBindVariable("e"),
+			"bl":  sqltypes.StringBindVariable("f"),
+			"ttx": sqltypes.StringBindVariable("g"),
+			"tx":  sqltypes.StringBindVariable("h"),
+			"en":  sqltypes.StringBindVariable("a"),
+			"s":   sqltypes.StringBindVariable("a,b"),
 		},
 	)
 	if err != nil {
@@ -511,16 +510,16 @@ func TestStrings(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("a")),
-				sqltypes.MakeTrusted(sqltypes.Char, []byte("b")),
-				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("c")),
-				sqltypes.MakeTrusted(sqltypes.Binary, []byte("d\x00\x00\x00")),
-				sqltypes.MakeTrusted(sqltypes.Blob, []byte("e")),
-				sqltypes.MakeTrusted(sqltypes.Blob, []byte("f")),
-				sqltypes.MakeTrusted(sqltypes.Text, []byte("g")),
-				sqltypes.MakeTrusted(sqltypes.Text, []byte("h")),
-				sqltypes.MakeTrusted(sqltypes.Enum, []byte("a")),
-				sqltypes.MakeTrusted(sqltypes.Set, []byte("a,b")),
+				sqltypes.TestValue(sqltypes.VarBinary, "a"),
+				sqltypes.TestValue(sqltypes.Char, "b"),
+				sqltypes.TestValue(sqltypes.VarChar, "c"),
+				sqltypes.TestValue(sqltypes.Binary, "d\x00\x00\x00"),
+				sqltypes.TestValue(sqltypes.Blob, "e"),
+				sqltypes.TestValue(sqltypes.Blob, "f"),
+				sqltypes.TestValue(sqltypes.Text, "g"),
+				sqltypes.TestValue(sqltypes.Text, "h"),
+				sqltypes.TestValue(sqltypes.Enum, "a"),
+				sqltypes.TestValue(sqltypes.Set, "a,b"),
 			},
 		},
 	}
@@ -535,12 +534,12 @@ func TestMiscTypes(t *testing.T) {
 
 	_, err := client.Execute(
 		"insert into vitess_misc values(:id, :b, :d, :dt, :t, point(1, 2))",
-		map[string]interface{}{
-			"id": 1,
-			"b":  "\x01",
-			"d":  "2012-01-01",
-			"dt": "2012-01-01 15:45:45",
-			"t":  "15:45:45",
+		map[string]*querypb.BindVariable{
+			"id": sqltypes.Int64BindVariable(1),
+			"b":  sqltypes.StringBindVariable("\x01"),
+			"d":  sqltypes.StringBindVariable("2012-01-01"),
+			"dt": sqltypes.StringBindVariable("2012-01-01 15:45:45"),
+			"t":  sqltypes.StringBindVariable("15:45:45"),
 		},
 	)
 	if err != nil {
@@ -550,7 +549,6 @@ func TestMiscTypes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Printf("val: %q\n", qr.Rows[0][5].String())
 	want := sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -618,12 +616,12 @@ func TestMiscTypes(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Bit, []byte("\x01")),
-				sqltypes.MakeTrusted(sqltypes.Date, []byte("2012-01-01")),
-				sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2012-01-01 15:45:45")),
-				sqltypes.MakeTrusted(sqltypes.Time, []byte("15:45:45")),
-				sqltypes.MakeTrusted(sqltypes.Geometry, []byte(point12)),
+				sqltypes.TestValue(sqltypes.Int32, "1"),
+				sqltypes.TestValue(sqltypes.Bit, "\x01"),
+				sqltypes.TestValue(sqltypes.Date, "2012-01-01"),
+				sqltypes.TestValue(sqltypes.Datetime, "2012-01-01 15:45:45"),
+				sqltypes.TestValue(sqltypes.Time, "15:45:45"),
+				sqltypes.TestValue(sqltypes.Geometry, point12),
 			},
 		},
 	}
@@ -687,7 +685,7 @@ func TestTypeLimits(t *testing.T) {
 
 	mismatchCases := []struct {
 		query string
-		bv    map[string]interface{}
+		bv    map[string]*querypb.BindVariable
 		out   string
 	}{{
 		query: "insert into vitess_ints(tiny) values('str')",
@@ -695,7 +693,7 @@ func TestTypeLimits(t *testing.T) {
 		out:   "strconv.ParseInt",
 	}, {
 		query: "insert into vitess_ints(tiny) values(:str)",
-		bv:    map[string]interface{}{"str": "str"},
+		bv:    map[string]*querypb.BindVariable{"str": sqltypes.StringBindVariable("str")},
 		out:   "strconv.ParseInt",
 	}, {
 		query: "insert into vitess_ints(tiny) values(1.2)",
@@ -703,16 +701,8 @@ func TestTypeLimits(t *testing.T) {
 		out:   "unsupported: cannot identify primary key of statement",
 	}, {
 		query: "insert into vitess_ints(tiny) values(:fl)",
-		bv:    map[string]interface{}{"fl": 1.2},
-		out:   "type mismatch",
-	}, {
-		query: "insert into vitess_strings(vb) values(1)",
-		bv:    nil,
-		out:   "type mismatch",
-	}, {
-		query: "insert into vitess_strings(vb) values(:id)",
-		bv:    map[string]interface{}{"id": 1},
-		out:   "type mismatch",
+		bv:    map[string]*querypb.BindVariable{"fl": sqltypes.Float64BindVariable(1.2)},
+		out:   "invalid syntax",
 	}, {
 		query: "insert into vitess_strings(vb) select tiny from vitess_ints",
 		bv:    nil,
@@ -728,7 +718,7 @@ func TestTypeLimits(t *testing.T) {
 	}}
 	for _, tcase := range mismatchCases {
 		_, err := client.Execute(tcase.query, tcase.bv)
-		if err == nil || !strings.HasPrefix(err.Error(), tcase.out) {
+		if err == nil || !strings.Contains(err.Error(), tcase.out) {
 			t.Errorf("Error(%s): %v, want %s", tcase.query, err, tcase.out)
 		}
 	}
@@ -798,8 +788,8 @@ func TestJSONType(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte("{\"foo\": \"bar\"}")),
+				sqltypes.TestValue(sqltypes.Int32, "1"),
+				sqltypes.TestValue(sqltypes.TypeJSON, "{\"foo\": \"bar\"}"),
 			},
 		},
 	}

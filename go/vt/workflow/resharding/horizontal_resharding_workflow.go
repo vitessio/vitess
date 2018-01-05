@@ -209,7 +209,7 @@ func createUINodes(rootNode *workflow.Node, phaseName PhaseType, shards []string
 }
 
 // initCheckpoint initialize the checkpoint for the horizontal workflow.
-func initCheckpoint(ts topo.Server, keyspace string, vtworkers []string) (*workflowpb.WorkflowCheckpoint, error) {
+func initCheckpoint(ts *topo.Server, keyspace string, vtworkers []string) (*workflowpb.WorkflowCheckpoint, error) {
 	sourceShards, destinationShards, err := findSourceAndDestinationShards(ts, keyspace)
 	if err != nil {
 		return nil, err
@@ -217,7 +217,7 @@ func initCheckpoint(ts topo.Server, keyspace string, vtworkers []string) (*workf
 	return initCheckpointFromShards(keyspace, vtworkers, sourceShards, destinationShards)
 }
 
-func findSourceAndDestinationShards(ts topo.Server, keyspace string) ([]string, []string, error) {
+func findSourceAndDestinationShards(ts *topo.Server, keyspace string) ([]string, []string, error) {
 	overlappingShards, err := topotools.FindOverlappingShards(context.Background(), ts, keyspace)
 	if err != nil {
 		return nil, nil, err
@@ -326,7 +326,7 @@ type HorizontalReshardingWorkflow struct {
 	ctx        context.Context
 	wr         ReshardingWrangler
 	manager    *workflow.Manager
-	topoServer topo.Server
+	topoServer *topo.Server
 	wi         *topo.WorkflowInfo
 	// logger is the logger we export UI logs from.
 	logger *logutil.MemoryLogger

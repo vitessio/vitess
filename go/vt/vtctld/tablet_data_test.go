@@ -116,10 +116,10 @@ func TestTabletData(t *testing.T) {
 	}
 
 	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
-	tablet1.StartActionLoop(t, wr)
-	defer tablet1.StopActionLoop(t)
 	shsq := newStreamHealthTabletServer(t)
 	grpcqueryservice.Register(tablet1.RPCServer, shsq)
+	tablet1.StartActionLoop(t, wr)
+	defer tablet1.StopActionLoop(t)
 
 	thc := newTabletHealthCache(ts)
 

@@ -260,20 +260,3 @@ func TestBasicPackets(t *testing.T) {
 		t.Fatalf("cConn.ReadPacket - EOFPacket failed: %v %v", data, err)
 	}
 }
-
-func TestConnParamsValidate(t *testing.T) {
-	var c *ConnParams
-	want := "mysql connection parameters are empty"
-	if err := c.Validate(); err == nil || err.Error() != want {
-		t.Errorf("Validate(%v): %v, want %s", c, err, want)
-	}
-	c = &ConnParams{}
-	want = "either a unix socket or port must be specified for the mysql connection"
-	if err := c.Validate(); err == nil || err.Error() != want {
-		t.Errorf("Validate(%v): %v, want %s", c, err, want)
-	}
-	c = &ConnParams{Port: 1}
-	if err := c.Validate(); err != nil {
-		t.Error(err)
-	}
-}

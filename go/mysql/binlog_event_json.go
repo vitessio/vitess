@@ -454,7 +454,7 @@ func printJSONDecimal(data []byte, toplevel bool, result *bytes.Buffer) error {
 		result.WriteString("CAST(")
 	}
 	result.WriteString("CAST('")
-	result.Write(val.Raw())
+	result.Write(val.ToBytes())
 	fmt.Fprintf(result, "' AS DECIMAL(%d,%d))", precision, scale)
 	if toplevel {
 		result.WriteString(" AS JSON)")

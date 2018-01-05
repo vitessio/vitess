@@ -34,7 +34,7 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-func checkShardServedTypes(t *testing.T, ts topo.Server, shard string, expected int) {
+func checkShardServedTypes(t *testing.T, ts *topo.Server, shard string, expected int) {
 	ctx := context.Background()
 	si, err := ts.GetShard(ctx, "ks", shard)
 	if err != nil {
@@ -45,7 +45,7 @@ func checkShardServedTypes(t *testing.T, ts topo.Server, shard string, expected 
 	}
 }
 
-func checkShardSourceShards(t *testing.T, ts topo.Server, shard string, expected int) {
+func checkShardSourceShards(t *testing.T, ts *topo.Server, shard string, expected int) {
 	ctx := context.Background()
 	si, err := ts.GetShard(ctx, "ks", shard)
 	if err != nil {
@@ -137,8 +137,8 @@ func TestMigrateServedTypes(t *testing.T) {
 		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": {
 			Rows: [][]sqltypes.Value{
 				{
-					sqltypes.MakeString([]byte(mysql.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition))),
-					sqltypes.MakeString([]byte("")),
+					sqltypes.NewVarBinary(mysql.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition)),
+					sqltypes.NewVarBinary(""),
 				},
 			},
 		},
@@ -160,8 +160,8 @@ func TestMigrateServedTypes(t *testing.T) {
 		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": {
 			Rows: [][]sqltypes.Value{
 				{
-					sqltypes.MakeString([]byte(mysql.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition))),
-					sqltypes.MakeString([]byte("")),
+					sqltypes.NewVarBinary(mysql.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition)),
+					sqltypes.NewVarBinary(""),
 				},
 			},
 		},

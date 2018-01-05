@@ -1,6 +1,7 @@
 ---
 layout: doc
 title: "Vitess Sequences"
+redirect_from: /user-guide/vitess-sequences.html
 description:
 modified:
 excerpt:

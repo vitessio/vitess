@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Command to generate a mock for this interface with mockgen.
-//go:generate mockgen -source resharding_wrangler.go -destination mock_resharding_wrangler.go -package resharding
+//go:generate mockgen -source resharding_wrangler.go -destination mock_resharding_wrangler_test.go -package resharding
 
 package resharding
 

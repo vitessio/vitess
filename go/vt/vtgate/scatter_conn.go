@@ -17,6 +17,8 @@ limitations under the License.
 package vtgate
 
 import (
+	"flag"
+	"io"
 	"math/rand"
 	"sync"
 	"time"
@@ -29,12 +31,15 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+)
+
+var (
+	messageStreamGracePeriod = flag.Duration("message_stream_grace_period", 30*time.Second, "the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent.")
 )
 
 // ScatterConn is used for executing queries across
@@ -104,7 +109,7 @@ func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.Al
 func (stc *ScatterConn) Execute(
 	ctx context.Context,
 	query string,
-	bindVars map[string]interface{},
+	bindVars map[string]*querypb.BindVariable,
 	keyspace string,
 	shards []string,
 	tabletType topodatapb.TabletType,
@@ -154,7 +159,7 @@ func (stc *ScatterConn) Execute(
 func (stc *ScatterConn) ExecuteMultiShard(
 	ctx context.Context,
 	keyspace string,
-	shardQueries map[string]querytypes.BoundQuery,
+	shardQueries map[string]*querypb.BoundQuery,
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
@@ -206,7 +211,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 	ctx context.Context,
 	shards []string,
 	sqls map[string]string,
-	bindVars map[string]map[string]interface{},
+	bindVars map[string]map[string]*querypb.BindVariable,
 	keyspace string,
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
@@ -228,18 +233,17 @@ func (stc *ScatterConn) ExecuteEntityIds(
 		notInTransaction,
 		func(target *querypb.Target, shouldBegin bool, transactionID int64) (int64, error) {
 			sql := sqls[target.Shard]
-			bindVar := bindVars[target.Shard]
 			var innerqr *sqltypes.Result
 
 			if shouldBegin {
 				var err error
-				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, sql, bindVar, options)
+				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, sql, bindVars[target.Shard], options)
 				if err != nil {
 					return transactionID, err
 				}
 			} else {
 				var err error
-				innerqr, err = stc.gateway.Execute(ctx, target, sql, bindVar, transactionID, options)
+				innerqr, err = stc.gateway.Execute(ctx, target, sql, bindVars[target.Shard], transactionID, options)
 				if err != nil {
 					return transactionID, err
 				}
@@ -265,7 +269,7 @@ type scatterBatchRequest struct {
 }
 
 type shardBatchRequest struct {
-	Queries         []querytypes.BoundQuery
+	Queries         []*querypb.BoundQuery
 	Keyspace, Shard string
 	ResultIndexes   []int
 }
@@ -361,7 +365,7 @@ func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *boo
 func (stc *ScatterConn) StreamExecute(
 	ctx context.Context,
 	query string,
-	bindVars map[string]interface{},
+	bindVars map[string]*querypb.BindVariable,
 	keyspace string,
 	shards []string,
 	tabletType topodatapb.TabletType,
@@ -388,7 +392,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	ctx context.Context,
 	query string,
 	keyspace string,
-	shardVars map[string]map[string]interface{},
+	shardVars map[string]map[string]*querypb.BindVariable,
 	tabletType topodatapb.TabletType,
 	options *querypb.ExecuteOptions,
 	callback func(reply *sqltypes.Result) error,
@@ -405,15 +409,88 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	return allErrors.AggrError(vterrors.Aggregate)
 }
 
+// timeTracker is a convenience wrapper used by MessageStream
+// to track how long a stream has been unavailable.
+type timeTracker struct {
+	mu         sync.Mutex
+	timestamps map[*querypb.Target]time.Time
+}
+
+func newTimeTracker() *timeTracker {
+	return &timeTracker{
+		timestamps: make(map[*querypb.Target]time.Time),
+	}
+}
+
+// Reset resets the timestamp set by Record.
+func (tt *timeTracker) Reset(target *querypb.Target) {
+	tt.mu.Lock()
+	defer tt.mu.Unlock()
+	delete(tt.timestamps, target)
+}
+
+// Record records the time to Now if there was no previous timestamp,
+// and it keeps returning that value until the next Reset.
+func (tt *timeTracker) Record(target *querypb.Target) time.Time {
+	tt.mu.Lock()
+	defer tt.mu.Unlock()
+	last, ok := tt.timestamps[target]
+	if !ok {
+		last = time.Now()
+		tt.timestamps[target] = last
+	}
+	return last
+}
+
 // MessageStream streams messages from the specified shards.
 func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shards []string, name string, callback func(*sqltypes.Result) error) error {
+	// The cancelable context is used for handling errors
+	// from individual streams.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	// mu is used to merge multiple callback calls into one.
 	var mu sync.Mutex
 	fieldSent := false
+	lastErrors := newTimeTracker()
 	allErrors := stc.multiGo(ctx, "MessageStream", keyspace, shards, topodatapb.TabletType_MASTER, func(target *querypb.Target) error {
-		return stc.gateway.MessageStream(ctx, target, name, func(qr *sqltypes.Result) error {
-			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
-		})
+		// This loop handles the case where a reparent happens, which can cause
+		// an individual stream to end. If we don't succeed on the retries for
+		// messageStreamGracePeriod, we abort and return an error.
+		for {
+			err := stc.gateway.MessageStream(ctx, target, name, func(qr *sqltypes.Result) error {
+				lastErrors.Reset(target)
+				return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
+			})
+			// nil and EOF are equivalent. UNAVAILABLE can be returned by vttablet if it's demoted
+			// from master to replica. For any of these conditions, we have to retry.
+			if err != nil && err != io.EOF && vterrors.Code(err) != vtrpcpb.Code_UNAVAILABLE {
+				cancel()
+				return err
+			}
+
+			// There was no error. We have to see if we need to retry.
+			// If context was canceled, likely due to client disconnect,
+			// return normally without retrying.
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+			}
+			firstErrorTimeStamp := lastErrors.Record(target)
+			if time.Now().Sub(firstErrorTimeStamp) >= *messageStreamGracePeriod {
+				// Cancel all streams and return an error.
+				cancel()
+				return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "message stream from %v has repeatedly failed for longer than %v", target, *messageStreamGracePeriod)
+			}
+
+			// It's not been too long since our last good send. Wait and retry.
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(*messageStreamGracePeriod / 5):
+			}
+		}
 	})
 	return allErrors.AggrError(vterrors.Aggregate)
 }
@@ -446,21 +523,21 @@ func (stc *ScatterConn) UpdateStream(ctx context.Context, target *querypb.Target
 }
 
 // SplitQuery scatters a SplitQuery request to the shards whose names are given in 'shards'.
-// For every set of querytypes.QuerySplit's received from a shard, it applies the given
-// 'querySplitToPartFunc' function to convert each querytypes.QuerySplit into a
+// For every set of *querypb.QuerySplit's received from a shard, it applies the given
+// 'querySplitToPartFunc' function to convert each *querypb.QuerySplit into a
 // 'SplitQueryResponse_Part' message. Finally, it aggregates the obtained
 // SplitQueryResponse_Parts across all shards and returns the resulting slice.
 func (stc *ScatterConn) SplitQuery(
 	ctx context.Context,
 	sql string,
-	bindVariables map[string]interface{},
+	bindVariables map[string]*querypb.BindVariable,
 	splitColumns []string,
 	perShardSplitCount int64,
 	numRowsPerQueryPart int64,
 	algorithm querypb.SplitQueryRequest_Algorithm,
 	shards []string,
 	querySplitToQueryPartFunc func(
-		querySplit *querytypes.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error),
+		querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error),
 	keyspace string) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 
 	tabletType := topodatapb.TabletType_RDONLY
@@ -477,7 +554,7 @@ func (stc *ScatterConn) SplitQuery(
 		tabletType,
 		func(target *querypb.Target) error {
 			// Get all splits from this shard
-			query := querytypes.BoundQuery{
+			query := &querypb.BoundQuery{
 				Sql:           sql,
 				BindVariables: bindVariables,
 			}
@@ -494,7 +571,7 @@ func (stc *ScatterConn) SplitQuery(
 			}
 			parts := make([]*vtgatepb.SplitQueryResponse_Part, len(querySplits))
 			for i, querySplit := range querySplits {
-				parts[i], err = querySplitToQueryPartFunc(&querySplit, target.Shard)
+				parts[i], err = querySplitToQueryPartFunc(querySplit, target.Shard)
 				if err != nil {
 					return err
 				}
@@ -716,7 +793,7 @@ func transactionInfo(
 	return true, 0
 }
 
-func getShards(shardVars map[string]map[string]interface{}) []string {
+func getShards(shardVars map[string]map[string]*querypb.BindVariable) []string {
 	shards := make([]string, 0, len(shardVars))
 	for k := range shardVars {
 		shards = append(shards, k)

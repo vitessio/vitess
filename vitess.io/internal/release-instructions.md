@@ -1,6 +1,7 @@
 ---
 layout: doc
 title: "Release Instructions"
+served_from: /internal/release-instructions.html
 description:
 modified:
 excerpt:

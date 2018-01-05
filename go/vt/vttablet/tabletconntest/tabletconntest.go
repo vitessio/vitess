@@ -19,20 +19,21 @@ limitations under the License.
 package tabletconntest
 
 import (
+	"flag"
 	"io"
+	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletconn"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -740,7 +741,10 @@ func testSplitQuery(t *testing.T, conn queryservice.QueryService, f *FakeQuerySe
 	if err != nil {
 		t.Fatalf("SplitQuery failed: %v", err)
 	}
-	if !querytypes.QuerySplitsEqual(qsl, SplitQueryQuerySplitList) {
+	if !proto.Equal(
+		&querypb.SplitQueryResponse{Queries: qsl},
+		&querypb.SplitQueryResponse{Queries: SplitQueryQuerySplitList},
+	) {
 		t.Errorf("Unexpected result from SplitQuery: got %v wanted %v", qsl, SplitQueryQuerySplitList)
 	}
 }
@@ -918,7 +922,7 @@ func testUpdateStreamPanics(t *testing.T, conn queryservice.QueryService, f *Fak
 // TestSuite runs all the tests.
 // If fake.TestingGateway is set, we only test the calls that can go through
 // a gateway.
-func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *FakeQueryService) {
+func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *FakeQueryService, clientCreds *os.File) {
 	tests := []func(*testing.T, queryservice.QueryService, *FakeQueryService){
 		// positive test cases
 		testBegin,
@@ -1006,7 +1010,11 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 	*tabletconn.TabletProtocol = protocol
 
 	// create a connection
-	conn, err := tabletconn.GetDialer()(tablet, 30*time.Second)
+	if clientCreds != nil {
+		flag.Set("grpc_auth_static_client_creds", clientCreds.Name())
+	}
+
+	conn, err := tabletconn.GetDialer()(tablet, grpcclient.FailFast(false))
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}

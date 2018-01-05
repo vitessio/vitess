@@ -24,14 +24,14 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/test"
 )
 
-func newFakeTeeServer(t *testing.T) topo.Impl {
-	s1 := memorytopo.New("test")
-	s2 := memorytopo.New("test")
-	return NewTee(s1, s2, false)
-}
-
 func TestTeeTopo(t *testing.T) {
-	test.TopoServerTestSuite(t, func() topo.Impl {
-		return newFakeTeeServer(t)
+	test.TopoServerTestSuite(t, func() *topo.Server {
+		s1 := memorytopo.NewServer(test.LocalCellName)
+		s2 := memorytopo.NewServer(test.LocalCellName)
+		tee, err := NewTee(s1, s2, false)
+		if err != nil {
+			t.Fatalf("NewTee() failed: %v", err)
+		}
+		return tee
 	})
 }

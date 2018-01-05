@@ -41,7 +41,7 @@ Using this SQL driver is as simple as:
 
 For a full example, please see: https://github.com/youtube/vitess/blob/master/examples/local/client.go
 
-The full example is based on our tutorial for running Vitess locally: http://vitess.io/getting-started/local-instance.html
+The full example is based on our tutorial for running Vitess locally: http://vitess.io/getting-started/local-instance/
 
 
 Vtgate

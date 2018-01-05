@@ -19,14 +19,15 @@ package discovery
 import (
 	"flag"
 	"fmt"
-	"math"
+	"sort"
 	"time"
 )
 
 var (
 	// lowReplicationLag defines the duration that replication lag is low enough that the VTTablet is considered healthy.
 	lowReplicationLag            = flag.Duration("discovery_low_replication_lag", 30*time.Second, "the replication lag that is considered low enough to be healthy")
-	highReplicationLagMinServing = flag.Duration("discovery_high_replication_lag_minimum_serving", 2*time.Hour, "the replication lag that is considered too high when selecting miminum 2 vttablets for serving")
+	highReplicationLagMinServing = flag.Duration("discovery_high_replication_lag_minimum_serving", 2*time.Hour, "the replication lag that is considered too high when selecting the minimum num vttablets for serving")
+	minNumTablets                = flag.Int("min_number_serving_vttablets", 2, "the minimum number of vttablets that will be continue to be used even with low replication lag")
 )
 
 // IsReplicationLagHigh verifies that the given TabletStats refers to a tablet with high
@@ -35,19 +36,32 @@ func IsReplicationLagHigh(tabletStats *TabletStats) bool {
 	return float64(tabletStats.Stats.SecondsBehindMaster) > lowReplicationLag.Seconds()
 }
 
+// IsReplicationLagVeryHigh verifies that the given TabletStats refers to a tablet with very high
+// replication lag, i.e. higher than the configured discovery_high_replication_lag_minimum_serving flag.
+func IsReplicationLagVeryHigh(tabletStats *TabletStats) bool {
+	return float64(tabletStats.Stats.SecondsBehindMaster) > highReplicationLagMinServing.Seconds()
+}
+
 // FilterByReplicationLag filters the list of TabletStats by TabletStats.Stats.SecondsBehindMaster.
 // The algorithm (TabletStats that is non-serving or has error is ignored):
 // - Return the list if there is 0 or 1 tablet.
 // - Return the list if all tablets have <=30s lag.
 // - Filter by replication lag: for each tablet, if the mean value without it is more than 0.7 of the mean value across all tablets, it is valid.
-// - Make sure we return at least two tablets (if there is one with <2h replication lag).
+// - Make sure we return at least minNumTablets tablets (if there are enough one with only low replication lag).
 // - If one tablet is removed, run above steps again in case there are two tablets with high replication lag. (It should cover most cases.)
 // For example, lags of (5s, 10s, 15s, 120s) return the first three;
 // lags of (30m, 35m, 40m, 45m) return all.
+//
+// One thing to know about this code: vttablet also has a couple flags that impact the logic here:
+// * unhealthy_threshold: if replication lag is higher than this, a tablet will be reported as unhealhty.
+//   The default for this is 2h, same as the discovery_high_replication_lag_minimum_serving here.
+// * degraded_threshold: this is only used by vttablet for display. It should match
+//   discovery_low_replication_lag here, so the vttablet status display matches what vtgate will do of it.
 func FilterByReplicationLag(tabletStatsList []*TabletStats) []*TabletStats {
 	res := filterByLag(tabletStatsList)
-	// run the filter again if exact one tablet is removed.
-	if len(res) > 2 && len(res) == len(tabletStatsList)-1 {
+	// run the filter again if exactly one tablet is removed,
+	// and we have spare tablets.
+	if len(res) > *minNumTablets && len(res) == len(tabletStatsList)-1 {
 		res = filterByLag(res)
 	}
 	return res
@@ -87,29 +101,62 @@ func filterByLag(tabletStatsList []*TabletStats) []*TabletStats {
 			res = append(res, ts)
 		}
 	}
-	// return at least 2 tablets to avoid over loading,
-	// if there is another tablet with replication lag < highReplicationLagMinServing.
-	if len(res) == 0 {
-		return list
+	if len(res) >= *minNumTablets {
+		return res
 	}
-	if len(res) == 1 && len(list) > 1 {
-		minLag := uint32(math.MaxUint32)
-		idx := -1
-		for i, ts := range list {
-			if ts == res[0] {
-				continue
-			}
-			if ts.Stats.SecondsBehindMaster < minLag {
-				idx = i
-				minLag = ts.Stats.SecondsBehindMaster
-			}
+	// return at least minNumTablets tablets to avoid over loading,
+	// if there is enough tablets with replication lag < highReplicationLagMinServing.
+	// Pull the current replication lag for a stable sort.
+	snapshots := make([]tabletLagSnapshot, 0, len(list))
+	for _, ts := range list {
+		if !IsReplicationLagVeryHigh(ts) {
+			snapshots = append(snapshots, tabletLagSnapshot{
+				ts:     ts,
+				replag: ts.Stats.SecondsBehindMaster})
 		}
-		if idx >= 0 && minLag <= uint32(highReplicationLagMinServing.Seconds()) {
-			res = append(res, list[idx])
+	}
+	if len(snapshots) == 0 {
+		// We get here if all tablets are over the high
+		// replication lag threshold, and their lag is
+		// different enough that the 70% mean computation up
+		// there didn't find them all in a group. For
+		// instance, if *minNumTablets = 2, and we have two
+		// tablets with lag of 3h and 30h.  In that case, we
+		// just use them all.
+		for _, ts := range list {
+			snapshots = append(snapshots, tabletLagSnapshot{
+				ts:     ts,
+				replag: ts.Stats.SecondsBehindMaster})
 		}
+	}
+
+	// Sort by replication lag.
+	sort.Sort(byReplag(snapshots))
+
+	// Pick the first minNumTablets tablets.
+	res = make([]*TabletStats, 0, *minNumTablets)
+	for i := 0; i < min(*minNumTablets, len(snapshots)); i++ {
+		res = append(res, snapshots[i].ts)
 	}
 	return res
 }
+
+func min(a, b int) int {
+	if a > b {
+		return b
+	}
+	return a
+}
+
+type tabletLagSnapshot struct {
+	ts     *TabletStats
+	replag uint32
+}
+type byReplag []tabletLagSnapshot
+
+func (a byReplag) Len() int           { return len(a) }
+func (a byReplag) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a byReplag) Less(i, j int) bool { return a[i].replag < a[j].replag }
 
 // mean calculates the mean value over the given list,
 // while excluding the item with the specified index.

@@ -147,10 +147,10 @@ func (f *fakeResultReader) Next() (*sqltypes.Result, error) {
 type rowFactory func(id int) []sqltypes.Value
 
 func createRowSinglePk(id int) []sqltypes.Value {
-	idValue, _ := sqltypes.BuildValue(int32(id))
+	idValue := sqltypes.NewInt64(int64(id))
 	return []sqltypes.Value{
 		idValue,
-		sqltypes.MakeString([]byte(fmt.Sprintf("msg %d", id))),
+		sqltypes.NewVarBinary(fmt.Sprintf("msg %d", id)),
 	}
 }
 
@@ -159,12 +159,10 @@ func createRowMultiPk(id int) []sqltypes.Value {
 	// Examples: 0, 1, 2, 3, 4 => (0, 0), (0, 1), (1, 0), (1, 1), (2, 0)
 	newID := id / 2
 	subID := id % 2
-	idValue, _ := sqltypes.BuildValue(int32(newID))
-	subIDValue, _ := sqltypes.BuildValue(int32(subID))
 	return []sqltypes.Value{
-		idValue,
-		subIDValue,
-		sqltypes.MakeString([]byte(fmt.Sprintf("msg %d", id))),
+		sqltypes.NewInt64(int64(newID)),
+		sqltypes.NewInt64(int64(subID)),
+		sqltypes.NewVarBinary(fmt.Sprintf("msg %d", id)),
 	}
 }
 

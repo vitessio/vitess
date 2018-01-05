@@ -23,6 +23,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/sqlescape"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 
@@ -186,7 +187,7 @@ func NewInsertsQueryBuilder(dbName string, td *tabletmanagerdatapb.TableDefiniti
 	// Example: INSERT INTO test (id, sub_id, msg) VALUES (0, 10, 'a'), (1, 11, 'b')
 	return &InsertsQueryBuilder{
 		BaseQueryBuilder{
-			head:      "INSERT INTO " + escape(dbName) + "." + escape(td.Name) + " (" + strings.Join(escapeAll(td.Columns), ", ") + ") VALUES ",
+			head:      "INSERT INTO " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID(td.Name) + " (" + strings.Join(escapeAll(td.Columns), ", ") + ") VALUES ",
 			separator: ",",
 		},
 	}
@@ -226,7 +227,7 @@ func NewUpdatesQueryBuilder(dbName string, td *tabletmanagerdatapb.TableDefiniti
 	// and not the primary key).
 	return &UpdatesQueryBuilder{
 		BaseQueryBuilder: BaseQueryBuilder{
-			head: "UPDATE " + escape(dbName) + "." + escape(td.Name) + " SET ",
+			head: "UPDATE " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID(td.Name) + " SET ",
 		},
 		td: td,
 		// Build list of non-primary key columns (required for update statements).
@@ -248,7 +249,7 @@ func (b *UpdatesQueryBuilder) WriteRow(buffer *bytes.Buffer, row []sqltypes.Valu
 		if i > 0 {
 			buffer.WriteByte(',')
 		}
-		writeEscaped(buffer, column)
+		sqlescape.WriteEscapeID(buffer, column)
 		buffer.WriteByte('=')
 		row[nonPrimaryOffset+i].EncodeSQL(buffer)
 	}
@@ -257,7 +258,7 @@ func (b *UpdatesQueryBuilder) WriteRow(buffer *bytes.Buffer, row []sqltypes.Valu
 		if i > 0 {
 			buffer.WriteString(" AND ")
 		}
-		writeEscaped(buffer, pkColumn)
+		sqlescape.WriteEscapeID(buffer, pkColumn)
 		buffer.WriteByte('=')
 		row[i].EncodeSQL(buffer)
 	}
@@ -278,7 +279,7 @@ func NewDeletesQueryBuilder(dbName string, td *tabletmanagerdatapb.TableDefiniti
 	// for such a query. (We haven't confirmed this ourselves.)
 	return &DeletesQueryBuilder{
 		BaseQueryBuilder: BaseQueryBuilder{
-			head:      "DELETE FROM " + escape(dbName) + "." + escape(td.Name) + " WHERE ",
+			head:      "DELETE FROM " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID(td.Name) + " WHERE ",
 			separator: " OR ",
 		},
 		td: td,
@@ -293,7 +294,7 @@ func (b *DeletesQueryBuilder) WriteRow(buffer *bytes.Buffer, row []sqltypes.Valu
 		if i > 0 {
 			buffer.WriteString(" AND ")
 		}
-		writeEscaped(buffer, pkColumn)
+		sqlescape.WriteEscapeID(buffer, pkColumn)
 		buffer.WriteByte('=')
 		row[i].EncodeSQL(buffer)
 	}

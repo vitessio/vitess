@@ -71,7 +71,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 	}
 
 	// parse and validate shard name
-	shard, _, err := topo.ValidateShardName(*initShard)
+	shard, keyRange, err := topo.ValidateShardName(*initShard)
 	if err != nil {
 		return fmt.Errorf("cannot validate shard name %v: %v", *initShard, err)
 	}
@@ -102,11 +102,17 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 			// There's no existing tablet record, so we can assume
 			// no one has left us a message to step down.
 			tabletType = topodatapb.TabletType_MASTER
+			// Update the TER timestamp (current value is 0) because we
+			// assume that we are actually the MASTER and in case of a tiebreak,
+			// vtgate should prefer us.
+			agent.setExternallyReparentedTime(time.Now())
 		case nil:
 			if oldTablet.Type == topodatapb.TabletType_MASTER {
 				// We're marked as master in the shard record,
 				// and our existing tablet record agrees.
 				tabletType = topodatapb.TabletType_MASTER
+				// Same comment as above. Update tiebreaking timestamp to now.
+				agent.setExternallyReparentedTime(time.Now())
 			}
 		default:
 			return fmt.Errorf("InitTablet failed to read existing tablet record: %v", err)
@@ -149,7 +155,8 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		Hostname:       hostname,
 		PortMap:        make(map[string]int32),
 		Keyspace:       *initKeyspace,
-		Shard:          *initShard,
+		Shard:          shard,
+		KeyRange:       keyRange,
 		Type:           tabletType,
 		DbNameOverride: *initDbNameOverride,
 		Tags:           initTags,
@@ -159,9 +166,6 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 	}
 	if gRPCPort != 0 {
 		tablet.PortMap["grpc"] = gRPCPort
-	}
-	if err := topo.TabletComplete(tablet); err != nil {
-		return fmt.Errorf("InitTablet TabletComplete failed: %v", err)
 	}
 
 	// Now try to create the record (it will also fix up the
@@ -184,7 +188,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		}
 
 		// Then overwrite everything, ignoring version mismatch.
-		if err := agent.TopoServer.UpdateTablet(ctx, topo.NewTabletInfo(tablet, -1)); err != nil {
+		if err := agent.TopoServer.UpdateTablet(ctx, topo.NewTabletInfo(tablet, nil)); err != nil {
 			return fmt.Errorf("UpdateTablet failed: %v", err)
 		}
 	default:

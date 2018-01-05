@@ -37,17 +37,12 @@ type DBConnection struct {
 }
 
 func (dbc *DBConnection) handleError(err error) {
-	if sqlErr, ok := err.(*mysql.SQLError); ok {
-		if sqlErr.Number() >= 2000 && sqlErr.Number() <= 2018 { // mysql connection errors
-			dbc.Close()
-		}
-		if sqlErr.Number() == 1317 { // Query was interrupted
-			dbc.Close()
-		}
+	if mysql.IsConnErr(err) {
+		dbc.Close()
 	}
 }
 
-// ExecuteFetch is part of PoolConnection interface.
+// ExecuteFetch overwrites mysql.Conn.ExecuteFetch.
 func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	defer dbc.mysqlStats.Record("Exec", time.Now())
 	mqr, err := dbc.Conn.ExecuteFetch(query, maxrows, wantfields)
@@ -58,7 +53,7 @@ func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool
 	return mqr, nil
 }
 
-// ExecuteStreamFetch is part of PoolConnection interface.
+// ExecuteStreamFetch overwrites mysql.Conn.ExecuteStreamFetch.
 func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
 	defer dbc.mysqlStats.Record("ExecStream", time.Now())
 
@@ -86,6 +81,7 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 	for {
 		row, err := dbc.FetchNext()
 		if err != nil {
+			dbc.handleError(err)
 			return err
 		}
 		if row == nil {

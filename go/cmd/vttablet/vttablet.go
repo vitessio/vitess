@@ -48,7 +48,7 @@ func init() {
 }
 
 func main() {
-	dbconfigFlags := dbconfigs.AppConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
+	dbconfigFlags := dbconfigs.AppConfig | dbconfigs.AppDebugConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
 		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
 	dbconfigs.RegisterFlags(dbconfigFlags)
 	mysqlctl.RegisterFlags()
@@ -89,6 +89,13 @@ func main() {
 		log.Warning(err)
 	}
 
+	if *tableACLConfig != "" {
+		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
+		tableacl.Register("simpleacl", &simpleacl.Factory{})
+	} else if *enforceTableACLConfig {
+		log.Exit("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
+	}
+
 	// creates and registers the query service
 	ts := topo.Open()
 	qsc := tabletserver.NewServer(ts, *tabletAlias)
@@ -102,12 +109,6 @@ func main() {
 		qsc.StopService()
 	})
 
-	if *tableACLConfig != "" {
-		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
-		tableacl.Register("simpleacl", &simpleacl.Factory{})
-	} else if *enforceTableACLConfig {
-		log.Exit("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
-	}
 	// tabletacl.Init loads ACL from file if *tableACLConfig is not empty
 	err = tableacl.Init(
 		*tableACLConfig,
@@ -125,10 +126,7 @@ func main() {
 	// Create mysqld and register the health reporter (needs to be done
 	// before initializing the agent, so the initial health check
 	// done by the agent has the right reporter)
-	mysqld, err := mysqlctl.NewMysqld(mycnf, dbcfgs, dbconfigFlags)
-	if err != nil {
-		log.Exit(err)
-	}
+	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs, dbconfigFlags)
 	servenv.OnClose(mysqld.Close)
 
 	// Depends on both query and updateStream.
@@ -142,6 +140,9 @@ func main() {
 	}
 
 	servenv.OnClose(func() {
+		// stop the agent so that our topo entry gets pruned properly
+		agent.Close()
+
 		// We will still use the topo server during lameduck period
 		// to update our state, so closing it in OnClose()
 		ts.Close()
