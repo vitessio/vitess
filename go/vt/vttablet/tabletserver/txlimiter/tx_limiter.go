@@ -54,7 +54,7 @@ type TxLimiter interface {
 // into account when deciding "user" identity for purposes of transaction
 // limiting.
 func New(slotCount int, maxPerUser float64, enabled, dryRun, byUsername, byPrincipal, byComponent, bySubcomponent bool) TxLimiter {
-	if !enabled {
+	if !enabled && !dryRun {
 		return &TxAllowAll{}
 	}
 
