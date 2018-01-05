@@ -232,43 +232,45 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 	}
 }
 
+func closeMysqlConnections() {
+	if mysqlListener != nil {
+		mysqlListener.Close()
+		mysqlListener = nil
+	}
+	if mysqlUnixListener != nil {
+		mysqlUnixListener.Close()
+		mysqlUnixListener = nil
+	}
+	busyLock.Lock()
+	defer busyLock.Unlock()
+	if len(busy) == 0 {
+		log.Info("No mysql connections to drain.")
+		return
+	}
+	log.Infof("Draining %v mysql connection(s)...", len(busy))
+	for {
+		var notFinished bool
+		for c, connIsBusy := range busy {
+			if !connIsBusy {
+				c.Close()
+				delete(busy, c)
+			} else {
+				notFinished = true
+			}
+		}
+		if notFinished {
+			busyCond.Wait()
+			continue
+		}
+		break
+	}
+	log.Info("Drained mysql connections successfully.")
+}
+
 func init() {
 	servenv.OnRun(initMySQLProtocol)
 
-	servenv.OnTermSync(func() {
-		if mysqlListener != nil {
-			mysqlListener.Close()
-			mysqlListener = nil
-		}
-		if mysqlUnixListener != nil {
-			mysqlUnixListener.Close()
-			mysqlUnixListener = nil
-		}
-		busyLock.Lock()
-		defer busyLock.Unlock()
-		if len(busy) == 0 {
-			log.Info("No mysql connections to drain.")
-			return
-		}
-		log.Infof("Draining %v mysql connection(s)...", len(busy))
-		for {
-			var notFinished bool
-			for c, connIsBusy := range busy {
-				if !connIsBusy {
-					c.Close()
-					delete(busy, c)
-				} else {
-					notFinished = true
-				}
-			}
-			if notFinished {
-				busyCond.Wait()
-				continue
-			}
-			break
-		}
-		log.Info("Drained mysql connections successfully.")
-	})
+	servenv.OnTermSync(closeMysqlConnections)
 }
 
 var pluginInitializers []func()
