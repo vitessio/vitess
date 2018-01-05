@@ -189,28 +189,28 @@ func (axp *TxPool) Begin(ctx context.Context, useFoundRows bool, txIsolation que
 	if err != nil {
 		switch err {
 		case connpool.ErrConnPoolClosed:
-			axp.limiter.Release(ctx)
+			axp.limiter.ReleaseByContext(ctx)
 			return 0, err
 		case pools.ErrTimeout:
-			axp.limiter.Release(ctx)
+			axp.limiter.ReleaseByContext(ctx)
 			axp.LogActive()
 			return 0, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool connection limit exceeded")
 		}
-		axp.limiter.Release(ctx)
+		axp.limiter.ReleaseByContext(ctx)
 		return 0, err
 	}
 
 	if query, ok := txIsolations[txIsolation]; ok {
 		if _, err := conn.Exec(ctx, query, 1, false); err != nil {
 			conn.Recycle()
-			axp.limiter.Release(ctx)
+			axp.limiter.ReleaseByContext(ctx)
 			return 0, err
 		}
 	}
 
 	if _, err := conn.Exec(ctx, "begin", 1, false); err != nil {
 		conn.Recycle()
-		axp.limiter.Release(ctx)
+		axp.limiter.ReleaseByContext(ctx)
 		return 0, err
 	}
 	transactionID := axp.lastID.Add(1)

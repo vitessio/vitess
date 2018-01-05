@@ -40,6 +40,7 @@ var (
 // TxLimiter is the transaction limiter interface.
 type TxLimiter interface {
 	Get(ctx context.Context) bool
+	ReleaseByContext(ctx context.Context)
 	Release(immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID)
 }
 
@@ -77,6 +78,12 @@ type TxAllowAll struct{}
 // Implements TxLimiter.Get
 func (txa *TxAllowAll) Get(ctx context.Context) bool {
 	return true
+}
+
+// ReleaseByContext is noop, because TxAllowAll does no tracking.
+// Implements TxLimiter.ReleaseByContext
+func (txa *TxAllowAll) ReleaseByContext(ctx context.Context) {
+
 }
 
 // Release is noop, because TxAllowAll does no tracking.
@@ -131,6 +138,15 @@ func (txl *Impl) Get(ctx context.Context) bool {
 	log.Infof("TxLimiter: Over limit, rejecting transaction request for user: %s", key)
 	rejections.Add(key, 1)
 	return false
+}
+
+// ReleaseByContext marks that given user (identified by caller ID stored
+// in context.Context) is no longer using a transaction slot.
+// Implements TxLimiter.ReleaseByContext
+func (txl *Impl) ReleaseByContext(ctx context.Context) {
+	txl.Release(
+		callerid.ImmediateCallerIDFromContext(ctx),
+		callerid.EffectiveCallerIDFromContext(ctx))
 }
 
 // Release marks that given user (identified by caller ID) is no longer using
