@@ -42,7 +42,7 @@ func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, error) {
 	er := &engine.Route{
 		Query:               generateQuery(upd),
-		ChangedVindexValues: make(map[string]sqltypes.PlanValue),
+		ChangedVindexValues: make(map[string][]sqltypes.PlanValue),
 	}
 	bldr, err := processTableExprs(upd.TableExprs, vschema)
 	if err != nil {
@@ -84,7 +84,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, err
 	}
 	er.Opcode = engine.UpdateEqual
 
-	if err := addChangedVindexesValues(er, upd, er.Table.ColumnVindexes); err != nil {
+	if er.ChangedVindexValues, err = buildChangedVindexesValues(er, upd, er.Table.ColumnVindexes); err != nil {
 		return nil, err
 	}
 	if len(er.ChangedVindexValues) != 0 {
@@ -99,36 +99,46 @@ func generateQuery(statement sqlparser.Statement) string {
 	return buf.String()
 }
 
-// addChangedVindexesValues adds to the plan all the lookup vindexes that are changing.
+// buildChangedVindexesValues adds to the plan all the lookup vindexes that are changing.
 // Updates can only be performed to secondary lookup vindexes with no complex expressions
 // in the set clause.
-func addChangedVindexesValues(route *engine.Route, update *sqlparser.Update, colVindexes []*vindexes.ColumnVindex) error {
-	for _, assignment := range update.Exprs {
-		for i, vcol := range colVindexes {
-			// Column not changing, continue
-			if !vcol.Column.Equal(assignment.Name.Name) {
-				continue
+func buildChangedVindexesValues(route *engine.Route, update *sqlparser.Update, colVindexes []*vindexes.ColumnVindex) (map[string][]sqltypes.PlanValue, error) {
+	changedVindexes := make(map[string][]sqltypes.PlanValue)
+	for i, vindex := range colVindexes {
+		for _, assignment := range update.Exprs {
+			for _, vcol := range vindex.Columns {
+				if vcol.Equal(assignment.Name.Name) {
+					pv, err := extractValueFromUpdate(assignment, vcol)
+					if err != nil {
+						return changedVindexes, err
+					}
+					changedVindexes[vindex.Name] = append(changedVindexes[vindex.Name], pv)
+				}
 			}
-			if update.Limit != nil && len(update.OrderBy) == 0 {
-				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Need to provide order by clause when using limit. Invalid update on column: %v", assignment.Name.Name)
-			}
-			if i == 0 {
-				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can't update primary vindex columns. Invalid update on column: %v", assignment.Name.Name)
-			}
-			if _, ok := vcol.Vindex.(vindexes.Lookup); !ok {
-				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update lookup vindexes. Invalid update on column: %v", assignment.Name.Name)
-			}
-			if !vcol.Owned {
-				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update owned vindexes. Invalid update on column: %v", assignment.Name.Name)
-			}
-			pv, err := extractValueFromUpdate(assignment, vcol.Column)
-			if err != nil {
-				return err
-			}
-			route.ChangedVindexValues[vcol.Name] = pv
+		}
+		if len(changedVindexes[vindex.Name]) == 0 {
+			// Vindex not changing, continue
+			continue
+		}
+		if len(changedVindexes[vindex.Name]) != len(vindex.Columns) {
+			return changedVindexes, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update does not have values for all the columns in vindex (%s)", vindex.Name)
+		}
+
+		if update.Limit != nil && len(update.OrderBy) == 0 {
+			return changedVindexes, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Need to provide order by clause when using limit. Invalid update on vindex: %v", vindex.Name)
+		}
+		if i == 0 {
+			return changedVindexes, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can't update primary vindex columns. Invalid update on vindex: %v", vindex.Name)
+		}
+		if _, ok := vindex.Vindex.(vindexes.Lookup); !ok {
+			return changedVindexes, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update lookup vindexes. Invalid update on vindex: %v", vindex.Name)
+		}
+		if !vindex.Owned {
+			return changedVindexes, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update owned vindexes. Invalid update on vindex: %v", vindex.Name)
 		}
 	}
-	return nil
+
+	return changedVindexes, nil
 }
 
 // buildDeletePlan builds the instructions for a DELETE statement.
@@ -185,11 +195,13 @@ func generateDeleteSubquery(del *sqlparser.Delete, table *vindexes.Table) string
 	}
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.WriteString("select ")
-	for i, cv := range table.Owned {
-		if i == 0 {
-			buf.Myprintf("%v", cv.Column)
-		} else {
-			buf.Myprintf(", %v", cv.Column)
+	for vIdx, cv := range table.Owned {
+		for cIdx, column := range cv.Columns {
+			if cIdx == 0 && vIdx == 0 {
+				buf.Myprintf("%v", column)
+			} else {
+				buf.Myprintf(", %v", column)
+			}
 		}
 	}
 	buf.Myprintf(" from %v%v for update", table.Name, del.Where)
@@ -199,11 +211,13 @@ func generateDeleteSubquery(del *sqlparser.Delete, table *vindexes.Table) string
 func generateUpdateSubquery(upd *sqlparser.Update, table *vindexes.Table) string {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.WriteString("select ")
-	for i, cv := range table.Owned {
-		if i == 0 {
-			buf.Myprintf("%v", cv.Column)
-		} else {
-			buf.Myprintf(", %v", cv.Column)
+	for vIdx, cv := range table.Owned {
+		for cIdx, column := range cv.Columns {
+			if cIdx == 0 && vIdx == 0 {
+				buf.Myprintf("%v", column)
+			} else {
+				buf.Myprintf(", %v", column)
+			}
 		}
 	}
 	buf.Myprintf(" from %v%v%v%v for update", table.Name, upd.Where, upd.OrderBy, upd.Limit)
@@ -220,7 +234,7 @@ func getDMLRouting(where *sqlparser.Where, route *engine.Route) error {
 		if !vindexes.IsUnique(index.Vindex) {
 			continue
 		}
-		if pv, ok := getMatch(where.Expr, index.Column); ok {
+		if pv, ok := getMatch(where.Expr, index.Columns[0]); ok {
 			route.Vindex = index.Vindex
 			route.Values = []sqltypes.PlanValue{pv}
 			return nil

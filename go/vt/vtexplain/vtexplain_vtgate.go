@@ -124,7 +124,9 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error
 	planCache := vtgateExecutor.Plans()
 	var plans []*engine.Plan
 	for _, item := range planCache.Items() {
-		plans = append(plans, item.Value.(*engine.Plan))
+		plan := item.Value.(*engine.Plan)
+		plan.ExecTime = 0
+		plans = append(plans, plan)
 	}
 	planCache.Clear()
 

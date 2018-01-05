@@ -12,7 +12,12 @@
                     },
                     "Query": "select * from t1",
                     "FieldQuery": "select * from t1 where 1 != 1"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -48,7 +53,12 @@
                     },
                     "Query": "insert into t1(id, intval, floatval) values (:vtg1, :vtg2, :vtg3)",
                     "Table": "t1"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -94,7 +104,12 @@
                         "Sharded": false
                     },
                     "Query": "update t1 set intval = :vtg1"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -142,7 +157,12 @@
                         "Sharded": false
                     },
                     "Query": "update t1 set floatval = :vtg1"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -190,7 +210,12 @@
                         "Sharded": false
                     },
                     "Query": "delete from t1 where id = :vtg1"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -235,7 +260,12 @@
                     },
                     "Query": "insert into t1(id, intval, floatval) values (:vtg1, :vtg2, :vtg3) on duplicate key update intval = :vtg4, floatval = :vtg5",
                     "Table": "t1"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             }
         ],
         "TabletActions": {

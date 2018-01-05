@@ -143,16 +143,17 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string) (topo.Lock
 		return nil, convertError(err)
 	}
 	go func() {
+		// Drain the lease keepAlive channel, we're not
+		// interested in its contents.
 		for range leaseKA {
 		}
 	}()
 
 	// Create an ephemeral node in the locks directory.
-	_, revision, err := s.newUniqueEphemeralKV(ctx, s.cli, lease.ID, nodePath, contents)
+	key, revision, err := s.newUniqueEphemeralKV(ctx, s.cli, lease.ID, nodePath, contents)
 	if err != nil {
 		return nil, err
 	}
-	key := path.Join(nodePath, fmt.Sprintf("%v", lease.ID))
 
 	// Wait until all older nodes in the locks directory are gone.
 	for {
@@ -173,6 +174,16 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string) (topo.Lock
 			}, nil
 		}
 	}
+}
+
+// Check is part of the topo.LockDescriptor interface.
+// We use KeepAliveOnce to make sure the lease is still active and well.
+func (ld *etcdLockDescriptor) Check(ctx context.Context) error {
+	_, err := ld.s.cli.KeepAliveOnce(ctx, ld.leaseID)
+	if err != nil {
+		return convertError(err)
+	}
+	return nil
 }
 
 // Unlock is part of the topo.LockDescriptor interface.

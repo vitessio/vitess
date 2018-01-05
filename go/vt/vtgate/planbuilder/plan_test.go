@@ -56,9 +56,9 @@ func (*lookupIndex) Cost() int        { return 2 }
 func (*lookupIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*lookupIndex) Map(vindexes.VCursor, []sqltypes.Value) ([][]byte, error)        { return nil, nil }
-func (*lookupIndex) Create(vindexes.VCursor, []sqltypes.Value, [][]byte, bool) error { return nil }
-func (*lookupIndex) Delete(vindexes.VCursor, []sqltypes.Value, []byte) error         { return nil }
+func (*lookupIndex) Map(vindexes.VCursor, []sqltypes.Value) ([][]byte, error)          { return nil, nil }
+func (*lookupIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
+func (*lookupIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
 
 func newLookupIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &lookupIndex{name: name}, nil
@@ -72,9 +72,9 @@ func (*multiIndex) Cost() int        { return 3 }
 func (*multiIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*multiIndex) Map(vindexes.VCursor, []sqltypes.Value) ([][][]byte, error)      { return nil, nil }
-func (*multiIndex) Create(vindexes.VCursor, []sqltypes.Value, [][]byte, bool) error { return nil }
-func (*multiIndex) Delete(vindexes.VCursor, []sqltypes.Value, []byte) error         { return nil }
+func (*multiIndex) Map(vindexes.VCursor, []sqltypes.Value) ([][][]byte, error)        { return nil, nil }
+func (*multiIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
+func (*multiIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
 
 func newMultiIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &multiIndex{name: name}, nil
@@ -88,9 +88,9 @@ func (*costlyIndex) Cost() int        { return 10 }
 func (*costlyIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*costlyIndex) Map(vindexes.VCursor, []sqltypes.Value) ([][][]byte, error)      { return nil, nil }
-func (*costlyIndex) Create(vindexes.VCursor, []sqltypes.Value, [][]byte, bool) error { return nil }
-func (*costlyIndex) Delete(vindexes.VCursor, []sqltypes.Value, []byte) error         { return nil }
+func (*costlyIndex) Map(vindexes.VCursor, []sqltypes.Value) ([][][]byte, error)        { return nil, nil }
+func (*costlyIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
+func (*costlyIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
 
 func newCostlyIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &costlyIndex{name: name}, nil
@@ -113,14 +113,15 @@ func TestPlan(t *testing.T) {
 	// column names are case-preserved, but treated as
 	// case-insensitive even if they come from the vschema.
 	testFile(t, "aggr_cases.txt", vschema)
+	testFile(t, "dml_cases.txt", vschema)
 	testFile(t, "from_cases.txt", vschema)
 	testFile(t, "filter_cases.txt", vschema)
-	testFile(t, "select_cases.txt", vschema)
 	testFile(t, "postprocess_cases.txt", vschema)
-	testFile(t, "wireup_cases.txt", vschema)
-	testFile(t, "dml_cases.txt", vschema)
-	testFile(t, "vindex_func_cases.txt", vschema)
+	testFile(t, "select_cases.txt", vschema)
+	testFile(t, "symtab_cases.txt", vschema)
 	testFile(t, "unsupported_cases.txt", vschema)
+	testFile(t, "vindex_func_cases.txt", vschema)
+	testFile(t, "wireup_cases.txt", vschema)
 }
 
 func TestOne(t *testing.T) {

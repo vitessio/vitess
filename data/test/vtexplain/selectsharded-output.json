@@ -12,7 +12,12 @@
                     },
                     "Query": "select * from user",
                     "FieldQuery": "select * from user where 1 != 1"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 4,
+                "Rows": 4,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -103,7 +108,12 @@
                     "Values": [
                         ":vtg1"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -140,7 +150,12 @@
                     },
                     "Query": "select * from user where id > :vtg1",
                     "FieldQuery": "select * from user where 1 != 1"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 4,
+                "Rows": 4,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -235,7 +250,12 @@
                     "Values": [
                         ":name"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             },
             {
                 "Original": "select * from user where name = :vtg1",
@@ -251,7 +271,12 @@
                     "Values": [
                         ":vtg1"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -306,7 +331,12 @@
                     },
                     "Query": "select * from user where (name = :vtg1 or nickname = :vtg1)",
                     "FieldQuery": "select * from user where 1 != 1"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 4,
+                "Rows": 4,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -425,7 +455,12 @@
                     "Vars": {
                         "u_name": 1
                     }
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 8,
+                "Rows": 4,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -591,7 +626,12 @@
                     "Vars": {
                         "m_id": 0
                     }
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 2,
+                "Rows": 1,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -651,7 +691,12 @@
                     "Values": [
                         ":vtg1"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -692,7 +737,12 @@
                     "Values": [
                         ":name"
                     ]
-                }
+                },
+                "ExecCount": 2,
+                "ExecTime": 0,
+                "ShardQueries": 2,
+                "Rows": 2,
+                "Errors": 0
             },
             {
                 "Original": "select count(*) from user where name in ::vtg1",
@@ -717,7 +767,12 @@
                             "::vtg1"
                         ]
                     }
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -791,7 +846,12 @@
                     },
                     "Query": "select name, count(*) from user group by name",
                     "FieldQuery": "select name, count(*) from user where 1 != 1 group by name"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 4,
+                "Rows": 4,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -882,7 +942,12 @@
                         "Query": "select :vtg1, :vtg2, :vtg3 from user limit :vtg4",
                         "FieldQuery": "select :vtg1, :vtg2, :vtg3 from user where 1 != 1"
                     }
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 4,
+                "Rows": 4,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -985,7 +1050,12 @@
                     },
                     "Query": "select * from (select id from user) as s",
                     "FieldQuery": "select * from (select id from user where 1 != 1) as s where 1 != 1"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 4,
+                "Rows": 0,
+                "Errors": 0
             }
         ],
         "TabletActions": {

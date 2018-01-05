@@ -200,6 +200,14 @@ func (c *TeeConn) Lock(ctx context.Context, dirPath, contents string) (topo.Lock
 	}, nil
 }
 
+// Check is part of the topo.LockDescriptor interface.
+func (ld *teeTopoLockDescriptor) Check(ctx context.Context) error {
+	if err := ld.firstLockDescriptor.Check(ctx); err != nil {
+		return err
+	}
+	return ld.secondLockDescriptor.Check(ctx)
+}
+
 // Unlock is part of the topo.LockDescriptor interface.
 func (ld *teeTopoLockDescriptor) Unlock(ctx context.Context) error {
 	// Unlock lockSecond, then lockFirst.
