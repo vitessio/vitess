@@ -18,12 +18,12 @@ package vtworkerclient
 
 import (
 	"io"
-	"time"
 
 	"golang.org/x/net/context"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 	"github.com/youtube/vitess/go/vt/vterrors"
+
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 )
 
 // RunCommandAndWait executes a single command on a given vtworker and blocks until the command did return or timed out.
@@ -34,17 +34,16 @@ func RunCommandAndWait(ctx context.Context, server string, args []string, recv f
 		panic("no function closure for Event stream specified")
 	}
 	// create the client
-	// TODO(mberlin): vtctlclient exposes dialTimeout as flag. If there are no use cases, remove it there as well to be consistent?
-	client, err := New(server, 30*time.Second /* dialTimeout */)
+	client, err := New(server)
 	if err != nil {
-		return vterrors.Errorf(vterrors.Code(err), "cannot dial to server "+server+": %v", err)
+		return vterrors.Wrapf(err, "cannot dial to server %v", server)
 	}
 	defer client.Close()
 
 	// run the command
 	stream, err := client.ExecuteVtworkerCommand(ctx, args)
 	if err != nil {
-		return vterrors.Errorf(vterrors.Code(err), "cannot execute remote command: %v", err)
+		return vterrors.Wrap(err, "cannot execute remote command")
 	}
 
 	for {
@@ -55,7 +54,7 @@ func RunCommandAndWait(ctx context.Context, server string, args []string, recv f
 		case io.EOF:
 			return nil
 		default:
-			return vterrors.Errorf(vterrors.Code(err), "stream error: %v", err)
+			return vterrors.Wrap(err, "stream error")
 		}
 	}
 }

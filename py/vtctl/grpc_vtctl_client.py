@@ -25,7 +25,8 @@ import vtctl_client
 
 from vtproto import vtctldata_pb2
 from vtproto import vtctlservice_pb2
-
+from util import static_auth_client
+from util import grpc_with_metadata
 
 class GRPCVtctlClient(vtctl_client.VtctlClient):
   """GRPCVtctlClient is the gRPC implementation of VtctlClient.
@@ -33,10 +34,11 @@ class GRPCVtctlClient(vtctl_client.VtctlClient):
   It is registered as 'grpc' protocol.
   """
 
-  def __init__(self, addr, timeout):
+  def __init__(self, addr, timeout, auth_static_client_creds = None):
     self.addr = addr
     self.timeout = timeout
     self.stub = None
+    self.auth_static_client_creds = auth_static_client_creds
 
   def __str__(self):
     return '<GRPCVtctlClient %s>' % self.addr
@@ -47,6 +49,8 @@ class GRPCVtctlClient(vtctl_client.VtctlClient):
 
     p = urlparse('http://' + self.addr)
     channel = grpc.insecure_channel('%s:%s' % (p.hostname, p.port))
+    if self.auth_static_client_creds is not None:
+      channel = grpc_with_metadata.GRPCWithMetadataChannel(channel, self.get_auth_static_client_creds)
     self.stub = vtctlservice_pb2.VtctlStub(channel)
 
   def close(self):
@@ -54,6 +58,9 @@ class GRPCVtctlClient(vtctl_client.VtctlClient):
 
   def is_closed(self):
     return self.stub is None
+
+  def get_auth_static_client_creds(self):
+    return static_auth_client.StaticAuthClientCreds(self.auth_static_client_creds).metadata()
 
   def execute_vtctl_command(self, args, action_timeout=30.0):
     req = vtctldata_pb2.ExecuteVtctlCommandRequest(

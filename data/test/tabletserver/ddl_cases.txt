@@ -38,6 +38,11 @@
   "Action": "alter", "TableName": "b.c", "NewName": "b.c"
 }
 
+"drop index a on b lock=none"
+{
+  "Action": "alter", "TableName": "b", "NewName": "b"
+}
+
 "rename table a to b"
 {
   "Action": "rename", "TableName": "a", "NewTable": "b"
@@ -86,4 +91,28 @@
 "syntax error"
 {
   "Action": ""
+}
+
+"alter table a reorganize partition b into (partition c values less than (1000), partition d values less than (maxvalue))"
+{
+  "Action": "alter"
+}
+
+"alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))"
+{
+  "Action": "alter", "TableName": "a", "NewTable": "a"
+}
+
+# truncate
+"truncate a"
+{
+  "PlanID": "DDL",
+  "TableName": "a"
+}
+
+# truncate
+"truncate table a"
+{
+  "PlanID": "DDL",
+  "TableName": "a"
 }

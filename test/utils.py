@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 
 # Copyright 2017 Google Inc.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -142,7 +142,7 @@ def main(mod=None, test_options=None):
     test_options(parser)
   (options, args) = parser.parse_args()
 
-  set_log_level(options.verbose)
+  environment.set_log_level(options.verbose)
   logging.basicConfig(
       format='-- %(asctime)s %(module)s:%(lineno)d %(levelname)s %(message)s')
 
@@ -342,21 +342,6 @@ def validate_topology(ping_tablets=False):
     run_vtctl(['Validate'])
 
 
-def zk_ls(path):
-  out, _ = run(environment.binary_argstr('zk')+' ls '+path, trap_output=True)
-  return sorted(out.splitlines())
-
-
-def zk_cat(path):
-  out, _ = run(environment.binary_argstr('zk')+' cat '+path, trap_output=True)
-  return out
-
-
-def zk_cat_json(path):
-  data = zk_cat(path)
-  return json.loads(data)
-
-
 # wait_step is a helper for looping until a condition is true.
 # use as follow:
 #    timeout = 10
@@ -554,7 +539,6 @@ class VtGate(object):
 
   def start(self, cell='test_nj', retry_count=2,
             topo_impl=None, cache_ttl='1s',
-            healthcheck_conn_timeout='2s',
             extra_args=None, tablets=None,
             tablet_types_to_wait='MASTER,REPLICA',
             l2vtgates=None):
@@ -577,7 +561,6 @@ class VtGate(object):
       ])
     else:
       args.extend([
-          '-healthcheck_conn_timeout', healthcheck_conn_timeout,
           '-gateway_implementation', vtgate_gateway_flavor().flavor(),
       ])
       args.extend(vtgate_gateway_flavor().flags(cell=cell, tablets=tablets))
@@ -586,6 +569,8 @@ class VtGate(object):
 
     if protocols_flavor().vtgate_protocol() == 'grpc':
       args.extend(['-grpc_port', str(self.grpc_port)])
+      args.extend(['-grpc_max_message_size',
+                   str(environment.grpc_max_message_size)])
     if protocols_flavor().service_map():
       args.extend(['-service_map', ','.join(protocols_flavor().service_map())])
     if topo_impl:
@@ -598,7 +583,9 @@ class VtGate(object):
       args.extend(['-mysql_server_port', str(self.mysql_port)])
 
     self.proc = run_bg(args)
-    wait_for_vars('vtgate', self.port)
+    # We use a longer timeout here, as we may be waiting for the initial
+    # state of a few tablets.
+    wait_for_vars('vtgate', self.port, timeout=20.0)
 
     global vtgate
     if not vtgate:
@@ -796,7 +783,6 @@ class L2VtGate(object):
 
   def start(self, cell='test_nj', retry_count=2,
             topo_impl=None, cache_ttl='1s',
-            healthcheck_conn_timeout='2s',
             extra_args=None, tablets=None,
             tablet_types_to_wait='MASTER,REPLICA',
             tablet_filters=None):
@@ -808,7 +794,6 @@ class L2VtGate(object):
         '-retry-count', str(retry_count),
         '-log_dir', environment.vtlogroot,
         '-srv_topo_cache_ttl', cache_ttl,
-        '-healthcheck_conn_timeout', healthcheck_conn_timeout,
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
         '-gateway_implementation', vtgate_gateway_flavor().flavor(),
     ]
@@ -829,7 +814,9 @@ class L2VtGate(object):
       args.extend(extra_args)
 
     self.proc = run_bg(args)
-    wait_for_vars('l2vtgate', self.port)
+    # We use a longer timeout here, as we may be waiting for the initial
+    # state of a few tablets.
+    wait_for_vars('l2vtgate', self.port, timeout=20.0)
 
   def kill(self):
     """Terminates the l2vtgate process, and waits for it to exit.
@@ -969,15 +956,6 @@ def get_log_level():
     return '2'
 
 
-def set_log_level(verbose):
-  level = logging.DEBUG
-  if verbose == 0:
-    level = logging.WARNING
-  elif verbose == 1:
-    level = logging.INFO
-  logging.getLogger().setLevel(level)
-
-
 # vtworker helpers
 def run_vtworker(clargs, auto_log=False, expect_fail=False, **kwargs):
   """Runs a vtworker process, returning the stdout and stderr."""
@@ -990,7 +968,9 @@ def run_vtworker(clargs, auto_log=False, expect_fail=False, **kwargs):
 def run_vtworker_bg(clargs, auto_log=False, **kwargs):
   """Starts a background vtworker process."""
   cmd, port, rpc_port = _get_vtworker_cmd(clargs, auto_log)
-  return run_bg(cmd, **kwargs), port, rpc_port
+  proc = run_bg(cmd, **kwargs), port, rpc_port
+  wait_for_vars('vtworker', port)
+  return proc
 
 
 def _get_vtworker_cmd(clargs, auto_log=False):

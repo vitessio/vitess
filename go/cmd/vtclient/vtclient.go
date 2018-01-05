@@ -17,11 +17,13 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"math/rand"
 	"os"
 	"sort"
 	"sync"
@@ -62,6 +64,8 @@ Examples:
 	jsonOutput    = flag.Bool("json", false, "Output JSON instead of human-readable table")
 	parallel      = flag.Int("parallel", 1, "DMLs only: Number of threads executing the same query in parallel. Useful for simple load testing.")
 	count         = flag.Int("count", 1, "DMLs only: Number of times each thread executes the query. Useful for simple, sustained load testing.")
+	minRandomID   = flag.Int("min_random_id", 0, "min random ID to generate. When max_random_id > min_random_id, for each query, a random number is generated in [min_random_id, max_random_id) and attached to the end of the bind variables.")
+	maxRandomID   = flag.Int("max_random_id", 0, "max random ID.")
 )
 
 func init() {
@@ -149,7 +153,6 @@ func run() (*results, error) {
 		Protocol:  *vtgateconn.VtgateProtocol,
 		Address:   *server,
 		Target:    *targetString,
-		Timeout:   *timeout,
 		Streaming: *streaming,
 	}
 	db, err := vitessdriver.OpenWithConfiguration(c)
@@ -159,17 +162,24 @@ func run() (*results, error) {
 
 	log.Infof("Sending the query...")
 
-	if sqlparser.IsDML(args[0]) {
-		return execMultiDml(db, args[0])
-	}
-
-	return execNonDml(db, args[0])
+	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
+	defer cancel()
+	return execMulti(ctx, db, args[0])
 }
 
-func execMultiDml(db *sql.DB, sql string) (*results, error) {
+func prepareBindVariables() []interface{} {
+	bv := *bindVariables
+	if *maxRandomID > *minRandomID {
+		bv = append(bv, rand.Intn(*maxRandomID-*minRandomID)+*minRandomID)
+	}
+	return bv
+}
+
+func execMulti(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 	all := newResults()
 	ec := concurrency.FirstErrorRecorder{}
 	wg := sync.WaitGroup{}
+	isDML := sqlparser.IsDML(sql)
 
 	start := time.Now()
 	for i := 0; i < *parallel; i++ {
@@ -179,37 +189,51 @@ func execMultiDml(db *sql.DB, sql string) (*results, error) {
 			defer wg.Done()
 
 			for j := 0; j < *count; j++ {
-				qr, err := execDml(db, sql)
-				all.merge(qr)
+				var qr *results
+				var err error
+				if isDML {
+					qr, err = execDml(ctx, db, sql)
+				} else {
+					qr, err = execNonDml(ctx, db, sql)
+				}
+				if *count == 1 && *parallel == 1 {
+					all = qr
+				} else {
+					all.merge(qr)
+					if err != nil {
+						all.recordError(err)
+					}
+				}
 				if err != nil {
 					ec.RecordError(err)
-					all.recordError(err)
 					// We keep going and do not return early purpose.
 				}
 			}
 		}()
 	}
 	wg.Wait()
-	all.duration = time.Since(start)
+	if all != nil {
+		all.duration = time.Since(start)
+	}
 
 	return all, ec.Error()
 }
 
-func execDml(db *sql.DB, sql string) (*results, error) {
+func execDml(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 	start := time.Now()
 	tx, err := db.Begin()
 	if err != nil {
-		return nil, vterrors.Errorf(vterrors.Code(err), "BEGIN failed: %v", err)
+		return nil, vterrors.Wrap(err, "BEGIN failed")
 	}
 
-	result, err := tx.Exec(sql, []interface{}(*bindVariables)...)
+	result, err := tx.ExecContext(ctx, sql, []interface{}(prepareBindVariables())...)
 	if err != nil {
-		return nil, vterrors.Errorf(vterrors.Code(err), "failed to execute DML: %v", err)
+		return nil, vterrors.Wrap(err, "failed to execute DML")
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		return nil, vterrors.Errorf(vterrors.Code(err), "COMMIT failed: %v", err)
+		return nil, vterrors.Wrap(err, "COMMIT failed")
 	}
 
 	rowsAffected, err := result.RowsAffected()
@@ -221,11 +245,11 @@ func execDml(db *sql.DB, sql string) (*results, error) {
 	}, nil
 }
 
-func execNonDml(db *sql.DB, sql string) (*results, error) {
+func execNonDml(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 	start := time.Now()
-	rows, err := db.Query(sql, []interface{}(*bindVariables)...)
+	rows, err := db.QueryContext(ctx, sql, []interface{}(prepareBindVariables())...)
 	if err != nil {
-		return nil, vterrors.Errorf(vterrors.Code(err), "client error: %v", err)
+		return nil, vterrors.Wrap(err, "client error")
 	}
 	defer rows.Close()
 

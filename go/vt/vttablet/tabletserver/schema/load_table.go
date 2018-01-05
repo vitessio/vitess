@@ -24,6 +24,7 @@ import (
 
 	log "github.com/golang/glog"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -69,13 +70,30 @@ func fetchColumns(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
 		return err
 	}
 	for _, row := range columns.Rows {
-		name := row[0].String()
+		name := row[0].ToString()
 		columnType, ok := fieldTypes[name]
 		if !ok {
+			// This code is unreachable.
 			log.Warningf("Table: %s, column %s not found in select list, skipping.", ta.Name, name)
 			continue
 		}
-		ta.AddColumn(name, columnType, row[4], row[5].String())
+		// BIT data type default value representation differs from how
+		// it's returned. It's represented as b'101', but returned in
+		// its binary form. Extract the binary form.
+		if columnType == querypb.Type_BIT && row[4].ToString() != "" {
+			query := fmt.Sprintf("select %s", row[4].ToString())
+			r, err := conn.Exec(tabletenv.LocalContext(), query, 10000, false)
+			if err != nil {
+				return err
+			}
+			if len(r.Rows) != 1 || len(r.Rows[0]) != 1 {
+				// This code is unreachable.
+				return fmt.Errorf("Invalid rows returned from %s: %v", query, r.Rows)
+			}
+			// overwrite the original value with the new one.
+			row[4] = r.Rows[0][0]
+		}
+		ta.AddColumn(name, columnType, row[4], row[5].ToString())
 	}
 	return nil
 }
@@ -88,19 +106,19 @@ func fetchIndexes(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
 	var currentIndex *Index
 	currentName := ""
 	for _, row := range indexes.Rows {
-		indexName := row[2].String()
+		indexName := row[2].ToString()
 		if currentName != indexName {
-			currentIndex = ta.AddIndex(indexName)
+			currentIndex = ta.AddIndex(indexName, row[1].ToString() == "0")
 			currentName = indexName
 		}
 		var cardinality uint64
 		if !row[6].IsNull() {
-			cardinality, err = strconv.ParseUint(row[6].String(), 0, 64)
+			cardinality, err = sqltypes.ToUint64(row[6])
 			if err != nil {
 				log.Warningf("%s", err)
 			}
 		}
-		currentIndex.AddColumn(row[4].String(), cardinality)
+		currentIndex.AddColumn(row[4].ToString(), cardinality)
 	}
 	ta.Done()
 	return nil

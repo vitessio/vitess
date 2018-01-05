@@ -73,12 +73,12 @@ type ActionRepository struct {
 	keyspaceActions map[string]actionKeyspaceMethod
 	shardActions    map[string]actionShardMethod
 	tabletActions   map[string]actionTabletRecord
-	ts              topo.Server
+	ts              *topo.Server
 }
 
 // NewActionRepository creates and returns a new ActionRepository,
 // with no actions.
-func NewActionRepository(ts topo.Server) *ActionRepository {
+func NewActionRepository(ts *topo.Server) *ActionRepository {
 	return &ActionRepository{
 		keyspaceActions: make(map[string]actionKeyspaceMethod),
 		shardActions:    make(map[string]actionShardMethod),

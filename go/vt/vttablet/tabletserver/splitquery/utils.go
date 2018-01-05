@@ -22,14 +22,16 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // populateNewBindVariable inserts 'bindVariableName' with 'bindVariableValue' to the
 // 'resultBindVariables' map. Panics if 'bindVariableName' already exists in the map.
 func populateNewBindVariable(
 	bindVariableName string,
-	bindVariableValue interface{},
-	resultBindVariables map[string]interface{}) {
+	bindVariableValue *querypb.BindVariable,
+	resultBindVariables map[string]*querypb.BindVariable) {
 	_, alreadyInMap := resultBindVariables[bindVariableName]
 	if alreadyInMap {
 		panic(fmt.Sprintf(
@@ -42,8 +44,8 @@ func populateNewBindVariable(
 }
 
 // cloneBindVariables returns a shallow-copy of the given bindVariables map.
-func cloneBindVariables(bindVariables map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
+func cloneBindVariables(bindVariables map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {
+	result := make(map[string]*querypb.BindVariable)
 	for key, value := range bindVariables {
 		result[key] = value
 	}

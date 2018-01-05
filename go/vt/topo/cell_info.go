@@ -27,7 +27,7 @@ import (
 )
 
 // This file provides the utility methods to save / retrieve CellInfo
-// in the topology Backend.
+// in the topology server.
 //
 // CellInfo records are not meant to be changed while the system is
 // running.  In a running system, a CellInfo can be added, and
@@ -37,33 +37,33 @@ import (
 // available cells, if necessary. A CellInfo can only be removed if no
 // Shard record references the corresponding cell in its Cells list.
 
-const (
-	cellsPath = "cells"
-)
-
 func pathForCellInfo(cell string) string {
-	return path.Join(cellsPath, cell, CellInfoFile)
+	return path.Join(CellsPath, cell, CellInfoFile)
 }
 
 // GetCellInfoNames returns the names of the existing cells. They are
 // sorted by name.
-func (ts Server) GetCellInfoNames(ctx context.Context) ([]string, error) {
-	entries, err := ts.ListDir(ctx, GlobalCell, cellsPath)
+func (ts *Server) GetCellInfoNames(ctx context.Context) ([]string, error) {
+	entries, err := ts.globalCell.ListDir(ctx, CellsPath, false /*full*/)
 	switch err {
 	case ErrNoNode:
 		return nil, nil
 	case nil:
-		return entries, nil
+		return DirEntriesToStringArray(entries), nil
 	default:
 		return nil, err
 	}
 }
 
-// GetCellInfo reads a CellInfo from the Backend.
-func (ts Server) GetCellInfo(ctx context.Context, cell string) (*topodatapb.CellInfo, error) {
+// GetCellInfo reads a CellInfo from the global Conn.
+func (ts *Server) GetCellInfo(ctx context.Context, cell string, strongRead bool) (*topodatapb.CellInfo, error) {
+	conn := ts.globalCell
+	if !strongRead {
+		conn = ts.globalReadOnlyCell
+	}
 	// Read the file.
 	filePath := pathForCellInfo(cell)
-	contents, _, err := ts.Get(ctx, GlobalCell, filePath)
+	contents, _, err := conn.Get(ctx, filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func (ts Server) GetCellInfo(ctx context.Context, cell string) (*topodatapb.Cell
 }
 
 // CreateCellInfo creates a new CellInfo with the provided content.
-func (ts Server) CreateCellInfo(ctx context.Context, cell string, ci *topodatapb.CellInfo) error {
+func (ts *Server) CreateCellInfo(ctx context.Context, cell string, ci *topodatapb.CellInfo) error {
 	// Pack the content.
 	contents, err := proto.Marshal(ci)
 	if err != nil {
@@ -86,7 +86,7 @@ func (ts Server) CreateCellInfo(ctx context.Context, cell string, ci *topodatapb
 
 	// Save it.
 	filePath := pathForCellInfo(cell)
-	_, err = ts.Create(ctx, GlobalCell, filePath, contents)
+	_, err = ts.globalCell.Create(ctx, filePath, contents)
 	return err
 }
 
@@ -95,13 +95,13 @@ func (ts Server) CreateCellInfo(ctx context.Context, cell string, ci *topodatapb
 // a version mismatch, it will re-read the record and retry the update.
 // If the update method returns ErrNoUpdateNeeded, nothing is written,
 // and nil is returned.
-func (ts Server) UpdateCellInfoFields(ctx context.Context, cell string, update func(*topodatapb.CellInfo) error) error {
+func (ts *Server) UpdateCellInfoFields(ctx context.Context, cell string, update func(*topodatapb.CellInfo) error) error {
 	filePath := pathForCellInfo(cell)
 	for {
 		ci := &topodatapb.CellInfo{}
 
 		// Read the file, unpack the contents.
-		contents, version, err := ts.Get(ctx, GlobalCell, filePath)
+		contents, version, err := ts.globalCell.Get(ctx, filePath)
 		switch err {
 		case nil:
 			if err := proto.Unmarshal(contents, ci); err != nil {
@@ -126,7 +126,7 @@ func (ts Server) UpdateCellInfoFields(ctx context.Context, cell string, update f
 		if err != nil {
 			return err
 		}
-		if _, err = ts.Update(ctx, GlobalCell, filePath, contents, version); err != ErrBadVersion {
+		if _, err = ts.globalCell.Update(ctx, filePath, contents, version); err != ErrBadVersion {
 			// This includes the 'err=nil' case.
 			return err
 		}
@@ -135,7 +135,7 @@ func (ts Server) UpdateCellInfoFields(ctx context.Context, cell string, update f
 
 // DeleteCellInfo deletes the specified CellInfo.
 // We first make sure no Shard record points to the cell.
-func (ts Server) DeleteCellInfo(ctx context.Context, cell string) error {
+func (ts *Server) DeleteCellInfo(ctx context.Context, cell string) error {
 	// Get all keyspaces.
 	keyspaces, err := ts.GetKeyspaces(ctx)
 	if err != nil {
@@ -157,5 +157,19 @@ func (ts Server) DeleteCellInfo(ctx context.Context, cell string) error {
 	}
 
 	filePath := pathForCellInfo(cell)
-	return ts.Delete(ctx, GlobalCell, filePath, nil)
+	return ts.globalCell.Delete(ctx, filePath, nil)
+}
+
+// GetKnownCells returns the list of known cells.
+// For now, it just lists the 'cells' directory in the global topology server.
+// TODO(alainjobart) once the cell map is migrated to this generic
+// package, we can do better than this.
+func (ts *Server) GetKnownCells(ctx context.Context) ([]string, error) {
+	// Note we use the global read-only cell here, as the result
+	// is not time sensitive.
+	entries, err := ts.globalReadOnlyCell.ListDir(ctx, CellsPath, false /*full*/)
+	if err != nil {
+		return nil, err
+	}
+	return DirEntriesToStringArray(entries), nil
 }

@@ -16,12 +16,13 @@
 
 package io.vitess.jdbc;
 
-import io.vitess.util.Constants;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.util.logging.Logger;
+
+import io.vitess.util.Constants;
 
 /**
  * Created by harshit.gangal on 25/01/16.
@@ -76,7 +77,7 @@ public abstract class VitessDatabaseMetaData implements DatabaseMetaData {
     }
 
     public String getDatabaseProductVersion() throws SQLException {
-        return this.connection.getDbProperties().getProductversion();
+        return this.connection.getDbProperties().getProductVersion();
     }
 
     public String getDriverVersion() throws SQLException {

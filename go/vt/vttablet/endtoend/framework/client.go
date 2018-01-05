@@ -22,7 +22,6 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -48,6 +47,15 @@ func NewClient() *QueryClient {
 			&vtrpcpb.CallerID{},
 			&querypb.VTGateCallerID{Username: "dev"},
 		),
+		target: Target,
+		server: Server,
+	}
+}
+
+// NewClientWithContext creates a new client for Server with the provided context.
+func NewClientWithContext(ctx context.Context) *QueryClient {
+	return &QueryClient{
+		ctx:    ctx,
 		target: Target,
 		server: Server,
 	}
@@ -132,12 +140,31 @@ func (client *QueryClient) SetServingType(tabletType topodatapb.TabletType) erro
 }
 
 // Execute executes a query.
-func (client *QueryClient) Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
+func (client *QueryClient) Execute(query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return client.ExecuteWithOptions(query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 }
 
+// BeginExecute performs a BeginExecute.
+func (client *QueryClient) BeginExecute(query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	if client.transactionID != 0 {
+		return nil, errors.New("already in transaction")
+	}
+	qr, transactionID, err := client.server.BeginExecute(
+		client.ctx,
+		&client.target,
+		query,
+		bindvars,
+		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
+	)
+	if err != nil {
+		return nil, err
+	}
+	client.transactionID = transactionID
+	return qr, nil
+}
+
 // ExecuteWithOptions executes a query using 'options'.
-func (client *QueryClient) ExecuteWithOptions(query string, bindvars map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (client *QueryClient) ExecuteWithOptions(query string, bindvars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	return client.server.Execute(
 		client.ctx,
 		&client.target,
@@ -149,12 +176,12 @@ func (client *QueryClient) ExecuteWithOptions(query string, bindvars map[string]
 }
 
 // StreamExecute executes a query & returns the results.
-func (client *QueryClient) StreamExecute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
+func (client *QueryClient) StreamExecute(query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return client.StreamExecuteWithOptions(query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 }
 
 // StreamExecuteWithOptions executes a query & returns the results using 'options'.
-func (client *QueryClient) StreamExecuteWithOptions(query string, bindvars map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (client *QueryClient) StreamExecuteWithOptions(query string, bindvars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	result := &sqltypes.Result{}
 	err := client.server.StreamExecute(
 		client.ctx,
@@ -178,7 +205,7 @@ func (client *QueryClient) StreamExecuteWithOptions(query string, bindvars map[s
 }
 
 // Stream streams the results of a query.
-func (client *QueryClient) Stream(query string, bindvars map[string]interface{}, sendFunc func(*sqltypes.Result) error) error {
+func (client *QueryClient) Stream(query string, bindvars map[string]*querypb.BindVariable, sendFunc func(*sqltypes.Result) error) error {
 	return client.server.StreamExecute(
 		client.ctx,
 		&client.target,
@@ -190,7 +217,7 @@ func (client *QueryClient) Stream(query string, bindvars map[string]interface{},
 }
 
 // ExecuteBatch executes a batch of queries.
-func (client *QueryClient) ExecuteBatch(queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, error) {
+func (client *QueryClient) ExecuteBatch(queries []*querypb.BoundQuery, asTransaction bool) ([]sqltypes.Result, error) {
 	return client.server.ExecuteBatch(
 		client.ctx,
 		&client.target,

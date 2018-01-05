@@ -27,8 +27,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
 	"github.com/youtube/vitess/go/vt/tlstest"
+	"github.com/youtube/vitess/go/vt/vttls"
 )
 
 // This file tests the handshake scenarios between our client and our server.
@@ -38,8 +38,8 @@ func TestClearTextClientAuth(t *testing.T) {
 
 	authServer := NewAuthServerStatic()
 	authServer.Method = MysqlClearPassword
-	authServer.Entries["user1"] = &AuthServerStaticEntry{
-		Password: "password1",
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{
+		{Password: "password1"},
 	}
 
 	// Create the listener.
@@ -96,8 +96,8 @@ func TestSSLConnection(t *testing.T) {
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = &AuthServerStaticEntry{
-		Password: "password1",
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{
+		{Password: "password1"},
 	}
 
 	// Create the listener, so we can get its host.
@@ -120,7 +120,7 @@ func TestSSLConnection(t *testing.T) {
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
 
 	// Create the server with TLS config.
-	serverConfig, err := grpcutils.TLSServerConfig(
+	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
 		path.Join(root, "ca-cert.pem"))
@@ -173,7 +173,7 @@ func testSSLConnectionClearText(t *testing.T, params *ConnParams) {
 	if err != nil {
 		t.Fatalf("ExecuteFetch failed: %v", err)
 	}
-	if result.Rows[0][0].String() != "ON" {
+	if result.Rows[0][0].ToString() != "ON" {
 		t.Errorf("Got wrong result from ExecuteFetch(ssl echo): %v", result)
 	}
 
@@ -207,7 +207,7 @@ func testSSLConnectionBasics(t *testing.T, params *ConnParams) {
 	if err != nil {
 		t.Fatalf("ExecuteFetch failed: %v", err)
 	}
-	if result.Rows[0][0].String() != "ON" {
+	if result.Rows[0][0].ToString() != "ON" {
 		t.Errorf("Got wrong result from ExecuteFetch(ssl echo): %v", result)
 	}
 

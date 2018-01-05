@@ -1,0 +1,26 @@
+----------------------------------------------------------------------
+select * from user where email='null@void.com'
+
+1 ks_sharded/-40: select * from user where email = 'null@void.com' limit 10001
+1 ks_sharded/40-80: select * from user where email = 'null@void.com' limit 10001
+1 ks_sharded/80-c0: select * from user where email = 'null@void.com' limit 10001
+1 ks_sharded/c0-: select * from user where email = 'null@void.com' limit 10001
+
+----------------------------------------------------------------------
+select * from user where id in (1,2,3,4,5,6,7,8)
+
+1 ks_sharded/-40: select * from user where id in (1, 2) limit 10001
+1 ks_sharded/40-80: select * from user where id in (3, 5) limit 10001
+1 ks_sharded/c0-: select * from user where id in (4, 6, 7, 8) limit 10001
+
+----------------------------------------------------------------------
+insert into user (id, name) values(2, 'bob')
+
+1 ks_sharded/c0-: begin
+1 ks_sharded/c0-: insert into name_user_map(name, user_id) values ('bob', 2) /* _stream name_user_map (name user_id ) ('Ym9i' 2 ); */ /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */
+2 ks_sharded/-40: begin
+2 ks_sharded/-40: insert into user(id, name) values (2, 'bob') /* _stream user (id ) (2 ); */ /* vtgate:: keyspace_id:06e7ea22ce92708f */
+3 ks_sharded/c0-: commit
+4 ks_sharded/-40: commit
+
+----------------------------------------------------------------------

@@ -20,28 +20,27 @@ import (
 	"database/sql/driver"
 	"errors"
 
-	"golang.org/x/net/context"
-
 	"github.com/youtube/vitess/go/sqltypes"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // streamingRows creates a database/sql/driver compliant Row iterator
 // for a streaming query.
 type streamingRows struct {
-	stream sqltypes.ResultStream
-	failed error
-	fields []*querypb.Field
-	qr     *sqltypes.Result
-	index  int
-	cancel context.CancelFunc
+	stream  sqltypes.ResultStream
+	failed  error
+	fields  []*querypb.Field
+	qr      *sqltypes.Result
+	index   int
+	convert *converter
 }
 
 // newStreamingRows creates a new streamingRows from stream.
-func newStreamingRows(stream sqltypes.ResultStream, cancel context.CancelFunc) driver.Rows {
+func newStreamingRows(stream sqltypes.ResultStream, conv *converter) driver.Rows {
 	return &streamingRows{
-		stream: stream,
-		cancel: cancel,
+		stream:  stream,
+		convert: conv,
 	}
 }
 
@@ -61,9 +60,6 @@ func (ri *streamingRows) Columns() []string {
 }
 
 func (ri *streamingRows) Close() error {
-	if ri.cancel != nil {
-		ri.cancel()
-	}
 	return nil
 }
 
@@ -84,7 +80,9 @@ func (ri *streamingRows) Next(dest []driver.Value) error {
 		ri.qr = qr
 		ri.index = 0
 	}
-	populateRow(dest, ri.qr.Rows[ri.index])
+	if err := ri.convert.populateRow(dest, ri.qr.Rows[ri.index]); err != nil {
+		return err
+	}
 	ri.index++
 	return nil
 }

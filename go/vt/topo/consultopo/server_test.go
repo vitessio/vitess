@@ -26,11 +26,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/consul/api"
 	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test"
+	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -115,42 +115,27 @@ func TestConsulTopo(t *testing.T) {
 		os.Remove(configFilename)
 	}()
 
-	// This function will create a toplevel directory for a new test.
+	// Run the TopoServerTestSuite tests.
 	testIndex := 0
-	newServer := func() *Server {
+	test.TopoServerTestSuite(t, func() *topo.Server {
 		// Each test will use its own sub-directories.
 		testRoot := fmt.Sprintf("test-%v", testIndex)
 		testIndex++
 
 		// Create the server on the new root.
-		s, err := NewServer(serverAddr, path.Join(testRoot, "global"))
+		ts, err := topo.OpenServer("consul", serverAddr, path.Join(testRoot, topo.GlobalCell))
 		if err != nil {
-			t.Fatalf("NewServer() failed: %v", err)
+			t.Fatalf("OpenServer() failed: %v", err)
 		}
 
 		// Create the CellInfo.
-		cell := "test"
-		ci := &topodatapb.CellInfo{
+		if err := ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
 			ServerAddress: serverAddr,
-			Root:          path.Join(testRoot, cell),
-		}
-		data, err := proto.Marshal(ci)
-		if err != nil {
-			t.Fatalf("cannot proto.Marshal CellInfo: %v", err)
-		}
-		nodePath := path.Join(s.global.root, cellsPath, cell, topo.CellInfoFile)
-		if _, err := s.global.kv.Put(&api.KVPair{
-			Key:   nodePath,
-			Value: data,
-		}, nil); err != nil {
-			t.Fatalf("s.global.kv.Put(%v) failed: %v", nodePath, err)
+			Root:          path.Join(testRoot, test.LocalCellName),
+		}); err != nil {
+			t.Fatalf("CreateCellInfo() failed: %v", err)
 		}
 
-		return s
-	}
-
-	// Run the TopoServerTestSuite tests.
-	test.TopoServerTestSuite(t, func() topo.Impl {
-		return newServer()
+		return ts
 	})
 }

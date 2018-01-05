@@ -42,7 +42,7 @@ func Run(port int) {
 
 	l, err := proc.Listen(fmt.Sprintf("%v", port))
 	if err != nil {
-		log.Fatal(err)
+		log.Exit(err)
 	}
 	go http.Serve(l, nil)
 

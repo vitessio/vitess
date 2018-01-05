@@ -51,7 +51,7 @@ var (
 
 	schemaDir = flag.String("schema_dir", "", "Schema base directory. Should contain one directory per keyspace, with a vschema.json file if necessary.")
 
-	ts topo.Server
+	ts *topo.Server
 )
 
 func init() {
@@ -97,7 +97,9 @@ func main() {
 	// vtctld UI requires the cell flag
 	flag.Set("cell", tpb.Cells[0])
 	flag.Set("enable_realtime_stats", "true")
-	flag.Set("log_dir", "$VTDATAROOT/tmp")
+	if flag.Lookup("log_dir") == nil {
+		flag.Set("log_dir", "$VTDATAROOT/tmp")
+	}
 
 	// Create topo server. We use a 'memorytopo' implementation.
 	ts = memorytopo.NewServer(tpb.Cells...)
@@ -114,10 +116,7 @@ func main() {
 	if err != nil {
 		log.Warning(err)
 	}
-	mysqld, err := mysqlctl.NewMysqld(mycnf, dbcfgs, dbconfigFlags)
-	if err != nil {
-		log.Exit(err)
-	}
+	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs, dbconfigFlags)
 	servenv.OnClose(mysqld.Close)
 
 	// tablets configuration and init
@@ -128,17 +127,20 @@ func main() {
 
 	// vtgate configuration and init
 	resilientSrvTopoServer := vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
-	healthCheck := discovery.NewHealthCheck(30*time.Second /*connTimeoutTotal*/, 1*time.Millisecond /*retryDelay*/, 1*time.Hour /*healthCheckTimeout*/)
+	healthCheck := discovery.NewHealthCheck(1*time.Millisecond /*retryDelay*/, 1*time.Hour /*healthCheckTimeout*/)
 	tabletTypesToWait := []topodatapb.TabletType{
 		topodatapb.TabletType_MASTER,
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
 	}
+
+	vtgate.QueryLogHandler = "/debug/vtgate/querylog"
+	vtgate.QueryLogzHandler = "/debug/vtgate/querylogz"
+	vtgate.QueryzHandler = "/debug/vtgate/queryz"
 	vtgate.Init(context.Background(), healthCheck, ts, resilientSrvTopoServer, tpb.Cells[0], 2 /*retryCount*/, tabletTypesToWait)
 
 	// vtctld configuration and init
 	vtctld.InitVtctld(ts)
-	vtctld.HandleExplorer("memorytopo", vtctld.NewBackendExplorer(ts.Impl))
 
 	servenv.OnTerm(func() {
 		// FIXME(alainjobart): stop vtgate

@@ -25,13 +25,14 @@ import (
 	"path"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	vtenv "github.com/youtube/vitess/go/vt/env"
-	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
 	"github.com/youtube/vitess/go/vt/tlstest"
+	"github.com/youtube/vitess/go/vt/vttls"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
@@ -71,8 +72,8 @@ func (th *testHandler) NewConnection(c *Conn) {
 func (th *testHandler) ConnectionClosed(c *Conn) {
 }
 
-func (th *testHandler) ComQuery(c *Conn, q []byte, callback func(*sqltypes.Result) error) error {
-	switch query := string(q); query {
+func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+	switch query {
 	case "error":
 		return NewSQLError(ERUnknownComError, SSUnknownComError, "forced query handling error for: %v", query)
 	case "panic":
@@ -144,25 +145,144 @@ func (th *testHandler) ComQuery(c *Conn, q []byte, callback func(*sqltypes.Resul
 	return nil
 }
 
-func TestClientFoundRows(t *testing.T) {
+func getHostPort(t *testing.T, a net.Addr) (string, int) {
+	// For the host name, we resolve 'localhost' into an address.
+	// This works around a few travis issues where IPv6 is not 100% enabled.
+	hosts, err := net.LookupHost("localhost")
+	if err != nil {
+		t.Fatalf("LookupHost(localhost) failed: %v", err)
+	}
+	host := hosts[0]
+	port := a.(*net.TCPAddr).Port
+	t.Logf("listening on address '%v' port %v", host, port)
+	return host, port
+}
+
+func TestConnectionWithoutSourceHost(t *testing.T) {
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = &AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
-	}
+	}}
 	l, err := NewListener("tcp", ":0", authServer, th)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go func() {
-		l.Accept()
-	}()
+	go l.Accept()
 
-	host := l.Addr().(*net.TCPAddr).IP.String()
-	port := l.Addr().(*net.TCPAddr).Port
+	host, port := getHostPort(t, l.Addr())
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	c, err := Connect(context.Background(), params)
+	if err != nil {
+		t.Errorf("Should be able to connect to server but found error: %v", err)
+	}
+	c.Close()
+}
+
+func TestConnectionWithSourceHost(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic()
+
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{
+		{
+			Password:   "password1",
+			UserData:   "userData1",
+			SourceHost: "localhost",
+		},
+	}
+
+	l, err := NewListener("tcp", ":0", authServer, th)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	go l.Accept()
+
+	host, port := getHostPort(t, l.Addr())
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	_, err = Connect(context.Background(), params)
+	// target is localhost, should not work from tcp connection
+	if err == nil {
+		t.Errorf("Should be able to connect to server but found error: %v", err)
+	}
+}
+
+func TestConnectionUnixSocket(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic()
+
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{
+		{
+			Password:   "password1",
+			UserData:   "userData1",
+			SourceHost: "localhost",
+		},
+	}
+
+	unixSocket, err := ioutil.TempFile("", "mysql_vitess_test.sock")
+	if err != nil {
+		t.Fatalf("Failed to create temp file")
+	}
+	os.Remove(unixSocket.Name())
+
+	l, err := NewListener("unix", unixSocket.Name(), authServer, th)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	go l.Accept()
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		UnixSocket: unixSocket.Name(),
+		Uname:      "user1",
+		Pass:       "password1",
+	}
+
+	c, err := Connect(context.Background(), params)
+	if err != nil {
+		t.Errorf("Should be able to connect to server but found error: %v", err)
+	}
+	c.Close()
+}
+
+func TestClientFoundRows(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic()
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
+	l, err := NewListener("tcp", ":0", authServer, th)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	go l.Accept()
+
+	host, port := getHostPort(t, l.Addr())
 
 	// Setup the right parameters.
 	params := &ConnParams{
@@ -203,21 +323,18 @@ func TestServer(t *testing.T) {
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = &AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
-	}
+	}}
 	l, err := NewListener("tcp", ":0", authServer, th)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go func() {
-		l.Accept()
-	}()
+	go l.Accept()
 
-	host := l.Addr().(*net.TCPAddr).IP.String()
-	port := l.Addr().(*net.TCPAddr).Port
+	host, port := getHostPort(t, l.Addr())
 
 	// Setup the right parameters.
 	params := &ConnParams{
@@ -227,6 +344,12 @@ func TestServer(t *testing.T) {
 		Pass:  "password1",
 	}
 
+	initialTimingCounts := timings.Counts()
+	initialConnAccept := connAccept.Get()
+	initialConnSlow := connSlow.Get()
+
+	l.SlowConnectWarnThreshold = time.Duration(time.Nanosecond * 1)
+
 	// Run an 'error' command.
 	output, ok := runMysql(t, params, "error")
 	if ok {
@@ -234,8 +357,34 @@ func TestServer(t *testing.T) {
 	}
 	if !strings.Contains(output, "ERROR 1047 (08S01)") ||
 		!strings.Contains(output, "forced query handling error for") {
-		t.Errorf("Unexpected output for 'error'")
+		t.Errorf("Unexpected output for 'error': %v", output)
 	}
+	if connCount.Get() != 0 {
+		t.Errorf("Expected ConnCount=0, got %d", connCount.Get())
+	}
+	if connAccept.Get()-initialConnAccept != 1 {
+		t.Errorf("Expected ConnAccept delta=1, got %d", connAccept.Get()-initialConnAccept)
+	}
+	if connSlow.Get()-initialConnSlow != 1 {
+		t.Errorf("Expected ConnSlow delta=1, got %d", connSlow.Get()-initialConnSlow)
+	}
+
+	expectedTimingDeltas := map[string]int64{
+		"All":            2,
+		connectTimingKey: 1,
+		queryTimingKey:   1,
+	}
+	gotTimingCounts := timings.Counts()
+	for key, got := range gotTimingCounts {
+		expected := expectedTimingDeltas[key]
+		delta := got - initialTimingCounts[key]
+		if delta < expected {
+			t.Errorf("Expected Timing count delta %s should be >= %d, got %d", key, expected, delta)
+		}
+	}
+
+	// Set the slow connect threshold to something high that we don't expect to trigger
+	l.SlowConnectWarnThreshold = time.Duration(time.Second * 1)
 
 	// Run a 'panic' command, other side should panic, recover and
 	// close the connection.
@@ -246,6 +395,15 @@ func TestServer(t *testing.T) {
 	if !strings.Contains(output, "ERROR 2013 (HY000)") ||
 		!strings.Contains(output, "Lost connection to MySQL server during query") {
 		t.Errorf("Unexpected output for 'panic'")
+	}
+	if connCount.Get() != 0 {
+		t.Errorf("Expected ConnCount=0, got %d", connCount.Get())
+	}
+	if connAccept.Get()-initialConnAccept != 2 {
+		t.Errorf("Expected ConnAccept delta=2, got %d", connAccept.Get()-initialConnAccept)
+	}
+	if connSlow.Get()-initialConnSlow != 1 {
+		t.Errorf("Expected ConnSlow delta=1, got %d", connSlow.Get()-initialConnSlow)
 	}
 
 	// Run a 'select rows' command with results.
@@ -352,22 +510,19 @@ func TestClearTextServer(t *testing.T) {
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = &AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
-	}
+	}}
 	authServer.Method = MysqlClearPassword
 	l, err := NewListener("tcp", ":0", authServer, th)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go func() {
-		l.Accept()
-	}()
+	go l.Accept()
 
-	host := l.Addr().(*net.TCPAddr).IP.String()
-	port := l.Addr().(*net.TCPAddr).Port
+	host, port := getHostPort(t, l.Addr())
 
 	// Setup the right parameters.
 	params := &ConnParams{
@@ -440,10 +595,10 @@ func TestDialogServer(t *testing.T) {
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = &AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
-	}
+	}}
 	authServer.Method = MysqlDialog
 	l, err := NewListener("tcp", ":0", authServer, th)
 	if err != nil {
@@ -451,12 +606,9 @@ func TestDialogServer(t *testing.T) {
 	}
 	l.AllowClearTextWithoutTLS = true
 	defer l.Close()
-	go func() {
-		l.Accept()
-	}()
+	go l.Accept()
 
-	host := l.Addr().(*net.TCPAddr).IP.String()
-	port := l.Addr().(*net.TCPAddr).Port
+	host, port := getHostPort(t, l.Addr())
 
 	// Setup the right parameters.
 	params := &ConnParams{
@@ -487,9 +639,9 @@ func TestTLSServer(t *testing.T) {
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = &AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
-	}
+	}}
 
 	// Create the listener, so we can get its host.
 	// Below, we are enabling --ssl-verify-server-cert, which adds
@@ -500,7 +652,13 @@ func TestTLSServer(t *testing.T) {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	host := l.Addr().(*net.TCPAddr).IP.String()
+
+	// Make sure hostname is added as an entry to /etc/hosts, otherwise ssl handshake will fail
+	host, err := os.Hostname()
+	if err != nil {
+		t.Fatalf("Failed to get os Hostname: %v", err)
+	}
+
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
@@ -514,7 +672,7 @@ func TestTLSServer(t *testing.T) {
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
 
 	// Create the server with TLS config.
-	serverConfig, err := grpcutils.TLSServerConfig(
+	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
 		path.Join(root, "ca-cert.pem"))
@@ -522,9 +680,7 @@ func TestTLSServer(t *testing.T) {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
 	l.TLSConfig = serverConfig
-	go func() {
-		l.Accept()
-	}()
+	go l.Accept()
 
 	// Setup the right parameters.
 	params := &ConnParams{
@@ -613,6 +769,7 @@ func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
 		"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql"),
 	}
 
+	t.Logf("Running mysql command: %v %v", name, args)
 	cmd := exec.Command(name, args...)
 	cmd.Env = env
 	cmd.Dir = dir

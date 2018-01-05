@@ -65,7 +65,7 @@
 
 # scatter order by with * expression
 "select * from user order by id"
-"unsupported: scatter order by with a '*' in select expression"
+"unsupported: in scatter query: order by must reference a column in the select list: id asc"
 
 # filtering on a cross-shard subquery
 "select id from (select user.id, user.col from user join user_extra) as t where id=5"
@@ -121,6 +121,10 @@
 
 # * expresson not allowed for cross-shard joins
 "select * from user join user_extra"
+"unsupported: '*' expression in cross-shard query"
+
+# Group by column number, used with non-aliased expression (duplicated code)
+"select * from user group by 1"
 "unsupported: '*' expression in cross-shard query"
 
 # Filtering on scatter aggregates
@@ -199,7 +203,7 @@
 "select user.col1 as a from user order by 1 collate utf8_general_ci"
 "unsupported: in scatter query: complex order by expression: 1 collate utf8_general_ci"
 
-#Order by for join, but order by is cross-shard
+# Order by for join, but order by is cross-shard
 "select user.col1 as a, user_extra.col2 as b from user join user_extra on user_extra.user_id = 5 where user.id = 5 order by a+b"
 "unsupported: order by spans across shards"
 
@@ -207,13 +211,9 @@
 "select id from unsharded order by (select id from unsharded)"
 "unsupported: order by has subquery"
 
-# limit for joins
-"select user.col from user join user_extra limit 1"
-"unsupported: limits with cross-shard query"
-
-# limit for scatter
-"select col from user limit 1"
-"unsupported: limits with scatter"
+# limit with offset for scatter query
+"select id from user limit 10, 20"
+"unsupported: offset limit for cross-shard queries"
 
 # sequence in subquery
 "select col from unsharded where id in (select next value from seq)"
@@ -221,11 +221,31 @@
 
 # subqueries in update
 "update user set col = (select id from unsharded)"
-"unsupported: subqueries in DML"
+"unsupported: subqueries in sharded DML"
+
+# sharded subqueries in unsharded update
+"update unsharded set col = (select id from user)"
+"unsupported: sharded subqueries in DML"
+
+# sharded join unsharded subqueries in unsharded update
+"update unsharded set col = (select id from unsharded join user on unsharded.id = user.id)"
+"unsupported: sharded subqueries in DML"
 
 # subqueries in delete
 "delete from user where col = (select id from unsharded)"
-"unsupported: subqueries in DML"
+"unsupported: subqueries in sharded DML"
+
+# sharded subqueries in unsharded delete
+"delete from unsharded where col = (select id from user)"
+"unsupported: sharded subqueries in DML"
+
+# sharded subquery in unsharded subquery in unsharded delete
+"delete from unsharded where col = (select id from unsharded where id = (select id from user))"
+"unsupported: sharded subqueries in DML"
+
+# sharded join unsharded subqueries in unsharded delete
+"delete from unsharded where col = (select id from unsharded join user on unsharded.id = user.id)"
+"unsupported: sharded subqueries in DML"
 
 # update with no where clause
 "update user set val = 1"
@@ -283,13 +303,33 @@
 "delete user from user join user_extra on user.id = user_extra.id where user.name = 'foo'"
 "unsupported: multi-table delete statement in sharded keyspace"
 
-# update changes index column
-"update music set id = 1 where id = 1"
-"unsupported: DML cannot change vindex column"
+# update changes primary vindex column
+"update user set id = 1 where id = 1"
+"unsupported: You can't update primary vindex columns. Invalid update on vindex: user_index"
+
+# update changes non owned vindex column
+"update music_extra set music_id = 1 where user_id = 1"
+"unsupported: You can only update owned vindexes. Invalid update on vindex: music_user_map"
+
+# update changes non lookup vindex column
+"update user_metadata set md5 = 1 where user_id = 1"
+"unsupported: You can only update lookup vindexes. Invalid update on vindex: user_md5_index"
+
+# update with complex set clause
+"update music set id = id + 1 where id = 1"
+"unsupported: Only values are supported. Invalid update on column: id"
+
+# update by primary keyspace id, changing one vindex column, limit without order clause
+"update user_metadata set email = 'juan@vitess.io' where user_id = 1 limit 10"
+"unsupported: Need to provide order by clause when using limit. Invalid update on vindex: email_user_map"
+
+# update multi column vindex, without values for all the vindex columns
+"update multicolvin set column_c = 2 where kid = 1"
+"unsupported: update does not have values for all the columns in vindex (colb_colc_map)"
 
 # cross-shard update tables
 "update (select id from user) as u set id = 4"
-"unsupported: subqueries in DML"
+"unsupported: subqueries in sharded DML"
 
 # join in update tables
 "update user join user_extra on user.id = user_extra.id set user.name = 'foo'"
@@ -299,29 +339,21 @@
 "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id"
 "unsupported: multi-table update statement in sharded keyspace"
 
-# unsharded insert from union
-"insert into unsharded select 1 from dual union select 1 from dual"
-"unsupported: union in insert"
-
-# unsharded insert with cross-shard select
-"insert into unsharded select col from user limit 1"
-"unsupported: limits with scatter"
-
 # unsharded insert with cross-shard join"
 "insert into unsharded select u.col from user u join user u1"
-"unsupported: cross-shard join in insert"
+"unsupported: sharded subquery in insert values"
 
 # unsharded insert with mismatched keyspaces"
 "insert into unsharded select col from user where id=1"
-"unsupported: cross-keyspace select in insert"
+"unsupported: sharded subquery in insert values"
 
 # unsharded insert, unqualified names and auto-inc combined
 "insert into unsharded_auto select col from unsharded"
 "unsupported: auto-inc and select in insert"
 
-# unsharded inssert subquery in insert value
-"insert into unsharded values((select 1 from dual), 1)"
-"unsupported: subquery in insert values"
+# unsharded insert, with sharded subquery in insert value
+"insert into unsharded values((select 1 from user), 1)"
+"unsupported: sharded subquery in insert values"
 
 # unsharded insert, no col list with auto-inc
 "insert into unsharded_auto values(1,1)"
@@ -330,6 +362,10 @@
 # unsharded insert, col list does not match values
 "insert into unsharded_auto(id, val) values(1)"
 "column list doesn't match values"
+
+# sharded upsert can't change vindex
+"insert into user(id) values(1) on duplicate key update id = 3"
+"unsupported: DML cannot change vindex column"
 
 # sharded insert from select
 "insert into user(id) select 1 from dual"
@@ -375,10 +411,6 @@
 "replace into user(id) values (1), (2)"
 "unsupported: REPLACE INTO with sharded schema"
 
-# cross-shard expression in parenthesis with limit not supported yet
-"select * from user where (id = 4 AND name ='abc') limit 5"
-"unsupported: limits with scatter"
-
 # union of information_schema with normal table
 "select * from information_schema.a union select * from unsharded"
 "unsupported: intermixing of information_schema and regular tables"
@@ -416,3 +448,27 @@
 
 "select 'b','c' from user union (select user.id, user.name from user join user_extra where user_extra.extra = 'asdf')"
 "unsupported construct: SELECT of UNION is non-trivial"
+
+"select keyspace_id from user_index where id = 1 and id = 2"
+"unsupported: where clause for vindex function must be of the form id = <val> (multiple filters)"
+
+"select keyspace_id from user_index where func(id)"
+"unsupported: where clause for vindex function must be of the form id = <val> (not a comparison)"
+
+"select keyspace_id from user_index where id > 1"
+"unsupported: where clause for vindex function must be of the form id = <val> (not equality)"
+
+"select keyspace_id from user_index where 1 = id"
+"unsupported: where clause for vindex function must be of the form id = <val> (lhs is not a column)"
+
+"select keyspace_id from user_index where none = 1"
+"unsupported: where clause for vindex function must be of the form id = <val> (lhs is not id)"
+
+"select keyspace_id from user_index where id = a"
+"unsupported: where clause for vindex function must be of the form id = <val> (rhs is not a value)"
+
+"select keyspace_id from user_index"
+"unsupported: where clause for vindex function must be of the form id = <val> (where clause missing)"
+
+"select func(keyspace_id) from user_index where id = :id"
+"unsupported: expression on results of a vindex function"

@@ -18,7 +18,7 @@
 # It's used by the pre-commit hook, but is a separate script
 # so you can run it manually too.
 
-PYLINT=/usr/bin/gpylint
+PYLINT=${PYLINT:-/usr/bin/gpylint}
 
 file=$1
 

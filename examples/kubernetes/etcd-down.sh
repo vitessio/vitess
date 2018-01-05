@@ -22,15 +22,15 @@ set -e
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
+replicas=${ETCD_REPLICAS:-3}
 cells=`echo $CELLS | tr ',' ' '`
 
-# Delete replication controllers
+# Delete etcd clusters
 for cell in 'global' $cells; do
-  echo "Stopping etcd replicationcontroller for $cell cell..."
-  $KUBECTL $KUBECTL_OPTIONS delete replicationcontroller etcd-$cell
-
-  echo "Deleting etcd service for $cell cell..."
-  $KUBECTL $KUBECTL_OPTIONS delete service etcd-$cell
-  $KUBECTL $KUBECTL_OPTIONS delete service etcd-$cell-srv
+  echo "Stopping etcd cluster for $cell cell..."
+  sed -e "s/{{cell}}/$cell/g" -e "s/{{replicas}}/$replicas/g" \
+    etcd-service-template.yaml | \
+    $KUBECTL $KUBECTL_OPTIONS delete -f -
 done
 
+# Note we keep etcd-operator installed for future use.

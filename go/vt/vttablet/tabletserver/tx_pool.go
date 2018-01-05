@@ -56,6 +56,13 @@ const txLogInterval = time.Duration(1 * time.Minute)
 var (
 	txOnce  sync.Once
 	txStats = stats.NewTimings("Transactions")
+
+	txIsolations = map[querypb.ExecuteOptions_TransactionIsolation]string{
+		querypb.ExecuteOptions_REPEATABLE_READ:  "set transaction isolation level REPEATABLE READ",
+		querypb.ExecuteOptions_READ_COMMITTED:   "set transaction isolation level READ COMMITTED",
+		querypb.ExecuteOptions_READ_UNCOMMITTED: "set transaction isolation level READ UNCOMMITTED",
+		querypb.ExecuteOptions_SERIALIZABLE:     "set transaction isolation level SERIALIZABLE",
+	}
 )
 
 // TxPool is the transaction pool for the query service.
@@ -105,12 +112,12 @@ func NewTxPool(
 
 // Open makes the TxPool operational. This also starts the transaction killer
 // that will kill long-running transactions.
-func (axp *TxPool) Open(appParams, dbaParams *mysql.ConnParams) {
+func (axp *TxPool) Open(appParams, dbaParams, appDebugParams *mysql.ConnParams) {
 	log.Infof("Starting transaction id: %d", axp.lastID)
-	axp.conns.Open(appParams, dbaParams)
+	axp.conns.Open(appParams, dbaParams, appDebugParams)
 	foundRowsParam := *appParams
 	foundRowsParam.EnableClientFoundRows()
-	axp.foundRowsPool.Open(&foundRowsParam, dbaParams)
+	axp.foundRowsPool.Open(&foundRowsParam, dbaParams, appDebugParams)
 	axp.ticks.Start(func() { axp.transactionKiller() })
 }
 
@@ -164,7 +171,7 @@ func (axp *TxPool) WaitForEmpty() {
 
 // Begin begins a transaction, and returns the associated transaction id.
 // Subsequent statements can access the connection through the transaction id.
-func (axp *TxPool) Begin(ctx context.Context, useFoundRows bool) (int64, error) {
+func (axp *TxPool) Begin(ctx context.Context, useFoundRows bool, txIsolation querypb.ExecuteOptions_TransactionIsolation) (int64, error) {
 	var conn *connpool.DBConn
 	var err error
 	if useFoundRows {
@@ -182,6 +189,14 @@ func (axp *TxPool) Begin(ctx context.Context, useFoundRows bool) (int64, error) 
 		}
 		return 0, err
 	}
+
+	if query, ok := txIsolations[txIsolation]; ok {
+		if _, err := conn.Exec(ctx, query, 1, false); err != nil {
+			conn.Recycle()
+			return 0, err
+		}
+	}
+
 	if _, err := conn.Exec(ctx, "begin", 1, false); err != nil {
 		conn.Recycle()
 		return 0, err
@@ -231,8 +246,8 @@ func (axp *TxPool) Get(transactionID int64, reason string) (*TxConnection, error
 // LocalBegin is equivalent to Begin->Get.
 // It's used for executing transactions within a request. It's safe
 // to always call LocalConclude at the end.
-func (axp *TxPool) LocalBegin(ctx context.Context, useFoundRows bool) (*TxConnection, error) {
-	transactionID, err := axp.Begin(ctx, useFoundRows)
+func (axp *TxPool) LocalBegin(ctx context.Context, useFoundRows bool, txIsolation querypb.ExecuteOptions_TransactionIsolation) (*TxConnection, error) {
+	transactionID, err := axp.Begin(ctx, useFoundRows, txIsolation)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +258,6 @@ func (axp *TxPool) LocalBegin(ctx context.Context, useFoundRows bool) (*TxConnec
 func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, messager *messager.Engine) error {
 	defer conn.conclude(TxCommit)
 	defer messager.LockDB(conn.NewMessages, conn.ChangedMessages)()
-	txStats.Add("Completed", time.Now().Sub(conn.StartTime))
 	if _, err := conn.Exec(ctx, "commit", 1, false); err != nil {
 		conn.Close()
 		return err
@@ -262,7 +276,6 @@ func (axp *TxPool) LocalConclude(ctx context.Context, conn *TxConnection) {
 
 func (axp *TxPool) localRollback(ctx context.Context, conn *TxConnection) error {
 	defer conn.conclude(TxRollback)
-	txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
 	if _, err := conn.Exec(ctx, "rollback", 1, false); err != nil {
 		conn.Close()
 		return err
@@ -332,7 +345,13 @@ func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wa
 	r, err := txc.DBConn.ExecOnce(ctx, query, maxrows, wantfields)
 	if err != nil {
 		if mysql.IsConnErr(err) {
-			txc.pool.checker.CheckMySQL()
+			select {
+			case <-ctx.Done():
+				// If the context is done, the query was killed.
+				// So, don't trigger a mysql check.
+			default:
+				txc.pool.checker.CheckMySQL()
+			}
 		}
 		return nil, err
 	}
@@ -383,6 +402,7 @@ func (txc *TxConnection) log(conclusion string) {
 	duration := txc.EndTime.Sub(txc.StartTime)
 	tabletenv.UserTransactionCount.Add([]string{username, conclusion}, 1)
 	tabletenv.UserTransactionTimesNs.Add([]string{username, conclusion}, int64(duration))
+	txStats.Add(conclusion, duration)
 	if txc.LogToFile.Get() != 0 {
 		log.Infof("Logged transaction: %s", txc.Format(nil))
 	}

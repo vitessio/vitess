@@ -43,16 +43,16 @@ func TestDBConnExec(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeTrusted(sqltypes.VarChar, []byte("123"))},
+			{sqltypes.NewVarChar("123")},
 		},
 	}
 	db.AddQuery(sql, expectedResult)
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams())
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
 	defer cancel()
-	dbConn, err := NewDBConn(connPool, db.ConnParams(), db.ConnParams())
+	dbConn, err := NewDBConn(connPool, db.ConnParams())
 	defer dbConn.Close()
 	if err != nil {
 		t.Fatalf("should not get an error, err: %v", err)
@@ -83,15 +83,15 @@ func TestDBConnKill(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams())
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
-	dbConn, err := NewDBConn(connPool, db.ConnParams(), db.ConnParams())
+	dbConn, err := NewDBConn(connPool, db.ConnParams())
 	defer dbConn.Close()
 	query := fmt.Sprintf("kill %d", dbConn.ID())
 	db.AddQuery(query, &sqltypes.Result{})
 	// Kill failed because we are not able to connect to the database
 	db.EnableConnFail()
-	err = dbConn.Kill("test kill")
+	err = dbConn.Kill("test kill", 0)
 	want := "errno 2013"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Exec: %v, want %s", err, want)
@@ -99,7 +99,7 @@ func TestDBConnKill(t *testing.T) {
 	db.DisableConnFail()
 
 	// Kill succeed
-	err = dbConn.Kill("test kill")
+	err = dbConn.Kill("test kill", 0)
 	if err != nil {
 		t.Fatalf("kill should succeed, but got error: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestDBConnKill(t *testing.T) {
 	newKillQuery := fmt.Sprintf("kill %d", dbConn.ID())
 	// Kill failed because "kill query_id" failed
 	db.AddRejectedQuery(newKillQuery, errors.New("rejected"))
-	err = dbConn.Kill("test kill")
+	err = dbConn.Kill("test kill", 0)
 	want = "rejected"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Exec: %v, want %s", err, want)
@@ -127,16 +127,16 @@ func TestDBConnStream(t *testing.T) {
 			{Type: sqltypes.VarChar},
 		},
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeTrusted(sqltypes.VarChar, []byte("123"))},
+			{sqltypes.NewVarChar("123")},
 		},
 	}
 	db.AddQuery(sql, expectedResult)
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams())
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
 	defer cancel()
-	dbConn, err := NewDBConn(connPool, db.ConnParams(), db.ConnParams())
+	dbConn, err := NewDBConn(connPool, db.ConnParams())
 	defer dbConn.Close()
 	var result sqltypes.Result
 	err = dbConn.Stream(
@@ -164,9 +164,8 @@ func TestDBConnStream(t *testing.T) {
 			return nil
 		}, 10, querypb.ExecuteOptions_ALL)
 	db.DisableConnFail()
-	want1 := "Connection is closed"
-	want2 := "use of closed network connection"
-	if err == nil || (!strings.Contains(err.Error(), want1) && !strings.Contains(err.Error(), want2)) {
-		t.Errorf("Error: '%v', must contain '%s' or '%s'\n", err, want1, want2)
+	want := "no such file or directory (errno 2002)"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Error: '%v', must contain '%s'", err, want)
 	}
 }

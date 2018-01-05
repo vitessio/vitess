@@ -1,6 +1,7 @@
 ---
 layout: doc
 title: "Upgrading"
+redirect_from: /user-guide/upgrading.html
 description:
 modified:
 excerpt:

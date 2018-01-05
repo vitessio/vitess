@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"errors"
 	"flag"
 	"os"
 	"time"
@@ -34,7 +35,6 @@ import (
 // actionnode modules, as we do't want to depend on them at all.
 var (
 	actionTimeout = flag.Duration("action_timeout", time.Hour, "timeout for the total command")
-	dialTimeout   = flag.Duration("dial_timeout", 30*time.Second, "time to wait for the dial phase")
 	server        = flag.String("server", "", "server to use for connection")
 )
 
@@ -45,9 +45,15 @@ func main() {
 
 	logger := logutil.NewConsoleLogger()
 
+	// We can't do much without a -server flag
+	if *server == "" {
+		log.Error(errors.New("Please specify -server <vtctld_host:vtctld_port> to specify the vtctld server to connect to"))
+		os.Exit(1)
+	}
+
 	err := vtctlclient.RunCommandAndWait(
 		context.Background(), *server, flag.Args(),
-		*dialTimeout, *actionTimeout,
+		*actionTimeout,
 		func(e *logutilpb.Event) {
 			logutil.LogEvent(logger, e)
 		})

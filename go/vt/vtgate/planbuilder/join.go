@@ -109,14 +109,18 @@ func newJoin(lhs, rhs builder, ajoin *sqlparser.JoinTableExpr) (*join, error) {
 	if ajoin == nil {
 		return jb, nil
 	}
+	if ajoin.Condition.Using != nil {
+		return nil, errors.New("unsupported: join with USING(column_list) clause")
+	}
+
 	if opcode == engine.LeftJoin {
-		err := pushFilter(ajoin.On, rhs, sqlparser.WhereStr)
+		err := pushFilter(ajoin.Condition.On, rhs, sqlparser.WhereStr)
 		if err != nil {
 			return nil, err
 		}
 		return jb, nil
 	}
-	err = pushFilter(ajoin.On, jb, sqlparser.WhereStr)
+	err = pushFilter(ajoin.Condition.On, jb, sqlparser.WhereStr)
 	if err != nil {
 		return nil, err
 	}
@@ -195,6 +199,19 @@ func (jb *join) PushSelect(expr *sqlparser.AliasedExpr, origin columnOriginator)
 func (jb *join) PushOrderByNull() {
 	jb.Left.PushOrderByNull()
 	jb.Right.PushOrderByNull()
+}
+
+// PushOrderByRand satisfies the builder interface.
+func (jb *join) PushOrderByRand() {
+	jb.Left.PushOrderByRand()
+	jb.Right.PushOrderByRand()
+}
+
+// SetUpperLimit satisfies the builder interface.
+// The call is ignored because results get multiplied
+// as they join with others. So, it's hard to reliably
+// predict if a limit push down will work correctly.
+func (jb *join) SetUpperLimit(_ *sqlparser.SQLVal) {
 }
 
 // PushMisc satisfies the builder interface.

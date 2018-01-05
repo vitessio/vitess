@@ -18,7 +18,6 @@ package io.vitess.jdbc;
 
 import java.sql.SQLException;
 import java.sql.Types;
-
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -194,7 +193,7 @@ public class FieldWithMetadataTest extends BaseTest {
 
         conn.setIncludedFields(Query.ExecuteOptions.IncludedFields.TYPE_AND_NAME);
         fieldWithMetadata = new FieldWithMetadata(conn, raw);
-        Assert.assertEquals(Types.BINARY, fieldWithMetadata.getJavaType());
+        Assert.assertEquals(Types.CHAR, fieldWithMetadata.getJavaType());
         Assert.assertEquals(null, fieldWithMetadata.getEncoding());
         Assert.assertEquals(false, fieldWithMetadata.isSingleBit());
 

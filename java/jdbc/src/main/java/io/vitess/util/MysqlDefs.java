@@ -16,11 +16,12 @@
 
 package io.vitess.util;
 
-import io.vitess.proto.Query;
 import java.sql.Connection;
 import java.sql.Types;
 import java.util.HashMap;
 import java.util.Map;
+
+import io.vitess.proto.Query;
 
 /**
  * Created by ashudeep.sharma on 07/03/16.
@@ -195,7 +196,7 @@ public final class MysqlDefs {
         vitesstoMySqlType.put(Query.Type.SET, Types.CHAR);
         vitesstoMySqlType.put(Query.Type.TUPLE, Types.OTHER);
         vitesstoMySqlType.put(Query.Type.GEOMETRY, Types.BINARY);
-        vitesstoMySqlType.put(Query.Type.JSON, Types.BINARY);
+        vitesstoMySqlType.put(Query.Type.JSON, Types.CHAR);
     }
 
     static {

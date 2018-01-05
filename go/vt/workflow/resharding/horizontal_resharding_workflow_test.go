@@ -127,7 +127,7 @@ func setupMockWrangler(ctrl *gomock.Controller, keyspace string) *MockResharding
 	return mockWranglerInterface
 }
 
-func setupTopology(ctx context.Context, t *testing.T, keyspace string) topo.Server {
+func setupTopology(ctx context.Context, t *testing.T, keyspace string) *topo.Server {
 	ts := memorytopo.NewServer("cell")
 	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)

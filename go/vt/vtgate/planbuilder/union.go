@@ -58,7 +58,7 @@ func processUnion(union *sqlparser.Union, vschema VSchema, outer builder) (build
 	if err != nil {
 		return nil, err
 	}
-	err = pushLimit(union.Limit, bldr)
+	bldr, err = pushLimit(union.Limit, bldr)
 	if err != nil {
 		return nil, err
 	}
@@ -99,6 +99,7 @@ func unionRouteMerge(union *sqlparser.Union, left, right builder, vschema VSchem
 	rb := newRoute(
 		&sqlparser.Union{Type: union.Type, Left: union.Left, Right: union.Right, Lock: union.Lock},
 		lroute.ERoute,
+		lroute.condition,
 		vschema,
 	)
 	lroute.Redirect = rb

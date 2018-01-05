@@ -14,8 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package vtgate provides query routing rpc services
-// for vttablets.
 package vtgate
 
 import (
@@ -73,7 +71,7 @@ func isRetryableError(err error) bool {
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 // This throws an error if a dml spans multiple keyspace_ids. Resharding depends
 // on being able to uniquely route a write.
-func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	if sqlparser.IsDML(sql) && len(keyspaceIds) > 1 {
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "DML should not span multiple keyspace_ids")
 	}
@@ -86,12 +84,12 @@ func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVar
 			tabletType,
 			keyspaceIds)
 	}
-	return res.Execute(ctx, sql, bindVariables, keyspace, tabletType, session, mapToShards, notInTransaction, options)
+	return res.Execute(ctx, sql, bindVariables, keyspace, tabletType, session, mapToShards, notInTransaction, options, nil /* LogStats */)
 }
 
 // ExecuteKeyRanges executes a non-streaming query based on KeyRanges.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (res *Resolver) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	mapToShards := func(k string) (string, []string, error) {
 		return mapKeyRangesToShards(
 			ctx,
@@ -101,7 +99,7 @@ func (res *Resolver) ExecuteKeyRanges(ctx context.Context, sql string, bindVaria
 			tabletType,
 			keyRanges)
 	}
-	return res.Execute(ctx, sql, bindVariables, keyspace, tabletType, session, mapToShards, notInTransaction, options)
+	return res.Execute(ctx, sql, bindVariables, keyspace, tabletType, session, mapToShards, notInTransaction, options, nil)
 }
 
 // Execute executes a non-streaming query based on shards resolved by given func.
@@ -109,17 +107,21 @@ func (res *Resolver) ExecuteKeyRanges(ctx context.Context, sql string, bindVaria
 func (res *Resolver) Execute(
 	ctx context.Context,
 	sql string,
-	bindVars map[string]interface{},
+	bindVars map[string]*querypb.BindVariable,
 	keyspace string,
 	tabletType topodatapb.TabletType,
 	session *vtgatepb.Session,
 	mapToShards func(string) (string, []string, error),
 	notInTransaction bool,
 	options *querypb.ExecuteOptions,
+	logStats *LogStats,
 ) (*sqltypes.Result, error) {
 	keyspace, shards, err := mapToShards(keyspace)
 	if err != nil {
 		return nil, err
+	}
+	if logStats != nil {
+		logStats.ShardQueries = uint32(len(shards))
 	}
 	for {
 		qr, err := res.scatterConn.Execute(
@@ -165,7 +167,7 @@ func (res *Resolver) Execute(
 func (res *Resolver) ExecuteEntityIds(
 	ctx context.Context,
 	sql string,
-	bindVariables map[string]interface{},
+	bindVariables map[string]*querypb.BindVariable,
 	keyspace string,
 	entityColumnName string,
 	entityKeyspaceIDs []*vtgatepb.ExecuteEntityIdsRequest_EntityId,
@@ -297,7 +299,7 @@ func (res *Resolver) ExecuteBatch(
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple KeyspaceIds to make it future proof.
-func (res *Resolver) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+func (res *Resolver) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	mapToShards := func(k string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(
 			ctx,
@@ -316,7 +318,7 @@ func (res *Resolver) StreamExecuteKeyspaceIds(ctx context.Context, sql string, b
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple keyranges to make it future proof.
-func (res *Resolver) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+func (res *Resolver) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	mapToShards := func(k string) (string, []string, error) {
 		return mapKeyRangesToShards(
 			ctx,
@@ -336,7 +338,7 @@ func (res *Resolver) StreamExecuteKeyRanges(ctx context.Context, sql string, bin
 func (res *Resolver) streamExecute(
 	ctx context.Context,
 	sql string,
-	bindVars map[string]interface{},
+	bindVars map[string]*querypb.BindVariable,
 	keyspace string,
 	tabletType topodatapb.TabletType,
 	mapToShards func(string) (string, []string, error),
@@ -468,20 +470,23 @@ func StrsEquals(a, b []string) bool {
 	return true
 }
 
-func buildEntityIds(shardIDMap map[string][]interface{}, qSQL, entityColName string, qBindVars map[string]interface{}) ([]string, map[string]string, map[string]map[string]interface{}) {
+func buildEntityIds(shardIDMap map[string][]*querypb.Value, qSQL, entityColName string, qBindVars map[string]*querypb.BindVariable) ([]string, map[string]string, map[string]map[string]*querypb.BindVariable) {
 	shards := make([]string, len(shardIDMap))
 	shardsIdx := 0
 	sqls := make(map[string]string)
-	bindVars := make(map[string]map[string]interface{})
-	for shard, ids := range shardIDMap {
+	bindVars := make(map[string]map[string]*querypb.BindVariable)
+	for shard, values := range shardIDMap {
 		var b bytes.Buffer
 		b.Write([]byte(entityColName))
-		bindVar := make(map[string]interface{})
+		bindVar := make(map[string]*querypb.BindVariable)
 		for k, v := range qBindVars {
 			bindVar[k] = v
 		}
 		bvName := fmt.Sprintf("%v_entity_ids", entityColName)
-		bindVar[bvName] = ids
+		bindVar[bvName] = &querypb.BindVariable{
+			Type:   querypb.Type_TUPLE,
+			Values: values,
+		}
 		b.Write(inOperator)
 		b.Write(sqlListIdentifier)
 		b.Write([]byte(bvName))

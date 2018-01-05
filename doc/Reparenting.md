@@ -22,8 +22,6 @@ replicate from that master.
 
 ## MySQL requirements
 
-Vitess supports [MySQL 5.6](https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-howto.html), [MySQL 5.7](https://dev.mysql.com/doc/refman/5.7/en/replication-gtids-howto.html) and [MariaDB 10.0](https://mariadb.com/kb/en/mariadb/global-transaction-id/) implementations.
-
 ### GTIDs
 Vitess requires the use of global transaction identifiers
 ([GTIDs](https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-concepts.html)) for its operations:
@@ -33,7 +31,7 @@ Vitess requires the use of global transaction identifiers
   correct when reparenting. (During external reparenting, Vitess
   assumes the external tool manages the replication process.)
 * During resharding, Vitess uses GTIDs for
-  [filtered replication](/user-guide/sharding.html#filtered-replication),
+  [filtered replication]({% link user-guide/sharding.md %}#filtered-replication),
   the process by which source tablet data is transferred to the proper
   destination tablets.
 
@@ -45,16 +43,15 @@ Larger Vitess deployments typically do implement semisynchronous replication.
 
 ## Active Reparenting
 
-You can use the following <code>[vtctl](/reference/vtctl.html)</code>
+You can use the following <code>[vtctl]({% link reference/vtctl.md %})</code>
 commands to perform reparenting operations:
 
-* <code>[PlannedReparentShard](#plannedreparentshard:-planned-reparenting)</code>
-* <code>[EmergencyReparentShard](#emergencyreparentshard:-emergency-reparenting)</code>
+* <code>PlannedReparentShard</code>
+* <code>EmergencyReparentShard</code>
 
-Both commands lock the shard for write operations. The two commands
+Both commands lock the Shard record in the global topology server. The two commands
 cannot run in parallel, nor can either command run in parallel with the
-<code>[InitShardMaster](/reference/vtctl.html#initshardmaster)</code>
-command.
+<code>InitShardMaster</code> command.
 
 The two commands are both dependent on the global topology server being
 available, and they both insert rows in the topology server's
@@ -114,7 +111,7 @@ of the available slaves.
 **Important:** Before calling this command, you must first identify
 the slave with the most advanced replication position as that slave
 must be designated as the new master. You can use the 
-<code>[vtctl ShardReplicationPositions](/reference/vtctl.html#shardreplicationpositions)</code>
+<code>[vtctl ShardReplicationPositions]({% link reference/vtctl.md %}#shardreplicationpositions)</code>
 command to determine the current replication positions of a shard's slaves.
 
 This command performs the following actions:
@@ -140,7 +137,7 @@ This command performs the following actions:
 External reparenting occurs when another tool handles the process
 of changing a shard's master tablet. After that occurs, the tool
 needs to call the
-<code>[vtctl TabletExternallyReparented](/reference/vtctl.html#tabletexternallyreparented)</code>
+<code>[vtctl TabletExternallyReparented]({% link reference/vtctl.md %}#tabletexternallyreparented)</code>
 command to ensure that the topology server, replication graph, and serving
 graph are updated accordingly.
 
@@ -182,7 +179,7 @@ A tablet can be orphaned after a reparenting if it is unavailable
 when the reparent operation is running but then recovers later on.
 In that case, you can manually reset the tablet's master to the
 current shard master using the
-<code>[vtctl ReparentTablet](/reference/vtctl.html#reparenttablet)</code>
+<code>[vtctl ReparentTablet]({% link reference/vtctl.md %}#reparenttablet)</code>
 command. You can then restart replication on the tablet if it was stopped
-by calling the <code>[vtctl StartSlave](/reference/vtctl.html#startslave)</code>
+by calling the <code>[vtctl StartSlave]({% link reference/vtctl.md %}#startslave)</code>
 command.

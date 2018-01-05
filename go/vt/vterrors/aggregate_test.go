@@ -47,14 +47,6 @@ func TestAggregateVtGateErrorCodes(t *testing.T) {
 			expected: vtrpcpb.Code_INVALID_ARGUMENT,
 		},
 		{
-			// OK should be converted to INTERNAL
-			input: []error{
-				errFromCode(vtrpcpb.Code_OK),
-				errFromCode(vtrpcpb.Code_UNAVAILABLE),
-			},
-			expected: vtrpcpb.Code_INTERNAL,
-		},
-		{
 			// aggregate two codes to the highest priority
 			input: []error{
 				errFromCode(vtrpcpb.Code_UNAVAILABLE),

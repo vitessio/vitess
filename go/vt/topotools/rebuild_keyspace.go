@@ -32,7 +32,7 @@ import (
 )
 
 // RebuildKeyspace rebuilds the serving graph data while locking out other changes.
-func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts topo.Server, keyspace string, cells []string) (err error) {
+func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts *topo.Server, keyspace string, cells []string) (err error) {
 	ctx, unlock, lockErr := ts.LockKeyspace(ctx, keyspace, "RebuildKeyspace")
 	if lockErr != nil {
 		return lockErr
@@ -67,7 +67,7 @@ func findCellsForRebuild(ki *topo.KeyspaceInfo, shardMap map[string]*topo.ShardI
 //
 // Take data from the global keyspace and rebuild the local serving
 // copies in each cell.
-func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts topo.Server, keyspace string, cells []string) error {
+func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Server, keyspace string, cells []string) error {
 	log.Infof("rebuildKeyspace %v", keyspace)
 	if err := topo.CheckKeyspaceLocked(ctx, keyspace); err != nil {
 		return err

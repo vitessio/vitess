@@ -51,7 +51,7 @@ type VtctlPipe struct {
 }
 
 // NewVtctlPipe creates a new VtctlPipe based on the given topo server.
-func NewVtctlPipe(t *testing.T, ts topo.Server) *VtctlPipe {
+func NewVtctlPipe(t *testing.T, ts *topo.Server) *VtctlPipe {
 	// Register all vtctl commands
 	servenvInitialized.Do(func() {
 		// make sure we use the right protocol
@@ -74,7 +74,7 @@ func NewVtctlPipe(t *testing.T, ts topo.Server) *VtctlPipe {
 	go server.Serve(listener)
 
 	// Create a VtctlClient gRPC client to talk to the fake server
-	client, err := vtctlclient.New(listener.Addr().String(), 30*time.Second)
+	client, err := vtctlclient.New(listener.Addr().String())
 	if err != nil {
 		t.Fatalf("Cannot create client: %v", err)
 	}

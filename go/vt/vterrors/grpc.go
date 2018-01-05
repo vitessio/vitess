@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"io"
 
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -120,7 +120,7 @@ func ToGRPC(err error) error {
 	if err == nil {
 		return nil
 	}
-	return grpc.Errorf(codes.Code(Code(err)), "%v", truncateError(err))
+	return status.Errorf(codes.Code(Code(err)), "%v", truncateError(err))
 }
 
 // FromGRPC returns a gRPC error as a vtError, translating between error codes.
@@ -135,5 +135,9 @@ func FromGRPC(err error) error {
 		// Do not wrap io.EOF because we compare against it for finished streams.
 		return err
 	}
-	return New(vtrpcpb.Code(grpc.Code(err)), err.Error())
+	code := codes.Unknown
+	if s, ok := status.FromError(err); ok {
+		code = s.Code()
+	}
+	return New(vtrpcpb.Code(code), err.Error())
 }

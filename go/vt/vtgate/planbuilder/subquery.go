@@ -140,6 +140,19 @@ func (sq *subquery) PushSelect(expr *sqlparser.AliasedExpr, _ columnOriginator) 
 func (sq *subquery) PushOrderByNull() {
 }
 
+// PushOrderByRand satisfies the builder interface.
+func (sq *subquery) PushOrderByRand() {
+}
+
+// SetUpperLimit satisfies the builder interface.
+// For now, the call is ignored because the
+// repercussions of pushing this limit down
+// into a subquery have not been studied yet.
+// We can consider doing it in the future.
+// TODO(sougou): this could be improved.
+func (sq *subquery) SetUpperLimit(_ *sqlparser.SQLVal) {
+}
+
 // PushMisc satisfies the builder interface.
 func (sq *subquery) PushMisc(sel *sqlparser.Select) {
 }
@@ -166,9 +179,6 @@ func (sq *subquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum 
 	// columns that reference subqueries will have their colnum set.
 	// Let's use it here.
 	sq.esubquery.Cols = append(sq.esubquery.Cols, c.colnum)
-	sq.resultColumns = append(sq.resultColumns, &resultColumn{
-		alias:  col.Name,
-		column: c,
-	})
+	sq.resultColumns = append(sq.resultColumns, &resultColumn{column: c})
 	return rc, len(sq.resultColumns) - 1
 }

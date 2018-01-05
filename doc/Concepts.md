@@ -3,7 +3,9 @@ This document defines common Vitess concepts and terminology.
 ## Keyspace
 
 A *keyspace* is a logical database. In the unsharded case, it maps directly
-to a MySQL database name, but it can also map to multiple MySQL databases.
+to a MySQL database name. If [sharded](http://en.wikipedia.org/wiki/Shard_(database_architecture)),
+a keyspace maps to multiple MySQL databases. However, it appears as a single
+database to the application.
 
 Reading data from a keyspace is like reading from a MySQL database. However,
 depending on the consistency requirements of the read operation, Vitess
@@ -11,29 +13,38 @@ might fetch the data from a master database or from a replica. By routing
 each query to the appropriate database, Vitess allows your code to be
 structured as if it were reading from a single MySQL database.
 
-When a database is
-[sharded](http://en.wikipedia.org/wiki/Shard_(database_architecture)),
-a keyspace maps to multiple MySQL databases. In that case, a single query sent
-to Vitess will be routed to one or more shards, depending on where the requested
-data resides.
 
 ## Keyspace ID
 
 The *keyspace ID* is the value that is used to decide on which shard a given
-record lives. [Range-based Sharding](http://vitess.io/user-guide/sharding.html#range-based-sharding)
+row lives. [Range-based Sharding]({% link user-guide/sharding.md %}#range-based-sharding)
 refers to creating shards that each cover a particular range of keyspace IDs.
 
-Often, the keyspace ID is computed as the hash of some column in your data,
-such as the user ID. This would result in randomly spreading users across
-the range-based shards.
 Using this technique means you can split a given shard by replacing it with two
 or more new shards that combine to cover the original range of keyspace IDs,
 without having to move any records in other shards.
 
-Previously, our resharding process required each table to store this value as a
-`keyspace_id` column because it was computed by the application. However, this
-column is no longer necessary when you allow VTGate to compute the keyspace ID
-for you, for example by using a `hash` vindex.
+The keyspace ID itself is computed using a function of some column in your data,
+such as the user ID. Vitess allows you to choose from a variety of functions
+([vindexes]({% link user-guide/vschema.md %}#vindex))
+to perform this mapping. This allows you to choose the right one to achieve optimal
+distribution of the data across shards.
+
+## VSchema
+
+A [VSchema]({% link user-guide/vschema.md %}) allows you to describe how data is organized
+within keyspaces and shards. This information is used for routing queries, and also during
+resharding operations.
+
+For a Keyspace, you can specify if it's sharded or not. For sharded keyspaces, you can specify
+the list of vindexes for each table.
+
+Vitess also supports [sequence generators]({% link user-guide/vschema.md %}#sequences)
+that can be used to generate new ids that work like MySQL auto increment columns.
+The VSchema allows you to associate table columns to sequence tables.
+If no value is specified for such a column, then VTGate will know to use
+the sequence table to generate a new value for it.
+
 
 ## Shard
 
@@ -45,13 +56,13 @@ lag). The slaves can serve read-only traffic (with eventual consistency guarante
 execute long-running data analysis tools, or perform administrative tasks
 (backup, restore, diff, etc.).
 
-A keyspace that does not use sharding effectively has one shard.
+An unsharded keyspace has effectively one shard.
 Vitess names the shard `0` by convention. When sharded, a keyspace has `N`
 shards with non-overlapping data.
 
 ### Resharding
 
-Vitess supports [dynamic resharding](http://vitess.io/user-guide/sharding.html#resharding),
+Vitess supports [dynamic resharding]({% link user-guide/sharding.md %}#resharding),
 in which the number of shards is changed on a live cluster. This can be either
 splitting one or more shards into smaller pieces, or merging neighboring shards
 into bigger pieces.
@@ -144,14 +155,14 @@ to a newly designated master database so that replication can continue.
 
 ## Topology Service
 
-The *[Topology Service](/user-guide/topology-service.html)*
+The *[Topology Service]({% link user-guide/topology-service.md %})*
 is a set of backend processes running on different servers.
 Those servers store topology data and provide a distributed locking service.
 
 Vitess uses a plug-in system to support various backends for storing topology
 data, which are assumed to provide a distributed, consistent key-value store.
-By default, our [local example](http://vitess.io/getting-started/local-instance.html)
-uses the ZooKeeper plugin, and the [Kubernetes example](http://vitess.io/getting-started/)
+By default, our [local example]({% link getting-started/local-instance.md %})
+uses the ZooKeeper plugin, and the [Kubernetes example]({% link getting-started/index.md %})
 uses etcd.
 
 The topology service exists for several reasons:

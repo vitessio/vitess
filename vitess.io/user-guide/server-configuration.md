@@ -1,6 +1,7 @@
 ---
 layout: doc
 title: "Server Configuration"
+redirect_from: /user-guide/server-configuration.html
 description:
 modified:
 excerpt:

@@ -29,7 +29,6 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 
@@ -134,8 +133,7 @@ type tableCacheEntry struct {
 // NewStreamer() again.
 type Streamer struct {
 	// The following fields at set at creation and immutable.
-	dbname          string
-	mysqld          mysqlctl.MysqlDaemon
+	cp              *mysql.ConnParams
 	se              *schema.Engine
 	resolverFactory keyspaceIDResolverFactory
 	extractPK       bool
@@ -146,7 +144,7 @@ type Streamer struct {
 	sendTransaction  sendTransactionFunc
 	usePreviousGTIDs bool
 
-	conn *mysqlctl.SlaveConnection
+	conn *SlaveConnection
 }
 
 // NewStreamer creates a binlog Streamer.
@@ -157,10 +155,9 @@ type Streamer struct {
 // startPos is the position to start streaming at. Incompatible with timestamp.
 // timestamp is the timestamp to start streaming at. Incompatible with startPos.
 // sendTransaction is called each time a transaction is committed or rolled back.
-func NewStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, se *schema.Engine, clientCharset *binlogdatapb.Charset, startPos mysql.Position, timestamp int64, sendTransaction sendTransactionFunc) *Streamer {
+func NewStreamer(cp *mysql.ConnParams, se *schema.Engine, clientCharset *binlogdatapb.Charset, startPos mysql.Position, timestamp int64, sendTransaction sendTransactionFunc) *Streamer {
 	return &Streamer{
-		dbname:          dbname,
-		mysqld:          mysqld,
+		cp:              cp,
 		se:              se,
 		clientCharset:   clientCharset,
 		startPos:        startPos,
@@ -171,15 +168,20 @@ func NewStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, se *schema.Engine, 
 
 // Stream starts streaming binlog events using the settings from NewStreamer().
 func (bls *Streamer) Stream(ctx context.Context) (err error) {
+	// Ensure se is Open. If vttablet came up in a non_serving role,
+	// the schema engine may not have been initialized.
+	if err := bls.se.Open(); err != nil {
+		return err
+	}
 	stopPos := bls.startPos
 	defer func() {
-		if err != nil && err != mysqlctl.ErrBinlogUnavailable {
+		if err != nil && err != ErrBinlogUnavailable {
 			err = fmt.Errorf("stream error @ %v: %v", stopPos, err)
 		}
 		log.Infof("stream ended @ %v, err = %v", stopPos, err)
 	}()
 
-	if bls.conn, err = bls.mysqld.NewSlaveConnection(); err != nil {
+	if bls.conn, err = NewSlaveConnection(bls.cp); err != nil {
 		return err
 	}
 	defer bls.conn.Close()
@@ -390,7 +392,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 					return pos, err
 				}
 			default: // BL_DDL, BL_SET, BL_INSERT, BL_UPDATE, BL_DELETE, BL_UNRECOGNIZED
-				if q.Database != "" && q.Database != bls.dbname {
+				if q.Database != "" && q.Database != bls.cp.DbName {
 					// Skip cross-db statements.
 					continue
 				}
@@ -455,7 +457,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 
 			// Check we're in the right database, and if so, fill
 			// in more data.
-			if tm.Database != "" && tm.Database != bls.dbname {
+			if tm.Database != "" && tm.Database != bls.cp.DbName {
 				continue
 			}
 
@@ -587,13 +589,10 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 
 func (bls *Streamer) appendInserts(statements []FullBinlogStatement, tce *tableCacheEntry, rows *mysql.Rows) []FullBinlogStatement {
 	for i := range rows.Rows {
-		var sql bytes.Buffer
+		sql := sqlparser.NewTrackedBuffer(nil)
+		sql.Myprintf("INSERT INTO %v SET ", sqlparser.NewTableIdent(tce.tm.Name))
 
-		sql.WriteString("INSERT INTO ")
-		sql.WriteString(tce.tm.Name)
-		sql.WriteString(" SET ")
-
-		keyspaceIDCell, pkValues, err := writeValuesAsSQL(&sql, tce, rows, i, tce.pkNames != nil)
+		keyspaceIDCell, pkValues, err := writeValuesAsSQL(sql, tce, rows, i, tce.pkNames != nil)
 		if err != nil {
 			log.Warningf("writeValuesAsSQL(%v) failed: %v", i, err)
 			continue
@@ -626,13 +625,10 @@ func (bls *Streamer) appendInserts(statements []FullBinlogStatement, tce *tableC
 
 func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableCacheEntry, rows *mysql.Rows) []FullBinlogStatement {
 	for i := range rows.Rows {
-		var sql bytes.Buffer
+		sql := sqlparser.NewTrackedBuffer(nil)
+		sql.Myprintf("UPDATE %v SET ", sqlparser.NewTableIdent(tce.tm.Name))
 
-		sql.WriteString("UPDATE ")
-		sql.WriteString(tce.tm.Name)
-		sql.WriteString(" SET ")
-
-		keyspaceIDCell, pkValues, err := writeValuesAsSQL(&sql, tce, rows, i, tce.pkNames != nil)
+		keyspaceIDCell, pkValues, err := writeValuesAsSQL(sql, tce, rows, i, tce.pkNames != nil)
 		if err != nil {
 			log.Warningf("writeValuesAsSQL(%v) failed: %v", i, err)
 			continue
@@ -640,7 +636,7 @@ func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableC
 
 		sql.WriteString(" WHERE ")
 
-		if _, _, err := writeIdentifiesAsSQL(&sql, tce, rows, i, false); err != nil {
+		if _, _, err := writeIdentifiersAsSQL(sql, tce, rows, i, false); err != nil {
 			log.Warningf("writeIdentifiesAsSQL(%v) failed: %v", i, err)
 			continue
 		}
@@ -672,13 +668,10 @@ func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableC
 
 func (bls *Streamer) appendDeletes(statements []FullBinlogStatement, tce *tableCacheEntry, rows *mysql.Rows) []FullBinlogStatement {
 	for i := range rows.Rows {
-		var sql bytes.Buffer
+		sql := sqlparser.NewTrackedBuffer(nil)
+		sql.Myprintf("DELETE FROM %v WHERE ", sqlparser.NewTableIdent(tce.tm.Name))
 
-		sql.WriteString("DELETE FROM ")
-		sql.WriteString(tce.tm.Name)
-		sql.WriteString(" WHERE ")
-
-		keyspaceIDCell, pkValues, err := writeIdentifiesAsSQL(&sql, tce, rows, i, tce.pkNames != nil)
+		keyspaceIDCell, pkValues, err := writeIdentifiersAsSQL(sql, tce, rows, i, tce.pkNames != nil)
 		if err != nil {
 			log.Warningf("writeIdentifiesAsSQL(%v) failed: %v", i, err)
 			continue
@@ -712,7 +705,7 @@ func (bls *Streamer) appendDeletes(statements []FullBinlogStatement, tce *tableC
 // writeValuesAsSQL is a helper method to print the values as SQL in the
 // provided bytes.Buffer. It also returns the value for the keyspaceIDColumn,
 // and the array of values for the PK, if necessary.
-func writeValuesAsSQL(sql *bytes.Buffer, tce *tableCacheEntry, rs *mysql.Rows, rowIndex int, getPK bool) (sqltypes.Value, []sqltypes.Value, error) {
+func writeValuesAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, rs *mysql.Rows, rowIndex int, getPK bool) (sqltypes.Value, []sqltypes.Value, error) {
 	valueIndex := 0
 	data := rs.Rows[rowIndex].Data
 	pos := 0
@@ -730,7 +723,7 @@ func writeValuesAsSQL(sql *bytes.Buffer, tce *tableCacheEntry, rs *mysql.Rows, r
 		if valueIndex > 0 {
 			sql.WriteString(", ")
 		}
-		sql.WriteString(tce.ti.Columns[c].Name.String())
+		sql.Myprintf("%v", tce.ti.Columns[c].Name)
 		sql.WriteByte('=')
 
 		if rs.Rows[rowIndex].NullColumns.Bit(valueIndex) {
@@ -745,7 +738,7 @@ func writeValuesAsSQL(sql *bytes.Buffer, tce *tableCacheEntry, rs *mysql.Rows, r
 		if err != nil {
 			return keyspaceIDCell, nil, err
 		}
-		if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(value.Raw(), mysql.ZeroTimestamp) {
+		if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(value.ToBytes(), mysql.ZeroTimestamp) {
 			// Values in the binary log are UTC. Let's convert them
 			// to whatever timezone the connection is using,
 			// so MySQL properly converts them back to UTC.
@@ -770,10 +763,10 @@ func writeValuesAsSQL(sql *bytes.Buffer, tce *tableCacheEntry, rs *mysql.Rows, r
 	return keyspaceIDCell, pkValues, nil
 }
 
-// writeIdentifiesAsSQL is a helper method to print the identifies as SQL in the
+// writeIdentifiersAsSQL is a helper method to print the identifies as SQL in the
 // provided bytes.Buffer. It also returns the value for the keyspaceIDColumn,
 // and the array of values for the PK, if necessary.
-func writeIdentifiesAsSQL(sql *bytes.Buffer, tce *tableCacheEntry, rs *mysql.Rows, rowIndex int, getPK bool) (sqltypes.Value, []sqltypes.Value, error) {
+func writeIdentifiersAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, rs *mysql.Rows, rowIndex int, getPK bool) (sqltypes.Value, []sqltypes.Value, error) {
 	valueIndex := 0
 	data := rs.Rows[rowIndex].Identify
 	pos := 0
@@ -791,7 +784,7 @@ func writeIdentifiesAsSQL(sql *bytes.Buffer, tce *tableCacheEntry, rs *mysql.Row
 		if valueIndex > 0 {
 			sql.WriteString(" AND ")
 		}
-		sql.WriteString(tce.ti.Columns[c].Name.String())
+		sql.Myprintf("%v", tce.ti.Columns[c].Name)
 
 		if rs.Rows[rowIndex].NullIdentifyColumns.Bit(valueIndex) {
 			// This column is represented, but its value is NULL.
@@ -806,7 +799,7 @@ func writeIdentifiesAsSQL(sql *bytes.Buffer, tce *tableCacheEntry, rs *mysql.Row
 		if err != nil {
 			return keyspaceIDCell, nil, err
 		}
-		if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(value.Raw(), mysql.ZeroTimestamp) {
+		if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(value.ToBytes(), mysql.ZeroTimestamp) {
 			// Values in the binary log are UTC. Let's convert them
 			// to whatever timezone the connection is using,
 			// so MySQL properly converts them back to UTC.

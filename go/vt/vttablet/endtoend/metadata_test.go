@@ -31,9 +31,9 @@ func getAndSetup(t *testing.T) *framework.QueryClient {
 
 	_, err := client.Execute(
 		"insert into vitess_b values(:eid, :id)",
-		map[string]interface{}{
-			"id":  int64(-2147483648),
-			"eid": int64(-9223372036854775808),
+		map[string]*querypb.BindVariable{
+			"id":  sqltypes.Int64BindVariable(-2147483648),
+			"eid": sqltypes.Int64BindVariable(-9223372036854775808),
 		},
 	)
 	if err != nil {
@@ -94,8 +94,8 @@ func TestMetadataSpecificExecOptions(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("-9223372036854775808")),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("-2147483648")),
+				sqltypes.NewInt64(-9223372036854775808),
+				sqltypes.NewInt32(-2147483648),
 			},
 		},
 	}
@@ -135,8 +135,8 @@ func TestMetadataDefaultExecOptions(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("-9223372036854775808")),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("-2147483648")),
+				sqltypes.NewInt64(-9223372036854775808),
+				sqltypes.NewInt32(-2147483648),
 			},
 		},
 	}
@@ -176,8 +176,8 @@ func TestMetadataNoExecOptions(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("-9223372036854775808")),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("-2147483648")),
+				sqltypes.NewInt64(-9223372036854775808),
+				sqltypes.NewInt32(-2147483648),
 			},
 		},
 	}

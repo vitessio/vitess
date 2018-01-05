@@ -42,7 +42,7 @@ func ExecuteFetchMap(conn *Conn, query string) (map[string]string, error) {
 
 	rowMap := make(map[string]string)
 	for i, value := range qr.Rows[0] {
-		rowMap[qr.Fields[i].Name] = value.String()
+		rowMap[qr.Fields[i].Name] = value.ToString()
 	}
 	return rowMap, nil
 }

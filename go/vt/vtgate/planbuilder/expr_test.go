@@ -27,7 +27,7 @@ func TestValEqual(t *testing.T) {
 	c1 := &column{}
 	c2 := &column{}
 	testcases := []struct {
-		in1, in2 interface{}
+		in1, in2 sqlparser.Expr
 		out      bool
 	}{{
 		in1: &sqlparser.ColName{Metadata: c1, Name: sqlparser.NewColIdent("c1")},
@@ -104,39 +104,13 @@ func TestValEqual(t *testing.T) {
 	}
 }
 
-func TestValConvert(t *testing.T) {
-	testcases := []struct {
-		in  sqlparser.Expr
-		out interface{}
-	}{{
-		in:  newValArg(":aa"),
-		out: ":aa",
-	}, {
-		in:  newStrVal("aa"),
-		out: []byte("aa"),
-	}, {
-		in:  newHexVal("3131"),
-		out: []byte("11"),
-	}, {
-		in:  newIntVal("3131"),
-		out: int64(3131),
-	}, {
-		in:  newIntVal("18446744073709551615"),
-		out: uint64(18446744073709551615),
-	}, {
-		in:  newIntVal("aa"),
-		out: "strconv.ParseUint: parsing \"aa\": invalid syntax",
-	}, {
-		in:  sqlparser.ListArg("::aa"),
-		out: "::aa is not a value",
-	}}
-	for _, tc := range testcases {
-		out, err := valConvert(tc.in)
-		if err != nil {
-			out = err.Error()
-		}
-		if !reflect.DeepEqual(out, tc.out) {
-			t.Errorf("ValConvert(%#v): %#v, want %#v", tc.in, out, tc.out)
+func TestSkipParenthesis(t *testing.T) {
+	baseNode := newIntVal("1")
+	paren1 := &sqlparser.ParenExpr{Expr: baseNode}
+	paren2 := &sqlparser.ParenExpr{Expr: paren1}
+	for _, tcase := range []sqlparser.Expr{baseNode, paren1, paren2} {
+		if got, want := skipParenthesis(tcase), baseNode; !reflect.DeepEqual(got, want) {
+			t.Errorf("skipParenthesis(%v): %v, want %v", sqlparser.String(tcase), sqlparser.String(got), sqlparser.String(want))
 		}
 	}
 }

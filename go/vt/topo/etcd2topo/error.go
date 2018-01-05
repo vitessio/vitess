@@ -21,8 +21,8 @@ import (
 
 	"github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes"
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -40,6 +40,10 @@ var (
 // convertError converts an etcd error into a topo error. All errors
 // are either application-level errors, or context errors.
 func convertError(err error) error {
+	if err == nil {
+		return nil
+	}
+
 	if typeErr, ok := err.(rpctypes.EtcdError); ok {
 		switch typeErr.Code() {
 		case codes.NotFound:
@@ -60,17 +64,18 @@ func convertError(err error) error {
 		return err
 	}
 
-	switch grpc.Code(err) {
-	case codes.Unknown:
-		// Not produced by gRPC, keep going.
-	case codes.NotFound:
-		return topo.ErrNoNode
-	case codes.Canceled:
-		return topo.ErrInterrupted
-	case codes.DeadlineExceeded:
-		return topo.ErrTimeout
-	default:
-		return err
+	if s, ok := status.FromError(err); ok {
+		// This is a gRPC error.
+		switch s.Code() {
+		case codes.NotFound:
+			return topo.ErrNoNode
+		case codes.Canceled:
+			return topo.ErrInterrupted
+		case codes.DeadlineExceeded:
+			return topo.ErrTimeout
+		default:
+			return err
+		}
 	}
 
 	switch err {

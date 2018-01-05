@@ -22,8 +22,8 @@ import environment
 import tablet
 import utils
 
-SHARDED_KEYSPACE = 'TEST_KEYSPACE_SHARDED'
-UNSHARDED_KEYSPACE = 'TEST_KEYSPACE_UNSHARDED'
+SHARDED_KEYSPACE = 'test_keyspace_sharded'
+UNSHARDED_KEYSPACE = 'test_keyspace_unsharded'
 
 # shards for SHARDED_KEYSPACE
 # range '' - 80

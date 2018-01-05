@@ -17,9 +17,6 @@
 package io.vitess.jdbc;
 
 import com.google.common.annotations.VisibleForTesting;
-import io.vitess.proto.Query;
-import io.vitess.util.Constants;
-import io.vitess.util.MysqlDefs;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
@@ -39,6 +36,10 @@ import java.util.StringTokenizer;
 import java.util.TreeMap;
 import java.util.logging.Logger;
 import org.apache.commons.lang.StringUtils;
+
+import io.vitess.proto.Query;
+import io.vitess.util.Constants;
+import io.vitess.util.MysqlDefs;
 
 /**
  * Created by ashudeep.sharma on 15/02/16.

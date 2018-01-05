@@ -16,11 +16,15 @@ limitations under the License.
 
 package splitquery
 
-import "github.com/youtube/vitess/go/sqltypes"
+import (
+	"github.com/youtube/vitess/go/sqltypes"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+)
 
 // SQLExecuter enacpsulates access to the MySQL database for the this package.
 type SQLExecuter interface {
-	SQLExecute(sql string, bindVariables map[string]interface{}) (*sqltypes.Result, error)
+	SQLExecute(sql string, bindVariables map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 }
 
 // Command to generate a mock for this interface with mockgen.

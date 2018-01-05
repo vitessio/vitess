@@ -41,8 +41,8 @@ func TestVtctlThrottlerCommands(t *testing.T) {
 		t.Fatalf("Cannot listen: %v", err)
 	}
 	s := grpc.NewServer()
+	grpcthrottlerserver.RegisterServer(s, throttler.GlobalManager)
 	go s.Serve(listener)
-	grpcthrottlerserver.StartServer(s, throttler.GlobalManager)
 
 	addr := fmt.Sprintf("localhost:%v", listener.Addr().(*net.TCPAddr).Port)
 

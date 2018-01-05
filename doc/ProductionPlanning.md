@@ -44,7 +44,7 @@ You may have to add a few more app class machines to absorb any additional CPU a
 
 The Lock Service should be running, and both the global and local instances
 should be up. See the
-[Topology Service](/user-guide/topology-service.html)
+[Topology Service]({% link user-guide/topology-service.md %})
 document for more information.
 
 Each lock service implementation supports a couple configuration command line
@@ -52,7 +52,7 @@ parameters, they need to be specified for each Vitess process.
 
 For sizing purposes, the Vitess processes do not access the lock service very
 much. Each *vtgate* process keeps a few watches on a few local nodes (VSchema
-and SrvKeyspace). Each *vttablet* process will keep its on Tablet record up to
+and SrvKeyspace). Each *vttablet* process will keep its own Tablet record up to
 date, but it usually doesn't change. The *vtctld* process will access it a lot
 more, but only on demand to display web pages.
 
@@ -65,9 +65,9 @@ Before running Vitess in production, please make yourself comfortable first with
 
 Here is a short list of all the basic workflows Vitess supports:
 
-* [Failover / Reparents](http://vitess.io/user-guide/reparenting.html)
-* [Backup/Restore](http://vitess.io/user-guide/backup-and-restore.html)
-* [Schema Management](http://vitess.io/user-guide/schema-management.html) / [Schema Swap](http://vitess.io/user-guide/schema-swap.html)
-* [Resharding](http://vitess.io/user-guide/sharding.html) / [Horizontal Resharding Tutorial](http://vitess.io/user-guide/horizontal-sharding.html)
-* [Upgrading](http://vitess.io/user-guide/upgrading.html)
+* [Failover / Reparents]({% link user-guide/reparenting.md %})
+* [Backup/Restore]({% link user-guide/backup-and-restore.md %})
+* [Schema Management]({% link user-guide/schema-management.md %}) / [Schema Swap]({% link user-guide/schema-swap.md %})
+* [Resharding]({% link user-guide/sharding.md %}) / [Horizontal Resharding Tutorial]({% link user-guide/horizontal-sharding.md %})
+* [Upgrading]({% link user-guide/upgrading.md %})
 

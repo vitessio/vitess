@@ -20,7 +20,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/rules"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
@@ -39,7 +39,7 @@ type Controller interface {
 	AddStatusPart()
 
 	// InitDBConfig sets up the db config vars.
-	InitDBConfig(querypb.Target, dbconfigs.DBConfigs, mysqlctl.MysqlDaemon) error
+	InitDBConfig(querypb.Target, dbconfigs.DBConfigs) error
 
 	// SetServingType transitions the query service to the required serving type.
 	// Returns true if the state of QueryService or the tablet type changed.
@@ -81,6 +81,9 @@ type Controller interface {
 	// HeartbeatLag returns the current lag as calculated by the heartbeat
 	// package, if heartbeat is enabled. Otherwise returns 0.
 	HeartbeatLag() (time.Duration, error)
+
+	// TopoServer returns the topo server.
+	TopoServer() *topo.Server
 }
 
 // Ensure TabletServer satisfies Controller interface.

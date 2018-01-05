@@ -22,7 +22,6 @@ import (
 )
 
 func init() {
-	servenv.RegisterGRPCFlags()
 	servenv.OnRun(func() {
 		if servenv.GRPCCheckServiceMap("vtctl") {
 			grpcvtctlserver.StartServer(servenv.GRPCServer, ts)

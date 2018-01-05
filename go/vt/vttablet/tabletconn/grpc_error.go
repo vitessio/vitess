@@ -20,7 +20,8 @@ import (
 	"io"
 
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -32,7 +33,11 @@ func ErrorFromGRPC(err error) error {
 	if err == nil || err == io.EOF {
 		return nil
 	}
-	return vterrors.Errorf(vtrpcpb.Code(grpc.Code(err)), "vttablet: %v", err)
+	code := codes.Unknown
+	if s, ok := status.FromError(err); ok {
+		code = s.Code()
+	}
+	return vterrors.Errorf(vtrpcpb.Code(code), "vttablet: %v", err)
 }
 
 // ErrorFromVTRPC converts a *vtrpcpb.RPCError to vtError for

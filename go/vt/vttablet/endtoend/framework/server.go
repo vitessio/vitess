@@ -26,7 +26,6 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/vtgate/fakerpcvtgateconn"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver"
@@ -50,11 +49,11 @@ var (
 // StartServer starts the server and initializes
 // all the global variables. This function should only be called
 // once at the beginning of the test.
-func StartServer(connParams mysql.ConnParams) error {
+func StartServer(connParams, connAppDebugParams mysql.ConnParams) error {
 	// Setup a fake vtgate server.
 	protocol := "resolveTest"
 	*vtgateconn.VtgateProtocol = protocol
-	vtgateconn.RegisterDialer(protocol, func(context.Context, string, time.Duration) (vtgateconn.Impl, error) {
+	vtgateconn.RegisterDialer(protocol, func(context.Context, string) (vtgateconn.Impl, error) {
 		return &txResolver{
 			FakeVTGateConn: fakerpcvtgateconn.FakeVTGateConn{},
 		}, nil
@@ -62,16 +61,8 @@ func StartServer(connParams mysql.ConnParams) error {
 
 	dbcfgs := dbconfigs.DBConfigs{
 		App:           connParams,
+		AppDebug:      connAppDebugParams,
 		SidecarDBName: "_vt",
-	}
-
-	mysqld, err := mysqlctl.NewMysqld(
-		&mysqlctl.Mycnf{},
-		&dbcfgs,
-		dbconfigs.AppConfig,
-	)
-	if err != nil {
-		return err
 	}
 
 	config := tabletenv.DefaultQsConfig
@@ -80,6 +71,7 @@ func StartServer(connParams mysql.ConnParams) error {
 	config.TwoPCEnable = true
 	config.TwoPCAbandonAge = 1
 	config.TwoPCCoordinatorAddress = "fake"
+	config.EnableHotRowProtection = true
 
 	Target = querypb.Target{
 		Keyspace:   "vttest",
@@ -89,7 +81,7 @@ func StartServer(connParams mysql.ConnParams) error {
 
 	Server = tabletserver.NewTabletServerWithNilTopoServer(config)
 	Server.Register()
-	err = Server.StartService(Target, dbcfgs, mysqld)
+	err := Server.StartService(Target, dbcfgs)
 	if err != nil {
 		return fmt.Errorf("could not start service: %v", err)
 	}

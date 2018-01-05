@@ -21,6 +21,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/sqlescape"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -89,20 +90,20 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 	}
 
 	// Get the MIN and MAX of the leading column of the primary key.
-	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", escape(td.PrimaryKeyColumns[0]), escape(td.PrimaryKeyColumns[0]), escape(topoproto.TabletDbName(tablet)), escape(td.Name))
+	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", sqlescape.EscapeID(td.PrimaryKeyColumns[0]), sqlescape.EscapeID(td.PrimaryKeyColumns[0]), sqlescape.EscapeID(topoproto.TabletDbName(tablet)), sqlescape.EscapeID(td.Name))
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(shortCtx, tablet, true, []byte(query), 1)
 	cancel()
 	if err != nil {
-		return nil, fmt.Errorf("Cannot determine MIN and MAX of the first primary key column. ExecuteFetchAsApp: %v", err)
+		return nil, fmt.Errorf("tablet: %v, table: %v: cannot determine MIN and MAX of the first primary key column. ExecuteFetchAsApp: %v", topoproto.TabletAliasString(tablet.Alias), td.Name, err)
 	}
 	if len(qr.Rows) != 1 {
-		return nil, fmt.Errorf("Cannot determine MIN and MAX of the first primary key column. Zero rows were returned for the following query: %v", query)
+		return nil, fmt.Errorf("tablet: %v, table: %v: cannot determine MIN and MAX of the first primary key column. Zero rows were returned", topoproto.TabletAliasString(tablet.Alias), td.Name)
 	}
 
 	result := sqltypes.Proto3ToResult(qr)
-	min := result.Rows[0][0].ToNative()
-	max := result.Rows[0][1].ToNative()
+	min, _ := sqltypes.ToNative(result.Rows[0][0])
+	max, _ := sqltypes.ToNative(result.Rows[0][1])
 
 	if min == nil || max == nil {
 		wr.Logger().Infof("table=%v: Not splitting the table into multiple chunks, min or max is NULL: %v", td.Name, qr.Rows[0])
@@ -154,7 +155,7 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 		end := add(start, interval)
 		chunk, err := toChunk(start, end, i+1, chunkCount)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("tablet: %v, table: %v: %v", topoproto.TabletAliasString(tablet.Alias), td.Name, err)
 		}
 		chunks[i] = chunk
 		start = end
@@ -182,13 +183,13 @@ func add(start, interval interface{}) interface{} {
 }
 
 func toChunk(start, end interface{}, number, total int) (chunk, error) {
-	startValue, err := sqltypes.BuildValue(start)
+	startValue, err := sqltypes.InterfaceToValue(start)
 	if err != nil {
-		return chunk{}, fmt.Errorf("Failed to convert calculated start value (%v) into internal sqltypes.Value: %v", start, err)
+		return chunk{}, fmt.Errorf("failed to convert calculated start value (%v) into internal sqltypes.Value: %v", start, err)
 	}
-	endValue, err := sqltypes.BuildValue(end)
+	endValue, err := sqltypes.InterfaceToValue(end)
 	if err != nil {
-		return chunk{}, fmt.Errorf("Failed to convert calculated end value (%v) into internal sqltypes.Value: %v", end, err)
+		return chunk{}, fmt.Errorf("failed to convert calculated end value (%v) into internal sqltypes.Value: %v", end, err)
 	}
 	return chunk{startValue, endValue, number, total}, nil
 }

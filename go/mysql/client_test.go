@@ -30,6 +30,8 @@ import (
 
 // assertSQLError makes sure we get the right error.
 func assertSQLError(t *testing.T, err error, code int, sqlState string, subtext string, query string) {
+	t.Helper()
+
 	if err == nil {
 		t.Fatalf("was expecting SQLError %v / %v / %v but got no error.", code, sqlState, subtext)
 	}
@@ -61,8 +63,7 @@ func TestConnectTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cannot listen: %v", err)
 	}
-	host := listener.Addr().(*net.TCPAddr).IP.String()
-	port := listener.Addr().(*net.TCPAddr).Port
+	host, port := getHostPort(t, listener.Addr())
 	params := &ConnParams{
 		Host: host,
 		Port: port,

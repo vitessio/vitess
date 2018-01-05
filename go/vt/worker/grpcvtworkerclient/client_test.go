@@ -17,11 +17,15 @@ limitations under the License.
 package grpcvtworkerclient
 
 import (
+	"flag"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net"
+	"os"
 	"testing"
-	"time"
 
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/worker/grpcvtworkerserver"
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclienttest"
 	"google.golang.org/grpc"
@@ -46,7 +50,55 @@ func TestVtworkerServer(t *testing.T) {
 	go server.Serve(listener)
 
 	// Create a VtworkerClient gRPC client to talk to the vtworker.
-	client, err := gRPCVtworkerClientFactory(fmt.Sprintf("localhost:%v", port), 30*time.Second)
+	client, err := gRPCVtworkerClientFactory(fmt.Sprintf("localhost:%v", port))
+	if err != nil {
+		t.Fatalf("Cannot create client: %v", err)
+	}
+	defer client.Close()
+
+	vtworkerclienttest.TestSuite(t, client)
+}
+
+// Test gRPC interface using a vtworker and vtworkerclient with auth.
+func TestVtworkerServerAuth(t *testing.T) {
+	wi := vtworkerclienttest.CreateWorkerInstance(t)
+
+	// Listen on a random port.
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatalf("Cannot listen: %v", err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+
+	// Create a gRPC server and listen on the port
+	var opts []grpc.ServerOption
+	opts = append(opts, grpc.StreamInterceptor(servenv.FakeAuthStreamInterceptor))
+	opts = append(opts, grpc.UnaryInterceptor(servenv.FakeAuthUnaryInterceptor))
+	server := grpc.NewServer(opts...)
+
+	vtworkerservicepb.RegisterVtworkerServer(server, grpcvtworkerserver.NewVtworkerServer(wi))
+	go server.Serve(listener)
+
+	authJSON := `{
+         "Username": "valid",
+         "Password": "valid"
+        }`
+
+	f, err := ioutil.TempFile("", "static_auth_creds.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(f.Name())
+	if _, err := io.WriteString(f, authJSON); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a VtworkerClient gRPC client to talk to the vtworker.
+	flag.Set("grpc_auth_static_client_creds", f.Name())
+	client, err := gRPCVtworkerClientFactory(fmt.Sprintf("localhost:%v", port))
 	if err != nil {
 		t.Fatalf("Cannot create client: %v", err)
 	}

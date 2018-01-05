@@ -475,7 +475,7 @@ func TestParallelRunnerRetry(t *testing.T) {
 	wg.Wait()
 }
 
-func setupTestWorkflow(ctx context.Context, ts topo.Server, enableApprovals, retry bool) (*workflow.Manager, string, *sync.WaitGroup, context.CancelFunc, error) {
+func setupTestWorkflow(ctx context.Context, ts *topo.Server, enableApprovals, retry bool) (*workflow.Manager, string, *sync.WaitGroup, context.CancelFunc, error) {
 	m := workflow.NewManager(ts)
 	// Run the manager in the background.
 	wg, _, cancel := startManager(m)
@@ -733,7 +733,7 @@ func waitForFinished(notifications chan []byte, path, message string) error {
 	return fmt.Errorf("notifications channel is closed unexpectedly when waiting for expected nodes")
 }
 
-func verifyAllTasksDone(ctx context.Context, ts topo.Server, uuid string) error {
+func verifyAllTasksDone(ctx context.Context, ts *topo.Server, uuid string) error {
 	checkpoint, err := checkpoint(ctx, ts, uuid)
 	if err != nil {
 		return err
@@ -747,7 +747,7 @@ func verifyAllTasksDone(ctx context.Context, ts topo.Server, uuid string) error 
 	return nil
 }
 
-func verifyTask(ctx context.Context, ts topo.Server, uuid, taskID string, taskState workflowpb.TaskState, taskError string) error {
+func verifyTask(ctx context.Context, ts *topo.Server, uuid, taskID string, taskState workflowpb.TaskState, taskError string) error {
 	checkpoint, err := checkpoint(ctx, ts, uuid)
 	if err != nil {
 		return err
@@ -760,7 +760,7 @@ func verifyTask(ctx context.Context, ts topo.Server, uuid, taskID string, taskSt
 	return nil
 }
 
-func checkpoint(ctx context.Context, ts topo.Server, uuid string) (*workflowpb.WorkflowCheckpoint, error) {
+func checkpoint(ctx context.Context, ts *topo.Server, uuid string) (*workflowpb.WorkflowCheckpoint, error) {
 	wi, err := ts.GetWorkflow(ctx, uuid)
 	if err != nil {
 		return nil, fmt.Errorf("fail to get workflow for: %v", uuid)

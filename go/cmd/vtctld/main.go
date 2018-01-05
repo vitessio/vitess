@@ -31,7 +31,7 @@ func init() {
 
 // used at runtime by plug-ins
 var (
-	ts topo.Server
+	ts *topo.Server
 )
 
 func main() {
@@ -49,6 +49,9 @@ func main() {
 
 	// Init the vtctld core
 	vtctld.InitVtctld(ts)
+
+	// Register http debug/health
+	vtctld.RegisterDebugHealthHandler(ts)
 
 	// Start schema manager service.
 	initSchema()

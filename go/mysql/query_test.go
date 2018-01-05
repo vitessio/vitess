@@ -404,7 +404,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		if comQuery[0] != ComQuery {
 			t.Fatalf("server got bad packet: %v", comQuery)
 		}
-		got := string(sConn.parseComQuery(comQuery))
+		got := sConn.parseComQuery(comQuery)
 		if got != query {
 			t.Errorf("server got query '%v' but expected '%v'", got, query)
 		}
@@ -418,11 +418,11 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 }
 
 func writeResult(conn *Conn, result *sqltypes.Result) error {
+	if len(result.Fields) == 0 {
+		return conn.writeOKPacket(result.RowsAffected, result.InsertID, conn.StatusFlags, 0)
+	}
 	if err := conn.writeFields(result); err != nil {
 		return err
-	}
-	if len(result.Fields) == 0 {
-		return nil
 	}
 	if err := conn.writeRows(result); err != nil {
 		return err
@@ -434,11 +434,7 @@ func RowString(row []sqltypes.Value) string {
 	l := len(row)
 	result := fmt.Sprintf("%v values:", l)
 	for _, val := range row {
-		if val.IsNull() {
-			result += " NULL"
-		} else {
-			result += fmt.Sprintf(" (%v)%v", val.Type(), val.String())
-		}
+		result += fmt.Sprintf(" %v", val)
 	}
 	return result
 }

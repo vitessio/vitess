@@ -9,13 +9,13 @@ The `kubectl` steps will apply to any Kubernetes cluster.
 
 ## Prerequisites
 
-To complete the exercise in this guide, you must locally install Go 1.8+,
+To complete the exercise in this guide, you must locally install Go 1.9+,
 Vitess' `vtctlclient` tool, and Google Cloud SDK. The
 following sections explain how to set these up in your environment.
 
-### Install Go 1.8+
+### Install Go 1.9+
 
-You need to install [Go 1.8+](http://golang.org/doc/install) to build the
+You need to install [Go 1.9+](http://golang.org/doc/install) to build the
 `vtctlclient` tool, which issues commands to Vitess.
 
 After installing Go, make sure your `GOPATH` environment
@@ -139,7 +139,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     ```
 
     **Note:** The `--scopes storage-rw` argument is necessary to allow
-    [built-in backup/restore](http://vitess.io/user-guide/backup-and-restore.html)
+    [built-in backup/restore]({% link user-guide/backup-and-restore.md %})
     to access [Google Cloud Storage](https://cloud.google.com/storage/).
 
 1.  Create a Cloud Storage bucket:
@@ -171,7 +171,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     used to customize your cluster settings.
 
     Currently, we have out-of-the-box support for storing
-    [backups](http://vitess.io/user-guide/backup-and-restore.html) in
+    [backups]({% link user-guide/backup-and-restore.md %}) in
     [Google Cloud Storage](https://cloud.google.com/storage/). If you're using
     GCS, fill in the fields requested by the configure script, including the
     name of the bucket you created above.
@@ -199,28 +199,27 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
 
 1.  **Start an etcd cluster**
 
-    The Vitess [topology service](http://vitess.io/overview/concepts.html#topology-service)
+    The Vitess [topology service]({% link overview/concepts.md %}#topology-service)
     stores coordination data for all the servers in a Vitess cluster.
     It can store this data in one of several consistent storage systems.
     In this example, we'll use [etcd](https://github.com/coreos/etcd).
     Note that we need our own etcd clusters, separate from the one used by
-    Kubernetes itself.
+    Kubernetes itself. We will use etcd-operator to manage these clusters.
 
     ``` sh
     vitess/examples/kubernetes$ ./etcd-up.sh
     ### example output:
-    # Creating etcd service for global cell...
-    # service "etcd-global" created
-    # service "etcd-global-srv" created
-    # Creating etcd replicationcontroller for global cell...
-    # replicationcontroller "etcd-global" created
+    # Creating etcd service for 'global' cell...
+    # etcdcluster "etcd-global" created
+    # Creating etcd service for 'global' cell...
+    # etcdcluster "etcd-test" created
     # ...
     ```
 
     This command creates two clusters. One is for the
-    [global cell](/user-guide/topology-service.html#global-vs-local),
+    [global cell]({% link user-guide/topology-service.md %}#global-vs-local),
     and the other is for a
-    [local cell](http://vitess.io/overview/concepts.html#cell-data-center)
+    [local cell]({% link overview/concepts.md %}#cell-data-center)
     called *test*. You can check the status of the
     [pods](http://kubernetes.io/v1.1/docs/user-guide/pods.html)
     in the cluster by running:
@@ -229,12 +228,13 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     $ kubectl get pods
     ### example output:
     # NAME                READY     STATUS    RESTARTS   AGE
-    # etcd-global-8oxzm   1/1       Running   0          1m
-    # etcd-global-hcxl6   1/1       Running   0          1m
-    # etcd-global-xupzu   1/1       Running   0          1m
-    # etcd-test-e2y6o     1/1       Running   0          1m
-    # etcd-test-m6wse     1/1       Running   0          1m
-    # etcd-test-qajdj     1/1       Running   0          1m
+    # etcd-global-0000                1/1       Running   0          1m
+    # etcd-global-0001                1/1       Running   0          1m
+    # etcd-global-0002                1/1       Running   0          1m
+    # etcd-operator-857677187-rvgf5   1/1       Running   0          28m
+    # etcd-test-0000                  1/1       Running   0          1m
+    # etcd-test-0001                  1/1       Running   0          1m
+    # etcd-test-0002                  1/1       Running   0          1m
     ```
 
     It may take a while for each Kubernetes node to download the
@@ -326,12 +326,24 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     vitess/examples/kubernetes$ ./kvtctl.sh help ListAllTablets
     ```
 
-    See the [vtctl reference](http://vitess.io/reference/vtctl.html) for a
+    See the [vtctl reference]({% link reference/vtctl.md %}) for a
     web-formatted version of the `vtctl help` output.
+
+1.  **Setup the cell in the topology**
+
+    The global etcd cluster is configured from command-line parameters,
+    specified in the Kubernetes configuration files. The per-cell etcd cluster
+    however needs to be configured, so it is reachable by Vitess. The following
+    command sets it up:
+
+    ``` sh
+    ./kvtctl.sh AddCellInfo --root /test -server_address http://etcd-test-client:2379 test
+    ```
+
 
 1.  **Start vttablets**
 
-    A Vitess [tablet](http://vitess.io/overview/concepts.html#tablet) is the
+    A Vitess [tablet]({% link overview/concepts.md %}#tablet) is the
     unit of scaling for the database. A tablet consists of the
     `vttablet` and `mysqld` processes, running on the same
     host. We enforce this coupling in Kubernetes by putting the respective
@@ -358,8 +370,8 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     ```
 
     In the vtctld web UI, you should soon see a
-    [keyspace](http://vitess.io/overview/concepts.html#keyspace) named `test_keyspace`
-    with a single [shard](http://vitess.io/overview/concepts.html#shard) named `0`.
+    [keyspace]({% link overview/concepts.md %}#keyspace) named `test_keyspace`
+    with a single [shard]({% link overview/concepts.md %}#shard) named `0`.
     Click on the shard name to see the list of tablets. When all 5 tablets
     show up on the shard status page, you're ready to continue. Note that it's
     normal for the tablets to be unhealthy at this point, since you haven't
@@ -420,7 +432,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
 
     The **replica** tablets are used for serving live web traffic, while the
     **rdonly** tablets are used for offline processing, such as batch jobs and backups.
-    The amount of each [tablet type](http://vitess.io/overview/concepts.html#tablet)
+    The amount of each [tablet type]({% link overview/concepts.md %}#tablet)
     that you launch can be configured in the `vttablet-up.sh` script.
 
 1.  **Create a table**
@@ -469,7 +481,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
 1.  **Take a backup**
 
     Now that the initial schema is applied, it's a good time to take the first
-    [backup](http://vitess.io/user-guide/backup-and-restore.html). This backup
+    [backup]({% link user-guide/backup-and-restore.md %}). This backup
     will be used to automatically restore any additional replicas that you run,
     before they connect themselves to the master and catch up on replication.
     If an existing tablet goes down and comes back up without its data, it will
@@ -505,7 +517,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
 
 1.  **Start vtgate**
 
-    Vitess uses [vtgate](http://vitess.io/overview/#vtgate) to route each client
+    Vitess uses [vtgate]({% link overview/index.md %}#vtgate) to route each client
     query to the correct `vttablet`. In Kubernetes, a `vtgate` service
     distributes connections to a pool of `vtgate` pods. The pods are curated by
     a [replication controller]
@@ -600,10 +612,10 @@ provides more detail about how the app server interacts with Vitess.
 ## Try Vitess resharding
 
 Now that you have a full Vitess stack running, you may want to go on to the
-[Sharding in Kubernetes workflow guide](http://vitess.io/user-guide/sharding-kubernetes.html)
-or [Sharding in Kubernetes codelab](http://vitess.io/user-guide/sharding-kubernetes.html)
+[Sharding in Kubernetes workflow guide]({% link user-guide/sharding-kubernetes.md %})
+or [Sharding in Kubernetes codelab]({% link user-guide/sharding-kubernetes.md %})
 (if you prefer to run each step manually through commands) to try out
-[dynamic resharding](http://vitess.io/user-guide/sharding.html#resharding).
+[dynamic resharding]({% link user-guide/sharding.md %}#resharding).
 
 If so, you can skip the tear-down since the sharding guide picks up right here.
 If not, continue to the clean-up steps below.

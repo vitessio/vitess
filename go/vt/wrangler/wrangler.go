@@ -39,12 +39,12 @@ var (
 // provided they want to share the same logger / topo server / lock timeout.
 type Wrangler struct {
 	logger logutil.Logger
-	ts     topo.Server
+	ts     *topo.Server
 	tmc    tmclient.TabletManagerClient
 }
 
 // New creates a new Wrangler object.
-func New(logger logutil.Logger, ts topo.Server, tmc tmclient.TabletManagerClient) *Wrangler {
+func New(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClient) *Wrangler {
 	return &Wrangler{
 		logger: logger,
 		ts:     ts,
@@ -53,7 +53,7 @@ func New(logger logutil.Logger, ts topo.Server, tmc tmclient.TabletManagerClient
 }
 
 // TopoServer returns the topo.Server this wrangler is using.
-func (wr *Wrangler) TopoServer() topo.Server {
+func (wr *Wrangler) TopoServer() *topo.Server {
 	return wr.ts
 }
 

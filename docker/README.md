@@ -39,7 +39,7 @@ All these Vitess images include a specific MySQL/MariaDB version ("flavor").
   * We provide Dockerfile files for multiple flavors (`Dockerfile.<flavor>`).
   * As of April 2017, the following flavors are supported: `mariadb`, `mysql56`, `mysql57`, `percona`(56), `percona57`
   * On Docker Hub we publish only images with MySQL 5.7 to minimize maintenance overhead and avoid confusion.
-  * If you need an image for a different flavor, it is very easy to build it yourself. See the [Custom Docker Build instructions](http://vitess.io/getting-started/docker-build.html).
+  * If you need an image for a different flavor, it is very easy to build it yourself. See the [Custom Docker Build instructions](http://vitess.io/getting-started/docker-build/).
 
 If you are looking for a stable version of Vitess, use the **lite** image with a fixed version. If you are looking for the latest Vitess code in binary form, use the "latest" tag of the **base** image.
 
@@ -47,8 +47,6 @@ If you are looking for a stable version of Vitess, use the **lite** image with a
 
 | Image | How (When) Updated | Description |
 | --- | --- | --- |
-| **etcd-lite** | manual | Our Kubernetes tutorial uses etcd as Vitess topology backing store and runs this image. It is a stripped version of the **etcd** image for faster Kubernetes startup times. Published as `vitess/etcd:<version>-lite` e.g. [v2.0.13-lite](https://hub.docker.com/r/vitess/etcd/tags/). |
-| **etcd** | manual | Basis for **etcd-lite**. |
 | **guestbook** | manual (updated with every Vitess release) | Vitess adaption of the Kubernetes guestbook example. Used to showcase sharding in Vitess. Dockerfile is located in [`examples/kubernetes/guestbook/`](https://github.com/youtube/vitess/tree/master/examples/kubernetes/guestbook). |
 | **orchestrator** | manual | Binaries for [Orchestrator](https://github.com/github/orchestrator). It can be used with Vitess for automatic failovers. Currently not part of the Kubernetes Tutorial and only used in tests. |
 

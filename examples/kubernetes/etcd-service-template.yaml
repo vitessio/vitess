@@ -1,37 +1,7 @@
----
-# Regular service for load balancing client connections.
-kind: Service
-apiVersion: v1
+apiVersion: "etcd.database.coreos.com/v1beta2"
+kind: "EtcdCluster"
 metadata:
-  name: etcd-{{cell}}
-  labels:
-    component: etcd
-    cell: {{cell}}
-    app: vitess
+  name: "etcd-{{cell}}"
 spec:
-  ports:
-    - port: 4001
-  selector:
-    component: etcd
-    cell: {{cell}}
-    app: vitess
----
-# Headless service for etcd cluster bootstrap.
-kind: Service
-apiVersion: v1
-metadata:
-  name: etcd-{{cell}}-srv
-  labels:
-    component: etcd
-    cell: {{cell}}
-    app: vitess
-spec:
-  clusterIP: None
-  ports:
-    - name: etcd-server
-      port: 7001
-  selector:
-    component: etcd
-    cell: {{cell}}
-    app: vitess
-
+  size: {{replicas}}
+  version: "3.1.8"

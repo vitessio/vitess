@@ -17,17 +17,17 @@ limitations under the License.
 package tabletenv
 
 import (
-	"encoding/json"
+	"bytes"
 	"fmt"
 	"html/template"
 	"net/url"
 	"strings"
 	"time"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
 
@@ -48,7 +48,7 @@ type LogStats struct {
 	Target               *querypb.Target
 	PlanType             string
 	OriginalSQL          string
-	BindVariables        map[string]interface{}
+	BindVariables        map[string]*querypb.BindVariable
 	rewrittenSqls        []string
 	RowsAffected         int
 	NumberOfQueries      int
@@ -133,34 +133,54 @@ func (stats *LogStats) SizeOfResponse() int {
 	return size
 }
 
-// FmtBindVariables returns the map of bind variables as JSON. For
-// values that are strings or byte slices it only reports their type
-// and length.
+// FmtBindVariables returns the map of bind variables as a string or a json
+// string depending on the streamlog.QueryLogFormat value. If RedactDebugUIQueries
+// is true then this returns the string "[REDACTED]"
+//
+// For values that are strings or byte slices it only reports their type
+// and length unless full is true.
 func (stats *LogStats) FmtBindVariables(full bool) string {
-	var out map[string]interface{}
+	if *streamlog.RedactDebugUIQueries {
+		return "\"[REDACTED]\""
+	}
+
+	var out map[string]*querypb.BindVariable
 	if full {
 		out = stats.BindVariables
 	} else {
 		// NOTE(szopa): I am getting rid of potentially large bind
 		// variables.
-		out = make(map[string]interface{})
+		out = make(map[string]*querypb.BindVariable)
 		for k, v := range stats.BindVariables {
-			switch val := v.(type) {
-			case string:
-				out[k] = fmt.Sprintf("string %v", len(val))
-			case []byte:
-				out[k] = fmt.Sprintf("bytes %v", len(val))
-			default:
+			if sqltypes.IsIntegral(v.Type) || sqltypes.IsFloat(v.Type) {
 				out[k] = v
+			} else {
+				out[k] = sqltypes.StringBindVariable(fmt.Sprintf("%v bytes", len(v.Value)))
 			}
 		}
 	}
-	b, err := json.Marshal(out)
-	if err != nil {
-		log.Warningf("could not marshal %q", stats.BindVariables)
-		return ""
+
+	if *streamlog.QueryLogFormat == streamlog.QueryLogFormatJSON {
+		var buf bytes.Buffer
+		buf.WriteString("{")
+		first := true
+		for k, v := range out {
+			if !first {
+				buf.WriteString(", ")
+			} else {
+				first = false
+			}
+			if sqltypes.IsIntegral(v.Type) || sqltypes.IsFloat(v.Type) {
+				fmt.Fprintf(&buf, "%q: {\"type\": %q, \"value\": %v}", k, v.Type, string(v.Value))
+			} else {
+				fmt.Fprintf(&buf, "%q: {\"type\": %q, \"value\": %q}", k, v.Type, string(v.Value))
+			}
+		}
+		buf.WriteString("}")
+		return buf.String()
 	}
-	return string(b)
+
+	return fmt.Sprintf("%v", out)
 }
 
 // FmtQuerySources returns a comma separated list of query
@@ -209,12 +229,28 @@ func (stats *LogStats) RemoteAddrUsername() (string, string) {
 
 // Format returns a tab separated list of logged fields.
 func (stats *LogStats) Format(params url.Values) string {
+	rewrittenSQL := "[REDACTED]"
+	if !*streamlog.RedactDebugUIQueries {
+		rewrittenSQL = stats.RewrittenSQL()
+	}
+
 	_, fullBindParams := params["full"]
+	formattedBindVars := stats.FmtBindVariables(fullBindParams)
 
 	// TODO: remove username here we fully enforce immediate caller id
 	remoteAddr, username := stats.RemoteAddrUsername()
+
+	// Valid options for the QueryLogFormat are text or json
+	var fmtString string
+	switch *streamlog.QueryLogFormat {
+	case streamlog.QueryLogFormatText:
+		fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%q\t\n"
+	case streamlog.QueryLogFormatJSON:
+		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanType\": %q, \"OriginalSQL\": %q, \"BindVars\": %v, \"Queries\": %v, \"RewrittenSQL\": %q, \"QuerySources\": %q, \"MysqlTime\": %.6f, \"ConnWaitTime\": %.6f, \"RowsAffected\": %v, \"ResponseSize\": %v, \"Error\": %q}\n"
+	}
+
 	return fmt.Sprintf(
-		"%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%q\t\n",
+		fmtString,
 		stats.Method,
 		remoteAddr,
 		username,
@@ -225,9 +261,9 @@ func (stats *LogStats) Format(params url.Values) string {
 		stats.TotalTime().Seconds(),
 		stats.PlanType,
 		stats.OriginalSQL,
-		stats.FmtBindVariables(fullBindParams),
+		formattedBindVars,
 		stats.NumberOfQueries,
-		stats.RewrittenSQL(),
+		rewrittenSQL,
 		stats.FmtQuerySources(),
 		stats.MysqlResponseTime.Seconds(),
 		stats.WaitingForConnection.Seconds(),

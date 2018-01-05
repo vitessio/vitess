@@ -18,6 +18,7 @@ package tabletserver
 
 import (
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 )
@@ -32,7 +33,7 @@ func (tc *testConn) Current() string { return tc.query }
 
 func (tc *testConn) ID() int64 { return tc.id }
 
-func (tc *testConn) Kill(string) error {
+func (tc *testConn) Kill(string, time.Duration) error {
 	tc.killed = true
 	return nil
 }

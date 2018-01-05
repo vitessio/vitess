@@ -85,7 +85,7 @@ type ActionAgent struct {
 	QueryServiceControl tabletserver.Controller
 	UpdateStream        binlog.UpdateStreamControl
 	HealthReporter      health.Reporter
-	TopoServer          topo.Server
+	TopoServer          *topo.Server
 	TabletAlias         *topodatapb.TabletAlias
 	MysqlDaemon         mysqlctl.MysqlDaemon
 	DBConfigs           dbconfigs.DBConfigs
@@ -114,6 +114,12 @@ type ActionAgent struct {
 	// both agent.actionMutex and agent.mutex needs to be taken,
 	// take actionMutex first.
 	actionMutex sync.Mutex
+
+	// actionMutexLocked is set to true after we acquire actionMutex,
+	// and reset to false when we release it.
+	// It is meant as a sanity check to make sure the methods that need
+	// to have the actionMutex have it.
+	actionMutexLocked bool
 
 	// waitingForMysql is set to true if mysql is not up when we
 	// start. That way, we only log once that we're waiting for
@@ -197,7 +203,7 @@ type ActionAgent struct {
 // it spawns.
 func NewActionAgent(
 	batchCtx context.Context,
-	ts topo.Server,
+	ts *topo.Server,
 	mysqld mysqlctl.MysqlDaemon,
 	queryServiceControl tabletserver.Controller,
 	tabletAlias *topodatapb.TabletAlias,
@@ -265,6 +271,10 @@ func NewActionAgent(
 		return nil, err
 	}
 
+	// Run a background task to rebuild the SrvKeyspace in our cell/keyspace
+	// if it doesn't exist yet.
+	go agent.maybeRebuildKeyspace(agent.initialTablet.Alias.Cell, agent.initialTablet.Keyspace)
+
 	// register the RPC services from the agent
 	servenv.OnRun(func() {
 		agent.registerQueryService()
@@ -280,17 +290,22 @@ func NewActionAgent(
 			// (same as if it was triggered remotely)
 			if err := agent.RestoreData(batchCtx, logutil.NewConsoleLogger(), false /* deleteBeforeRestore */); err != nil {
 				println(fmt.Sprintf("RestoreFromBackup failed: %v", err))
-				log.Fatalf("RestoreFromBackup failed: %v", err)
+				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
 
 			// after the restore is done, start health check
 			agent.initHealthCheck()
 		}()
 	} else {
-		// update our state
-		if err := agent.refreshTablet(batchCtx, "Start"); err != nil {
+		// Update our state (need the action lock).
+		if err := agent.lock(batchCtx); err != nil {
 			return nil, err
 		}
+		if err := agent.refreshTablet(batchCtx, "Start"); err != nil {
+			agent.unlock()
+			return nil, err
+		}
+		agent.unlock()
 
 		// synchronously start health check if needed
 		agent.initHealthCheck()
@@ -306,7 +321,7 @@ func NewActionAgent(
 
 // NewTestActionAgent creates an agent for test purposes. Only a
 // subset of features are supported now, but we'll add more over time.
-func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, mysqlDaemon mysqlctl.MysqlDaemon, preStart func(*ActionAgent)) *ActionAgent {
+func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, mysqlDaemon mysqlctl.MysqlDaemon, preStart func(*ActionAgent)) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: tabletservermock.NewController(),
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -329,7 +344,11 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *t
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
 	}
 
-	// Update our running state.
+	// Update our running state. Need to take action lock.
+	if err := agent.lock(batchCtx); err != nil {
+		panic(fmt.Errorf("agent.lock() failed: %v", err))
+	}
+	defer agent.unlock()
 	if err := agent.refreshTablet(batchCtx, "Start"); err != nil {
 		panic(fmt.Errorf("agent.refreshTablet(%v) failed: %v", tabletAlias, err))
 	}
@@ -340,7 +359,7 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *t
 // NewComboActionAgent creates an agent tailored specifically to run
 // within the vtcombo binary. It cannot be called concurrently,
 // as it changes the flags.
-func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
+func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: queryServiceControl,
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -371,7 +390,11 @@ func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
 	}
 
-	// And update our running state.
+	// And update our running state (need to take the Action lock).
+	if err := agent.lock(batchCtx); err != nil {
+		panic(fmt.Errorf("agent.lock() failed: %v", err))
+	}
+	defer agent.unlock()
 	if err := agent.refreshTablet(batchCtx, "Start"); err != nil {
 		panic(fmt.Errorf("agent.refreshTablet(%v) failed: %v", tabletAlias, err))
 	}
@@ -568,11 +591,13 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 		}
 	}
 
-	// create and register the RPC services from UpdateStream
+	// Create and register the RPC services from UpdateStream.
 	// (it needs the dbname, so it has to be delayed up to here,
 	// but it has to be before updateState below that may use it)
 	if initUpdateStream {
-		us := binlog.NewUpdateStream(agent.TopoServer, agent.initialTablet.Keyspace, agent.TabletAlias.Cell, agent.MysqlDaemon, agent.QueryServiceControl.SchemaEngine(), agent.DBConfigs.App.DbName)
+		cp := agent.DBConfigs.Dba
+		cp.DbName = agent.DBConfigs.App.DbName
+		us := binlog.NewUpdateStream(agent.TopoServer, agent.initialTablet.Keyspace, agent.TabletAlias.Cell, &cp, agent.QueryServiceControl.SchemaEngine())
 		agent.UpdateStream = us
 		servenv.OnRun(func() {
 			us.RegisterService()
@@ -592,7 +617,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 		Keyspace:   agent.initialTablet.Keyspace,
 		Shard:      agent.initialTablet.Shard,
 		TabletType: agent.initialTablet.Type,
-	}, agent.DBConfigs, agent.MysqlDaemon); err != nil {
+	}, agent.DBConfigs); err != nil {
 		return fmt.Errorf("failed to InitDBConfig: %v", err)
 	}
 
@@ -619,11 +644,26 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 	startingTablet.Type = topodatapb.TabletType_UNKNOWN
 	agent.setTablet(startingTablet)
 
-	// run a background task to rebuild the SrvKeyspace in our cell/keyspace
-	// if it doesn't exist yet
-	go agent.maybeRebuildKeyspace(agent.initialTablet.Alias.Cell, agent.initialTablet.Keyspace)
-
 	return nil
+}
+
+// Close prepares a tablet for shutdown. First we check our tablet ownership and
+// then prune the tablet topology entry of all post-init fields. This prevents
+// stale identifiers from hanging around in topology.
+func (agent *ActionAgent) Close() {
+	// cleanup initialized fields in the tablet entry
+	f := func(tablet *topodatapb.Tablet) error {
+		if err := topotools.CheckOwnership(agent.initialTablet, tablet); err != nil {
+			return err
+		}
+		tablet.Hostname = ""
+		tablet.MysqlHostname = ""
+		tablet.PortMap = nil
+		return nil
+	}
+	if _, err := agent.TopoServer.UpdateTabletFields(context.Background(), agent.TabletAlias, f); err != nil {
+		log.Warningf("Failed to update tablet record, may contain stale identifiers: %v", err)
+	}
 }
 
 // Stop shuts down the agent. Normally this is not necessary, since we use
@@ -657,6 +697,7 @@ func (agent *ActionAgent) hookExtraEnv() map[string]string {
 //
 // The actionMutex lock must be held when calling this function.
 func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topodatapb.Tablet) *topodatapb.Tablet {
+	agent.checkLock()
 	mport, err := agent.MysqlDaemon.GetMysqlPort()
 	if err != nil {
 		// Only log the first time, so we don't spam the logs.

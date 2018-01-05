@@ -1,0 +1,27 @@
+----------------------------------------------------------------------
+delete from user where id=10
+
+1 ks_sharded/40-80: begin
+1 ks_sharded/40-80: select name from user where id = 10 limit 10001 for update
+2 ks_sharded/80-c0: begin
+2 ks_sharded/80-c0: delete from name_user_map where (name = 'name_val_1' and user_id = 10) /* vtgate:: keyspace_id:a6e89b54b129c33051b76db219595660 */
+3 ks_sharded/40-80: delete from user where id in (10) /* vtgate:: keyspace_id:594764e1a2b2d98e */
+4 ks_sharded/40-80: commit
+5 ks_sharded/80-c0: commit
+
+----------------------------------------------------------------------
+delete from user where name='billy'
+
+1 ks_sharded/c0-: begin
+1 ks_sharded/c0-: select user_id from name_user_map where name = 'billy' limit 10001
+2 ks_sharded/-40: begin
+2 ks_sharded/-40: select name from user where name = 'billy' limit 10001 for update
+3 ks_sharded/80-c0: begin
+3 ks_sharded/80-c0: delete from name_user_map where (name = 'name_val_1' and user_id = 1) /* vtgate:: keyspace_id:a6e89b54b129c33051b76db219595660 */
+4 ks_sharded/-40: delete from user where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+4 ks_sharded/-40: select id from user where name = 'billy' limit 10001 for update /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+5 ks_sharded/c0-: commit
+6 ks_sharded/-40: commit
+7 ks_sharded/80-c0: commit
+
+----------------------------------------------------------------------

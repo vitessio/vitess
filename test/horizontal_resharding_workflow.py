@@ -48,7 +48,7 @@ class TestHorizontalReshardingWorkflow(worker.TestBaseSplitClone):
   def test_successful_resharding(self):
     """Reshard from 1 to 2 shards by running the workflow."""
     worker_proc, _, worker_rpc_port = utils.run_vtworker_bg(
-        ['--cell', 'test_nj'], auto_log=True)
+        ['--cell', 'test_nj', '--use_v3_resharding_mode=false'], auto_log=True)
     vtworker_endpoint = 'localhost:%d' % worker_rpc_port
 
     stdout = utils.run_vtctl(['WorkflowCreate', 'horizontal_resharding',

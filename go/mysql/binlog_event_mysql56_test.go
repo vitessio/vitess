@@ -110,7 +110,7 @@ func TestMysql56ParseGTID(t *testing.T) {
 	}
 }
 
-func TestMysql56ParseReplicationPosition(t *testing.T) {
+func TestMysql56ParsePosition(t *testing.T) {
 	input := "00010203-0405-0607-0809-0a0b0c0d0e0f:1-2"
 
 	sid := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
@@ -124,6 +124,6 @@ func TestMysql56ParseReplicationPosition(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 	if !got.Equal(want) {
-		t.Errorf("(&mysql56{}).ParseReplicationPosition(%#v) = %#v, want %#v", input, got, want)
+		t.Errorf("(&mysql56{}).ParsePosition(%#v) = %#v, want %#v", input, got, want)
 	}
 }

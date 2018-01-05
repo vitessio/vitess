@@ -43,8 +43,8 @@ var (
 	schemazTmpl = template.Must(template.New("example").Parse(`
 	{{$top := .}}{{with .Table}}<tr class="low">
 			<td>{{.Name}}</td>
-			<td>{{range .Columns}}{{.Name}}: {{.Type}}, {{if .IsAuto}}autoinc{{end}}, {{.Default}}<br>{{end}}</td>
-			<td>{{range .Indexes}}{{.Name}}: ({{range .Columns}}{{.}},{{end}}), ({{range .Cardinality}}{{.}},{{end}})<br>{{end}}</td>
+			<td>{{range .Columns}}{{.Name}}: {{.Type}}, {{if .IsAuto}}autoinc{{end}}, {{.Default.ToString}}<br>{{end}}</td>
+			<td>{{range .Indexes}}{{.Name}}{{if .Unique}}(unique){{end}}: ({{range .Columns}}{{.}},{{end}}), ({{range .Cardinality}}{{.}},{{end}})<br>{{end}}</td>
 			<td>{{index $top.Type .Type}}</td>
 			<td>{{.TableRows.Get}}</td>
 			<td>{{.DataLength.Get}}</td>

@@ -20,6 +20,8 @@ syntax = "proto3";
 
 package vschema;
 
+import "query.proto";
+
 // Keyspace is the vschema for a keyspace.
 message Keyspace {
   // If sharded is false, vindexes and tables are ignored.
@@ -55,13 +57,18 @@ message Table {
   // auto_increment is specified if a column needs
   // to be associated with a sequence.
   AutoIncrement auto_increment = 3;
+  // columns lists the columns for the table.
+  repeated Column columns = 4;
 }
 
 // ColumnVindex is used to associate a column to a vindex.
 message ColumnVindex {
+  // Legacy implemenation, moving forward all vindexes should define a list of columns.
   string column = 1;
   // The name must match a vindex defined in Keyspace.
   string name = 2;
+  // List of columns that define this Vindex
+  repeated string columns = 3;
 }
 
 // Autoincrement is used to designate a column as auto-inc.
@@ -69,6 +76,12 @@ message AutoIncrement {
   string column = 1;
   // The sequence must match a table of type SEQUENCE.
   string sequence = 2;
+}
+
+// Column describes a column.
+message Column {
+  string name = 1;
+  query.Type type = 2;
 }
 
 // SrvVSchema is the roll-up of all the Keyspace schema for a cell.

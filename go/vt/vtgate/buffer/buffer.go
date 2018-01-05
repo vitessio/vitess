@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
@@ -69,12 +70,15 @@ const (
 // There should be exactly one instance of this buffer. For each failover, an
 // instance of "ShardBuffer" will be created.
 type Buffer struct {
-	// Immutable configuration fields (parsed from command line flags).
+	// Immutable configuration fields.
+	// Except for "now", they are parsed from command line flags.
 	// keyspaces has the same purpose as "shards" but applies to a whole keyspace.
 	keyspaces map[string]bool
 	// shards is a set of keyspace/shard entries to which buffering is limited.
 	// If empty (and *enabled==true), buffering is enabled for all shards.
 	shards map[string]bool
+	// now returns the current time. Overriden in tests.
+	now func() time.Time
 
 	// bufferSizeSema limits how many requests can be buffered
 	// ("-buffer_size") and is shared by all shardBuffer instances.
@@ -97,6 +101,10 @@ type Buffer struct {
 
 // New creates a new Buffer object.
 func New() *Buffer {
+	return newWithNow(time.Now)
+}
+
+func newWithNow(now func() time.Time) *Buffer {
 	if err := verifyFlags(); err != nil {
 		log.Fatalf("Invalid buffer configuration: %v", err)
 	}
@@ -139,6 +147,7 @@ func New() *Buffer {
 	return &Buffer{
 		keyspaces:      keyspaces,
 		shards:         shards,
+		now:            now,
 		bufferSizeSema: sync2.NewSemaphore(*size, 0),
 		buffers:        make(map[string]*shardBuffer),
 	}
@@ -224,7 +233,7 @@ func (b *Buffer) StatsUpdate(ts *discovery.TabletStats) {
 		// Buffer is shut down. Ignore all calls.
 		return
 	}
-	sb.recordExternallyReparentedTimestamp(timestamp)
+	sb.recordExternallyReparentedTimestamp(timestamp, ts.Tablet.Alias)
 }
 
 // causedByFailover returns true if "err" was supposedly caused by a failover.
@@ -279,7 +288,7 @@ func (b *Buffer) getOrCreateBuffer(keyspace, shard string) *shardBuffer {
 	// Look it up again because it could have been created in the meantime.
 	sb, ok = b.buffers[key]
 	if !ok {
-		sb = newShardBuffer(b.mode(keyspace, shard), keyspace, shard, b.bufferSizeSema)
+		sb = newShardBuffer(b.mode(keyspace, shard), keyspace, shard, b.now, b.bufferSizeSema)
 		b.buffers[key] = sb
 	}
 	return sb

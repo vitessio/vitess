@@ -41,6 +41,7 @@ type DBConfigFlag int
 const (
 	EmptyConfig DBConfigFlag = 0
 	AppConfig   DBConfigFlag = 1 << iota
+	AppDebugConfig
 	// AllPrivs user should have more privileges than App (should include possibility to do
 	// schema changes and write to internal Vitess tables), but it shouldn't have SUPER
 	// privilege like Dba has.
@@ -80,6 +81,10 @@ func RegisterFlags(flags DBConfigFlag) DBConfigFlag {
 	if AppConfig&flags != 0 {
 		registerConnFlags(&dbConfigs.App, "app")
 		registeredFlags |= AppConfig
+	}
+	if AppDebugConfig&flags != 0 {
+		registerConnFlags(&dbConfigs.AppDebug, "appdebug")
+		registeredFlags |= AppDebugConfig
 	}
 	if AllPrivsConfig&flags != 0 {
 		registerConnFlags(&dbConfigs.AllPrivs, "allprivs")
@@ -124,6 +129,7 @@ func initConnParams(cp *mysql.ConnParams, socketFile string) error {
 // - SidecarDBName for storing operational metadata
 type DBConfigs struct {
 	App           mysql.ConnParams
+	AppDebug      mysql.ConnParams
 	AllPrivs      mysql.ConnParams
 	Dba           mysql.ConnParams
 	Filtered      mysql.ConnParams
@@ -133,6 +139,9 @@ type DBConfigs struct {
 
 func (dbcfgs *DBConfigs) String() string {
 	if dbcfgs.App.Pass != redactedPassword {
+		panic("Cannot log a non-redacted DBConfig")
+	}
+	if dbcfgs.AppDebug.Pass != redactedPassword {
 		panic("Cannot log a non-redacted DBConfig")
 	}
 	data, err := json.MarshalIndent(dbcfgs, "", "  ")
@@ -145,6 +154,7 @@ func (dbcfgs *DBConfigs) String() string {
 // Redact will remove the password, so the object can be logged
 func (dbcfgs *DBConfigs) Redact() {
 	dbcfgs.App.Pass = redactedPassword
+	dbcfgs.AppDebug.Pass = redactedPassword
 	dbcfgs.AllPrivs.Pass = redactedPassword
 	dbcfgs.Dba.Pass = redactedPassword
 	dbcfgs.Filtered.Pass = redactedPassword
@@ -164,6 +174,11 @@ func Init(socketFile string, flags DBConfigFlag) (*DBConfigs, error) {
 	if AppConfig&flags != 0 {
 		if err := initConnParams(&dbConfigs.App, socketFile); err != nil {
 			return nil, fmt.Errorf("app dbconfig cannot be initialized: %v", err)
+		}
+	}
+	if AppDebugConfig&flags != 0 {
+		if err := initConnParams(&dbConfigs.AppDebug, socketFile); err != nil {
+			return nil, fmt.Errorf("appdebug dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if AllPrivsConfig&flags != 0 {

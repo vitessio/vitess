@@ -8,6 +8,13 @@ if [ -z "$GIT_DIR" ]; then
   DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
   GIT_DIR="${DIR}/.."
 fi
+
+# This is necessary because the Atom packages don't set GOPATH
+if [ -z "$GOPATH" ]; then
+  GOPATH=$( cd "$( dirname "${BASH_SOURCE[0]}" )/../../../../../.." && pwd )
+  export GOPATH
+fi
+
 for hook in $GIT_DIR/../misc/git/hooks/*; do
   $hook
 done

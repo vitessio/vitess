@@ -39,6 +39,7 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 )
 
 var (
@@ -46,6 +47,7 @@ var (
 	tabletFilters       flagutil.StringListValue
 	refreshInterval     = flag.Duration("tablet_refresh_interval", 1*time.Minute, "tablet refresh interval")
 	topoReadConcurrency = flag.Int("topo_read_concurrency", 32, "concurrent topo reads")
+	allowedTabletTypes  []topodatapb.TabletType
 )
 
 const (
@@ -54,6 +56,7 @@ const (
 
 func init() {
 	flag.Var(&tabletFilters, "tablet_filters", "Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch")
+	topoproto.TabletTypeListVar(&allowedTabletTypes, "allowed_tablet_types", "Specifies the tablet types this vtgate is allowed to route queries to")
 	RegisterCreator(gatewayImplementationDiscovery, createDiscoveryGateway)
 }
 
@@ -61,7 +64,7 @@ type discoveryGateway struct {
 	queryservice.QueryService
 	hc            discovery.HealthCheck
 	tsc           *discovery.TabletStatsCache
-	topoServer    topo.Server
+	topoServer    *topo.Server
 	srvTopoServer topo.SrvTopoServer
 	localCell     string
 	retryCount    int
@@ -80,10 +83,10 @@ type discoveryGateway struct {
 	buffer *buffer.Buffer
 }
 
-func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int) Gateway {
+func createDiscoveryGateway(hc discovery.HealthCheck, topoServer *topo.Server, serv topo.SrvTopoServer, cell string, retryCount int) Gateway {
 	dg := &discoveryGateway{
 		hc:                hc,
-		tsc:               discovery.NewTabletStatsCacheDoNotSetListener(cell),
+		tsc:               discovery.NewTabletStatsCacheDoNotSetListener(topoServer, cell),
 		topoServer:        topoServer,
 		srvTopoServer:     serv,
 		localCell:         cell,
@@ -106,7 +109,7 @@ func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, se
 		if len(tabletFilters) > 0 {
 			fbs, err := discovery.NewFilterByShard(dg.hc, tabletFilters)
 			if err != nil {
-				log.Fatalf("Cannot parse tablet_filters parameter: %v", err)
+				log.Exitf("Cannot parse tablet_filters parameter: %v", err)
 			}
 			tr = fbs
 		}
@@ -178,6 +181,19 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 	var err error
 	invalidTablets := make(map[string]bool)
 
+	if len(allowedTabletTypes) > 0 {
+		var match bool
+		for _, allowed := range allowedTabletTypes {
+			if allowed == target.TabletType {
+				match = true
+				break
+			}
+		}
+		if !match {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requested tablet type %v is not part of the allowed tablet types for this vtgate: %+v", target.TabletType.String(), allowedTabletTypes)
+		}
+	}
+
 	bufferedOnce := false
 	for i := 0; i < dg.retryCount+1; i++ {
 		// Check if we should buffer MASTER queries which failed due to an ongoing
@@ -212,7 +228,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 			err = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no valid tablet")
 			break
 		}
-		shuffleTablets(tablets)
+		shuffleTablets(dg.localCell, tablets)
 
 		// skip tablets we tried before
 		var ts *discovery.TabletStats
@@ -257,13 +273,51 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 	return NewShardError(err, target, tabletLastUsed, inTransaction)
 }
 
-func shuffleTablets(tablets []discovery.TabletStats) {
-	index := 0
+func shuffleTablets(cell string, tablets []discovery.TabletStats) {
+	sameCell, diffCell, sameCellMax := 0, 0, -1
 	length := len(tablets)
-	for i := length - 1; i > 0; i-- {
-		index = rand.Intn(i + 1)
-		tablets[i], tablets[index] = tablets[index], tablets[i]
+
+	// move all same cell tablets to the front, this is O(n)
+	for {
+		sameCellMax = diffCell - 1
+		sameCell = nextTablet(cell, tablets, sameCell, length, true)
+		diffCell = nextTablet(cell, tablets, diffCell, length, false)
+		// either no more diffs or no more same cells should stop the iteration
+		if sameCell < 0 || diffCell < 0 {
+			break
+		}
+
+		if sameCell < diffCell {
+			// fast forward the `sameCell` lookup to `diffCell + 1`, `diffCell` unchanged
+			sameCell = diffCell + 1
+		} else {
+			// sameCell > diffCell, swap needed
+			tablets[sameCell], tablets[diffCell] = tablets[diffCell], tablets[sameCell]
+			sameCell++
+			diffCell++
+		}
 	}
+
+	//shuffle in same cell tablets
+	for i := sameCellMax; i > 0; i-- {
+		swap := rand.Intn(i + 1)
+		tablets[i], tablets[swap] = tablets[swap], tablets[i]
+	}
+
+	//shuffle in diff cell tablets
+	for i, diffCellMin := length-1, sameCellMax+1; i > diffCellMin; i-- {
+		swap := rand.Intn(i-sameCellMax) + diffCellMin
+		tablets[i], tablets[swap] = tablets[swap], tablets[i]
+	}
+}
+
+func nextTablet(cell string, tablets []discovery.TabletStats, offset, length int, sameCell bool) int {
+	for ; offset < length; offset++ {
+		if (tablets[offset].Tablet.Alias.Cell == cell) == sameCell {
+			return offset
+		}
+	}
+	return -1
 }
 
 func (dg *discoveryGateway) updateStats(target *querypb.Target, startTime time.Time, err error) {

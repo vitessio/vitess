@@ -21,6 +21,10 @@ import (
 	"fmt"
 )
 
+// NodeFormatter defines the signature of a custom node formatter
+// function that can be given to TrackedBuffer for code generation.
+type NodeFormatter func(buf *TrackedBuffer, node SQLNode)
+
 // TrackedBuffer is used to rebuild a query from the ast.
 // bindLocations keeps track of locations in the buffer that
 // use bind variables for efficient future substitutions.
@@ -31,11 +35,11 @@ import (
 type TrackedBuffer struct {
 	*bytes.Buffer
 	bindLocations []bindLocation
-	nodeFormatter func(buf *TrackedBuffer, node SQLNode)
+	nodeFormatter NodeFormatter
 }
 
 // NewTrackedBuffer creates a new TrackedBuffer.
-func NewTrackedBuffer(nodeFormatter func(buf *TrackedBuffer, node SQLNode)) *TrackedBuffer {
+func NewTrackedBuffer(nodeFormatter NodeFormatter) *TrackedBuffer {
 	return &TrackedBuffer{
 		Buffer:        new(bytes.Buffer),
 		nodeFormatter: nodeFormatter,

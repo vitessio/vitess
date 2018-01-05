@@ -29,7 +29,9 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/youtube/vitess/go/sqlescape"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -55,7 +57,7 @@ type QueryResultReader struct {
 
 // NewQueryResultReaderForTablet creates a new QueryResultReader for
 // the provided tablet / sql query
-func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias, sql string) (*QueryResultReader, error) {
+func NewQueryResultReaderForTablet(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, sql string) (*QueryResultReader, error) {
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	tablet, err := ts.GetTablet(shortCtx, tabletAlias)
 	cancel()
@@ -63,7 +65,7 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAl
 		return nil, err
 	}
 
-	conn, err := tabletconn.GetDialer()(tablet.Tablet, *remoteActionsTimeout)
+	conn, err := tabletconn.GetDialer()(tablet.Tablet, grpcclient.FailFast(false))
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +74,7 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAl
 		Keyspace:   tablet.Tablet.Keyspace,
 		Shard:      tablet.Tablet.Shard,
 		TabletType: tablet.Tablet.Type,
-	}, sql, make(map[string]interface{}), nil)
+	}, sql, make(map[string]*querypb.BindVariable), nil)
 
 	// read the columns, or grab the error
 	cols, err := stream.Recv()
@@ -188,8 +190,8 @@ func uint64FromKeyspaceID(keyspaceID []byte) uint64 {
 // TableScan returns a QueryResultReader that gets all the rows from a
 // table, ordered by Primary Key. The returned columns are ordered
 // with the Primary Key columns in front.
-func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *topodatapb.TabletAlias, td *tabletmanagerdatapb.TableDefinition) (*QueryResultReader, error) {
-	sql := fmt.Sprintf("SELECT %v FROM %v", strings.Join(escapeAll(orderedColumns(td)), ", "), escape(td.Name))
+func TableScan(ctx context.Context, log logutil.Logger, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, td *tabletmanagerdatapb.TableDefinition) (*QueryResultReader, error) {
+	sql := fmt.Sprintf("SELECT %v FROM %v", strings.Join(escapeAll(orderedColumns(td)), ", "), sqlescape.EscapeID(td.Name))
 	if len(td.PrimaryKeyColumns) > 0 {
 		sql += fmt.Sprintf(" ORDER BY %v", strings.Join(escapeAll(td.PrimaryKeyColumns), ", "))
 	}
@@ -204,7 +206,7 @@ func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAl
 // If keyspaceSchema is passed in, we go into v3 mode, and we ask for all
 // source data, and filter here. Otherwise we stick with v2 mode, where we can
 // ask the source tablet to do the filtering.
-func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *topodatapb.TabletAlias, td *tabletmanagerdatapb.TableDefinition, keyRange *topodatapb.KeyRange, keyspaceSchema *vindexes.KeyspaceSchema, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType) (*QueryResultReader, error) {
+func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, td *tabletmanagerdatapb.TableDefinition, keyRange *topodatapb.KeyRange, keyspaceSchema *vindexes.KeyspaceSchema, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType) (*QueryResultReader, error) {
 	if keyspaceSchema != nil {
 		// switch to v3 mode.
 		keyResolver, err := newV3ResolverFromColumnList(keyspaceSchema, td.Name, orderedColumns(td))
@@ -234,37 +236,37 @@ func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server
 		if len(keyRange.Start) > 0 {
 			if len(keyRange.End) > 0 {
 				// have start & end
-				where = fmt.Sprintf("WHERE %v >= %v AND %v < %v", escape(shardingColumnName), uint64FromKeyspaceID(keyRange.Start), escape(shardingColumnName), uint64FromKeyspaceID(keyRange.End))
+				where = fmt.Sprintf("WHERE %v >= %v AND %v < %v", sqlescape.EscapeID(shardingColumnName), uint64FromKeyspaceID(keyRange.Start), sqlescape.EscapeID(shardingColumnName), uint64FromKeyspaceID(keyRange.End))
 			} else {
 				// have start only
-				where = fmt.Sprintf("WHERE %v >= %v", escape(shardingColumnName), uint64FromKeyspaceID(keyRange.Start))
+				where = fmt.Sprintf("WHERE %v >= %v", sqlescape.EscapeID(shardingColumnName), uint64FromKeyspaceID(keyRange.Start))
 			}
 		} else {
 			if len(keyRange.End) > 0 {
 				// have end only
-				where = fmt.Sprintf("WHERE %v < %v", escape(shardingColumnName), uint64FromKeyspaceID(keyRange.End))
+				where = fmt.Sprintf("WHERE %v < %v", sqlescape.EscapeID(shardingColumnName), uint64FromKeyspaceID(keyRange.End))
 			}
 		}
 	case topodatapb.KeyspaceIdType_BYTES:
 		if len(keyRange.Start) > 0 {
 			if len(keyRange.End) > 0 {
 				// have start & end
-				where = fmt.Sprintf("WHERE HEX(%v) >= '%v' AND HEX(%v) < '%v'", escape(shardingColumnName), hex.EncodeToString(keyRange.Start), escape(shardingColumnName), hex.EncodeToString(keyRange.End))
+				where = fmt.Sprintf("WHERE HEX(%v) >= '%v' AND HEX(%v) < '%v'", sqlescape.EscapeID(shardingColumnName), hex.EncodeToString(keyRange.Start), sqlescape.EscapeID(shardingColumnName), hex.EncodeToString(keyRange.End))
 			} else {
 				// have start only
-				where = fmt.Sprintf("WHERE HEX(%v) >= '%v'", escape(shardingColumnName), hex.EncodeToString(keyRange.Start))
+				where = fmt.Sprintf("WHERE HEX(%v) >= '%v'", sqlescape.EscapeID(shardingColumnName), hex.EncodeToString(keyRange.Start))
 			}
 		} else {
 			if len(keyRange.End) > 0 {
 				// have end only
-				where = fmt.Sprintf("WHERE HEX(%v) < '%v'", escape(shardingColumnName), hex.EncodeToString(keyRange.End))
+				where = fmt.Sprintf("WHERE HEX(%v) < '%v'", sqlescape.EscapeID(shardingColumnName), hex.EncodeToString(keyRange.End))
 			}
 		}
 	default:
 		return nil, fmt.Errorf("Unsupported ShardingColumnType: %v", shardingColumnType)
 	}
 
-	sql := fmt.Sprintf("SELECT %v FROM %v %v", strings.Join(escapeAll(orderedColumns(td)), ", "), escape(td.Name), where)
+	sql := fmt.Sprintf("SELECT %v FROM %v %v", strings.Join(escapeAll(orderedColumns(td)), ", "), sqlescape.EscapeID(td.Name), where)
 	if len(td.PrimaryKeyColumns) > 0 {
 		sql += fmt.Sprintf(" ORDER BY %v", strings.Join(escapeAll(td.PrimaryKeyColumns), ", "))
 	}
@@ -398,8 +400,8 @@ func RowsEqual(left, right []sqltypes.Value) int {
 // TODO: This can panic if types for left and right don't match.
 func CompareRows(fields []*querypb.Field, compareCount int, left, right []sqltypes.Value) (int, error) {
 	for i := 0; i < compareCount; i++ {
-		lv := left[i].ToNative()
-		rv := right[i].ToNative()
+		lv, _ := sqltypes.ToNative(left[i])
+		rv, _ := sqltypes.ToNative(right[i])
 		switch l := lv.(type) {
 		case int64:
 			r := rv.(int64)

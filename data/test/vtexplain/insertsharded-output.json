@@ -1,0 +1,895 @@
+[
+    {
+        "SQL": "insert into user (id, name) values(1, 'alice')",
+        "Plans": [
+            {
+                "Original": "insert into name_user_map(name, user_id) values (:name0, :user_id0)",
+                "Instructions": {
+                    "Opcode": "InsertSharded",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert into name_user_map(name, user_id) values (:_name0, :user_id0)",
+                    "Values": [
+                        [
+                            [
+                                ":name0"
+                            ]
+                        ]
+                    ],
+                    "Table": "name_user_map",
+                    "Prefix": "insert into name_user_map(name, user_id) values ",
+                    "Mid": [
+                        "(:_name0, :user_id0)"
+                    ]
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            },
+            {
+                "Original": "insert into user(id, name) values (:vtg1, :vtg2)",
+                "Instructions": {
+                    "Opcode": "InsertSharded",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert into user(id, name) values (:_id0, :_name0)",
+                    "Values": [
+                        [
+                            [
+                                ":vtg1"
+                            ]
+                        ],
+                        [
+                            [
+                                ":vtg2"
+                            ]
+                        ]
+                    ],
+                    "Table": "user",
+                    "Prefix": "insert into user(id, name) values ",
+                    "Mid": [
+                        "(:_id0, :_name0)"
+                    ]
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-40": {
+                "TabletQueries": [
+                    {
+                        "Time": 2,
+                        "SQL": "insert into user(id, name) values (:_id0, :_name0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "_id0": "1",
+                            "_name0": "'alice'",
+                            "vtg1": "1",
+                            "vtg2": "'alice'"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 2,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 2,
+                        "SQL": "insert into user(id, name) values (1, 'alice') /* vtgate:: keyspace_id:166b40b44aba4bd6 */"
+                    },
+                    {
+                        "Time": 4,
+                        "SQL": "commit"
+                    }
+                ]
+            },
+            "ks_sharded/40-80": {
+                "TabletQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "insert into name_user_map(name, user_id) values (:_name0, :user_id0) /* vtgate:: keyspace_id:475e26c086f437f36bd72ecd883504a7 */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "_name0": "'alice'",
+                            "name0": "'alice'",
+                            "user_id0": "1"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 1,
+                        "SQL": "insert into name_user_map(name, user_id) values ('alice', 1) /* vtgate:: keyspace_id:475e26c086f437f36bd72ecd883504a7 */"
+                    },
+                    {
+                        "Time": 3,
+                        "SQL": "commit"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "insert into user (id, name) values(2, 'bob')",
+        "Plans": [
+            {
+                "Original": "insert into name_user_map(name, user_id) values (:name0, :user_id0)",
+                "Instructions": {
+                    "Opcode": "InsertSharded",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert into name_user_map(name, user_id) values (:_name0, :user_id0)",
+                    "Values": [
+                        [
+                            [
+                                ":name0"
+                            ]
+                        ]
+                    ],
+                    "Table": "name_user_map",
+                    "Prefix": "insert into name_user_map(name, user_id) values ",
+                    "Mid": [
+                        "(:_name0, :user_id0)"
+                    ]
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            },
+            {
+                "Original": "insert into user(id, name) values (:vtg1, :vtg2)",
+                "Instructions": {
+                    "Opcode": "InsertSharded",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert into user(id, name) values (:_id0, :_name0)",
+                    "Values": [
+                        [
+                            [
+                                ":vtg1"
+                            ]
+                        ],
+                        [
+                            [
+                                ":vtg2"
+                            ]
+                        ]
+                    ],
+                    "Table": "user",
+                    "Prefix": "insert into user(id, name) values ",
+                    "Mid": [
+                        "(:_id0, :_name0)"
+                    ]
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-40": {
+                "TabletQueries": [
+                    {
+                        "Time": 2,
+                        "SQL": "insert into user(id, name) values (:_id0, :_name0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "_id0": "2",
+                            "_name0": "'bob'",
+                            "vtg1": "2",
+                            "vtg2": "'bob'"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 2,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 2,
+                        "SQL": "insert into user(id, name) values (2, 'bob') /* vtgate:: keyspace_id:06e7ea22ce92708f */"
+                    },
+                    {
+                        "Time": 4,
+                        "SQL": "commit"
+                    }
+                ]
+            },
+            "ks_sharded/c0-": {
+                "TabletQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "insert into name_user_map(name, user_id) values (:_name0, :user_id0) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "_name0": "'bob'",
+                            "name0": "'bob'",
+                            "user_id0": "2"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 1,
+                        "SQL": "insert into name_user_map(name, user_id) values ('bob', 2) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */"
+                    },
+                    {
+                        "Time": 3,
+                        "SQL": "commit"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "insert ignore into user (id, name) values(2, 'bob')",
+        "Plans": [
+            {
+                "Original": "select name from name_user_map where name = :name and user_id = :user_id",
+                "Instructions": {
+                    "Opcode": "SelectEqualUnique",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "select name from name_user_map where name = :name and user_id = :user_id",
+                    "FieldQuery": "select name from name_user_map where 1 != 1",
+                    "Vindex": "md5",
+                    "Values": [
+                        ":name"
+                    ]
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            },
+            {
+                "Original": "insert ignore into name_user_map(name, user_id) values (:name0, :user_id0)",
+                "Instructions": {
+                    "Opcode": "InsertShardedIgnore",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0)",
+                    "Values": [
+                        [
+                            [
+                                ":name0"
+                            ]
+                        ]
+                    ],
+                    "Table": "name_user_map",
+                    "Prefix": "insert ignore into name_user_map(name, user_id) values ",
+                    "Mid": [
+                        "(:_name0, :user_id0)"
+                    ]
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            },
+            {
+                "Original": "insert ignore into user(id, name) values (:vtg1, :vtg2)",
+                "Instructions": {
+                    "Opcode": "InsertShardedIgnore",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert ignore into user(id, name) values (:_id0, :_name0)",
+                    "Values": [
+                        [
+                            [
+                                ":vtg1"
+                            ]
+                        ],
+                        [
+                            [
+                                ":vtg2"
+                            ]
+                        ]
+                    ],
+                    "Table": "user",
+                    "Prefix": "insert ignore into user(id, name) values ",
+                    "Mid": [
+                        "(:_id0, :_name0)"
+                    ]
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-40": {
+                "TabletQueries": [
+                    {
+                        "Time": 3,
+                        "SQL": "insert ignore into user(id, name) values (:_id0, :_name0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "_id0": "2",
+                            "_name0": "'bob'",
+                            "vtg1": "2",
+                            "vtg2": "'bob'"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 3,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 3,
+                        "SQL": "insert ignore into user(id, name) values (2, 'bob') /* vtgate:: keyspace_id:06e7ea22ce92708f */"
+                    },
+                    {
+                        "Time": 5,
+                        "SQL": "commit"
+                    }
+                ]
+            },
+            "ks_sharded/c0-": {
+                "TabletQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "_name0": "'bob'",
+                            "name0": "'bob'",
+                            "user_id0": "2"
+                        }
+                    },
+                    {
+                        "Time": 2,
+                        "SQL": "select name from name_user_map where name = :name and user_id = :user_id",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "name": "'bob'",
+                            "user_id": "2"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 1,
+                        "SQL": "insert ignore into name_user_map(name, user_id) values ('bob', 2) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */"
+                    },
+                    {
+                        "Time": 2,
+                        "SQL": "select name from name_user_map where name = 'bob' and user_id = 2 limit 10001"
+                    },
+                    {
+                        "Time": 4,
+                        "SQL": "commit"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "insert ignore into user (id, name, nickname) values(2, 'bob', 'bob')",
+        "Plans": [
+            {
+                "Original": "select name from name_user_map where name = :name and user_id = :user_id",
+                "Instructions": {
+                    "Opcode": "SelectEqualUnique",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "select name from name_user_map where name = :name and user_id = :user_id",
+                    "FieldQuery": "select name from name_user_map where 1 != 1",
+                    "Vindex": "md5",
+                    "Values": [
+                        ":name"
+                    ]
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            },
+            {
+                "Original": "insert ignore into name_user_map(name, user_id) values (:name0, :user_id0)",
+                "Instructions": {
+                    "Opcode": "InsertShardedIgnore",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0)",
+                    "Values": [
+                        [
+                            [
+                                ":name0"
+                            ]
+                        ]
+                    ],
+                    "Table": "name_user_map",
+                    "Prefix": "insert ignore into name_user_map(name, user_id) values ",
+                    "Mid": [
+                        "(:_name0, :user_id0)"
+                    ]
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            },
+            {
+                "Original": "insert ignore into user(id, name, nickname) values (:vtg1, :vtg2, :vtg3)",
+                "Instructions": {
+                    "Opcode": "InsertShardedIgnore",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert ignore into user(id, name, nickname) values (:_id0, :_name0, :vtg3)",
+                    "Values": [
+                        [
+                            [
+                                ":vtg1"
+                            ]
+                        ],
+                        [
+                            [
+                                ":vtg2"
+                            ]
+                        ]
+                    ],
+                    "Table": "user",
+                    "Prefix": "insert ignore into user(id, name, nickname) values ",
+                    "Mid": [
+                        "(:_id0, :_name0, :vtg3)"
+                    ]
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-40": {
+                "TabletQueries": [
+                    {
+                        "Time": 3,
+                        "SQL": "insert ignore into user(id, name, nickname) values (:_id0, :_name0, :vtg3) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "_id0": "2",
+                            "_name0": "'bob'",
+                            "vtg1": "2",
+                            "vtg2": "'bob'",
+                            "vtg3": "'bob'"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 3,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 3,
+                        "SQL": "insert ignore into user(id, name, nickname) values (2, 'bob', 'bob') /* vtgate:: keyspace_id:06e7ea22ce92708f */"
+                    },
+                    {
+                        "Time": 5,
+                        "SQL": "commit"
+                    }
+                ]
+            },
+            "ks_sharded/c0-": {
+                "TabletQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "_name0": "'bob'",
+                            "name0": "'bob'",
+                            "user_id0": "2"
+                        }
+                    },
+                    {
+                        "Time": 2,
+                        "SQL": "select name from name_user_map where name = :name and user_id = :user_id",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "name": "'bob'",
+                            "user_id": "2"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 1,
+                        "SQL": "insert ignore into name_user_map(name, user_id) values ('bob', 2) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */"
+                    },
+                    {
+                        "Time": 2,
+                        "SQL": "select name from name_user_map where name = 'bob' and user_id = 2 limit 10001"
+                    },
+                    {
+                        "Time": 4,
+                        "SQL": "commit"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "insert into user (id, name, nickname) values(2, 'bob', 'bobby') on duplicate key update nickname='bobby'",
+        "Plans": [
+            {
+                "Original": "select name from name_user_map where name = :name and user_id = :user_id",
+                "Instructions": {
+                    "Opcode": "SelectEqualUnique",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "select name from name_user_map where name = :name and user_id = :user_id",
+                    "FieldQuery": "select name from name_user_map where 1 != 1",
+                    "Vindex": "md5",
+                    "Values": [
+                        ":name"
+                    ]
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            },
+            {
+                "Original": "insert ignore into name_user_map(name, user_id) values (:name0, :user_id0)",
+                "Instructions": {
+                    "Opcode": "InsertShardedIgnore",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0)",
+                    "Values": [
+                        [
+                            [
+                                ":name0"
+                            ]
+                        ]
+                    ],
+                    "Table": "name_user_map",
+                    "Prefix": "insert ignore into name_user_map(name, user_id) values ",
+                    "Mid": [
+                        "(:_name0, :user_id0)"
+                    ]
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            },
+            {
+                "Original": "insert into user(id, name, nickname) values (:vtg1, :vtg2, :vtg3) on duplicate key update nickname = :vtg4",
+                "Instructions": {
+                    "Opcode": "InsertShardedIgnore",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert into user(id, name, nickname) values (:_id0, :_name0, :vtg3) on duplicate key update nickname = :vtg4",
+                    "Values": [
+                        [
+                            [
+                                ":vtg1"
+                            ]
+                        ],
+                        [
+                            [
+                                ":vtg2"
+                            ]
+                        ]
+                    ],
+                    "Table": "user",
+                    "Prefix": "insert into user(id, name, nickname) values ",
+                    "Mid": [
+                        "(:_id0, :_name0, :vtg3)"
+                    ],
+                    "Suffix": " on duplicate key update nickname = :vtg4"
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-40": {
+                "TabletQueries": [
+                    {
+                        "Time": 3,
+                        "SQL": "insert into user(id, name, nickname) values (:_id0, :_name0, :vtg3) on duplicate key update nickname = :vtg4 /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "_id0": "2",
+                            "_name0": "'bob'",
+                            "vtg1": "2",
+                            "vtg2": "'bob'",
+                            "vtg3": "'bobby'",
+                            "vtg4": "'bobby'"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 3,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 3,
+                        "SQL": "insert into user(id, name, nickname) values (2, 'bob', 'bobby') on duplicate key update nickname = 'bobby' /* vtgate:: keyspace_id:06e7ea22ce92708f */"
+                    },
+                    {
+                        "Time": 5,
+                        "SQL": "commit"
+                    }
+                ]
+            },
+            "ks_sharded/c0-": {
+                "TabletQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "_name0": "'bob'",
+                            "name0": "'bob'",
+                            "user_id0": "2"
+                        }
+                    },
+                    {
+                        "Time": 2,
+                        "SQL": "select name from name_user_map where name = :name and user_id = :user_id",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "name": "'bob'",
+                            "user_id": "2"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 1,
+                        "SQL": "insert ignore into name_user_map(name, user_id) values ('bob', 2) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */"
+                    },
+                    {
+                        "Time": 2,
+                        "SQL": "select name from name_user_map where name = 'bob' and user_id = 2 limit 10001"
+                    },
+                    {
+                        "Time": 4,
+                        "SQL": "commit"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "insert into user (id, name, nickname, address) values(2, 'bob', 'bobby', '123 main st') on duplicate key update nickname=values(nickname), address=values(address)",
+        "Plans": [
+            {
+                "Original": "select name from name_user_map where name = :name and user_id = :user_id",
+                "Instructions": {
+                    "Opcode": "SelectEqualUnique",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "select name from name_user_map where name = :name and user_id = :user_id",
+                    "FieldQuery": "select name from name_user_map where 1 != 1",
+                    "Vindex": "md5",
+                    "Values": [
+                        ":name"
+                    ]
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            },
+            {
+                "Original": "insert ignore into name_user_map(name, user_id) values (:name0, :user_id0)",
+                "Instructions": {
+                    "Opcode": "InsertShardedIgnore",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0)",
+                    "Values": [
+                        [
+                            [
+                                ":name0"
+                            ]
+                        ]
+                    ],
+                    "Table": "name_user_map",
+                    "Prefix": "insert ignore into name_user_map(name, user_id) values ",
+                    "Mid": [
+                        "(:_name0, :user_id0)"
+                    ]
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            },
+            {
+                "Original": "insert into user(id, name, nickname, address) values (:vtg1, :vtg2, :vtg3, :vtg4) on duplicate key update nickname = values(nickname), address = values(address)",
+                "Instructions": {
+                    "Opcode": "InsertShardedIgnore",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert into user(id, name, nickname, address) values (:_id0, :_name0, :vtg3, :vtg4) on duplicate key update nickname = values(nickname), address = values(address)",
+                    "Values": [
+                        [
+                            [
+                                ":vtg1"
+                            ]
+                        ],
+                        [
+                            [
+                                ":vtg2"
+                            ]
+                        ]
+                    ],
+                    "Table": "user",
+                    "Prefix": "insert into user(id, name, nickname, address) values ",
+                    "Mid": [
+                        "(:_id0, :_name0, :vtg3, :vtg4)"
+                    ],
+                    "Suffix": " on duplicate key update nickname = values(nickname), address = values(address)"
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-40": {
+                "TabletQueries": [
+                    {
+                        "Time": 3,
+                        "SQL": "insert into user(id, name, nickname, address) values (:_id0, :_name0, :vtg3, :vtg4) on duplicate key update nickname = values(nickname), address = values(address) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "_id0": "2",
+                            "_name0": "'bob'",
+                            "vtg1": "2",
+                            "vtg2": "'bob'",
+                            "vtg3": "'bobby'",
+                            "vtg4": "'123 main st'"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 3,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 3,
+                        "SQL": "insert into user(id, name, nickname, address) values (2, 'bob', 'bobby', '123 main st') on duplicate key update nickname = values(nickname), address = values(address) /* vtgate:: keyspace_id:06e7ea22ce92708f */"
+                    },
+                    {
+                        "Time": 5,
+                        "SQL": "commit"
+                    }
+                ]
+            },
+            "ks_sharded/c0-": {
+                "TabletQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "insert ignore into name_user_map(name, user_id) values (:_name0, :user_id0) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "_name0": "'bob'",
+                            "name0": "'bob'",
+                            "user_id0": "2"
+                        }
+                    },
+                    {
+                        "Time": 2,
+                        "SQL": "select name from name_user_map where name = :name and user_id = :user_id",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "name": "'bob'",
+                            "user_id": "2"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 1,
+                        "SQL": "insert ignore into name_user_map(name, user_id) values ('bob', 2) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */"
+                    },
+                    {
+                        "Time": 2,
+                        "SQL": "select name from name_user_map where name = 'bob' and user_id = 2 limit 10001"
+                    },
+                    {
+                        "Time": 4,
+                        "SQL": "commit"
+                    }
+                ]
+            }
+        }
+    }
+]

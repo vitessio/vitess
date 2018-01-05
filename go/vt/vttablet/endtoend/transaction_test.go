@@ -106,7 +106,7 @@ func TestCommit(t *testing.T) {
 		tag:  "Transactions/TotalCount",
 		diff: 2,
 	}, {
-		tag:  "Transactions/Histograms/Completed/Count",
+		tag:  "Transactions/Histograms/commit/Count",
 		diff: 2,
 	}, {
 		tag:  "Queries/TotalCount",
@@ -163,7 +163,7 @@ func TestRollback(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want := []string{"insert into vitess_test values (4, null, null, null) /* _stream vitess_test (intval ) (4 ); */"}
+	want := []string{"insert into vitess_test(intval, floatval, charval, binval) values (4, null, null, null) /* _stream vitess_test (intval ) (4 ); */"}
 	if !reflect.DeepEqual(tx.Queries, want) {
 		t.Errorf("queries: %v, want %v", tx.Queries, want)
 	}
@@ -187,7 +187,7 @@ func TestRollback(t *testing.T) {
 		tag:  "Transactions/TotalCount",
 		diff: 1,
 	}, {
-		tag:  "Transactions/Histograms/Aborted/Count",
+		tag:  "Transactions/Histograms/rollback/Count",
 		diff: 1,
 	}, {
 		tag:  "Queries/Histograms/BEGIN/Count",
@@ -269,7 +269,7 @@ func TestAutoCommit(t *testing.T) {
 		tag:  "Transactions/TotalCount",
 		diff: 2,
 	}, {
-		tag:  "Transactions/Histograms/Completed/Count",
+		tag:  "Transactions/Histograms/commit/Count",
 		diff: 2,
 	}, {
 		tag:  "Queries/TotalCount",
@@ -580,7 +580,7 @@ func TestMMCommitFlow(t *testing.T) {
 	}
 
 	err = client.SetRollback("aa", 0)
-	want = "could not transition to ROLLBACK: aa"
+	want = "could not transition to ROLLBACK: aa, CallerID: dev"
 	if err == nil || err.Error() != want {
 		t.Errorf("%v, must contain %s", err, want)
 	}

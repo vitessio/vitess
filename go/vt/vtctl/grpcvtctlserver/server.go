@@ -37,11 +37,11 @@ import (
 
 // VtctlServer is our RPC server
 type VtctlServer struct {
-	ts topo.Server
+	ts *topo.Server
 }
 
 // NewVtctlServer returns a new Vtctl Server for the topo server.
-func NewVtctlServer(ts topo.Server) *VtctlServer {
+func NewVtctlServer(ts *topo.Server) *VtctlServer {
 	return &VtctlServer{ts}
 }
 
@@ -70,6 +70,6 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *vtctldatapb.ExecuteVtctlCommandR
 }
 
 // StartServer registers the VtctlServer for RPCs
-func StartServer(s *grpc.Server, ts topo.Server) {
+func StartServer(s *grpc.Server, ts *topo.Server) {
 	vtctlservicepb.RegisterVtctlServer(s, NewVtctlServer(ts))
 }

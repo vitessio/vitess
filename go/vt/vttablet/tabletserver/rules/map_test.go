@@ -17,24 +17,17 @@ limitations under the License.
 package rules
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/planbuilder"
-
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
-	keyrangeRules  *Rules
 	blacklistRules *Rules
 	otherRules     *Rules
 )
-
-// mimic query rules from keyrange
-const keyrangeQueryRules string = "KEYRANGE_QUERY_RULES"
 
 // mimic query rules from blacklist
 const blacklistQueryRules string = "BLACKLIST_QUERY_RULES"
@@ -44,28 +37,6 @@ const customQueryRules string = "CUSTOM_QUERY_RULES"
 
 func setupRules() {
 	var qr *Rule
-	// mock keyrange rules
-	keyrangeRules = New()
-	dmlPlans := []struct {
-		planID   planbuilder.PlanType
-		onAbsent bool
-	}{
-		{planbuilder.PlanInsertPK, true},
-		{planbuilder.PlanInsertSubquery, true},
-		{planbuilder.PlanPassDML, false},
-		{planbuilder.PlanDMLPK, false},
-		{planbuilder.PlanDMLSubquery, false},
-	}
-	for _, plan := range dmlPlans {
-		qr = NewQueryRule(
-			fmt.Sprintf("enforce keyspace_id range for %v", plan.planID),
-			fmt.Sprintf("keyspace_id_not_in_range_%v", plan.planID),
-			QRFail,
-		)
-		qr.AddPlanCond(plan.planID)
-		qr.AddBindVarCond("keyspace_id", plan.onAbsent, true, QRNotIn, &topodatapb.KeyRange{Start: []byte{'a', 'a'}, End: []byte{'z', 'z'}})
-		keyrangeRules.Add(qr)
-	}
 
 	// mock blacklisted tables
 	blacklistRules = New()
@@ -87,41 +58,41 @@ func setupRules() {
 func TestMapRegisterARegisteredSource(t *testing.T) {
 	setupRules()
 	qri := NewMap()
-	qri.RegisterSource(keyrangeQueryRules)
+	qri.RegisterSource(blacklistQueryRules)
 	defer func() {
 		err := recover()
 		if err == nil {
 			t.Fatalf("should get an error for registering a registered query rule source ")
 		}
 	}()
-	qri.RegisterSource(keyrangeQueryRules)
+	qri.RegisterSource(blacklistQueryRules)
 }
 
 func TestMapSetRulesWithNil(t *testing.T) {
 	setupRules()
 	qri := NewMap()
 
-	qri.RegisterSource(keyrangeQueryRules)
-	err := qri.SetRules(keyrangeQueryRules, keyrangeRules)
+	qri.RegisterSource(blacklistQueryRules)
+	err := qri.SetRules(blacklistQueryRules, blacklistRules)
 	if err != nil {
-		t.Errorf("Failed to set keyrange Rules : %s", err)
+		t.Errorf("Failed to set blacklistQueryRules Rules : %s", err)
 	}
-	qrs, err := qri.Get(keyrangeQueryRules)
+	qrs, err := qri.Get(blacklistQueryRules)
 	if err != nil {
-		t.Errorf("GetRules failed to retrieve keyrangeQueryRules that has been set: %s", err)
+		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
 	}
-	if !reflect.DeepEqual(qrs, keyrangeRules) {
-		t.Errorf("keyrangeQueryRules retrived is %v, but the expected value should be %v", qrs, keyrangeRules)
+	if !reflect.DeepEqual(qrs, blacklistRules) {
+		t.Errorf("blacklistQueryRules retrived is %v, but the expected value should be %v", qrs, blacklistQueryRules)
 	}
 
-	qri.SetRules(keyrangeQueryRules, nil)
+	qri.SetRules(blacklistQueryRules, nil)
 
-	qrs, err = qri.Get(keyrangeQueryRules)
+	qrs, err = qri.Get(blacklistQueryRules)
 	if err != nil {
-		t.Errorf("GetRules failed to retrieve keyrangeQueryRules that has been set: %s", err)
+		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, New()) {
-		t.Errorf("keyrangeQueryRules retrived is %v, but the expected value should be %v", qrs, keyrangeRules)
+		t.Errorf("blacklistQueryRules retrived is %v, but the expected value should be %v", qrs, blacklistQueryRules)
 	}
 }
 
@@ -129,7 +100,6 @@ func TestMapGetSetQueryRules(t *testing.T) {
 	setupRules()
 	qri := NewMap()
 
-	qri.RegisterSource(keyrangeQueryRules)
 	qri.RegisterSource(blacklistQueryRules)
 	qri.RegisterSource(customQueryRules)
 
@@ -152,9 +122,9 @@ func TestMapGetSetQueryRules(t *testing.T) {
 	}
 
 	// Test if we can successfully set Rules previously mocked into Map
-	err = qri.SetRules(keyrangeQueryRules, keyrangeRules)
+	err = qri.SetRules(blacklistQueryRules, blacklistRules)
 	if err != nil {
-		t.Errorf("Failed to set keyrange Rules : %s", err)
+		t.Errorf("Failed to set blacklist Rules : %s", err)
 	}
 	err = qri.SetRules(blacklistQueryRules, blacklistRules)
 	if err != nil {
@@ -166,12 +136,12 @@ func TestMapGetSetQueryRules(t *testing.T) {
 	}
 
 	// Test if we can successfully retrive rules that've been set
-	qrs, err = qri.Get(keyrangeQueryRules)
+	qrs, err = qri.Get(blacklistQueryRules)
 	if err != nil {
-		t.Errorf("GetRules failed to retrieve keyrangeQueryRules that has been set: %s", err)
+		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
 	}
-	if !reflect.DeepEqual(qrs, keyrangeRules) {
-		t.Errorf("keyrangeQueryRules retrived is %v, but the expected value should be %v", qrs, keyrangeRules)
+	if !reflect.DeepEqual(qrs, blacklistRules) {
+		t.Errorf("blacklistQueryRules retrived is %v, but the expected value should be %v", qrs, blacklistRules)
 	}
 
 	qrs, err = qri.Get(blacklistQueryRules)
@@ -196,22 +166,11 @@ func TestMapFilterByPlan(t *testing.T) {
 	setupRules()
 	qri := NewMap()
 
-	qri.RegisterSource(keyrangeQueryRules)
 	qri.RegisterSource(blacklistQueryRules)
 	qri.RegisterSource(customQueryRules)
 
-	qri.SetRules(keyrangeQueryRules, keyrangeRules)
 	qri.SetRules(blacklistQueryRules, blacklistRules)
 	qri.SetRules(customQueryRules, otherRules)
-
-	// Test filter by keyrange rule
-	qrs = qri.FilterByPlan("insert into t_test values(123, 456, 'abc')", planbuilder.PlanInsertPK, "t_test")
-	if l := len(qrs.rules); l != 1 {
-		t.Errorf("Insert PK query matches %d rules, but we expect %d", l, 1)
-	}
-	if !strings.HasPrefix(qrs.rules[0].Name, "keyspace_id_not_in_range") {
-		t.Errorf("Insert PK query matches rule '%s', but we expect rule with prefix '%s'", qrs.rules[0].Name, "keyspace_id_not_in_range")
-	}
 
 	// Test filter by blacklist rule
 	qrs = qri.FilterByPlan("select * from bannedtable2", planbuilder.PlanPassSelect, "bannedtable2")
@@ -231,27 +190,16 @@ func TestMapFilterByPlan(t *testing.T) {
 		t.Errorf("Select from t_customer matches rule '%s', but we expect rule with prefix '%s'", qrs.rules[0].Name, "customrule_ban_bindvar")
 	}
 
-	// Test match two rules: both keyrange rule and custom rule will be matched
+	// Test match two rules: both blacklist rule and custom rule will be matched
 	otherRules = New()
 	qr := NewQueryRule("sample custom rule", "customrule_ban_bindvar", QRFail)
 	qr.AddBindVarCond("bindvar1", true, false, QRNoOp, nil)
 	otherRules.Add(qr)
 	qri.SetRules(customQueryRules, otherRules)
-	qrs = qri.FilterByPlan("insert into t_test values (:bindvar1, 123, 'test')", planbuilder.PlanInsertPK, "t_test")
+	qrs = qri.FilterByPlan("select * from bannedtable2", planbuilder.PlanPassSelect, "bannedtable2")
 	if l := len(qrs.rules); l != 2 {
-		t.Errorf("Insert into t_test matches %d rules: %v, but we expect %d rules to be matched", l, qrs.rules, 2)
+		t.Errorf("Insert into bannedtable2 matches %d rules: %v, but we expect %d rules to be matched", l, qrs.rules, 2)
 	}
-	if strings.HasPrefix(qrs.rules[0].Name, "keyspace_id_not_in_range") &&
-		strings.HasPrefix(qrs.rules[1].Name, "customrule_ban_bindvar") {
-		return
-	}
-	if strings.HasPrefix(qrs.rules[1].Name, "keyspace_id_not_in_range") &&
-		strings.HasPrefix(qrs.rules[0].Name, "customrule_ban_bindvar") {
-		return
-	}
-
-	t.Errorf("Insert into t_test matches rule[0] '%s' and rule[1] '%s', but we expect rule[0] with prefix '%s' and rule[1] with prefix '%s'",
-		qrs.rules[0].Name, qrs.rules[1].Name, "keyspace_id_not_in_range", "customrule_ban_bindvar")
 }
 
 func TestMapJSON(t *testing.T) {
@@ -278,6 +226,6 @@ func TestMapJSON(t *testing.T) {
 		}]
 	}`)
 	if got != want {
-		t.Errorf("keyrangeRules:\n%v, want\n%v", got, want)
+		t.Errorf("MapJSON:\n%v, want\n%v", got, want)
 	}
 }

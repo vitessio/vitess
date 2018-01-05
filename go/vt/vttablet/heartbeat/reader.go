@@ -25,6 +25,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/hack"
+	"github.com/youtube/vitess/go/sqlescape"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -33,6 +34,8 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 const (
@@ -46,6 +49,8 @@ const (
 // table against the current time at read time. This value is reported in metrics and
 // also to the healthchecks.
 type Reader struct {
+	dbconfigs dbconfigs.DBConfigs
+
 	enabled       bool
 	interval      time.Duration
 	keyspaceShard string
@@ -53,10 +58,12 @@ type Reader struct {
 	now           func() time.Time
 	errorLog      *logutil.ThrottledLogger
 
-	mu             sync.Mutex
-	isOpen         bool
-	pool           *connpool.Pool
-	ticks          *timer.Timer
+	runMu  sync.Mutex
+	isOpen bool
+	pool   *connpool.Pool
+	ticks  *timer.Timer
+
+	lagMu          sync.Mutex
 	lastKnownLag   time.Duration
 	lastKnownError error
 }
@@ -77,30 +84,35 @@ func NewReader(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *Re
 	}
 }
 
+// InitDBConfig must be called before Init.
+func (r *Reader) InitDBConfig(dbcfgs dbconfigs.DBConfigs) {
+	r.dbconfigs = dbcfgs
+}
+
 // Init does last minute initialization of db settings, such as dbName
 // and keyspaceShard
-func (r *Reader) Init(dbc dbconfigs.DBConfigs, target query.Target) {
+func (r *Reader) Init(target query.Target) {
 	if !r.enabled {
 		return
 	}
-	r.dbName = sqlparser.Backtick(dbc.SidecarDBName)
+	r.dbName = sqlescape.EscapeID(r.dbconfigs.SidecarDBName)
 	r.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
 }
 
 // Open starts the heartbeat ticker and opens the db pool. It may be called multiple
 // times, as long as it was closed since last invocation.
-func (r *Reader) Open(dbc dbconfigs.DBConfigs) {
+func (r *Reader) Open() {
 	if !r.enabled {
 		return
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.runMu.Lock()
+	defer r.runMu.Unlock()
 	if r.isOpen {
 		return
 	}
 
 	log.Info("Beginning heartbeat reads")
-	r.pool.Open(&dbc.App, &dbc.Dba)
+	r.pool.Open(&r.dbconfigs.App, &r.dbconfigs.Dba, &r.dbconfigs.AppDebug)
 	r.ticks.Start(func() { r.readHeartbeat() })
 	r.isOpen = true
 }
@@ -111,8 +123,8 @@ func (r *Reader) Close() {
 	if !r.enabled {
 		return
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.runMu.Lock()
+	defer r.runMu.Unlock()
 	if !r.isOpen {
 		return
 	}
@@ -124,8 +136,8 @@ func (r *Reader) Close() {
 
 // GetLatest returns the most recently recorded lag measurement or error encountered.
 func (r *Reader) GetLatest() (time.Duration, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.lagMu.Lock()
+	defer r.lagMu.Unlock()
 	if r.lastKnownError != nil {
 		return 0, r.lastKnownError
 	}
@@ -155,10 +167,10 @@ func (r *Reader) readHeartbeat() {
 	lagNs.Add(lag.Nanoseconds())
 	reads.Add(1)
 
-	r.mu.Lock()
+	r.lagMu.Lock()
 	r.lastKnownLag = lag
 	r.lastKnownError = nil
-	r.mu.Unlock()
+	r.lagMu.Unlock()
 }
 
 // fetchMostRecentHeartbeat fetches the most recently recorded heartbeat from the heartbeat table,
@@ -180,11 +192,11 @@ func (r *Reader) fetchMostRecentHeartbeat(ctx context.Context) (*sqltypes.Result
 // fields to the query as bind vars. This is done to protect ourselves
 // against a badly formed keyspace or shard name.
 func (r *Reader) bindHeartbeatFetch() (string, error) {
-	bindVars := map[string]interface{}{
-		"ks": sqltypes.MakeString([]byte(r.keyspaceShard)),
+	bindVars := map[string]*querypb.BindVariable{
+		"ks": sqltypes.StringBindVariable(r.keyspaceShard),
 	}
 	parsed := sqlparser.BuildParsedQuery(sqlFetchMostRecentHeartbeat, r.dbName, ":ks")
-	bound, err := parsed.GenerateQuery(bindVars)
+	bound, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return "", err
 	}
@@ -196,7 +208,7 @@ func parseHeartbeatResult(res *sqltypes.Result) (int64, error) {
 	if len(res.Rows) != 1 {
 		return 0, fmt.Errorf("Failed to read heartbeat: writer query did not result in 1 row. Got %v", len(res.Rows))
 	}
-	ts, err := res.Rows[0][0].ParseInt64()
+	ts, err := sqltypes.ToInt64(res.Rows[0][0])
 	if err != nil {
 		return 0, err
 	}
@@ -207,9 +219,9 @@ func parseHeartbeatResult(res *sqltypes.Result) (int64, error) {
 // Errors tracked here are logged with throttling to cut down on log spam since
 // operations can happen very frequently in this package.
 func (r *Reader) recordError(err error) {
-	r.mu.Lock()
+	r.lagMu.Lock()
 	r.lastKnownError = err
-	r.mu.Unlock()
+	r.lagMu.Unlock()
 	r.errorLog.Errorf("%v", err)
 	readErrors.Add(1)
 }

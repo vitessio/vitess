@@ -1,6 +1,7 @@
 ---
 layout: doc
 title: "Vitess and Replication"
+redirect_from: /user-guide/vitess-replication.html
 description:
 modified:
 excerpt:

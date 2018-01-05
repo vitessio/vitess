@@ -1,20 +1,27 @@
+# Note: When you change this file and run "bundle install", the Gemfile.lock
+# file will be changed as well. Please always commit both files and do not
+# ignore the changes in the .lock file.
 source "https://rubygems.org"
 
-gem 'jekyll', '2.4.0'
+gem 'jekyll', '3.5.2'
 gem 'jekyll-coffeescript', '1.0.1'
 gem 'jekyll-sass-converter', '1.3.0'
 gem 'kramdown', '1.5.0'
 gem 'maruku', '0.7.0'
 gem 'rdiscount', '2.1.7'
 gem 'redcarpet', '3.3.2'
-gem 'RedCloth', '4.2.9'
-gem 'liquid', '2.6.2'
-gem 'pygments.rb', '0.6.3'
+gem 'RedCloth', '~> 4.3.2'
+gem 'liquid', '4.0.0'
+gem 'pygments.rb'
 gem 'jemoji', '0.5.0'
-gem 'jekyll-mentions', '0.2.1'
-gem 'jekyll-redirect-from', '0.8.0'
-gem 'jekyll-sitemap', '0.8.1'
+# Note that we cannot use 0.12.1 because it does not have the bugfix
+# https://github.com/jekyll/jekyll-redirect-from/pull/142. Instead,
+# we use a version which is not affected by issue
+# https://github.com/jekyll/jekyll-redirect-from/issues/139.
+gem 'jekyll-redirect-from', '0.11.0'
+gem 'jekyll-sitemap', '1.1.1'
 gem 'jekyll-feed', '0.3.1'
+gem 'jekyll-seo-tag', '2.3.0'
 
 gem 'bourbon'
 gem 'neat'

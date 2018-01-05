@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 
@@ -34,6 +33,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -49,6 +49,8 @@ type notifier func(full map[string]*Table, created, altered, dropped []string)
 // Engine stores the schema info and performs operations that
 // keep itself up-to-date.
 type Engine struct {
+	dbconfigs dbconfigs.DBConfigs
+
 	// mu protects the following fields.
 	mu         sync.Mutex
 	isOpen     bool
@@ -90,9 +92,14 @@ func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *En
 	return se
 }
 
+// InitDBConfig must be called before Open.
+func (se *Engine) InitDBConfig(dbcfgs dbconfigs.DBConfigs) {
+	se.dbconfigs = dbcfgs
+}
+
 // Open initializes the Engine. Calling Open on an already
 // open engine is a no-op.
-func (se *Engine) Open(dbaParams *mysql.ConnParams) error {
+func (se *Engine) Open() error {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	if se.isOpen {
@@ -101,7 +108,8 @@ func (se *Engine) Open(dbaParams *mysql.ConnParams) error {
 	start := time.Now()
 	defer log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
 	ctx := tabletenv.LocalContext()
-	se.conns.Open(dbaParams, dbaParams)
+	dbaParams := &se.dbconfigs.Dba
+	se.conns.Open(dbaParams, dbaParams, dbaParams)
 
 	conn, err := se.conns.Get(ctx)
 	if err != nil {
@@ -131,7 +139,7 @@ func (se *Engine) Open(dbaParams *mysql.ConnParams) error {
 				wg.Done()
 			}()
 
-			tableName := row[0].String()
+			tableName := row[0].ToString()
 			conn, err := se.conns.Get(ctx)
 			if err != nil {
 				log.Errorf("Engine.Open: connection error while reading table %s: %v", tableName, err)
@@ -142,8 +150,8 @@ func (se *Engine) Open(dbaParams *mysql.ConnParams) error {
 			table, err := LoadTable(
 				conn,
 				tableName,
-				row[1].String(), // table_type
-				row[3].String(), // table_comment
+				row[1].ToString(), // table_type
+				row[3].ToString(), // table_comment
 			)
 			if err != nil {
 				tabletenv.InternalErrors.Add("Schema", 1)
@@ -190,6 +198,22 @@ func (se *Engine) Close() {
 	se.isOpen = false
 }
 
+// MakeNonMaster clears the sequence caches to make sure that
+// they don't get accidentally reused after losing mastership.
+func (se *Engine) MakeNonMaster() {
+	// This function is tested through endtoend test.
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	for _, t := range se.tables {
+		if t.SequenceInfo != nil {
+			t.SequenceInfo.Lock()
+			t.SequenceInfo.NextVal = 0
+			t.SequenceInfo.LastVal = 0
+			t.SequenceInfo.Unlock()
+		}
+	}
+}
+
 // Reload reloads the schema info from the db.
 // Any tables that have changed since the last load are updated.
 // This is a no-op if the Engine is closed.
@@ -227,9 +251,9 @@ func (se *Engine) Reload(ctx context.Context) error {
 	rec := concurrency.AllErrorRecorder{}
 	curTables := map[string]bool{"dual": true}
 	for _, row := range tableData.Rows {
-		tableName := row[0].String()
+		tableName := row[0].ToString()
 		curTables[tableName] = true
-		createTime, _ := row[2].ParseInt64()
+		createTime, _ := sqltypes.ToInt64(row[2])
 		// Check if we know about the table or it has been recreated.
 		if _, ok := se.tables[tableName]; !ok || createTime >= se.lastChange {
 			func() {
@@ -275,9 +299,9 @@ func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, 
 	if len(tm.Rows) != 1 || len(tm.Rows[0]) != 1 || tm.Rows[0][0].IsNull() {
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unexpected result for MySQL time: %+v", tm.Rows)
 	}
-	t, err := strconv.ParseInt(tm.Rows[0][0].String(), 10, 64)
+	t, err := sqltypes.ToInt64(tm.Rows[0][0])
 	if err != nil {
-		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse time %+v: %v", tm, err)
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse time %v: %v", tm, err)
 	}
 	return t, nil
 }
@@ -308,8 +332,8 @@ func (se *Engine) TableWasCreatedOrAltered(ctx context.Context, tableName string
 	table, err := LoadTable(
 		conn,
 		tableName,
-		row[1].String(), // table_type
-		row[3].String(), // table_comment
+		row[1].ToString(), // table_type
+		row[3].ToString(), // table_comment
 	)
 	if err != nil {
 		tabletenv.InternalErrors.Add("Schema", 1)

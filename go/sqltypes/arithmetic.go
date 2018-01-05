@@ -18,11 +18,12 @@ package sqltypes
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"strconv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 // numeric represents a numeric value extracted from
@@ -34,7 +35,9 @@ type numeric struct {
 	fval float64
 }
 
-// Add adds two Values. A numeric value is first built
+// NullsafeAdd adds two Values in a null-safe manner. A null value
+// is treated as 0. If both values are null, then a null is returned.
+// If both values are not null, a numeric value is built
 // from each input: Signed->int64, Unsigned->uint64, Float->float64.
 // Otherwise the 'best type fit' is chosen for the number: int64 or float64.
 // Addition is performed by upgrading types as needed, or in case
@@ -42,11 +45,15 @@ type numeric struct {
 // Unsigned ints can only be added to positive ints. After the
 // addition, if one of the input types was Decimal, then
 // a Decimal is built. Otherwise, the final type of the
-// result is preserved. If any value is NULL, the result is NULL.
-func Add(v1, v2 Value, resultType querypb.Type) (Value, error) {
-	if v1.IsNull() || v2.IsNull() {
-		return NULL, nil
+// result is preserved.
+func NullsafeAdd(v1, v2 Value, resultType querypb.Type) (Value, error) {
+	if v1.IsNull() {
+		return v2, nil
 	}
+	if v2.IsNull() {
+		return v1, nil
+	}
+
 	lv1, err := newNumeric(v1)
 	if err != nil {
 		return NULL, err
@@ -66,8 +73,12 @@ func Add(v1, v2 Value, resultType querypb.Type) (Value, error) {
 // NULL is the lowest value. If any value is
 // numeric, then a numeric comparison is performed after
 // necessary conversions. If none are numeric, then it's
-// a simple binary comparison. Text values return an error.
+// a simple binary comparison. Uncomparable values return an error.
 func NullsafeCompare(v1, v2 Value) (int, error) {
+	// Based on the categorization defined for the types,
+	// we're going to allow comparison of the following:
+	// Null, isNumber, IsBinary. This will exclude IsQuoted
+	// types that are not Binary, and Expression.
 	if v1.IsNull() {
 		if v2.IsNull() {
 			return 0, nil
@@ -77,10 +88,7 @@ func NullsafeCompare(v1, v2 Value) (int, error) {
 	if v2.IsNull() {
 		return 1, nil
 	}
-	if v1.IsText() || v2.IsText() {
-		return 0, errors.New("text fields cannot be compared")
-	}
-	if isNumber(v1.typ) || isNumber(v2.typ) {
+	if isNumber(v1.Type()) || isNumber(v2.Type()) {
 		lv1, err := newNumeric(v1)
 		if err != nil {
 			return 0, err
@@ -91,56 +99,97 @@ func NullsafeCompare(v1, v2 Value) (int, error) {
 		}
 		return compareNumeric(lv1, lv2), nil
 	}
-	return bytes.Compare(v1.Raw(), v2.Raw()), nil
+	if isByteComparable(v1) && isByteComparable(v2) {
+		return bytes.Compare(v1.ToBytes(), v2.ToBytes()), nil
+	}
+	return 0, fmt.Errorf("types are not comparable: %v vs %v", v1.Type(), v2.Type())
 }
 
-// ConvertToUint64 converts any go, sqltypes, or querypb
-// value to uint64. It returns an error if the conversion
-// fails.
-// TODO(sougou): deprecate support for go values after
-// bind vars are cleaned up to not carry go values.
-func ConvertToUint64(v interface{}) (uint64, error) {
-	var num numeric
-	var err error
-	switch v := v.(type) {
-	case int:
-		return int64ToUint64(int64(v))
-	case int8:
-		return int64ToUint64(int64(v))
-	case int16:
-		return int64ToUint64(int64(v))
-	case int32:
-		return int64ToUint64(int64(v))
-	case int64:
-		return int64ToUint64(int64(v))
-	case uint:
-		return uint64(v), nil
-	case uint8:
-		return uint64(v), nil
-	case uint16:
-		return uint64(v), nil
-	case uint32:
-		return uint64(v), nil
-	case uint64:
-		return uint64(v), nil
-	case []byte:
-		num, err = newIntegralNumeric(MakeTrusted(VarChar, v))
-	case string:
-		num, err = newIntegralNumeric(MakeTrusted(VarChar, []byte(v)))
-	case Value:
-		num, err = newIntegralNumeric(v)
-	case *querypb.BindVariable:
-		num, err = newIntegralNumeric(MakeTrusted(v.Type, v.Value))
-	default:
-		return 0, fmt.Errorf("getNumber: unexpected type for %v: %T", v, v)
+// isByteComparable returns true if the type is binary or date/time.
+func isByteComparable(v Value) bool {
+	if v.IsBinary() {
+		return true
 	}
+	switch v.Type() {
+	case Timestamp, Date, Time, Datetime:
+		return true
+	}
+	return false
+}
+
+// Min returns the minimum of v1 and v2. If one of the
+// values is NULL, it returns the other value. If both
+// are NULL, it returns NULL.
+func Min(v1, v2 Value) (Value, error) {
+	return minmax(v1, v2, true)
+}
+
+// Max returns the maximum of v1 and v2. If one of the
+// values is NULL, it returns the other value. If both
+// are NULL, it returns NULL.
+func Max(v1, v2 Value) (Value, error) {
+	return minmax(v1, v2, false)
+}
+
+func minmax(v1, v2 Value, min bool) (Value, error) {
+	if v1.IsNull() {
+		return v2, nil
+	}
+	if v2.IsNull() {
+		return v1, nil
+	}
+
+	n, err := NullsafeCompare(v1, v2)
+	if err != nil {
+		return NULL, err
+	}
+
+	// XNOR construct. See tests.
+	v1isSmaller := n < 0
+	if min == v1isSmaller {
+		return v1, nil
+	}
+	return v2, nil
+}
+
+// Cast converts a Value to the target type.
+func Cast(v Value, typ querypb.Type) (Value, error) {
+	if v.Type() == typ || v.IsNull() {
+		return v, nil
+	}
+	if IsSigned(typ) && v.IsSigned() {
+		return MakeTrusted(typ, v.ToBytes()), nil
+	}
+	if IsUnsigned(typ) && v.IsUnsigned() {
+		return MakeTrusted(typ, v.ToBytes()), nil
+	}
+	if (IsFloat(typ) || typ == Decimal) && (v.IsIntegral() || v.IsFloat() || v.Type() == Decimal) {
+		return MakeTrusted(typ, v.ToBytes()), nil
+	}
+	if IsQuoted(typ) && (v.IsIntegral() || v.IsFloat() || v.Type() == Decimal || v.IsQuoted()) {
+		return MakeTrusted(typ, v.ToBytes()), nil
+	}
+
+	// Explicitly disallow Expression.
+	if v.Type() == Expression {
+		return NULL, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v cannot be cast to %v", v, typ)
+	}
+
+	// If the above fast-paths were not possible,
+	// go through full validation.
+	return NewValue(typ, v.ToBytes())
+}
+
+// ToUint64 converts Value to uint64.
+func ToUint64(v Value) (uint64, error) {
+	num, err := newIntegralNumeric(v)
 	if err != nil {
 		return 0, err
 	}
 	switch num.typ {
 	case Int64:
 		if num.ival < 0 {
-			return 0, fmt.Errorf("getNumber: negative number cannot be converted to unsigned: %d", num.ival)
+			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "negative number cannot be converted to unsigned: %d", num.ival)
 		}
 		return uint64(num.ival), nil
 	case Uint64:
@@ -149,81 +198,124 @@ func ConvertToUint64(v interface{}) (uint64, error) {
 	panic("unreachable")
 }
 
-func int64ToUint64(n int64) (uint64, error) {
-	if n < 0 {
-		return 0, fmt.Errorf("getNumber: negative number cannot be converted to unsigned: %d", n)
+// ToInt64 converts Value to uint64.
+func ToInt64(v Value) (int64, error) {
+	num, err := newIntegralNumeric(v)
+	if err != nil {
+		return 0, err
 	}
-	return uint64(n), nil
+	switch num.typ {
+	case Int64:
+		return num.ival, nil
+	case Uint64:
+		ival := int64(num.uval)
+		if ival < 0 {
+			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsigned number overflows int64 value: %d", num.uval)
+		}
+		return ival, nil
+	}
+	panic("unreachable")
+}
+
+// ToFloat64 converts Value to float64.
+func ToFloat64(v Value) (float64, error) {
+	num, err := newNumeric(v)
+	if err != nil {
+		return 0, err
+	}
+	switch num.typ {
+	case Int64:
+		return float64(num.ival), nil
+	case Uint64:
+		return float64(num.uval), nil
+	case Float64:
+		return num.fval, nil
+	}
+	panic("unreachable")
+}
+
+// ToNative converts Value to a native go type.
+// Decimal is returned as []byte.
+func ToNative(v Value) (interface{}, error) {
+	var out interface{}
+	var err error
+	switch {
+	case v.Type() == Null:
+		// no-op
+	case v.IsSigned():
+		return ToInt64(v)
+	case v.IsUnsigned():
+		return ToUint64(v)
+	case v.IsFloat():
+		return ToFloat64(v)
+	case v.IsQuoted() || v.Type() == Decimal:
+		out = v.val
+	case v.Type() == Expression:
+		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v cannot be converted to a go type", v)
+	}
+	return out, err
 }
 
 // newNumeric parses a value and produces an Int64, Uint64 or Float64.
-func newNumeric(v Value) (result numeric, err error) {
-	str := v.String()
+func newNumeric(v Value) (numeric, error) {
+	str := v.ToString()
 	switch {
 	case v.IsSigned():
-		result.ival, err = strconv.ParseInt(str, 10, 64)
-		result.typ = Int64
-		return
+		ival, err := strconv.ParseInt(str, 10, 64)
+		if err != nil {
+			return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+		}
+		return numeric{ival: ival, typ: Int64}, nil
 	case v.IsUnsigned():
-		result.uval, err = strconv.ParseUint(str, 10, 64)
-		result.typ = Uint64
-		return
+		uval, err := strconv.ParseUint(str, 10, 64)
+		if err != nil {
+			return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+		}
+		return numeric{uval: uval, typ: Uint64}, nil
 	case v.IsFloat():
-		result.fval, err = strconv.ParseFloat(str, 64)
-		result.typ = Float64
-		return
+		fval, err := strconv.ParseFloat(str, 64)
+		if err != nil {
+			return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+		}
+		return numeric{fval: fval, typ: Float64}, nil
 	}
 
 	// For other types, do best effort.
-	result.ival, err = strconv.ParseInt(str, 10, 64)
-	if err == nil {
-		result.typ = Int64
-		return
+	if ival, err := strconv.ParseInt(str, 10, 64); err == nil {
+		return numeric{ival: ival, typ: Int64}, nil
 	}
-	result.fval, err = strconv.ParseFloat(str, 64)
-	if err == nil {
-		result.typ = Float64
-		return
+	if fval, err := strconv.ParseFloat(str, 64); err == nil {
+		return numeric{fval: fval, typ: Float64}, nil
 	}
-	err = fmt.Errorf("could not parse value: %s", str)
-	return
+	return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: %s", str)
 }
 
 // newIntegralNumeric parses a value and produces an Int64 or Uint64.
-func newIntegralNumeric(v Value) (result numeric, err error) {
-	str := v.String()
+func newIntegralNumeric(v Value) (numeric, error) {
+	str := v.ToString()
 	switch {
 	case v.IsSigned():
-		result.ival, err = strconv.ParseInt(str, 10, 64)
+		ival, err := strconv.ParseInt(str, 10, 64)
 		if err != nil {
-			return
+			return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
-		result.typ = Int64
-		return
+		return numeric{ival: ival, typ: Int64}, nil
 	case v.IsUnsigned():
-		result.uval, err = strconv.ParseUint(str, 10, 64)
+		uval, err := strconv.ParseUint(str, 10, 64)
 		if err != nil {
-			return
+			return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
-		result.typ = Uint64
-		return
+		return numeric{uval: uval, typ: Uint64}, nil
 	}
 
 	// For other types, do best effort.
-	result.ival, err = strconv.ParseInt(str, 10, 64)
-	if err == nil {
-		result.typ = Int64
-		return
+	if ival, err := strconv.ParseInt(str, 10, 64); err == nil {
+		return numeric{ival: ival, typ: Int64}, nil
 	}
-	// ParseInt can return a non-zero value on failure.
-	result.ival = 0
-	result.uval, err = strconv.ParseUint(str, 10, 64)
-	if err == nil {
-		result.typ = Uint64
-		return
+	if uval, err := strconv.ParseUint(str, 10, 64); err == nil {
+		return numeric{uval: uval, typ: Uint64}, nil
 	}
-	err = fmt.Errorf("could not parse value: %s", str)
-	return
+	return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: %s", str)
 }
 
 func addNumeric(v1, v2 numeric) (numeric, error) {
@@ -276,7 +368,7 @@ overflow:
 
 func uintPlusInt(v1 uint64, v2 int64) (numeric, error) {
 	if v2 < 0 {
-		return numeric{}, fmt.Errorf("cannot add a negative number to an unsigned integer: %d, %d", v1, v2)
+		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot add a negative number to an unsigned integer: %d, %d", v1, v2)
 	}
 	return uintPlusUint(v1, uint64(v2)), nil
 }
@@ -306,14 +398,14 @@ func castFromNumeric(v numeric, resultType querypb.Type) (Value, error) {
 		case Int64:
 			return MakeTrusted(resultType, strconv.AppendInt(nil, v.ival, 10)), nil
 		case Uint64, Float64:
-			return NULL, fmt.Errorf("unexpected type conversion: %v to %v", v.typ, resultType)
+			return NULL, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: %v to %v", v.typ, resultType)
 		}
 	case IsUnsigned(resultType):
 		switch v.typ {
 		case Uint64:
 			return MakeTrusted(resultType, strconv.AppendUint(nil, v.uval, 10)), nil
 		case Int64, Float64:
-			return NULL, fmt.Errorf("unexpected type conversion: %v to %v", v.typ, resultType)
+			return NULL, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: %v to %v", v.typ, resultType)
 		}
 	case IsFloat(resultType) || resultType == Decimal:
 		switch v.typ {
@@ -329,7 +421,7 @@ func castFromNumeric(v numeric, resultType querypb.Type) (Value, error) {
 			return MakeTrusted(resultType, strconv.AppendFloat(nil, v.fval, format, -1, 64)), nil
 		}
 	}
-	return NULL, fmt.Errorf("unexpected type conversion to non-numeric: %v", resultType)
+	return NULL, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion to non-numeric: %v", resultType)
 }
 
 func compareNumeric(v1, v2 numeric) int {

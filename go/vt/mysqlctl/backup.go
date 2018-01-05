@@ -272,7 +272,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 	switch err {
 	case nil:
 		slaveStartRequired = slaveStatus.SlaveRunning()
-	case ErrNotSlave:
+	case mysql.ErrNotSlave:
 		// keep going if we're the master, might be a degenerate case
 		sourceIsMaster = true
 	default:
@@ -301,7 +301,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 		if err = StopSlave(mysqld, hookExtraEnv); err != nil {
 			return false, fmt.Errorf("can't stop slave: %v", err)
 		}
-		var slaveStatus Status
+		var slaveStatus mysql.SlaveStatus
 		slaveStatus, err = mysqld.SlaveStatus()
 		if err != nil {
 			return false, fmt.Errorf("can't get slave status: %v", err)
@@ -321,6 +321,11 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 	usable := backupErr == nil
 
 	// Try to restart mysqld
+	err = mysqld.RefreshConfig()
+	if err != nil {
+		return usable, fmt.Errorf("can't refresh mysqld config: %v", err)
+	}
+
 	err = mysqld.Start(ctx)
 	if err != nil {
 		return usable, fmt.Errorf("can't restart mysqld: %v", err)
@@ -535,7 +540,7 @@ func checkNoDB(ctx context.Context, mysqld MysqlDaemon, dbName string) (bool, er
 	}
 
 	for _, row := range qr.Rows {
-		if row[0].String() == dbName {
+		if row[0].ToString() == dbName {
 			tableQr, err := mysqld.FetchSuperQuery(ctx, "SHOW TABLES FROM "+dbName)
 			if err != nil {
 				return false, fmt.Errorf("checkNoDB failed: %v", err)

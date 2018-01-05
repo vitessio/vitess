@@ -24,7 +24,7 @@ import (
 
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 
@@ -45,7 +45,7 @@ func TestInitTablet(t *testing.T) {
 	// start with a tablet record that doesn't exist
 	port := int32(1234)
 	gRPCPort := int32(3456)
-	mysqlDaemon := mysqlctl.NewFakeMysqlDaemon(nil)
+	mysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 	agent := &ActionAgent{
 		TopoServer:      ts,
 		TabletAlias:     tabletAlias,
@@ -57,11 +57,14 @@ func TestInitTablet(t *testing.T) {
 		_healthy:        fmt.Errorf("healthcheck not run yet"),
 	}
 
-	// let's use a real tablet in a shard, that will create
-	// the keyspace and shard.
+	// 1. Initialize the tablet as REPLICA.
+	// This will create the respective topology records.
+	// We use a capitalized shard name here, to make sure the
+	// Keyrange computation works, fills in the KeyRange, and converts
+	// it to lower case.
 	*tabletHostname = "localhost"
 	*initKeyspace = "test_keyspace"
-	*initShard = "-80"
+	*initShard = "-C0"
 	*initTabletType = "replica"
 	tabletAlias = &topodatapb.TabletAlias{
 		Cell: "cell1",
@@ -71,7 +74,7 @@ func TestInitTablet(t *testing.T) {
 	if err := agent.InitTablet(port, gRPCPort); err != nil {
 		t.Fatalf("InitTablet(type) failed: %v", err)
 	}
-	si, err := ts.GetShard(ctx, "test_keyspace", "-80")
+	si, err := ts.GetShard(ctx, "test_keyspace", "-c0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
@@ -94,9 +97,21 @@ func TestInitTablet(t *testing.T) {
 	if ti.PortMap["grpc"] != gRPCPort {
 		t.Errorf("wrong gRPC port for tablet: %v", ti.PortMap["grpc"])
 	}
+	if ti.Shard != "-c0" {
+		t.Errorf("wrong shard for tablet: %v", ti.Shard)
+	}
+	if string(ti.KeyRange.Start) != "" || string(ti.KeyRange.End) != "\xc0" {
+		t.Errorf("wrong KeyRange for tablet: %v", ti.KeyRange)
+	}
+	if got := agent._tabletExternallyReparentedTime; !got.IsZero() {
+		t.Fatalf("REPLICA tablet should not have an ExternallyReparentedTimestamp set: %v", got)
+	}
 
-	// update shard's master to our alias, then try to init again
-	si, err = agent.TopoServer.UpdateShardFields(ctx, "test_keyspace", "-80", func(si *topo.ShardInfo) error {
+	// 2. Update shard's master to our alias, then try to init again.
+	// (This simulates the case where the MasterAlias in the shard record says
+	// that we are the master but the tablet record says otherwise. In that case,
+	// we assume we are not the MASTER.)
+	si, err = agent.TopoServer.UpdateShardFields(ctx, "test_keyspace", "-c0", func(si *topo.ShardInfo) error {
 		si.MasterAlias = tabletAlias
 		return nil
 	})
@@ -114,8 +129,34 @@ func TestInitTablet(t *testing.T) {
 	if ti.Type != topodatapb.TabletType_REPLICA {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
+	if got := agent._tabletExternallyReparentedTime; !got.IsZero() {
+		t.Fatalf("REPLICA tablet should not have an ExternallyReparentedTimestamp set: %v", got)
+	}
 
-	// Fix the tablet record to agree that we're master.
+	// 3. Delete the tablet record. The shard record still says that we are the
+	// MASTER. Since it is the only source, we assume that its information is
+	// correct and start as MASTER.
+	if err := ts.DeleteTablet(ctx, tabletAlias); err != nil {
+		t.Fatalf("DeleteTablet failed: %v", err)
+	}
+	if err := agent.InitTablet(port, gRPCPort); err != nil {
+		t.Fatalf("InitTablet(type, healthcheck) failed: %v", err)
+	}
+	ti, err = ts.GetTablet(ctx, tabletAlias)
+	if err != nil {
+		t.Fatalf("GetTablet failed: %v", err)
+	}
+	if ti.Type != topodatapb.TabletType_MASTER {
+		t.Errorf("wrong tablet type: %v", ti.Type)
+	}
+	ter1 := agent._tabletExternallyReparentedTime
+	if ter1.IsZero() {
+		t.Fatalf("MASTER tablet should have an ExternallyReparentedTimestamp set")
+	}
+
+	// 4. Fix the tablet record to agree that we're master.
+	// Shard and tablet record are in sync now and we assume that we are actually
+	// the MASTER.
 	ti.Type = topodatapb.TabletType_MASTER
 	if err := ts.UpdateTablet(ctx, ti); err != nil {
 		t.Fatalf("UpdateTablet failed: %v", err)
@@ -130,10 +171,13 @@ func TestInitTablet(t *testing.T) {
 	if ti.Type != topodatapb.TabletType_MASTER {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
+	ter2 := agent._tabletExternallyReparentedTime
+	if ter2.IsZero() || !ter2.After(ter1) {
+		t.Fatalf("After a restart, ExternallyReparentedTimestamp must be set to the current time. Previous timestamp: %v current timestamp: %v", ter1, ter2)
+	}
 
-	// init again with the tablet_type set, using init_tablet_type
-	// (also check db name override and tags here)
-	*initTabletType = "replica"
+	// 5. Subsequent inits will still start the vttablet as MASTER.
+	// (Also check db name override and tags here.)
 	*initDbNameOverride = "DBNAME"
 	initTags.Set("aaa:bbb")
 	if err := agent.InitTablet(port, gRPCPort); err != nil {
@@ -151,5 +195,9 @@ func TestInitTablet(t *testing.T) {
 	}
 	if len(ti.Tags) != 1 || ti.Tags["aaa"] != "bbb" {
 		t.Errorf("wrong tablet tags: %v", ti.Tags)
+	}
+	ter3 := agent._tabletExternallyReparentedTime
+	if ter3.IsZero() || !ter3.After(ter2) {
+		t.Fatalf("After a restart, ExternallyReparentedTimestamp must be set to the current time. Previous timestamp: %v current timestamp: %v", ter2, ter3)
 	}
 }

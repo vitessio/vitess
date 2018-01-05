@@ -35,10 +35,15 @@ type WatchSrvVSchemaData struct {
 }
 
 // WatchSrvVSchema will set a watch on the SrvVSchema object.
-// It has the same contract as Backend.Watch, but it also unpacks the
+// It has the same contract as Conn.Watch, but it also unpacks the
 // contents into a SrvVSchema object.
-func (ts Server) WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVSchemaData, <-chan *WatchSrvVSchemaData, CancelFunc) {
-	current, wdChannel, cancel := ts.Watch(ctx, cell, SrvVSchemaFile)
+func (ts *Server) WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVSchemaData, <-chan *WatchSrvVSchemaData, CancelFunc) {
+	conn, err := ts.ConnForCell(ctx, cell)
+	if err != nil {
+		return &WatchSrvVSchemaData{Err: err}, nil, nil
+	}
+
+	current, wdChannel, cancel := conn.Watch(ctx, SrvVSchemaFile)
 	if current.Err != nil {
 		return &WatchSrvVSchemaData{Err: current.Err}, nil, nil
 	}
@@ -83,4 +88,50 @@ func (ts Server) WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVSc
 	}()
 
 	return &WatchSrvVSchemaData{Value: value}, changes, cancel
+}
+
+// UpdateSrvVSchema updates the SrvVSchema file for a cell.
+func (ts *Server) UpdateSrvVSchema(ctx context.Context, cell string, srvVSchema *vschemapb.SrvVSchema) error {
+	conn, err := ts.ConnForCell(ctx, cell)
+	if err != nil {
+		return err
+	}
+
+	nodePath := SrvVSchemaFile
+	data, err := proto.Marshal(srvVSchema)
+	if err != nil {
+		return err
+	}
+	_, err = conn.Update(ctx, nodePath, data, nil)
+	return err
+}
+
+// GetSrvVSchema returns the SrvVSchema for a cell.
+func (ts *Server) GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.SrvVSchema, error) {
+	conn, err := ts.ConnForCell(ctx, cell)
+	if err != nil {
+		return nil, err
+	}
+
+	nodePath := SrvVSchemaFile
+	data, _, err := conn.Get(ctx, nodePath)
+	if err != nil {
+		return nil, err
+	}
+	srvVSchema := &vschemapb.SrvVSchema{}
+	if err := proto.Unmarshal(data, srvVSchema); err != nil {
+		return nil, fmt.Errorf("SrvVSchema unmarshal failed: %v %v", data, err)
+	}
+	return srvVSchema, nil
+}
+
+// DeleteSrvVSchema deletes the SrvVSchema file for a cell.
+func (ts *Server) DeleteSrvVSchema(ctx context.Context, cell string) error {
+	conn, err := ts.ConnForCell(ctx, cell)
+	if err != nil {
+		return err
+	}
+
+	nodePath := SrvVSchemaFile
+	return conn.Delete(ctx, nodePath, nil)
 }

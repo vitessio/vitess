@@ -21,7 +21,7 @@ set -e
 script_root=`dirname "${BASH_SOURCE}"`
 
 # Shard -80 contains all entries whose keyspace ID has a first byte < 0x80.
-# See: http://vitess.io/overview/concepts.html#keyspace-id
+# See: http://vitess.io/overview/concepts/#keyspace-id
 SHARD=-80 UID_BASE=200 $script_root/vttablet-up.sh "$@"
 
 # Shard 80- contains all entries whose keyspace ID has a first byte >= 0x80.

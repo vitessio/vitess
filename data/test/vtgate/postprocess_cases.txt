@@ -93,7 +93,7 @@
     "Query": "select col from user where id = 5 order by aa asc",
     "FieldQuery": "select col from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": 5
+    "Values": [5]
   }
 }
 
@@ -110,7 +110,7 @@
     "Query": "select col from user where id = 1 order by 1 asc",
     "FieldQuery": "select col from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": 1
+    "Values": [1]
   }
 }
 
@@ -169,7 +169,7 @@
       "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by null",
       "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
       "Vindex": "user_index",
-      "Values": 1
+      "Values": [1]
     },
     "Right": {
       "Opcode": "SelectEqualUnique",
@@ -180,7 +180,64 @@
       "Query": "select music.col3 from music where music.id = :user_id order by null",
       "FieldQuery": "select music.col3 from music where 1 != 1",
       "Vindex": "music_user_map",
-      "Values": ":user_id",
+      "Values": [":user_id"],
+      "JoinVars": {
+        "user_id": {}
+      }
+    },
+    "Cols": [
+      -1,
+      -2,
+      1
+    ],
+    "Vars": {
+      "user_id": 2
+    }
+  }
+}
+
+# ORDER BY RAND()
+"select col from user order by RAND()"
+{
+  "Original": "select col from user order by RAND()",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col from user order by rand()",
+    "FieldQuery": "select col from user where 1 != 1"
+  }
+}
+
+# ORDER BY RAND() for join
+"select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()"
+{
+  "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by rand()",
+      "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
+      "Vindex": "user_index",
+      "Values": [1]
+    },
+    "Right": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select music.col3 from music where music.id = :user_id order by rand()",
+      "FieldQuery": "select music.col3 from music where 1 != 1",
+      "Vindex": "music_user_map",
+      "Values": [":user_id"],
       "JoinVars": {
         "user_id": {}
       }
@@ -209,7 +266,7 @@
     "Query": "select * from user where id = 5 order by col asc",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": 5
+    "Values": [5]
   }
 }
 
@@ -226,7 +283,7 @@
     "Query": "select user.* from user where id = 5 order by user.col asc",
     "FieldQuery": "select user.* from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": 5
+    "Values": [5]
   }
 }
 
@@ -243,7 +300,7 @@
     "Query": "select * from user where id = 5 order by user.col asc",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": 5
+    "Values": [5]
   }
 }
 
@@ -313,7 +370,7 @@
     "Query": "select * from user where id = 5 order by user.col collate utf8_general_ci asc",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": 5
+    "Values": [5]
   }
 }
 
@@ -330,7 +387,7 @@
       "Query":"select * from user where id = 5 order by -col1 asc",
       "FieldQuery":"select * from user where 1 != 1",
       "Vindex":"user_index",
-      "Values":5
+      "Values":[5]
    }
 }
 
@@ -347,7 +404,7 @@
       "Query":"select * from user where id = 5 order by concat(col, col1) collate utf8_general_ci desc",
       "FieldQuery":"select * from user where 1 != 1",
       "Vindex":"user_index",
-      "Values":5
+      "Values":[5]
    }
 }
 
@@ -364,7 +421,7 @@
       "Query":"select * from user where id = 5 order by id + col collate utf8_general_ci desc",
       "FieldQuery":"select * from user where 1 != 1",
       "Vindex":"user_index",
-      "Values":5
+      "Values":[5]
    }
 }
 
@@ -381,7 +438,7 @@
       "Query":"select * from user as u join (select user_id from user_extra where user_id = 5) as eu on u.id = eu.user_id where u.id = 5 order by eu.user_id asc",
       "FieldQuery":"select * from user as u join (select user_id from user_extra where 1 != 1) as eu on u.id = eu.user_id where 1 != 1",
       "Vindex":"user_index",
-      "Values":5
+      "Values":[5]
    }
 }
 
@@ -398,6 +455,102 @@
     "Query": "select col1 from user where id = 1 limit 1",
     "FieldQuery": "select col1 from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": 1
+    "Values": [1]
   }
 }
+
+# limit for joins. Can't push down the limit because result
+# counts get multiplied by join operations.
+"select user.col from user join user_extra limit 1"
+{
+  "Original": "select user.col from user join user_extra limit 1",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": 1,
+    "Input": {
+      "Opcode": "Join",
+      "Left": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select user.col from user",
+        "FieldQuery": "select user.col from user where 1 != 1"
+      },
+      "Right": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select 1 from user_extra",
+        "FieldQuery": "select 1 from user_extra where 1 != 1"
+      },
+      "Cols": [
+        -1
+      ]
+    }
+  }
+}
+
+# limit for scatter
+"select col from user limit 1"
+{
+  "Original": "select col from user limit 1",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": 1,
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user limit 1",
+      "FieldQuery": "select col from user where 1 != 1"
+    }
+  }
+}
+
+# limit for scatter with bind var
+"select col from user limit :a"
+{
+  "Original": "select col from user limit :a",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": ":a",
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user limit :a",
+      "FieldQuery": "select col from user where 1 != 1"
+    }
+  }
+}
+
+# cross-shard expression in parenthesis with limit
+"select * from user where (id = 4 AND name ='abc') limit 5"
+{
+  "Original": "select * from user where (id = 4 AND name ='abc') limit 5",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": 5,
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select * from user where (id = 4 and name = 'abc') limit 5",
+      "FieldQuery": "select * from user where 1 != 1"
+    }
+  }
+}
+
+# invalid limit expression
+"select id from user limit 1+1"
+"unexpected expression in LIMIT:  limit 1 + 1"

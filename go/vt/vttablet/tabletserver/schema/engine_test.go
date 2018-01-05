@@ -31,6 +31,7 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema/schematest"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -47,12 +48,12 @@ func TestOpenFailedDueToMissMySQLTime(t *testing.T) {
 			{Type: sqltypes.Uint64},
 		},
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeString([]byte("1427325875"))},
-			{sqltypes.MakeString([]byte("1427325875"))},
+			{sqltypes.NewVarBinary("1427325875")},
+			{sqltypes.NewVarBinary("1427325875")},
 		},
 	})
-	se := newEngine(10, 1*time.Second, 1*time.Second, false)
-	err := se.Open(db.ConnParams())
+	se := newEngine(10, 1*time.Second, 1*time.Second, false, db)
+	err := se.Open()
 	want := "could not get MySQL time"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("se.Open: %v, want %s", err, want)
@@ -71,8 +72,8 @@ func TestOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
 			{sqltypes.NULL},
 		},
 	})
-	se := newEngine(10, 1*time.Second, 1*time.Second, false)
-	err := se.Open(db.ConnParams())
+	se := newEngine(10, 1*time.Second, 1*time.Second, false, db)
+	err := se.Open()
 	want := "unexpected result for MySQL time"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("se.Open: %v, want %s", err, want)
@@ -88,11 +89,11 @@ func TestOpenFailedDueToInvalidTimeFormat(t *testing.T) {
 		}},
 		Rows: [][]sqltypes.Value{
 			// make safety check fail, invalid time format
-			{sqltypes.MakeString([]byte("invalid_time"))},
+			{sqltypes.NewVarBinary("invalid_time")},
 		},
 	})
-	se := newEngine(10, 1*time.Second, 1*time.Second, false)
-	err := se.Open(db.ConnParams())
+	se := newEngine(10, 1*time.Second, 1*time.Second, false, db)
+	err := se.Open()
 	want := "could not parse time"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("se.Open: %v, want %s", err, want)
@@ -106,8 +107,8 @@ func TestOpenFailedDueToExecErr(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	db.AddRejectedQuery(mysql.BaseShowTables, fmt.Errorf("injected error"))
-	se := newEngine(10, 1*time.Second, 1*time.Second, false)
-	err := se.Open(db.ConnParams())
+	se := newEngine(10, 1*time.Second, 1*time.Second, false, db)
+	err := se.Open()
 	want := "could not get table list"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("se.Open: %v, want %s", err, want)
@@ -135,11 +136,11 @@ func TestOpenFailedDueToTableErr(t *testing.T) {
 			},
 		},
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeString([]byte(""))},
+			{sqltypes.NewVarBinary("")},
 		},
 	})
-	se := newEngine(10, 1*time.Second, 1*time.Second, false)
-	err := se.Open(db.ConnParams())
+	se := newEngine(10, 1*time.Second, 1*time.Second, false, db)
+	err := se.Open()
 	want := "could not get schema for any tables"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("se.Open: %v, want %s", err, want)
@@ -154,8 +155,8 @@ func TestReload(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	idleTimeout := 10 * time.Second
-	se := newEngine(10, 10*time.Second, idleTimeout, true)
-	se.Open(db.ConnParams())
+	se := newEngine(10, 10*time.Second, idleTimeout, true, db)
+	se.Open()
 	defer se.Close()
 	// this new table does not exist
 	newTable := sqlparser.NewTableIdent("test_table_04")
@@ -235,8 +236,8 @@ func TestCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	db.AddRejectedQuery(mysql.BaseShowTablesForTable("test_table"), fmt.Errorf("forced fail"))
-	se := newEngine(10, 1*time.Second, 1*time.Second, false)
-	se.Open(db.ConnParams())
+	se := newEngine(10, 1*time.Second, 1*time.Second, false, db)
+	se.Open()
 	defer se.Close()
 	originalSchemaErrorCount := tabletenv.InternalErrors.Counts()["Schema"]
 	// should silently fail: no errors returned, but increment a counter
@@ -255,8 +256,8 @@ func TestCreateOrUpdateTable(t *testing.T) {
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	se := newEngine(10, 1*time.Second, 1*time.Second, false)
-	se.Open(db.ConnParams())
+	se := newEngine(10, 1*time.Second, 1*time.Second, false, db)
+	se.Open()
 	defer se.Close()
 	existingTable := "test_table_01"
 	db.AddQuery(mysql.BaseShowTablesForTable(existingTable), &sqltypes.Result{
@@ -270,8 +271,8 @@ func TestCreateOrUpdateTable(t *testing.T) {
 	se.RegisterNotifier("test", func(schema map[string]*Table, created, altered, dropped []string) {
 		switch i {
 		case 0:
-			if len(created) != 4 {
-				t.Errorf("callback 0: %v, want len of 4\n", created)
+			if len(created) != 5 {
+				t.Errorf("callback 0: %v, want len of 5\n", created)
 			}
 		case 1:
 			want := []string{"test_table_01"}
@@ -298,8 +299,8 @@ func TestExportVars(t *testing.T) {
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	se := newEngine(10, 1*time.Second, 1*time.Second, true)
-	se.Open(db.ConnParams())
+	se := newEngine(10, 1*time.Second, 1*time.Second, true, db)
+	se.Open()
 	defer se.Close()
 	expvar.Do(func(kv expvar.KeyValue) {
 		_ = kv.Value.String()
@@ -314,8 +315,8 @@ func TestUpdatedMysqlStats(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	idleTimeout := 10 * time.Second
-	se := newEngine(10, 10*time.Second, idleTimeout, true)
-	se.Open(db.ConnParams())
+	se := newEngine(10, 10*time.Second, idleTimeout, true, db)
+	se.Open()
 	defer se.Close()
 	// Add new table
 	tableName := sqlparser.NewTableIdent("mysql_stats_test_table")
@@ -372,12 +373,12 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	mdl1 := table.MaxDataLength
 	// Update existing table with new stats.
 	row := mysql.BaseShowTablesRow(tableName.String(), false, "")
-	row[2] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0")) // smaller timestamp
-	row[4] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("2")) // table_rows
-	row[5] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("3")) // data_length
-	row[6] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("4")) // index_length
-	row[7] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("5")) // data_free
-	row[8] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("6")) // max_data_length
+	row[2] = sqltypes.NewUint64(0) // smaller timestamp
+	row[4] = sqltypes.NewUint64(2) // table_rows
+	row[5] = sqltypes.NewUint64(3) // data_length
+	row[6] = sqltypes.NewUint64(4) // index_length
+	row[7] = sqltypes.NewUint64(5) // data_free
+	row[8] = sqltypes.NewUint64(6) // max_data_length
 	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
 		Fields:       mysql.BaseShowTablesFields,
 		RowsAffected: 1,
@@ -406,8 +407,8 @@ func TestStatsURL(t *testing.T) {
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	se := newEngine(10, 1*time.Second, 1*time.Second, true)
-	se.Open(db.ConnParams())
+	se := newEngine(10, 1*time.Second, 1*time.Second, true, db)
+	se.Open()
 	defer se.Close()
 
 	request, _ := http.NewRequest("GET", "/debug/schema", nil)
@@ -422,10 +423,20 @@ func (dummyChecker) CheckMySQL() {}
 
 var DummyChecker = dummyChecker{}
 
-func newEngine(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, strict bool) *Engine {
+func newEngine(queryPlanCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, strict bool, db *fakesqldb.DB) *Engine {
 	config := tabletenv.DefaultQsConfig
-	config.QueryCacheSize = queryCacheSize
+	config.QueryPlanCacheSize = queryPlanCacheSize
 	config.SchemaReloadTime = float64(reloadTime) / 1e9
 	config.IdleTimeout = float64(idleTimeout) / 1e9
-	return NewEngine(DummyChecker, config)
+	se := NewEngine(DummyChecker, config)
+	se.InitDBConfig(newDBConfigs(db))
+	return se
+}
+
+func newDBConfigs(db *fakesqldb.DB) dbconfigs.DBConfigs {
+	return dbconfigs.DBConfigs{
+		App:           *db.ConnParams(),
+		Dba:           *db.ConnParams(),
+		SidecarDBName: "_vt",
+	}
 }

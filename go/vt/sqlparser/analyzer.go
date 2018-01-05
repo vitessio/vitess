@@ -25,6 +25,8 @@ import (
 	"unicode"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 // These constants are used to identify the SQL statement type.
@@ -92,6 +94,40 @@ func Preview(sql string) int {
 	return StmtUnknown
 }
 
+// StmtType returns the statement type as a string
+func StmtType(stmtType int) string {
+	switch stmtType {
+	case StmtSelect:
+		return "SELECT"
+	case StmtInsert:
+		return "INSERT"
+	case StmtReplace:
+		return "REPLACE"
+	case StmtUpdate:
+		return "UPDATE"
+	case StmtDelete:
+		return "DELETE"
+	case StmtDDL:
+		return "DDL"
+	case StmtBegin:
+		return "BEGIN"
+	case StmtCommit:
+		return "COMMIT"
+	case StmtRollback:
+		return "ROLLBACK"
+	case StmtSet:
+		return "SET"
+	case StmtShow:
+		return "SHOW"
+	case StmtUse:
+		return "USE"
+	case StmtOther:
+		return "OTHER"
+	default:
+		return "UNKNOWN"
+	}
+}
+
 // IsDML returns true if the query is an INSERT, UPDATE or DELETE statement.
 func IsDML(sql string) bool {
 	switch Preview(sql) {
@@ -126,10 +162,6 @@ func IsValue(node Expr) bool {
 		case StrVal, HexVal, IntVal, ValArg:
 			return true
 		}
-	case *ValuesFuncExpr:
-		if v.Resolved != nil {
-			return IsValue(v.Resolved)
-		}
 	}
 	return false
 }
@@ -161,51 +193,49 @@ func IsSimpleTuple(node Expr) bool {
 	return false
 }
 
-// AsInterface converts the Expr to an interface. It converts
-// ValTuple to []interface{}, ValArg to string, StrVal to sqltypes.String,
-// IntVal to sqltypes.Numeric, NullVal to nil.
-// Otherwise, it returns an error.
-func AsInterface(node Expr) (interface{}, error) {
+// NewPlanValue builds a sqltypes.PlanValue from an Expr.
+func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 	switch node := node.(type) {
-	case *ValuesFuncExpr:
-		if node.Resolved != nil {
-			return AsInterface(node.Resolved)
-		}
-	case ValTuple:
-		vals := make([]interface{}, 0, len(node))
-		for _, val := range node {
-			v, err := AsInterface(val)
-			if err != nil {
-				return nil, err
-			}
-			vals = append(vals, v)
-		}
-		return vals, nil
 	case *SQLVal:
 		switch node.Type {
 		case ValArg:
-			return string(node.Val), nil
+			return sqltypes.PlanValue{Key: string(node.Val[1:])}, nil
+		case IntVal:
+			n, err := sqltypes.NewIntegral(string(node.Val))
+			if err != nil {
+				return sqltypes.PlanValue{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+			}
+			return sqltypes.PlanValue{Value: n}, nil
 		case StrVal:
-			return sqltypes.MakeString(node.Val), nil
+			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, node.Val)}, nil
 		case HexVal:
 			v, err := node.HexDecode()
 			if err != nil {
-				return nil, err
+				return sqltypes.PlanValue{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 			}
-			return sqltypes.MakeString(v), nil
-		case IntVal:
-			n, err := sqltypes.BuildIntegral(string(node.Val))
-			if err != nil {
-				return nil, fmt.Errorf("type mismatch: %s", err)
-			}
-			return n, nil
+			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, v)}, nil
 		}
 	case ListArg:
-		return string(node), nil
+		return sqltypes.PlanValue{ListKey: string(node[2:])}, nil
+	case ValTuple:
+		pv := sqltypes.PlanValue{
+			Values: make([]sqltypes.PlanValue, 0, len(node)),
+		}
+		for _, val := range node {
+			innerpv, err := NewPlanValue(val)
+			if err != nil {
+				return sqltypes.PlanValue{}, err
+			}
+			if innerpv.ListKey != "" || innerpv.Values != nil {
+				return sqltypes.PlanValue{}, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: nested lists")
+			}
+			pv.Values = append(pv.Values, innerpv)
+		}
+		return pv, nil
 	case *NullVal:
-		return nil, nil
+		return sqltypes.PlanValue{}, nil
 	}
-	return nil, fmt.Errorf("expression is too complex '%v'", String(node))
+	return sqltypes.PlanValue{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expression is too complex '%v'", String(node))
 }
 
 // StringIn is a convenience function that returns
@@ -223,38 +253,43 @@ func StringIn(str string, values ...string) bool {
 // if the query is a SET statement. Values can be int64 or string.
 // Since set variable names are case insensitive, all keys are returned
 // as lower case.
-func ExtractSetValues(sql string) (map[string]interface{}, error) {
+func ExtractSetValues(sql string) (keyValues map[string]interface{}, charset string, err error) {
 	stmt, err := Parse(sql)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	setStmt, ok := stmt.(*Set)
 	if !ok {
-		return nil, fmt.Errorf("ast did not yield *sqlparser.Set: %T", stmt)
+		return nil, "", fmt.Errorf("ast did not yield *sqlparser.Set: %T", stmt)
 	}
 	result := make(map[string]interface{})
 	for _, expr := range setStmt.Exprs {
 		if !expr.Name.Qualifier.IsEmpty() {
-			return nil, fmt.Errorf("invalid syntax: %v", String(expr.Name))
+			return nil, "", fmt.Errorf("invalid syntax: %v", String(expr.Name))
 		}
 		key := expr.Name.Name.Lowered()
 
-		sqlval, ok := expr.Expr.(*SQLVal)
-		if !ok {
-			return nil, fmt.Errorf("invalid syntax: %s", String(expr.Expr))
-		}
-		switch sqlval.Type {
-		case StrVal:
-			result[key] = string(sqlval.Val)
-		case IntVal:
-			num, err := strconv.ParseInt(string(sqlval.Val), 0, 64)
-			if err != nil {
-				return nil, err
+		switch expr := expr.Expr.(type) {
+		case *SQLVal:
+			switch expr.Type {
+			case StrVal:
+				result[key] = string(expr.Val)
+			case IntVal:
+				num, err := strconv.ParseInt(string(expr.Val), 0, 64)
+				if err != nil {
+					return nil, "", err
+				}
+				result[key] = num
+			default:
+				return nil, "", fmt.Errorf("invalid value type: %v", String(expr))
 			}
-			result[key] = num
+		case *NullVal:
+			result[key] = nil
+		case *Default:
+			result[key] = "default"
 		default:
-			return nil, fmt.Errorf("invalid value type: %v", String(expr.Expr))
+			return nil, "", fmt.Errorf("invalid syntax: %s", String(expr))
 		}
 	}
-	return result, nil
+	return result, setStmt.Charset.Lowered(), nil
 }

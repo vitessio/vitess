@@ -1,24 +1,6 @@
 
 {
 	"Tests": {
-		"automation_horizontal_resharding": {
-			"File": "automation_horizontal_resharding.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"automation_vertical_split": {
-			"File": "automation_vertical_split.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 3,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"backup": {
 			"File": "backup.py",
 			"Args": [],
@@ -228,17 +210,16 @@
 				"site_test"
 			]
 		},
-		"php": {
+		"check_make_parser": {
 			"File": "",
 			"Args": [],
 			"Command": [
-				"make",
-				"php_test"
+				"tools/check_make_parser.sh"
 			],
-			"Manual": true,
-			"Shard": 4,
-			"RetryMax": 0,
-				"Tags": []
+			"Manual": false,
+			"Shard": 0,
+			"RetryMax": 1,
+			"Tags": []
 		},
 		"python_client": {
 			"File": "python_client_test.py",
@@ -312,17 +293,6 @@
 		"tabletmanager": {
 			"File": "tabletmanager.py",
 			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 1,
-			"RetryMax": 0,
-			"Tags": [
-				"site_test"
-			]
-		},
-		"tabletmanager_etcd": {
-			"File": "tabletmanager.py",
-			"Args": ["--topo-server-flavor=etcd"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 1,

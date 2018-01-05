@@ -27,7 +27,6 @@ import protocols_flavor
 # --topo-server-flavor flag.
 # pylint: disable=unused-import
 import topo_flavor.zk2
-import topo_flavor.etcd
 import topo_flavor.etcd2
 import topo_flavor.consul
 
@@ -95,6 +94,10 @@ run_local_database = os.path.join(vtroot, 'py-vtdb', 'vttest',
 
 # url to hit to force the logs to flush.
 flush_logs_url = '/debug/flushlogs'
+
+# set the maximum size for grpc messages to be 5MB (larger than the default of
+# 4MB).
+grpc_max_message_size = 5 * 1024 * 1024
 
 
 def setup():
@@ -250,3 +253,12 @@ def create_webdriver():
     driver.set_window_position(0, 0)
     driver.set_window_size(1280, 1024)
   return driver
+
+
+def set_log_level(verbose):
+  level = logging.DEBUG
+  if verbose == 0:
+    level = logging.WARNING
+  elif verbose == 1:
+    level = logging.INFO
+  logging.getLogger().setLevel(level)
