@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/txlimiter"
+
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
@@ -483,6 +485,7 @@ func newTxPool() *TxPool {
 	transactionCap := 300
 	transactionTimeout := time.Duration(30 * time.Second)
 	idleTimeout := time.Duration(30 * time.Second)
+	limiter := &txlimiter.TxAllowAll{}
 	return NewTxPool(
 		poolName,
 		transactionCap,
@@ -490,5 +493,6 @@ func newTxPool() *TxPool {
 		transactionTimeout,
 		idleTimeout,
 		DummyChecker,
+		limiter,
 	)
 }

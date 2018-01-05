@@ -6,8 +6,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/callerid"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func resetVariables() {
@@ -19,10 +17,6 @@ func createCtx(username, principal, component, subcomponent string) context.Cont
 	im := callerid.NewImmediateCallerID(username)
 	ef := callerid.NewEffectiveCallerID(principal, component, subcomponent)
 	return callerid.NewContext(context.Background(), ef, im)
-}
-
-func extractCaller(ctx context.Context) (*querypb.VTGateCallerID, *vtrpcpb.CallerID) {
-	return callerid.ImmediateCallerIDFromContext(ctx), callerid.EffectiveCallerIDFromContext(ctx)
 }
 
 func TestTxLimiter_DisabledAllowsAll(t *testing.T) {
@@ -82,7 +76,7 @@ func TestTxLimiter_LimitsOnlyOffendingUser(t *testing.T) {
 	}
 
 	// user1 releases a slot, which allows to get another
-	limiter.Release(extractCaller(ctx1))
+	limiter.ReleaseByContext(ctx1)
 	if got, want := limiter.Get(ctx1), true; got != want {
 		t.Errorf("Get(ctx1) after releasing: got %v, want %v", got, want)
 	}
