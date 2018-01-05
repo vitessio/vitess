@@ -63,9 +63,12 @@ message Table {
 
 // ColumnVindex is used to associate a column to a vindex.
 message ColumnVindex {
+  // Legacy implemenation, moving forward all vindexes should define a list of columns.
   string column = 1;
   // The name must match a vindex defined in Keyspace.
   string name = 2;
+  // List of columns that define this Vindex
+  repeated string columns = 3;
 }
 
 // Autoincrement is used to designate a column as auto-inc.

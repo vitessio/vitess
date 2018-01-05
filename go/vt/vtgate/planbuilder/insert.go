@@ -127,15 +127,42 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 		}
 	}
 
-	for _, colVindex := range eRoute.Table.ColumnVindexes {
-		pos := findOrAddColumn(ins, colVindex.Column)
-		swappedValues, err := swapBindVariables(rows, pos, ":_"+colVindex.Column.CompliantName())
-		if err != nil {
-			return nil, err
-		}
-		eRoute.Values = append(eRoute.Values, swappedValues)
+	routeValues := make([]sqltypes.PlanValue, len(eRoute.Table.ColumnVindexes))
+	// Initialize each table vindex with the number of rows per insert.
+	// There will be a plan value for each row.
+	for vIdx := range routeValues {
+		routeValues[vIdx].Values = make([]sqltypes.PlanValue, len(rows))
 	}
+	// What's going in here?
+	// For each vindex, we need to compute the column value for each row being inserted:
+	// routeValues will contain a PlanValue for each Vindex.
+	// In turn, each  PlanValue will have Values ([]sqltypes.PlanValue) for each row.
+	// In each row will have Values for the columns that are defined in the vindex.
+	// For instance, given the following insert statement:
+	// INSERT INTO table_a (column_a, column_b, column_c) VALUES (value_a1, value_b1, value_c1), (value_a2, value_b2, value_c2)
+	// Primary vindex on column_a and secondary vindex on columns b and c,
+	// routeValues will look like the following:
+	// [
+	//  [[value_a1], [value_a2]], <- Values for each row primary vindex
+	//  [[value_b1, value_c1], [value_b2, value_c2]] <- Values for each row multicolumn secondary vindex
+	// ]
 
+	for vIdx, colVindex := range eRoute.Table.ColumnVindexes {
+		for _, col := range colVindex.Columns {
+			colNum := findOrAddColumn(ins, col)
+			// swap bind variables
+			baseName := ":_" + col.CompliantName()
+			for rowNum, row := range rows {
+				innerpv, err := sqlparser.NewPlanValue(row[colNum])
+				if err != nil {
+					return nil, fmt.Errorf("could not compute value for vindex or auto-inc column: %v", err)
+				}
+				routeValues[vIdx].Values[rowNum].Values = append(routeValues[vIdx].Values[rowNum].Values, innerpv)
+				row[colNum] = sqlparser.NewValArg([]byte(baseName + strconv.Itoa(rowNum)))
+			}
+		}
+	}
+	eRoute.Values = routeValues
 	eRoute.Query = generateQuery(ins)
 	generateInsertShardedQuery(ins, eRoute, rows)
 	return eRoute, nil
@@ -213,8 +240,10 @@ func findOrAddColumn(ins *sqlparser.Insert, col sqlparser.ColIdent) int {
 func isVindexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.ColumnVindex) bool {
 	for _, assignment := range setClauses {
 		for _, vcol := range colVindexes {
-			if vcol.Column.Equal(assignment.Name.Name) {
-				return true
+			for _, col := range vcol.Columns {
+				if col.Equal(assignment.Name.Name) {
+					return true
+				}
 			}
 		}
 	}

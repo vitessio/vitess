@@ -12,7 +12,12 @@
                     },
                     "Query": "select * from user where email = 'null@void.com'",
                     "FieldQuery": "select * from user where 1 != 1"
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 4,
+                "Rows": 4,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -112,7 +117,12 @@
                             8
                         ]
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 3,
+                "Rows": 3,
+                "Errors": 0
             }
         ],
         "TabletActions": {
@@ -186,7 +196,9 @@
                     "Query": "insert into name_user_map(name, user_id) values (:_name0, :user_id0)",
                     "Values": [
                         [
-                            ":name0"
+                            [
+                                ":name0"
+                            ]
                         ]
                     ],
                     "Table": "name_user_map",
@@ -194,7 +206,12 @@
                     "Mid": [
                         "(:_name0, :user_id0)"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             },
             {
                 "Original": "insert into user (id, name) values(2, 'bob')",
@@ -207,10 +224,14 @@
                     "Query": "insert into user(id, name) values (:_id0, :_name0)",
                     "Values": [
                         [
-                            2
+                            [
+                                2
+                            ]
                         ],
                         [
-                            "bob"
+                            [
+                                "bob"
+                            ]
                         ]
                     ],
                     "Table": "user",
@@ -218,7 +239,12 @@
                     "Mid": [
                         "(:_id0, :_name0)"
                     ]
-                }
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
             }
         ],
         "TabletActions": {

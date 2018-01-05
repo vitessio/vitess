@@ -1,0 +1,42 @@
+# Tests in this file are for testing symtab functionality
+
+# Column names need not be qualified if they are predefined in vschema and unambiguous.
+"select predef2, predef3 from user join unsharded on predef2 = predef3"
+{
+  "Original": "select predef2, predef3 from user join unsharded on predef2 = predef3",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select predef2 from user",
+      "FieldQuery": "select predef2 from user where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select predef3 from unsharded where predef3 = :predef2",
+      "FieldQuery": "select predef3 from unsharded where 1 != 1",
+      "JoinVars": {
+        "predef2": {}
+      }
+    },
+    "Cols": [
+      -1,
+      1
+    ],
+    "Vars": {
+      "predef2": 0
+    }
+  }
+}
+
+# predef1 is in both user and unsharded. So, it's ambiguous.
+"select predef1, predef3 from user join unsharded on predef1 = predef3"
+"symbol predef1 not found"
