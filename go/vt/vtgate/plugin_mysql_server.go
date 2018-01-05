@@ -49,6 +49,10 @@ var (
 	mysqlSslCa   = flag.String("mysql_server_ssl_ca", "", "Path to ssl CA for mysql server plugin SSL. If specified, server will require and validate client certs.")
 
 	mysqlSlowConnectWarnThreshold = flag.Duration("mysql_slow_connect_warn_threshold", 0, "Warn if it takes more than the given threshold for a mysql connection to establish")
+
+	busyLock = sync.Mutex{}
+	busyCond = sync.NewCond(&busyLock)
+	busy     = make(map[*mysql.Conn]bool)
 )
 
 // vtgateHandler implements the Listener interface.
@@ -88,6 +92,10 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	// FIXME(alainjobart): Add some kind of timeout to the context.
 	ctx := context.Background()
 
+	busyLock.Lock()
+	busy[c] = true
+	busyLock.Unlock()
+
 	// Fill in the ImmediateCallerID with the UserData returned by
 	// the AuthServer plugin for that user. If nothing was
 	// returned, use the User. This lets the plugin map a MySQL
@@ -112,6 +120,15 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 			session.Options.ClientFoundRows = true
 		}
 	}
+	defer func() {
+		busyLock.Lock()
+		defer busyLock.Unlock()
+		busy[c] = session.InTransaction
+		if !session.InTransaction {
+			// This will wake up the OnTerm function if it's waiting for connections to become non-busy.
+			busyCond.Broadcast()
+		}
+	}()
 	if c.SchemaName != "" {
 		session.TargetString = c.SchemaName
 	}
@@ -226,28 +243,39 @@ func init() {
 	servenv.OnRun(initMySQLProtocol)
 
 	servenv.OnTermSync(func() {
-		wg := &sync.WaitGroup{}
 		if mysqlListener != nil {
-			drainListener(mysqlListener, wg)
+			mysqlListener.Close()
+			mysqlListener = nil
 		}
 		if mysqlUnixListener != nil {
-			drainListener(mysqlUnixListener, wg)
+			mysqlUnixListener.Close()
+			mysqlUnixListener = nil
 		}
-		log.Info("Waiting for mysql connections to drain...")
-		wg.Wait()
-		log.Info("All mysql connections drained successfully!")
+		busyLock.Lock()
+		defer busyLock.Unlock()
+		if len(busy) == 0 {
+			log.Info("No mysql connections to drain.")
+			return
+		}
+		log.Infof("Draining %v mysql connection(s)...", len(busy))
+		for {
+			var notFinished bool
+			for c, connIsBusy := range busy {
+				if !connIsBusy {
+					c.Close()
+					delete(busy, c)
+				} else {
+					notFinished = true
+				}
+			}
+			if notFinished {
+				busyCond.Wait()
+				continue
+			}
+			break
+		}
+		log.Info("Drained mysql connections successfully.")
 	})
-}
-
-func drainListener(l *mysql.Listener, wg *sync.WaitGroup) {
-	wg.Add(1)
-	go func() {
-		l.Shutdown()
-		l.WaitForConnections()
-		l.Close()
-		l = nil
-		wg.Done()
-	}()
 }
 
 var pluginInitializers []func()

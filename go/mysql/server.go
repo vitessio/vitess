@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -75,11 +74,6 @@ type Handler interface {
 	// the first call to callback. So the Handler should not
 	// hang on to the byte slice.
 	ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error
-
-	// SafeToClose is called when Shutdown has been called on
-	// the listener. This is used to prevent connections from
-	// being closed while a transaction is still open.
-	SafeToClose(c *Conn) bool
 }
 
 // Listener is the MySQL server protocol listener.
@@ -120,11 +114,6 @@ type Listener struct {
 
 	// Incrementing ID for connection id.
 	connectionID uint32
-
-	shutdownOnce      sync.Once
-	shutdown          bool
-	shutdownCh        chan bool
-	activeConnections sync.WaitGroup
 }
 
 // NewListener creates a new Listener.
@@ -141,8 +130,6 @@ func NewListener(protocol, address string, authServer AuthServer, handler Handle
 
 		ServerVersion: DefaultServerVersion,
 		connectionID:  1,
-
-		shutdownCh: make(chan bool, 1),
 	}, nil
 }
 
@@ -160,12 +147,6 @@ func (l *Listener) Accept() {
 			return
 		}
 
-		if l.shutdown {
-			log.Infof("Listener is shutting down -- refusing connection from %v", conn.RemoteAddr)
-			conn.Close()
-			continue
-		}
-
 		acceptTime := time.Now()
 
 		connectionID := l.connectionID
@@ -173,7 +154,6 @@ func (l *Listener) Accept() {
 
 		connCount.Add(1)
 		connAccept.Add(1)
-		l.activeConnections.Add(1)
 
 		go l.handle(conn, connectionID, acceptTime)
 	}
@@ -197,7 +177,6 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	// Tell the handler about the connection coming and going.
 	l.handler.NewConnection(c)
 	defer l.handler.ConnectionClosed(c)
-	defer l.activeConnections.Done()
 
 	// Adjust the count of open connections
 	defer connCount.Add(-1)
@@ -279,11 +258,11 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 		// Switch our auth method to what the server wants.
 		// Dialog plugin expects an AskPassword prompt.
-		var pluginData []byte
+		var data []byte
 		if authServerMethod == MysqlDialog {
-			pluginData = authServerDialogSwitchData()
+			data = authServerDialogSwitchData()
 		}
-		if err := c.writeAuthSwitchRequest(authServerMethod, pluginData); err != nil {
+		if err := c.writeAuthSwitchRequest(authServerMethod, data); err != nil {
 			log.Errorf("Error writing auth switch packet for %s: %v", c, err)
 			return
 		}
@@ -315,37 +294,10 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		log.Warningf("Slow connection from %s: %v", c, connectTime)
 	}
 
-	packetCh := make(chan []byte, 1)
-	errorCh := make(chan error)
-	mu := sync.Mutex{}
-	var data []byte
-
-	go func() {
-		for {
-			mu.Lock()
-			c.sequence = 0
-			data, err := c.readEphemeralPacket()
-
-			if err != nil {
-				errorCh <- err
-				return
-			}
-
-			packetCh <- data
-		}
-	}()
-
 	for {
-		if l.shutdown {
-			if l.handler.SafeToClose(c) {
-				return
-			}
-			log.Infof("Listener is shutting down but connection ID %v is not safe to close yet", c.ConnectionID)
-		}
-		select {
-		case <-l.shutdownCh:
-			continue // jump to beginning of loop so we can attempt to proactively close the connection
-		case err := <-errorCh:
+		c.sequence = 0
+		data, err := c.readEphemeralPacket()
+		if err != nil {
 			// Don't log EOF errors. They cause too much spam.
 			// Note the EOF detection is not 100%
 			// guaranteed, in the case where the client
@@ -357,8 +309,6 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 				log.Errorf("Error reading packet from %s: %v", c, err)
 			}
 			return
-		case data = <-packetCh:
-			// yee haw
 		}
 
 		switch data[0] {
@@ -413,7 +363,6 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 					log.Errorf("Error writing query error to %s: %v", c, werr)
 					return
 				}
-				mu.Unlock()
 				continue
 			}
 
@@ -450,26 +399,12 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			}
 
 		}
-		mu.Unlock()
 	}
 }
 
 // Close stops the listener, and closes all connections.
 func (l *Listener) Close() {
 	l.listener.Close()
-}
-
-// Shutdown starts closing idle connections.
-func (l *Listener) Shutdown() {
-	l.shutdownOnce.Do(func() {
-		l.shutdown = true
-		l.shutdownCh <- true
-	})
-}
-
-// WaitForConnections blocks until there are no active connections
-func (l *Listener) WaitForConnections() {
-	l.activeConnections.Wait()
 }
 
 // writeHandshakeV10 writes the Initial Handshake Packet, server side.
