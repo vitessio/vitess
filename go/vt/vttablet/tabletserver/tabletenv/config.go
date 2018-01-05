@@ -83,6 +83,14 @@ func init() {
 	flag.IntVar(&Config.HotRowProtectionMaxGlobalQueueSize, "hot_row_protection_max_global_queue_size", DefaultQsConfig.HotRowProtectionMaxGlobalQueueSize, "Global queue limit across all row (ranges). Useful to prevent that the queue can grow unbounded.")
 	flag.IntVar(&Config.HotRowProtectionConcurrentTransactions, "hot_row_protection_concurrent_transactions", DefaultQsConfig.HotRowProtectionConcurrentTransactions, "Number of concurrent transactions let through to the txpool/MySQL for the same hot row. Should be > 1 to have enough 'ready' transactions in MySQL and benefit from a pipelining effect.")
 
+	flag.BoolVar(&Config.EnableTransactionLimit, "enable_transaction_limit", DefaultQsConfig.EnableTransactionLimit, "If true, limit on number of transactions open at the same time will be enforced for all users. User trying to open a new transaction after exhausting their limit will receive an error immediately, regardless of whether there are available slots or not.")
+	flag.BoolVar(&Config.EnableTransactionLimitDryRun, "enable_transaction_limit_dry_run", DefaultQsConfig.EnableTransactionLimitDryRun, "If true, limit on number of transactions open at the same time will be tracked for all users, but not enforced.")
+	flag.Float64Var(&Config.TransactionLimitPerUser, "transaction_limit_per_user", DefaultQsConfig.TransactionLimitPerUser, "Maximum number of transactions a single user is allowed to use at any time, represented as fraction of -transaction_cap.")
+	flag.BoolVar(&Config.TransactionLimitByUsername, "transaction_limit_by_username", DefaultQsConfig.TransactionLimitByUsername, "Include VTGateCallerID.username when considering who the user is for the purpose of transaction limit.")
+	flag.BoolVar(&Config.TransactionLimitByPrincipal, "transaction_limit_by_principal", DefaultQsConfig.TransactionLimitByPrincipal, "Include CallerID.principal when considering who the user is for the purpose of transaction limit.")
+	flag.BoolVar(&Config.TransactionLimitByComponent, "transaction_limit_by_component", DefaultQsConfig.TransactionLimitByComponent, "Include CallerID.component when considering who the user is for the purpose of transaction limit.")
+	flag.BoolVar(&Config.TransactionLimitBySubcomponent, "transaction_limit_by_subcomponent", DefaultQsConfig.TransactionLimitBySubcomponent, "Include CallerID.subcomponent when considering who the user is for the purpose of transaction limit.")
+
 	flag.BoolVar(&Config.HeartbeatEnable, "heartbeat_enable", DefaultQsConfig.HeartbeatEnable, "If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.")
 	flag.DurationVar(&Config.HeartbeatInterval, "heartbeat_interval", DefaultQsConfig.HeartbeatInterval, "How frequently to read and write replication heartbeat.")
 
@@ -147,10 +155,24 @@ type TabletConfig struct {
 	HotRowProtectionMaxGlobalQueueSize     int
 	HotRowProtectionConcurrentTransactions int
 
+	TransactionLimitConfig
+
 	HeartbeatEnable   bool
 	HeartbeatInterval time.Duration
 
 	EnforceStrictTransTables bool
+}
+
+// TransactionLimitConfig captures configuration of transaction pool slots
+// limiter configuration.
+type TransactionLimitConfig struct {
+	EnableTransactionLimit         bool
+	EnableTransactionLimitDryRun   bool
+	TransactionLimitPerUser        float64
+	TransactionLimitByUsername     bool
+	TransactionLimitByPrincipal    bool
+	TransactionLimitByComponent    bool
+	TransactionLimitBySubcomponent bool
 }
 
 // DefaultQsConfig is the default value for the query service config.
@@ -202,6 +224,8 @@ var DefaultQsConfig = TabletConfig{
 	// of them ready in MySQL and profit from a pipelining effect.
 	HotRowProtectionConcurrentTransactions: 5,
 
+	TransactionLimitConfig: defaultTransactionLimitConfig(),
+
 	HeartbeatEnable:   false,
 	HeartbeatInterval: 1 * time.Second,
 
@@ -221,12 +245,61 @@ func defaultTxThrottlerConfig() string {
 	return proto.MarshalTextString(&config)
 }
 
+func defaultTransactionLimitConfig() TransactionLimitConfig {
+	return TransactionLimitConfig{
+		EnableTransactionLimit:       false,
+		EnableTransactionLimitDryRun: false,
+
+		// Single user can use up to 40% of transaction pool slots. Enough to
+		// accommodate 2 misbehaving users.
+		TransactionLimitPerUser: 0.4,
+
+		TransactionLimitByUsername:     true,
+		TransactionLimitByPrincipal:    true,
+		TransactionLimitByComponent:    false,
+		TransactionLimitBySubcomponent: false,
+	}
+}
+
+// verifyTransactionLimitConfig checks TransactionLimitConfig for sanity
+func (c *TabletConfig) verifyTransactionLimitConfig() error {
+	actual, dryRun := c.EnableTransactionLimit, c.EnableTransactionLimitDryRun
+	if actual && dryRun {
+		return errors.New("only one of two flags allowed: -enable_transaction_limit or -enable_transaction_limit_dry_run")
+	}
+
+	// Skip other checks if this is not enabled
+	if !actual && !dryRun {
+		return nil
+	}
+
+	var (
+		byUser      = c.TransactionLimitByUsername
+		byPrincipal = c.TransactionLimitByPrincipal
+		byComp      = c.TransactionLimitByComponent
+		bySubcomp   = c.TransactionLimitBySubcomponent
+	)
+	if byAny := byUser || byPrincipal || byComp || bySubcomp; !byAny {
+		return errors.New("no user discriminating fields selected for transaction limiter, everyone would share single chunk of transaction pool. Override with at least one of -transaction_limit_by flags set to true")
+	}
+	if v := c.TransactionLimitPerUser; v <= 0 || v >= 1 {
+		return fmt.Errorf("-transaction_limit_per_user should be a fraction within range (0, 1) (specified value: %v)", v)
+	}
+	if limit := int(c.TransactionLimitPerUser * float64(c.TransactionCap)); limit == 0 {
+		return fmt.Errorf("effective transaction limit per user is 0 due to rounding, increase -transaction_limit_per_user")
+	}
+	return nil
+}
+
 // Config contains all the current config values. It's read-only,
 // except for tests.
 var Config TabletConfig
 
 // VerifyConfig checks "Config" for contradicting flags.
 func VerifyConfig() error {
+	if err := Config.verifyTransactionLimitConfig(); err != nil {
+		return err
+	}
 	if actual, dryRun := Config.EnableHotRowProtection, Config.EnableHotRowProtectionDryRun; actual && dryRun {
 		return errors.New("only one of two flags allowed: -enable_hot_row_protection or -enable_hot_row_protection_dry_run")
 	}

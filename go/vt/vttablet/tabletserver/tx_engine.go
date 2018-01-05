@@ -57,8 +57,8 @@ func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *
 	limiter := txlimiter.New(
 		config.TransactionCap,
 		config.TransactionLimitPerUser,
-		config.TransactionLimitEnabled,
-		config.TransactionLimitDryRun,
+		config.EnableTransactionLimit,
+		config.EnableTransactionLimitDryRun,
 		config.TransactionLimitByUsername,
 		config.TransactionLimitByPrincipal,
 		config.TransactionLimitByComponent,
