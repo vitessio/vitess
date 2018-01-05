@@ -43,10 +43,6 @@ func (th *testHandler) ComQuery(c *mysql.Conn, q string, callback func(*sqltypes
 	return nil
 }
 
-func (th *testHandler) SafeToClose(c *mysql.Conn) bool {
-	return true
-}
-
 func TestConnectionUnixSocket(t *testing.T) {
 	th := &testHandler{}
 
