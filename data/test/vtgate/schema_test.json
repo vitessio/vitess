@@ -1,5 +1,5 @@
 {
-  "Keyspaces": {
+  "keyspaces": {
     "user": {
       "sharded": true,
       "vindexes": {
@@ -7,12 +7,24 @@
           "type": "hash_test",
           "owner": "user"
         },
+        "kid_index": {
+          "type": "hash_test",
+          "owner": "multicolvin"
+        },
         "user_md5_index": {
           "type": "hash_test"
         },
         "music_user_map": {
           "type": "lookup_test",
           "owner": "music"
+        },
+        "cola_map": {
+          "type": "lookup_test",
+          "owner": "multicolvin"
+        },
+        "colb_colc_map": {
+          "type": "lookup_test",
+          "owner": "multicolvin"
         },
         "name_user_map": {
           "type": "multi",
@@ -54,7 +66,15 @@
           "auto_increment": {
             "column": "id",
             "sequence": "seq"
-          }
+          },
+          "columns": [
+            {
+              "name": "predef1"
+            },
+            {
+              "name": "predef2"
+            }
+          ]
         },
         "user_metadata": {
           "column_vindexes": [
@@ -100,6 +120,22 @@
             }
           ]
         },
+        "multicolvin": {
+          "column_vindexes": [
+            {
+              "column": "kid",
+              "name": "kid_index"
+            },
+            {
+              "column": "column_a",
+              "name": "cola_map"
+            },
+            {
+              "columns": ["column_b", "column_c"],
+              "name": "colb_colc_map"
+            }
+          ]
+        },
         "music_extra": {
           "column_vindexes": [
             {
@@ -135,7 +171,16 @@
     },
     "main": {
       "tables": {
-        "unsharded": {},
+        "unsharded": {
+          "columns": [
+            {
+              "name": "predef1"
+            },
+            {
+              "name": "predef3"
+            }
+          ]
+        },
         "unsharded_a": {},
         "unsharded_b": {},
         "unsharded_auto": {

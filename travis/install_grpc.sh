@@ -27,18 +27,7 @@ if [ $? -ne 0 ]; then
       return 1
 fi
 
-# grpc_dist can be empty, in which case we just install to the default paths
-grpc_dist="$1"
-if [ -n "$grpc_dist" ]; then
-  cd $grpc_dist
-fi
-
-if [[ -z "$PIP" ]]; then
-  # PIP is not set i.e. dev.env was not loaded.
-  # We're probably doing a system-wide installation when building the Docker
-  # bootstrap image. Set the variable now.
-  PIP=pip
-fi
+cd $grpc_dist
 
 # Python requires a very recent version of virtualenv.
 # We also require a recent version of pip, as we use it to
@@ -46,22 +35,10 @@ fi
 # For instance, setuptools doesn't work with pip 6.0:
 # https://github.com/pypa/setuptools/issues/945
 # (and setuptools is used by grpc install).
-if [ -n "$grpc_dist" ]; then
-  # Non-system wide installation. Create a virtualenv, which also creates a
-  # virtualenv-boxed pip.
-
-  # Update both pip and virtualenv.
-  $VIRTUALENV -v $grpc_dist/usr/local
-  PIP=$grpc_dist/usr/local/bin/pip
-  $PIP install --upgrade pip
-  $PIP install --upgrade --ignore-installed virtualenv
-else
-  PIP=pip
-  $PIP install --upgrade pip
-  # System wide installations require an explicit upgrade of
-  # certain gRPC Python dependencies e.g. "six" on Debian Jessie.
-  $PIP install --upgrade --ignore-installed six
-fi
+$VIRTUALENV -v $grpc_dist/usr/local
+PIP=$grpc_dist/usr/local/bin/pip
+$PIP install --upgrade pip
+$PIP install --upgrade --ignore-installed virtualenv
 
 # clone the repository, setup the submodules
 git clone https://github.com/grpc/grpc.git
@@ -81,29 +58,12 @@ if [ `uname -s` == "Darwin" ]; then
      export CPPFLAGS="-Wno-deprecated-declarations"
 fi
 
-# build everything
-make
-
-cd third_party/protobuf
-# install protobuf side (it was already built by the 'make' earlier)
-if [ -n "$grpc_dist" ]; then
-    make install prefix=$grpc_dist/usr/local
-else
-    make install
-fi
-
-cd ../..
-# now install grpc itself
-if [ -n "$grpc_dist" ]; then
-  make install prefix=$grpc_dist/usr/local
-  # Add bin directory to the path such that gRPC python won't complain that
-  # it cannot find "grpc_python_plugin".
-  export PATH=$(prepend_path $PATH $grpc_dist/usr/local/bin)
-else
-  make install
-fi
-
 # Install gRPC python libraries from PyPI.
 # Dependencies like protobuf python will be installed automatically.
 grpcio_ver=1.7.0
 $PIP install --upgrade grpcio==$grpcio_ver
+
+# now install grpc_python_plugin, which also builds the protoc compiler.
+make grpc_python_plugin
+ln -sf $grpc_dist/grpc/bins/opt/protobuf/protoc $VTROOT/bin/protoc
+ln -sf $grpc_dist/grpc/bins/opt/protobuf/grpc_python_plugin $VTROOT/bin/grpc_python_plugin

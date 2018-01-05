@@ -1065,6 +1065,22 @@ var (
 		input: "select name, group_concat(score) from t group by name",
 	}, {
 		input: "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
+	}, {
+		input: "select * from t partition (p0)",
+	}, {
+		input: "select * from t partition (p0, p1)",
+	}, {
+		input: "select e.id, s.city from employees as e join stores partition (p1) as s on e.store_id = s.id",
+	}, {
+		input: "update t partition (p0) set a = 1",
+	}, {
+		input: "insert into t partition (p0) values (1, 'asdf')",
+	}, {
+		input: "insert into t1 select * from t2 partition (p0)",
+	}, {
+		input: "replace into t partition (p0) values (1, 'asdf')",
+	}, {
+		input: "delete from t partition (p0) where a = 1",
 	}}
 )
 

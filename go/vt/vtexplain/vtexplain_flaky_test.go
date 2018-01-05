@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os/exec"
+	"path"
 	"strings"
 	"testing"
 
@@ -55,11 +56,6 @@ func initTest(opts *Options, t *testing.T) {
 }
 
 func testExplain(testcase string, opts *Options, t *testing.T) {
-	// TODO(sougou): remove this skip for manual testing.
-	// We need to find a better testing strategy.
-	// These tests are almost always failing on travis.
-	t.Skip()
-
 	initTest(opts, t)
 
 	sqlFile := testfiles.Locate(fmt.Sprintf("vtexplain/%s-queries.sql", testcase))
@@ -84,8 +80,6 @@ func testExplain(testcase string, opts *Options, t *testing.T) {
 		// Print the json that was actually returned and also dump to a
 		// temp file to be able to diff the results.
 		t.Errorf("json output did not match")
-		t.Logf("got:\n%s\n", string(explainJSON))
-
 		if testOutputTempDir == "" {
 			testOutputTempDir, err = ioutil.TempDir("", "vtexplain_output")
 			if err != nil {
@@ -98,6 +92,9 @@ func testExplain(testcase string, opts *Options, t *testing.T) {
 		command := exec.Command("diff", "-u", jsonOutFile, gotFile)
 		out, _ := command.CombinedOutput()
 		t.Logf("diff:\n%s\n", out)
+
+		t.Logf("run the following command to update the expected output:")
+		t.Logf("cp %s/* %s", testOutputTempDir, path.Dir(jsonOutFile))
 	}
 
 	explainText := ExplainsAsText(explains)
@@ -105,7 +102,6 @@ func testExplain(testcase string, opts *Options, t *testing.T) {
 		// Print the Text that was actually returned and also dump to a
 		// temp file to be able to diff the results.
 		t.Errorf("Text output did not match")
-		t.Logf("got:\n%s\n", string(explainText))
 
 		if testOutputTempDir == "" {
 			testOutputTempDir, err = ioutil.TempDir("", "vtexplain_output")
@@ -119,6 +115,8 @@ func testExplain(testcase string, opts *Options, t *testing.T) {
 		command := exec.Command("diff", "-u", textOutFile, gotFile)
 		out, _ := command.CombinedOutput()
 		t.Logf("diff:\n%s\n", out)
+		t.Logf("run the following command to update the expected output:")
+		t.Logf("cp %s/* %s", testOutputTempDir, path.Dir(textOutFile))
 	}
 }
 

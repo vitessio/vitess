@@ -18,6 +18,9 @@ package grpccommon
 
 import (
 	"flag"
+	"sync"
+
+	"google.golang.org/grpc"
 )
 
 var (
@@ -27,4 +30,17 @@ var (
 	// Note: We're using 4 MiB as default value because that's the default in the
 	// gRPC 1.0.0 Go server.
 	MaxMessageSize = flag.Int("grpc_max_message_size", defaultMaxMessageSize, "Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'.")
+	// EnableTracing sets a flag to enable grpc client/server tracing.
+	EnableTracing = flag.Bool("grpc_enable_tracing", false, "Enable GRPC tracing")
 )
+
+var enableTracing sync.Once
+
+// EnableTracingOpt enables grpc tracing if requested.
+// It must be called before any grpc server or client is created but is safe
+// to be called multiple times.
+func EnableTracingOpt() {
+	enableTracing.Do(func() {
+		grpc.EnableTracing = *EnableTracing
+	})
+}

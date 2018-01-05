@@ -98,21 +98,21 @@ func (lh *LookupHash) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]by
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (lh *LookupHash) Create(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
+func (lh *LookupHash) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
 	values, err := unhashList(ksids)
 	if err != nil {
 		return fmt.Errorf("lookup.Create.vunhash: %v", err)
 	}
-	return lh.lkp.Create(vcursor, ids, values, ignoreMode)
+	return lh.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
 }
 
 // Delete deletes the entry from the vindex table.
-func (lh *LookupHash) Delete(vcursor VCursor, ids []sqltypes.Value, ksid []byte) error {
+func (lh *LookupHash) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
 	v, err := vunhash(ksid)
 	if err != nil {
 		return fmt.Errorf("lookup.Delete.vunhash: %v", err)
 	}
-	return lh.lkp.Delete(vcursor, ids, sqltypes.NewUint64(v))
+	return lh.lkp.Delete(vcursor, rowsColValues, sqltypes.NewUint64(v))
 }
 
 // MarshalJSON returns a JSON representation of LookupHash.
@@ -197,21 +197,21 @@ func (lhu *LookupHashUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (lhu *LookupHashUnique) Create(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
+func (lhu *LookupHashUnique) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
 	values, err := unhashList(ksids)
 	if err != nil {
 		return fmt.Errorf("lookup.Create.vunhash: %v", err)
 	}
-	return lhu.lkp.Create(vcursor, ids, values, ignoreMode)
+	return lhu.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
 }
 
 // Delete deletes the entry from the vindex table.
-func (lhu *LookupHashUnique) Delete(vcursor VCursor, ids []sqltypes.Value, ksid []byte) error {
+func (lhu *LookupHashUnique) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
 	v, err := vunhash(ksid)
 	if err != nil {
 		return fmt.Errorf("lookup.Delete.vunhash: %v", err)
 	}
-	return lhu.lkp.Delete(vcursor, ids, sqltypes.NewUint64(v))
+	return lhu.lkp.Delete(vcursor, rowsColValues, sqltypes.NewUint64(v))
 }
 
 // MarshalJSON returns a JSON representation of LookupHashUnique.

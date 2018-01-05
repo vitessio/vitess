@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"encoding/hex"
+	"flag"
 	"fmt"
 	"io"
 	"math"
@@ -54,6 +55,8 @@ var masterSession = &vtgatepb.Session{
 }
 
 func init() {
+	flag.CommandLine.Parse([]string{}) // prevents glog "ERROR: logging before flag.Parse"
+
 	getSandbox(KsTestUnsharded).VSchema = `
 {
 	"Sharded": false,

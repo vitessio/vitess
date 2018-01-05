@@ -305,15 +305,15 @@
 
 # update changes primary vindex column
 "update user set id = 1 where id = 1"
-"unsupported: You can't update primary vindex columns. Invalid update on column: id"
+"unsupported: You can't update primary vindex columns. Invalid update on vindex: user_index"
 
 # update changes non owned vindex column
 "update music_extra set music_id = 1 where user_id = 1"
-"unsupported: You can only update owned vindexes. Invalid update on column: music_id"
+"unsupported: You can only update owned vindexes. Invalid update on vindex: music_user_map"
 
 # update changes non lookup vindex column
 "update user_metadata set md5 = 1 where user_id = 1"
-"unsupported: You can only update lookup vindexes. Invalid update on column: md5"
+"unsupported: You can only update lookup vindexes. Invalid update on vindex: user_md5_index"
 
 # update with complex set clause
 "update music set id = id + 1 where id = 1"
@@ -321,7 +321,11 @@
 
 # update by primary keyspace id, changing one vindex column, limit without order clause
 "update user_metadata set email = 'juan@vitess.io' where user_id = 1 limit 10"
-"unsupported: Need to provide order by clause when using limit. Invalid update on column: email"
+"unsupported: Need to provide order by clause when using limit. Invalid update on vindex: email_user_map"
+
+# update multi column vindex, without values for all the vindex columns
+"update multicolvin set column_c = 2 where kid = 1"
+"unsupported: update does not have values for all the columns in vindex (colb_colc_map)"
 
 # cross-shard update tables
 "update (select id from user) as u set id = 4"
