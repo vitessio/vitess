@@ -36,6 +36,17 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
+// ExecutorMode controls the mode of operation for the vtexplain simulator
+type ExecutorMode string
+
+const (
+	// ModeMulti is the default mode with autocommit implemented at vtgate
+	ModeMulti = "multi"
+
+	// ModeTwoPC enables the twopc feature
+	ModeTwoPC = "twopc"
+)
+
 // Options to control the explain process
 type Options struct {
 	// NumShards indicates the number of shards in the topology
@@ -47,6 +58,9 @@ type Options struct {
 
 	// Normalize controls whether or not vtgate does query normalization
 	Normalize bool
+
+	// ExecutionMode must be set to one of the modes above
+	ExecutionMode string
 }
 
 // TabletQuery defines a query that was sent to a given tablet and how it was
