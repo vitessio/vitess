@@ -37,7 +37,7 @@ func defaultTestOpts() *Options {
 	}
 }
 
-func initTest(opts *Options, t *testing.T) {
+func initTest(mode string, opts *Options, t *testing.T) {
 	schema, err := ioutil.ReadFile(testfiles.Locate("vtexplain/test-schema.sql"))
 	if err != nil {
 		t.Fatalf("error: %v", err)
@@ -48,24 +48,38 @@ func initTest(opts *Options, t *testing.T) {
 		t.Fatalf("error: %v", err)
 	}
 
+	opts.ExecutionMode = mode
 	err = Init(string(vSchema), string(schema), opts)
 	if err != nil {
 		t.Fatalf("vtexplain Init error: %v", err)
 	}
-
 }
 
 func testExplain(testcase string, opts *Options, t *testing.T) {
-	initTest(opts, t)
+	modes := []string{
+		ModeMulti,
+	}
+
+	for _, mode := range modes {
+		runTestCase(testcase, mode, opts, t)
+	}
+}
+
+func runTestCase(testcase, mode string, opts *Options, t *testing.T) {
+	t.Logf("vtexplain test: %s mode: %s", testcase, mode)
+	initTest(mode, opts, t)
 
 	sqlFile := testfiles.Locate(fmt.Sprintf("vtexplain/%s-queries.sql", testcase))
 	sql, err := ioutil.ReadFile(sqlFile)
+	if err != nil {
+		t.Fatalf("vtexplain error: %v", err)
+	}
 
-	jsonOutFile := testfiles.Locate(fmt.Sprintf("vtexplain/%s-output.json", testcase))
-	jsonOut, err := ioutil.ReadFile(jsonOutFile)
+	jsonOutFile := testfiles.Locate(fmt.Sprintf("vtexplain/%s-output/%s-output.json", mode, testcase))
+	jsonOut, _ := ioutil.ReadFile(jsonOutFile)
 
-	textOutFile := testfiles.Locate(fmt.Sprintf("vtexplain/%s-output.txt", testcase))
-	textOut, err := ioutil.ReadFile(textOutFile)
+	textOutFile := testfiles.Locate(fmt.Sprintf("vtexplain/%s-output/%s-output.txt", mode, testcase))
+	textOut, _ := ioutil.ReadFile(textOutFile)
 
 	explains, err := Run(string(sql))
 	if err != nil {
@@ -155,7 +169,7 @@ func TestComments(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
-	initTest(defaultTestOpts(), t)
+	initTest(ModeMulti, defaultTestOpts(), t)
 
 	tests := []struct {
 		SQL string

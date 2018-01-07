@@ -37,6 +37,7 @@ var (
 	vschemaFlag     = flag.String("vschema", "", "Identifies the VTGate routing schema")
 	vschemaFileFlag = flag.String("vschema-file", "", "Identifies the VTGate routing schema file")
 	numShards       = flag.Int("shards", 2, "Number of shards per keyspace")
+	executionMode   = flag.String("execution-mode", "multi", "The execution mode to simulate -- must be set to multi, legacy-autocommit, or twopc")
 	replicationMode = flag.String("replication-mode", "ROW", "The replication mode to simulate -- must be set to either ROW or STATEMENT")
 	normalize       = flag.Bool("normalize", false, "Whether to enable vtgate normalization")
 	outputMode      = flag.String("output-mode", "text", "Output in human-friendly text or json")
@@ -161,6 +162,7 @@ func parseAndRun() error {
 	}
 
 	opts := &vtexplain.Options{
+		ExecutionMode:   *executionMode,
 		ReplicationMode: *replicationMode,
 		NumShards:       *numShards,
 		Normalize:       *normalize,
