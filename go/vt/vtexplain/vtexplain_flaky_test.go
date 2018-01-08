@@ -58,6 +58,10 @@ func initTest(mode string, opts *Options, t *testing.T) {
 func testExplain(testcase string, opts *Options, t *testing.T) {
 	modes := []string{
 		ModeMulti,
+
+		// TwoPC mode is functional, but the output isn't stable for
+		// tests since there are timestamps in the value rows
+		// ModeTwoPC,
 	}
 
 	for _, mode := range modes {
