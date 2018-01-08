@@ -115,7 +115,7 @@ func buildTopology(vschemaStr string, numShardsPerKeyspace int) error {
 func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error) {
 	_, err := vtgateExecutor.Execute(context.Background(), "VtexplainExecute", vtgate.NewSafeSession(vtgateSession), sql, nil)
 	if err != nil {
-		return nil, nil, fmt.Errorf("vtexplain execute error: %v in %s", err, sql)
+		return nil, nil, fmt.Errorf("vtexplain execute error in '%s': %v", sql, err)
 	}
 
 	// use the plan cache to get the set of plans used for this query, then
