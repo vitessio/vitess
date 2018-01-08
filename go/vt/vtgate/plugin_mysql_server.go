@@ -21,8 +21,9 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"sync"
+	"sync/atomic"
 	"syscall"
+	"time"
 
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
@@ -50,9 +51,7 @@ var (
 
 	mysqlSlowConnectWarnThreshold = flag.Duration("mysql_slow_connect_warn_threshold", 0, "Warn if it takes more than the given threshold for a mysql connection to establish")
 
-	busyLock = sync.Mutex{}
-	busyCond = sync.NewCond(&busyLock)
-	busy     = make(map[*mysql.Conn]bool)
+	busyConnections int32
 )
 
 // vtgateHandler implements the Listener interface.
@@ -76,6 +75,9 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	ctx := context.Background()
 	session, _ := c.ClientData.(*vtgatepb.Session)
 	if session != nil {
+		if session.InTransaction {
+			defer atomic.AddInt32(&busyConnections, -1)
+		}
 		_, _, _ = vh.vtg.Execute(ctx, session, "rollback", make(map[string]*querypb.BindVariable))
 	}
 }
@@ -109,16 +111,12 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		}
 	}
 
-	busyLock.Lock()
-	busy[c] = true
-	busyLock.Unlock()
+	if !session.InTransaction {
+		atomic.AddInt32(&busyConnections, 1)
+	}
 	defer func() {
-		busyLock.Lock()
-		defer busyLock.Unlock()
-		busy[c] = session.InTransaction
 		if !session.InTransaction {
-			// This will wake up the OnTerm function if it's waiting for connections to become non-busy.
-			busyCond.Broadcast()
+			atomic.AddInt32(&busyConnections, -1)
 		}
 	}()
 
@@ -232,45 +230,26 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 	}
 }
 
-func closeMysqlConnections() {
-	if mysqlListener != nil {
-		mysqlListener.Close()
-		mysqlListener = nil
-	}
-	if mysqlUnixListener != nil {
-		mysqlUnixListener.Close()
-		mysqlUnixListener = nil
-	}
-	busyLock.Lock()
-	defer busyLock.Unlock()
-	if len(busy) == 0 {
-		log.Info("No mysql connections to drain.")
-		return
-	}
-	log.Infof("Draining %v mysql connection(s)...", len(busy))
-	for {
-		var notFinished bool
-		for c, connIsBusy := range busy {
-			if !connIsBusy {
-				c.Close()
-				delete(busy, c)
-			} else {
-				notFinished = true
-			}
-		}
-		if notFinished {
-			busyCond.Wait()
-			continue
-		}
-		break
-	}
-	log.Info("Drained mysql connections successfully.")
-}
-
 func init() {
 	servenv.OnRun(initMySQLProtocol)
 
-	servenv.OnTermSync(closeMysqlConnections)
+	servenv.OnTermSync(func() {
+		if mysqlListener != nil {
+			mysqlListener.Close()
+			mysqlListener = nil
+		}
+		if mysqlUnixListener != nil {
+			mysqlUnixListener.Close()
+			mysqlUnixListener = nil
+		}
+
+		if atomic.LoadInt32(&busyConnections) > 0 {
+			log.Infof("Waiting for all client connections to be idle...")
+			for atomic.LoadInt32(&busyConnections) > 0 {
+				time.Sleep(1 * time.Millisecond)
+			}
+		}
+	})
 }
 
 var pluginInitializers []func()
