@@ -214,5 +214,414 @@
                 ]
             }
         }
+    },
+    {
+        "SQL": "update user set name='alicia' where id=1",
+        "Plans": [
+            {
+                "Original": "insert into name_user_map(name, user_id) values (:name0, :user_id0)",
+                "Instructions": {
+                    "Opcode": "InsertSharded",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert into name_user_map(name, user_id) values (:_name0, :user_id0)",
+                    "Values": [
+                        [
+                            [
+                                ":name0"
+                            ]
+                        ]
+                    ],
+                    "Table": "name_user_map",
+                    "Prefix": "insert into name_user_map(name, user_id) values ",
+                    "Mid": [
+                        "(:_name0, :user_id0)"
+                    ]
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            },
+            {
+                "Original": "delete from name_user_map where name = :name and user_id = :user_id",
+                "Instructions": {
+                    "Opcode": "DeleteEqual",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "delete from name_user_map where name = :name and user_id = :user_id",
+                    "Vindex": "md5",
+                    "Values": [
+                        ":name"
+                    ],
+                    "Table": "name_user_map"
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            },
+            {
+                "Original": "update user set name = :vtg1 where id = :vtg2",
+                "Instructions": {
+                    "Opcode": "UpdateEqual",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "update user set name = :vtg1 where id = :vtg2",
+                    "Vindex": "hash",
+                    "Values": [
+                        ":vtg2"
+                    ],
+                    "ChangedVindexValues": {
+                        "name_user_map": [
+                            ":vtg1"
+                        ]
+                    },
+                    "Table": "user",
+                    "Subquery": "select name from user where id = :vtg2 for update"
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 2,
+                "Rows": 1,
+                "Errors": 0
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-40": {
+                "TabletQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "select name from user where id = :vtg2 for update",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "vtg1": "'alicia'",
+                            "vtg2": "1"
+                        }
+                    },
+                    {
+                        "Time": 4,
+                        "SQL": "update user set name = :vtg1 where id = :vtg2 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "_name0": "'alicia'",
+                            "vtg1": "'alicia'",
+                            "vtg2": "1"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 1,
+                        "SQL": "select name from user where id = 1 limit 10001 for update"
+                    },
+                    {
+                        "Time": 4,
+                        "SQL": "update user set name = 'alicia' where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */"
+                    },
+                    {
+                        "Time": 5,
+                        "SQL": "commit"
+                    }
+                ]
+            },
+            "ks_sharded/80-c0": {
+                "TabletQueries": [
+                    {
+                        "Time": 2,
+                        "SQL": "delete from name_user_map where name = :name and user_id = :user_id /* vtgate:: keyspace_id:a6e89b54b129c33051b76db219595660 */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "name": "'name_val_1'",
+                            "user_id": "1"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 2,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 2,
+                        "SQL": "delete from name_user_map where (name = 'name_val_1' and user_id = 1) /* vtgate:: keyspace_id:a6e89b54b129c33051b76db219595660 */"
+                    },
+                    {
+                        "Time": 6,
+                        "SQL": "commit"
+                    }
+                ]
+            },
+            "ks_sharded/c0-": {
+                "TabletQueries": [
+                    {
+                        "Time": 3,
+                        "SQL": "insert into name_user_map(name, user_id) values (:_name0, :user_id0) /* vtgate:: keyspace_id:e2821261367fbee90bb5cf72955146c6 */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "_name0": "'alicia'",
+                            "name0": "'alicia'",
+                            "user_id0": "1"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 3,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 3,
+                        "SQL": "insert into name_user_map(name, user_id) values ('alicia', 1) /* vtgate:: keyspace_id:e2821261367fbee90bb5cf72955146c6 */"
+                    },
+                    {
+                        "Time": 7,
+                        "SQL": "commit"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "update user set name='alicia' where name='alice'",
+        "Plans": [
+            {
+                "Original": "insert into name_user_map(name, user_id) values (:name0, :user_id0)",
+                "Instructions": {
+                    "Opcode": "InsertSharded",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "insert into name_user_map(name, user_id) values (:_name0, :user_id0)",
+                    "Values": [
+                        [
+                            [
+                                ":name0"
+                            ]
+                        ]
+                    ],
+                    "Table": "name_user_map",
+                    "Prefix": "insert into name_user_map(name, user_id) values ",
+                    "Mid": [
+                        "(:_name0, :user_id0)"
+                    ]
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            },
+            {
+                "Original": "delete from name_user_map where name = :name and user_id = :user_id",
+                "Instructions": {
+                    "Opcode": "DeleteEqual",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "delete from name_user_map where name = :name and user_id = :user_id",
+                    "Vindex": "md5",
+                    "Values": [
+                        ":name"
+                    ],
+                    "Table": "name_user_map"
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            },
+            {
+                "Original": "select user_id from name_user_map where name = :name",
+                "Instructions": {
+                    "Opcode": "SelectEqualUnique",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "select user_id from name_user_map where name = :name",
+                    "FieldQuery": "select user_id from name_user_map where 1 != 1",
+                    "Vindex": "md5",
+                    "Values": [
+                        ":name"
+                    ]
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            },
+            {
+                "Original": "update user set name = :vtg1 where name = :vtg2",
+                "Instructions": {
+                    "Opcode": "UpdateEqual",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "update user set name = :vtg1 where name = :vtg2",
+                    "Vindex": "name_user_map",
+                    "Values": [
+                        ":vtg2"
+                    ],
+                    "ChangedVindexValues": {
+                        "name_user_map": [
+                            ":vtg1"
+                        ]
+                    },
+                    "Table": "user",
+                    "Subquery": "select name from user where name = :vtg2 for update"
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 2,
+                "Rows": 1,
+                "Errors": 0
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-40": {
+                "TabletQueries": [
+                    {
+                        "Time": 2,
+                        "SQL": "select name from user where name = :vtg2 for update",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "vtg1": "'alicia'",
+                            "vtg2": "'alice'"
+                        }
+                    },
+                    {
+                        "Time": 5,
+                        "SQL": "update user set name = :vtg1 where name = :vtg2 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "_name0": "'alicia'",
+                            "vtg1": "'alicia'",
+                            "vtg2": "'alice'"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 2,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 2,
+                        "SQL": "select name from user where name = 'alice' limit 10001 for update"
+                    },
+                    {
+                        "Time": 5,
+                        "SQL": "select id from user where name = 'alice' limit 10001 for update /* vtgate:: keyspace_id:166b40b44aba4bd6 */"
+                    },
+                    {
+                        "Time": 5,
+                        "SQL": "update user set name = 'alicia' where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */"
+                    },
+                    {
+                        "Time": 7,
+                        "SQL": "commit"
+                    }
+                ]
+            },
+            "ks_sharded/40-80": {
+                "TabletQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "select user_id from name_user_map where name = :name",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "name": "'alice'"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 1,
+                        "SQL": "select user_id from name_user_map where name = 'alice' limit 10001"
+                    },
+                    {
+                        "Time": 6,
+                        "SQL": "commit"
+                    }
+                ]
+            },
+            "ks_sharded/80-c0": {
+                "TabletQueries": [
+                    {
+                        "Time": 3,
+                        "SQL": "delete from name_user_map where name = :name and user_id = :user_id /* vtgate:: keyspace_id:a6e89b54b129c33051b76db219595660 */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "name": "'name_val_1'",
+                            "user_id": "1"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 3,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 3,
+                        "SQL": "delete from name_user_map where (name = 'name_val_1' and user_id = 1) /* vtgate:: keyspace_id:a6e89b54b129c33051b76db219595660 */"
+                    },
+                    {
+                        "Time": 8,
+                        "SQL": "commit"
+                    }
+                ]
+            },
+            "ks_sharded/c0-": {
+                "TabletQueries": [
+                    {
+                        "Time": 4,
+                        "SQL": "insert into name_user_map(name, user_id) values (:_name0, :user_id0) /* vtgate:: keyspace_id:e2821261367fbee90bb5cf72955146c6 */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "_name0": "'alicia'",
+                            "name0": "'alicia'",
+                            "user_id0": "1"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 4,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 4,
+                        "SQL": "insert into name_user_map(name, user_id) values ('alicia', 1) /* vtgate:: keyspace_id:e2821261367fbee90bb5cf72955146c6 */"
+                    },
+                    {
+                        "Time": 9,
+                        "SQL": "commit"
+                    }
+                ]
+            }
+        }
     }
 ]
