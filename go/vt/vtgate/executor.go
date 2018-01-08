@@ -578,20 +578,24 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 
 			for _, colVindex := range table.ColumnVindexes {
 				vindex, ok := ks.Vindexes[colVindex.GetName()]
+				columns := colVindex.GetColumns()
+				if len(columns) == 0 {
+					columns = []string{colVindex.GetColumn()}
+				}
 				if ok {
 					params := make([]string, 0, 4)
 					for k, v := range vindex.GetParams() {
 						params = append(params, fmt.Sprintf("%s=%s", k, v))
 					}
 					sort.Strings(params)
-					rows = append(rows, buildVarCharRow(colVindex.GetColumn(), colVindex.GetName(), vindex.GetType(), strings.Join(params, ", "), vindex.GetOwner()))
+					rows = append(rows, buildVarCharRow(strings.Join(columns, ", "), colVindex.GetName(), vindex.GetType(), strings.Join(params, "; "), vindex.GetOwner()))
 				} else {
-					rows = append(rows, buildVarCharRow(colVindex.GetColumn(), colVindex.GetName(), "", "", ""))
+					rows = append(rows, buildVarCharRow(strings.Join(columns, ", "), colVindex.GetName(), "", "", ""))
 				}
 			}
 
 			return &sqltypes.Result{
-				Fields:       buildVarCharFields("Column", "Name", "Type", "Params", "Owner"),
+				Fields:       buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
 				Rows:         rows,
 				RowsAffected: uint64(len(rows)),
 			}, nil
@@ -620,7 +624,7 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 					params = append(params, fmt.Sprintf("%s=%s", k, v))
 				}
 				sort.Strings(params)
-				rows = append(rows, buildVarCharRow(ksName, vindexName, vindex.GetType(), strings.Join(params, ", "), vindex.GetOwner()))
+				rows = append(rows, buildVarCharRow(ksName, vindexName, vindex.GetType(), strings.Join(params, "; "), vindex.GetOwner()))
 			}
 		}
 		return &sqltypes.Result{
