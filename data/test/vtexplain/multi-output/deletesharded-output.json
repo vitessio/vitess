@@ -1,6 +1,119 @@
 [
     {
-        "SQL": "delete from user where id=10",
+        "SQL": "delete from music_extra where id=1",
+        "Plans": [
+            {
+                "Original": "delete from music_extra where id = :vtg1",
+                "Instructions": {
+                    "Opcode": "DeleteEqual",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "delete from music_extra where id = :vtg1",
+                    "Vindex": "hash",
+                    "Values": [
+                        ":vtg1"
+                    ],
+                    "Table": "music_extra"
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-40": {
+                "TabletQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "delete from music_extra where id = :vtg1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "vtg1": "1"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 1,
+                        "SQL": "delete from music_extra where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */"
+                    },
+                    {
+                        "Time": 2,
+                        "SQL": "commit"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "delete from music_extra where id=1 and extra='abc'",
+        "Plans": [
+            {
+                "Original": "delete from music_extra where id = :vtg1 and extra = :vtg2",
+                "Instructions": {
+                    "Opcode": "DeleteEqual",
+                    "Keyspace": {
+                        "Name": "ks_sharded",
+                        "Sharded": true
+                    },
+                    "Query": "delete from music_extra where id = :vtg1 and extra = :vtg2",
+                    "Vindex": "hash",
+                    "Values": [
+                        ":vtg1"
+                    ],
+                    "Table": "music_extra"
+                },
+                "ExecCount": 1,
+                "ExecTime": 0,
+                "ShardQueries": 1,
+                "Rows": 1,
+                "Errors": 0
+            }
+        ],
+        "TabletActions": {
+            "ks_sharded/-40": {
+                "TabletQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "delete from music_extra where id = :vtg1 and extra = :vtg2 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+                        "BindVars": {
+                            "#maxLimit": "10001",
+                            "vtg1": "1",
+                            "vtg2": "'abc'"
+                        }
+                    }
+                ],
+                "MysqlQueries": [
+                    {
+                        "Time": 1,
+                        "SQL": "begin"
+                    },
+                    {
+                        "Time": 1,
+                        "SQL": "select id from music_extra where id = 1 and extra = 'abc' limit 10001 for update /* vtgate:: keyspace_id:166b40b44aba4bd6 */"
+                    },
+                    {
+                        "Time": 1,
+                        "SQL": "delete from music_extra where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */"
+                    },
+                    {
+                        "Time": 2,
+                        "SQL": "commit"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "SQL": "delete from user where id=1",
         "Plans": [
             {
                 "Original": "delete from name_user_map where name = :name and user_id = :user_id",
@@ -47,22 +160,22 @@
             }
         ],
         "TabletActions": {
-            "ks_sharded/40-80": {
+            "ks_sharded/-40": {
                 "TabletQueries": [
                     {
                         "Time": 1,
                         "SQL": "select name from user where id = :vtg1 for update",
                         "BindVars": {
                             "#maxLimit": "10001",
-                            "vtg1": "10"
+                            "vtg1": "1"
                         }
                     },
                     {
                         "Time": 3,
-                        "SQL": "delete from user where id = :vtg1 /* vtgate:: keyspace_id:594764e1a2b2d98e */",
+                        "SQL": "delete from user where id = :vtg1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
                         "BindVars": {
                             "#maxLimit": "10001",
-                            "vtg1": "10"
+                            "vtg1": "1"
                         }
                     }
                 ],
@@ -73,11 +186,11 @@
                     },
                     {
                         "Time": 1,
-                        "SQL": "select name from user where id = 10 limit 10001 for update"
+                        "SQL": "select name from user where id = 1 limit 10001 for update"
                     },
                     {
                         "Time": 3,
-                        "SQL": "delete from user where id in (10) /* vtgate:: keyspace_id:594764e1a2b2d98e */"
+                        "SQL": "delete from user where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */"
                     },
                     {
                         "Time": 4,
@@ -93,7 +206,7 @@
                         "BindVars": {
                             "#maxLimit": "10001",
                             "name": "'name_val_1'",
-                            "user_id": "10"
+                            "user_id": "1"
                         }
                     }
                 ],
@@ -104,7 +217,7 @@
                     },
                     {
                         "Time": 2,
-                        "SQL": "delete from name_user_map where (name = 'name_val_1' and user_id = 10) /* vtgate:: keyspace_id:a6e89b54b129c33051b76db219595660 */"
+                        "SQL": "delete from name_user_map where (name = 'name_val_1' and user_id = 1) /* vtgate:: keyspace_id:a6e89b54b129c33051b76db219595660 */"
                     },
                     {
                         "Time": 5,
