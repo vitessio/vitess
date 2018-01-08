@@ -466,11 +466,10 @@ func binaryPath(root, binary string) (string, error) {
 		binary, root, strings.Join(subdirs, ","))
 }
 
-// Init will create the default directory structure for the mysqld process,
-// generate / configure a my.cnf file, install a skeleton database,
-// and apply the provided initial SQL file.
-func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
-	log.Infof("mysqlctl.Init")
+// InitConfig will create the default directory structure for the mysqld process,
+// generate / configure a my.cnf file.
+func (mysqld *Mysqld) InitConfig() error {
+	log.Infof("mysqlctl.InitConfig")
 	err := mysqld.createDirs()
 	if err != nil {
 		log.Errorf("%s", err.Error())
@@ -487,7 +486,19 @@ func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 		log.Errorf("failed creating %v: %v", mysqld.config.path, err)
 		return err
 	}
+	return nil
+}
 
+// Init will create the default directory structure for the mysqld process,
+// generate / configure a my.cnf file install a skeleton database,
+// and apply the provided initial SQL file.
+func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
+	log.Infof("mysqlctl.Init")
+	err := mysqld.InitConfig()
+	if err != nil {
+		log.Errorf("%s", err.Error())
+		return err
+	}
 	// Install data dir.
 	if err = mysqld.installDataDir(); err != nil {
 		return err
