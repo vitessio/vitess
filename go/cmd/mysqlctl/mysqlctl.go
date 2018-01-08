@@ -50,6 +50,21 @@ const (
 	dbconfigFlags = dbconfigs.DbaConfig
 )
 
+func initConfigCmd(subFlags *flag.FlagSet, args []string) error {
+	subFlags.Parse(args)
+
+	// Generate my.cnf from scratch and use it to find mysqld.
+	mysqld, err := mysqlctl.CreateMysqld(uint32(*tabletUID), *mysqlSocket, int32(*mysqlPort), dbconfigFlags)
+	if err != nil {
+		return fmt.Errorf("failed to initialize mysql config: %v", err)
+	}
+	defer mysqld.Close()
+	if err := mysqld.InitConfig(); err != nil {
+		return fmt.Errorf("failed to init mysql config: %v", err)
+	}
+	return nil
+}
+
 func initCmd(subFlags *flag.FlagSet, args []string) error {
 	waitTime := subFlags.Duration("wait_time", 5*time.Minute, "how long to wait for startup")
 	initDBSQLFile := subFlags.String("init_db_sql_file", "", "path to .sql file to run after mysql_install_db")
@@ -189,6 +204,8 @@ type command struct {
 var commands = []command{
 	{"init", initCmd, "[-wait_time=5m] [-init_db_sql_file=]",
 		"Initalizes the directory structure and starts mysqld"},
+	{"init_config", initConfigCmd, "",
+		"Initalizes the directory structure, creates my.cnf file, but does not start mysqld"},
 	{"reinit_config", reinitConfigCmd, "",
 		"Reinitalizes my.cnf file with new server_id"},
 	{"teardown", teardownCmd, "[-wait_time=5m] [-force]",
