@@ -71,11 +71,18 @@ type explainTablet struct {
 	currentTime   int
 }
 
-func newTablet(t *topodatapb.Tablet) *explainTablet {
+func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 	db := fakesqldb.New(nil)
 
+	config := tabletenv.DefaultQsConfig
+	if opts.ExecutionMode == ModeTwoPC {
+		config.TwoPCCoordinatorAddress = "XXX"
+		config.TwoPCAbandonAge = 1.0
+		config.TwoPCEnable = true
+	}
+
 	// XXX much of this is cloned from the tabletserver tests
-	tsv := tabletserver.NewTabletServerWithNilTopoServer(tabletenv.DefaultQsConfig)
+	tsv := tabletserver.NewTabletServerWithNilTopoServer(config)
 
 	tablet := explainTablet{db: db, tsv: tsv}
 	db.Handler = &tablet
@@ -153,6 +160,62 @@ func (t *explainTablet) Execute(ctx context.Context, target *querypb.Target, sql
 	return t.tsv.Execute(ctx, target, sql, bindVariables, transactionID, options)
 }
 
+// Prepare is part of the QueryService interface.
+func (t *explainTablet) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	t.mu.Lock()
+	t.currentTime = batchTime.Wait()
+	t.mu.Unlock()
+	return t.tsv.Prepare(ctx, target, transactionID, dtid)
+}
+
+// CommitPrepared commits the prepared transaction.
+func (t *explainTablet) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	t.mu.Lock()
+	t.currentTime = batchTime.Wait()
+	t.mu.Unlock()
+	return t.tsv.CommitPrepared(ctx, target, dtid)
+}
+
+// CreateTransaction is part of the QueryService interface.
+func (t *explainTablet) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
+	t.mu.Lock()
+	t.currentTime = batchTime.Wait()
+	t.mu.Unlock()
+	return t.tsv.CreateTransaction(ctx, target, dtid, participants)
+}
+
+// StartCommit is part of the QueryService interface.
+func (t *explainTablet) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	t.mu.Lock()
+	t.currentTime = batchTime.Wait()
+	t.mu.Unlock()
+	return t.tsv.StartCommit(ctx, target, transactionID, dtid)
+}
+
+// SetRollback is part of the QueryService interface.
+func (t *explainTablet) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error) {
+	t.mu.Lock()
+	t.currentTime = batchTime.Wait()
+	t.mu.Unlock()
+	return t.tsv.SetRollback(ctx, target, dtid, transactionID)
+}
+
+// ConcludeTransaction is part of the QueryService interface.
+func (t *explainTablet) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	t.mu.Lock()
+	t.currentTime = batchTime.Wait()
+	t.mu.Unlock()
+	return t.tsv.ConcludeTransaction(ctx, target, dtid)
+}
+
+// ReadTransaction is part of the QueryService interface.
+func (t *explainTablet) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
+	t.mu.Lock()
+	t.currentTime = batchTime.Wait()
+	t.mu.Unlock()
+	return t.tsv.ReadTransaction(ctx, target, dtid)
+}
+
 // BeginExecute is part of the QueryService interface.
 func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
 	t.mu.Lock()
@@ -214,6 +277,77 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 				sqltypes.NewVarBinary("binlog_format"),
 				sqltypes.NewVarBinary(opts.ReplicationMode),
 			}},
+		},
+		"set @@session.sql_log_bin = 0": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}},
+			RowsAffected: 0,
+			Rows:         [][]sqltypes.Value{},
+		},
+		"create database if not exists `_vt`": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}},
+			RowsAffected: 0,
+			Rows:         [][]sqltypes.Value{},
+		},
+		"drop table if exists `_vt`.redo_log_transaction": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}},
+			RowsAffected: 0,
+			Rows:         [][]sqltypes.Value{},
+		},
+		"drop table if exists `_vt`.redo_log_statement": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}},
+			RowsAffected: 0,
+			Rows:         [][]sqltypes.Value{},
+		},
+		"drop table if exists `_vt`.transaction": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}},
+			RowsAffected: 0,
+			Rows:         [][]sqltypes.Value{},
+		},
+		"drop table if exists `_vt`.participant": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}},
+			RowsAffected: 0,
+			Rows:         [][]sqltypes.Value{},
+		},
+		"create table if not exists `_vt`.redo_state(\n  dtid varbinary(512),\n  state bigint,\n  time_created bigint,\n  primary key(dtid)\n\t) engine=InnoDB": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}},
+			RowsAffected: 0,
+			Rows:         [][]sqltypes.Value{},
+		},
+		"create table if not exists `_vt`.redo_statement(\n  dtid varbinary(512),\n  id bigint,\n  statement mediumblob,\n  primary key(dtid, id)\n\t) engine=InnoDB": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}},
+			RowsAffected: 0,
+			Rows:         [][]sqltypes.Value{},
+		},
+		"create table if not exists `_vt`.dt_state(\n  dtid varbinary(512),\n  state bigint,\n  time_created bigint,\n  primary key(dtid)\n\t) engine=InnoDB": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}},
+			RowsAffected: 0,
+			Rows:         [][]sqltypes.Value{},
+		},
+		"create table if not exists `_vt`.dt_participant(\n  dtid varbinary(512),\n\tid bigint,\n\tkeyspace varchar(256),\n\tshard varchar(256),\n  primary key(dtid, id)\n\t) engine=InnoDB": {
+
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}},
+			RowsAffected: 0,
+			Rows:         [][]sqltypes.Value{},
 		},
 	}
 

@@ -55,9 +55,9 @@ func initVtgateExecutor(vSchemaStr string, opts *Options) error {
 	explainTopo = &ExplainTopo{NumShards: opts.NumShards}
 	healthCheck = discovery.NewFakeHealthCheck()
 
-	resolver := newFakeResolver(healthCheck, explainTopo, vtexplainCell)
+	resolver := newFakeResolver(opts, healthCheck, explainTopo, vtexplainCell)
 
-	err := buildTopology(vSchemaStr, opts.NumShards)
+	err := buildTopology(opts, vSchemaStr, opts.NumShards)
 	if err != nil {
 		return err
 	}
@@ -69,15 +69,20 @@ func initVtgateExecutor(vSchemaStr string, opts *Options) error {
 	return nil
 }
 
-func newFakeResolver(hc discovery.HealthCheck, serv srvtopo.Server, cell string) *vtgate.Resolver {
+func newFakeResolver(opts *Options, hc discovery.HealthCheck, serv srvtopo.Server, cell string) *vtgate.Resolver {
 	gw := gateway.GetCreator()(hc, nil, serv, cell, 3)
 	gw.WaitForTablets(context.Background(), []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
-	tc := vtgate.NewTxConn(gw, vtgatepb.TransactionMode_MULTI)
+
+	txMode := vtgatepb.TransactionMode_MULTI
+	if opts.ExecutionMode == ModeTwoPC {
+		txMode = vtgatepb.TransactionMode_TWOPC
+	}
+	tc := vtgate.NewTxConn(gw, txMode)
 	sc := vtgate.NewScatterConn("", tc, gw, hc)
 	return vtgate.NewResolver(serv, cell, sc)
 }
 
-func buildTopology(vschemaStr string, numShardsPerKeyspace int) error {
+func buildTopology(opts *Options, vschemaStr string, numShardsPerKeyspace int) error {
 	explainTopo.Lock.Lock()
 	defer explainTopo.Lock.Unlock()
 
@@ -103,7 +108,7 @@ func buildTopology(vschemaStr string, numShardsPerKeyspace int) error {
 			log.Infof("registering test tablet %s for keyspace %s shard %s", hostname, ks, shard)
 
 			tablet := healthCheck.AddFakeTablet(vtexplainCell, hostname, 1, ks, shard, topodatapb.TabletType_MASTER, true, 1, nil, func(t *topodatapb.Tablet) queryservice.QueryService {
-				return newTablet(t)
+				return newTablet(opts, t)
 			})
 			explainTopo.TabletConns[hostname] = tablet.(*explainTablet)
 		}
