@@ -177,22 +177,22 @@ func TestErrors(t *testing.T) {
 	}{
 		{
 			SQL: "INVALID SQL",
-			Err: "vtexplain execute error: unrecognized statement: INVALID SQL in INVALID SQL",
+			Err: "vtexplain execute error in 'INVALID SQL': unrecognized statement: INVALID SQL",
 		},
 
 		{
 			SQL: "SELECT * FROM THIS IS NOT SQL",
-			Err: "vtexplain execute error: syntax error at position 22 near 'is' in SELECT * FROM THIS IS NOT SQL",
+			Err: "vtexplain execute error in 'SELECT * FROM THIS IS NOT SQL': syntax error at position 22 near 'is'",
 		},
 
 		{
 			SQL: "SELECT * FROM table_not_in_vschema",
-			Err: "vtexplain execute error: table table_not_in_vschema not found in SELECT * FROM table_not_in_vschema",
+			Err: "vtexplain execute error in 'SELECT * FROM table_not_in_vschema': table table_not_in_vschema not found",
 		},
 
 		{
 			SQL: "SELECT * FROM table_not_in_schema",
-			Err: "vtexplain execute error: target: ks_unsharded.-.master, used tablet: explainCell-0 (ks_unsharded/-), table table_not_in_schema not found in schema in SELECT * FROM table_not_in_schema",
+			Err: "vtexplain execute error in 'SELECT * FROM table_not_in_schema': target: ks_unsharded.-.master, used tablet: explainCell-0 (ks_unsharded/-), table table_not_in_schema not found in schema",
 		},
 	}
 
