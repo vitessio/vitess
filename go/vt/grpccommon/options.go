@@ -20,6 +20,7 @@ import (
 	"flag"
 	"sync"
 
+	"github.com/youtube/vitess/go/stats"
 	"google.golang.org/grpc"
 )
 
@@ -43,4 +44,8 @@ func EnableTracingOpt() {
 	enableTracing.Do(func() {
 		grpc.EnableTracing = *EnableTracing
 	})
+}
+
+func init() {
+	stats.NewString("GrpcVersion").Set(grpc.Version)
 }
