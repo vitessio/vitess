@@ -950,6 +950,12 @@ var (
 		input:  "show session variables",
 		output: "show session",
 	}, {
+		input:  "show vindexes",
+		output: "show vindexes",
+	}, {
+		input:  "show vindexes on t",
+		output: "show vindexes on t",
+	}, {
 		input:  "show vitess_keyspaces",
 		output: "show vitess_keyspaces",
 	}, {

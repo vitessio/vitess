@@ -149,6 +149,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
+%token <bytes> VINDEX VINDEXES
 
 // Type Tokens
 %token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
@@ -1086,6 +1087,14 @@ show_statement:
 | SHOW TABLES ddl_force_eof
   {
     $$ = &Show{Type: string($2)}
+  }
+| SHOW VINDEXES
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW VINDEXES ON table_name
+  {
+    $$ = &Show{Type: string($2), OnTable: $4}
   }
 | SHOW VITESS_KEYSPACES
   {
@@ -2608,6 +2617,8 @@ non_reserved_keyword:
 | VARBINARY
 | VARCHAR
 | VIEW
+| VINDEX
+| VINDEXES
 | VITESS_KEYSPACES
 | VITESS_SHARDS
 | VSCHEMA_TABLES
