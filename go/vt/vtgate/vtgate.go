@@ -833,10 +833,35 @@ func (vtg *VTGate) SplitQuery(
 		for _, shardRef := range shardRefs {
 			shardRefByName[shardRef.Name] = shardRef
 		}
-		querySplitToQueryPartFunc = getQuerySplitToKeyRangePartFunc(keyspace, shardRefByName)
+		querySplitToQueryPartFunc = func(querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
+			// TODO(erez): Assert that shardRefByName contains an entry for 'shard'.
+			// Keyrange can be nil for the shard (e.g. for single-sharded keyspaces during resharding).
+			// In this case we append an empty keyrange that represents the entire keyspace.
+			keyranges := []*topodatapb.KeyRange{{Start: []byte{}, End: []byte{}}}
+			if shardRefByName[shard].KeyRange != nil {
+				keyranges = []*topodatapb.KeyRange{shardRefByName[shard].KeyRange}
+			}
+			return &vtgatepb.SplitQueryResponse_Part{
+				Query: querySplit.Query,
+				KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{
+					Keyspace:  keyspace,
+					KeyRanges: keyranges,
+				},
+				Size: querySplit.RowCount,
+			}, nil
+		}
 	} else {
 		// Keyspace is either unsharded or custom-sharded.
-		querySplitToQueryPartFunc = getQuerySplitToShardPartFunc(keyspace)
+		querySplitToQueryPartFunc = func(querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
+			return &vtgatepb.SplitQueryResponse_Part{
+				Query: querySplit.Query,
+				ShardPart: &vtgatepb.SplitQueryResponse_ShardPart{
+					Keyspace: keyspace,
+					Shards:   []string{shard},
+				},
+				Size: querySplit.RowCount,
+			}, nil
+		}
 	}
 
 	// Collect all shard names into a slice.
@@ -855,53 +880,6 @@ func (vtg *VTGate) SplitQuery(
 		shardNames,
 		querySplitToQueryPartFunc,
 		keyspace)
-}
-
-// getQuerySplitToKeyRangePartFunc returns a function to use with scatterConn.SplitQuery
-// that converts the given QuerySplit to a SplitQueryResponse_Part message whose KeyRangePart field
-// is set.
-func getQuerySplitToKeyRangePartFunc(
-	keyspace string,
-	shardReferenceByName map[string]*topodatapb.ShardReference) func(
-	querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
-
-	return func(
-		querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
-		// TODO(erez): Assert that shardReferenceByName contains an entry for 'shard'.
-		// Keyrange can be nil for the shard (e.g. for single-sharded keyspaces during resharding).
-		// In this case we append an empty keyrange that represents the entire keyspace.
-		keyranges := []*topodatapb.KeyRange{{Start: []byte{}, End: []byte{}}}
-		if shardReferenceByName[shard].KeyRange != nil {
-			keyranges = []*topodatapb.KeyRange{shardReferenceByName[shard].KeyRange}
-		}
-		return &vtgatepb.SplitQueryResponse_Part{
-			Query: querySplit.Query,
-			KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{
-				Keyspace:  keyspace,
-				KeyRanges: keyranges,
-			},
-			Size: querySplit.RowCount,
-		}, nil
-	}
-}
-
-// getQuerySplitToShardPartFunc returns a function to use with scatterConn.SplitQuery
-// that converts the given QuerySplit to a SplitQueryResponse_Part message whose ShardPart field
-// is set.
-func getQuerySplitToShardPartFunc(keyspace string) func(
-	querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
-
-	return func(
-		querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
-		return &vtgatepb.SplitQueryResponse_Part{
-			Query: querySplit.Query,
-			ShardPart: &vtgatepb.SplitQueryResponse_ShardPart{
-				Keyspace: keyspace,
-				Shards:   []string{shard},
-			},
-			Size: querySplit.RowCount,
-		}, nil
-	}
 }
 
 // GetSrvKeyspace is part of the vtgate service API.

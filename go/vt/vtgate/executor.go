@@ -111,7 +111,7 @@ func NewExecutor(ctx context.Context, serv topo.SrvTopoServer, cell, statsName s
 // Execute executes a non-streaming query.
 func (e *Executor) Execute(ctx context.Context, method string, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (result *sqltypes.Result, err error) {
 	logStats := NewLogStats(ctx, method, sql, bindVars)
-	result, err = e.execute(ctx, method, session, sql, bindVars, logStats)
+	result, err = e.execute(ctx, session, sql, bindVars, logStats)
 	logStats.Error = err
 
 	// The mysql plugin runs an implicit rollback whenever a connection closes.
@@ -123,7 +123,7 @@ func (e *Executor) Execute(ctx context.Context, method string, session *vtgatepb
 	return result, err
 }
 
-func (e *Executor) execute(ctx context.Context, method string, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (*sqltypes.Result, error) {
 	// Start an implicit transaction if necessary.
 	// TODO(sougou): deprecate legacyMode after all users are migrated out.
 	if !e.legacyAutocommit && !session.Autocommit && !session.InTransaction {

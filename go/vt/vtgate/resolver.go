@@ -370,7 +370,9 @@ func (res *Resolver) MessageStream(ctx context.Context, keyspace string, shard s
 		keyspace, _, _, err = getKeyspaceShards(ctx, res.toposerv, res.cell, keyspace, topodatapb.TabletType_MASTER)
 		shards = []string{shard}
 	} else {
-		// If we pass in a KeyRange, resolve it to one shard only for now.
+		// If we pass in a KeyRange, resolve it to the proper shards.
+		// Note we support multiple shards here, we will just aggregate
+		// the message streams.
 		keyspace, shards, err = mapExactShards(ctx, res.toposerv, res.cell, keyspace, topodatapb.TabletType_MASTER, keyRange)
 	}
 	if err != nil {
