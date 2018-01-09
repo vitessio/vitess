@@ -30,6 +30,7 @@ import (
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/srvtopo"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vtgate"
@@ -45,7 +46,7 @@ var (
 	tabletTypesToWait     = flag.String("tablet_types_to_wait", "", "wait till connected for specified tablet types during Gateway initialization")
 )
 
-var resilientSrvTopoServer *vtgate.ResilientSrvTopoServer
+var resilientServer *srvtopo.ResilientServer
 var healthCheck discovery.HealthCheck
 
 var initFakeZK func()
@@ -72,7 +73,7 @@ func main() {
 	ts := topo.Open()
 	defer ts.Close()
 
-	resilientSrvTopoServer = vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
+	resilientServer = srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer")
 
 	healthCheck = discovery.NewHealthCheck(*healthCheckRetryDelay, *healthCheckTimeout)
 	healthCheck.RegisterStats()
@@ -89,7 +90,7 @@ func main() {
 		}
 	}
 
-	vtg := vtgate.Init(context.Background(), healthCheck, ts, resilientSrvTopoServer, *cell, *retryCount, tabletTypes)
+	vtg := vtgate.Init(context.Background(), healthCheck, ts, resilientServer, *cell, *retryCount, tabletTypes)
 
 	servenv.OnRun(func() {
 		addStatusParts(vtg)

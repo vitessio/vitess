@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vtgate
+package srvtopo
 
 import (
 	"flag"
@@ -43,7 +43,7 @@ const (
 	errorCategory  = "error"
 
 	// TopoTemplate is the HTML to use to display the
-	// ResilientSrvTopoServerCacheStatus object
+	// ResilientServerCacheStatus object
 	TopoTemplate = `
 <style>
   table {
@@ -90,11 +90,11 @@ const (
 `
 )
 
-// ResilientSrvTopoServer is an implementation of srvtopo.Server based
+// ResilientServer is an implementation of srvtopo.Server based
 // on a topo.Server that uses a cache for two purposes:
 // - limit the QPS to the underlying topo.Server
 // - return the last known value of the data if there is an error
-type ResilientSrvTopoServer struct {
+type ResilientServer struct {
 	topoServer *topo.Server
 	cacheTTL   time.Duration
 	counts     *stats.Counters
@@ -148,10 +148,10 @@ type srvKeyspaceEntry struct {
 	lastErrorCtx context.Context
 }
 
-// NewResilientSrvTopoServer creates a new ResilientSrvTopoServer
+// NewResilientServer creates a new ResilientServer
 // based on the provided topo.Server.
-func NewResilientSrvTopoServer(base *topo.Server, counterPrefix string) *ResilientSrvTopoServer {
-	return &ResilientSrvTopoServer{
+func NewResilientServer(base *topo.Server, counterPrefix string) *ResilientServer {
+	return &ResilientServer{
 		topoServer: base,
 		cacheTTL:   *srvTopoCacheTTL,
 		counts:     stats.NewCounters(counterPrefix + "Counts"),
@@ -162,7 +162,7 @@ func NewResilientSrvTopoServer(base *topo.Server, counterPrefix string) *Resilie
 }
 
 // GetSrvKeyspaceNames returns all keyspace names for the given cell.
-func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
+func (server *ResilientServer) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
 	server.counts.Add(queryCategory, 1)
 
 	// find the entry in the cache, add it if not there
@@ -210,12 +210,12 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(ctx context.Context, c
 	return result, err
 }
 
-// WatchSrvVSchema is part of the SrvTopoServer API
-func (server *ResilientSrvTopoServer) WatchSrvVSchema(ctx context.Context, cell string) (*topo.WatchSrvVSchemaData, <-chan *topo.WatchSrvVSchemaData, topo.CancelFunc) {
+// WatchSrvVSchema is part of the srvtopo.Server interface.
+func (server *ResilientServer) WatchSrvVSchema(ctx context.Context, cell string) (*topo.WatchSrvVSchemaData, <-chan *topo.WatchSrvVSchemaData, topo.CancelFunc) {
 	return server.topoServer.WatchSrvVSchema(ctx, cell)
 }
 
-func (server *ResilientSrvTopoServer) getSrvKeyspaceEntry(cell, keyspace string) *srvKeyspaceEntry {
+func (server *ResilientServer) getSrvKeyspaceEntry(cell, keyspace string) *srvKeyspaceEntry {
 	// find the entry in the cache, add it if not there
 	key := cell + "." + keyspace
 	server.mutex.RLock()
@@ -240,7 +240,7 @@ func (server *ResilientSrvTopoServer) getSrvKeyspaceEntry(cell, keyspace string)
 }
 
 // GetSrvKeyspace returns SrvKeyspace object for the given cell and keyspace.
-func (server *ResilientSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
+func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	entry := server.getSrvKeyspaceEntry(cell, keyspace)
 
 	// If the watch is already running, return the value
@@ -400,15 +400,15 @@ func (skcsl SrvKeyspaceCacheStatusList) Swap(i, j int) {
 	skcsl[i], skcsl[j] = skcsl[j], skcsl[i]
 }
 
-// ResilientSrvTopoServerCacheStatus has the full status of the cache
-type ResilientSrvTopoServerCacheStatus struct {
+// ResilientServerCacheStatus has the full status of the cache
+type ResilientServerCacheStatus struct {
 	SrvKeyspaceNames SrvKeyspaceNamesCacheStatusList
 	SrvKeyspaces     SrvKeyspaceCacheStatusList
 }
 
 // CacheStatus returns a displayable version of the cache
-func (server *ResilientSrvTopoServer) CacheStatus() *ResilientSrvTopoServerCacheStatus {
-	result := &ResilientSrvTopoServerCacheStatus{}
+func (server *ResilientServer) CacheStatus() *ResilientServerCacheStatus {
+	result := &ResilientServerCacheStatus{}
 	server.mutex.Lock()
 
 	for _, entry := range server.srvKeyspaceNamesCache {
