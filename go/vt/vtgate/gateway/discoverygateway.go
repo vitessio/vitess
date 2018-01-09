@@ -30,6 +30,7 @@ import (
 
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/vt/discovery"
+	"github.com/youtube/vitess/go/vt/srvtopo"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/buffer"
@@ -65,7 +66,7 @@ type discoveryGateway struct {
 	hc            discovery.HealthCheck
 	tsc           *discovery.TabletStatsCache
 	topoServer    *topo.Server
-	srvTopoServer topo.SrvTopoServer
+	srvTopoServer srvtopo.Server
 	localCell     string
 	retryCount    int
 
@@ -83,7 +84,7 @@ type discoveryGateway struct {
 	buffer *buffer.Buffer
 }
 
-func createDiscoveryGateway(hc discovery.HealthCheck, topoServer *topo.Server, serv topo.SrvTopoServer, cell string, retryCount int) Gateway {
+func createDiscoveryGateway(hc discovery.HealthCheck, topoServer *topo.Server, serv srvtopo.Server, cell string, retryCount int) Gateway {
 	dg := &discoveryGateway{
 		hc:                hc,
 		tsc:               discovery.NewTabletStatsCacheDoNotSetListener(topoServer, cell),

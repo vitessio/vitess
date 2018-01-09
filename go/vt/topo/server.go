@@ -50,8 +50,6 @@ import (
 
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
-
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -167,16 +165,6 @@ type Server struct {
 	// will read the list of addresses for that cell from the
 	// global cluster and create clients as needed.
 	cells map[string]Conn
-}
-
-// SrvTopoServer is a subset of the topo.Server API that only contains
-// the serving graph read-only calls used by clients to resolve
-// serving addresses, and how to get VSchema. It is mostly used by our
-// discovery modules, and by vtgate.
-type SrvTopoServer interface {
-	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
-	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
-	WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVSchemaData, <-chan *WatchSrvVSchemaData, CancelFunc)
 }
 
 type cellsToRegionsMap struct {
