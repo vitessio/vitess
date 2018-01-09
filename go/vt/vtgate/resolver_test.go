@@ -27,7 +27,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/srvtopo"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -662,7 +662,7 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 	}
 }
 
-func newTestResolver(hc discovery.HealthCheck, serv topo.SrvTopoServer, cell string) *Resolver {
+func newTestResolver(hc discovery.HealthCheck, serv srvtopo.Server, cell string) *Resolver {
 	sc := newTestScatterConn(hc, serv, cell)
 	return NewResolver(serv, cell, sc)
 }

@@ -29,7 +29,7 @@ import (
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
-// ExplainTopo satisfies the SrvTopoServer interface.
+// ExplainTopo satisfies the srvtopo.Server interface.
 // Modeled after the vtgate test sandboxTopo
 type ExplainTopo struct {
 	// Map of keyspace name to vschema
@@ -54,7 +54,7 @@ func (et *ExplainTopo) getSrvVSchema() *vschemapb.SrvVSchema {
 	}
 }
 
-// GetSrvKeyspaceNames is part of SrvTopoServer.
+// GetSrvKeyspaceNames is part of the srvtopo.Server interface.
 func (et *ExplainTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
 	et.Lock.Lock()
 	defer et.Lock.Unlock()
@@ -66,7 +66,7 @@ func (et *ExplainTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]
 	return keyspaces, nil
 }
 
-// GetSrvKeyspace is part of SrvTopoServer.
+// GetSrvKeyspace is part of the srvtopo.Server interface.
 func (et *ExplainTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	et.Lock.Lock()
 	defer et.Lock.Unlock()
@@ -143,7 +143,7 @@ func (et *ExplainTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string
 	return srvKeyspace, nil
 }
 
-// WatchSrvVSchema is part of SrvTopoServer.
+// WatchSrvVSchema is part of the srvtopo.Server interface.
 func (et *ExplainTopo) WatchSrvVSchema(ctx context.Context, cell string) (*topo.WatchSrvVSchemaData, <-chan *topo.WatchSrvVSchemaData, topo.CancelFunc) {
 	return &topo.WatchSrvVSchemaData{
 		Value: et.getSrvVSchema(),

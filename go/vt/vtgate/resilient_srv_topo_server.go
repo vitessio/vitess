@@ -90,7 +90,7 @@ const (
 `
 )
 
-// ResilientSrvTopoServer is an implementation of SrvTopoServer based
+// ResilientSrvTopoServer is an implementation of srvtopo.Server based
 // on a topo.Server that uses a cache for two purposes:
 // - limit the QPS to the underlying topo.Server
 // - return the last known value of the data if there is an error

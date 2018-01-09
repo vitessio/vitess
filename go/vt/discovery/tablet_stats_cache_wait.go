@@ -23,7 +23,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/srvtopo"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -66,7 +66,7 @@ func (tc *TabletStatsCache) WaitForAnyTablet(ctx context.Context, cell, keyspace
 // WaitForAllServingTablets waits for at least one healthy serving tablet in
 // the given cell for all keyspaces / shards before returning.
 // It will return ctx.Err() if the context is canceled.
-func (tc *TabletStatsCache) WaitForAllServingTablets(ctx context.Context, ts topo.SrvTopoServer, cell string, types []topodatapb.TabletType) error {
+func (tc *TabletStatsCache) WaitForAllServingTablets(ctx context.Context, ts srvtopo.Server, cell string, types []topodatapb.TabletType) error {
 	keyspaceShards, err := findAllKeyspaceShards(ctx, ts, cell)
 	if err != nil {
 		return err
@@ -76,7 +76,7 @@ func (tc *TabletStatsCache) WaitForAllServingTablets(ctx context.Context, ts top
 }
 
 // findAllKeyspaceShards goes through all serving shards in the topology
-func findAllKeyspaceShards(ctx context.Context, ts topo.SrvTopoServer, cell string) (map[keyspaceShard]bool, error) {
+func findAllKeyspaceShards(ctx context.Context, ts srvtopo.Server, cell string) (map[keyspaceShard]bool, error) {
 	ksNames, err := ts.GetSrvKeyspaceNames(ctx, cell)
 	if err != nil {
 		return nil, err

@@ -214,11 +214,11 @@ func createUnshardedKeyspace() (*topodatapb.SrvKeyspace, error) {
 	return unshardedSrvKeyspace, nil
 }
 
-// sandboxTopo satisfies the SrvTopoServer interface
+// sandboxTopo satisfies the srvtopo.Server interface
 type sandboxTopo struct {
 }
 
-// GetSrvKeyspaceNames is part of SrvTopoServer.
+// GetSrvKeyspaceNames is part of the srvtopo.Server interface.
 func (sct *sandboxTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
@@ -229,7 +229,7 @@ func (sct *sandboxTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([
 	return keyspaces, nil
 }
 
-// GetSrvKeyspace is part of SrvTopoServer.
+// GetSrvKeyspace is part of the srvtopo.Server interface.
 func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	sand := getSandbox(keyspace)
 	sand.sandmu.Lock()
@@ -266,7 +266,7 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 	return createShardedSrvKeyspace(sand.ShardSpec, sand.KeyspaceServedFrom)
 }
 
-// WatchSrvVSchema is part of SrvTopoServer.
+// WatchSrvVSchema is part of the srvtopo.Server interface.
 func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string) (*topo.WatchSrvVSchemaData, <-chan *topo.WatchSrvVSchemaData, topo.CancelFunc) {
 	return &topo.WatchSrvVSchemaData{
 		Value: getSandboxSrvVSchema(),

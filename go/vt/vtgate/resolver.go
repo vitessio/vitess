@@ -25,7 +25,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/srvtopo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 	"golang.org/x/net/context"
@@ -49,12 +49,12 @@ var (
 // resharding happened.
 type Resolver struct {
 	scatterConn *ScatterConn
-	toposerv    topo.SrvTopoServer
+	toposerv    srvtopo.Server
 	cell        string
 }
 
 // NewResolver creates a new Resolver.
-func NewResolver(serv topo.SrvTopoServer, cell string, sc *ScatterConn) *Resolver {
+func NewResolver(serv srvtopo.Server, cell string, sc *ScatterConn) *Resolver {
 	return &Resolver{
 		scatterConn: sc,
 		toposerv:    serv,
