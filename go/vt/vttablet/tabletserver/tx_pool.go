@@ -178,7 +178,10 @@ func (axp *TxPool) WaitForEmpty() {
 func (axp *TxPool) Begin(ctx context.Context, useFoundRows bool, txIsolation querypb.ExecuteOptions_TransactionIsolation) (int64, error) {
 	var conn *connpool.DBConn
 	var err error
-	if !axp.limiter.Get(ctx) {
+	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
+	effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
+
+	if !axp.limiter.Get(immediateCaller, effectiveCaller) {
 		return 0, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
 	}
 
@@ -191,7 +194,7 @@ func (axp *TxPool) Begin(ctx context.Context, useFoundRows bool, txIsolation que
 		if conn != nil {
 			conn.Recycle()
 		}
-		axp.limiter.ReleaseByContext(ctx)
+		axp.limiter.Release(immediateCaller, effectiveCaller)
 	}()
 
 	if useFoundRows {
@@ -228,8 +231,8 @@ func (axp *TxPool) Begin(ctx context.Context, useFoundRows bool, txIsolation que
 			conn,
 			transactionID,
 			axp,
-			callerid.ImmediateCallerIDFromContext(ctx),
-			callerid.EffectiveCallerIDFromContext(ctx),
+			immediateCaller,
+			effectiveCaller,
 		),
 	)
 	return transactionID, nil
