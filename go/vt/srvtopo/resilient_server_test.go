@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vtgate
+package srvtopo
 
 import (
 	"bytes"
@@ -34,7 +34,7 @@ import (
 // TestGetSrvKeyspace will test we properly return updated SrvKeyspace.
 func TestGetSrvKeyspace(t *testing.T) {
 	ts := memorytopo.NewServer("test_cell")
-	rsts := NewResilientSrvTopoServer(ts, "TestGetSrvKeyspace")
+	rsts := NewResilientServer(ts, "TestGetSrvKeyspace")
 
 	// Ask for a not-yet-created keyspace
 	_, err := rsts.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
@@ -116,7 +116,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 // the topo server upon failure.
 func TestSrvKeyspaceCachedError(t *testing.T) {
 	ts := memorytopo.NewServer("test_cell")
-	rsts := NewResilientSrvTopoServer(ts, "TestSrvKeyspaceCachedErrors")
+	rsts := NewResilientServer(ts, "TestSrvKeyspaceCachedErrors")
 
 	// Ask for an unknown keyspace, should get an error.
 	ctx := context.Background()
@@ -152,7 +152,7 @@ func TestSrvKeyspaceCachedError(t *testing.T) {
 // value if the SrvKeyspace already exists.
 func TestGetSrvKeyspaceCreated(t *testing.T) {
 	ts := memorytopo.NewServer("test_cell")
-	rsts := NewResilientSrvTopoServer(ts, "TestGetSrvKeyspaceCreated")
+	rsts := NewResilientServer(ts, "TestGetSrvKeyspaceCreated")
 
 	// Set SrvKeyspace with value
 	want := &topodatapb.SrvKeyspace{
