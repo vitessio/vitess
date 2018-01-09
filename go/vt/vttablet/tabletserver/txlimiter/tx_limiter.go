@@ -110,12 +110,7 @@ func (txl *Impl) Get(immediate *querypb.VTGateCallerID, effective *vtrpcpb.Calle
 	txl.mu.Lock()
 	defer txl.mu.Unlock()
 
-	usage, ok := txl.usageMap[key]
-	if !ok {
-		txl.usageMap[key] = 1
-		return true
-	}
-
+	usage := txl.usageMap[key]
 	if usage < txl.maxPerUser {
 		txl.usageMap[key] = usage + 1
 		return true
