@@ -21,7 +21,6 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
-	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/callerid"
@@ -39,8 +38,7 @@ var (
 
 // TxLimiter is the transaction limiter interface.
 type TxLimiter interface {
-	Get(ctx context.Context) bool
-	ReleaseByContext(ctx context.Context)
+	Get(immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID) bool
 	Release(immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID)
 }
 
@@ -76,14 +74,8 @@ type TxAllowAll struct{}
 
 // Get always returns true (allows all requests).
 // Implements TxLimiter.Get
-func (txa *TxAllowAll) Get(ctx context.Context) bool {
+func (txa *TxAllowAll) Get(immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID) bool {
 	return true
-}
-
-// ReleaseByContext is noop, because TxAllowAll does no tracking.
-// Implements TxLimiter.ReleaseByContext
-func (txa *TxAllowAll) ReleaseByContext(ctx context.Context) {
-
 }
 
 // Release is noop, because TxAllowAll does no tracking.
@@ -112,8 +104,8 @@ type Impl struct {
 // to use another transaction slot. If this method returns true, it's
 // necessary to call Release once transaction is returned to the pool.
 // Implements TxLimiter.Get
-func (txl *Impl) Get(ctx context.Context) bool {
-	key := txl.extractKeyFromContext(ctx)
+func (txl *Impl) Get(immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID) bool {
+	key := txl.extractKey(immediate, effective)
 
 	txl.mu.Lock()
 	defer txl.mu.Unlock()
@@ -140,20 +132,11 @@ func (txl *Impl) Get(ctx context.Context) bool {
 	return false
 }
 
-// ReleaseByContext marks that given user (identified by caller ID stored
-// in context.Context) is no longer using a transaction slot.
-// Implements TxLimiter.ReleaseByContext
-func (txl *Impl) ReleaseByContext(ctx context.Context) {
-	txl.Release(
-		callerid.ImmediateCallerIDFromContext(ctx),
-		callerid.EffectiveCallerIDFromContext(ctx))
-}
-
 // Release marks that given user (identified by caller ID) is no longer using
 // a transaction slot.
 // Implements TxLimiter.Release
 func (txl *Impl) Release(immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID) {
-	key := txl.extractKeyFromCallers(immediate, effective)
+	key := txl.extractKey(immediate, effective)
 
 	txl.mu.Lock()
 	defer txl.mu.Unlock()
@@ -170,15 +153,9 @@ func (txl *Impl) Release(immediate *querypb.VTGateCallerID, effective *vtrpcpb.C
 	txl.usageMap[key] = usage - 1
 }
 
-func (txl *Impl) extractKeyFromContext(ctx context.Context) string {
-	return txl.extractKeyFromCallers(
-		callerid.ImmediateCallerIDFromContext(ctx),
-		callerid.EffectiveCallerIDFromContext(ctx))
-}
-
-// extractKeyFromCallers builds a string key used to differentiate users, based
+// extractKey builds a string key used to differentiate users, based
 // on fields specified in configuration and their values from caller ID.
-func (txl *Impl) extractKeyFromCallers(immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID) string {
+func (txl *Impl) extractKey(immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID) string {
 	var parts []string
 	if txl.byUsername {
 		if immediate != nil {
