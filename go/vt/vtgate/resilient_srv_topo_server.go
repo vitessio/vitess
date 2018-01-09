@@ -35,7 +35,6 @@ import (
 
 var (
 	srvTopoCacheTTL = flag.Duration("srv_topo_cache_ttl", 1*time.Second, "how long to use cached entries for topology")
-	srvTopoTimeout  = flag.Duration("srv_topo_timeout", 2*time.Second, "topo server timeout")
 )
 
 const (
@@ -189,18 +188,16 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(ctx context.Context, c
 		return entry.value, entry.lastError
 	}
 
-	// not in cache or too old, get the real value
-	newCtx, cancel := context.WithTimeout(context.Background(), *srvTopoTimeout)
-	defer cancel()
-
-	result, err := server.topoServer.GetSrvKeyspaceNames(newCtx, cell)
+	// Not in cache or too old, get the real value. We use the context that issued
+	// the query here.
+	result, err := server.topoServer.GetSrvKeyspaceNames(ctx, cell)
 	if err != nil {
 		if entry.insertionTime.IsZero() {
 			server.counts.Add(errorCategory, 1)
-			log.Errorf("GetSrvKeyspaceNames(%v, %v) failed: %v (no cached value, caching and returning error)", newCtx, cell, err)
+			log.Errorf("GetSrvKeyspaceNames(%v, %v) failed: %v (no cached value, caching and returning error)", ctx, cell, err)
 		} else {
 			server.counts.Add(cachedCategory, 1)
-			log.Warningf("GetSrvKeyspaceNames(%v, %v) failed: %v (returning cached value: %v %v)", newCtx, cell, err, entry.value, entry.lastError)
+			log.Warningf("GetSrvKeyspaceNames(%v, %v) failed: %v (returning cached value: %v %v)", ctx, cell, err, entry.value, entry.lastError)
 			return entry.value, entry.lastError
 		}
 	}
@@ -209,7 +206,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(ctx context.Context, c
 	entry.insertionTime = time.Now()
 	entry.value = result
 	entry.lastError = err
-	entry.lastErrorCtx = newCtx
+	entry.lastErrorCtx = ctx
 	return result, err
 }
 
