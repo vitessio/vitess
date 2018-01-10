@@ -1043,7 +1043,7 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]int
 	request = truncateErrorStrings(request)
 
 	errorCounts.Add(fullKey, 1)
-	// Most errors are not logged by vtgate beecause they're either too spammy or logged elsewhere.
+	// Most errors are not logged by vtgate because they're either too spammy or logged elsewhere.
 	switch ec {
 	case vtrpcpb.Code_UNKNOWN, vtrpcpb.Code_INTERNAL, vtrpcpb.Code_DATA_LOSS:
 		logger.Errorf("%v, request: %+v", err, request)
