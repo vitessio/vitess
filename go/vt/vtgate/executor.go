@@ -283,7 +283,7 @@ func (e *Executor) handleDDL(ctx context.Context, session *vtgatepb.Session, sql
 	f := func(keyspace string) (string, []string, error) {
 		var shards []string
 		if target.Shard == "" {
-			ks, _, allShards, err := getKeyspaceShards(ctx, e.serv, e.cell, keyspace, target.TabletType)
+			ks, _, allShards, err := srvtopo.GetKeyspaceShards(ctx, e.serv, e.cell, keyspace, target.TabletType)
 			if err != nil {
 				return "", nil, err
 			}
@@ -484,7 +484,7 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 
 	switch show.Type {
 	case sqlparser.KeywordString(sqlparser.DATABASES), sqlparser.KeywordString(sqlparser.VITESS_KEYSPACES):
-		keyspaces, err := getAllKeyspaces(ctx, e.serv, e.cell)
+		keyspaces, err := srvtopo.GetAllKeyspaces(ctx, e.serv, e.cell)
 		if err != nil {
 			return nil, err
 		}
@@ -500,14 +500,14 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 			RowsAffected: uint64(len(rows)),
 		}, nil
 	case sqlparser.KeywordString(sqlparser.VITESS_SHARDS):
-		keyspaces, err := getAllKeyspaces(ctx, e.serv, e.cell)
+		keyspaces, err := srvtopo.GetAllKeyspaces(ctx, e.serv, e.cell)
 		if err != nil {
 			return nil, err
 		}
 
 		var rows [][]sqltypes.Value
 		for _, keyspace := range keyspaces {
-			_, _, shards, err := getKeyspaceShards(ctx, e.serv, e.cell, keyspace, target.TabletType)
+			_, _, shards, err := srvtopo.GetKeyspaceShards(ctx, e.serv, e.cell, keyspace, target.TabletType)
 			if err != nil {
 				// There might be a misconfigured keyspace or no shards in the keyspace.
 				// Skip any errors and move on.
@@ -664,7 +664,7 @@ func (e *Executor) handleOther(ctx context.Context, session *vtgatepb.Session, s
 	}
 	if target.Shard == "" {
 		var err error
-		target.Keyspace, target.Shard, err = getAnyShard(ctx, e.serv, e.cell, target.Keyspace, target.TabletType)
+		target.Keyspace, target.Shard, err = srvtopo.GetAnyShard(ctx, e.serv, e.cell, target.Keyspace, target.TabletType)
 		if err != nil {
 			return nil, err
 		}
@@ -768,7 +768,7 @@ func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []
 		nil,
 	)
 
-	newKeyspace, _, allShards, err := getKeyspaceShards(ctx, e.serv, e.cell, table.Keyspace.Name, topodatapb.TabletType_MASTER)
+	newKeyspace, _, allShards, err := srvtopo.GetKeyspaceShards(ctx, e.serv, e.cell, table.Keyspace.Name, topodatapb.TabletType_MASTER)
 	if err != nil {
 		return 0, err
 	}
@@ -791,7 +791,7 @@ func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []
 			if ksid == nil {
 				continue
 			}
-			shard, err := getShardForKeyspaceID(allShards, ksid)
+			shard, err := srvtopo.GetShardForKeyspaceID(allShards, ksid)
 			if err != nil {
 				return 0, err
 			}

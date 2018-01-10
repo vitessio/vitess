@@ -76,7 +76,7 @@ func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVar
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "DML should not span multiple keyspace_ids")
 	}
 	mapToShards := func(k string) (string, []string, error) {
-		return mapKeyspaceIdsToShards(
+		return srvtopo.MapKeyspaceIdsToShards(
 			ctx,
 			res.toposerv,
 			res.cell,
@@ -91,7 +91,7 @@ func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVar
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	mapToShards := func(k string) (string, []string, error) {
-		return mapKeyRangesToShards(
+		return srvtopo.MapKeyRangesToShards(
 			ctx,
 			res.toposerv,
 			res.cell,
@@ -176,7 +176,7 @@ func (res *Resolver) ExecuteEntityIds(
 	notInTransaction bool,
 	options *querypb.ExecuteOptions,
 ) (*sqltypes.Result, error) {
-	newKeyspace, shardIDMap, err := mapEntityIdsToShards(
+	newKeyspace, shardIDMap, err := srvtopo.MapEntityIdsToShards(
 		ctx,
 		res.toposerv,
 		res.cell,
@@ -201,7 +201,7 @@ func (res *Resolver) ExecuteEntityIds(
 			options)
 		if isRetryableError(err) {
 			resharding := false
-			newKeyspace, newShardIDMap, err := mapEntityIdsToShards(
+			newKeyspace, newShardIDMap, err := srvtopo.MapEntityIdsToShards(
 				ctx,
 				res.toposerv,
 				res.cell,
@@ -234,6 +234,24 @@ func (res *Resolver) ExecuteEntityIds(
 		}
 		return qr, err
 	}
+}
+
+// boundKeyspaceIDQueriesToBoundShardQueries is a helper used by
+// ExecuteBatchKeyspaceIds.
+func boundKeyspaceIDQueriesToBoundShardQueries(ctx context.Context, topoServ srvtopo.Server, cell string, tabletType topodatapb.TabletType, idQueries []*vtgatepb.BoundKeyspaceIdQuery) ([]*vtgatepb.BoundShardQuery, error) {
+	shardQueries := make([]*vtgatepb.BoundShardQuery, len(idQueries))
+	for i, idQuery := range idQueries {
+		keyspace, shards, err := srvtopo.MapKeyspaceIdsToShards(ctx, topoServ, cell, idQuery.Keyspace, tabletType, idQuery.KeyspaceIds)
+		if err != nil {
+			return nil, err
+		}
+		shardQueries[i] = &vtgatepb.BoundShardQuery{
+			Query:    idQuery.Query,
+			Keyspace: keyspace,
+			Shards:   shards,
+		}
+	}
+	return shardQueries, nil
 }
 
 // ExecuteBatchKeyspaceIds executes a group of queries based on KeyspaceIds.
@@ -301,7 +319,7 @@ func (res *Resolver) ExecuteBatch(
 // The api supports supplying multiple KeyspaceIds to make it future proof.
 func (res *Resolver) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	mapToShards := func(k string) (string, []string, error) {
-		return mapKeyspaceIdsToShards(
+		return srvtopo.MapKeyspaceIdsToShards(
 			ctx,
 			res.toposerv,
 			res.cell,
@@ -320,7 +338,7 @@ func (res *Resolver) StreamExecuteKeyspaceIds(ctx context.Context, sql string, b
 // The api supports supplying multiple keyranges to make it future proof.
 func (res *Resolver) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	mapToShards := func(k string) (string, []string, error) {
-		return mapKeyRangesToShards(
+		return srvtopo.MapKeyRangesToShards(
 			ctx,
 			res.toposerv,
 			res.cell,
@@ -367,13 +385,13 @@ func (res *Resolver) MessageStream(ctx context.Context, keyspace string, shard s
 	var err error
 	if shard != "" {
 		// If we pass in a shard, resolve the keyspace following redirects.
-		keyspace, _, _, err = getKeyspaceShards(ctx, res.toposerv, res.cell, keyspace, topodatapb.TabletType_MASTER)
+		keyspace, _, _, err = srvtopo.GetKeyspaceShards(ctx, res.toposerv, res.cell, keyspace, topodatapb.TabletType_MASTER)
 		shards = []string{shard}
 	} else {
 		// If we pass in a KeyRange, resolve it to the proper shards.
 		// Note we support multiple shards here, we will just aggregate
 		// the message streams.
-		keyspace, shards, err = mapExactShards(ctx, res.toposerv, res.cell, keyspace, topodatapb.TabletType_MASTER, keyRange)
+		keyspace, shards, err = srvtopo.MapExactShards(ctx, res.toposerv, res.cell, keyspace, topodatapb.TabletType_MASTER, keyRange)
 	}
 	if err != nil {
 		return err
@@ -383,14 +401,14 @@ func (res *Resolver) MessageStream(ctx context.Context, keyspace string, shard s
 
 // MessageAckKeyspaceIds routes message acks based on the associated keyspace ids.
 func (res *Resolver) MessageAckKeyspaceIds(ctx context.Context, keyspace, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error) {
-	newKeyspace, _, allShards, err := getKeyspaceShards(ctx, res.toposerv, res.cell, keyspace, topodatapb.TabletType_MASTER)
+	newKeyspace, _, allShards, err := srvtopo.GetKeyspaceShards(ctx, res.toposerv, res.cell, keyspace, topodatapb.TabletType_MASTER)
 	if err != nil {
 		return 0, err
 	}
 
 	shardIDs := make(map[string][]*querypb.Value)
 	for _, idKeyspaceID := range idKeyspaceIDs {
-		shard, err := getShardForKeyspaceID(allShards, idKeyspaceID.KeyspaceId)
+		shard, err := srvtopo.GetShardForKeyspaceID(allShards, idKeyspaceID.KeyspaceId)
 		if err != nil {
 			return 0, err
 		}
@@ -405,7 +423,7 @@ func (res *Resolver) UpdateStream(ctx context.Context, keyspace string, shard st
 	if shard != "" {
 		// If we pass in a shard, resolve the keyspace following redirects.
 		var err error
-		keyspace, _, _, err = getKeyspaceShards(ctx, res.toposerv, res.cell, keyspace, tabletType)
+		keyspace, _, _, err = srvtopo.GetKeyspaceShards(ctx, res.toposerv, res.cell, keyspace, tabletType)
 		if err != nil {
 			return err
 		}
@@ -413,7 +431,7 @@ func (res *Resolver) UpdateStream(ctx context.Context, keyspace string, shard st
 		// If we pass in a KeyRange, resolve it to one shard only for now.
 		var shards []string
 		var err error
-		keyspace, shards, err = mapExactShards(
+		keyspace, shards, err = srvtopo.MapExactShards(
 			ctx,
 			res.toposerv,
 			res.cell,
