@@ -153,9 +153,9 @@ func (e *Executor) execute(ctx context.Context, method string, session *vtgatepb
 		}
 
 		nsf := NewSafeSession(session)
-		autocommit := false
+		nsf.InstantCommit = false
 		if session.Autocommit && !session.InTransaction {
-			autocommit = true
+			nsf.InstantCommit = true
 			if err := e.txConn.Begin(ctx, nsf); err != nil {
 				return nil, err
 			}
@@ -163,14 +163,13 @@ func (e *Executor) execute(ctx context.Context, method string, session *vtgatepb
 			// the rollback will be a no-op.
 			defer e.txConn.Rollback(ctx, nsf)
 		}
-		nsf.InstantCommit = autocommit
 
 		qr, err := e.handleExec(ctx, session, sql, bindVars, target, logStats)
 		if err != nil {
 			return nil, err
 		}
 
-		if autocommit {
+		if nsf.InstantCommit {
 			commitStart := time.Now()
 			if err = e.txConn.Commit(ctx, nsf); err != nil {
 				return nil, err

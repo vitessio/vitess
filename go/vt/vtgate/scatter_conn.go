@@ -163,7 +163,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
-	autocommit bool,
+	canAutocommit bool,
 	options *querypb.ExecuteOptions,
 ) (*sqltypes.Result, error) {
 
@@ -187,7 +187,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			var innerqr *sqltypes.Result
 			if shouldBegin {
 				var err error
-				alsoCommit := session.InstantCommit && len(session.ShardSessions) == 0 && autocommit
+				alsoCommit := canAutocommit && session.InstantCommit
 				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, alsoCommit, options)
 				if alsoCommit {
 					transactionID = 0

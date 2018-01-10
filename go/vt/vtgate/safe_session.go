@@ -74,6 +74,7 @@ func (session *SafeSession) Append(shardSession *vtgatepb.Session_ShardSession, 
 	if !session.InTransaction() {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: inconsistent state, session is not in transaction, please report this issue to the developers: %v", session.ShardSessions)
 	}
+	session.InstantCommit = false
 	// Always append, in order for rollback to succeed.
 	session.ShardSessions = append(session.ShardSessions, shardSession)
 	if session.isSingleDB(txMode) && len(session.ShardSessions) > 1 {
