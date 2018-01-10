@@ -37,6 +37,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/messager"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/txlimiter"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -80,6 +81,7 @@ type TxPool struct {
 	timeout       sync2.AtomicDuration
 	ticks         *timer.Timer
 	checker       connpool.MySQLChecker
+	limiter       txlimiter.TxLimiter
 	// Tracking culprits that cause tx pool full errors.
 	logMu   sync.Mutex
 	lastLog time.Time
@@ -92,7 +94,8 @@ func NewTxPool(
 	foundRowsCapacity int,
 	timeout time.Duration,
 	idleTimeout time.Duration,
-	checker connpool.MySQLChecker) *TxPool {
+	checker connpool.MySQLChecker,
+	limiter txlimiter.TxLimiter) *TxPool {
 	axp := &TxPool{
 		conns:         connpool.New(prefix+"TransactionPool", capacity, idleTimeout, checker),
 		foundRowsPool: connpool.New(prefix+"FoundRowsPool", foundRowsCapacity, idleTimeout, checker),
@@ -101,6 +104,7 @@ func NewTxPool(
 		timeout:       sync2.NewAtomicDuration(timeout),
 		ticks:         timer.NewTimer(timeout / 10),
 		checker:       checker,
+		limiter:       limiter,
 	}
 	txOnce.Do(func() {
 		// Careful: conns also exports name+"xxx" vars,
@@ -174,6 +178,25 @@ func (axp *TxPool) WaitForEmpty() {
 func (axp *TxPool) Begin(ctx context.Context, useFoundRows bool, txIsolation querypb.ExecuteOptions_TransactionIsolation) (int64, error) {
 	var conn *connpool.DBConn
 	var err error
+	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
+	effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
+
+	if !axp.limiter.Get(immediateCaller, effectiveCaller) {
+		return 0, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
+	}
+
+	var beginSucceeded bool
+	defer func() {
+		if beginSucceeded {
+			return
+		}
+
+		if conn != nil {
+			conn.Recycle()
+		}
+		axp.limiter.Release(immediateCaller, effectiveCaller)
+	}()
+
 	if useFoundRows {
 		conn, err = axp.foundRowsPool.Get(ctx)
 	} else {
@@ -192,15 +215,15 @@ func (axp *TxPool) Begin(ctx context.Context, useFoundRows bool, txIsolation que
 
 	if query, ok := txIsolations[txIsolation]; ok {
 		if _, err := conn.Exec(ctx, query, 1, false); err != nil {
-			conn.Recycle()
 			return 0, err
 		}
 	}
 
 	if _, err := conn.Exec(ctx, "begin", 1, false); err != nil {
-		conn.Recycle()
 		return 0, err
 	}
+
+	beginSucceeded = true
 	transactionID := axp.lastID.Add(1)
 	axp.activePool.Register(
 		transactionID,
@@ -208,8 +231,8 @@ func (axp *TxPool) Begin(ctx context.Context, useFoundRows bool, txIsolation que
 			conn,
 			transactionID,
 			axp,
-			callerid.ImmediateCallerIDFromContext(ctx),
-			callerid.EffectiveCallerIDFromContext(ctx),
+			immediateCaller,
+			effectiveCaller,
 		),
 	)
 	return transactionID, nil
@@ -388,6 +411,7 @@ func (txc *TxConnection) conclude(conclusion string) {
 	txc.pool.activePool.Unregister(txc.TransactionID)
 	txc.DBConn.Recycle()
 	txc.DBConn = nil
+	txc.pool.limiter.Release(txc.ImmediateCallerID, txc.EffectiveCallerID)
 	txc.log(conclusion)
 }
 
