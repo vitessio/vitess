@@ -1053,12 +1053,21 @@ const (
 
 // Show represents a show statement.
 type Show struct {
-	Type string
+	Type    string
+	OnTable TableName
 }
 
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
 	buf.Myprintf("show %s", node.Type)
+	if node.HasOnTable() {
+		buf.Myprintf(" on %v", node.OnTable)
+	}
+}
+
+// HasOnTable returns true if the show statement has an "on" clause
+func (node *Show) HasOnTable() bool {
+	return node.OnTable.Name.v != ""
 }
 
 // WalkSubtree walks the nodes of the subtree.

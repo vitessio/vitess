@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"flag"
 	"net/http"
 
 	"github.com/youtube/vitess/go/streamlog"
@@ -34,9 +35,12 @@ var (
 
 	// QueryLogger enables streaming logging of queries
 	QueryLogger = streamlog.New("VTGate", 10)
+
+	// queryLogToFile controls whether query logs are sent to a file
+	queryLogToFile = flag.String("log_queries_to_file", "", "Enable query logging to the specified file")
 )
 
-func initQueryLogger(vtg *VTGate) {
+func initQueryLogger(vtg *VTGate) error {
 	QueryLogger.ServeLogs(QueryLogHandler, streamlog.GetFormatter(QueryLogger))
 
 	http.HandleFunc(QueryLogzHandler, func(w http.ResponseWriter, r *http.Request) {
@@ -49,4 +53,12 @@ func initQueryLogger(vtg *VTGate) {
 		queryzHandler(vtg.executor, w, r)
 	})
 
+	if *queryLogToFile != "" {
+		_, err := QueryLogger.LogToFile(*queryLogToFile, streamlog.GetFormatter(QueryLogger))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

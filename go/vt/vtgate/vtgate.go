@@ -202,7 +202,10 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server
 		}
 	})
 	vtgateOnce.Do(rpcVTGate.registerDebugHealthHandler)
-	initQueryLogger(rpcVTGate)
+	err := initQueryLogger(rpcVTGate)
+	if err != nil {
+		log.Fatalf("error initializing query logger: %v", err)
+	}
 
 	return rpcVTGate
 }
