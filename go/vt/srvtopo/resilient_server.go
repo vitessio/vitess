@@ -308,6 +308,8 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 	return entry.value, entry.lastError
 }
 
+var watchSrvVSchemaSleepTime = 5 * time.Second
+
 // WatchSrvVSchema is part of the srvtopo.Server interface.
 func (server *ResilientServer) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error)) {
 	wg := sync.WaitGroup{}
@@ -340,7 +342,7 @@ func (server *ResilientServer) WatchSrvVSchema(ctx context.Context, cell string,
 			}
 
 			// Sleep a bit before trying again.
-			time.Sleep(5 * time.Second)
+			time.Sleep(watchSrvVSchemaSleepTime)
 		}
 	}()
 

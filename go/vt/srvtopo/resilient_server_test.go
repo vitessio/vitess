@@ -19,6 +19,7 @@ package srvtopo
 import (
 	"bytes"
 	"html/template"
+	"sync"
 	"testing"
 	"time"
 
@@ -29,15 +30,16 @@ import (
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
 // TestGetSrvKeyspace will test we properly return updated SrvKeyspace.
 func TestGetSrvKeyspace(t *testing.T) {
 	ts := memorytopo.NewServer("test_cell")
-	rsts := NewResilientServer(ts, "TestGetSrvKeyspace")
+	rs := NewResilientServer(ts, "TestGetSrvKeyspace")
 
 	// Ask for a not-yet-created keyspace
-	_, err := rsts.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
+	_, err := rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
 	if err != topo.ErrNoNode {
 		t.Fatalf("GetSrvKeyspace(not created) got unexpected error: %v", err)
 	}
@@ -53,7 +55,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	var got *topodatapb.SrvKeyspace
 	expiry := time.Now().Add(5 * time.Second)
 	for {
-		got, err = rsts.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
+		got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
 		if err != nil {
 			t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
 		}
@@ -72,7 +74,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	}
 	expiry = time.Now().Add(5 * time.Second)
 	for {
-		got, err = rsts.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
+		got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
 		if err == topo.ErrNoNode {
 			break
 		}
@@ -90,7 +92,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
 	expiry = time.Now().Add(5 * time.Second)
 	for {
-		got, err = rsts.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
+		got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
 		if err == nil && proto.Equal(want, got) {
 			break
 		}
@@ -107,7 +109,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 		t.Fatalf("error parsing template: %v", err)
 	}
 	wr := &bytes.Buffer{}
-	if err := templ.Execute(wr, rsts.CacheStatus()); err != nil {
+	if err := templ.Execute(wr, rs.CacheStatus()); err != nil {
 		t.Fatalf("error executing template: %v", err)
 	}
 }
@@ -116,15 +118,15 @@ func TestGetSrvKeyspace(t *testing.T) {
 // the topo server upon failure.
 func TestSrvKeyspaceCachedError(t *testing.T) {
 	ts := memorytopo.NewServer("test_cell")
-	rsts := NewResilientServer(ts, "TestSrvKeyspaceCachedErrors")
+	rs := NewResilientServer(ts, "TestSrvKeyspaceCachedErrors")
 
 	// Ask for an unknown keyspace, should get an error.
 	ctx := context.Background()
-	_, err := rsts.GetSrvKeyspace(ctx, "test_cell", "unknown_ks")
+	_, err := rs.GetSrvKeyspace(ctx, "test_cell", "unknown_ks")
 	if err == nil {
 		t.Fatalf("First GetSrvKeyspace didn't return an error")
 	}
-	entry := rsts.getSrvKeyspaceEntry("test_cell", "unknown_ks")
+	entry := rs.getSrvKeyspaceEntry("test_cell", "unknown_ks")
 	if err != entry.lastError {
 		t.Errorf("Error wasn't saved properly")
 	}
@@ -136,7 +138,7 @@ func TestSrvKeyspaceCachedError(t *testing.T) {
 	// save that context.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	_, err2 := rsts.GetSrvKeyspace(ctx, "test_cell", "unknown_ks")
+	_, err2 := rs.GetSrvKeyspace(ctx, "test_cell", "unknown_ks")
 	if err2 == nil {
 		t.Fatalf("Second GetSrvKeyspace didn't return an error")
 	}
@@ -152,19 +154,19 @@ func TestSrvKeyspaceCachedError(t *testing.T) {
 // value if the SrvKeyspace already exists.
 func TestGetSrvKeyspaceCreated(t *testing.T) {
 	ts := memorytopo.NewServer("test_cell")
-	rsts := NewResilientServer(ts, "TestGetSrvKeyspaceCreated")
+	rs := NewResilientServer(ts, "TestGetSrvKeyspaceCreated")
 
-	// Set SrvKeyspace with value
+	// Set SrvKeyspace with value.
 	want := &topodatapb.SrvKeyspace{
 		ShardingColumnName: "id",
 		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}
 	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
 
-	// wait until we get the right value
+	// Wait until we get the right value.
 	expiry := time.Now().Add(5 * time.Second)
 	for {
-		got, err := rsts.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
+		got, err := rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
 		switch err {
 		case topo.ErrNoNode:
 			// keep trying
@@ -178,6 +180,90 @@ func TestGetSrvKeyspaceCreated(t *testing.T) {
 		}
 		if time.Now().After(expiry) {
 			t.Fatalf("GetSrvKeyspace() timeout = %+v, want %+v", got, want)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestWatchSrvVSchema(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer("test_cell")
+	rs := NewResilientServer(ts, "TestWatchSrvVSchema")
+	watchSrvVSchemaSleepTime = 10 * time.Millisecond
+
+	// mu protects watchValue and watchErr.
+	mu := sync.Mutex{}
+	var watchValue *vschemapb.SrvVSchema
+	var watchErr error
+	rs.WatchSrvVSchema(ctx, "test_cell", func(v *vschemapb.SrvVSchema, e error) {
+		mu.Lock()
+		defer mu.Unlock()
+		watchValue = v
+		watchErr = e
+	})
+	get := func() (*vschemapb.SrvVSchema, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		return watchValue, watchErr
+	}
+
+	// WatchSrvVSchema won't return until it gets the initial value,
+	// which is not there, so we should get watchErr=topo.ErrNoNode.
+	if _, err := get(); err != topo.ErrNoNode {
+		t.Fatalf("WatchSrvVSchema didn't return topo.ErrNoNode at first, but got: %v", err)
+	}
+
+	// Save a value, wait for it.
+	newValue := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks1": {},
+		},
+	}
+	if err := ts.UpdateSrvVSchema(ctx, "test_cell", newValue); err != nil {
+		t.Fatalf("UpdateSrvVSchema failed: %v", err)
+	}
+	start := time.Now()
+	for {
+		if v, err := get(); err == nil && proto.Equal(newValue, v) {
+			break
+		}
+		if time.Since(start) > 5*time.Second {
+			t.Fatalf("timed out waiting for new SrvVschema")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// Update value, wait for it.
+	updatedValue := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks1": {},
+		},
+	}
+	if err := ts.UpdateSrvVSchema(ctx, "test_cell", updatedValue); err != nil {
+		t.Fatalf("UpdateSrvVSchema failed: %v", err)
+	}
+	start = time.Now()
+	for {
+		if v, err := get(); err == nil && proto.Equal(updatedValue, v) {
+			break
+		}
+		if time.Since(start) > 5*time.Second {
+			t.Fatalf("timed out waiting for updated SrvVschema")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// Delete the value, wait for topo.ErrNoNode
+	if err := ts.DeleteSrvVSchema(ctx, "test_cell"); err != nil {
+		t.Fatalf("DeleteSrvVSchema failed: %v", err)
+	}
+	start = time.Now()
+	for {
+		if _, err := get(); err == topo.ErrNoNode {
+			break
+		}
+		if time.Since(start) > 5*time.Second {
+			t.Fatalf("timed out waiting for deleted SrvVschema")
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
