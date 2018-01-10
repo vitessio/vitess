@@ -106,9 +106,10 @@ func (st *symtab) Resolve() *symtab {
 // and adds it to symtab.
 func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexes.Table, rb *route) error {
 	t := &table{
-		alias:   alias,
-		columns: make(map[string]*column),
-		origin:  rb,
+		alias:       alias,
+		columns:     make(map[string]*column),
+		origin:      rb,
+		vindexTable: vindexTable,
 	}
 
 	for _, col := range vindexTable.Columns {
@@ -436,9 +437,10 @@ func (st *symtab) ResolveSymbols(node sqlparser.SQLNode) error {
 // It represents a table alias in a FROM clause. It points
 // to the columnOriginator that represents it.
 type table struct {
-	alias   sqlparser.TableName
-	columns map[string]*column
-	origin  columnOriginator
+	alias       sqlparser.TableName
+	columns     map[string]*column
+	origin      columnOriginator
+	vindexTable *vindexes.Table
 }
 
 // column represents a unique symbol in the query that other

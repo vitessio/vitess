@@ -121,6 +121,41 @@
   }
 }
 
+
+# update by primary keyspace id with alias
+"update user as user_alias set val = 1 where user_alias.id = 1"
+{
+  "Original": "update user as user_alias set val = 1 where user_alias.id = 1",
+  "Instructions": {
+    "Opcode": "UpdateEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user as user_alias set val = 1 where user_alias.id = 1",
+    "Vindex": "user_index",
+    "Values": [1],
+    "Table": "user"
+  }
+}
+
+# select by primary keyspace id with alias
+"select val from user as user_alias where user_alias.id = 1"
+{
+  "Original": "select val from user as user_alias where user_alias.id = 1",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select val from user as user_alias where user_alias.id = 1",
+    "FieldQuery": "select val from user as user_alias where 1 != 1",
+    "Vindex": "user_index",
+    "Values": [1]
+  }
+}
+
 # update by primary keyspace id with parenthesized expression
 "update user set val = 1 where (id = 1)"
 {
