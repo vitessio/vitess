@@ -141,8 +141,17 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 			return qre.execUpsertPK(conn)
 		case planbuilder.PlanSet:
 			return qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, nil, false, true)
-		default:
+		case planbuilder.PlanPassSelect, planbuilder.PlanSelectLock:
 			return qre.execDirect(conn)
+		default:
+			// handled above:
+			// planbuilder.PlanNextval
+			// planbuilder.PlanDDL
+
+			// not valid for Execute:
+			// planbuilder.PlanSelectStream
+			// planbuilder.PlanMessageStream:
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
 		}
 	} else {
 		switch qre.plan.PlanID {
@@ -159,11 +168,33 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 			}
 			defer conn.Recycle()
 			return qre.execSQL(conn, qre.query, true)
-		default:
+
+		case planbuilder.PlanPassDML:
+			fallthrough
+		case planbuilder.PlanInsertPK:
+			fallthrough
+		case planbuilder.PlanInsertMessage:
+			fallthrough
+		case planbuilder.PlanInsertSubquery:
+			fallthrough
+		case planbuilder.PlanDMLPK:
+			fallthrough
+		case planbuilder.PlanDMLSubquery:
+			fallthrough
+		case planbuilder.PlanUpsertPK:
 			if !qre.tsv.qe.autoCommit.Get() {
 				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s disallowed outside transaction", qre.plan.PlanID.String())
 			}
 			return qre.execDmlAutoCommit()
+		default:
+			// handled above:
+			// planbuilder.PlanNextval
+			// planbuilder.PlanDDL
+
+			// not valid for Execute:
+			// planbuilder.PlanSelectStream
+			// planbuilder.PlanMessageStream:
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
 		}
 	}
 }
