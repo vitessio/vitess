@@ -813,7 +813,7 @@ func (vtg *VTGate) SplitQuery(
 	}
 
 	// TODO(erez): Add validation of SplitQuery parameters.
-	keyspace, srvKeyspace, shardRefs, err := getKeyspaceShards(
+	keyspace, srvKeyspace, shardRefs, err := srvtopo.GetKeyspaceShards(
 		ctx, vtg.resolver.toposerv, vtg.resolver.cell, keyspace, topodatapb.TabletType_RDONLY)
 	if err != nil {
 		return nil, err

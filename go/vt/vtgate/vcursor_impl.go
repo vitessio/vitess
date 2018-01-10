@@ -23,6 +23,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/srvtopo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 
@@ -142,7 +143,7 @@ func (vc *vcursorImpl) StreamExecuteMulti(query string, keyspace string, shardVa
 
 // GetKeyspaceShards returns the list of shards for a keyspace, and the mapped keyspace if an alias was used.
 func (vc *vcursorImpl) GetKeyspaceShards(keyspace *vindexes.Keyspace) (string, []*topodatapb.ShardReference, error) {
-	ks, _, allShards, err := getKeyspaceShards(vc.ctx, vc.executor.serv, vc.executor.cell, keyspace.Name, vc.target.TabletType)
+	ks, _, allShards, err := srvtopo.GetKeyspaceShards(vc.ctx, vc.executor.serv, vc.executor.cell, keyspace.Name, vc.target.TabletType)
 	if err != nil {
 		return "", nil, err
 	}
@@ -156,7 +157,7 @@ func (vc *vcursorImpl) GetKeyspaceShards(keyspace *vindexes.Keyspace) (string, [
 }
 
 func (vc *vcursorImpl) GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error) {
-	return getShardForKeyspaceID(allShards, keyspaceID)
+	return srvtopo.GetShardForKeyspaceID(allShards, keyspaceID)
 }
 
 func commentedShardQueries(shardQueries map[string]*querypb.BoundQuery, trailingComments string) map[string]*querypb.BoundQuery {

@@ -19,6 +19,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
@@ -665,4 +666,75 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 func newTestResolver(hc discovery.HealthCheck, serv srvtopo.Server, cell string) *Resolver {
 	sc := newTestScatterConn(hc, serv, cell)
 	return NewResolver(serv, cell, sc)
+}
+
+func TestBoundKeyspaceIdQueriesToBoundShardQueries(t *testing.T) {
+	ts := new(sandboxTopo)
+	kid10 := []byte{0x10}
+	kid25 := []byte{0x25}
+	var testCases = []struct {
+		idQueries    []*vtgatepb.BoundKeyspaceIdQuery
+		shardQueries []*vtgatepb.BoundShardQuery
+	}{
+		{
+			idQueries: []*vtgatepb.BoundKeyspaceIdQuery{
+				{
+					Query: &querypb.BoundQuery{
+						Sql: "q1",
+						BindVariables: map[string]*querypb.BindVariable{
+							"q1var": sqltypes.Int64BindVariable(1),
+						},
+					},
+					Keyspace:    KsTestSharded,
+					KeyspaceIds: [][]byte{kid10, kid25},
+				}, {
+					Query: &querypb.BoundQuery{
+						Sql: "q2",
+						BindVariables: map[string]*querypb.BindVariable{
+							"q2var": sqltypes.Int64BindVariable(2),
+						},
+					},
+					Keyspace:    KsTestSharded,
+					KeyspaceIds: [][]byte{kid25, kid25},
+				},
+			},
+			shardQueries: []*vtgatepb.BoundShardQuery{
+				{
+					Query: &querypb.BoundQuery{
+						Sql: "q1",
+						BindVariables: map[string]*querypb.BindVariable{
+							"q1var": sqltypes.Int64BindVariable(1),
+						},
+					},
+					Keyspace: KsTestSharded,
+					Shards:   []string{"-20", "20-40"},
+				}, {
+					Query: &querypb.BoundQuery{
+						Sql: "q2",
+						BindVariables: map[string]*querypb.BindVariable{
+							"q2var": sqltypes.Int64BindVariable(2),
+						},
+					},
+					Keyspace: KsTestSharded,
+					Shards:   []string{"20-40"},
+				},
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		shardQueries, err := boundKeyspaceIDQueriesToBoundShardQueries(context.Background(), ts, "", topodatapb.TabletType_MASTER, testCase.idQueries)
+		if err != nil {
+			t.Error(err)
+		}
+		// Sort shards, because they're random otherwise.
+		for _, shardQuery := range shardQueries {
+			sort.Strings(shardQuery.Shards)
+		}
+		got, _ := json.Marshal(shardQueries)
+		want, _ := json.Marshal(testCase.shardQueries)
+		if string(got) != string(want) {
+			t.Errorf("idQueries: %#v\nResponse:   %s\nExpecting: %s", testCase.idQueries, string(got), string(want))
+		}
+	}
 }
