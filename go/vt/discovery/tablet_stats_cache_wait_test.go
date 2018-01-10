@@ -17,12 +17,14 @@ limitations under the License.
 package discovery
 
 import (
+	"flag"
 	"reflect"
 	"testing"
 	"time"
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/vt/srvtopo"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 
@@ -33,9 +35,11 @@ import (
 func TestFindAllKeyspaceShards(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1", "cell2")
+	flag.Set("srv_topo_cache_ttl", "0s") // No caching values
+	rs := srvtopo.NewResilientServer(ts, "TestFindAllKeyspaceShards")
 
 	// no keyspace / shards
-	ks, err := findAllKeyspaceShards(ctx, ts, "cell1")
+	ks, err := findAllKeyspaceShards(ctx, rs, "cell1")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -60,7 +64,7 @@ func TestFindAllKeyspaceShards(t *testing.T) {
 	}
 
 	// get it
-	ks, err = findAllKeyspaceShards(ctx, ts, "cell1")
+	ks, err = findAllKeyspaceShards(ctx, rs, "cell1")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -98,7 +102,7 @@ func TestFindAllKeyspaceShards(t *testing.T) {
 	}
 
 	// get it
-	ks, err = findAllKeyspaceShards(ctx, ts, "cell1")
+	ks, err = findAllKeyspaceShards(ctx, rs, "cell1")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
