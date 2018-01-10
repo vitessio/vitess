@@ -635,6 +635,11 @@ class VtGate(object):
     """Returns the vars for this process."""
     return get_vars(self.port)
 
+  def get_vschema(self):
+    """Returns the used vschema for this process."""
+    return urllib2.urlopen('http://localhost:%d/debug/vschema' %
+                           self.port).read()
+
   @contextlib.contextmanager
   def create_connection(self):
     """Connects to vtgate and allows to create a cursor to execute queries.
