@@ -49,8 +49,8 @@ type Join struct {
 }
 
 // Execute performs a non-streaming exec.
-func (jn *Join) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	lresult, err := jn.Left.Execute(vcursor, bindVars, joinVars, wantfields)
+func (jn *Join) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields, autocommit bool) (*sqltypes.Result, error) {
+	lresult, err := jn.Left.Execute(vcursor, bindVars, joinVars, wantfields, autocommit)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func (jn *Join) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.
 		for k, col := range jn.Vars {
 			joinVars[k] = sqltypes.ValueBindVariable(lrow[col])
 		}
-		rresult, err := jn.Right.Execute(vcursor, bindVars, joinVars, wantfields)
+		rresult, err := jn.Right.Execute(vcursor, bindVars, joinVars, wantfields, autocommit)
 		if err != nil {
 			return nil, err
 		}

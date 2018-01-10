@@ -43,7 +43,7 @@ type VCursor interface {
 	// Context returns the context of the current request.
 	Context() context.Context
 	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
-	ExecuteMultiShard(keyspace string, shardQueries map[string]*querypb.BoundQuery, isDML bool) (*sqltypes.Result, error)
+	ExecuteMultiShard(keyspace string, shardQueries map[string]*querypb.BoundQuery, isDML, autocommit bool) (*sqltypes.Result, error)
 	ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, keyspace, shard string) (*sqltypes.Result, error)
 	StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error
 	GetKeyspaceShards(vkeyspace *vindexes.Keyspace) (string, []*topodatapb.ShardReference, error)
@@ -108,7 +108,7 @@ func (p *Plan) Size() int {
 // Primitive is the interface that needs to be satisfied by
 // all primitives of a plan.
 type Primitive interface {
-	Execute(vcursor VCursor, bindVars, joinvars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
+	Execute(vcursor VCursor, bindVars, joinvars map[string]*querypb.BindVariable, wantfields, autocommit bool) (*sqltypes.Result, error)
 	StreamExecute(vcursor VCursor, bindVars, joinvars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
 	GetFields(vcursor VCursor, bindVars, joinvars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 }

@@ -586,6 +586,7 @@ message BeginExecuteRequest {
   Target target = 3;
   BoundQuery query = 4;
   ExecuteOptions options = 5;
+  bool also_commit = 6;
 }
 
 // BeginExecuteResponse is the returned value from BeginExecute

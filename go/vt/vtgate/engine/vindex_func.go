@@ -78,7 +78,7 @@ func (code VindexOpcode) MarshalJSON() ([]byte, error) {
 }
 
 // Execute performs a non-streaming exec.
-func (vf *VindexFunc) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (vf *VindexFunc) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields, autocommit bool) (*sqltypes.Result, error) {
 	return vf.mapVindex(vcursor, bindVars, joinVars)
 }
 

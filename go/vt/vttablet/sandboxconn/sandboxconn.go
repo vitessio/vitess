@@ -280,7 +280,7 @@ func (sbc *SandboxConn) ReadTransaction(ctx context.Context, target *querypb.Tar
 }
 
 // BeginExecute is part of the QueryService interface.
-func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
+func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, alsoCommit bool, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
 	transactionID, err := sbc.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, err

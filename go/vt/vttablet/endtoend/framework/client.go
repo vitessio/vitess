@@ -145,7 +145,7 @@ func (client *QueryClient) Execute(query string, bindvars map[string]*querypb.Bi
 }
 
 // BeginExecute performs a BeginExecute.
-func (client *QueryClient) BeginExecute(query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (client *QueryClient) BeginExecute(query string, bindvars map[string]*querypb.BindVariable, alsoCommit bool) (*sqltypes.Result, error) {
 	if client.transactionID != 0 {
 		return nil, errors.New("already in transaction")
 	}
@@ -154,6 +154,7 @@ func (client *QueryClient) BeginExecute(query string, bindvars map[string]*query
 		&client.target,
 		query,
 		bindvars,
+		alsoCommit,
 		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 	)
 	if err != nil {

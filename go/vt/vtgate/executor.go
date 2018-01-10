@@ -145,11 +145,11 @@ func (e *Executor) execute(ctx context.Context, method string, session *vtgatepb
 
 	switch stmtType {
 	case sqlparser.StmtSelect:
-		return e.handleExec(ctx, session, sql, bindVars, target, logStats)
+		return e.handleExec(ctx, session, sql, bindVars, target, false /* autocommit */, logStats)
 	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
 		// In legacy mode, we ignore autocommit settings.
 		if e.legacyAutocommit {
-			return e.handleExec(ctx, session, sql, bindVars, target, logStats)
+			return e.handleExec(ctx, session, sql, bindVars, target, false /* autocommit */, logStats)
 		}
 
 		nsf := NewSafeSession(session)
@@ -164,7 +164,7 @@ func (e *Executor) execute(ctx context.Context, method string, session *vtgatepb
 			defer e.txConn.Rollback(ctx, nsf)
 		}
 
-		qr, err := e.handleExec(ctx, session, sql, bindVars, target, logStats)
+		qr, err := e.handleExec(ctx, session, sql, bindVars, target, autocommit, logStats)
 		if err != nil {
 			return nil, err
 		}
@@ -197,7 +197,7 @@ func (e *Executor) execute(ctx context.Context, method string, session *vtgatepb
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
 
-func (e *Executor) handleExec(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleExec(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, autocommit bool, logStats *LogStats) (*sqltypes.Result, error) {
 	if target.Shard != "" {
 		// V1 mode or V3 mode with a forced shard target
 		sql = sqlannotation.AnnotateIfDML(sql, nil)
@@ -246,7 +246,7 @@ func (e *Executor) handleExec(ctx context.Context, session *vtgatepb.Session, sq
 		return nil, err
 	}
 
-	qr, err := plan.Instructions.Execute(vcursor, bindVars, make(map[string]*querypb.BindVariable), true)
+	qr, err := plan.Instructions.Execute(vcursor, bindVars, make(map[string]*querypb.BindVariable), true, autocommit)
 	logStats.ExecuteTime = time.Since(execStart)
 	var errCount uint64
 	if err != nil {
