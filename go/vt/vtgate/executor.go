@@ -825,110 +825,74 @@ func (e *Executor) IsKeyspaceRangeBasedSharded(keyspace string) bool {
 // This function will wait until the first value has either been processed
 // or triggered an error before returning.
 func (e *Executor) watchSrvVSchema(ctx context.Context, cell string) {
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-
-	go func() {
-		foundFirstValue := false
-
+	e.serv.WatchSrvVSchema(ctx, cell, func(v *vschemapb.SrvVSchema, err error) {
 		// Create a closure to save the vschema. If the value
 		// passed is nil, it means we encountered an error and
 		// we don't know the real value. In this case, we want
 		// to use the previous value if it was set, or an
 		// empty vschema if it wasn't.
-		saveVSchema := func(v *vschemapb.SrvVSchema, errorMessage string) {
-			// keep a copy of the latest SrvVschema for show statements
-			e.srvVschema = v
-
-			// transform the provided SrvVSchema into a VSchema
-			var vschema *vindexes.VSchema
-			if v != nil {
-				var err error
-				vschema, err = vindexes.BuildVSchema(v)
-				if err != nil {
-					log.Warningf("Error creating VSchema for cell %v (will try again next update): %v", cell, err)
-					v = nil
-					errorMessage = fmt.Sprintf("Error creating VSchema for cell %v: %v", cell, err)
-					if vschemaCounters != nil {
-						vschemaCounters.Add("Parsing", 1)
-					}
-				}
-			}
-			if v == nil {
-				// we encountered an error, build an
-				// empty vschema
-				vschema, _ = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
-			}
-
-			// Build the display version.
-			stats := NewVSchemaStats(vschema, errorMessage)
-
-			// save our value
-			e.mu.Lock()
-			if v != nil {
-				// no errors, we can save our schema
-				e.vschema = vschema
-			} else {
-				// we had an error, use the empty vschema
-				// if we had nothing before.
-				if e.vschema == nil {
-					e.vschema = vschema
-				}
-			}
-			e.vschemaStats = stats
-			e.mu.Unlock()
-			e.plans.Clear()
-
+		switch err {
+		case nil:
+			// Good case, we can try to save that value.
+		case topo.ErrNoNode:
+			// If the SrvVschema disappears, we need to clear our record.
+			// Otherwise, keep what we already had before.
+			v = nil
+		default:
+			// Watch error, increment our counters, and return.
 			if vschemaCounters != nil {
-				vschemaCounters.Add("Reload", 1)
-			}
-
-			// notify the listener
-			if !foundFirstValue {
-				foundFirstValue = true
-				wg.Done()
+				vschemaCounters.Add("WatchError", 1)
 			}
 		}
 
-		for {
-			current, changes, _ := e.serv.WatchSrvVSchema(ctx, cell)
-			if current.Err != nil {
-				// Don't log if there is no VSchema to start with.
-				if current.Err != topo.ErrNoNode {
-					log.Warningf("Error watching vschema for cell %s (will wait 5s before retrying): %v", cell, current.Err)
-				}
-				saveVSchema(nil, fmt.Sprintf("Error watching SvrVSchema: %v", current.Err.Error()))
+		// Keep a copy of the latest SrvVschema for show statements.
+		e.srvVschema = v
+
+		// Transform the provided SrvVSchema into a VSchema.
+		var vschema *vindexes.VSchema
+		if v != nil {
+			vschema, err = vindexes.BuildVSchema(v)
+			if err != nil {
+				log.Warningf("Error creating VSchema for cell %v (will try again next update): %v", cell, err)
+				v = nil
+				err = fmt.Errorf("Error creating VSchema for cell %v: %v", cell, err)
 				if vschemaCounters != nil {
-					vschemaCounters.Add("WatchError", 1)
+					vschemaCounters.Add("Parsing", 1)
 				}
-				time.Sleep(5 * time.Second)
-				continue
 			}
-			saveVSchema(current.Value, "")
-
-			for c := range changes {
-				if c.Err != nil {
-					// If the SrvVschema disappears, we need to clear our record.
-					// Otherwise, keep what we already had before.
-					if c.Err == topo.ErrNoNode {
-						saveVSchema(nil, "SrvVSchema object was removed from topology.")
-					}
-					log.Warningf("Error while watching vschema for cell %s (will wait 5s before retrying): %v", cell, c.Err)
-					if vschemaCounters != nil {
-						vschemaCounters.Add("WatchError", 1)
-					}
-					break
-				}
-				saveVSchema(c.Value, "")
-			}
-
-			// Sleep a bit before trying again.
-			time.Sleep(5 * time.Second)
 		}
-	}()
+		if v == nil {
+			// We encountered an error, build an empty vschema.
+			vschema, _ = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
+		}
 
-	// wait for the first value to have been processed
-	wg.Wait()
+		// Build the display version.
+		errorMessage := ""
+		if err != nil {
+			errorMessage = err.Error()
+		}
+		stats := NewVSchemaStats(vschema, errorMessage)
+
+		// save our value
+		e.mu.Lock()
+		if v != nil {
+			// no errors, we can save our schema
+			e.vschema = vschema
+		} else {
+			// we had an error, use the empty vschema
+			// if we had nothing before.
+			if e.vschema == nil {
+				e.vschema = vschema
+			}
+		}
+		e.vschemaStats = stats
+		e.mu.Unlock()
+		e.plans.Clear()
+
+		if vschemaCounters != nil {
+			vschemaCounters.Add("Reload", 1)
+		}
+	})
 }
 
 // VSchema returns the VSchema.

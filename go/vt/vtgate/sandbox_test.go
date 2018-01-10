@@ -24,7 +24,6 @@ import (
 
 	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 	"github.com/youtube/vitess/go/vt/vttablet/sandboxconn"
@@ -267,10 +266,8 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 }
 
 // WatchSrvVSchema is part of the srvtopo.Server interface.
-func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string) (*topo.WatchSrvVSchemaData, <-chan *topo.WatchSrvVSchemaData, topo.CancelFunc) {
-	return &topo.WatchSrvVSchemaData{
-		Value: getSandboxSrvVSchema(),
-	}, make(chan *topo.WatchSrvVSchemaData), func() {}
+func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error)) {
+	callback(getSandboxSrvVSchema(), nil)
 }
 
 func sandboxDialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {

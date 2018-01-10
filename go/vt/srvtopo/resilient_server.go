@@ -31,6 +31,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
 var (
@@ -210,11 +211,6 @@ func (server *ResilientServer) GetSrvKeyspaceNames(ctx context.Context, cell str
 	return result, err
 }
 
-// WatchSrvVSchema is part of the srvtopo.Server interface.
-func (server *ResilientServer) WatchSrvVSchema(ctx context.Context, cell string) (*topo.WatchSrvVSchemaData, <-chan *topo.WatchSrvVSchemaData, topo.CancelFunc) {
-	return server.topoServer.WatchSrvVSchema(ctx, cell)
-}
-
 func (server *ResilientServer) getSrvKeyspaceEntry(cell, keyspace string) *srvKeyspaceEntry {
 	// find the entry in the cache, add it if not there
 	key := cell + "." + keyspace
@@ -310,6 +306,46 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 	}()
 
 	return entry.value, entry.lastError
+}
+
+// WatchSrvVSchema is part of the srvtopo.Server interface.
+func (server *ResilientServer) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error)) {
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	go func() {
+		foundFirstValue := false
+
+		for {
+			current, changes, _ := server.topoServer.WatchSrvVSchema(ctx, cell)
+			callback(current.Value, current.Err)
+			if !foundFirstValue {
+				foundFirstValue = true
+				wg.Done()
+			}
+			if current.Err != nil {
+				// Don't log if there is no VSchema to start with.
+				if current.Err != topo.ErrNoNode {
+					log.Warningf("Error watching vschema for cell %s (will wait 5s before retrying): %v", cell, current.Err)
+				}
+			} else {
+				for c := range changes {
+					// Note we forward topo.ErrNoNode as is.
+					callback(nil, c.Err)
+					if c.Err != nil {
+						log.Warningf("Error while watching vschema for cell %s (will wait 5s before retrying): %v", cell, c.Err)
+						break
+					}
+				}
+			}
+
+			// Sleep a bit before trying again.
+			time.Sleep(5 * time.Second)
+		}
+	}()
+
+	// Wait for the first value to have been processed.
+	wg.Wait()
 }
 
 // The next few structures and methods are used to get a displayable

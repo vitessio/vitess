@@ -23,7 +23,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/topo"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
@@ -144,8 +143,6 @@ func (et *ExplainTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string
 }
 
 // WatchSrvVSchema is part of the srvtopo.Server interface.
-func (et *ExplainTopo) WatchSrvVSchema(ctx context.Context, cell string) (*topo.WatchSrvVSchemaData, <-chan *topo.WatchSrvVSchemaData, topo.CancelFunc) {
-	return &topo.WatchSrvVSchemaData{
-		Value: et.getSrvVSchema(),
-	}, make(chan *topo.WatchSrvVSchemaData), func() {}
+func (et *ExplainTopo) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error)) {
+	callback(et.getSrvVSchema(), nil)
 }
