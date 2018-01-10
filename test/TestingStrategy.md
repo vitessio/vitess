@@ -1,6 +1,6 @@
 This document describe the testing strategy we use for all Vitess components, and the progression in scope / complexity.
 
-As Vitess developers, our goal is to have great unit test coverage, and complete that with whatever integration or end-to-end test makes sense. In the past, we have been relying too much on end-to-end tests, so we are in the process on scaling down our tests to lower levels when appropriate, and increaing our coverage.
+As Vitess developers, our goal is to have great unit test coverage, and complete that with whatever integration or end-to-end test makes sense. In the past, we have been relying too much on end-to-end tests, so we are in the process on scaling down our tests to lower levels when appropriate, and increasing our coverage.
 
 ## Unit Tests
 
