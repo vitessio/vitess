@@ -296,7 +296,7 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) error 
 }
 
 // addDual adds dual as a valid table to all keyspaces.
-// For unsharded keyspaces, it gets pinned against keyspace id '0x00'.
+// For sharded keyspaces, it gets pinned against keyspace id '0x00'.
 func addDual(vschema *VSchema) {
 	first := ""
 	for ksname, ks := range vschema.Keyspaces {
