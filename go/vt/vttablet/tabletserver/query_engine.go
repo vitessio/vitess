@@ -311,9 +311,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
 	plan.Authorized = tableacl.Authorized(plan.TableName().String(), plan.PlanID.MinRole())
 	if plan.PlanID.IsSelect() {
-		if plan.FieldQuery == nil {
-			log.Warningf("Cannot cache field info: %s", sql)
-		} else {
+		if plan.FieldQuery != nil {
 			conn, err := qe.conns.Get(ctx)
 			if err != nil {
 				return nil, err
