@@ -187,10 +187,12 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			var innerqr *sqltypes.Result
 			if shouldBegin {
 				var err error
-				alsoCommit := len(session.ShardSessions) == 0 && autocommit
+				alsoCommit := session.InstantCommit && len(session.ShardSessions) == 0 && autocommit
 				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, alsoCommit, options)
 				if alsoCommit {
 					transactionID = 0
+					// To be safe, set the session to rollback.
+					session.SetRollback()
 				}
 				if err != nil {
 					return transactionID, err

@@ -51,13 +51,13 @@ func (l *Limit) MarshalJSON() ([]byte, error) {
 }
 
 // Execute satisfies the Primtive interface.
-func (l *Limit) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields, autocommit bool) (*sqltypes.Result, error) {
+func (l *Limit) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, err := l.fetchCount(bindVars, joinVars)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := l.Input.Execute(vcursor, bindVars, joinVars, wantfields, autocommit)
+	result, err := l.Input.Execute(vcursor, bindVars, joinVars, wantfields)
 	if err != nil {
 		return nil, err
 	}

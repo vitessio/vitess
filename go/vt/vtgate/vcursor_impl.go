@@ -127,7 +127,7 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, BindVars map[string]*quer
 			BindVariables: BindVars,
 		},
 	}
-	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, bq, vc.target.TabletType, NewSafeSession(nil), false, false, vc.session.Options)
+	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, bq, vc.target.TabletType, NewSafeSession(nil), false, true /* autocommit */, vc.session.Options)
 	if err == nil {
 		vc.hasPartialDML = true
 	}

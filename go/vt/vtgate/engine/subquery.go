@@ -32,8 +32,8 @@ type Subquery struct {
 }
 
 // Execute performs a non-streaming exec.
-func (sq *Subquery) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields, autocommit bool) (*sqltypes.Result, error) {
-	inner, err := sq.Subquery.Execute(vcursor, bindVars, joinVars, wantfields, autocommit)
+func (sq *Subquery) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	inner, err := sq.Subquery.Execute(vcursor, bindVars, joinVars, wantfields)
 	if err != nil {
 		return nil, err
 	}

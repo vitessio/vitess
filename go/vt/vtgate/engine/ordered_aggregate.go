@@ -86,8 +86,8 @@ func (code AggregateOpcode) MarshalJSON() ([]byte, error) {
 }
 
 // Execute is a Primitive function.
-func (oa *OrderedAggregate) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields, autocommit bool) (*sqltypes.Result, error) {
-	result, err := oa.Input.Execute(vcursor, bindVars, joinVars, wantfields, autocommit)
+func (oa *OrderedAggregate) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	result, err := oa.Input.Execute(vcursor, bindVars, joinVars, wantfields)
 	if err != nil {
 		return nil, err
 	}

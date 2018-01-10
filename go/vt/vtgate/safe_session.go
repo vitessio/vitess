@@ -31,8 +31,9 @@ import (
 // (the use pattern is 'Find', if not found, then 'Append',
 // for a single shard)
 type SafeSession struct {
-	mu           sync.Mutex
-	mustRollback bool
+	mu            sync.Mutex
+	mustRollback  bool
+	InstantCommit bool
 	*vtgatepb.Session
 }
 
@@ -70,6 +71,9 @@ func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.T
 func (session *SafeSession) Append(shardSession *vtgatepb.Session_ShardSession, txMode vtgatepb.TransactionMode) error {
 	session.mu.Lock()
 	defer session.mu.Unlock()
+	if !session.InTransaction() {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: inconsistent state, session is not in transaction, please report this issue to the developers: %v", session.ShardSessions)
+	}
 	// Always append, in order for rollback to succeed.
 	session.ShardSessions = append(session.ShardSessions, shardSession)
 	if session.isSingleDB(txMode) && len(session.ShardSessions) > 1 {
