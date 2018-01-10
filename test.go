@@ -792,7 +792,7 @@ type ByPassTime []TestStats
 
 func (a ByPassTime) Len() int           { return len(a) }
 func (a ByPassTime) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a ByPassTime) Less(i, j int) bool { return a[i].PassTime < a[j].PassTime }
+func (a ByPassTime) Less(i, j int) bool { return a[i].PassTime > a[j].PassTime }
 
 func getTestsSorted(names []string, testMap map[string]*Test) []*Test {
 	sort.Strings(names)
