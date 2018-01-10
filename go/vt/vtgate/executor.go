@@ -550,7 +550,7 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 			RowsAffected: uint64(len(rows)),
 		}, nil
 	case sqlparser.KeywordString(sqlparser.VINDEXES):
-		vschema := e.srvVschema
+		vschema := e.SrvVSchema()
 		if vschema == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema not loaded")
 		}
@@ -839,14 +839,11 @@ func (e *Executor) watchSrvVSchema(ctx context.Context, cell string) {
 			// Otherwise, keep what we already had before.
 			v = nil
 		default:
-			// Watch error, increment our counters, and return.
+			// Watch error, increment our counters.
 			if vschemaCounters != nil {
 				vschemaCounters.Add("WatchError", 1)
 			}
 		}
-
-		// Keep a copy of the latest SrvVschema for show statements.
-		e.srvVschema = v
 
 		// Transform the provided SrvVSchema into a VSchema.
 		var vschema *vindexes.VSchema
@@ -866,7 +863,12 @@ func (e *Executor) watchSrvVSchema(ctx context.Context, cell string) {
 			vschema, _ = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
 		}
 
-		// Build the display version.
+		// Build the display version. At this point, three cases:
+		// - v is nil, vschema is empty, and err is set:
+		//     1. when the watch returned an error.
+		//     2. when BuildVSchema failed.
+		// - v is set, vschema is full, and err is nil:
+		//     3. when everything worked.
 		errorMessage := ""
 		if err != nil {
 			errorMessage = err.Error()
@@ -876,13 +878,17 @@ func (e *Executor) watchSrvVSchema(ctx context.Context, cell string) {
 		// save our value
 		e.mu.Lock()
 		if v != nil {
-			// no errors, we can save our schema
+			// No errors, we can save our VSchema and SrvVSchema
+			// (for show queries).
 			e.vschema = vschema
+			e.srvVschema = v
 		} else {
-			// we had an error, use the empty vschema
-			// if we had nothing before.
-			if e.vschema == nil {
+			// We had an error, use the empty vschema if
+			// we had nothing before, or if the vschema
+			// disappeared.
+			if e.vschema == nil || err == topo.ErrNoNode {
 				e.vschema = vschema
+				e.srvVschema = nil
 			}
 		}
 		e.vschemaStats = stats
@@ -900,6 +906,13 @@ func (e *Executor) VSchema() *vindexes.VSchema {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.vschema
+}
+
+// SrvVSchema returns the SrvVSchema.
+func (e *Executor) SrvVSchema() *vschemapb.SrvVSchema {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.srvVschema
 }
 
 // ParseTarget parses the string representation of a Target
