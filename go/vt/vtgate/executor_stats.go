@@ -84,8 +84,8 @@ function drawQPSChart() {
 
       // Create data points, starting with the most recent timestamp.
       // (On the graph this means going from right to left.)
-      // Time span: 15 minutes in 1 minute intervals.
-      for (var i = 0; i < 15; i++) {
+      // Time span: 15 minutes in 5 second intervals.
+      for (var i = 0; i < 15*60/5; i++) {
         var datum = [sampleDate(now, i)];
         for (var j = 0; j < planTypes.length; j++) {
           if (i < qps[planTypes[j]].length) {
