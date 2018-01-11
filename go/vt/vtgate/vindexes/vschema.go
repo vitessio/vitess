@@ -51,7 +51,7 @@ type Table struct {
 	Pinned         []byte               `json:"pinned,omitempty"`
 }
 
-// Keyspace contains the keyspcae info for each Table.
+// Keyspace contains the keyspace info for each Table.
 type Keyspace struct {
 	Name    string
 	Sharded bool
