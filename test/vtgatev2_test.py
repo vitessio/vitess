@@ -695,7 +695,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
         cursorclass=vtgate_cursor.StreamVTGateCursor)
     stream_cursor.execute('select * from vt_insert_test', {})
     rows = stream_cursor.fetchone()
-    self.assertTrue(isinstance(rows, tuple), 'Received a valid row')
+    self.assertIsInstance(rows, tuple, 'Received a valid row')
     stream_cursor.close()
     vtgate_conn.close()
 
@@ -906,9 +906,8 @@ class TestCoreVTGateFunctions(BaseTestCase):
     v = utils.vtgate.get_vars()
     self.assertIn('VtgateVSchemaCounts', v)
     self.assertIn('Reload', v['VtgateVSchemaCounts'])
-    self.assertTrue(v['VtgateVSchemaCounts']['Reload'] > 0)
-    self.assertIn('WatchError', v['VtgateVSchemaCounts'])
-    self.assertTrue(v['VtgateVSchemaCounts']['WatchError'] > 0)
+    self.assertGreater(v['VtgateVSchemaCounts']['Reload'], 0)
+    self.assertNotIn('WatchError', v['VtgateVSchemaCounts'])
     self.assertNotIn('Parsing', v['VtgateVSchemaCounts'])
 
 
@@ -1136,7 +1135,7 @@ class TestFailures(BaseTestCase):
       # instead of poking into it like this.
       logging.info('Shard session: %s', vtgate_conn.session)
       transaction_id = vtgate_conn.session.shard_sessions[0].transaction_id
-      self.assertTrue(transaction_id != 0)
+      self.assertNotEqual(transaction_id, 0)
     except Exception, e:  # pylint: disable=broad-except
       self.fail('Expected DatabaseError as exception, got %s' % str(e))
     finally:
@@ -1543,8 +1542,8 @@ class TestFailures(BaseTestCase):
     # The true upper limit is 2 seconds (1s * 2 retries as in
     # utils.py). To account for network latencies and other variances,
     # we keep an upper bound of 3 here.
-    self.assertTrue(
-        max(rt_times) < 3,
+    self.assertLess(
+        max(rt_times), 3,
         'at least one request did not fail-fast; round trip times: %s' %
         rt_times)
 

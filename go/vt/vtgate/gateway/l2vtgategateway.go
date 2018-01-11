@@ -31,6 +31,7 @@ import (
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/srvtopo"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
@@ -82,7 +83,7 @@ type l2VTGateGateway struct {
 	statusAggregators map[string]*TabletStatusAggregator
 }
 
-func createL2VTGateGateway(hc discovery.HealthCheck, topoServer *topo.Server, serv topo.SrvTopoServer, cell string, retryCount int) Gateway {
+func createL2VTGateGateway(hc discovery.HealthCheck, topoServer *topo.Server, serv srvtopo.Server, cell string, retryCount int) Gateway {
 	lg := &l2VTGateGateway{
 		retryCount:        retryCount,
 		connMap:           make(map[string][]*l2VTGateConn),
