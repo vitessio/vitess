@@ -14,14 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vtgate
+package srvtopo
 
 import (
 	"encoding/hex"
 	"sort"
 
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
@@ -32,14 +31,16 @@ import (
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
-func mapKeyspaceIdsToShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, keyspace string, tabletType topodatapb.TabletType, keyspaceIds [][]byte) (string, []string, error) {
-	keyspace, _, allShards, err := getKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
+// MapKeyspaceIdsToShards maps the given keyspaceIds to a concrete set
+// of shards.
+func MapKeyspaceIdsToShards(ctx context.Context, topoServ Server, cell, keyspace string, tabletType topodatapb.TabletType, keyspaceIds [][]byte) (string, []string, error) {
+	keyspace, _, allShards, err := GetKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
 	if err != nil {
 		return "", nil, err
 	}
 	var shards = make(map[string]bool)
 	for _, ksID := range keyspaceIds {
-		shard, err := getShardForKeyspaceID(allShards, ksID)
+		shard, err := GetShardForKeyspaceID(allShards, ksID)
 		if err != nil {
 			return "", nil, err
 		}
@@ -52,8 +53,10 @@ func mapKeyspaceIdsToShards(ctx context.Context, topoServ topo.SrvTopoServer, ce
 	return keyspace, res, nil
 }
 
-func getAnyShard(ctx context.Context, topoServ topo.SrvTopoServer, cell, keyspace string, tabletType topodatapb.TabletType) (ks, shard string, err error) {
-	keyspace, _, allShards, err := getKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
+// GetAnyShard returns a shard from the keyspace. In practice, the
+// implementation now returns the first one.
+func GetAnyShard(ctx context.Context, topoServ Server, cell, keyspace string, tabletType topodatapb.TabletType) (ks, shard string, err error) {
+	keyspace, _, allShards, err := GetKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
 	if err != nil {
 		return "", "", err
 	}
@@ -63,7 +66,8 @@ func getAnyShard(ctx context.Context, topoServ topo.SrvTopoServer, cell, keyspac
 	return keyspace, allShards[0].Name, nil
 }
 
-func getAllKeyspaces(ctx context.Context, topoServ topo.SrvTopoServer, cell string) ([]string, error) {
+// GetAllKeyspaces returns all the known keyspaces in a shard.
+func GetAllKeyspaces(ctx context.Context, topoServ Server, cell string) ([]string, error) {
 	keyspaces, err := topoServ.GetSrvKeyspaceNames(ctx, cell)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "keyspace names fetch error: %v", err)
@@ -73,7 +77,9 @@ func getAllKeyspaces(ctx context.Context, topoServ topo.SrvTopoServer, cell stri
 	return keyspaces, nil
 }
 
-func getKeyspaceShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, keyspace string, tabletType topodatapb.TabletType) (string, *topodatapb.SrvKeyspace, []*topodatapb.ShardReference, error) {
+// GetKeyspaceShards return all the shards in a keyspace. It follows
+// redirection if ServedFrom is set.
+func GetKeyspaceShards(ctx context.Context, topoServ Server, cell, keyspace string, tabletType topodatapb.TabletType) (string, *topodatapb.SrvKeyspace, []*topodatapb.ShardReference, error) {
 	srvKeyspace, err := topoServ.GetSrvKeyspace(ctx, cell, keyspace)
 	if err != nil {
 		return "", nil, nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "keyspace %v fetch error: %v", keyspace, err)
@@ -97,7 +103,8 @@ func getKeyspaceShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, k
 	return keyspace, srvKeyspace, partition.ShardReferences, nil
 }
 
-func getShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error) {
+// GetShardForKeyspaceID finds the right shard for a keyspace id.
+func GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error) {
 	if len(allShards) == 0 {
 		return "", vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "No shards found for this tabletType")
 	}
@@ -110,14 +117,15 @@ func getShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []
 	return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "KeyspaceId %v didn't match any shards %+v", hex.EncodeToString(keyspaceID), allShards)
 }
 
-func mapEntityIdsToShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, keyspace string, entityIds []*vtgatepb.ExecuteEntityIdsRequest_EntityId, tabletType topodatapb.TabletType) (string, map[string][]*querypb.Value, error) {
-	keyspace, _, allShards, err := getKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
+// MapEntityIdsToShards returns a map of shards to values to use in that shard.
+func MapEntityIdsToShards(ctx context.Context, topoServ Server, cell, keyspace string, entityIds []*vtgatepb.ExecuteEntityIdsRequest_EntityId, tabletType topodatapb.TabletType) (string, map[string][]*querypb.Value, error) {
+	keyspace, _, allShards, err := GetKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
 	if err != nil {
 		return "", nil, err
 	}
 	var shards = make(map[string][]*querypb.Value)
 	for _, eid := range entityIds {
-		shard, err := getShardForKeyspaceID(allShards, eid.KeyspaceId)
+		shard, err := GetShardForKeyspaceID(allShards, eid.KeyspaceId)
 		if err != nil {
 			return "", nil, err
 		}
@@ -126,17 +134,17 @@ func mapEntityIdsToShards(ctx context.Context, topoServ topo.SrvTopoServer, cell
 	return keyspace, shards, nil
 }
 
-// Given a collection of key-ranges, returns the set of shards that "intersect"
-// them; that is, a shard is included if and only if its corresponding key-space ids
-// are in one of the key-ranges.
-func mapKeyRangesToShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, keyspace string, tabletType topodatapb.TabletType, krs []*topodatapb.KeyRange) (string, []string, error) {
-	keyspace, _, allShards, err := getKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
+// MapKeyRangesToShards returns the set of shards that "intersect"
+// with a collection of key-ranges; that is, a shard is included if
+// and only if its corresponding key-space ids are in one of the key-ranges.
+func MapKeyRangesToShards(ctx context.Context, topoServ Server, cell, keyspace string, tabletType topodatapb.TabletType, krs []*topodatapb.KeyRange) (string, []string, error) {
+	keyspace, _, allShards, err := GetKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
 	if err != nil {
 		return "", nil, err
 	}
 	uniqueShards := make(map[string]bool)
 	for _, kr := range krs {
-		resolveKeyRangeToShards(allShards, uniqueShards, kr)
+		ResolveKeyRangeToShards(allShards, uniqueShards, kr)
 	}
 	var res = make([]string, 0, len(uniqueShards))
 	for s := range uniqueShards {
@@ -145,8 +153,8 @@ func mapKeyRangesToShards(ctx context.Context, topoServ topo.SrvTopoServer, cell
 	return keyspace, res, nil
 }
 
-// This maps a list of keyranges to shard names.
-func resolveKeyRangeToShards(allShards []*topodatapb.ShardReference, matches map[string]bool, kr *topodatapb.KeyRange) {
+// ResolveKeyRangeToShards maps a list of keyranges to shard names.
+func ResolveKeyRangeToShards(allShards []*topodatapb.ShardReference, matches map[string]bool, kr *topodatapb.KeyRange) {
 	if !key.KeyRangeIsPartial(kr) {
 		for _, shard := range allShards {
 			matches[shard.Name] = true
@@ -160,10 +168,10 @@ func resolveKeyRangeToShards(allShards []*topodatapb.ShardReference, matches map
 	}
 }
 
-// mapExactShards maps a keyrange to shards only if there's a complete
+// MapExactShards maps a keyrange to shards only if there's a complete
 // match. If there's any partial match the function returns no match.
-func mapExactShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, keyspace string, tabletType topodatapb.TabletType, kr *topodatapb.KeyRange) (newkeyspace string, shards []string, err error) {
-	keyspace, _, allShards, err := getKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
+func MapExactShards(ctx context.Context, topoServ Server, cell, keyspace string, tabletType topodatapb.TabletType, kr *topodatapb.KeyRange) (newkeyspace string, shards []string, err error) {
+	keyspace, _, allShards, err := GetKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
 	if err != nil {
 		return "", nil, err
 	}
@@ -182,43 +190,4 @@ func mapExactShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, keys
 		shardnum++
 	}
 	return keyspace, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyrange %v does not exactly match shards", key.KeyRangeString(kr))
-}
-
-func boundShardQueriesToScatterBatchRequest(boundQueries []*vtgatepb.BoundShardQuery) (*scatterBatchRequest, error) {
-	requests := &scatterBatchRequest{
-		Length:   len(boundQueries),
-		Requests: make(map[string]*shardBatchRequest),
-	}
-	for i, boundQuery := range boundQueries {
-		for shard := range unique(boundQuery.Shards) {
-			key := boundQuery.Keyspace + ":" + shard
-			request := requests.Requests[key]
-			if request == nil {
-				request = &shardBatchRequest{
-					Keyspace: boundQuery.Keyspace,
-					Shard:    shard,
-				}
-				requests.Requests[key] = request
-			}
-			request.Queries = append(request.Queries, boundQuery.Query)
-			request.ResultIndexes = append(request.ResultIndexes, i)
-		}
-	}
-	return requests, nil
-}
-
-func boundKeyspaceIDQueriesToBoundShardQueries(ctx context.Context, topoServ topo.SrvTopoServer, cell string, tabletType topodatapb.TabletType, idQueries []*vtgatepb.BoundKeyspaceIdQuery) ([]*vtgatepb.BoundShardQuery, error) {
-	shardQueries := make([]*vtgatepb.BoundShardQuery, len(idQueries))
-	for i, idQuery := range idQueries {
-		keyspace, shards, err := mapKeyspaceIdsToShards(ctx, topoServ, cell, idQuery.Keyspace, tabletType, idQuery.KeyspaceIds)
-		if err != nil {
-			return nil, err
-		}
-		shardQueries[i] = &vtgatepb.BoundShardQuery{
-			Query:    idQuery.Query,
-			Keyspace: keyspace,
-			Shards:   shards,
-		}
-	}
-	return shardQueries, nil
 }

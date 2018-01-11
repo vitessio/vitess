@@ -27,6 +27,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/srvtopo"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -58,7 +59,7 @@ type RegisterL2VTGate func(queryservice.QueryService)
 var RegisterL2VTGates []RegisterL2VTGate
 
 // Init creates the single L2VTGate with the provided parameters.
-func Init(hc discovery.HealthCheck, topoServer *topo.Server, serv topo.SrvTopoServer, statsName, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *L2VTGate {
+func Init(hc discovery.HealthCheck, topoServer *topo.Server, serv srvtopo.Server, statsName, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *L2VTGate {
 	if l2VTGate != nil {
 		log.Fatalf("L2VTGate already initialized")
 	}

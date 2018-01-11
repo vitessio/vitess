@@ -589,6 +589,14 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertIn('user', v['keyspaces'])
     self.assertIn('lookup', v['keyspaces'])
 
+    # Wait for vtgate to re-read it.
+    timeout = 10
+    while True:
+      vschema_json = utils.vtgate.get_vschema()
+      if 'lookup' in vschema_json:
+        break
+      timeout = utils.wait_step('vtgate re-read vschema', timeout)
+
   def test_user(self):
     count = 4
     vtgate_conn = get_connection()
@@ -1084,7 +1092,8 @@ class TestVTGateFunctions(unittest.TestCase):
         vtgate_conn,
         'insert into vt_multicolvin (cola, colb, colc, kid) '
         'values (:cola, :colb, :colc, :kid)',
-        {'kid': 5, 'cola': 'cola_value', 'colb': 'colb_value', 'colc': 'colc_value'})
+        {'kid': 5, 'cola': 'cola_value', 'colb': 'colb_value',
+         'colc': 'colc_value'})
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
 
@@ -1092,12 +1101,15 @@ class TestVTGateFunctions(unittest.TestCase):
     vtgate_conn.begin()
     result = self.execute_on_master(
         vtgate_conn,
-        'update vt_multicolvin set cola = :cola, colb = :colb, colc = :colc where kid = :kid',
-        {'kid': 5, 'cola': 'cola_newvalue', 'colb': 'colb_newvalue', 'colc': 'colc_newvalue'})
+        'update vt_multicolvin set cola = :cola, colb = :colb, colc = :colc'
+        ' where kid = :kid',
+        {'kid': 5, 'cola': 'cola_newvalue', 'colb': 'colb_newvalue',
+         'colc': 'colc_newvalue'})
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
     result = self.execute_on_master(
-        vtgate_conn, 'select cola, colb, colc from vt_multicolvin where kid = 5', {})
+        vtgate_conn,
+        'select cola, colb, colc from vt_multicolvin where kid = 5', {})
     self.assertEqual(
         result,
         ([('cola_newvalue', 'colb_newvalue', 'colc_newvalue')], 1, 0,
@@ -1142,9 +1154,12 @@ class TestVTGateFunctions(unittest.TestCase):
     result = self.execute_on_master(
         vtgate_conn,
         'insert into vt_multicolvin (cola, colb, colc, kid) '
-        'values (:cola0, :colb0, :colc0, :kid0), (:cola1, :colb1, :colc1, :kid1)',
-        {'kid0': 6, 'cola0': 'cola0_value', 'colb0': 'colb0_value', 'colc0': 'colc0_value',
-         'kid1': 7, 'cola1': 'cola1_value', 'colb1': 'colb1_value', 'colc1': 'colc1_value'
+        'values (:cola0, :colb0, :colc0, :kid0),'
+        ' (:cola1, :colb1, :colc1, :kid1)',
+        {'kid0': 6, 'cola0': 'cola0_value', 'colb0': 'colb0_value',
+         'colc0': 'colc0_value',
+         'kid1': 7, 'cola1': 'cola1_value', 'colb1': 'colb1_value',
+         'colc1': 'colc1_value'
         })
     self.assertEqual(result, ([], 2L, 0L, []))
     vtgate_conn.commit()
@@ -1746,14 +1761,13 @@ class TestVTGateFunctions(unittest.TestCase):
     """Tests the variables exported by vtgate.
 
     This test needs to run as the last test, as it depends on what happened
-    previously. The WatchError happens when we delete and re-create the
-    SrvVSchema.
+    previously.
     """
     v = utils.vtgate.get_vars()
     self.assertIn('VtgateVSchemaCounts', v)
     self.assertIn('Reload', v['VtgateVSchemaCounts'])
     self.assertGreater(v['VtgateVSchemaCounts']['Reload'], 0)
-    self.assertGreater(v['VtgateVSchemaCounts']['WatchError'], 0)
+    self.assertNotIn('WatchError', v['VtgateVSchemaCounts'], 0)
     self.assertNotIn('Parsing', v['VtgateVSchemaCounts'])
 
 if __name__ == '__main__':

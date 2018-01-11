@@ -274,6 +274,29 @@ type shardBatchRequest struct {
 	ResultIndexes   []int
 }
 
+func boundShardQueriesToScatterBatchRequest(boundQueries []*vtgatepb.BoundShardQuery) (*scatterBatchRequest, error) {
+	requests := &scatterBatchRequest{
+		Length:   len(boundQueries),
+		Requests: make(map[string]*shardBatchRequest),
+	}
+	for i, boundQuery := range boundQueries {
+		for shard := range unique(boundQuery.Shards) {
+			key := boundQuery.Keyspace + ":" + shard
+			request := requests.Requests[key]
+			if request == nil {
+				request = &shardBatchRequest{
+					Keyspace: boundQuery.Keyspace,
+					Shard:    shard,
+				}
+				requests.Requests[key] = request
+			}
+			request.Queries = append(request.Queries, boundQuery.Query)
+			request.ResultIndexes = append(request.ResultIndexes, i)
+		}
+	}
+	return requests, nil
+}
+
 // ExecuteBatch executes a batch of non-streaming queries on the specified shards.
 func (stc *ScatterConn) ExecuteBatch(
 	ctx context.Context,
