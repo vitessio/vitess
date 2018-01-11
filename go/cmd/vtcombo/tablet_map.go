@@ -391,7 +391,7 @@ func (itc *internalTabletConn) ReadTransaction(ctx context.Context, target *quer
 }
 
 // BeginExecute is part of queryservice.QueryService
-func (itc *internalTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
+func (itc *internalTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, alsoCommit bool, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
 	transactionID, err := itc.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, err

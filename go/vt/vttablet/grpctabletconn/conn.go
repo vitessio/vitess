@@ -434,7 +434,7 @@ func (conn *gRPCQueryClient) ReadTransaction(ctx context.Context, target *queryp
 }
 
 // BeginExecute starts a transaction and runs an Execute.
-func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (result *sqltypes.Result, transactionID int64, err error) {
+func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, alsoCommit bool, options *querypb.ExecuteOptions) (result *sqltypes.Result, transactionID int64, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -449,7 +449,8 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 			Sql:           query,
 			BindVariables: bindVars,
 		},
-		Options: options,
+		Options:    options,
+		AlsoCommit: alsoCommit,
 	}
 	reply, err := conn.c.BeginExecute(ctx, req)
 	if err != nil {

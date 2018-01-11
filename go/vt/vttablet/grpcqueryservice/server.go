@@ -250,7 +250,7 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 		request.ImmediateCallerId,
 	)
 
-	result, transactionID, err := q.server.BeginExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.Options)
+	result, transactionID, err := q.server.BeginExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.AlsoCommit, request.Options)
 	if err != nil {
 		// if we have a valid transactionID, return the error in-band
 		if transactionID != 0 {

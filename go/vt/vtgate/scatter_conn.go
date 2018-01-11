@@ -134,7 +134,7 @@ func (stc *ScatterConn) Execute(
 			var innerqr *sqltypes.Result
 			if shouldBegin {
 				var err error
-				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, query, bindVars, options)
+				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, query, bindVars, false, options)
 				if err != nil {
 					return transactionID, err
 				}
@@ -163,6 +163,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
+	canAutocommit bool,
 	options *querypb.ExecuteOptions,
 ) (*sqltypes.Result, error) {
 
@@ -186,7 +187,13 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			var innerqr *sqltypes.Result
 			if shouldBegin {
 				var err error
-				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, options)
+				alsoCommit := canAutocommit && session.InstantCommit
+				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, alsoCommit, options)
+				if alsoCommit {
+					transactionID = 0
+					// To be safe, set the session to rollback.
+					session.SetRollback()
+				}
 				if err != nil {
 					return transactionID, err
 				}
@@ -237,7 +244,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 
 			if shouldBegin {
 				var err error
-				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, sql, bindVars[target.Shard], options)
+				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, sql, bindVars[target.Shard], false, options)
 				if err != nil {
 					return transactionID, err
 				}
