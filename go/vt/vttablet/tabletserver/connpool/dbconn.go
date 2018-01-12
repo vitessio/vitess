@@ -68,9 +68,10 @@ func NewDBConn(
 		return nil, err
 	}
 	return &DBConn{
-		conn: c,
-		info: appParams,
-		pool: cp,
+		conn:    c,
+		info:    appParams,
+		pool:    cp,
+		dbaPool: cp.dbaPool,
 	}, nil
 }
 
@@ -293,16 +294,7 @@ func (dbc *DBConn) Recycle() {
 func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 	tabletenv.KillStats.Add("Queries", 1)
 	log.Infof("Due to %s, elapsed time: %v, killing query %s", reason, elapsed, dbc.Current())
-	// Hack: Most of the times DBConn is created with a pool. There is a snowflake case
-	// (NewDBConnNoPool) used for AppDebug user where there is no pool set.
-	// In those cases dbaPool will be available in the context directly.
-	var dbaPool *dbconnpool.ConnectionPool
-	if dbc.pool == nil {
-		dbaPool = dbc.dbaPool
-	} else {
-		dbaPool = dbc.pool.dbaPool
-	}
-	killConn, err := dbaPool.Get(context.TODO())
+	killConn, err := dbc.dbaPool.Get(context.TODO())
 	if err != nil {
 		log.Warningf("Failed to get conn from dba pool: %v", err)
 		return err
