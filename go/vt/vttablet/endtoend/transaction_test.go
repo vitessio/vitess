@@ -307,7 +307,7 @@ func TestAutoCommitOff(t *testing.T) {
 	defer framework.Server.SetAutoCommit(true)
 
 	_, err := framework.NewClient().Execute("insert into vitess_test values(4, null, null, null)", nil)
-	want := "disallowed outside transaction"
+	want := "INSERT_PK disallowed outside transaction"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("%v, must start with %s", err, want)
 	}
@@ -395,7 +395,7 @@ func TestForUpdate(t *testing.T) {
 		client := framework.NewClient()
 		query := fmt.Sprintf("select * from vitess_test where intval=2 %s", mode)
 		_, err := client.Execute(query, nil)
-		want := "disallowed"
+		want := "SELECT_LOCK disallowed outside transaction"
 		if err == nil || !strings.HasPrefix(err.Error(), want) {
 			t.Errorf("%v, must have prefix %s", err, want)
 		}

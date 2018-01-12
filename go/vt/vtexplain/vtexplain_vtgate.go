@@ -29,7 +29,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/srvtopo"
 	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
@@ -70,7 +70,7 @@ func initVtgateExecutor(vSchemaStr string, opts *Options) error {
 	return nil
 }
 
-func newFakeResolver(hc discovery.HealthCheck, serv topo.SrvTopoServer, cell string) *vtgate.Resolver {
+func newFakeResolver(hc discovery.HealthCheck, serv srvtopo.Server, cell string) *vtgate.Resolver {
 	gw := gateway.GetCreator()(hc, nil, serv, cell, 3)
 	gw.WaitForTablets(context.Background(), []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
 	tc := vtgate.NewTxConn(gw, vtgatepb.TransactionMode_MULTI)

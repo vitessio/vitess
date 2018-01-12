@@ -36,6 +36,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/srvtopo"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -62,7 +63,7 @@ func init() {
 // Executor is the engine that executes queries by utilizing
 // the abilities of the underlying vttablets.
 type Executor struct {
-	serv        topo.SrvTopoServer
+	serv        srvtopo.Server
 	cell        string
 	resolver    *Resolver
 	scatterConn *ScatterConn
@@ -81,7 +82,7 @@ type Executor struct {
 var executorOnce sync.Once
 
 // NewExecutor creates a new Executor.
-func NewExecutor(ctx context.Context, serv topo.SrvTopoServer, cell, statsName string, resolver *Resolver, normalize bool, streamSize int, queryPlanCacheSize int64, legacyAutocommit bool) *Executor {
+func NewExecutor(ctx context.Context, serv srvtopo.Server, cell, statsName string, resolver *Resolver, normalize bool, streamSize int, queryPlanCacheSize int64, legacyAutocommit bool) *Executor {
 	e := &Executor{
 		serv:             serv,
 		cell:             cell,
@@ -111,7 +112,7 @@ func NewExecutor(ctx context.Context, serv topo.SrvTopoServer, cell, statsName s
 // Execute executes a non-streaming query.
 func (e *Executor) Execute(ctx context.Context, method string, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (result *sqltypes.Result, err error) {
 	logStats := NewLogStats(ctx, method, sql, bindVars)
-	result, err = e.execute(ctx, method, session, sql, bindVars, logStats)
+	result, err = e.execute(ctx, session, sql, bindVars, logStats)
 	logStats.Error = err
 
 	// The mysql plugin runs an implicit rollback whenever a connection closes.
@@ -123,7 +124,7 @@ func (e *Executor) Execute(ctx context.Context, method string, session *vtgatepb
 	return result, err
 }
 
-func (e *Executor) execute(ctx context.Context, method string, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (*sqltypes.Result, error) {
 	// Start an implicit transaction if necessary.
 	// TODO(sougou): deprecate legacyMode after all users are migrated out.
 	if !e.legacyAutocommit && !session.Autocommit && !session.InTransaction {
@@ -282,7 +283,7 @@ func (e *Executor) handleDDL(ctx context.Context, session *vtgatepb.Session, sql
 	f := func(keyspace string) (string, []string, error) {
 		var shards []string
 		if target.Shard == "" {
-			ks, _, allShards, err := getKeyspaceShards(ctx, e.serv, e.cell, keyspace, target.TabletType)
+			ks, _, allShards, err := srvtopo.GetKeyspaceShards(ctx, e.serv, e.cell, keyspace, target.TabletType)
 			if err != nil {
 				return "", nil, err
 			}
@@ -483,7 +484,7 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 
 	switch show.Type {
 	case sqlparser.KeywordString(sqlparser.DATABASES), sqlparser.KeywordString(sqlparser.VITESS_KEYSPACES):
-		keyspaces, err := getAllKeyspaces(ctx, e.serv, e.cell)
+		keyspaces, err := srvtopo.GetAllKeyspaces(ctx, e.serv, e.cell)
 		if err != nil {
 			return nil, err
 		}
@@ -499,14 +500,14 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 			RowsAffected: uint64(len(rows)),
 		}, nil
 	case sqlparser.KeywordString(sqlparser.VITESS_SHARDS):
-		keyspaces, err := getAllKeyspaces(ctx, e.serv, e.cell)
+		keyspaces, err := srvtopo.GetAllKeyspaces(ctx, e.serv, e.cell)
 		if err != nil {
 			return nil, err
 		}
 
 		var rows [][]sqltypes.Value
 		for _, keyspace := range keyspaces {
-			_, _, shards, err := getKeyspaceShards(ctx, e.serv, e.cell, keyspace, target.TabletType)
+			_, _, shards, err := srvtopo.GetKeyspaceShards(ctx, e.serv, e.cell, keyspace, target.TabletType)
 			if err != nil {
 				// There might be a misconfigured keyspace or no shards in the keyspace.
 				// Skip any errors and move on.
@@ -549,7 +550,7 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 			RowsAffected: uint64(len(rows)),
 		}, nil
 	case sqlparser.KeywordString(sqlparser.VINDEXES):
-		vschema := e.srvVschema
+		vschema := e.SrvVSchema()
 		if vschema == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema not loaded")
 		}
@@ -663,7 +664,7 @@ func (e *Executor) handleOther(ctx context.Context, session *vtgatepb.Session, s
 	}
 	if target.Shard == "" {
 		var err error
-		target.Keyspace, target.Shard, err = getAnyShard(ctx, e.serv, e.cell, target.Keyspace, target.TabletType)
+		target.Keyspace, target.Shard, err = srvtopo.GetAnyShard(ctx, e.serv, e.cell, target.Keyspace, target.TabletType)
 		if err != nil {
 			return nil, err
 		}
@@ -767,7 +768,7 @@ func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []
 		nil,
 	)
 
-	newKeyspace, _, allShards, err := getKeyspaceShards(ctx, e.serv, e.cell, table.Keyspace.Name, topodatapb.TabletType_MASTER)
+	newKeyspace, _, allShards, err := srvtopo.GetKeyspaceShards(ctx, e.serv, e.cell, table.Keyspace.Name, topodatapb.TabletType_MASTER)
 	if err != nil {
 		return 0, err
 	}
@@ -790,7 +791,7 @@ func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []
 			if ksid == nil {
 				continue
 			}
-			shard, err := getShardForKeyspaceID(allShards, ksid)
+			shard, err := srvtopo.GetShardForKeyspaceID(allShards, ksid)
 			if err != nil {
 				return 0, err
 			}
@@ -824,110 +825,80 @@ func (e *Executor) IsKeyspaceRangeBasedSharded(keyspace string) bool {
 // This function will wait until the first value has either been processed
 // or triggered an error before returning.
 func (e *Executor) watchSrvVSchema(ctx context.Context, cell string) {
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-
-	go func() {
-		foundFirstValue := false
-
+	e.serv.WatchSrvVSchema(ctx, cell, func(v *vschemapb.SrvVSchema, err error) {
 		// Create a closure to save the vschema. If the value
 		// passed is nil, it means we encountered an error and
 		// we don't know the real value. In this case, we want
 		// to use the previous value if it was set, or an
 		// empty vschema if it wasn't.
-		saveVSchema := func(v *vschemapb.SrvVSchema, errorMessage string) {
-			// keep a copy of the latest SrvVschema for show statements
-			e.srvVschema = v
-
-			// transform the provided SrvVSchema into a VSchema
-			var vschema *vindexes.VSchema
-			if v != nil {
-				var err error
-				vschema, err = vindexes.BuildVSchema(v)
-				if err != nil {
-					log.Warningf("Error creating VSchema for cell %v (will try again next update): %v", cell, err)
-					v = nil
-					errorMessage = fmt.Sprintf("Error creating VSchema for cell %v: %v", cell, err)
-					if vschemaCounters != nil {
-						vschemaCounters.Add("Parsing", 1)
-					}
-				}
-			}
-			if v == nil {
-				// we encountered an error, build an
-				// empty vschema
-				vschema, _ = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
-			}
-
-			// Build the display version.
-			stats := NewVSchemaStats(vschema, errorMessage)
-
-			// save our value
-			e.mu.Lock()
-			if v != nil {
-				// no errors, we can save our schema
-				e.vschema = vschema
-			} else {
-				// we had an error, use the empty vschema
-				// if we had nothing before.
-				if e.vschema == nil {
-					e.vschema = vschema
-				}
-			}
-			e.vschemaStats = stats
-			e.mu.Unlock()
-			e.plans.Clear()
-
+		switch err {
+		case nil:
+			// Good case, we can try to save that value.
+		case topo.ErrNoNode:
+			// If the SrvVschema disappears, we need to clear our record.
+			// Otherwise, keep what we already had before.
+			v = nil
+		default:
+			// Watch error, increment our counters.
 			if vschemaCounters != nil {
-				vschemaCounters.Add("Reload", 1)
-			}
-
-			// notify the listener
-			if !foundFirstValue {
-				foundFirstValue = true
-				wg.Done()
+				vschemaCounters.Add("WatchError", 1)
 			}
 		}
 
-		for {
-			current, changes, _ := e.serv.WatchSrvVSchema(ctx, cell)
-			if current.Err != nil {
-				// Don't log if there is no VSchema to start with.
-				if current.Err != topo.ErrNoNode {
-					log.Warningf("Error watching vschema for cell %s (will wait 5s before retrying): %v", cell, current.Err)
-				}
-				saveVSchema(nil, fmt.Sprintf("Error watching SvrVSchema: %v", current.Err.Error()))
+		// Transform the provided SrvVSchema into a VSchema.
+		var vschema *vindexes.VSchema
+		if v != nil {
+			vschema, err = vindexes.BuildVSchema(v)
+			if err != nil {
+				log.Warningf("Error creating VSchema for cell %v (will try again next update): %v", cell, err)
+				v = nil
+				err = fmt.Errorf("Error creating VSchema for cell %v: %v", cell, err)
 				if vschemaCounters != nil {
-					vschemaCounters.Add("WatchError", 1)
+					vschemaCounters.Add("Parsing", 1)
 				}
-				time.Sleep(5 * time.Second)
-				continue
 			}
-			saveVSchema(current.Value, "")
-
-			for c := range changes {
-				if c.Err != nil {
-					// If the SrvVschema disappears, we need to clear our record.
-					// Otherwise, keep what we already had before.
-					if c.Err == topo.ErrNoNode {
-						saveVSchema(nil, "SrvVSchema object was removed from topology.")
-					}
-					log.Warningf("Error while watching vschema for cell %s (will wait 5s before retrying): %v", cell, c.Err)
-					if vschemaCounters != nil {
-						vschemaCounters.Add("WatchError", 1)
-					}
-					break
-				}
-				saveVSchema(c.Value, "")
-			}
-
-			// Sleep a bit before trying again.
-			time.Sleep(5 * time.Second)
 		}
-	}()
+		if v == nil {
+			// We encountered an error, build an empty vschema.
+			vschema, _ = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
+		}
 
-	// wait for the first value to have been processed
-	wg.Wait()
+		// Build the display version. At this point, three cases:
+		// - v is nil, vschema is empty, and err is set:
+		//     1. when the watch returned an error.
+		//     2. when BuildVSchema failed.
+		// - v is set, vschema is full, and err is nil:
+		//     3. when everything worked.
+		errorMessage := ""
+		if err != nil {
+			errorMessage = err.Error()
+		}
+		stats := NewVSchemaStats(vschema, errorMessage)
+
+		// save our value
+		e.mu.Lock()
+		if v != nil {
+			// No errors, we can save our VSchema and SrvVSchema
+			// (for show queries).
+			e.vschema = vschema
+			e.srvVschema = v
+		} else {
+			// We had an error, use the empty vschema if
+			// we had nothing before, or if the vschema
+			// disappeared.
+			if e.vschema == nil || err == topo.ErrNoNode {
+				e.vschema = vschema
+				e.srvVschema = nil
+			}
+		}
+		e.vschemaStats = stats
+		e.mu.Unlock()
+		e.plans.Clear()
+
+		if vschemaCounters != nil {
+			vschemaCounters.Add("Reload", 1)
+		}
+	})
 }
 
 // VSchema returns the VSchema.
@@ -935,6 +906,13 @@ func (e *Executor) VSchema() *vindexes.VSchema {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.vschema
+}
+
+// SrvVSchema returns the SrvVSchema.
+func (e *Executor) SrvVSchema() *vschemapb.SrvVSchema {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.srvVschema
 }
 
 // ParseTarget parses the string representation of a Target
