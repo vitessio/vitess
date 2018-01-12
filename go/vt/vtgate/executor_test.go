@@ -553,8 +553,8 @@ func TestExecutorShow(t *testing.T) {
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "Alias", "Hostname"),
 		Rows: [][]sqltypes.Value{
-			buildVarCharRow("FakeCell", "TestExecutor", "-20", "MASTER", "cell:\"aa\" ", "-20"),
-			buildVarCharRow("FakeCell", "TestUnsharded", "0", "MASTER", "cell:\"aa\" ", "0"),
+			buildVarCharRow("FakeCell", "TestExecutor", "-20", "MASTER", "aa-0000000000", "-20"),
+			buildVarCharRow("FakeCell", "TestUnsharded", "0", "MASTER", "aa-0000000000", "0"),
 		},
 		RowsAffected: 9,
 	}
