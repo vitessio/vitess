@@ -349,6 +349,7 @@ var keywords = map[string]int{
 	"view":                VIEW,
 	"vitess_keyspaces":    VITESS_KEYSPACES,
 	"vitess_shards":       VITESS_SHARDS,
+	"vitess_tablets":      VITESS_TABLETS,
 	"vschema_tables":      VSCHEMA_TABLES,
 	"when":                WHEN,
 	"where":               WHERE,
