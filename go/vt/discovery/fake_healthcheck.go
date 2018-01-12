@@ -17,6 +17,7 @@ limitations under the License.
 package discovery
 
 import (
+	"sort"
 	"sync"
 
 	"github.com/youtube/vitess/go/vt/topo"
@@ -122,9 +123,21 @@ func (fhc *FakeHealthCheck) GetConnection(key string) queryservice.QueryService 
 	return nil
 }
 
-// CacheStatus is not implemented.
+// CacheStatus returns the status for each tablet
 func (fhc *FakeHealthCheck) CacheStatus() TabletsCacheStatusList {
-	return nil
+	fhc.mu.Lock()
+	defer fhc.mu.Unlock()
+
+	stats := make(TabletsCacheStatusList, 0, len(fhc.items))
+	for _, item := range fhc.items {
+		stats = append(stats, &TabletsCacheStatus{
+			Cell:         "FakeCell",
+			Target:       item.ts.Target,
+			TabletsStats: TabletStatsList{item.ts},
+		})
+	}
+	sort.Sort(stats)
+	return stats
 }
 
 // Close is not implemented.

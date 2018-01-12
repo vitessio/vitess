@@ -159,7 +159,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server
 
 	tc := NewTxConn(gw, getTxMode())
 	// ScatterConn depends on TxConn to perform forced rollbacks.
-	sc := NewScatterConn("VttabletCall", tc, gw)
+	sc := NewScatterConn("VttabletCall", tc, gw, hc)
 	resolver := NewResolver(serv, cell, sc)
 
 	rpcVTGate = &VTGate{
