@@ -28,6 +28,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
@@ -49,6 +50,7 @@ type ScatterConn struct {
 	tabletCallErrorCount *stats.MultiCounters
 	txConn               *TxConn
 	gateway              gateway.Gateway
+	healthCheck          discovery.HealthCheck
 }
 
 // shardActionFunc defines the contract for a shard action
@@ -69,7 +71,7 @@ type shardActionFunc func(target *querypb.Target) error
 type shardActionTransactionFunc func(target *querypb.Target, shouldBegin bool, transactionID int64) (int64, error)
 
 // NewScatterConn creates a new ScatterConn.
-func NewScatterConn(statsName string, txConn *TxConn, gw gateway.Gateway) *ScatterConn {
+func NewScatterConn(statsName string, txConn *TxConn, gw gateway.Gateway, hc discovery.HealthCheck) *ScatterConn {
 	tabletCallErrorCountStatsName := ""
 	if statsName != "" {
 		tabletCallErrorCountStatsName = statsName + "ErrorCount"
@@ -79,6 +81,7 @@ func NewScatterConn(statsName string, txConn *TxConn, gw gateway.Gateway) *Scatt
 		tabletCallErrorCount: stats.NewMultiCounters(tabletCallErrorCountStatsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
 		txConn:               txConn,
 		gateway:              gw,
+		healthCheck:          hc,
 	}
 }
 
