@@ -534,7 +534,7 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 					s.Target.Keyspace,
 					s.Target.Shard,
 					ts.Tablet.Type.String(),
-					ts.Tablet.Alias.String(),
+					topoproto.TabletAliasString(ts.Tablet.Alias),
 					ts.Tablet.Hostname,
 				))
 			}
