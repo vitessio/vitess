@@ -524,6 +524,26 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 			Rows:         rows,
 			RowsAffected: uint64(len(rows)),
 		}, nil
+	case sqlparser.KeywordString(sqlparser.VITESS_TABLETS):
+		var rows [][]sqltypes.Value
+		stats := e.scatterConn.healthCheck.CacheStatus()
+		for _, s := range stats {
+			for _, ts := range s.TabletsStats {
+				rows = append(rows, buildVarCharRow(
+					s.Cell,
+					s.Target.Keyspace,
+					s.Target.Shard,
+					ts.Tablet.Type.String(),
+					topoproto.TabletAliasString(ts.Tablet.Alias),
+					ts.Tablet.Hostname,
+				))
+			}
+		}
+		return &sqltypes.Result{
+			Fields:       buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "Alias", "Hostname"),
+			Rows:         rows,
+			RowsAffected: uint64(len(rows)),
+		}, nil
 	case sqlparser.KeywordString(sqlparser.VSCHEMA_TABLES):
 		if target.Keyspace == "" {
 			return nil, errNoKeyspace

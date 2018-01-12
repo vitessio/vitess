@@ -956,14 +956,13 @@ var (
 		input:  "show vindexes on t",
 		output: "show vindexes on t",
 	}, {
-		input:  "show vitess_keyspaces",
-		output: "show vitess_keyspaces",
+		input: "show vitess_keyspaces",
 	}, {
-		input:  "show vitess_shards",
-		output: "show vitess_shards",
+		input: "show vitess_shards",
 	}, {
-		input:  "show vschema_tables",
-		output: "show vschema_tables",
+		input: "show vitess_tablets",
+	}, {
+		input: "show vschema_tables",
 	}, {
 		input:  "show warnings",
 		output: "show warnings",
