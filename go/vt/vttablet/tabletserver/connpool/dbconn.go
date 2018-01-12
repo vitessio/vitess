@@ -291,12 +291,34 @@ func (dbc *DBConn) Recycle() {
 func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 	tabletenv.KillStats.Add("Queries", 1)
 	log.Infof("Due to %s, elapsed time: %v, killing query %s", reason, elapsed, dbc.Current())
+	// When using appDebug feature, there is no connection pool.
+	// Hence a different way of  killing the transaction
+	if dbc.pool == nil {
+		return dbc.killNoPool(reason, elapsed)
+	}
 	killConn, err := dbc.pool.dbaPool.Get(context.TODO())
 	if err != nil {
 		log.Warningf("Failed to get conn from dba pool: %v", err)
 		return err
 	}
 	defer killConn.Recycle()
+	sql := fmt.Sprintf("kill %d", dbc.conn.ID())
+	_, err = killConn.ExecuteFetch(sql, 10000, false)
+	if err != nil {
+		log.Errorf("Could not kill query %s: %v", dbc.Current(), err)
+		return err
+	}
+	return nil
+}
+
+// this method is used in Kill when there is no transaction pool
+func (dbc *DBConn) killNoPool(reason string, elapsed time.Duration) error {
+	killConn, err := dbconnpool.NewDBConnection(dbc.info, tabletenv.MySQLStats)
+	if err != nil {
+		log.Warningf("Failed to get conn to kill transaction: %v", err)
+		return err
+	}
+	defer killConn.Close()
 	sql := fmt.Sprintf("kill %d", dbc.conn.ID())
 	_, err = killConn.ExecuteFetch(sql, 10000, false)
 	if err != nil {
