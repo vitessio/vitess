@@ -53,6 +53,7 @@ const (
 type DBConn struct {
 	conn    *dbconnpool.DBConnection
 	info    *mysql.ConnParams
+	dbaPool *dbconnpool.ConnectionPool
 	pool    *Pool
 	current sync2.AtomicString
 }
@@ -74,15 +75,16 @@ func NewDBConn(
 }
 
 // NewDBConnNoPool creates a new DBConn without a pool.
-func NewDBConnNoPool(params *mysql.ConnParams) (*DBConn, error) {
+func NewDBConnNoPool(params *mysql.ConnParams, dbaPool *dbconnpool.ConnectionPool) (*DBConn, error) {
 	c, err := dbconnpool.NewDBConnection(params, tabletenv.MySQLStats)
 	if err != nil {
 		return nil, err
 	}
 	return &DBConn{
-		conn: c,
-		info: params,
-		pool: nil,
+		conn:    c,
+		info:    params,
+		dbaPool: dbaPool,
+		pool:    nil,
 	}, nil
 }
 
@@ -291,34 +293,20 @@ func (dbc *DBConn) Recycle() {
 func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 	tabletenv.KillStats.Add("Queries", 1)
 	log.Infof("Due to %s, elapsed time: %v, killing query %s", reason, elapsed, dbc.Current())
-	// When using appDebug feature, there is no connection pool.
-	// Hence a different way of  killing the transaction
+	// Hack: when using appDebug feature, there is no connection pool, so
+	// connections needs to be killed in a different way.
+	var dbaPool *dbconnpool.ConnectionPool
 	if dbc.pool == nil {
-		return dbc.killNoPool(reason, elapsed)
+		dbaPool = dbc.dbaPool
+	} else {
+		dbaPool = dbc.pool.dbaPool
 	}
-	killConn, err := dbc.pool.dbaPool.Get(context.TODO())
+	killConn, err := dbaPool.Get(context.TODO())
 	if err != nil {
 		log.Warningf("Failed to get conn from dba pool: %v", err)
 		return err
 	}
 	defer killConn.Recycle()
-	sql := fmt.Sprintf("kill %d", dbc.conn.ID())
-	_, err = killConn.ExecuteFetch(sql, 10000, false)
-	if err != nil {
-		log.Errorf("Could not kill query %s: %v", dbc.Current(), err)
-		return err
-	}
-	return nil
-}
-
-// this method is used in Kill when there is no transaction pool
-func (dbc *DBConn) killNoPool(reason string, elapsed time.Duration) error {
-	killConn, err := dbconnpool.NewDBConnection(dbc.info, tabletenv.MySQLStats)
-	if err != nil {
-		log.Warningf("Failed to get conn to kill transaction: %v", err)
-		return err
-	}
-	defer killConn.Close()
 	sql := fmt.Sprintf("kill %d", dbc.conn.ID())
 	_, err = killConn.ExecuteFetch(sql, 10000, false)
 	if err != nil {
