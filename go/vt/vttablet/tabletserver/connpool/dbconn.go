@@ -293,8 +293,9 @@ func (dbc *DBConn) Recycle() {
 func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 	tabletenv.KillStats.Add("Queries", 1)
 	log.Infof("Due to %s, elapsed time: %v, killing query %s", reason, elapsed, dbc.Current())
-	// Hack: when using appDebug feature, there is no connection pool, so
-	// connections needs to be killed in a different way.
+	// Hack: Most of the times DBConn is created with a pool. There is a snowflake case
+	// (NewDBConnNoPool) used for AppDebug user where there is no pool set.
+	// In those cases dbaPool will be available in the context directly.
 	var dbaPool *dbconnpool.ConnectionPool
 	if dbc.pool == nil {
 		dbaPool = dbc.dbaPool
