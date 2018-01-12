@@ -120,8 +120,11 @@ func TestDBConnKill(t *testing.T) {
 
 func TestDBNoPoolConnKill(t *testing.T) {
 	db := fakesqldb.New(t)
+	connPool := newPool()
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer connPool.Close()
 	defer db.Close()
-	dbConn, err := NewDBConnNoPool(db.ConnParams())
+	dbConn, err := NewDBConnNoPool(db.ConnParams(), connPool.dbaPool)
 	defer dbConn.Close()
 	query := fmt.Sprintf("kill %d", dbConn.ID())
 	db.AddQuery(query, &sqltypes.Result{})
