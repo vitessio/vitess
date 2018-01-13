@@ -135,7 +135,7 @@ func (cp *Pool) Close() {
 // You must call Recycle on DBConn once done.
 func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
 	if cp.isCallerIDAppDebug(ctx) {
-		return NewDBConnNoPool(cp.appDebugParams)
+		return NewDBConnNoPool(cp.appDebugParams, cp.dbaPool)
 	}
 	p := cp.pool()
 	if p == nil {

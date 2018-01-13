@@ -53,6 +53,7 @@ const (
 type DBConn struct {
 	conn    *dbconnpool.DBConnection
 	info    *mysql.ConnParams
+	dbaPool *dbconnpool.ConnectionPool
 	pool    *Pool
 	current sync2.AtomicString
 }
@@ -67,22 +68,24 @@ func NewDBConn(
 		return nil, err
 	}
 	return &DBConn{
-		conn: c,
-		info: appParams,
-		pool: cp,
+		conn:    c,
+		info:    appParams,
+		pool:    cp,
+		dbaPool: cp.dbaPool,
 	}, nil
 }
 
 // NewDBConnNoPool creates a new DBConn without a pool.
-func NewDBConnNoPool(params *mysql.ConnParams) (*DBConn, error) {
+func NewDBConnNoPool(params *mysql.ConnParams, dbaPool *dbconnpool.ConnectionPool) (*DBConn, error) {
 	c, err := dbconnpool.NewDBConnection(params, tabletenv.MySQLStats)
 	if err != nil {
 		return nil, err
 	}
 	return &DBConn{
-		conn: c,
-		info: params,
-		pool: nil,
+		conn:    c,
+		info:    params,
+		dbaPool: dbaPool,
+		pool:    nil,
 	}, nil
 }
 
@@ -291,7 +294,7 @@ func (dbc *DBConn) Recycle() {
 func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 	tabletenv.KillStats.Add("Queries", 1)
 	log.Infof("Due to %s, elapsed time: %v, killing query %s", reason, elapsed, dbc.Current())
-	killConn, err := dbc.pool.dbaPool.Get(context.TODO())
+	killConn, err := dbc.dbaPool.Get(context.TODO())
 	if err != nil {
 		log.Warningf("Failed to get conn from dba pool: %v", err)
 		return err
