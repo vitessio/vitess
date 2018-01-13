@@ -16,6 +16,7 @@
 # limitations under the License.
 
 
+from decimal import Decimal
 import itertools
 import logging
 import unittest
@@ -67,6 +68,12 @@ cola varchar(64),
 colb varchar(64),
 colc varchar(64),
 primary key (kid)
+) Engine=InnoDB'''
+
+create_vt_aggr = '''create table vt_aggr (
+id bigint,
+name varchar(64),
+primary key (id)
 ) Engine=InnoDB'''
 
 create_vt_music = '''create table vt_music (
@@ -334,6 +341,36 @@ vschema = {
             }
           ]
         },
+        "vt_multicolvin": {
+          "column_vindexes": [
+            {
+              "column": "kid",
+              "name": "hash_index"
+            },
+            {
+              "column": "cola",
+              "name": "cola_map"
+            },
+            {
+              "columns": ["colb", "colc"],
+              "name": "colb_colc_map"
+            }
+          ]
+        },
+        "vt_aggr": {
+          "column_vindexes": [
+            {
+              "column": "id",
+              "name": "hash_index"
+            }
+          ],
+          "columns": [
+            {
+              "name": "name",
+              "type": "VARCHAR"
+            }
+          ]
+        },
         "vt_music": {
           "column_vindexes": [
             {
@@ -359,22 +396,6 @@ vschema = {
             {
               "column": "user_id",
               "name": "hash_index"
-            }
-          ]
-        },
-        "vt_multicolvin": {
-          "column_vindexes": [
-            {
-              "column": "kid",
-              "name": "hash_index"
-            },
-            {
-              "column": "cola",
-              "name": "cola_map"
-            },
-            {
-              "columns": ["colb", "colc"],
-              "name": "colb_colc_map"
             }
           ]
         },
@@ -480,6 +501,7 @@ def setUpModule():
             create_vt_user_extra,
             create_vt_user_extra2,
             create_vt_multicolvin,
+            create_vt_aggr,
             create_vt_music,
             create_vt_music_extra,
             create_upsert,
@@ -552,6 +574,7 @@ def get_connection(timeout=10.0):
 
 class TestVTGateFunctions(unittest.TestCase):
 
+  decimal_type = 18
   int_type = 265
   string_type = 6165
   varbinary_type = 10262
@@ -1163,6 +1186,39 @@ class TestVTGateFunctions(unittest.TestCase):
         })
     self.assertEqual(result, ([], 2L, 0L, []))
     vtgate_conn.commit()
+
+  def test_aggr(self):
+    # test_aggr tests text column aggregation
+    vtgate_conn = get_connection()
+    vtgate_conn.begin()
+    # insert upper and lower-case mixed rows in jumbled order
+    result = self.execute_on_master(
+        vtgate_conn,
+        'insert into vt_aggr (id, name) values '
+        '(10, \'A\'), '
+        '(9, \'a\'), '
+        '(8, \'b\'), '
+        '(7, \'B\'), '
+        '(6, \'d\'), '
+        '(5, \'c\'), '
+        '(4, \'C\'), '
+        '(3, \'d\'), '
+        '(2, \'e\'), '
+        '(1, \'E\')',
+        {})
+    vtgate_conn.commit()
+
+    result = self.execute_on_master(
+        vtgate_conn, 'select sum(id), name from vt_aggr group by name', {})
+    values = [v1 for v1, v2 in result[0]]
+    print values
+    self.assertEqual(
+        [v1 for v1, v2 in result[0]],
+        [(Decimal('19')),
+          (Decimal('15')),
+          (Decimal('9')),
+          (Decimal('9')),
+          (Decimal('3'))])
 
   def test_music(self):
     # music is for testing owned lookup index

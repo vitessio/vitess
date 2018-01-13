@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
@@ -38,6 +39,11 @@ type OrderedAggregate struct {
 	// Keys specifies the input values that must be used for
 	// the aggregation key.
 	Keys []int
+
+	// TruncateColumnCount specifies the number of columns to return
+	// in the final result. Rest of the columns are truncated
+	// from the result received. If 0, no truncation happens.
+	TruncateColumnCount int `json:",omitempty"`
 
 	// Input is the primitive that will feed into this Primitive.
 	Input Primitive
@@ -87,6 +93,14 @@ func (code AggregateOpcode) MarshalJSON() ([]byte, error) {
 
 // Execute is a Primitive function.
 func (oa *OrderedAggregate) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	qr, err := oa.execute(vcursor, bindVars, joinVars, wantfields)
+	if err != nil {
+		return nil, err
+	}
+	return qr.Truncate(oa.TruncateColumnCount), nil
+}
+
+func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	result, err := oa.Input.Execute(vcursor, bindVars, joinVars, wantfields)
 	if err != nil {
 		return nil, err
@@ -130,10 +144,15 @@ func (oa *OrderedAggregate) Execute(vcursor VCursor, bindVars, joinVars map[stri
 func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var current []sqltypes.Value
 	var fields []*querypb.Field
+
+	cb := func(qr *sqltypes.Result) error {
+		return callback(qr.Truncate(oa.TruncateColumnCount))
+	}
+
 	err := oa.Input.StreamExecute(vcursor, bindVars, joinVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
 			fields = qr.Fields
-			if err := callback(&sqltypes.Result{Fields: qr.Fields}); err != nil {
+			if err := cb(&sqltypes.Result{Fields: fields}); err != nil {
 				return err
 			}
 		}
@@ -156,7 +175,7 @@ func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars, joinVars ma
 				}
 				continue
 			}
-			if err := callback(&sqltypes.Result{Rows: [][]sqltypes.Value{current}}); err != nil {
+			if err := cb(&sqltypes.Result{Rows: [][]sqltypes.Value{current}}); err != nil {
 				return err
 			}
 			current = row
@@ -168,7 +187,7 @@ func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars, joinVars ma
 	}
 
 	if current != nil {
-		if err := callback(&sqltypes.Result{Rows: [][]sqltypes.Value{current}}); err != nil {
+		if err := cb(&sqltypes.Result{Rows: [][]sqltypes.Value{current}}); err != nil {
 			return err
 		}
 	}
@@ -177,7 +196,11 @@ func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars, joinVars ma
 
 // GetFields is a Primitive function.
 func (oa *OrderedAggregate) GetFields(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return oa.Input.GetFields(vcursor, bindVars, joinVars)
+	qr, err := oa.Input.GetFields(vcursor, bindVars, joinVars)
+	if err != nil {
+		return nil, err
+	}
+	return qr.Truncate(oa.TruncateColumnCount), nil
 }
 
 func (oa *OrderedAggregate) keysEqual(row1, row2 []sqltypes.Value) (bool, error) {

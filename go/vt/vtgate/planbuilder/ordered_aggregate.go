@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
@@ -462,7 +463,18 @@ func (oa *orderedAggregate) PushMisc(sel *sqlparser.Select) {
 }
 
 // Wireup satisfies the builder interface.
+// If text columns are detected in the keys, then the function modifies
+// the primitive to pull a corresponding weight_string from mysql and
+// compare those instead. This is because we currently don't have the
+// ability to mimic mysql's collation behavior.
 func (oa *orderedAggregate) Wireup(bldr builder, jt *jointab) error {
+	for i, colnum := range oa.eaggr.Keys {
+		if sqltypes.IsText(oa.resultColumns[colnum].column.typ) {
+			// len(oa.resultColumns) does not change. No harm using the value multiple times.
+			oa.eaggr.TruncateColumnCount = len(oa.resultColumns)
+			oa.eaggr.Keys[i] = oa.input.SupplyWeightString(colnum)
+		}
+	}
 	return oa.input.Wireup(bldr, jt)
 }
 

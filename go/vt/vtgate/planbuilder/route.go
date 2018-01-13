@@ -57,16 +57,22 @@ type route struct {
 	// to resolve the ERoute Values field.
 	condition sqlparser.Expr
 
+	// weight_string keeps track of the weight_string expressions
+	// that were added additionally for each column. These expressions
+	// are added to be used for collation of text columns.
+	weightStrings map[*resultColumn]int
+
 	// ERoute is the primitive being built.
 	ERoute *engine.Route
 }
 
 func newRoute(stmt sqlparser.SelectStatement, eroute *engine.Route, condition sqlparser.Expr, vschema VSchema) *route {
 	rb := &route{
-		Select:    stmt,
-		order:     1,
-		condition: condition,
-		ERoute:    eroute,
+		Select:        stmt,
+		order:         1,
+		condition:     condition,
+		weightStrings: make(map[*resultColumn]int),
+		ERoute:        eroute,
 	}
 	rb.symtab = newSymtabWithRoute(vschema, rb)
 	return rb
@@ -499,6 +505,43 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 		}
 	}
 
+	// If rb has to do the ordering, and if any columns are Text,
+	// we have to request the corresponding weight_string from mysql
+	// and use that value instead. This is because we cannot mimic
+	// mysql's collation behavior yet.
+	for i, orderby := range rb.ERoute.OrderBy {
+		rc := rb.resultColumns[orderby.Col]
+		if sqltypes.IsText(rc.column.typ) {
+			// If a weight string was previously requested (by OrderedAggregator),
+			// reuse it.
+			if colnum, ok := rb.weightStrings[rc]; ok {
+				rb.ERoute.OrderBy[i].Col = colnum
+				continue
+			}
+
+			// len(rb.resultColumns) does not change. No harm using the value multiple times.
+			rb.ERoute.TruncateColumnCount = len(rb.resultColumns)
+
+			// This code is partially duplicated from SupplyWeightString and PushSelect.
+			// We should not update resultColumns because it's not returned in the result.
+			// This is why we don't call PushSelect (or SupplyWeightString).
+			expr := &sqlparser.AliasedExpr{
+				Expr: &sqlparser.FuncExpr{
+					Name: sqlparser.NewColIdent("weight_string"),
+					Exprs: []sqlparser.SelectExpr{
+						rb.Select.(*sqlparser.Select).SelectExprs[orderby.Col],
+					},
+				},
+			}
+			sel := rb.Select.(*sqlparser.Select)
+			sel.SelectExprs = append(sel.SelectExprs, expr)
+			rb.ERoute.OrderBy[i].Col = len(sel.SelectExprs) - 1
+			// We don't really have to update weightStrings, but we're doing it
+			// for good measure.
+			rb.weightStrings[rc] = len(sel.SelectExprs) - 1
+		}
+	}
+
 	// Fix up the AST.
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node := node.(type) {
@@ -629,6 +672,24 @@ func (rb *route) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int
 	sel := rb.Select.(*sqlparser.Select)
 	sel.SelectExprs = append(sel.SelectExprs, &sqlparser.AliasedExpr{Expr: col})
 	return rc, len(rb.resultColumns) - 1
+}
+
+func (rb *route) SupplyWeightString(colnum int) (weightColnum int) {
+	rc := rb.resultColumns[colnum]
+	if weightColnum, ok := rb.weightStrings[rc]; ok {
+		return weightColnum
+	}
+	expr := &sqlparser.AliasedExpr{
+		Expr: &sqlparser.FuncExpr{
+			Name: sqlparser.NewColIdent("weight_string"),
+			Exprs: []sqlparser.SelectExpr{
+				rb.Select.(*sqlparser.Select).SelectExprs[colnum],
+			},
+		},
+	}
+	_, weightColnum, _ = rb.PushSelect(expr, nil)
+	rb.weightStrings[rc] = weightColnum
+	return weightColnum
 }
 
 // BuildColName builds a *sqlparser.ColName for the resultColumn specified

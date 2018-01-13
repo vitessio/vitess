@@ -101,7 +101,13 @@ var executorVSchema = `
 			"auto_increment": {
 				"column": "id",
 				"sequence": "user_seq"
-			}
+			},
+			"columns": [
+				{
+					"name": "textcol",
+					"type": "VARCHAR"
+				}
+			]
 		},
 		"user2": {
 			"column_vindexes": [
