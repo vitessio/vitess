@@ -59,8 +59,8 @@ func init() {
 
 	getSandbox(KsTestUnsharded).VSchema = `
 {
-	"Sharded": false,
-	"Tables": {
+	"sharded": false,
+	"tables": {
 		"t1": {}
 	}
 }

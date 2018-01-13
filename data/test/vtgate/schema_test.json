@@ -73,6 +73,14 @@
             },
             {
               "name": "predef2"
+            },
+            {
+              "name": "textcol1",
+              "type": "VARCHAR"
+            },
+            {
+              "name": "textcol2",
+              "type": "VARCHAR"
             }
           ]
         },
