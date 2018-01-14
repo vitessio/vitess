@@ -166,7 +166,6 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
-	options *querypb.ExecuteOptions,
 ) (*sqltypes.Result, error) {
 
 	// mu protects qr
@@ -187,15 +186,19 @@ func (stc *ScatterConn) ExecuteMultiShard(
 		notInTransaction,
 		func(target *querypb.Target, shouldBegin bool, transactionID int64) (int64, error) {
 			var innerqr *sqltypes.Result
+			var opts *querypb.ExecuteOptions
+			if session != nil && session.Session != nil {
+				opts = session.Session.Options
+			}
 			if shouldBegin {
 				var err error
-				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, options)
+				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, opts)
 				if err != nil {
 					return transactionID, err
 				}
 			} else {
 				var err error
-				innerqr, err = stc.gateway.Execute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, transactionID, options)
+				innerqr, err = stc.gateway.Execute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, transactionID, opts)
 				if err != nil {
 					return transactionID, err
 				}

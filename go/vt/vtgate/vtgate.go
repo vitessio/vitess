@@ -243,7 +243,7 @@ func (vtg *VTGate) Execute(ctx context.Context, session *vtgatepb.Session, sql s
 		goto handleError
 	}
 
-	qr, err = vtg.executor.Execute(ctx, "Execute", session, sql, bindVariables)
+	qr, err = vtg.executor.Execute(ctx, "Execute", NewSafeSession(session), sql, bindVariables)
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 		return session, qr, nil
@@ -316,7 +316,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 		err = vtg.executor.StreamExecute(
 			ctx,
 			"StreamExecute",
-			session,
+			NewSafeSession(session),
 			sql,
 			bindVariables,
 			target,
