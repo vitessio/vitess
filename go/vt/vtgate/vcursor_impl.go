@@ -29,7 +29,6 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -37,7 +36,7 @@ import (
 // packages to call back into VTGate.
 type vcursorImpl struct {
 	ctx              context.Context
-	session          *vtgatepb.Session
+	safeSession      *SafeSession
 	target           querypb.Target
 	trailingComments string
 	executor         *Executor
@@ -52,10 +51,10 @@ type vcursorImpl struct {
 // the query and supply it here. Trailing comments are typically sent by the application for various reasons,
 // including as identifying markers. So, they have to be added back to all queries that are executed
 // on behalf of the original query.
-func newVCursorImpl(ctx context.Context, session *vtgatepb.Session, target querypb.Target, trailingComments string, executor *Executor, logStats *LogStats) *vcursorImpl {
+func newVCursorImpl(ctx context.Context, safeSession *SafeSession, target querypb.Target, trailingComments string, executor *Executor, logStats *LogStats) *vcursorImpl {
 	return &vcursorImpl{
 		ctx:              ctx,
-		session:          session,
+		safeSession:      safeSession,
 		target:           target,
 		trailingComments: trailingComments,
 		executor:         executor,
@@ -103,7 +102,7 @@ func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
 
 // Execute performs a V3 level execution of the query. It does not take any routing directives.
 func (vc *vcursorImpl) Execute(method string, query string, BindVars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	qr, err := vc.executor.Execute(vc.ctx, method, vc.session, query+vc.trailingComments, BindVars)
+	qr, err := vc.executor.Execute(vc.ctx, method, vc.safeSession, query+vc.trailingComments, BindVars)
 	if err == nil {
 		vc.hasPartialDML = true
 	}
@@ -113,14 +112,14 @@ func (vc *vcursorImpl) Execute(method string, query string, BindVars map[string]
 // ExecuteMultiShard executes different queries on different shards and returns the combined result.
 func (vc *vcursorImpl) ExecuteMultiShard(keyspace string, shardQueries map[string]*querypb.BoundQuery, isDML bool) (*sqltypes.Result, error) {
 	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(shardQueries)))
-	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, commentedShardQueries(shardQueries, vc.trailingComments), vc.target.TabletType, NewSafeSession(vc.session), false, vc.session.Options)
+	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, commentedShardQueries(shardQueries, vc.trailingComments), vc.target.TabletType, vc.safeSession, false)
 	if err == nil {
 		vc.hasPartialDML = true
 	}
 	return qr, err
 }
 
-// ExecuteStandalone executes the specified query on keyspace:shard, but outside of the current transaction, as an independent statement.
+// ExecuteStandalone executes the specified query on keyspace:shard using an independent session with autocommit enabled.
 func (vc *vcursorImpl) ExecuteStandalone(query string, BindVars map[string]*querypb.BindVariable, keyspace, shard string) (*sqltypes.Result, error) {
 	bq := map[string]*querypb.BoundQuery{
 		shard: {
@@ -128,17 +127,13 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, BindVars map[string]*quer
 			BindVariables: BindVars,
 		},
 	}
-	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, bq, vc.target.TabletType, NewSafeSession(nil), false, vc.session.Options)
-	if err == nil {
-		vc.hasPartialDML = true
-	}
-	return qr, err
+	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, bq, vc.target.TabletType, NewAutocommitSession(vc.safeSession.Session), false)
 }
 
 // StreamExeculteMulti is the streaming version of ExecuteMultiShard.
 func (vc *vcursorImpl) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
 	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(shardVars)))
-	return vc.executor.scatterConn.StreamExecuteMulti(vc.ctx, query+vc.trailingComments, keyspace, shardVars, vc.target.TabletType, vc.session.Options, callback)
+	return vc.executor.scatterConn.StreamExecuteMulti(vc.ctx, query+vc.trailingComments, keyspace, shardVars, vc.target.TabletType, vc.safeSession.Options, callback)
 }
 
 // GetKeyspaceShards returns the list of shards for a keyspace, and the mapped keyspace if an alias was used.

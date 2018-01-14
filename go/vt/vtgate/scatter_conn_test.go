@@ -57,7 +57,7 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 			shardQueries[shard] = query
 		}
 
-		return sc.ExecuteMultiShard(context.Background(), "TestScatterConnExecuteMultiShard", shardQueries, topodatapb.TabletType_REPLICA, nil, false, nil)
+		return sc.ExecuteMultiShard(context.Background(), "TestScatterConnExecuteMultiShard", shardQueries, topodatapb.TabletType_REPLICA, nil, false)
 	})
 }
 
@@ -249,7 +249,7 @@ func TestMultiExecs(t *testing.T) {
 		shardQueries[shard] = query
 	}
 
-	_, _ = sc.ExecuteMultiShard(context.Background(), "TestMultiExecs", shardQueries, topodatapb.TabletType_REPLICA, nil, false, nil)
+	_, _ = sc.ExecuteMultiShard(context.Background(), "TestMultiExecs", shardQueries, topodatapb.TabletType_REPLICA, nil, false)
 	if len(sbc0.Queries) == 0 || len(sbc1.Queries) == 0 {
 		t.Fatalf("didn't get expected query")
 	}
