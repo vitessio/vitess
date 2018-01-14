@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -32,6 +33,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
@@ -887,9 +889,71 @@ func TestExecutorDDL(t *testing.T) {
 	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{}), "create", nil)
 	want := errNoKeyspace.Error()
 	if err == nil || err.Error() != want {
-		t.Errorf("show vschema_tables: %v, want %v", err, want)
+		t.Errorf("ddl with no keyspace: %v, want %v", err, want)
 	}
 	testQueryLog(t, logChan, "TestExecute", "DDL", "create", 0)
+}
+
+func TestExecutorVindexDDL(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	ks := "TestExecutor"
+
+	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
+	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) {
+		vschemaUpdates <- vschema
+	})
+
+	vschema := <-vschemaUpdates
+	vindex, ok := vschema.Keyspaces[ks].Vindexes["test_vindex"]
+	if ok {
+		t.Fatalf("test_vindex should not exist in original vschema")
+	}
+
+	stmt := "create vindex test_vindex hash"
+	wantCount := []int64{0, 0, 0}
+	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: ks}), stmt, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	gotCount := []int64{
+		sbc1.ExecCount.Get(),
+		sbc2.ExecCount.Get(),
+		sbclookup.ExecCount.Get(),
+	}
+	if !reflect.DeepEqual(gotCount, wantCount) {
+		t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
+	}
+
+	time.Sleep(10 * time.Millisecond)
+	select {
+	case vschema = <-vschemaUpdates:
+		vindex, ok = vschema.Keyspaces[ks].Vindexes["test_vindex"]
+		if !ok || vindex.Type != "hash" {
+			t.Errorf("updated vschema did not contain test_vindex")
+		}
+	default:
+		t.Errorf("vschema was not updated as expected")
+	}
+
+	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: ks}), stmt, nil)
+	wantErr := "vindex test_vindex already exists in keyspace TestExecutor"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("create duplicate vindex: %v, want %s", err, wantErr)
+	}
+	gotCount = []int64{
+		sbc1.ExecCount.Get(),
+		sbc2.ExecCount.Get(),
+		sbclookup.ExecCount.Get(),
+	}
+	if !reflect.DeepEqual(gotCount, wantCount) {
+		t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
+	}
+	select {
+	case vschema = <-vschemaUpdates:
+		t.Errorf("vschema shoud not be updated on error")
+	default:
+	}
+
 }
 
 func TestExecutorUnrecognized(t *testing.T) {
