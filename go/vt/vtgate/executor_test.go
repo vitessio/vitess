@@ -935,6 +935,19 @@ func TestExecutorVindexDDL(t *testing.T) {
 		t.Errorf("vschema was not updated as expected")
 	}
 
+	// Wait up to 10ms until the vindex manager gets notified of the update
+	for i := 0; i < 10; i++ {
+		vschema = executor.vm.GetCurrentSrvVschema()
+		vindex, ok = vschema.Keyspaces[ks].Vindexes["test_vindex"]
+		if ok {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !ok || vindex.Type != "hash" {
+		t.Errorf("updated vschema did not contain test_vindex")
+	}
+
 	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: ks}), stmt, nil)
 	wantErr := "vindex test_vindex already exists in keyspace TestExecutor"
 	if err == nil || err.Error() != wantErr {
