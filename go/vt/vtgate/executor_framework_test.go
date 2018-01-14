@@ -329,7 +329,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	hc := discovery.NewFakeHealthCheck()
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
-	serv := new(sandboxTopo)
+	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	sbc1 = hc.AddTestTablet(cell, "-20", 1, "TestExecutor", "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestExecutor", "40-60", topodatapb.TabletType_MASTER, true, 1, nil)
@@ -360,7 +360,7 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 	hc := discovery.NewFakeHealthCheck()
 	s := createSandbox("TestExecutor")
 	s.VSchema = vschema
-	serv := new(sandboxTopo)
+	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	sbc1 = hc.AddTestTablet(cell, "-20", 1, "TestExecutor", "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestExecutor", "40-60", topodatapb.TabletType_MASTER, true, 1, nil)
