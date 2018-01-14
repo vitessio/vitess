@@ -29,7 +29,6 @@ import (
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/logz"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 var (
@@ -105,7 +104,7 @@ func querylogzHandler(ch chan interface{}, w http.ResponseWriter, r *http.Reques
 			}
 			stats, ok := out.(*LogStats)
 			if !ok {
-				err := fmt.Errorf("Unexpected value in %s: %#v (expecting value of type %T)", tabletenv.TxLogger.Name(), out, &LogStats{})
+				err := fmt.Errorf("unexpected value in %s: %#v (expecting value of type %T)", QueryLogger.Name(), out, &LogStats{})
 				io.WriteString(w, `<tr class="error">`)
 				io.WriteString(w, err.Error())
 				io.WriteString(w, "</tr>")
