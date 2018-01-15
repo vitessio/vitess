@@ -163,7 +163,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VSCHEMA_TABLES
+%token <bytes> DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES
 
 // SET tokens
 %token <bytes> NAMES CHARSET
@@ -1101,6 +1101,10 @@ show_statement:
     $$ = &Show{Type: string($2)}
   }
 | SHOW VITESS_SHARDS
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW VITESS_TABLETS
   {
     $$ = &Show{Type: string($2)}
   }
@@ -2621,6 +2625,7 @@ non_reserved_keyword:
 | VINDEXES
 | VITESS_KEYSPACES
 | VITESS_SHARDS
+| VITESS_TABLETS
 | VSCHEMA_TABLES
 | WITH
 | YEAR

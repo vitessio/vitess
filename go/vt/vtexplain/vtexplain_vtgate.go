@@ -74,7 +74,7 @@ func newFakeResolver(hc discovery.HealthCheck, serv srvtopo.Server, cell string)
 	gw := gateway.GetCreator()(hc, nil, serv, cell, 3)
 	gw.WaitForTablets(context.Background(), []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
 	tc := vtgate.NewTxConn(gw, vtgatepb.TransactionMode_MULTI)
-	sc := vtgate.NewScatterConn("", tc, gw)
+	sc := vtgate.NewScatterConn("", tc, gw, hc)
 	return vtgate.NewResolver(serv, cell, sc)
 }
 

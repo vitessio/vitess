@@ -541,7 +541,25 @@ func TestExecutorShow(t *testing.T) {
 		RowsAffected: 25,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("show databases:\n%+v, want\n%+v", qr, wantqr)
+		t.Errorf("show vitess_shards:\n%+v, want\n%+v", qr, wantqr)
+	}
+
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vitess_tablets", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	// Just test for first & last.
+	qr.Rows = [][]sqltypes.Value{qr.Rows[0], qr.Rows[len(qr.Rows)-1]}
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "Alias", "Hostname"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("FakeCell", "TestExecutor", "-20", "MASTER", "aa-0000000000", "-20"),
+			buildVarCharRow("FakeCell", "TestUnsharded", "0", "MASTER", "aa-0000000000", "0"),
+		},
+		RowsAffected: 9,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show vitess_tablets:\n%+v, want\n%+v", qr, wantqr)
 	}
 
 	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes", nil)

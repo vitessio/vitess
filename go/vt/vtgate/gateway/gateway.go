@@ -51,7 +51,7 @@ type Gateway interface {
 	// before the end, it should return ctx.Err().
 	WaitForTablets(ctx context.Context, tabletTypesToWait []topodatapb.TabletType) error
 
-	// CacheStatus returns a list of TabletCacheStatus per tablet.
+	// CacheStatus returns a list of TabletCacheStatus per shard / tablet type.
 	CacheStatus() TabletCacheStatusList
 }
 

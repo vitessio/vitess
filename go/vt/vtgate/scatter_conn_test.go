@@ -570,7 +570,7 @@ func newTestScatterConn(hc discovery.HealthCheck, serv srvtopo.Server, cell stri
 	// empty by default. So it's unused in this test, set to nil.
 	gw := gateway.GetCreator()(hc, nil /*topo.Server*/, serv, cell, 3)
 	tc := NewTxConn(gw, vtgatepb.TransactionMode_TWOPC)
-	return NewScatterConn("", tc, gw)
+	return NewScatterConn("", tc, gw, hc)
 }
 
 func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
