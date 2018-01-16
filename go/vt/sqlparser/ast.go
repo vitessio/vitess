@@ -537,11 +537,22 @@ type Set struct {
 	Comments Comments
 	Exprs    UpdateExprs
 	Charset  ColIdent
+	Scope    string
 }
+
+// Set.Scope or Show.Scope
+const (
+	SessionStr = "session"
+	GlobalStr  = "global"
+)
 
 // Format formats the node.
 func (node *Set) Format(buf *TrackedBuffer) {
-	buf.Myprintf("set %v%v", node.Comments, node.Exprs)
+	if node.Scope == "" {
+		buf.Myprintf("set %v%v", node.Comments, node.Exprs)
+	} else {
+		buf.Myprintf("set %v%s %v", node.Comments, node.Scope, node.Exprs)
+	}
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -1055,11 +1066,16 @@ const (
 type Show struct {
 	Type    string
 	OnTable TableName
+	Scope   string
 }
 
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
-	buf.Myprintf("show %s", node.Type)
+	if node.Scope == "" {
+		buf.Myprintf("show %s", node.Type)
+	} else {
+		buf.Myprintf("show %s %s", node.Scope, node.Type)
+	}
 	if node.HasOnTable() {
 		buf.Myprintf(" on %v", node.OnTable)
 	}

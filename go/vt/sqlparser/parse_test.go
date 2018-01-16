@@ -671,6 +671,9 @@ var (
 		input:  "set charset default",
 		output: "set ",
 	}, {
+		input:  "set session wait_timeout = 3600",
+		output: "set session wait_timeout = 3600",
+	}, {
 		input: "set /* list */ a = 3, b = 4",
 	}, {
 		input:  "alter ignore table a add foo",
@@ -924,10 +927,10 @@ var (
 		output: "show status",
 	}, {
 		input:  "show global status",
-		output: "show global",
+		output: "show global status",
 	}, {
 		input:  "show session status",
-		output: "show session",
+		output: "show session status",
 	}, {
 		input:  "show table status",
 		output: "show table",
@@ -945,10 +948,10 @@ var (
 		output: "show variables",
 	}, {
 		input:  "show global variables",
-		output: "show global",
+		output: "show global variables",
 	}, {
 		input:  "show session variables",
-		output: "show session",
+		output: "show session variables",
 	}, {
 		input:  "show vindexes",
 		output: "show vindexes",
@@ -1478,12 +1481,12 @@ func TestCreateTable(t *testing.T) {
 			"	username varchar,\n" +
 			"	email varchar,\n" +
 			"	full_name varchar,\n" +
-			"	status varchar,\n" +
+			"	status_nonkeyword varchar,\n" +
 			"	primary key (id),\n" +
 			"	unique key by_username (username),\n" +
 			"	unique by_username2 (username),\n" +
 			"	unique index by_username3 (username),\n" +
-			"	index by_status (status),\n" +
+			"	index by_status (status_nonkeyword),\n" +
 			"	key by_full_name (full_name)\n" +
 			")",
 

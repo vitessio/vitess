@@ -338,7 +338,7 @@ func (e *Executor) handleRollback(ctx context.Context, session *vtgatepb.Session
 }
 
 func (e *Executor) handleSet(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (*sqltypes.Result, error) {
-	vals, charset, err := sqlparser.ExtractSetValues(sql)
+	vals, charset, scope, err := sqlparser.ExtractSetValues(sql)
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	defer func() {
@@ -350,6 +350,10 @@ func (e *Executor) handleSet(ctx context.Context, session *vtgatepb.Session, sql
 	}
 	if len(vals) > 0 && charset != "" {
 		return &sqltypes.Result{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected key values and charset, must specify one")
+	}
+
+	if scope == "global" {
+		return &sqltypes.Result{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported in set: global")
 	}
 
 	switch charset {
@@ -458,6 +462,11 @@ func (e *Executor) handleSet(ctx context.Context, session *vtgatepb.Session, sql
 			case nil, "utf8", "utf8mb4", "latin1":
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed value for character_set_results: %v", v)
+			}
+		case "wait_timeout":
+			_, ok := v.(int64)
+			if !ok {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for wait_timeout: %T", v)
 			}
 		case "net_write_timeout", "net_read_timeout", "lc_messages", "collation_connection":
 			log.Warningf("Ignored inapplicable SET %v = %v", k, v)

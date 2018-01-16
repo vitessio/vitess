@@ -430,7 +430,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		log.V(100).Infof("query %s result %s\n", query, string(resultJSON))
 
 		break
-	case sqlparser.StmtBegin, sqlparser.StmtCommit:
+	case sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtSet, sqlparser.StmtShow:
 		result = &sqltypes.Result{}
 		break
 	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
