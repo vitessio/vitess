@@ -894,7 +894,42 @@ func TestExecutorDDL(t *testing.T) {
 	testQueryLog(t, logChan, "TestExecute", "DDL", "create", 0)
 }
 
-func TestExecutorVindexDDL(t *testing.T) {
+func waitForVindex(t *testing.T, ks, name string, watch chan *vschemapb.SrvVSchema, executor *Executor) (*vschemapb.SrvVSchema, *vschemapb.Vindex) {
+	t.Helper()
+
+	// Wait up to 10ms until the watch gets notified of the update
+	ok := false
+	for i := 0; i < 10; i++ {
+		select {
+		case vschema := <-watch:
+			_, ok = vschema.Keyspaces[ks].Vindexes[name]
+			if !ok {
+				t.Errorf("updated vschema did not contain %s", name)
+			}
+			break
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+	if !ok {
+		t.Errorf("vschema was not updated as expected")
+	}
+
+	// Wait up to 10ms until the vindex manager gets notified of the update
+	for i := 0; i < 10; i++ {
+		vschema := executor.vm.GetCurrentSrvVschema()
+		vindex, ok := vschema.Keyspaces[ks].Vindexes[name]
+		if ok {
+			return vschema, vindex
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	t.Fatalf("updated vschema did not contain %s", name)
+	return nil, nil
+}
+
+func TestExecutorCreateVindexDDL(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 	ks := "TestExecutor"
 
@@ -967,6 +1002,199 @@ func TestExecutorVindexDDL(t *testing.T) {
 	default:
 	}
 
+}
+
+func TestExecutorAddDropVindexDDL(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	ks := "TestExecutor"
+	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
+	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) {
+		vschemaUpdates <- vschema
+	})
+
+	vschema := <-vschemaUpdates
+	vindex, ok := vschema.Keyspaces[ks].Vindexes["test_hash"]
+	if ok {
+		t.Fatalf("test_hash should not exist in original vschema")
+	}
+
+	// Create a new vindex implicitly with the statement
+	stmt := "alter table test add vindex test_hash (id) using hash"
+	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Fatalf("error in %s: %v", stmt, err)
+	}
+
+	vschema, vindex = waitForVindex(t, ks, "test_hash", vschemaUpdates, executor)
+	if vindex.Type != "hash" {
+		t.Errorf("vindex type %s not hash", vindex.Type)
+	}
+
+	if table, ok := vschema.Keyspaces[ks].Tables["test"]; ok {
+		if len(table.ColumnVindexes) != 1 {
+			t.Fatalf("table vindexes want 1 got %d", len(table.ColumnVindexes))
+		}
+		if table.ColumnVindexes[0].Name != "test_hash" {
+			t.Fatalf("table vindexes didn't contain test_hash")
+		}
+	} else {
+		t.Fatalf("table test not defined in vschema")
+	}
+
+	qr, err := executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.test", nil)
+	if err != nil {
+		t.Fatalf("error in show vindexes on TestExecutor.test: %v", err)
+	}
+	wantqr := &sqltypes.Result{
+		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("id", "test_hash", "hash", "", ""),
+		},
+		RowsAffected: 1,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
+	}
+
+	stmt = "alter table test add vindex test_lookup (c1,c2) using lookup on test with from=`c1,c2`, table=test_lookup, to=keyspace_id"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Fatalf("error in %s: %v", stmt, err)
+	}
+
+	vschema, vindex = waitForVindex(t, ks, "test_lookup", vschemaUpdates, executor)
+	if vindex.Type != "lookup" {
+		t.Errorf("vindex type %s not hash", vindex.Type)
+	}
+
+	if table, ok := vschema.Keyspaces[ks].Tables["test"]; ok {
+		if len(table.ColumnVindexes) != 2 {
+			t.Fatalf("table vindexes want 1 got %d", len(table.ColumnVindexes))
+		}
+		if table.ColumnVindexes[1].Name != "test_lookup" {
+			t.Fatalf("table vindexes didn't contain test_lookup")
+		}
+	} else {
+		t.Fatalf("table test not defined in vschema")
+	}
+
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.test", nil)
+	if err != nil {
+		t.Fatalf("error in show vindexes on TestExecutor.test: %v", err)
+	}
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("id", "test_hash", "hash", "", ""),
+			buildVarCharRow("c1, c2", "test_lookup", "lookup", "from=c1,c2; table=test_lookup; to=keyspace_id", "test"),
+		},
+		RowsAffected: 2,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
+	}
+
+	// use the newly created vindex on a new table
+	stmt = "alter table test2 add vindex test_hash (id)"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Fatalf("error in %s: %v", stmt, err)
+	}
+
+	vschema, vindex = waitForVindex(t, ks, "test_hash", vschemaUpdates, executor)
+	if vindex.Type != "hash" {
+		t.Errorf("vindex type %s not hash", vindex.Type)
+	}
+
+	if table, ok := vschema.Keyspaces[ks].Tables["test2"]; ok {
+		if len(table.ColumnVindexes) != 1 {
+			t.Fatalf("table vindexes want 1 got %d", len(table.ColumnVindexes))
+		}
+		if table.ColumnVindexes[0].Name != "test_hash" {
+			t.Fatalf("table vindexes didn't contain test_hash")
+		}
+	} else {
+		t.Fatalf("table test2 not defined in vschema")
+	}
+
+	// create an identical vindex definition on a different table
+	stmt = "alter table test2 add vindex test_lookup (c1,c2) using lookup on test with from=`c1,c2`, table=test_lookup, to=keyspace_id"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Fatalf("error in %s: %v", stmt, err)
+	}
+
+	vschema, vindex = waitForVindex(t, ks, "test_lookup", vschemaUpdates, executor)
+	if vindex.Type != "lookup" {
+		t.Errorf("vindex type %s not hash", vindex.Type)
+	}
+
+	if table, ok := vschema.Keyspaces[ks].Tables["test2"]; ok {
+		if len(table.ColumnVindexes) != 2 {
+			t.Fatalf("table vindexes want 1 got %d", len(table.ColumnVindexes))
+		}
+		if table.ColumnVindexes[1].Name != "test_lookup" {
+			t.Fatalf("table vindexes didn't contain test_lookup")
+		}
+	} else {
+		t.Fatalf("table test2 not defined in vschema")
+	}
+
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.test2", nil)
+	if err != nil {
+		t.Fatalf("error in show vindexes on TestExecutor.test2: %v", err)
+	}
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("id", "test_hash", "hash", "", ""),
+			buildVarCharRow("c1, c2", "test_lookup", "lookup", "from=c1,c2; table=test_lookup; to=keyspace_id", "test"),
+		},
+		RowsAffected: 2,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
+	}
+
+	stmt = "alter table test2 add vindex nonexistent (c1,c2)"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	wantErr := "vindex nonexistent does not exist in keyspace TestExecutor"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("got %v want err %s", err, wantErr)
+	}
+
+	stmt = "alter table test2 add vindex test_hash (c1,c2) using lookup"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	wantErr = "vindex test_hash defined with type hash not lookup"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("got %v want err %s", err, wantErr)
+	}
+
+	stmt = "alter table test2 add vindex test_lookup (c1,c2) using lookup on xyz"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	wantErr = "vindex test_lookup defined with owner test not xyz"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("got %v want err %s", err, wantErr)
+	}
+
+	stmt = "alter table test2 add vindex test_lookup (c1,c2) using lookup on test with foo=bar"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	wantErr = "vindex test_lookup defined with different parameters"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("got %v want err %s", err, wantErr)
+	}
+
+	// no queries should have gone to any tablets
+	wantCount := []int64{0, 0, 0}
+	gotCount := []int64{
+		sbc1.ExecCount.Get(),
+		sbc2.ExecCount.Get(),
+		sbclookup.ExecCount.Get(),
+	}
+	if !reflect.DeepEqual(gotCount, wantCount) {
+		t.Errorf("Exec %s: %v, want %v", "", gotCount, wantCount)
+	}
 }
 
 func TestExecutorUnrecognized(t *testing.T) {
