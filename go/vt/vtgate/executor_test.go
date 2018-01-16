@@ -909,7 +909,7 @@ func TestExecutorVindexDDL(t *testing.T) {
 		t.Fatalf("test_vindex should not exist in original vschema")
 	}
 
-	stmt := "create vindex test_vindex hash"
+	stmt := "create vindex test_vindex using hash"
 	wantCount := []int64{0, 0, 0}
 	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: ks}), stmt, nil)
 	if err != nil {

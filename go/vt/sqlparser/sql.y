@@ -147,7 +147,7 @@ func forceEOF(yylex interface{}) {
 %token <empty> JSON_EXTRACT_OP JSON_UNQUOTE_EXTRACT_OP
 
 // DDL Tokens
-%token <bytes> CREATE ALTER DROP RENAME ANALYZE
+%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD
 %token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
@@ -235,7 +235,7 @@ func forceEOF(yylex interface{}) {
 %type <str> asc_desc_opt
 %type <limit> limit_opt
 %type <str> lock_opt
-%type <columns> ins_column_list using_column_list
+%type <columns> ins_column_list column_list
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
@@ -244,7 +244,7 @@ func forceEOF(yylex interface{}) {
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
 %type <byt> exists_opt
-%type <empty> not_exists_opt non_rename_operation to_opt index_opt constraint_opt
+%type <empty> not_exists_opt non_add_or_rename_operation to_opt index_opt constraint_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt charset_value using_opt
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id
@@ -274,7 +274,8 @@ func forceEOF(yylex interface{}) {
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
-%type <vindexParams> vindex_param_list vindex_params
+%type <vindexParams> vindex_param_list vindex_params_opt
+%type <colIdent> vindex_type vindex_type_opt
 %type <str> vindex_owner_opt
 
 %start any_command
@@ -497,17 +498,41 @@ create_statement:
   {
     $$ = &DDL{Action: CreateStr, NewName: $5.ToViewName()}
   }
-| CREATE VINDEX sql_id sql_id vindex_params vindex_owner_opt
+| CREATE VINDEX sql_id vindex_type_opt vindex_owner_opt vindex_params_opt
   {
     $$ = &DDL{Action: CreateVindexStr, VindexSpec: &VindexSpec{
         Name: $3,
         Type: $4,
-        Params: $5,
-        Owner: $6,
+        Owner: $5,
+        Params: $6,
     }}
   }
 
-vindex_params:
+vindex_type_opt:
+  {
+    $$ = NewColIdent("")
+  }
+| USING vindex_type
+  {
+    $$ = $2
+  }
+
+vindex_type:
+  ID
+  {
+    $$ = NewColIdent(string($1))
+  }
+
+vindex_owner_opt:
+  {
+    $$ = ""
+  }
+| ON table_id
+  {
+    $$ = $2.String()
+  }
+
+vindex_params_opt:
   {
     var v []VindexParam
     $$ = v
@@ -532,15 +557,6 @@ vindex_param:
   reserved_sql_id '=' table_opt_value
   {
     $$ = VindexParam{Key: $1, Val: $3}
-  }
-
-vindex_owner_opt:
-  {
-    $$ = ""
-  }
-| USING table_id
-  {
-    $$ = $2.String()
   }
 
 create_table_prefix:
@@ -1017,7 +1033,25 @@ table_opt_value:
   }
 
 alter_statement:
-  ALTER ignore_opt TABLE table_name non_rename_operation force_eof
+  ALTER ignore_opt TABLE table_name non_add_or_rename_operation force_eof
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+  }
+| ALTER ignore_opt TABLE table_name ADD VINDEX sql_id '(' column_list ')' vindex_type_opt vindex_owner_opt vindex_params_opt
+  {
+    $$ = &DDL{
+        Action: AddColVindexStr,
+        Table: $4,
+        VindexSpec: &VindexSpec{
+            Name: $7,
+            Type: $11,
+            Owner: $12,
+            Params: $13,
+        },
+        VindexCols: $9,
+      }
+  }
+| ALTER ignore_opt TABLE table_name ADD ID force_eof
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
@@ -1447,12 +1481,12 @@ table_name as_opt_id index_hint_list
     $$ = &AliasedTableExpr{Expr:$1, Partitions: $4, As: $6, Hints: $7}
   }
 
-using_column_list:
+column_list:
   sql_id
   {
     $$ = Columns{$1}
   }
-| using_column_list ',' sql_id
+| column_list ',' sql_id
   {
     $$ = append($$, $3)
   }
@@ -1495,7 +1529,7 @@ join_table:
 join_condition:
   ON expression
   { $$ = JoinCondition{On: $2} }
-| USING '(' using_column_list ')'
+| USING '(' column_list ')'
   { $$ = JoinCondition{Using: $3} }
 
 join_condition_opt:
@@ -1611,15 +1645,15 @@ index_hint_list:
   {
     $$ = nil
   }
-| USE INDEX openb using_column_list closeb
+| USE INDEX openb column_list closeb
   {
     $$ = &IndexHints{Type: UseStr, Indexes: $4}
   }
-| IGNORE INDEX openb using_column_list closeb
+| IGNORE INDEX openb column_list closeb
   {
     $$ = &IndexHints{Type: IgnoreStr, Indexes: $4}
   }
-| FORCE INDEX openb using_column_list closeb
+| FORCE INDEX openb column_list closeb
   {
     $$ = &IndexHints{Type: ForceStr, Indexes: $4}
   }
@@ -2497,7 +2531,7 @@ ignore_opt:
 | IGNORE
   { $$ = IgnoreStr }
 
-non_rename_operation:
+non_add_or_rename_operation:
   ALTER
   { $$ = struct{}{} }
 | AUTO_INCREMENT
@@ -2590,7 +2624,8 @@ reserved_table_id:
   Sorted alphabetically
 */
 reserved_keyword:
-  AND
+  ADD
+| AND
 | AS
 | ASC
 | AUTO_INCREMENT

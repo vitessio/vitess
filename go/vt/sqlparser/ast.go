@@ -600,7 +600,8 @@ func (node *Set) WalkSubtree(visit Visit) error {
 // DDL represents a CREATE, ALTER, DROP, RENAME or TRUNCATE statement.
 // Table is set for AlterStr, DropStr, RenameStr, TruncateStr
 // NewName is set for AlterStr, CreateStr, RenameStr.
-// VindexSpec is set for CreateVindexStr DropVindexStr
+// VindexSpec is set for CreateVindexStr, DropVindexStr, AddColVindexStr, DropColVindexStr
+// VindexCols is set for AddColVindexStr
 type DDL struct {
 	Action        string
 	Table         TableName
@@ -609,6 +610,7 @@ type DDL struct {
 	TableSpec     *TableSpec
 	PartitionSpec *PartitionSpec
 	VindexSpec    *VindexSpec
+	VindexCols    []ColIdent
 }
 
 // DDL strings.
@@ -619,6 +621,7 @@ const (
 	RenameStr       = "rename"
 	TruncateStr     = "truncate"
 	CreateVindexStr = "create vindex"
+	AddColVindexStr = "add vindex"
 )
 
 // Format formats the node.
@@ -645,7 +648,20 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			buf.Myprintf("%s table %v", node.Action, node.Table)
 		}
 	case CreateVindexStr:
-		buf.Myprintf("%s %v", node.Action, node.VindexSpec)
+		buf.Myprintf("%s %v %v", node.Action, node.VindexSpec.Name, node.VindexSpec)
+	case AddColVindexStr:
+		buf.Myprintf("alter table %v %s %v (", node.Table, node.Action, node.VindexSpec.Name)
+		for i, col := range node.VindexCols {
+			if i != 0 {
+				buf.Myprintf(", %v", col)
+			} else {
+				buf.Myprintf("%v", col)
+			}
+		}
+		buf.Myprintf(")")
+		if node.VindexSpec.Type.String() != "" {
+			buf.Myprintf(" %v", node.VindexSpec)
+		}
 	default:
 		buf.Myprintf("%s table %v", node.Action, node.Table)
 	}
@@ -1113,7 +1129,11 @@ type VindexSpec struct {
 // the containing DDL node Format, so this just prints the type, any
 // parameters, and optionally the owner
 func (node *VindexSpec) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v %v", node.Name, node.Type)
+	buf.Myprintf("using %v", node.Type)
+	if node.Owner != "" {
+		buf.Myprintf(" on %s", node.Owner)
+	}
+
 	numParams := len(node.Params)
 	if numParams != 0 {
 		buf.Myprintf(" with ")
@@ -1124,17 +1144,12 @@ func (node *VindexSpec) Format(buf *TrackedBuffer) {
 			buf.Myprintf("%v", p)
 		}
 	}
-
-	if node.Owner != "" {
-		buf.Myprintf(" using %s", node.Owner)
-	}
 }
 
 // WalkSubtree walks the nodes of the subtree.
 func (node *VindexSpec) WalkSubtree(visit Visit) error {
 	err := Walk(visit,
 		node.Name,
-		node.Type,
 	)
 
 	if err != nil {
