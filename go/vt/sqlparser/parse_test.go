@@ -772,7 +772,31 @@ var (
 		input:  "alter table a add constraint",
 		output: "alter table a",
 	}, {
-		input:  "alter table a add xyx",
+		input:  "alter table a add id",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop column id int",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop index idx (id)",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop fulltext index idx (id)",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop spatial index idx (id)",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop foreign key",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop primary key",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop constraint",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop id",
 		output: "alter table a",
 	}, {
 		input: "alter table a add vindex hash (id)",
@@ -794,6 +818,17 @@ var (
 	}, {
 		input:  "alter table user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup on user with table=name_lastname_keyspace_id_map, from=`name,lastname`, to=keyspace_id",
 		output: "alter table user2 add vindex name_lastname_lookup_vdx (name, lastname) using lookup on user with table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
+	}, {
+		input: "alter table a drop vindex hash",
+	}, {
+		input:  "alter table a drop vindex `hash`",
+		output: "alter table a drop vindex hash",
+	}, {
+		input:  "alter table a drop vindex hash",
+		output: "alter table a drop vindex hash",
+	}, {
+		input:  "alter table a drop vindex `add`",
+		output: "alter table a drop vindex `add`",
 	}, {
 		input: "create table a",
 	}, {

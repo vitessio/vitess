@@ -244,7 +244,7 @@ func forceEOF(yylex interface{}) {
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
 %type <byt> exists_opt
-%type <empty> not_exists_opt non_add_or_rename_operation to_opt index_opt constraint_opt
+%type <empty> not_exists_opt non_add_drop_or_rename_operation to_opt index_opt constraint_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt charset_value using_opt
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id
@@ -277,7 +277,7 @@ func forceEOF(yylex interface{}) {
 %type <vindexParams> vindex_param_list vindex_params_opt
 %type <colIdent> vindex_type vindex_type_opt
 %type <str> vindex_owner_opt
-%type <bytes> alter_table_add_type
+%type <bytes> alter_object_type
 
 %start any_command
 
@@ -1034,7 +1034,15 @@ table_opt_value:
   }
 
 alter_statement:
-  ALTER ignore_opt TABLE table_name non_add_or_rename_operation force_eof
+  ALTER ignore_opt TABLE table_name non_add_drop_or_rename_operation force_eof
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+  }
+| ALTER ignore_opt TABLE table_name ADD alter_object_type force_eof
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+  }
+| ALTER ignore_opt TABLE table_name DROP alter_object_type force_eof
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
@@ -1052,9 +1060,15 @@ alter_statement:
         VindexCols: $9,
       }
   }
-| ALTER ignore_opt TABLE table_name ADD alter_table_add_type force_eof
+| ALTER ignore_opt TABLE table_name DROP VINDEX sql_id
   {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+    $$ = &DDL{
+        Action: DropColVindexStr,
+        Table: $4,
+        VindexSpec: &VindexSpec{
+            Name: $7,
+        },
+      }
   }
 | ALTER ignore_opt TABLE table_name RENAME to_opt table_name
   {
@@ -1075,7 +1089,7 @@ alter_statement:
     $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
   }
 
-alter_table_add_type:
+alter_object_type:
   COLUMN
 | CONSTRAINT
 | FOREIGN
@@ -2543,7 +2557,7 @@ ignore_opt:
 | IGNORE
   { $$ = IgnoreStr }
 
-non_add_or_rename_operation:
+non_add_drop_or_rename_operation:
   ALTER
   { $$ = struct{}{} }
 | AUTO_INCREMENT
@@ -2553,8 +2567,6 @@ non_add_or_rename_operation:
 | COMMENT_KEYWORD
   { $$ = struct{}{} }
 | DEFAULT
-  { $$ = struct{}{} }
-| DROP
   { $$ = struct{}{} }
 | ORDER
   { $$ = struct{}{} }

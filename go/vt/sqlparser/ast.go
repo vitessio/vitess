@@ -615,13 +615,14 @@ type DDL struct {
 
 // DDL strings.
 const (
-	CreateStr       = "create"
-	AlterStr        = "alter"
-	DropStr         = "drop"
-	RenameStr       = "rename"
-	TruncateStr     = "truncate"
-	CreateVindexStr = "create vindex"
-	AddColVindexStr = "add vindex"
+	CreateStr        = "create"
+	AlterStr         = "alter"
+	DropStr          = "drop"
+	RenameStr        = "rename"
+	TruncateStr      = "truncate"
+	CreateVindexStr  = "create vindex"
+	AddColVindexStr  = "add vindex"
+	DropColVindexStr = "drop vindex"
 )
 
 // Format formats the node.
@@ -662,6 +663,8 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		if node.VindexSpec.Type.String() != "" {
 			buf.Myprintf(" %v", node.VindexSpec)
 		}
+	case DropColVindexStr:
+		buf.Myprintf("alter table %v %s %v", node.Table, node.Action, node.VindexSpec.Name)
 	default:
 		buf.Myprintf("%s table %v", node.Action, node.Table)
 	}
