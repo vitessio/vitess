@@ -348,7 +348,7 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 	return result, err
 }
 
-func (e *Executor) handleVindexDDL(ctx context.Context, session *SafeSession, target querypb.Target, ddl *sqlparser.DDL, logStats *LogStats) error {
+func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession, target querypb.Target, ddl *sqlparser.DDL, logStats *LogStats) error {
 	vschema := e.vm.GetCurrentSrvVschema()
 	if vschema == nil {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema not loaded")

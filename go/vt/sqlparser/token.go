@@ -83,7 +83,7 @@ func NewTokenizer(r io.Reader) *Tokenizer {
 // in identifiers. See the docs for each grammar to determine which one to put it into.
 var keywords = map[string]int{
 	"accessible":          UNUSED,
-	"add":                 UNUSED,
+	"add":                 ADD,
 	"against":             AGAINST,
 	"all":                 ALL,
 	"alter":               ALTER,
