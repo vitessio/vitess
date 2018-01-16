@@ -150,6 +150,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
+%token <bytes> STATUS VARIABLES
 
 // Type Tokens
 %token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
@@ -166,7 +167,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES
 
 // SET tokens
-%token <bytes> NAMES CHARSET
+%token <bytes> NAMES CHARSET GLOBAL SESSION
 
 // Functions
 %token <bytes> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
@@ -244,6 +245,7 @@ func forceEOF(yylex interface{}) {
 %type <empty> as_opt
 %type <empty> force_eof ddl_force_eof
 %type <str> charset
+%type <str> set_session_or_global show_session_or_global
 %type <convertType> convert_type
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type
@@ -419,14 +421,18 @@ opt_partition_clause:
   }
 
 set_statement:
-  SET comment_opt charset_or_character_set charset_value force_eof
-  {
-    $$ = &Set{Comments: Comments($2), Charset: $4}
-  }
-| SET comment_opt update_list
+  SET comment_opt update_list
   {
     $$ = &Set{Comments: Comments($2), Exprs: $3}
    }
+| SET comment_opt set_session_or_global update_list
+  {
+    $$ = &Set{Comments: Comments($2), Scope: $3, Exprs: $4}
+   }
+| SET comment_opt charset_or_character_set charset_value force_eof
+  {
+    $$ = &Set{Comments: Comments($2), Charset: $4}
+  }
 
 charset_or_character_set:
   CHARSET
@@ -441,6 +447,16 @@ charset_value:
 | STRING
   {
     $$ = NewColIdent(string($1))
+  }
+
+set_session_or_global:
+  SESSION
+  {
+    $$ = SessionStr
+  }
+| GLOBAL
+  {
+    $$ = GlobalStr
   }
 
 create_statement:
@@ -1080,6 +1096,10 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
+| SHOW show_session_or_global STATUS ddl_force_eof
+  {
+    $$ = &Show{Scope: $2, Type: string($3)}
+  }
 | SHOW TABLE ddl_force_eof
   {
     $$ = &Show{Type: string($2)}
@@ -1087,6 +1107,10 @@ show_statement:
 | SHOW TABLES ddl_force_eof
   {
     $$ = &Show{Type: string($2)}
+  }
+| SHOW show_session_or_global VARIABLES ddl_force_eof
+  {
+    $$ = &Show{Scope: $2, Type: string($3)}
   }
 | SHOW VINDEXES
   {
@@ -1121,6 +1145,20 @@ show_statement:
 | SHOW ID ddl_force_eof
   {
     $$ = &Show{Type: string($2)}
+  }
+
+show_session_or_global:
+  /* empty */
+  {
+    $$ = ""
+  }
+| SESSION
+  {
+    $$ = SessionStr
+  }
+| GLOBAL
+  {
+    $$ = GlobalStr
   }
 
 use_statement:
@@ -2499,6 +2537,7 @@ reserved_keyword:
 | FOR
 | FORCE
 | FROM
+| GLOBAL
 | GROUP
 | HAVING
 | IF
@@ -2535,9 +2574,11 @@ reserved_keyword:
 | RIGHT
 | SELECT
 | SEPARATOR
+| SESSION
 | SET
 | SHOW
 | STRAIGHT_JOIN
+| STATUS
 | TABLE
 | TABLES
 | THEN
@@ -2552,6 +2593,7 @@ reserved_keyword:
 | UTC_TIME
 | UTC_TIMESTAMP
 | VALUES
+| VARIABLES
 | WHEN
 | WHERE
 
