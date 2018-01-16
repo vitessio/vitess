@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -318,7 +319,7 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 		execStart := time.Now()
 		logStats.PlanTime = execStart.Sub(logStats.StartTime)
 		switch ddl.Action {
-		case sqlparser.CreateVindexStr:
+		case sqlparser.CreateVindexStr, sqlparser.AddColVindexStr, sqlparser.DropColVindexStr:
 			err := e.handleVindexDDL(ctx, safeSession, target, ddl, logStats)
 			logStats.ExecuteTime = time.Since(execStart)
 			return &sqltypes.Result{}, err
@@ -375,7 +376,78 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 		}
 
 		e.vm.UpdateVSchema(ctx, target.Keyspace, vschema)
+	case sqlparser.AddColVindexStr:
+		// Support two cases:
+		//
+		// 1. The vindex type / params / owner are specified. If the
+		//    named vindex doesn't exist, create it. If it does exist,
+		//    require the parameters to match.
+		//
+		// 2. The vindex type is not specified. Make sure the vindex
+		//    already exists.
+		spec := ddl.VindexSpec
+		name := spec.Name.String()
+		if !spec.Type.IsEmpty() {
+			params := map[string]string{}
+			for _, p := range ddl.VindexSpec.Params {
+				params[p.Key.String()] = p.Val
+			}
 
+			if vindex, ok := ks.Vindexes[name]; ok {
+				if vindex.Type != spec.Type.String() {
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s defined with type %s not %s", name, vindex.Type, spec.Type.String())
+				}
+				if vindex.Owner != spec.Owner {
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s defined with owner %s not %s", name, vindex.Owner, spec.Owner)
+				}
+				if (len(vindex.Params) != 0 || len(params) != 0) && !reflect.DeepEqual(vindex.Params, params) {
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s defined with different parameters", name)
+				}
+			} else {
+				ks.Vindexes[name] = &vschemapb.Vindex{
+					Type:   spec.Type.String(),
+					Params: params,
+					Owner:  spec.Owner,
+				}
+			}
+		} else {
+			if _, ok := ks.Vindexes[name]; !ok {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s does not exist in keyspace %s", name, target.Keyspace)
+			}
+		}
+
+		ksName := ddl.Table.Qualifier.String()
+		if ksName == "" {
+			ksName = target.Keyspace
+		}
+
+		ks, ok := vschema.Keyspaces[ksName]
+		if !ok {
+			return errNoKeyspace
+		}
+
+		tableName := ddl.Table.Name.String()
+		table, ok := ks.Tables[tableName]
+		if !ok {
+			table = &vschemapb.Table{
+				ColumnVindexes: make([]*vschemapb.ColumnVindex, 0, 4),
+			}
+		}
+
+		columns := make([]string, len(ddl.VindexCols), len(ddl.VindexCols))
+		for i, col := range ddl.VindexCols {
+			columns[i] = col.String()
+		}
+		table.ColumnVindexes = append(table.ColumnVindexes, &vschemapb.ColumnVindex{
+			Name:    name,
+			Columns: columns,
+		})
+		ks.Tables[tableName] = table
+
+		e.vm.UpdateVSchema(ctx, target.Keyspace, vschema)
+
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected vindex ddl operation %s", ddl.Action)
 	}
 
 	return nil
