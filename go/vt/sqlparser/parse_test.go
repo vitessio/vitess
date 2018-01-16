@@ -751,6 +751,30 @@ var (
 		input:  "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
 		output: "alter table a",
 	}, {
+		input:  "alter table a add column id int",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add index idx (id)",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add fulltext index idx (id)",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add spatial index idx (id)",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add foreign key",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add primary key",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add constraint",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add xyx",
+		output: "alter table a",
+	}, {
 		input: "alter table a add vindex hash (id)",
 	}, {
 		input:  "alter table a add vindex `hash` (`id`)",
