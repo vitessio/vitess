@@ -148,7 +148,7 @@ func forceEOF(yylex interface{}) {
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD
-%token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY
+%token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT SPATIAL FULLTEXT FOREIGN
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
@@ -277,6 +277,7 @@ func forceEOF(yylex interface{}) {
 %type <vindexParams> vindex_param_list vindex_params_opt
 %type <colIdent> vindex_type vindex_type_opt
 %type <str> vindex_owner_opt
+%type <bytes> alter_table_add_type
 
 %start any_command
 
@@ -1051,7 +1052,7 @@ alter_statement:
         VindexCols: $9,
       }
   }
-| ALTER ignore_opt TABLE table_name ADD ID force_eof
+| ALTER ignore_opt TABLE table_name ADD alter_table_add_type force_eof
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
@@ -1073,6 +1074,17 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
   }
+
+alter_table_add_type:
+  COLUMN
+| CONSTRAINT
+| FOREIGN
+| FULLTEXT
+| ID
+| INDEX
+| KEY
+| PRIMARY
+| SPATIAL
 
 partition_operation:
   REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb
@@ -2741,6 +2753,8 @@ non_reserved_keyword:
 | ENUM
 | EXPANSION
 | FLOAT_TYPE
+| FOREIGN
+| FULLTEXT
 | GLOBAL
 | INT
 | INTEGER
@@ -2772,6 +2786,7 @@ non_reserved_keyword:
 | SHARE
 | SIGNED
 | SMALLINT
+| SPATIAL
 | START
 | STATUS
 | TEXT
