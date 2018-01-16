@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -141,8 +140,6 @@ type RegisterVTGate func(vtgateservice.VTGateService)
 // RegisterVTGates stores register funcs for VTGate server.
 var RegisterVTGates []RegisterVTGate
 
-var vtgateOnce sync.Once
-
 // Init initializes VTGate server.
 func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server, serv srvtopo.Server, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *VTGate {
 	if rpcVTGate != nil {
@@ -202,7 +199,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server
 			f(rpcVTGate)
 		}
 	})
-	vtgateOnce.Do(rpcVTGate.registerDebugHealthHandler)
+	rpcVTGate.registerDebugHealthHandler()
 	err := initQueryLogger(rpcVTGate)
 	if err != nil {
 		log.Fatalf("error initializing query logger: %v", err)
