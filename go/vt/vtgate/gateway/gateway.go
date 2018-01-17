@@ -49,6 +49,11 @@ type Gateway interface {
 	// WaitForTablets asks the gateway to wait for the provided
 	// tablets types to be available. It the context is canceled
 	// before the end, it should return ctx.Err().
+	// The error returned will have specific effects:
+	// - nil: keep going with startup.
+	// - context.DeadlineExceeded: log a warning that we didn't get
+	//   all tablets, and keep going with startup.
+	// - any other error: log.Fatalf out.
 	WaitForTablets(ctx context.Context, tabletTypesToWait []topodatapb.TabletType) error
 
 	// CacheStatus returns a list of TabletCacheStatus per shard / tablet type.
@@ -89,12 +94,16 @@ func WaitForTablets(gw Gateway, tabletTypesToWait []topodatapb.TabletType) error
 	err := gw.WaitForTablets(ctx, tabletTypesToWait)
 	switch err {
 	case nil:
+		// Log so we know everything is fine.
 		log.Infof("Waiting for tablets completed")
-		// all good
 	case context.DeadlineExceeded:
+		// In this scenario, we were able to reach the
+		// topology service, but some tablets may not be
+		// ready. We just warn and keep going.
 		log.Warningf("Timeout waiting for all keyspaces / shards to have healthy tablets, may be in degraded mode")
+		err = nil
 	default:
-		log.Errorf("gateway.WaitForTablets failed: %v", err)
+		// Nothing to do here, the caller will log.Fatalf.
 	}
 	return err
 }

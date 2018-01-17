@@ -137,7 +137,7 @@ func TestL2VTGateDiscovery(t *testing.T) {
 	ctx := context.Background()
 	err = l2vtgate.Gateway().WaitForTablets(ctx, []topodatapb.TabletType{tabletconntest.TestTarget.TabletType})
 	if err != nil {
-		t.Fatalf("WaitForAllServingTablets failed: %v", err)
+		t.Fatalf("WaitForTablets failed: %v", err)
 	}
 
 	// L2VTGate: listen on a random port.

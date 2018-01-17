@@ -62,7 +62,7 @@ func CreateFakeServers(t *testing.T) (*tabletconntest.FakeQueryService, *topo.Se
 	if err := ts.UpdateSrvKeyspace(context.Background(), cell, tabletconntest.TestTarget.Keyspace, &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
-				ServedType: topodatapb.TabletType_MASTER,
+				ServedType: tabletconntest.TestTarget.TabletType,
 				ShardReferences: []*topodatapb.ShardReference{
 					{
 						Name: tabletconntest.TestTarget.Shard,
