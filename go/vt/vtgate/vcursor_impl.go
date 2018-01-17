@@ -110,9 +110,9 @@ func (vc *vcursorImpl) Execute(method string, query string, BindVars map[string]
 }
 
 // ExecuteMultiShard executes different queries on different shards and returns the combined result.
-func (vc *vcursorImpl) ExecuteMultiShard(keyspace string, shardQueries map[string]*querypb.BoundQuery, isDML bool) (*sqltypes.Result, error) {
+func (vc *vcursorImpl) ExecuteMultiShard(keyspace string, shardQueries map[string]*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
 	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(shardQueries)))
-	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, commentedShardQueries(shardQueries, vc.trailingComments), vc.target.TabletType, vc.safeSession, false)
+	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, commentedShardQueries(shardQueries, vc.trailingComments), vc.target.TabletType, vc.safeSession, false, canAutocommit)
 	if err == nil {
 		vc.hasPartialDML = true
 	}
@@ -127,7 +127,9 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, BindVars map[string]*quer
 			BindVariables: BindVars,
 		},
 	}
-	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, bq, vc.target.TabletType, NewAutocommitSession(vc.safeSession.Session), false)
+	// The canAutocommit flag is not significant because we currently don't execute DMLs through ExecuteStandalone.
+	// But we set it to true for future-proofing this function.
+	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, bq, vc.target.TabletType, NewAutocommitSession(vc.safeSession.Session), false, true /* canAutocommit */)
 }
 
 // StreamExeculteMulti is the streaming version of ExecuteMultiShard.

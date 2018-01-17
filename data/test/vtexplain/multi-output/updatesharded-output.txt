@@ -3,7 +3,7 @@ update user set nickname='alice' where id=1
 
 1 ks_sharded/-40: begin
 1 ks_sharded/-40: update user set nickname = 'alice' where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */
-2 ks_sharded/-40: commit
+1 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
 update user set nickname='alice' where name='alice'
@@ -21,7 +21,7 @@ update user set pet='fido' where id=1
 
 1 ks_sharded/-40: begin
 1 ks_sharded/-40: update user set pet = 'fido' where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */
-2 ks_sharded/-40: commit
+1 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
 update user set name='alicia' where id=1

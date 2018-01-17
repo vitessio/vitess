@@ -166,6 +166,16 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 			defer e.txConn.Rollback(ctx, safeSession)
 		}
 
+		// The SetAutocommitable flag should be same as mustCommit.
+		// If we started a transaction because of autocommit, then mustCommit
+		// will be true, which means that we can autocommit. If we were already
+		// in a transaction, it means that the app started it, or we are being
+		// called recursively. If so, we cannot autocommit because whatever we
+		// do is likely not final.
+		// The control flow is such that autocommitable can only be turned on
+		// at the beginning, but never after.
+		safeSession.SetAutocommitable(mustCommit)
+
 		qr, err := e.handleExec(ctx, safeSession, sql, bindVars, target, logStats)
 		if err != nil {
 			return nil, err
@@ -202,6 +212,8 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
 	if target.Shard != "" {
 		// V1 mode or V3 mode with a forced shard target
+		// TODO(sougou): change this flow to go through V3 functions
+		// which will allow us to benefit from the autocommitable flag.
 		sql = sqlannotation.AnnotateIfDML(sql, nil)
 
 		if e.normalize {

@@ -333,7 +333,8 @@ func (route *Route) execute(vcursor VCursor, bindVars, joinVars map[string]*quer
 	}
 
 	shardQueries := route.getShardQueries(route.Query, params)
-	result, err := vcursor.ExecuteMultiShard(params.ks, shardQueries, isDML)
+	// canAutocommit should be true only if it's a DML.
+	result, err := vcursor.ExecuteMultiShard(params.ks, shardQueries, isDML, isDML /* canAutocommit */)
 	if err != nil {
 		return nil, err
 	}
@@ -388,7 +389,7 @@ func (route *Route) GetFields(vcursor VCursor, bindVars, joinVars map[string]*qu
 		return nil, err
 	}
 
-	qr, err := route.execShard(vcursor, route.FieldQuery, bindVars, ks, shard, false /* isDML */)
+	qr, err := route.execShard(vcursor, route.FieldQuery, bindVars, ks, shard, false /* isDML */, false /* canAutocommit */)
 	if err != nil {
 		return nil, err
 	}
@@ -467,7 +468,7 @@ func (route *Route) execUpdateEqual(vcursor VCursor, bindVars map[string]*queryp
 		return result, nil
 	}
 	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{ksid}, "")
-	return route.execShard(vcursor, rewritten, bindVars, ks, shard, true /* isDML */)
+	return route.execShard(vcursor, rewritten, bindVars, ks, shard, true /* isDML */, true /* canAutocommit */)
 }
 
 // execUpdateEqualChangedVindex performs an update when a vindex is being modified
@@ -494,7 +495,7 @@ func (route *Route) execUpdateEqualChangedVindex(vcursor VCursor, query string, 
 	var err error
 	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{keyspaceID}, "")
 	if route.Subquery != "" {
-		subQueryResult, err = route.execShard(vcursor, route.Subquery, bindVars, keyspace, shard, false /* isDML */)
+		subQueryResult, err = route.execShard(vcursor, route.Subquery, bindVars, keyspace, shard, false /* isDML */, false /* canAutocommit */)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "execUpdateEqual")
 		}
@@ -503,7 +504,7 @@ func (route *Route) execUpdateEqualChangedVindex(vcursor VCursor, query string, 
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execUpdateEqual")
 	}
-	result, err := route.execShard(vcursor, rewritten, bindVars, keyspace, shard, true /* isDML */)
+	result, err := route.execShard(vcursor, rewritten, bindVars, keyspace, shard, true /* isDML */, true /* canAutocommit */)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execUpdateEqual")
 	}
@@ -529,7 +530,7 @@ func (route *Route) execDeleteEqual(vcursor VCursor, bindVars map[string]*queryp
 		}
 	}
 	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{ksid}, "")
-	return route.execShard(vcursor, rewritten, bindVars, ks, shard, true /* isDML */)
+	return route.execShard(vcursor, rewritten, bindVars, ks, shard, true /* isDML */, true /* canAutocommit */)
 }
 
 func (route *Route) execInsertUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
@@ -543,7 +544,7 @@ func (route *Route) execInsertUnsharded(vcursor VCursor, bindVars map[string]*qu
 	}
 
 	shardQueries := route.getShardQueries(route.Query, params)
-	result, err := vcursor.ExecuteMultiShard(params.ks, shardQueries, true /* isDML */)
+	result, err := vcursor.ExecuteMultiShard(params.ks, shardQueries, true /* isDML */, true /* canAutocommit */)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execInsertUnsharded")
 	}
@@ -568,7 +569,7 @@ func (route *Route) execInsertSharded(vcursor VCursor, bindVars map[string]*quer
 		return nil, vterrors.Wrap(err, "execInsertSharded")
 	}
 
-	result, err := vcursor.ExecuteMultiShard(keyspace, shardQueries, true /* isDML */)
+	result, err := vcursor.ExecuteMultiShard(keyspace, shardQueries, true /* isDML */, true /* canAutocommit */)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execInsertSharded")
 	}
@@ -689,7 +690,7 @@ func (route *Route) updateChangedVindexes(subQueryResult *sqltypes.Result, vcurs
 }
 
 func (route *Route) deleteVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, ks, shard string, ksid []byte) error {
-	result, err := route.execShard(vcursor, route.Subquery, bindVars, ks, shard, false /* isDML */)
+	result, err := route.execShard(vcursor, route.Subquery, bindVars, ks, shard, false /* isDML */, false /* canAutocommit */)
 	if err != nil {
 		return err
 	}
@@ -1080,13 +1081,13 @@ func (route *Route) execAnyShard(vcursor VCursor, bindVars map[string]*querypb.B
 	return vcursor.ExecuteStandalone(route.Query, bindVars, ks, shard)
 }
 
-func (route *Route) execShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, keyspace, shard string, isDML bool) (*sqltypes.Result, error) {
+func (route *Route) execShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, keyspace, shard string, isDML, canAutocommit bool) (*sqltypes.Result, error) {
 	return vcursor.ExecuteMultiShard(keyspace, map[string]*querypb.BoundQuery{
 		shard: {
 			Sql:           query,
 			BindVariables: bindVars,
 		},
-	}, isDML)
+	}, isDML, canAutocommit)
 }
 
 func (route *Route) anyShard(vcursor VCursor, keyspace *vindexes.Keyspace) (string, string, error) {
