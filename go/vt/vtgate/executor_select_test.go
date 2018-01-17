@@ -60,7 +60,7 @@ func TestExecDBA(t *testing.T) {
 	_, err := executor.Execute(
 		context.Background(),
 		"TestExecDBA",
-		&vtgatepb.Session{TargetString: "TestExecutor"},
+		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query,
 		map[string]*querypb.BindVariable{},
 	)
@@ -230,7 +230,7 @@ func TestStreamBuffering(t *testing.T) {
 	err := executor.StreamExecute(
 		context.Background(),
 		"TestStreamBuffering",
-		masterSession,
+		NewSafeSession(masterSession),
 		"select id from music_user_map where id = 1",
 		nil,
 		querypb.Target{
