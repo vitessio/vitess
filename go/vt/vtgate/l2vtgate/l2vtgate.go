@@ -70,7 +70,10 @@ func Init(hc discovery.HealthCheck, topoServer *topo.Server, serv srvtopo.Server
 	}
 
 	gw := gateway.GetCreator()(hc, topoServer, serv, cell, retryCount)
-	gateway.WaitForTablets(gw, tabletTypesToWait)
+	if err := gateway.WaitForTablets(gw, tabletTypesToWait); err != nil {
+		log.Fatalf("gateway.WaitForTablets failed: %v", err)
+	}
+
 	l2VTGate = &L2VTGate{
 		timings:              stats.NewMultiTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
 		tabletCallErrorCount: stats.NewMultiCounters(tabletCallErrorCountStatsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
