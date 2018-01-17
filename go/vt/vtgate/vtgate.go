@@ -151,8 +151,12 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server
 	vschemaCounters = stats.NewCounters("VtgateVSchemaCounts")
 
 	// Build objects from low to high level.
+	// Start with the gateway. If we can't reach the topology service,
+	// we can't go on much further, so we log.Fatal out.
 	gw := gateway.GetCreator()(hc, topoServer, serv, cell, retryCount)
-	gateway.WaitForTablets(gw, tabletTypesToWait)
+	if err := gateway.WaitForTablets(gw, tabletTypesToWait); err != nil {
+		log.Fatalf("gateway.WaitForTablets failed: %v", err)
+	}
 
 	tc := NewTxConn(gw, getTxMode())
 	// ScatterConn depends on TxConn to perform forced rollbacks.

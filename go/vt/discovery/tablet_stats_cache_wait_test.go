@@ -19,6 +19,7 @@ package discovery
 import (
 	"flag"
 	"reflect"
+	"sort"
 	"testing"
 	"time"
 
@@ -32,14 +33,32 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
+// To sort []*querypb.Target for comparison.
+type TargetArray []*querypb.Target
+
+func (a TargetArray) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a TargetArray) Len() int      { return len(a) }
+func (a TargetArray) Less(i, j int) bool {
+	if a[i].Cell != a[j].Cell {
+		return a[i].Cell < a[j].Cell
+	}
+	if a[i].Keyspace != a[j].Keyspace {
+		return a[i].Keyspace < a[j].Keyspace
+	}
+	if a[i].Shard != a[j].Shard {
+		return a[i].Shard < a[j].Shard
+	}
+	return a[i].TabletType < a[j].TabletType
+}
+
 func TestFindAllKeyspaceShards(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	flag.Set("srv_topo_cache_ttl", "0s") // No caching values
 	rs := srvtopo.NewResilientServer(ts, "TestFindAllKeyspaceShards")
 
-	// no keyspace / shards
-	ks, err := findAllKeyspaceShards(ctx, rs, "cell1")
+	// No keyspace / shards.
+	ks, err := FindAllTargets(ctx, rs, "cell1", []topodatapb.TabletType{topodatapb.TabletType_MASTER})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -47,7 +66,7 @@ func TestFindAllKeyspaceShards(t *testing.T) {
 		t.Errorf("why did I get anything? %v", ks)
 	}
 
-	// add one
+	// Add one.
 	if err := ts.UpdateSrvKeyspace(ctx, "cell1", "test_keyspace", &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
@@ -63,21 +82,23 @@ func TestFindAllKeyspaceShards(t *testing.T) {
 		t.Fatalf("can't add srvKeyspace: %v", err)
 	}
 
-	// get it
-	ks, err = findAllKeyspaceShards(ctx, rs, "cell1")
+	// Get it.
+	ks, err = FindAllTargets(ctx, rs, "cell1", []topodatapb.TabletType{topodatapb.TabletType_MASTER})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !reflect.DeepEqual(ks, map[keyspaceShard]bool{
+	if !reflect.DeepEqual(ks, []*querypb.Target{
 		{
-			keyspace: "test_keyspace",
-			shard:    "test_shard0",
-		}: true,
+			Cell:       "cell1",
+			Keyspace:   "test_keyspace",
+			Shard:      "test_shard0",
+			TabletType: topodatapb.TabletType_MASTER,
+		},
 	}) {
 		t.Errorf("got wrong value: %v", ks)
 	}
 
-	// add another one
+	// Add another one.
 	if err := ts.UpdateSrvKeyspace(ctx, "cell1", "test_keyspace2", &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
@@ -89,7 +110,7 @@ func TestFindAllKeyspaceShards(t *testing.T) {
 				},
 			},
 			{
-				ServedType: topodatapb.TabletType_MASTER,
+				ServedType: topodatapb.TabletType_REPLICA,
 				ShardReferences: []*topodatapb.ShardReference{
 					{
 						Name: "test_shard2",
@@ -101,24 +122,47 @@ func TestFindAllKeyspaceShards(t *testing.T) {
 		t.Fatalf("can't add srvKeyspace: %v", err)
 	}
 
-	// get it
-	ks, err = findAllKeyspaceShards(ctx, rs, "cell1")
+	// Get it for all types.
+	ks, err = FindAllTargets(ctx, rs, "cell1", []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !reflect.DeepEqual(ks, map[keyspaceShard]bool{
+	sort.Sort(TargetArray(ks))
+	if !reflect.DeepEqual(ks, []*querypb.Target{
 		{
-			keyspace: "test_keyspace",
-			shard:    "test_shard0",
-		}: true,
+			Cell:       "cell1",
+			Keyspace:   "test_keyspace",
+			Shard:      "test_shard0",
+			TabletType: topodatapb.TabletType_MASTER,
+		},
 		{
-			keyspace: "test_keyspace2",
-			shard:    "test_shard1",
-		}: true,
+			Cell:       "cell1",
+			Keyspace:   "test_keyspace2",
+			Shard:      "test_shard1",
+			TabletType: topodatapb.TabletType_MASTER,
+		},
 		{
-			keyspace: "test_keyspace2",
-			shard:    "test_shard2",
-		}: true,
+			Cell:       "cell1",
+			Keyspace:   "test_keyspace2",
+			Shard:      "test_shard2",
+			TabletType: topodatapb.TabletType_REPLICA,
+		},
+	}) {
+		t.Errorf("got wrong value: %v", ks)
+	}
+
+	// Only get the REPLICA targets.
+	ks, err = FindAllTargets(ctx, rs, "cell1", []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(ks, []*querypb.Target{
+		{
+			Cell:       "cell1",
+			Keyspace:   "test_keyspace2",
+			Shard:      "test_shard2",
+			TabletType: topodatapb.TabletType_REPLICA,
+		},
 	}) {
 		t.Errorf("got wrong value: %v", ks)
 	}
@@ -139,14 +183,14 @@ func TestWaitForTablets(t *testing.T) {
 	hc.AddTablet(tablet, "")
 
 	// this should time out
-	if err := tsc.WaitForTablets(shortCtx, "cell", "keyspace", "shard", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != context.DeadlineExceeded {
+	if err := tsc.WaitForTablets(shortCtx, "cell", "keyspace", "shard", topodatapb.TabletType_REPLICA); err != context.DeadlineExceeded {
 		t.Errorf("got wrong error: %v", err)
 	}
 
 	// this should fail, but return a non-timeout error
 	cancelledCtx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := tsc.WaitForTablets(cancelledCtx, "cell", "keyspace", "shard", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err == nil || err == context.DeadlineExceeded {
+	if err := tsc.WaitForTablets(cancelledCtx, "cell", "keyspace", "shard", topodatapb.TabletType_REPLICA); err == nil || err == context.DeadlineExceeded {
 		t.Errorf("want: non-timeout error, got: %v", err)
 	}
 
@@ -166,7 +210,7 @@ func TestWaitForTablets(t *testing.T) {
 	longCtx, longCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer longCancel()
 	waitAvailableTabletInterval = 10 * time.Millisecond
-	if err := tsc.WaitForTablets(longCtx, "cell", "keyspace", "shard", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != nil {
+	if err := tsc.WaitForTablets(longCtx, "cell", "keyspace", "shard", topodatapb.TabletType_REPLICA); err != nil {
 		t.Errorf("got error: %v", err)
 	}
 }
