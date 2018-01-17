@@ -17,15 +17,9 @@ limitations under the License.
 package discovery
 
 import (
-	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
-
-	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/srvtopo"
-	"github.com/youtube/vitess/go/vt/topo"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -57,85 +51,11 @@ func (tc *TabletStatsCache) WaitForAnyTablet(ctx context.Context, cell, keyspace
 }
 
 // WaitForAllServingTablets waits for at least one healthy serving tablet in
-// the given cell for all keyspaces / shards before returning.
+// each given target before returning.
 // It will return ctx.Err() if the context is canceled.
 // It will return an error if it can't read the necessary topology records.
-func (tc *TabletStatsCache) WaitForAllServingTablets(ctx context.Context, ts srvtopo.Server, cell string, types []topodatapb.TabletType) error {
-	targets, err := FindAllTargets(ctx, ts, cell, types)
-	if err != nil {
-		return err
-	}
-
+func (tc *TabletStatsCache) WaitForAllServingTablets(ctx context.Context, targets []*querypb.Target) error {
 	return tc.waitForTablets(ctx, targets, true)
-}
-
-// FindAllTargets goes through all serving shards in the topology
-// for the provided tablet types. It returns one Target object per
-// keyspace / shard / matching TabletType.
-func FindAllTargets(ctx context.Context, ts srvtopo.Server, cell string, tabletTypes []topodatapb.TabletType) ([]*querypb.Target, error) {
-	ksNames, err := ts.GetSrvKeyspaceNames(ctx, cell)
-	if err != nil {
-		return nil, err
-	}
-
-	var targets []*querypb.Target
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	var errRecorder concurrency.AllErrorRecorder
-	for _, ksName := range ksNames {
-		wg.Add(1)
-		go func(keyspace string) {
-			defer wg.Done()
-
-			// Get SrvKeyspace for cell/keyspace.
-			ks, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
-			if err != nil {
-				if err == topo.ErrNoNode {
-					// Possibly a race condition, or leftover
-					// crud in the topology service. Just log it.
-					log.Warningf("GetSrvKeyspace(%v, %v) returned ErrNoNode, skipping that SrvKeyspace", cell, keyspace)
-				} else {
-					// More serious error, abort.
-					errRecorder.RecordError(err)
-				}
-				return
-			}
-
-			// Get all shard names that are used for serving.
-			for _, ksPartition := range ks.Partitions {
-				// Check we're waiting for tablets of that type.
-				waitForIt := false
-				for _, tt := range tabletTypes {
-					if tt == ksPartition.ServedType {
-						waitForIt = true
-					}
-				}
-				if !waitForIt {
-					continue
-				}
-
-				// Add all the shards. Note we can't have
-				// duplicates, as there is only one entry per
-				// TabletType in the Partitions list.
-				mu.Lock()
-				for _, shard := range ksPartition.ShardReferences {
-					targets = append(targets, &querypb.Target{
-						Cell:       cell,
-						Keyspace:   keyspace,
-						Shard:      shard.Name,
-						TabletType: ksPartition.ServedType,
-					})
-				}
-				mu.Unlock()
-			}
-		}(ksName)
-	}
-	wg.Wait()
-	if errRecorder.HasErrors() {
-		return nil, errRecorder.Error()
-	}
-
-	return targets, nil
 }
 
 // waitForTablets is the internal method that polls for tablets.
