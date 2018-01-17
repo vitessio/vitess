@@ -261,6 +261,12 @@ func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) (pv sqltypes.PlanValu
 	filters := splitAndExpression(nil, node)
 	for _, filter := range filters {
 		filter = skipParenthesis(filter)
+		if parenthesis, ok := node.(*sqlparser.ParenExpr); ok {
+			if pv, ok := getMatch(parenthesis.Expr, col); ok {
+				return pv, ok
+			}
+			continue
+		}
 		comparison, ok := filter.(*sqlparser.ComparisonExpr)
 		if !ok {
 			continue
