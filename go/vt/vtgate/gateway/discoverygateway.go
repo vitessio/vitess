@@ -139,7 +139,13 @@ func (dg *discoveryGateway) WaitForTablets(ctx context.Context, tabletTypesToWai
 		return nil
 	}
 
-	return dg.tsc.WaitForAllServingTablets(ctx, dg.srvTopoServer, dg.localCell, tabletTypesToWait)
+	// Finds the targets to look for.
+	targets, err := srvtopo.FindAllTargets(ctx, dg.srvTopoServer, dg.localCell, tabletTypesToWait)
+	if err != nil {
+		return err
+	}
+
+	return dg.tsc.WaitForAllServingTablets(ctx, targets)
 }
 
 // StreamHealth is currently not implemented.
