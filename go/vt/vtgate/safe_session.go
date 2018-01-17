@@ -19,6 +19,7 @@ package vtgate
 import (
 	"sync"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/vterrors"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -39,6 +40,16 @@ type SafeSession struct {
 // NewSafeSession returns a new SafeSession based on the Session
 func NewSafeSession(sessn *vtgatepb.Session) *SafeSession {
 	return &SafeSession{Session: sessn}
+}
+
+// NewAutocommitSession returns a SafeSession based on the original
+// session, but with autocommit enabled.
+func NewAutocommitSession(sessn *vtgatepb.Session) *SafeSession {
+	newSession := proto.Clone(sessn).(*vtgatepb.Session)
+	newSession.InTransaction = false
+	newSession.ShardSessions = nil
+	newSession.Autocommit = true
+	return NewSafeSession(newSession)
 }
 
 // InTransaction returns true if we are in a transaction
