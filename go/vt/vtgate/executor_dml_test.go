@@ -1195,7 +1195,7 @@ func TestInsertPartialFail1(t *testing.T) {
 	_, err := executor.Execute(
 		context.Background(),
 		"TestExecute",
-		&vtgatepb.Session{InTransaction: true},
+		NewSafeSession(&vtgatepb.Session{InTransaction: true}),
 		"insert into user(id, v, name) values (1, 2, 'myname')",
 		nil,
 	)
@@ -1217,7 +1217,7 @@ func TestInsertPartialFail2(t *testing.T) {
 	_, err := executor.Execute(
 		context.Background(),
 		"TestExecute",
-		&vtgatepb.Session{InTransaction: true},
+		NewSafeSession(&vtgatepb.Session{InTransaction: true}),
 		"insert into user(id, v, name) values (1, 2, 'myname')",
 		nil,
 	)

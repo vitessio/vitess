@@ -273,7 +273,7 @@ func executorExec(executor *Executor, sql string, bv map[string]*querypb.BindVar
 	return executor.Execute(
 		context.Background(),
 		"TestExecute",
-		masterSession,
+		NewSafeSession(masterSession),
 		sql,
 		bv)
 }
@@ -283,7 +283,7 @@ func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err er
 	err = executor.StreamExecute(
 		context.Background(),
 		"TestExecuteStream",
-		masterSession,
+		NewSafeSession(masterSession),
 		sql,
 		nil,
 		querypb.Target{
