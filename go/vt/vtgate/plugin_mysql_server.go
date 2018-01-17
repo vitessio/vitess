@@ -230,26 +230,27 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 	}
 }
 
+func shutdownMysqlProtocolAndDrain() {
+	if mysqlListener != nil {
+		mysqlListener.Close()
+		mysqlListener = nil
+	}
+	if mysqlUnixListener != nil {
+		mysqlUnixListener.Close()
+		mysqlUnixListener = nil
+	}
+
+	if atomic.LoadInt32(&busyConnections) > 0 {
+		log.Infof("Waiting for all client connections to be idle...")
+		for atomic.LoadInt32(&busyConnections) > 0 {
+			time.Sleep(1 * time.Millisecond)
+		}
+	}
+}
+
 func init() {
 	servenv.OnRun(initMySQLProtocol)
-
-	servenv.OnTermSync(func() {
-		if mysqlListener != nil {
-			mysqlListener.Close()
-			mysqlListener = nil
-		}
-		if mysqlUnixListener != nil {
-			mysqlUnixListener.Close()
-			mysqlUnixListener = nil
-		}
-
-		if atomic.LoadInt32(&busyConnections) > 0 {
-			log.Infof("Waiting for all client connections to be idle...")
-			for atomic.LoadInt32(&busyConnections) > 0 {
-				time.Sleep(1 * time.Millisecond)
-			}
-		}
-	})
+	servenv.OnTermSync(shutdownMysqlProtocolAndDrain)
 }
 
 var pluginInitializers []func()
