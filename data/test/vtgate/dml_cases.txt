@@ -121,6 +121,24 @@
   }
 }
 
+
+# update by primary keyspace id with alias
+"update user as user_alias set val = 1 where user_alias.id = 1"
+{
+  "Original": "update user as user_alias set val = 1 where user_alias.id = 1",
+  "Instructions": {
+    "Opcode": "UpdateEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user as user_alias set val = 1 where user_alias.id = 1",
+    "Vindex": "user_index",
+    "Values": [1],
+    "Table": "user"
+  }
+}
+
 # update by primary keyspace id with parenthesized expression
 "update user set val = 1 where (id = 1)"
 {
@@ -139,6 +157,27 @@
     "Table": "user"
   }
 }
+
+# update by primary keyspace id with multi-part where clause with parens
+"update user set val = 1 where (name = 'foo' and id = 1)"
+{
+  "Original": "update user set val = 1 where (name = 'foo' and id = 1)",
+  "Instructions": {
+    "Opcode": "UpdateEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user set val = 1 where (name = 'foo' and id = 1)",
+    "Vindex": "user_index",
+    "Values": [1],
+    "Table": "user"
+  }
+}
+
+# update with unsupported multi-shard where clause with parens
+"update user set val = 1 where (name = 'foo' or id = 1)"
+"unsupported: multi-shard where clause in DML"
 
 # update by primary keyspace id, changing one vindex column
 "update user_metadata set email = 'juan@vitess.io' where user_id = 1"
