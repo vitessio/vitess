@@ -21,11 +21,11 @@ limitations under the License.
 package acl
 
 import (
-	"flag"
+	"errors"
 	"fmt"
 	"net/http"
-	"sync"
 
+	"github.com/casbin/casbin"
 	log "github.com/golang/glog"
 )
 
@@ -39,64 +39,47 @@ const (
 )
 
 var (
-	securityPolicy = flag.String("security_policy", "", "security policy to enforce for URLs")
-	policies       = make(map[string]Policy)
-	once           sync.Once
-	currentPolicy  Policy
+	enforcer *casbin.Enforcer
 )
 
-// Policy defines the interface that needs to be satisfied by
-// ACL policy implementors.
-type Policy interface {
-	// CheckAccessActor can be called to verify if an actor
-	// has access to the role.
-	CheckAccessActor(actor, role string) error
-	// CheckAccessHTTP can be called to verify if an actor in
-	// the http request has access to the role.
-	CheckAccessHTTP(req *http.Request, role string) error
+// initEnforcer creates a Casbin enforcer.
+func initEnforcer() {
+	model := casbin.NewModel()
+	model.AddDef("r", "r", "sub, obj, act")
+	model.AddDef("p", "p", "sub, obj, act")
+	model.AddDef("g", "g", "_, _")
+	model.AddDef("e", "e", "some(where (p.eft == allow))")
+	model.AddDef("m", "m", "g(r.sub, p.sub) && keyMatch(r.obj, p.obj) && (r.act == p.act || p.act == \"*\")")
+
+	enforcer = casbin.NewEnforcer(model, false)
 }
 
-// RegisterPolicy registers a security policy. This function must be called
-// before the first call to CheckAccess happens, preferably through an init.
-// This will ensure that the requested policy can be found by other acl
-// functions when needed.
-func RegisterPolicy(name string, policy Policy) {
-	if _, ok := policies[name]; ok {
-		log.Fatalf("policy %s is already registered", name)
-	}
-	policies[name] = policy
+// initPolicy adds the default security policy.
+func initPolicy() {
+	enforcer.AddPermissionForUser("admin", "*", "*")
+	enforcer.AddPermissionForUser("debugging", "*", "*")
+	enforcer.AddPermissionForUser("monitoring", "*", "*")
 }
 
-func savePolicy() {
-	if *securityPolicy == "" {
-		return
-	}
-	currentPolicy = policies[*securityPolicy]
-	if currentPolicy == nil {
-		log.Warningf("policy %s not found, using fallback policy", *securityPolicy)
-		currentPolicy = FallbackPolicy{}
-	}
-}
-
-// CheckAccessActor uses the current security policy to
-// verify if an actor has access to the role.
-func CheckAccessActor(actor, role string) error {
-	once.Do(savePolicy)
-	if currentPolicy != nil {
-		return currentPolicy.CheckAccessActor(actor, role)
-	}
-	return nil
-}
-
-// CheckAccessHTTP uses the current security policy to
-// verify if an actor in an http request has access to
-// the role.
+// CheckAccessHTTP uses the security policy to
+// verify if a http request has access to
+// the resource.
 func CheckAccessHTTP(req *http.Request, role string) error {
-	once.Do(savePolicy)
-	if currentPolicy != nil {
-		return currentPolicy.CheckAccessHTTP(req, role)
+	if enforcer == nil {
+		initEnforcer()
+		initPolicy()
 	}
-	return nil
+
+	path := req.URL.Path
+	method := req.Method
+
+	res := enforcer.Enforce(role, path, method)
+	log.Warningf("Request: %s, %s, %s ---> %t", role, path, method, res)
+	if res {
+		return nil
+	}
+
+	return errors.New("access denied")
 }
 
 // SendError is a convenience function that sends an ACL
@@ -104,4 +87,11 @@ func CheckAccessHTTP(req *http.Request, role string) error {
 func SendError(w http.ResponseWriter, err error) {
 	w.WriteHeader(http.StatusForbidden)
 	fmt.Fprintf(w, "Access denied: %v\n", err)
+}
+
+// GetUserName gets the user name from the request.
+// Currently, only HTTP basic authentication is supported
+func GetUserName(r *http.Request) string {
+	username, _, _ := r.BasicAuth()
+	return username
 }
