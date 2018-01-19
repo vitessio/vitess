@@ -456,6 +456,7 @@ func (hcc *healthCheckConn) stream(ctx context.Context, hc *HealthCheckImpl, cal
 		hcc.conn.Close(ctx)
 		hcc.conn = nil
 		hcc.tabletStats.Serving = false
+		hcc.tabletStats.Up = false
 		hcc.tabletStats.LastError = err
 		ts := hcc.tabletStats
 		hcc.mu.Unlock()
