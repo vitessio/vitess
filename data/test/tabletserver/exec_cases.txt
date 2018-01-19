@@ -25,7 +25,7 @@
   "FullQuery": "select distinct * from a limit :#maxLimit"
 }
 
-# grouy by
+# group by
 "select * from a group by b"
 {
   "PlanID": "PASS_SELECT",
@@ -186,6 +186,15 @@
   "FullQuery": "insert into b.a(eid, id) values (1, :a)"
 }
 
+# insert cross-db
+options:PassthroughDMLs
+"insert into b.a (eid, id) values (1, :a)"
+{
+  "PlanID": "PASS_DML",
+  "TableName": "",
+  "FullQuery": "insert into b.a(eid, id) values (1, :a)"
+}
+
 # insert with bind value
 "insert into a (eid, id) values (1, :a)"
 {
@@ -194,6 +203,15 @@
   "FullQuery": "insert into a(eid, id) values (1, :a)",
   "OuterQuery": "insert into a(eid, id) values (1, :a)",
   "PKValues": [[1], [":a"]]
+}
+
+# insert with bind value
+options:PassthroughDMLs
+"insert into a (eid, id) values (1, :a)"
+{
+  "PlanID": "PASS_DML",
+  "TableName": "",
+  "FullQuery": "insert into a(eid, id) values (1, :a)"
 }
 
 # default number
@@ -305,6 +323,15 @@
   "OuterQuery": "insert into a(eid, id) values (1, 2)",
   "UpsertQuery": "update a set name = func(a) where :#pk",
   "PKValues": [[1], [2]]
+}
+
+# upsert multiple unique index
+options:PassthroughDMLs
+"insert into a (eid, id) values (1, 2) on duplicate key update name = func(a)"
+{
+  "PlanID": "PASS_DML",
+  "TableName": "",
+  "FullQuery": "insert into a(eid, id) values (1, 2) on duplicate key update name = func(a)"
 }
 
 # upsert single unique index
@@ -610,6 +637,15 @@
   "FullQuery": "replace into b(eid, id) values (1, 2), (3, 4)"
 }
 
+# multi-row
+options:PassthroughDMLs
+"replace into b (eid, id) values (1, 2), (3, 4)"
+{
+  "PlanID": "PASS_DML",
+  "TableName": "",
+  "FullQuery": "replace into b(eid, id) values (1, 2), (3, 4)"
+}
+
 # single-row with set
 "replace into b set eid = 1, id = 2"
 {
@@ -648,11 +684,29 @@
   "WhereClause": " where name in ('a', 'b')"
 }
 
+# update limit with pk
+options:PassthroughDMLs
+"update d set foo='foo' where name in ('a', 'b') limit 1"
+{
+  "PlanID": "PASS_DML",
+  "TableName": "",
+  "FullQuery": "update d set foo = 'foo' where name in ('a', 'b') limit 1"
+}
+
 # update cross-db
 "update b.a set name='foo' where eid=1 and id=1"
 {
   "PlanID": "PASS_DML",
   "Reason": "TABLE",
+  "TableName": "",
+  "FullQuery": "update b.a set name = 'foo' where eid = 1 and id = 1"
+}
+
+# update cross-db
+options:PassthroughDMLs
+"update b.a set name='foo' where eid=1 and id=1"
+{
+  "PlanID": "PASS_DML",
   "TableName": "",
   "FullQuery": "update b.a set name = 'foo' where eid = 1 and id = 1"
 }
@@ -865,6 +919,15 @@
   "WhereClause": " where name in ('a', 'b')"
 }
 
+# delete limit with pk
+options:PassthroughDMLs
+"delete from d where name in ('a', 'b') limit 1"
+{
+  "PlanID": "PASS_DML",
+  "TableName": "",
+  "FullQuery": "delete from d where name in ('a', 'b') limit 1"
+}
+
 # delete cross-db
 "delete from b.a where eid=1 and id=1"
 {
@@ -905,6 +968,15 @@
   "OuterQuery": "delete from a where :#pk",
   "PKValues": [1, 1],
   "WhereClause": " where eid = 1 and id = 1"
+}
+
+# pk
+options:PassthroughDMLs
+"delete from a where eid=1 and id=1"
+{
+  "PlanID": "PASS_DML",
+  "TableName": "",
+  "FullQuery": "delete from a where eid = 1 and id = 1"
 }
 
 # partial pk
