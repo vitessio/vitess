@@ -32,6 +32,9 @@ var (
 	// ErrTooComplex indicates given sql query is too complex.
 	ErrTooComplex = vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "Complex")
 	execLimit     = &sqlparser.Limit{Rowcount: sqlparser.NewValArg([]byte(":#maxLimit"))}
+
+	// PassthroughDMLs will return PlanPassDML for all update or delete statements
+	PassthroughDMLs = false
 )
 
 //_______________________________________________
@@ -49,6 +52,9 @@ const (
 	PlanNextval
 	// PlanPassDML is pass through update & delete statements. This is
 	// the default plan for update and delete statements.
+	// If PassthroughDMLs is true, then it is used for all DML statements
+	// and is valid in all replication modes.
+	// Otherwise is only allowed in row based replication mode
 	PlanPassDML
 	// PlanDMLPK is an update or delete with an equality where clause(s)
 	// on primary key(s).
