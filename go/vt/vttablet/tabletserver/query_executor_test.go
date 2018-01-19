@@ -105,6 +105,59 @@ func TestQueryExecutorPlanPassDmlRBR(t *testing.T) {
 	testCommitHelper(t, tsv, qre)
 }
 
+func TestQueryExecutorPassthroughDml(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	planbuilder.PassthroughDMLs = true
+	defer func() { planbuilder.PassthroughDMLs = false }()
+	query := "update test_table set pk = foo()"
+	want := &sqltypes.Result{}
+	db.AddQuery(query, want)
+	ctx := context.Background()
+	// RBR mode
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	planbuilder.PassthroughDMLs = true
+	defer func() { planbuilder.PassthroughDMLs = false }()
+	tsv.qe.passthroughDMLs.Set(true)
+	tsv.qe.binlogFormat = connpool.BinlogFormatRow
+
+	txid := newTransaction(tsv, nil)
+	qre := newTestQueryExecutor(ctx, tsv, query, txid)
+
+	checkPlanID(t, planbuilder.PlanPassDML, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+	wantqueries := []string{query}
+	gotqueries := fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	}
+
+	// Statement mode also works
+	tsv.qe.binlogFormat = connpool.BinlogFormatStatement
+	got, err = qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+	wantqueries = []string{query, query}
+	gotqueries = fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	}
+
+	testCommitHelper(t, tsv, qre)
+}
+
 func TestQueryExecutorPlanPassDmlAutoCommitRBR(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
@@ -131,6 +184,43 @@ func TestQueryExecutorPlanPassDmlAutoCommitRBR(t *testing.T) {
 	_, err = qre.Execute()
 	if code := vterrors.Code(err); code != vtrpcpb.Code_UNIMPLEMENTED {
 		t.Errorf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
+	}
+}
+
+func TestQueryExecutorPassthroughDmlAutoCommit(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	query := "update test_table set pk = foo()"
+	want := &sqltypes.Result{}
+	db.AddQuery(query, want)
+	ctx := context.Background()
+	// RBR mode
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	planbuilder.PassthroughDMLs = true
+	defer func() { planbuilder.PassthroughDMLs = false }()
+	tsv.qe.passthroughDMLs.Set(true)
+	tsv.qe.binlogFormat = connpool.BinlogFormatRow
+
+	qre := newTestQueryExecutor(ctx, tsv, query, 0)
+	checkPlanID(t, planbuilder.PlanPassDML, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+
+	// Statement mode
+	tsv.qe.binlogFormat = connpool.BinlogFormatStatement
+	got, err = qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
 	}
 }
 
