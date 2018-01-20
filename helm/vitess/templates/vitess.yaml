@@ -1,60 +1,59 @@
 # Create global resources.
 ---
-# Headless service for vttablets.
-# This is only required when using StatefulSet, but it doesn't hurt otherwise.
-apiVersion: v1
-kind: Service
-metadata:
-  name: vttablet
-  labels:
-    app: vitess
-  annotations:
-    service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
-spec:
-  ports:
-    - port: 15002
-      name: web
-    - port: 16002
-      name: grpc
-  clusterIP: None
-  selector:
-    app: vitess
-    component: vttablet
+# create a single vttablet service
+{{ include "vttablet-service" $ }}
+---
+# create an etcd cluster for the global topology
+{{- $replicas := $.Values.topology.globalCell.replicas | default $.Values.etcd.replicas -}}
+{{- $version := $.Values.topology.globalCell.version | default $.Values.etcd.version -}}
+{{- $resources := $.Values.topology.globalCell.resources | default $.Values.etcd.resources -}}
+
+{{ include "etcd" (tuple "global" $replicas $version $resources) }}
 
 # Create requested resources in each cell.
 {{ range $cell := $.Values.topology.cells }}
----
-{{ with $cell.etcd }}{{ include "etcd" (tuple $ $cell .) }}{{ end }}
----
-{{ with $cell.vtctld }}{{ include "vtctld" (tuple $ $cell .) }}{{ end }}
----
-{{ with $cell.vtgate }}{{ include "vtgate" (tuple $ $cell .) }}{{ end }}
----
-{{ with $cell.orchestrator }}{{ include "orchestrator" (tuple $ $cell .) }}{{ end }}
 
-# Tablets for keyspaces
-{{ range $keyspace := $cell.keyspaces }}
-{{ range $shard := $keyspace.shards }}
-{{ range $tablet := $shard.tablets }}
-{{ with $tablet.vttablet }}
-{{- $0 := $.Values.vttablet -}}
-
-{{- $controllerType := .controllerType | default $0.controllerType -}}
-{{ if eq $controllerType "StatefulSet" }}
 ---
-{{ include "vttablet-stateful-set" (tuple $ $cell $keyspace $shard $tablet) }}
-{{ else if eq $controllerType "None" }}
-{{ range $index := until (atoi (print $tablet.vttablet.replicas)) }}
-{{- $uid := add $tablet.uidBase $index -}}
----
-{{ include "vttablet-pod" (tuple $ $cell $keyspace $shard $tablet $uid) }}
-{{ end }} # range $index
-{{ end }} # if eq $controllerType
+# create an etcd cluster per cell
+{{- $cellClean := include "clean-label" $cell.name -}}
+{{- $replicas := $cell.etcd.replicas | default $.Values.etcd.replicas -}}
+{{- $version := $cell.etcd.version | default $.Values.etcd.version -}}
+{{- $resources := $cell.etcd.resources | default $.Values.etcd.resources -}}
 
-{{ end }} # with $tablet.vttablet
-{{ end }} # range $tablet
-{{ end }} # range $shard
-{{ end }} # range $keyspace
+{{ include "etcd" (tuple $cellClean $replicas $version $resources) }}
+---
+# create one controller per cell
+{{ include "vtctld" (tuple $.Values.topology $cell $.Values.vtctld $.Release.Namespace $.Values.config) }}
+---
+# create a pool of vtgates per cell
+{{ include "vtgate" (tuple $.Values.topology $cell $.Values.vtgate $.Release.Namespace) }}
+
+  # Tablets for keyspaces
+  {{ range $keyspace := $cell.keyspaces }}
+    {{ range $shard := $keyspace.shards }}
+      {{ range $tablet := $shard.tablets }}
+---
+{{ include "vttablet" (tuple $.Values.topology $cell $keyspace $shard $tablet $.Values.vttablet $.Release.Namespace $.Values.config) }}
+      {{ end }} # range $tablet
+    {{ end }} # range $shard
+  {{ end }} # range $keyspace
 
 {{ end }} # range $cell
+---
+{{ with $.Values.config }}
+# shared ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vitess-cm
+data:
+  backup.backup_storage_implementation: {{ .backup.backup_storage_implementation }}
+  backup.gcs_backup_storage_bucket: {{ .backup.gcs_backup_storage_bucket }}
+  backup.gcs_backup_storage_root: {{ .backup.gcs_backup_storage_root }}
+  backup.s3_backup_aws_region: {{ .backup.s3_backup_aws_region }}
+  backup.s3_backup_storage_bucket: {{ .backup.s3_backup_storage_bucket }}
+  backup.s3_backup_storage_root: {{ .backup.s3_backup_storage_root }}
+  backup.s3_backup_server_side_encryption: {{ .backup.s3_backup_server_side_encryption }}
 
+  db.flavor: {{ $.Values.vttablet.flavor }}
+{{ end }} # end with config
