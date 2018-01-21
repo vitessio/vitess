@@ -280,7 +280,7 @@ func TestToUint64(t *testing.T) {
 		err error
 	}{{
 		v:   TestValue(VarChar, "abcd"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: abcd"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: 'abcd'"),
 	}, {
 		v:   NewInt64(-1),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "negative number cannot be converted to unsigned: -1"),
@@ -313,7 +313,7 @@ func TestToInt64(t *testing.T) {
 		err error
 	}{{
 		v:   TestValue(VarChar, "abcd"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: abcd"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: 'abcd'"),
 	}, {
 		v:   NewUint64(18446744073709551615),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsigned number overflows int64 value: 18446744073709551615"),
@@ -346,7 +346,7 @@ func TestToFloat64(t *testing.T) {
 		err error
 	}{{
 		v:   TestValue(VarChar, "abcd"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: abcd"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: 'abcd'"),
 	}, {
 		v:   NewInt64(1),
 		out: 1,
@@ -515,7 +515,7 @@ func TestNewNumeric(t *testing.T) {
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseFloat: parsing \"abcd\": invalid syntax"),
 	}, {
 		v:   TestValue(VarChar, "abcd"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: abcd"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: 'abcd'"),
 	}}
 	for _, tcase := range tcases {
 		got, err := newNumeric(tcase.v)
@@ -564,7 +564,7 @@ func TestNewIntegralNumeric(t *testing.T) {
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseUint: parsing \"1.2\": invalid syntax"),
 	}, {
 		v:   TestValue(VarChar, "abcd"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: abcd"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: 'abcd'"),
 	}}
 	for _, tcase := range tcases {
 		got, err := newIntegralNumeric(tcase.v)

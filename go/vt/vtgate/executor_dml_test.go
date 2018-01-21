@@ -1153,7 +1153,7 @@ func TestInsertFail(t *testing.T) {
 	}
 
 	_, err = executorExec(executor, "insert into music_extra_reversed(music_id, user_id) values (1, 'aa')", nil)
-	want = `execInsertSharded: getInsertShardedRoute: hash.Verify: could not parse value: aa`
+	want = `execInsertSharded: getInsertShardedRoute: hash.Verify: could not parse value: 'aa'`
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("executorExec: %v, must contain %v", err, want)
 	}
