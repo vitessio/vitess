@@ -239,7 +239,7 @@ func TestLimitInvalidCount(t *testing.T) {
 
 	l.Count = sqltypes.PlanValue{Value: sqltypes.NewFloat64(1.2)}
 	_, err = l.fetchCount(nil, nil)
-	want = "could not parse value: 1.2"
+	want = "could not parse value: '1.2'"
 	if err == nil || err.Error() != want {
 		t.Errorf("fetchCount: %v, want %s", err, want)
 	}

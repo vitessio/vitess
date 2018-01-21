@@ -87,7 +87,7 @@ func TestHashVerify(t *testing.T) {
 
 	// Failure test
 	_, err = hash.Verify(nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
-	wantErr := "hash.Verify: could not parse value: aa"
+	wantErr := "hash.Verify: could not parse value: 'aa'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("hash.Verify err: %v, want %s", err, wantErr)
 	}
