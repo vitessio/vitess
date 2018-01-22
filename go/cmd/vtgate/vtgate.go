@@ -67,6 +67,11 @@ func main() {
 		os.Exit(0)
 	}
 
+	if len(flag.Args()) > 0 {
+		flag.Usage()
+		log.Exit("vtgate doesn't take any positional arguments")
+	}
+
 	if initFakeZK != nil {
 		initFakeZK()
 	}
