@@ -140,12 +140,15 @@ func TestQueryExecutorPassthroughDml(t *testing.T) {
 		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
 	}
 
-	// Statement mode also works
+	// Statement mode also works when allowUnsafeDMLs is true
 	tsv.qe.binlogFormat = connpool.BinlogFormatStatement
-	got, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
+	_, err = qre.Execute()
+	if code := vterrors.Code(err); code != vtrpcpb.Code_UNIMPLEMENTED {
+		t.Errorf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
 	}
+
+	tsv.qe.allowUnsafeDMLs = true
+	got, err = qre.Execute()
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
 	}
@@ -215,6 +218,12 @@ func TestQueryExecutorPassthroughDmlAutoCommit(t *testing.T) {
 
 	// Statement mode
 	tsv.qe.binlogFormat = connpool.BinlogFormatStatement
+	_, err = qre.Execute()
+	if code := vterrors.Code(err); code != vtrpcpb.Code_UNIMPLEMENTED {
+		t.Errorf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
+	}
+
+	tsv.qe.allowUnsafeDMLs = true
 	got, err = qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
