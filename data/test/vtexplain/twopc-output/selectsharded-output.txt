@@ -1,0 +1,90 @@
+----------------------------------------------------------------------
+select * from user /* scatter */
+
+1 ks_sharded/-40: select * from user limit 10001 /* scatter */
+1 ks_sharded/40-80: select * from user limit 10001 /* scatter */
+1 ks_sharded/80-c0: select * from user limit 10001 /* scatter */
+1 ks_sharded/c0-: select * from user limit 10001 /* scatter */
+
+----------------------------------------------------------------------
+select * from user where id = 1 /* equal unique */
+
+1 ks_sharded/-40: select * from user where id = 1 limit 10001 /* equal unique */
+
+----------------------------------------------------------------------
+select * from user where id > 100 /* scatter range */
+
+1 ks_sharded/-40: select * from user where id > 100 limit 10001 /* scatter range */
+1 ks_sharded/40-80: select * from user where id > 100 limit 10001 /* scatter range */
+1 ks_sharded/80-c0: select * from user where id > 100 limit 10001 /* scatter range */
+1 ks_sharded/c0-: select * from user where id > 100 limit 10001 /* scatter range */
+
+----------------------------------------------------------------------
+select * from user where name = 'bob' /* vindex lookup */
+
+1 ks_sharded/c0-: select user_id from name_user_map where name = 'bob' limit 10001 /* vindex lookup */
+2 ks_sharded/-40: select * from user where name = 'bob' limit 10001 /* vindex lookup */
+
+----------------------------------------------------------------------
+select * from user where name = 'bob' or nickname = 'bob' /* vindex lookup */
+
+1 ks_sharded/-40: select * from user where (name = 'bob' or nickname = 'bob') limit 10001 /* vindex lookup */
+1 ks_sharded/40-80: select * from user where (name = 'bob' or nickname = 'bob') limit 10001 /* vindex lookup */
+1 ks_sharded/80-c0: select * from user where (name = 'bob' or nickname = 'bob') limit 10001 /* vindex lookup */
+1 ks_sharded/c0-: select * from user where (name = 'bob' or nickname = 'bob') limit 10001 /* vindex lookup */
+
+----------------------------------------------------------------------
+select u.id, u.name, u.nickname, n.info from user u join name_info n on u.name = n.name /* join on varchar */
+
+1 ks_sharded/-40: select u.id, u.name, u.nickname from user as u limit 10001 /* join on varchar */
+1 ks_sharded/40-80: select u.id, u.name, u.nickname from user as u limit 10001 /* join on varchar */
+1 ks_sharded/80-c0: select u.id, u.name, u.nickname from user as u limit 10001 /* join on varchar */
+1 ks_sharded/c0-: select u.id, u.name, u.nickname from user as u limit 10001 /* join on varchar */
+2 ks_sharded/40-80: select n.info from name_info as n where n.name = 'name_val_2' limit 10001 /* join on varchar */
+3 ks_sharded/40-80: select n.info from name_info as n where n.name = 'name_val_2' limit 10001 /* join on varchar */
+4 ks_sharded/40-80: select n.info from name_info as n where n.name = 'name_val_2' limit 10001 /* join on varchar */
+5 ks_sharded/40-80: select n.info from name_info as n where n.name = 'name_val_2' limit 10001 /* join on varchar */
+
+----------------------------------------------------------------------
+select m.id, m.song, e.extra from music m join music_extra e on m.id = e.id where m.user_id = 100 /* join on int */
+
+1 ks_sharded/80-c0: select m.id, m.song from music as m where m.user_id = 100 limit 10001 /* join on int */
+2 ks_sharded/-40: select e.extra from music_extra as e where e.id = 1 limit 10001 /* join on int */
+
+----------------------------------------------------------------------
+select count(*) from user where id = 1 /* point aggregate */
+
+1 ks_sharded/-40: select count(*) from user where id = 1 limit 10001 /* point aggregate */
+
+----------------------------------------------------------------------
+select count(*) from user where name in ('alice','bob') /* scatter aggregate */
+
+1 ks_sharded/40-80: select user_id from name_user_map where name = 'alice' limit 10001 /* scatter aggregate */
+2 ks_sharded/c0-: select user_id from name_user_map where name = 'bob' limit 10001 /* scatter aggregate */
+3 ks_sharded/-40: select count(*) from user where name in ('alice', 'bob') limit 10001 /* scatter aggregate */
+
+----------------------------------------------------------------------
+select name, count(*) from user group by name /* scatter aggregate */
+
+1 ks_sharded/-40: select name, count(*) from user group by name limit 10001 /* scatter aggregate */
+1 ks_sharded/40-80: select name, count(*) from user group by name limit 10001 /* scatter aggregate */
+1 ks_sharded/80-c0: select name, count(*) from user group by name limit 10001 /* scatter aggregate */
+1 ks_sharded/c0-: select name, count(*) from user group by name limit 10001 /* scatter aggregate */
+
+----------------------------------------------------------------------
+select 1, "hello", 3.14 from user limit 10 /* select constant sql values */
+
+1 ks_sharded/-40: select 1, 'hello', 3.14 from user limit 10 /* select constant sql values */
+1 ks_sharded/40-80: select 1, 'hello', 3.14 from user limit 10 /* select constant sql values */
+1 ks_sharded/80-c0: select 1, 'hello', 3.14 from user limit 10 /* select constant sql values */
+1 ks_sharded/c0-: select 1, 'hello', 3.14 from user limit 10 /* select constant sql values */
+
+----------------------------------------------------------------------
+select * from (select id from user) s /* scatter paren select */
+
+1 ks_sharded/-40: select * from (select id from user) as s limit 10001 /* scatter paren select */
+1 ks_sharded/40-80: select * from (select id from user) as s limit 10001 /* scatter paren select */
+1 ks_sharded/80-c0: select * from (select id from user) as s limit 10001 /* scatter paren select */
+1 ks_sharded/c0-: select * from (select id from user) as s limit 10001 /* scatter paren select */
+
+----------------------------------------------------------------------

@@ -22,7 +22,6 @@ package vtexplain
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
 
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
@@ -56,9 +55,9 @@ func initVtgateExecutor(vSchemaStr string, opts *Options) error {
 	explainTopo = &ExplainTopo{NumShards: opts.NumShards}
 	healthCheck = discovery.NewFakeHealthCheck()
 
-	resolver := newFakeResolver(healthCheck, explainTopo, vtexplainCell)
+	resolver := newFakeResolver(opts, healthCheck, explainTopo, vtexplainCell)
 
-	err := buildTopology(vSchemaStr, opts.NumShards)
+	err := buildTopology(opts, vSchemaStr, opts.NumShards)
 	if err != nil {
 		return err
 	}
@@ -70,15 +69,20 @@ func initVtgateExecutor(vSchemaStr string, opts *Options) error {
 	return nil
 }
 
-func newFakeResolver(hc discovery.HealthCheck, serv srvtopo.Server, cell string) *vtgate.Resolver {
+func newFakeResolver(opts *Options, hc discovery.HealthCheck, serv srvtopo.Server, cell string) *vtgate.Resolver {
 	gw := gateway.GetCreator()(hc, nil, serv, cell, 3)
 	gw.WaitForTablets(context.Background(), []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
-	tc := vtgate.NewTxConn(gw, vtgatepb.TransactionMode_MULTI)
+
+	txMode := vtgatepb.TransactionMode_MULTI
+	if opts.ExecutionMode == ModeTwoPC {
+		txMode = vtgatepb.TransactionMode_TWOPC
+	}
+	tc := vtgate.NewTxConn(gw, txMode)
 	sc := vtgate.NewScatterConn("", tc, gw, hc)
 	return vtgate.NewResolver(serv, cell, sc)
 }
 
-func buildTopology(vschemaStr string, numShardsPerKeyspace int) error {
+func buildTopology(opts *Options, vschemaStr string, numShardsPerKeyspace int) error {
 	explainTopo.Lock.Lock()
 	defer explainTopo.Lock.Unlock()
 
@@ -104,7 +108,7 @@ func buildTopology(vschemaStr string, numShardsPerKeyspace int) error {
 			log.Infof("registering test tablet %s for keyspace %s shard %s", hostname, ks, shard)
 
 			tablet := healthCheck.AddFakeTablet(vtexplainCell, hostname, 1, ks, shard, topodatapb.TabletType_MASTER, true, 1, nil, func(t *topodatapb.Tablet) queryservice.QueryService {
-				return newTablet(t)
+				return newTablet(opts, t)
 			})
 			explainTopo.TabletConns[hostname] = tablet.(*explainTablet)
 		}
@@ -114,14 +118,21 @@ func buildTopology(vschemaStr string, numShardsPerKeyspace int) error {
 }
 
 func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error) {
-	_, err := vtgateExecutor.Execute(context.Background(), "VtexplainExecute", vtgate.NewSafeSession(vtgateSession), sql, nil)
-	if err != nil {
-		return nil, nil, fmt.Errorf("vtexplain execute error: %v in %s", err, sql)
-	}
-
 	// use the plan cache to get the set of plans used for this query, then
 	// clear afterwards for the next run
 	planCache := vtgateExecutor.Plans()
+
+	_, err := vtgateExecutor.Execute(context.Background(), "VtexplainExecute", vtgate.NewSafeSession(vtgateSession), sql, nil)
+	if err != nil {
+		for _, tc := range explainTopo.TabletConns {
+			tc.tabletQueries = nil
+			tc.mysqlQueries = nil
+		}
+		planCache.Clear()
+
+		return nil, nil, fmt.Errorf("vtexplain execute error in '%s': %v", sql, err)
+	}
+
 	var plans []*engine.Plan
 	for _, item := range planCache.Items() {
 		plan := item.Value.(*engine.Plan)
@@ -136,17 +147,13 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error
 			continue
 		}
 
-		actions := &TabletActions{
+		tabletActions[shard] = &TabletActions{
 			TabletQueries: tc.tabletQueries,
 			MysqlQueries:  tc.mysqlQueries,
 		}
 
 		tc.tabletQueries = nil
 		tc.mysqlQueries = nil
-
-		sort.Sort(actions.TabletQueries)
-		sort.Sort(actions.MysqlQueries)
-		tabletActions[shard] = actions
 	}
 
 	return plans, tabletActions, nil

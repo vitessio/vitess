@@ -42,7 +42,7 @@ create table t2 (
 	}
 	initTabletEnvironment(ddls, defaultTestOpts())
 
-	tablet := newTablet(&topodatapb.Tablet{
+	tablet := newTablet(defaultTestOpts(), &topodatapb.Tablet{
 		Keyspace: "test_keyspace",
 		Shard:    "-80",
 	})
