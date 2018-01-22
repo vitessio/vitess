@@ -38,7 +38,13 @@ func TestLookupUniqueString(t *testing.T) {
 
 func TestLookupUniqueMap(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	got, err := lookupUnique.(Unique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lookupUnique.(Unique).Map(
+		vc,
+		[][]sqltypes.Value{
+			[]sqltypes.Value{sqltypes.NewInt64(1)},
+			[]sqltypes.Value{sqltypes.NewInt64(2)},
+		},
+	)
 	if err != nil {
 		t.Error(err)
 	}
@@ -51,7 +57,13 @@ func TestLookupUniqueMap(t *testing.T) {
 	}
 
 	vc.numRows = 0
-	got, err = lookupUnique.(Unique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err = lookupUnique.(Unique).Map(
+		vc,
+		[][]sqltypes.Value{
+			[]sqltypes.Value{sqltypes.NewInt64(1)},
+			[]sqltypes.Value{sqltypes.NewInt64(2)},
+		},
+	)
 	if err != nil {
 		t.Error(err)
 	}
@@ -61,7 +73,13 @@ func TestLookupUniqueMap(t *testing.T) {
 	}
 
 	vc.numRows = 2
-	_, err = lookupUnique.(Unique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	_, err = lookupUnique.(Unique).Map(
+		vc,
+		[][]sqltypes.Value{
+			[]sqltypes.Value{sqltypes.NewInt64(1)},
+			[]sqltypes.Value{sqltypes.NewInt64(2)},
+		},
+	)
 	wantErr := "Lookup.Map: unexpected multiple results from vindex t: INT64(1)"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("lookupUnique(query fail) err: %v, want %s", err, wantErr)
@@ -69,7 +87,7 @@ func TestLookupUniqueMap(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	_, err = lookupUnique.(Unique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	_, err = lookupUnique.(Unique).Map(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}})
 	wantErr = "lookup.Map: execute failed"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("lookupUnique(query fail) err: %v, want %s", err, wantErr)
@@ -79,7 +97,7 @@ func TestLookupUniqueMap(t *testing.T) {
 
 func TestLookupUniqueVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	_, err := lookupUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("test")})
+	_, err := lookupUnique.Verify(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}}, [][]byte{[]byte("test")})
 	if err != nil {
 		t.Error(err)
 	}
@@ -87,7 +105,7 @@ func TestLookupUniqueVerify(t *testing.T) {
 		t.Errorf("vc.queries length: %v, want %v", got, want)
 	}
 
-	_, err = lookuphashunique.Verify(nil, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("test1test23")})
+	_, err = lookuphashunique.Verify(nil, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}}, [][]byte{[]byte("test1test23")})
 	want := "lookup.Verify.vunhash: invalid keyspace id: 7465737431746573743233"
 	if err.Error() != want {
 		t.Error(err)

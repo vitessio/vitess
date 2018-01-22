@@ -60,7 +60,7 @@ func TestLookupHashString(t *testing.T) {
 
 func TestLookupHashMap(t *testing.T) {
 	vc := &vcursor{numRows: 2}
-	got, err := lookuphash.(NonUnique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lookuphash.(NonUnique).Map(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}, []sqltypes.Value{sqltypes.NewInt64(2)}})
 	if err != nil {
 		t.Error(err)
 	}
@@ -80,7 +80,7 @@ func TestLookupHashMap(t *testing.T) {
 		sqltypes.MakeTestFields("a", "varbinary"),
 		"notint",
 	)
-	got, err = lookuphash.(NonUnique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	got, err = lookuphash.(NonUnique).Map(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}})
 	if err != nil {
 		t.Error(err)
 	}
@@ -91,7 +91,7 @@ func TestLookupHashMap(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	_, err = lookuphash.(NonUnique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	_, err = lookuphash.(NonUnique).Map(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}})
 	wantErr := "lookup.Map: execute failed"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("lookuphash(query fail) err: %v, want %s", err, wantErr)
@@ -104,7 +104,7 @@ func TestLookupHashVerify(t *testing.T) {
 	// The check doesn't actually happen. But we give correct values
 	// to avoid confusion.
 	got, err := lookuphash.Verify(vc,
-		[]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
+		[][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}, []sqltypes.Value{sqltypes.NewInt64(2)}},
 		[][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x06\xe7\xea\"Βp\x8f")})
 	if err != nil {
 		t.Error(err)
@@ -115,7 +115,7 @@ func TestLookupHashVerify(t *testing.T) {
 	}
 
 	vc.numRows = 0
-	got, err = lookuphash.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	got, err = lookuphash.Verify(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	if err != nil {
 		t.Error(err)
 	}
@@ -124,7 +124,7 @@ func TestLookupHashVerify(t *testing.T) {
 		t.Errorf("lookuphash.Verify(mismatch): %v, want %v", got, want)
 	}
 
-	_, err = lookuphash.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("bogus")})
+	_, err = lookuphash.Verify(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}}, [][]byte{[]byte("bogus")})
 	wantErr := "lookup.Verify.vunhash: invalid keyspace id: 626f677573"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("lookuphash.Verify(bogus) err: %v, want %s", err, wantErr)

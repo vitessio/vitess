@@ -100,7 +100,13 @@ func TestLookupNonUniqueString(t *testing.T) {
 
 func TestLookupNonUniqueMap(t *testing.T) {
 	vc := &vcursor{numRows: 2}
-	got, err := lookupNonUnique.(NonUnique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lookupNonUnique.(NonUnique).Map(
+		vc,
+		[][]sqltypes.Value{
+			[]sqltypes.Value{sqltypes.NewInt64(1)},
+			[]sqltypes.Value{sqltypes.NewInt64(2)},
+		},
+	)
 	if err != nil {
 		t.Error(err)
 	}
@@ -132,7 +138,7 @@ func TestLookupNonUniqueMap(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	_, err = lookupNonUnique.(NonUnique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	_, err = lookupNonUnique.(NonUnique).Map(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}})
 	wantErr := "lookup.Map: execute failed"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, wantErr)
@@ -142,7 +148,14 @@ func TestLookupNonUniqueMap(t *testing.T) {
 
 func TestLookupNonUniqueVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	_, err := lookupNonUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("test1"), []byte("test2")})
+	_, err := lookupNonUnique.Verify(
+		vc,
+		[][]sqltypes.Value{
+			[]sqltypes.Value{sqltypes.NewInt64(1)},
+			[]sqltypes.Value{sqltypes.NewInt64(2)},
+		},
+		[][]byte{[]byte("test1"), []byte("test2")},
+	)
 	if err != nil {
 		t.Error(err)
 	}
@@ -166,7 +179,11 @@ func TestLookupNonUniqueVerify(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	_, err = lookupNonUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	_, err = lookupNonUnique.Verify(
+		vc,
+		[][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}},
+		[][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")},
+	)
 	want := "lookup.Verify: execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)

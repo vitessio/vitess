@@ -41,7 +41,13 @@ func TestLookupHashUniqueCost(t *testing.T) {
 
 func TestLookupHashUniqueMap(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	got, err := lhu.(Unique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lhu.(Unique).Map(
+		vc,
+		[][]sqltypes.Value{
+			[]sqltypes.Value{sqltypes.NewInt64(1)},
+			[]sqltypes.Value{sqltypes.NewInt64(2)},
+		},
+	)
 	if err != nil {
 		t.Error(err)
 	}
@@ -54,7 +60,13 @@ func TestLookupHashUniqueMap(t *testing.T) {
 	}
 
 	vc.numRows = 0
-	got, err = lhu.(Unique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err = lhu.(Unique).Map(
+		vc,
+		[][]sqltypes.Value{
+			[]sqltypes.Value{sqltypes.NewInt64(1)},
+			[]sqltypes.Value{sqltypes.NewInt64(2)},
+		},
+	)
 	if err != nil {
 		t.Error(err)
 	}
@@ -64,8 +76,14 @@ func TestLookupHashUniqueMap(t *testing.T) {
 	}
 
 	vc.numRows = 2
-	_, err = lhu.(Unique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
-	wantErr := "LookupHash.Map: unexpected multiple results from vindex t: INT64(1)"
+	_, err = lhu.(Unique).Map(
+		vc,
+		[][]sqltypes.Value{
+			[]sqltypes.Value{sqltypes.NewInt64(1)},
+			[]sqltypes.Value{sqltypes.NewInt64(2)},
+		},
+	)
+	wantErr := "LookupHashUnique.Map: unexpected multiple results from vindex t: INT64(1)"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("lhu(query fail) err: %v, want %s", err, wantErr)
 	}
@@ -75,7 +93,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 		sqltypes.MakeTestFields("a", "varbinary"),
 		"notint",
 	)
-	got, err = lhu.(Unique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	got, err = lhu.(Unique).Map(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}})
 	if err != nil {
 		t.Error(err)
 	}
@@ -86,7 +104,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	_, err = lhu.(Unique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	_, err = lhu.(Unique).Map(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}})
 	wantErr = "lookup.Map: execute failed"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("lhu(query fail) err: %v, want %s", err, wantErr)
@@ -99,7 +117,7 @@ func TestLookupHashUniqueVerify(t *testing.T) {
 	// The check doesn't actually happen. But we give correct values
 	// to avoid confusion.
 	got, err := lhu.Verify(vc,
-		[]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
+		[][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}, []sqltypes.Value{sqltypes.NewInt64(2)}},
 		[][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x06\xe7\xea\"Βp\x8f")})
 	if err != nil {
 		t.Error(err)
@@ -110,7 +128,7 @@ func TestLookupHashUniqueVerify(t *testing.T) {
 	}
 
 	vc.numRows = 0
-	got, err = lhu.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	got, err = lhu.Verify(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	if err != nil {
 		t.Error(err)
 	}
@@ -119,7 +137,7 @@ func TestLookupHashUniqueVerify(t *testing.T) {
 		t.Errorf("lhu.Verify(mismatch): %v, want %v", got, want)
 	}
 
-	_, err = lhu.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("bogus")})
+	_, err = lhu.Verify(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}}, [][]byte{[]byte("bogus")})
 	wantErr := "lookup.Verify.vunhash: invalid keyspace id: 626f677573"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("lhu.Verify(bogus) err: %v, want %s", err, wantErr)
