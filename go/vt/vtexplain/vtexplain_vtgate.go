@@ -118,14 +118,21 @@ func buildTopology(opts *Options, vschemaStr string, numShardsPerKeyspace int) e
 }
 
 func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error) {
-	_, err := vtgateExecutor.Execute(context.Background(), "VtexplainExecute", vtgate.NewSafeSession(vtgateSession), sql, nil)
-	if err != nil {
-		return nil, nil, fmt.Errorf("vtexplain execute error in '%s': %v", sql, err)
-	}
-
 	// use the plan cache to get the set of plans used for this query, then
 	// clear afterwards for the next run
 	planCache := vtgateExecutor.Plans()
+
+	_, err := vtgateExecutor.Execute(context.Background(), "VtexplainExecute", vtgate.NewSafeSession(vtgateSession), sql, nil)
+	if err != nil {
+		for _, tc := range explainTopo.TabletConns {
+			tc.tabletQueries = nil
+			tc.mysqlQueries = nil
+		}
+		planCache.Clear()
+
+		return nil, nil, fmt.Errorf("vtexplain execute error in '%s': %v", sql, err)
+	}
+
 	var plans []*engine.Plan
 	for _, item := range planCache.Items() {
 		plan := item.Value.(*engine.Plan)

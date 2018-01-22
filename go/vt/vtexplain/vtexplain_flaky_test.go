@@ -17,6 +17,7 @@ limitations under the License.
 package vtexplain
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os/exec"
@@ -180,5 +181,76 @@ func TestErrors(t *testing.T) {
 		if err == nil || err.Error() != test.Err {
 			t.Errorf("Run(%s): %v, want %s", test.SQL, err, test.Err)
 		}
+	}
+}
+
+func TestJSONOutput(t *testing.T) {
+	sql := "select 1 from user where id = 1"
+	explains, err := Run(sql)
+	if err != nil {
+		t.Fatalf("vtexplain error: %v", err)
+	}
+	if explains == nil {
+		t.Fatalf("vtexplain error running %s: no explain", string(sql))
+	}
+
+	explainJSON := ExplainsAsJSON(explains)
+
+	var data interface{}
+	err = json.Unmarshal([]byte(explainJSON), &data)
+	if err != nil {
+		t.Errorf("error unmarshaling json: %v", err)
+	}
+
+	array, ok := data.([]interface{})
+	if !ok || len(array) != 1 {
+		t.Errorf("expected single-element top-level array, got:\n%s", explainJSON)
+	}
+
+	explain, ok := array[0].(map[string]interface{})
+	if !ok {
+		t.Errorf("expected explain map, got:\n%s", explainJSON)
+	}
+
+	if explain["SQL"] != sql {
+		t.Errorf("expected SQL, got:\n%s", explainJSON)
+	}
+
+	plans, ok := explain["Plans"].([]interface{})
+	if !ok || len(plans) != 1 {
+		t.Errorf("expected single-element plans array, got:\n%s", explainJSON)
+	}
+
+	actions, ok := explain["TabletActions"].(map[string]interface{})
+	if !ok {
+		t.Errorf("expected TabletActions map, got:\n%s", explainJSON)
+	}
+
+	actionsJSON, err := json.MarshalIndent(actions, "", "    ")
+	if err != nil {
+		t.Errorf("error in json marshal: %v", err)
+	}
+	wantJSON := `{
+    "ks_sharded/-40": {
+        "MysqlQueries": [
+            {
+                "SQL": "select 1 from user where id = 1 limit 10001",
+                "Time": 1
+            }
+        ],
+        "TabletQueries": [
+            {
+                "BindVars": {
+                    "#maxLimit": "10001",
+                    "vtg1": "1"
+                },
+                "SQL": "select :vtg1 from user where id = :vtg1",
+                "Time": 1
+            }
+        ]
+    }
+}`
+	if string(actionsJSON) != wantJSON {
+		t.Errorf("TabletActions mismatch: got:\n%v\nwant:\n%v\n", string(actionsJSON), wantJSON)
 	}
 }
