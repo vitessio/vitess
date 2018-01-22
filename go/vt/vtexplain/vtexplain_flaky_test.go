@@ -79,9 +79,6 @@ func runTestCase(testcase, mode string, opts *Options, t *testing.T) {
 		t.Fatalf("vtexplain error: %v", err)
 	}
 
-	jsonOutFile := testfiles.Locate(fmt.Sprintf("vtexplain/%s-output/%s-output.json", mode, testcase))
-	jsonOut, _ := ioutil.ReadFile(jsonOutFile)
-
 	textOutFile := testfiles.Locate(fmt.Sprintf("vtexplain/%s-output/%s-output.txt", mode, testcase))
 	textOut, _ := ioutil.ReadFile(textOutFile)
 
@@ -91,28 +88,6 @@ func runTestCase(testcase, mode string, opts *Options, t *testing.T) {
 	}
 	if explains == nil {
 		t.Fatalf("vtexplain error running %s: no explain", string(sql))
-	}
-
-	explainJSON := ExplainsAsJSON(explains)
-	if strings.TrimSpace(string(explainJSON)) != strings.TrimSpace(string(jsonOut)) {
-		// Print the json that was actually returned and also dump to a
-		// temp file to be able to diff the results.
-		t.Errorf("json output did not match")
-		if testOutputTempDir == "" {
-			testOutputTempDir, err = ioutil.TempDir("", "vtexplain_output")
-			if err != nil {
-				t.Fatalf("error getting tempdir: %v", err)
-			}
-		}
-		gotFile := fmt.Sprintf("%s/%s-output.json", testOutputTempDir, testcase)
-		ioutil.WriteFile(gotFile, []byte(explainJSON), 0644)
-
-		command := exec.Command("diff", "-u", jsonOutFile, gotFile)
-		out, _ := command.CombinedOutput()
-		t.Logf("diff:\n%s\n", out)
-
-		t.Logf("run the following command to update the expected output:")
-		t.Logf("cp %s/* %s", testOutputTempDir, path.Dir(jsonOutFile))
 	}
 
 	explainText := ExplainsAsText(explains)
