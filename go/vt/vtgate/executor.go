@@ -195,6 +195,8 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		return e.handleUse(ctx, safeSession, sql, bindVars)
 	case sqlparser.StmtOther:
 		return e.handleOther(ctx, safeSession, sql, bindVars, target, logStats)
+	case sqlparser.StmtComment:
+		return e.handleComment(ctx, safeSession, sql, bindVars, target, logStats)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
@@ -703,6 +705,13 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 	result, err := e.shardExec(ctx, safeSession, sql, bindVars, target, logStats)
 	logStats.ExecuteTime = time.Since(execStart)
 	return result, err
+}
+
+func (e *Executor) handleComment(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
+	_, sql = sqlparser.ExtractMysqlComment(sql)
+
+	// Not sure if this is a good idea.
+	return &sqltypes.Result{}, nil
 }
 
 // StreamExecute executes a streaming query.

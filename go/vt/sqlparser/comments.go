@@ -121,6 +121,10 @@ func StripLeadingComments(sql string) string {
 			if index <= 1 {
 				return sql
 			}
+			// don't strip /*! ... */ or /*!50700 ... */
+			if len(sql) > 2 && sql[2] == '!' {
+				return sql
+			}
 			sql = sql[index+2:]
 		case '-':
 			// Single line comment
@@ -139,4 +143,15 @@ func StripLeadingComments(sql string) string {
 
 func hasCommentPrefix(sql string) bool {
 	return len(sql) > 1 && ((sql[0] == '/' && sql[1] == '*') || (sql[0] == '-' && sql[1] == '-'))
+}
+
+func ExtractMysqlComment(sql string) (version string, inner_sql string) {
+	// assuming sql is already trimmed, trim off "/*!" and "*/"
+	sql = sql[3 : len(sql)-2]
+
+	end_of_version_index := strings.IndexFunc(sql, func(c rune) bool { return !unicode.IsDigit(c) })
+	version = sql[0:end_of_version_index]
+	inner_sql = strings.TrimFunc(sql[end_of_version_index:], unicode.IsSpace)
+
+	return version, inner_sql
 }
