@@ -136,6 +136,7 @@ type QueryEngine struct {
 	warnResultSize   sync2.AtomicInt64
 	maxDMLRows       sync2.AtomicInt64
 	passthroughDMLs  sync2.AtomicBool
+	allowUnsafeDMLs  bool
 	streamBufferSize sync2.AtomicInt64
 	// tableaclExemptCount count the number of accesses allowed
 	// based on membership in the superuser ACL
