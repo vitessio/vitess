@@ -114,7 +114,7 @@ func TestNumericStaticMapVerify(t *testing.T) {
 
 	// Failure test
 	_, err = numericStaticMap.Verify(nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
-	wantErr := "NumericStaticMap.Verify: could not parse value: aa"
+	wantErr := "NumericStaticMap.Verify: could not parse value: 'aa'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("hash.Verify err: %v, want %s", err, wantErr)
 	}

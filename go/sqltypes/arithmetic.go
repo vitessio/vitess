@@ -287,7 +287,7 @@ func newNumeric(v Value) (numeric, error) {
 	if fval, err := strconv.ParseFloat(str, 64); err == nil {
 		return numeric{fval: fval, typ: Float64}, nil
 	}
-	return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: %s", str)
+	return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: '%s'", str)
 }
 
 // newIntegralNumeric parses a value and produces an Int64 or Uint64.
@@ -315,7 +315,7 @@ func newIntegralNumeric(v Value) (numeric, error) {
 	if uval, err := strconv.ParseUint(str, 10, 64); err == nil {
 		return numeric{uval: uval, typ: Uint64}, nil
 	}
-	return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: %s", str)
+	return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: '%s'", str)
 }
 
 func addNumeric(v1, v2 numeric) (numeric, error) {
