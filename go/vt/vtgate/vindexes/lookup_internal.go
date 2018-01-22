@@ -43,23 +43,25 @@ func (lkp *lookupInternal) Init(lookupQueryParams map[string]string) {
 		fromColumns = append(fromColumns, strings.TrimSpace(from))
 	}
 	lkp.FromColumns = fromColumns
-
-	// TODO @rafael: update sel and ver to support multi column vindexes. This will be done
-	// as part of face 2 of https://github.com/youtube/vitess/issues/3481
-	// For now multi column behaves as a single column for Map and Verify operations
-	lkp.sel = fmt.Sprintf("select %s from %s where %s = :%s", lkp.To, lkp.Table, lkp.FromColumns[0], lkp.FromColumns[0])
-	lkp.ver = fmt.Sprintf("select %s from %s where %s = :%s and %s = :%s", lkp.FromColumns[0], lkp.Table, lkp.FromColumns[0], lkp.FromColumns[0], lkp.To, lkp.To)
 	lkp.del = lkp.initDelStm()
 }
 
-// Lookup performs a lookup for the ids.
-func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sqltypes.Result, error) {
-	results := make([]*sqltypes.Result, 0, len(ids))
-	for _, id := range ids {
-		bindVars := map[string]*querypb.BindVariable{
-			lkp.FromColumns[0]: sqltypes.ValueBindVariable(id),
+// Lookup performs a lookup for the rowsColValues.
+func (lkp *lookupInternal) Lookup(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]*sqltypes.Result, error) {
+	results := make([]*sqltypes.Result, 0, len(rowsColValues))
+	for _, ids := range rowsColValues {
+		var selBuffer bytes.Buffer
+		fmt.Fprintf(&selBuffer, "select %s from %s where ", lkp.To, lkp.Table)
+		bindVars := make(map[string]*querypb.BindVariable)
+		for colIdx, id := range ids {
+			if colIdx != 0 {
+				selBuffer.WriteString(" and ")
+			}
+			column := lkp.FromColumns[colIdx]
+			bindVars[column] = sqltypes.ValueBindVariable(id)
+			selBuffer.WriteString(column + " = :" + column)
 		}
-		result, err := vcursor.Execute("VindexLookup", lkp.sel, bindVars, false /* isDML */)
+		result, err := vcursor.Execute("VindexLookup", selBuffer.String(), bindVars, false /* isDML */)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
@@ -68,19 +70,29 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sql
 	return results, nil
 }
 
-// Verify returns true if ids map to values.
-func (lkp *lookupInternal) Verify(vcursor VCursor, ids, values []sqltypes.Value) ([]bool, error) {
-	out := make([]bool, len(ids))
-	for i, id := range ids {
-		bindVars := map[string]*querypb.BindVariable{
-			lkp.FromColumns[0]: sqltypes.ValueBindVariable(id),
-			lkp.To:             sqltypes.ValueBindVariable(values[i]),
+// Verify returns true if rowsColValues map to values.
+func (lkp *lookupInternal) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, values []sqltypes.Value) ([]bool, error) {
+	out := make([]bool, len(rowsColValues))
+	for idx, ids := range rowsColValues {
+		bindVars := make(map[string]*querypb.BindVariable)
+		var verBuffer bytes.Buffer
+		fmt.Fprintf(&verBuffer, "select %s from %s where ", lkp.FromColumns[0], lkp.Table)
+
+		for colIdx, id := range ids {
+			if colIdx != 0 {
+				verBuffer.WriteString(" and ")
+			}
+			column := lkp.FromColumns[colIdx]
+			bindVars[column] = sqltypes.ValueBindVariable(id)
+			verBuffer.WriteString(column + " = :" + column)
 		}
-		result, err := vcursor.Execute("VindexVerify", lkp.ver, bindVars, true /* isDML */)
+		bindVars[lkp.To] = sqltypes.ValueBindVariable(values[idx])
+		verBuffer.WriteString(" and " + lkp.To + " = :" + lkp.To)
+		result, err := vcursor.Execute("VindexVerify", verBuffer.String(), bindVars, true /* isDML */)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Verify: %v", err)
 		}
-		out[i] = (len(result.Rows) != 0)
+		out[idx] = (len(result.Rows) != 0)
 	}
 	return out, nil
 }

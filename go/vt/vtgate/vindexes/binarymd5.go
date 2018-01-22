@@ -48,19 +48,25 @@ func (vind *BinaryMD5) Cost() int {
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *BinaryMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	out := make([]bool, len(ids))
-	for i := range ids {
-		out[i] = (bytes.Compare(binHash(ids[i].ToBytes()), ksids[i]) == 0)
+func (vind *BinaryMD5) Verify(v VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	out := make([]bool, len(rowsColValues))
+	for idx, ids := range rowsColValues {
+		ksid := make([]byte, 0)
+		for _, id := range ids {
+			ksid = append(ksid, binHash(id.ToBytes())...)
+		}
+		out[idx] = (bytes.Compare(ksid, ksids[idx]) == 0)
 	}
 	return out, nil
 }
 
 // Map returns the corresponding keyspace id values for the given ids.
-func (vind *BinaryMD5) Map(_ VCursor, ids []sqltypes.Value) ([][]byte, error) {
-	out := make([][]byte, 0, len(ids))
-	for _, id := range ids {
-		out = append(out, binHash(id.ToBytes()))
+func (vind *BinaryMD5) Map(_ VCursor, rowsColValues [][]sqltypes.Value) ([][]byte, error) {
+	out := make([][]byte, len(rowsColValues))
+	for idx, ids := range rowsColValues {
+		for _, id := range ids {
+			out[idx] = append(out[idx], binHash(id.ToBytes())...)
+		}
 	}
 	return out, nil
 }
