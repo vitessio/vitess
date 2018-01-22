@@ -331,7 +331,7 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 		Input: tp,
 	}
 
-	want := "could not parse value: b"
+	want := "could not parse value: 'b'"
 	if _, err := oa.Execute(nil, nil, nil, false); err == nil || err.Error() != want {
 		t.Errorf("oa.Execute(): %v, want %s", err, want)
 	}
