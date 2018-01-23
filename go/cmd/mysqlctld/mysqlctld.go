@@ -58,12 +58,7 @@ func main() {
 	// mysqlctld only starts and stops mysql, only needs dba.
 	dbconfigFlags := dbconfigs.DbaConfig
 	dbconfigs.RegisterFlags(dbconfigFlags)
-	flag.Parse()
-
-	if *servenv.Version {
-		servenv.AppVersion.Print()
-		os.Exit(0)
-	}
+	servenv.ParseFlags("mysqlctld")
 
 	// We'll register this OnTerm handler before mysqld starts, so we get notified
 	// if mysqld dies on its own without us (or our RPC client) telling it to.
