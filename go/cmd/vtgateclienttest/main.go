@@ -20,9 +20,6 @@ limitations under the License.
 package main
 
 import (
-	"flag"
-	"os"
-
 	"github.com/youtube/vitess/go/cmd/vtgateclienttest/services"
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -36,13 +33,8 @@ func init() {
 func main() {
 	defer exit.Recover()
 
-	flag.Parse()
+	servenv.ParseFlags("vtgateclienttest")
 	servenv.Init()
-
-	if *servenv.Version {
-		servenv.AppVersion.Print()
-		os.Exit(0)
-	}
 
 	// The implementation chain.
 	servenv.OnRun(func() {

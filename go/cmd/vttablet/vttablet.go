@@ -19,7 +19,6 @@ package main
 
 import (
 	"flag"
-	"os"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -52,17 +51,9 @@ func main() {
 		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
 	dbconfigs.RegisterFlags(dbconfigFlags)
 	mysqlctl.RegisterFlags()
-	flag.Parse()
 
-	if *servenv.Version {
-		servenv.AppVersion.Print()
-		os.Exit(0)
-	}
+	servenv.ParseFlags("vttablet")
 
-	if len(flag.Args()) > 0 {
-		flag.Usage()
-		log.Exit("vttablet doesn't take any positional arguments")
-	}
 	if err := tabletenv.VerifyConfig(); err != nil {
 		log.Exitf("invalid config: %v", err)
 	}
