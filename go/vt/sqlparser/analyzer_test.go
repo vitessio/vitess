@@ -357,6 +357,7 @@ func TestExtractSetValues(t *testing.T) {
 		sql     string
 		out     map[string]interface{}
 		charset string
+		scope   string
 		err     string
 	}{{
 		sql: "invalid",
@@ -401,9 +402,17 @@ func TestExtractSetValues(t *testing.T) {
 		sql:     "SET character set ascii",
 		out:     map[string]interface{}{},
 		charset: "ascii",
+	}, {
+		sql:   "SET SESSION wait_timeout = 3600",
+		out:   map[string]interface{}{"wait_timeout": int64(3600)},
+		scope: "session",
+	}, {
+		sql:   "SET GLOBAL wait_timeout = 3600",
+		out:   map[string]interface{}{"wait_timeout": int64(3600)},
+		scope: "global",
 	}}
 	for _, tcase := range testcases {
-		out, charset, err := ExtractSetValues(tcase.sql)
+		out, charset, _, err := ExtractSetValues(tcase.sql)
 		if tcase.err != "" {
 			if err == nil || err.Error() != tcase.err {
 				t.Errorf("ExtractSetValues(%s): %v, want '%s'", tcase.sql, err, tcase.err)

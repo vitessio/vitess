@@ -36,6 +36,17 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
+// ExecutorMode controls the mode of operation for the vtexplain simulator
+type ExecutorMode string
+
+const (
+	// ModeMulti is the default mode with autocommit implemented at vtgate
+	ModeMulti = "multi"
+
+	// ModeTwoPC enables the twopc feature
+	ModeTwoPC = "twopc"
+)
+
 // Options to control the explain process
 type Options struct {
 	// NumShards indicates the number of shards in the topology
@@ -47,6 +58,9 @@ type Options struct {
 
 	// Normalize controls whether or not vtgate does query normalization
 	Normalize bool
+
+	// ExecutionMode must be set to one of the modes above
+	ExecutionMode string
 }
 
 // TabletQuery defines a query that was sent to a given tablet and how it was
@@ -93,55 +107,13 @@ func (tq *TabletQuery) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// TabletQueries is a collection of queries
-type TabletQueries []*TabletQuery
-
-// Len is part of the sort interface
-func (tq TabletQueries) Len() int {
-	return len(tq)
-}
-
-// Less is part of the sort interface
-func (tq TabletQueries) Less(i, j int) bool {
-	if tq[i].Time == tq[j].Time {
-		return tq[i].SQL < tq[j].SQL
-	}
-	return tq[i].Time < tq[j].Time
-}
-
-// Swap is part of the sort interface
-func (tq TabletQueries) Swap(i, j int) {
-	tq[i], tq[j] = tq[j], tq[i]
-}
-
-// MysqlQueries is a collection of queries
-type MysqlQueries []*MysqlQuery
-
-// Len is part of the sort interface
-func (mq MysqlQueries) Len() int {
-	return len(mq)
-}
-
-// Less is part of the sort interface
-func (mq MysqlQueries) Less(i, j int) bool {
-	if mq[i].Time == mq[j].Time {
-		return mq[i].SQL < mq[j].SQL
-	}
-	return mq[i].Time < mq[j].Time
-}
-
-// Swap is part of the sort interface
-func (mq MysqlQueries) Swap(i, j int) {
-	mq[i], mq[j] = mq[j], mq[i]
-}
-
 // TabletActions contains the set of operations done by a given tablet
 type TabletActions struct {
 	// Queries sent from vtgate to the tablet
-	TabletQueries TabletQueries
+	TabletQueries []*TabletQuery
 
 	// Queries that were run on mysql
-	MysqlQueries MysqlQueries
+	MysqlQueries []*MysqlQuery
 }
 
 // Explain defines how vitess will execute a given sql query, including the vtgate

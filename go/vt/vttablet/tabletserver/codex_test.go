@@ -148,7 +148,7 @@ func TestResolveNumber(t *testing.T) {
 		err: "missing bind var nokey",
 	}, {
 		pv:  sqltypes.PlanValue{Value: sqltypes.NewVarChar("aa")},
-		err: "could not parse value: aa",
+		err: "could not parse value: 'aa'",
 	}}
 	for _, tc := range tcases {
 		got, err := resolveNumber(tc.pv, bindVars)

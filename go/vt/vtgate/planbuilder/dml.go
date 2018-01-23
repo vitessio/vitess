@@ -70,13 +70,13 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, err
 		return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
 	}
 
-	var tableName sqlparser.TableName
-	for t := range rb.Symtab().tables {
-		tableName = t
+	var vindexTable *vindexes.Table
+	for _, tval := range rb.Symtab().tables {
+		vindexTable = tval.vindexTable
 	}
-	er.Table, err = vschema.FindTable(tableName)
-	if err != nil {
-		return nil, err
+	er.Table = vindexTable
+	if er.Table == nil {
+		return nil, errors.New("internal error: table.vindexTable is mysteriously nil")
 	}
 	err = getDMLRouting(upd.Where, er)
 	if err != nil {
@@ -261,6 +261,12 @@ func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) (pv sqltypes.PlanValu
 	filters := splitAndExpression(nil, node)
 	for _, filter := range filters {
 		filter = skipParenthesis(filter)
+		if parenthesis, ok := node.(*sqlparser.ParenExpr); ok {
+			if pv, ok := getMatch(parenthesis.Expr, col); ok {
+				return pv, ok
+			}
+			continue
+		}
 		comparison, ok := filter.(*sqlparser.ComparisonExpr)
 		if !ok {
 			continue

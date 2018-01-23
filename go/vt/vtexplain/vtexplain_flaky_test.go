@@ -17,6 +17,7 @@ limitations under the License.
 package vtexplain
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os/exec"
@@ -37,7 +38,7 @@ func defaultTestOpts() *Options {
 	}
 }
 
-func initTest(opts *Options, t *testing.T) {
+func initTest(mode string, opts *Options, t *testing.T) {
 	schema, err := ioutil.ReadFile(testfiles.Locate("vtexplain/test-schema.sql"))
 	if err != nil {
 		t.Fatalf("error: %v", err)
@@ -48,24 +49,39 @@ func initTest(opts *Options, t *testing.T) {
 		t.Fatalf("error: %v", err)
 	}
 
+	opts.ExecutionMode = mode
 	err = Init(string(vSchema), string(schema), opts)
 	if err != nil {
 		t.Fatalf("vtexplain Init error: %v", err)
 	}
-
 }
 
 func testExplain(testcase string, opts *Options, t *testing.T) {
-	initTest(opts, t)
+	modes := []string{
+		ModeMulti,
+
+		// TwoPC mode is functional, but the output isn't stable for
+		// tests since there are timestamps in the value rows
+		// ModeTwoPC,
+	}
+
+	for _, mode := range modes {
+		runTestCase(testcase, mode, opts, t)
+	}
+}
+
+func runTestCase(testcase, mode string, opts *Options, t *testing.T) {
+	t.Logf("vtexplain test: %s mode: %s", testcase, mode)
+	initTest(mode, opts, t)
 
 	sqlFile := testfiles.Locate(fmt.Sprintf("vtexplain/%s-queries.sql", testcase))
 	sql, err := ioutil.ReadFile(sqlFile)
+	if err != nil {
+		t.Fatalf("vtexplain error: %v", err)
+	}
 
-	jsonOutFile := testfiles.Locate(fmt.Sprintf("vtexplain/%s-output.json", testcase))
-	jsonOut, err := ioutil.ReadFile(jsonOutFile)
-
-	textOutFile := testfiles.Locate(fmt.Sprintf("vtexplain/%s-output.txt", testcase))
-	textOut, err := ioutil.ReadFile(textOutFile)
+	textOutFile := testfiles.Locate(fmt.Sprintf("vtexplain/%s-output/%s-output.txt", mode, testcase))
+	textOut, _ := ioutil.ReadFile(textOutFile)
 
 	explains, err := Run(string(sql))
 	if err != nil {
@@ -73,28 +89,6 @@ func testExplain(testcase string, opts *Options, t *testing.T) {
 	}
 	if explains == nil {
 		t.Fatalf("vtexplain error running %s: no explain", string(sql))
-	}
-
-	explainJSON := ExplainsAsJSON(explains)
-	if strings.TrimSpace(string(explainJSON)) != strings.TrimSpace(string(jsonOut)) {
-		// Print the json that was actually returned and also dump to a
-		// temp file to be able to diff the results.
-		t.Errorf("json output did not match")
-		if testOutputTempDir == "" {
-			testOutputTempDir, err = ioutil.TempDir("", "vtexplain_output")
-			if err != nil {
-				t.Fatalf("error getting tempdir: %v", err)
-			}
-		}
-		gotFile := fmt.Sprintf("%s/%s-output.json", testOutputTempDir, testcase)
-		ioutil.WriteFile(gotFile, []byte(explainJSON), 0644)
-
-		command := exec.Command("diff", "-u", jsonOutFile, gotFile)
-		out, _ := command.CombinedOutput()
-		t.Logf("diff:\n%s\n", out)
-
-		t.Logf("run the following command to update the expected output:")
-		t.Logf("cp %s/* %s", testOutputTempDir, path.Dir(jsonOutFile))
 	}
 
 	explainText := ExplainsAsText(explains)
@@ -155,7 +149,7 @@ func TestComments(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
-	initTest(defaultTestOpts(), t)
+	initTest(ModeMulti, defaultTestOpts(), t)
 
 	tests := []struct {
 		SQL string
@@ -163,22 +157,22 @@ func TestErrors(t *testing.T) {
 	}{
 		{
 			SQL: "INVALID SQL",
-			Err: "vtexplain execute error: unrecognized statement: INVALID SQL in INVALID SQL",
+			Err: "vtexplain execute error in 'INVALID SQL': unrecognized statement: INVALID SQL",
 		},
 
 		{
 			SQL: "SELECT * FROM THIS IS NOT SQL",
-			Err: "vtexplain execute error: syntax error at position 22 near 'is' in SELECT * FROM THIS IS NOT SQL",
+			Err: "vtexplain execute error in 'SELECT * FROM THIS IS NOT SQL': syntax error at position 22 near 'is'",
 		},
 
 		{
 			SQL: "SELECT * FROM table_not_in_vschema",
-			Err: "vtexplain execute error: table table_not_in_vschema not found in SELECT * FROM table_not_in_vschema",
+			Err: "vtexplain execute error in 'SELECT * FROM table_not_in_vschema': table table_not_in_vschema not found",
 		},
 
 		{
 			SQL: "SELECT * FROM table_not_in_schema",
-			Err: "vtexplain execute error: target: ks_unsharded.-.master, used tablet: explainCell-0 (ks_unsharded/-), table table_not_in_schema not found in schema in SELECT * FROM table_not_in_schema",
+			Err: "vtexplain execute error in 'SELECT * FROM table_not_in_schema': target: ks_unsharded.-.master, used tablet: explainCell-0 (ks_unsharded/-), table table_not_in_schema not found in schema",
 		},
 	}
 
@@ -187,5 +181,76 @@ func TestErrors(t *testing.T) {
 		if err == nil || err.Error() != test.Err {
 			t.Errorf("Run(%s): %v, want %s", test.SQL, err, test.Err)
 		}
+	}
+}
+
+func TestJSONOutput(t *testing.T) {
+	sql := "select 1 from user where id = 1"
+	explains, err := Run(sql)
+	if err != nil {
+		t.Fatalf("vtexplain error: %v", err)
+	}
+	if explains == nil {
+		t.Fatalf("vtexplain error running %s: no explain", string(sql))
+	}
+
+	explainJSON := ExplainsAsJSON(explains)
+
+	var data interface{}
+	err = json.Unmarshal([]byte(explainJSON), &data)
+	if err != nil {
+		t.Errorf("error unmarshaling json: %v", err)
+	}
+
+	array, ok := data.([]interface{})
+	if !ok || len(array) != 1 {
+		t.Errorf("expected single-element top-level array, got:\n%s", explainJSON)
+	}
+
+	explain, ok := array[0].(map[string]interface{})
+	if !ok {
+		t.Errorf("expected explain map, got:\n%s", explainJSON)
+	}
+
+	if explain["SQL"] != sql {
+		t.Errorf("expected SQL, got:\n%s", explainJSON)
+	}
+
+	plans, ok := explain["Plans"].([]interface{})
+	if !ok || len(plans) != 1 {
+		t.Errorf("expected single-element plans array, got:\n%s", explainJSON)
+	}
+
+	actions, ok := explain["TabletActions"].(map[string]interface{})
+	if !ok {
+		t.Errorf("expected TabletActions map, got:\n%s", explainJSON)
+	}
+
+	actionsJSON, err := json.MarshalIndent(actions, "", "    ")
+	if err != nil {
+		t.Errorf("error in json marshal: %v", err)
+	}
+	wantJSON := `{
+    "ks_sharded/-40": {
+        "MysqlQueries": [
+            {
+                "SQL": "select 1 from user where id = 1 limit 10001",
+                "Time": 1
+            }
+        ],
+        "TabletQueries": [
+            {
+                "BindVars": {
+                    "#maxLimit": "10001",
+                    "vtg1": "1"
+                },
+                "SQL": "select :vtg1 from user where id = :vtg1",
+                "Time": 1
+            }
+        ]
+    }
+}`
+	if string(actionsJSON) != wantJSON {
+		t.Errorf("TabletActions mismatch: got:\n%v\nwant:\n%v\n", string(actionsJSON), wantJSON)
 	}
 }
