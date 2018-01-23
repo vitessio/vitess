@@ -19,7 +19,6 @@ package main
 import (
 	"flag"
 	"math/rand"
-	"os"
 	"strings"
 	"time"
 
@@ -59,13 +58,8 @@ func init() {
 func main() {
 	defer exit.Recover()
 
-	flag.Parse()
+	servenv.ParseFlags("vtgate")
 	servenv.Init()
-
-	if *servenv.Version {
-		servenv.AppVersion.Print()
-		os.Exit(0)
-	}
 
 	if initFakeZK != nil {
 		initFakeZK()
