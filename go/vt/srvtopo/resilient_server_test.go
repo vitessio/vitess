@@ -236,7 +236,7 @@ func TestWatchSrvVSchema(t *testing.T) {
 	// Update value, wait for it.
 	updatedValue := &vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
-			"ks1": {},
+			"ks2": {},
 		},
 	}
 	if err := ts.UpdateSrvVSchema(ctx, "test_cell", updatedValue); err != nil {
