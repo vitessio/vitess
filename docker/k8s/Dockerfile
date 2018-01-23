@@ -1,4 +1,4 @@
-FROM vitess/base as base
+FROM vitess/base AS base
 
 FROM debian:stretch-slim
 
@@ -7,9 +7,8 @@ ENV VTROOT /vt
 ENV VTDATAROOT /vtdataroot
 ENV VTTOP /vt/src/github.com/youtube/vitess
 
-# Create vitess user
+# Prepare directory structure.
 RUN mkdir -p /vt && \
-\
     mkdir -p /vt/bin && \
     mkdir -p /vt/config && \
     mkdir -p /vt/web && \
@@ -47,13 +46,13 @@ COPY --from=base $VTTOP/config/mycnf/backup.cnf /vt/config/mycnf/
 COPY --from=base $VTTOP/config/mycnf/rbr.cnf /vt/config/mycnf/
 
 # add vitess user and add permissions
-RUN groupadd -r vitess && useradd -r -g vitess vitess && \
+RUN groupadd -r --gid 999 vitess && useradd -r -g vitess --uid 999 vitess && \
    chown -R vitess:vitess /vt;
 
 # TODO: remove when https://github.com/youtube/vitess/issues/3553 is fixed
 RUN apt-get update && \
     apt-get upgrade -qq && \
-    apt-get install mysql-client -qq && \
+    apt-get install mysql-client -qq --no-install-recommends && \
+    apt-get autoremove && \
     apt-get clean && \
-    apt-get autoclean && \
-    apt-get autoremove
+    rm -rf /var/lib/apt/lists/*
