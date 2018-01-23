@@ -67,7 +67,7 @@ topology:
     etcd:
       replicas: 3
   cells:
-    - name: "datacenter-1"
+    - name: "zone1"
 
       # set failure-domain.beta.kubernetes.io/region
       # region: eastus
@@ -146,7 +146,8 @@ vttablet:
     # pd-ssd (Google Cloud)
     # managed-premium (Azure)
     # standard (AWS) - not sure what the default class is for ssd
-    storageClassName: "default"
+    # Note: Leave storageClassName unset to use cluster-specific default class.
+    #storageClassName: "pd-ssd"
     accessModes: ["ReadWriteOnce"]
     resources:
       requests:

@@ -14,11 +14,21 @@ It currently includes all dependencies (e.g. etcd) and Vitess components
 **WARNING: This chart should be considered Alpha.
 Upgrading a release of this chart may or may not delete all your data.**
 
+## Prerequisites
+
+* Install [etcd-operator](https://github.com/coreos/etcd-operator) in the
+  namespace where you plan to install this chart.
+
 ## Installing the Chart
 
 ```console
 helm/vitess$ helm install . -f site-values.yaml
 ```
+
+See the [Configuration](#configuration) section below for what you need to put
+in `site-values.yaml`.
+You can install the chart without site values, but it will only launch a
+skeleton cluster without any keyspaces (logical databases).
 
 ## Cleaning up
 
@@ -31,16 +41,25 @@ kubectl delete pvc -l app=vitess
 
 ## Configuration
 
-You will need to provide a `site-values.yaml` file in order for Vitess to properly
-install. Here are examples of various configurations. To see additional options,
+You will need to provide a `site-values.yaml` file to specify your actual
+logical database topology (e.g. whether to shard).
+Here are examples of various configurations. To see additional options,
 look at the default `values.yaml` file, which is well commented.
 
-### Minimum config
+### Unsharded keyspace
 
 ```
 topology:
   cells:
-    - name: "datacenter-1"
+    - name: "zone1"
+      etcd:
+        replicas: 3
+      vtctld:
+        replicas: 1
+      vtgate:
+        replicas: 3
+      mysqlProtocol:
+        enabled: false
       keyspaces:
         - name: "unsharded-dbname"
           shards:
@@ -56,7 +75,8 @@ topology:
 ```
 topology:
   cells:
-    - name: "datacenter-1"
+    - name: "zone1"
+      ...
       keyspaces:
         - name: "unsharded-dbname"
           shards:
@@ -84,7 +104,8 @@ topology:
 ```
 topology:
   cells:
-    - name: "datacenter-1"
+    - name: "zone1"
+      ...
       keyspaces:
         - name: "unsharded-dbname"
           shards:
@@ -116,7 +137,8 @@ vttablet:
 ```
 topology:
   cells:
-    - name: "datacenter-1"
+    - name: "zone1"
+      ...
       # enable or disable mysql protocol support, with accompanying auth details
       mysqlProtocol:
         enabled: false
