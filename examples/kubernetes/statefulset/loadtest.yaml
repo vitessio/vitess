@@ -1,0 +1,20 @@
+apiVersion: extensions/v1beta1
+kind: ReplicaSet
+metadata:
+  name: loadtest
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        component: loadtest
+        app: vitess
+    spec:
+      containers:
+        - name: loadtest
+          image: enisoc/vitess-loadtest:latest
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+
