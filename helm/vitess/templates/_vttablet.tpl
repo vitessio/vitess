@@ -217,7 +217,7 @@ spec:
   image: "vitess/vttablet:{{$vitessTag}}"
   livenessProbe:
     httpGet:
-      path: /debug/vars
+      path: /debug/health
       port: 15002
     initialDelaySeconds: 60
     timeoutSeconds: 10

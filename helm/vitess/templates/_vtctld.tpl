@@ -62,7 +62,7 @@ spec:
           image: vitess/vtctld:{{$vitessTag}}
           livenessProbe:
             httpGet:
-              path: /debug/vars
+              path: /debug/health
               port: 15000
             initialDelaySeconds: 30
             timeoutSeconds: 5
