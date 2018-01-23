@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"flag"
 	"fmt"
 	"net"
 	"os"
@@ -34,13 +33,7 @@ func init() {
 }
 
 func main() {
-
-	flag.Parse()
-
-	if *servenv.Version {
-		servenv.AppVersion.Print()
-		os.Exit(0)
-	}
+	servenv.ParseFlags("automation_server")
 
 	fmt.Println("Automation Server, listening on:", *servenv.Port)
 
