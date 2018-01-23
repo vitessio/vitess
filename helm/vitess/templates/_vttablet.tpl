@@ -306,6 +306,11 @@ spec:
 - name: mysql
   image: {{.mysqlImage | default $defaultVttablet.mysqlImage | quote}}
   imagePullPolicy: Always
+  livenessProbe:
+    exec:
+      command: ["mysqladmin", "ping", "-uroot", "--socket=/vtdataroot/tabletdata/mysql.sock"]
+    initialDelaySeconds: 60
+    timeoutSeconds: 10
   volumeMounts:
     - name: vtdataroot
       mountPath: /vtdataroot
