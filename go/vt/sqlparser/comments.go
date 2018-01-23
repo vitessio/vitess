@@ -145,13 +145,14 @@ func hasCommentPrefix(sql string) bool {
 	return len(sql) > 1 && ((sql[0] == '/' && sql[1] == '*') || (sql[0] == '-' && sql[1] == '-'))
 }
 
-func ExtractMysqlComment(sql string) (version string, inner_sql string) {
-	// assuming sql is already trimmed, trim off "/*!" and "*/"
+// ExtractMysqlComment extracts the version and SQL from a comment-only query
+// such as /*!50708 sql here */
+func ExtractMysqlComment(sql string) (version string, innerSQL string) {
 	sql = sql[3 : len(sql)-2]
 
-	end_of_version_index := strings.IndexFunc(sql, func(c rune) bool { return !unicode.IsDigit(c) })
-	version = sql[0:end_of_version_index]
-	inner_sql = strings.TrimFunc(sql[end_of_version_index:], unicode.IsSpace)
+	endOfVersionIndex := strings.IndexFunc(sql, func(c rune) bool { return !unicode.IsDigit(c) })
+	version = sql[0:endOfVersionIndex]
+	innerSQL = strings.TrimFunc(sql[endOfVersionIndex:], unicode.IsSpace)
 
-	return version, inner_sql
+	return version, innerSQL
 }
