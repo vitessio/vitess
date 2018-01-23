@@ -72,7 +72,7 @@ spec:
 
       containers:
         - name: vtgate
-          image: vitess/k8s:{{$vitessTag}}
+          image: vitess/vtgate:{{$vitessTag}}
           livenessProbe:
             httpGet:
               path: /debug/vars
@@ -192,7 +192,7 @@ affinity:
 {{- with $cell.mysqlProtocol -}}
 
 - name: init-mysql-creds
-  image: "vitess/k8s:{{$vitessTag}}"
+  image: "vitess/vtgate:{{$vitessTag}}"
   volumeMounts:
     - name: creds
       mountPath: "/mysqlcreds"
