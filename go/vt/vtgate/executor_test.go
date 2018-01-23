@@ -734,6 +734,26 @@ func TestExecutorUse(t *testing.T) {
 	}
 }
 
+func TestExecutorComment(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+
+	stmts := []string{
+		"/*! SET max_execution_time=5000*/",
+		"/*!50708 SET max_execution_time=5000*/",
+	}
+	wantResult := &sqltypes.Result{}
+
+	for _, stmt := range stmts {
+		gotResult, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), stmt, nil)
+		if err != nil {
+			t.Error(err)
+		}
+		if !reflect.DeepEqual(gotResult, wantResult) {
+			t.Errorf("Exec %s: %v, want %v", stmt, gotResult, wantResult)
+		}
+	}
+}
+
 func TestExecutorOther(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
