@@ -8,8 +8,6 @@ To access administrative web pages, start a proxy with:
 
 Then use the following URLs:
 
-Kubernetes dashboard: http://localhost:8001/ui
-
 vtctld: {{$proxyURL}}/services/vtctld:web/app/
 vtgate: {{$proxyURL}}/services/vtgate-{{$cell}}:web/
 
