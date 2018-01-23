@@ -333,7 +333,7 @@ func (server *ResilientServer) WatchSrvVSchema(ctx context.Context, cell string,
 			} else {
 				for c := range changes {
 					// Note we forward topo.ErrNoNode as is.
-					callback(nil, c.Err)
+					callback(c.Value, c.Err)
 					if c.Err != nil {
 						log.Warningf("Error while watching vschema for cell %s (will wait 5s before retrying): %v", cell, c.Err)
 						break
