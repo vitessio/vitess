@@ -76,7 +76,12 @@ func toJSON(p *Plan) ([]byte, error) {
 func TestPlan(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	for tcase := range iterateExecFile("exec_cases.txt") {
+		if strings.Contains(tcase.options, "PassthroughDMLs") {
+			PassthroughDMLs = true
+		}
 		plan, err := Build(tcase.input, testSchema)
+		PassthroughDMLs = false
+
 		var out string
 		if err != nil {
 			out = err.Error()
@@ -232,10 +237,11 @@ func loadSchema(name string) map[string]*schema.Table {
 }
 
 type testCase struct {
-	file   string
-	lineno int
-	input  string
-	output string
+	file    string
+	lineno  int
+	options string
+	input   string
+	output  string
 }
 
 func iterateExecFile(name string) (testCaseIterator chan testCase) {
@@ -250,6 +256,7 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 
 		r := bufio.NewReader(fd)
 		lineno := 0
+		options := ""
 		for {
 			binput, err := r.ReadBytes('\n')
 			if err != nil {
@@ -263,6 +270,11 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 			input := string(binput)
 			if input == "" || input == "\n" || input[0] == '#' || strings.HasPrefix(input, "Length:") {
 				//fmt.Printf("%s\n", input)
+				continue
+			}
+
+			if strings.HasPrefix(input, "options:") {
+				options = input[8:]
 				continue
 			}
 			err = json.Unmarshal(binput, &input)
@@ -293,7 +305,8 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 					break
 				}
 			}
-			testCaseIterator <- testCase{name, lineno, input, string(output)}
+			testCaseIterator <- testCase{name, lineno, options, input, string(output)}
+			options = ""
 		}
 	}()
 	return testCaseIterator
