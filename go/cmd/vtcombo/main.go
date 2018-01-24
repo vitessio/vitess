@@ -23,7 +23,6 @@ package main
 
 import (
 	"flag"
-	"os"
 	"strings"
 	"time"
 
@@ -67,18 +66,7 @@ func main() {
 		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
 	dbconfigs.RegisterFlags(dbconfigFlags)
 	mysqlctl.RegisterFlags()
-	flag.Parse()
-
-	if *servenv.Version {
-		servenv.AppVersion.Print()
-		os.Exit(0)
-	}
-
-	if len(flag.Args()) > 0 {
-		flag.Usage()
-		log.Errorf("vtcombo doesn't take any positional arguments")
-		exit.Return(1)
-	}
+	servenv.ParseFlags("vtcombo")
 
 	// parse the input topology
 	tpb := &vttestpb.VTTestTopology{}

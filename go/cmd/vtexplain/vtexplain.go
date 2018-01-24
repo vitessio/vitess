@@ -20,7 +20,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"os"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
@@ -124,19 +123,7 @@ func main() {
 	defer exit.RecoverAll()
 	defer logutil.Flush()
 
-	flag.Parse()
-
-	if *servenv.Version {
-		servenv.AppVersion.Print()
-		os.Exit(0)
-	}
-
-	args := flag.Args()
-
-	if len(args) != 0 {
-		flag.Usage()
-		exit.Return(1)
-	}
+	servenv.ParseFlags("vtexplain")
 
 	err := parseAndRun()
 	if err != nil {

@@ -2650,6 +2650,7 @@ non_reserved_keyword:
 | SHARE
 | SIGNED
 | SMALLINT
+| STATUS
 | TEXT
 | THAN
 | TIME

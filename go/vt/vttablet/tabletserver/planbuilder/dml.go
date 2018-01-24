@@ -32,6 +32,10 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 		FullQuery: GenerateFullQuery(upd),
 	}
 
+	if PassthroughDMLs {
+		return plan, nil
+	}
+
 	if len(upd.TableExprs) > 1 {
 		plan.Reason = ReasonMultiTable
 		return plan, nil
@@ -93,6 +97,10 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
 	plan = &Plan{
 		PlanID:    PlanPassDML,
 		FullQuery: GenerateFullQuery(del),
+	}
+
+	if PassthroughDMLs {
+		return plan, nil
 	}
 
 	if len(del.TableExprs) > 1 {
@@ -292,6 +300,10 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 		PlanID:    PlanPassDML,
 		FullQuery: GenerateFullQuery(ins),
 	}
+	if PassthroughDMLs {
+		return plan, nil
+	}
+
 	if ins.Action == sqlparser.ReplaceStr {
 		plan.Reason = ReasonReplace
 		return plan, nil
