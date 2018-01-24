@@ -2578,7 +2578,6 @@ reserved_keyword:
 | SET
 | SHOW
 | STRAIGHT_JOIN
-| STATUS
 | TABLE
 | TABLES
 | THEN
@@ -2593,7 +2592,6 @@ reserved_keyword:
 | UTC_TIME
 | UTC_TIMESTAMP
 | VALUES
-| VARIABLES
 | WHEN
 | WHERE
 
@@ -2663,6 +2661,7 @@ non_reserved_keyword:
 | UNUSED
 | VARBINARY
 | VARCHAR
+| VARIABLES
 | VIEW
 | VINDEX
 | VINDEXES
