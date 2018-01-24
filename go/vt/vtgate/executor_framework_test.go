@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -307,6 +308,40 @@ func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err er
 		qr.Rows = append(qr.Rows, r.Rows...)
 	}
 	return qr, nil
+}
+
+// testBatchQuery verifies that a single (or no) query ExecuteBatch was performed on the SandboxConn.
+func testBatchQuery(t *testing.T, sbcName string, sbc *sandboxconn.SandboxConn, boundQuery *querypb.BoundQuery) {
+	t.Helper()
+
+	var wantQueries [][]*querypb.BoundQuery
+	if boundQuery != nil {
+		wantQueries = [][]*querypb.BoundQuery{{boundQuery}}
+	}
+	if !reflect.DeepEqual(sbc.BatchQueries, wantQueries) {
+		t.Errorf("%s.BatchQueries:\n%+v, want\n%+v\n", sbcName, sbc.BatchQueries, wantQueries)
+	}
+}
+
+func testAsTransactionCount(t *testing.T, sbcName string, sbc *sandboxconn.SandboxConn, want int) {
+	t.Helper()
+	if got, want := sbc.AsTransactionCount.Get(), int64(want); got != want {
+		t.Errorf("%s.AsTransactionCount: %d, want %d\n", sbcName, got, want)
+	}
+}
+
+func testQueries(t *testing.T, sbcName string, sbc *sandboxconn.SandboxConn, wantQueries []*querypb.BoundQuery) {
+	t.Helper()
+	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
+		t.Errorf("%s.Queries:\n%+v, want\n%+v\n", sbcName, sbc.Queries, wantQueries)
+	}
+}
+
+func testCommitCount(t *testing.T, sbcName string, sbc *sandboxconn.SandboxConn, want int) {
+	t.Helper()
+	if got, want := sbc.CommitCount.Get(), int64(want); got != want {
+		t.Errorf("%s.CommitCount: %d, want %d\n", sbcName, got, want)
+	}
 }
 
 func testNonZeroDuration(t *testing.T, what, d string) {
