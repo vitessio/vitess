@@ -66,6 +66,26 @@ func TestBinaryMap(t *testing.T) {
 	}
 }
 
+func TestBinaryMultiColumnMap(t *testing.T) {
+	expectedOut := []byte("test1test2")
+	got, err := binOnlyVindex.(Unique).Map(
+		nil,
+		[][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.NewVarChar("test1"),
+				sqltypes.NewVarChar("test2"),
+			},
+		},
+	)
+	if err != nil {
+		t.Error(err)
+	}
+	out := []byte(got[0])
+	if bytes.Compare(expectedOut, out) != 0 {
+		t.Errorf("Map(%#v): %#v, want %#v", "test1,test2", out, expectedOut)
+	}
+}
+
 func TestBinaryVerify(t *testing.T) {
 	rowsColValues := [][]sqltypes.Value{
 		[]sqltypes.Value{sqltypes.NewVarBinary("1")},

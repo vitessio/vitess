@@ -55,6 +55,7 @@ func TestHashMap(t *testing.T) {
 		[]sqltypes.Value{sqltypes.NewInt64(4)},
 		[]sqltypes.Value{sqltypes.NewInt64(5)},
 		[]sqltypes.Value{sqltypes.NewInt64(6)},
+		[]sqltypes.Value{sqltypes.NewInt64(6), sqltypes.NewInt64(5)},
 	})
 	if err != nil {
 		t.Error(err)
@@ -67,6 +68,7 @@ func TestHashMap(t *testing.T) {
 		[]byte("\xd2\xfd\x88g\xd5\r-\xfe"),
 		[]byte("p\xbb\x02<\x81\f\xa8z"),
 		[]byte("\xf0\x98H\n\xc4ľq"),
+		[]byte("\xf0\x98H\n\xc4ľqp\xbb\x02<\x81\f\xa8z"),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
@@ -90,6 +92,30 @@ func TestHashVerify(t *testing.T) {
 	wantErr := "hash.Verify: could not parse value: 'aa'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("hash.Verify err: %v, want %s", err, wantErr)
+	}
+}
+
+func TestHashVerifyMultiCol(t *testing.T) {
+	rowsColValues := [][]sqltypes.Value{
+		[]sqltypes.Value{
+			sqltypes.NewInt64(1),
+			sqltypes.NewInt64(1)},
+		[]sqltypes.Value{
+			sqltypes.NewInt64(2),
+			sqltypes.NewInt64(1),
+		},
+	}
+	ksids := [][]byte{
+		[]byte("\x16k@\xb4J\xbaK\xd6\x16k@\xb4J\xbaK\xd6"),
+		[]byte("\x16k@\xb4J\xbaK\xd6\x16k@\xb4J\xbaK\xd6"),
+	}
+	got, err := hash.Verify(nil, rowsColValues, ksids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []bool{true, false}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("binaryMD5.Verify: %v, want %v", got, want)
 	}
 }
 
