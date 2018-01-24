@@ -166,6 +166,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
+	canAutocommit bool,
 ) (*sqltypes.Result, error) {
 
 	// mu protects qr
@@ -176,6 +177,8 @@ func (stc *ScatterConn) ExecuteMultiShard(
 		shards = append(shards, shard)
 	}
 
+	canCommit := len(shards) == 1 && canAutocommit && session.AutocommitApproval()
+
 	err := stc.multiGoTransaction(
 		ctx,
 		"Execute",
@@ -185,23 +188,25 @@ func (stc *ScatterConn) ExecuteMultiShard(
 		session,
 		notInTransaction,
 		func(target *querypb.Target, shouldBegin bool, transactionID int64) (int64, error) {
-			var innerqr *sqltypes.Result
-			var opts *querypb.ExecuteOptions
+			var (
+				innerqr *sqltypes.Result
+				err     error
+				opts    *querypb.ExecuteOptions
+			)
 			if session != nil && session.Session != nil {
 				opts = session.Session.Options
 			}
-			if shouldBegin {
-				var err error
+
+			switch {
+			case canCommit:
+				innerqr, err = stc.executeAutocommit(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, opts)
+			case shouldBegin:
 				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, opts)
-				if err != nil {
-					return transactionID, err
-				}
-			} else {
-				var err error
+			default:
 				innerqr, err = stc.gateway.Execute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, transactionID, opts)
-				if err != nil {
-					return transactionID, err
-				}
+			}
+			if err != nil {
+				return transactionID, err
 			}
 
 			mu.Lock()
@@ -210,6 +215,20 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			return transactionID, nil
 		})
 	return qr, err
+}
+
+func (stc *ScatterConn) executeAutocommit(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+	queries := []*querypb.BoundQuery{{
+		Sql:           sql,
+		BindVariables: bindVariables,
+	}}
+	// ExecuteBatch is a stop-gap because it's the only function that can currently do
+	// single round-trip commit.
+	qrs, err := stc.gateway.ExecuteBatch(ctx, target, queries, true /* asTransaction */, 0, options)
+	if err != nil {
+		return nil, err
+	}
+	return &qrs[0], nil
 }
 
 // ExecuteEntityIds executes queries that are shard specific.

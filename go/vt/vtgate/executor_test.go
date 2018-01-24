@@ -385,7 +385,9 @@ func TestExecutorAutocommit(t *testing.T) {
 		t.Errorf("Commit count: %d, want %d", got, want)
 	}
 
-	startCount = sbclookup.CommitCount.Get()
+	// In the following section, we look at AsTransaction count instead of CommitCount because
+	// the update results in a single round-trip ExecuteBatch call.
+	startCount = sbclookup.AsTransactionCount.Get()
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "update main1 set id=1", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -394,7 +396,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	if !proto.Equal(session.Session, wantSession) {
 		t.Errorf("autocommit=1: %v, want %v", session.Session, wantSession)
 	}
-	if got, want := sbclookup.CommitCount.Get(), startCount+1; got != want {
+	if got, want := sbclookup.AsTransactionCount.Get(), startCount+1; got != want {
 		t.Errorf("Commit count: %d, want %d", got, want)
 	}
 
@@ -407,6 +409,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	}
 
 	// autocommit = 1, "begin"
+	session.Reset()
 	startCount = sbclookup.CommitCount.Get()
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "begin", nil)
 	if err != nil {
