@@ -253,12 +253,15 @@ def setup_tablets():
       'Partitions(replica): -80 80-\n')
 
   if use_l2vtgate:
-    l2vtgate = utils.L2VtGate()
-    l2vtgate.start(tablets=
+    l2vtgate = utils.VtGate()
+    l2vtgate.start(extra_args=['--enable_forwarding'], tablets=
                    [shard_0_master, shard_0_replica1, shard_0_replica2,
                     shard_1_master, shard_1_replica1, shard_1_replica2])
     _, addr = l2vtgate.rpc_endpoint()
     l2vtgate_param = '%s|%s|%s' % (addr, KEYSPACE_NAME, '-')
+
+    # Clear utils.vtgate, so it doesn't point to the previous l2vtgate.
+    utils.vtgate = None
     utils.VtGate().start(l2vtgates=[l2vtgate_param,])
 
   else:
@@ -411,8 +414,8 @@ class TestCoreVTGateFunctions(BaseTestCase):
     before1 = v['VttabletCall']['Histograms'][key1]['Count']
     if use_l2vtgate:
       lv = l2vtgate.get_vars()
-      lbefore0 = lv['VttabletCall']['Histograms'][key0]['Count']
-      lbefore1 = lv['VttabletCall']['Histograms'][key1]['Count']
+      lbefore0 = lv['QueryServiceCall']['Histograms'][key0]['Count']
+      lbefore1 = lv['QueryServiceCall']['Histograms'][key1]['Count']
 
     cursor = vtgate_conn.cursor(
         tablet_type='master', keyspace=KEYSPACE_NAME,
@@ -428,8 +431,8 @@ class TestCoreVTGateFunctions(BaseTestCase):
     self.assertEqual(after1 - before1, 1)
     if use_l2vtgate:
       lv = l2vtgate.get_vars()
-      lafter0 = lv['VttabletCall']['Histograms'][key0]['Count']
-      lafter1 = lv['VttabletCall']['Histograms'][key1]['Count']
+      lafter0 = lv['QueryServiceCall']['Histograms'][key0]['Count']
+      lafter1 = lv['QueryServiceCall']['Histograms'][key1]['Count']
       self.assertEqual(lafter0 - lbefore0, 1)
       self.assertEqual(lafter1 - lbefore1, 1)
 

@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 #
 # Copyright 2017 Google Inc.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -243,9 +243,9 @@ index by_msg (msg)
     shard_master.start_vttablet(wait_for_state=None,
                                 binlog_use_v3_resharding_mode=False)
     shard_replica.start_vttablet(wait_for_state=None,
-                                binlog_use_v3_resharding_mode=False)
+                                 binlog_use_v3_resharding_mode=False)
     shard_rdonly1.start_vttablet(wait_for_state=None,
-                                binlog_use_v3_resharding_mode=False)
+                                 binlog_use_v3_resharding_mode=False)
 
     for t in [shard_master, shard_replica, shard_rdonly1]:
       t.wait_for_vttablet_state('NOT_SERVING')
@@ -271,8 +271,8 @@ index by_msg (msg)
     # (that is the tablet_refresh_interval parameter for discovery gateway)
     # we want cache_ttl at zero so we re-read the topology for every test query.
     if use_l2vtgate:
-      l2vtgate1 = utils.L2VtGate()
-      l2vtgate1.start(tablets=
+      l2vtgate1 = utils.VtGate()
+      l2vtgate1.start(extra_args=['--enable_forwarding'], tablets=
                       [shard_master, shard_replica, shard_rdonly1])
       l2vtgate1.wait_for_endpoints('test_keyspace.0.master', 1)
       l2vtgate1.wait_for_endpoints('test_keyspace.0.replica', 1)
@@ -280,6 +280,9 @@ index by_msg (msg)
 
       _, addr = l2vtgate1.rpc_endpoint()
       l2vtgate1_param = '%s|test_keyspace|0' % addr
+
+      # Clear utils.vtgate, so it doesn't point to the previous l2vtgate1.
+      utils.vtgate = None
       utils.VtGate().start(cache_ttl='0', l2vtgates=[l2vtgate1_param,])
 
     else:
@@ -375,11 +378,13 @@ index by_msg (msg)
     if use_l2vtgate:
       l2vtgate1.kill()
 
-      l2vtgate1 = utils.L2VtGate()
-      l2vtgate1.start(tablets=
-                      [shard_master, shard_replica, shard_rdonly1,
-                       shard_0_master, shard_0_replica, shard_0_rdonly1],
-                      tablet_filters='test_keyspace|0,test_keyspace|-80')
+      l2vtgate1 = utils.VtGate()
+      l2vtgate1.start(extra_args=['--enable_forwarding',
+                                  '-tablet_filters',
+                                  'test_keyspace|0,test_keyspace|-80'],
+                      tablets=[shard_master, shard_replica, shard_rdonly1,
+                               shard_0_master, shard_0_replica,
+                               shard_0_rdonly1])
       l2vtgate1.wait_for_endpoints('test_keyspace.0.master', 1)
       l2vtgate1.wait_for_endpoints('test_keyspace.0.replica', 1)
       l2vtgate1.wait_for_endpoints('test_keyspace.0.rdonly', 1)
@@ -395,10 +400,11 @@ index by_msg (msg)
       # is test_keyspace.0. This is not ideal, we should re-work
       # which keyspace/shard a l2vtgate can wait for, as the ones
       # filtered by tablet_filters.
-      l2vtgate2 = utils.L2VtGate()
-      l2vtgate2.start(tablets=
+      l2vtgate2 = utils.VtGate()
+      l2vtgate2.start(extra_args=['--enable_forwarding',
+                                  '-tablet_filters',
+                                  'test_keyspace|80-'], tablets=
                       [shard_1_master, shard_1_replica, shard_1_rdonly1],
-                      tablet_filters='test_keyspace|80-',
                       tablet_types_to_wait='')
       l2vtgate2.wait_for_endpoints('test_keyspace.80-.master', 1)
       l2vtgate2.wait_for_endpoints('test_keyspace.80-.replica', 1)
@@ -415,11 +421,13 @@ index by_msg (msg)
       l2vtgate1_param1 = '%s|test_keyspace|0' % addr1
       l2vtgate1_param2 = '%s|test_keyspace|-80' % addr1
       l2vtgate2_param = '%s|test_keyspace|80-' % addr2
+      utils.vtgate = None
       utils.VtGate().start(cache_ttl='0', l2vtgates=[l2vtgate1_param1,
                                                      l2vtgate1_param2,
                                                      l2vtgate2_param,])
 
     else:
+      utils.vtgate = None
       utils.VtGate().start(cache_ttl='0', tablets=[
           shard_master, shard_replica, shard_rdonly1,
           shard_0_master, shard_0_replica, shard_0_rdonly1,
@@ -465,7 +473,7 @@ index by_msg (msg)
     # Run vtworker as daemon for the following SplitClone commands.
     worker_proc, worker_port, worker_rpc_port = utils.run_vtworker_bg(
         ['--cell', 'test_nj', '--command_display_interval', '10ms',
-          '--use_v3_resharding_mode=false'],
+         '--use_v3_resharding_mode=false'],
         auto_log=True)
 
     # Initial clone (online).
