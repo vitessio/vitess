@@ -216,6 +216,26 @@ func (t *explainTablet) ReadTransaction(ctx context.Context, target *querypb.Tar
 	return t.tsv.ReadTransaction(ctx, target, dtid)
 }
 
+// ExecuteBatch is part of the QueryService interface.
+func (t *explainTablet) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
+	t.mu.Lock()
+	t.currentTime = batchTime.Wait()
+
+	// Since the query is simulated being "sent" over the wire we need to
+	// copy the bindVars into the executor to avoid a data race.
+	for _, query := range queries {
+		bindVariables := sqltypes.CopyBindVariables(query.BindVariables)
+		t.tabletQueries = append(t.tabletQueries, &TabletQuery{
+			Time:     t.currentTime,
+			SQL:      query.Sql,
+			BindVars: bindVariables,
+		})
+	}
+	t.mu.Unlock()
+
+	return t.tsv.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
+}
+
 // BeginExecute is part of the QueryService interface.
 func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
 	t.mu.Lock()
