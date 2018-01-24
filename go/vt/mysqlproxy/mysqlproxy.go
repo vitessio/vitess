@@ -117,7 +117,7 @@ func (mp *Proxy) doRollback(ctx context.Context, session *ProxySession) error {
 
 // Set is currently ignored
 func (mp *Proxy) doSet(ctx context.Context, session *ProxySession, sql string, bindVariables map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	vals, charset, err := sqlparser.ExtractSetValues(sql)
+	vals, charset, _, err := sqlparser.ExtractSetValues(sql)
 	if err != nil {
 		return nil, err
 	}
