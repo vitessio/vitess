@@ -101,6 +101,8 @@ func (lh *LookupHash) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, 
 	if err != nil {
 		return fmt.Errorf("lookup.Create.vunhash: %v", err)
 	}
+	fmt.Println("----HEREEEE-----")
+	fmt.Printf("This are the values %v \n", values)
 	return lh.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
 }
 

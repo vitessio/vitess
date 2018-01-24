@@ -131,6 +131,25 @@ func TestLookupHashVerify(t *testing.T) {
 	}
 }
 
+func TestMultiColLookupHashVerify(t *testing.T) {
+	vc := &vcursor{numRows: 1}
+	// The check doesn't actually happen. But we give correct values
+	// to avoid confusion.
+	got, err := lookuphash.Verify(vc,
+		[][]sqltypes.Value{
+			[]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
+			[]sqltypes.Value{sqltypes.NewInt64(2), sqltypes.NewInt64(1)},
+		},
+		[][]byte{[]byte("\x16k@\xb4J\xbaK\xd6\x06\xe7\xea\"Βp\x8f"), []byte("\x06\xe7\xea\"Βp\x8f\x16k@\xb4J\xbaK\xd6")})
+	if err != nil {
+		t.Error(err)
+	}
+	want := []bool{true, true}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("lookuphash.Verify(match): %v, want %v", got, want)
+	}
+}
+
 func TestLookupHashCreate(t *testing.T) {
 	vc := &vcursor{}
 	err := lookuphash.(Lookup).Create(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)

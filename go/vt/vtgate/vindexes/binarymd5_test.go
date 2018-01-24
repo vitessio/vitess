@@ -68,6 +68,25 @@ func TestBinaryMD5Map(t *testing.T) {
 	}
 }
 
+func TestBinaryMultiMD5Map(t *testing.T) {
+	expectedOut := "\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za[\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za["
+	got, err := binVindex.(Unique).Map(nil,
+		[][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.NewVarBinary("Test"),
+				sqltypes.NewVarBinary("Test"),
+			},
+		},
+	)
+	if err != nil {
+		t.Error(err)
+	}
+	out := string(got[0])
+	if out != expectedOut {
+		t.Errorf("Map(%#v): %#v, want %#v", "Test,Test", out, expectedOut)
+	}
+}
+
 func TestBinaryMD5Verify(t *testing.T) {
 	rowsColValues := [][]sqltypes.Value{
 		[]sqltypes.Value{sqltypes.NewVarBinary("Test")},
@@ -79,6 +98,21 @@ func TestBinaryMD5Verify(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []bool{true, false}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("binaryMD5.Verify: %v, want %v", got, want)
+	}
+
+	// Multi col test
+	rowsColValues = [][]sqltypes.Value{
+		[]sqltypes.Value{sqltypes.NewVarBinary("Test"), sqltypes.NewVarBinary("Test")},
+		[]sqltypes.Value{sqltypes.NewVarBinary("TEst")},
+	}
+	ksids = [][]byte{[]byte("\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za[\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za["), []byte("\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za[")}
+	got, err = binVindex.Verify(nil, rowsColValues, ksids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = []bool{true, false}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("binaryMD5.Verify: %v, want %v", got, want)
 	}
