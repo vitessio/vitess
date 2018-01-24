@@ -244,21 +244,13 @@ func shutdownMysqlProtocolAndDrain() {
 		log.Infof("Waiting for all client connections to be idle (%d active)...", atomic.LoadInt32(&busyConnections))
 		start := time.Now()
 		reported := start
-		for time.Since(start) < 30*time.Second {
-			if atomic.LoadInt32(&busyConnections) == 0 {
-				break
-			}
-
+		for atomic.LoadInt32(&busyConnections) != 0 {
 			if time.Since(reported) > 2*time.Second {
 				log.Infof("Still waiting for client connections to be idle (%d active)...", atomic.LoadInt32(&busyConnections))
 				reported = time.Now()
 			}
 
 			time.Sleep(1 * time.Millisecond)
-		}
-
-		if atomic.LoadInt32(&busyConnections) > 0 {
-			log.Infof("Client connections still not idle, exiting anyway (%d active)...", atomic.LoadInt32(&busyConnections))
 		}
 	}
 }
