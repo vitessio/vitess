@@ -57,6 +57,7 @@ var (
 	streamBufferSize   = flag.Int("stream_buffer_size", 32*1024, "the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size.")
 	queryPlanCacheSize = flag.Int64("gate_query_cache_size", 10000, "gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
 	legacyAutocommit   = flag.Bool("legacy_autocommit", false, "DEPRECATED: set this flag to true to get the legacy behavior: all transactions will need an explicit begin, and DMLs outside transactions will return an error.")
+	enableL2VTGate     = flag.Bool("enable_forwarding", false, "if specified, this process will also expose a QueryService interface that allows other vtgates to talk through this vtgate to the underlying tablets.")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -111,6 +112,8 @@ type VTGate struct {
 	executor *Executor
 	resolver *Resolver
 	txConn   *TxConn
+	gw       gateway.Gateway
+	l2vtgate *L2VTGate
 
 	// stats objects.
 	// TODO(sougou): This needs to be cleaned up. There
@@ -158,6 +161,13 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server
 		log.Fatalf("gateway.WaitForTablets failed: %v", err)
 	}
 
+	// l2vtgate gives access to the underlying Gateway from an exported
+	// QueryService interface.
+	var l2vtgate *L2VTGate
+	if *enableL2VTGate {
+		l2vtgate = initL2VTGate(gw)
+	}
+
 	tc := NewTxConn(gw, getTxMode())
 	// ScatterConn depends on TxConn to perform forced rollbacks.
 	sc := NewScatterConn("VttabletCall", tc, gw, hc)
@@ -167,6 +177,8 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server
 		executor:     NewExecutor(ctx, serv, cell, "VTGateExecutor", resolver, *normalizeQueries, *streamBufferSize, *queryPlanCacheSize, *legacyAutocommit),
 		resolver:     resolver,
 		txConn:       tc,
+		gw:           gw,
+		l2vtgate:     l2vtgate,
 		timings:      stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
 		rowsReturned: stats.NewMultiCounters("VtgateApiRowsReturned", []string{"Operation", "Keyspace", "DbType"}),
 
@@ -231,6 +243,16 @@ func (vtg *VTGate) registerDebugHealthHandler() {
 // Otherwise, it returns an error indicating the reason.
 func (vtg *VTGate) IsHealthy() error {
 	return nil
+}
+
+// Gateway returns the current gateway implementation. Mostly used for tests.
+func (vtg *VTGate) Gateway() gateway.Gateway {
+	return vtg.gw
+}
+
+// L2VTGate returns the L2VTGate object. Mostly used for tests.
+func (vtg *VTGate) L2VTGate() *L2VTGate {
+	return vtg.l2vtgate
 }
 
 // Execute executes a non-streaming query. This is a V3 function.

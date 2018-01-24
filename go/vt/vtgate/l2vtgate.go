@@ -14,9 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package l2vtgate provides the core functionnality of a second-layer vtgate
-// to route queries from an original vtgate to a subset of tablets.
-package l2vtgate
+package vtgate
 
 import (
 	"time"
@@ -25,17 +23,13 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/srvtopo"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -47,9 +41,9 @@ var (
 // the underlying gateway.
 type L2VTGate struct {
 	queryservice.QueryService
-	timings              *stats.MultiTimings
-	tabletCallErrorCount *stats.MultiCounters
-	gateway              gateway.Gateway
+	timings     *stats.MultiTimings
+	errorCounts *stats.MultiCounters
+	gateway     gateway.Gateway
 }
 
 // RegisterL2VTGate defines the type of registration mechanism.
@@ -58,26 +52,16 @@ type RegisterL2VTGate func(queryservice.QueryService)
 // RegisterL2VTGates stores register funcs for L2VTGate server.
 var RegisterL2VTGates []RegisterL2VTGate
 
-// Init creates the single L2VTGate with the provided parameters.
-func Init(hc discovery.HealthCheck, topoServer *topo.Server, serv srvtopo.Server, statsName, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *L2VTGate {
+// initL2VTGate creates the single L2VTGate with the provided parameters.
+func initL2VTGate(gw gateway.Gateway) *L2VTGate {
 	if l2VTGate != nil {
 		log.Fatalf("L2VTGate already initialized")
 	}
 
-	tabletCallErrorCountStatsName := ""
-	if statsName != "" {
-		tabletCallErrorCountStatsName = statsName + "ErrorCount"
-	}
-
-	gw := gateway.GetCreator()(hc, topoServer, serv, cell, retryCount)
-	if err := gateway.WaitForTablets(gw, tabletTypesToWait); err != nil {
-		log.Fatalf("gateway.WaitForTablets failed: %v", err)
-	}
-
 	l2VTGate = &L2VTGate{
-		timings:              stats.NewMultiTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
-		tabletCallErrorCount: stats.NewMultiCounters(tabletCallErrorCountStatsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
-		gateway:              gw,
+		timings:     stats.NewMultiTimings("QueryServiceCall", []string{"Operation", "Keyspace", "ShardName", "DbType"}),
+		errorCounts: stats.NewMultiCounters("QueryServiceCallErrorCount", []string{"Operation", "Keyspace", "ShardName", "DbType"}),
+		gateway:     gw,
 	}
 	l2VTGate.QueryService = queryservice.Wrap(
 		gw,
@@ -98,11 +82,6 @@ func Init(hc discovery.HealthCheck, topoServer *topo.Server, serv srvtopo.Server
 	return l2VTGate
 }
 
-// Gateway returns this l2vtgate Gateway object (for tests mainly).
-func (l *L2VTGate) Gateway() gateway.Gateway {
-	return l.gateway
-}
-
 func (l *L2VTGate) startAction(name string, target *querypb.Target) (time.Time, []string) {
 	statsKey := []string{name, target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType)}
 	startTime := time.Now()
@@ -116,13 +95,8 @@ func (l *L2VTGate) endAction(startTime time.Time, statsKey []string, err *error)
 		// client queries and are not VTGate's fault.
 		ec := vterrors.Code(*err)
 		if ec != vtrpcpb.Code_ALREADY_EXISTS && ec != vtrpcpb.Code_INVALID_ARGUMENT {
-			l.tabletCallErrorCount.Add(statsKey, 1)
+			l.errorCounts.Add(statsKey, 1)
 		}
 	}
 	l.timings.Record(statsKey, startTime)
-}
-
-// GetGatewayCacheStatus returns a displayable version of the Gateway cache.
-func (l *L2VTGate) GetGatewayCacheStatus() gateway.TabletCacheStatusList {
-	return l.gateway.CacheStatus()
 }

@@ -20,13 +20,13 @@ package main
 
 import (
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/vtgate/l2vtgate"
+	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vttablet/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 )
 
 func init() {
-	l2vtgate.RegisterL2VTGates = append(l2vtgate.RegisterL2VTGates, func(qs queryservice.QueryService) {
+	vtgate.RegisterL2VTGates = append(vtgate.RegisterL2VTGates, func(qs queryservice.QueryService) {
 		if servenv.GRPCCheckServiceMap("queryservice") {
 			grpcqueryservice.Register(servenv.GRPCServer, qs)
 		}
