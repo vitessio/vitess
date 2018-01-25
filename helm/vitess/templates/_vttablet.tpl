@@ -84,8 +84,8 @@ spec:
 {{ include "vttablet-affinity" (tuple $cellClean $keyspaceClean $shardClean $cell.region) | indent 6 }}
 
       initContainers:
-{{ include "init-mysql" (tuple $vitessTag $cellClean $namespace) | indent 8 }}
-{{ include "init-tablet-uid" (tuple $vitessTag $cell) | indent 8 }}
+{{ include "init-mysql" (tuple $vitessTag $cellClean) | indent 8 }}
+{{ include "init-vttablet" (tuple $vitessTag $cell $cellClean $namespace) | indent 8 }}
 
       containers:
 {{ include "cont-mysql" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $uid) | indent 8 }}
@@ -115,10 +115,9 @@ spec:
 {{- define "init-mysql" -}}
 {{- $vitessTag := index . 0 -}}
 {{- $cellClean := index . 1 -}}
-{{- $namespace := index . 2 -}}
 
 - name: "init-mysql"
-  image: "vitess/k8s:{{$vitessTag}}"
+  image: "vitess/mysqlctld:{{$vitessTag}}"
   imagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
@@ -139,32 +138,21 @@ spec:
       cp /vt/bin/mysqlctld /vttmp/bin/
       cp -R /vt/config /vttmp/
 
-      # make sure that etcd is initialized
-      eval exec /vt/bin/vtctl $(cat <<END_OF_COMMAND
-        -topo_implementation="etcd2"
-        -topo_global_root=/vitess/global
-        -topo_global_server_address="etcd-global-client.{{ $namespace }}:2379"
-        -logtostderr=true
-        -stderrthreshold=0
-        UpdateCellInfo
-        -server_address="etcd-global-client.{{ $namespace }}:2379"
-        {{ $cellClean | quote}}
-      END_OF_COMMAND
-      )
-
 {{- end -}}
 
 ###################################
-# init-container to set tablet uid
+# init-container to set tablet uid + register tablet with global topo
 # This converts the unique identity assigned by StatefulSet (pod name)
 # into a 31-bit unsigned integer for use as a Vitess tablet UID.
 ###################################
-{{- define "init-tablet-uid" -}}
+{{- define "init-vttablet" -}}
 {{- $vitessTag := index . 0 -}}
 {{- $cell := index . 1 -}}
+{{- $cellClean := index . 2 -}}
+{{- $namespace := index . 3 -}}
 
-- name: init-tablet-uid
-  image: "vitess/k8s:{{$vitessTag}}"
+- name: init-vttablet
+  image: "vitess/vtctl:{{$vitessTag}}"
   volumeMounts:
     - name: vtdataroot
       mountPath: "/vtdataroot"
@@ -191,6 +179,19 @@ spec:
       echo report-host=$hostname.vttablet > /vtdataroot/tabletdata/report-host.cnf
       # Orchestrator looks there, so it should match -tablet_hostname above.
 
+      # make sure that etcd is initialized
+      eval exec /vt/bin/vtctl $(cat <<END_OF_COMMAND
+        -topo_implementation="etcd2"
+        -topo_global_root=/vitess/global
+        -topo_global_server_address="etcd-global-client.{{ $namespace }}:2379"
+        -logtostderr=true
+        -stderrthreshold=0
+        UpdateCellInfo
+        -server_address="etcd-global-client.{{ $namespace }}:2379"
+        {{ $cellClean | quote}}
+      END_OF_COMMAND
+      )
+
 {{- end -}}
 
 ##########################
@@ -213,7 +214,7 @@ spec:
 {{- with $tablet.vttablet -}}
 
 - name: vttablet
-  image: "vitess/k8s:{{$vitessTag}}"
+  image: "vitess/vttablet:{{$vitessTag}}"
   livenessProbe:
     httpGet:
       path: /debug/vars

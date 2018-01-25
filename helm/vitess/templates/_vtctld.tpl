@@ -59,7 +59,7 @@ spec:
 {{ include "vtctld-affinity" (tuple $cellClean $cell.region) | indent 6 }}
       containers:
         - name: vtctld
-          image: vitess/k8s:{{$vitessTag}}
+          image: vitess/vtctld:{{$vitessTag}}
           livenessProbe:
             httpGet:
               path: /debug/vars
