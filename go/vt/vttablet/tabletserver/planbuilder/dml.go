@@ -20,10 +20,11 @@ import (
 	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
+
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan *Plan, err error) {
@@ -77,7 +78,7 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 		return nil, err
 	}
 
-	plan.OuterQuery = GenerateUpdateOuterQuery(upd, nil)
+	plan.OuterQuery = GenerateUpdateOuterQuery(upd, aliased, nil)
 
 	if pkValues := analyzeWhere(upd.Where, table.Indexes[0]); pkValues != nil {
 		// Also, there should be no limit clause.
@@ -133,7 +134,7 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
 		return plan, nil
 	}
 
-	plan.OuterQuery = GenerateDeleteOuterQuery(del)
+	plan.OuterQuery = GenerateDeleteOuterQuery(del, aliased)
 
 	if pkValues := analyzeWhere(del.Where, table.Indexes[0]); pkValues != nil {
 		// Also, there should be no limit clause.
@@ -421,15 +422,16 @@ func analyzeInsertNoType(ins *sqlparser.Insert, plan *Plan, table *schema.Table)
 	newins.Ignore = ""
 	newins.OnDup = nil
 	plan.OuterQuery = sqlparser.NewParsedQuery(&newins)
+	tableAlias := &sqlparser.AliasedTableExpr{Expr: ins.Table}
 	upd := &sqlparser.Update{
 		Comments:   ins.Comments,
-		TableExprs: sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}},
+		TableExprs: sqlparser.TableExprs{tableAlias},
 		Exprs:      sqlparser.UpdateExprs(ins.OnDup),
 	}
 
 	// We need to replace 'values' expressions with the actual values they reference.
 	var formatErr error
-	plan.UpsertQuery = GenerateUpdateOuterQuery(upd, func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
+	plan.UpsertQuery = GenerateUpdateOuterQuery(upd, tableAlias, func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 		if node, ok := node.(*sqlparser.ValuesFuncExpr); ok {
 			colnum := ins.Columns.FindColumn(node.Name)
 			if colnum == -1 {

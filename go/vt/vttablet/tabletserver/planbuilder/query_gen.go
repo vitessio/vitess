@@ -82,16 +82,16 @@ func GenerateInsertOuterQuery(ins *sqlparser.Insert) *sqlparser.ParsedQuery {
 
 // GenerateUpdateOuterQuery generates the outer query for updates.
 // If there is no custom formatting needed, formatter can be nil.
-func GenerateUpdateOuterQuery(upd *sqlparser.Update, formatter sqlparser.NodeFormatter) *sqlparser.ParsedQuery {
+func GenerateUpdateOuterQuery(upd *sqlparser.Update, aliased *sqlparser.AliasedTableExpr, formatter sqlparser.NodeFormatter) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(formatter)
-	buf.Myprintf("update %v%v set %v where %a%v", upd.Comments, upd.TableExprs, upd.Exprs, ":#pk", upd.OrderBy)
+	buf.Myprintf("update %v%v set %v where %a%v", upd.Comments, aliased.RemoveHints(), upd.Exprs, ":#pk", upd.OrderBy)
 	return buf.ParsedQuery()
 }
 
 // GenerateDeleteOuterQuery generates the outer query for deletes.
-func GenerateDeleteOuterQuery(del *sqlparser.Delete) *sqlparser.ParsedQuery {
+func GenerateDeleteOuterQuery(del *sqlparser.Delete, aliased *sqlparser.AliasedTableExpr) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("delete %vfrom %v where %a%v", del.Comments, del.TableExprs, ":#pk", del.OrderBy)
+	buf.Myprintf("delete %vfrom %v where %a%v", del.Comments, aliased.RemoveHints(), ":#pk", del.OrderBy)
 	return buf.ParsedQuery()
 }
 
