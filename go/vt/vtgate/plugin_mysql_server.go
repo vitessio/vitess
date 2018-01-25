@@ -230,26 +230,34 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 	}
 }
 
+func shutdownMysqlProtocolAndDrain() {
+	if mysqlListener != nil {
+		mysqlListener.Close()
+		mysqlListener = nil
+	}
+	if mysqlUnixListener != nil {
+		mysqlUnixListener.Close()
+		mysqlUnixListener = nil
+	}
+
+	if atomic.LoadInt32(&busyConnections) > 0 {
+		log.Infof("Waiting for all client connections to be idle (%d active)...", atomic.LoadInt32(&busyConnections))
+		start := time.Now()
+		reported := start
+		for atomic.LoadInt32(&busyConnections) != 0 {
+			if time.Since(reported) > 2*time.Second {
+				log.Infof("Still waiting for client connections to be idle (%d active)...", atomic.LoadInt32(&busyConnections))
+				reported = time.Now()
+			}
+
+			time.Sleep(1 * time.Millisecond)
+		}
+	}
+}
+
 func init() {
 	servenv.OnRun(initMySQLProtocol)
-
-	servenv.OnTermSync(func() {
-		if mysqlListener != nil {
-			mysqlListener.Close()
-			mysqlListener = nil
-		}
-		if mysqlUnixListener != nil {
-			mysqlUnixListener.Close()
-			mysqlUnixListener = nil
-		}
-
-		if atomic.LoadInt32(&busyConnections) > 0 {
-			log.Infof("Waiting for all client connections to be idle...")
-			for atomic.LoadInt32(&busyConnections) > 0 {
-				time.Sleep(1 * time.Millisecond)
-			}
-		}
-	})
+	servenv.OnTermSync(shutdownMysqlProtocolAndDrain)
 }
 
 var pluginInitializers []func()
