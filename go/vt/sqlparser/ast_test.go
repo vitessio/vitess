@@ -110,18 +110,23 @@ func TestSelect(t *testing.T) {
 }
 
 func TestRemoveHints(t *testing.T) {
-	tree, err := Parse("select * from t use index (i)")
-	if err != nil {
-		t.Fatal(err)
-	}
-	sel := tree.(*Select)
-	sel.From = TableExprs{
-		sel.From[0].(*AliasedTableExpr).RemoveHints(),
-	}
-	buf := NewTrackedBuffer(nil)
-	sel.Format(buf)
-	if got, want := buf.String(), "select * from t"; got != want {
-		t.Errorf("stripped query: %s, want %s", got, want)
+	for _, query := range []string{
+		"select * from t use index (i)",
+		"select * from t force index (i)",
+	} {
+		tree, err := Parse(query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sel := tree.(*Select)
+		sel.From = TableExprs{
+			sel.From[0].(*AliasedTableExpr).RemoveHints(),
+		}
+		buf := NewTrackedBuffer(nil)
+		sel.Format(buf)
+		if got, want := buf.String(), "select * from t"; got != want {
+			t.Errorf("stripped query: %s, want %s", got, want)
+		}
 	}
 }
 
