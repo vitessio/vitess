@@ -1194,3 +1194,63 @@
     "Subquery": "select column_a, column_b, column_c from multicolvin where kid = 1 for update"
   }
 }
+
+# delete from with no where clause
+"delete from user_extra"
+{
+  "Original": "delete from user_extra",
+  "Instructions": {
+    "Opcode": "DeleteSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete from user_extra",
+    "Table": "user_extra"
+  }
+}
+
+# delete with non-comparison expr
+"delete from user_extra where user_id between 1 and 2"
+{
+  "Original": "delete from user_extra where user_id between 1 and 2",
+  "Instructions": {
+    "Opcode": "DeleteSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete from user_extra where user_id between 1 and 2",
+    "Table": "user_extra"
+  }
+}
+
+# delete from with no index match
+"delete from user_extra where name = 'jose'"
+{
+  "Original": "delete from user_extra where name = 'jose'",
+  "Instructions": {
+    "Opcode": "DeleteSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete from user_extra where name = 'jose'",
+    "Table": "user_extra"
+  }
+}
+
+# delete from with primary id in through IN clause
+"delete from user_extra where user_id in (1, 2)"
+{
+  "Original": "delete from user_extra where user_id in (1, 2)",
+  "Instructions": {
+    "Opcode": "DeleteSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete from user_extra where user_id in (1, 2)",
+    "Table": "user_extra"
+  }
+}
