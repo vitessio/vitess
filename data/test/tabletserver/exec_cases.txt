@@ -908,6 +908,18 @@ options:PassthroughDMLs
   "WhereClause": " where eid = 1"
 }
 
+# update with index hint
+# note that you won't find a corresponding test for delete because the grammar doesn't allow it.
+"update a use index(b) set name = 'foo' where eid=1"
+{
+  "PlanID": "DML_SUBQUERY",
+  "TableName": "a",
+  "FullQuery": "update a use index (b) set name = 'foo' where eid = 1",
+  "OuterQuery": "update a set name = 'foo' where :#pk",
+  "Subquery": "select eid, id from a use index (b) where eid = 1 limit :#maxLimit for update",
+  "WhereClause": " where eid = 1"
+}
+
 # delete limit with pk
 "delete from d where name in ('a', 'b') limit 1"
 {
