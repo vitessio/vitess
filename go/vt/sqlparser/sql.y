@@ -2537,7 +2537,6 @@ reserved_keyword:
 | FOR
 | FORCE
 | FROM
-| GLOBAL
 | GROUP
 | HAVING
 | IF
@@ -2574,11 +2573,9 @@ reserved_keyword:
 | RIGHT
 | SELECT
 | SEPARATOR
-| SESSION
 | SET
 | SHOW
 | STRAIGHT_JOIN
-| STATUS
 | TABLE
 | TABLES
 | THEN
@@ -2593,7 +2590,6 @@ reserved_keyword:
 | UTC_TIME
 | UTC_TIMESTAMP
 | VALUES
-| VARIABLES
 | WHEN
 | WHERE
 
@@ -2622,6 +2618,7 @@ non_reserved_keyword:
 | ENUM
 | EXPANSION
 | FLOAT_TYPE
+| GLOBAL
 | INT
 | INTEGER
 | JSON
@@ -2647,6 +2644,7 @@ non_reserved_keyword:
 | REAL
 | REORGANIZE
 | REPAIR
+| SESSION
 | SHARE
 | SIGNED
 | SMALLINT
@@ -2663,6 +2661,7 @@ non_reserved_keyword:
 | UNUSED
 | VARBINARY
 | VARCHAR
+| VARIABLES
 | VIEW
 | VINDEX
 | VINDEXES
