@@ -1383,6 +1383,13 @@ func (node *AliasedTableExpr) WalkSubtree(visit Visit) error {
 	)
 }
 
+// RemoveHints returns a new AliasedTableExpr with the hints removed.
+func (node *AliasedTableExpr) RemoveHints() *AliasedTableExpr {
+	noHints := *node
+	noHints.Hints = nil
+	return &noHints
+}
+
 // SimpleTableExpr represents a simple table expression.
 type SimpleTableExpr interface {
 	iSimpleTableExpr()
