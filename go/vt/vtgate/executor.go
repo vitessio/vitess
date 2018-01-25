@@ -553,18 +553,23 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		stats := e.scatterConn.healthCheck.CacheStatus()
 		for _, s := range stats {
 			for _, ts := range s.TabletsStats {
+				state := "SERVING"
+				if !ts.Serving {
+					state = "NOT_SERVING"
+				}
 				rows = append(rows, buildVarCharRow(
 					s.Cell,
 					s.Target.Keyspace,
 					s.Target.Shard,
 					ts.Tablet.Type.String(),
+					state,
 					topoproto.TabletAliasString(ts.Tablet.Alias),
 					ts.Tablet.Hostname,
 				))
 			}
 		}
 		return &sqltypes.Result{
-			Fields:       buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "Alias", "Hostname"),
+			Fields:       buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname"),
 			Rows:         rows,
 			RowsAffected: uint64(len(rows)),
 		}, nil

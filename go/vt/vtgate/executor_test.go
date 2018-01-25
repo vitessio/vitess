@@ -554,10 +554,10 @@ func TestExecutorShow(t *testing.T) {
 	// Just test for first & last.
 	qr.Rows = [][]sqltypes.Value{qr.Rows[0], qr.Rows[len(qr.Rows)-1]}
 	wantqr = &sqltypes.Result{
-		Fields: buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "Alias", "Hostname"),
+		Fields: buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname"),
 		Rows: [][]sqltypes.Value{
-			buildVarCharRow("FakeCell", "TestExecutor", "-20", "MASTER", "aa-0000000000", "-20"),
-			buildVarCharRow("FakeCell", "TestUnsharded", "0", "MASTER", "aa-0000000000", "0"),
+			buildVarCharRow("FakeCell", "TestExecutor", "-20", "MASTER", "SERVING", "aa-0000000000", "-20"),
+			buildVarCharRow("FakeCell", "TestUnsharded", "0", "MASTER", "SERVING", "aa-0000000000", "0"),
 		},
 		RowsAffected: 9,
 	}
