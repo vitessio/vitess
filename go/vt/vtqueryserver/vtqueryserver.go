@@ -45,8 +45,7 @@ var (
 	normalizeQueries = flag.Bool("normalize_queries", true, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
 )
 
-// Init initializes the proxy
-func Init(dbcfgs *dbconfigs.DBConfigs) error {
+func initProxy(dbcfgs *dbconfigs.DBConfigs) (*tabletserver.TabletServer, error) {
 	target.Keyspace = *targetKeyspace
 	log.Infof("initalizing vtqueryserver.Proxy for target %s", target.Keyspace)
 
@@ -55,8 +54,22 @@ func Init(dbcfgs *dbconfigs.DBConfigs) error {
 
 	// creates and registers the query service
 	qs := tabletserver.NewTabletServerWithNilTopoServer(tabletenv.Config)
-
 	mysqlProxy = mysqlproxy.NewProxy(&target, qs, *normalizeQueries)
+
+	err := qs.StartService(target, *dbcfgs)
+	if err != nil {
+		return nil, err
+	}
+
+	return qs, nil
+}
+
+// Init initializes the proxy
+func Init(dbcfgs *dbconfigs.DBConfigs) error {
+	qs, err := initProxy(dbcfgs)
+	if err != nil {
+		return err
+	}
 
 	servenv.OnRun(func() {
 		qs.Register()
@@ -68,11 +81,6 @@ func Init(dbcfgs *dbconfigs.DBConfigs) error {
 		// so stop it in OnClose(), after lameduck is over.
 		qs.StopService()
 	})
-
-	err := qs.StartService(target, *dbcfgs)
-	if err != nil {
-		return err
-	}
 
 	return nil
 }

@@ -165,6 +165,7 @@ func initMySQLProtocol() {
 		}
 		// Start listening for tcp
 		go mysqlListener.Accept()
+		log.Infof("listening on %s:%d", *mysqlServerBindAddress, *mysqlServerPort)
 	}
 
 	if *mysqlServerSocketPath != "" {
@@ -213,19 +214,22 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 	}
 }
 
+func shutdownMySQLProtocol() {
+	log.Infof("shutting down mysql protocol")
+	if mysqlListener != nil {
+		mysqlListener.Close()
+		mysqlListener = nil
+	}
+
+	if mysqlUnixListener != nil {
+		mysqlUnixListener.Close()
+		mysqlUnixListener = nil
+	}
+}
+
 func init() {
 	servenv.OnRun(initMySQLProtocol)
-
-	servenv.OnTerm(func() {
-		if mysqlListener != nil {
-			mysqlListener.Close()
-			mysqlListener = nil
-		}
-		if mysqlUnixListener != nil {
-			mysqlUnixListener.Close()
-			mysqlUnixListener = nil
-		}
-	})
+	servenv.OnTerm(shutdownMySQLProtocol)
 }
 
 var pluginInitializers []func()
