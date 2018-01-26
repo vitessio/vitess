@@ -1280,6 +1280,12 @@ func TestKeywords(t *testing.T) {
 	}, {
 		input:  "select /* unused keywords as cols */ write, varying from t where trailing = 'foo'",
 		output: "select /* unused keywords as cols */ `write`, `varying` from t where `trailing` = 'foo'",
+	}, {
+		input:  "select status from t",
+		output: "select `status` from t",
+	}, {
+		input:  "select variables from t",
+		output: "select `variables` from t",
 	}}
 
 	for _, tcase := range validSQL {
