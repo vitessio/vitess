@@ -57,7 +57,6 @@ x{{$replaced_label}}
 securityContext:
   runAsUser: 1000
   fsGroup: 2000
-  runAsNonRoot: true
 {{- end -}}
 
 #############################

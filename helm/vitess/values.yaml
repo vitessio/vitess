@@ -152,3 +152,58 @@ vttablet:
     resources:
       requests:
         storage: "10Gi"
+
+# Default values for pmm
+pmm:
+  enabled: false
+  pmmTag: "1.6.1"
+  client:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+  server:
+    resources:
+      limits:
+        cpu: 500m
+        memory: 1Gi
+    # PVC for pmm
+    dataVolumeClaimAnnotations:
+    dataVolumeClaimSpec:
+      # storageClassName: "pd-ssd"
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: "10Gi"
+    env:
+      # DISABLE_TELEMETRY
+      # With telemetry enabled, your PMM Server sends some statistics to v.percona.com every 24 hours
+      disableTelemetry: true
+
+      # METRICS_RESOLUTION (Option)
+      # This option sets the minimum resolution for checking metrics. You should set it if the latency is higher than 1 second
+      metricsResolution: 1s
+
+      # METRICS_RETENTION (Option)
+      # This option determines how long metrics are stored at PMM Server. 
+      # The value is passed as a combination of hours, minutes, and seconds, such as 720h0m0s. 
+      # The minutes (a number followed by m) and seconds (a number followed by s) are optional.
+      metricsRetention: 720h
+
+      # QUERIES_RETENTION
+      # This option determines how many days queries are stored at PMM Server
+      queriesRetention: 8
+
+      # METRICS_MEMORY (Option) -- TODO: automatically calculate based on resource limits
+      # NOTE: The value must be passed in kilobytes
+      # NOTE: Make sure to quote this value so it isn't converted into scientific notation
+
+      # By default, Prometheus in PMM Server uses up to 768 MB of memory for storing the most recently used data chunks. 
+      # Depending on the amount of data coming into Prometheus, you may require a higher limit to avoid throttling data ingestion,
+      # or allow less memory consumption if it is needed for other processes.
+      # The limit affects only memory reserved for data chunks. Actual RAM usage by Prometheus is higher. 
+      # It is recommended to set this limit to roughly 2/3 of the total memory that you are planning to allow for Prometheus.
+      metricsMemory: "600000"

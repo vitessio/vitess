@@ -1,8 +1,14 @@
 # Create global resources.
 ---
 # create a single vttablet service
-{{ include "vttablet-service" $ }}
+{{ include "vttablet-service" (tuple $.Values.pmm) }}
 ---
+{{ if $.Values.pmm.enabled }}
+# create the pmm service and stateful set
+{{ include "pmm" (tuple $.Values.pmm $.Release.Namespace) }}
+---
+{{ end }}
+
 # create an etcd cluster for the global topology
 {{- $replicas := $.Values.topology.globalCell.replicas | default $.Values.etcd.replicas -}}
 {{- $version := $.Values.topology.globalCell.version | default $.Values.etcd.version -}}
@@ -33,7 +39,7 @@
     {{ range $shard := $keyspace.shards }}
       {{ range $tablet := $shard.tablets }}
 ---
-{{ include "vttablet" (tuple $.Values.topology $cell $keyspace $shard $tablet $.Values.vttablet $.Release.Namespace $.Values.config) }}
+{{ include "vttablet" (tuple $.Values.topology $cell $keyspace $shard $tablet $.Values.vttablet $.Release.Namespace $.Values.config $.Values.pmm) }}
       {{ end }} # range $tablet
     {{ end }} # range $shard
   {{ end }} # range $keyspace
