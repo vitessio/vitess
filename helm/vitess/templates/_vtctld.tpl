@@ -60,9 +60,15 @@ spec:
       containers:
         - name: vtctld
           image: vitess/vtctld:{{$vitessTag}}
-          livenessProbe:
+          readinessProbe:
             httpGet:
               path: /debug/health
+              port: 15000
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /debug/status
               port: 15000
             initialDelaySeconds: 30
             timeoutSeconds: 5

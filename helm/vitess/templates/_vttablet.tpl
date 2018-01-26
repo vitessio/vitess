@@ -215,9 +215,15 @@ spec:
 
 - name: vttablet
   image: "vitess/vttablet:{{$vitessTag}}"
-  livenessProbe:
+  readinessProbe:
     httpGet:
       path: /debug/health
+      port: 15002
+    initialDelaySeconds: 60
+    timeoutSeconds: 10
+  livenessProbe:
+    httpGet:
+      path: /debug/status
       port: 15002
     initialDelaySeconds: 60
     timeoutSeconds: 10
@@ -306,6 +312,11 @@ spec:
 - name: mysql
   image: {{.mysqlImage | default $defaultVttablet.mysqlImage | quote}}
   imagePullPolicy: Always
+  readinessProbe:
+    exec:
+      command: ["mysqladmin", "ping", "-uroot", "--socket=/vtdataroot/tabletdata/mysql.sock"]
+    initialDelaySeconds: 60
+    timeoutSeconds: 10
   livenessProbe:
     exec:
       command: ["mysqladmin", "ping", "-uroot", "--socket=/vtdataroot/tabletdata/mysql.sock"]
