@@ -122,6 +122,22 @@ spec:
         - name: creds
           emptyDir: {}
 
+---
+###################################
+# vtgate PodDisruptionBudget
+###################################
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: vtgate-{{ $cellClean }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: vitess
+      component: vtgate
+      cell: {{ $cellClean }}
+
 {{ if gt .maxReplicas .replicas }}
 ###################################
 # optional HPA for vtgate

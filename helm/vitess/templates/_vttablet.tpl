@@ -110,6 +110,25 @@ spec:
       spec:
 {{ toYaml (.dataVolumeClaimSpec | default $defaultVttablet.dataVolumeClaimSpec) | indent 8 }}
 
+---
+###################################
+# vttablet PodDisruptionBudget
+###################################
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $setName | quote }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: vitess
+      component: vttablet
+      cell: {{ $cellClean | quote }}
+      keyspace: {{ $keyspaceClean | quote }}
+      shard: {{ $shardClean | quote }}
+      type: {{ $tablet.type | quote }}
+
 {{- end -}}
 {{- end -}}
 
