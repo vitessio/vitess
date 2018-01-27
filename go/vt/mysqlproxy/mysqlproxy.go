@@ -70,8 +70,10 @@ func (mp *Proxy) Execute(ctx context.Context, session *ProxySession, sql string,
 		err = mp.doRollback(ctx, session)
 	case sqlparser.StmtSet:
 		result, err = mp.doSet(ctx, session, sql, bindVariables)
+	case sqlparser.StmtSelect:
+		result, err = mp.doSelect(ctx, session, sql, bindVariables)
 	default:
-		result, err = mp.doExecute(ctx, session, sql, bindVariables)
+		result, err = mp.doExecuteDML(ctx, session, sql, bindVariables)
 	}
 
 	if err != nil {
@@ -133,14 +135,35 @@ func (mp *Proxy) doSet(ctx context.Context, session *ProxySession, sql string, b
 	}
 
 	for k, v := range vals {
-		log.Warningf("Ignored inapplicable SET %v = %v", k, v)
+		switch k {
+		case "autocommit":
+			val, ok := v.(int64)
+			if !ok {
+				return nil, fmt.Errorf("unexpected value type for autocommit: %T", v)
+			}
+			switch val {
+			case 0:
+				session.Autocommit = false
+			case 1:
+				if session.TransactionID != 0 {
+					if err := mp.doCommit(ctx, session); err != nil {
+						return nil, err
+					}
+				}
+				session.Autocommit = true
+			default:
+				return nil, fmt.Errorf("unexpected value for autocommit: %d", val)
+			}
+		default:
+			log.Warningf("Ignored inapplicable SET %v = %v", k, v)
+		}
 	}
 
 	return &sqltypes.Result{}, nil
 }
 
-// doExecute runs the given query
-func (mp *Proxy) doExecute(ctx context.Context, session *ProxySession, sql string, bindVariables map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+// doSelect runs the given select
+func (mp *Proxy) doSelect(ctx context.Context, session *ProxySession, sql string, bindVariables map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	if mp.normalize {
 		query, comments := sqlparser.SplitTrailingComments(sql)
 		stmt, err := sqlparser.Parse(query)
@@ -153,4 +176,43 @@ func (mp *Proxy) doExecute(ctx context.Context, session *ProxySession, sql strin
 	}
 
 	return mp.qs.Execute(ctx, mp.target, sql, bindVariables, session.TransactionID, session.Options)
+}
+
+// doExecuteDML runs the given query handling autocommit semantics
+func (mp *Proxy) doExecuteDML(ctx context.Context, session *ProxySession, sql string, bindVariables map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	if mp.normalize {
+		query, comments := sqlparser.SplitTrailingComments(sql)
+		stmt, err := sqlparser.Parse(query)
+		if err != nil {
+			return nil, err
+		}
+		sqlparser.Normalize(stmt, bindVariables, "vtp")
+		normalized := sqlparser.String(stmt)
+		sql = normalized + comments
+	}
+
+	if session.TransactionID != 0 {
+		return mp.qs.Execute(ctx, mp.target, sql, bindVariables, session.TransactionID, session.Options)
+
+	} else if session.Autocommit {
+		queries := []*querypb.BoundQuery{{
+			Sql:           sql,
+			BindVariables: bindVariables,
+		}}
+
+		// This is a stopgap until there is a better way to do autocommit
+		results, err := mp.qs.ExecuteBatch(ctx, mp.target, queries, true /* asTransaction */, 0, session.Options)
+		if err != nil {
+			return nil, err
+		}
+		return &results[0], nil
+
+	} else {
+		result, txnID, err := mp.qs.BeginExecute(ctx, mp.target, sql, bindVariables, session.Options)
+		if err != nil {
+			return nil, err
+		}
+		session.TransactionID = txnID
+		return result, nil
+	}
 }

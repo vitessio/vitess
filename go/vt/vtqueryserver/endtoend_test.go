@@ -114,11 +114,11 @@ func testFetch(t *testing.T, conn *mysql.Conn, sql string, expectedRows int) {
 
 	result, err := conn.ExecuteFetch(sql, 1000, true)
 	if err != nil {
-		t.Fatalf("error: %v", err)
+		t.Errorf("error: %v", err)
 	}
 
 	if len(result.Rows) != expectedRows {
-		t.Fatalf("expected %d rows but got %d", expectedRows, len(result.Rows))
+		t.Errorf("expected %d rows but got %d", expectedRows, len(result.Rows))
 	}
 }
 
@@ -127,11 +127,11 @@ func testDML(t *testing.T, conn *mysql.Conn, sql string, expectedRows int) {
 
 	result, err := conn.ExecuteFetch(sql, 1000, true)
 	if err != nil {
-		t.Fatalf("error: %v", err)
+		t.Errorf("error: %v", err)
 	}
 
 	if int(result.RowsAffected) != expectedRows {
-		t.Fatalf("expected %d rows affected but got %d", expectedRows, result.RowsAffected)
+		t.Errorf("expected %d rows affected but got %d", expectedRows, result.RowsAffected)
 	}
 }
 
@@ -205,6 +205,42 @@ func TestTransactions(t *testing.T) {
 	testFetch(t, conn2, "select * from test", 1)
 
 	testDML(t, conn2, "begin", 0)
+	testDML(t, conn2, "delete from test", 1)
+	testDML(t, conn2, "commit", 0)
+
+	testFetch(t, conn, "select * from test", 0)
+	testFetch(t, conn2, "select * from test", 0)
+}
+
+func TestNoAutocommit(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &proxyConnParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn2, err := mysql.Connect(ctx, &proxyConnParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testDML(t, conn, "set autocommit=0", 0)
+
+	testDML(t, conn, "insert into test (id, val) values(1, 'hello')", 1)
+	testFetch(t, conn, "select * from test", 1)
+	testFetch(t, conn2, "select * from test", 0)
+	testDML(t, conn, "commit", 0)
+	testFetch(t, conn, "select * from test", 1)
+	testFetch(t, conn2, "select * from test", 1)
+
+	testDML(t, conn, "delete from test", 1)
+	testFetch(t, conn, "select * from test", 0)
+	testFetch(t, conn2, "select * from test", 1)
+	testDML(t, conn, "rollback", 0)
+
+	testFetch(t, conn, "select * from test", 1)
+	testFetch(t, conn2, "select * from test", 1)
+
+	testDML(t, conn2, "set autocommit=0", 0)
 	testDML(t, conn2, "delete from test", 1)
 	testDML(t, conn2, "commit", 0)
 

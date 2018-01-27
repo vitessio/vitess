@@ -49,9 +49,6 @@ func initProxy(dbcfgs *dbconfigs.DBConfigs) (*tabletserver.TabletServer, error) 
 	target.Keyspace = *targetKeyspace
 	log.Infof("initalizing vtqueryserver.Proxy for target %s", target.Keyspace)
 
-	// force autocommit to be enabled
-	tabletenv.Config.EnableAutoCommit = true
-
 	// creates and registers the query service
 	qs := tabletserver.NewTabletServerWithNilTopoServer(tabletenv.Config)
 	mysqlProxy = mysqlproxy.NewProxy(&target, qs, *normalizeQueries)
