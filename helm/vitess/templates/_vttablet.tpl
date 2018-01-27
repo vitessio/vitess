@@ -8,6 +8,8 @@ metadata:
   name: vttablet
   labels:
     app: vitess
+  annotations:
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
 spec:
   publishNotReadyAddresses: true
   ports:
@@ -60,6 +62,7 @@ metadata:
 spec:
   serviceName: vttablet
   replicas: {{ .replicas | default $defaultVttablet.replicas }}
+  podManagementPolicy: Parallel
   updateStrategy: 
     type: RollingUpdate
   selector:
@@ -215,9 +218,15 @@ spec:
 
 - name: vttablet
   image: "vitess/vttablet:{{$vitessTag}}"
+  readinessProbe:
+    httpGet:
+      path: /debug/health
+      port: 15002
+    initialDelaySeconds: 60
+    timeoutSeconds: 10
   livenessProbe:
     httpGet:
-      path: /debug/vars
+      path: /debug/status
       port: 15002
     initialDelaySeconds: 60
     timeoutSeconds: 10
@@ -306,6 +315,12 @@ spec:
 - name: mysql
   image: {{.mysqlImage | default $defaultVttablet.mysqlImage | quote}}
   imagePullPolicy: Always
+  readinessProbe:
+    exec:
+      command: ["mysqladmin", "ping", "-uroot", "--socket=/vtdataroot/tabletdata/mysql.sock"]
+    initialDelaySeconds: 60
+    timeoutSeconds: 10
+
   volumeMounts:
     - name: vtdataroot
       mountPath: /vtdataroot
