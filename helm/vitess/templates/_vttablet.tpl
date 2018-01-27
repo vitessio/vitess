@@ -83,6 +83,7 @@ spec:
         shard: {{ $shardClean | quote }}
         type: {{ $tablet.type | quote }}
     spec:
+      terminationGracePeriodSeconds: 600
 {{ include "pod-security" . | indent 6 }}
 {{ include "vttablet-affinity" (tuple $cellClean $keyspaceClean $shardClean $cell.region) | indent 6 }}
 
