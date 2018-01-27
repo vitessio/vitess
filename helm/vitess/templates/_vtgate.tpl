@@ -73,9 +73,15 @@ spec:
       containers:
         - name: vtgate
           image: vitess/vtgate:{{$vitessTag}}
+          readinessProbe:
+            httpGet:
+              path: /debug/health
+              port: 15001
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
           livenessProbe:
             httpGet:
-              path: /debug/vars
+              path: /debug/status
               port: 15001
             initialDelaySeconds: 30
             timeoutSeconds: 5
