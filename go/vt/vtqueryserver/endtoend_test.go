@@ -26,6 +26,7 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vttest"
 
@@ -33,6 +34,7 @@ import (
 )
 
 var (
+	queryServer     *tabletserver.TabletServer
 	mysqlConnParams mysql.ConnParams
 	proxyConnParams mysql.ConnParams
 )
@@ -89,12 +91,14 @@ func TestMain(m *testing.M) {
 		dbcfgs := dbconfigs.DBConfigs{
 			App: mysqlConnParams,
 		}
-		qs, err := initProxy(&dbcfgs)
+
+		var err error
+		queryServer, err = initProxy(&dbcfgs)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "could not start proxy: %v\n", err)
 			return 1
 		}
-		defer qs.StopService()
+		defer queryServer.StopService()
 
 		initMySQLProtocol()
 		defer shutdownMySQLProtocol()
@@ -112,7 +116,7 @@ create table valtest(intval int default 0, floatval float default null, charval 
 func testFetch(t *testing.T, conn *mysql.Conn, sql string, expectedRows int) {
 	t.Helper()
 
-	result, err := conn.ExecuteFetch(sql, 1000, true)
+	result, err := conn.ExecuteFetch(sql, 1000, false)
 	if err != nil {
 		t.Errorf("error: %v", err)
 	}
@@ -122,16 +126,22 @@ func testFetch(t *testing.T, conn *mysql.Conn, sql string, expectedRows int) {
 	}
 }
 
-func testDML(t *testing.T, conn *mysql.Conn, sql string, expectedRows int) {
+func testDML(t *testing.T, conn *mysql.Conn, sql string, expectedNumQueries int64, expectedRowsAffected uint64) {
 	t.Helper()
 
-	result, err := conn.ExecuteFetch(sql, 1000, true)
+	numQueries := tabletenv.MySQLStats.Count()
+	result, err := conn.ExecuteFetch(sql, 1000, false)
 	if err != nil {
 		t.Errorf("error: %v", err)
 	}
+	numQueries = tabletenv.MySQLStats.Count() - numQueries
 
-	if int(result.RowsAffected) != expectedRows {
-		t.Errorf("expected %d rows affected but got %d", expectedRows, result.RowsAffected)
+	if numQueries != expectedNumQueries {
+		t.Errorf("expected %d mysql queries but got %d", expectedNumQueries, numQueries)
+	}
+
+	if result.RowsAffected != expectedRowsAffected {
+		t.Errorf("expected %d rows affected but got %d", expectedRowsAffected, result.RowsAffected)
 	}
 }
 
@@ -165,12 +175,52 @@ func TestAutocommitDMLs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testDML(t, conn, "insert into test (id, val) values(1, 'hello')", 1)
+	testDML(t, conn, "insert into test (id, val) values(1, 'hello')", 3, 1)
 
 	testFetch(t, conn, "select * from test", 1)
 	testFetch(t, conn2, "select * from test", 1)
 
-	testDML(t, conn, "delete from test", 1)
+	testDML(t, conn, "delete from test", 4, 1)
+
+	testFetch(t, conn, "select * from test", 0)
+	testFetch(t, conn2, "select * from test", 0)
+}
+
+func TestPassthroughDMLs(t *testing.T) {
+	ctx := context.Background()
+
+	queryServer.SetPassthroughDMLs(true)
+	conn, err := mysql.Connect(ctx, &proxyConnParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conn2, err := mysql.Connect(ctx, &proxyConnParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testDML(t, conn, "insert into test (id, val) values(1, 'hello')", 3, 1)
+	testDML(t, conn, "insert into test (id, val) values(2, 'hello')", 3, 1)
+	testDML(t, conn, "insert into test (id, val) values(3, 'hello')", 3, 1)
+
+	// Subquery DMLs are errors in passthrough mode with SBR, unless
+	// SetAllowUnsafeDMLs is set
+	_, err = conn.ExecuteFetch("update test set val='goodbye'", 1000, true)
+	if err == nil || !strings.Contains(err.Error(), "cannot identify primary key of statement") {
+		t.Fatalf("expected error but got: %v", err)
+	}
+
+	queryServer.SetAllowUnsafeDMLs(true)
+
+	// This is 3 queries in passthrough mode and not 4 queries as it would
+	// be in non-passthrough mode
+	testDML(t, conn, "update test set val='goodbye'", 3, 3)
+
+	testFetch(t, conn, "select * from test where val='goodbye'", 3)
+	testFetch(t, conn2, "select * from test where val='goodbye'", 3)
+
+	testDML(t, conn, "delete from test", 4, 3)
 
 	testFetch(t, conn, "select * from test", 0)
 	testFetch(t, conn2, "select * from test", 0)
@@ -187,26 +237,26 @@ func TestTransactions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testDML(t, conn, "begin", 0)
-	testDML(t, conn, "insert into test (id, val) values(1, 'hello')", 1)
+	testDML(t, conn, "begin", 1, 0)
+	testDML(t, conn, "insert into test (id, val) values(1, 'hello')", 1, 1)
 	testFetch(t, conn, "select * from test", 1)
 	testFetch(t, conn2, "select * from test", 0)
-	testDML(t, conn, "commit", 0)
+	testDML(t, conn, "commit", 1, 0)
 	testFetch(t, conn, "select * from test", 1)
 	testFetch(t, conn2, "select * from test", 1)
 
-	testDML(t, conn, "begin", 0)
-	testDML(t, conn, "delete from test", 1)
+	testDML(t, conn, "begin", 1, 0)
+	testDML(t, conn, "delete from test", 2, 1)
 	testFetch(t, conn, "select * from test", 0)
 	testFetch(t, conn2, "select * from test", 1)
-	testDML(t, conn, "rollback", 0)
+	testDML(t, conn, "rollback", 1, 0)
 
 	testFetch(t, conn, "select * from test", 1)
 	testFetch(t, conn2, "select * from test", 1)
 
-	testDML(t, conn2, "begin", 0)
-	testDML(t, conn2, "delete from test", 1)
-	testDML(t, conn2, "commit", 0)
+	testDML(t, conn2, "begin", 1, 0)
+	testDML(t, conn2, "delete from test", 2, 1)
+	testDML(t, conn2, "commit", 1, 0)
 
 	testFetch(t, conn, "select * from test", 0)
 	testFetch(t, conn2, "select * from test", 0)
@@ -223,26 +273,26 @@ func TestNoAutocommit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testDML(t, conn, "set autocommit=0", 0)
+	testFetch(t, conn, "set autocommit=0", 0)
 
-	testDML(t, conn, "insert into test (id, val) values(1, 'hello')", 1)
+	testDML(t, conn, "insert into test (id, val) values(1, 'hello')", 2, 1)
 	testFetch(t, conn, "select * from test", 1)
 	testFetch(t, conn2, "select * from test", 0)
-	testDML(t, conn, "commit", 0)
+	testDML(t, conn, "commit", 1, 0)
 	testFetch(t, conn, "select * from test", 1)
 	testFetch(t, conn2, "select * from test", 1)
 
-	testDML(t, conn, "delete from test", 1)
+	testDML(t, conn, "delete from test", 3, 1)
 	testFetch(t, conn, "select * from test", 0)
 	testFetch(t, conn2, "select * from test", 1)
-	testDML(t, conn, "rollback", 0)
+	testDML(t, conn, "rollback", 1, 0)
 
 	testFetch(t, conn, "select * from test", 1)
 	testFetch(t, conn2, "select * from test", 1)
 
-	testDML(t, conn2, "set autocommit=0", 0)
-	testDML(t, conn2, "delete from test", 1)
-	testDML(t, conn2, "commit", 0)
+	testFetch(t, conn2, "set autocommit=0", 0)
+	testDML(t, conn2, "delete from test", 3, 1)
+	testDML(t, conn2, "commit", 1, 0)
 
 	testFetch(t, conn, "select * from test", 0)
 	testFetch(t, conn2, "select * from test", 0)
