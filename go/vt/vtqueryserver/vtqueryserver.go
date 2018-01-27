@@ -43,6 +43,7 @@ var (
 
 	targetKeyspace   = flag.String("target", "", "Target database name")
 	normalizeQueries = flag.Bool("normalize_queries", true, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
+	allowUnsafeDMLs  = flag.Bool("allow_unsafe_dmls", false, "Allow passthrough DML statements when running with statement-based replication")
 )
 
 func initProxy(dbcfgs *dbconfigs.DBConfigs) (*tabletserver.TabletServer, error) {
@@ -51,6 +52,7 @@ func initProxy(dbcfgs *dbconfigs.DBConfigs) (*tabletserver.TabletServer, error) 
 
 	// creates and registers the query service
 	qs := tabletserver.NewTabletServerWithNilTopoServer(tabletenv.Config)
+	qs.SetAllowUnsafeDMLs(*allowUnsafeDMLs)
 	mysqlProxy = mysqlproxy.NewProxy(&target, qs, *normalizeQueries)
 
 	err := qs.StartService(target, *dbcfgs)
