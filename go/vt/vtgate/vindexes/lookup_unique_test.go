@@ -24,20 +24,50 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
+func TestLookupUniqueNew(t *testing.T) {
+	_ = createLookup(t, "lookup_unique", false)
+
+	_, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
+		"table":             "t",
+		"from":              "fromc",
+		"to":                "toc",
+		"scatter_if_absent": "true",
+	})
+	want := "scatter_if_absent cannot be true for a unique lookup vindex"
+	if err == nil || err.Error() != want {
+		t.Errorf("Create(bad_scatter): %v, want %s", err, want)
+	}
+
+	_, err = CreateVindex("lookup_unique", "lookup_unique", map[string]string{
+		"table":             "t",
+		"from":              "fromc",
+		"to":                "toc",
+		"scatter_if_absent": "invalid",
+	})
+	want = "scatter_if_absent value must be 'true' or 'false': 'invalid'"
+	if err == nil || err.Error() != want {
+		t.Errorf("Create(bad_scatter): %v, want %s", err, want)
+	}
+}
+
 func TestLookupUniqueCost(t *testing.T) {
+	lookupUnique := createLookup(t, "lookup_unique", false)
 	if lookupUnique.Cost() != 10 {
 		t.Errorf("Cost(): %d, want 10", lookupUnique.Cost())
 	}
 }
 
 func TestLookupUniqueString(t *testing.T) {
-	if strings.Compare("lookupUnique", lookupUnique.String()) != 0 {
-		t.Errorf("String(): %s, want lookupUnique", lookupUnique.String())
+	lookupUnique := createLookup(t, "lookup_unique", false)
+	if strings.Compare("lookup_unique", lookupUnique.String()) != 0 {
+		t.Errorf("String(): %s, want lookup_unique", lookupUnique.String())
 	}
 }
 
 func TestLookupUniqueMap(t *testing.T) {
+	lookupUnique := createLookup(t, "lookup_unique", false)
 	vc := &vcursor{numRows: 1}
+
 	got, err := lookupUnique.(Unique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	if err != nil {
 		t.Error(err)
@@ -78,7 +108,9 @@ func TestLookupUniqueMap(t *testing.T) {
 }
 
 func TestLookupUniqueVerify(t *testing.T) {
+	lookupUnique := createLookup(t, "lookup_unique", false)
 	vc := &vcursor{numRows: 1}
+
 	_, err := lookupUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("test")})
 	if err != nil {
 		t.Error(err)
@@ -86,45 +118,30 @@ func TestLookupUniqueVerify(t *testing.T) {
 	if got, want := len(vc.queries), 1; got != want {
 		t.Errorf("vc.queries length: %v, want %v", got, want)
 	}
-
-	_, err = lookuphashunique.Verify(nil, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("test1test23")})
-	want := "lookup.Verify.vunhash: invalid keyspace id: 7465737431746573743233"
-	if err.Error() != want {
-		t.Error(err)
-	}
 }
 
 func TestLookupUniqueCreate(t *testing.T) {
+	lookupUnique := createLookup(t, "lookup_unique", false)
 	vc := &vcursor{}
-	err := lookupUnique.(Lookup).Create(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}}, [][]byte{[]byte("test")}, false /* ignoreMode */)
+
+	err := lookupUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("test")}, false /* ignoreMode */)
 	if err != nil {
 		t.Error(err)
 	}
 	if got, want := len(vc.queries), 1; got != want {
 		t.Errorf("vc.queries length: %v, want %v", got, want)
-	}
-
-	err = lookuphashunique.(Lookup).Create(nil, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}}, [][]byte{[]byte("test1test23")}, false /* ignoreMode */)
-	want := "lookup.Create.vunhash: invalid keyspace id: 7465737431746573743233"
-	if err.Error() != want {
-		t.Error(err)
 	}
 }
 
 func TestLookupUniqueDelete(t *testing.T) {
+	lookupUnique := createLookup(t, "lookup_unique", false)
 	vc := &vcursor{}
-	err := lookupUnique.(Lookup).Delete(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}}, []byte("test"))
+
+	err := lookupUnique.(Lookup).Delete(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, []byte("test"))
 	if err != nil {
 		t.Error(err)
 	}
 	if got, want := len(vc.queries), 1; got != want {
 		t.Errorf("vc.queries length: %v, want %v", got, want)
-	}
-
-	//Negative Test
-	err = lookuphashunique.(Lookup).Delete(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}}, []byte("test1test23"))
-	want := "lookup.Delete.vunhash: invalid keyspace id: 7465737431746573743233"
-	if err.Error() != want {
-		t.Error(err)
 	}
 }

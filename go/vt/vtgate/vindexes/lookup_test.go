@@ -26,6 +26,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // LookupNonUnique tests are more comprehensive than others.
@@ -69,37 +70,47 @@ func (vc *vcursor) Execute(method string, query string, bindvars map[string]*que
 	panic("unexpected")
 }
 
-var lookupUnique Vindex
-var lookupNonUnique Vindex
-
-func init() {
-	lkpunique, err := CreateVindex("lookup_unique", "lookupUnique", map[string]string{"table": "t", "from": "fromc", "to": "toc"})
-	if err != nil {
-		panic(err)
-	}
-	lkpnonunique, err := CreateVindex("lookup", "lookupNonUnique", map[string]string{"table": "t", "from": "fromc", "to": "toc"})
-	if err != nil {
-		panic(err)
+func TestLookupNonUniqueNew(t *testing.T) {
+	l := createLookup(t, "lookup", false)
+	if want, got := l.(*LookupNonUnique).scatterIfAbsent, false; got != want {
+		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
-	lookupUnique = lkpunique
-	lookupNonUnique = lkpnonunique
+	l = createLookup(t, "lookup", true)
+	if want, got := l.(*LookupNonUnique).scatterIfAbsent, true; got != want {
+		t.Errorf("Create(lookup, false): %v, want %v", got, want)
+	}
+
+	l, err := CreateVindex("lookup", "lookup", map[string]string{
+		"table":             "t",
+		"from":              "fromc",
+		"to":                "toc",
+		"scatter_if_absent": "invalid",
+	})
+	want := "scatter_if_absent value must be 'true' or 'false': 'invalid'"
+	if err == nil || err.Error() != want {
+		t.Errorf("Create(bad_scatter): %v, want %s", err, want)
+	}
 }
 
 func TestLookupNonUniqueCost(t *testing.T) {
+	lookupNonUnique := createLookup(t, "lookup", false)
 	if lookupNonUnique.Cost() != 20 {
-		t.Errorf("Cost(): %d, want 20", lookupUnique.Cost())
+		t.Errorf("Cost(): %d, want 20", lookupNonUnique.Cost())
 	}
 }
 
 func TestLookupNonUniqueString(t *testing.T) {
-	if strings.Compare("lookupNonUnique", lookupNonUnique.String()) != 0 {
-		t.Errorf("String(): %s, want lookupNonUnique", lookupNonUnique.String())
+	lookupNonUnique := createLookup(t, "lookup", false)
+	if strings.Compare("lookup", lookupNonUnique.String()) != 0 {
+		t.Errorf("String(): %s, want lookup", lookupNonUnique.String())
 	}
 }
 
 func TestLookupNonUniqueMap(t *testing.T) {
+	lookupNonUnique := createLookup(t, "lookup", false)
 	vc := &vcursor{numRows: 2}
+
 	got, err := lookupNonUnique.(NonUnique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	if err != nil {
 		t.Error(err)
@@ -144,8 +155,39 @@ func TestLookupNonUniqueMap(t *testing.T) {
 	vc.mustFail = false
 }
 
+func TestLookupNonUniqueMapAbsent(t *testing.T) {
+	lookupNonUnique := createLookup(t, "lookup", false)
+	vc := &vcursor{numRows: 0}
+
+	got, err := lookupNonUnique.(NonUnique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	if err != nil {
+		t.Error(err)
+	}
+	want := []Ksids{{}, {}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Map(): %#v, want %+v", got, want)
+	}
+
+	// scatterIfAbsent true should return full keyranges.
+	lookupNonUnique = createLookup(t, "lookup", true)
+	got, err = lookupNonUnique.(NonUnique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	if err != nil {
+		t.Error(err)
+	}
+	want = []Ksids{{
+		Range: &topodatapb.KeyRange{},
+	}, {
+		Range: &topodatapb.KeyRange{},
+	}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Map(): %#v, want %+v", got, want)
+	}
+}
+
 func TestLookupNonUniqueVerify(t *testing.T) {
+	lookupNonUnique := createLookup(t, "lookup", false)
 	vc := &vcursor{numRows: 1}
+
 	_, err := lookupNonUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("test1"), []byte("test2")})
 	if err != nil {
 		t.Error(err)
@@ -176,10 +218,28 @@ func TestLookupNonUniqueVerify(t *testing.T) {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
 	}
 	vc.mustFail = false
+
+	// scatterIfAbsent true should always yield true.
+	lookupNonUnique = createLookup(t, "lookup", true)
+	vc.queries = nil
+
+	got, err := lookupNonUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte(""), []byte("")})
+	if err != nil {
+		t.Error(err)
+	}
+	if vc.queries != nil {
+		t.Errorf("lookup.Verify(scatter), queries: %v, want nil", vc.queries)
+	}
+	wantBools := []bool{true, true}
+	if !reflect.DeepEqual(got, wantBools) {
+		t.Errorf("lookup.Verify(scatter): %v, want %v", got, wantBools)
+	}
 }
 
 func TestLookupNonUniqueCreate(t *testing.T) {
+	lookupNonUnique := createLookup(t, "lookup", false)
 	vc := &vcursor{}
+
 	err := lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, [][]byte{[]byte("test1"), []byte("test2")}, false /* ignoreMode */)
 	if err != nil {
 		t.Error(err)
@@ -221,7 +281,9 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 }
 
 func TestLookupNonUniqueDelete(t *testing.T) {
+	lookupNonUnique := createLookup(t, "lookup", false)
 	vc := &vcursor{}
+
 	err := lookupNonUnique.(Lookup).Delete(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, []byte("test"))
 	if err != nil {
 		t.Error(err)
@@ -252,4 +314,22 @@ func TestLookupNonUniqueDelete(t *testing.T) {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
 	}
 	vc.mustFail = false
+}
+
+func createLookup(t *testing.T, name string, scatterIfAbsent bool) Vindex {
+	t.Helper()
+	scatter := "false"
+	if scatterIfAbsent {
+		scatter = "true"
+	}
+	l, err := CreateVindex(name, name, map[string]string{
+		"table":             "t",
+		"from":              "fromc",
+		"to":                "toc",
+		"scatter_if_absent": scatter,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return l
 }

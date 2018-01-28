@@ -18,9 +18,11 @@ package vindexes
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -38,8 +40,9 @@ func init() {
 // LookupNonUnique defines a vindex that uses a lookup table and create a mapping between from ids and KeyspaceId.
 // It's NonUnique and a Lookup.
 type LookupNonUnique struct {
-	name string
-	lkp  lookupInternal
+	name            string
+	scatterIfAbsent bool
+	lkp             lookupInternal
 }
 
 // String returns the name of the vindex.
@@ -60,6 +63,14 @@ func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksids, 
 		return nil, err
 	}
 	for _, result := range results {
+		if len(result.Rows) == 0 {
+			if ln.scatterIfAbsent {
+				out = append(out, Ksids{Range: &topodata.KeyRange{}})
+				continue
+			}
+			out = append(out, Ksids{})
+			continue
+		}
 		ksids := make([][]byte, 0, len(result.Rows))
 		for _, row := range result.Rows {
 			ksids = append(ksids, row[0].ToBytes())
@@ -71,6 +82,13 @@ func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksids, 
 
 // Verify returns true if ids maps to ksids.
 func (ln *LookupNonUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	if ln.scatterIfAbsent {
+		out := make([]bool, len(ids))
+		for i := range ids {
+			out[i] = true
+		}
+		return out, nil
+	}
 	return ln.lkp.Verify(vcursor, ids, ksidsToValues(ksids))
 }
 
@@ -93,6 +111,11 @@ func (ln *LookupNonUnique) MarshalJSON() ([]byte, error) {
 func NewLookup(name string, m map[string]string) (Vindex, error) {
 	lookup := &LookupNonUnique{name: name}
 	lookup.lkp.Init(m)
+	var err error
+	lookup.scatterIfAbsent, err = getScatterIfAbsent(m)
+	if err != nil {
+		return nil, err
+	}
 	return lookup, nil
 }
 
@@ -102,6 +125,21 @@ func ksidsToValues(ksids [][]byte) []sqltypes.Value {
 		values = append(values, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid))
 	}
 	return values
+}
+
+func getScatterIfAbsent(m map[string]string) (bool, error) {
+	val, ok := m["scatter_if_absent"]
+	if !ok {
+		return false, nil
+	}
+	switch val {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	default:
+		return false, fmt.Errorf("scatter_if_absent value must be 'true' or 'false': '%s'", val)
+	}
 }
 
 //====================================================================
@@ -118,6 +156,13 @@ type LookupUnique struct {
 func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 	lu := &LookupUnique{name: name}
 	lu.lkp.Init(m)
+	scatter, err := getScatterIfAbsent(m)
+	if err != nil {
+		return nil, err
+	}
+	if scatter {
+		return nil, errors.New("scatter_if_absent cannot be true for a unique lookup vindex")
+	}
 	return lu, nil
 }
 

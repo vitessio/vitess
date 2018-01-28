@@ -18,9 +18,11 @@ package vindexes
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -42,14 +44,20 @@ func init() {
 // NonUnique and a Lookup.
 // Warning: This Vindex is being depcreated in favor of Lookup
 type LookupHash struct {
-	name string
-	lkp  lookupInternal
+	name            string
+	scatterIfAbsent bool
+	lkp             lookupInternal
 }
 
 // NewLookupHash creates a LookupHash vindex.
 func NewLookupHash(name string, m map[string]string) (Vindex, error) {
 	lh := &LookupHash{name: name}
 	lh.lkp.Init(m)
+	var err error
+	lh.scatterIfAbsent, err = getScatterIfAbsent(m)
+	if err != nil {
+		return nil, err
+	}
 	return lh, nil
 }
 
@@ -71,6 +79,14 @@ func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksids, error
 		return nil, err
 	}
 	for _, result := range results {
+		if len(result.Rows) == 0 {
+			if lh.scatterIfAbsent {
+				out = append(out, Ksids{Range: &topodata.KeyRange{}})
+				continue
+			}
+			out = append(out, Ksids{})
+			continue
+		}
 		ksids := make([][]byte, 0, len(result.Rows))
 		for _, row := range result.Rows {
 			num, err := sqltypes.ToUint64(row[0])
@@ -88,6 +104,13 @@ func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksids, error
 
 // Verify returns true if ids maps to ksids.
 func (lh *LookupHash) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	if lh.scatterIfAbsent {
+		out := make([]bool, len(ids))
+		for i := range ids {
+			out[i] = true
+		}
+		return out, nil
+	}
 	values, err := unhashList(ksids)
 	if err != nil {
 		return nil, fmt.Errorf("lookup.Verify.vunhash: %v", err)
@@ -146,6 +169,13 @@ type LookupHashUnique struct {
 func NewLookupHashUnique(name string, m map[string]string) (Vindex, error) {
 	lhu := &LookupHashUnique{name: name}
 	lhu.lkp.Init(m)
+	scatter, err := getScatterIfAbsent(m)
+	if err != nil {
+		return nil, err
+	}
+	if scatter {
+		return nil, errors.New("scatter_if_absent cannot be true for a unique lookup vindex")
+	}
 	return lhu, nil
 }
 
