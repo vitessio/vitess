@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -43,7 +44,7 @@ func (v *uvindex) Map(vindexes.VCursor, []sqltypes.Value) ([][]byte, error) {
 }
 
 // nvindex is NonUnique.
-type nvindex struct{ match bool }
+type nvindex struct{ matchid, matchkr bool }
 
 func (*nvindex) String() string { return "nvindex" }
 func (*nvindex) Cost() int      { return 1 }
@@ -51,13 +52,24 @@ func (*nvindex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, er
 	panic("unimplemented")
 }
 
-func (v *nvindex) Map(vindexes.VCursor, []sqltypes.Value) ([][][]byte, error) {
-	if v.match {
-		return [][][]byte{{
-			[]byte("foo"), []byte("bar"),
+func (v *nvindex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksids, error) {
+	if v.matchid {
+		return []vindexes.Ksids{{
+			IDs: [][]byte{
+				[]byte("foo"),
+				[]byte("bar"),
+			},
 		}}, nil
 	}
-	return [][][]byte{nil}, nil
+	if v.matchkr {
+		return []vindexes.Ksids{{
+			Range: &topodatapb.KeyRange{
+				Start: []byte{0x40},
+				End:   []byte{0x60},
+			},
+		}}, nil
+	}
+	return []vindexes.Ksids{{}}, nil
 }
 
 func TestVindexFuncMap(t *testing.T) {
@@ -68,7 +80,7 @@ func TestVindexFuncMap(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := &sqltypes.Result{
-		Fields: sqltypes.MakeTestFields("id|keyspace_id", "varbinary|varbinary"),
+		Fields: sqltypes.MakeTestFields("id|keyspace_id|range_start|range_end", "varbinary|varbinary|varbinary|varbinary"),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Execute(Map, uvindex(none)):\n%v, want\n%v", got, want)
@@ -81,7 +93,7 @@ func TestVindexFuncMap(t *testing.T) {
 		t.Fatal(err)
 	}
 	want = sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|keyspace_id", "varbinary|varbinary"),
+		sqltypes.MakeTestFields("id|keyspace_id|range_start|range_end", "varbinary|varbinary|varbinary|varbinary"),
 		"1|foo",
 	)
 	if !reflect.DeepEqual(got, want) {
@@ -95,37 +107,62 @@ func TestVindexFuncMap(t *testing.T) {
 		t.Fatal(err)
 	}
 	want = &sqltypes.Result{
-		Fields: sqltypes.MakeTestFields("id|keyspace_id", "varbinary|varbinary"),
+		Fields: sqltypes.MakeTestFields("id|keyspace_id|range_start|range_end", "varbinary|varbinary|varbinary|varbinary"),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Execute(Map, uvindex(none)):\n%v, want\n%v", got, want)
 	}
 
 	// NonUnique Vindex returning 2 rows.
-	vf = testVindexFunc(&nvindex{match: true})
+	vf = testVindexFunc(&nvindex{matchid: true})
 	got, err = vf.Execute(nil, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want = sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|keyspace_id", "varbinary|varbinary"),
-		"1|foo",
-		"1|bar",
+		sqltypes.MakeTestFields("id|keyspace_id|range_start|range_end", "varbinary|varbinary|varbinary|varbinary"),
+		"1|foo||",
+		"1|bar||",
 	)
+	// Massage the rows because MakeTestResult doesn't do NULL values.
+	for _, row := range want.Rows {
+		row[2] = sqltypes.NULL
+		row[3] = sqltypes.NULL
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Execute(Map, uvindex(none)):\n%v, want\n%v", got, want)
+	}
+
+	// NonUnique Vindex returning keyrange
+	vf = testVindexFunc(&nvindex{matchkr: true})
+	got, err = vf.Execute(nil, nil, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = &sqltypes.Result{
+		Fields: sqltypes.MakeTestFields("id|keyspace_id|range_start|range_end", "varbinary|varbinary|varbinary|varbinary"),
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarBinary("1"),
+			sqltypes.NULL,
+			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte{0x40}),
+			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte{0x60}),
+		}},
+		RowsAffected: 1,
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Execute(Map, uvindex(none)):\n%v, want\n%v", got, want)
 	}
 }
 
 func TestVindexFuncStreamExecute(t *testing.T) {
-	vf := testVindexFunc(&nvindex{match: true})
+	vf := testVindexFunc(&nvindex{matchid: true})
 	want := []*sqltypes.Result{{
-		Fields: sqltypes.MakeTestFields("id|keyspace_id", "varbinary|varbinary"),
+		Fields: sqltypes.MakeTestFields("id|keyspace_id|range_start|range_end", "varbinary|varbinary|varbinary|varbinary"),
 	}, {
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewVarBinary("1"), sqltypes.NewVarBinary("foo"),
+			sqltypes.NewVarBinary("1"), sqltypes.NewVarBinary("foo"), sqltypes.NULL, sqltypes.NULL,
 		}, {
-			sqltypes.NewVarBinary("1"), sqltypes.NewVarBinary("bar"),
+			sqltypes.NewVarBinary("1"), sqltypes.NewVarBinary("bar"), sqltypes.NULL, sqltypes.NULL,
 		}},
 	}}
 	i := 0
@@ -148,7 +185,7 @@ func TestVindexFuncGetFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := &sqltypes.Result{
-		Fields: sqltypes.MakeTestFields("id|keyspace_id", "varbinary|varbinary"),
+		Fields: sqltypes.MakeTestFields("id|keyspace_id|range_start|range_end", "varbinary|varbinary|varbinary|varbinary"),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Execute(Map, uvindex(none)):\n%v, want\n%v", got, want)
@@ -156,7 +193,7 @@ func TestVindexFuncGetFields(t *testing.T) {
 }
 
 func TestFieldOrder(t *testing.T) {
-	vf := testVindexFunc(&nvindex{match: true})
+	vf := testVindexFunc(&nvindex{matchid: true})
 	vf.Fields = sqltypes.MakeTestFields("keyspace_id|id|keyspace_id", "varbinary|varbinary|varbinary")
 	vf.Cols = []int{1, 0, 1}
 	got, err := vf.Execute(nil, nil, nil, true)
@@ -175,8 +212,8 @@ func TestFieldOrder(t *testing.T) {
 
 func testVindexFunc(v vindexes.Vindex) *VindexFunc {
 	return &VindexFunc{
-		Fields: sqltypes.MakeTestFields("id|keyspace_id", "varbinary|varbinary"),
-		Cols:   []int{0, 1},
+		Fields: sqltypes.MakeTestFields("id|keyspace_id|range_start|range_end", "varbinary|varbinary|varbinary|varbinary"),
+		Cols:   []int{0, 1, 2, 3},
 		Opcode: VindexMap,
 		Vindex: v,
 		Value:  int64PlanValue(1),

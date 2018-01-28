@@ -64,8 +64,8 @@ func (lh *LookupHash) Cost() int {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([][][]byte, error) {
-	out := make([][][]byte, 0, len(ids))
+func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksids, error) {
+	out := make([]Ksids, 0, len(ids))
 	results, err := lh.lkp.Lookup(vcursor, ids)
 	if err != nil {
 		return nil, err
@@ -81,7 +81,7 @@ func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([][][]byte, er
 			}
 			ksids = append(ksids, vhash(num))
 		}
-		out = append(out, ksids)
+		out = append(out, Ksids{IDs: ksids})
 	}
 	return out, nil
 }

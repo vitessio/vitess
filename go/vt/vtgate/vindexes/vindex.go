@@ -22,6 +22,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This file defines interfaces and registration for vindexes.
@@ -62,10 +63,17 @@ type Unique interface {
 	Map(cursor VCursor, ids []sqltypes.Value) ([][]byte, error)
 }
 
+// Ksids represents keyspace ids. It's either a list of keyspace ids
+// or a keyrange.
+type Ksids struct {
+	Range *topodatapb.KeyRange
+	IDs   [][]byte
+}
+
 // NonUnique defines the interface for a non-unique vindex.
 // This means that an id can map to multiple keyspace ids.
 type NonUnique interface {
-	Map(cursor VCursor, ids []sqltypes.Value) ([][][]byte, error)
+	Map(cursor VCursor, ids []sqltypes.Value) ([]Ksids, error)
 }
 
 // IsUnique returns true if the Vindex is Unique.

@@ -612,11 +612,11 @@ func (route *Route) resolveShards(vcursor VCursor, bindVars map[string]*querypb.
 			return "", nil, err
 		}
 		for i, ksids := range ksidss {
-			for _, ksid := range ksids {
-				shard, err := vcursor.GetShardForKeyspaceID(allShards, ksid)
-				if err != nil {
-					return "", nil, err
-				}
+			shards, err := vcursor.GetShardsForKsids(allShards, ksids)
+			if err != nil {
+				return "", nil, err
+			}
+			for _, shard := range shards {
 				routing.Add(shard, sqltypes.ValueToProto(vindexKeys[i]))
 			}
 		}

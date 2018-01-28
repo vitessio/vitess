@@ -26,6 +26,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/discovery"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/vttablet/sandboxconn"
 	"golang.org/x/net/context"
 
@@ -85,6 +86,9 @@ var executorVSchema = `
 		},
 		"keyspace_id": {
 			"type": "numeric"
+		},
+		"krcol_vdx": {
+			"type": "keyrange_lookuper"
 		}
 	},
 	"tables": {
@@ -194,6 +198,18 @@ var executorVSchema = `
 				}
 			]
 		},
+		"keyrange_table": {
+			"column_vindexes": [
+				{
+					"column": "id",
+					"name": "hash_index"
+				},
+				{
+					"column": "krcol",
+					"name": "krcol_vdx"
+				}
+			]
+		},
 		"ksid_table": {
 			"column_vindexes": [
 				{
@@ -235,6 +251,35 @@ var unshardedVSchema = `
 	}
 }
 `
+
+// keyRangeLookuper is for testing a lookup that returns a keyrange.
+type keyRangeLookuper struct {
+}
+
+func (v *keyRangeLookuper) String() string { return "keyrange_lookuper" }
+func (*keyRangeLookuper) Cost() int        { return 0 }
+func (*keyRangeLookuper) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+	return []bool{}, nil
+}
+func (*keyRangeLookuper) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksids, error) {
+	return []vindexes.Ksids{{
+		Range: &topodatapb.KeyRange{
+			End: []byte{0x10},
+		},
+	}}, nil
+}
+func (*keyRangeLookuper) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error {
+	return nil
+}
+func (*keyRangeLookuper) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error { return nil }
+
+func newLookupMigrator(name string, params map[string]string) (vindexes.Vindex, error) {
+	return &keyRangeLookuper{}, nil
+}
+
+func init() {
+	vindexes.Register("keyrange_lookuper", newLookupMigrator)
+}
 
 const testBufferSize = 10
 const testCacheSize = int64(10)

@@ -157,6 +157,21 @@ func (vc *vcursorImpl) GetShardForKeyspaceID(allShards []*topodatapb.ShardRefere
 	return srvtopo.GetShardForKeyspaceID(allShards, keyspaceID)
 }
 
+func (vc *vcursorImpl) GetShardsForKsids(allShards []*topodatapb.ShardReference, ksids vindexes.Ksids) ([]string, error) {
+	if ksids.Range != nil {
+		return srvtopo.GetShardsForKeyRange(allShards, ksids.Range), nil
+	}
+	var shards []string
+	for _, ksid := range ksids.IDs {
+		shard, err := srvtopo.GetShardForKeyspaceID(allShards, ksid)
+		if err != nil {
+			return nil, err
+		}
+		shards = append(shards, shard)
+	}
+	return shards, nil
+}
+
 func commentedShardQueries(shardQueries map[string]*querypb.BoundQuery, trailingComments string) map[string]*querypb.BoundQuery {
 	if trailingComments == "" {
 		return shardQueries

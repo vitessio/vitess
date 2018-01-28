@@ -70,7 +70,7 @@ type stLN struct {
 func (v *stLN) String() string                                           { return v.name }
 func (*stLN) Cost() int                                                  { return 0 }
 func (*stLN) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error) { return []bool{}, nil }
-func (*stLN) Map(VCursor, []sqltypes.Value) ([][][]byte, error)          { return nil, nil }
+func (*stLN) Map(VCursor, []sqltypes.Value) ([]Ksids, error)             { return nil, nil }
 func (*stLN) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error   { return nil }
 func (*stLN) Delete(VCursor, [][]sqltypes.Value, []byte) error           { return nil }
 

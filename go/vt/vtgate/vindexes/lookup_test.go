@@ -104,12 +104,16 @@ func TestLookupNonUniqueMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := [][][]byte{{
-		[]byte("1"),
-		[]byte("2"),
+	want := []Ksids{{
+		IDs: [][]byte{
+			[]byte("1"),
+			[]byte("2"),
+		},
 	}, {
-		[]byte("1"),
-		[]byte("2"),
+		IDs: [][]byte{
+			[]byte("1"),
+			[]byte("2"),
+		},
 	}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
@@ -176,7 +180,7 @@ func TestLookupNonUniqueVerify(t *testing.T) {
 
 func TestLookupNonUniqueCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}, []sqltypes.Value{sqltypes.NewInt64(2)}}, [][]byte{[]byte("test1"), []byte("test2")}, false /* ignoreMode */)
+	err := lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, [][]byte{[]byte("test1"), []byte("test2")}, false /* ignoreMode */)
 	if err != nil {
 		t.Error(err)
 	}
@@ -196,7 +200,7 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 
 	// With ignore.
 	vc.queries = nil
-	err = lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}, []sqltypes.Value{sqltypes.NewInt64(2)}}, [][]byte{[]byte("test1"), []byte("test2")}, true /* ignoreMode */)
+	err = lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, [][]byte{[]byte("test1"), []byte("test2")}, true /* ignoreMode */)
 	if err != nil {
 		t.Error(err)
 	}
@@ -208,7 +212,7 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	err = lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
+	err = lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
 	want := "lookup.Create: execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
@@ -218,7 +222,7 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 
 func TestLookupNonUniqueDelete(t *testing.T) {
 	vc := &vcursor{}
-	err := lookupNonUnique.(Lookup).Delete(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}, []sqltypes.Value{sqltypes.NewInt64(2)}}, []byte("test"))
+	err := lookupNonUnique.(Lookup).Delete(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, []byte("test"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -242,7 +246,7 @@ func TestLookupNonUniqueDelete(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	err = lookupNonUnique.(Lookup).Delete(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err = lookupNonUnique.(Lookup).Delete(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	want := "lookup.Delete: execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
