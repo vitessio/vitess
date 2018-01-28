@@ -53,8 +53,8 @@ func (ln *LookupNonUnique) Cost() int {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][][]byte, error) {
-	out := make([][][]byte, 0, len(ids))
+func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksids, error) {
+	out := make([]Ksids, 0, len(ids))
 	results, err := ln.lkp.Lookup(vcursor, ids)
 	if err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][][]byt
 		for _, row := range result.Rows {
 			ksids = append(ksids, row[0].ToBytes())
 		}
-		out = append(out, ksids)
+		out = append(out, Ksids{IDs: ksids})
 	}
 	return out, nil
 }

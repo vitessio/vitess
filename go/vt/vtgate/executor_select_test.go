@@ -583,6 +583,26 @@ func TestStreamSelectEqual(t *testing.T) {
 	}
 }
 
+func TestSelectKeyRange(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+
+	_, err := executorExec(executor, "select id, krcol from keyrange_table where krcol = 1", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select id, krcol from keyrange_table where krcol = 1",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+	}
+	sbc1.Queries = nil
+}
+
 func TestSelectEqualFail(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	s := getSandbox("TestExecutor")

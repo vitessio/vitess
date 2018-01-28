@@ -374,6 +374,10 @@ func (t *fakeVcursor) GetKeyspaceShards(vkeyspace *vindexes.Keyspace) (string, [
 	panic("unimplemented")
 }
 
+func (t *fakeVcursor) GetShardsForKsids(allShards []*topodatapb.ShardReference, ksids vindexes.Ksids) ([]string, error) {
+	panic("unimplemented")
+}
+
 func (t *fakeVcursor) GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error) {
 	panic("unimplemented")
 }
