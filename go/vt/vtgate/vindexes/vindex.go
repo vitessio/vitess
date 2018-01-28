@@ -111,7 +111,11 @@ type Lookup interface {
 	// Create creates an association between ids and ksids. If ignoreMode
 	// is true, then the Create should ignore dup key errors.
 	Create(vc VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error
-	Delete(VCursor, [][]sqltypes.Value, []byte) error
+
+	Delete(vc VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error
+
+	// Update replaces the mapping of old values with new values for a keyspace id.
+	Update(vc VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error
 }
 
 // A NewVindexFunc is a function that creates a Vindex based on the

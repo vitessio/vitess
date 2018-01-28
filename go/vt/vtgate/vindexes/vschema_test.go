@@ -47,6 +47,8 @@ func NewSTFU(name string, params map[string]string) (Vindex, error) {
 	return &stFU{name: name, Params: params}, nil
 }
 
+var _ Unique = (*stFU)(nil)
+
 // stF satisfies Functional, but no Map. Invalid vindex.
 type stF struct {
 	name   string
@@ -67,16 +69,20 @@ type stLN struct {
 	Params map[string]string
 }
 
-func (v *stLN) String() string                                           { return v.name }
-func (*stLN) Cost() int                                                  { return 0 }
-func (*stLN) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error) { return []bool{}, nil }
-func (*stLN) Map(VCursor, []sqltypes.Value) ([]Ksids, error)             { return nil, nil }
-func (*stLN) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error   { return nil }
-func (*stLN) Delete(VCursor, [][]sqltypes.Value, []byte) error           { return nil }
+func (v *stLN) String() string                                                 { return v.name }
+func (*stLN) Cost() int                                                        { return 0 }
+func (*stLN) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)       { return []bool{}, nil }
+func (*stLN) Map(VCursor, []sqltypes.Value) ([]Ksids, error)                   { return nil, nil }
+func (*stLN) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error         { return nil }
+func (*stLN) Delete(VCursor, [][]sqltypes.Value, []byte) error                 { return nil }
+func (*stLN) Update(VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error { return nil }
 
 func NewSTLN(name string, params map[string]string) (Vindex, error) {
 	return &stLN{name: name, Params: params}, nil
 }
+
+var _ NonUnique = (*stLN)(nil)
+var _ Lookup = (*stLN)(nil)
 
 // stLU satisfies Lookup, Unique.
 type stLU struct {
@@ -84,16 +90,20 @@ type stLU struct {
 	Params map[string]string
 }
 
-func (v *stLU) String() string                                           { return v.name }
-func (*stLU) Cost() int                                                  { return 2 }
-func (*stLU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error) { return []bool{}, nil }
-func (*stLU) Map(VCursor, []sqltypes.Value) ([][]byte, error)            { return nil, nil }
-func (*stLU) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error   { return nil }
-func (*stLU) Delete(VCursor, [][]sqltypes.Value, []byte) error           { return nil }
+func (v *stLU) String() string                                                 { return v.name }
+func (*stLU) Cost() int                                                        { return 2 }
+func (*stLU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)       { return []bool{}, nil }
+func (*stLU) Map(VCursor, []sqltypes.Value) ([][]byte, error)                  { return nil, nil }
+func (*stLU) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error         { return nil }
+func (*stLU) Delete(VCursor, [][]sqltypes.Value, []byte) error                 { return nil }
+func (*stLU) Update(VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error { return nil }
 
 func NewSTLU(name string, params map[string]string) (Vindex, error) {
 	return &stLU{name: name, Params: params}, nil
 }
+
+var _ Unique = (*stLU)(nil)
+var _ Lookup = (*stLU)(nil)
 
 func init() {
 	Register("stfu", NewSTFU)

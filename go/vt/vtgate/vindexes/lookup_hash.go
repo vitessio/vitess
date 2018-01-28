@@ -127,6 +127,15 @@ func (lh *LookupHash) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, 
 	return lh.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
 }
 
+// Update updates the entry in the vindex table.
+func (lh *LookupHash) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
+	v, err := vunhash(ksid)
+	if err != nil {
+		return fmt.Errorf("lookup.Update.vunhash: %v", err)
+	}
+	return lh.lkp.Update(vcursor, oldValues, sqltypes.NewUint64(v), newValues)
+}
+
 // Delete deletes the entry from the vindex table.
 func (lh *LookupHash) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
 	v, err := vunhash(ksid)
@@ -239,6 +248,15 @@ func (lhu *LookupHashUnique) Delete(vcursor VCursor, rowsColValues [][]sqltypes.
 		return fmt.Errorf("lookup.Delete.vunhash: %v", err)
 	}
 	return lhu.lkp.Delete(vcursor, rowsColValues, sqltypes.NewUint64(v))
+}
+
+// Update updates the entry in the vindex table.
+func (lhu *LookupHashUnique) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
+	v, err := vunhash(ksid)
+	if err != nil {
+		return fmt.Errorf("lookup.Update.vunhash: %v", err)
+	}
+	return lhu.lkp.Update(vcursor, oldValues, sqltypes.NewUint64(v), newValues)
 }
 
 // MarshalJSON returns a JSON representation of LookupHashUnique.

@@ -200,6 +200,10 @@
   }
 }
 
+# update by primary keyspace id, changing same vindex twice
+"update user_metadata set email = 'a', email = 'b' where user_id = 1"
+"column has duplicate set values: 'email'"
+
 # update by primary keyspace id, changing multiple vindex columns
 "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1"
 {

@@ -105,37 +105,46 @@ func generateQuery(statement sqlparser.Statement) string {
 func buildChangedVindexesValues(route *engine.Route, update *sqlparser.Update, colVindexes []*vindexes.ColumnVindex) (map[string][]sqltypes.PlanValue, error) {
 	changedVindexes := make(map[string][]sqltypes.PlanValue)
 	for i, vindex := range colVindexes {
-		for _, assignment := range update.Exprs {
-			for _, vcol := range vindex.Columns {
-				if vcol.Equal(assignment.Name.Name) {
-					pv, err := extractValueFromUpdate(assignment, vcol)
-					if err != nil {
-						return changedVindexes, err
-					}
-					changedVindexes[vindex.Name] = append(changedVindexes[vindex.Name], pv)
+		var vindexValues []sqltypes.PlanValue
+		for _, vcol := range vindex.Columns {
+			// Searching in order of columns in colvindex.
+			found := false
+			for _, assignment := range update.Exprs {
+				if !vcol.Equal(assignment.Name.Name) {
+					continue
 				}
+				if found {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "column has duplicate set values: '%v'", assignment.Name.Name)
+				}
+				found = true
+				pv, err := extractValueFromUpdate(assignment, vcol)
+				if err != nil {
+					return nil, err
+				}
+				vindexValues = append(vindexValues, pv)
 			}
 		}
-		if len(changedVindexes[vindex.Name]) == 0 {
+		if len(vindexValues) == 0 {
 			// Vindex not changing, continue
 			continue
 		}
-		if len(changedVindexes[vindex.Name]) != len(vindex.Columns) {
-			return changedVindexes, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update does not have values for all the columns in vindex (%s)", vindex.Name)
+		if len(vindexValues) != len(vindex.Columns) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update does not have values for all the columns in vindex (%s)", vindex.Name)
 		}
 
 		if update.Limit != nil && len(update.OrderBy) == 0 {
-			return changedVindexes, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Need to provide order by clause when using limit. Invalid update on vindex: %v", vindex.Name)
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Need to provide order by clause when using limit. Invalid update on vindex: %v", vindex.Name)
 		}
 		if i == 0 {
-			return changedVindexes, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can't update primary vindex columns. Invalid update on vindex: %v", vindex.Name)
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can't update primary vindex columns. Invalid update on vindex: %v", vindex.Name)
 		}
 		if _, ok := vindex.Vindex.(vindexes.Lookup); !ok {
-			return changedVindexes, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update lookup vindexes. Invalid update on vindex: %v", vindex.Name)
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update lookup vindexes. Invalid update on vindex: %v", vindex.Name)
 		}
 		if !vindex.Owned {
-			return changedVindexes, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update owned vindexes. Invalid update on vindex: %v", vindex.Name)
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update owned vindexes. Invalid update on vindex: %v", vindex.Name)
 		}
+		changedVindexes[vindex.Name] = vindexValues
 	}
 
 	return changedVindexes, nil
