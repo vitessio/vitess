@@ -221,6 +221,7 @@ var executorVSchema = `
 	}
 }
 `
+
 var badVSchema = `
 {
 	"sharded": false,
@@ -268,10 +269,6 @@ func (*keyRangeLookuper) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksi
 		},
 	}}, nil
 }
-func (*keyRangeLookuper) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error {
-	return nil
-}
-func (*keyRangeLookuper) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error { return nil }
 
 func newLookupMigrator(name string, params map[string]string) (vindexes.Vindex, error) {
 	return &keyRangeLookuper{}, nil
@@ -309,6 +306,24 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	bad := createSandbox("TestXBadSharding")
 	bad.VSchema = badVSchema
 
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+
+	executor = NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize, false)
+	return executor, sbc1, sbc2, sbclookup
+}
+
+func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck()
+	s := createSandbox("TestExecutor")
+	s.VSchema = vschema
+	serv := new(sandboxTopo)
+	resolver := newTestResolver(hc, serv, cell)
+	sbc1 = hc.AddTestTablet(cell, "-20", 1, "TestExecutor", "-20", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestExecutor", "40-60", topodatapb.TabletType_MASTER, true, 1, nil)
+
+	createSandbox(KsTestUnsharded)
+	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
 	executor = NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize, false)

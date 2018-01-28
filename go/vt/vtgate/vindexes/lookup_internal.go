@@ -160,6 +160,14 @@ func (lkp *lookupInternal) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Va
 	return nil
 }
 
+// Update implements the update functionality.
+func (lkp *lookupInternal) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid sqltypes.Value, newValues []sqltypes.Value) error {
+	if err := lkp.Delete(vcursor, [][]sqltypes.Value{oldValues}, ksid); err != nil {
+		return err
+	}
+	return lkp.Create(vcursor, [][]sqltypes.Value{newValues}, []sqltypes.Value{ksid}, false /* ignoreMode */)
+}
+
 func (lkp *lookupInternal) initDelStm() string {
 	var delBuffer bytes.Buffer
 	fmt.Fprintf(&delBuffer, "delete from %s where ", lkp.Table)
