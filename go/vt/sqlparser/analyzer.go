@@ -81,7 +81,7 @@ func Preview(sql string) int {
 		return StmtRollback
 	}
 	switch loweredFirstWord {
-	case "create", "alter", "rename", "drop":
+	case "create", "alter", "rename", "drop", "truncate":
 		return StmtDDL
 	case "set":
 		return StmtSet
@@ -89,7 +89,7 @@ func Preview(sql string) int {
 		return StmtShow
 	case "use":
 		return StmtUse
-	case "analyze", "describe", "desc", "explain", "repair", "optimize", "truncate":
+	case "analyze", "describe", "desc", "explain", "repair", "optimize":
 		return StmtOther
 	}
 	if strings.Index(trimmed, "/*!") == 0 {

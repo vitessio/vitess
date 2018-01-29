@@ -887,6 +887,12 @@ class TestVTGateFunctions(unittest.TestCase):
         'delete from vt_user2 where id = :id',
         {'id': 7})
     vtgate_conn.commit()
+    vtgate_conn.begin()
+    self.execute_on_master(
+        vtgate_conn,
+        'delete from vt_user2 where id = :id',
+        {'id': 3})
+    vtgate_conn.commit()
 
   def test_user_truncate(self):
     vtgate_conn = get_connection()
@@ -896,6 +902,25 @@ class TestVTGateFunctions(unittest.TestCase):
         'insert into vt_user2 (id, name) values (:id, :name)',
         {'id': 1, 'name': 'name1'})
     self.assertEqual(result, ([], 1L, 0L, []))
+    result = self.execute_on_master(
+        vtgate_conn,
+        'insert into vt_user2 (id, name) values (:id, :name)',
+        {'id': 7, 'name': 'name1'})
+    self.assertEqual(result, ([], 1L, 0L, []))
+    result = self.execute_on_master(
+        vtgate_conn,
+        'insert into vt_user2 (id, name) values (:id0, :name0),(:id1, :name1)',
+        {'id0': 2, 'name0': 'name2', 'id1': 3, 'name1': 'name2'})
+    self.assertEqual(result, ([], 2L, 0L, []))
+    vtgate_conn.commit()
+    result = shard_0_master.mquery('vt_user', 'select id, name from vt_user2')
+    self.assertEqual(result, ((1L, 'name1'), (2L, 'name2'), (3L, 'name2')))
+    result = shard_1_master.mquery('vt_user', 'select id, name from vt_user2')
+    self.assertEqual(result, ((7L, 'name1'),))
+    result = lookup_master.mquery(
+        'vt_lookup', 'select name, user2_id from name_user2_map')
+    self.assertEqual(result, (('name1', 1L), ('name1', 7L), ('name2', 2L),
+                              ('name2', 3L)))
     vtgate_conn.commit()
     vtgate_conn.begin()
     result = vtgate_conn._execute(
