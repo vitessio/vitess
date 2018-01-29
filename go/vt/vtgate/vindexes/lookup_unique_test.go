@@ -145,3 +145,16 @@ func TestLookupUniqueDelete(t *testing.T) {
 		t.Errorf("vc.queries length: %v, want %v", got, want)
 	}
 }
+
+func TestLookupUniqueUpdate(t *testing.T) {
+	lookupUnique := createLookup(t, "lookup_unique", false)
+	vc := &vcursor{}
+
+	err := lookupUnique.(Lookup).Update(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, []byte("test"), []sqltypes.Value{sqltypes.NewInt64(2)})
+	if err != nil {
+		t.Error(err)
+	}
+	if got, want := len(vc.queries), 2; got != want {
+		t.Errorf("vc.queries length: %v, want %v", got, want)
+	}
+}
