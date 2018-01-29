@@ -411,13 +411,14 @@ func (node *Union) WalkSubtree(visit Visit) error {
 // of the implications the deletion part may have on vindexes.
 // If you add fields here, consider adding them to calls to validateSubquerySamePlan.
 type Insert struct {
-	Action   string
-	Comments Comments
-	Ignore   string
-	Table    TableName
-	Columns  Columns
-	Rows     InsertRows
-	OnDup    OnDup
+	Action     string
+	Comments   Comments
+	Ignore     string
+	Table      TableName
+	Partitions Partitions
+	Columns    Columns
+	Rows       InsertRows
+	OnDup      OnDup
 }
 
 // DDL strings.
@@ -428,10 +429,10 @@ const (
 
 // Format formats the node.
 func (node *Insert) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s %v%sinto %v%v %v%v",
+	buf.Myprintf("%s %v%sinto %v%v%v %v%v",
 		node.Action,
 		node.Comments, node.Ignore,
-		node.Table, node.Columns, node.Rows, node.OnDup)
+		node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -500,6 +501,7 @@ type Delete struct {
 	Comments   Comments
 	Targets    TableNames
 	TableExprs TableExprs
+	Partitions Partitions
 	Where      *Where
 	OrderBy    OrderBy
 	Limit      *Limit
@@ -511,7 +513,7 @@ func (node *Delete) Format(buf *TrackedBuffer) {
 	if node.Targets != nil {
 		buf.Myprintf("%v ", node.Targets)
 	}
-	buf.Myprintf("from %v%v%v%v", node.TableExprs, node.Where, node.OrderBy, node.Limit)
+	buf.Myprintf("from %v%v%v%v%v", node.TableExprs, node.Partitions, node.Where, node.OrderBy, node.Limit)
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -535,11 +537,22 @@ type Set struct {
 	Comments Comments
 	Exprs    UpdateExprs
 	Charset  ColIdent
+	Scope    string
 }
+
+// Set.Scope or Show.Scope
+const (
+	SessionStr = "session"
+	GlobalStr  = "global"
+)
 
 // Format formats the node.
 func (node *Set) Format(buf *TrackedBuffer) {
-	buf.Myprintf("set %v%v", node.Comments, node.Exprs)
+	if node.Scope == "" {
+		buf.Myprintf("set %v%v", node.Comments, node.Exprs)
+	} else {
+		buf.Myprintf("set %v%s %v", node.Comments, node.Scope, node.Exprs)
+	}
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -1051,12 +1064,26 @@ const (
 
 // Show represents a show statement.
 type Show struct {
-	Type string
+	Type    string
+	OnTable TableName
+	Scope   string
 }
 
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
-	buf.Myprintf("show %s", node.Type)
+	if node.Scope == "" {
+		buf.Myprintf("show %s", node.Type)
+	} else {
+		buf.Myprintf("show %s %s", node.Scope, node.Type)
+	}
+	if node.HasOnTable() {
+		buf.Myprintf(" on %v", node.OnTable)
+	}
+}
+
+// HasOnTable returns true if the show statement has an "on" clause
+func (node *Show) HasOnTable() bool {
+	return node.OnTable.Name.v != ""
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -1263,6 +1290,32 @@ func (node Columns) FindColumn(col ColIdent) int {
 	return -1
 }
 
+// Partitions is a type alias for Columns so we can handle printing efficiently
+type Partitions Columns
+
+// Format formats the node
+func (node Partitions) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	prefix := " partition ("
+	for _, n := range node {
+		buf.Myprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node Partitions) WalkSubtree(visit Visit) error {
+	for _, n := range node {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // TableExprs represents a list of table expressions.
 type TableExprs []TableExpr
 
@@ -1299,14 +1352,15 @@ func (*JoinTableExpr) iTableExpr()    {}
 // coupled with an optional alias or index hint.
 // If As is empty, no alias was used.
 type AliasedTableExpr struct {
-	Expr  SimpleTableExpr
-	As    TableIdent
-	Hints *IndexHints
+	Expr       SimpleTableExpr
+	Partitions Partitions
+	As         TableIdent
+	Hints      *IndexHints
 }
 
 // Format formats the node.
 func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v", node.Expr)
+	buf.Myprintf("%v%v", node.Expr, node.Partitions)
 	if !node.As.IsEmpty() {
 		buf.Myprintf(" as %v", node.As)
 	}
@@ -1327,6 +1381,13 @@ func (node *AliasedTableExpr) WalkSubtree(visit Visit) error {
 		node.As,
 		node.Hints,
 	)
+}
+
+// RemoveHints returns a new AliasedTableExpr with the hints removed.
+func (node *AliasedTableExpr) RemoveHints() *AliasedTableExpr {
+	noHints := *node
+	noHints.Hints = nil
+	return &noHints
 }
 
 // SimpleTableExpr represents a simple table expression.

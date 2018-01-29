@@ -112,19 +112,27 @@ func (cnf *Mycnf) lookup(key string) string {
 	return cnf.mycnfMap[key]
 }
 
-func (cnf *Mycnf) lookupWithDefault(key, defaultVal string) string {
+func (cnf *Mycnf) lookupWithDefault(key, defaultVal string) (string, error) {
 	val := cnf.lookup(key)
 	if val == "" {
 		if defaultVal == "" {
-			panic(fmt.Errorf("Value for key '%v' not set and no default value set", key))
+			return "", fmt.Errorf("value for key '%v' not set and no default value set", key)
 		}
-		return defaultVal
+		return defaultVal, nil
 	}
-	return val
+	return val, nil
 }
 
-func (cnf *Mycnf) lookupAndCheck(key string) string {
-	return cnf.lookupWithDefault(key, "")
+func (cnf *Mycnf) lookupInt(key string) (int, error) {
+	val, err := cnf.lookupWithDefault(key, "")
+	if err != nil {
+		return 0, err
+	}
+	ival, err := strconv.Atoi(val)
+	if err != nil {
+		return 0, fmt.Errorf("failed to convert %s: %v", key, err)
+	}
+	return ival, nil
 }
 
 func normKey(bkey []byte) string {
@@ -136,13 +144,6 @@ func normKey(bkey []byte) string {
 // ReadMycnf will read an existing my.cnf from disk, and update the passed in Mycnf object
 // with values from the my.cnf on disk.
 func ReadMycnf(mycnf *Mycnf) (*Mycnf, error) {
-	var err error
-	defer func(err *error) {
-		if x := recover(); x != nil {
-			*err = x.(error)
-		}
-	}(&err)
-
 	f, err := os.Open(mycnf.path)
 	if err != nil {
 		return nil, err
@@ -173,35 +174,42 @@ func ReadMycnf(mycnf *Mycnf) (*Mycnf, error) {
 		mycnf.mycnfMap[lval] = rval
 	}
 
-	serverIDStr := mycnf.lookupAndCheck("server-id")
-	serverID, err := strconv.Atoi(serverIDStr)
+	serverID, err := mycnf.lookupInt("server-id")
 	if err != nil {
-		return nil, fmt.Errorf("Failed to convert server-id %v", err)
+		return nil, err
 	}
 	mycnf.ServerID = uint32(serverID)
 
-	portStr := mycnf.lookupAndCheck("port")
-	port, err := strconv.Atoi(portStr)
+	port, err := mycnf.lookupInt("port")
 	if err != nil {
-		return nil, fmt.Errorf("Failed: failed to convert port %v", err)
+		return nil, err
 	}
-
 	mycnf.MysqlPort = int32(port)
-	mycnf.DataDir = mycnf.lookupWithDefault("datadir", mycnf.DataDir)
-	mycnf.InnodbDataHomeDir = mycnf.lookupWithDefault("innodb_data_home_dir", mycnf.InnodbDataHomeDir)
-	mycnf.InnodbLogGroupHomeDir = mycnf.lookupWithDefault("innodb_log_group_home_dir", mycnf.InnodbLogGroupHomeDir)
-	mycnf.SocketFile = mycnf.lookupWithDefault("socket", mycnf.SocketFile)
-	mycnf.GeneralLogPath = mycnf.lookupWithDefault("general_log_file", mycnf.GeneralLogPath)
-	mycnf.ErrorLogPath = mycnf.lookupWithDefault("log-error", mycnf.ErrorLogPath)
-	mycnf.SlowLogPath = mycnf.lookupWithDefault("slow-query-log-file", mycnf.SlowLogPath)
-	mycnf.RelayLogPath = mycnf.lookupWithDefault("relay-log", mycnf.RelayLogPath)
-	mycnf.RelayLogIndexPath = mycnf.lookupWithDefault("relay-log-index", mycnf.RelayLogIndexPath)
-	mycnf.RelayLogInfoPath = mycnf.lookupWithDefault("relay-log-info-file", mycnf.RelayLogInfoPath)
-	mycnf.BinLogPath = mycnf.lookupWithDefault("log-bin", mycnf.BinLogPath)
-	mycnf.MasterInfoFile = mycnf.lookupWithDefault("master-info-file", mycnf.MasterInfoFile)
-	mycnf.PidFile = mycnf.lookupWithDefault("pid-file", mycnf.PidFile)
-	mycnf.TmpDir = mycnf.lookupWithDefault("tmpdir", mycnf.TmpDir)
-	mycnf.SlaveLoadTmpDir = mycnf.lookupWithDefault("slave_load_tmpdir", mycnf.SlaveLoadTmpDir)
+
+	mapping := map[string]*string{
+		"datadir":                   &mycnf.DataDir,
+		"innodb_data_home_dir":      &mycnf.InnodbDataHomeDir,
+		"innodb_log_group_home_dir": &mycnf.InnodbLogGroupHomeDir,
+		"socket":                    &mycnf.SocketFile,
+		"general_log_file":          &mycnf.GeneralLogPath,
+		"log-error":                 &mycnf.ErrorLogPath,
+		"slow-query-log-file":       &mycnf.SlowLogPath,
+		"relay-log":                 &mycnf.RelayLogPath,
+		"relay-log-index":           &mycnf.RelayLogIndexPath,
+		"relay-log-info-file":       &mycnf.RelayLogInfoPath,
+		"log-bin":                   &mycnf.BinLogPath,
+		"master-info-file":          &mycnf.MasterInfoFile,
+		"pid-file":                  &mycnf.PidFile,
+		"tmpdir":                    &mycnf.TmpDir,
+		"slave_load_tmpdir":         &mycnf.SlaveLoadTmpDir,
+	}
+	for key, member := range mapping {
+		val, err := mycnf.lookupWithDefault(key, *member)
+		if err != nil {
+			return nil, err
+		}
+		*member = val
+	}
 
 	return mycnf, nil
 }

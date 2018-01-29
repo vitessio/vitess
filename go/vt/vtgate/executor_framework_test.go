@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -101,7 +102,13 @@ var executorVSchema = `
 			"auto_increment": {
 				"column": "id",
 				"sequence": "user_seq"
-			}
+			},
+			"columns": [
+				{
+					"name": "textcol",
+					"type": "VARCHAR"
+				}
+			]
 		},
 		"user2": {
 			"column_vindexes": [
@@ -267,7 +274,7 @@ func executorExec(executor *Executor, sql string, bv map[string]*querypb.BindVar
 	return executor.Execute(
 		context.Background(),
 		"TestExecute",
-		masterSession,
+		NewSafeSession(masterSession),
 		sql,
 		bv)
 }
@@ -277,7 +284,7 @@ func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err er
 	err = executor.StreamExecute(
 		context.Background(),
 		"TestExecuteStream",
-		masterSession,
+		NewSafeSession(masterSession),
 		sql,
 		nil,
 		querypb.Target{
@@ -301,6 +308,40 @@ func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err er
 		qr.Rows = append(qr.Rows, r.Rows...)
 	}
 	return qr, nil
+}
+
+// testBatchQuery verifies that a single (or no) query ExecuteBatch was performed on the SandboxConn.
+func testBatchQuery(t *testing.T, sbcName string, sbc *sandboxconn.SandboxConn, boundQuery *querypb.BoundQuery) {
+	t.Helper()
+
+	var wantQueries [][]*querypb.BoundQuery
+	if boundQuery != nil {
+		wantQueries = [][]*querypb.BoundQuery{{boundQuery}}
+	}
+	if !reflect.DeepEqual(sbc.BatchQueries, wantQueries) {
+		t.Errorf("%s.BatchQueries:\n%+v, want\n%+v\n", sbcName, sbc.BatchQueries, wantQueries)
+	}
+}
+
+func testAsTransactionCount(t *testing.T, sbcName string, sbc *sandboxconn.SandboxConn, want int) {
+	t.Helper()
+	if got, want := sbc.AsTransactionCount.Get(), int64(want); got != want {
+		t.Errorf("%s.AsTransactionCount: %d, want %d\n", sbcName, got, want)
+	}
+}
+
+func testQueries(t *testing.T, sbcName string, sbc *sandboxconn.SandboxConn, wantQueries []*querypb.BoundQuery) {
+	t.Helper()
+	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
+		t.Errorf("%s.Queries:\n%+v, want\n%+v\n", sbcName, sbc.Queries, wantQueries)
+	}
+}
+
+func testCommitCount(t *testing.T, sbcName string, sbc *sandboxconn.SandboxConn, want int) {
+	t.Helper()
+	if got, want := sbc.CommitCount.Get(), int64(want); got != want {
+		t.Errorf("%s.CommitCount: %d, want %d\n", sbcName, got, want)
+	}
 }
 
 func testNonZeroDuration(t *testing.T, what, d string) {

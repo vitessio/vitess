@@ -1,9 +1,23 @@
+###################################
+# vtctld Service + Deployment
+###################################
 {{- define "vtctld" -}}
-{{- $ := index . 0 -}}
+# set tuple values to more recognizable variables
+{{- $topology := index . 0 -}}
 {{- $cell := index . 1 -}}
-{{- with index . 2 -}}
-{{- $0 := $.Values.vtctld -}}
-# vtctld
+{{- $defaultVtctld := index . 2 -}}
+{{- $namespace := index . 3 -}}
+{{- $config := index . 4 -}}
+
+{{- with $cell.vtctld -}}
+
+# define image to use
+{{- $vitessTag := .vitessTag | default $defaultVtctld.vitessTag -}}
+{{- $cellClean := include "clean-label" $cell.name -}}
+
+###################################
+# vtctld Service
+###################################
 kind: Service
 apiVersion: v1
 metadata:
@@ -20,112 +34,95 @@ spec:
   selector:
     component: vtctld
     app: vitess
-  type: {{.serviceType | default $0.serviceType}}
+  type: {{.serviceType | default $defaultVtctld.serviceType}}
 ---
-apiVersion: extensions/v1beta1
+###################################
+# vtctld Service + Deployment
+###################################
+apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
   name: vtctld
 spec:
-  replicas: {{.replicas | default $0.replicas}}
+  replicas: {{.replicas | default $defaultVtctld.replicas}}
+  selector:
+    matchLabels:
+      app: vitess
+      component: vtctld
   template:
     metadata:
       labels:
-        component: vtctld
         app: vitess
-      annotations:
-        pod.beta.kubernetes.io/init-containers: '[
-{{ include "init-vtdataroot" (.image | default $0.image) | indent 10 }},
-          {
-            "name": "init-vtctld",
-            "image": {{.image | default $0.image | quote}},
-            "imagePullPolicy": "IfNotPresent",
-            "command": ["bash", "-c", "
-              set -ex\n
-              rm -rf /vt/web/*\n
-              cp -R $VTTOP/web/* /vt/web/\n
-              cp /mnt/config/config.js /vt/web/vtctld/\n
-            "],
-            "volumeMounts": [
-              {
-                "name": "config",
-                "mountPath": "/mnt/config"
-              },
-              {
-                "name": "web",
-                "mountPath": "/vt/web"
-              }
-            ]
-          }
-        ]'
+        component: vtctld
     spec:
+{{ include "pod-security" . | indent 6 }}
+{{ include "vtctld-affinity" (tuple $cellClean $cell.region) | indent 6 }}
       containers:
         - name: vtctld
-          image: {{.image | default $0.image | quote}}
-          livenessProbe:
+          image: vitess/vtctld:{{$vitessTag}}
+          readinessProbe:
             httpGet:
-              path: /debug/vars
+              path: /debug/health
               port: 15000
             initialDelaySeconds: 30
             timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /debug/status
+              port: 15000
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+          env:
+{{ include "backup-env" $config.backup | indent 12 }}
           volumeMounts:
-            - name: syslog
-              mountPath: /dev/log
-            - name: vtdataroot
-              mountPath: /vt/vtdataroot
-            - name: web
-              mountPath: /vt/web
-            - name: certs
-              readOnly: true
-              # Mount root certs from the host OS into the location
-              # expected for our container OS (Debian):
-              mountPath: /etc/ssl/certs/ca-certificates.crt
+{{ include "backup-volumeMount" $config.backup | indent 12 }}
+
           resources:
-{{ toYaml (.resources | default $0.resources) | indent 12 }}
-          securityContext:
-            runAsUser: 999
+{{ toYaml (.resources | default $defaultVtctld.resources) | indent 12 }}
           command:
             - bash
             - "-c"
             - |
-              set -ex
+              set -ex;
+
+{{ include "backup-exec" $config.backup | indent 14 }}
+
               eval exec /vt/bin/vtctld $(cat <<END_OF_COMMAND
-                -cell={{$cell.name | quote}}
+                -cell={{$cellClean | quote}}
                 -web_dir="/vt/web/vtctld"
                 -web_dir2="/vt/web/vtctld2/app"
                 -workflow_manager_init
                 -workflow_manager_use_election
-                -log_dir="$VTDATAROOT/tmp"
-                -alsologtostderr
+                -logtostderr=true
+                -stderrthreshold=0
                 -port=15000
                 -grpc_port=15999
                 -service_map="grpc-vtctl"
-                -topo_implementation="etcd"
-                -etcd_global_addrs="http://etcd-global:4001"
-{{ include "format-flags-all" (tuple $.Values.backupFlags $0.extraFlags .extraFlags) | indent 16 }}
+                -topo_implementation="etcd2"
+                -topo_global_server_address="etcd-global-client.{{ $namespace }}:2379"
+                -topo_global_root=/vitess/global
+{{ include "backup-flags" . | indent 16 }}
               END_OF_COMMAND
               )
+
       volumes:
-        - name: syslog
-          hostPath: {path: /dev/log}
-        - name: vtdataroot
-          emptyDir: {}
-        - name: certs
-          hostPath: { path: {{$.Values.certsPath | quote}} }
-        - name: web
-          emptyDir: {}
-        - name: config
-          configMap:
-            name: vtctld
----
-# vtctld ConfigMap
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: vtctld
-data:
-  config.js: |
-{{ $.Files.Get "vtctld-config.js" | indent 4 }}
+{{ include "backup-volume" $config.backup | indent 8 }}
+
 {{- end -}}
 {{- end -}}
 
+###################################
+# vtctld-affinity sets node/pod affinities
+###################################
+{{- define "vtctld-affinity" -}}
+# set tuple values to more recognizable variables
+{{- $cellClean := index . 0 -}}
+{{- $region := index . 1 -}}
+
+{{ with $region }}
+# affinity pod spec
+affinity:
+{{ include "node-affinity" $region | indent 2 }}
+{{- end -}}
+
+{{- end -}}

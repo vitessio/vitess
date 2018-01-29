@@ -64,6 +64,7 @@ func forceEOF(yylex interface{}) {
   selectExprs   SelectExprs
   selectExpr    SelectExpr
   columns       Columns
+  partitions    Partitions
   colName       *ColName
   tableExprs    TableExprs
   tableExpr     TableExpr
@@ -86,7 +87,6 @@ func forceEOF(yylex interface{}) {
   updateExprs   UpdateExprs
   updateExpr    *UpdateExpr
   colIdent      ColIdent
-  colIdents     []ColIdent
   tableIdent    TableIdent
   convertType   *ConvertType
   aliasedTableName *AliasedTableExpr
@@ -149,6 +149,8 @@ func forceEOF(yylex interface{}) {
 %token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
+%token <bytes> VINDEX VINDEXES
+%token <bytes> STATUS VARIABLES
 
 // Type Tokens
 %token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
@@ -162,10 +164,10 @@ func forceEOF(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VSCHEMA_TABLES
+%token <bytes> DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES
 
 // SET tokens
-%token <bytes> NAMES CHARSET
+%token <bytes> NAMES CHARSET GLOBAL SESSION
 
 // Functions
 %token <bytes> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
@@ -202,7 +204,6 @@ func forceEOF(yylex interface{}) {
 %type <tableName> table_name into_table_name
 %type <aliasedTableName> aliased_table_name
 %type <indexHints> index_hint_list
-%type <colIdents> index_list
 %type <expr> where_expression_opt
 %type <expr> condition
 %type <boolVal> boolean_value
@@ -229,6 +230,7 @@ func forceEOF(yylex interface{}) {
 %type <limit> limit_opt
 %type <str> lock_opt
 %type <columns> ins_column_list using_column_list
+%type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
 %type <bytes> charset_or_character_set
@@ -243,6 +245,7 @@ func forceEOF(yylex interface{}) {
 %type <empty> as_opt
 %type <empty> force_eof ddl_force_eof
 %type <str> charset
+%type <str> set_session_or_global show_session_or_global
 %type <convertType> convert_type
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type
@@ -345,26 +348,27 @@ union_rhs:
 
 
 insert_statement:
-  insert_or_replace comment_opt ignore_opt into_table_name insert_data on_dup_opt
+  insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data on_dup_opt
   {
     // insert_data returns a *Insert pre-filled with Columns & Values
-    ins := $5
+    ins := $6
     ins.Action = $1
     ins.Comments = $2
     ins.Ignore = $3
     ins.Table = $4
-    ins.OnDup = OnDup($6)
+    ins.Partitions = $5
+    ins.OnDup = OnDup($7)
     $$ = ins
   }
-| insert_or_replace comment_opt ignore_opt into_table_name SET update_list on_dup_opt
+| insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET update_list on_dup_opt
   {
-    cols := make(Columns, 0, len($6))
-    vals := make(ValTuple, 0, len($7))
-    for _, updateList := range $6 {
+    cols := make(Columns, 0, len($7))
+    vals := make(ValTuple, 0, len($8))
+    for _, updateList := range $7 {
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Action: $1, Comments: Comments($2), Ignore: $3, Table: $4, Columns: cols, Rows: Values{vals}, OnDup: OnDup($7)}
+    $$ = &Insert{Action: $1, Comments: Comments($2), Ignore: $3, Table: $4, Partitions: $5, Columns: cols, Rows: Values{vals}, OnDup: OnDup($8)}
   }
 
 insert_or_replace:
@@ -384,9 +388,9 @@ update_statement:
   }
 
 delete_statement:
-  DELETE comment_opt FROM table_name where_expression_opt order_by_opt limit_opt
+  DELETE comment_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: Comments($2), TableExprs:  TableExprs{&AliasedTableExpr{Expr:$4}}, Where: NewWhere(WhereStr, $5), OrderBy: $6, Limit: $7}
+    $$ = &Delete{Comments: Comments($2), TableExprs:  TableExprs{&AliasedTableExpr{Expr:$4}}, Partitions: $5, Where: NewWhere(WhereStr, $6), OrderBy: $7, Limit: $8}
   }
 | DELETE comment_opt table_name_list from_or_using table_references where_expression_opt
   {
@@ -407,15 +411,28 @@ table_name_list:
     $$ = append($$, $3)
   }
 
-set_statement:
-  SET comment_opt charset_or_character_set charset_value force_eof
+opt_partition_clause:
   {
-    $$ = &Set{Comments: Comments($2), Charset: $4}
+    $$ = nil
   }
-| SET comment_opt update_list
+| PARTITION openb partition_list closeb
+  {
+  $$ = $3
+  }
+
+set_statement:
+  SET comment_opt update_list
   {
     $$ = &Set{Comments: Comments($2), Exprs: $3}
    }
+| SET comment_opt set_session_or_global update_list
+  {
+    $$ = &Set{Comments: Comments($2), Scope: $3, Exprs: $4}
+   }
+| SET comment_opt charset_or_character_set charset_value force_eof
+  {
+    $$ = &Set{Comments: Comments($2), Charset: $4}
+  }
 
 charset_or_character_set:
   CHARSET
@@ -430,6 +447,16 @@ charset_value:
 | STRING
   {
     $$ = NewColIdent(string($1))
+  }
+
+set_session_or_global:
+  SESSION
+  {
+    $$ = SessionStr
+  }
+| GLOBAL
+  {
+    $$ = GlobalStr
   }
 
 create_statement:
@@ -1069,6 +1096,10 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
+| SHOW show_session_or_global STATUS ddl_force_eof
+  {
+    $$ = &Show{Scope: $2, Type: string($3)}
+  }
 | SHOW TABLE ddl_force_eof
   {
     $$ = &Show{Type: string($2)}
@@ -1077,11 +1108,27 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
+| SHOW show_session_or_global VARIABLES ddl_force_eof
+  {
+    $$ = &Show{Scope: $2, Type: string($3)}
+  }
+| SHOW VINDEXES
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW VINDEXES ON table_name
+  {
+    $$ = &Show{Type: string($2), OnTable: $4}
+  }
 | SHOW VITESS_KEYSPACES
   {
     $$ = &Show{Type: string($2)}
   }
 | SHOW VITESS_SHARDS
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW VITESS_TABLETS
   {
     $$ = &Show{Type: string($2)}
   }
@@ -1098,6 +1145,20 @@ show_statement:
 | SHOW ID ddl_force_eof
   {
     $$ = &Show{Type: string($2)}
+  }
+
+show_session_or_global:
+  /* empty */
+  {
+    $$ = ""
+  }
+| SESSION
+  {
+    $$ = SessionStr
+  }
+| GLOBAL
+  {
+    $$ = GlobalStr
   }
 
 use_statement:
@@ -1295,6 +1356,10 @@ table_name as_opt_id index_hint_list
   {
     $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
   }
+| table_name PARTITION openb partition_list closeb as_opt_id index_hint_list
+  {
+    $$ = &AliasedTableExpr{Expr:$1, Partitions: $4, As: $6, Hints: $7}
+  }
 
 using_column_list:
   sql_id
@@ -1302,6 +1367,16 @@ using_column_list:
     $$ = Columns{$1}
   }
 | using_column_list ',' sql_id
+  {
+    $$ = append($$, $3)
+  }
+
+partition_list:
+  sql_id
+  {
+    $$ = Partitions{$1}
+  }
+| partition_list ',' sql_id
   {
     $$ = append($$, $3)
   }
@@ -1450,27 +1525,17 @@ index_hint_list:
   {
     $$ = nil
   }
-| USE INDEX openb index_list closeb
+| USE INDEX openb using_column_list closeb
   {
     $$ = &IndexHints{Type: UseStr, Indexes: $4}
   }
-| IGNORE INDEX openb index_list closeb
+| IGNORE INDEX openb using_column_list closeb
   {
     $$ = &IndexHints{Type: IgnoreStr, Indexes: $4}
   }
-| FORCE INDEX openb index_list closeb
+| FORCE INDEX openb using_column_list closeb
   {
     $$ = &IndexHints{Type: ForceStr, Indexes: $4}
-  }
-
-index_list:
-  sql_id
-  {
-    $$ = []ColIdent{$1}
-  }
-| index_list ',' sql_id
-  {
-    $$ = append($1, $3)
   }
 
 where_expression_opt:
@@ -2553,6 +2618,7 @@ non_reserved_keyword:
 | ENUM
 | EXPANSION
 | FLOAT_TYPE
+| GLOBAL
 | INT
 | INTEGER
 | JSON
@@ -2578,9 +2644,11 @@ non_reserved_keyword:
 | REAL
 | REORGANIZE
 | REPAIR
+| SESSION
 | SHARE
 | SIGNED
 | SMALLINT
+| STATUS
 | TEXT
 | THAN
 | TIME
@@ -2593,9 +2661,13 @@ non_reserved_keyword:
 | UNUSED
 | VARBINARY
 | VARCHAR
+| VARIABLES
 | VIEW
+| VINDEX
+| VINDEXES
 | VITESS_KEYSPACES
 | VITESS_SHARDS
+| VITESS_TABLETS
 | VSCHEMA_TABLES
 | WITH
 | YEAR

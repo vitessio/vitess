@@ -135,6 +135,8 @@ type QueryEngine struct {
 	maxResultSize    sync2.AtomicInt64
 	warnResultSize   sync2.AtomicInt64
 	maxDMLRows       sync2.AtomicInt64
+	passthroughDMLs  sync2.AtomicBool
+	allowUnsafeDMLs  bool
 	streamBufferSize sync2.AtomicInt64
 	// tableaclExemptCount count the number of accesses allowed
 	// based on membership in the superuser ACL
@@ -208,6 +210,9 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 	qe.warnResultSize = sync2.NewAtomicInt64(int64(config.WarnResultSize))
 	qe.maxDMLRows = sync2.NewAtomicInt64(int64(config.MaxDMLRows))
 	qe.streamBufferSize = sync2.NewAtomicInt64(int64(config.StreamBufferSize))
+
+	qe.passthroughDMLs = sync2.NewAtomicBool(config.PassthroughDMLs)
+	planbuilder.PassthroughDMLs = config.PassthroughDMLs
 
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
@@ -311,9 +316,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
 	plan.Authorized = tableacl.Authorized(plan.TableName().String(), plan.PlanID.MinRole())
 	if plan.PlanID.IsSelect() {
-		if plan.FieldQuery == nil {
-			log.Warningf("Cannot cache field info: %s", sql)
-		} else {
+		if plan.FieldQuery != nil {
 			conn, err := qe.conns.Get(ctx)
 			if err != nil {
 				return nil, err

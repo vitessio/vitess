@@ -31,6 +31,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/txlimiter"
 )
 
 // TxEngine handles transactions.
@@ -53,6 +54,16 @@ func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *
 	te := &TxEngine{
 		shutdownGracePeriod: time.Duration(config.TxShutDownGracePeriod * 1e9),
 	}
+	limiter := txlimiter.New(
+		config.TransactionCap,
+		config.TransactionLimitPerUser,
+		config.EnableTransactionLimit,
+		config.EnableTransactionLimitDryRun,
+		config.TransactionLimitByUsername,
+		config.TransactionLimitByPrincipal,
+		config.TransactionLimitByComponent,
+		config.TransactionLimitBySubcomponent,
+	)
 	te.txPool = NewTxPool(
 		config.PoolNamePrefix,
 		config.TransactionCap,
@@ -60,6 +71,7 @@ func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *
 		time.Duration(config.TransactionTimeout*1e9),
 		time.Duration(config.IdleTimeout*1e9),
 		checker,
+		limiter,
 	)
 	te.twopcEnabled = config.TwoPCEnable
 	if te.twopcEnabled {

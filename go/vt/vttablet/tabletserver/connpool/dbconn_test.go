@@ -118,6 +118,45 @@ func TestDBConnKill(t *testing.T) {
 	}
 }
 
+func TestDBNoPoolConnKill(t *testing.T) {
+	db := fakesqldb.New(t)
+	connPool := newPool()
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer connPool.Close()
+	defer db.Close()
+	dbConn, err := NewDBConnNoPool(db.ConnParams(), connPool.dbaPool)
+	defer dbConn.Close()
+	query := fmt.Sprintf("kill %d", dbConn.ID())
+	db.AddQuery(query, &sqltypes.Result{})
+	// Kill failed because we are not able to connect to the database
+	db.EnableConnFail()
+	err = dbConn.Kill("test kill", 0)
+	want := "errno 2013"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Exec: %v, want %s", err, want)
+	}
+	db.DisableConnFail()
+
+	// Kill succeed
+	err = dbConn.Kill("test kill", 0)
+	if err != nil {
+		t.Fatalf("kill should succeed, but got error: %v", err)
+	}
+
+	err = dbConn.reconnect()
+	if err != nil {
+		t.Fatalf("reconnect should succeed, but got error: %v", err)
+	}
+	newKillQuery := fmt.Sprintf("kill %d", dbConn.ID())
+	// Kill failed because "kill query_id" failed
+	db.AddRejectedQuery(newKillQuery, errors.New("rejected"))
+	err = dbConn.Kill("test kill", 0)
+	want = "rejected"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Exec: %v, want %s", err, want)
+	}
+}
+
 func TestDBConnStream(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()

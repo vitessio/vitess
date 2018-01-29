@@ -16,6 +16,7 @@
 # limitations under the License.
 
 
+from decimal import Decimal
 import itertools
 import logging
 import unittest
@@ -67,6 +68,12 @@ cola varchar(64),
 colb varchar(64),
 colc varchar(64),
 primary key (kid)
+) Engine=InnoDB'''
+
+create_vt_aggr = '''create table vt_aggr (
+id bigint,
+name varchar(64),
+primary key (id)
 ) Engine=InnoDB'''
 
 create_vt_music = '''create table vt_music (
@@ -334,6 +341,36 @@ vschema = {
             }
           ]
         },
+        "vt_multicolvin": {
+          "column_vindexes": [
+            {
+              "column": "kid",
+              "name": "hash_index"
+            },
+            {
+              "column": "cola",
+              "name": "cola_map"
+            },
+            {
+              "columns": ["colb", "colc"],
+              "name": "colb_colc_map"
+            }
+          ]
+        },
+        "vt_aggr": {
+          "column_vindexes": [
+            {
+              "column": "id",
+              "name": "hash_index"
+            }
+          ],
+          "columns": [
+            {
+              "name": "name",
+              "type": "VARCHAR"
+            }
+          ]
+        },
         "vt_music": {
           "column_vindexes": [
             {
@@ -359,22 +396,6 @@ vschema = {
             {
               "column": "user_id",
               "name": "hash_index"
-            }
-          ]
-        },
-        "vt_multicolvin": {
-          "column_vindexes": [
-            {
-              "column": "kid",
-              "name": "hash_index"
-            },
-            {
-              "column": "cola",
-              "name": "cola_map"
-            },
-            {
-              "columns": ["colb", "colc"],
-              "name": "colb_colc_map"
             }
           ]
         },
@@ -480,6 +501,7 @@ def setUpModule():
             create_vt_user_extra,
             create_vt_user_extra2,
             create_vt_multicolvin,
+            create_vt_aggr,
             create_vt_music,
             create_vt_music_extra,
             create_upsert,
@@ -552,6 +574,7 @@ def get_connection(timeout=10.0):
 
 class TestVTGateFunctions(unittest.TestCase):
 
+  decimal_type = 18
   int_type = 265
   string_type = 6165
   varbinary_type = 10262
@@ -588,6 +611,14 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(len(v['keyspaces']), 2, 'wrong vschema: %s' % str(v))
     self.assertIn('user', v['keyspaces'])
     self.assertIn('lookup', v['keyspaces'])
+
+    # Wait for vtgate to re-read it.
+    timeout = 10
+    while True:
+      vschema_json = utils.vtgate.get_vschema()
+      if 'lookup' in vschema_json:
+        break
+      timeout = utils.wait_step('vtgate re-read vschema', timeout)
 
   def test_user(self):
     count = 4
@@ -1084,7 +1115,8 @@ class TestVTGateFunctions(unittest.TestCase):
         vtgate_conn,
         'insert into vt_multicolvin (cola, colb, colc, kid) '
         'values (:cola, :colb, :colc, :kid)',
-        {'kid': 5, 'cola': 'cola_value', 'colb': 'colb_value', 'colc': 'colc_value'})
+        {'kid': 5, 'cola': 'cola_value', 'colb': 'colb_value',
+         'colc': 'colc_value'})
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
 
@@ -1092,12 +1124,15 @@ class TestVTGateFunctions(unittest.TestCase):
     vtgate_conn.begin()
     result = self.execute_on_master(
         vtgate_conn,
-        'update vt_multicolvin set cola = :cola, colb = :colb, colc = :colc where kid = :kid',
-        {'kid': 5, 'cola': 'cola_newvalue', 'colb': 'colb_newvalue', 'colc': 'colc_newvalue'})
+        'update vt_multicolvin set cola = :cola, colb = :colb, colc = :colc'
+        ' where kid = :kid',
+        {'kid': 5, 'cola': 'cola_newvalue', 'colb': 'colb_newvalue',
+         'colc': 'colc_newvalue'})
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
     result = self.execute_on_master(
-        vtgate_conn, 'select cola, colb, colc from vt_multicolvin where kid = 5', {})
+        vtgate_conn,
+        'select cola, colb, colc from vt_multicolvin where kid = 5', {})
     self.assertEqual(
         result,
         ([('cola_newvalue', 'colb_newvalue', 'colc_newvalue')], 1, 0,
@@ -1142,12 +1177,48 @@ class TestVTGateFunctions(unittest.TestCase):
     result = self.execute_on_master(
         vtgate_conn,
         'insert into vt_multicolvin (cola, colb, colc, kid) '
-        'values (:cola0, :colb0, :colc0, :kid0), (:cola1, :colb1, :colc1, :kid1)',
-        {'kid0': 6, 'cola0': 'cola0_value', 'colb0': 'colb0_value', 'colc0': 'colc0_value',
-         'kid1': 7, 'cola1': 'cola1_value', 'colb1': 'colb1_value', 'colc1': 'colc1_value'
+        'values (:cola0, :colb0, :colc0, :kid0),'
+        ' (:cola1, :colb1, :colc1, :kid1)',
+        {'kid0': 6, 'cola0': 'cola0_value', 'colb0': 'colb0_value',
+         'colc0': 'colc0_value',
+         'kid1': 7, 'cola1': 'cola1_value', 'colb1': 'colb1_value',
+         'colc1': 'colc1_value'
         })
     self.assertEqual(result, ([], 2L, 0L, []))
     vtgate_conn.commit()
+
+  def test_aggr(self):
+    # test_aggr tests text column aggregation
+    vtgate_conn = get_connection()
+    vtgate_conn.begin()
+    # insert upper and lower-case mixed rows in jumbled order
+    result = self.execute_on_master(
+        vtgate_conn,
+        'insert into vt_aggr (id, name) values '
+        '(10, \'A\'), '
+        '(9, \'a\'), '
+        '(8, \'b\'), '
+        '(7, \'B\'), '
+        '(6, \'d\'), '
+        '(5, \'c\'), '
+        '(4, \'C\'), '
+        '(3, \'d\'), '
+        '(2, \'e\'), '
+        '(1, \'E\')',
+        {})
+    vtgate_conn.commit()
+
+    result = self.execute_on_master(
+        vtgate_conn, 'select sum(id), name from vt_aggr group by name', {})
+    values = [v1 for v1, v2 in result[0]]
+    print values
+    self.assertEqual(
+        [v1 for v1, v2 in result[0]],
+        [(Decimal('19')),
+          (Decimal('15')),
+          (Decimal('9')),
+          (Decimal('9')),
+          (Decimal('3'))])
 
   def test_music(self):
     # music is for testing owned lookup index
@@ -1746,14 +1817,13 @@ class TestVTGateFunctions(unittest.TestCase):
     """Tests the variables exported by vtgate.
 
     This test needs to run as the last test, as it depends on what happened
-    previously. The WatchError happens when we delete and re-create the
-    SrvVSchema.
+    previously.
     """
     v = utils.vtgate.get_vars()
     self.assertIn('VtgateVSchemaCounts', v)
     self.assertIn('Reload', v['VtgateVSchemaCounts'])
     self.assertGreater(v['VtgateVSchemaCounts']['Reload'], 0)
-    self.assertGreater(v['VtgateVSchemaCounts']['WatchError'], 0)
+    self.assertNotIn('WatchError', v['VtgateVSchemaCounts'], 0)
     self.assertNotIn('Parsing', v['VtgateVSchemaCounts'])
 
 if __name__ == '__main__':

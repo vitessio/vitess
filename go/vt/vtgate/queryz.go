@@ -28,7 +28,6 @@ import (
 	"github.com/youtube/vitess/go/vt/logz"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/planbuilder"
 )
 
 var (
@@ -68,8 +67,6 @@ var (
 type queryzRow struct {
 	Query        string
 	Table        string
-	Plan         planbuilder.PlanType
-	Reason       planbuilder.ReasonType
 	Count        uint64
 	tm           time.Duration
 	ShardQueries uint64

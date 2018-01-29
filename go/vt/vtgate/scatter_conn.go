@@ -28,6 +28,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
@@ -49,6 +50,7 @@ type ScatterConn struct {
 	tabletCallErrorCount *stats.MultiCounters
 	txConn               *TxConn
 	gateway              gateway.Gateway
+	healthCheck          discovery.HealthCheck
 }
 
 // shardActionFunc defines the contract for a shard action
@@ -69,7 +71,7 @@ type shardActionFunc func(target *querypb.Target) error
 type shardActionTransactionFunc func(target *querypb.Target, shouldBegin bool, transactionID int64) (int64, error)
 
 // NewScatterConn creates a new ScatterConn.
-func NewScatterConn(statsName string, txConn *TxConn, gw gateway.Gateway) *ScatterConn {
+func NewScatterConn(statsName string, txConn *TxConn, gw gateway.Gateway, hc discovery.HealthCheck) *ScatterConn {
 	tabletCallErrorCountStatsName := ""
 	if statsName != "" {
 		tabletCallErrorCountStatsName = statsName + "ErrorCount"
@@ -79,6 +81,7 @@ func NewScatterConn(statsName string, txConn *TxConn, gw gateway.Gateway) *Scatt
 		tabletCallErrorCount: stats.NewMultiCounters(tabletCallErrorCountStatsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
 		txConn:               txConn,
 		gateway:              gw,
+		healthCheck:          hc,
 	}
 }
 
@@ -163,7 +166,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
-	options *querypb.ExecuteOptions,
+	canAutocommit bool,
 ) (*sqltypes.Result, error) {
 
 	// mu protects qr
@@ -174,6 +177,8 @@ func (stc *ScatterConn) ExecuteMultiShard(
 		shards = append(shards, shard)
 	}
 
+	canCommit := len(shards) == 1 && canAutocommit && session.AutocommitApproval()
+
 	err := stc.multiGoTransaction(
 		ctx,
 		"Execute",
@@ -183,19 +188,25 @@ func (stc *ScatterConn) ExecuteMultiShard(
 		session,
 		notInTransaction,
 		func(target *querypb.Target, shouldBegin bool, transactionID int64) (int64, error) {
-			var innerqr *sqltypes.Result
-			if shouldBegin {
-				var err error
-				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, options)
-				if err != nil {
-					return transactionID, err
-				}
-			} else {
-				var err error
-				innerqr, err = stc.gateway.Execute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, transactionID, options)
-				if err != nil {
-					return transactionID, err
-				}
+			var (
+				innerqr *sqltypes.Result
+				err     error
+				opts    *querypb.ExecuteOptions
+			)
+			if session != nil && session.Session != nil {
+				opts = session.Session.Options
+			}
+
+			switch {
+			case canCommit:
+				innerqr, err = stc.executeAutocommit(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, opts)
+			case shouldBegin:
+				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, opts)
+			default:
+				innerqr, err = stc.gateway.Execute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, transactionID, opts)
+			}
+			if err != nil {
+				return transactionID, err
 			}
 
 			mu.Lock()
@@ -204,6 +215,20 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			return transactionID, nil
 		})
 	return qr, err
+}
+
+func (stc *ScatterConn) executeAutocommit(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+	queries := []*querypb.BoundQuery{{
+		Sql:           sql,
+		BindVariables: bindVariables,
+	}}
+	// ExecuteBatch is a stop-gap because it's the only function that can currently do
+	// single round-trip commit.
+	qrs, err := stc.gateway.ExecuteBatch(ctx, target, queries, true /* asTransaction */, 0, options)
+	if err != nil {
+		return nil, err
+	}
+	return &qrs[0], nil
 }
 
 // ExecuteEntityIds executes queries that are shard specific.
@@ -272,6 +297,29 @@ type shardBatchRequest struct {
 	Queries         []*querypb.BoundQuery
 	Keyspace, Shard string
 	ResultIndexes   []int
+}
+
+func boundShardQueriesToScatterBatchRequest(boundQueries []*vtgatepb.BoundShardQuery) (*scatterBatchRequest, error) {
+	requests := &scatterBatchRequest{
+		Length:   len(boundQueries),
+		Requests: make(map[string]*shardBatchRequest),
+	}
+	for i, boundQuery := range boundQueries {
+		for shard := range unique(boundQuery.Shards) {
+			key := boundQuery.Keyspace + ":" + shard
+			request := requests.Requests[key]
+			if request == nil {
+				request = &shardBatchRequest{
+					Keyspace: boundQuery.Keyspace,
+					Shard:    shard,
+				}
+				requests.Requests[key] = request
+			}
+			request.Queries = append(request.Queries, boundQuery.Query)
+			request.ResultIndexes = append(request.ResultIndexes, i)
+		}
+	}
+	return requests, nil
 }
 
 // ExecuteBatch executes a batch of non-streaming queries on the specified shards.

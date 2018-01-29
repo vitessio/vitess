@@ -117,7 +117,7 @@ func querylogzHandler(ch chan interface{}, w http.ResponseWriter, r *http.Reques
 			}
 			stats, ok := out.(*tabletenv.LogStats)
 			if !ok {
-				err := fmt.Errorf("Unexpected value in %s: %#v (expecting value of type %T)", tabletenv.TxLogger.Name(), out, &tabletenv.LogStats{})
+				err := fmt.Errorf("unexpected value in %s: %#v (expecting value of type %T)", tabletenv.TxLogger.Name(), out, &tabletenv.LogStats{})
 				io.WriteString(w, `<tr class="error">`)
 				io.WriteString(w, err.Error())
 				io.WriteString(w, "</tr>")

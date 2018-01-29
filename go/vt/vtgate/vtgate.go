@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -38,6 +37,7 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/srvtopo"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -140,10 +140,8 @@ type RegisterVTGate func(vtgateservice.VTGateService)
 // RegisterVTGates stores register funcs for VTGate server.
 var RegisterVTGates []RegisterVTGate
 
-var vtgateOnce sync.Once
-
 // Init initializes VTGate server.
-func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server, serv topo.SrvTopoServer, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *VTGate {
+func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server, serv srvtopo.Server, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *VTGate {
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
@@ -153,12 +151,16 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server
 	vschemaCounters = stats.NewCounters("VtgateVSchemaCounts")
 
 	// Build objects from low to high level.
+	// Start with the gateway. If we can't reach the topology service,
+	// we can't go on much further, so we log.Fatal out.
 	gw := gateway.GetCreator()(hc, topoServer, serv, cell, retryCount)
-	gateway.WaitForTablets(gw, tabletTypesToWait)
+	if err := gateway.WaitForTablets(gw, tabletTypesToWait); err != nil {
+		log.Fatalf("gateway.WaitForTablets failed: %v", err)
+	}
 
 	tc := NewTxConn(gw, getTxMode())
 	// ScatterConn depends on TxConn to perform forced rollbacks.
-	sc := NewScatterConn("VttabletCall", tc, gw)
+	sc := NewScatterConn("VttabletCall", tc, gw, hc)
 	resolver := NewResolver(serv, cell, sc)
 
 	rpcVTGate = &VTGate{
@@ -187,7 +189,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server
 
 	qpsByOperation = stats.NewRates("QPSByOperation", stats.CounterForDimension(rpcVTGate.timings, "Operation"), 15, 1*time.Minute)
 	qpsByKeyspace = stats.NewRates("QPSByKeyspace", stats.CounterForDimension(rpcVTGate.timings, "Keyspace"), 15, 1*time.Minute)
-	qpsByDbType = stats.NewRates("QPSByDbType", stats.CounterForDimension(rpcVTGate.timings, "DbType"), 15, 1*time.Minute)
+	qpsByDbType = stats.NewRates("QPSByDbType", stats.CounterForDimension(rpcVTGate.timings, "DbType"), 15*60/5, 5*time.Second)
 
 	errorsByOperation = stats.NewRates("ErrorsByOperation", stats.CounterForDimension(errorCounts, "Operation"), 15, 1*time.Minute)
 	errorsByKeyspace = stats.NewRates("ErrorsByKeyspace", stats.CounterForDimension(errorCounts, "Keyspace"), 15, 1*time.Minute)
@@ -201,8 +203,11 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server
 			f(rpcVTGate)
 		}
 	})
-	vtgateOnce.Do(rpcVTGate.registerDebugHealthHandler)
-	initQueryLogger(rpcVTGate)
+	rpcVTGate.registerDebugHealthHandler()
+	err := initQueryLogger(rpcVTGate)
+	if err != nil {
+		log.Fatalf("error initializing query logger: %v", err)
+	}
 
 	return rpcVTGate
 }
@@ -239,7 +244,7 @@ func (vtg *VTGate) Execute(ctx context.Context, session *vtgatepb.Session, sql s
 		goto handleError
 	}
 
-	qr, err = vtg.executor.Execute(ctx, "Execute", session, sql, bindVariables)
+	qr, err = vtg.executor.Execute(ctx, "Execute", NewSafeSession(session), sql, bindVariables)
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 		return session, qr, nil
@@ -312,7 +317,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 		err = vtg.executor.StreamExecute(
 			ctx,
 			"StreamExecute",
-			session,
+			NewSafeSession(session),
 			sql,
 			bindVariables,
 			target,
@@ -809,7 +814,7 @@ func (vtg *VTGate) SplitQuery(
 	}
 
 	// TODO(erez): Add validation of SplitQuery parameters.
-	keyspace, srvKeyspace, shardRefs, err := getKeyspaceShards(
+	keyspace, srvKeyspace, shardRefs, err := srvtopo.GetKeyspaceShards(
 		ctx, vtg.resolver.toposerv, vtg.resolver.cell, keyspace, topodatapb.TabletType_RDONLY)
 	if err != nil {
 		return nil, err
@@ -830,10 +835,35 @@ func (vtg *VTGate) SplitQuery(
 		for _, shardRef := range shardRefs {
 			shardRefByName[shardRef.Name] = shardRef
 		}
-		querySplitToQueryPartFunc = getQuerySplitToKeyRangePartFunc(keyspace, shardRefByName)
+		querySplitToQueryPartFunc = func(querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
+			// TODO(erez): Assert that shardRefByName contains an entry for 'shard'.
+			// Keyrange can be nil for the shard (e.g. for single-sharded keyspaces during resharding).
+			// In this case we append an empty keyrange that represents the entire keyspace.
+			keyranges := []*topodatapb.KeyRange{{Start: []byte{}, End: []byte{}}}
+			if shardRefByName[shard].KeyRange != nil {
+				keyranges = []*topodatapb.KeyRange{shardRefByName[shard].KeyRange}
+			}
+			return &vtgatepb.SplitQueryResponse_Part{
+				Query: querySplit.Query,
+				KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{
+					Keyspace:  keyspace,
+					KeyRanges: keyranges,
+				},
+				Size: querySplit.RowCount,
+			}, nil
+		}
 	} else {
 		// Keyspace is either unsharded or custom-sharded.
-		querySplitToQueryPartFunc = getQuerySplitToShardPartFunc(keyspace)
+		querySplitToQueryPartFunc = func(querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
+			return &vtgatepb.SplitQueryResponse_Part{
+				Query: querySplit.Query,
+				ShardPart: &vtgatepb.SplitQueryResponse_ShardPart{
+					Keyspace: keyspace,
+					Shards:   []string{shard},
+				},
+				Size: querySplit.RowCount,
+			}, nil
+		}
 	}
 
 	// Collect all shard names into a slice.
@@ -852,53 +882,6 @@ func (vtg *VTGate) SplitQuery(
 		shardNames,
 		querySplitToQueryPartFunc,
 		keyspace)
-}
-
-// getQuerySplitToKeyRangePartFunc returns a function to use with scatterConn.SplitQuery
-// that converts the given QuerySplit to a SplitQueryResponse_Part message whose KeyRangePart field
-// is set.
-func getQuerySplitToKeyRangePartFunc(
-	keyspace string,
-	shardReferenceByName map[string]*topodatapb.ShardReference) func(
-	querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
-
-	return func(
-		querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
-		// TODO(erez): Assert that shardReferenceByName contains an entry for 'shard'.
-		// Keyrange can be nil for the shard (e.g. for single-sharded keyspaces during resharding).
-		// In this case we append an empty keyrange that represents the entire keyspace.
-		keyranges := []*topodatapb.KeyRange{{Start: []byte{}, End: []byte{}}}
-		if shardReferenceByName[shard].KeyRange != nil {
-			keyranges = []*topodatapb.KeyRange{shardReferenceByName[shard].KeyRange}
-		}
-		return &vtgatepb.SplitQueryResponse_Part{
-			Query: querySplit.Query,
-			KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{
-				Keyspace:  keyspace,
-				KeyRanges: keyranges,
-			},
-			Size: querySplit.RowCount,
-		}, nil
-	}
-}
-
-// getQuerySplitToShardPartFunc returns a function to use with scatterConn.SplitQuery
-// that converts the given QuerySplit to a SplitQueryResponse_Part message whose ShardPart field
-// is set.
-func getQuerySplitToShardPartFunc(keyspace string) func(
-	querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
-
-	return func(
-		querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
-		return &vtgatepb.SplitQueryResponse_Part{
-			Query: querySplit.Query,
-			ShardPart: &vtgatepb.SplitQueryResponse_ShardPart{
-				Keyspace: keyspace,
-				Shards:   []string{shard},
-			},
-			Size: querySplit.RowCount,
-		}, nil
-	}
 }
 
 // GetSrvKeyspace is part of the vtgate service API.
@@ -1040,7 +1023,7 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]int
 	request = truncateErrorStrings(request)
 
 	errorCounts.Add(fullKey, 1)
-	// Most errors are not logged by vtgate beecause they're either too spammy or logged elsewhere.
+	// Most errors are not logged by vtgate because they're either too spammy or logged elsewhere.
 	switch ec {
 	case vtrpcpb.Code_UNKNOWN, vtrpcpb.Code_INTERNAL, vtrpcpb.Code_DATA_LOSS:
 		logger.Errorf("%v, request: %+v", err, request)

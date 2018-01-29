@@ -671,6 +671,9 @@ var (
 		input:  "set charset default",
 		output: "set ",
 	}, {
+		input:  "set session wait_timeout = 3600",
+		output: "set session wait_timeout = 3600",
+	}, {
 		input: "set /* list */ a = 3, b = 4",
 	}, {
 		input:  "alter ignore table a add foo",
@@ -924,10 +927,10 @@ var (
 		output: "show status",
 	}, {
 		input:  "show global status",
-		output: "show global",
+		output: "show global status",
 	}, {
 		input:  "show session status",
-		output: "show session",
+		output: "show session status",
 	}, {
 		input:  "show table status",
 		output: "show table",
@@ -945,19 +948,24 @@ var (
 		output: "show variables",
 	}, {
 		input:  "show global variables",
-		output: "show global",
+		output: "show global variables",
 	}, {
 		input:  "show session variables",
-		output: "show session",
+		output: "show session variables",
 	}, {
-		input:  "show vitess_keyspaces",
-		output: "show vitess_keyspaces",
+		input:  "show vindexes",
+		output: "show vindexes",
 	}, {
-		input:  "show vitess_shards",
-		output: "show vitess_shards",
+		input:  "show vindexes on t",
+		output: "show vindexes on t",
 	}, {
-		input:  "show vschema_tables",
-		output: "show vschema_tables",
+		input: "show vitess_keyspaces",
+	}, {
+		input: "show vitess_shards",
+	}, {
+		input: "show vitess_tablets",
+	}, {
+		input: "show vschema_tables",
 	}, {
 		input:  "show warnings",
 		output: "show warnings",
@@ -1065,6 +1073,22 @@ var (
 		input: "select name, group_concat(score) from t group by name",
 	}, {
 		input: "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
+	}, {
+		input: "select * from t partition (p0)",
+	}, {
+		input: "select * from t partition (p0, p1)",
+	}, {
+		input: "select e.id, s.city from employees as e join stores partition (p1) as s on e.store_id = s.id",
+	}, {
+		input: "update t partition (p0) set a = 1",
+	}, {
+		input: "insert into t partition (p0) values (1, 'asdf')",
+	}, {
+		input: "insert into t1 select * from t2 partition (p0)",
+	}, {
+		input: "replace into t partition (p0) values (1, 'asdf')",
+	}, {
+		input: "delete from t partition (p0) where a = 1",
 	}}
 )
 
@@ -1256,6 +1280,12 @@ func TestKeywords(t *testing.T) {
 	}, {
 		input:  "select /* unused keywords as cols */ write, varying from t where trailing = 'foo'",
 		output: "select /* unused keywords as cols */ `write`, `varying` from t where `trailing` = 'foo'",
+	}, {
+		input:  "select status from t",
+		output: "select `status` from t",
+	}, {
+		input:  "select variables from t",
+		output: "select `variables` from t",
 	}}
 
 	for _, tcase := range validSQL {
@@ -1457,12 +1487,12 @@ func TestCreateTable(t *testing.T) {
 			"	username varchar,\n" +
 			"	email varchar,\n" +
 			"	full_name varchar,\n" +
-			"	status varchar,\n" +
+			"	status_nonkeyword varchar,\n" +
 			"	primary key (id),\n" +
 			"	unique key by_username (username),\n" +
 			"	unique by_username2 (username),\n" +
 			"	unique index by_username3 (username),\n" +
-			"	index by_status (status),\n" +
+			"	index by_status (status_nonkeyword),\n" +
 			"	key by_full_name (full_name)\n" +
 			")",
 
