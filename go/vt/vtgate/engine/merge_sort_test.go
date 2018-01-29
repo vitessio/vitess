@@ -342,6 +342,10 @@ func (t *fakeVcursor) Execute(method string, query string, bindvars map[string]*
 	panic("unimplemented")
 }
 
+func (t *fakeVcursor) ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+	panic("unimplemented")
+}
+
 func (t *fakeVcursor) ExecuteMultiShard(keyspace string, shardQueries map[string]*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }

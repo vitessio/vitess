@@ -235,3 +235,16 @@ func TestLookupHashDelete(t *testing.T) {
 		t.Errorf("lookuphash.Delete(bogus) err: %v, want %s", err, want)
 	}
 }
+
+func TestLookupHashUpdate(t *testing.T) {
+	lookuphash := createLookup(t, "lookup_hash", false)
+	vc := &vcursor{}
+
+	err := lookuphash.(Lookup).Update(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, []byte("\x16k@\xb4J\xbaK\xd6"), []sqltypes.Value{sqltypes.NewInt64(2)})
+	if err != nil {
+		t.Error(err)
+	}
+	if got, want := len(vc.queries), 2; got != want {
+		t.Errorf("vc.queries length: %v, want %v", got, want)
+	}
+}

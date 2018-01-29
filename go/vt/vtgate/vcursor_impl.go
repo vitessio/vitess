@@ -100,9 +100,18 @@ func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
 	return ks.Keyspace, nil
 }
 
-// Execute performs a V3 level execution of the query. It does not take any routing directives.
+// Execute performs a V3 level execution of the query.
 func (vc *vcursorImpl) Execute(method string, query string, BindVars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
 	qr, err := vc.executor.Execute(vc.ctx, method, vc.safeSession, query+vc.trailingComments, BindVars)
+	if err == nil {
+		vc.hasPartialDML = true
+	}
+	return qr, err
+}
+
+// ExecuteAutocommit performs a V3 level execution of the query in a separate autocommit session.
+func (vc *vcursorImpl) ExecuteAutocommit(method string, query string, BindVars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+	qr, err := vc.executor.Execute(vc.ctx, method, NewAutocommitSession(vc.safeSession.Session), query+vc.trailingComments, BindVars)
 	if err == nil {
 		vc.hasPartialDML = true
 	}

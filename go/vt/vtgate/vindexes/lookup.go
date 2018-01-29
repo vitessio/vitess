@@ -113,11 +113,21 @@ func (ln *LookupNonUnique) MarshalJSON() ([]byte, error) {
 }
 
 // NewLookup creates a LookupNonUnique vindex.
+// The supplied map has the following required fields:
+//   table: name of the backing table. It can be qualified by the keyspace.
+//   from: list of columns in the table that have the 'from' values of the lookup vindex.
+//   to: The 'to' column name of the table.
+//
+// The following fields are optional:
+//   autocommit: setting this to "true" will cause inserts to upsert, deletes to be ignored, and updates to fail.
+//   scatter_if_absent: if an entry is missing, this flag will the query to be sent to all shards.
 func NewLookup(name string, m map[string]string) (Vindex, error) {
 	lookup := &LookupNonUnique{name: name}
-	lookup.lkp.Init(m)
+	if err := lookup.lkp.Init(m); err != nil {
+		return nil, err
+	}
 	var err error
-	lookup.scatterIfAbsent, err = getScatterIfAbsent(m)
+	lookup.scatterIfAbsent, err = boolFromMap(m, "scatter_if_absent")
 	if err != nil {
 		return nil, err
 	}
@@ -132,21 +142,6 @@ func ksidsToValues(ksids [][]byte) []sqltypes.Value {
 	return values
 }
 
-func getScatterIfAbsent(m map[string]string) (bool, error) {
-	val, ok := m["scatter_if_absent"]
-	if !ok {
-		return false, nil
-	}
-	switch val {
-	case "true":
-		return true, nil
-	case "false":
-		return false, nil
-	default:
-		return false, fmt.Errorf("scatter_if_absent value must be 'true' or 'false': '%s'", val)
-	}
-}
-
 //====================================================================
 
 // LookupUnique defines a vindex that uses a lookup table.
@@ -158,10 +153,19 @@ type LookupUnique struct {
 }
 
 // NewLookupUnique creates a LookupUnique vindex.
+// The supplied map has the following required fields:
+//   table: name of the backing table. It can be qualified by the keyspace.
+//   from: list of columns in the table that have the 'from' values of the lookup vindex.
+//   to: The 'to' column name of the table.
+//
+// The following fields are optional:
+//   autocommit: setting this to "true" will cause inserts to upsert, deletes to be ignored, and updates to fail.
 func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 	lu := &LookupUnique{name: name}
-	lu.lkp.Init(m)
-	scatter, err := getScatterIfAbsent(m)
+	if err := lu.lkp.Init(m); err != nil {
+		return nil, err
+	}
+	scatter, err := boolFromMap(m, "scatter_if_absent")
 	if err != nil {
 		return nil, err
 	}

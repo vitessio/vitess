@@ -648,6 +648,85 @@ func TestInsertSharded(t *testing.T) {
 	}
 }
 
+func TestInsertShardedAutocommitLookup(t *testing.T) {
+
+	vschema := `
+{
+	"sharded": true,
+	"vindexes": {
+		"hash_index": {
+			"type": "hash"
+		},
+		"name_user_map": {
+			"type": "lookup_hash",
+			"owner": "user",
+			"params": {
+				"table": "name_user_map",
+				"from": "name",
+				"to": "user_id",
+				"autocommit": "true"
+			}
+		}
+	},
+	"tables": {
+		"user": {
+			"column_vindexes": [
+				{
+					"column": "Id",
+					"name": "hash_index"
+				},
+				{
+					"column": "name",
+					"name": "name_user_map"
+				}
+			],
+			"auto_increment": {
+				"column": "id",
+				"sequence": "user_seq"
+			},
+			"columns": [
+				{
+					"name": "textcol",
+					"type": "VARCHAR"
+				}
+			]
+		}
+	}
+}
+`
+	executor, sbc1, sbc2, sbclookup := createCustomExecutor(vschema)
+
+	_, err := executorExec(executor, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql: "insert into user(id, v, name) values (:_Id0, 2, :_name0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		BindVariables: map[string]*querypb.BindVariable{
+			"_Id0":   sqltypes.Int64BindVariable(1),
+			"_name0": sqltypes.BytesBindVariable([]byte("myname")),
+			"__seq0": sqltypes.Int64BindVariable(1),
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
+	}
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+	}
+	wantQueries = []*querypb.BoundQuery{{
+		Sql: "insert into name_user_map(name, user_id) values (:name0, :user_id0) on duplicate key update name = values(name), user_id = values(user_id)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"name0":    sqltypes.BytesBindVariable([]byte("myname")),
+			"user_id0": sqltypes.Uint64BindVariable(1),
+		},
+	}}
+	// autocommit should go as ExecuteBatch
+	if !reflect.DeepEqual(sbclookup.BatchQueries[0], wantQueries) {
+		t.Errorf("sbclookup.BatchQueries[0]: \n%+v, want \n%+v", sbclookup.BatchQueries[0], wantQueries)
+	}
+}
+
 func TestInsertShardedIgnore(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 

@@ -50,11 +50,21 @@ type LookupHash struct {
 }
 
 // NewLookupHash creates a LookupHash vindex.
+// The supplied map has the following required fields:
+//   table: name of the backing table. It can be qualified by the keyspace.
+//   from: list of columns in the table that have the 'from' values of the lookup vindex.
+//   to: The 'to' column name of the table.
+//
+// The following fields are optional:
+//   autocommit: setting this to "true" will cause inserts to upsert, deletes to be ignored, and updates to fail.
+//   scatter_if_absent: if an entry is missing, this flag will the query to be sent to all shards.
 func NewLookupHash(name string, m map[string]string) (Vindex, error) {
 	lh := &LookupHash{name: name}
-	lh.lkp.Init(m)
+	if err := lh.lkp.Init(m); err != nil {
+		return nil, err
+	}
 	var err error
-	lh.scatterIfAbsent, err = getScatterIfAbsent(m)
+	lh.scatterIfAbsent, err = boolFromMap(m, "scatter_if_absent")
 	if err != nil {
 		return nil, err
 	}
@@ -175,10 +185,19 @@ type LookupHashUnique struct {
 }
 
 // NewLookupHashUnique creates a LookupHashUnique vindex.
+// The supplied map has the following required fields:
+//   table: name of the backing table. It can be qualified by the keyspace.
+//   from: list of columns in the table that have the 'from' values of the lookup vindex.
+//   to: The 'to' column name of the table.
+//
+// The following fields are optional:
+//   autocommit: setting this to "true" will cause inserts to upsert, deletes to be ignored, and updates to fail.
 func NewLookupHashUnique(name string, m map[string]string) (Vindex, error) {
 	lhu := &LookupHashUnique{name: name}
-	lhu.lkp.Init(m)
-	scatter, err := getScatterIfAbsent(m)
+	if err := lhu.lkp.Init(m); err != nil {
+		return nil, err
+	}
+	scatter, err := boolFromMap(m, "scatter_if_absent")
 	if err != nil {
 		return nil, err
 	}
