@@ -71,6 +71,7 @@ PMC members will be added to the [list of administrators](https://github.com/org
 The current list of PMC members and their github handles are:
 
 * Alain Jobart (alainjobart)
+* Anthony Yeh (enisoc)
 * Michael Berlin (michael-berlin)
 * Michael Demmer (demmer)
 * Sugu Sougoumarane (sougou)
