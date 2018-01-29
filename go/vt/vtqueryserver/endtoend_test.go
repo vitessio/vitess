@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -113,7 +114,7 @@ create table test(id int, val varchar(256), primary key(id));
 create table valtest(intval int default 0, floatval float default null, charval varchar(256) default null, binval varbinary(256) default null, primary key(intval));
 `
 
-func testFetch(t *testing.T, conn *mysql.Conn, sql string, expectedRows int) {
+func testFetch(t *testing.T, conn *mysql.Conn, sql string, expectedRows int) *sqltypes.Result {
 	t.Helper()
 
 	result, err := conn.ExecuteFetch(sql, 1000, false)
@@ -124,6 +125,8 @@ func testFetch(t *testing.T, conn *mysql.Conn, sql string, expectedRows int) {
 	if len(result.Rows) != expectedRows {
 		t.Errorf("expected %d rows but got %d", expectedRows, len(result.Rows))
 	}
+
+	return result
 }
 
 func testDML(t *testing.T, conn *mysql.Conn, sql string, expectedNumQueries int64, expectedRowsAffected uint64) {
@@ -296,4 +299,16 @@ func TestNoAutocommit(t *testing.T) {
 
 	testFetch(t, conn, "select * from test", 0)
 	testFetch(t, conn2, "select * from test", 0)
+}
+
+func TestOther(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &proxyConnParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testFetch(t, conn, "explain select * from test", 1)
+	testFetch(t, conn, "select table_name, table_rows from information_schema.tables where table_name='test'", 1)
+
 }

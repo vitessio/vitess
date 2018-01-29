@@ -70,10 +70,12 @@ func (mp *Proxy) Execute(ctx context.Context, session *ProxySession, sql string,
 		err = mp.doRollback(ctx, session)
 	case sqlparser.StmtSet:
 		result, err = mp.doSet(ctx, session, sql, bindVariables)
+	case sqlparser.StmtInsert, sqlparser.StmtUpdate, sqlparser.StmtDelete, sqlparser.StmtReplace:
+		result, err = mp.executeDML(ctx, session, sql, bindVariables)
 	case sqlparser.StmtSelect:
-		result, err = mp.doSelect(ctx, session, sql, bindVariables)
+		result, err = mp.executeSelect(ctx, session, sql, bindVariables)
 	default:
-		result, err = mp.doExecuteDML(ctx, session, sql, bindVariables)
+		result, err = mp.executeOther(ctx, session, sql, bindVariables)
 	}
 
 	if err != nil {
@@ -162,12 +164,13 @@ func (mp *Proxy) doSet(ctx context.Context, session *ProxySession, sql string, b
 	return &sqltypes.Result{}, nil
 }
 
-// doSelect runs the given select
-func (mp *Proxy) doSelect(ctx context.Context, session *ProxySession, sql string, bindVariables map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+// executeSelect runs the given select statement
+func (mp *Proxy) executeSelect(ctx context.Context, session *ProxySession, sql string, bindVariables map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	if mp.normalize {
 		query, comments := sqlparser.SplitTrailingComments(sql)
 		stmt, err := sqlparser.Parse(query)
 		if err != nil {
+			fmt.Printf("YYY parse error  %s\n", query)
 			return nil, err
 		}
 		sqlparser.Normalize(stmt, bindVariables, "vtp")
@@ -178,8 +181,8 @@ func (mp *Proxy) doSelect(ctx context.Context, session *ProxySession, sql string
 	return mp.qs.Execute(ctx, mp.target, sql, bindVariables, session.TransactionID, session.Options)
 }
 
-// doExecuteDML runs the given query handling autocommit semantics
-func (mp *Proxy) doExecuteDML(ctx context.Context, session *ProxySession, sql string, bindVariables map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+// executeDML runs the given query handling autocommit semantics
+func (mp *Proxy) executeDML(ctx context.Context, session *ProxySession, sql string, bindVariables map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	if mp.normalize {
 		query, comments := sqlparser.SplitTrailingComments(sql)
 		stmt, err := sqlparser.Parse(query)
@@ -215,4 +218,9 @@ func (mp *Proxy) doExecuteDML(ctx context.Context, session *ProxySession, sql st
 		session.TransactionID = txnID
 		return result, nil
 	}
+}
+
+// executeOther runs the given other statement bypassing the normalizer
+func (mp *Proxy) executeOther(ctx context.Context, session *ProxySession, sql string, bindVariables map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return mp.qs.Execute(ctx, mp.target, sql, bindVariables, session.TransactionID, session.Options)
 }
