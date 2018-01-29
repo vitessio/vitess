@@ -921,7 +921,6 @@ class TestVTGateFunctions(unittest.TestCase):
         'vt_lookup', 'select name, user2_id from name_user2_map')
     self.assertEqual(result, (('name1', 1L), ('name1', 7L), ('name2', 2L),
                               ('name2', 3L)))
-    vtgate_conn.commit()
     vtgate_conn.begin()
     result = vtgate_conn._execute(
         'truncate vt_user2',
