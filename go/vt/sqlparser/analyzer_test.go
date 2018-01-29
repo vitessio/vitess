@@ -61,7 +61,7 @@ func TestPreview(t *testing.T) {
 		{"explain", StmtOther},
 		{"repair", StmtOther},
 		{"optimize", StmtOther},
-		{"truncate", StmtOther},
+		{"truncate", StmtDDL},
 		{"unknown", StmtUnknown},
 
 		{"/* leading comment */ select ...", StmtSelect},
