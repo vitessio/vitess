@@ -1,0 +1,82 @@
+###################################
+# vttablet Service
+###################################
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $.Values.jobName | quote }}
+spec:
+  completions: {{ len $.Values.remoteFiles }}
+  parallelism: {{ $.Values.parallelism }}
+  template:
+    metadata:
+      name: {{ $.Values.jobName | quote }}
+    spec:
+      volumes:
+        - name: {{ $.Values.jobName | quote }}
+          persistentVolumeClaim:
+            claimName: {{ $.Values.jobName | quote }}
+
+      containers:
+      - name: migrate
+        image: nozzle/mysql:5.7.20
+
+        env:
+          - name: VTGATE_SVC
+            value: {{ $.Values.vtgateService | quote }}
+          - name: MYSQL_USER
+            value: {{ $.Values.mysql.user | quote }}
+          - name: MYSQL_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ $.Values.mysql.passwordSecret | quote }}
+                key: password
+
+        volumeMounts:
+          - name: {{ $.Values.jobName | quote }}
+            mountPath: "/mydata"
+
+        command: ["bash"]
+        args:
+          - "-c"
+          - |
+            set -ex
+
+            applyData () {
+              # retrieve the file
+              wget -O /mydata/tmp.sql.gz $1
+              
+              # check for gzip compression
+              if gzip -t /mydata/tmp.sql.gz ; then
+                # decompress the file, which removes the .gz extension
+                gunzip /mydata/tmp.sql.gz
+              else
+                # just remove the .gz extension
+                mv /mydata/tmp.sql.gz /mydata/tmp.sql
+              fi
+
+              # run the SQL file through vtgate
+              mysql -u $MYSQL_USER --password=$MYSQL_PASSWORD -h $VTGATE_SVC < /mydata/tmp.sql
+
+              # eliminate the successfully applied file
+              rm /mydata/tmp.sql
+            }
+
+            # run applyData for all remote files supplied in values.yaml
+            {{ range $.Values.remoteFiles }}
+            applyData {{ . | quote }}
+            {{ end }}
+
+      restartPolicy: OnFailure
+  backoffLimit: 1
+
+---
+
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: {{ $.Values.jobName | quote }}
+  annotations:
+{{ toYaml $.Values.tempDisk.dataVolumeClaimAnnotations | indent 4 }}
+spec:
+{{ toYaml $.Values.tempDisk.dataVolumeClaimSpec | indent 2 }}
