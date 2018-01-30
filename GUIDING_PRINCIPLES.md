@@ -4,7 +4,7 @@ The Vitess project operates under the guiding principles described below. The PM
 
 # Mission Statement
 
-*“To be the best performing, most scalable, and available NewSQL storage solution in the Cloud.”*
+*“To be the most performant, scalable, and available NewSQL storage system in the Cloud.”*
 
 Vitess can currently run on bare-metal. However, the trend is clear that applications are moving to the cloud. For the foreseeable future, we should continue to support the ability to run on bare-metal, because it will facilitate migration to the cloud.
 
