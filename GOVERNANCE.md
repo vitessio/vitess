@@ -37,7 +37,7 @@ In addition to their actions as users, contributors may also find themselves doi
 * fixing bugs
 * adding features
 
-Contributors engage with the project through the issue tracker,mailing list, the Slack channel, or by writing or editing documentation. They submit changes to the project itself via patches, which will be considered for inclusion in the project by existing committers (see next section). The Slack channel is the most appropriate place to ask for help when making that first contribution.
+Contributors engage with the project through the issue tracker, mailing list, the Slack channel, or by writing or editing documentation. They submit changes to the project itself via patches, which will be considered for inclusion in the project by existing committers (see next section). The Slack channel is the most appropriate place to ask for help when making that first contribution.
 
 As contributors gain experience and familiarity with the project, their profile within, and commitment to, the community will increase. At some stage, they may find themselves being nominated for committership.
 
