@@ -83,6 +83,7 @@ spec:
         shard: {{ $shardClean | quote }}
         type: {{ $tablet.type | quote }}
     spec:
+      terminationGracePeriodSeconds: 600
 {{ include "pod-security" . | indent 6 }}
 {{ include "vttablet-affinity" (tuple $cellClean $keyspaceClean $shardClean $cell.region) | indent 6 }}
 
@@ -108,6 +109,25 @@ spec:
 {{ toYaml (.dataVolumeClaimAnnotations | default $defaultVttablet.dataVolumeClaimAnnotations) | indent 10 }}
       spec:
 {{ toYaml (.dataVolumeClaimSpec | default $defaultVttablet.dataVolumeClaimSpec) | indent 8 }}
+
+---
+###################################
+# vttablet PodDisruptionBudget
+###################################
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $setName | quote }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: vitess
+      component: vttablet
+      cell: {{ $cellClean | quote }}
+      keyspace: {{ $keyspaceClean | quote }}
+      shard: {{ $shardClean | quote }}
+      type: {{ $tablet.type | quote }}
 
 {{- end -}}
 {{- end -}}
