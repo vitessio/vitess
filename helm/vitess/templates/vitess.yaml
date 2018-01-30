@@ -9,6 +9,22 @@
 ---
 {{ end }}
 
+{{ if $.Values.orchestrator.enabled }}
+
+# create orchestrator global services and StatefulSet
+{{ include "orchestrator" (tuple $.Values.orchestrator) }}
+---
+# create orchestrator config map
+{{ include "orchestrator-config" (tuple $.Values.orchestrator $.Release.Namespace) }}
+---
+# create a Service per StatefulSet replica
+{{ range $i := until (int $.Values.orchestrator.replicas) }}
+{{ include "orchestrator-statefulset-services" (tuple $.Values.orchestrator $i) }}
+---
+{{ end }}
+
+{{ end }}
+
 # create an etcd cluster for the global topology
 {{- $replicas := $.Values.topology.globalCell.replicas | default $.Values.etcd.replicas -}}
 {{- $version := $.Values.topology.globalCell.version | default $.Values.etcd.version -}}
@@ -39,7 +55,7 @@
     {{ range $shard := $keyspace.shards }}
       {{ range $tablet := $shard.tablets }}
 ---
-{{ include "vttablet" (tuple $.Values.topology $cell $keyspace $shard $tablet $.Values.vttablet $.Release.Namespace $.Values.config $.Values.pmm) }}
+{{ include "vttablet" (tuple $.Values.topology $cell $keyspace $shard $tablet $.Values.vttablet $.Release.Namespace $.Values.config $.Values.pmm $.Values.orchestrator) }}
       {{ end }} # range $tablet
     {{ end }} # range $shard
   {{ end }} # range $keyspace

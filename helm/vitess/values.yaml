@@ -207,3 +207,13 @@ pmm:
       # The limit affects only memory reserved for data chunks. Actual RAM usage by Prometheus is higher. 
       # It is recommended to set this limit to roughly 2/3 of the total memory that you are planning to allow for Prometheus.
       metricsMemory: "600000"
+
+# Default values for orchestrator resources defined in 'topology'.
+orchestrator:
+  enabled: true
+  image: "vitess/orchestrator:3.0.6"
+  replicas: 3
+  resources:
+    limits:
+      memory: "512Mi"
+      cpu: "100m"
