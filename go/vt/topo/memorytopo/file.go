@@ -34,6 +34,10 @@ func (c *Conn) Create(ctx context.Context, filePath string, contents []byte) (to
 	c.factory.mu.Lock()
 	defer c.factory.mu.Unlock()
 
+	if c.factory.err != nil {
+		return nil, c.factory.err
+	}
+
 	// Get the parent dir.
 	dir, file := path.Split(filePath)
 	p := c.factory.getOrCreatePath(c.cell, dir)
@@ -60,6 +64,10 @@ func (c *Conn) Update(ctx context.Context, filePath string, contents []byte, ver
 
 	c.factory.mu.Lock()
 	defer c.factory.mu.Unlock()
+
+	if c.factory.err != nil {
+		return nil, c.factory.err
+	}
 
 	// Get the parent dir, we'll need it in case of creation.
 	dir, file := path.Split(filePath)
@@ -117,6 +125,10 @@ func (c *Conn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, 
 	c.factory.mu.Lock()
 	defer c.factory.mu.Unlock()
 
+	if c.factory.err != nil {
+		return nil, nil, c.factory.err
+	}
+
 	// Get the node.
 	n := c.factory.nodeByPath(c.cell, filePath)
 	if n == nil {
@@ -133,6 +145,10 @@ func (c *Conn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, 
 func (c *Conn) Delete(ctx context.Context, filePath string, version topo.Version) error {
 	c.factory.mu.Lock()
 	defer c.factory.mu.Unlock()
+
+	if c.factory.err != nil {
+		return c.factory.err
+	}
 
 	// Get the parent dir.
 	dir, file := path.Split(filePath)

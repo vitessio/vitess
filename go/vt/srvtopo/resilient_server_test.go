@@ -35,7 +35,7 @@ import (
 
 // TestGetSrvKeyspace will test we properly return updated SrvKeyspace.
 func TestGetSrvKeyspace(t *testing.T) {
-	ts := memorytopo.NewServer("test_cell")
+	ts, factory := memorytopo.NewServerAndFactory("test_cell")
 	rs := NewResilientServer(ts, "TestGetSrvKeyspace")
 
 	// Ask for a not-yet-created keyspace
