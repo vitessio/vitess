@@ -134,11 +134,16 @@ type srvKeyspaceEntry struct {
 	//
 	// if watchrunning is not set, the next time we try to access the
 	// keyspace, we will start a watch.
-	// if watchrunning is set, we are guaranteed to have exactly one of
-	// value or lastError be nil, and the other non-nil.
+	// if watchrunning is set, we are guaranteed to have lastError be
+	// non-nil and an up-to-date value (which may be nil)
 	watchRunning bool
 	value        *topodatapb.SrvKeyspace
 	lastError    error
+
+	// valueTime is the time when the watch last obtained a non-nil value.
+	// It is compared to the TTL to determine if we can return the value
+	// when the watch is failing
+	lastValueTime time.Time
 
 	// lastErrorCtx tries to remember the context of the query
 	// that failed to get the SrvKeyspace, so we can display it in
@@ -263,42 +268,59 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 	// We use a background context, as starting the watch should keep going
 	// even if the current query context is short-lived.
 	newCtx := context.Background()
-	current, changes, _ := server.topoServer.WatchSrvKeyspace(newCtx, cell, keyspace)
+	current, changes, cancel := server.topoServer.WatchSrvKeyspace(newCtx, cell, keyspace)
 	if current.Err != nil {
 		// lastError and lastErrorCtx will be visible from the UI
 		// until the next try
-		entry.value = nil
 		entry.lastError = current.Err
 		entry.lastErrorCtx = ctx
-		log.Errorf("WatchSrvKeyspace failed for %v/%v: %v", cell, keyspace, current.Err)
+
+		// if the node disappears, delete the cached value
+		if current.Err == topo.ErrNoNode {
+			entry.value = nil
+		}
+
+		// check if the cached value is still fresh enough to use
+		if entry.value != nil && time.Since(entry.lastValueTime) < *srvTopoCacheTTL {
+			return entry.value, nil
+		}
+
+		log.Errorf("Initial WatchSrvKeyspace failed for %v/%v: %v", cell, keyspace, current.Err)
 		return nil, current.Err
 	}
 
 	// we are now watching, cache the first notification
 	entry.watchRunning = true
 	entry.value = current.Value
+	entry.lastValueTime = time.Now()
 	entry.lastError = nil
 	entry.lastErrorCtx = nil
-
 	go func() {
 		for c := range changes {
 			if c.Err != nil {
-				// Watch errored out. We log it, clear
-				// our record, and return.
-				err := fmt.Errorf("watch for SrvKeyspace %v in cell %v failed: %v", keyspace, cell, c.Err)
+				// Watch errored out.
+				//
+				// Log it and store the error, but do not clear the value
+				// so it can be used until the ttl elapses unless the node
+				// was deleted.
+				err := fmt.Errorf("WatchSrvKeyspace failed for %v/%v: %v", cell, keyspace, c.Err)
 				log.Errorf("%v", err)
 				entry.mutex.Lock()
+				if err == topo.ErrNoNode {
+					entry.value = nil
+				}
 				entry.watchRunning = false
-				entry.value = nil
 				entry.lastError = err
 				entry.lastErrorCtx = nil
 				entry.mutex.Unlock()
+				cancel()
 				return
 			}
 
 			// We got a new value, save it.
 			entry.mutex.Lock()
 			entry.value = c.Value
+			entry.lastValueTime = time.Now()
 			entry.lastError = nil
 			entry.lastErrorCtx = nil
 			entry.mutex.Unlock()

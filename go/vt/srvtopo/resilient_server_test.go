@@ -18,6 +18,7 @@ package srvtopo
 
 import (
 	"bytes"
+	"fmt"
 	"html/template"
 	"sync"
 	"testing"
@@ -37,6 +38,8 @@ import (
 func TestGetSrvKeyspace(t *testing.T) {
 	ts, factory := memorytopo.NewServerAndFactory("test_cell")
 	rs := NewResilientServer(ts, "TestGetSrvKeyspace")
+	ttl := time.Duration(500 * time.Millisecond)
+	*srvTopoCacheTTL = ttl
 
 	// Ask for a not-yet-created keyspace
 	_, err := rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
@@ -68,6 +71,17 @@ func TestGetSrvKeyspace(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
+	// make sure the HTML template works
+	templ := template.New("").Funcs(status.StatusFuncs)
+	templ, err = templ.Parse(TopoTemplate)
+	if err != nil {
+		t.Fatalf("error parsing template: %v", err)
+	}
+	wr := &bytes.Buffer{}
+	if err := templ.Execute(wr, rs.CacheStatus()); err != nil {
+		t.Fatalf("error executing template: %v", err)
+	}
+
 	// Now delete the SrvKeyspace, wait until we get the error.
 	if err := ts.DeleteSrvKeyspace(context.Background(), "test_cell", "test_ks"); err != nil {
 		t.Fatalf("DeleteSrvKeyspace() failed: %v", err)
@@ -89,8 +103,10 @@ func TestGetSrvKeyspace(t *testing.T) {
 		ShardingColumnName: "id2",
 		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}
+
 	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
 	expiry = time.Now().Add(5 * time.Second)
+	updateTime := time.Now()
 	for {
 		got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
 		if err == nil && proto.Equal(want, got) {
@@ -102,15 +118,62 @@ func TestGetSrvKeyspace(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 
-	// make sure the HTML template works
-	templ := template.New("").Funcs(status.StatusFuncs)
-	templ, err = templ.Parse(TopoTemplate)
-	if err != nil {
-		t.Fatalf("error parsing template: %v", err)
+	// Now simulate a topo service error and see that the last value is
+	// cached for at least half of the expected ttl.
+	forceErr := fmt.Errorf("test topo error")
+	factory.SetError(forceErr)
+
+	expiry = time.Now().Add(ttl / 2)
+	for {
+		got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
+		if err != nil || !proto.Equal(want, got) {
+			t.Errorf("expected keyspace to be cached for at least %s seconds, got error %v", time.Since(updateTime), err)
+		}
+
+		if time.Now().After(expiry) {
+			break
+		}
+		time.Sleep(time.Millisecond)
 	}
-	wr := &bytes.Buffer{}
-	if err := templ.Execute(wr, rs.CacheStatus()); err != nil {
-		t.Fatalf("error executing template: %v", err)
+
+	// Now wait for the TTL to expire and we should get the expected error
+	expiry = time.Now().Add(1 * time.Second)
+	for {
+		_, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
+		if err != nil || err == forceErr {
+			break
+		}
+
+		if time.Now().After(expiry) {
+			t.Fatalf("timed out waiting for error to be returned")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	// Clear the error away and check that we can now get the value
+	factory.SetError(nil)
+
+	got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
+	if err != nil || !proto.Equal(want, got) {
+		t.Errorf("expected value to be restored, got %v", err)
+	}
+
+	// Check that the watch now works to update the value
+	want = &topodatapb.SrvKeyspace{
+		ShardingColumnName: "id3",
+		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+	}
+	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	expiry = time.Now().Add(5 * time.Second)
+	for {
+		got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
+		if err == nil && proto.Equal(want, got) {
+			break
+		}
+		if time.Now().After(expiry) {
+			t.Fatalf("timeout waiting for new keyspace value")
+		}
+		time.Sleep(time.Millisecond)
 	}
 }
 
