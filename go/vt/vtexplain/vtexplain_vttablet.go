@@ -286,6 +286,15 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 				{sqltypes.NewVarBinary("1")},
 			},
 		},
+		"select @@sql_auto_is_null": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}},
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				{sqltypes.NewVarBinary("0")},
+			},
+		},
 		"show variables like 'binlog_format'": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.VarChar,
