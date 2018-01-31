@@ -216,6 +216,7 @@ func (dbc *DBConn) streamOnce(ctx context.Context, query string, callback func(*
 var (
 	getModeSQL    = "select @@global.sql_mode"
 	getAutocommit = "select @@autocommit"
+	getAutoIsNull = "select @@sql_auto_is_null"
 	showBinlog    = "show variables like 'binlog_format'"
 )
 
@@ -244,6 +245,16 @@ func (dbc *DBConn) VerifyMode(strictTransTables bool) (BinlogFormat, error) {
 	}
 	if !strings.Contains(qr.Rows[0][0].ToString(), "1") {
 		return 0, fmt.Errorf("require autocommit to be 1: got %s", qr.Rows[0][0].ToString())
+	}
+	qr, err = dbc.conn.ExecuteFetch(getAutoIsNull, 2, false)
+	if err != nil {
+		return 0, fmt.Errorf("could not verify mode: %v", err)
+	}
+	if len(qr.Rows) != 1 {
+		return 0, fmt.Errorf("incorrect rowcount received for %s: %d", getAutoIsNull, len(qr.Rows))
+	}
+	if !strings.Contains(qr.Rows[0][0].ToString(), "0") {
+		return 0, fmt.Errorf("require sql_auto_is_null to be 0: got %s", qr.Rows[0][0].ToString())
 	}
 	qr, err = dbc.conn.ExecuteFetch(showBinlog, 10, false)
 	if err != nil {
