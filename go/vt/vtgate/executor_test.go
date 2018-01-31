@@ -329,6 +329,12 @@ func TestExecutorSet(t *testing.T) {
 	}, {
 		in:  "set skip_query_plan_cache = 0",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
+	}, {
+		in:  "set sql_auto_is_null = 0",
+		out: &vtgatepb.Session{Autocommit: true}, // no effect
+	}, {
+		in:  "set sql_auto_is_null = 1",
+		err: "sql_auto_is_null is not currently supported",
 	}}
 	for _, tcase := range testcases {
 		session := NewSafeSession(&vtgatepb.Session{Autocommit: true})

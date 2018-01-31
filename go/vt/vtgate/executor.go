@@ -471,6 +471,19 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 				safeSession.Options = &querypb.ExecuteOptions{}
 			}
 			safeSession.Options.SqlSelectLimit = val
+		case "sql_auto_is_null":
+			val, ok := v.(int64)
+			if !ok {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for sql_auto_is_null: %T", v)
+			}
+			switch val {
+			case 0:
+				// This is the default setting for MySQL. Do nothing.
+			case 1:
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "sql_auto_is_null is not currently supported")
+			default:
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for sql_auto_is_null: %d", val)
+			}
 		case "character_set_results":
 			// This is a statement that mysql-connector-j sends at the beginning. We return a canned response for it.
 			switch v {
