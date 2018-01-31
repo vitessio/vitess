@@ -681,7 +681,7 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, opti
 				// TODO(erez): I think this should be RESOURCE_EXHAUSTED.
 				return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "Transaction throttled")
 			}
-			transactionID, err = tsv.te.txPool.Begin(ctx, options.GetClientFoundRows(), options.GetTransactionIsolation())
+			transactionID, err = tsv.te.txPool.Begin(ctx, options)
 			logStats.TransactionID = transactionID
 			return err
 		},

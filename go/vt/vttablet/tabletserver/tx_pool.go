@@ -175,7 +175,7 @@ func (axp *TxPool) WaitForEmpty() {
 
 // Begin begins a transaction, and returns the associated transaction id.
 // Subsequent statements can access the connection through the transaction id.
-func (axp *TxPool) Begin(ctx context.Context, useFoundRows bool, txIsolation querypb.ExecuteOptions_TransactionIsolation) (int64, error) {
+func (axp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (int64, error) {
 	var conn *connpool.DBConn
 	var err error
 	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
@@ -197,7 +197,7 @@ func (axp *TxPool) Begin(ctx context.Context, useFoundRows bool, txIsolation que
 		axp.limiter.Release(immediateCaller, effectiveCaller)
 	}()
 
-	if useFoundRows {
+	if options.GetClientFoundRows() {
 		conn, err = axp.foundRowsPool.Get(ctx)
 	} else {
 		conn, err = axp.conns.Get(ctx)
@@ -213,7 +213,7 @@ func (axp *TxPool) Begin(ctx context.Context, useFoundRows bool, txIsolation que
 		return 0, err
 	}
 
-	if query, ok := txIsolations[txIsolation]; ok {
+	if query, ok := txIsolations[options.GetTransactionIsolation()]; ok {
 		if _, err := conn.Exec(ctx, query, 1, false); err != nil {
 			return 0, err
 		}
@@ -234,6 +234,7 @@ func (axp *TxPool) Begin(ctx context.Context, useFoundRows bool, txIsolation que
 			immediateCaller,
 			effectiveCaller,
 		),
+		options.GetWorkload() != querypb.ExecuteOptions_DBA,
 	)
 	return transactionID, nil
 }
@@ -269,8 +270,8 @@ func (axp *TxPool) Get(transactionID int64, reason string) (*TxConnection, error
 // LocalBegin is equivalent to Begin->Get.
 // It's used for executing transactions within a request. It's safe
 // to always call LocalConclude at the end.
-func (axp *TxPool) LocalBegin(ctx context.Context, useFoundRows bool, txIsolation querypb.ExecuteOptions_TransactionIsolation) (*TxConnection, error) {
-	transactionID, err := axp.Begin(ctx, useFoundRows, txIsolation)
+func (axp *TxPool) LocalBegin(ctx context.Context, options *querypb.ExecuteOptions) (*TxConnection, error) {
+	transactionID, err := axp.Begin(ctx, options)
 	if err != nil {
 		return nil, err
 	}
