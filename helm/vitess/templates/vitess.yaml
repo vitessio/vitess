@@ -53,9 +53,15 @@
   # Tablets for keyspaces
   {{ range $keyspace := $cell.keyspaces }}
     {{ range $shard := $keyspace.shards }}
+
+      # TODO: add the replicas rather than making the user provide it
+      {{ $totalTabletCount := $shard.tabletCount }}
+
+      # now range through the tablets again to set them up
       {{ range $tablet := $shard.tablets }}
 ---
-{{ include "vttablet" (tuple $.Values.topology $cell $keyspace $shard $tablet $.Values.vttablet $.Release.Namespace $.Values.config $.Values.pmm $.Values.orchestrator) }}
+{{ include "vttablet" (tuple $.Values.topology $cell $keyspace $shard $tablet $.Values.vttablet $.Release.Namespace $.Values.config $.Values.pmm $.Values.orchestrator $totalTabletCount) }}
+
       {{ end }} # range $tablet
     {{ end }} # range $shard
   {{ end }} # range $keyspace
