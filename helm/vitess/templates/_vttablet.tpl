@@ -384,7 +384,9 @@ spec:
         -db-config-filtered-uname "vt_filtered"
         -db-config-filtered-dbname "vt_{{$keyspace.name}}"
         -db-config-filtered-charset "utf8"
+{{ if gt (int $shard.tabletCount) 1 }}
         -enable_semi_sync
+{{ end }}
         -enable_replication_reporter
 {{ if $orc.enabled }}
         -heartbeat_enable
