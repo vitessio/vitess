@@ -163,28 +163,17 @@ spec:
       mkdir -p /vtdataroot/pmm
 
       # redirect logs to PV
-      ln -s /vtdataroot/pmm/pmm-mysql-queries-42001.log /var/log/pmm-mysql-queries-0.log
       ln -s /vtdataroot/pmm/pmm-mysql-metrics-42002.log /var/log/pmm-mysql-metrics-42002.log
-
 
       # --force is used because the pod ip address may have changed
       pmm-admin config --server pmm.{{ $namespace }} --force
 
-      # each of these creates a systemd service
+      # creates a systemd service
       # TODO: remove "|| true" after https://jira.percona.com/projects/PMM/issues/PMM-1985 is resolved
       pmm-admin add mysql:metrics --user root --socket /vtdataroot/tabletdata/mysql.sock --force || true
-      pmm-admin add mysql:queries --user root --socket /vtdataroot/tabletdata/mysql.sock --force || true
 
       # keep the container alive but still responsive to stop requests
       trap : TERM INT; sleep infinity & wait
-
-- name: pmm-client-query-log
-  image: busybox
-  command: ["/bin/sh"]
-  args: ["-c", "tail -n+1 -F /vtdataroot/pmm/pmm-mysql-queries-0.log"]
-  volumeMounts:
-    - name: vtdataroot
-      mountPath: /vtdataroot
 
 - name: pmm-client-metrics-log
   image: busybox
