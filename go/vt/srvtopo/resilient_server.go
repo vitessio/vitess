@@ -297,6 +297,7 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 
 	if !shouldRefresh {
 		if cacheValid {
+			server.counts.Add(cachedCategory, 1)
 			return entry.value, nil
 		}
 		return nil, entry.lastError
@@ -319,12 +320,13 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 			entry.value = nil
 		}
 
-		// check if the cached value is still fresh enough to use
+		server.counts.Add(errorCategory, 1)
+		log.Errorf("Initial WatchSrvKeyspace failed for %v/%v: %v", cell, keyspace, current.Err)
+
 		if cacheValid {
 			return entry.value, nil
 		}
 
-		log.Errorf("Initial WatchSrvKeyspace failed for %v/%v: %v", cell, keyspace, current.Err)
 		return nil, current.Err
 	}
 
@@ -344,6 +346,7 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 				// was deleted.
 				err := fmt.Errorf("WatchSrvKeyspace failed for %v/%v: %v", cell, keyspace, c.Err)
 				log.Errorf("%v", err)
+				server.counts.Add(errorCategory, 1)
 				entry.mutex.Lock()
 				if err == topo.ErrNoNode {
 					entry.value = nil

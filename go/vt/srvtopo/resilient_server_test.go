@@ -38,9 +38,12 @@ import (
 // TestGetSrvKeyspace will test we properly return updated SrvKeyspace.
 func TestGetSrvKeyspace(t *testing.T) {
 	ts, factory := memorytopo.NewServerAndFactory("test_cell")
-	ttl := time.Duration(500 * time.Millisecond)
-	*srvTopoCacheTTL = ttl
-	*srvTopoCacheRefresh = time.Duration(200 * time.Millisecond)
+	*srvTopoCacheTTL = time.Duration(100 * time.Millisecond)
+	*srvTopoCacheRefresh = time.Duration(40 * time.Millisecond)
+	defer func() {
+		*srvTopoCacheTTL = 1 * time.Second
+		*srvTopoCacheRefresh = 1 * time.Second
+	}()
 
 	rs := NewResilientServer(ts, "TestGetSrvKeyspace")
 
@@ -75,7 +78,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 		if time.Now().After(expiry) {
 			t.Fatalf("GetSrvKeyspace() timeout = %+v, want %+v", got, want)
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(2 * time.Millisecond)
 	}
 
 	// make sure the HTML template works
@@ -127,10 +130,11 @@ func TestGetSrvKeyspace(t *testing.T) {
 
 	// Now simulate a topo service error and see that the last value is
 	// cached for at least half of the expected ttl.
+	errorReqsBefore, _ := rs.counts.Counts()[errorCategory]
 	forceErr := fmt.Errorf("test topo error")
 	factory.SetError(forceErr)
 
-	expiry = time.Now().Add(ttl / 2)
+	expiry = time.Now().Add(*srvTopoCacheTTL / 2)
 	for {
 		got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
 		if err != nil || !proto.Equal(want, got) {
@@ -157,14 +161,27 @@ func TestGetSrvKeyspace(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 
-	// Clear the error away, wait for the refresh interval, and check that
-	// we can now get the value
+	// Clear the error away and check that the cached error is still returned
+	// until the refresh interval elapses
 	factory.SetError(nil)
-	time.Sleep(*srvTopoCacheRefresh + 10*time.Millisecond)
+	_, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
+	if err == nil || err != forceErr {
+		t.Fatalf("expected error to be cached")
+	}
 
+	// Now sleep for the rest of the interval and we should get the value again
+	time.Sleep(*srvTopoCacheRefresh)
 	got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
 	if err != nil || !proto.Equal(want, got) {
 		t.Errorf("expected value to be restored, got %v", err)
+	}
+
+	// Check that there were three errors counted during the interval,
+	// one for the original watch failing, then three more attempts to
+	// re-establish the watch
+	errorReqs, _ := rs.counts.Counts()[errorCategory]
+	if errorReqs-errorReqsBefore != 4 {
+		t.Errorf("expected 4 error requests got %d", errorReqs-errorReqsBefore)
 	}
 
 	// Check that the watch now works to update the value
@@ -190,6 +207,12 @@ func TestGetSrvKeyspace(t *testing.T) {
 // the topo server upon failure.
 func TestSrvKeyspaceCachedError(t *testing.T) {
 	ts := memorytopo.NewServer("test_cell")
+	*srvTopoCacheTTL = 100 * time.Millisecond
+	*srvTopoCacheRefresh = 40 * time.Millisecond
+	defer func() {
+		*srvTopoCacheTTL = 1 * time.Second
+		*srvTopoCacheRefresh = 1 * time.Second
+	}()
 	rs := NewResilientServer(ts, "TestSrvKeyspaceCachedErrors")
 
 	// Ask for an unknown keyspace, should get an error.
@@ -206,6 +229,7 @@ func TestSrvKeyspaceCachedError(t *testing.T) {
 		t.Errorf("Context wasn't saved properly")
 	}
 
+	time.Sleep(*srvTopoCacheTTL + 10*time.Millisecond)
 	// Ask again with a different context, should get an error and
 	// save that context.
 	ctx, cancel := context.WithCancel(ctx)
@@ -258,10 +282,10 @@ func TestGetSrvKeyspaceCreated(t *testing.T) {
 }
 
 func TestWatchSrvVSchema(t *testing.T) {
+	watchSrvVSchemaSleepTime = 10 * time.Millisecond
 	ctx := context.Background()
 	ts := memorytopo.NewServer("test_cell")
 	rs := NewResilientServer(ts, "TestWatchSrvVSchema")
-	watchSrvVSchemaSleepTime = 10 * time.Millisecond
 
 	// mu protects watchValue and watchErr.
 	mu := sync.Mutex{}
@@ -343,8 +367,12 @@ func TestWatchSrvVSchema(t *testing.T) {
 
 func TestGetSrvKeyspaceNames(t *testing.T) {
 	ts, factory := memorytopo.NewServerAndFactory("test_cell")
-	*srvTopoCacheTTL = time.Duration(500 * time.Millisecond)
-	*srvTopoCacheRefresh = time.Duration(200 * time.Millisecond)
+	*srvTopoCacheTTL = 100 * time.Millisecond
+	*srvTopoCacheRefresh = 40 * time.Millisecond
+	defer func() {
+		*srvTopoCacheTTL = 1 * time.Second
+		*srvTopoCacheRefresh = 1 * time.Second
+	}()
 	rs := NewResilientServer(ts, "TestGetSrvKeyspaceNames")
 
 	// Set SrvKeyspace with value
@@ -369,8 +397,8 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	forceErr := fmt.Errorf("force test error")
 	factory.SetError(forceErr)
 
-	// Check that we get the cached value until 2X the refresh interval
-	// (400ms) elapses but before the TTL (500ms) expires
+	// Check that we get the cached value until at least the refresh interval
+	// elapses but before the TTL expires
 	start := time.Now()
 	for {
 		names, err = rs.GetSrvKeyspaceNames(ctx, "test_cell")
@@ -382,11 +410,11 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 			t.Errorf("GetSrvKeyspaceNames got %v want %v", names, wantNames)
 		}
 
-		if time.Since(start) >= *srvTopoCacheRefresh*2 {
+		if time.Since(start) >= *srvTopoCacheRefresh+10*time.Millisecond {
 			break
 		}
 
-		time.Sleep(25 * time.Millisecond)
+		time.Sleep(time.Millisecond)
 	}
 
 	// Now wait for it to expire from cache
@@ -396,7 +424,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 			break
 		}
 
-		time.Sleep(25 * time.Millisecond)
+		time.Sleep(2 * time.Millisecond)
 
 		if time.Since(start) > 2*time.Second {
 			t.Fatalf("expected error after TTL expires")
@@ -407,11 +435,11 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 		t.Errorf("got error %v want %v", err, forceErr)
 	}
 
-	// Check that we only checked the topo service 2 times during the
+	// Check that we only checked the topo service 1 or 2 times during the
 	// period where we got the cached error.
 	cachedReqs, ok := rs.counts.Counts()[cachedCategory]
-	if !ok || cachedReqs != 2 {
-		t.Errorf("expected 2 cached requests got %v", cachedReqs)
+	if !ok || cachedReqs > 2 {
+		t.Errorf("expected <= 2 cached requests got %v", cachedReqs)
 	}
 
 	// Clear the error and wait until the cached error state expires
@@ -424,7 +452,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 			break
 		}
 
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(2 * time.Millisecond)
 
 		if time.Since(start) > 2*time.Second {
 			t.Fatalf("expected error after TTL expires")
