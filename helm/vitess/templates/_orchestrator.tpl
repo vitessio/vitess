@@ -75,12 +75,25 @@ spec:
         app: vitess
         component: orchestrator
     spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          # strongly prefer to stay away from other orchestrators
+          - weight: 100
+            podAffinityTerm:
+              topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app: "vitess"
+                  component: "orchestrator"
+
       initContainers:
 {{ include "init-orchestrator" $orc | indent 8 }}
 
       containers:
         - name: orchestrator
           image: {{ $orc.image | quote }}
+          imagePullPolicy: Always
           ports:
             - containerPort: 3000
               name: web
