@@ -75,9 +75,12 @@ spec:
         app: vitess
         component: orchestrator
     spec:
+      initContainers:
+{{ include "init-orchestrator" $orc | indent 8 }}
+
       containers:
         - name: orchestrator
-          image: {{ $orc.image }}
+          image: {{ $orc.image | quote }}
           ports:
             - containerPort: 3000
               name: web
@@ -96,29 +99,17 @@ spec:
               path: "/api/leader-check"
               port: 3000
             timeoutSeconds: 10
-          volumeMounts:
-            - name: config-volume
-              mountPath: /conf/
+
           resources:
-{{ toYaml ($orc.resources ) | indent 12 }}
+{{ toYaml ($orc.resources) | indent 12 }}
+
+          volumeMounts:
+            - name: config-shared
+              mountPath: /conf/
+
           env:
-            - name: MY_POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
             - name: VTCTLD_SERVER_PORT
               value: "15999"
-          
-          command: ["bash"]
-          args:
-            - "-c"
-            - |
-              set -ex
-
-              # set the local config to advertise/bind its own service IP
-              sed -i -e "s/POD_NAME/$MY_POD_NAME/g" /conf/orchestrator.conf.json
-
-              cd /usr/local/orchestrator && ./orchestrator --config=/conf/orchestrator.conf.json http
 
         - name: recovery-log
           image: busybox
@@ -131,9 +122,12 @@ spec:
           args: ["-c", "tail -n+1 -F /tmp/orchestrator-audit.log"]
 
       volumes:
-        - name: config-volume
+        - name: config-map
           configMap:
             name: orchestrator-cm
+        - name: config-shared
+          emptyDir: {}
+
 {{- end -}}
 
 ###################################
@@ -166,5 +160,39 @@ spec:
     app: vitess
     # this should be auto-filled by kubernetes
     statefulset.kubernetes.io/pod-name: "orchestrator-{{ $i }}"
+
+{{- end -}}
+
+###################################
+# init-container to copy and sed
+# Orchestrator config from ConfigMap
+###################################
+{{- define "init-orchestrator" -}}
+{{- $orc := . -}}
+
+- name: init-orchestrator
+  image: {{ $orc.image | quote }}
+  volumeMounts:
+    - name: config-map
+      mountPath: /conftmp/
+    - name: config-shared
+      mountPath: /conf/
+  env:
+    - name: MY_POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+
+  command: ["bash"]
+  args:
+    - "-c"
+    - |
+      set -ex
+
+      # make a copy of the config map file before editing it locally
+      cp /conftmp/orchestrator.conf.json /conf/orchestrator.conf.json
+
+      # set the local config to advertise/bind its own service IP
+      sed -i -e "s/POD_NAME/$MY_POD_NAME/g" /conf/orchestrator.conf.json
 
 {{- end -}}
