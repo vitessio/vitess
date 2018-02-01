@@ -52,7 +52,6 @@ const (
 // textual comparison to identify the statement type.
 func Preview(sql string) int {
 	trimmed := StripLeadingComments(sql)
-	trimmedNoComments, _ := SplitTrailingComments(trimmed)
 
 	firstWord := trimmed
 	if end := strings.IndexFunc(trimmed, unicode.IsSpace); end != -1 {
@@ -73,6 +72,7 @@ func Preview(sql string) int {
 	case "delete":
 		return StmtDelete
 	}
+	trimmedNoComments, _ := SplitTrailingComments(trimmed)
 	switch strings.ToLower(trimmedNoComments) {
 	case "begin", "start transaction":
 		return StmtBegin
