@@ -72,7 +72,7 @@ func Preview(sql string) int {
 	case "delete":
 		return StmtDelete
 	}
-	// For the following statements, is not enough to just check
+	// For the following statements is not enough to just check
 	// loweredFirstWord. This is because they are not statements
 	// in the grammar and we are relying in Preview to parse them.
 	// For instance, we don't want: "BEGIN ..." to be parsed
