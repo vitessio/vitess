@@ -38,15 +38,20 @@ import (
 // TestGetSrvKeyspace will test we properly return updated SrvKeyspace.
 func TestGetSrvKeyspace(t *testing.T) {
 	ts, factory := memorytopo.NewServerAndFactory("test_cell")
-	rs := NewResilientServer(ts, "TestGetSrvKeyspace")
 	ttl := time.Duration(500 * time.Millisecond)
 	*srvTopoCacheTTL = ttl
+	*srvTopoCacheRefresh = time.Duration(200 * time.Millisecond)
+
+	rs := NewResilientServer(ts, "TestGetSrvKeyspace")
 
 	// Ask for a not-yet-created keyspace
 	_, err := rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
 	if err != topo.ErrNoNode {
 		t.Fatalf("GetSrvKeyspace(not created) got unexpected error: %v", err)
 	}
+
+	// Wait until the cached error expires.
+	time.Sleep(*srvTopoCacheRefresh + 10*time.Millisecond)
 
 	// Set SrvKeyspace with value
 	want := &topodatapb.SrvKeyspace{
@@ -60,6 +65,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	expiry := time.Now().Add(5 * time.Second)
 	for {
 		got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
+
 		if err != nil {
 			t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
 		}
@@ -151,8 +157,10 @@ func TestGetSrvKeyspace(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 
-	// Clear the error away and check that we can now get the value
+	// Clear the error away, wait for the refresh interval, and check that
+	// we can now get the value
 	factory.SetError(nil)
+	time.Sleep(*srvTopoCacheRefresh + 10*time.Millisecond)
 
 	got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
 	if err != nil || !proto.Equal(want, got) {
