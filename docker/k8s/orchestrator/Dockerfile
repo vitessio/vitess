@@ -18,3 +18,6 @@ RUN apt-get update && \
     apt-get autoremove -qq && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+WORKDIR /usr/local/orchestrator
+CMD ["./orchestrator", "--config=/conf/orchestrator.conf.json", "http"]
