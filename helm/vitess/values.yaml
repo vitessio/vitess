@@ -208,9 +208,10 @@ pmm:
       # It is recommended to set this limit to roughly 2/3 of the total memory that you are planning to allow for Prometheus.
       metricsMemory: "600000"
 
-# Default values for orchestrator resources defined in 'topology'.
+# Orchestrator requires at least Kubernetes 1.9 to work
+# Default values for orchestrator resources
 orchestrator:
-  enabled: true
+  enabled: false
   image: "vitess/orchestrator:3.0.6"
   replicas: 3
   resources:
