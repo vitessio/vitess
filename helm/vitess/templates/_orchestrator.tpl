@@ -106,6 +106,8 @@ spec:
           volumeMounts:
             - name: config-shared
               mountPath: /conf/
+            - name: tmplogs
+              mountPath: /tmp
 
           env:
             - name: VTCTLD_SERVER_PORT
@@ -115,17 +117,25 @@ spec:
           image: busybox
           command: ["/bin/sh"]
           args: ["-c", "tail -n+1 -F /tmp/recovery.log"]
+          volumeMounts:
+            - name: tmplogs
+              mountPath: /tmp
 
         - name: audit-log
           image: busybox
           command: ["/bin/sh"]
           args: ["-c", "tail -n+1 -F /tmp/orchestrator-audit.log"]
+          volumeMounts:
+            - name: tmplogs
+              mountPath: /tmp
 
       volumes:
         - name: config-map
           configMap:
             name: orchestrator-cm
         - name: config-shared
+          emptyDir: {}
+        - name: tmplogs
           emptyDir: {}
 
 {{- end -}}
