@@ -35,6 +35,18 @@ import (
 )
 
 var (
+	// srvTopoCacheTTL and srvTopoCacheRefresh control the behavior of
+	// the caching for both watched and unwatched values.
+	//
+	// For entries we don't watch (like the list of Keyspaces), we refresh
+	// the cached list from the topo after srv_topo_cache_refresh elapses.
+	// If the fetch fails, we hold onto the cached value until
+	// srv_topo_cache_ttl elapses.
+	//
+	// For entries we watch (like the SrvKeyspace for a given cell), if
+	// setting the watch fails, we will use the last known value until
+	// srv_topo_cache_ttl elapses and we only try to re-establish the watch
+	// once every srv_topo_cache_refresh interval.
 	srvTopoCacheTTL     = flag.Duration("srv_topo_cache_ttl", 1*time.Second, "how long to use cached entries for topology")
 	srvTopoCacheRefresh = flag.Duration("srv_topo_cache_refresh", 1*time.Second, "how frequently to refresh the topology for cached entries")
 )
