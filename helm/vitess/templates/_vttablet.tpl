@@ -324,6 +324,7 @@ spec:
         -enable_semi_sync
         -enable_replication_reporter
 {{ if $orc.enabled }}
+        -heartbeat_enable
         -orc_api_url "http://orchestrator.{{ $namespace }}/api"
         -orc_discover_interval "5m"
 {{ end }}

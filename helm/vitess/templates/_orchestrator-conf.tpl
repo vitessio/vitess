@@ -117,7 +117,7 @@ data:
     "ReduceReplicationAnalysisCount": true,
     "RejectHostnameResolvePattern": "",
     "RemoveTextFromHostnameDisplay": ".mydomain.com:3306",
-    "ReplicationLagQuery": "select round(absolute_lag) from meta.heartbeat_view",
+    "ReplicationLagQuery": "SELECT unix_timestamp() - floor(ts/1000000000) FROM `_vt`.heartbeat WHERE keyspaceShard='KEYSPACE:SHARD';",
     "ServeAgentsHttp": false,
     "SkipBinlogEventsContaining": [
     ],
