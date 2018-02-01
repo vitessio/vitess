@@ -164,6 +164,10 @@ type srvKeyspaceEntry struct {
 // NewResilientServer creates a new ResilientServer
 // based on the provided topo.Server.
 func NewResilientServer(base *topo.Server, counterPrefix string) *ResilientServer {
+	if *srvTopoCacheRefresh > *srvTopoCacheTTL {
+		log.Fatalf("srv_topo_cache_refresh must be less than or equal to srv_topo_cache_ttl")
+	}
+
 	return &ResilientServer{
 		topoServer:   base,
 		cacheTTL:     *srvTopoCacheTTL,
