@@ -134,16 +134,26 @@ func TestGetSrvKeyspace(t *testing.T) {
 	forceErr := fmt.Errorf("test topo error")
 	factory.SetError(forceErr)
 
-	expiry = time.Now().Add(*srvTopoCacheTTL / 2)
+	expiry = updateTime.Add(*srvTopoCacheTTL / 2)
 	for {
 		got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
 		if err != nil || !proto.Equal(want, got) {
+			// On a slow test machine it is possible that we never end up
+			// verifying the value is cached because it could take too long to
+			// even get into this loop... so log this as an informative message
+			// but don't fail the test
+			if time.Now().After(expiry) {
+				t.Logf("test execution was too slow -- caching was not verified")
+				break
+			}
+
 			t.Errorf("expected keyspace to be cached for at least %s seconds, got error %v", time.Since(updateTime), err)
 		}
 
 		if time.Now().After(expiry) {
 			break
 		}
+
 		time.Sleep(time.Millisecond)
 	}
 
