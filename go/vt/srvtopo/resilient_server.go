@@ -337,6 +337,8 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 	entry.lastError = nil
 	entry.lastErrorCtx = nil
 	go func() {
+		defer cancel()
+
 		for c := range changes {
 			if c.Err != nil {
 				// Watch errored out.
@@ -355,7 +357,6 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 				entry.lastError = err
 				entry.lastErrorCtx = nil
 				entry.mutex.Unlock()
-				cancel()
 				return
 			}
 
