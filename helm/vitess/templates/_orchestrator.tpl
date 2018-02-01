@@ -87,7 +87,7 @@ spec:
               protocol: TCP
           livenessProbe:
             httpGet:
-              path: /
+              path: /api/lb-check
               port: 3000
             initialDelaySeconds: 300
             timeoutSeconds: 10
@@ -139,7 +139,7 @@ spec:
 ###################################
 # Per StatefulSet Orchestrator Service
 ###################################
-{{- define "orchestrator-statefulset-services" -}}
+{{- define "orchestrator-statefulset-service" -}}
 # set tuple values to more recognizable variables
 {{- $orc := index . 0 -}}
 {{- $i := index . 1 -}}
