@@ -155,6 +155,10 @@ type srvKeyspaceEntry struct {
 	// The intent is to have the source of a query that for instance
 	// has a bad keyspace or cell name.
 	lastErrorCtx context.Context
+
+	// lastErrorTime records the time that the watch failed, so that
+	// any requests that come in
+	lastErrorTime time.Time
 }
 
 // NewResilientServer creates a new ResilientServer
@@ -223,6 +227,7 @@ func (server *ResilientServer) GetSrvKeyspaceNames(ctx context.Context, cell str
 			result = entry.value
 			err = nil
 		} else {
+			server.counts.Add(errorCategory, 1)
 			log.Errorf("GetSrvKeyspaceNames(%v, %v) failed: %v (cached value expired)", ctx, cell, err)
 			entry.insertionTime = time.Time{}
 			entry.value = nil
@@ -283,7 +288,21 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 		return entry.value, entry.lastError
 	}
 
-	// Watch is not running, let's try to start it.
+	// Watch is not running, but check if the last time we got an error was
+	// more recent than the refresh interval.
+	//
+	// If so return either the last cached value or the last error we got.
+	cacheValid := entry.value != nil && time.Since(entry.lastValueTime) < server.cacheTTL
+	shouldRefresh := time.Since(entry.lastErrorTime) > server.cacheRefresh
+
+	if !shouldRefresh {
+		if cacheValid {
+			return entry.value, nil
+		}
+		return nil, entry.lastError
+	}
+
+	// Time to try to start the watch again.
 	// We use a background context, as starting the watch should keep going
 	// even if the current query context is short-lived.
 	newCtx := context.Background()
@@ -293,6 +312,7 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 		// until the next try
 		entry.lastError = current.Err
 		entry.lastErrorCtx = ctx
+		entry.lastErrorTime = time.Now()
 
 		// if the node disappears, delete the cached value
 		if current.Err == topo.ErrNoNode {
@@ -300,7 +320,7 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 		}
 
 		// check if the cached value is still fresh enough to use
-		if entry.value != nil && time.Since(entry.lastValueTime) < server.cacheTTL {
+		if cacheValid {
 			return entry.value, nil
 		}
 
