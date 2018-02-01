@@ -19,7 +19,7 @@
 ---
 # create a Service per StatefulSet replica
 {{ range $i := until (int $.Values.orchestrator.replicas) }}
-{{ include "orchestrator-statefulset-services" (tuple $.Values.orchestrator $i) }}
+{{ include "orchestrator-statefulset-service" (tuple $.Values.orchestrator $i) }}
 ---
 {{ end }}
 

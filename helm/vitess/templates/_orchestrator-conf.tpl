@@ -13,19 +13,7 @@ metadata:
 data: 
   orchestrator.conf.json: |-
     {
-    "AccessTokenExpiryMinutes": 1440,
-    "AccessTokenUseExpirySeconds": 60,
     "ActiveNodeExpireSeconds": 5,
-    "AgentPollMinutes": 60,
-    "AgentsServerPort": ":3001",
-    "AgentSSLCAFile": "",
-    "AgentSSLCertFile": "",
-    "AgentSSLPrivateKeyFile": "",
-    "AgentSSLSkipVerify": false,
-    "AgentSSLValidOUs": [
-    ],
-    "AgentsUseMutualTLS": false,
-    "AgentsUseSSL": false,
     "ApplyMySQLPromotionAfterMasterFailover": true,
     "AuditLogFile": "/tmp/orchestrator-audit.log",
     "AuditToSyslog": false,
@@ -35,9 +23,6 @@ data:
     "BackendDB": "sqlite",
     "BinlogEventsChunkSize": 10000,
     "CandidateInstanceExpireMinutes": 60,
-    "ClusterNameToAlias": {
-        "127.0.0.1": "test suite"
-    },
     "CoMasterRecoveryMustPromoteOtherCoMaster": true,
     "DataCenterPattern": "[.]([^.]+)[.][^.]+[.]mydomain[.]com",
     "Debug": true,
@@ -61,7 +46,7 @@ data:
     "HTTPAuthPassword": "",
     "HTTPAuthUser": "",
     "InstanceBulkOperationsWaitTimeoutSeconds": 10,
-    "InstancePollSeconds": 12,
+    "InstancePollSeconds": 5,
     "ListenAddress": ":3000",
     "MasterFailoverLostInstancesDowntimeMinutes": 0,
     "MySQLConnectTimeoutSeconds": 1,
@@ -121,27 +106,24 @@ data:
     "ReasonableMaintenanceReplicationLagSeconds": 20,
     "ReasonableReplicationLagSeconds": 10,
     "RecoverIntermediateMasterClusterFilters": [
-        "_intermediate_master_pattern_"
+        "*"
     ],
     "RecoverMasterClusterFilters": [
         ".*"
     ],
     "RecoveryIgnoreHostnameFilters": [
     ],
-    "RecoveryPeriodBlockMinutes": 1,
     "RecoveryPeriodBlockSeconds": 60,
     "ReduceReplicationAnalysisCount": true,
     "RejectHostnameResolvePattern": "",
     "RemoveTextFromHostnameDisplay": ".mydomain.com:3306",
     "ReplicationLagQuery": "select round(absolute_lag) from meta.heartbeat_view",
-    "SeedAcceptableBytesDiff": 8192,
     "ServeAgentsHttp": false,
     "SkipBinlogEventsContaining": [
     ],
     "SkipBinlogServerUnresolveCheck": true,
     "SkipMaxScaleCheck": true,
     "SkipOrchestratorDatabaseUpdate": false,
-    "SlaveLagQuery": "",
     "SlaveStartPostWaitMilliseconds": 1000,
     "SnapshotTopologiesIntervalHours": 0,
     "SQLite3DataFile": ":memory:",
