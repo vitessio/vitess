@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -329,5 +330,105 @@ func TestWatchSrvVSchema(t *testing.T) {
 			t.Fatalf("timed out waiting for deleted SrvVschema")
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestGetSrvKeyspaceNames(t *testing.T) {
+	ts, factory := memorytopo.NewServerAndFactory("test_cell")
+	*srvTopoCacheTTL = time.Duration(500 * time.Millisecond)
+	*srvTopoCacheRefresh = time.Duration(200 * time.Millisecond)
+	rs := NewResilientServer(ts, "TestGetSrvKeyspaceNames")
+
+	// Set SrvKeyspace with value
+	want := &topodatapb.SrvKeyspace{
+		ShardingColumnName: "id",
+		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+	}
+	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks2", want)
+
+	ctx := context.Background()
+	names, err := rs.GetSrvKeyspaceNames(ctx, "test_cell")
+	if err != nil {
+		t.Errorf("GetSrvKeyspaceNames unexpected error %v", err)
+	}
+	wantNames := []string{"test_ks", "test_ks2"}
+
+	if !reflect.DeepEqual(names, wantNames) {
+		t.Errorf("GetSrvKeyspaceNames got %v want %v", names, wantNames)
+	}
+
+	forceErr := fmt.Errorf("force test error")
+	factory.SetError(forceErr)
+
+	// Check that we get the cached value until 2X the refresh interval
+	// (400ms) elapses but before the TTL (500ms) expires
+	start := time.Now()
+	for {
+		names, err = rs.GetSrvKeyspaceNames(ctx, "test_cell")
+		if err != nil {
+			t.Errorf("GetSrvKeyspaceNames unexpected error %v", err)
+		}
+
+		if !reflect.DeepEqual(names, wantNames) {
+			t.Errorf("GetSrvKeyspaceNames got %v want %v", names, wantNames)
+		}
+
+		if time.Since(start) >= *srvTopoCacheRefresh*2 {
+			break
+		}
+
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	// Now wait for it to expire from cache
+	for {
+		_, err = rs.GetSrvKeyspaceNames(ctx, "test_cell")
+		if err != nil {
+			break
+		}
+
+		time.Sleep(25 * time.Millisecond)
+
+		if time.Since(start) > 2*time.Second {
+			t.Fatalf("expected error after TTL expires")
+		}
+	}
+
+	if err != forceErr {
+		t.Errorf("got error %v want %v", err, forceErr)
+	}
+
+	// Check that we only checked the topo service 2 times during the
+	// period where we got the cached error.
+	cachedReqs, ok := rs.counts.Counts()[cachedCategory]
+	if !ok || cachedReqs != 2 {
+		t.Errorf("expected 2 cached requests got %v", cachedReqs)
+	}
+
+	// Clear the error and wait until the cached error state expires
+	factory.SetError(nil)
+
+	start = time.Now()
+	for {
+		names, err = rs.GetSrvKeyspaceNames(ctx, "test_cell")
+		if err == nil {
+			break
+		}
+
+		time.Sleep(10 * time.Millisecond)
+
+		if time.Since(start) > 2*time.Second {
+			t.Fatalf("expected error after TTL expires")
+		}
+	}
+
+	if !reflect.DeepEqual(names, wantNames) {
+		t.Errorf("GetSrvKeyspaceNames got %v want %v", names, wantNames)
+	}
+
+	errorReqs, ok := rs.counts.Counts()[errorCategory]
+	if !ok || errorReqs != 1 {
+		t.Errorf("expected 1 error request got %v", errorReqs)
 	}
 }

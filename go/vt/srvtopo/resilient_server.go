@@ -35,7 +35,8 @@ import (
 )
 
 var (
-	srvTopoCacheTTL = flag.Duration("srv_topo_cache_ttl", 1*time.Second, "how long to use cached entries for topology")
+	srvTopoCacheTTL     = flag.Duration("srv_topo_cache_ttl", 1*time.Second, "how long to use cached entries for topology")
+	srvTopoCacheRefresh = flag.Duration("srv_topo_cache_refresh", 1*time.Second, "how frequently to refresh the topology for cached entries")
 )
 
 const (
@@ -96,9 +97,10 @@ const (
 // - limit the QPS to the underlying topo.Server
 // - return the last known value of the data if there is an error
 type ResilientServer struct {
-	topoServer *topo.Server
-	cacheTTL   time.Duration
-	counts     *stats.Counters
+	topoServer   *topo.Server
+	cacheTTL     time.Duration
+	cacheRefresh time.Duration
+	counts       *stats.Counters
 
 	// mutex protects the cache map itself, not the individual
 	// values in the cache.
@@ -115,6 +117,7 @@ type srvKeyspaceNamesEntry struct {
 	mutex sync.Mutex
 
 	insertionTime time.Time
+	lastQueryTime time.Time
 	value         []string
 	lastError     error
 	lastErrorCtx  context.Context
@@ -158,9 +161,10 @@ type srvKeyspaceEntry struct {
 // based on the provided topo.Server.
 func NewResilientServer(base *topo.Server, counterPrefix string) *ResilientServer {
 	return &ResilientServer{
-		topoServer: base,
-		cacheTTL:   *srvTopoCacheTTL,
-		counts:     stats.NewCounters(counterPrefix + "Counts"),
+		topoServer:   base,
+		cacheTTL:     *srvTopoCacheTTL,
+		cacheRefresh: *srvTopoCacheRefresh,
+		counts:       stats.NewCounters(counterPrefix + "Counts"),
 
 		srvKeyspaceNamesCache: make(map[string]*srvKeyspaceNamesEntry),
 		srvKeyspaceCache:      make(map[string]*srvKeyspaceEntry),
@@ -189,29 +193,44 @@ func (server *ResilientServer) GetSrvKeyspaceNames(ctx context.Context, cell str
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
-	// If the entry is fresh enough, return it
-	if time.Now().Sub(entry.insertionTime) < server.cacheTTL {
-		return entry.value, entry.lastError
+	// If it is not time to check again, then return either the cached
+	// value or the cached error
+	cacheValid := entry.value != nil && time.Since(entry.insertionTime) < server.cacheTTL
+	shouldRefresh := time.Since(entry.lastQueryTime) > server.cacheRefresh
+
+	if !shouldRefresh {
+		if cacheValid {
+			return entry.value, nil
+		}
+		return nil, entry.lastError
 	}
 
-	// Not in cache or too old, get the real value. We use the context that issued
-	// the query here.
+	// Not in cache or needs refresh so try to get the real value.
+	// We use the context that issued the query here.
 	result, err := server.topoServer.GetSrvKeyspaceNames(ctx, cell)
-	if err != nil {
+	if err == nil {
+		// save the value we got and the current time in the cache
+		entry.insertionTime = time.Now()
+		entry.value = result
+	} else {
 		if entry.insertionTime.IsZero() {
 			server.counts.Add(errorCategory, 1)
 			log.Errorf("GetSrvKeyspaceNames(%v, %v) failed: %v (no cached value, caching and returning error)", ctx, cell, err)
-		} else {
+
+		} else if cacheValid {
 			server.counts.Add(cachedCategory, 1)
 			log.Warningf("GetSrvKeyspaceNames(%v, %v) failed: %v (returning cached value: %v %v)", ctx, cell, err, entry.value, entry.lastError)
-			return entry.value, entry.lastError
+			result = entry.value
+			err = nil
+		} else {
+			log.Errorf("GetSrvKeyspaceNames(%v, %v) failed: %v (cached value expired)", ctx, cell, err)
+			entry.insertionTime = time.Time{}
+			entry.value = nil
 		}
 	}
 
-	// save the value we got and the current time in the cache
-	entry.insertionTime = time.Now()
-	entry.value = result
 	entry.lastError = err
+	entry.lastQueryTime = time.Now()
 	entry.lastErrorCtx = ctx
 	return result, err
 }
@@ -281,7 +300,7 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 		}
 
 		// check if the cached value is still fresh enough to use
-		if entry.value != nil && time.Since(entry.lastValueTime) < *srvTopoCacheTTL {
+		if entry.value != nil && time.Since(entry.lastValueTime) < server.cacheTTL {
 			return entry.value, nil
 		}
 
