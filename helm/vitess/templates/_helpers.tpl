@@ -243,17 +243,25 @@ export EXTRA_MY_CNF="$FLAVOR_MYCNF:/vtdataroot/tabletdata/report-host.cnf:/vt/co
 
 {{ if .enabled }}
 
+  {{ if eq .backup_storage_implementation "gcs" }}
+
+    {{ if .gcsSecret }}
 credsPath=/etc/secrets/creds/$(ls /etc/secrets/creds/ | head -1)
 
-{{ if eq .backup_storage_implementation "gcs" }}
 export GOOGLE_APPLICATION_CREDENTIALS=$credsPath
 cat $GOOGLE_APPLICATION_CREDENTIALS
+    {{ end }}
 
-{{ else if eq .backup_storage_implementation "s3" }}
+  {{ else if eq .backup_storage_implementation "s3" }}
+
+    {{ if .s3Secret }}
+credsPath=/etc/secrets/creds/$(ls /etc/secrets/creds/ | head -1)
+
 export AWS_SHARED_CREDENTIALS_FILE=$credsPath
 cat $AWS_SHARED_CREDENTIALS_FILE
+    {{ end }}
 
-{{ end }}
+  {{ end }}
 
 {{ end }}
 
