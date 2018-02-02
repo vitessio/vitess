@@ -2,6 +2,8 @@
 # vttablet Service
 ###################################
 {{- define "vttablet-service" -}}
+# set tuple values to more recognizable variables
+{{- $pmm := index . 0 -}}
 apiVersion: v1
 kind: Service
 metadata:
@@ -17,6 +19,12 @@ spec:
       name: web
     - port: 16002
       name: grpc
+{{ if $pmm.enabled }}
+    - port: 42001
+      name: query-data
+    - port: 42002
+      name: mysql-metrics
+{{ end }}
   clusterIP: None
   selector:
     app: vitess
@@ -37,6 +45,7 @@ spec:
 {{- $defaultVttablet := index . 5 -}}
 {{- $namespace := index . 6 -}}
 {{- $config := index . 7 -}}
+{{- $pmm := index . 8 -}}
 
 # sanitize inputs to create tablet name
 {{- $cellClean := include "clean-label" $cell.name -}}
@@ -96,6 +105,7 @@ spec:
 {{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $vitessTag $uid $namespace $config) | indent 8 }}
 {{ include "cont-mysql-errorlog" . | indent 8 }}
 {{ include "cont-mysql-slowlog" . | indent 8 }}
+{{ if $pmm.enabled }}{{ include "cont-pmm-client" (tuple $pmm $namespace) | indent 8 }}{{ end }}
 
       volumes:
         - name: vt

@@ -217,3 +217,36 @@ vttablet:
       requests:
         storage: "100Gi"
 ```
+
+### Enable PMM (Percona Monitoring and Management)
+
+```
+topology:
+  cells:
+    ...
+
+pmm:
+  enabled: true
+  pmmTag: "1.6.1"
+  client:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+  server:
+    resources:
+      limits:
+        cpu: 2
+        memory: 4Gi
+    dataVolumeClaimSpec:
+      storageClassName: "default"
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: "150Gi"
+    env:
+      metricsMemory: "3000000"
+```
