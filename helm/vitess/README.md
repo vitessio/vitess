@@ -250,3 +250,15 @@ pmm:
     env:
       metricsMemory: "3000000"
 ```
+
+### Enable Orchestrator
+#### NOTE: This requires at least Kubernetes 1.9
+
+```
+topology:
+  cells:
+    ...
+
+orchestrator:
+  enabled: true
+```

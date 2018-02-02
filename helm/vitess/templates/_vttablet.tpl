@@ -46,6 +46,7 @@ spec:
 {{- $namespace := index . 6 -}}
 {{- $config := index . 7 -}}
 {{- $pmm := index . 8 -}}
+{{- $orc := index . 9 -}}
 
 # sanitize inputs to create tablet name
 {{- $cellClean := include "clean-label" $cell.name -}}
@@ -102,7 +103,7 @@ spec:
 
       containers:
 {{ include "cont-mysql" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $uid) | indent 8 }}
-{{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $vitessTag $uid $namespace $config) | indent 8 }}
+{{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $vitessTag $uid $namespace $config $orc) | indent 8 }}
 {{ include "cont-mysql-errorlog" . | indent 8 }}
 {{ include "cont-mysql-slowlog" . | indent 8 }}
 {{ if $pmm.enabled }}{{ include "cont-pmm-client" (tuple $pmm $namespace) | indent 8 }}{{ end }}
@@ -242,6 +243,7 @@ spec:
 {{- $uid := index . 7 -}}
 {{- $namespace := index . 8 -}}
 {{- $config := index . 9 -}}
+{{- $orc := index . 10 -}}
 
 {{- $cellClean := include "clean-label" $cell.name -}}
 {{- with $tablet.vttablet -}}
@@ -321,6 +323,11 @@ spec:
         -db-config-filtered-charset "utf8"
         -enable_semi_sync
         -enable_replication_reporter
+{{ if $orc.enabled }}
+        -heartbeat_enable
+        -orc_api_url "http://orchestrator.{{ $namespace }}/api"
+        -orc_discover_interval "5m"
+{{ end }}
 {{ include "backup-flags" $config.backup | indent 8 }}
       END_OF_COMMAND
       )
