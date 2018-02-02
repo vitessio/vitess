@@ -507,7 +507,7 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
 	pos = writeByte(data, pos, byte(typ))
 	pos = writeUint16(data, pos, uint16(flags))
 	pos = writeByte(data, pos, byte(field.Decimals))
-	pos += 2
+	pos = writeUint16(data, pos, uint16(0x0000))
 
 	if pos != len(data) {
 		return fmt.Errorf("internal error: packing of column definition used %v bytes instead of %v", pos, len(data))
