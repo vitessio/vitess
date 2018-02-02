@@ -166,8 +166,17 @@ spec:
           - |
             set -ex
 
+            SECONDS=0
+            TIMEOUT_SECONDS=600
+
             # poll every 5 seconds to see if vtctld is ready
-            until vtctlclient -server vtctld.{{ $namespace }}:15999 ListAllTablets {{ $cellClean }} > /dev/null 2>&1; do sleep 5; done
+            until vtctlclient -server vtctld.{{ $namespace }}:15999 ListAllTablets {{ $cellClean }} > /dev/null 2>&1; do 
+              if (( $SECONDS > $TIMEOUT_SECONDS )); then
+                echo "timed out waiting for vtctlclient to be ready"
+                exit 1
+              fi
+              sleep 5
+            done
 
             until [ $TABLETS_READY ]; do
               # get all the tablets in the current cell
@@ -193,13 +202,24 @@ spec:
                 # wait 5 seconds for vttablets to continue getting ready
                 sleep 5
               fi
+
+              if (( $SECONDS > $TIMEOUT_SECONDS )); then
+                echo "timed out waiting for tablets to be ready"
+                exit 1
+              fi
             done
 
             # find the tablet id for the "-replica-0" stateful set for a given cell, keyspace and shard
             tablet_id=$( echo "$shardTablets" | awk 'substr( $5,1,{{ add (len $shardName) 10 }} ) == "{{ $shardName }}-replica-0" {print $1}')
             
             # initialize the shard master
-            until vtctlclient -server vtctld.{{ $namespace }}:15999 InitShardMaster -force {{ $keyspaceClean }}/{{ $shard.name }} $tablet_id; do sleep 5; done
+            until vtctlclient -server vtctld.{{ $namespace }}:15999 InitShardMaster -force {{ $keyspaceClean }}/{{ $shard.name }} $tablet_id; do 
+              if (( $SECONDS > $TIMEOUT_SECONDS )); then
+                echo "timed out waiting for InitShardMaster to succeed"
+                exit 1
+              fi
+              sleep 5
+            done
             
 {{- end -}}
 
