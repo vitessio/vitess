@@ -117,7 +117,7 @@ data:
     "ReduceReplicationAnalysisCount": true,
     "RejectHostnameResolvePattern": "",
     "RemoveTextFromHostnameDisplay": ".mydomain.com:3306",
-    "ReplicationLagQuery": "SELECT unix_timestamp() - floor(ts/1000000000) FROM `_vt`.heartbeat WHERE keyspaceShard='KEYSPACE:SHARD';",
+    "ReplicationLagQuery": "SELECT unix_timestamp() - floor(ts/1000000000) FROM `_vt`.heartbeat ORDER BY ts DESC LIMIT 1;",
     "ServeAgentsHttp": false,
     "SkipBinlogEventsContaining": [
     ],
