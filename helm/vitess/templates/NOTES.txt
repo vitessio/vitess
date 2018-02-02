@@ -10,4 +10,4 @@ Then use the following URLs:
 
 vtctld: {{$proxyURL}}/services/vtctld:web/app/
 vtgate: {{$proxyURL}}/services/vtgate-{{$cell}}:web/
-
+{{ if $.Values.pmm.enabled }}   pmm: {{$proxyURL}}/services/pmm:web/{{ end }}
