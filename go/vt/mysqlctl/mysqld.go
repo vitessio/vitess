@@ -637,7 +637,18 @@ func getMycnfTemplates(root string) []string {
 // RefreshConfig attempts to recreate the my.cnf from templates, and log and
 // swap in to place if it's updated. It keeps a copy of the last version in case fallback is required.
 // Should be called from a stable replica, server_id is not regenerated.
-func (mysqld *Mysqld) RefreshConfig() error {
+func (mysqld *Mysqld) RefreshConfig(ctx context.Context) error {
+	// Execute as remote action on mysqlctld if requested.
+	if *socketFile != "" {
+		log.Infof("executing Mysqld.RefreshConfig() remotely via mysqlctld server: %v", *socketFile)
+		client, err := mysqlctlclient.New("unix", *socketFile)
+		if err != nil {
+			return fmt.Errorf("can't dial mysqlctld: %v", err)
+		}
+		defer client.Close()
+		return client.RefreshConfig(ctx)
+	}
+
 	log.Info("Checking for updates to my.cnf")
 	root, err := vtenv.VtRoot()
 	if err != nil {

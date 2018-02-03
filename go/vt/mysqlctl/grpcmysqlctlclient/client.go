@@ -91,6 +91,14 @@ func (c *client) ReinitConfig(ctx context.Context) error {
 	})
 }
 
+// RefreshConfig is part of the MysqlctlClient interface.
+func (c *client) RefreshConfig(ctx context.Context) error {
+	return c.withRetry(ctx, func() error {
+		_, err := c.c.RefreshConfig(ctx, &mysqlctlpb.RefreshConfigRequest{})
+		return err
+	})
+}
+
 // Close is part of the MysqlctlClient interface.
 func (c *client) Close() {
 	c.cc.Close()
