@@ -54,8 +54,7 @@
   {{ range $keyspace := $cell.keyspaces }}
     {{ range $shard := $keyspace.shards }}
 
-      # TODO: add the replicas rather than making the user provide it
-      {{ $totalTabletCount := $shard.tabletCount }}
+      {{ $totalTabletCount := len (include "tablet-count" $shard.tablets) }}
 
       # now range through the tablets again to set them up
       {{ range $tablet := $shard.tablets }}
