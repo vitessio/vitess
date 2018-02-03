@@ -101,7 +101,7 @@ spec:
                 -topo_implementation="etcd2"
                 -topo_global_server_address="etcd-global-client.{{ $namespace }}:2379"
                 -topo_global_root=/vitess/global
-{{ include "backup-flags" . | indent 16 }}
+{{ include "backup-flags" $config.backup | indent 16 }}
               END_OF_COMMAND
               )
 
