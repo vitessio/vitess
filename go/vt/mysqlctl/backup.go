@@ -35,6 +35,7 @@ import (
 
 	"github.com/youtube/vitess/go/cgzip"
 	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/sqlescape"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/hook"
@@ -539,9 +540,10 @@ func checkNoDB(ctx context.Context, mysqld MysqlDaemon, dbName string) (bool, er
 		return false, fmt.Errorf("checkNoDB failed: %v", err)
 	}
 
+	backtickDBName := sqlescape.EscapeID(dbName)
 	for _, row := range qr.Rows {
 		if row[0].ToString() == dbName {
-			tableQr, err := mysqld.FetchSuperQuery(ctx, "SHOW TABLES FROM "+dbName)
+			tableQr, err := mysqld.FetchSuperQuery(ctx, "SHOW TABLES FROM "+backtickDBName)
 			if err != nil {
 				return false, fmt.Errorf("checkNoDB failed: %v", err)
 			}
