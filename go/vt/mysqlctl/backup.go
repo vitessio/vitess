@@ -529,11 +529,6 @@ func backupFile(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, 
 // satisfied (there is a DB with tables).
 // Returns non-nil error if one occurs while trying to perform the check.
 func checkNoDB(ctx context.Context, mysqld MysqlDaemon, dbName string) (bool, error) {
-	// Wait for mysqld to be ready, in case it was launched in parallel with us.
-	if err := mysqld.Wait(ctx); err != nil {
-		return false, err
-	}
-
 	qr, err := mysqld.FetchSuperQuery(ctx, "SHOW DATABASES")
 	if err != nil {
 		return false, fmt.Errorf("checkNoDB failed: %v", err)
@@ -740,6 +735,11 @@ func Restore(
 	logger logutil.Logger,
 	deleteBeforeRestore bool,
 	dbName string) (mysql.Position, error) {
+
+	// Wait for mysqld to be ready, in case it was launched in parallel with us.
+	if err := mysqld.Wait(ctx); err != nil {
+		return mysql.Position{}, err
+	}
 
 	// find the right backup handle: most recent one, with a MANIFEST
 	logger.Infof("Restore: looking for a suitable backup to restore")
