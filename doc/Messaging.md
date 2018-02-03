@@ -142,7 +142,7 @@ A received (or processed) message can be acknowledged using the `MessageAck`
 API call. This call accepts the following parameters:
 
 * `Name`: Name of the message table.
-* `Keyspace`: Keypsace where the message table is present. This field can be
+* `Keyspace`: Keyspace where the message table is present. This field can be
   empty if the table name is unique across all keyspaces.
 * `Ids`: The list of ids that need to be acked.
 
@@ -184,18 +184,24 @@ message and the back-off is less aggressive.
 
 You can also view messages using regular `select` queries.
 
+## Undocumented features
+
+These are features that were previously known limitations, but have since been supported
+and are awaiting further documentation.
+
+* Flexible columns: Allow any number of application defined columns to be in
+  the message table.
+* No ACL check for receivers: To be added.
+* Monitoring support: To be added.
+* Dropped tables: The message engine does not currently detect dropped tables.
+
 ## Known limitations
 
 The message feature is currently in alpha, and can be improved. Here is the
 list of possible limitations/improvements:
 
-* Flexible columns: Allow any number of application defined columns to be in
-  the message table.
-* No ACL check for receivers: To be added.
 * Proactive scheduling: Upcoming messages can be proactively scheduled for
   timely delivery instead of waiting for the next polling cycle.
-* Monitoring support: To be added.
-* Dropped tables: The message engine does not currently detect dropped tables.
 * Changed properties: Although the engine detects new message tables, it does
   not refresh properties of an existing table.
 * A `SELECT` style syntax for subscribing to messages.
