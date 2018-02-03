@@ -130,6 +130,9 @@ vttablet:
   mysqlImage: "percona:5.7.20"
   # mysqlImage: "mysql:5.7.20"
   # mysqlImage: "mariadb:10.3.4"
+
+  enableHeartbeat: false
+  
   resources:
     # common production values 2-4CPU/4-8Gi RAM
     limits:
