@@ -404,12 +404,14 @@ spec:
         -db-config-filtered-uname "vt_filtered"
         -db-config-filtered-dbname "vt_{{$keyspace.name}}"
         -db-config-filtered-charset "utf8"
+        -enable_replication_reporter
 {{ if gt (int $shard.tabletCount) 1 }}
         -enable_semi_sync
 {{ end }}
-        -enable_replication_reporter
-{{ if $orc.enabled }}
+{{ if $defaultVttablet.enableHeartbeat }}
         -heartbeat_enable
+{{ end }}
+{{ if $orc.enabled }}
         -orc_api_url "http://orchestrator.{{ $namespace }}/api"
         -orc_discover_interval "5m"
 {{ end }}
