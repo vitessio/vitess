@@ -105,7 +105,6 @@ export EXTRA_MY_CNF="$FLAVOR_MYCNF:/vtdataroot/tabletdata/report-host.cnf:/vt/co
 # backup flags - expects config.backup
 #############################
 {{- define "backup-flags" -}}
-# set tuple values to more recognizable variables
 {{- $backup := index . 0 -}}
 {{- $caller := index . 1 -}}
 
@@ -115,7 +114,7 @@ export EXTRA_MY_CNF="$FLAVOR_MYCNF:/vtdataroot/tabletdata/report-host.cnf:/vt/co
     {{ if eq $caller "vttablet" }}
 -restore_from_backup
     {{ end }}
-    
+
 -backup_storage_implementation=$VT_BACKUP_SERVICE
 
     {{ if eq .backup_storage_implementation "gcs" }}
