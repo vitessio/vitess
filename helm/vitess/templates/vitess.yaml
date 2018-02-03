@@ -15,7 +15,7 @@
 {{ include "orchestrator" (tuple $.Values.orchestrator) }}
 ---
 # create orchestrator config map
-{{ include "orchestrator-config" (tuple $.Values.orchestrator $.Release.Namespace) }}
+{{ include "orchestrator-config" (tuple $.Values.orchestrator $.Release.Namespace $.Values.vttablet.enableHeartbeat) }}
 ---
 # create a Service per StatefulSet replica
 {{ range $i := until (int $.Values.orchestrator.replicas) }}

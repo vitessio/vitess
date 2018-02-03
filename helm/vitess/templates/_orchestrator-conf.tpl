@@ -5,6 +5,7 @@
 # set tuple values to more recognizable variables
 {{- $orc := index . 0 -}}
 {{- $namespace := index . 1 -}}
+{{- $enableHeartbeat := index . 2 -}}
 
 apiVersion: v1
 kind: ConfigMap
@@ -117,7 +118,11 @@ data:
     "ReduceReplicationAnalysisCount": true,
     "RejectHostnameResolvePattern": "",
     "RemoveTextFromHostnameDisplay": ".mydomain.com:3306",
+{{ if $enableHeartbeat }}
     "ReplicationLagQuery": "SELECT unix_timestamp() - floor(ts/1000000000) FROM `_vt`.heartbeat ORDER BY ts DESC LIMIT 1;",
+{{ else }}
+    "ReplicationLagQuery": "",
+{{ end }}    
     "ServeAgentsHttp": false,
     "SkipBinlogEventsContaining": [
     ],
