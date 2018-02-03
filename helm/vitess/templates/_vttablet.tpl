@@ -105,7 +105,7 @@ spec:
 
       containers:
 {{ include "cont-mysql" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $uid) | indent 8 }}
-{{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $vitessTag $uid $namespace $config $orc) | indent 8 }}
+{{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $vitessTag $uid $namespace $config $orc $totalTabletCount) | indent 8 }}
 {{ include "cont-mysql-errorlog" . | indent 8 }}
 {{ include "cont-mysql-slowlog" . | indent 8 }}
 {{ if $pmm.enabled }}{{ include "cont-pmm-client" (tuple $pmm $namespace) | indent 8 }}{{ end }}
@@ -327,6 +327,7 @@ spec:
 {{- $namespace := index . 8 -}}
 {{- $config := index . 9 -}}
 {{- $orc := index . 10 -}}
+{{- $totalTabletCount := index . 11 -}}
 
 {{- $cellClean := include "clean-label" $cell.name -}}
 {{- with $tablet.vttablet -}}
@@ -405,8 +406,10 @@ spec:
         -db-config-filtered-dbname "vt_{{$keyspace.name}}"
         -db-config-filtered-charset "utf8"
         -enable_replication_reporter
-{{ if gt (int $shard.tabletCount) 1 }}
+{{ if $defaultVttablet.enableSemisync }}
+  {{ if gt $totalTabletCount 1 }}
         -enable_semi_sync
+  {{ end }}
 {{ end }}
 {{ if $defaultVttablet.enableHeartbeat }}
         -heartbeat_enable
