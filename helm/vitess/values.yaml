@@ -132,7 +132,8 @@ vttablet:
   # mysqlImage: "mariadb:10.3.4"
 
   enableHeartbeat: false
-  
+  enableSemisync: false
+
   resources:
     # common production values 2-4CPU/4-8Gi RAM
     limits:
