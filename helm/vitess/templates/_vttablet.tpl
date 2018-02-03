@@ -328,7 +328,7 @@ spec:
         -orc_api_url "http://orchestrator.{{ $namespace }}/api"
         -orc_discover_interval "5m"
 {{ end }}
-{{ include "backup-flags" $config.backup | indent 8 }}
+{{ include "backup-flags" (tuple $config.backup "vttablet") | indent 8 }}
       END_OF_COMMAND
       )
 {{- end -}}
