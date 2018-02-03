@@ -3,9 +3,6 @@
 
 Release name: {{.Release.Name}}
 
-After the init-shard-master jobs complete successfully, you can and should delete the jobs.
-Kubernetes does not automatically remove them in case you need to see the logs.
-
 To access administrative web pages, start a proxy with:
   kubectl proxy --port=8001
 
