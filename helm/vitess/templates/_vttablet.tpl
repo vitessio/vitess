@@ -199,14 +199,15 @@ spec:
               if [ $tabletCount == {{ $totalTabletCount }} ]; then
                 TABLETS_READY=true
               else
+                if (( $SECONDS > $TIMEOUT_SECONDS )); then
+                  echo "timed out waiting for tablets to be ready"
+                  exit 1
+                fi
+                
                 # wait 5 seconds for vttablets to continue getting ready
                 sleep 5
               fi
 
-              if (( $SECONDS > $TIMEOUT_SECONDS )); then
-                echo "timed out waiting for tablets to be ready"
-                exit 1
-              fi
             done
 
             # find the tablet id for the "-replica-0" stateful set for a given cell, keyspace and shard
