@@ -166,11 +166,12 @@ spec:
           - |
             set -ex
 
+            VTCTLD_SVC=vtctld.{{ $namespace }}:15999
             SECONDS=0
             TIMEOUT_SECONDS=600
 
             # poll every 5 seconds to see if vtctld is ready
-            until vtctlclient -server vtctld.{{ $namespace }}:15999 ListAllTablets {{ $cellClean }} > /dev/null 2>&1; do 
+            until vtctlclient -server $VTCTLD_SVC ListAllTablets {{ $cellClean }} > /dev/null 2>&1; do 
               if (( $SECONDS > $TIMEOUT_SECONDS )); then
                 echo "timed out waiting for vtctlclient to be ready"
                 exit 1
@@ -180,15 +181,22 @@ spec:
 
             until [ $TABLETS_READY ]; do
               # get all the tablets in the current cell
-              cellTablets="$(vtctlclient -server vtctld.{{ $namespace }}:15999 ListAllTablets {{ $cellClean }})"
+              cellTablets="$(vtctlclient -server $VTCTLD_SVC ListAllTablets {{ $cellClean }})"
               
               # filter to only the tablets in our current shard
               shardTablets=$( echo "$cellTablets" | awk 'substr( $5,1,{{ len $shardName }} ) == "{{ $shardName }}" {print $0}')
 
-              # check for a master tablet
+              # check for a master tablet from the ListAllTablets call
               masterTablet=$( echo "$shardTablets" | awk '$4 == "master" {print $1}')
               if [ $masterTablet ]; then
                   echo "'$masterTablet' is already the master tablet, exiting without running InitShardMaster"
+                  exit
+              fi
+
+              # check for a master tablet from the GetShard call
+              master_alias=$(vtctlclient -server $VTCTLD_SVC GetShard {{ $keyspaceClean }}/{{ $shard.name }} | jq '.master_alias.uid')
+              if [ $master_alias != "null" ]; then
+                  echo "'$master_alias' is already the master tablet, exiting without running InitShardMaster"
                   exit
               fi
 
@@ -214,7 +222,7 @@ spec:
             tablet_id=$( echo "$shardTablets" | awk 'substr( $5,1,{{ add (len $shardName) 10 }} ) == "{{ $shardName }}-replica-0" {print $1}')
             
             # initialize the shard master
-            until vtctlclient -server vtctld.{{ $namespace }}:15999 InitShardMaster -force {{ $keyspaceClean }}/{{ $shard.name }} $tablet_id; do 
+            until vtctlclient -server $VTCTLD_SVC InitShardMaster -force {{ $keyspaceClean }}/{{ $shard.name }} $tablet_id; do 
               if (( $SECONDS > $TIMEOUT_SECONDS )); then
                 echo "timed out waiting for InitShardMaster to succeed"
                 exit 1
