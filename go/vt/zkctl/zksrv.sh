@@ -55,7 +55,6 @@ fi
 
 cmd="$java -DZOO_LOG_DIR=$logdir -cp $classpath org.apache.zookeeper.server.quorum.QuorumPeerMain $config"
 
-start=`/bin/date +%s`
 log "INFO starting $cmd"
 $cmd < /dev/null &> /dev/null &
 pid=$!
