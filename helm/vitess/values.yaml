@@ -130,6 +130,13 @@ vttablet:
   mysqlImage: "percona:5.7.20"
   # mysqlImage: "mysql:5.7.20"
   # mysqlImage: "mariadb:10.3.4"
+
+  enableHeartbeat: false
+
+  # This requires at least 2 instances of "replica" tablet types, otherwise semi-sync
+  # will block forever. "rdonly" tablets do not ACK.
+  enableSemisync: false
+
   resources:
     # common production values 2-4CPU/4-8Gi RAM
     limits:
