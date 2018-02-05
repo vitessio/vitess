@@ -284,8 +284,8 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 }
 
 func (e *Executor) shardExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
-	f := func(keyspace string) (string, []string, error) {
-		return keyspace, []string{target.Shard}, nil
+	f := func() ([]*srvtopo.ResolvedShard, error) {
+		return e.resolver.resolver.ResolveShards(ctx, target.Keyspace, []string{target.Shard}, target.TabletType)
 	}
 	return e.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, safeSession.Session, f, false /* notInTransaction */, safeSession.Options, logStats)
 }
@@ -295,25 +295,19 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 		return nil, errNoKeyspace
 	}
 
-	f := func(keyspace string) (string, []string, error) {
-		var shards []string
+	f := func() ([]*srvtopo.ResolvedShard, error) {
+		var result []*srvtopo.ResolvedShard
+		var err error
 		if target.Shard == "" {
-			ks, _, allShards, err := srvtopo.GetKeyspaceShards(ctx, e.serv, e.cell, keyspace, target.TabletType)
-			if err != nil {
-				return "", nil, err
-			}
-			// The usual keyspace resolution rules are applied.
-			// This means that the keyspace can be remapped to a new one
-			// if vertical resharding is in progress.
-			keyspace = ks
-			for _, shard := range allShards {
-				shards = append(shards, shard.Name)
-			}
+			result, err = e.resolver.resolver.GetAllShards(ctx, target.Keyspace, target.TabletType)
 		} else {
-			shards = []string{target.Shard}
+			result, err = e.resolver.resolver.ResolveShards(ctx, target.Keyspace, []string{target.Shard}, target.TabletType)
 		}
-		logStats.ShardQueries = uint32(len(shards))
-		return keyspace, shards, nil
+		if err != nil {
+			return nil, err
+		}
+		logStats.ShardQueries = uint32(len(result))
+		return result, nil
 	}
 
 	execStart := time.Now()

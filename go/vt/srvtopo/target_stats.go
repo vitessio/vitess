@@ -20,25 +20,29 @@ import (
 	"fmt"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 )
 
 // TargetStats is an interface that the srvtopo module uses to handle
 // routing of queries.
-// - discovery.TabletStatsCache will implement this interface.
-// - l2vtgategateway will also implement this interface: for each l2vtgate pool,
+// - discovery.TabletStatsCache will implement the discovery part of the
+//   interface, and discoverygateway will have the QueryService.
+// - hybridgateway will also implement this interface: for each l2vtgate pool,
 //   it will establish a StreamHealth connection, and store the returned
 //   health stats.
 type TargetStats interface {
 	// GetAggregateStats returns the aggregate stats for the given Target.
 	// The srvtopo module will use that information to route queries
-	// to the right cell.
+	// to the right cell. Also returns the QueryService to use to
+	// reach that target.
 	// Can return topo.ErrNoNode if the target has no stats.
-	GetAggregateStats(target *querypb.Target) (*querypb.AggregateStats, error)
+	GetAggregateStats(target *querypb.Target) (*querypb.AggregateStats, queryservice.QueryService, error)
 
 	// GetMasterCell returns the master location for a keyspace/shard.
 	// Since there is only one master for a shard, we only need to
-	// know its cell to complete the Target.
-	GetMasterCell(keyspace, shard string) (cell string, err error)
+	// know its cell to complete the Target. Also returns the QueryService
+	// to use to reach that target.
+	GetMasterCell(keyspace, shard string) (cell string, qs queryservice.QueryService, err error)
 }
 
 // TargetStatsListener is an interface used to propagate TargetStats changes.

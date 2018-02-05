@@ -25,9 +25,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -115,23 +113,6 @@ func GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []
 		}
 	}
 	return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "KeyspaceId %v didn't match any shards %+v", hex.EncodeToString(keyspaceID), allShards)
-}
-
-// MapEntityIdsToShards returns a map of shards to values to use in that shard.
-func MapEntityIdsToShards(ctx context.Context, topoServ Server, cell, keyspace string, entityIds []*vtgatepb.ExecuteEntityIdsRequest_EntityId, tabletType topodatapb.TabletType) (string, map[string][]*querypb.Value, error) {
-	keyspace, _, allShards, err := GetKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
-	if err != nil {
-		return "", nil, err
-	}
-	var shards = make(map[string][]*querypb.Value)
-	for _, eid := range entityIds {
-		shard, err := GetShardForKeyspaceID(allShards, eid.KeyspaceId)
-		if err != nil {
-			return "", nil, err
-		}
-		shards[shard] = append(shards[shard], &querypb.Value{Type: eid.Type, Value: eid.Value})
-	}
-	return keyspace, shards, nil
 }
 
 // MapKeyRangesToShards returns the set of shards that "intersect"
