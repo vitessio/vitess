@@ -85,8 +85,14 @@ func TestScatterConnExecuteBatch(t *testing.T) {
 
 func TestScatterConnStreamExecute(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnStreamExecute", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
+		res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+		rss, err := res.ResolveShards(context.Background(), "TestScatterConnStreamExecute", shards, topodatapb.TabletType_REPLICA)
+		if err != nil {
+			return nil, err
+		}
+
 		qr := new(sqltypes.Result)
-		err := sc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecute", shards, topodatapb.TabletType_REPLICA, nil, func(r *sqltypes.Result) error {
+		err = sc.StreamExecute(context.Background(), "query", nil, rss, topodatapb.TabletType_REPLICA, nil, func(r *sqltypes.Result) error {
 			qr.AppendResult(r)
 			return nil
 		})
@@ -283,7 +289,12 @@ func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	hc := discovery.NewFakeHealthCheck()
 	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
 	hc.AddTestTablet("aa", "0", 1, "TestScatterConnStreamExecuteSendError", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
-	err := sc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecuteSendError", []string{"0"}, topodatapb.TabletType_REPLICA, nil, func(*sqltypes.Result) error {
+	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+	rss, err := res.ResolveShards(context.Background(), "TestScatterConnStreamExecuteSendError", []string{"0"}, topodatapb.TabletType_REPLICA)
+	if err != nil {
+		t.Fatalf("ResolveShards failed: %v", err)
+	}
+	err = sc.StreamExecute(context.Background(), "query", nil, rss, topodatapb.TabletType_REPLICA, nil, func(*sqltypes.Result) error {
 		return fmt.Errorf("send error")
 	})
 	want := "send error"

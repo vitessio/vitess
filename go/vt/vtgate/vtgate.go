@@ -340,8 +340,8 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 			bindVariables,
 			target.Keyspace,
 			target.TabletType,
-			func(keyspace string) (string, []string, error) {
-				return keyspace, []string{target.Shard}, nil
+			func(keyspace string) ([]*srvtopo.ResolvedShard, error) {
+				return vtg.resolver.resolver.ResolveShards(ctx, keyspace, []string{target.Shard}, target.TabletType)
 			},
 			session.Options,
 			func(reply *sqltypes.Result) error {
@@ -751,8 +751,8 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 		bindVariables,
 		keyspace,
 		tabletType,
-		func(keyspace string) (string, []string, error) {
-			return keyspace, shards, nil
+		func(keyspace string) ([]*srvtopo.ResolvedShard, error) {
+			return vtg.resolver.resolver.ResolveShards(ctx, keyspace, shards, tabletType)
 		},
 		options,
 		func(reply *sqltypes.Result) error {
@@ -850,8 +850,9 @@ func (vtg *VTGate) SplitQuery(
 	}
 
 	// TODO(erez): Add validation of SplitQuery parameters.
-	keyspace, srvKeyspace, shardRefs, err := srvtopo.GetKeyspaceShards(
-		ctx, vtg.resolver.toposerv, vtg.resolver.cell, keyspace, topodatapb.TabletType_RDONLY)
+	// It is OK to use GetKeyspaceShards here as we won't route queries
+	// here, just return the queries to the client.
+	keyspace, srvKeyspace, shardRefs, err := vtg.resolver.resolver.GetKeyspaceShards(ctx, keyspace, topodatapb.TabletType_RDONLY)
 	if err != nil {
 		return nil, err
 	}

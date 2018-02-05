@@ -719,11 +719,12 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 		return nil, errNoKeyspace
 	}
 	if target.Shard == "" {
-		var err error
-		target.Keyspace, target.Shard, err = srvtopo.GetAnyShard(ctx, e.serv, e.cell, target.Keyspace, target.TabletType)
+		// shardExec will re-resolve this a bit later.
+		rs, err := e.resolver.resolver.GetAnyShard(ctx, target.Keyspace, target.TabletType)
 		if err != nil {
 			return nil, err
 		}
+		target.Keyspace, target.Shard = rs.Target.Keyspace, rs.Target.Shard
 	}
 	execStart := time.Now()
 	result, err := e.shardExec(ctx, safeSession, sql, bindVars, target, logStats)
