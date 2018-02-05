@@ -132,6 +132,9 @@ vttablet:
   # mysqlImage: "mariadb:10.3.4"
 
   enableHeartbeat: false
+
+  # This requires at least 2 instances of "replica" tablet types, otherwise semi-sync
+  # will block forever. "rdonly" tablets do not ACK.
   enableSemisync: false
 
   resources:

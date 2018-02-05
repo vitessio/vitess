@@ -416,9 +416,7 @@ spec:
         -db-config-filtered-charset "utf8"
         -enable_replication_reporter
 {{ if $defaultVttablet.enableSemisync }}
-  {{ if gt $totalTabletCount 1 }}
         -enable_semi_sync
-  {{ end }}
 {{ end }}
 {{ if $defaultVttablet.enableHeartbeat }}
         -heartbeat_enable
