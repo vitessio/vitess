@@ -158,6 +158,45 @@ func getHostPort(t *testing.T, a net.Addr) (string, int) {
 	return host, port
 }
 
+func TestConnectionFromListener(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic()
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
+	// Make sure we can create our own net.Listener for use with the mysql
+	// listener
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatalf("net.Listener failed: %v", err)
+	}
+
+	l, err := NewFromListener(listener, authServer, th)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	go l.Accept()
+
+	host, port := getHostPort(t, l.Addr())
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	c, err := Connect(context.Background(), params)
+	if err != nil {
+		t.Errorf("Should be able to connect to server but found error: %v", err)
+	}
+	c.Close()
+}
+
 func TestConnectionWithoutSourceHost(t *testing.T) {
 	th := &testHandler{}
 

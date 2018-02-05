@@ -29,6 +29,10 @@ func (c *Conn) ListDir(ctx context.Context, dirPath string, full bool) ([]topo.D
 	c.factory.mu.Lock()
 	defer c.factory.mu.Unlock()
 
+	if c.factory.err != nil {
+		return nil, c.factory.err
+	}
+
 	isRoot := false
 	if dirPath == "" || dirPath == "/" {
 		isRoot = true

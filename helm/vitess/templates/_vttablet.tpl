@@ -2,6 +2,8 @@
 # vttablet Service
 ###################################
 {{- define "vttablet-service" -}}
+# set tuple values to more recognizable variables
+{{- $pmm := index . 0 -}}
 apiVersion: v1
 kind: Service
 metadata:
@@ -17,6 +19,12 @@ spec:
       name: web
     - port: 16002
       name: grpc
+{{ if $pmm.enabled }}
+    - port: 42001
+      name: query-data
+    - port: 42002
+      name: mysql-metrics
+{{ end }}
   clusterIP: None
   selector:
     app: vitess
@@ -37,6 +45,8 @@ spec:
 {{- $defaultVttablet := index . 5 -}}
 {{- $namespace := index . 6 -}}
 {{- $config := index . 7 -}}
+{{- $pmm := index . 8 -}}
+{{- $orc := index . 9 -}}
 
 # sanitize inputs to create tablet name
 {{- $cellClean := include "clean-label" $cell.name -}}
@@ -83,6 +93,7 @@ spec:
         shard: {{ $shardClean | quote }}
         type: {{ $tablet.type | quote }}
     spec:
+      terminationGracePeriodSeconds: 600
 {{ include "pod-security" . | indent 6 }}
 {{ include "vttablet-affinity" (tuple $cellClean $keyspaceClean $shardClean $cell.region) | indent 6 }}
 
@@ -92,9 +103,10 @@ spec:
 
       containers:
 {{ include "cont-mysql" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $uid) | indent 8 }}
-{{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $vitessTag $uid $namespace $config) | indent 8 }}
+{{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $vitessTag $uid $namespace $config $orc) | indent 8 }}
 {{ include "cont-mysql-errorlog" . | indent 8 }}
 {{ include "cont-mysql-slowlog" . | indent 8 }}
+{{ if $pmm.enabled }}{{ include "cont-pmm-client" (tuple $pmm $namespace) | indent 8 }}{{ end }}
 
       volumes:
         - name: vt
@@ -108,6 +120,25 @@ spec:
 {{ toYaml (.dataVolumeClaimAnnotations | default $defaultVttablet.dataVolumeClaimAnnotations) | indent 10 }}
       spec:
 {{ toYaml (.dataVolumeClaimSpec | default $defaultVttablet.dataVolumeClaimSpec) | indent 8 }}
+
+---
+###################################
+# vttablet PodDisruptionBudget
+###################################
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $setName | quote }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: vitess
+      component: vttablet
+      cell: {{ $cellClean | quote }}
+      keyspace: {{ $keyspaceClean | quote }}
+      shard: {{ $shardClean | quote }}
+      type: {{ $tablet.type | quote }}
 
 {{- end -}}
 {{- end -}}
@@ -212,6 +243,7 @@ spec:
 {{- $uid := index . 7 -}}
 {{- $namespace := index . 8 -}}
 {{- $config := index . 9 -}}
+{{- $orc := index . 10 -}}
 
 {{- $cellClean := include "clean-label" $cell.name -}}
 {{- with $tablet.vttablet -}}
@@ -291,7 +323,12 @@ spec:
         -db-config-filtered-charset "utf8"
         -enable_semi_sync
         -enable_replication_reporter
-{{ include "backup-flags" $config.backup | indent 8 }}
+{{ if $orc.enabled }}
+        -heartbeat_enable
+        -orc_api_url "http://orchestrator.{{ $namespace }}/api"
+        -orc_discover_interval "5m"
+{{ end }}
+{{ include "backup-flags" (tuple $config.backup "vttablet") | indent 8 }}
       END_OF_COMMAND
       )
 {{- end -}}

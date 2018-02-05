@@ -29,6 +29,10 @@ func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-c
 	c.factory.mu.Lock()
 	defer c.factory.mu.Unlock()
 
+	if c.factory.err != nil {
+		return &topo.WatchData{Err: c.factory.err}, nil, nil
+	}
+
 	n := c.factory.nodeByPath(c.cell, filePath)
 	if n == nil {
 		return &topo.WatchData{Err: topo.ErrNoNode}, nil, nil
