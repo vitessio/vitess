@@ -550,6 +550,7 @@ class VtGate(object):
         '-retry-count', str(retry_count),
         '-log_dir', environment.vtlogroot,
         '-srv_topo_cache_ttl', cache_ttl,
+        '-srv_topo_cache_refresh', cache_ttl,
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
         '-stderrthreshold', get_log_level(),
         '-normalize_queries',
@@ -799,6 +800,7 @@ class L2VtGate(object):
         '-retry-count', str(retry_count),
         '-log_dir', environment.vtlogroot,
         '-srv_topo_cache_ttl', cache_ttl,
+        '-srv_topo_cache_refresh', cache_ttl,
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
         '-gateway_implementation', vtgate_gateway_flavor().flavor(),
     ]

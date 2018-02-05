@@ -46,6 +46,11 @@ func (c *Conn) Lock(ctx context.Context, dirPath, contents string) (topo.LockDes
 	for {
 		c.factory.mu.Lock()
 
+		if c.factory.err != nil {
+			c.factory.mu.Unlock()
+			return nil, c.factory.err
+		}
+
 		n := c.factory.nodeByPath(c.cell, dirPath)
 		if n == nil {
 			c.factory.mu.Unlock()
