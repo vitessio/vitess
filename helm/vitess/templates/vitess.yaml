@@ -15,7 +15,7 @@
 {{ include "orchestrator" (tuple $.Values.orchestrator) }}
 ---
 # create orchestrator config map
-{{ include "orchestrator-config" (tuple $.Values.orchestrator $.Release.Namespace) }}
+{{ include "orchestrator-config" (tuple $.Values.orchestrator $.Release.Namespace $.Values.vttablet.enableHeartbeat) }}
 ---
 # create a Service per StatefulSet replica
 {{ range $i := until (int $.Values.orchestrator.replicas) }}
@@ -53,9 +53,14 @@
   # Tablets for keyspaces
   {{ range $keyspace := $cell.keyspaces }}
     {{ range $shard := $keyspace.shards }}
+
+      {{ $totalTabletCount := len (include "tablet-count" $shard.tablets) }}
+
+      # now range through the tablets again to set them up
       {{ range $tablet := $shard.tablets }}
 ---
-{{ include "vttablet" (tuple $.Values.topology $cell $keyspace $shard $tablet $.Values.vttablet $.Release.Namespace $.Values.config $.Values.pmm $.Values.orchestrator) }}
+{{ include "vttablet" (tuple $.Values.topology $cell $keyspace $shard $tablet $.Values.vttablet $.Release.Namespace $.Values.config $.Values.pmm $.Values.orchestrator $totalTabletCount) }}
+
       {{ end }} # range $tablet
     {{ end }} # range $shard
   {{ end }} # range $keyspace
