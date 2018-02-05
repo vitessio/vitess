@@ -61,6 +61,9 @@ type Factory struct {
 	// version at 1. It is initialized with a random number,
 	// so if we have two implementations, the numbers won't match.
 	generation uint64
+	// err is used for testing purposes to force queries / watches
+	// to return the given error
+	err error
 }
 
 // HasGlobalReadOnlyCell is part of the topo.Factory interface.
@@ -79,6 +82,20 @@ func (f *Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
 		factory: f,
 		cell:    cell,
 	}, nil
+}
+
+// SetError forces the given error to be returned from all calls and propagates
+// the error to all active watches.
+func (f *Factory) SetError(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.err = err
+	if err != nil {
+		for _, node := range f.cells {
+			node.PropagateWatchError(err)
+		}
+	}
 }
 
 // Conn implements the topo.Conn interface. It remembers the cell, and
@@ -123,10 +140,24 @@ func (n *node) isDirectory() bool {
 	return n.children != nil
 }
 
-// NewServer returns a new MemoryTopo for all the cells. It will create one
-// cell for each parameter passed in.  It will log.Exit out in case
-// of a problem.
-func NewServer(cells ...string) *topo.Server {
+// PropagateWatchError propagates the given error to all watches on this node
+// and recursively applies to all children
+func (n *node) PropagateWatchError(err error) {
+	for _, ch := range n.watches {
+		ch <- &topo.WatchData{
+			Err: err,
+		}
+	}
+
+	for _, c := range n.children {
+		c.PropagateWatchError(err)
+	}
+}
+
+// NewServerAndFactory returns a new MemoryTopo and the backing factory for all
+// the cells. It will create one cell for each parameter passed in.  It will log.Exit out
+// in case of a problem.
+func NewServerAndFactory(cells ...string) (*topo.Server, *Factory) {
 	f := &Factory{
 		cells:      make(map[string]*node),
 		generation: uint64(rand.Int63n(2 ^ 60)),
@@ -144,7 +175,13 @@ func NewServer(cells ...string) *topo.Server {
 			log.Exitf("ts.CreateCellInfo(%v) failed: %v", cell, err)
 		}
 	}
-	return ts
+	return ts, f
+}
+
+// NewServer returns the new server
+func NewServer(cells ...string) *topo.Server {
+	server, _ := NewServerAndFactory(cells...)
+	return server
 }
 
 func (f *Factory) getNextVersion() uint64 {
