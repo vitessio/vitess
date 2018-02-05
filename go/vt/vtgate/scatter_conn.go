@@ -62,6 +62,14 @@ type ScatterConn struct {
 // consolidating the results and errors for the caller.
 type shardActionFunc func(target *querypb.Target) error
 
+// shardActionFunc2 defines the contract for a shard action
+// outside of a transaction. Every such function executes the
+// necessary action on a shard, sends the results to sResults, and
+// return an error if any.  multiGo is capable of executing
+// multiple shardActionFunc actions in parallel and
+// consolidating the results and errors for the caller.
+type shardActionFunc2 func(rs *srvtopo.ResolvedShard) error
+
 // shardActionTransactionFunc defines the contract for a shard action
 // that may be in a transaction. Every such function executes the
 // necessary action on a shard (with an optional Begin call), aggregates
@@ -469,8 +477,7 @@ func (stc *ScatterConn) StreamExecute(
 	ctx context.Context,
 	query string,
 	bindVars map[string]*querypb.BindVariable,
-	keyspace string,
-	shards []string,
+	rss []*srvtopo.ResolvedShard,
 	tabletType topodatapb.TabletType,
 	options *querypb.ExecuteOptions,
 	callback func(reply *sqltypes.Result) error,
@@ -480,8 +487,8 @@ func (stc *ScatterConn) StreamExecute(
 	var mu sync.Mutex
 	fieldSent := false
 
-	allErrors := stc.multiGo(ctx, "StreamExecute", keyspace, shards, tabletType, func(target *querypb.Target) error {
-		return stc.gateway.StreamExecute(ctx, target, query, bindVars, options, func(qr *sqltypes.Result) error {
+	allErrors := stc.multiGo2(ctx, "StreamExecute", rss, tabletType, func(rs *srvtopo.ResolvedShard) error {
+		return rs.QueryService.StreamExecute(ctx, rs.Target, query, bindVars, options, func(qr *sqltypes.Result) error {
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
 	})
@@ -790,6 +797,46 @@ func (stc *ScatterConn) multiGo(
 			defer wg.Done()
 			oneShard(shard)
 		}(shard)
+	}
+	wg.Wait()
+	return allErrors
+}
+
+// multiGo2 performs the requested 'action' on the specified
+// shards in parallel. This does not handle any transaction state.
+// The action function must match the shardActionFunc2 signature.
+func (stc *ScatterConn) multiGo2(
+	ctx context.Context,
+	name string,
+	rss []*srvtopo.ResolvedShard,
+	tabletType topodatapb.TabletType,
+	action shardActionFunc2,
+) (allErrors *concurrency.AllErrorRecorder) {
+	allErrors = new(concurrency.AllErrorRecorder)
+	if len(rss) == 0 {
+		return allErrors
+	}
+
+	oneShard := func(rs *srvtopo.ResolvedShard) {
+		var err error
+		startTime, statsKey := stc.startAction(name, rs.Target)
+		defer stc.endAction(startTime, allErrors, statsKey, &err, nil)
+		err = action(rs)
+	}
+
+	if len(rss) == 1 {
+		// only one shard, do it synchronously.
+		oneShard(rss[0])
+		return allErrors
+	}
+
+	var wg sync.WaitGroup
+	for _, rs := range rss {
+		//		wg.Add(1)
+		//		go func(rs *srvtopo.ResolvedShard) {
+		//			defer wg.Done()
+		oneShard(rs)
+		//		}(rs)
 	}
 	wg.Wait()
 	return allErrors

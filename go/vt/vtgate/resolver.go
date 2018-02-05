@@ -289,11 +289,9 @@ func (res *Resolver) ExecuteBatch(
 // response which is needed for checkpointing.
 // The api supports supplying multiple KeyspaceIds to make it future proof.
 func (res *Resolver) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
-	mapToShards := func(k string) (string, []string, error) {
-		return srvtopo.MapKeyspaceIdsToShards(
+	mapToShards := func(k string) ([]*srvtopo.ResolvedShard, error) {
+		return res.resolver.ResolveKeyspaceIds(
 			ctx,
-			res.toposerv,
-			res.cell,
 			k,
 			tabletType,
 			keyspaceIds)
@@ -308,11 +306,9 @@ func (res *Resolver) StreamExecuteKeyspaceIds(ctx context.Context, sql string, b
 // response which is needed for checkpointing.
 // The api supports supplying multiple keyranges to make it future proof.
 func (res *Resolver) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
-	mapToShards := func(k string) (string, []string, error) {
-		return srvtopo.MapKeyRangesToShards(
+	mapToShards := func(k string) ([]*srvtopo.ResolvedShard, error) {
+		return res.resolver.ResolveKeyRanges(
 			ctx,
-			res.toposerv,
-			res.cell,
 			k,
 			tabletType,
 			keyRanges)
@@ -330,11 +326,11 @@ func (res *Resolver) streamExecute(
 	bindVars map[string]*querypb.BindVariable,
 	keyspace string,
 	tabletType topodatapb.TabletType,
-	mapToShards func(string) (string, []string, error),
+	mapToShards func(string) ([]*srvtopo.ResolvedShard, error),
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
 ) error {
-	keyspace, shards, err := mapToShards(keyspace)
+	rss, err := mapToShards(keyspace)
 	if err != nil {
 		return err
 	}
@@ -342,8 +338,7 @@ func (res *Resolver) streamExecute(
 		ctx,
 		sql,
 		bindVars,
-		keyspace,
-		shards,
+		rss,
 		tabletType,
 		options,
 		callback)
