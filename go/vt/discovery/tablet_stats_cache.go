@@ -497,4 +497,3 @@ func (tc *TabletStatsCache) GetMasterCell(keyspace, shard string) (cell string, 
 // Compile-time interface check.
 var _ HealthCheckStatsListener = (*TabletStatsCache)(nil)
 var _ srvtopo.TargetStatsListener = (*TabletStatsCache)(nil)
-var _ srvtopo.TargetStats = (*TabletStatsCache)(nil)

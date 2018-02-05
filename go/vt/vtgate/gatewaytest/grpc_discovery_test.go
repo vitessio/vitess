@@ -18,7 +18,6 @@ package gatewaytest
 
 import (
 	"flag"
-	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -92,7 +91,7 @@ func TestGRPCDiscovery(t *testing.T) {
 	TestSuite(t, "discovery-grpc", dg, service)
 }
 
-// TestL2VTGateDiscovery tests the l2vtgate gateway with a gRPC
+// TestL2VTGateDiscovery tests the hybrid gateway with a gRPC
 // connection from the gateway to a l2vtgate in-process object.
 func TestL2VTGateDiscovery(t *testing.T) {
 	flag.Set("tablet_protocol", "grpc")
@@ -154,12 +153,14 @@ func TestL2VTGateDiscovery(t *testing.T) {
 	go server.Serve(listener)
 	defer server.Stop()
 
-	// VTGate: create the l2vtgate gateway
-	flag.Set("gateway_implementation", "l2vtgategateway")
-	flag.Set("l2vtgategateway_addrs", fmt.Sprintf("%v|%v|%v", listener.Addr().String(), tabletconntest.TestTarget.Keyspace, tabletconntest.TestTarget.Shard))
-	lg := gateway.GetCreator()(nil, ts, nil, "", 2)
-	defer lg.Close(ctx)
+	// VTGate: create the HybridGateway, with no local gateway,
+	// and just the remote address in the l2vtgate pool.
+	hg, err := gateway.NewHybridGateway(nil, []string{listener.Addr().String()}, 2)
+	if err != nil {
+		t.Fatalf("gateway.NewHybridGateway() failed: %v", err)
+	}
+	defer hg.Close(ctx)
 
 	// and run the test suite.
-	TestSuite(t, "l2vtgate-grpc", lg, service)
+	TestSuite(t, "l2vtgate-grpc", hg, service)
 }

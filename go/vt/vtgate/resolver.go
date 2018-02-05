@@ -46,17 +46,19 @@ var (
 // Resolver is the layer to resolve KeyspaceIds and KeyRanges
 // to shards. It will try to re-resolve shards if ScatterConn
 // returns retryable error, which may imply horizontal or vertical
-// resharding happened.
+// resharding happened. It is implemented using a srvtopo.Resolver.
 type Resolver struct {
 	scatterConn *ScatterConn
+	resolver    *srvtopo.Resolver
 	toposerv    srvtopo.Server
 	cell        string
 }
 
 // NewResolver creates a new Resolver.
-func NewResolver(serv srvtopo.Server, cell string, sc *ScatterConn) *Resolver {
+func NewResolver(resolver *srvtopo.Resolver, serv srvtopo.Server, cell string, sc *ScatterConn) *Resolver {
 	return &Resolver{
 		scatterConn: sc,
+		resolver:    resolver,
 		toposerv:    serv,
 		cell:        cell,
 	}
@@ -75,12 +77,10 @@ func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVar
 	if sqlparser.IsDML(sql) && len(keyspaceIds) > 1 {
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "DML should not span multiple keyspace_ids")
 	}
-	mapToShards := func(k string) (string, []string, error) {
-		return srvtopo.MapKeyspaceIdsToShards(
+	mapToShards := func() ([]*srvtopo.ResolvedShard, error) {
+		return res.resolver.ResolveKeyspaceIds(
 			ctx,
-			res.toposerv,
-			res.cell,
-			k,
+			keyspace,
 			tabletType,
 			keyspaceIds)
 	}
@@ -90,12 +90,10 @@ func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVar
 // ExecuteKeyRanges executes a non-streaming query based on KeyRanges.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
-	mapToShards := func(k string) (string, []string, error) {
-		return srvtopo.MapKeyRangesToShards(
+	mapToShards := func() ([]*srvtopo.ResolvedShard, error) {
+		return res.resolver.ResolveKeyRanges(
 			ctx,
-			res.toposerv,
-			res.cell,
-			k,
+			keyspace,
 			tabletType,
 			keyRanges)
 	}
@@ -111,47 +109,37 @@ func (res *Resolver) Execute(
 	keyspace string,
 	tabletType topodatapb.TabletType,
 	session *vtgatepb.Session,
-	mapToShards func(string) (string, []string, error),
+	mapToShards func() ([]*srvtopo.ResolvedShard, error),
 	notInTransaction bool,
 	options *querypb.ExecuteOptions,
 	logStats *LogStats,
 ) (*sqltypes.Result, error) {
-	keyspace, shards, err := mapToShards(keyspace)
+	rss, err := mapToShards()
 	if err != nil {
 		return nil, err
 	}
 	if logStats != nil {
-		logStats.ShardQueries = uint32(len(shards))
+		logStats.ShardQueries = uint32(len(rss))
 	}
 	for {
-		qr, err := res.scatterConn.Execute(
+		qr, err := res.scatterConn.Execute2(
 			ctx,
 			sql,
 			bindVars,
-			keyspace,
-			shards,
+			rss,
 			tabletType,
 			NewSafeSession(session),
 			notInTransaction,
 			options)
 		if isRetryableError(err) {
-			resharding := false
-			newKeyspace, newShards, err := mapToShards(keyspace)
+			newRss, err := mapToShards()
 			if err != nil {
 				return nil, err
 			}
-			// check keyspace change for vertical resharding
-			if newKeyspace != keyspace {
-				keyspace = newKeyspace
-				resharding = true
-			}
-			// check shards change for horizontal resharding
-			if !StrsEquals(newShards, shards) {
-				shards = newShards
-				resharding = true
-			}
-			// retry if resharding happened
-			if resharding {
+			if !srvtopo.ResolvedShardsEqual(rss, newRss) {
+				// If the mapping to underlying shards changed,
+				// we might be resharding. Try again.
+				rss = newRss
 				continue
 			}
 		}
@@ -176,22 +164,19 @@ func (res *Resolver) ExecuteEntityIds(
 	notInTransaction bool,
 	options *querypb.ExecuteOptions,
 ) (*sqltypes.Result, error) {
-	newKeyspace, shardIDMap, err := srvtopo.MapEntityIdsToShards(
+	rss, values, err := res.resolver.ResolveEntityIds(
 		ctx,
-		res.toposerv,
-		res.cell,
 		keyspace,
 		entityKeyspaceIDs,
 		tabletType)
 	if err != nil {
 		return nil, err
 	}
-	keyspace = newKeyspace
-	shards, sqls, bindVars := buildEntityIds(shardIDMap, sql, entityColumnName, bindVariables)
 	for {
+		sqls, bindVars := buildEntityIds(values, sql, entityColumnName, bindVariables)
 		qr, err := res.scatterConn.ExecuteEntityIds(
 			ctx,
-			shards,
+			rss,
 			sqls,
 			bindVars,
 			keyspace,
@@ -200,32 +185,18 @@ func (res *Resolver) ExecuteEntityIds(
 			notInTransaction,
 			options)
 		if isRetryableError(err) {
-			resharding := false
-			newKeyspace, newShardIDMap, err := srvtopo.MapEntityIdsToShards(
+			newRss, newValues, err := res.resolver.ResolveEntityIds(
 				ctx,
-				res.toposerv,
-				res.cell,
 				keyspace,
 				entityKeyspaceIDs,
 				tabletType)
 			if err != nil {
 				return nil, err
 			}
-			// check keyspace change for vertical resharding
-			if newKeyspace != keyspace {
-				keyspace = newKeyspace
-				resharding = true
-			}
-			// check shards change for horizontal resharding
-			newShards, newSqls, newBindVars := buildEntityIds(newShardIDMap, sql, entityColumnName, bindVariables)
-			if !StrsEquals(newShards, shards) {
-				shards = newShards
-				sqls = newSqls
-				bindVars = newBindVars
-				resharding = true
-			}
-			// retry if resharding happened
-			if resharding {
+			if !srvtopo.ResolvedShardsEqual(rss, newRss) || !srvtopo.ValuesEqual(values, newValues) {
+				// Retry if resharding happened.
+				rss = newRss
+				values = newValues
 				continue
 			}
 		}
@@ -490,32 +461,29 @@ func StrsEquals(a, b []string) bool {
 	return true
 }
 
-func buildEntityIds(shardIDMap map[string][]*querypb.Value, qSQL, entityColName string, qBindVars map[string]*querypb.BindVariable) ([]string, map[string]string, map[string]map[string]*querypb.BindVariable) {
-	shards := make([]string, len(shardIDMap))
-	shardsIdx := 0
-	sqls := make(map[string]string)
-	bindVars := make(map[string]map[string]*querypb.BindVariable)
-	for shard, values := range shardIDMap {
+// buildEntityIds populates SQL and BindVariables.
+func buildEntityIds(values [][]*querypb.Value, qSQL, entityColName string, qBindVars map[string]*querypb.BindVariable) ([]string, []map[string]*querypb.BindVariable) {
+	sqls := make([]string, len(values))
+	bindVars := make([]map[string]*querypb.BindVariable, len(values))
+	for i, val := range values {
 		var b bytes.Buffer
 		b.Write([]byte(entityColName))
-		bindVar := make(map[string]*querypb.BindVariable)
+		bindVariables := make(map[string]*querypb.BindVariable)
 		for k, v := range qBindVars {
-			bindVar[k] = v
+			bindVariables[k] = v
 		}
 		bvName := fmt.Sprintf("%v_entity_ids", entityColName)
-		bindVar[bvName] = &querypb.BindVariable{
+		bindVariables[bvName] = &querypb.BindVariable{
 			Type:   querypb.Type_TUPLE,
-			Values: values,
+			Values: val,
 		}
 		b.Write(inOperator)
 		b.Write(sqlListIdentifier)
 		b.Write([]byte(bvName))
-		bindVars[shard] = bindVar
-		sqls[shard] = insertSQLClause(qSQL, b.String())
-		shards[shardsIdx] = shard
-		shardsIdx++
+		sqls[i] = insertSQLClause(qSQL, b.String())
+		bindVars[i] = bindVariables
 	}
-	return shards, sqls, bindVars
+	return sqls, bindVars
 }
 
 func insertSQLClause(querySQL, clause string) string {

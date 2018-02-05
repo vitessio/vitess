@@ -215,10 +215,10 @@ func testResolverGeneric(t *testing.T, name string, action func(res *Resolver) (
 	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	sbc1.MustFailCodes[vtrpcpb.Code_INTERNAL] = 1
 	_, err = action(res)
-	want1 := fmt.Sprintf("target: %s.-20.master, used tablet: aa-0 (-20), INVALID_ARGUMENT error", name)
-	want2 := fmt.Sprintf("target: %s.20-40.master, used tablet: aa-0 (20-40), INTERNAL error", name)
-	want := []string{want1, want2}
-	sort.Strings(want)
+	want := []string{
+		fmt.Sprintf("target: %s.-20.master, used tablet: aa-0 (-20), INVALID_ARGUMENT error", name),
+		fmt.Sprintf("target: %s.20-40.master, used tablet: aa-0 (20-40), INTERNAL error", name),
+	}
 	if err == nil {
 		t.Errorf("want\n%v\ngot\n%v", want, err)
 	} else {
@@ -248,10 +248,10 @@ func testResolverGeneric(t *testing.T, name string, action func(res *Resolver) (
 	sbc0.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	sbc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	_, err = action(res)
-	want1 = fmt.Sprintf("target: %s.-20.master, used tablet: aa-0 (-20), FAILED_PRECONDITION error", name)
-	want2 = fmt.Sprintf("target: %s.20-40.master, used tablet: aa-0 (20-40), FAILED_PRECONDITION error", name)
-	want = []string{want1, want2}
-	sort.Strings(want)
+	want = []string{
+		fmt.Sprintf("target: %s.-20.master, used tablet: aa-0 (-20), FAILED_PRECONDITION error", name),
+		fmt.Sprintf("target: %s.20-40.master, used tablet: aa-0 (20-40), FAILED_PRECONDITION error", name),
+	}
 	if err == nil {
 		t.Errorf("want\n%v\ngot\n%v", want, err)
 	} else {
@@ -524,38 +524,37 @@ func TestResolverInsertSqlClause(t *testing.T) {
 }
 
 func TestResolverBuildEntityIds(t *testing.T) {
-	shardMap := map[string][]*querypb.Value{
-		"-20": {{
-			Type:  querypb.Type_VARCHAR,
-			Value: []byte("0"),
-		}, {
-			Type:  querypb.Type_INT64,
-			Value: []byte("1"),
-		}},
-		"20-40": {{
-			Type:  querypb.Type_VARCHAR,
-			Value: []byte("2"),
-		}},
+	values := [][]*querypb.Value{
+		{
+			{
+				Type:  querypb.Type_VARCHAR,
+				Value: []byte("0"),
+			},
+			{
+				Type:  querypb.Type_INT64,
+				Value: []byte("1"),
+			},
+		},
+		{
+			{
+				Type:  querypb.Type_VARCHAR,
+				Value: []byte("2"),
+			},
+		},
 	}
 	sql := "select a from table where id=:id"
 	entityColName := "uid"
 	bindVar := map[string]*querypb.BindVariable{
 		"id": sqltypes.Int64BindVariable(10),
 	}
-	shards, sqls, bindVars := buildEntityIds(shardMap, sql, entityColName, bindVar)
-	wantShards := []string{"-20", "20-40"}
-	wantSqls := map[string]string{
-		"-20":   "select a from table where id=:id and uid in ::uid_entity_ids",
-		"20-40": "select a from table where id=:id and uid in ::uid_entity_ids",
+	sqls, bindVars := buildEntityIds(values, sql, entityColName, bindVar)
+	wantSqls := []string{
+		"select a from table where id=:id and uid in ::uid_entity_ids",
+		"select a from table where id=:id and uid in ::uid_entity_ids",
 	}
-	wantBindVars := map[string]map[string]*querypb.BindVariable{
-		"-20":   {"id": sqltypes.Int64BindVariable(10), "uid_entity_ids": sqltypes.TestBindVariable([]interface{}{"0", 1})},
-		"20-40": {"id": sqltypes.Int64BindVariable(10), "uid_entity_ids": sqltypes.TestBindVariable([]interface{}{"2"})},
-	}
-	sort.Strings(wantShards)
-	sort.Strings(shards)
-	if !reflect.DeepEqual(wantShards, shards) {
-		t.Errorf("want %+v, got %+v", wantShards, shards)
+	wantBindVars := []map[string]*querypb.BindVariable{
+		{"id": sqltypes.Int64BindVariable(10), "uid_entity_ids": sqltypes.TestBindVariable([]interface{}{"0", 1})},
+		{"id": sqltypes.Int64BindVariable(10), "uid_entity_ids": sqltypes.TestBindVariable([]interface{}{"2"})},
 	}
 	if !reflect.DeepEqual(wantSqls, sqls) {
 		t.Errorf("want %+v, got %+v", wantSqls, sqls)
@@ -665,7 +664,8 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 
 func newTestResolver(hc discovery.HealthCheck, serv srvtopo.Server, cell string) *Resolver {
 	sc := newTestScatterConn(hc, serv, cell)
-	return NewResolver(serv, cell, sc)
+	srvResolver := srvtopo.NewResolver(serv, sc.gateway, cell)
+	return NewResolver(srvResolver, serv, cell, sc)
 }
 
 func TestBoundKeyspaceIdQueriesToBoundShardQueries(t *testing.T) {

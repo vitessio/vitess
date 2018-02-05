@@ -118,7 +118,7 @@ func createDiscoveryGateway(hc discovery.HealthCheck, topoServer *topo.Server, s
 		ctw := discovery.NewCellTabletsWatcher(dg.topoServer, tr, c, *refreshInterval, *topoReadConcurrency)
 		dg.tabletsWatchers = append(dg.tabletsWatchers, ctw)
 	}
-	dg.QueryService = queryservice.Wrap(dg, dg.withRetry)
+	dg.QueryService = queryservice.Wrap(nil, dg.withRetry)
 	return dg
 }
 
@@ -148,11 +148,22 @@ func (dg *discoveryGateway) WaitForTablets(ctx context.Context, tabletTypesToWai
 	return dg.tsc.WaitForAllServingTablets(ctx, targets)
 }
 
-// StreamHealth is currently not implemented.
-// This function hides the inner implementation.
-// TODO(alainjobart): Maybe we should?
+// GetAggregateStats is part of the srvtopo.TargetStats interface.
+func (dg *discoveryGateway) GetAggregateStats(target *querypb.Target) (*querypb.AggregateStats, queryservice.QueryService, error) {
+	stats, err := dg.tsc.GetAggregateStats(target)
+	return stats, dg, err
+}
+
+// GetMasterCell is part of the srvtopo.TargetStats interface.
+func (dg *discoveryGateway) GetMasterCell(keyspace, shard string) (string, queryservice.QueryService, error) {
+	cell, err := dg.tsc.GetMasterCell(keyspace, shard)
+	return cell, dg, err
+}
+
+// StreamHealth is not forwarded to any other tablet,
+// but we handle it directly here.
 func (dg *discoveryGateway) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
-	panic("not implemented")
+	return StreamHealthFromTargetStatsListener(ctx, dg.tsc, callback)
 }
 
 // Close shuts down underlying connections.

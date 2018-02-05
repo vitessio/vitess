@@ -29,6 +29,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/acl"
+	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/tb"
@@ -57,7 +58,8 @@ var (
 	streamBufferSize   = flag.Int("stream_buffer_size", 32*1024, "the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size.")
 	queryPlanCacheSize = flag.Int64("gate_query_cache_size", 10000, "gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
 	legacyAutocommit   = flag.Bool("legacy_autocommit", false, "DEPRECATED: set this flag to true to get the legacy behavior: all transactions will need an explicit begin, and DMLs outside transactions will return an error.")
-	enableL2VTGate     = flag.Bool("enable_forwarding", false, "if specified, this process will also expose a QueryService interface that allows other vtgates to talk through this vtgate to the underlying tablets.")
+	enableForwarding   = flag.Bool("enable_forwarding", false, "if specified, this process will also expose a QueryService interface that allows other vtgates to talk through this vtgate to the underlying tablets.")
+	l2vtgateAddrs      flagutil.StringListValue
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -164,14 +166,25 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server
 	// l2vtgate gives access to the underlying Gateway from an exported
 	// QueryService interface.
 	var l2vtgate *L2VTGate
-	if *enableL2VTGate {
+	if *enableForwarding {
 		l2vtgate = initL2VTGate(gw)
+	}
+
+	// If we have other vtgate pools to connect to, create a
+	// HybridGateway to perform the routing.
+	if len(l2vtgateAddrs) > 0 {
+		hgw, err := gateway.NewHybridGateway(gw, l2vtgateAddrs, retryCount)
+		if err != nil {
+			log.Fatalf("gateway.NewHybridGateway failed: %v", err)
+		}
+		gw = hgw
 	}
 
 	tc := NewTxConn(gw, getTxMode())
 	// ScatterConn depends on TxConn to perform forced rollbacks.
 	sc := NewScatterConn("VttabletCall", tc, gw, hc)
-	resolver := NewResolver(serv, cell, sc)
+	srvResolver := srvtopo.NewResolver(serv, gw, cell)
+	resolver := NewResolver(srvResolver, serv, cell, sc)
 
 	rpcVTGate = &VTGate{
 		executor:     NewExecutor(ctx, serv, cell, "VTGateExecutor", resolver, *normalizeQueries, *streamBufferSize, *queryPlanCacheSize, *legacyAutocommit),
@@ -361,7 +374,8 @@ handleError:
 	return nil
 }
 
-// ExecuteShards executes a non-streaming query on the specified shards. This is a legacy function.
+// ExecuteShards executes a non-streaming query on the specified shards.
+// This is a legacy function.
 func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, keyspace string, shards []string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(tabletType)
@@ -385,8 +399,8 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables 
 		keyspace,
 		tabletType,
 		session,
-		func(keyspace string) (string, []string, error) {
-			return keyspace, shards, nil
+		func() ([]*srvtopo.ResolvedShard, error) {
+			return vtg.resolver.resolver.ResolveShards(ctx, keyspace, shards, tabletType)
 		},
 		notInTransaction,
 		options,
@@ -1127,4 +1141,8 @@ func unambiguousKeyspaceBSQ(queries []*vtgatepb.BoundShardQuery) string {
 		}
 		return keyspace
 	}
+}
+
+func init() {
+	flag.Var(&l2vtgateAddrs, "l2vtgate_addrs", "Specifies a comma-separated list of other l2 vtgate pools to connect to. These other vtgates must run with the --enable_forwarding flag")
 }
