@@ -21,13 +21,14 @@ import (
 	"flag"
 
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/vt/grpcclient"
-	"github.com/youtube/vitess/go/vt/proto/throttlerdata"
-	"github.com/youtube/vitess/go/vt/proto/throttlerservice"
 	"github.com/youtube/vitess/go/vt/throttler/throttlerclient"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"google.golang.org/grpc"
+
+	throttlerdatapb "github.com/youtube/vitess/go/vt/proto/throttlerdata"
+	throttlerservicepb "github.com/youtube/vitess/go/vt/proto/throttlerservice"
 )
 
 var (
@@ -39,7 +40,7 @@ var (
 
 type client struct {
 	conn       *grpc.ClientConn
-	gRPCClient throttlerservice.ThrottlerClient
+	gRPCClient throttlerservicepb.ThrottlerClient
 }
 
 func factory(addr string) (throttlerclient.Client, error) {
@@ -51,7 +52,7 @@ func factory(addr string) (throttlerclient.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	gRPCClient := throttlerservice.NewThrottlerClient(conn)
+	gRPCClient := throttlerservicepb.NewThrottlerClient(conn)
 
 	return &client{conn, gRPCClient}, nil
 }
@@ -59,7 +60,7 @@ func factory(addr string) (throttlerclient.Client, error) {
 // MaxRates is part of the throttlerclient.Client interface and returns the
 // current max rate for each throttler of the process.
 func (c *client) MaxRates(ctx context.Context) (map[string]int64, error) {
-	response, err := c.gRPCClient.MaxRates(ctx, &throttlerdata.MaxRatesRequest{})
+	response, err := c.gRPCClient.MaxRates(ctx, &throttlerdatapb.MaxRatesRequest{})
 	if err != nil {
 		return nil, vterrors.FromGRPC(err)
 	}
@@ -69,7 +70,7 @@ func (c *client) MaxRates(ctx context.Context) (map[string]int64, error) {
 // SetMaxRate is part of the throttlerclient.Client interface and sets the rate
 // on all throttlers of the server.
 func (c *client) SetMaxRate(ctx context.Context, rate int64) ([]string, error) {
-	request := &throttlerdata.SetMaxRateRequest{
+	request := &throttlerdatapb.SetMaxRateRequest{
 		Rate: rate,
 	}
 
@@ -81,8 +82,8 @@ func (c *client) SetMaxRate(ctx context.Context, rate int64) ([]string, error) {
 }
 
 // GetConfiguration is part of the throttlerclient.Client interface.
-func (c *client) GetConfiguration(ctx context.Context, throttlerName string) (map[string]*throttlerdata.Configuration, error) {
-	response, err := c.gRPCClient.GetConfiguration(ctx, &throttlerdata.GetConfigurationRequest{
+func (c *client) GetConfiguration(ctx context.Context, throttlerName string) (map[string]*throttlerdatapb.Configuration, error) {
+	response, err := c.gRPCClient.GetConfiguration(ctx, &throttlerdatapb.GetConfigurationRequest{
 		ThrottlerName: throttlerName,
 	})
 	if err != nil {
@@ -92,8 +93,8 @@ func (c *client) GetConfiguration(ctx context.Context, throttlerName string) (ma
 }
 
 // UpdateConfiguration is part of the throttlerclient.Client interface.
-func (c *client) UpdateConfiguration(ctx context.Context, throttlerName string, configuration *throttlerdata.Configuration, copyZeroValues bool) ([]string, error) {
-	response, err := c.gRPCClient.UpdateConfiguration(ctx, &throttlerdata.UpdateConfigurationRequest{
+func (c *client) UpdateConfiguration(ctx context.Context, throttlerName string, configuration *throttlerdatapb.Configuration, copyZeroValues bool) ([]string, error) {
+	response, err := c.gRPCClient.UpdateConfiguration(ctx, &throttlerdatapb.UpdateConfigurationRequest{
 		ThrottlerName:  throttlerName,
 		Configuration:  configuration,
 		CopyZeroValues: copyZeroValues,
@@ -106,7 +107,7 @@ func (c *client) UpdateConfiguration(ctx context.Context, throttlerName string, 
 
 // ResetConfiguration is part of the throttlerclient.Client interface.
 func (c *client) ResetConfiguration(ctx context.Context, throttlerName string) ([]string, error) {
-	response, err := c.gRPCClient.ResetConfiguration(ctx, &throttlerdata.ResetConfigurationRequest{
+	response, err := c.gRPCClient.ResetConfiguration(ctx, &throttlerdatapb.ResetConfigurationRequest{
 		ThrottlerName: throttlerName,
 	})
 	if err != nil {
