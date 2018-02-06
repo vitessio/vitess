@@ -20,6 +20,7 @@ import (
 	"sort"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
@@ -260,6 +261,54 @@ func (r *Resolver) ResolveShards(ctx context.Context, keyspace string, shards []
 		})
 	}
 	return res, nil
+}
+
+// ResolveExactShards resolves a keyrange to shards only if there's a complete
+// match. If there's any partial match the function returns no match.
+func (r *Resolver) ResolveExactShards(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, kr *topodatapb.KeyRange) ([]*ResolvedShard, error) {
+	keyspace, _, allShards, err := r.GetKeyspaceShards(ctx, keyspace, tabletType)
+	if err != nil {
+		return nil, err
+	}
+	var res []*ResolvedShard
+	shardnum := 0
+	for shardnum < len(allShards) {
+		if key.KeyRangeStartEqual(kr, allShards[shardnum].KeyRange) {
+			break
+		}
+		shardnum++
+	}
+	for shardnum < len(allShards) {
+		if !key.KeyRangesIntersect(kr, allShards[shardnum].KeyRange) {
+			// If we are over the requested keyrange, we
+			// can stop now, we won't find more.
+			break
+		}
+
+		target := &querypb.Target{
+			Keyspace:   keyspace,
+			Shard:      allShards[shardnum].Name,
+			TabletType: tabletType,
+			Cell:       r.localCell,
+		}
+		_, qs, err := r.stats.GetAggregateStats(target)
+		if err != nil {
+			return nil, resolverError(err, target)
+		}
+
+		// FIXME(alainjobart) we ignore the stats for now.
+		// Later we can fallback to another cell if needed.
+		target.Cell = ""
+		res = append(res, &ResolvedShard{
+			Target:       target,
+			QueryService: qs,
+		})
+		if key.KeyRangeEndEqual(kr, allShards[shardnum].KeyRange) {
+			return res, nil
+		}
+		shardnum++
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyrange %v does not exactly match shards", key.KeyRangeString(kr))
 }
 
 // ResolveKeyRanges returns the set of shards that "intersect"

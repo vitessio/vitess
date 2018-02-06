@@ -1188,12 +1188,10 @@ func TestVTGateSplitQuerySharded(t *testing.T) {
 
 func TestVTGateMessageStreamSharded(t *testing.T) {
 	ks := "TestVTGateMessageStreamSharded"
-	shard1 := "-20"
-	shard2 := "20-40"
 	createSandbox(ks)
 	hcVTGateTest.Reset()
-	_ = hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, shard1, topodatapb.TabletType_MASTER, true, 1, nil)
-	_ = hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1002, ks, shard2, topodatapb.TabletType_MASTER, true, 1, nil)
+	_ = hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
+	_ = hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1002, ks, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
 	ch := make(chan *sqltypes.Result)
 	done := make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1230,7 +1228,7 @@ func TestVTGateMessageStreamSharded(t *testing.T) {
 	})
 	want := "keyrange -30 does not exactly match shards"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("MessageStream: %v, must contain %s", err, want)
+		t.Errorf("MessageStream: '%v', must contain '%s'", err, want)
 	}
 }
 

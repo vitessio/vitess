@@ -316,22 +316,22 @@ func (res *Resolver) streamExecute(
 
 // MessageStream streams messages.
 func (res *Resolver) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error {
-	var shards []string
+	var rss []*srvtopo.ResolvedShard
 	var err error
 	if shard != "" {
-		// If we pass in a shard, resolve the keyspace following redirects.
-		keyspace, _, _, err = srvtopo.GetKeyspaceShards(ctx, res.toposerv, res.cell, keyspace, topodatapb.TabletType_MASTER)
-		shards = []string{shard}
+		// If we pass in a shard, resolve the keyspace/shard
+		// following redirects.
+		rss, err = res.resolver.ResolveShards(ctx, keyspace, []string{shard}, topodatapb.TabletType_MASTER)
 	} else {
 		// If we pass in a KeyRange, resolve it to the proper shards.
 		// Note we support multiple shards here, we will just aggregate
 		// the message streams.
-		keyspace, shards, err = srvtopo.MapExactShards(ctx, res.toposerv, res.cell, keyspace, topodatapb.TabletType_MASTER, keyRange)
+		rss, err = res.resolver.ResolveExactShards(ctx, keyspace, topodatapb.TabletType_MASTER, keyRange)
 	}
 	if err != nil {
 		return err
 	}
-	return res.scatterConn.MessageStream(ctx, keyspace, shards, name, callback)
+	return res.scatterConn.MessageStream(ctx, rss, name, callback)
 }
 
 // MessageAckKeyspaceIds routes message acks based on the associated keyspace ids.
@@ -354,31 +354,26 @@ func (res *Resolver) MessageAckKeyspaceIds(ctx context.Context, keyspace, name s
 // UpdateStream streams the events.
 // TODO(alainjobart): Implement the multi-shards merge code.
 func (res *Resolver) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, callback func(*querypb.StreamEvent, int64) error) error {
+	var rs *srvtopo.ResolvedShard
 	if shard != "" {
-		// If we pass in a shard, resolve the keyspace following redirects.
-		var err error
-		keyspace, _, _, err = srvtopo.GetKeyspaceShards(ctx, res.toposerv, res.cell, keyspace, tabletType)
+		// If we pass in a shard, resolve the keyspace/shard
+		// following redirects.
+		rss, err := res.resolver.ResolveShards(ctx, keyspace, []string{shard}, tabletType)
 		if err != nil {
 			return err
 		}
+		rs = rss[0]
 	} else {
-		// If we pass in a KeyRange, resolve it to one shard only for now.
-		var shards []string
-		var err error
-		keyspace, shards, err = srvtopo.MapExactShards(
-			ctx,
-			res.toposerv,
-			res.cell,
-			keyspace,
-			tabletType,
-			keyRange)
+		// If we pass in a KeyRange, resolve it to one shard
+		// only for now.
+		rss, err := res.resolver.ResolveExactShards(ctx, keyspace, tabletType, keyRange)
 		if err != nil {
 			return err
 		}
-		if len(shards) != 1 {
-			return fmt.Errorf("UpdateStream only supports exactly one shard per keyrange at the moment, but provided keyrange %v maps to %v", keyRange, shards)
+		if len(rss) != 1 {
+			return fmt.Errorf("UpdateStream only supports exactly one shard per keyrange at the moment, but provided keyrange %v maps to %v shards", keyRange, len(rss))
 		}
-		shard = shards[0]
+		rs = rss[0]
 	}
 
 	// Just send it to ScatterConn.  With just one connection, the
@@ -389,12 +384,7 @@ func (res *Resolver) UpdateStream(ctx context.Context, keyspace string, shard st
 		position = event.Position
 		timestamp = 0
 	}
-	target := &querypb.Target{
-		Keyspace:   keyspace,
-		Shard:      shard,
-		TabletType: tabletType,
-	}
-	return res.scatterConn.UpdateStream(ctx, target, timestamp, position, func(se *querypb.StreamEvent) error {
+	return res.scatterConn.UpdateStream(ctx, rs, timestamp, position, func(se *querypb.StreamEvent) error {
 		var timestamp int64
 		if se.EventToken != nil {
 			timestamp = se.EventToken.Timestamp
