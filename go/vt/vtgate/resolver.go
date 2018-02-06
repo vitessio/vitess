@@ -207,37 +207,6 @@ func (res *Resolver) ExecuteEntityIds(
 	}
 }
 
-// boundKeyspaceIDQueriesToBoundShardQueries is a helper used by
-// ExecuteBatchKeyspaceIds.
-func boundKeyspaceIDQueriesToBoundShardQueries(ctx context.Context, topoServ srvtopo.Server, cell string, tabletType topodatapb.TabletType, idQueries []*vtgatepb.BoundKeyspaceIdQuery) ([]*vtgatepb.BoundShardQuery, error) {
-	shardQueries := make([]*vtgatepb.BoundShardQuery, len(idQueries))
-	for i, idQuery := range idQueries {
-		keyspace, shards, err := srvtopo.MapKeyspaceIdsToShards(ctx, topoServ, cell, idQuery.Keyspace, tabletType, idQuery.KeyspaceIds)
-		if err != nil {
-			return nil, err
-		}
-		shardQueries[i] = &vtgatepb.BoundShardQuery{
-			Query:    idQuery.Query,
-			Keyspace: keyspace,
-			Shards:   shards,
-		}
-	}
-	return shardQueries, nil
-}
-
-// ExecuteBatchKeyspaceIds executes a group of queries based on KeyspaceIds.
-// It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
-	buildBatchRequest := func() (*scatterBatchRequest, error) {
-		shardQueries, err := boundKeyspaceIDQueriesToBoundShardQueries(ctx, res.toposerv, res.cell, tabletType, queries)
-		if err != nil {
-			return nil, err
-		}
-		return boundShardQueriesToScatterBatchRequest(shardQueries)
-	}
-	return res.ExecuteBatch(ctx, tabletType, asTransaction, session, options, buildBatchRequest)
-}
-
 // ExecuteBatch executes a group of queries based on shards resolved by given func.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) ExecuteBatch(

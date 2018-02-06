@@ -352,34 +352,71 @@ func (stc *ScatterConn) ExecuteEntityIds(
 // list. In each request variable, the resultIndexes specifies the position
 // for each result from the shard.
 type scatterBatchRequest struct {
-	Length   int
-	Requests map[string]*shardBatchRequest
+	// length is the total number of queries we have.
+	length int
+	// requests maps the 'keyspace:shard' key to the structure below.
+	requests map[string]*shardBatchRequest
 }
 
 type shardBatchRequest struct {
-	Queries         []*querypb.BoundQuery
-	Keyspace, Shard string
-	ResultIndexes   []int
+	// rs is the ResolvedShard to send the queries to.
+	rs *srvtopo.ResolvedShard
+	// queries are the queries to send to that ResolvedShard.
+	queries []*querypb.BoundQuery
+	// resultIndexes describes the index of the query and its results
+	// into the full original query array.
+	resultIndexes []int
 }
 
-func boundShardQueriesToScatterBatchRequest(boundQueries []*vtgatepb.BoundShardQuery) (*scatterBatchRequest, error) {
+func boundShardQueriesToScatterBatchRequest(ctx context.Context, resolver *srvtopo.Resolver, boundQueries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType) (*scatterBatchRequest, error) {
 	requests := &scatterBatchRequest{
-		Length:   len(boundQueries),
-		Requests: make(map[string]*shardBatchRequest),
+		length:   len(boundQueries),
+		requests: make(map[string]*shardBatchRequest),
 	}
 	for i, boundQuery := range boundQueries {
-		for shard := range unique(boundQuery.Shards) {
-			key := boundQuery.Keyspace + ":" + shard
-			request := requests.Requests[key]
+		rss, err := resolver.ResolveShards(ctx, boundQuery.Keyspace, boundQuery.Shards, tabletType)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, rs := range rss {
+			key := rs.Target.Keyspace + ":" + rs.Target.Shard
+			request := requests.requests[key]
 			if request == nil {
 				request = &shardBatchRequest{
-					Keyspace: boundQuery.Keyspace,
-					Shard:    shard,
+					rs: rs,
 				}
-				requests.Requests[key] = request
+				requests.requests[key] = request
 			}
-			request.Queries = append(request.Queries, boundQuery.Query)
-			request.ResultIndexes = append(request.ResultIndexes, i)
+			request.queries = append(request.queries, boundQuery.Query)
+			request.resultIndexes = append(request.resultIndexes, i)
+		}
+	}
+	return requests, nil
+}
+
+func boundKeyspaceIDQueriesToScatterBatchRequest(ctx context.Context, resolver *srvtopo.Resolver, boundQueries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType) (*scatterBatchRequest, error) {
+	requests := &scatterBatchRequest{
+		length:   len(boundQueries),
+		requests: make(map[string]*shardBatchRequest),
+	}
+	for i, boundQuery := range boundQueries {
+		rss, err := resolver.ResolveKeyspaceIds(ctx, boundQuery.Keyspace, tabletType, boundQuery.KeyspaceIds)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, rs := range rss {
+			key := rs.Target.Keyspace + ":" + rs.Target.Shard
+			request := requests.requests[key]
+			if request == nil {
+				request = &shardBatchRequest{
+					rs: rs,
+				}
+				requests.requests[key] = request
+			}
+			request.queries = append(request.queries, boundQuery.Query)
+			request.resultIndexes = append(request.resultIndexes, i)
 		}
 	}
 	return requests, nil
@@ -395,31 +432,25 @@ func (stc *ScatterConn) ExecuteBatch(
 	options *querypb.ExecuteOptions) (qrs []sqltypes.Result, err error) {
 	allErrors := new(concurrency.AllErrorRecorder)
 
-	results := make([]sqltypes.Result, batchRequest.Length)
+	results := make([]sqltypes.Result, batchRequest.length)
 	var resMutex sync.Mutex
 
 	var wg sync.WaitGroup
-	for _, req := range batchRequest.Requests {
+	for _, req := range batchRequest.requests {
 		wg.Add(1)
 		go func(req *shardBatchRequest) {
 			defer wg.Done()
-			target := &querypb.Target{
-				Keyspace:   req.Keyspace,
-				Shard:      req.Shard,
-				TabletType: tabletType,
-			}
-
 			var err error
-			startTime, statsKey := stc.startAction("ExecuteBatch", target)
+			startTime, statsKey := stc.startAction("ExecuteBatch", req.rs.Target)
 			defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
-			shouldBegin, transactionID := transactionInfo(target, session, false)
+			shouldBegin, transactionID := transactionInfo(req.rs.Target, session, false)
 			var innerqrs []sqltypes.Result
 			if shouldBegin {
-				innerqrs, transactionID, err = stc.gateway.BeginExecuteBatch(ctx, target, req.Queries, asTransaction, options)
+				innerqrs, transactionID, err = req.rs.QueryService.BeginExecuteBatch(ctx, req.rs.Target, req.queries, asTransaction, options)
 				if transactionID != 0 {
 					if appendErr := session.Append(&vtgatepb.Session_ShardSession{
-						Target:        target,
+						Target:        req.rs.Target,
 						TransactionId: transactionID,
 					}, stc.txConn.mode); appendErr != nil {
 						err = appendErr
@@ -429,7 +460,7 @@ func (stc *ScatterConn) ExecuteBatch(
 					return
 				}
 			} else {
-				innerqrs, err = stc.gateway.ExecuteBatch(ctx, target, req.Queries, asTransaction, transactionID, options)
+				innerqrs, err = req.rs.QueryService.ExecuteBatch(ctx, req.rs.Target, req.queries, asTransaction, transactionID, options)
 				if err != nil {
 					return
 				}
@@ -438,7 +469,7 @@ func (stc *ScatterConn) ExecuteBatch(
 			resMutex.Lock()
 			defer resMutex.Unlock()
 			for i, result := range innerqrs {
-				results[req.ResultIndexes[i]].AppendResult(&result)
+				results[req.resultIndexes[i]].AppendResult(&result)
 			}
 		}(req)
 	}

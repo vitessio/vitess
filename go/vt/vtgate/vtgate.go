@@ -567,7 +567,7 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.B
 		session,
 		options,
 		func() (*scatterBatchRequest, error) {
-			return boundShardQueriesToScatterBatchRequest(queries)
+			return boundShardQueriesToScatterBatchRequest(ctx, vtg.resolver.resolver, queries, tabletType)
 		})
 	if err == nil {
 		var rowCount int64
@@ -609,13 +609,15 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgat
 
 	annotateBoundKeyspaceIDQueries(queries)
 
-	qrs, err = vtg.resolver.ExecuteBatchKeyspaceIds(
+	qrs, err = vtg.resolver.ExecuteBatch(
 		ctx,
-		queries,
 		tabletType,
 		asTransaction,
 		session,
-		options)
+		options,
+		func() (*scatterBatchRequest, error) {
+			return boundKeyspaceIDQueriesToScatterBatchRequest(ctx, vtg.resolver.resolver, queries, tabletType)
+		})
 	if err == nil {
 		var rowCount int64
 		for _, qr := range qrs {

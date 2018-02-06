@@ -229,6 +229,7 @@ func (r *Resolver) GetAllKeyspaces(ctx context.Context) ([]string, error) {
 
 // ResolveShards returns the list of ResolvedShards associated with the
 // Shard list.
+// FIXME(alainjobart) this should first resolve keyspace to allow for redirects.
 func (r *Resolver) ResolveShards(ctx context.Context, keyspace string, shards []string, tabletType topodatapb.TabletType) ([]*ResolvedShard, error) {
 	res := make([]*ResolvedShard, 0, len(shards))
 	visited := make(map[string]bool)

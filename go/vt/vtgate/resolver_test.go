@@ -19,7 +19,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
@@ -95,22 +94,25 @@ func TestResolverExecuteEntityIds(t *testing.T) {
 
 func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
 	testResolverGeneric(t, "TestResolverExecuteBatchKeyspaceIds", func(res *Resolver) (*sqltypes.Result, error) {
-		qrs, err := res.ExecuteBatchKeyspaceIds(context.Background(),
-			[]*vtgatepb.BoundKeyspaceIdQuery{{
-				Query: &querypb.BoundQuery{
-					Sql:           "query",
-					BindVariables: nil,
-				},
-				Keyspace: "TestResolverExecuteBatchKeyspaceIds",
-				KeyspaceIds: [][]byte{
-					{0x10},
-					{0x25},
-				},
-			}},
+		queries := []*vtgatepb.BoundKeyspaceIdQuery{{
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace: "TestResolverExecuteBatchKeyspaceIds",
+			KeyspaceIds: [][]byte{
+				{0x10},
+				{0x25},
+			},
+		}}
+		qrs, err := res.ExecuteBatch(context.Background(),
 			topodatapb.TabletType_MASTER,
 			false,
 			nil,
-			nil)
+			nil,
+			func() (*scatterBatchRequest, error) {
+				return boundKeyspaceIDQueriesToScatterBatchRequest(context.Background(), res.resolver, queries, topodatapb.TabletType_MASTER)
+			})
 		if err != nil {
 			return nil, err
 		}
@@ -607,7 +609,7 @@ func TestResolverExecBatchReresolve(t *testing.T) {
 			Keyspace: keyspace,
 			Shards:   []string{"0"},
 		}}
-		return boundShardQueriesToScatterBatchRequest(queries)
+		return boundShardQueriesToScatterBatchRequest(context.Background(), res.resolver, queries, topodatapb.TabletType_MASTER)
 	}
 
 	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, false, nil, nil, buildBatchRequest)
@@ -644,7 +646,7 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 			Keyspace: keyspace,
 			Shards:   []string{"0"},
 		}}
-		return boundShardQueriesToScatterBatchRequest(queries)
+		return boundShardQueriesToScatterBatchRequest(context.Background(), res.resolver, queries, topodatapb.TabletType_MASTER)
 	}
 
 	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, true, nil, nil, buildBatchRequest)
@@ -666,75 +668,4 @@ func newTestResolver(hc discovery.HealthCheck, serv srvtopo.Server, cell string)
 	sc := newTestScatterConn(hc, serv, cell)
 	srvResolver := srvtopo.NewResolver(serv, sc.gateway, cell)
 	return NewResolver(srvResolver, serv, cell, sc)
-}
-
-func TestBoundKeyspaceIdQueriesToBoundShardQueries(t *testing.T) {
-	ts := new(sandboxTopo)
-	kid10 := []byte{0x10}
-	kid25 := []byte{0x25}
-	var testCases = []struct {
-		idQueries    []*vtgatepb.BoundKeyspaceIdQuery
-		shardQueries []*vtgatepb.BoundShardQuery
-	}{
-		{
-			idQueries: []*vtgatepb.BoundKeyspaceIdQuery{
-				{
-					Query: &querypb.BoundQuery{
-						Sql: "q1",
-						BindVariables: map[string]*querypb.BindVariable{
-							"q1var": sqltypes.Int64BindVariable(1),
-						},
-					},
-					Keyspace:    KsTestSharded,
-					KeyspaceIds: [][]byte{kid10, kid25},
-				}, {
-					Query: &querypb.BoundQuery{
-						Sql: "q2",
-						BindVariables: map[string]*querypb.BindVariable{
-							"q2var": sqltypes.Int64BindVariable(2),
-						},
-					},
-					Keyspace:    KsTestSharded,
-					KeyspaceIds: [][]byte{kid25, kid25},
-				},
-			},
-			shardQueries: []*vtgatepb.BoundShardQuery{
-				{
-					Query: &querypb.BoundQuery{
-						Sql: "q1",
-						BindVariables: map[string]*querypb.BindVariable{
-							"q1var": sqltypes.Int64BindVariable(1),
-						},
-					},
-					Keyspace: KsTestSharded,
-					Shards:   []string{"-20", "20-40"},
-				}, {
-					Query: &querypb.BoundQuery{
-						Sql: "q2",
-						BindVariables: map[string]*querypb.BindVariable{
-							"q2var": sqltypes.Int64BindVariable(2),
-						},
-					},
-					Keyspace: KsTestSharded,
-					Shards:   []string{"20-40"},
-				},
-			},
-		},
-	}
-
-	for _, testCase := range testCases {
-		shardQueries, err := boundKeyspaceIDQueriesToBoundShardQueries(context.Background(), ts, "", topodatapb.TabletType_MASTER, testCase.idQueries)
-		if err != nil {
-			t.Error(err)
-		}
-		// Sort shards, because they're random otherwise.
-		for _, shardQuery := range shardQueries {
-			sort.Strings(shardQuery.Shards)
-		}
-		got, _ := json.Marshal(shardQueries)
-		want, _ := json.Marshal(testCase.shardQueries)
-		if string(got) != string(want) {
-			t.Errorf("idQueries: %#v\nResponse:   %s\nExpecting: %s", testCase.idQueries, string(got), string(want))
-		}
-	}
 }
