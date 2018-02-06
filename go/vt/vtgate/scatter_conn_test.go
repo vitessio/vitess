@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -71,7 +70,8 @@ func TestScatterConnExecuteBatch(t *testing.T) {
 			Keyspace: "TestScatterConnExecuteBatch",
 			Shards:   shards,
 		}}
-		scatterRequest, err := boundShardQueriesToScatterBatchRequest(queries)
+		res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+		scatterRequest, err := boundShardQueriesToScatterBatchRequest(context.Background(), res, queries, topodatapb.TabletType_REPLICA)
 		if err != nil {
 			return nil, err
 		}
@@ -582,138 +582,4 @@ func newTestScatterConn(hc discovery.HealthCheck, serv srvtopo.Server, cell stri
 	gw := gateway.GetCreator()(hc, nil /*topo.Server*/, serv, cell, 3)
 	tc := NewTxConn(gw, vtgatepb.TransactionMode_TWOPC)
 	return NewScatterConn("", tc, gw, hc)
-}
-
-func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
-	var testCases = []struct {
-		boundQueries []*vtgatepb.BoundShardQuery
-		requests     *scatterBatchRequest
-	}{
-		{
-			boundQueries: []*vtgatepb.BoundShardQuery{
-				{
-					Query: &querypb.BoundQuery{
-						Sql: "q1",
-						BindVariables: map[string]*querypb.BindVariable{
-							"q1var": sqltypes.Int64BindVariable(1),
-						},
-					},
-					Keyspace: "ks1",
-					Shards:   []string{"0", "1"},
-				}, {
-					Query: &querypb.BoundQuery{
-						Sql: "q2",
-						BindVariables: map[string]*querypb.BindVariable{
-							"q2var": sqltypes.Int64BindVariable(2),
-						},
-					},
-					Keyspace: "ks1",
-					Shards:   []string{"1"},
-				}, {
-					Query: &querypb.BoundQuery{
-						Sql: "q3",
-						BindVariables: map[string]*querypb.BindVariable{
-							"q3var": sqltypes.Int64BindVariable(3),
-						},
-					},
-					Keyspace: "ks2",
-					Shards:   []string{"1"},
-				},
-			},
-			requests: &scatterBatchRequest{
-				Length: 3,
-				Requests: map[string]*shardBatchRequest{
-					"ks1:0": {
-						Queries: []*querypb.BoundQuery{
-							{
-								Sql: "q1",
-								BindVariables: map[string]*querypb.BindVariable{
-									"q1var": sqltypes.Int64BindVariable(1),
-								},
-							},
-						},
-						Keyspace:      "ks1",
-						Shard:         "0",
-						ResultIndexes: []int{0},
-					},
-					"ks1:1": {
-						Queries: []*querypb.BoundQuery{
-							{
-								Sql: "q1",
-								BindVariables: map[string]*querypb.BindVariable{
-									"q1var": sqltypes.Int64BindVariable(1),
-								},
-							}, {
-								Sql: "q2",
-								BindVariables: map[string]*querypb.BindVariable{
-									"q2var": sqltypes.Int64BindVariable(2),
-								},
-							},
-						},
-						Keyspace:      "ks1",
-						Shard:         "1",
-						ResultIndexes: []int{0, 1},
-					},
-					"ks2:1": {
-						Queries: []*querypb.BoundQuery{
-							{
-								Sql: "q3",
-								BindVariables: map[string]*querypb.BindVariable{
-									"q3var": sqltypes.Int64BindVariable(3),
-								},
-							},
-						},
-						Keyspace:      "ks2",
-						Shard:         "1",
-						ResultIndexes: []int{2},
-					},
-				},
-			},
-		},
-		{
-			boundQueries: []*vtgatepb.BoundShardQuery{
-				{
-					Query: &querypb.BoundQuery{
-						Sql: "q1",
-						BindVariables: map[string]*querypb.BindVariable{
-							"q1var": sqltypes.Int64BindVariable(1),
-						},
-					},
-					Keyspace: "ks1",
-					Shards:   []string{"0", "0"},
-				},
-			},
-			requests: &scatterBatchRequest{
-				Length: 1,
-				Requests: map[string]*shardBatchRequest{
-					"ks1:0": {
-						Queries: []*querypb.BoundQuery{
-							{
-								Sql: "q1",
-								BindVariables: map[string]*querypb.BindVariable{
-									"q1var": sqltypes.Int64BindVariable(1),
-								},
-							},
-						},
-						Keyspace:      "ks1",
-						Shard:         "0",
-						ResultIndexes: []int{0},
-					},
-				},
-			},
-		},
-	}
-
-	for _, testCase := range testCases {
-		scatterRequest, err := boundShardQueriesToScatterBatchRequest(testCase.boundQueries)
-		if err != nil {
-			t.Errorf("boundShardQueriesToScatterBatchRequest failed: %v", err)
-			continue
-		}
-		if !reflect.DeepEqual(testCase.requests, scatterRequest) {
-			got, _ := json.Marshal(scatterRequest)
-			want, _ := json.Marshal(testCase.requests)
-			t.Errorf("Bound Query: %#v\nResponse:  %s\nExpecting: %s", testCase.boundQueries, got, want)
-		}
-	}
 }
