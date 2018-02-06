@@ -367,20 +367,19 @@ func (res *Resolver) MessageStream(ctx context.Context, keyspace string, shard s
 
 // MessageAckKeyspaceIds routes message acks based on the associated keyspace ids.
 func (res *Resolver) MessageAckKeyspaceIds(ctx context.Context, keyspace, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error) {
-	newKeyspace, _, allShards, err := srvtopo.GetKeyspaceShards(ctx, res.toposerv, res.cell, keyspace, topodatapb.TabletType_MASTER)
+	ids := make([]*querypb.Value, len(idKeyspaceIDs))
+	ksids := make([][]byte, len(idKeyspaceIDs))
+	for i, iki := range idKeyspaceIDs {
+		ids[i] = iki.Id
+		ksids[i] = iki.KeyspaceId
+	}
+
+	rss, values, err := res.resolver.ResolveKeyspaceIdsValues(ctx, keyspace, ids, ksids, topodatapb.TabletType_MASTER)
 	if err != nil {
 		return 0, err
 	}
 
-	shardIDs := make(map[string][]*querypb.Value)
-	for _, idKeyspaceID := range idKeyspaceIDs {
-		shard, err := srvtopo.GetShardForKeyspaceID(allShards, idKeyspaceID.KeyspaceId)
-		if err != nil {
-			return 0, err
-		}
-		shardIDs[shard] = append(shardIDs[shard], idKeyspaceID.Id)
-	}
-	return res.scatterConn.MessageAck(ctx, newKeyspace, shardIDs, name)
+	return res.scatterConn.MessageAck(ctx, rss, values, name)
 }
 
 // UpdateStream streams the events.

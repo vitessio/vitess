@@ -17,6 +17,8 @@ limitations under the License.
 package srvtopo
 
 import (
+	"sort"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -212,6 +214,19 @@ func (r *Resolver) GetAllShards(ctx context.Context, keyspace string, tabletType
 	return res, nil
 }
 
+// GetAllKeyspaces returns all the known keyspaces in the local cell.
+func (r *Resolver) GetAllKeyspaces(ctx context.Context) ([]string, error) {
+	keyspaces, err := r.topoServ.GetSrvKeyspaceNames(ctx, r.localCell)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "keyspace names fetch error: %v", err)
+	}
+	// FIXME(alainjobart) this should be unnecessary. The results
+	// of ListDir are sorted, and that's the underlying topo code.
+	// But the tests depend on this behavior now.
+	sort.Strings(keyspaces)
+	return keyspaces, nil
+}
+
 // ResolveShards returns the list of ResolvedShards associated with the
 // Shard list.
 func (r *Resolver) ResolveShards(ctx context.Context, keyspace string, shards []string, tabletType topodatapb.TabletType) ([]*ResolvedShard, error) {
@@ -283,7 +298,7 @@ func (r *Resolver) ResolveKeyRanges(ctx context.Context, keyspace string, tablet
 	return res, nil
 }
 
-// ResolveEntityIds returns a map of shards to values to use in that shard.
+// ResolveEntityIds returns a list of shards and values to use in that shard.
 func (r *Resolver) ResolveEntityIds(ctx context.Context, keyspace string, entityIds []*vtgatepb.ExecuteEntityIdsRequest_EntityId, tabletType topodatapb.TabletType) ([]*ResolvedShard, [][]*querypb.Value, error) {
 	keyspace, _, allShards, err := r.GetKeyspaceShards(ctx, keyspace, tabletType)
 	if err != nil {
@@ -323,6 +338,51 @@ func (r *Resolver) ResolveEntityIds(ctx context.Context, keyspace string, entity
 			resolved[shard] = i
 		}
 		values[i] = append(values[i], &querypb.Value{Type: eid.Type, Value: eid.Value})
+	}
+	return result, values, nil
+}
+
+// ResolveKeyspaceIdsValues resolves keyspace IDs and values into their
+// respective shards. Same logic as ResolveEntityIds.
+func (r *Resolver) ResolveKeyspaceIdsValues(ctx context.Context, keyspace string, ids []*querypb.Value, ksids [][]byte, tabletType topodatapb.TabletType) ([]*ResolvedShard, [][]*querypb.Value, error) {
+	keyspace, _, allShards, err := r.GetKeyspaceShards(ctx, keyspace, tabletType)
+	if err != nil {
+		return nil, nil, err
+	}
+	var result []*ResolvedShard
+	var values [][]*querypb.Value
+	resolved := make(map[string]int)
+	for i, id := range ids {
+		shard, err := GetShardForKeyspaceID(allShards, ksids[i])
+		if err != nil {
+			return nil, nil, err
+		}
+		in, ok := resolved[shard]
+		if !ok {
+			target := &querypb.Target{
+				Keyspace:   keyspace,
+				Shard:      shard,
+				TabletType: tabletType,
+				Cell:       r.localCell,
+			}
+			_, qs, err := r.stats.GetAggregateStats(target)
+			if err != nil {
+				return nil, nil, resolverError(err, target)
+			}
+
+			// FIXME(alainjobart) we ignore the stats for now.
+			// Later we can fallback to another cell if needed.
+			// We would then need to read the SrvKeyspace there too.
+			target.Cell = ""
+			in = len(result)
+			result = append(result, &ResolvedShard{
+				Target:       target,
+				QueryService: qs,
+			})
+			values = append(values, nil)
+			resolved[shard] = in
+		}
+		values[in] = append(values[in], id)
 	}
 	return result, values, nil
 }
