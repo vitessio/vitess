@@ -61,7 +61,7 @@ topology:
       mysqlProtocol:
         enabled: false
       keyspaces:
-        - name: "unsharded-dbname"
+        - name: "unsharded_dbname"
           shards:
             - name: "0"
               tablets:
@@ -78,14 +78,14 @@ topology:
     - name: "zone1"
       ...
       keyspaces:
-        - name: "unsharded-dbname"
+        - name: "unsharded_dbname"
           shards:
             - name: "0"
               tablets:
                 - type: "replica"
                   vttablet:
                     replicas: 2
-        - name: "sharded-db"
+        - name: "sharded_db"
           shards:
             - name: "-80"
               tablets:
@@ -107,7 +107,7 @@ topology:
     - name: "zone1"
       ...
       keyspaces:
-        - name: "unsharded-dbname"
+        - name: "unsharded_dbname"
           shards:
             - name: "0"
               tablets:
@@ -249,4 +249,16 @@ pmm:
           storage: "150Gi"
     env:
       metricsMemory: "3000000"
+```
+
+### Enable Orchestrator
+#### NOTE: This requires at least Kubernetes 1.9
+
+```
+topology:
+  cells:
+    ...
+
+orchestrator:
+  enabled: true
 ```

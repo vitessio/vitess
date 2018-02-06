@@ -12,6 +12,17 @@
 {{- end -}}
 
 #############################
+# Repeat a string N times, where N is the total number
+# of replicas. Len must be used on the calling end to
+# get an int
+#############################
+{{- define "tablet-count" -}}
+{{- range . -}}
+{{- repeat (int .vttablet.replicas) "x" -}}
+{{- end -}}
+{{- end -}}
+
+#############################
 # Format a list of flag maps into a command line.
 #############################
 {{- define "format-flags-all" -}}
@@ -105,21 +116,30 @@ export EXTRA_MY_CNF="$FLAVOR_MYCNF:/vtdataroot/tabletdata/report-host.cnf:/vt/co
 # backup flags - expects config.backup
 #############################
 {{- define "backup-flags" -}}
+{{- $backup := index . 0 -}}
+{{- $caller := index . 1 -}}
 
-{{ if .enabled }}
+{{ with $backup }}
+
+  {{ if .enabled }}
+    {{ if eq $caller "vttablet" }}
 -restore_from_backup
+    {{ end }}
+
 -backup_storage_implementation=$VT_BACKUP_SERVICE
 
-{{ if eq .backup_storage_implementation "gcs" }}
+    {{ if eq .backup_storage_implementation "gcs" }}
 -gcs_backup_storage_bucket=$VT_GCS_BACKUP_STORAGE_BUCKET
 -gcs_backup_storage_root=$VT_GCS_BACKUP_STORAGE_ROOT
 
-{{ else if eq .backup_storage_implementation "s3" }}
+    {{ else if eq .backup_storage_implementation "s3" }}
 -s3_backup_aws_region=$VT_S3_BACKUP_AWS_REGION
 -s3_backup_storage_bucket=$VT_S3_BACKUP_STORAGE_BUCKET
 -s3_backup_storage_root=$VT_S3_BACKUP_STORAGE_ROOT
 -s3_backup_server_side_encryption=$VT_S3_BACKUP_SERVER_SIDE_ENCRYPTION
-{{ end }}
+    {{ end }}
+
+  {{ end }}
 
 {{ end }}
 
@@ -243,17 +263,25 @@ export EXTRA_MY_CNF="$FLAVOR_MYCNF:/vtdataroot/tabletdata/report-host.cnf:/vt/co
 
 {{ if .enabled }}
 
+  {{ if eq .backup_storage_implementation "gcs" }}
+
+    {{ if .gcsSecret }}
 credsPath=/etc/secrets/creds/$(ls /etc/secrets/creds/ | head -1)
 
-{{ if eq .backup_storage_implementation "gcs" }}
 export GOOGLE_APPLICATION_CREDENTIALS=$credsPath
 cat $GOOGLE_APPLICATION_CREDENTIALS
+    {{ end }}
 
-{{ else if eq .backup_storage_implementation "s3" }}
+  {{ else if eq .backup_storage_implementation "s3" }}
+
+    {{ if .s3Secret }}
+credsPath=/etc/secrets/creds/$(ls /etc/secrets/creds/ | head -1)
+
 export AWS_SHARED_CREDENTIALS_FILE=$credsPath
 cat $AWS_SHARED_CREDENTIALS_FILE
+    {{ end }}
 
-{{ end }}
+  {{ end }}
 
 {{ end }}
 

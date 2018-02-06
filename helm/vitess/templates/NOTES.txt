@@ -8,6 +8,7 @@ To access administrative web pages, start a proxy with:
 
 Then use the following URLs:
 
-vtctld: {{$proxyURL}}/services/vtctld:web/app/
-vtgate: {{$proxyURL}}/services/vtgate-{{$cell}}:web/
-{{ if $.Values.pmm.enabled }}   pmm: {{$proxyURL}}/services/pmm:web/{{ end }}
+      vtctld: {{$proxyURL}}/services/vtctld:web/app/
+      vtgate: {{$proxyURL}}/services/vtgate-{{$cell}}:web/
+{{ if $.Values.orchestrator.enabled }}orchestrator: {{$proxyURL}}/services/orchestrator:web/{{ end }}
+{{ if $.Values.pmm.enabled }}         pmm: {{$proxyURL}}/services/pmm:web/{{ end }}
