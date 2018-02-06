@@ -982,6 +982,7 @@ func (ct *ColumnType) WalkSubtree(visit Visit) error {
 type IndexDefinition struct {
 	Info    *IndexInfo
 	Columns []*IndexColumn
+	Using   ColIdent
 }
 
 // Format formats the node.
@@ -998,6 +999,9 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 		}
 	}
 	buf.Myprintf(")")
+	if !idx.Using.IsEmpty() {
+		buf.Myprintf(" USING %v", idx.Using)
+	}
 }
 
 // WalkSubtree walks the nodes of the subtree.
