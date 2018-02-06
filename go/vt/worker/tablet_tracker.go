@@ -23,8 +23,9 @@ import (
 	"sync"
 
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // TabletTracker tracks for each tablet alias how often it is currently in use
@@ -49,7 +50,7 @@ func NewTabletTracker() *TabletTracker {
 // Track will pick the least used tablet from "stats", increment its usage by 1
 // and return it.
 // "stats" must not be empty.
-func (t *TabletTracker) Track(stats []discovery.TabletStats) *topodata.Tablet {
+func (t *TabletTracker) Track(stats []discovery.TabletStats) *topodatapb.Tablet {
 	if len(stats) == 0 {
 		panic("stats must not be empty")
 	}
@@ -80,7 +81,7 @@ func (t *TabletTracker) Track(stats []discovery.TabletStats) *topodata.Tablet {
 }
 
 // Untrack decrements the usage of "alias" by 1.
-func (t *TabletTracker) Untrack(alias *topodata.TabletAlias) {
+func (t *TabletTracker) Untrack(alias *topodatapb.TabletAlias) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 

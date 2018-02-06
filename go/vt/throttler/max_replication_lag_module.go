@@ -23,14 +23,13 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-
 	"github.com/golang/protobuf/proto"
 
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/proto/throttlerdata"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
+	throttlerdatapb "github.com/youtube/vitess/go/vt/proto/throttlerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -204,7 +203,7 @@ func (m *MaxReplicationLagModule) applyLatestConfig() {
 	}
 }
 
-func (m *MaxReplicationLagModule) getConfiguration() *throttlerdata.Configuration {
+func (m *MaxReplicationLagModule) getConfiguration() *throttlerdatapb.Configuration {
 	m.mutableConfigMu.Lock()
 	defer m.mutableConfigMu.Unlock()
 
@@ -212,14 +211,14 @@ func (m *MaxReplicationLagModule) getConfiguration() *throttlerdata.Configuratio
 	return &configCopy
 }
 
-func (m *MaxReplicationLagModule) updateConfiguration(configuration *throttlerdata.Configuration, copyZeroValues bool) error {
+func (m *MaxReplicationLagModule) updateConfiguration(configuration *throttlerdatapb.Configuration, copyZeroValues bool) error {
 	m.mutableConfigMu.Lock()
 	defer m.mutableConfigMu.Unlock()
 
 	newConfig := m.mutableConfig
 
 	if copyZeroValues {
-		newConfig.Configuration = *proto.Clone(configuration).(*throttlerdata.Configuration)
+		newConfig.Configuration = *proto.Clone(configuration).(*throttlerdatapb.Configuration)
 	} else {
 		proto.Merge(&newConfig.Configuration, configuration)
 	}
