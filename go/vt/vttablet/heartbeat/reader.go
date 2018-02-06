@@ -30,7 +30,6 @@ import (
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -91,7 +90,7 @@ func (r *Reader) InitDBConfig(dbcfgs dbconfigs.DBConfigs) {
 
 // Init does last minute initialization of db settings, such as dbName
 // and keyspaceShard
-func (r *Reader) Init(target query.Target) {
+func (r *Reader) Init(target querypb.Target) {
 	if !r.enabled {
 		return
 	}

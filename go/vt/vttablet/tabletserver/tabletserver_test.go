@@ -2777,7 +2777,7 @@ func TestConfigChanges(t *testing.T) {
 
 	tsv.SetAutoCommit(true)
 	if val := tsv.qe.autoCommit.Get(); !val {
-		t.Errorf("tsv.qe.autoCommit.Get: %d, want true", val)
+		t.Errorf("tsv.qe.autoCommit.Get: %v, want true", val)
 	}
 
 	tsv.SetMaxResultSize(newSize)

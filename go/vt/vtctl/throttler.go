@@ -25,12 +25,14 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/olekukonko/tablewriter"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/proto/throttlerdata"
 	"github.com/youtube/vitess/go/vt/throttler"
 	"github.com/youtube/vitess/go/vt/throttler/throttlerclient"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"golang.org/x/net/context"
+
+	throttlerdatapb "github.com/youtube/vitess/go/vt/proto/throttlerdata"
 )
 
 // This file contains the commands to control the throttler which is used during
@@ -220,7 +222,7 @@ func commandUpdateThrottlerConfiguration(ctx context.Context, wr *wrangler.Wrang
 	}
 
 	protoText := subFlags.Arg(0)
-	configuration := &throttlerdata.Configuration{}
+	configuration := &throttlerdatapb.Configuration{}
 	if err := proto.UnmarshalText(protoText, configuration); err != nil {
 		return fmt.Errorf("Failed to unmarshal the configuration protobuf text (%v) into a protobuf instance: %v", protoText, err)
 	}
