@@ -48,7 +48,7 @@ func TestReaderReadHeartbeat(t *testing.T) {
 		}},
 	})
 
-	lagNs.Set(0)
+	cumulativeLagNs.Set(0)
 	readErrors.Set(0)
 	reads.Set(0)
 
@@ -61,7 +61,7 @@ func TestReaderReadHeartbeat(t *testing.T) {
 	if got, want := lag, 10*time.Second; got != want {
 		t.Fatalf("wrong latest lag: got = %v, want = %v", tr.lastKnownLag, want)
 	}
-	if got, want := lagNs.Get(), 10*time.Second.Nanoseconds(); got != want {
+	if got, want := cumulativeLagNs.Get(), 10*time.Second.Nanoseconds(); got != want {
 		t.Fatalf("wrong cumulative lag: got = %v, want = %v", got, want)
 	}
 	if got, want := reads.Get(), int64(1); got != want {
@@ -80,7 +80,7 @@ func TestReaderReadHeartbeatError(t *testing.T) {
 	tr := newReader(db, mockNowFunc)
 	defer tr.Close()
 
-	lagNs.Set(0)
+	cumulativeLagNs.Set(0)
 	readErrors.Set(0)
 
 	tr.readHeartbeat()
@@ -92,7 +92,7 @@ func TestReaderReadHeartbeatError(t *testing.T) {
 	if got, want := lag, 0*time.Second; got != want {
 		t.Fatalf("wrong lastKnownLag: got = %v, want = %v", got, want)
 	}
-	if got, want := lagNs.Get(), int64(0); got != want {
+	if got, want := cumulativeLagNs.Get(), int64(0); got != want {
 		t.Fatalf("wrong cumulative lag: got = %v, want = %v", got, want)
 	}
 	if got, want := readErrors.Get(), int64(1); got != want {
