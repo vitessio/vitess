@@ -68,7 +68,7 @@ type shardActionFunc func(target *querypb.Target) error
 // return an error if any.  multiGo is capable of executing
 // multiple shardActionFunc actions in parallel and
 // consolidating the results and errors for the caller.
-type shardActionFunc2 func(rs *srvtopo.ResolvedShard) error
+type shardActionFunc2 func(rs *srvtopo.ResolvedShard, i int) error
 
 // shardActionTransactionFunc defines the contract for a shard action
 // that may be in a transaction. Every such function executes the
@@ -487,7 +487,7 @@ func (stc *ScatterConn) StreamExecute(
 	var mu sync.Mutex
 	fieldSent := false
 
-	allErrors := stc.multiGo2(ctx, "StreamExecute", rss, tabletType, func(rs *srvtopo.ResolvedShard) error {
+	allErrors := stc.multiGo2(ctx, "StreamExecute", rss, tabletType, func(rs *srvtopo.ResolvedShard, i int) error {
 		return rs.QueryService.StreamExecute(ctx, rs.Target, query, bindVars, options, func(qr *sqltypes.Result) error {
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
@@ -606,15 +606,11 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shar
 }
 
 // MessageAck acks messages across multiple shards.
-func (stc *ScatterConn) MessageAck(ctx context.Context, keyspace string, shardIDs map[string][]*querypb.Value, name string) (int64, error) {
+func (stc *ScatterConn) MessageAck(ctx context.Context, rss []*srvtopo.ResolvedShard, values [][]*querypb.Value, name string) (int64, error) {
 	var mu sync.Mutex
 	var totalCount int64
-	shards := make([]string, 0, len(shardIDs))
-	for shard := range shardIDs {
-		shards = append(shards, shard)
-	}
-	allErrors := stc.multiGo(ctx, "MessageAck", keyspace, shards, topodatapb.TabletType_MASTER, func(target *querypb.Target) error {
-		count, err := stc.gateway.MessageAck(ctx, target, name, shardIDs[target.Shard])
+	allErrors := stc.multiGo2(ctx, "MessageAck", rss, topodatapb.TabletType_MASTER, func(rs *srvtopo.ResolvedShard, i int) error {
+		count, err := rs.QueryService.MessageAck(ctx, rs.Target, name, values[i])
 		if err != nil {
 			return err
 		}
@@ -817,26 +813,26 @@ func (stc *ScatterConn) multiGo2(
 		return allErrors
 	}
 
-	oneShard := func(rs *srvtopo.ResolvedShard) {
+	oneShard := func(rs *srvtopo.ResolvedShard, i int) {
 		var err error
 		startTime, statsKey := stc.startAction(name, rs.Target)
 		defer stc.endAction(startTime, allErrors, statsKey, &err, nil)
-		err = action(rs)
+		err = action(rs, i)
 	}
 
 	if len(rss) == 1 {
 		// only one shard, do it synchronously.
-		oneShard(rss[0])
+		oneShard(rss[0], 0)
 		return allErrors
 	}
 
 	var wg sync.WaitGroup
-	for _, rs := range rss {
-		//		wg.Add(1)
-		//		go func(rs *srvtopo.ResolvedShard) {
-		//			defer wg.Done()
-		oneShard(rs)
-		//		}(rs)
+	for i, rs := range rss {
+		wg.Add(1)
+		go func(rs *srvtopo.ResolvedShard, i int) {
+			defer wg.Done()
+			oneShard(rs, i)
+		}(rs, i)
 	}
 	wg.Wait()
 	return allErrors

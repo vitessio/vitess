@@ -18,7 +18,6 @@ package srvtopo
 
 import (
 	"encoding/hex"
-	"sort"
 
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -62,17 +61,6 @@ func GetAnyShard(ctx context.Context, topoServ Server, cell, keyspace string, ta
 		return "", "", vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "No shards found for this tabletType")
 	}
 	return keyspace, allShards[0].Name, nil
-}
-
-// GetAllKeyspaces returns all the known keyspaces in a shard.
-func GetAllKeyspaces(ctx context.Context, topoServ Server, cell string) ([]string, error) {
-	keyspaces, err := topoServ.GetSrvKeyspaceNames(ctx, cell)
-	if err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "keyspace names fetch error: %v", err)
-	}
-	sort.Strings(keyspaces)
-
-	return keyspaces, nil
 }
 
 // GetKeyspaceShards return all the shards in a keyspace. It follows

@@ -515,7 +515,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 
 	switch show.Type {
 	case sqlparser.KeywordString(sqlparser.DATABASES), sqlparser.KeywordString(sqlparser.VITESS_KEYSPACES):
-		keyspaces, err := srvtopo.GetAllKeyspaces(ctx, e.serv, e.cell)
+		keyspaces, err := e.resolver.resolver.GetAllKeyspaces(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -531,14 +531,14 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			RowsAffected: uint64(len(rows)),
 		}, nil
 	case sqlparser.KeywordString(sqlparser.VITESS_SHARDS):
-		keyspaces, err := srvtopo.GetAllKeyspaces(ctx, e.serv, e.cell)
+		keyspaces, err := e.resolver.resolver.GetAllKeyspaces(ctx)
 		if err != nil {
 			return nil, err
 		}
 
 		var rows [][]sqltypes.Value
 		for _, keyspace := range keyspaces {
-			_, _, shards, err := srvtopo.GetKeyspaceShards(ctx, e.serv, e.cell, keyspace, target.TabletType)
+			_, _, shards, err := e.resolver.resolver.GetKeyspaceShards(ctx, keyspace, target.TabletType)
 			if err != nil {
 				// There might be a misconfigured keyspace or no shards in the keyspace.
 				// Skip any errors and move on.
@@ -864,31 +864,32 @@ func (e *Executor) MessageStream(ctx context.Context, keyspace string, shard str
 }
 
 // MessageAck acks messages.
+// FIXME(alainjobart) the keyspace field here is not used for routing,
+// but just for finding the table in the VSchema. If we don't find the
+// table in the VSchema, we could just assume it's sharded (which would work
+// for unsharded as well) and route it to the provided keyspace.
 func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []*querypb.Value) (int64, error) {
 	table, err := e.VSchema().FindTable(keyspace, name)
 	if err != nil {
 		return 0, err
 	}
-	// TODO(sougou): Change this to use Session.
-	vcursor := newVCursorImpl(
-		ctx,
-		NewSafeSession(&vtgatepb.Session{}),
-		querypb.Target{
-			Keyspace:   table.Keyspace.Name,
-			TabletType: topodatapb.TabletType_MASTER,
-		},
-		"",
-		e,
-		nil,
-	)
 
-	newKeyspace, _, allShards, err := srvtopo.GetKeyspaceShards(ctx, e.serv, e.cell, table.Keyspace.Name, topodatapb.TabletType_MASTER)
-	if err != nil {
-		return 0, err
-	}
-
-	shardIDs := make(map[string][]*querypb.Value)
+	var rss []*srvtopo.ResolvedShard
+	var rssValues [][]*querypb.Value
 	if table.Keyspace.Sharded {
+		// TODO(sougou): Change this to use Session.
+		vcursor := newVCursorImpl(
+			ctx,
+			NewSafeSession(&vtgatepb.Session{}),
+			querypb.Target{
+				Keyspace:   table.Keyspace.Name,
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			"",
+			e,
+			nil,
+		)
+
 		// We always use the (unique) primary vindex. The ID must be the
 		// primary vindex for message tables.
 		mapper := table.ColumnVindexes[0].Vindex.(vindexes.Unique)
@@ -901,20 +902,19 @@ func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []
 		if err != nil {
 			return 0, err
 		}
-		for i, ksid := range ksids {
-			if ksid == nil {
-				continue
-			}
-			shard, err := srvtopo.GetShardForKeyspaceID(allShards, ksid)
-			if err != nil {
-				return 0, err
-			}
-			shardIDs[shard] = append(shardIDs[shard], ids[i])
+		rss, rssValues, err = e.resolver.resolver.ResolveKeyspaceIdsValues(ctx, table.Keyspace.Name, ids, ksids, topodatapb.TabletType_MASTER)
+		if err != nil {
+			return 0, err
 		}
 	} else {
-		shardIDs[allShards[0].Name] = ids
+		rs, err := e.resolver.resolver.GetAnyShard(ctx, table.Keyspace.Name, topodatapb.TabletType_MASTER)
+		if err != nil {
+			return 0, err
+		}
+		rss = []*srvtopo.ResolvedShard{rs}
+		rssValues = [][]*querypb.Value{ids}
 	}
-	return e.scatterConn.MessageAck(ctx, newKeyspace, shardIDs, name)
+	return e.scatterConn.MessageAck(ctx, rss, rssValues, name)
 }
 
 // IsKeyspaceRangeBasedSharded returns true if the keyspace in the vschema is
