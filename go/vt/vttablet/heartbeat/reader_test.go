@@ -27,8 +27,9 @@ import (
 	"github.com/youtube/vitess/go/sqlescape"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // TestReaderReadHeartbeat tests that reading a heartbeat sets the appropriate
@@ -40,7 +41,7 @@ func TestReaderReadHeartbeat(t *testing.T) {
 	defer tr.Close()
 
 	db.AddQuery(fmt.Sprintf("SELECT ts FROM %s.heartbeat WHERE keyspaceShard='%s'", tr.dbName, tr.keyspaceShard), &sqltypes.Result{
-		Fields: []*query.Field{
+		Fields: []*querypb.Field{
 			{Name: "ts", Type: sqltypes.Int64},
 		},
 		Rows: [][]sqltypes.Value{{

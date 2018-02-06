@@ -22,7 +22,8 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/proto/throttlerdata"
+
+	throttlerdatapb "github.com/youtube/vitess/go/vt/proto/throttlerdata"
 )
 
 // GlobalManager is the per-process manager which manages all active throttlers.
@@ -40,7 +41,7 @@ type Manager interface {
 
 	// GetConfiguration returns the configuration of the MaxReplicationlag module
 	// for the given throttler or all throttlers if "throttlerName" is empty.
-	GetConfiguration(throttlerName string) (map[string]*throttlerdata.Configuration, error)
+	GetConfiguration(throttlerName string) (map[string]*throttlerdatapb.Configuration, error)
 
 	// UpdateConfiguration (partially) updates the configuration of the
 	// MaxReplicationlag module for the given throttler or all throttlers if
@@ -48,7 +49,7 @@ type Manager interface {
 	// If "copyZeroValues" is true, fields with zero values will be copied
 	// as well.
 	// The function returns the names of the updated throttlers.
-	UpdateConfiguration(throttlerName string, configuration *throttlerdata.Configuration, copyZeroValues bool) ([]string, error)
+	UpdateConfiguration(throttlerName string, configuration *throttlerdatapb.Configuration, copyZeroValues bool) ([]string, error)
 
 	// ResetConfiguration resets the configuration of the MaxReplicationlag module
 	// to the initial configuration for the given throttler or all throttlers if
@@ -118,11 +119,11 @@ func (m *managerImpl) SetMaxRate(rate int64) []string {
 }
 
 // GetConfiguration implements the "Manager" interface.
-func (m *managerImpl) GetConfiguration(throttlerName string) (map[string]*throttlerdata.Configuration, error) {
+func (m *managerImpl) GetConfiguration(throttlerName string) (map[string]*throttlerdatapb.Configuration, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	configurations := make(map[string]*throttlerdata.Configuration)
+	configurations := make(map[string]*throttlerdatapb.Configuration)
 
 	if throttlerName != "" {
 		t, ok := m.throttlers[throttlerName]
@@ -140,7 +141,7 @@ func (m *managerImpl) GetConfiguration(throttlerName string) (map[string]*thrott
 }
 
 // UpdateConfiguration implements the "Manager" interface.
-func (m *managerImpl) UpdateConfiguration(throttlerName string, configuration *throttlerdata.Configuration, copyZeroValues bool) ([]string, error) {
+func (m *managerImpl) UpdateConfiguration(throttlerName string, configuration *throttlerdatapb.Configuration, copyZeroValues bool) ([]string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

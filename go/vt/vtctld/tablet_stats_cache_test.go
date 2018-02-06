@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/proto/topodata"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -146,7 +145,7 @@ func TestHeatmapData(t *testing.T) {
 				{float64(ts2.Stats.SecondsBehindMaster), float64(ts4.Stats.SecondsBehindMaster)},
 				{float64(ts1.Stats.SecondsBehindMaster), float64(-1)},
 			},
-			Aliases: [][]*topodata.TabletAlias{
+			Aliases: [][]*topodatapb.TabletAlias{
 				{nil, ts9.Tablet.Alias},
 				{ts6.Tablet.Alias, ts8.Tablet.Alias},
 				{ts5.Tablet.Alias, nil},
@@ -193,7 +192,7 @@ func TestHeatmapData(t *testing.T) {
 				{float64(ts3.Stats.SecondsBehindMaster), float64(-1)},
 				{float64(ts2.Stats.SecondsBehindMaster), float64(ts4.Stats.SecondsBehindMaster)},
 			},
-			Aliases: [][]*topodata.TabletAlias{
+			Aliases: [][]*topodatapb.TabletAlias{
 				{ts5.Tablet.Alias, nil},
 				{ts3.Tablet.Alias, nil},
 				{ts2.Tablet.Alias, ts4.Tablet.Alias},
@@ -233,7 +232,7 @@ func TestHeatmapData(t *testing.T) {
 				{float64(ts11.Stats.SecondsBehindMaster), float64(ts13.Stats.SecondsBehindMaster)},
 				{float64(ts10.Stats.SecondsBehindMaster), float64(-1)},
 			},
-			Aliases: [][]*topodata.TabletAlias{
+			Aliases: [][]*topodatapb.TabletAlias{
 				{ts12.Tablet.Alias, nil},
 				{ts11.Tablet.Alias, ts13.Tablet.Alias},
 				{ts10.Tablet.Alias, nil},
@@ -313,7 +312,7 @@ func TestHeatmapData(t *testing.T) {
 			Data: [][]float64{
 				{float64(-1), float64(ts7.Stats.SecondsBehindMaster)},
 			},
-			Aliases: [][]*topodata.TabletAlias{
+			Aliases: [][]*topodatapb.TabletAlias{
 				{nil, ts7.Tablet.Alias},
 			},
 			CellAndTypeLabels: []yLabel{
