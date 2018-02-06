@@ -584,7 +584,7 @@ func (tt *timeTracker) Record(target *querypb.Target) time.Time {
 }
 
 // MessageStream streams messages from the specified shards.
-func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shards []string, name string, callback func(*sqltypes.Result) error) error {
+func (stc *ScatterConn) MessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error {
 	// The cancelable context is used for handling errors
 	// from individual streams.
 	ctx, cancel := context.WithCancel(ctx)
@@ -594,13 +594,13 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shar
 	var mu sync.Mutex
 	fieldSent := false
 	lastErrors := newTimeTracker()
-	allErrors := stc.multiGo(ctx, "MessageStream", keyspace, shards, topodatapb.TabletType_MASTER, func(target *querypb.Target) error {
+	allErrors := stc.multiGo2(ctx, "MessageStream", rss, topodatapb.TabletType_MASTER, func(rs *srvtopo.ResolvedShard, i int) error {
 		// This loop handles the case where a reparent happens, which can cause
 		// an individual stream to end. If we don't succeed on the retries for
 		// messageStreamGracePeriod, we abort and return an error.
 		for {
-			err := stc.gateway.MessageStream(ctx, target, name, func(qr *sqltypes.Result) error {
-				lastErrors.Reset(target)
+			err := rs.QueryService.MessageStream(ctx, rs.Target, name, func(qr *sqltypes.Result) error {
+				lastErrors.Reset(rs.Target)
 				return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 			})
 			// nil and EOF are equivalent. UNAVAILABLE can be returned by vttablet if it's demoted
@@ -618,11 +618,11 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shar
 				return nil
 			default:
 			}
-			firstErrorTimeStamp := lastErrors.Record(target)
+			firstErrorTimeStamp := lastErrors.Record(rs.Target)
 			if time.Now().Sub(firstErrorTimeStamp) >= *messageStreamGracePeriod {
 				// Cancel all streams and return an error.
 				cancel()
-				return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "message stream from %v has repeatedly failed for longer than %v", target, *messageStreamGracePeriod)
+				return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "message stream from %v has repeatedly failed for longer than %v", rs.Target, *messageStreamGracePeriod)
 			}
 
 			// It's not been too long since our last good send. Wait and retry.
@@ -653,10 +653,10 @@ func (stc *ScatterConn) MessageAck(ctx context.Context, rss []*srvtopo.ResolvedS
 	return totalCount, allErrors.AggrError(vterrors.Aggregate)
 }
 
-// UpdateStream just sends the query to the gateway,
+// UpdateStream just sends the query to the ResolvedShard,
 // and sends the results back.
-func (stc *ScatterConn) UpdateStream(ctx context.Context, target *querypb.Target, timestamp int64, position string, callback func(*querypb.StreamEvent) error) error {
-	return stc.gateway.UpdateStream(ctx, target, position, timestamp, callback)
+func (stc *ScatterConn) UpdateStream(ctx context.Context, rs *srvtopo.ResolvedShard, timestamp int64, position string, callback func(*querypb.StreamEvent) error) error {
+	return rs.QueryService.UpdateStream(ctx, rs.Target, position, timestamp, callback)
 }
 
 // SplitQuery scatters a SplitQuery request to the shards whose names are given in 'shards'.
