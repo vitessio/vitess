@@ -25,6 +25,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/grpcclient"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletconn"
 	"golang.org/x/net/context"
@@ -105,6 +106,19 @@ func NewL2VTGateConn(name, addr string, retryCount int) (*L2VTGateConn, error) {
 func (c *L2VTGateConn) Close(ctx context.Context) error {
 	c.cancel()
 	return nil
+}
+
+func (c *L2VTGateConn) servingConnStats(res map[string]int64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for k, s := range c.stats {
+		key := fmt.Sprintf("%s.%s.%s", k.keyspace, k.shard, topoproto.TabletTypeLString(k.tabletType))
+		var htc int32
+		for _, stats := range s.aggregates {
+			htc += stats.HealthyTabletCount
+		}
+		res[key] += int64(htc)
+	}
 }
 
 func (c *L2VTGateConn) checkConn(ctx context.Context) {

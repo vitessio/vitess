@@ -53,13 +53,14 @@ import (
 )
 
 var (
-	transactionMode    = flag.String("transaction_mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
-	normalizeQueries   = flag.Bool("normalize_queries", true, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
-	streamBufferSize   = flag.Int("stream_buffer_size", 32*1024, "the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size.")
-	queryPlanCacheSize = flag.Int64("gate_query_cache_size", 10000, "gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
-	legacyAutocommit   = flag.Bool("legacy_autocommit", false, "DEPRECATED: set this flag to true to get the legacy behavior: all transactions will need an explicit begin, and DMLs outside transactions will return an error.")
-	enableForwarding   = flag.Bool("enable_forwarding", false, "if specified, this process will also expose a QueryService interface that allows other vtgates to talk through this vtgate to the underlying tablets.")
-	l2vtgateAddrs      flagutil.StringListValue
+	transactionMode     = flag.String("transaction_mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
+	normalizeQueries    = flag.Bool("normalize_queries", true, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
+	streamBufferSize    = flag.Int("stream_buffer_size", 32*1024, "the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size.")
+	queryPlanCacheSize  = flag.Int64("gate_query_cache_size", 10000, "gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
+	legacyAutocommit    = flag.Bool("legacy_autocommit", false, "DEPRECATED: set this flag to true to get the legacy behavior: all transactions will need an explicit begin, and DMLs outside transactions will return an error.")
+	enableForwarding    = flag.Bool("enable_forwarding", false, "if specified, this process will also expose a QueryService interface that allows other vtgates to talk through this vtgate to the underlying tablets.")
+	l2vtgateAddrs       flagutil.StringListValue
+	disableLocalGateway = flag.Bool("disable_local_gateway", false, "if specified, this process will not route any queries to local tablets in the local cell")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -158,16 +159,19 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
 	// we can't go on much further, so we log.Fatal out.
-	gw := gateway.GetCreator()(hc, topoServer, serv, cell, retryCount)
-	if err := gateway.WaitForTablets(gw, tabletTypesToWait); err != nil {
-		log.Fatalf("gateway.WaitForTablets failed: %v", err)
-	}
-
-	// l2vtgate gives access to the underlying Gateway from an exported
-	// QueryService interface.
+	var gw gateway.Gateway
 	var l2vtgate *L2VTGate
-	if *enableForwarding {
-		l2vtgate = initL2VTGate(gw)
+	if !*disableLocalGateway {
+		gw = gateway.GetCreator()(hc, topoServer, serv, cell, retryCount)
+		if err := gateway.WaitForTablets(gw, tabletTypesToWait); err != nil {
+			log.Fatalf("gateway.WaitForTablets failed: %v", err)
+		}
+
+		// l2vtgate gives access to the underlying Gateway
+		// from an exported QueryService interface.
+		if *enableForwarding {
+			l2vtgate = initL2VTGate(gw)
+		}
 	}
 
 	// If we have other vtgate pools to connect to, create a
@@ -177,7 +181,13 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server
 		if err != nil {
 			log.Fatalf("gateway.NewHybridGateway failed: %v", err)
 		}
+		hgw.RegisterStats()
 		gw = hgw
+	}
+
+	// Check we have something to do.
+	if gw == nil {
+		log.Fatalf("'-disable_local_gateway' cannot be specified if 'l2vtgate_addrs' is also empty, otherwise this vtgate has no backend")
 	}
 
 	tc := NewTxConn(gw, getTxMode())
