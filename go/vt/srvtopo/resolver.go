@@ -183,11 +183,12 @@ func (r *Resolver) GetAnyShard(ctx context.Context, keyspace string, tabletType 
 	}, nil
 }
 
-// GetAllShards returns the list of ResolvedShards associated with all the shards in a keyspace.
-func (r *Resolver) GetAllShards(ctx context.Context, keyspace string, tabletType topodatapb.TabletType) ([]*ResolvedShard, error) {
-	keyspace, _, allShards, err := r.GetKeyspaceShards(ctx, keyspace, tabletType)
+// GetAllShards returns the list of ResolvedShards associated with all
+// the shards in a keyspace.
+func (r *Resolver) GetAllShards(ctx context.Context, keyspace string, tabletType topodatapb.TabletType) ([]*ResolvedShard, *topodatapb.SrvKeyspace, error) {
+	keyspace, srvKeyspace, allShards, err := r.GetKeyspaceShards(ctx, keyspace, tabletType)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	res := make([]*ResolvedShard, len(allShards))
@@ -200,7 +201,7 @@ func (r *Resolver) GetAllShards(ctx context.Context, keyspace string, tabletType
 		}
 		_, qs, err := r.stats.GetAggregateStats(target)
 		if err != nil {
-			return nil, resolverError(err, target)
+			return nil, nil, resolverError(err, target)
 		}
 
 		// FIXME(alainjobart) we ignore the stats for now.
@@ -212,7 +213,7 @@ func (r *Resolver) GetAllShards(ctx context.Context, keyspace string, tabletType
 			QueryService: qs,
 		}
 	}
-	return res, nil
+	return res, srvKeyspace, nil
 }
 
 // GetAllKeyspaces returns all the known keyspaces in the local cell.
