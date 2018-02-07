@@ -33,13 +33,12 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -61,7 +60,7 @@ type Writer struct {
 
 	enabled       bool
 	interval      time.Duration
-	tabletAlias   topodata.TabletAlias
+	tabletAlias   topodatapb.TabletAlias
 	keyspaceShard string
 	dbName        string
 	now           func() time.Time
@@ -74,7 +73,7 @@ type Writer struct {
 }
 
 // NewWriter creates a new Writer.
-func NewWriter(checker connpool.MySQLChecker, alias topodata.TabletAlias, config tabletenv.TabletConfig) *Writer {
+func NewWriter(checker connpool.MySQLChecker, alias topodatapb.TabletAlias, config tabletenv.TabletConfig) *Writer {
 	if !config.HeartbeatEnable {
 		return &Writer{}
 	}
@@ -96,7 +95,7 @@ func (w *Writer) InitDBConfig(dbcfgs dbconfigs.DBConfigs) {
 
 // Init runs at tablet startup and last minute initialization of db settings, and
 // creates the necessary tables for heartbeat.
-func (w *Writer) Init(target query.Target) error {
+func (w *Writer) Init(target querypb.Target) error {
 	if !w.enabled {
 		return nil
 	}

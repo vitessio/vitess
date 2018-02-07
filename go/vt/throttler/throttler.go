@@ -34,8 +34,10 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/proto/throttlerdata"
+
+	throttlerdatapb "github.com/youtube/vitess/go/vt/proto/throttlerdata"
 )
 
 const (
@@ -299,12 +301,12 @@ func (t *Throttler) RecordReplicationLag(time time.Time, ts *discovery.TabletSta
 }
 
 // GetConfiguration returns the configuration of the MaxReplicationLag module.
-func (t *Throttler) GetConfiguration() *throttlerdata.Configuration {
+func (t *Throttler) GetConfiguration() *throttlerdatapb.Configuration {
 	return t.maxReplicationLagModule.getConfiguration()
 }
 
 // UpdateConfiguration updates the configuration of the MaxReplicationLag module.
-func (t *Throttler) UpdateConfiguration(configuration *throttlerdata.Configuration, copyZeroValues bool) error {
+func (t *Throttler) UpdateConfiguration(configuration *throttlerdatapb.Configuration, copyZeroValues bool) error {
 	return t.maxReplicationLagModule.updateConfiguration(configuration, copyZeroValues)
 }
 
