@@ -28,6 +28,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -70,34 +71,42 @@ const (
 </style>
 <table>
   <tr>
-    <th colspan="2">SrvKeyspace Names Cache</th>
+    <th colspan="4">SrvKeyspace Names Cache</th>
   </tr>
   <tr>
     <th>Cell</th>
     <th>SrvKeyspace Names</th>
+    <th>TTL</th>
+    <th>Error</th>
   </tr>
   {{range $i, $skn := .SrvKeyspaceNames}}
   <tr>
     <td>{{github_com_youtube_vitess_vtctld_srv_cell $skn.Cell}}</td>
-    <td>{{if $skn.LastError}}<b>{{$skn.LastError}}</b>{{else}}{{range $j, $value := $skn.Value}}{{github_com_youtube_vitess_vtctld_srv_keyspace $skn.Cell $value}}&nbsp;{{end}}{{end}}</td>
+    <td>{{range $j, $value := $skn.Value}}{{github_com_youtube_vitess_vtctld_srv_keyspace $skn.Cell $value}}&nbsp;{{end}}</td>
+    <td>{{github_com_youtube_vitess_srvtopo_ttl_time $skn.ExpirationTime}}</td>
+    <td>{{if $skn.LastError}}({{github_com_youtube_vitess_srvtopo_time_since $skn.LastQueryTime}}Ago) {{$skn.LastError}}{{end}}</td>
   </tr>
   {{end}}
 </table>
 <br>
 <table>
   <tr>
-    <th colspan="3">SrvKeyspace Cache</th>
+    <th colspan="5">SrvKeyspace Cache</th>
   </tr>
   <tr>
     <th>Cell</th>
     <th>Keyspace</th>
     <th>SrvKeyspace</th>
+    <th>TTL</th>
+    <th>Error</th>
   </tr>
   {{range $i, $sk := .SrvKeyspaces}}
   <tr>
     <td>{{github_com_youtube_vitess_vtctld_srv_cell $sk.Cell}}</td>
     <td>{{github_com_youtube_vitess_vtctld_srv_keyspace $sk.Cell $sk.Keyspace}}</td>
-    <td>{{if $sk.LastError}}<b>{{$sk.LastError}}</b>{{else}}{{$sk.StatusAsHTML}}{{end}}</td>
+    <td>{{$sk.StatusAsHTML}}</td>
+    <td>{{github_com_youtube_vitess_srvtopo_ttl_time $sk.ExpirationTime}}</td>
+    <td>{{if $sk.LastError}}({{github_com_youtube_vitess_srvtopo_time_since $sk.LastErrorTime}} Ago) {{$sk.LastError}}{{end}}</td>
   </tr>
   {{end}}
 </table>
@@ -436,10 +445,12 @@ func (server *ResilientServer) WatchSrvVSchema(ctx context.Context, cell string,
 
 // SrvKeyspaceNamesCacheStatus is the current value for SrvKeyspaceNames
 type SrvKeyspaceNamesCacheStatus struct {
-	Cell         string
-	Value        []string
-	LastError    error
-	LastErrorCtx context.Context
+	Cell           string
+	Value          []string
+	ExpirationTime time.Time
+	LastQueryTime  time.Time
+	LastError      error
+	LastErrorCtx   context.Context
 }
 
 // SrvKeyspaceNamesCacheStatusList is used for sorting
@@ -462,11 +473,13 @@ func (skncsl SrvKeyspaceNamesCacheStatusList) Swap(i, j int) {
 
 // SrvKeyspaceCacheStatus is the current value for a SrvKeyspace object
 type SrvKeyspaceCacheStatus struct {
-	Cell         string
-	Keyspace     string
-	Value        *topodatapb.SrvKeyspace
-	LastError    error
-	LastErrorCtx context.Context
+	Cell           string
+	Keyspace       string
+	Value          *topodatapb.SrvKeyspace
+	ExpirationTime time.Time
+	LastErrorTime  time.Time
+	LastError      error
+	LastErrorCtx   context.Context
 }
 
 // StatusAsHTML returns an HTML version of our status.
@@ -532,23 +545,34 @@ func (server *ResilientServer) CacheStatus() *ResilientServerCacheStatus {
 
 	for _, entry := range server.srvKeyspaceNamesCache {
 		entry.mutex.Lock()
+
 		result.SrvKeyspaceNames = append(result.SrvKeyspaceNames, &SrvKeyspaceNamesCacheStatus{
-			Cell:         entry.cell,
-			Value:        entry.value,
-			LastError:    entry.lastError,
-			LastErrorCtx: entry.lastErrorCtx,
+			Cell:           entry.cell,
+			Value:          entry.value,
+			ExpirationTime: entry.insertionTime.Add(server.cacheTTL),
+			LastQueryTime:  entry.lastQueryTime,
+			LastError:      entry.lastError,
+			LastErrorCtx:   entry.lastErrorCtx,
 		})
 		entry.mutex.Unlock()
 	}
 
 	for _, entry := range server.srvKeyspaceCache {
 		entry.mutex.RLock()
+
+		expirationTime := time.Now().Add(server.cacheTTL)
+		if !entry.watchRunning {
+			expirationTime = entry.lastValueTime.Add(server.cacheTTL)
+		}
+
 		result.SrvKeyspaces = append(result.SrvKeyspaces, &SrvKeyspaceCacheStatus{
-			Cell:         entry.cell,
-			Keyspace:     entry.keyspace,
-			Value:        entry.value,
-			LastError:    entry.lastError,
-			LastErrorCtx: entry.lastErrorCtx,
+			Cell:           entry.cell,
+			Keyspace:       entry.keyspace,
+			Value:          entry.value,
+			ExpirationTime: expirationTime,
+			LastErrorTime:  entry.lastErrorTime,
+			LastError:      entry.lastError,
+			LastErrorCtx:   entry.lastErrorCtx,
 		})
 		entry.mutex.RUnlock()
 	}
@@ -560,4 +584,26 @@ func (server *ResilientServer) CacheStatus() *ResilientServerCacheStatus {
 	sort.Sort(result.SrvKeyspaces)
 
 	return result
+}
+
+// Returns the ttl for the cached entry or "Expired" if it is in the past
+func ttlTime(expirationTime time.Time) template.HTML {
+	ttl := time.Until(expirationTime).Round(time.Second)
+	if ttl < 0 {
+		return template.HTML("<b>Expired</b>")
+	}
+	return template.HTML(ttl.String())
+}
+
+func timeSince(t time.Time) template.HTML {
+	return template.HTML(time.Since(t).Round(time.Second).String())
+}
+
+var statusFuncs = template.FuncMap{
+	"github_com_youtube_vitess_srvtopo_ttl_time":   ttlTime,
+	"github_com_youtube_vitess_srvtopo_time_since": timeSince,
+}
+
+func init() {
+	servenv.AddStatusFuncs(statusFuncs)
 }
