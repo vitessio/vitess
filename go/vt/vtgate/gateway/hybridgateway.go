@@ -21,6 +21,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/stats"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/srvtopo"
@@ -85,6 +86,19 @@ func (h *HybridGateway) WaitForTablets(ctx context.Context, tabletTypesToWait []
 
 	// No local tablets, we don't wait for anything here.
 	return nil
+}
+
+// RegisterStats registers the l2vtgate connection counts stats.
+func (h *HybridGateway) RegisterStats() {
+	stats.NewMultiCountersFunc("L2VtgateConnections", []string{"Keyspace", "ShardName", "TabletType"}, h.servingConnStats)
+}
+
+func (h *HybridGateway) servingConnStats() map[string]int64 {
+	res := make(map[string]int64)
+	for _, l := range h.l2vtgates {
+		l.servingConnStats(res)
+	}
+	return res
 }
 
 // CacheStatus is part of the Gateway interface. It just concatenates

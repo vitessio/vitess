@@ -554,19 +554,13 @@ class VtGate(object):
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
         '-stderrthreshold', get_log_level(),
         '-normalize_queries',
+        '-gateway_implementation', vtgate_gateway_flavor().flavor(),
     ]
+    args.extend(vtgate_gateway_flavor().flags(cell=cell, tablets=tablets))
     if l2vtgates:
-      args.extend([
-          '-gateway_implementation', 'l2vtgategateway',
-          '-l2vtgategateway_addrs', ','.join(l2vtgates),
-      ])
-    else:
-      args.extend([
-          '-gateway_implementation', vtgate_gateway_flavor().flavor(),
-      ])
-      args.extend(vtgate_gateway_flavor().flags(cell=cell, tablets=tablets))
-      if tablet_types_to_wait:
-        args.extend(['-tablet_types_to_wait', tablet_types_to_wait])
+      args.extend(['-l2vtgate_addrs', ','.join(l2vtgates)])
+    if tablet_types_to_wait:
+      args.extend(['-tablet_types_to_wait', tablet_types_to_wait])
 
     if protocols_flavor().vtgate_protocol() == 'grpc':
       args.extend(['-grpc_port', str(self.grpc_port)])
@@ -764,16 +758,17 @@ class VtGate(object):
     args.append(sql)
     return run_vtctl_json(args)
 
-  def wait_for_endpoints(self, name, count, timeout=20.0):
+  def wait_for_endpoints(self, name, count, timeout=20.0, var=None):
     """waits until vtgate gets endpoints.
 
     Args:
       name: name of the endpoint, in the form: 'keyspace.shard.type'.
       count: how many endpoints to wait for.
       timeout: how long to wait.
+      var: name of the variable to use. if None, defaults to the gateway's.
     """
     wait_for_vars('vtgate', self.port,
-                  var=vtgate_gateway_flavor().connection_count_vars(),
+                  var=var or vtgate_gateway_flavor().connection_count_vars(),
                   key=name, value=count, timeout=timeout)
 
   def verify_no_endpoint(self, name):

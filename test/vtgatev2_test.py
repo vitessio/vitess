@@ -42,8 +42,8 @@ use_l2vtgate = False
 # l2vtgate is the L2VTGate object, if any
 l2vtgate = None
 
-# l2vtgate_param is the parameter to send to vtgate
-l2vtgate_param = None
+# l2vtgate_addr is the address of the l2vtgate to send to vtgate
+l2vtgate_addr = None
 
 shard_0_master = tablet.Tablet()
 shard_0_replica1 = tablet.Tablet()
@@ -184,7 +184,7 @@ def tearDownModule():
 
 def setup_tablets():
   """Start up a master mysql and vttablet."""
-  global l2vtgate, l2vtgate_param
+  global l2vtgate, l2vtgate_addr
 
   logging.debug('Setting up tablets')
   utils.run_vtctl(['CreateKeyspace', KEYSPACE_NAME])
@@ -257,12 +257,14 @@ def setup_tablets():
     l2vtgate.start(extra_args=['--enable_forwarding'], tablets=
                    [shard_0_master, shard_0_replica1, shard_0_replica2,
                     shard_1_master, shard_1_replica1, shard_1_replica2])
-    _, addr = l2vtgate.rpc_endpoint()
-    l2vtgate_param = '%s|%s|%s' % (addr, KEYSPACE_NAME, '-')
+    _, l2vtgate_addr = l2vtgate.rpc_endpoint()
 
     # Clear utils.vtgate, so it doesn't point to the previous l2vtgate.
     utils.vtgate = None
-    utils.VtGate().start(l2vtgates=[l2vtgate_param,])
+
+    # This vgate doesn't watch any local tablets, so we disable_local_gateway.
+    utils.VtGate().start(l2vtgates=[l2vtgate_addr,],
+                         extra_args=['-disable_local_gateway'])
 
   else:
     utils.VtGate().start(tablets=
@@ -274,7 +276,8 @@ def setup_tablets():
 
 def restart_vtgate(port):
   if use_l2vtgate:
-    utils.VtGate(port=port).start(l2vtgates=[l2vtgate_param,])
+    utils.VtGate(port=port).start(l2vtgates=[l2vtgate_addr,],
+                                  extra_args=['-disable_local_gateway'])
   else:
     utils.VtGate(port=port).start(
         tablets=[shard_0_master, shard_0_replica1, shard_0_replica2,
@@ -283,7 +286,10 @@ def restart_vtgate(port):
 
 def wait_for_endpoints(name, count):
   if use_l2vtgate:
+    # Wait for the l2vtgate to have a healthy connection.
     l2vtgate.wait_for_endpoints(name, count)
+    # Also wait for vtgate to have received the remote healthy connection.
+    utils.vtgate.wait_for_endpoints(name, count, var='L2VtgateConnections')
   else:
     utils.vtgate.wait_for_endpoints(name, count)
 
