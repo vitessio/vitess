@@ -320,31 +320,40 @@ func (r *Resolver) ResolveKeyRanges(ctx context.Context, keyspace string, tablet
 	if err != nil {
 		return nil, err
 	}
-	uniqueShards := make(map[string]bool)
+	var res []*ResolvedShard
+	visited := make(map[string]bool)
 	for _, kr := range krs {
-		ResolveKeyRangeToShards(allShards, uniqueShards, kr)
-	}
-	var res = make([]*ResolvedShard, 0, len(uniqueShards))
-	for shard := range uniqueShards {
-		target := &querypb.Target{
-			Keyspace:   keyspace,
-			Shard:      shard,
-			TabletType: tabletType,
-			Cell:       r.localCell,
-		}
-		_, qs, err := r.stats.GetAggregateStats(target)
-		if err != nil {
-			return nil, resolverError(err, target)
-		}
+		for _, shard := range allShards {
+			if !key.KeyRangesIntersect(kr, shard.KeyRange) {
+				// We don't need that shard.
+				continue
+			}
+			if visited[shard.Name] {
+				// We've already added that shard.
+				continue
+			}
+			// We need to add this shard.
+			visited[shard.Name] = true
+			target := &querypb.Target{
+				Keyspace:   keyspace,
+				Shard:      shard.Name,
+				TabletType: tabletType,
+				Cell:       r.localCell,
+			}
+			_, qs, err := r.stats.GetAggregateStats(target)
+			if err != nil {
+				return nil, resolverError(err, target)
+			}
 
-		// FIXME(alainjobart) we ignore the stats for now.
-		// Later we can fallback to another cell if needed.
-		// We would then need to read the SrvKeyspace there too.
-		target.Cell = ""
-		res = append(res, &ResolvedShard{
-			Target:       target,
-			QueryService: qs,
-		})
+			// FIXME(alainjobart) we ignore the stats for now.
+			// Later we can fallback to another cell if needed.
+			// We would then need to read the SrvKeyspace there too.
+			target.Cell = ""
+			res = append(res, &ResolvedShard{
+				Target:       target,
+				QueryService: qs,
+			})
+		}
 	}
 	return res, nil
 }
