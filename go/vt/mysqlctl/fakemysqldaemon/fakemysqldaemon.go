@@ -190,7 +190,7 @@ func (fmd *FakeMysqlDaemon) ReinitConfig(ctx context.Context) error {
 }
 
 // RefreshConfig is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) RefreshConfig() error {
+func (fmd *FakeMysqlDaemon) RefreshConfig(ctx context.Context) error {
 	return nil
 }
 

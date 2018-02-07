@@ -322,7 +322,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 	usable := backupErr == nil
 
 	// Try to restart mysqld
-	err = mysqld.RefreshConfig()
+	err = mysqld.RefreshConfig(ctx)
 	if err != nil {
 		return usable, fmt.Errorf("can't refresh mysqld config: %v", err)
 	}
