@@ -301,6 +301,56 @@ func TestNoAutocommit(t *testing.T) {
 	testFetch(t, conn2, "select * from test", 0)
 }
 
+func TestTransactionsInProcess(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &proxyConnParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn2, err := mysql.Connect(ctx, &proxyConnParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testDML(t, conn, "begin", 1, 0)
+	testDML(t, conn, "insert into test (id, val) values(1, 'hello')", 1, 1)
+	testFetch(t, conn, "select * from test", 1)
+	testFetch(t, conn2, "select * from test", 0)
+
+	// A second begin causes the first transaction to commit and then
+	// runs the begin
+	testDML(t, conn, "begin", 2, 0)
+	testFetch(t, conn, "select * from test", 1)
+	testFetch(t, conn2, "select * from test", 1)
+	testDML(t, conn, "rollback", 1, 0)
+
+	testFetch(t, conn, "select * from test", 1)
+	testFetch(t, conn2, "select * from test", 1)
+
+	testDML(t, conn, "set autocommit=0", 0, 0)
+	testDML(t, conn, "begin", 1, 0)
+	testDML(t, conn, "insert into test (id, val) values(2, 'hello')", 1, 1)
+	testFetch(t, conn, "select * from test", 2)
+	testFetch(t, conn2, "select * from test", 1)
+
+	// Setting autocommit=1 causes the existing transaction to commit
+	testDML(t, conn, "set autocommit=1", 1, 0)
+	testFetch(t, conn, "select * from test", 2)
+	testFetch(t, conn2, "select * from test", 2)
+
+	testDML(t, conn, "insert into test (id, val) values(3, 'hello')", 3, 1)
+	testFetch(t, conn, "select * from test", 3)
+	testFetch(t, conn2, "select * from test", 3)
+
+	testDML(t, conn2, "begin", 1, 0)
+	testDML(t, conn2, "delete from test", 2, 3)
+	testDML(t, conn2, "commit", 1, 0)
+
+	testFetch(t, conn, "select * from test", 0)
+	testFetch(t, conn2, "select * from test", 0)
+
+}
+
 func TestOther(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &proxyConnParams)
