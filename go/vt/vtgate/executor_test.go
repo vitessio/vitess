@@ -773,7 +773,6 @@ func TestExecutorOther(t *testing.T) {
 		"explain",
 		"repair",
 		"optimize",
-		"truncate",
 	}
 	wantCount := []int64{0, 0, 0}
 	for _, stmt := range stmts {
@@ -824,6 +823,7 @@ func TestExecutorDDL(t *testing.T) {
 		"alter",
 		"rename",
 		"drop",
+		"truncate",
 	}
 	wantCount := []int64{0, 0, 0}
 	for _, stmt := range stmts {
