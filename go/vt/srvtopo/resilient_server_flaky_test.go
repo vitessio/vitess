@@ -82,7 +82,14 @@ func TestGetSrvKeyspace(t *testing.T) {
 	}
 
 	// make sure the HTML template works
-	templ := template.New("").Funcs(status.StatusFuncs)
+	funcs := map[string]interface{}{}
+	for k, v := range status.StatusFuncs {
+		funcs[k] = v
+	}
+	for k, v := range statusFuncs {
+		funcs[k] = v
+	}
+	templ := template.New("").Funcs(funcs)
 	templ, err = templ.Parse(TopoTemplate)
 	if err != nil {
 		t.Fatalf("error parsing template: %v", err)
