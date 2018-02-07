@@ -72,7 +72,13 @@ func Preview(sql string) int {
 	case "delete":
 		return StmtDelete
 	}
-	switch strings.ToLower(trimmed) {
+	// For the following statements it is not sufficient to rely
+	// on loweredFirstWord. This is because they are not statements
+	// in the grammar and we are relying on Preview to parse them.
+	// For instance, we don't want: "BEGIN JUNK" to be parsed
+	// as StmtBegin.
+	trimmedNoComments, _ := SplitTrailingComments(trimmed)
+	switch strings.ToLower(trimmedNoComments) {
 	case "begin", "start transaction":
 		return StmtBegin
 	case "commit":
