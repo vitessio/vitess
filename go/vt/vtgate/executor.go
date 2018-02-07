@@ -299,7 +299,7 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 		var result []*srvtopo.ResolvedShard
 		var err error
 		if target.Shard == "" {
-			result, err = e.resolver.resolver.GetAllShards(ctx, target.Keyspace, target.TabletType)
+			result, _, err = e.resolver.resolver.GetAllShards(ctx, target.Keyspace, target.TabletType)
 		} else {
 			result, err = e.resolver.resolver.ResolveShards(ctx, target.Keyspace, []string{target.Shard}, target.TabletType)
 		}

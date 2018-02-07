@@ -672,10 +672,9 @@ func (stc *ScatterConn) SplitQuery(
 	perShardSplitCount int64,
 	numRowsPerQueryPart int64,
 	algorithm querypb.SplitQueryRequest_Algorithm,
-	shards []string,
+	rss []*srvtopo.ResolvedShard,
 	querySplitToQueryPartFunc func(
-		querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error),
-	keyspace string) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+		querySplit *querypb.QuerySplit, rs *srvtopo.ResolvedShard) (*vtgatepb.SplitQueryResponse_Part, error)) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 
 	tabletType := topodatapb.TabletType_RDONLY
 	// allParts will collect the query-parts from all the shards. It's protected
@@ -683,21 +682,20 @@ func (stc *ScatterConn) SplitQuery(
 	var allParts []*vtgatepb.SplitQueryResponse_Part
 	var allPartsMutex sync.Mutex
 
-	allErrors := stc.multiGo(
+	allErrors := stc.multiGo2(
 		ctx,
 		"SplitQuery",
-		keyspace,
-		shards,
+		rss,
 		tabletType,
-		func(target *querypb.Target) error {
+		func(rs *srvtopo.ResolvedShard, i int) error {
 			// Get all splits from this shard
 			query := &querypb.BoundQuery{
 				Sql:           sql,
 				BindVariables: bindVariables,
 			}
-			querySplits, err := stc.gateway.SplitQuery(
+			querySplits, err := rs.QueryService.SplitQuery(
 				ctx,
-				target,
+				rs.Target,
 				query,
 				splitColumns,
 				perShardSplitCount,
@@ -708,7 +706,7 @@ func (stc *ScatterConn) SplitQuery(
 			}
 			parts := make([]*vtgatepb.SplitQueryResponse_Part, len(querySplits))
 			for i, querySplit := range querySplits {
-				parts[i], err = querySplitToQueryPartFunc(querySplit, target.Shard)
+				parts[i], err = querySplitToQueryPartFunc(querySplit, rs)
 				if err != nil {
 					return err
 				}

@@ -278,12 +278,18 @@ index by_msg (msg)
       l2vtgate1.wait_for_endpoints('test_keyspace.0.replica', 1)
       l2vtgate1.wait_for_endpoints('test_keyspace.0.rdonly', 1)
 
-      _, addr = l2vtgate1.rpc_endpoint()
-      l2vtgate1_param = '%s|test_keyspace|0' % addr
+      _, l2vtgate1_addr = l2vtgate1.rpc_endpoint()
 
       # Clear utils.vtgate, so it doesn't point to the previous l2vtgate1.
       utils.vtgate = None
-      utils.VtGate().start(cache_ttl='0', l2vtgates=[l2vtgate1_param,])
+      utils.VtGate().start(cache_ttl='0', l2vtgates=[l2vtgate1_addr,],
+                           extra_args=['-disable_local_gateway'])
+      utils.vtgate.wait_for_endpoints('test_keyspace.0.master', 1,
+                                      var='L2VtgateConnections')
+      utils.vtgate.wait_for_endpoints('test_keyspace.0.replica', 1,
+                                      var='L2VtgateConnections')
+      utils.vtgate.wait_for_endpoints('test_keyspace.0.rdonly', 1,
+                                      var='L2VtgateConnections')
 
     else:
       utils.VtGate().start(cache_ttl='0', tablets=[
@@ -416,15 +422,13 @@ index by_msg (msg)
       l2vtgate2.verify_no_endpoint('test_keyspace.-80.replica')
       l2vtgate2.verify_no_endpoint('test_keyspace.-80.rdonly')
 
-      _, addr1 = l2vtgate1.rpc_endpoint()
-      _, addr2 = l2vtgate2.rpc_endpoint()
-      l2vtgate1_param1 = '%s|test_keyspace|0' % addr1
-      l2vtgate1_param2 = '%s|test_keyspace|-80' % addr1
-      l2vtgate2_param = '%s|test_keyspace|80-' % addr2
+      _, l2vtgate1_addr = l2vtgate1.rpc_endpoint()
+      _, l2vtgate2_addr = l2vtgate2.rpc_endpoint()
       utils.vtgate = None
-      utils.VtGate().start(cache_ttl='0', l2vtgates=[l2vtgate1_param1,
-                                                     l2vtgate1_param2,
-                                                     l2vtgate2_param,])
+      utils.VtGate().start(cache_ttl='0', l2vtgates=[l2vtgate1_addr,
+                                                     l2vtgate2_addr,],
+                           extra_args=['-disable_local_gateway'])
+      var = 'L2VtgateConnections'
 
     else:
       utils.vtgate = None
@@ -432,15 +436,18 @@ index by_msg (msg)
           shard_master, shard_replica, shard_rdonly1,
           shard_0_master, shard_0_replica, shard_0_rdonly1,
           shard_1_master, shard_1_replica, shard_1_rdonly1])
-      utils.vtgate.wait_for_endpoints('test_keyspace.0.master', 1)
-      utils.vtgate.wait_for_endpoints('test_keyspace.0.replica', 1)
-      utils.vtgate.wait_for_endpoints('test_keyspace.0.rdonly', 1)
-      utils.vtgate.wait_for_endpoints('test_keyspace.-80.master', 1)
-      utils.vtgate.wait_for_endpoints('test_keyspace.-80.replica', 1)
-      utils.vtgate.wait_for_endpoints('test_keyspace.-80.rdonly', 1)
-      utils.vtgate.wait_for_endpoints('test_keyspace.80-.master', 1)
-      utils.vtgate.wait_for_endpoints('test_keyspace.80-.replica', 1)
-      utils.vtgate.wait_for_endpoints('test_keyspace.80-.rdonly', 1)
+      var = None
+
+    # Wait for the endpoints, either local or remote.
+    utils.vtgate.wait_for_endpoints('test_keyspace.0.master', 1, var=var)
+    utils.vtgate.wait_for_endpoints('test_keyspace.0.replica', 1, var=var)
+    utils.vtgate.wait_for_endpoints('test_keyspace.0.rdonly', 1, var=var)
+    utils.vtgate.wait_for_endpoints('test_keyspace.-80.master', 1, var=var)
+    utils.vtgate.wait_for_endpoints('test_keyspace.-80.replica', 1, var=var)
+    utils.vtgate.wait_for_endpoints('test_keyspace.-80.rdonly', 1, var=var)
+    utils.vtgate.wait_for_endpoints('test_keyspace.80-.master', 1, var=var)
+    utils.vtgate.wait_for_endpoints('test_keyspace.80-.replica', 1, var=var)
+    utils.vtgate.wait_for_endpoints('test_keyspace.80-.rdonly', 1, var=var)
 
     # check the Map Reduce API works correctly, should use ExecuteKeyRanges now,
     # as we are sharded (with just one shard).
