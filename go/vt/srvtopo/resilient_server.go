@@ -375,7 +375,7 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 				log.Errorf("%v", err)
 				server.counts.Add(errorCategory, 1)
 				entry.mutex.Lock()
-				if c.Err == topo.ErrNoNode {
+				if c.Err == topo.ErrNoNode || time.Since(entry.lastValueTime) > server.cacheTTL {
 					entry.value = nil
 				}
 				entry.watchRunning = false
