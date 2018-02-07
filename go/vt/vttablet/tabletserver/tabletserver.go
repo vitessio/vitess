@@ -440,6 +440,7 @@ func (tsv *TabletServer) decideAction(tabletType topodatapb.TabletType, serving 
 func (tsv *TabletServer) fullStart() (err error) {
 	c, err := dbconnpool.NewDBConnection(&tsv.dbconfigs.App, tabletenv.MySQLStats)
 	if err != nil {
+		log.Errorf("error creating db app connection: %v", err)
 		return err
 	}
 	c.Close()
@@ -1973,6 +1974,19 @@ func (tsv *TabletServer) SetMaxDMLRows(val int) {
 // MaxDMLRows returns the max result size.
 func (tsv *TabletServer) MaxDMLRows() int {
 	return int(tsv.qe.maxDMLRows.Get())
+}
+
+// SetPassthroughDMLs changes the setting to pass through all DMLs
+// It should only be used for testing
+func (tsv *TabletServer) SetPassthroughDMLs(val bool) {
+	planbuilder.PassthroughDMLs = true
+	tsv.qe.passthroughDMLs.Set(val)
+}
+
+// SetAllowUnsafeDMLs changes the setting to allow unsafe DML statements
+// in SBR mode. It should be used only on initialization or for testing.
+func (tsv *TabletServer) SetAllowUnsafeDMLs(val bool) {
+	tsv.qe.allowUnsafeDMLs = val
 }
 
 // queryAsString prints a readable version of query+bind variables,
