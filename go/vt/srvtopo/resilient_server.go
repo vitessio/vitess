@@ -137,12 +137,24 @@ type srvKeyspaceNamesEntry struct {
 	// the mutex protects any access to this structure (read or write)
 	mutex sync.Mutex
 
+	// refreshingChan is used to synchronize requests and avoid hammering
+	// the topo server
+	refreshingChan chan bool
+
 	insertionTime time.Time
 	lastQueryTime time.Time
 	value         []string
 	lastError     error
 	lastErrorCtx  context.Context
 }
+
+const (
+	watchStateIdle = iota
+	watchStateStarting
+	watchStateRunning
+)
+
+type watchState int
 
 type srvKeyspaceEntry struct {
 	// unmutable values
@@ -152,17 +164,25 @@ type srvKeyspaceEntry struct {
 	// the mutex protects any access to this structure (read or write)
 	mutex sync.RWMutex
 
-	// watchRunning describes if the watch go routine is running.
+	// watchState describes if the watch go routine is running.
 	// It is easier to have an explicit field instead of guessing
 	// based on value and lastError.
 	//
-	// if watchrunning is not set, the next time we try to access the
-	// keyspace, we will start a watch.
-	// if watchrunning is set, we are guaranteed to have lastError be
+	// if the state is watchStateIdle, and the time since the last error is
+	// greater than the refresh time, the next time we try to access the
+	// keyspace, we will set watchState to watchStarting and kick off the
+	// watch in a separate goroutine
+	//
+	// in watchStateRunning, we are guaranteed to have lastError be
 	// non-nil and an up-to-date value (which may be nil)
-	watchRunning bool
-	value        *topodatapb.SrvKeyspace
-	lastError    error
+	watchState watchState
+
+	// watchStartingCond is used to serialize callers for the first attempt
+	// to establish the watch
+	watchStartingChan chan bool
+
+	value     *topodatapb.SrvKeyspace
+	lastError error
 
 	// lastValueTime is the time when the cached value is known to be valid,
 	// either because the watch last obtained a non-nil value or when a
@@ -180,9 +200,14 @@ type srvKeyspaceEntry struct {
 	// has a bad keyspace or cell name.
 	lastErrorCtx context.Context
 
-	// lastErrorTime records the time that the watch failed, so that
-	// any requests that come in
+	// lastErrorTime records the time that the watch failed, used for
+	// the status page
 	lastErrorTime time.Time
+
+	// lastWatchTime records the time that the watch was last started,
+	// used to ensure we don't restart the watch more often than the
+	// refresh time
+	lastWatchTime time.Time
 }
 
 // NewResilientServer creates a new ResilientServer
@@ -219,17 +244,19 @@ func (server *ResilientServer) GetSrvKeyspaceNames(ctx context.Context, cell str
 	}
 	server.mutex.Unlock()
 
-	// Lock the entry, and do everything holding the lock.  This
-	// means two concurrent requests will only issue one
-	// underlying query.
+	// Lock the entry, and do everything holding the lock except
+	// querying the underlying topo server.
+	//
+	// This means that unless the topo server is very slow, two concurrent
+	// requests will only issue one underlying query.
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
-	// If it is not time to check again, then return either the cached
-	// value or the cached error
 	cacheValid := entry.value != nil && time.Since(entry.insertionTime) < server.cacheTTL
 	shouldRefresh := time.Since(entry.lastQueryTime) > server.cacheRefresh
 
+	// If it is not time to check again, then return either the cached
+	// value or the cached error but don't ask consul again.
 	if !shouldRefresh {
 		if cacheValid {
 			return entry.value, nil
@@ -237,35 +264,74 @@ func (server *ResilientServer) GetSrvKeyspaceNames(ctx context.Context, cell str
 		return nil, entry.lastError
 	}
 
-	// Not in cache or needs refresh so try to get the real value.
-	// We use the context that issued the query here.
-	result, err := server.topoServer.GetSrvKeyspaceNames(ctx, cell)
-	if err == nil {
-		// save the value we got and the current time in the cache
-		entry.insertionTime = time.Now()
-		entry.value = result
-	} else {
-		if entry.insertionTime.IsZero() {
-			server.counts.Add(errorCategory, 1)
-			log.Errorf("GetSrvKeyspaceNames(%v, %v) failed: %v (no cached value, caching and returning error)", ctx, cell, err)
+	// Rrefresh the state in a background goroutine if no refresh is already
+	// in progress none is already running. This way queries are not blocked
+	// while the cache is still valid but past the refresh time, and avoids
+	// calling out to the topo service while the lock is held.
+	if entry.refreshingChan == nil {
+		entry.refreshingChan = make(chan bool)
+		entry.lastQueryTime = time.Now()
+		go func() {
+			result, err := server.topoServer.GetSrvKeyspaceNames(ctx, cell)
 
-		} else if cacheValid {
-			server.counts.Add(cachedCategory, 1)
-			log.Warningf("GetSrvKeyspaceNames(%v, %v) failed: %v (returning cached value: %v %v)", ctx, cell, err, entry.value, entry.lastError)
-			result = entry.value
-			err = nil
-		} else {
-			server.counts.Add(errorCategory, 1)
-			log.Errorf("GetSrvKeyspaceNames(%v, %v) failed: %v (cached value expired)", ctx, cell, err)
-			entry.insertionTime = time.Time{}
-			entry.value = nil
-		}
+			entry.mutex.Lock()
+			defer func() {
+				close(entry.refreshingChan)
+				entry.refreshingChan = nil
+				entry.mutex.Unlock()
+			}()
+
+			if err == nil {
+				// save the value we got and the current time in the cache
+				entry.insertionTime = time.Now()
+				entry.value = result
+			} else {
+				server.counts.Add(errorCategory, 1)
+				if entry.insertionTime.IsZero() {
+					log.Errorf("GetSrvKeyspaceNames(%v, %v) failed: %v (no cached value, caching and returning error)", ctx, cell, err)
+
+				} else if entry.value != nil && time.Since(entry.insertionTime) < server.cacheTTL {
+					server.counts.Add(cachedCategory, 1)
+					log.Warningf("GetSrvKeyspaceNames(%v, %v) failed: %v (keeping cached value: %v)", ctx, cell, err, entry.value)
+				} else {
+					log.Errorf("GetSrvKeyspaceNames(%v, %v) failed: %v (cached value expired)", ctx, cell, err)
+					entry.insertionTime = time.Time{}
+					entry.value = nil
+				}
+			}
+
+			entry.lastError = err
+			entry.lastErrorCtx = ctx
+		}()
 	}
 
-	entry.lastError = err
-	entry.lastQueryTime = time.Now()
-	entry.lastErrorCtx = ctx
-	return result, err
+	// If the cached entry is still valid then use it, otherwise wait
+	// for the refresh attempt to complete to get a more up to date
+	// response.
+	//
+	// In the event that the topo service is slow or unresponsive either
+	// on the initial fetch or if the cache TTL expires, then several
+	// requests could be blocked on refreshingCond waiting for the response
+	// to come back.
+	if cacheValid {
+		return entry.value, nil
+	}
+
+	refreshingChan := entry.refreshingChan
+	entry.mutex.Unlock()
+	select {
+	case _, _ = <-refreshingChan:
+	case <-ctx.Done():
+		entry.mutex.Lock()
+		return nil, fmt.Errorf("timed out waiting for keyspace names")
+	}
+	entry.mutex.Lock()
+
+	if entry.value != nil {
+		return entry.value, nil
+	}
+
+	return nil, entry.lastError
 }
 
 func (server *ResilientServer) getSrvKeyspaceEntry(cell, keyspace string) *srvKeyspaceEntry {
@@ -298,49 +364,79 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 
 	// If the watch is already running, return the value
 	entry.mutex.RLock()
-	if entry.watchRunning {
+	if entry.watchState == watchStateRunning {
 		v, e := entry.value, entry.lastError
 		entry.mutex.RUnlock()
 		return v, e
 	}
 	entry.mutex.RUnlock()
 
-	// Lock the entry, and do everything holding the lock.  This
-	// means two concurrent requests will only issue one
-	// underlying query.
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
-	// If the watch is already running, return the value
-	if entry.watchRunning {
+	// If the watch is already running (now that we have the write lock),
+	// return the value
+	if entry.watchState == watchStateRunning {
 		return entry.value, entry.lastError
 	}
 
-	// Watch is not running, but check if the last time we got an error was
-	// more recent than the refresh interval.
-	//
-	// If so return either the last cached value or the last error we got.
-	cacheValid := entry.value != nil && time.Since(entry.lastValueTime) < server.cacheTTL
+	// Watch is not running. Start a new one if it is time to use it and if
+	// there isn't one already one  in the process of being started.
 	shouldRefresh := time.Since(entry.lastErrorTime) > server.cacheRefresh
-
-	if !shouldRefresh {
-		if cacheValid {
-			server.counts.Add(cachedCategory, 1)
-			return entry.value, nil
-		}
-		return nil, entry.lastError
+	if shouldRefresh && (entry.watchState == watchStateIdle) {
+		entry.watchState = watchStateStarting
+		entry.watchStartingChan = make(chan bool)
+		go server.watchSrvKeyspace(ctx, entry, cell, keyspace)
 	}
 
-	// Time to try to start the watch again.
+	// If the cached value is still valid, use it. Otherwise wait
+	// for the watch attempt to complete to get a more up to date
+	// response.
+	//
+	// In the event that the topo service is slow or unresponsive either
+	// on the initial fetch or if the cache TTL expires, then several
+	// requests could be blocked waiting for the response to come back.
+	cacheValid := entry.value != nil && time.Since(entry.lastValueTime) < server.cacheTTL
+	if cacheValid {
+		server.counts.Add(cachedCategory, 1)
+		return entry.value, nil
+	}
+
+	if entry.watchState == watchStateStarting {
+		watchStartingChan := entry.watchStartingChan
+		entry.mutex.Unlock()
+		select {
+		case _, _ = <-watchStartingChan:
+		case <-ctx.Done():
+			entry.mutex.Lock()
+			return nil, fmt.Errorf("timed out waiting for keyspace")
+		}
+		entry.mutex.Lock()
+	}
+
+	if entry.value != nil {
+		return entry.value, nil
+	}
+
+	return nil, entry.lastError
+}
+
+// watchSrvKeyspace is started in a separate goroutine and attempts to establish
+// a watch. The caller context is provided to show in the UI in case the watch
+// fails due to an error like a mistyped keyspace.
+func (server *ResilientServer) watchSrvKeyspace(callerCtx context.Context, entry *srvKeyspaceEntry, cell, keyspace string) {
 	// We use a background context, as starting the watch should keep going
 	// even if the current query context is short-lived.
 	newCtx := context.Background()
 	current, changes, cancel := server.topoServer.WatchSrvKeyspace(newCtx, cell, keyspace)
+
+	entry.mutex.Lock()
+
 	if current.Err != nil {
 		// lastError and lastErrorCtx will be visible from the UI
 		// until the next try
 		entry.lastError = current.Err
-		entry.lastErrorCtx = ctx
+		entry.lastErrorCtx = callerCtx
 		entry.lastErrorTime = time.Now()
 
 		// if the node disappears, delete the cached value
@@ -351,21 +447,22 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 		server.counts.Add(errorCategory, 1)
 		log.Errorf("Initial WatchSrvKeyspace failed for %v/%v: %v", cell, keyspace, current.Err)
 
-		if cacheValid {
-			return entry.value, nil
-		}
-
 		if time.Since(entry.lastValueTime) > server.cacheTTL {
 			log.Errorf("WatchSrvKeyspace clearing cached entry for %v/%v", cell, keyspace)
 			entry.value = nil
 		}
 
-		entry.value = nil
-		return nil, current.Err
+		entry.watchState = watchStateIdle
+		close(entry.watchStartingChan)
+		entry.watchStartingChan = nil
+		entry.mutex.Unlock()
+		return
 	}
 
 	// we are now watching, cache the first notification
-	entry.watchRunning = true
+	entry.watchState = watchStateRunning
+	close(entry.watchStartingChan)
+	entry.watchStartingChan = nil
 	entry.value = current.Value
 	entry.lastValueTime = time.Now()
 
@@ -373,48 +470,45 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 	entry.lastErrorCtx = nil
 	entry.lastErrorTime = time.Time{}
 
-	go func() {
-		defer cancel()
+	entry.mutex.Unlock()
 
-		for c := range changes {
-			if c.Err != nil {
-				// Watch errored out.
-				//
-				// Log it and store the error, but do not clear the value
-				// so it can be used until the ttl elapses unless the node
-				// was deleted.
-				err := fmt.Errorf("WatchSrvKeyspace failed for %v/%v: %v", cell, keyspace, c.Err)
-				log.Errorf("%v", err)
-				server.counts.Add(errorCategory, 1)
-				entry.mutex.Lock()
-				if c.Err == topo.ErrNoNode {
-					entry.value = nil
-				}
-				entry.watchRunning = false
-
-				// Even though we didn't get a new value, update the lastValueTime
-				// here since the watch was successfully running before and we want
-				// the value to be cached for the full TTL from here onwards.
-				entry.lastValueTime = time.Now()
-
-				entry.lastError = err
-				entry.lastErrorCtx = nil
-				entry.lastErrorTime = time.Now()
-				entry.mutex.Unlock()
-				return
-			}
-
-			// We got a new value, save it.
+	defer cancel()
+	for c := range changes {
+		if c.Err != nil {
+			// Watch errored out.
+			//
+			// Log it and store the error, but do not clear the value
+			// so it can be used until the ttl elapses unless the node
+			// was deleted.
+			err := fmt.Errorf("WatchSrvKeyspace failed for %v/%v: %v", cell, keyspace, c.Err)
+			log.Errorf("%v", err)
+			server.counts.Add(errorCategory, 1)
 			entry.mutex.Lock()
-			entry.value = c.Value
-			entry.lastError = nil
-			entry.lastErrorCtx = nil
-			entry.lastErrorTime = time.Time{}
-			entry.mutex.Unlock()
-		}
-	}()
+			if c.Err == topo.ErrNoNode {
+				entry.value = nil
+			}
+			entry.watchState = watchStateIdle
 
-	return entry.value, entry.lastError
+			// Even though we didn't get a new value, update the lastValueTime
+			// here since the watch was successfully running before and we want
+			// the value to be cached for the full TTL from here onwards.
+			entry.lastValueTime = time.Now()
+
+			entry.lastError = err
+			entry.lastErrorCtx = nil
+			entry.lastErrorTime = time.Now()
+			entry.mutex.Unlock()
+			return
+		}
+
+		// We got a new value, save it.
+		entry.mutex.Lock()
+		entry.value = c.Value
+		entry.lastError = nil
+		entry.lastErrorCtx = nil
+		entry.lastErrorTime = time.Time{}
+		entry.mutex.Unlock()
+	}
 }
 
 var watchSrvVSchemaSleepTime = 5 * time.Second
@@ -580,7 +674,7 @@ func (server *ResilientServer) CacheStatus() *ResilientServerCacheStatus {
 		entry.mutex.RLock()
 
 		expirationTime := time.Now().Add(server.cacheTTL)
-		if !entry.watchRunning {
+		if entry.watchState != watchStateRunning {
 			expirationTime = entry.lastValueTime.Add(server.cacheTTL)
 		}
 
