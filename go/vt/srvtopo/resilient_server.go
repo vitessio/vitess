@@ -223,6 +223,10 @@ func (server *ResilientServer) GetSrvKeyspaceNames(ctx context.Context, cell str
 		entry.mutex.Lock()
 		defer entry.mutex.Unlock()
 
+		if entry.value != nil && time.Since(entry.insertionTime) < server.cacheTTL {
+			return
+		}
+
 		// Not in cache or needs refresh so try to get the real value.
 		// We use the context that issued the query here.
 		result, err := server.topoServer.GetSrvKeyspaceNames(ctx, cell)
