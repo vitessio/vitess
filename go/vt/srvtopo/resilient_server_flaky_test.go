@@ -193,12 +193,49 @@ func TestGetSrvKeyspace(t *testing.T) {
 		t.Errorf("expected value to be restored, got %v", err)
 	}
 
-	// Check that there were three errors counted during the interval,
-	// one for the original watch failing, then three more attempts to
-	// re-establish the watch
+	// Now sleep for the full TTL before setting the error again to test
+	// that even when there is no activity on the key, it is still cached
+	// for the full configured TTL.
+	time.Sleep(*srvTopoCacheTTL)
+	forceErr = fmt.Errorf("another test topo error")
+	factory.SetError(forceErr)
+
+	expiry = time.Now().Add(*srvTopoCacheTTL / 2)
+	for {
+		_, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
+		if err != nil {
+			t.Fatalf("value should have been cached for the full ttl")
+		}
+		if time.Now().After(expiry) {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	// Wait again until the TTL expires and we get the error
+	expiry = time.Now().Add(time.Second)
+	for {
+		_, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
+		if err != nil {
+			if err == forceErr {
+				break
+			}
+			t.Fatalf("expected %v got %v", forceErr, err)
+		}
+
+		if time.Now().After(expiry) {
+			t.Fatalf("timed out waiting for error")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	factory.SetError(nil)
+
+	// Check that the expected number of errors wrte counted during the
+	// interval
 	errorReqs, _ := rs.counts.Counts()[errorCategory]
-	if errorReqs-errorReqsBefore != 4 {
-		t.Errorf("expected 4 error requests got %d", errorReqs-errorReqsBefore)
+	if errorReqs-errorReqsBefore != 6 {
+		t.Errorf("expected 6 error requests got %d", errorReqs-errorReqsBefore)
 	}
 
 	// Check that the watch now works to update the value
@@ -481,7 +518,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	}
 
 	errorReqs, ok := rs.counts.Counts()[errorCategory]
-	if !ok || errorReqs != 1 {
-		t.Errorf("expected 1 error request got %v", errorReqs)
+	if !ok || errorReqs == 0 {
+		t.Errorf("expected non-zero error requests got %v", errorReqs)
 	}
 }
