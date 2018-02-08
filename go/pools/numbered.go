@@ -31,11 +31,12 @@ type Numbered struct {
 }
 
 type numberedWrapper struct {
-	val         interface{}
-	inUse       bool
-	purpose     string
-	timeCreated time.Time
-	timeUsed    time.Time
+	val            interface{}
+	inUse          bool
+	purpose        string
+	timeCreated    time.Time
+	timeUsed       time.Time
+	enforceTimeout bool
 }
 
 func NewNumbered() *Numbered {
@@ -47,7 +48,7 @@ func NewNumbered() *Numbered {
 // Register starts tracking a resource by the supplied id.
 // It does not lock the object.
 // It returns an error if the id already exists.
-func (nu *Numbered) Register(id int64, val interface{}) error {
+func (nu *Numbered) Register(id int64, val interface{}, enforceTimeout bool) error {
 	nu.mu.Lock()
 	defer nu.mu.Unlock()
 	if _, ok := nu.resources[id]; ok {
@@ -55,9 +56,10 @@ func (nu *Numbered) Register(id int64, val interface{}) error {
 	}
 	now := time.Now()
 	nu.resources[id] = &numberedWrapper{
-		val:         val,
-		timeCreated: now,
-		timeUsed:    now,
+		val:            val,
+		timeCreated:    now,
+		timeUsed:       now,
+		enforceTimeout: enforceTimeout,
 	}
 	return nil
 }
@@ -120,7 +122,7 @@ func (nu *Numbered) GetOutdated(age time.Duration, purpose string) (vals []inter
 	defer nu.mu.Unlock()
 	now := time.Now()
 	for _, nw := range nu.resources {
-		if nw.inUse {
+		if nw.inUse || !nw.enforceTimeout {
 			continue
 		}
 		if nw.timeCreated.Add(age).Sub(now) <= 0 {

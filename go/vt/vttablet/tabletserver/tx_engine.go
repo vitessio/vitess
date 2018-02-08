@@ -224,7 +224,7 @@ outer:
 		if txid > maxid {
 			maxid = txid
 		}
-		conn, err := te.txPool.LocalBegin(ctx, false, querypb.ExecuteOptions_DEFAULT)
+		conn, err := te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
 		if err != nil {
 			allErr.RecordError(err)
 			continue
