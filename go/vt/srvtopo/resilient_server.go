@@ -164,7 +164,10 @@ type srvKeyspaceEntry struct {
 	value        *topodatapb.SrvKeyspace
 	lastError    error
 
-	// valueTime is the time when the watch last obtained a non-nil value.
+	// lastValueTime is the time when the cached value is known to be valid,
+	// either because the watch last obtained a non-nil value or when a
+	// running watch first got an error.
+	//
 	// It is compared to the TTL to determine if we can return the value
 	// when the watch is failing
 	lastValueTime time.Time
@@ -352,6 +355,12 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 			return entry.value, nil
 		}
 
+		if time.Since(entry.lastValueTime) > server.cacheTTL {
+			log.Errorf("WatchSrvKeyspace clearing cached entry for %v/%v", cell, keyspace)
+			entry.value = nil
+		}
+
+		entry.value = nil
 		return nil, current.Err
 	}
 
@@ -359,8 +368,11 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 	entry.watchRunning = true
 	entry.value = current.Value
 	entry.lastValueTime = time.Now()
+
 	entry.lastError = nil
 	entry.lastErrorCtx = nil
+	entry.lastErrorTime = time.Time{}
+
 	go func() {
 		defer cancel()
 
@@ -375,12 +387,19 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 				log.Errorf("%v", err)
 				server.counts.Add(errorCategory, 1)
 				entry.mutex.Lock()
-				if c.Err == topo.ErrNoNode || time.Since(entry.lastValueTime) > server.cacheTTL {
+				if c.Err == topo.ErrNoNode {
 					entry.value = nil
 				}
 				entry.watchRunning = false
+
+				// Even though we didn't get a new value, update the lastValueTime
+				// here since the watch was successfully running before and we want
+				// the value to be cached for the full TTL from here onwards.
+				entry.lastValueTime = time.Now()
+
 				entry.lastError = err
 				entry.lastErrorCtx = nil
+				entry.lastErrorTime = time.Now()
 				entry.mutex.Unlock()
 				return
 			}
@@ -388,9 +407,9 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 			// We got a new value, save it.
 			entry.mutex.Lock()
 			entry.value = c.Value
-			entry.lastValueTime = time.Now()
 			entry.lastError = nil
 			entry.lastErrorCtx = nil
+			entry.lastErrorTime = time.Time{}
 			entry.mutex.Unlock()
 		}
 	}()
