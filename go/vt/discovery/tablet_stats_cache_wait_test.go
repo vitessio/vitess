@@ -31,6 +31,7 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 // To sort []*querypb.Target for comparison.
@@ -84,10 +85,17 @@ func TestFindAllKeyspaceShards(t *testing.T) {
 	}
 
 	// Get it.
-	ks, err = FindAllTargets(ctx, rs, "cell1", []topodatapb.TabletType{topodatapb.TabletType_MASTER})
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
+	for {
+		ks, err = FindAllTargets(ctx, rs, "cell1", []topodatapb.TabletType{topodatapb.TabletType_MASTER})
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if ks != nil {
+			break
+		}
+		time.Sleep(time.Millisecond)
 	}
+
 	if !reflect.DeepEqual(ks, []*querypb.Target{
 		{
 			Cell:       "cell1",
