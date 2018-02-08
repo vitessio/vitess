@@ -31,7 +31,6 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 // To sort []*querypb.Target for comparison.
