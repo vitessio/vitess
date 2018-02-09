@@ -133,7 +133,7 @@ func (axp *TxPool) Open(appParams, dbaParams, appDebugParams *mysql.ConnParams) 
 // Close closes the TxPool. A closed pool can be reopened.
 func (axp *TxPool) Close() {
 	axp.ticks.Stop()
-	for _, v := range axp.activePool.GetOutdated(time.Duration(0), true, "for closing") {
+	for _, v := range axp.activePool.GetOutdated(time.Duration(0), "for closing") {
 		conn := v.(*TxConnection)
 		log.Warningf("killing transaction for shutdown: %s", conn.Format(nil))
 		tabletenv.InternalErrors.Add("StrayTransactions", 1)
@@ -141,6 +141,7 @@ func (axp *TxPool) Close() {
 		conn.conclude(TxClose, "pool closed")
 	}
 	axp.conns.Close()
+	axp.foundRowsPool.Close()
 }
 
 // AdjustLastID adjusts the last transaction id to be at least
@@ -157,14 +158,14 @@ func (axp *TxPool) AdjustLastID(id int64) {
 // Transactions can be in use for situations like executing statements
 // or in prepared state.
 func (axp *TxPool) RollbackNonBusy(ctx context.Context) {
-	for _, v := range axp.activePool.GetOutdated(time.Duration(0), false, "for transition") {
+	for _, v := range axp.activePool.GetOutdated(time.Duration(0), "for transition") {
 		axp.LocalConclude(ctx, v.(*TxConnection))
 	}
 }
 
 func (axp *TxPool) transactionKiller() {
 	defer tabletenv.LogError()
-	for _, v := range axp.activePool.GetOutdated(time.Duration(axp.Timeout()), false, "for rollback") {
+	for _, v := range axp.activePool.GetOutdated(time.Duration(axp.Timeout()), "for rollback") {
 		conn := v.(*TxConnection)
 		log.Warningf("killing transaction (exceeded timeout: %v): %s", axp.Timeout(), conn.Format(nil))
 		tabletenv.KillStats.Add("Transactions", 1)

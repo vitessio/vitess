@@ -137,12 +137,12 @@ func (nu *Numbered) GetAll() (vals []interface{}) {
 
 // GetOutdated returns a list of resources that are older than age, and locks them.
 // It does not return any resources that are already locked.
-func (nu *Numbered) GetOutdated(age time.Duration, strict bool, purpose string) (vals []interface{}) {
+func (nu *Numbered) GetOutdated(age time.Duration, purpose string) (vals []interface{}) {
 	nu.mu.Lock()
 	defer nu.mu.Unlock()
 	now := time.Now()
 	for _, nw := range nu.resources {
-		if !strict && (nw.inUse || !nw.enforceTimeout) {
+		if nw.inUse || !nw.enforceTimeout {
 			continue
 		}
 		if nw.timeCreated.Add(age).Sub(now) <= 0 {

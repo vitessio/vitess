@@ -65,19 +65,8 @@ func TestNumbered(t *testing.T) {
 	p.Register(id, id, true)
 	time.Sleep(100 * time.Millisecond)
 
-	// p has 0, 1, 2, 3 (0, 1, 2 are aged, but 2 is not enforced unless strict)
-
-	// all aged should be returned because strict
-	vals := p.GetOutdated(200*time.Millisecond, true, "by outdated - strict")
-	if num := len(vals); num != 3 {
-		t.Errorf("want 3, got %v", num)
-	}
-	for _, v := range vals {
-		p.Put(v.(int64))
-	}
-
-	// just 0 and 1 should be returned now because not strict
-	vals = p.GetOutdated(200*time.Millisecond, false, "by outdated")
+	// p has 0, 1, 2, 3 (0, 1, 2 are aged, but 2 is not enforced)
+	vals := p.GetOutdated(200*time.Millisecond, "by outdated")
 	if num := len(vals); num != 2 {
 		t.Errorf("want 2, got %v", num)
 	}
