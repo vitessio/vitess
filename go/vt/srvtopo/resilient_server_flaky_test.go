@@ -394,20 +394,10 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks2", want)
 
 	ctx := context.Background()
-
-	var names []string
-	var err error
-	for {
-		names, err = rs.GetSrvKeyspaceNames(ctx, "test_cell")
-		if err != nil {
-			t.Errorf("GetSrvKeyspaceNames unexpected error %v", err)
-		}
-		if names != nil {
-			break
-		}
-		time.Sleep(time.Millisecond)
+	names, err := rs.GetSrvKeyspaceNames(ctx, "test_cell")
+	if err != nil {
+		t.Errorf("GetSrvKeyspaceNames unexpected error %v", err)
 	}
-
 	wantNames := []string{"test_ks", "test_ks2"}
 
 	if !reflect.DeepEqual(names, wantNames) {

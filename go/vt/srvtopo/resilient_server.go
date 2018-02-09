@@ -207,51 +207,53 @@ func (server *ResilientServer) GetSrvKeyspaceNames(ctx context.Context, cell str
 	}
 	server.mutex.Unlock()
 
+	// Lock the entry, and do everything holding the lock.  This
+	// means two concurrent requests will only issue one
+	// underlying query.
+	entry.mutex.Lock()
+	defer entry.mutex.Unlock()
+
 	// If it is not time to check again, then return either the cached
 	// value or the cached error
 	cacheValid := entry.value != nil && time.Since(entry.insertionTime) < server.cacheTTL
 	shouldRefresh := time.Since(entry.lastQueryTime) > server.cacheRefresh
 
-	if !shouldRefresh && cacheValid {
-		return entry.value, nil
+	if !shouldRefresh {
+		if cacheValid {
+			return entry.value, nil
+		}
+		return nil, entry.lastError
 	}
 
-	go func() {
-		// Lock the entry, and do everything holding the lock.  This
-		// means two concurrent requests will only issue one
-		// underlying query.
-		entry.mutex.Lock()
-		defer entry.mutex.Unlock()
+	// Not in cache or needs refresh so try to get the real value.
+	// We use the context that issued the query here.
+	result, err := server.topoServer.GetSrvKeyspaceNames(ctx, cell)
+	if err == nil {
+		// save the value we got and the current time in the cache
+		entry.insertionTime = time.Now()
+		entry.value = result
+	} else {
+		if entry.insertionTime.IsZero() {
+			server.counts.Add(errorCategory, 1)
+			log.Errorf("GetSrvKeyspaceNames(%v, %v) failed: %v (no cached value, caching and returning error)", ctx, cell, err)
 
-		if entry.value != nil && time.Since(entry.insertionTime) < server.cacheTTL {
-			return
-		}
-
-		// Not in cache or needs refresh so try to get the real value.
-		// We use the context that issued the query here.
-		result, err := server.topoServer.GetSrvKeyspaceNames(ctx, cell)
-		if err == nil {
-			// save the value we got and the current time in the cache
-			entry.insertionTime = time.Now()
-			entry.value = result
+		} else if cacheValid {
+			server.counts.Add(cachedCategory, 1)
+			log.Warningf("GetSrvKeyspaceNames(%v, %v) failed: %v (returning cached value: %v %v)", ctx, cell, err, entry.value, entry.lastError)
+			result = entry.value
+			err = nil
 		} else {
-			if entry.insertionTime.IsZero() {
-				server.counts.Add(errorCategory, 1)
-				log.Errorf("GetSrvKeyspaceNames(%v, %v) failed: %v (no cached value, caching and returning error)", ctx, cell, err)
-			} else if cacheValid {
-				server.counts.Add(cachedCategory, 1)
-				log.Warningf("GetSrvKeyspaceNames(%v, %v) failed: %v (returning cached value: %v %v)", ctx, cell, err, entry.value, entry.lastError)
-			} else {
-				server.counts.Add(errorCategory, 1)
-				log.Errorf("GetSrvKeyspaceNames(%v, %v) failed: %v (cached value expired, but also returning cached value: %v %v)", ctx, cell, err, entry.value, entry.lastError)
-			}
+			server.counts.Add(errorCategory, 1)
+			log.Errorf("GetSrvKeyspaceNames(%v, %v) failed: %v (cached value expired)", ctx, cell, err)
+			entry.insertionTime = time.Time{}
+			entry.value = nil
 		}
-		entry.lastError = err
-		entry.lastQueryTime = time.Now()
-		entry.lastErrorCtx = ctx
-	}()
+	}
 
-	return entry.value, entry.lastError
+	entry.lastError = err
+	entry.lastQueryTime = time.Now()
+	entry.lastErrorCtx = ctx
+	return result, err
 }
 
 func (server *ResilientServer) getSrvKeyspaceEntry(cell, keyspace string) *srvKeyspaceEntry {

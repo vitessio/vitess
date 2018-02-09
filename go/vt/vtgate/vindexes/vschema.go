@@ -51,7 +51,7 @@ type Table struct {
 	Pinned         []byte               `json:"pinned,omitempty"`
 }
 
-// Keyspace contains the keyspace info for each Table.
+// Keyspace contains the keyspcae info for each Table.
 type Keyspace struct {
 	Name    string
 	Sharded bool
@@ -404,7 +404,7 @@ func (vschema *VSchema) FindTableOrVindex(keyspace, name string) (*Table, Vindex
 }
 
 // FindVindex finds a vindex by name. If a keyspace is specified, only vindexes
-// from that keyspace are searched. If no keyspace is specified, then a vindex
+// from that keyspace are searched. If no kesypace is specified, then a vindex
 // is returned only if its name is unique across all keyspaces. The function
 // returns an error only if the vindex name is ambiguous.
 func (vschema *VSchema) FindVindex(keyspace, name string) (Vindex, error) {

@@ -84,17 +84,10 @@ func TestFindAllKeyspaceShards(t *testing.T) {
 	}
 
 	// Get it.
-	for {
-		ks, err = FindAllTargets(ctx, rs, "cell1", []topodatapb.TabletType{topodatapb.TabletType_MASTER})
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-		if ks != nil {
-			break
-		}
-		time.Sleep(time.Millisecond)
+	ks, err = FindAllTargets(ctx, rs, "cell1", []topodatapb.TabletType{topodatapb.TabletType_MASTER})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
 	}
-
 	if !reflect.DeepEqual(ks, []*querypb.Target{
 		{
 			Cell:       "cell1",

@@ -137,7 +137,7 @@ func (lkp *lookupInternal) Create(vcursor VCursor, rowsColValues [][]sqltypes.Va
 //
 // Given the following information in a vindex table with two columns:
 //
-//  +------------------+-----------+--------+
+//      +------------------+-----------+--------+
 //	| hex(keyspace_id) | a         | b      |
 //	+------------------+-----------+--------+
 //	| 52CB7B1B31B2222E | valuea    | valueb |
