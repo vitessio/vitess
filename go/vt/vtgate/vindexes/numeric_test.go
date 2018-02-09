@@ -44,16 +44,17 @@ func TestNumericString(t *testing.T) {
 }
 
 func TestNumericMap(t *testing.T) {
-	got, err := numeric.(Unique).Map(nil, []sqltypes.Value{
-		sqltypes.NewInt64(1),
-		sqltypes.NewInt64(2),
-		sqltypes.NewInt64(3),
-		sqltypes.NewFloat64(1.1),
-		sqltypes.NewInt64(4),
-		sqltypes.NewInt64(5),
-		sqltypes.NewInt64(6),
-		sqltypes.NewInt64(7),
-		sqltypes.NewInt64(8),
+	got, err := numeric.(Unique).Map(nil, [][]sqltypes.Value{
+		[]sqltypes.Value{sqltypes.NewInt64(1)},
+		[]sqltypes.Value{sqltypes.NewInt64(2)},
+		[]sqltypes.Value{sqltypes.NewInt64(3)},
+		[]sqltypes.Value{sqltypes.NewFloat64(1.1)},
+		[]sqltypes.Value{sqltypes.NewInt64(4)},
+		[]sqltypes.Value{sqltypes.NewInt64(5)},
+		[]sqltypes.Value{sqltypes.NewInt64(6)},
+		[]sqltypes.Value{sqltypes.NewInt64(7)},
+		[]sqltypes.Value{sqltypes.NewInt64(8)},
+		[]sqltypes.Value{sqltypes.NewInt64(9), sqltypes.NewInt64(10)},
 	})
 	if err != nil {
 		t.Error(err)
@@ -68,6 +69,7 @@ func TestNumericMap(t *testing.T) {
 		[]byte("\x00\x00\x00\x00\x00\x00\x00\x06"),
 		[]byte("\x00\x00\x00\x00\x00\x00\x00\x07"),
 		[]byte("\x00\x00\x00\x00\x00\x00\x00\x08"),
+		[]byte("\x00\x00\x00\x00\x00\x00\x00\x09\x00\x00\x00\x00\x00\x00\x00\x0a"),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %+v, want %+v", got, want)
@@ -76,7 +78,7 @@ func TestNumericMap(t *testing.T) {
 
 func TestNumericVerify(t *testing.T) {
 	got, err := numeric.Verify(nil,
-		[]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
+		[][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}, []sqltypes.Value{sqltypes.NewInt64(2)}},
 		[][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01"), []byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
 	if err != nil {
 		t.Error(err)
@@ -86,11 +88,16 @@ func TestNumericVerify(t *testing.T) {
 		t.Errorf("lhu.Verify(match): %v, want %v", got, want)
 	}
 
-	// Failure test
-	_, err = numeric.Verify(nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
-	wantErr := "Numeric.Verify: could not parse value: 'aa'"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("hash.Verify err: %v, want %s", err, wantErr)
+	// Multi column test
+	got, err = numeric.Verify(nil,
+		[][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}},
+		[][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x02")})
+	if err != nil {
+		t.Error(err)
+	}
+	want = []bool{true}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("lhu.Verify(match): %v, want %v", got, want)
 	}
 }
 
@@ -99,7 +106,19 @@ func TestNumericReverseMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := []sqltypes.Value{sqltypes.NewUint64(1)}
+	want := [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewUint64(1)}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ReverseMap(): %v, want %v", got, want)
+	}
+	// Multi column reverse
+	got, err = numeric.(Reversible).ReverseMap(
+		nil,
+		[][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x02")},
+	)
+	if err != nil {
+		t.Error(err)
+	}
+	want = [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewUint64(1), sqltypes.NewUint64(2)}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ReverseMap(): %v, want %v", got, want)
 	}
@@ -107,7 +126,7 @@ func TestNumericReverseMap(t *testing.T) {
 
 func TestNumericReverseMapBadData(t *testing.T) {
 	_, err := numeric.(Reversible).ReverseMap(nil, [][]byte{[]byte("aa")})
-	want := `Numeric.ReverseMap: length of keyspaceId is not 8: 2`
+	want := `Numeric.ReverseMap: length of keyspaceId is not valid: 2`
 	if err == nil || err.Error() != want {
 		t.Errorf("numeric.Map: %v, want %v", err, want)
 	}

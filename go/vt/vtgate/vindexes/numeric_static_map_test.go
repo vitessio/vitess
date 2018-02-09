@@ -63,16 +63,16 @@ func TestNumericStaticMapMap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create vindex: %v", err)
 	}
-	got, err := numericStaticMap.(Unique).Map(nil, []sqltypes.Value{
-		sqltypes.NewInt64(1),
-		sqltypes.NewInt64(2),
-		sqltypes.NewInt64(3),
-		sqltypes.NewFloat64(1.1),
-		sqltypes.NewInt64(4),
-		sqltypes.NewInt64(5),
-		sqltypes.NewInt64(6),
-		sqltypes.NewInt64(7),
-		sqltypes.NewInt64(8),
+	got, err := numericStaticMap.(Unique).Map(nil, [][]sqltypes.Value{
+		[]sqltypes.Value{sqltypes.NewInt64(1)},
+		[]sqltypes.Value{sqltypes.NewInt64(2)},
+		[]sqltypes.Value{sqltypes.NewInt64(3)},
+		[]sqltypes.Value{sqltypes.NewFloat64(1.1)},
+		[]sqltypes.Value{sqltypes.NewInt64(4)},
+		[]sqltypes.Value{sqltypes.NewInt64(5)},
+		[]sqltypes.Value{sqltypes.NewInt64(6)},
+		[]sqltypes.Value{sqltypes.NewInt64(7)},
+		[]sqltypes.Value{sqltypes.NewInt64(8)},
 	})
 	if err != nil {
 		t.Error(err)
@@ -102,7 +102,10 @@ func TestNumericStaticMapVerify(t *testing.T) {
 		t.Fatalf("failed to create vindex: %v", err)
 	}
 	got, err := numericStaticMap.Verify(nil,
-		[]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
+		[][]sqltypes.Value{
+			[]sqltypes.Value{sqltypes.NewInt64(1)},
+			[]sqltypes.Value{sqltypes.NewInt64(2)},
+		},
 		[][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01"), []byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
 	if err != nil {
 		t.Error(err)
@@ -113,7 +116,7 @@ func TestNumericStaticMapVerify(t *testing.T) {
 	}
 
 	// Failure test
-	_, err = numericStaticMap.Verify(nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
+	_, err = numericStaticMap.Verify(nil, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewVarBinary("aa")}}, [][]byte{nil})
 	wantErr := "NumericStaticMap.Verify: could not parse value: 'aa'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("hash.Verify err: %v, want %s", err, wantErr)

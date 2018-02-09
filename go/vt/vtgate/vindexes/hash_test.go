@@ -47,14 +47,15 @@ func TestHashString(t *testing.T) {
 }
 
 func TestHashMap(t *testing.T) {
-	got, err := hash.(Unique).Map(nil, []sqltypes.Value{
-		sqltypes.NewInt64(1),
-		sqltypes.NewInt64(2),
-		sqltypes.NewInt64(3),
-		sqltypes.NULL,
-		sqltypes.NewInt64(4),
-		sqltypes.NewInt64(5),
-		sqltypes.NewInt64(6),
+	got, err := hash.(Unique).Map(nil, [][]sqltypes.Value{
+		[]sqltypes.Value{sqltypes.NewInt64(1)},
+		[]sqltypes.Value{sqltypes.NewInt64(2)},
+		[]sqltypes.Value{sqltypes.NewInt64(3)},
+		[]sqltypes.Value{sqltypes.NULL},
+		[]sqltypes.Value{sqltypes.NewInt64(4)},
+		[]sqltypes.Value{sqltypes.NewInt64(5)},
+		[]sqltypes.Value{sqltypes.NewInt64(6)},
+		[]sqltypes.Value{sqltypes.NewInt64(6), sqltypes.NewInt64(5)},
 	})
 	if err != nil {
 		t.Error(err)
@@ -67,6 +68,7 @@ func TestHashMap(t *testing.T) {
 		[]byte("\xd2\xfd\x88g\xd5\r-\xfe"),
 		[]byte("p\xbb\x02<\x81\f\xa8z"),
 		[]byte("\xf0\x98H\n\xc4ľq"),
+		[]byte("\xf0\x98H\n\xc4ľqp\xbb\x02<\x81\f\xa8z"),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
@@ -74,9 +76,9 @@ func TestHashMap(t *testing.T) {
 }
 
 func TestHashVerify(t *testing.T) {
-	ids := []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}
+	rowsColValues := [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}, []sqltypes.Value{sqltypes.NewInt64(2)}}
 	ksids := [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x16k@\xb4J\xbaK\xd6")}
-	got, err := hash.Verify(nil, ids, ksids)
+	got, err := hash.Verify(nil, rowsColValues, ksids)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,10 +88,34 @@ func TestHashVerify(t *testing.T) {
 	}
 
 	// Failure test
-	_, err = hash.Verify(nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
+	_, err = hash.Verify(nil, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewVarBinary("aa")}}, [][]byte{nil})
 	wantErr := "hash.Verify: could not parse value: 'aa'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("hash.Verify err: %v, want %s", err, wantErr)
+	}
+}
+
+func TestHashVerifyMultiCol(t *testing.T) {
+	rowsColValues := [][]sqltypes.Value{
+		[]sqltypes.Value{
+			sqltypes.NewInt64(1),
+			sqltypes.NewInt64(1)},
+		[]sqltypes.Value{
+			sqltypes.NewInt64(2),
+			sqltypes.NewInt64(1),
+		},
+	}
+	ksids := [][]byte{
+		[]byte("\x16k@\xb4J\xbaK\xd6\x16k@\xb4J\xbaK\xd6"),
+		[]byte("\x16k@\xb4J\xbaK\xd6\x16k@\xb4J\xbaK\xd6"),
+	}
+	got, err := hash.Verify(nil, rowsColValues, ksids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []bool{true, false}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("binaryMD5.Verify: %v, want %v", got, want)
 	}
 }
 
@@ -98,15 +124,15 @@ func TestHashReverseMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := []sqltypes.Value{sqltypes.NewUint64(uint64(1))}
+	want := [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewUint64(uint64(1))}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ReverseMap(): %v, want %v", got, want)
 	}
 }
 
 func TestHashReverseMapNeg(t *testing.T) {
-	_, err := hash.(Reversible).ReverseMap(nil, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6\x16k@\xb4J\xbaK\xd6")})
-	want := "invalid keyspace id: 166b40b44aba4bd6166b40b44aba4bd6"
+	_, err := hash.(Reversible).ReverseMap(nil, [][]byte{[]byte("\x16k@\xb4J\xbaK")})
+	want := "invalid keyspace id: 166b40b44aba4b"
 	if err.Error() != want {
 		t.Error(err)
 	}

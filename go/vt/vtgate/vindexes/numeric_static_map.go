@@ -75,40 +75,48 @@ func (*NumericStaticMap) Cost() int {
 }
 
 // Verify returns true if ids and ksids match.
-func (vind *NumericStaticMap) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	out := make([]bool, len(ids))
-	for i := range ids {
-		var keybytes [8]byte
-		num, err := sqltypes.ToUint64(ids[i])
-		if err != nil {
-			return nil, fmt.Errorf("NumericStaticMap.Verify: %v", err)
+func (vind *NumericStaticMap) Verify(_ VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	out := make([]bool, len(rowsColValues))
+	for i := range out {
+		out[i] = true
+	}
+	for idx, ids := range rowsColValues {
+		for _, id := range ids {
+			var keybytes [8]byte
+			num, err := sqltypes.ToUint64(id)
+			if err != nil {
+				return nil, fmt.Errorf("NumericStaticMap.Verify: %v", err)
+			}
+			lookupNum, ok := vind.lookup[num]
+			if ok {
+				num = lookupNum
+			}
+			binary.BigEndian.PutUint64(keybytes[:], num)
+			out[idx] = out[idx] && (bytes.Compare(keybytes[:], ksids[idx]) == 0)
 		}
-		lookupNum, ok := vind.lookup[num]
-		if ok {
-			num = lookupNum
-		}
-		binary.BigEndian.PutUint64(keybytes[:], num)
-		out[i] = (bytes.Compare(keybytes[:], ksids[i]) == 0)
+
 	}
 	return out, nil
 }
 
 // Map returns the associated keyspace ids for the given ids.
-func (vind *NumericStaticMap) Map(_ VCursor, ids []sqltypes.Value) ([][]byte, error) {
-	out := make([][]byte, 0, len(ids))
-	for _, id := range ids {
-		num, err := sqltypes.ToUint64(id)
-		if err != nil {
-			out = append(out, nil)
-			continue
+func (vind *NumericStaticMap) Map(_ VCursor, rowsColValues [][]sqltypes.Value) ([][]byte, error) {
+	out := make([][]byte, len(rowsColValues))
+	for idx, ids := range rowsColValues {
+		for _, id := range ids {
+			num, err := sqltypes.ToUint64(id)
+			if err != nil {
+				out[idx] = nil
+				continue
+			}
+			lookupNum, ok := vind.lookup[num]
+			if ok {
+				num = lookupNum
+			}
+			var keybytes [8]byte
+			binary.BigEndian.PutUint64(keybytes[:], num)
+			out[idx] = append(out[idx], keybytes[:]...)
 		}
-		lookupNum, ok := vind.lookup[num]
-		if ok {
-			num = lookupNum
-		}
-		var keybytes [8]byte
-		binary.BigEndian.PutUint64(keybytes[:], num)
-		out = append(out, keybytes[:])
 	}
 	return out, nil
 }

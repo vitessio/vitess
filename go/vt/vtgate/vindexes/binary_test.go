@@ -55,7 +55,7 @@ func TestBinaryMap(t *testing.T) {
 		out: []byte("test2"),
 	}}
 	for _, tcase := range tcases {
-		got, err := binOnlyVindex.(Unique).Map(nil, []sqltypes.Value{tcase.in})
+		got, err := binOnlyVindex.(Unique).Map(nil, [][]sqltypes.Value{[]sqltypes.Value{tcase.in}})
 		if err != nil {
 			t.Error(err)
 		}
@@ -66,33 +66,38 @@ func TestBinaryMap(t *testing.T) {
 	}
 }
 
+func TestBinaryMultiColumnMap(t *testing.T) {
+	expectedOut := []byte("test1test2")
+	got, err := binOnlyVindex.(Unique).Map(
+		nil,
+		[][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.NewVarChar("test1"),
+				sqltypes.NewVarChar("test2"),
+			},
+		},
+	)
+	if err != nil {
+		t.Error(err)
+	}
+	out := []byte(got[0])
+	if bytes.Compare(expectedOut, out) != 0 {
+		t.Errorf("Map(%#v): %#v, want %#v", "test1,test2", out, expectedOut)
+	}
+}
+
 func TestBinaryVerify(t *testing.T) {
-	ids := []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NewVarBinary("2")}
+	rowsColValues := [][]sqltypes.Value{
+		[]sqltypes.Value{sqltypes.NewVarBinary("1")},
+		[]sqltypes.Value{sqltypes.NewVarBinary("2")},
+	}
 	ksids := [][]byte{[]byte("1"), []byte("1")}
-	got, err := binOnlyVindex.Verify(nil, ids, ksids)
+	got, err := binOnlyVindex.Verify(nil, rowsColValues, ksids)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []bool{true, false}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("binary.Verify: %v, want %v", got, want)
-	}
-}
-
-func TestBinaryReverseMap(t *testing.T) {
-	got, err := binOnlyVindex.(Reversible).ReverseMap(nil, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
-	if err != nil {
-		t.Error(err)
-	}
-	want := []sqltypes.Value{sqltypes.NewVarBinary("\x00\x00\x00\x00\x00\x00\x00\x01")}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("ReverseMap(): %+v, want %+v", got, want)
-	}
-
-	// Negative Test
-	_, err = binOnlyVindex.(Reversible).ReverseMap(nil, [][]byte{[]byte(nil)})
-	wantErr := "Binary.ReverseMap: keyspaceId is nil"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("ReverseMap(): %v, want %s", err, wantErr)
 	}
 }

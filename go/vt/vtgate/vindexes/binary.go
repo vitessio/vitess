@@ -18,14 +18,12 @@ package vindexes
 
 import (
 	"bytes"
-	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
 var (
 	_ Functional = (*Binary)(nil)
-	_ Reversible = (*Binary)(nil)
 )
 
 // Binary is a vindex that converts binary bits to a keyspace id.
@@ -48,34 +46,28 @@ func (vind *Binary) Cost() int {
 	return 1
 }
 
-// Verify returns true if ids maps to ksids.
-func (vind *Binary) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	out := make([]bool, len(ids))
-	for i := range ids {
-		out[i] = (bytes.Compare(ids[i].ToBytes(), ksids[i]) == 0)
+// Verify returns true if rowsColValues maps to ksids.
+func (vind *Binary) Verify(v VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	out := make([]bool, len(rowsColValues))
+	mappedKids, err := vind.Map(v, rowsColValues)
+	if err != nil {
+		return out, err
+	}
+	for i := range ksids {
+		out[i] = (bytes.Compare(ksids[i], mappedKids[i]) == 0)
 	}
 	return out, nil
 }
 
 // Map returns the corresponding keyspace id values for the given ids.
-func (vind *Binary) Map(_ VCursor, ids []sqltypes.Value) ([][]byte, error) {
-	out := make([][]byte, 0, len(ids))
-	for _, id := range ids {
-		out = append(out, id.ToBytes())
+func (vind *Binary) Map(_ VCursor, rowsColValues [][]sqltypes.Value) ([][]byte, error) {
+	out := make([][]byte, len(rowsColValues))
+	for idx, rows := range rowsColValues {
+		for _, id := range rows {
+			out[idx] = append(out[idx], id.ToBytes()...)
+		}
 	}
 	return out, nil
-}
-
-// ReverseMap returns the associated ids for the ksids.
-func (*Binary) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error) {
-	var reverseIds = make([]sqltypes.Value, len(ksids))
-	for rownum, keyspaceID := range ksids {
-		if keyspaceID == nil {
-			return nil, fmt.Errorf("Binary.ReverseMap: keyspaceId is nil")
-		}
-		reverseIds[rownum] = sqltypes.MakeTrusted(sqltypes.VarBinary, keyspaceID)
-	}
-	return reverseIds, nil
 }
 
 func init() {

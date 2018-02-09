@@ -64,9 +64,9 @@ func (lh *LookupHash) Cost() int {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([][][]byte, error) {
-	out := make([][][]byte, 0, len(ids))
-	results, err := lh.lkp.Lookup(vcursor, ids)
+func (lh *LookupHash) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([][][]byte, error) {
+	out := make([][][]byte, 0, len(rowsColValues))
+	results, err := lh.lkp.Lookup(vcursor, rowsColValues)
 	if err != nil {
 		return nil, err
 	}
@@ -87,12 +87,12 @@ func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([][][]byte, er
 }
 
 // Verify returns true if ids maps to ksids.
-func (lh *LookupHash) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (lh *LookupHash) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	values, err := unhashList(ksids)
 	if err != nil {
 		return nil, fmt.Errorf("lookup.Verify.vunhash: %v", err)
 	}
-	return lh.lkp.Verify(vcursor, ids, values)
+	return lh.lkp.Verify(vcursor, rowsColValues, values)
 }
 
 // Create reserves the id by inserting it into the vindex table.
@@ -101,6 +101,8 @@ func (lh *LookupHash) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, 
 	if err != nil {
 		return fmt.Errorf("lookup.Create.vunhash: %v", err)
 	}
+	fmt.Println("----HEREEEE-----")
+	fmt.Printf("This are the values %v \n", values)
 	return lh.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
 }
 
@@ -159,10 +161,10 @@ func (lhu *LookupHashUnique) Cost() int {
 	return 10
 }
 
-// Map returns the corresponding KeyspaceId values for the given ids.
-func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][]byte, error) {
-	out := make([][]byte, 0, len(ids))
-	results, err := lhu.lkp.Lookup(vcursor, ids)
+// Map returns the corresponding KeyspaceId values for the given rowsColValues.
+func (lhu *LookupHashUnique) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([][]byte, error) {
+	out := make([][]byte, 0, len(rowsColValues))
+	results, err := lhu.lkp.Lookup(vcursor, rowsColValues)
 	if err != nil {
 		return nil, err
 	}
@@ -178,19 +180,19 @@ func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][]byt
 			}
 			out = append(out, vhash(num))
 		default:
-			return nil, fmt.Errorf("LookupHash.Map: unexpected multiple results from vindex %s: %v", lhu.lkp.Table, ids[i])
+			return nil, fmt.Errorf("LookupHashUnique.Map: unexpected multiple results from vindex %s: %v", lhu.lkp.Table, rowsColValues[i][0])
 		}
 	}
 	return out, nil
 }
 
 // Verify returns true if ids maps to ksids.
-func (lhu *LookupHashUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (lhu *LookupHashUnique) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	values, err := unhashList(ksids)
 	if err != nil {
 		return nil, fmt.Errorf("lookup.Verify.vunhash: %v", err)
 	}
-	return lhu.lkp.Verify(vcursor, ids, values)
+	return lhu.lkp.Verify(vcursor, rowsColValues, values)
 }
 
 // Create reserves the id by inserting it into the vindex table.

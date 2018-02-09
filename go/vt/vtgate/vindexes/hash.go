@@ -54,42 +54,55 @@ func (vind *Hash) Cost() int {
 	return 1
 }
 
-// Map returns the corresponding KeyspaceId values for the given ids.
-func (vind *Hash) Map(_ VCursor, ids []sqltypes.Value) ([][]byte, error) {
-	out := make([][]byte, 0, len(ids))
-	for _, id := range ids {
-		num, err := sqltypes.ToUint64(id)
-		if err != nil {
-			out = append(out, nil)
-			continue
+// Map returns the corresponding KeyspaceId values for the given rowsColValues.
+func (vind *Hash) Map(_ VCursor, rowsColValues [][]sqltypes.Value) ([][]byte, error) {
+	out := make([][]byte, len(rowsColValues))
+	for idx, ids := range rowsColValues {
+		for _, id := range ids {
+			num, err := sqltypes.ToUint64(id)
+			if err != nil {
+				out[idx] = nil
+				continue
+			}
+			out[idx] = append(out[idx], vhash(num)...)
 		}
-		out = append(out, vhash(num))
 	}
 	return out, nil
 }
 
-// Verify returns true if ids maps to ksids.
-func (vind *Hash) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	out := make([]bool, len(ids))
-	for i := range ids {
-		num, err := sqltypes.ToUint64(ids[i])
-		if err != nil {
-			return nil, fmt.Errorf("hash.Verify: %v", err)
+// Verify returns true if rowsColValues maps to ksids.
+func (vind *Hash) Verify(v VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	out := make([]bool, len(rowsColValues))
+	for idx, ids := range rowsColValues {
+		ksid := make([]byte, 0)
+		for _, id := range ids {
+			num, err := sqltypes.ToUint64(id)
+			if err != nil {
+				return nil, fmt.Errorf("hash.Verify: %v", err)
+			}
+			ksid = append(ksid, vhash(num)...)
 		}
-		out[i] = (bytes.Compare(vhash(num), ksids[i]) == 0)
+		out[idx] = (bytes.Compare(ksid, ksids[idx]) == 0)
 	}
 	return out, nil
 }
 
-// ReverseMap returns the ids from ksids.
-func (vind *Hash) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error) {
-	reverseIds := make([]sqltypes.Value, 0, len(ksids))
-	for _, keyspaceID := range ksids {
-		val, err := vunhash(keyspaceID)
-		if err != nil {
-			return reverseIds, err
+// ReverseMap returns the rowsColValues from ksids.
+func (vind *Hash) ReverseMap(_ VCursor, ksids [][]byte) ([][]sqltypes.Value, error) {
+	reverseIds := make([][]sqltypes.Value, len(ksids))
+	for idx, keyspaceID := range ksids {
+		for i := 0; i < len(keyspaceID); i += 8 {
+			end := i + 8
+			// Current range overflows a valid keyspaceID
+			if len(keyspaceID) < end {
+				return reverseIds, fmt.Errorf("invalid keyspace id: %v", hex.EncodeToString(keyspaceID[i:]))
+			}
+			val, err := vunhash(keyspaceID[i:end])
+			if err != nil {
+				return reverseIds, err
+			}
+			reverseIds[idx] = append(reverseIds[idx], sqltypes.NewUint64(val))
 		}
-		reverseIds = append(reverseIds, sqltypes.NewUint64(val))
 	}
 	return reverseIds, nil
 }

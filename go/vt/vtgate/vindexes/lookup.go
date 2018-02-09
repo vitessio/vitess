@@ -52,10 +52,10 @@ func (ln *LookupNonUnique) Cost() int {
 	return 20
 }
 
-// Map returns the corresponding KeyspaceId values for the given ids.
-func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][][]byte, error) {
-	out := make([][][]byte, 0, len(ids))
-	results, err := ln.lkp.Lookup(vcursor, ids)
+// Map returns the corresponding KeyspaceId values for the given rowsColValues.
+func (ln *LookupNonUnique) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([][][]byte, error) {
+	out := make([][][]byte, 0, len(rowsColValues))
+	results, err := ln.lkp.Lookup(vcursor, rowsColValues)
 	if err != nil {
 		return nil, err
 	}
@@ -70,8 +70,8 @@ func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][][]byt
 }
 
 // Verify returns true if ids maps to ksids.
-func (ln *LookupNonUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	return ln.lkp.Verify(vcursor, ids, ksidsToValues(ksids))
+func (ln *LookupNonUnique) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	return ln.lkp.Verify(vcursor, rowsColValues, ksidsToValues(ksids))
 }
 
 // Create reserves the id by inserting it into the vindex table.
@@ -131,10 +131,10 @@ func (lu *LookupUnique) Cost() int {
 	return 10
 }
 
-// Map returns the corresponding KeyspaceId values for the given ids.
-func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][]byte, error) {
-	out := make([][]byte, 0, len(ids))
-	results, err := lu.lkp.Lookup(vcursor, ids)
+// Map returns the corresponding KeyspaceId values for the given rowsColValues.
+func (lu *LookupUnique) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([][]byte, error) {
+	out := make([][]byte, 0, len(rowsColValues))
+	results, err := lu.lkp.Lookup(vcursor, rowsColValues)
 	if err != nil {
 		return nil, err
 	}
@@ -145,15 +145,15 @@ func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][]byte, er
 		case 1:
 			out = append(out, result.Rows[0][0].ToBytes())
 		default:
-			return nil, fmt.Errorf("Lookup.Map: unexpected multiple results from vindex %s: %v", lu.lkp.Table, ids[i])
+			return nil, fmt.Errorf("Lookup.Map: unexpected multiple results from vindex %s: %v", lu.lkp.Table, rowsColValues[i][0])
 		}
 	}
 	return out, nil
 }
 
 // Verify returns true if ids maps to ksids.
-func (lu *LookupUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	return lu.lkp.Verify(vcursor, ids, ksidsToValues(ksids))
+func (lu *LookupUnique) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	return lu.lkp.Verify(vcursor, rowsColValues, ksidsToValues(ksids))
 }
 
 // Create reserves the id by inserting it into the vindex table.

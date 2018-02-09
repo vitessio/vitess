@@ -78,7 +78,7 @@ func TestUnicodeLooseMD5Map(t *testing.T) {
 		out: "\xac\x0f\x91y\xf5\x1d\xb8\u007f\xe8\xec\xc0\xcf@ʹz",
 	}}
 	for _, tcase := range tcases {
-		got, err := charVindex.(Unique).Map(nil, []sqltypes.Value{sqltypes.NewVarBinary(tcase.in)})
+		got, err := charVindex.(Unique).Map(nil, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewVarBinary(tcase.in)}})
 		if err != nil {
 			t.Error(err)
 		}
@@ -90,9 +90,13 @@ func TestUnicodeLooseMD5Map(t *testing.T) {
 }
 
 func TestUnicodeLooseMD5Verify(t *testing.T) {
-	ids := []sqltypes.Value{sqltypes.NewVarBinary("Test"), sqltypes.NewVarBinary("TEst"), sqltypes.NewVarBinary("different")}
+	rowsColValues := [][]sqltypes.Value{
+		[]sqltypes.Value{sqltypes.NewVarBinary("Test")},
+		[]sqltypes.Value{sqltypes.NewVarBinary("TEst")},
+		[]sqltypes.Value{sqltypes.NewVarBinary("different")},
+	}
 	ksids := [][]byte{[]byte("\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5"), []byte("\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5"), []byte("\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5")}
-	got, err := charVindex.Verify(nil, ids, ksids)
+	got, err := charVindex.Verify(nil, rowsColValues, ksids)
 	if err != nil {
 		t.Fatal(err)
 	}

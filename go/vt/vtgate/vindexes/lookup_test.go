@@ -71,6 +71,7 @@ func (vc *vcursor) Execute(method string, query string, bindvars map[string]*que
 
 var lookupUnique Vindex
 var lookupNonUnique Vindex
+var lookupMultiNonUnique Vindex
 
 func init() {
 	lkpunique, err := CreateVindex("lookup_unique", "lookupUnique", map[string]string{"table": "t", "from": "fromc", "to": "toc"})
@@ -81,9 +82,14 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+	lkpmultinonunique, err := CreateVindex("lookup", "lookupNonUnique", map[string]string{"table": "t2", "from": "froma,fromb", "to": "toc"})
+	if err != nil {
+		panic(err)
+	}
 
 	lookupUnique = lkpunique
 	lookupNonUnique = lkpnonunique
+	lookupMultiNonUnique = lkpmultinonunique
 }
 
 func TestLookupNonUniqueCost(t *testing.T) {
@@ -100,7 +106,13 @@ func TestLookupNonUniqueString(t *testing.T) {
 
 func TestLookupNonUniqueMap(t *testing.T) {
 	vc := &vcursor{numRows: 2}
-	got, err := lookupNonUnique.(NonUnique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lookupNonUnique.(NonUnique).Map(
+		vc,
+		[][]sqltypes.Value{
+			[]sqltypes.Value{sqltypes.NewInt64(1)},
+			[]sqltypes.Value{sqltypes.NewInt64(2)},
+		},
+	)
 	if err != nil {
 		t.Error(err)
 	}
@@ -132,7 +144,7 @@ func TestLookupNonUniqueMap(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	_, err = lookupNonUnique.(NonUnique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	_, err = lookupNonUnique.(NonUnique).Map(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}})
 	wantErr := "lookup.Map: execute failed"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, wantErr)
@@ -140,9 +152,52 @@ func TestLookupNonUniqueMap(t *testing.T) {
 	vc.mustFail = false
 }
 
+func TestLookupMultiNonUniqueMap(t *testing.T) {
+	vc := &vcursor{numRows: 2}
+	got, err := lookupMultiNonUnique.(NonUnique).Map(
+		vc,
+		[][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.NewInt64(1),
+				sqltypes.NewInt64(2),
+			},
+		},
+	)
+	if err != nil {
+		t.Error(err)
+	}
+	want := [][][]byte{{
+		[]byte("1"),
+		[]byte("2"),
+	},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Map(): %#v, want %+v", got, want)
+	}
+	wantqueries := []*querypb.BoundQuery{
+		{
+			Sql: "select toc from t2 where froma = :froma and fromb = :fromb",
+			BindVariables: map[string]*querypb.BindVariable{
+				"froma": sqltypes.Int64BindVariable(1),
+				"fromb": sqltypes.Int64BindVariable(2),
+			},
+		},
+	}
+	if !reflect.DeepEqual(vc.queries, wantqueries) {
+		t.Errorf("lookup.Map queries:\n%v, want\n%v", vc.queries, wantqueries)
+	}
+}
+
 func TestLookupNonUniqueVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	_, err := lookupNonUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("test1"), []byte("test2")})
+	_, err := lookupNonUnique.Verify(
+		vc,
+		[][]sqltypes.Value{
+			[]sqltypes.Value{sqltypes.NewInt64(1)},
+			[]sqltypes.Value{sqltypes.NewInt64(2)},
+		},
+		[][]byte{[]byte("test1"), []byte("test2")},
+	)
 	if err != nil {
 		t.Error(err)
 	}
@@ -166,12 +221,83 @@ func TestLookupNonUniqueVerify(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	_, err = lookupNonUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	_, err = lookupNonUnique.Verify(
+		vc,
+		[][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}},
+		[][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")},
+	)
 	want := "lookup.Verify: execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
 	}
 	vc.mustFail = false
+}
+
+func TestLookupMultiColNonUniqueVerify(t *testing.T) {
+	vc := &vcursor{numRows: 1}
+	_, err := lookupMultiNonUnique.Verify(
+		vc,
+		[][]sqltypes.Value{
+			[]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
+		},
+		[][]byte{[]byte("test1test2")},
+	)
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantqueries := []*querypb.BoundQuery{{
+		Sql: "select froma from t2 where froma = :froma and fromb = :fromb and toc = :toc",
+		BindVariables: map[string]*querypb.BindVariable{
+			"froma": sqltypes.Int64BindVariable(1),
+			"fromb": sqltypes.Int64BindVariable(2),
+			"toc":   sqltypes.BytesBindVariable([]byte("test1test2")),
+		},
+	},
+	}
+	if !reflect.DeepEqual(vc.queries, wantqueries) {
+		t.Errorf("lookup.Verify queries:\n%v, want\n%v", vc.queries, wantqueries)
+	}
+}
+
+func TestLookupMultiNonUniqueCreate(t *testing.T) {
+	vc := &vcursor{}
+	err := lookupMultiNonUnique.(Lookup).Create(
+		vc,
+		[][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.NewInt64(1),
+				sqltypes.NewInt64(2),
+			},
+			[]sqltypes.Value{
+				sqltypes.NewInt64(3),
+				sqltypes.NewInt64(4),
+			},
+		},
+		[][]byte{
+			[]byte("test1test2"),
+			[]byte("test3test4"),
+		},
+		false, /* ignoreMode */
+	)
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantqueries := []*querypb.BoundQuery{{
+		Sql: "insert into t2(froma, fromb, toc) values(:froma0, :fromb0, :toc0), (:froma1, :fromb1, :toc1)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"froma0": sqltypes.Int64BindVariable(1),
+			"fromb0": sqltypes.Int64BindVariable(2),
+			"toc0":   sqltypes.BytesBindVariable([]byte("test1test2")),
+			"froma1": sqltypes.Int64BindVariable(3),
+			"fromb1": sqltypes.Int64BindVariable(4),
+			"toc1":   sqltypes.BytesBindVariable([]byte("test3test4")),
+		},
+	}}
+	if !reflect.DeepEqual(vc.queries, wantqueries) {
+		t.Errorf("lookup.Create queries:\n%v, want\n%v", vc.queries, wantqueries)
+	}
 }
 
 func TestLookupNonUniqueCreate(t *testing.T) {
@@ -248,4 +374,33 @@ func TestLookupNonUniqueDelete(t *testing.T) {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
 	}
 	vc.mustFail = false
+}
+
+func TestLookupMultiNonUniqueDelete(t *testing.T) {
+	vc := &vcursor{}
+	err := lookupMultiNonUnique.(Lookup).Delete(
+		vc,
+		[][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.NewInt64(1),
+				sqltypes.NewInt64(2),
+			},
+		},
+		[]byte("test"),
+	)
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantqueries := []*querypb.BoundQuery{{
+		Sql: "delete from t2 where froma = :froma and fromb = :fromb and toc = :toc",
+		BindVariables: map[string]*querypb.BindVariable{
+			"froma": sqltypes.Int64BindVariable(1),
+			"fromb": sqltypes.Int64BindVariable(2),
+			"toc":   sqltypes.BytesBindVariable([]byte("test")),
+		},
+	}}
+	if !reflect.DeepEqual(vc.queries, wantqueries) {
+		t.Errorf("lookup.Delete queries:\n%v, want\n%v", vc.queries, wantqueries)
+	}
 }
