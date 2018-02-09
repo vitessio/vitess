@@ -470,14 +470,14 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 		t.Fatalf("got error: %v", err)
 	}
 
-	assertErrorMatch(id, "commit requested")
+	assertErrorMatch(id, "transaction committed")
 
 	id, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	if err := txPool.Rollback(ctx, id); err != nil {
 		t.Fatalf("got error: %v", err)
 	}
 
-	assertErrorMatch(id, "rollback requested")
+	assertErrorMatch(id, "transaction rolled back")
 
 	txPool.Close()
 	txPool = newTxPool()
