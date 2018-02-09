@@ -66,6 +66,11 @@ var (
 	}
 )
 
+type messageCommitter interface {
+	UpdateCaches(newMessages map[string][]*messager.MessageRow, changedMessages map[string][]string)
+	LockDB(newMessages map[string][]*messager.MessageRow, changedMessages map[string][]string) func()
+}
+
 // TxPool is the transaction pool for the query service.
 type TxPool struct {
 	// conns is the 'regular' pool. By default, connections
@@ -128,12 +133,12 @@ func (axp *TxPool) Open(appParams, dbaParams, appDebugParams *mysql.ConnParams) 
 // Close closes the TxPool. A closed pool can be reopened.
 func (axp *TxPool) Close() {
 	axp.ticks.Stop()
-	for _, v := range axp.activePool.GetOutdated(time.Duration(0), "for closing") {
+	for _, v := range axp.activePool.GetOutdated(time.Duration(0), true, "for closing") {
 		conn := v.(*TxConnection)
 		log.Warningf("killing transaction for shutdown: %s", conn.Format(nil))
 		tabletenv.InternalErrors.Add("StrayTransactions", 1)
 		conn.Close()
-		conn.conclude(TxClose)
+		conn.conclude(TxClose, "pool closed")
 	}
 	axp.conns.Close()
 }
@@ -152,19 +157,19 @@ func (axp *TxPool) AdjustLastID(id int64) {
 // Transactions can be in use for situations like executing statements
 // or in prepared state.
 func (axp *TxPool) RollbackNonBusy(ctx context.Context) {
-	for _, v := range axp.activePool.GetOutdated(time.Duration(0), "for transition") {
+	for _, v := range axp.activePool.GetOutdated(time.Duration(0), false, "for transition") {
 		axp.LocalConclude(ctx, v.(*TxConnection))
 	}
 }
 
 func (axp *TxPool) transactionKiller() {
 	defer tabletenv.LogError()
-	for _, v := range axp.activePool.GetOutdated(time.Duration(axp.Timeout()), "for rollback") {
+	for _, v := range axp.activePool.GetOutdated(time.Duration(axp.Timeout()), false, "for rollback") {
 		conn := v.(*TxConnection)
 		log.Warningf("killing transaction (exceeded timeout: %v): %s", axp.Timeout(), conn.Format(nil))
 		tabletenv.KillStats.Add("Transactions", 1)
 		conn.Close()
-		conn.conclude(TxKill)
+		conn.conclude(TxKill, fmt.Sprintf("exceeded timeout: %v", axp.Timeout()))
 	}
 }
 
@@ -240,7 +245,7 @@ func (axp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (
 }
 
 // Commit commits the specified transaction.
-func (axp *TxPool) Commit(ctx context.Context, transactionID int64, messager *messager.Engine) error {
+func (axp *TxPool) Commit(ctx context.Context, transactionID int64, messager messageCommitter) error {
 	conn, err := axp.Get(transactionID, "for commit")
 	if err != nil {
 		return err
@@ -279,8 +284,8 @@ func (axp *TxPool) LocalBegin(ctx context.Context, options *querypb.ExecuteOptio
 }
 
 // LocalCommit is the commit function for LocalBegin.
-func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, messager *messager.Engine) error {
-	defer conn.conclude(TxCommit)
+func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, messager messageCommitter) error {
+	defer conn.conclude(TxCommit, "commit requested")
 	defer messager.LockDB(conn.NewMessages, conn.ChangedMessages)()
 	if _, err := conn.Exec(ctx, "commit", 1, false); err != nil {
 		conn.Close()
@@ -299,7 +304,7 @@ func (axp *TxPool) LocalConclude(ctx context.Context, conn *TxConnection) {
 }
 
 func (axp *TxPool) localRollback(ctx context.Context, conn *TxConnection) error {
-	defer conn.conclude(TxRollback)
+	defer conn.conclude(TxRollback, "rollback requested")
 	if _, err := conn.Exec(ctx, "rollback", 1, false); err != nil {
 		conn.Close()
 		return err
@@ -397,7 +402,7 @@ func (txc *TxConnection) BeginAgain(ctx context.Context) error {
 // active.
 func (txc *TxConnection) Recycle() {
 	if txc.IsClosed() {
-		txc.conclude(TxClose)
+		txc.conclude(TxClose, "closed")
 	} else {
 		txc.pool.activePool.Put(txc.TransactionID)
 	}
@@ -408,8 +413,8 @@ func (txc *TxConnection) RecordQuery(query string) {
 	txc.Queries = append(txc.Queries, query)
 }
 
-func (txc *TxConnection) conclude(conclusion string) {
-	txc.pool.activePool.Unregister(txc.TransactionID)
+func (txc *TxConnection) conclude(conclusion, reason string) {
+	txc.pool.activePool.Unregister(txc.TransactionID, reason)
 	txc.DBConn.Recycle()
 	txc.DBConn = nil
 	txc.pool.limiter.Release(txc.ImmediateCallerID, txc.EffectiveCallerID)
