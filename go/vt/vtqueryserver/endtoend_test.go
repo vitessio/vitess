@@ -19,8 +19,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
-	"path"
 	"strings"
 	"testing"
 
@@ -77,10 +77,17 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 		defer cluster.TearDown()
-
 		mysqlConnParams = cluster.MySQLConnParams()
 
-		proxySock := path.Join(cluster.Env.Directory(), "mysqlproxy.sock")
+		// Setup a unix socket to connect to the proxy.
+		// We use a temporary file.
+		unixSocket, err := ioutil.TempFile("", "mysqlproxy.sock")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create temp file: %v", err)
+			return 1
+		}
+		proxySock := unixSocket.Name()
+		os.Remove(proxySock)
 
 		proxyConnParams.UnixSocket = proxySock
 		proxyConnParams.Uname = "proxy"
@@ -89,11 +96,10 @@ func TestMain(m *testing.M) {
 		*mysqlServerSocketPath = proxyConnParams.UnixSocket
 		*mysqlAuthServerImpl = "none"
 
+		// Initialize the query service on top of the vttest MySQL database.
 		dbcfgs := dbconfigs.DBConfigs{
 			App: mysqlConnParams,
 		}
-
-		var err error
 		queryServer, err = initProxy(&dbcfgs)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "could not start proxy: %v\n", err)
@@ -101,6 +107,7 @@ func TestMain(m *testing.M) {
 		}
 		defer queryServer.StopService()
 
+		// Initialize the MySQL server protocol to talk to the query service.
 		initMySQLProtocol()
 		defer shutdownMySQLProtocol()
 
