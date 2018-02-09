@@ -245,12 +245,12 @@ func (axp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (
 }
 
 // Commit commits the specified transaction.
-func (axp *TxPool) Commit(ctx context.Context, transactionID int64, messager messageCommitter) error {
+func (axp *TxPool) Commit(ctx context.Context, transactionID int64, mc messageCommitter) error {
 	conn, err := axp.Get(transactionID, "for commit")
 	if err != nil {
 		return err
 	}
-	return axp.LocalCommit(ctx, conn, messager)
+	return axp.LocalCommit(ctx, conn, mc)
 }
 
 // Rollback rolls back the specified transaction.
@@ -284,14 +284,14 @@ func (axp *TxPool) LocalBegin(ctx context.Context, options *querypb.ExecuteOptio
 }
 
 // LocalCommit is the commit function for LocalBegin.
-func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, messager messageCommitter) error {
-	defer conn.conclude(TxCommit, "commit requested")
-	defer messager.LockDB(conn.NewMessages, conn.ChangedMessages)()
+func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, mc messageCommitter) error {
+	defer conn.conclude(TxCommit, "transaction committed")
+	defer mc.LockDB(conn.NewMessages, conn.ChangedMessages)()
 	if _, err := conn.Exec(ctx, "commit", 1, false); err != nil {
 		conn.Close()
 		return err
 	}
-	messager.UpdateCaches(conn.NewMessages, conn.ChangedMessages)
+	mc.UpdateCaches(conn.NewMessages, conn.ChangedMessages)
 	return nil
 }
 
@@ -304,7 +304,7 @@ func (axp *TxPool) LocalConclude(ctx context.Context, conn *TxConnection) {
 }
 
 func (axp *TxPool) localRollback(ctx context.Context, conn *TxConnection) error {
-	defer conn.conclude(TxRollback, "rollback requested")
+	defer conn.conclude(TxRollback, "transaction rolled back")
 	if _, err := conn.Exec(ctx, "rollback", 1, false); err != nil {
 		conn.Close()
 		return err
