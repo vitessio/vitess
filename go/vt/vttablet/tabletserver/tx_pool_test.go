@@ -585,6 +585,7 @@ func TestTxPoolExecFailDueToConnFail_Errno2013(t *testing.T) {
 }
 
 func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
+	startingStray := tabletenv.InternalErrors.Counts()["StrayTransactions"]
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("begin", &sqltypes.Result{})
@@ -600,7 +601,7 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 
 	// Close kills stray transaction.
 	txPool.Close()
-	if got, want := tabletenv.InternalErrors.Counts()["StrayTransactions"], int64(1); got != want {
+	if got, want := tabletenv.InternalErrors.Counts()["StrayTransactions"]-startingStray, int64(1); got != want {
 		t.Fatalf("internal error count for stray transactions not increased: got = %v, want = %v", got, want)
 	}
 	if got, want := txPool.conns.Capacity(), int64(0); got != want {
