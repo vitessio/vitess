@@ -224,6 +224,7 @@ var unshardedVSchema = `
 		"music_user_map": {},
 		"name_user_map": {},
 		"name_lastname_keyspace_id_map": {},
+		"user_msgs": {},
 		"ins_lookup": {},
 		"main1": {
 			"auto_increment": {
