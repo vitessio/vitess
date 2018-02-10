@@ -818,6 +818,20 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	return err
 }
 
+// MessageStream is part of the vtgate service API. This is a V2 level API that's sent
+// to the Resolver.
+func (e *Executor) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error {
+	err := e.resolver.MessageStream(
+		ctx,
+		keyspace,
+		shard,
+		keyRange,
+		name,
+		callback,
+	)
+	return formatError(err)
+}
+
 // MessageAck acks messages.
 func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []*querypb.Value) (int64, error) {
 	table, err := e.VSchema().FindTable(keyspace, name)
