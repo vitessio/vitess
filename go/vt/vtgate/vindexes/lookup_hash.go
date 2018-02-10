@@ -44,9 +44,9 @@ func init() {
 // NonUnique and a Lookup.
 // Warning: This Vindex is being depcreated in favor of Lookup
 type LookupHash struct {
-	name            string
-	scatterIfAbsent bool
-	lkp             lookupInternal
+	name      string
+	writeOnly bool
+	lkp       lookupInternal
 }
 
 // NewLookupHash creates a LookupHash vindex.
@@ -57,14 +57,14 @@ type LookupHash struct {
 //
 // The following fields are optional:
 //   autocommit: setting this to "true" will cause inserts to upsert, deletes to be ignored, and updates to fail.
-//   scatter_if_absent: if an entry is missing, this flag will the query to be sent to all shards.
+//   write_only: setting this to "true" will cause Map to do full scatter, and Verify to always succeed.
 func NewLookupHash(name string, m map[string]string) (Vindex, error) {
 	lh := &LookupHash{name: name}
 	if err := lh.lkp.Init(m); err != nil {
 		return nil, err
 	}
 	var err error
-	lh.scatterIfAbsent, err = boolFromMap(m, "scatter_if_absent")
+	lh.writeOnly, err = boolFromMap(m, "write_only")
 	if err != nil {
 		return nil, err
 	}
@@ -84,16 +84,19 @@ func (lh *LookupHash) Cost() int {
 // Map returns the corresponding KeyspaceId values for the given ids.
 func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksids, error) {
 	out := make([]Ksids, 0, len(ids))
+	if lh.writeOnly {
+		for range ids {
+			out = append(out, Ksids{Range: &topodata.KeyRange{}})
+		}
+		return out, nil
+	}
+
 	results, err := lh.lkp.Lookup(vcursor, ids)
 	if err != nil {
 		return nil, err
 	}
 	for _, result := range results {
 		if len(result.Rows) == 0 {
-			if lh.scatterIfAbsent {
-				out = append(out, Ksids{Range: &topodata.KeyRange{}})
-				continue
-			}
 			out = append(out, Ksids{})
 			continue
 		}
@@ -114,7 +117,7 @@ func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksids, error
 
 // Verify returns true if ids maps to ksids.
 func (lh *LookupHash) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	if lh.scatterIfAbsent {
+	if lh.writeOnly {
 		out := make([]bool, len(ids))
 		for i := range ids {
 			out[i] = true
@@ -197,12 +200,12 @@ func NewLookupHashUnique(name string, m map[string]string) (Vindex, error) {
 	if err := lhu.lkp.Init(m); err != nil {
 		return nil, err
 	}
-	scatter, err := boolFromMap(m, "scatter_if_absent")
+	scatter, err := boolFromMap(m, "write_only")
 	if err != nil {
 		return nil, err
 	}
 	if scatter {
-		return nil, errors.New("scatter_if_absent cannot be true for a unique lookup vindex")
+		return nil, errors.New("write_only cannot be true for a unique lookup vindex")
 	}
 	return lhu, nil
 }

@@ -40,9 +40,9 @@ func init() {
 // LookupNonUnique defines a vindex that uses a lookup table and create a mapping between from ids and KeyspaceId.
 // It's NonUnique and a Lookup.
 type LookupNonUnique struct {
-	name            string
-	scatterIfAbsent bool
-	lkp             lookupInternal
+	name      string
+	writeOnly bool
+	lkp       lookupInternal
 }
 
 // String returns the name of the vindex.
@@ -58,16 +58,19 @@ func (ln *LookupNonUnique) Cost() int {
 // Map returns the corresponding KeyspaceId values for the given ids.
 func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksids, error) {
 	out := make([]Ksids, 0, len(ids))
+	if ln.writeOnly {
+		for range ids {
+			out = append(out, Ksids{Range: &topodata.KeyRange{}})
+		}
+		return out, nil
+	}
+
 	results, err := ln.lkp.Lookup(vcursor, ids)
 	if err != nil {
 		return nil, err
 	}
 	for _, result := range results {
 		if len(result.Rows) == 0 {
-			if ln.scatterIfAbsent {
-				out = append(out, Ksids{Range: &topodata.KeyRange{}})
-				continue
-			}
 			out = append(out, Ksids{})
 			continue
 		}
@@ -82,7 +85,7 @@ func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksids, 
 
 // Verify returns true if ids maps to ksids.
 func (ln *LookupNonUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	if ln.scatterIfAbsent {
+	if ln.writeOnly {
 		out := make([]bool, len(ids))
 		for i := range ids {
 			out[i] = true
@@ -120,14 +123,14 @@ func (ln *LookupNonUnique) MarshalJSON() ([]byte, error) {
 //
 // The following fields are optional:
 //   autocommit: setting this to "true" will cause inserts to upsert, deletes to be ignored, and updates to fail.
-//   scatter_if_absent: if an entry is missing, this flag will the query to be sent to all shards.
+//   write_only: if an entry is missing, this flag will the query to be sent to all shards.
 func NewLookup(name string, m map[string]string) (Vindex, error) {
 	lookup := &LookupNonUnique{name: name}
 	if err := lookup.lkp.Init(m); err != nil {
 		return nil, err
 	}
 	var err error
-	lookup.scatterIfAbsent, err = boolFromMap(m, "scatter_if_absent")
+	lookup.writeOnly, err = boolFromMap(m, "write_only")
 	if err != nil {
 		return nil, err
 	}
@@ -165,12 +168,12 @@ func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 	if err := lu.lkp.Init(m); err != nil {
 		return nil, err
 	}
-	scatter, err := boolFromMap(m, "scatter_if_absent")
+	scatter, err := boolFromMap(m, "write_only")
 	if err != nil {
 		return nil, err
 	}
 	if scatter {
-		return nil, errors.New("scatter_if_absent cannot be true for a unique lookup vindex")
+		return nil, errors.New("write_only cannot be true for a unique lookup vindex")
 	}
 	return lu, nil
 }

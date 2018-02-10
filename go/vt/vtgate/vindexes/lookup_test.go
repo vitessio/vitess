@@ -82,22 +82,22 @@ func (vc *vcursor) execute(method string, query string, bindvars map[string]*que
 
 func TestLookupNonUniqueNew(t *testing.T) {
 	l := createLookup(t, "lookup", false)
-	if want, got := l.(*LookupNonUnique).scatterIfAbsent, false; got != want {
+	if want, got := l.(*LookupNonUnique).writeOnly, false; got != want {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
 	l = createLookup(t, "lookup", true)
-	if want, got := l.(*LookupNonUnique).scatterIfAbsent, true; got != want {
+	if want, got := l.(*LookupNonUnique).writeOnly, true; got != want {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
 	l, err := CreateVindex("lookup", "lookup", map[string]string{
-		"table":             "t",
-		"from":              "fromc",
-		"to":                "toc",
-		"scatter_if_absent": "invalid",
+		"table":      "t",
+		"from":       "fromc",
+		"to":         "toc",
+		"write_only": "invalid",
 	})
-	want := "scatter_if_absent value must be 'true' or 'false': 'invalid'"
+	want := "write_only value must be 'true' or 'false': 'invalid'"
 	if err == nil || err.Error() != want {
 		t.Errorf("Create(bad_scatter): %v, want %s", err, want)
 	}
@@ -178,7 +178,7 @@ func TestLookupNonUniqueMapAbsent(t *testing.T) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
 
-	// scatterIfAbsent true should return full keyranges.
+	// writeOnly true should return full keyranges.
 	lookupNonUnique = createLookup(t, "lookup", true)
 	got, err = lookupNonUnique.(NonUnique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	if err != nil {
@@ -229,7 +229,7 @@ func TestLookupNonUniqueVerify(t *testing.T) {
 	}
 	vc.mustFail = false
 
-	// scatterIfAbsent true should always yield true.
+	// writeOnly true should always yield true.
 	lookupNonUnique = createLookup(t, "lookup", true)
 	vc.queries = nil
 
@@ -238,11 +238,11 @@ func TestLookupNonUniqueVerify(t *testing.T) {
 		t.Error(err)
 	}
 	if vc.queries != nil {
-		t.Errorf("lookup.Verify(scatter), queries: %v, want nil", vc.queries)
+		t.Errorf("lookup.Verify(writeOnly), queries: %v, want nil", vc.queries)
 	}
 	wantBools := []bool{true, true}
 	if !reflect.DeepEqual(got, wantBools) {
-		t.Errorf("lookup.Verify(scatter): %v, want %v", got, wantBools)
+		t.Errorf("lookup.Verify(writeOnly): %v, want %v", got, wantBools)
 	}
 }
 
@@ -398,17 +398,17 @@ func TestLookupNonUniqueUpdate(t *testing.T) {
 	}
 }
 
-func createLookup(t *testing.T, name string, scatterIfAbsent bool) Vindex {
+func createLookup(t *testing.T, name string, writeOnly bool) Vindex {
 	t.Helper()
-	scatter := "false"
-	if scatterIfAbsent {
-		scatter = "true"
+	write := "false"
+	if writeOnly {
+		write = "true"
 	}
 	l, err := CreateVindex(name, name, map[string]string{
-		"table":             "t",
-		"from":              "fromc",
-		"to":                "toc",
-		"scatter_if_absent": scatter,
+		"table":      "t",
+		"from":       "fromc",
+		"to":         "toc",
+		"write_only": write,
 	})
 	if err != nil {
 		t.Fatal(err)
