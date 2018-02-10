@@ -1089,6 +1089,8 @@ var (
 		input: "replace into t partition (p0) values (1, 'asdf')",
 	}, {
 		input: "delete from t partition (p0) where a = 1",
+	}, {
+		input: "stream * from t",
 	}}
 )
 
