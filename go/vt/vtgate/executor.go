@@ -755,6 +755,13 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	}
 	query, comments := sqlparser.SplitTrailingComments(sql)
 	vcursor := newVCursorImpl(ctx, safeSession, target, comments, e, logStats)
+
+	// check if this is a stream statement for messaging
+	// TODO: support keyRange syntax
+	if logStats.StmtType == sqlparser.StmtType(sqlparser.StmtStream) {
+		return e.handleMessageStream(ctx, safeSession, sql, target, callback, vcursor, logStats)
+	}
+
 	plan, err := e.getPlan(
 		vcursor,
 		query,
@@ -815,6 +822,35 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 
 	logStats.ExecuteTime = time.Since(execStart)
 
+	return err
+}
+
+// handleMessageStream executes queries of the form 'stream * from t'
+func (e *Executor) handleMessageStream(ctx context.Context, safeSession *SafeSession, sql string, target querypb.Target, callback func(*sqltypes.Result) error, vcursor *vcursorImpl, logStats *LogStats) error {
+	stmt, err := sqlparser.Parse(sql)
+	if err != nil {
+		logStats.Error = err
+		return err
+	}
+
+	streamStmt, ok := stmt.(*sqlparser.Stream)
+	if !ok {
+		logStats.Error = err
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unrecognized STREAM statement: %v", sql)
+	}
+
+	table, err := vcursor.FindTable(streamStmt.Table)
+	if err != nil {
+		logStats.Error = err
+		return err
+	}
+
+	execStart := time.Now()
+	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+
+	err = e.MessageStream(ctx, table.Keyspace.Name, target.Shard, nil, table.Name.CompliantName(), callback)
+	logStats.Error = err
+	logStats.ExecuteTime = time.Since(execStart)
 	return err
 }
 
