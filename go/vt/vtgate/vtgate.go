@@ -897,7 +897,7 @@ func (vtg *VTGate) MessageStream(ctx context.Context, keyspace string, shard str
 	statsKey := []string{"MessageStream", keyspace, ltt}
 	defer vtg.timings.Record(statsKey, startTime)
 
-	err := vtg.resolver.MessageStream(
+	err := vtg.executor.MessageStream(
 		ctx,
 		keyspace,
 		shard,
