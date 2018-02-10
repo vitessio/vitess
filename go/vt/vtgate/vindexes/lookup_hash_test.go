@@ -27,22 +27,22 @@ import (
 
 func TestLookupHashNew(t *testing.T) {
 	l := createLookup(t, "lookup_hash", false)
-	if want, got := l.(*LookupHash).scatterIfAbsent, false; got != want {
+	if want, got := l.(*LookupHash).writeOnly, false; got != want {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
 	l = createLookup(t, "lookup_hash", true)
-	if want, got := l.(*LookupHash).scatterIfAbsent, true; got != want {
+	if want, got := l.(*LookupHash).writeOnly, true; got != want {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
 	l, err := CreateVindex("lookup_hash", "lookup_hash", map[string]string{
-		"table":             "t",
-		"from":              "fromc",
-		"to":                "toc",
-		"scatter_if_absent": "invalid",
+		"table":      "t",
+		"from":       "fromc",
+		"to":         "toc",
+		"write_only": "invalid",
 	})
-	want := "scatter_if_absent value must be 'true' or 'false': 'invalid'"
+	want := "write_only value must be 'true' or 'false': 'invalid'"
 	if err == nil || err.Error() != want {
 		t.Errorf("Create(bad_scatter): %v, want %s", err, want)
 	}
@@ -132,7 +132,7 @@ func TestLookupHashMapAbsent(t *testing.T) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
 
-	// scatterIfAbsent true should return full keyranges.
+	// writeOnly true should return full keyranges.
 	lookuphash = createLookup(t, "lookup_hash", true)
 	got, err = lookuphash.(NonUnique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	if err != nil {
@@ -181,7 +181,7 @@ func TestLookupHashVerify(t *testing.T) {
 		t.Errorf("lookuphash.Verify(bogus) err: %v, want %s", err, wantErr)
 	}
 
-	// scatterIfAbsent true should always yield true.
+	// writeOnly true should always yield true.
 	lookuphash = createLookup(t, "lookup_hash", true)
 	vc.queries = nil
 

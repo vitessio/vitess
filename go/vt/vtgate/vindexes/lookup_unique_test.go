@@ -28,23 +28,23 @@ func TestLookupUniqueNew(t *testing.T) {
 	_ = createLookup(t, "lookup_unique", false)
 
 	_, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
-		"table":             "t",
-		"from":              "fromc",
-		"to":                "toc",
-		"scatter_if_absent": "true",
+		"table":      "t",
+		"from":       "fromc",
+		"to":         "toc",
+		"write_only": "true",
 	})
-	want := "scatter_if_absent cannot be true for a unique lookup vindex"
+	want := "write_only cannot be true for a unique lookup vindex"
 	if err == nil || err.Error() != want {
 		t.Errorf("Create(bad_scatter): %v, want %s", err, want)
 	}
 
 	_, err = CreateVindex("lookup_unique", "lookup_unique", map[string]string{
-		"table":             "t",
-		"from":              "fromc",
-		"to":                "toc",
-		"scatter_if_absent": "invalid",
+		"table":      "t",
+		"from":       "fromc",
+		"to":         "toc",
+		"write_only": "invalid",
 	})
-	want = "scatter_if_absent value must be 'true' or 'false': 'invalid'"
+	want = "write_only value must be 'true' or 'false': 'invalid'"
 	if err == nil || err.Error() != want {
 		t.Errorf("Create(bad_scatter): %v, want %s", err, want)
 	}
