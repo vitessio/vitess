@@ -684,9 +684,10 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("name_lastname_keyspace_id_map"),
 			buildVarCharRow("name_user_map"),
 			buildVarCharRow("simple"),
+			buildVarCharRow("user_msgs"),
 			buildVarCharRow("user_seq"),
 		},
-		RowsAffected: 8,
+		RowsAffected: 9,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
 		t.Errorf("show vschema_tables:\n%+v, want\n%+v", qr, wantqr)
