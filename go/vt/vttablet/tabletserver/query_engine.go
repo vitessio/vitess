@@ -58,7 +58,7 @@ type TabletPlan struct {
 	*planbuilder.Plan
 	Fields     []*querypb.Field
 	Rules      *rules.Rules
-	Authorized *tableacl.ACLResult
+	Authorized []*tableacl.ACLResult
 
 	mu         sync.Mutex
 	QueryCount int64
@@ -94,6 +94,14 @@ func (ep *TabletPlan) Stats() (queryCount int64, duration, mysqlTime time.Durati
 	errorCount = ep.ErrorCount
 	ep.mu.Unlock()
 	return
+}
+
+// buildAuthorized builds 'Authorized', which is the runtime part for 'Permissions'.
+func (ep *TabletPlan) buildAuthorized() {
+	ep.Authorized = make([]*tableacl.ACLResult, len(ep.Permissions))
+	for i, perm := range ep.Permissions {
+		ep.Authorized[i] = tableacl.Authorized(perm.TableName, perm.Role)
+	}
 }
 
 //_______________________________________________
@@ -314,7 +322,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	}
 	plan := &TabletPlan{Plan: splan}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
-	plan.Authorized = tableacl.Authorized(plan.TableName().String(), plan.PlanID.MinRole())
+	plan.buildAuthorized()
 	if plan.PlanID.IsSelect() {
 		if plan.FieldQuery != nil {
 			conn, err := qe.conns.Get(ctx)
@@ -352,7 +360,7 @@ func (qe *QueryEngine) GetStreamPlan(sql string) (*TabletPlan, error) {
 	}
 	plan := &TabletPlan{Plan: splan}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
-	plan.Authorized = tableacl.Authorized(plan.TableName().String(), plan.PlanID.MinRole())
+	plan.buildAuthorized()
 	return plan, nil
 }
 
@@ -366,7 +374,7 @@ func (qe *QueryEngine) GetMessageStreamPlan(name string) (*TabletPlan, error) {
 	}
 	plan := &TabletPlan{Plan: splan}
 	plan.Rules = qe.queryRuleSources.FilterByPlan("stream from "+name, plan.PlanID, plan.TableName().String())
-	plan.Authorized = tableacl.Authorized(plan.TableName().String(), plan.PlanID.MinRole())
+	plan.buildAuthorized()
 	return plan, nil
 }
 
