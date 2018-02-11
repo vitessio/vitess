@@ -212,6 +212,9 @@ type Plan struct {
 	// NewName is the new name of the table. Set for DDLs which create or change the table.
 	NewName sqlparser.TableIdent
 
+	// Permissions stores the permissions for the tables accessed in the query.
+	Permissions []Permission
+
 	// FieldQuery is used to fetch field info
 	FieldQuery *sqlparser.ParsedQuery
 
@@ -268,34 +271,40 @@ func Build(sql string, tables map[string]*schema.Table) (*Plan, error) {
 	if err != nil {
 		return nil, err
 	}
+	var plan *Plan
 	switch stmt := statement.(type) {
 	case *sqlparser.Union:
-		return &Plan{
+		plan, err = &Plan{
 			PlanID:     PlanPassSelect,
 			FieldQuery: GenerateFieldQuery(stmt),
 			FullQuery:  GenerateLimitQuery(stmt),
 		}, nil
 	case *sqlparser.Select:
-		return analyzeSelect(stmt, tables)
+		plan, err = analyzeSelect(stmt, tables)
 	case *sqlparser.Insert:
-		return analyzeInsert(stmt, tables)
+		plan, err = analyzeInsert(stmt, tables)
 	case *sqlparser.Update:
-		return analyzeUpdate(stmt, tables)
+		plan, err = analyzeUpdate(stmt, tables)
 	case *sqlparser.Delete:
-		return analyzeDelete(stmt, tables)
+		plan, err = analyzeDelete(stmt, tables)
 	case *sqlparser.Set:
-		return analyzeSet(stmt), nil
+		plan, err = analyzeSet(stmt), nil
 	case *sqlparser.DDL:
-		return analyzeDDL(stmt, tables), nil
+		plan, err = analyzeDDL(stmt, tables), nil
 	case *sqlparser.Show:
-		return &Plan{PlanID: PlanOtherRead}, nil
+		plan, err = &Plan{PlanID: PlanOtherRead}, nil
 	case *sqlparser.OtherRead:
-		return &Plan{PlanID: PlanOtherRead}, nil
+		plan, err = &Plan{PlanID: PlanOtherRead}, nil
 	case *sqlparser.OtherAdmin:
-		return &Plan{PlanID: PlanOtherAdmin}, nil
+		plan, err = &Plan{PlanID: PlanOtherAdmin}, nil
+	default:
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid SQL")
 	}
-
-	return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid SQL")
+	if err != nil {
+		return nil, err
+	}
+	plan.Permissions = BuildPermissions(statement)
+	return plan, nil
 }
 
 // BuildStreaming builds a streaming plan based on the schema.
@@ -306,8 +315,9 @@ func BuildStreaming(sql string, tables map[string]*schema.Table) (*Plan, error) 
 	}
 
 	plan := &Plan{
-		PlanID:    PlanSelectStream,
-		FullQuery: GenerateFullQuery(statement),
+		PlanID:      PlanSelectStream,
+		FullQuery:   GenerateFullQuery(statement),
+		Permissions: BuildPermissions(statement),
 	}
 
 	switch stmt := statement.(type) {
@@ -339,5 +349,9 @@ func BuildMessageStreaming(name string, tables map[string]*schema.Table) (*Plan,
 	if plan.Table.Type != schema.Message {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "'%s' is not a message table", name)
 	}
+	plan.Permissions = []Permission{{
+		TableName: plan.Table.Name.String(),
+		Role:      tableacl.WRITER,
+	}}
 	return plan, nil
 }
