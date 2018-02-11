@@ -1091,6 +1091,8 @@ var (
 		input: "delete from t partition (p0) where a = 1",
 	}, {
 		input: "stream * from t",
+	}, {
+		input: "stream /* comment */ * from t",
 	}}
 )
 
