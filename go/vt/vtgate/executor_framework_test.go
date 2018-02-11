@@ -130,6 +130,14 @@ var executorVSchema = `
 				}
 			]
 		},
+		"sharded_user_msgs": {
+			"column_vindexes": [
+				{
+					"column": "user_id",
+					"name": "hash_index"
+				}
+			]
+		},
 		"music": {
 			"column_vindexes": [
 				{

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/discovery"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
@@ -39,6 +40,46 @@ func TestStreamSQLUnsharded(t *testing.T) {
 		t.Error(err)
 	}
 	wantResult := sandboxconn.StreamRowResult
+	if !result.Equal(wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+}
+
+func TestStreamSQLSharded(t *testing.T) {
+	// Special setup: Don't use createExecutorEnv.
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck()
+	s := createSandbox("TestExecutor")
+	s.VSchema = executorVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := new(sandboxTopo)
+	resolver := newTestResolver(hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	var conns []*sandboxconn.SandboxConn
+	for _, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		conns = append(conns, sbc)
+	}
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize, false)
+
+	sql := "stream * from sharded_user_msgs"
+	result, err := executorStreamMessages(executor, sql)
+	if err != nil {
+		t.Error(err)
+	}
+	wantResult := &sqltypes.Result{
+		Fields: sandboxconn.SingleRowResult.Fields,
+		Rows: [][]sqltypes.Value{
+			sandboxconn.StreamRowResult.Rows[0],
+			sandboxconn.StreamRowResult.Rows[0],
+			sandboxconn.StreamRowResult.Rows[0],
+			sandboxconn.StreamRowResult.Rows[0],
+			sandboxconn.StreamRowResult.Rows[0],
+			sandboxconn.StreamRowResult.Rows[0],
+			sandboxconn.StreamRowResult.Rows[0],
+			sandboxconn.StreamRowResult.Rows[0],
+		},
+	}
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
