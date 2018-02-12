@@ -239,6 +239,10 @@
 "delete from unsharded where col = (select id from user)"
 "unsupported: sharded subqueries in DML"
 
+# sharded delete with limit clasue
+"delete from user_extra limit 10"
+"unsupported: multi shard delete with limit"
+
 # sharded subquery in unsharded subquery in unsharded delete
 "delete from unsharded where col = (select id from unsharded where id = (select id from user))"
 "unsupported: sharded subqueries in DML"
