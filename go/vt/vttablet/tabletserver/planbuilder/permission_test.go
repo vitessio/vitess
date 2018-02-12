@@ -158,13 +158,13 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.WRITER,
 		}},
 	}, {
-		input: "update (select * from t2) as a join t1 on a=b set c=d",
+		input: "update (select * from t1) as a join t2 on a=b set c=d",
 		output: []Permission{{
 			TableName: "t1",
 			Role:      tableacl.WRITER,
 		}, {
 			TableName: "t2",
-			Role:      tableacl.READER,
+			Role:      tableacl.WRITER,
 		}},
 	}}
 
