@@ -374,6 +374,25 @@ func TestDeleteEqual(t *testing.T) {
 	}
 }
 
+func TestDeleteSharded(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	_, err := executorExec(executor, "delete from user_extra", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	// Queries get annotatted.
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "delete from user_extra/* vtgate:: filtered_replication_unfriendly */",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
+	}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc2.Queries, wantQueries)
+	}
+}
+
 func TestDeleteComments(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
 
