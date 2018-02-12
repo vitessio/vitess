@@ -130,6 +130,14 @@ var executorVSchema = `
 				}
 			]
 		},
+		"sharded_user_msgs": {
+			"column_vindexes": [
+				{
+					"column": "user_id",
+					"name": "hash_index"
+				}
+			]
+		},
 		"music": {
 			"column_vindexes": [
 				{
@@ -224,6 +232,7 @@ var unshardedVSchema = `
 		"music_user_map": {},
 		"name_user_map": {},
 		"name_lastname_keyspace_id_map": {},
+		"user_msgs": {},
 		"ins_lookup": {},
 		"main1": {
 			"auto_increment": {

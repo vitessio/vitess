@@ -107,7 +107,7 @@ func forceEOF(yylex interface{}) {
 
 %token LEX_ERROR
 %left <bytes> UNION
-%token <bytes> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
+%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK KEYS
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
@@ -185,7 +185,7 @@ func forceEOF(yylex interface{}) {
 
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
-%type <statement> insert_statement update_statement delete_statement set_statement
+%type <statement> stream_statement insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement
 %type <ddl> create_table_prefix
 %type <statement> analyze_statement show_statement use_statement other_statement
@@ -287,6 +287,7 @@ command:
   {
     $$ = $1
   }
+| stream_statement
 | insert_statement
 | update_statement
 | delete_statement
@@ -317,6 +318,12 @@ select_statement:
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
     $$ = &Select{Comments: Comments($2), Cache: $3, SelectExprs: SelectExprs{Nextval{Expr: $5}}, From: TableExprs{&AliasedTableExpr{Expr: $7}}}
+  }
+
+stream_statement:
+  STREAM comment_opt select_expression FROM table_name
+  {
+    $$ = &Stream{Comments: Comments($2), SelectExpr: $3, Table: $5}
   }
 
 // base_select is an unparenthesized SELECT with no order by clause or beyond.
