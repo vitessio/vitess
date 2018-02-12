@@ -49,7 +49,7 @@ func analyzeDDL(ddl *sqlparser.DDL, tables map[string]*schema.Table) *Plan {
 	// TODO(sougou): Add support for sequences.
 	plan := &Plan{
 		PlanID:  PlanDDL,
-		Table:   tables[ddl.Table.Name.String()],
+		Tables:  []*schema.Table{tables[ddl.Table.Name.String()]},
 		NewName: ddl.NewName.Name,
 	}
 	// this can become a whitelist of fully supported ddl actions as support grows

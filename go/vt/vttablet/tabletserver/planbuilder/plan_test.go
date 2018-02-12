@@ -189,7 +189,7 @@ func TestMessageStreamingPlan(t *testing.T) {
 
 	wantPlan := &Plan{
 		PlanID: PlanMessageStream,
-		Table:  testSchema["msg"],
+		Tables: []*schema.Table{testSchema["msg"]},
 	}
 	bout, _ = toJSON(wantPlan)
 	wantJSON := string(bout)

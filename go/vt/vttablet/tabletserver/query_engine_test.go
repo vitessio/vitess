@@ -126,7 +126,7 @@ func TestGetMessageStreamPlan(t *testing.T) {
 	}
 	wantPlan := &planbuilder.Plan{
 		PlanID: planbuilder.PlanMessageStream,
-		Table:  qe.tables["msg"],
+		Tables: []*schema.Table{qe.tables["msg"]},
 	}
 	if !reflect.DeepEqual(plan.Plan, wantPlan) {
 		t.Errorf("GetMessageStreamPlan(msg): %v, want %v", plan.Plan, wantPlan)

@@ -793,7 +793,7 @@ class TestVTGateFunctions(unittest.TestCase):
     lcursor = vtgate_conn.cursor(
         tablet_type='master', keyspace='lookup', writable=True)
     with self.assertRaisesRegexp(
-        dbexceptions.DatabaseError, '.*table vt_user not found in schema.*'):
+        dbexceptions.DatabaseError, '.*table vt_user .*not found in schema.*'):
       lcursor.execute('select id, name from vt_user', {})
 
   def test_user2(self):

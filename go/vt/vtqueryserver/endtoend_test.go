@@ -167,7 +167,7 @@ func TestQueries(t *testing.T) {
 
 	// Try a simple error case.
 	_, err = conn.ExecuteFetch("select * from aa", 1000, true)
-	if err == nil || !strings.Contains(err.Error(), "table aa not found in schema") {
+	if err == nil || !strings.Contains(err.Error(), "table aa of [aa] not found in schema") {
 		t.Fatalf("expected error but got: %v", err)
 	}
 }

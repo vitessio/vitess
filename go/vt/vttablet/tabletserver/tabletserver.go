@@ -168,6 +168,8 @@ type TabletServer struct {
 
 	// alias is used for identifying this tabletserver in healthcheck responses.
 	alias topodatapb.TabletAlias
+
+	enableTableACLChecksForMultipleTables bool
 }
 
 // RegisterFunction is a callback type to be called when we
@@ -205,6 +207,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 		history:                history.New(10),
 		topoServer:             topoServer,
 		alias:                  alias,
+		enableTableACLChecksForMultipleTables: config.EnableTableACLChecksForMultipleTables,
 	}
 	tsv.se = schema.NewEngine(tsv, config)
 	tsv.qe = NewQueryEngine(tsv, tsv.se, config)
@@ -893,6 +896,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 				ctx:              ctx,
 				logStats:         logStats,
 				tsv:              tsv,
+				enableTableACLChecksForMultipleTables: tsv.enableTableACLChecksForMultipleTables,
 			}
 			extras := tsv.watcher.ComputeExtras(options)
 			result, err = qre.Execute()
@@ -933,6 +937,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 				ctx:              ctx,
 				logStats:         logStats,
 				tsv:              tsv,
+				enableTableACLChecksForMultipleTables: tsv.enableTableACLChecksForMultipleTables,
 			}
 			return qre.Stream(callback)
 		},
@@ -1136,6 +1141,7 @@ func (tsv *TabletServer) MessageStream(ctx context.Context, target *querypb.Targ
 				ctx:      ctx,
 				logStats: logStats,
 				tsv:      tsv,
+				enableTableACLChecksForMultipleTables: tsv.enableTableACLChecksForMultipleTables,
 			}
 			return qre.MessageStream(callback)
 		},
@@ -1577,6 +1583,7 @@ func newSplitQuerySQLExecuter(
 		ctx:      ctx,
 		logStats: logStats,
 		tsv:      tsv,
+		enableTableACLChecksForMultipleTables: tsv.enableTableACLChecksForMultipleTables,
 	}
 	result := &splitQuerySQLExecuter{
 		queryExecutor: queryExecutor,

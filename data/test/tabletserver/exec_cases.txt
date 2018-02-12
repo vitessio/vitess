@@ -83,7 +83,7 @@
 "select * from a,b"
 {
   "PlanID": "PASS_SELECT",
-  "TableName": "",
+  "TableName": "a",
   "FieldQuery": "select * from a, b where 1 != 1",
   "FullQuery": "select * from a, b limit :#maxLimit"
 }
@@ -1172,7 +1172,7 @@ options:PassthroughDMLs
 
 # nextval on non-existent table
 "select next value from id"
-"table id not found in schema"
+"table id of [id] not found in schema"
 
 # int
 "set  a=1"
@@ -1300,19 +1300,19 @@ options:PassthroughDMLs
 
 # table not found select
 "select * from aaaa"
-"table aaaa not found in schema"
+"table aaaa of [aaaa] not found in schema"
 
 # table not found update
 "update aaaa set a=1"
-"table aaaa not found in schema"
+"table aaaa of [aaaa] not found in schema"
 
 # table not found update
 "delete from aaaa"
-"table aaaa not found in schema"
+"table aaaa of [aaaa] not found in schema"
 
 # table not found update
 "insert into aaaa values(1)"
-"table aaaa not found in schema"
+"table aaaa of [aaaa] not found in schema"
 
 # column not found insert with subquery
 "insert into a(missing) select * from b"
