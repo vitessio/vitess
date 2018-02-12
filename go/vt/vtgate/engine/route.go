@@ -226,6 +226,9 @@ const (
 	// Value, and a Subquery, which will be used to
 	// determine if lookup rows need to be deleted.
 	DeleteEqual
+	// DeleteSharded is for routing a scattered
+	// delete statement.
+	DeleteSharded
 	// InsertUnsharded is for routing an insert statement
 	// to an unsharded keyspace.
 	InsertUnsharded
@@ -252,6 +255,7 @@ var routeName = map[RouteOpcode]string{
 	UpdateUnsharded:     "UpdateUnsharded",
 	UpdateEqual:         "UpdateEqual",
 	DeleteUnsharded:     "DeleteUnsharded",
+	DeleteSharded:       "DeleteSharded",
 	DeleteEqual:         "DeleteEqual",
 	InsertUnsharded:     "InsertUnsharded",
 	InsertSharded:       "InsertSharded",
@@ -299,6 +303,8 @@ func (route *Route) execute(vcursor VCursor, bindVars, joinVars map[string]*quer
 		return route.execUpdateEqual(vcursor, bindVars)
 	case DeleteEqual:
 		return route.execDeleteEqual(vcursor, bindVars)
+	case DeleteSharded:
+		return route.execDeleteSharded(vcursor, bindVars)
 	case InsertSharded, InsertShardedIgnore:
 		return route.execInsertSharded(vcursor, bindVars)
 	case InsertUnsharded:
@@ -509,6 +515,16 @@ func (route *Route) execUpdateEqualChangedVindex(vcursor VCursor, query string, 
 		return nil, vterrors.Wrap(err, "execUpdateEqual")
 	}
 	return result, nil
+}
+
+func (route *Route) execDeleteSharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	params, err := route.paramsAllShards(vcursor, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	sql := sqlannotation.AnnotateIfDML(route.Query, nil)
+	shardQueries := route.getShardQueries(sql, params)
+	return vcursor.ExecuteMultiShard(params.ks, shardQueries, true /* isDML */, true /* canAutocommit */)
 }
 
 func (route *Route) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
