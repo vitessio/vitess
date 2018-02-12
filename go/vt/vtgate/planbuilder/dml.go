@@ -185,8 +185,14 @@ func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Route, err
 	} else {
 		er.Opcode = engine.DeleteEqual
 	}
-	if len(er.Table.Owned) != 0 && er.Opcode == engine.DeleteSharded {
-		return er, errors.New("unsupported: multi shard delete on a table with owned lookup vindexes")
+
+	if er.Opcode == engine.DeleteSharded {
+		if len(er.Table.Owned) != 0 {
+			return er, errors.New("unsupported: multi shard delete on a table with owned lookup vindexes")
+		}
+		if del.Limit != nil {
+			return er, errors.New("unsupported: multi shard delete limit clause in DML")
+		}
 	}
 	er.Subquery = generateDeleteSubquery(del, er.Table)
 	return er, nil
