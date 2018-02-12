@@ -37,16 +37,16 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 	// All Statement types myst be covered here.
 	switch node := stmt.(type) {
 	case *sqlparser.Union, *sqlparser.Select:
-		permissions = buildSubqueryPermissions(node, permissions)
+		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
 	case *sqlparser.Insert:
 		permissions = buildTableNamePermissions(node.Table, tableacl.WRITER, permissions)
-		permissions = buildSubqueryPermissions(node, permissions)
+		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
 	case *sqlparser.Update:
 		permissions = buildTableExprsPermissions(node.TableExprs, tableacl.WRITER, permissions)
-		permissions = buildSubqueryPermissions(node, permissions)
+		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
 	case *sqlparser.Delete:
 		permissions = buildTableExprsPermissions(node.TableExprs, tableacl.WRITER, permissions)
-		permissions = buildSubqueryPermissions(node, permissions)
+		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
 	case *sqlparser.Set, *sqlparser.Show, *sqlparser.OtherRead:
 		// no-op
 	case *sqlparser.DDL:
@@ -64,11 +64,13 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 	return permissions
 }
 
-func buildSubqueryPermissions(stmt sqlparser.Statement, permissions []Permission) []Permission {
+func buildSubqueryPermissions(stmt sqlparser.Statement, role tableacl.Role, permissions []Permission) []Permission {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node := node.(type) {
 		case *sqlparser.Select:
-			permissions = buildTableExprsPermissions(node.From, tableacl.READER, permissions)
+			permissions = buildTableExprsPermissions(node.From, role, permissions)
+		case sqlparser.TableExprs:
+			return false, nil
 		}
 		return true, nil
 	}, stmt)
@@ -91,6 +93,8 @@ func buildTableExprPermissions(node sqlparser.TableExpr, role tableacl.Role, per
 		switch node := node.Expr.(type) {
 		case sqlparser.TableName:
 			permissions = buildTableNamePermissions(node, role, permissions)
+		case *sqlparser.Subquery:
+			permissions = buildSubqueryPermissions(node.Select, role, permissions)
 		}
 	case *sqlparser.ParenTableExpr:
 		permissions = buildTableExprsPermissions(node.Exprs, role, permissions)
