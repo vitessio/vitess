@@ -33,8 +33,11 @@ import (
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
+	"regexp"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/messager"
 )
 
 func TestTxPoolExecuteRollback(t *testing.T) {
@@ -434,6 +437,82 @@ func TestTxPoolGetConnNonExistentTransaction(t *testing.T) {
 	}
 }
 
+func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	ctx := context.Background()
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("commit", &sqltypes.Result{})
+	db.AddQuery("rollback", &sqltypes.Result{})
+	txPool := newTxPool()
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	id, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	txPool.Close()
+
+	assertErrorMatch := func(id int64, reason string) {
+		_, err = txPool.Get(id, "for query")
+		if err == nil {
+			t.Fatalf("expected error, got nil")
+		}
+		want := fmt.Sprintf("transaction %v: ended at .* \\(%v\\)", id, reason)
+		if m, _ := regexp.MatchString(want, err.Error()); !m {
+			t.Errorf("Get: %v, want match %s", err, want)
+		}
+	}
+
+	assertErrorMatch(id, "pool closed")
+
+	txPool = newTxPool()
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+
+	id, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	if err := txPool.Commit(ctx, id, &fakeMessageCommitter{}); err != nil {
+		t.Fatalf("got error: %v", err)
+	}
+
+	assertErrorMatch(id, "transaction committed")
+
+	id, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	if err := txPool.Rollback(ctx, id); err != nil {
+		t.Fatalf("got error: %v", err)
+	}
+
+	assertErrorMatch(id, "transaction rolled back")
+
+	txPool.Close()
+	txPool = newTxPool()
+	txPool.SetTimeout(1 * time.Millisecond)
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer txPool.Close()
+
+	id, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	time.Sleep(5 * time.Millisecond)
+
+	assertErrorMatch(id, "exceeded timeout: 1ms")
+
+	txPool.SetTimeout(1 * time.Hour)
+	id, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	txc, err := txPool.Get(id, "for close")
+	if err != nil {
+		t.Fatalf("got error: %v", err)
+	}
+
+	txc.Close()
+	txc.Recycle()
+
+	assertErrorMatch(id, "closed")
+}
+
+type fakeMessageCommitter struct {
+}
+
+func (f *fakeMessageCommitter) LockDB(newMessages map[string][]*messager.MessageRow, changedMessages map[string][]string) func() {
+	return func() {}
+}
+
+func (f *fakeMessageCommitter) UpdateCaches(newMessages map[string][]*messager.MessageRow, changedMessages map[string][]string) {
+}
+
 func TestTxPoolExecFailDueToConnFail_Errno2006(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -506,6 +585,7 @@ func TestTxPoolExecFailDueToConnFail_Errno2013(t *testing.T) {
 }
 
 func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
+	startingStray := tabletenv.InternalErrors.Counts()["StrayTransactions"]
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("begin", &sqltypes.Result{})
@@ -521,7 +601,7 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 
 	// Close kills stray transaction.
 	txPool.Close()
-	if got, want := tabletenv.InternalErrors.Counts()["StrayTransactions"], int64(1); got != want {
+	if got, want := tabletenv.InternalErrors.Counts()["StrayTransactions"]-startingStray, int64(1); got != want {
 		t.Fatalf("internal error count for stray transactions not increased: got = %v, want = %v", got, want)
 	}
 	if got, want := txPool.conns.Capacity(), int64(0); got != want {

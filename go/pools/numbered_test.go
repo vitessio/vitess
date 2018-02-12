@@ -17,6 +17,7 @@ limitations under the License.
 package pools
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -46,9 +47,13 @@ func TestNumbered(t *testing.T) {
 	if v, err = p.Get(1, "test2"); err.Error() != "not found" {
 		t.Errorf("want 'not found', got '%v'", err)
 	}
-	p.Unregister(1) // Should not fail
-	p.Unregister(0)
+	p.Unregister(1, "test") // Should not fail
+	p.Unregister(0, "test")
 	// p is now empty
+
+	if v, err = p.Get(0, "test3"); !(strings.HasPrefix(err.Error(), "ended at") && strings.HasSuffix(err.Error(), "(test)")) {
+		t.Errorf("want prefix 'ended at' and suffix '(test'), got '%v'", err)
+	}
 
 	p.Register(id, id, true)
 	id++
@@ -62,8 +67,8 @@ func TestNumbered(t *testing.T) {
 
 	// p has 0, 1, 2, 3 (0, 1, 2 are aged, but 2 is not enforced)
 	vals := p.GetOutdated(200*time.Millisecond, "by outdated")
-	if len(vals) != 2 {
-		t.Errorf("want 2, got %v", len(vals))
+	if num := len(vals); num != 2 {
+		t.Errorf("want 2, got %v", num)
 	}
 	if v, err = p.Get(vals[0].(int64), "test1"); err.Error() != "in use: by outdated" {
 		t.Errorf("want 'in use: by outdated', got '%v'", err)
@@ -85,16 +90,16 @@ func TestNumbered(t *testing.T) {
 	if vals[0].(int64) != 3 {
 		t.Errorf("want 3, got %v", vals[0])
 	}
-	p.Unregister(vals[0].(int64))
+	p.Unregister(vals[0].(int64), "test")
 
 	// p has 0, 1, and 2
 	if p.Size() != 3 {
 		t.Errorf("want 3, got %v", p.Size())
 	}
 	go func() {
-		p.Unregister(0)
-		p.Unregister(1)
-		p.Unregister(2)
+		p.Unregister(0, "test")
+		p.Unregister(1, "test")
+		p.Unregister(2, "test")
 	}()
 	p.WaitForEmpty()
 }
