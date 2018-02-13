@@ -33,5 +33,8 @@ func NewShardError(in error, target *querypb.Target, tablet *topodatapb.Tablet, 
 	if tablet != nil {
 		return vterrors.Errorf(vterrors.Code(in), "target: %s.%s.%s, used tablet: %s, %v", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType), topotools.TabletIdent(tablet), in)
 	}
-	return vterrors.Errorf(vterrors.Code(in), "target: %s.%s.%s, %v", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType), in)
+	if target != nil {
+		return vterrors.Errorf(vterrors.Code(in), "target: %s.%s.%s, %v", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType), in)
+	}
+	return vterrors.Errorf(vterrors.Code(in), "%v", in)
 }
