@@ -1834,11 +1834,6 @@ func (tsv *TabletServer) endRequest(isTx bool) {
 	}
 }
 
-// GetPlan is only used from vtexplain
-func (tsv *TabletServer) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string) (*TabletPlan, error) {
-	return tsv.qe.GetPlan(ctx, logStats, sql, false /* skipQueryPlanCache */)
-}
-
 func (tsv *TabletServer) registerDebugHealthHandler() {
 	http.HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {

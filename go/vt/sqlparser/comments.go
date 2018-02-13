@@ -29,15 +29,16 @@ type matchtracker struct {
 
 // SplitTrailingComments splits the query trailing comments from the query.
 func SplitTrailingComments(sql string) (query, comments string) {
+	trimmed := strings.TrimRightFunc(sql, unicode.IsSpace)
 	tracker := matchtracker{
-		query: sql,
-		index: len(sql),
+		query: trimmed,
+		index: len(trimmed),
 	}
 	pos := tracker.matchComments()
 	if pos >= 0 {
 		return tracker.query[:pos], tracker.query[pos:]
 	}
-	return sql, ""
+	return trimmed, ""
 }
 
 // matchComments matches trailing comments. If no comment was found,
