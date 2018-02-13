@@ -76,7 +76,6 @@ func main() {
 
 	if len(args) == 0 {
 		// In interactive mode, initialize the web UI to choose a command.
-		wi.InitInteractiveMode()
 		servenv.Init()
 		defer servenv.Close()
 
@@ -84,6 +83,7 @@ func main() {
 			servenv.AppVersion.Print()
 			os.Exit(0)
 		}
+		wi.InitInteractiveMode()
 		servenv.RunDefault()
 	} else {
 		// In single command mode, just run it.
