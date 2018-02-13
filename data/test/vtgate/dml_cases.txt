@@ -1254,3 +1254,18 @@
     "Table": "user_extra"
   }
 }
+
+
+# sharded subqueries in unsharded update
+"update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)"
+{
+  "Original": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)",
+  "Instructions": {
+    "Opcode": "UpdateUnsharded",
+    "Keyspace": {
+      "Name":"main",
+      "Sharded":false
+    },
+    "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)"
+  }
+}
