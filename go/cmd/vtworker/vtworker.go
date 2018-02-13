@@ -93,15 +93,13 @@ func main() {
 			exit.Return(1)
 		}
 		// Run the subsequent, blocking wait asynchronously.
-		go func() {
-			if err := wi.WaitForCommand(worker, done); err != nil {
-				log.Error(err)
-				logutil.Flush()
-				// We cannot use exit.Return() here because we are in a different go routine now.
-				os.Exit(1)
-			}
+		if err := wi.WaitForCommand(worker, done); err != nil {
+			log.Error(err)
 			logutil.Flush()
-			os.Exit(0)
-		}()
+			// We cannot use exit.Return() here because we are in a different go routine now.
+			exit.Return(1)
+		}
+		logutil.Flush()
+		exit.Return(0)
 	}
 }
