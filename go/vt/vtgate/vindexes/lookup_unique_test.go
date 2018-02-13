@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 func TestLookupUniqueNew(t *testing.T) {
@@ -121,6 +122,39 @@ func TestLookupUniqueVerify(t *testing.T) {
 }
 
 func TestLookupUniqueCreate(t *testing.T) {
+	lookupUnique, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
+		"table":      "t",
+		"from":       "from",
+		"to":         "toc",
+		"autocommit": "true",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	vc := &vcursor{}
+
+	err = lookupUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("test")}, false /* ignoreMode */)
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantqueries := []*querypb.BoundQuery{{
+		Sql: "insert into t(from, toc) values(:from0, :toc0)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"from0": sqltypes.Int64BindVariable(1),
+			"toc0":  sqltypes.BytesBindVariable([]byte("test")),
+		},
+	}}
+	if !reflect.DeepEqual(vc.queries, wantqueries) {
+		t.Errorf("lookup.Create queries:\n%v, want\n%v", vc.queries, wantqueries)
+	}
+
+	if got, want := vc.autocommits, 1; got != want {
+		t.Errorf("Create(autocommit) count: %d, want %d", got, want)
+	}
+}
+
+func TestLookupUniqueCreateAutocommit(t *testing.T) {
 	lookupUnique := createLookup(t, "lookup_unique", false)
 	vc := &vcursor{}
 

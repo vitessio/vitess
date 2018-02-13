@@ -122,16 +122,22 @@ func (ln *LookupNonUnique) MarshalJSON() ([]byte, error) {
 //   to: The 'to' column name of the table.
 //
 // The following fields are optional:
-//   autocommit: setting this to "true" will cause inserts to upsert, deletes to be ignored, and updates to fail.
-//   write_only: if an entry is missing, this flag will the query to be sent to all shards.
+//   autocommit: setting this to "true" will cause inserts to upsert and deletes to be ignored.
+//   write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 func NewLookup(name string, m map[string]string) (Vindex, error) {
 	lookup := &LookupNonUnique{name: name}
-	if err := lookup.lkp.Init(m); err != nil {
+
+	autocommit, err := boolFromMap(m, "autocommit")
+	if err != nil {
 		return nil, err
 	}
-	var err error
 	lookup.writeOnly, err = boolFromMap(m, "write_only")
 	if err != nil {
+		return nil, err
+	}
+
+	// if autocommit is on for non-unique lookup, upsert should also be on.
+	if err := lookup.lkp.Init(m, autocommit, autocommit /* upsert */); err != nil {
 		return nil, err
 	}
 	return lookup, nil
@@ -162,10 +168,12 @@ type LookupUnique struct {
 //   to: The 'to' column name of the table.
 //
 // The following fields are optional:
-//   autocommit: setting this to "true" will cause inserts to upsert, deletes to be ignored, and updates to fail.
+//   autocommit: setting this to "true" will cause deletes to be ignored.
 func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 	lu := &LookupUnique{name: name}
-	if err := lu.lkp.Init(m); err != nil {
+
+	autocommit, err := boolFromMap(m, "autocommit")
+	if err != nil {
 		return nil, err
 	}
 	scatter, err := boolFromMap(m, "write_only")
@@ -174,6 +182,11 @@ func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 	}
 	if scatter {
 		return nil, errors.New("write_only cannot be true for a unique lookup vindex")
+	}
+
+	// Don't allow upserts for unique vindexes.
+	if err := lu.lkp.Init(m, autocommit, false /* upsert */); err != nil {
+		return nil, err
 	}
 	return lu, nil
 }
