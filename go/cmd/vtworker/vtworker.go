@@ -67,14 +67,6 @@ func main() {
 	flag.Parse()
 	args := flag.Args()
 
-	servenv.Init()
-	defer servenv.Close()
-
-	if *servenv.Version {
-		servenv.AppVersion.Print()
-		os.Exit(0)
-	}
-
 	ts := topo.Open()
 	defer ts.Close()
 
@@ -85,6 +77,14 @@ func main() {
 	if len(args) == 0 {
 		// In interactive mode, initialize the web UI to choose a command.
 		wi.InitInteractiveMode()
+		servenv.Init()
+		defer servenv.Close()
+
+		if *servenv.Version {
+			servenv.AppVersion.Print()
+			os.Exit(0)
+		}
+		servenv.RunDefault()
 	} else {
 		// In single command mode, just run it.
 		worker, done, err := wi.RunCommand(context.Background(), args, nil /*custom wrangler*/, true /*runFromCli*/)
@@ -104,6 +104,4 @@ func main() {
 			os.Exit(0)
 		}()
 	}
-
-	servenv.RunDefault()
 }
