@@ -97,6 +97,9 @@ func init() {
 	flag.DurationVar(&Config.HeartbeatInterval, "heartbeat_interval", DefaultQsConfig.HeartbeatInterval, "How frequently to read and write replication heartbeat.")
 
 	flag.BoolVar(&Config.EnforceStrictTransTables, "enforce_strict_trans_tables", DefaultQsConfig.EnforceStrictTransTables, "If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database.")
+
+	flag.BoolVar(&Config.EnableTableACLChecksForMultipleTables, "enable_table_acl_checks_for_multiple_tables", DefaultQsConfig.EnableTableACLChecksForMultipleTables, "This will enable table ACL checks for queries that are touching multiple tables, e.g. a join.")
+
 }
 
 // Init must be called after flag.Parse, and before doing any other operations.
@@ -163,7 +166,8 @@ type TabletConfig struct {
 	HeartbeatEnable   bool
 	HeartbeatInterval time.Duration
 
-	EnforceStrictTransTables bool
+	EnforceStrictTransTables              bool
+	EnableTableACLChecksForMultipleTables bool
 }
 
 // TransactionLimitConfig captures configuration of transaction pool slots
@@ -234,6 +238,8 @@ var DefaultQsConfig = TabletConfig{
 	HeartbeatInterval: 1 * time.Second,
 
 	EnforceStrictTransTables: true,
+
+	EnableTableACLChecksForMultipleTables: false,
 }
 
 // defaultTxThrottlerConfig formats the default throttlerdata.Configuration

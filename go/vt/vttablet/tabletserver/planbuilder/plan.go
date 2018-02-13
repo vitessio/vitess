@@ -207,7 +207,7 @@ func (rt ReasonType) MarshalJSON() ([]byte, error) {
 type Plan struct {
 	PlanID PlanType
 	Reason ReasonType
-	Table  *schema.Table
+	Tables []*schema.Table
 	// NewName is the new name of the table. Set for DDLs which create or change the table.
 	NewName sqlparser.TableIdent
 
@@ -248,17 +248,24 @@ type Plan struct {
 // TableName returns the table name for the plan.
 func (plan *Plan) TableName() sqlparser.TableIdent {
 	var tableName sqlparser.TableIdent
-	if plan.Table != nil {
-		tableName = plan.Table.Name
+	if (plan.Tables != nil) && (len(plan.Tables) > 0) && (plan.Tables[0] != nil) {
+		tableName = plan.Tables[0].Name
 	}
 	return tableName
 }
 
-func (plan *Plan) setTable(tableName sqlparser.TableIdent, tables map[string]*schema.Table) (*schema.Table, error) {
-	if plan.Table = tables[tableName.String()]; plan.Table == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table %s not found in schema", tableName)
+func (plan *Plan) setTables(tableNames []sqlparser.TableIdent, tables map[string]*schema.Table) ([]*schema.Table, error) {
+	plan.Tables = make([]*schema.Table, 0)
+
+	for _, tableName := range tableNames {
+		table := tables[tableName.String()]
+		if table == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table %s of %v not found in schema", tableName, tableNames)
+		}
+
+		plan.Tables = append(plan.Tables, table)
 	}
-	return plan.Table, nil
+	return plan.Tables, nil
 }
 
 // Build builds a plan based on the schema.
@@ -314,8 +321,9 @@ func BuildStreaming(sql string, tables map[string]*schema.Table) (*Plan, error) 
 		if stmt.Lock != "" {
 			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "select with lock not allowed for streaming")
 		}
-		if tableName := analyzeFrom(stmt.From); !tableName.IsEmpty() {
-			plan.setTable(tableName, tables)
+		tableNames := analyzeFrom(stmt.From)
+		if len(tableNames) >= 1 {
+			plan.setTables(tableNames, tables)
 		}
 	case *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Union:
 		// pass
@@ -330,12 +338,12 @@ func BuildStreaming(sql string, tables map[string]*schema.Table) (*Plan, error) 
 func BuildMessageStreaming(name string, tables map[string]*schema.Table) (*Plan, error) {
 	plan := &Plan{
 		PlanID: PlanMessageStream,
-		Table:  tables[name],
+		Tables: []*schema.Table{tables[name]},
 	}
-	if plan.Table == nil {
+	if (plan.Tables == nil) || (len(plan.Tables) == 0) || (plan.Tables[0] == nil) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table %s not found in schema", name)
 	}
-	if plan.Table.Type != schema.Message {
+	if plan.Tables[0].Type != schema.Message {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "'%s' is not a message table", name)
 	}
 	return plan, nil

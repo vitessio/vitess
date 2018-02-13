@@ -47,15 +47,16 @@ import (
 
 // QueryExecutor is used for executing a query request.
 type QueryExecutor struct {
-	query            string
-	trailingComments string
-	bindVars         map[string]*querypb.BindVariable
-	transactionID    int64
-	options          *querypb.ExecuteOptions
-	plan             *TabletPlan
-	ctx              context.Context
-	logStats         *tabletenv.LogStats
-	tsv              *TabletServer
+	query                                 string
+	trailingComments                      string
+	bindVars                              map[string]*querypb.BindVariable
+	transactionID                         int64
+	options                               *querypb.ExecuteOptions
+	plan                                  *TabletPlan
+	ctx                                   context.Context
+	logStats                              *tabletenv.LogStats
+	tsv                                   *TabletServer
+	enableTableACLChecksForMultipleTables bool
 }
 
 var sequenceFields = []*querypb.Field{
@@ -355,8 +356,27 @@ func (qre *QueryExecutor) checkPermissions() error {
 		// field to an "acl.DenyAllACL" ACL if no ACL was found.
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table acl error: nil acl")
 	}
-	if !qre.plan.TableName().IsEmpty() {
-		return qre.checkAccess(qre.plan.Authorized, qre.plan.TableName(), callerID)
+
+	// TODO(b/72787743) drop this after we have rolled out and
+	// tested the flag enableTableACLChecksForMultipleTables in
+	// prod.
+	if !qre.enableTableACLChecksForMultipleTables {
+		if !qre.plan.TableName().IsEmpty() {
+			return qre.checkAccess(qre.plan.Authorized, qre.plan.TableName(), callerID)
+		}
+		return nil
+	}
+
+	for _, table := range qre.plan.Tables {
+		if (table == nil) || (table.Name.IsEmpty()) {
+			continue
+		}
+
+		err := qre.checkAccess(qre.plan.Authorized, table.Name, callerID)
+		if err != nil {
+			log.Warningf("Found select query targeting multiple tables with tableACL missing for table %q in query: %q", table.Name.String(), qre.query)
+			return err
+		}
 	}
 	return nil
 }
@@ -434,7 +454,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 		return nil, fmt.Errorf("invalid increment for sequence %s: %d", tableName, inc)
 	}
 
-	t := qre.plan.Table
+	t := qre.plan.Tables[0]
 	t.SequenceInfo.Lock()
 	defer t.SequenceInfo.Unlock()
 	if t.SequenceInfo.NextVal == 0 || t.SequenceInfo.NextVal+inc > t.SequenceInfo.LastVal {
@@ -525,7 +545,7 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 }
 
 func (qre *QueryExecutor) execInsertPK(conn *TxConnection) (*sqltypes.Result, error) {
-	pkRows, err := buildValueList(qre.plan.Table, qre.plan.PKValues, qre.bindVars)
+	pkRows, err := buildValueList(qre.plan.Tables[0], qre.plan.PKValues, qre.bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -534,7 +554,7 @@ func (qre *QueryExecutor) execInsertPK(conn *TxConnection) (*sqltypes.Result, er
 
 func (qre *QueryExecutor) execInsertMessage(conn *TxConnection) (*sqltypes.Result, error) {
 	qre.bindVars["#time_now"] = sqltypes.Int64BindVariable(time.Now().UnixNano())
-	pkRows, err := buildValueList(qre.plan.Table, qre.plan.PKValues, qre.bindVars)
+	pkRows, err := buildValueList(qre.plan.Tables[0], qre.plan.PKValues, qre.bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -547,7 +567,7 @@ func (qre *QueryExecutor) execInsertMessage(conn *TxConnection) (*sqltypes.Resul
 	// If so, we have to populate it.
 	if qr.InsertID != 0 {
 		id := int64(qr.InsertID)
-		idPKIndex := qre.plan.Table.MessageInfo.IDPKIndex
+		idPKIndex := qre.plan.Tables[0].MessageInfo.IDPKIndex
 		for _, row := range pkRows {
 			if !row[idPKIndex].IsNull() {
 				// If a value was supplied, either it was not the auto-inc column
@@ -566,11 +586,11 @@ func (qre *QueryExecutor) execInsertMessage(conn *TxConnection) (*sqltypes.Resul
 	// Re-read the inserted rows to prime the cache.
 	extras := map[string]sqlparser.Encodable{
 		"#pk": &sqlparser.TupleEqualityList{
-			Columns: qre.plan.Table.Indexes[0].Columns,
+			Columns: qre.plan.Tables[0].Indexes[0].Columns,
 			Rows:    pkRows,
 		},
 	}
-	tableName := qre.plan.Table.Name.String()
+	tableName := qre.plan.Tables[0].Name.String()
 	loadMessages, err := qre.tsv.messager.GenerateLoadMessagesQuery(tableName)
 	if err != nil {
 		return nil, err
@@ -608,10 +628,10 @@ func (qre *QueryExecutor) execInsertSubquery(conn *TxConnection) (*sqltypes.Resu
 	}
 	pkRows := make([][]sqltypes.Value, len(innerRows))
 	for i, innerRow := range innerRows {
-		pkRows[i] = applyFilterWithPKDefaults(qre.plan.Table, qre.plan.SubqueryPKColumns, innerRow)
+		pkRows[i] = applyFilterWithPKDefaults(qre.plan.Tables[0], qre.plan.SubqueryPKColumns, innerRow)
 	}
 	// Validating first row is sufficient
-	if err := validateRow(qre.plan.Table, qre.plan.Table.PKColumns, pkRows[0]); err != nil {
+	if err := validateRow(qre.plan.Tables[0], qre.plan.Tables[0].PKColumns, pkRows[0]); err != nil {
 		return nil, err
 	}
 
@@ -625,11 +645,11 @@ func (qre *QueryExecutor) execInsertPKRows(conn *TxConnection, extras map[string
 	var bsc []byte
 	// Build comments only if we're not in RBR mode.
 	if qre.tsv.qe.binlogFormat != connpool.BinlogFormatRow {
-		secondaryList, err := buildSecondaryList(qre.plan.Table, pkRows, qre.plan.SecondaryPKValues, qre.bindVars)
+		secondaryList, err := buildSecondaryList(qre.plan.Tables[0], pkRows, qre.plan.SecondaryPKValues, qre.bindVars)
 		if err != nil {
 			return nil, err
 		}
-		bsc = buildStreamComment(qre.plan.Table, pkRows, secondaryList)
+		bsc = buildStreamComment(qre.plan.Tables[0], pkRows, secondaryList)
 	}
 	return qre.txFetch(conn, qre.plan.OuterQuery, qre.bindVars, extras, bsc, false, true)
 }
@@ -641,14 +661,14 @@ func (qre *QueryExecutor) execUpsertPK(conn *TxConnection) (*sqltypes.Result, er
 	}
 
 	// For statement or mixed mode, we have to split into two ops.
-	pkRows, err := buildValueList(qre.plan.Table, qre.plan.PKValues, qre.bindVars)
+	pkRows, err := buildValueList(qre.plan.Tables[0], qre.plan.PKValues, qre.bindVars)
 	if err != nil {
 		return nil, err
 	}
 	// We do not need to build the secondary list for the insert part.
 	// But the part that updates will build it if it gets executed,
 	// because it's the one that can change the primary keys.
-	bsc := buildStreamComment(qre.plan.Table, pkRows, nil)
+	bsc := buildStreamComment(qre.plan.Tables[0], pkRows, nil)
 	result, err := qre.txFetch(conn, qre.plan.OuterQuery, qre.bindVars, nil, bsc, false, true)
 	if err == nil {
 		return result, nil
@@ -678,7 +698,7 @@ func (qre *QueryExecutor) execUpsertPK(conn *TxConnection) (*sqltypes.Result, er
 }
 
 func (qre *QueryExecutor) execDMLPK(conn *TxConnection) (*sqltypes.Result, error) {
-	pkRows, err := buildValueList(qre.plan.Table, qre.plan.PKValues, qre.bindVars)
+	pkRows, err := buildValueList(qre.plan.Tables[0], qre.plan.PKValues, qre.bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -697,7 +717,7 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 	if len(pkRows) == 0 {
 		return &sqltypes.Result{RowsAffected: 0}, nil
 	}
-	secondaryList, err := buildSecondaryList(qre.plan.Table, pkRows, qre.plan.SecondaryPKValues, qre.bindVars)
+	secondaryList, err := buildSecondaryList(qre.plan.Tables[0], pkRows, qre.plan.SecondaryPKValues, qre.bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -717,11 +737,11 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 		var bsc []byte
 		// Build comments only if we're not in RBR mode.
 		if qre.tsv.qe.binlogFormat != connpool.BinlogFormatRow {
-			bsc = buildStreamComment(qre.plan.Table, pkRows, secondaryList)
+			bsc = buildStreamComment(qre.plan.Tables[0], pkRows, secondaryList)
 		}
 		extras := map[string]sqlparser.Encodable{
 			"#pk": &sqlparser.TupleEqualityList{
-				Columns: qre.plan.Table.Indexes[0].Columns,
+				Columns: qre.plan.Tables[0].Indexes[0].Columns,
 				Rows:    pkRows,
 			},
 		}
@@ -737,12 +757,12 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 		// DMLs should all return RowsAffected.
 		result.RowsAffected += r.RowsAffected
 	}
-	if qre.plan.Table.Type == schema.Message {
-		ids := conn.ChangedMessages[qre.plan.Table.Name.String()]
+	if qre.plan.Tables[0].Type == schema.Message {
+		ids := conn.ChangedMessages[qre.plan.Tables[0].Name.String()]
 		for _, pkrow := range pkRows {
-			ids = append(ids, pkrow[qre.plan.Table.MessageInfo.IDPKIndex].ToString())
+			ids = append(ids, pkrow[qre.plan.Tables[0].MessageInfo.IDPKIndex].ToString())
 		}
-		conn.ChangedMessages[qre.plan.Table.Name.String()] = ids
+		conn.ChangedMessages[qre.plan.Tables[0].Name.String()] = ids
 	}
 	return result, nil
 }

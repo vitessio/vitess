@@ -39,7 +39,7 @@ func TestQueryzHandler(t *testing.T) {
 
 	plan1 := &TabletPlan{
 		Plan: &planbuilder.Plan{
-			Table:  &schema.Table{Name: sqlparser.NewTableIdent("test_table")},
+			Tables: []*schema.Table{&schema.Table{Name: sqlparser.NewTableIdent("test_table")}},
 			PlanID: planbuilder.PlanPassSelect,
 			Reason: planbuilder.ReasonTable,
 		},
@@ -49,7 +49,7 @@ func TestQueryzHandler(t *testing.T) {
 
 	plan2 := &TabletPlan{
 		Plan: &planbuilder.Plan{
-			Table:  &schema.Table{Name: sqlparser.NewTableIdent("test_table")},
+			Tables: []*schema.Table{&schema.Table{Name: sqlparser.NewTableIdent("test_table")}},
 			PlanID: planbuilder.PlanDDL,
 			Reason: planbuilder.ReasonDefault,
 		},
@@ -59,7 +59,7 @@ func TestQueryzHandler(t *testing.T) {
 
 	plan3 := &TabletPlan{
 		Plan: &planbuilder.Plan{
-			Table:  &schema.Table{Name: sqlparser.NewTableIdent("")},
+			Tables: []*schema.Table{&schema.Table{Name: sqlparser.NewTableIdent("")}},
 			PlanID: planbuilder.PlanOtherRead,
 			Reason: planbuilder.ReasonDefault,
 		},
@@ -70,7 +70,7 @@ func TestQueryzHandler(t *testing.T) {
 
 	plan4 := &TabletPlan{
 		Plan: &planbuilder.Plan{
-			Table:  &schema.Table{Name: sqlparser.NewTableIdent("")},
+			Tables: []*schema.Table{&schema.Table{Name: sqlparser.NewTableIdent("")}},
 			PlanID: planbuilder.PlanOtherRead,
 			Reason: planbuilder.ReasonDefault,
 		},

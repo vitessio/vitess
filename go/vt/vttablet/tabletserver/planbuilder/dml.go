@@ -48,12 +48,12 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 		return plan, nil
 	}
 
-	tableName := sqlparser.GetTableName(aliased.Expr)
-	if tableName.IsEmpty() {
+	tableNames := []sqlparser.TableIdent{sqlparser.GetTableName(aliased.Expr)}
+	if tableNames[0].IsEmpty() {
 		plan.Reason = ReasonTable
 		return plan, nil
 	}
-	table, err := plan.setTable(tableName, tables)
+	assignedTables, err := plan.setTables(tableNames, tables)
 	if err != nil {
 		return nil, err
 	}
@@ -63,13 +63,13 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 	buf.Myprintf("%v", upd.Where)
 	plan.WhereClause = buf.ParsedQuery()
 
-	if !table.HasPrimary() {
-		log.Warningf("no primary key for table %s", tableName)
+	if !assignedTables[0].HasPrimary() {
+		log.Warningf("no primary key for table %s", tableNames)
 		plan.Reason = ReasonTableNoIndex
 		return plan, nil
 	}
 
-	plan.SecondaryPKValues, err = analyzeUpdateExpressions(upd.Exprs, table.Indexes[0])
+	plan.SecondaryPKValues, err = analyzeUpdateExpressions(upd.Exprs, assignedTables[0].Indexes[0])
 	if err != nil {
 		if err == ErrTooComplex {
 			plan.Reason = ReasonPKChange
@@ -80,7 +80,7 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 
 	plan.OuterQuery = GenerateUpdateOuterQuery(upd, aliased, nil)
 
-	if pkValues := analyzeWhere(upd.Where, table.Indexes[0]); pkValues != nil {
+	if pkValues := analyzeWhere(upd.Where, assignedTables[0].Indexes[0]); pkValues != nil {
 		// Also, there should be no limit clause.
 		if upd.Limit == nil {
 			plan.PlanID = PlanDMLPK
@@ -90,7 +90,7 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 	}
 
 	plan.PlanID = PlanDMLSubquery
-	plan.Subquery = GenerateUpdateSubquery(upd, table, aliased)
+	plan.Subquery = GenerateUpdateSubquery(upd, assignedTables[0], aliased)
 	return plan, nil
 }
 
@@ -113,12 +113,12 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
 		plan.Reason = ReasonMultiTable
 		return plan, nil
 	}
-	tableName := sqlparser.GetTableName(aliased.Expr)
-	if tableName.IsEmpty() {
+	tableNames := []sqlparser.TableIdent{sqlparser.GetTableName(aliased.Expr)}
+	if tableNames[0].IsEmpty() {
 		plan.Reason = ReasonTable
 		return plan, nil
 	}
-	table, err := plan.setTable(tableName, tables)
+	assignedTables, err := plan.setTables(tableNames, tables)
 	if err != nil {
 		return nil, err
 	}
@@ -128,15 +128,15 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
 	buf.Myprintf("%v", del.Where)
 	plan.WhereClause = buf.ParsedQuery()
 
-	if !table.HasPrimary() {
-		log.Warningf("no primary key for table %s", tableName)
+	if !assignedTables[0].HasPrimary() {
+		log.Warningf("no primary key for table %s", tableNames[0])
 		plan.Reason = ReasonTableNoIndex
 		return plan, nil
 	}
 
 	plan.OuterQuery = GenerateDeleteOuterQuery(del, aliased)
 
-	if pkValues := analyzeWhere(del.Where, table.Indexes[0]); pkValues != nil {
+	if pkValues := analyzeWhere(del.Where, assignedTables[0].Indexes[0]); pkValues != nil {
 		// Also, there should be no limit clause.
 		if del.Limit == nil {
 			plan.PlanID = PlanDMLPK
@@ -146,7 +146,7 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
 	}
 
 	plan.PlanID = PlanDMLSubquery
-	plan.Subquery = GenerateDeleteSubquery(del, table, aliased)
+	plan.Subquery = GenerateDeleteSubquery(del, assignedTables[0], aliased)
 	return plan, nil
 }
 
@@ -188,19 +188,19 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 		plan.PlanID = PlanSelectLock
 	}
 
-	tableName := analyzeFrom(sel.From)
-	if tableName.IsEmpty() {
+	tableNames := analyzeFrom(sel.From)
+	if len(tableNames) == 0 {
 		return plan, nil
 	}
-	table, err := plan.setTable(tableName, tables)
+	assignedTables, err := plan.setTables(tableNames, tables)
 	if err != nil {
 		return nil, err
 	}
 
 	// Check if it's a NEXT VALUE statement.
 	if nextVal, ok := sel.SelectExprs[0].(sqlparser.Nextval); ok {
-		if table.Type != schema.Sequence {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s is not a sequence", tableName)
+		if assignedTables[0].Type != schema.Sequence {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s is not a sequence", tableNames[0])
 		}
 		plan.PlanID = PlanNextval
 		v, err := sqlparser.NewPlanValue(nextVal.Expr)
@@ -214,15 +214,20 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 	return plan, nil
 }
 
-func analyzeFrom(tableExprs sqlparser.TableExprs) sqlparser.TableIdent {
-	if len(tableExprs) > 1 {
-		return sqlparser.NewTableIdent("")
+func analyzeFrom(tableExprs sqlparser.TableExprs) []sqlparser.TableIdent {
+	names := []sqlparser.TableIdent{}
+	for _, table := range tableExprs {
+		node, ok := table.(*sqlparser.AliasedTableExpr)
+		if !ok {
+			return []sqlparser.TableIdent{}
+		}
+
+		name := sqlparser.GetTableName(node.Expr)
+		if !name.IsEmpty() {
+			names = append(names, name)
+		}
 	}
-	node, ok := tableExprs[0].(*sqlparser.AliasedTableExpr)
-	if !ok {
-		return sqlparser.NewTableIdent("")
-	}
-	return sqlparser.GetTableName(node.Expr)
+	return names
 }
 
 func analyzeWhere(node *sqlparser.Where, pkIndex *schema.Index) []sqltypes.PlanValue {
@@ -309,27 +314,28 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 		plan.Reason = ReasonReplace
 		return plan, nil
 	}
-	tableName := sqlparser.GetTableName(ins.Table)
-	if tableName.IsEmpty() {
+
+	tableNames := []sqlparser.TableIdent{sqlparser.GetTableName(ins.Table)}
+	if tableNames[0].IsEmpty() {
 		plan.Reason = ReasonTable
 		return plan, nil
 	}
-	table, err := plan.setTable(tableName, tables)
+	assignedTables, err := plan.setTables(tableNames, tables)
 	if err != nil {
 		return nil, err
 	}
 
-	if !table.HasPrimary() {
-		log.Warningf("no primary key for table %s", tableName)
+	if !assignedTables[0].HasPrimary() {
+		log.Warningf("no primary key for table %s", tableNames[0])
 		plan.Reason = ReasonTableNoIndex
 		return plan, nil
 	}
-	switch table.Type {
+	switch assignedTables[0].Type {
 	case schema.NoType, schema.Sequence:
 		// For now, allow sequence inserts.
-		return analyzeInsertNoType(ins, plan, table)
+		return analyzeInsertNoType(ins, plan, assignedTables[0])
 	case schema.Message:
-		return analyzeInsertMessage(ins, plan, table)
+		return analyzeInsertMessage(ins, plan, assignedTables[0])
 	}
 	panic("unreachable")
 }
