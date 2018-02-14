@@ -77,14 +77,17 @@ const (
 </style>
 <table>
   <tr>
-    <th colspan="4">VSchema{{if not .Error}} <i><a href="/debug/vschema">in JSON</a></i>{{end}}</th>
+    <th colspan="4">VSchema Cache <i><a href="/debug/vschema">in JSON</a></i></th>
   </tr>
 {{if .Error}}
   <tr>
     <th>Error</th>
     <td colspan="3">{{$.Error}}</td>
   </tr>
-{{else}}
+  <tr>
+    <td>colspan="4"></td>
+  </tr>
+{{end}}
   <tr>
     <th>Keyspace</th>
     <th>Sharded</th>
@@ -97,7 +100,6 @@ const (
     <td>{{$ks.TableCount}}</td>
     <td>{{$ks.VindexCount}}</td>
   </tr>{{end}}
-{{end}}
 </table>
 `
 )

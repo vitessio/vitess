@@ -98,6 +98,18 @@ func (f *Factory) SetError(err error) {
 	}
 }
 
+// Lock blocks all requests to the topo and is exposed to allow tests to
+// simulate an unresponsive topo server
+func (f *Factory) Lock() {
+	f.mu.Lock()
+}
+
+// Unlock unblocks all requests to the topo and is exposed to allow tests to
+// simulate an unresponsive topo server
+func (f *Factory) Unlock() {
+	f.mu.Unlock()
+}
+
 // Conn implements the topo.Conn interface. It remembers the cell, and
 // points at the Factory that has all the data.
 type Conn struct {
