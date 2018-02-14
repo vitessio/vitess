@@ -48,7 +48,7 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vsch
 		Table:    table,
 		Keyspace: table.Keyspace,
 	}
-	if !validateSubquerySamePlan(eRoute, vschema, ins) {
+	if !validateSubquerySamePlan(eRoute, nil, vschema, ins) {
 		return nil, errors.New("unsupported: sharded subquery in insert values")
 	}
 	var rows sqlparser.Values

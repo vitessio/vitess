@@ -1254,3 +1254,31 @@
     "Table": "user_extra"
   }
 }
+
+# unsharded update where inner query references outer query
+"update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)"
+{
+  "Original": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)",
+  "Instructions": {
+    "Opcode": "UpdateUnsharded",
+    "Keyspace": {
+      "Name":"main",
+      "Sharded":false
+    },
+    "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)"
+  }
+}
+
+# unsharded delete where inner query references outer query
+"delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)"
+{
+  "Original": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)",
+  "Instructions": {
+    "Opcode": "DeleteUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)"
+  }
+}
