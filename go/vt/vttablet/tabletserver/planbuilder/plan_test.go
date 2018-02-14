@@ -33,18 +33,18 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 )
 
-// toJSON returns a JSON of the given Plan.
-// Except for "TableName", it's a 1:1 copy of the fields of "Plan".
-// (The JSON output is used in the tests to compare it against the data in the
-// golden files e.g. data/test/tabletserver/exec_cases.txt.)
-func toJSON(p *Plan) ([]byte, error) {
+// MarshalJSON returns a JSON of the given Plan.
+// This is only for testing.
+func (p *Plan) MarshalJSON() ([]byte, error) {
 	mplan := struct {
 		PlanID            PlanType
 		Reason            ReasonType             `json:",omitempty"`
 		TableName         sqlparser.TableIdent   `json:",omitempty"`
+		Permissions       []Permission           `json:",omitempty"`
 		FieldQuery        *sqlparser.ParsedQuery `json:",omitempty"`
 		FullQuery         *sqlparser.ParsedQuery `json:",omitempty"`
 		OuterQuery        *sqlparser.ParsedQuery `json:",omitempty"`
@@ -59,6 +59,7 @@ func toJSON(p *Plan) ([]byte, error) {
 		PlanID:            p.PlanID,
 		Reason:            p.Reason,
 		TableName:         p.TableName(),
+		Permissions:       p.Permissions,
 		FieldQuery:        p.FieldQuery,
 		FullQuery:         p.FullQuery,
 		OuterQuery:        p.OuterQuery,
@@ -86,7 +87,7 @@ func TestPlan(t *testing.T) {
 		if err != nil {
 			out = err.Error()
 		} else {
-			bout, err := toJSON(plan)
+			bout, err := json.Marshal(plan)
 			if err != nil {
 				t.Fatalf("Error marshalling %v: %v", plan, err)
 			}
@@ -129,7 +130,7 @@ func TestCustom(t *testing.T) {
 				if err != nil {
 					out = err.Error()
 				} else {
-					bout, err := toJSON(plan)
+					bout, err := json.Marshal(plan)
 					if err != nil {
 						t.Fatalf("Error marshalling %v: %v", plan, err)
 					}
@@ -151,7 +152,7 @@ func TestStreamPlan(t *testing.T) {
 		if err != nil {
 			out = err.Error()
 		} else {
-			bout, err := toJSON(plan)
+			bout, err := json.Marshal(plan)
 			if err != nil {
 				t.Fatalf("Error marshalling %v: %v", plan, err)
 			}
@@ -184,14 +185,18 @@ func TestMessageStreamingPlan(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	bout, _ := toJSON(plan)
+	bout, _ := json.Marshal(plan)
 	planJSON := string(bout)
 
 	wantPlan := &Plan{
 		PlanID: PlanMessageStream,
 		Table:  testSchema["msg"],
+		Permissions: []Permission{{
+			TableName: "msg",
+			Role:      tableacl.WRITER,
+		}},
 	}
-	bout, _ = toJSON(wantPlan)
+	bout, _ = json.Marshal(wantPlan)
 	wantJSON := string(bout)
 
 	if planJSON != wantJSON {
