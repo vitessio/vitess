@@ -17,6 +17,7 @@ limitations under the License.
 package tabletserver
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"strings"
@@ -44,6 +45,9 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
+
+// TODO(sougou): remove after affected parties have transitioned to new behavior.
+var legacyTableACL = flag.Bool("legacy-table-acl", false, "deprecated: this flag can be used to revert to the older table ACL behavior, which checked access for at most one table")
 
 // QueryExecutor is used for executing a query request.
 type QueryExecutor struct {
@@ -335,34 +339,23 @@ func (qre *QueryExecutor) checkPermissions() error {
 		return nil
 	}
 
-	// Skip the ACL check if no table name is available in the query or DDL.
-	if qre.plan.TableName().IsEmpty() && qre.plan.NewName.IsEmpty() {
-		return nil
-	}
-
-	// DDL: Check against the new name of the table as well.
-	if !qre.plan.NewName.IsEmpty() {
-		altAuthorized := tableacl.Authorized(qre.plan.NewName.String(), qre.plan.PlanID.MinRole())
-		err := qre.checkAccess(altAuthorized, qre.plan.NewName, callerID)
-		if err != nil {
-			return err
+	if *legacyTableACL {
+		if !qre.plan.TableName().IsEmpty() {
+			return qre.checkAccess(qre.plan.LegacyAuthorized, qre.plan.TableName().String(), callerID)
+		}
+	} else {
+		for i, auth := range qre.plan.Authorized {
+			if err := qre.checkAccess(auth, qre.plan.Permissions[i].TableName, callerID); err != nil {
+				return err
+			}
 		}
 	}
 
-	// Actual ACL check: Check if the user is a member of the ACL.
-	if qre.plan.Authorized == nil {
-		// Note: This should never happen because tableacl.Authorized() sets this
-		// field to an "acl.DenyAllACL" ACL if no ACL was found.
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table acl error: nil acl")
-	}
-	if !qre.plan.TableName().IsEmpty() {
-		return qre.checkAccess(qre.plan.Authorized, qre.plan.TableName(), callerID)
-	}
 	return nil
 }
 
-func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName sqlparser.TableIdent, callerID *querypb.VTGateCallerID) error {
-	statsKey := []string{tableName.String(), authorized.GroupName, qre.plan.PlanID.String(), callerID.Username}
+func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName string, callerID *querypb.VTGateCallerID) error {
+	statsKey := []string{tableName, authorized.GroupName, qre.plan.PlanID.String(), callerID.Username}
 	if !authorized.IsMember(callerID) {
 		if qre.tsv.qe.enableTableACLDryRun {
 			tabletenv.TableaclPseudoDenied.Add(statsKey, 1)
