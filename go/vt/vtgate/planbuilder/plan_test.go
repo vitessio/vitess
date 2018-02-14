@@ -48,6 +48,8 @@ func newHashIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &hashIndex{name: name}, nil
 }
 
+var _ vindexes.Unique = (*hashIndex)(nil)
+
 // lookupIndex satisfies Lookup, Unique.
 type lookupIndex struct{ name string }
 
@@ -59,10 +61,16 @@ func (*lookupIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool
 func (*lookupIndex) Map(vindexes.VCursor, []sqltypes.Value) ([][]byte, error)          { return nil, nil }
 func (*lookupIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
 func (*lookupIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
+func (*lookupIndex) Update(vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
+	return nil
+}
 
 func newLookupIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &lookupIndex{name: name}, nil
 }
+
+var _ vindexes.Unique = (*lookupIndex)(nil)
+var _ vindexes.Lookup = (*lookupIndex)(nil)
 
 // multiIndex satisfies Lookup, NonUnique.
 type multiIndex struct{ name string }
@@ -72,13 +80,19 @@ func (*multiIndex) Cost() int        { return 3 }
 func (*multiIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*multiIndex) Map(vindexes.VCursor, []sqltypes.Value) ([][][]byte, error)        { return nil, nil }
+func (*multiIndex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksids, error)  { return nil, nil }
 func (*multiIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
 func (*multiIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
+func (*multiIndex) Update(vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
+	return nil
+}
 
 func newMultiIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &multiIndex{name: name}, nil
 }
+
+var _ vindexes.NonUnique = (*multiIndex)(nil)
+var _ vindexes.Lookup = (*multiIndex)(nil)
 
 // costlyIndex satisfies Lookup, NonUnique.
 type costlyIndex struct{ name string }
@@ -88,13 +102,19 @@ func (*costlyIndex) Cost() int        { return 10 }
 func (*costlyIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*costlyIndex) Map(vindexes.VCursor, []sqltypes.Value) ([][][]byte, error)        { return nil, nil }
+func (*costlyIndex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksids, error)  { return nil, nil }
 func (*costlyIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
 func (*costlyIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
+func (*costlyIndex) Update(vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
+	return nil
+}
 
 func newCostlyIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &costlyIndex{name: name}, nil
 }
+
+var _ vindexes.NonUnique = (*costlyIndex)(nil)
+var _ vindexes.Lookup = (*costlyIndex)(nil)
 
 func init() {
 	vindexes.Register("hash_test", newHashIndex)

@@ -105,11 +105,8 @@ func TestAutocommitUpdateVindexChange(t *testing.T) {
 		Sql:           "select name, lastname from user2 where id = 1 for update",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql: "update user2 set name = 'myname', lastname = 'mylastname' where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
-		BindVariables: map[string]*querypb.BindVariable{
-			"_name0":     sqltypes.BytesBindVariable([]byte("myname")),
-			"_lastname0": sqltypes.BytesBindVariable([]byte("mylastname")),
-		},
+		Sql:           "update user2 set name = 'myname', lastname = 'mylastname' where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		BindVariables: map[string]*querypb.BindVariable{},
 	}})
 	testAsTransactionCount(t, "sbc1", sbc1, 0)
 	testCommitCount(t, "sbc1", sbc1, 1)

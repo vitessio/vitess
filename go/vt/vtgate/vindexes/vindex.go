@@ -22,6 +22,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This file defines interfaces and registration for vindexes.
@@ -31,6 +32,7 @@ import (
 // can use this interface to execute lookup queries.
 type VCursor interface {
 	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
+	ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
 }
 
 // Vindex defines the interface required to register a vindex.
@@ -62,10 +64,17 @@ type Unique interface {
 	Map(cursor VCursor, ids []sqltypes.Value) ([][]byte, error)
 }
 
+// Ksids represents keyspace ids. It's either a list of keyspace ids
+// or a keyrange.
+type Ksids struct {
+	Range *topodatapb.KeyRange
+	IDs   [][]byte
+}
+
 // NonUnique defines the interface for a non-unique vindex.
 // This means that an id can map to multiple keyspace ids.
 type NonUnique interface {
-	Map(cursor VCursor, ids []sqltypes.Value) ([][][]byte, error)
+	Map(cursor VCursor, ids []sqltypes.Value) ([]Ksids, error)
 }
 
 // IsUnique returns true if the Vindex is Unique.
@@ -103,7 +112,11 @@ type Lookup interface {
 	// Create creates an association between ids and ksids. If ignoreMode
 	// is true, then the Create should ignore dup key errors.
 	Create(vc VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error
-	Delete(VCursor, [][]sqltypes.Value, []byte) error
+
+	Delete(vc VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error
+
+	// Update replaces the mapping of old values with new values for a keyspace id.
+	Update(vc VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error
 }
 
 // A NewVindexFunc is a function that creates a Vindex based on the

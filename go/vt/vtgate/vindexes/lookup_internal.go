@@ -32,10 +32,12 @@ type lookupInternal struct {
 	Table         string   `json:"table"`
 	FromColumns   []string `json:"from_columns"`
 	To            string   `json:"to"`
+	Autocommit    bool     `json:"autocommit,omitempty"`
+	Upsert        bool     `json:"upsert,omitempty"`
 	sel, ver, del string
 }
 
-func (lkp *lookupInternal) Init(lookupQueryParams map[string]string) {
+func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit, upsert bool) error {
 	lkp.Table = lookupQueryParams["table"]
 	lkp.To = lookupQueryParams["to"]
 	var fromColumns []string
@@ -44,12 +46,16 @@ func (lkp *lookupInternal) Init(lookupQueryParams map[string]string) {
 	}
 	lkp.FromColumns = fromColumns
 
+	lkp.Autocommit = autocommit
+	lkp.Upsert = upsert
+
 	// TODO @rafael: update sel and ver to support multi column vindexes. This will be done
 	// as part of face 2 of https://github.com/youtube/vitess/issues/3481
 	// For now multi column behaves as a single column for Map and Verify operations
 	lkp.sel = fmt.Sprintf("select %s from %s where %s = :%s", lkp.To, lkp.Table, lkp.FromColumns[0], lkp.FromColumns[0])
 	lkp.ver = fmt.Sprintf("select %s from %s where %s = :%s and %s = :%s", lkp.FromColumns[0], lkp.Table, lkp.FromColumns[0], lkp.FromColumns[0], lkp.To, lkp.To)
-	lkp.del = lkp.initDelStm()
+	lkp.del = lkp.initDelStmt()
+	return nil
 }
 
 // Lookup performs a lookup for the ids.
@@ -59,7 +65,13 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sql
 		bindVars := map[string]*querypb.BindVariable{
 			lkp.FromColumns[0]: sqltypes.ValueBindVariable(id),
 		}
-		result, err := vcursor.Execute("VindexLookup", lkp.sel, bindVars, false /* isDML */)
+		var err error
+		var result *sqltypes.Result
+		if lkp.Autocommit {
+			result, err = vcursor.ExecuteAutocommit("VindexLookup", lkp.sel, bindVars, false /* isDML */)
+		} else {
+			result, err = vcursor.Execute("VindexLookup", lkp.sel, bindVars, false /* isDML */)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
@@ -76,7 +88,13 @@ func (lkp *lookupInternal) Verify(vcursor VCursor, ids, values []sqltypes.Value)
 			lkp.FromColumns[0]: sqltypes.ValueBindVariable(id),
 			lkp.To:             sqltypes.ValueBindVariable(values[i]),
 		}
-		result, err := vcursor.Execute("VindexVerify", lkp.ver, bindVars, true /* isDML */)
+		var err error
+		var result *sqltypes.Result
+		if lkp.Autocommit {
+			result, err = vcursor.ExecuteAutocommit("VindexVerify", lkp.ver, bindVars, true /* isDML */)
+		} else {
+			result, err = vcursor.Execute("VindexVerify", lkp.ver, bindVars, true /* isDML */)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Verify: %v", err)
 		}
@@ -91,43 +109,56 @@ func (lkp *lookupInternal) Verify(vcursor VCursor, ids, values []sqltypes.Value)
 // toValues contains the keyspace_id of each row being inserted.
 // Given a vindex with two columns and the following insert:
 //
-// INSERT INTO table_a (colum_a, column_b, column_c) VALUES (value_a1, value_b1, value_c1), (value_a2, value_b2, value_c2);
+// INSERT INTO table_a (colum_a, column_b, column_c) VALUES (value_a0, value_b0, value_c0), (value_a1, value_b1, value_c1);
 // If we assume that the primary vindex is on column_c. The call to create will look like this:
-// Create(vcursor, [[value_a1, value_b1,], [value_a2, value_b2]], [binary(value_c1), binary(value_c2)])
+// Create(vcursor, [[value_a0, value_b0,], [value_a1, value_b1]], [binary(value_c0), binary(value_c1)])
 // Notice that toValues contains the computed binary value of the keyspace_id.
 func (lkp *lookupInternal) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, toValues []sqltypes.Value, ignoreMode bool) error {
-	var insBuffer bytes.Buffer
+	buf := new(bytes.Buffer)
 	if ignoreMode {
-		fmt.Fprintf(&insBuffer, "insert ignore into %s(", lkp.Table)
+		fmt.Fprintf(buf, "insert ignore into %s(", lkp.Table)
 	} else {
-		fmt.Fprintf(&insBuffer, "insert into %s(", lkp.Table)
+		fmt.Fprintf(buf, "insert into %s(", lkp.Table)
 	}
 	for _, col := range lkp.FromColumns {
-		fmt.Fprintf(&insBuffer, "%s, ", col)
-
+		fmt.Fprintf(buf, "%s, ", col)
 	}
+	fmt.Fprintf(buf, "%s) values(", lkp.To)
 
-	fmt.Fprintf(&insBuffer, "%s) values(", lkp.To)
 	bindVars := make(map[string]*querypb.BindVariable, 2*len(rowsColValues))
 	for rowIdx := range toValues {
 		colIds := rowsColValues[rowIdx]
 		if rowIdx != 0 {
-			insBuffer.WriteString(", (")
+			buf.WriteString(", (")
 		}
 		for colIdx, colID := range colIds {
 			fromStr := lkp.FromColumns[colIdx] + strconv.Itoa(rowIdx)
 			bindVars[fromStr] = sqltypes.ValueBindVariable(colID)
-			insBuffer.WriteString(":" + fromStr + ", ")
+			buf.WriteString(":" + fromStr + ", ")
 		}
 		toStr := lkp.To + strconv.Itoa(rowIdx)
-		insBuffer.WriteString(":" + toStr + ")")
+		buf.WriteString(":" + toStr + ")")
 		bindVars[toStr] = sqltypes.ValueBindVariable(toValues[rowIdx])
 	}
-	_, err := vcursor.Execute("VindexCreate", insBuffer.String(), bindVars, true /* isDML */)
+
+	if lkp.Upsert {
+		fmt.Fprintf(buf, " on duplicate key update ")
+		for _, col := range lkp.FromColumns {
+			fmt.Fprintf(buf, "%s=values(%s), ", col, col)
+		}
+		fmt.Fprintf(buf, "%s=values(%s)", lkp.To, lkp.To)
+	}
+
+	var err error
+	if lkp.Autocommit {
+		_, err = vcursor.ExecuteAutocommit("VindexCreate", buf.String(), bindVars, true /* isDML */)
+	} else {
+		_, err = vcursor.Execute("VindexCreate", buf.String(), bindVars, true /* isDML */)
+	}
 	if err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
 	}
-	return err
+	return nil
 }
 
 // Delete deletes the association between ids and value.
@@ -137,7 +168,7 @@ func (lkp *lookupInternal) Create(vcursor VCursor, rowsColValues [][]sqltypes.Va
 //
 // Given the following information in a vindex table with two columns:
 //
-//      +------------------+-----------+--------+
+//	+------------------+-----------+--------+
 //	| hex(keyspace_id) | a         | b      |
 //	+------------------+-----------+--------+
 //	| 52CB7B1B31B2222E | valuea    | valueb |
@@ -146,6 +177,10 @@ func (lkp *lookupInternal) Create(vcursor VCursor, rowsColValues [][]sqltypes.Va
 // A call to Delete would look like this:
 // Delete(vcursor, [[valuea, valueb]], 52CB7B1B31B2222E)
 func (lkp *lookupInternal) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, value sqltypes.Value) error {
+	// In autocommit mode, it's not safe to delete. So, it's a no-op.
+	if lkp.Autocommit {
+		return nil
+	}
 	for _, column := range rowsColValues {
 		bindVars := make(map[string]*querypb.BindVariable, len(rowsColValues))
 		for colIdx, columnValue := range column {
@@ -160,7 +195,15 @@ func (lkp *lookupInternal) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Va
 	return nil
 }
 
-func (lkp *lookupInternal) initDelStm() string {
+// Update implements the update functionality.
+func (lkp *lookupInternal) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid sqltypes.Value, newValues []sqltypes.Value) error {
+	if err := lkp.Delete(vcursor, [][]sqltypes.Value{oldValues}, ksid); err != nil {
+		return err
+	}
+	return lkp.Create(vcursor, [][]sqltypes.Value{newValues}, []sqltypes.Value{ksid}, false /* ignoreMode */)
+}
+
+func (lkp *lookupInternal) initDelStmt() string {
 	var delBuffer bytes.Buffer
 	fmt.Fprintf(&delBuffer, "delete from %s where ", lkp.Table)
 	for colIdx, column := range lkp.FromColumns {
@@ -171,4 +214,19 @@ func (lkp *lookupInternal) initDelStm() string {
 	}
 	delBuffer.WriteString(" and " + lkp.To + " = :" + lkp.To)
 	return delBuffer.String()
+}
+
+func boolFromMap(m map[string]string, key string) (bool, error) {
+	val, ok := m[key]
+	if !ok {
+		return false, nil
+	}
+	switch val {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	default:
+		return false, fmt.Errorf("%s value must be 'true' or 'false': '%s'", key, val)
+	}
 }

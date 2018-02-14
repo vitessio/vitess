@@ -26,6 +26,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/discovery"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/vttablet/sandboxconn"
 	"golang.org/x/net/context"
 
@@ -85,6 +86,9 @@ var executorVSchema = `
 		},
 		"keyspace_id": {
 			"type": "numeric"
+		},
+		"krcol_vdx": {
+			"type": "keyrange_lookuper"
 		}
 	},
 	"tables": {
@@ -202,6 +206,18 @@ var executorVSchema = `
 				}
 			]
 		},
+		"keyrange_table": {
+			"column_vindexes": [
+				{
+					"column": "id",
+					"name": "hash_index"
+				},
+				{
+					"column": "krcol",
+					"name": "krcol_vdx"
+				}
+			]
+		},
 		"ksid_table": {
 			"column_vindexes": [
 				{
@@ -213,6 +229,7 @@ var executorVSchema = `
 	}
 }
 `
+
 var badVSchema = `
 {
 	"sharded": false,
@@ -245,6 +262,31 @@ var unshardedVSchema = `
 }
 `
 
+// keyRangeLookuper is for testing a lookup that returns a keyrange.
+type keyRangeLookuper struct {
+}
+
+func (v *keyRangeLookuper) String() string { return "keyrange_lookuper" }
+func (*keyRangeLookuper) Cost() int        { return 0 }
+func (*keyRangeLookuper) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+	return []bool{}, nil
+}
+func (*keyRangeLookuper) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksids, error) {
+	return []vindexes.Ksids{{
+		Range: &topodatapb.KeyRange{
+			End: []byte{0x10},
+		},
+	}}, nil
+}
+
+func newLookupMigrator(name string, params map[string]string) (vindexes.Vindex, error) {
+	return &keyRangeLookuper{}, nil
+}
+
+func init() {
+	vindexes.Register("keyrange_lookuper", newLookupMigrator)
+}
+
 const testBufferSize = 10
 const testCacheSize = int64(10)
 
@@ -273,6 +315,24 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	bad := createSandbox("TestXBadSharding")
 	bad.VSchema = badVSchema
 
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+
+	executor = NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize, false)
+	return executor, sbc1, sbc2, sbclookup
+}
+
+func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck()
+	s := createSandbox("TestExecutor")
+	s.VSchema = vschema
+	serv := new(sandboxTopo)
+	resolver := newTestResolver(hc, serv, cell)
+	sbc1 = hc.AddTestTablet(cell, "-20", 1, "TestExecutor", "-20", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestExecutor", "40-60", topodatapb.TabletType_MASTER, true, 1, nil)
+
+	createSandbox(KsTestUnsharded)
+	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
 	executor = NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize, false)

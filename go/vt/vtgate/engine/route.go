@@ -628,11 +628,11 @@ func (route *Route) resolveShards(vcursor VCursor, bindVars map[string]*querypb.
 			return "", nil, err
 		}
 		for i, ksids := range ksidss {
-			for _, ksid := range ksids {
-				shard, err := vcursor.GetShardForKeyspaceID(allShards, ksid)
-				if err != nil {
-					return "", nil, err
-				}
+			shards, err := vcursor.GetShardsForKsids(allShards, ksids)
+			if err != nil {
+				return "", nil, err
+			}
+			for _, shard := range shards {
 				routing.Add(shard, sqltypes.ValueToProto(vindexKeys[i]))
 			}
 		}
@@ -664,40 +664,34 @@ func (route *Route) resolveSingleShard(vcursor VCursor, bindVars map[string]*que
 }
 
 func (route *Route) updateChangedVindexes(subQueryResult *sqltypes.Result, vcursor VCursor, bindVars map[string]*querypb.BindVariable, ksid []byte) error {
-	if len(route.ChangedVindexValues) == 0 {
-		return nil
-	}
 	if len(subQueryResult.Rows) == 0 {
 		// NOOP, there are no actual rows changing due to this statement
 		return nil
 	}
-	for tIdx, colVindex := range route.Table.Owned {
-		if colValues, ok := route.ChangedVindexValues[colVindex.Name]; ok {
-			if len(subQueryResult.Rows) > 1 {
-				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update changes multiple columns in the vindex")
-			}
+	if len(subQueryResult.Rows) > 1 {
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update changes multiple columns in the vindex")
+	}
+	colnum := 0
+	for _, colVindex := range route.Table.Owned {
+		// Fetch the column values. colnum must keep incrementing.
+		fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
+		for range colVindex.Columns {
+			fromIds = append(fromIds, subQueryResult.Rows[0][colnum])
+			colnum++
+		}
 
-			fromIds := make([][]sqltypes.Value, len(subQueryResult.Rows))
-			var vindexColumnKeys []sqltypes.Value
+		// Update columns only if they're being changed.
+		if colValues, ok := route.ChangedVindexValues[colVindex.Name]; ok {
+			vindexColumnKeys := make([]sqltypes.Value, 0, len(colValues))
 			for _, colValue := range colValues {
 				resolvedVal, err := colValue.ResolveValue(bindVars)
 				if err != nil {
 					return err
 				}
 				vindexColumnKeys = append(vindexColumnKeys, resolvedVal)
-
 			}
 
-			for rowIdx, row := range subQueryResult.Rows {
-				for colIdx := range colVindex.Columns {
-					fromIds[rowIdx] = append(fromIds[rowIdx], row[tIdx+colIdx])
-				}
-			}
-
-			if err := colVindex.Vindex.(vindexes.Lookup).Delete(vcursor, fromIds, ksid); err != nil {
-				return err
-			}
-			if err := route.processOwned(vcursor, [][]sqltypes.Value{vindexColumnKeys}, colVindex, bindVars, [][]byte{ksid}); err != nil {
+			if err := colVindex.Vindex.(vindexes.Lookup).Update(vcursor, fromIds, ksid, vindexColumnKeys); err != nil {
 				return err
 			}
 		}

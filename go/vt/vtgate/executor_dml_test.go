@@ -106,11 +106,8 @@ func TestUpdateEqual(t *testing.T) {
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 		{
-			Sql: "update user2 set name = 'myname', lastname = 'mylastname' where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
-			BindVariables: map[string]*querypb.BindVariable{
-				"_name0":     sqltypes.BytesBindVariable([]byte("myname")),
-				"_lastname0": sqltypes.BytesBindVariable([]byte("mylastname")),
-			},
+			Sql:           "update user2 set name = 'myname', lastname = 'mylastname' where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+			BindVariables: map[string]*querypb.BindVariable{},
 		},
 	}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -142,7 +139,127 @@ func TestUpdateEqual(t *testing.T) {
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
 	}
+}
 
+func TestUpdateMultiOwned(t *testing.T) {
+	vschema := `
+{
+	"sharded": true,
+	"vindexes": {
+		"hash_index": {
+			"type": "hash"
+		},
+		"lookup1": {
+			"type": "lookup_hash_unique",
+			"owner": "user",
+			"params": {
+				"table": "music_user_map",
+				"from": "from1,from2",
+				"to": "user_id"
+			}
+		},
+		"lookup2": {
+			"type": "lookup_hash_unique",
+			"owner": "user",
+			"params": {
+				"table": "music_user_map",
+				"from": "from1,from2",
+				"to": "user_id"
+			}
+		},
+		"lookup3": {
+			"type": "lookup_hash_unique",
+			"owner": "user",
+			"params": {
+				"table": "music_user_map",
+				"from": "from1,from2",
+				"to": "user_id"
+			}
+		}
+	},
+	"tables": {
+		"user": {
+			"column_vindexes": [
+				{
+					"column": "id",
+					"name": "hash_index"
+				},
+				{
+					"columns": ["a", "b"],
+					"name": "lookup1"
+				},
+				{
+					"columns": ["c", "d"],
+					"name": "lookup2"
+				},
+				{
+					"columns": ["e", "f"],
+					"name": "lookup3"
+				}
+			]
+		}
+	}
+}
+`
+	executor, sbc1, sbc2, sbclookup := createCustomExecutor(vschema)
+
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("a|b|c|d|e|f", "int64|int64|int64|int64|int64|int64"),
+			"10|20|30|40|50|60",
+		),
+	})
+	_, err := executorExec(executor, "update user set a=1, b=2, f=4, e=3 where id=1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select a, b, c, d, e, f from user where id = 1 for update",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "update user set a = 1, b = 2, f = 4, e = 3 where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
+	}
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+	}
+
+	wantQueries = []*querypb.BoundQuery{{
+		Sql: "delete from music_user_map where from1 = :from1 and from2 = :from2 and user_id = :user_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"from1":   sqltypes.Int64BindVariable(10),
+			"from2":   sqltypes.Int64BindVariable(20),
+			"user_id": sqltypes.Uint64BindVariable(1),
+		},
+	}, {
+		Sql: "insert into music_user_map(from1, from2, user_id) values (:from10, :from20, :user_id0)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"from10":   sqltypes.Int64BindVariable(1),
+			"from20":   sqltypes.Int64BindVariable(2),
+			"user_id0": sqltypes.Uint64BindVariable(1),
+		},
+	}, {
+		Sql: "delete from music_user_map where from1 = :from1 and from2 = :from2 and user_id = :user_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"from1":   sqltypes.Int64BindVariable(50),
+			"from2":   sqltypes.Int64BindVariable(60),
+			"user_id": sqltypes.Uint64BindVariable(1),
+		},
+	}, {
+		Sql: "insert into music_user_map(from1, from2, user_id) values (:from10, :from20, :user_id0)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"from10":   sqltypes.Int64BindVariable(3),
+			"from20":   sqltypes.Int64BindVariable(4),
+			"user_id0": sqltypes.Uint64BindVariable(1),
+		},
+	}}
+
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries:\n%+v, want\n%+v\n", sbclookup.Queries, wantQueries)
+	}
 }
 
 func TestUpdateComments(t *testing.T) {
@@ -547,6 +664,85 @@ func TestInsertSharded(t *testing.T) {
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
+	}
+}
+
+func TestInsertShardedAutocommitLookup(t *testing.T) {
+
+	vschema := `
+{
+	"sharded": true,
+	"vindexes": {
+		"hash_index": {
+			"type": "hash"
+		},
+		"name_user_map": {
+			"type": "lookup_hash",
+			"owner": "user",
+			"params": {
+				"table": "name_user_map",
+				"from": "name",
+				"to": "user_id",
+				"autocommit": "true"
+			}
+		}
+	},
+	"tables": {
+		"user": {
+			"column_vindexes": [
+				{
+					"column": "Id",
+					"name": "hash_index"
+				},
+				{
+					"column": "name",
+					"name": "name_user_map"
+				}
+			],
+			"auto_increment": {
+				"column": "id",
+				"sequence": "user_seq"
+			},
+			"columns": [
+				{
+					"name": "textcol",
+					"type": "VARCHAR"
+				}
+			]
+		}
+	}
+}
+`
+	executor, sbc1, sbc2, sbclookup := createCustomExecutor(vschema)
+
+	_, err := executorExec(executor, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql: "insert into user(id, v, name) values (:_Id0, 2, :_name0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		BindVariables: map[string]*querypb.BindVariable{
+			"_Id0":   sqltypes.Int64BindVariable(1),
+			"_name0": sqltypes.BytesBindVariable([]byte("myname")),
+			"__seq0": sqltypes.Int64BindVariable(1),
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
+	}
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+	}
+	wantQueries = []*querypb.BoundQuery{{
+		Sql: "insert into name_user_map(name, user_id) values (:name0, :user_id0) on duplicate key update name = values(name), user_id = values(user_id)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"name0":    sqltypes.BytesBindVariable([]byte("myname")),
+			"user_id0": sqltypes.Uint64BindVariable(1),
+		},
+	}}
+	// autocommit should go as ExecuteBatch
+	if !reflect.DeepEqual(sbclookup.BatchQueries[0], wantQueries) {
+		t.Errorf("sbclookup.BatchQueries[0]: \n%+v, want \n%+v", sbclookup.BatchQueries[0], wantQueries)
 	}
 }
 
