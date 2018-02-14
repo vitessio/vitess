@@ -139,7 +139,7 @@ type srvKeyspaceNamesEntry struct {
 
 	// refreshingChan is used to synchronize requests and avoid hammering
 	// the topo server
-	refreshingChan chan bool
+	refreshingChan chan struct{}
 
 	insertionTime time.Time
 	lastQueryTime time.Time
@@ -148,13 +148,13 @@ type srvKeyspaceNamesEntry struct {
 	lastErrorCtx  context.Context
 }
 
+type watchState int
+
 const (
-	watchStateIdle = iota
+	watchStateIdle watchState = iota
 	watchStateStarting
 	watchStateRunning
 )
-
-type watchState int
 
 type srvKeyspaceEntry struct {
 	// unmutable values
@@ -179,7 +179,7 @@ type srvKeyspaceEntry struct {
 
 	// watchStartingCond is used to serialize callers for the first attempt
 	// to establish the watch
-	watchStartingChan chan bool
+	watchStartingChan chan struct{}
 
 	value     *topodatapb.SrvKeyspace
 	lastError error
@@ -247,7 +247,7 @@ func (server *ResilientServer) GetSrvKeyspaceNames(ctx context.Context, cell str
 	// Lock the entry, and do everything holding the lock except
 	// querying the underlying topo server.
 	//
-	// This means that unless the topo server is very slow, two concurrent
+	// This means that even if the topo server is very slow, two concurrent
 	// requests will only issue one underlying query.
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
@@ -264,12 +264,12 @@ func (server *ResilientServer) GetSrvKeyspaceNames(ctx context.Context, cell str
 		return nil, entry.lastError
 	}
 
-	// Rrefresh the state in a background goroutine if no refresh is already
+	// Refresh the state in a background goroutine if no refresh is already
 	// in progress none is already running. This way queries are not blocked
 	// while the cache is still valid but past the refresh time, and avoids
 	// calling out to the topo service while the lock is held.
 	if entry.refreshingChan == nil {
-		entry.refreshingChan = make(chan bool)
+		entry.refreshingChan = make(chan struct{})
 		entry.lastQueryTime = time.Now()
 		go func() {
 			result, err := server.topoServer.GetSrvKeyspaceNames(ctx, cell)
@@ -320,7 +320,7 @@ func (server *ResilientServer) GetSrvKeyspaceNames(ctx context.Context, cell str
 	refreshingChan := entry.refreshingChan
 	entry.mutex.Unlock()
 	select {
-	case _, _ = <-refreshingChan:
+	case <-refreshingChan:
 	case <-ctx.Done():
 		entry.mutex.Lock()
 		return nil, fmt.Errorf("timed out waiting for keyspace names")
@@ -385,7 +385,7 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 	shouldRefresh := time.Since(entry.lastErrorTime) > server.cacheRefresh
 	if shouldRefresh && (entry.watchState == watchStateIdle) {
 		entry.watchState = watchStateStarting
-		entry.watchStartingChan = make(chan bool)
+		entry.watchStartingChan = make(chan struct{})
 		go server.watchSrvKeyspace(ctx, entry, cell, keyspace)
 	}
 
@@ -406,7 +406,7 @@ func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspac
 		watchStartingChan := entry.watchStartingChan
 		entry.mutex.Unlock()
 		select {
-		case _, _ = <-watchStartingChan:
+		case <-watchStartingChan:
 		case <-ctx.Done():
 			entry.mutex.Lock()
 			return nil, fmt.Errorf("timed out waiting for keyspace")
