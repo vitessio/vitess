@@ -87,7 +87,8 @@ func TestStreamSQLSharded(t *testing.T) {
 
 func executorStreamMessages(executor *Executor, sql string) (qr *sqltypes.Result, err error) {
 	results := make(chan *sqltypes.Result, 100)
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
 	err = executor.StreamExecute(
 		ctx,
 		"TestExecuteStream",
