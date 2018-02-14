@@ -67,14 +67,6 @@ func main() {
 	flag.Parse()
 	args := flag.Args()
 
-	servenv.Init()
-	defer servenv.Close()
-
-	if *servenv.Version {
-		servenv.AppVersion.Print()
-		os.Exit(0)
-	}
-
 	ts := topo.Open()
 	defer ts.Close()
 
@@ -84,7 +76,15 @@ func main() {
 
 	if len(args) == 0 {
 		// In interactive mode, initialize the web UI to choose a command.
+		servenv.Init()
+		defer servenv.Close()
+
+		if *servenv.Version {
+			servenv.AppVersion.Print()
+			os.Exit(0)
+		}
 		wi.InitInteractiveMode()
+		servenv.RunDefault()
 	} else {
 		// In single command mode, just run it.
 		worker, done, err := wi.RunCommand(context.Background(), args, nil /*custom wrangler*/, true /*runFromCli*/)
@@ -93,17 +93,13 @@ func main() {
 			exit.Return(1)
 		}
 		// Run the subsequent, blocking wait asynchronously.
-		go func() {
-			if err := wi.WaitForCommand(worker, done); err != nil {
-				log.Error(err)
-				logutil.Flush()
-				// We cannot use exit.Return() here because we are in a different go routine now.
-				os.Exit(1)
-			}
+		if err := wi.WaitForCommand(worker, done); err != nil {
+			log.Error(err)
 			logutil.Flush()
-			os.Exit(0)
-		}()
+			// We cannot use exit.Return() here because we are in a different go routine now.
+			exit.Return(1)
+		}
+		logutil.Flush()
+		exit.Return(0)
 	}
-
-	servenv.RunDefault()
 }
