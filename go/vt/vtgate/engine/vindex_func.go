@@ -120,9 +120,13 @@ func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars, joinVars map[string]*
 		if err != nil {
 			return nil, err
 		}
-		if ksids[0] != nil {
+		switch {
+		case ksids[0].Range != nil:
+			result.Rows = append(result.Rows, vf.buildRow(vkey, nil, ksids[0].Range))
+			result.RowsAffected = 1
+		case ksids[0].ID != nil:
 			result.Rows = [][]sqltypes.Value{
-				vf.buildRow(vkey, ksids[0], nil),
+				vf.buildRow(vkey, ksids[0].ID, nil),
 			}
 			result.RowsAffected = 1
 		}

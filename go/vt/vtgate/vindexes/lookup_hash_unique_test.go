@@ -64,9 +64,9 @@ func TestLookupHashUniqueMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := [][]byte{
-		[]byte("\x16k@\xb4J\xbaK\xd6"),
-		[]byte("\x16k@\xb4J\xbaK\xd6"),
+	want := []Ksid{
+		{ID: []byte("\x16k@\xb4J\xbaK\xd6")},
+		{ID: []byte("\x16k@\xb4J\xbaK\xd6")},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
@@ -77,7 +77,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want = [][]byte{nil, nil}
+	want = []Ksid{{}, {}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
@@ -98,7 +98,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want = [][]byte{nil}
+	want = []Ksid{{}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
