@@ -238,9 +238,9 @@ func forceEOF(yylex interface{}) {
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
 %type <byt> exists_opt
-%type <empty> not_exists_opt non_rename_operation to_opt index_opt constraint_opt
+%type <empty> not_exists_opt non_rename_operation to_opt index_opt constraint_opt using_opt
 %type <bytes> reserved_keyword non_reserved_keyword
-%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt charset_value using_opt
+%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt charset_value
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id
 %type <empty> as_opt
 %type <empty> force_eof ddl_force_eof
@@ -860,9 +860,9 @@ column_comment_opt:
   }
 
 index_definition:
-  index_info '(' index_column_list ')' using_opt
+  index_info '(' index_column_list ')'
   {
-    $$ = &IndexDefinition{Info: $1, Columns: $3, Using: $5}
+    $$ = &IndexDefinition{Info: $1, Columns: $3}
   }
 
 index_info:
@@ -2456,9 +2456,9 @@ constraint_opt:
   { $$ = struct{}{} }
 
 using_opt:
-  { $$ = ColIdent{} }
+  { $$ = struct{}{} }
 | USING sql_id
-  { $$ = $2 }
+  { $$ = struct{}{} }
 
 sql_id:
   ID
