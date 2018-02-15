@@ -18,7 +18,6 @@ package vindexes
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -157,8 +156,9 @@ func ksidsToValues(ksids [][]byte) []sqltypes.Value {
 // The table is expected to define the id column as unique. It's
 // Unique and a Lookup.
 type LookupUnique struct {
-	name string
-	lkp  lookupInternal
+	name      string
+	writeOnly bool
+	lkp       lookupInternal
 }
 
 // NewLookupUnique creates a LookupUnique vindex.
@@ -169,6 +169,7 @@ type LookupUnique struct {
 //
 // The following fields are optional:
 //   autocommit: setting this to "true" will cause deletes to be ignored.
+//   write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 	lu := &LookupUnique{name: name}
 
@@ -176,12 +177,9 @@ func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 	if err != nil {
 		return nil, err
 	}
-	scatter, err := boolFromMap(m, "write_only")
+	lu.writeOnly, err = boolFromMap(m, "write_only")
 	if err != nil {
 		return nil, err
-	}
-	if scatter {
-		return nil, errors.New("write_only cannot be true for a unique lookup vindex")
 	}
 
 	// Don't allow upserts for unique vindexes.
@@ -204,6 +202,12 @@ func (lu *LookupUnique) Cost() int {
 // Map returns the corresponding KeyspaceId values for the given ids.
 func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksid, error) {
 	out := make([]Ksid, 0, len(ids))
+	if lu.writeOnly {
+		for range ids {
+			out = append(out, Ksid{Range: &topodata.KeyRange{}})
+		}
+		return out, nil
+	}
 	results, err := lu.lkp.Lookup(vcursor, ids)
 	if err != nil {
 		return nil, err
@@ -223,6 +227,13 @@ func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksid, erro
 
 // Verify returns true if ids maps to ksids.
 func (lu *LookupUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	if lu.writeOnly {
+		out := make([]bool, len(ids))
+		for i := range ids {
+			out[i] = true
+		}
+		return out, nil
+	}
 	return lu.lkp.Verify(vcursor, ids, ksidsToValues(ksids))
 }
 
