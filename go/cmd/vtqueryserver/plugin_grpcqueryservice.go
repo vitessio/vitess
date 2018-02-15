@@ -16,19 +16,19 @@ limitations under the License.
 
 package main
 
-// Imports and register the gRPC queryservice server
-
 import (
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/vtgate/l2vtgate"
 	"github.com/youtube/vitess/go/vt/vttablet/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver"
 )
 
+// Imports and register the gRPC queryservice server
+
 func init() {
-	l2vtgate.RegisterL2VTGates = append(l2vtgate.RegisterL2VTGates, func(qs queryservice.QueryService) {
+	tabletserver.RegisterFunctions = append(tabletserver.RegisterFunctions, func(qsc tabletserver.Controller) {
 		if servenv.GRPCCheckServiceMap("queryservice") {
-			grpcqueryservice.Register(servenv.GRPCServer, qs)
+			grpcqueryservice.Register(servenv.GRPCServer, qsc.QueryService())
 		}
 	})
+
 }

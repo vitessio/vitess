@@ -16,8 +16,13 @@ limitations under the License.
 
 package main
 
-// This plugin imports consultopo to register the consul implementation of TopoServer.
+// This plugin imports staticauthserver to register the flat-file implementation of AuthServer.
 
 import (
-	_ "github.com/youtube/vitess/go/vt/topo/consultopo"
+	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/vt/vtqueryserver"
 )
+
+func init() {
+	vtqueryserver.RegisterPluginInitializer(func() { mysql.InitAuthServerStatic() })
+}

@@ -23,24 +23,43 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
-var lhu Vindex
+func TestLookupHashUniqueNew(t *testing.T) {
+	_ = createLookup(t, "lookup_hash_unique", false)
 
-func init() {
-	h, err := CreateVindex("lookup_hash_unique", "nn", map[string]string{"table": "t", "from": "fromc", "to": "toc"})
-	if err != nil {
-		panic(err)
+	_, err := CreateVindex("lookup_hash_unique", "lookup_hash_unique", map[string]string{
+		"table":      "t",
+		"from":       "fromc",
+		"to":         "toc",
+		"write_only": "true",
+	})
+	want := "write_only cannot be true for a unique lookup vindex"
+	if err == nil || err.Error() != want {
+		t.Errorf("Create(bad_scatter): %v, want %s", err, want)
 	}
-	lhu = h
+
+	_, err = CreateVindex("lookup_hash_unique", "lookup_hash_unique", map[string]string{
+		"table":      "t",
+		"from":       "fromc",
+		"to":         "toc",
+		"write_only": "invalid",
+	})
+	want = "write_only value must be 'true' or 'false': 'invalid'"
+	if err == nil || err.Error() != want {
+		t.Errorf("Create(bad_scatter): %v, want %s", err, want)
+	}
 }
 
 func TestLookupHashUniqueCost(t *testing.T) {
+	lhu := createLookup(t, "lookup_hash_unique", false)
 	if lhu.Cost() != 10 {
 		t.Errorf("Cost(): %d, want 10", lhu.Cost())
 	}
 }
 
 func TestLookupHashUniqueMap(t *testing.T) {
+	lhu := createLookup(t, "lookup_hash_unique", false)
 	vc := &vcursor{numRows: 1}
+
 	got, err := lhu.(Unique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	if err != nil {
 		t.Error(err)
@@ -95,7 +114,9 @@ func TestLookupHashUniqueMap(t *testing.T) {
 }
 
 func TestLookupHashUniqueVerify(t *testing.T) {
+	lhu := createLookup(t, "lookup_hash_unique", false)
 	vc := &vcursor{numRows: 1}
+
 	// The check doesn't actually happen. But we give correct values
 	// to avoid confusion.
 	got, err := lhu.Verify(vc,
@@ -127,8 +148,10 @@ func TestLookupHashUniqueVerify(t *testing.T) {
 }
 
 func TestLookupHashUniqueCreate(t *testing.T) {
+	lhu := createLookup(t, "lookup_hash_unique", false)
 	vc := &vcursor{}
-	err := lhu.(Lookup).Create(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
+
+	err := lhu.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
 	if err != nil {
 		t.Error(err)
 	}
@@ -136,7 +159,7 @@ func TestLookupHashUniqueCreate(t *testing.T) {
 		t.Errorf("vc.queries length: %v, want %v", got, want)
 	}
 
-	err = lhu.(Lookup).Create(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}}, [][]byte{[]byte("bogus")}, false /* ignoreMode */)
+	err = lhu.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("bogus")}, false /* ignoreMode */)
 	want := "lookup.Create.vunhash: invalid keyspace id: 626f677573"
 	if err == nil || err.Error() != want {
 		t.Errorf("lhu.Create(bogus) err: %v, want %s", err, want)
@@ -144,8 +167,10 @@ func TestLookupHashUniqueCreate(t *testing.T) {
 }
 
 func TestLookupHashUniqueDelete(t *testing.T) {
+	lhu := createLookup(t, "lookup_hash_unique", false)
 	vc := &vcursor{}
-	err := lhu.(Lookup).Delete(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
+
+	err := lhu.(Lookup).Delete(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -153,9 +178,22 @@ func TestLookupHashUniqueDelete(t *testing.T) {
 		t.Errorf("vc.queries length: %v, want %v", got, want)
 	}
 
-	err = lhu.(Lookup).Delete(vc, [][]sqltypes.Value{[]sqltypes.Value{sqltypes.NewInt64(1)}}, []byte("bogus"))
+	err = lhu.(Lookup).Delete(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, []byte("bogus"))
 	want := "lookup.Delete.vunhash: invalid keyspace id: 626f677573"
 	if err == nil || err.Error() != want {
 		t.Errorf("lhu.Delete(bogus) err: %v, want %s", err, want)
+	}
+}
+
+func TestLookupHashUniqueUpdate(t *testing.T) {
+	lhu := createLookup(t, "lookup_hash_unique", false)
+	vc := &vcursor{}
+
+	err := lhu.(Lookup).Update(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, []byte("\x16k@\xb4J\xbaK\xd6"), []sqltypes.Value{sqltypes.NewInt64(2)})
+	if err != nil {
+		t.Error(err)
+	}
+	if got, want := len(vc.queries), 2; got != want {
+		t.Errorf("vc.queries length: %v, want %v", got, want)
 	}
 }

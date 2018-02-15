@@ -22,7 +22,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
@@ -36,7 +35,7 @@ type tabletProvider interface {
 
 	// returnTablet must be called after the tablet is no longer used and e.g.
 	// TabletTracker.Untrack() should get called for it.
-	returnTablet(*topodata.Tablet)
+	returnTablet(*topodatapb.Tablet)
 
 	// description returns a string which can be used in error messages e.g.
 	// the name of the keyspace and the shard.
@@ -65,7 +64,7 @@ func (p *singleTabletProvider) getTablet() (*topodatapb.Tablet, error) {
 	return tablet.Tablet, err
 }
 
-func (p *singleTabletProvider) returnTablet(*topodata.Tablet) {}
+func (p *singleTabletProvider) returnTablet(*topodatapb.Tablet) {}
 
 func (p *singleTabletProvider) description() string {
 	return topoproto.TabletAliasString(p.alias)

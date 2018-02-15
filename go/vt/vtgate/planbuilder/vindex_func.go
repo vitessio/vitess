@@ -172,6 +172,10 @@ func (vf *vindexFunc) PushSelect(expr *sqlparser.AliasedExpr, _ columnOriginator
 		vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, 0)
 	case col.Name.EqualString("keyspace_id"):
 		vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, 1)
+	case col.Name.EqualString("range_start"):
+		vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, 2)
+	case col.Name.EqualString("range_end"):
+		vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, 3)
 	default:
 		return nil, 0, fmt.Errorf("unrecognized column %s for vindex: %s", col.Name, vf.eVindexFunc.Vindex)
 	}

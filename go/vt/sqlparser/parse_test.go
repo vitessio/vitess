@@ -1089,6 +1089,10 @@ var (
 		input: "replace into t partition (p0) values (1, 'asdf')",
 	}, {
 		input: "delete from t partition (p0) where a = 1",
+	}, {
+		input: "stream * from t",
+	}, {
+		input: "stream /* comment */ * from t",
 	}}
 )
 
@@ -1494,6 +1498,21 @@ func TestCreateTable(t *testing.T) {
 			"	unique index by_username3 (username),\n" +
 			"	index by_status (status_nonkeyword),\n" +
 			"	key by_full_name (full_name)\n" +
+			")",
+
+		// test that indexes support USING <id>
+		"create table t (\n" +
+			"	id int auto_increment,\n" +
+			"	username varchar,\n" +
+			"	email varchar,\n" +
+			"	full_name varchar,\n" +
+			"	status_nonkeyword varchar,\n" +
+			"	primary key (id) USING BTREE,\n" +
+			"	unique key by_username (username) USING HASH,\n" +
+			"	unique by_username2 (username) USING OTHER,\n" +
+			"	unique index by_username3 (username) USING XYZ,\n" +
+			"	index by_status (status_nonkeyword) USING PDQ,\n" +
+			"	key by_full_name (full_name) USING OTHER\n" +
 			")",
 
 		// multi-column indexes

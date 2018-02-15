@@ -134,6 +134,80 @@ func TestMapKeyRangesToShards(t *testing.T) {
 	}
 }
 
+func TestGetShardsForKeyRange(t *testing.T) {
+	ctx := context.Background()
+	rs, err := initTopo("TestGetShardsForKeyRange")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, allShards, err := GetKeyspaceShards(ctx, rs, "cell1", "sks", topodatapb.TabletType_MASTER)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testCases := []struct {
+		input  *topodatapb.KeyRange
+		output []string
+	}{{
+		input: &topodatapb.KeyRange{
+			Start: []byte{0x40},
+			End:   []byte{0x60},
+		},
+		output: []string{
+			"40-60",
+		},
+	}, {
+		input: &topodatapb.KeyRange{
+			Start: []byte{0x40},
+			End:   []byte{0x80},
+		},
+		output: []string{
+			"40-60",
+			"60-80",
+		},
+	}, {
+		input: &topodatapb.KeyRange{
+			Start: []byte{0x50},
+			End:   []byte{0x70},
+		},
+		output: []string{
+			"40-60",
+			"60-80",
+		},
+	}, {
+		input: &topodatapb.KeyRange{},
+		output: []string{
+			"-20",
+			"20-40",
+			"40-60",
+			"60-80",
+			"80-a0",
+			"a0-c0",
+			"c0-e0",
+			"e0-",
+		},
+	}, {
+		input: nil,
+		output: []string{
+			"-20",
+			"20-40",
+			"40-60",
+			"60-80",
+			"80-a0",
+			"a0-c0",
+			"c0-e0",
+			"e0-",
+		},
+	}}
+
+	for _, testCase := range testCases {
+		shards := GetShardsForKeyRange(allShards, testCase.input)
+		if !reflect.DeepEqual(shards, testCase.output) {
+			t.Errorf("GetShardsForKeyRange(%s): %v, want %v", key.KeyRangeString(testCase.input), shards, testCase.output)
+		}
+	}
+}
+
 func TestMapExactShards(t *testing.T) {
 	ctx := context.Background()
 	rs, err := initTopo("TestMapExactShards")
@@ -201,6 +275,6 @@ func BenchmarkResolveKeyRangeToShards(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ResolveKeyRangeToShards(allShards, uniqueShards, kr)
+		keyRangeToShardMap(allShards, uniqueShards, kr)
 	}
 }

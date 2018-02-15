@@ -181,6 +181,7 @@ type Statement interface {
 
 func (*Union) iStatement()      {}
 func (*Select) iStatement()     {}
+func (*Stream) iStatement()     {}
 func (*Insert) iStatement()     {}
 func (*Update) iStatement()     {}
 func (*Delete) iStatement()     {}
@@ -399,6 +400,32 @@ func (node *Union) WalkSubtree(visit Visit) error {
 		visit,
 		node.Left,
 		node.Right,
+	)
+}
+
+// Stream represents a SELECT statement.
+type Stream struct {
+	Comments   Comments
+	SelectExpr SelectExpr
+	Table      TableName
+}
+
+// Format formats the node.
+func (node *Stream) Format(buf *TrackedBuffer) {
+	buf.Myprintf("stream %v%v from %v",
+		node.Comments, node.SelectExpr, node.Table)
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *Stream) WalkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Comments,
+		node.SelectExpr,
+		node.Table,
 	)
 }
 
@@ -982,6 +1009,7 @@ func (ct *ColumnType) WalkSubtree(visit Visit) error {
 type IndexDefinition struct {
 	Info    *IndexInfo
 	Columns []*IndexColumn
+	Using   ColIdent
 }
 
 // Format formats the node.
@@ -998,6 +1026,9 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 		}
 	}
 	buf.Myprintf(")")
+	if !idx.Using.IsEmpty() {
+		buf.Myprintf(" USING %v", idx.Using)
+	}
 }
 
 // WalkSubtree walks the nodes of the subtree.

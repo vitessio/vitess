@@ -226,6 +226,9 @@ const (
 	// Value, and a Subquery, which will be used to
 	// determine if lookup rows need to be deleted.
 	DeleteEqual
+	// DeleteSharded is for routing a scattered
+	// delete statement.
+	DeleteSharded
 	// InsertUnsharded is for routing an insert statement
 	// to an unsharded keyspace.
 	InsertUnsharded
@@ -252,6 +255,7 @@ var routeName = map[RouteOpcode]string{
 	UpdateUnsharded:     "UpdateUnsharded",
 	UpdateEqual:         "UpdateEqual",
 	DeleteUnsharded:     "DeleteUnsharded",
+	DeleteSharded:       "DeleteSharded",
 	DeleteEqual:         "DeleteEqual",
 	InsertUnsharded:     "InsertUnsharded",
 	InsertSharded:       "InsertSharded",
@@ -299,6 +303,8 @@ func (route *Route) execute(vcursor VCursor, bindVars, joinVars map[string]*quer
 		return route.execUpdateEqual(vcursor, bindVars)
 	case DeleteEqual:
 		return route.execDeleteEqual(vcursor, bindVars)
+	case DeleteSharded:
+		return route.execDeleteSharded(vcursor, bindVars)
 	case InsertSharded, InsertShardedIgnore:
 		return route.execInsertSharded(vcursor, bindVars)
 	case InsertUnsharded:
@@ -511,6 +517,16 @@ func (route *Route) execUpdateEqualChangedVindex(vcursor VCursor, query string, 
 	return result, nil
 }
 
+func (route *Route) execDeleteSharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	params, err := route.paramsAllShards(vcursor, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	sql := sqlannotation.AnnotateIfDML(route.Query, nil)
+	shardQueries := route.getShardQueries(sql, params)
+	return vcursor.ExecuteMultiShard(params.ks, shardQueries, true /* isDML */, true /* canAutocommit */)
+}
+
 func (route *Route) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	key, err := route.Values[0].ResolveValue(bindVars)
 	if err != nil {
@@ -612,11 +628,11 @@ func (route *Route) resolveShards(vcursor VCursor, bindVars map[string]*querypb.
 			return "", nil, err
 		}
 		for i, ksids := range ksidss {
-			for _, ksid := range ksids {
-				shard, err := vcursor.GetShardForKeyspaceID(allShards, ksid)
-				if err != nil {
-					return "", nil, err
-				}
+			shards, err := vcursor.GetShardsForKsids(allShards, ksids)
+			if err != nil {
+				return "", nil, err
+			}
+			for _, shard := range shards {
 				routing.Add(shard, sqltypes.ValueToProto(vindexKeys[i]))
 			}
 		}
@@ -648,40 +664,34 @@ func (route *Route) resolveSingleShard(vcursor VCursor, bindVars map[string]*que
 }
 
 func (route *Route) updateChangedVindexes(subQueryResult *sqltypes.Result, vcursor VCursor, bindVars map[string]*querypb.BindVariable, ksid []byte) error {
-	if len(route.ChangedVindexValues) == 0 {
-		return nil
-	}
 	if len(subQueryResult.Rows) == 0 {
 		// NOOP, there are no actual rows changing due to this statement
 		return nil
 	}
-	for tIdx, colVindex := range route.Table.Owned {
-		if colValues, ok := route.ChangedVindexValues[colVindex.Name]; ok {
-			if len(subQueryResult.Rows) > 1 {
-				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update changes multiple columns in the vindex")
-			}
+	if len(subQueryResult.Rows) > 1 {
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update changes multiple columns in the vindex")
+	}
+	colnum := 0
+	for _, colVindex := range route.Table.Owned {
+		// Fetch the column values. colnum must keep incrementing.
+		fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
+		for range colVindex.Columns {
+			fromIds = append(fromIds, subQueryResult.Rows[0][colnum])
+			colnum++
+		}
 
-			fromIds := make([][]sqltypes.Value, len(subQueryResult.Rows))
-			var vindexColumnKeys []sqltypes.Value
+		// Update columns only if they're being changed.
+		if colValues, ok := route.ChangedVindexValues[colVindex.Name]; ok {
+			vindexColumnKeys := make([]sqltypes.Value, 0, len(colValues))
 			for _, colValue := range colValues {
 				resolvedVal, err := colValue.ResolveValue(bindVars)
 				if err != nil {
 					return err
 				}
 				vindexColumnKeys = append(vindexColumnKeys, resolvedVal)
-
 			}
 
-			for rowIdx, row := range subQueryResult.Rows {
-				for colIdx := range colVindex.Columns {
-					fromIds[rowIdx] = append(fromIds[rowIdx], row[tIdx+colIdx])
-				}
-			}
-
-			if err := colVindex.Vindex.(vindexes.Lookup).Delete(vcursor, fromIds, ksid); err != nil {
-				return err
-			}
-			if err := route.processOwned(vcursor, [][]sqltypes.Value{vindexColumnKeys}, colVindex, bindVars, [][]byte{ksid}); err != nil {
+			if err := colVindex.Vindex.(vindexes.Lookup).Update(vcursor, fromIds, ksid, vindexColumnKeys); err != nil {
 				return err
 			}
 		}

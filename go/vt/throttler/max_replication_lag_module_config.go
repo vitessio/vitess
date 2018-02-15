@@ -20,14 +20,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/proto/throttlerdata"
+	throttlerdatapb "github.com/youtube/vitess/go/vt/proto/throttlerdata"
 )
 
 // MaxReplicationLagModuleConfig stores all configuration parameters for
 // MaxReplicationLagModule. Internally, the parameters are represented by a
 // protobuf message. This message is also used to update the parameters.
 type MaxReplicationLagModuleConfig struct {
-	throttlerdata.Configuration
+	throttlerdatapb.Configuration
 }
 
 // Most of the values are based on the assumption that vttablet is started
@@ -35,7 +35,7 @@ type MaxReplicationLagModuleConfig struct {
 const healthCheckInterval = 20
 
 var defaultMaxReplicationLagModuleConfig = MaxReplicationLagModuleConfig{
-	throttlerdata.Configuration{
+	throttlerdatapb.Configuration{
 		TargetReplicationLagSec: 2,
 		MaxReplicationLagSec:    ReplicationLagModuleDisabled,
 

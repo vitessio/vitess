@@ -16,8 +16,19 @@ limitations under the License.
 
 package main
 
-// This plugin imports influxdbbackend to register the influxdbbackend stats backend.
+// Imports and register the gRPC queryservice server
 
 import (
-	_ "github.com/youtube/vitess/go/stats/influxdbbackend"
+	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/vtgate"
+	"github.com/youtube/vitess/go/vt/vttablet/grpcqueryservice"
+	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 )
+
+func init() {
+	vtgate.RegisterL2VTGates = append(vtgate.RegisterL2VTGates, func(qs queryservice.QueryService) {
+		if servenv.GRPCCheckServiceMap("queryservice") {
+			grpcqueryservice.Register(servenv.GRPCServer, qs)
+		}
+	})
+}
