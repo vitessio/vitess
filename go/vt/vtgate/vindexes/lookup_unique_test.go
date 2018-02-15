@@ -73,9 +73,9 @@ func TestLookupUniqueMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := [][]byte{
-		[]byte("1"),
-		[]byte("1"),
+	want := []Ksid{
+		{ID: []byte("1")},
+		{ID: []byte("1")},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %+v, want %+v", got, want)
@@ -86,7 +86,7 @@ func TestLookupUniqueMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want = [][]byte{nil, nil}
+	want = []Ksid{{}, {}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}

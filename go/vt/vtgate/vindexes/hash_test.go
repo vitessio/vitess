@@ -59,14 +59,14 @@ func TestHashMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := [][]byte{
-		[]byte("\x16k@\xb4J\xbaK\xd6"),
-		[]byte("\x06\xe7\xea\"Βp\x8f"),
-		[]byte("N\xb1\x90ɢ\xfa\x16\x9c"),
-		nil,
-		[]byte("\xd2\xfd\x88g\xd5\r-\xfe"),
-		[]byte("p\xbb\x02<\x81\f\xa8z"),
-		[]byte("\xf0\x98H\n\xc4ľq"),
+	want := []Ksid{
+		{ID: []byte("\x16k@\xb4J\xbaK\xd6")},
+		{ID: []byte("\x06\xe7\xea\"Βp\x8f")},
+		{ID: []byte("N\xb1\x90ɢ\xfa\x16\x9c")},
+		{ID: nil},
+		{ID: []byte("\xd2\xfd\x88g\xd5\r-\xfe")},
+		{ID: []byte("p\xbb\x02<\x81\f\xa8z")},
+		{ID: []byte("\xf0\x98H\n\xc4ľq")},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)

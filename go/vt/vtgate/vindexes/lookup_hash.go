@@ -234,8 +234,8 @@ func (lhu *LookupHashUnique) Cost() int {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][]byte, error) {
-	out := make([][]byte, 0, len(ids))
+func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksid, error) {
+	out := make([]Ksid, 0, len(ids))
 	results, err := lhu.lkp.Lookup(vcursor, ids)
 	if err != nil {
 		return nil, err
@@ -243,14 +243,14 @@ func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][]byt
 	for i, result := range results {
 		switch len(result.Rows) {
 		case 0:
-			out = append(out, nil)
+			out = append(out, Ksid{})
 		case 1:
 			num, err := sqltypes.ToUint64(result.Rows[0][0])
 			if err != nil {
-				out = append(out, nil)
+				out = append(out, Ksid{})
 				continue
 			}
-			out = append(out, vhash(num))
+			out = append(out, Ksid{ID: vhash(num)})
 		default:
 			return nil, fmt.Errorf("LookupHash.Map: unexpected multiple results from vindex %s: %v", lhu.lkp.Table, ids[i])
 		}

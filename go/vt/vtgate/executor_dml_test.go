@@ -141,6 +141,17 @@ func TestUpdateEqual(t *testing.T) {
 	}
 }
 
+func TestUpdateEqualKeyrange(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+
+	// If a unique vindex returns a keyrange, we fail the update
+	_, err := executorExec(executor, "update keyrange_table set a=2 where krcol_unique = 1", nil)
+	want := "execUpdateEqual: vindex could not map the value to a unique keyspace id"
+	if err == nil || err.Error() != want {
+		t.Errorf("executorExec error: %v, want %s", err, want)
+	}
+}
+
 func TestUpdateMultiOwned(t *testing.T) {
 	vschema := `
 {
@@ -491,6 +502,17 @@ func TestDeleteEqual(t *testing.T) {
 	}
 }
 
+func TestDeleteEqualKeyrange(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+
+	// If a unique vindex returns a keyrange, we fail the delete
+	_, err := executorExec(executor, "delete from keyrange_table where krcol_unique = 1", nil)
+	want := "execDeleteEqual: vindex could not map the value to a unique keyspace id"
+	if err == nil || err.Error() != want {
+		t.Errorf("executorExec error: %v, want %s", err, want)
+	}
+}
+
 func TestDeleteSharded(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	_, err := executorExec(executor, "delete from user_extra", nil)
@@ -664,6 +686,17 @@ func TestInsertSharded(t *testing.T) {
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
+	}
+}
+
+func TestInsertShardedKeyrange(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+
+	// If a unique vindex returns a keyrange, we fail the insert
+	_, err := executorExec(executor, "insert into keyrange_table(krcol_unique, krcol) values(1, 1)", nil)
+	want := "execInsertSharded: getInsertShardedRoute: vindex could not map the value to a unique keyspace id"
+	if err == nil || err.Error() != want {
+		t.Errorf("executorExec error: %v, want %s", err, want)
 	}
 }
 

@@ -612,15 +612,25 @@ func (route *Route) resolveShards(vcursor VCursor, bindVars map[string]*querypb.
 		if err != nil {
 			return "", nil, err
 		}
+		var shards []string
 		for i, ksid := range ksids {
-			if ksid == nil {
-				continue
+			switch {
+			case ksid.Range != nil:
+				// Use the multi-keyspace id API to convert a keyrange to shards.
+				shards, err = vcursor.GetShardsForKsids(allShards, vindexes.Ksids{Range: ksid.Range})
+				if err != nil {
+					return "", nil, err
+				}
+			case ksid.ID != nil:
+				shard, err := vcursor.GetShardForKeyspaceID(allShards, ksid.ID)
+				if err != nil {
+					return "", nil, err
+				}
+				shards = []string{shard}
 			}
-			shard, err := vcursor.GetShardForKeyspaceID(allShards, ksid)
-			if err != nil {
-				return "", nil, err
+			for _, shard := range shards {
+				routing.Add(shard, sqltypes.ValueToProto(vindexKeys[i]))
 			}
-			routing.Add(shard, sqltypes.ValueToProto(vindexKeys[i]))
 		}
 	case vindexes.NonUnique:
 		ksidss, err := mapper.Map(vcursor, vindexKeys)
@@ -652,7 +662,10 @@ func (route *Route) resolveSingleShard(vcursor VCursor, bindVars map[string]*que
 	if err != nil {
 		return "", "", nil, err
 	}
-	ksid = ksids[0]
+	if err := ksids[0].ValidateUnique(); err != nil {
+		return "", "", nil, err
+	}
+	ksid = ksids[0].ID
 	if ksid == nil {
 		return "", "", ksid, nil
 	}
@@ -875,9 +888,15 @@ func (route *Route) processPrimary(vcursor VCursor, vindexKeys [][]sqltypes.Valu
 			flattenedVidexKeys = append(flattenedVidexKeys, internalVal)
 		}
 	}
-	keyspaceIDs, err = mapper.Map(vcursor, flattenedVidexKeys)
+	ksids, err := mapper.Map(vcursor, flattenedVidexKeys)
 	if err != nil {
 		return nil, err
+	}
+	for _, ksid := range ksids {
+		if err := ksid.ValidateUnique(); err != nil {
+			return nil, err
+		}
+		keyspaceIDs = append(keyspaceIDs, ksid.ID)
 	}
 
 	for rowNum, vindexKey := range flattenedVidexKeys {
