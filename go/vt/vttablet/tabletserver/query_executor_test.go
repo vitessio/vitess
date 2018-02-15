@@ -108,6 +108,8 @@ func TestQueryExecutorPlanPassDmlRBR(t *testing.T) {
 func TestQueryExecutorPassthroughDml(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
+	planbuilder.PassthroughDMLs = true
+	defer func() { planbuilder.PassthroughDMLs = false }()
 	query := "update test_table set pk = foo()"
 	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
@@ -116,8 +118,9 @@ func TestQueryExecutorPassthroughDml(t *testing.T) {
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	defer tsv.StopService()
 
-	tsv.SetPassthroughDMLs(true)
-	defer tsv.SetPassthroughDMLs(false)
+	planbuilder.PassthroughDMLs = true
+	defer func() { planbuilder.PassthroughDMLs = false }()
+	tsv.qe.passthroughDMLs.Set(true)
 	tsv.qe.binlogFormat = connpool.BinlogFormatRow
 
 	txid := newTransaction(tsv, nil)
@@ -144,7 +147,7 @@ func TestQueryExecutorPassthroughDml(t *testing.T) {
 		t.Errorf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
 	}
 
-	tsv.SetAllowUnsafeDMLs(true)
+	tsv.qe.allowUnsafeDMLs = true
 	got, err = qre.Execute()
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
@@ -198,8 +201,9 @@ func TestQueryExecutorPassthroughDmlAutoCommit(t *testing.T) {
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	defer tsv.StopService()
 
-	tsv.SetPassthroughDMLs(true)
-	defer tsv.SetPassthroughDMLs(false)
+	planbuilder.PassthroughDMLs = true
+	defer func() { planbuilder.PassthroughDMLs = false }()
+	tsv.qe.passthroughDMLs.Set(true)
 	tsv.qe.binlogFormat = connpool.BinlogFormatRow
 
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
@@ -219,7 +223,7 @@ func TestQueryExecutorPassthroughDmlAutoCommit(t *testing.T) {
 		t.Errorf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
 	}
 
-	tsv.SetAllowUnsafeDMLs(true)
+	tsv.qe.allowUnsafeDMLs = true
 	got, err = qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
