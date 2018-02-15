@@ -17,6 +17,7 @@ limitations under the License.
 package pools
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -26,10 +27,10 @@ func TestNumbered(t *testing.T) {
 	p := NewNumbered()
 
 	var err error
-	if err = p.Register(id, id); err != nil {
+	if err = p.Register(id, id, true); err != nil {
 		t.Errorf("Error %v", err)
 	}
-	if err = p.Register(id, id); err.Error() != "already present" {
+	if err = p.Register(id, id, true); err.Error() != "already present" {
 		t.Errorf("want 'already present', got '%v'", err)
 	}
 	var v interface{}
@@ -46,22 +47,28 @@ func TestNumbered(t *testing.T) {
 	if v, err = p.Get(1, "test2"); err.Error() != "not found" {
 		t.Errorf("want 'not found', got '%v'", err)
 	}
-	p.Unregister(1) // Should not fail
-	p.Unregister(0)
+	p.Unregister(1, "test") // Should not fail
+	p.Unregister(0, "test")
 	// p is now empty
 
-	p.Register(id, id)
+	if v, err = p.Get(0, "test3"); !(strings.HasPrefix(err.Error(), "ended at") && strings.HasSuffix(err.Error(), "(test)")) {
+		t.Errorf("want prefix 'ended at' and suffix '(test'), got '%v'", err)
+	}
+
+	p.Register(id, id, true)
 	id++
-	p.Register(id, id)
+	p.Register(id, id, true)
+	id++
+	p.Register(id, id, false)
 	time.Sleep(300 * time.Millisecond)
 	id++
-	p.Register(id, id)
+	p.Register(id, id, true)
 	time.Sleep(100 * time.Millisecond)
 
-	// p has 0, 1, 2 (0 & 1 are aged)
+	// p has 0, 1, 2, 3 (0, 1, 2 are aged, but 2 is not enforced)
 	vals := p.GetOutdated(200*time.Millisecond, "by outdated")
-	if len(vals) != 2 {
-		t.Errorf("want 2, got %v", len(vals))
+	if num := len(vals); num != 2 {
+		t.Errorf("want 2, got %v", num)
 	}
 	if v, err = p.Get(vals[0].(int64), "test1"); err.Error() != "in use: by outdated" {
 		t.Errorf("want 'in use: by outdated', got '%v'", err)
@@ -69,6 +76,7 @@ func TestNumbered(t *testing.T) {
 	for _, v := range vals {
 		p.Put(v.(int64))
 	}
+	p.Put(2) // put to 2 to ensure it's not idle
 	time.Sleep(100 * time.Millisecond)
 
 	// p has 0, 1, 2 (2 is idle)
@@ -79,18 +87,19 @@ func TestNumbered(t *testing.T) {
 	if v, err = p.Get(vals[0].(int64), "test1"); err.Error() != "in use: by idle" {
 		t.Errorf("want 'in use: by idle', got '%v'", err)
 	}
-	if vals[0].(int64) != 2 {
-		t.Errorf("want 2, got %v", vals[0])
+	if vals[0].(int64) != 3 {
+		t.Errorf("want 3, got %v", vals[0])
 	}
-	p.Unregister(vals[0].(int64))
+	p.Unregister(vals[0].(int64), "test")
 
-	// p has 0 & 1
-	if p.Size() != 2 {
-		t.Errorf("want 2, got %v", p.Size())
+	// p has 0, 1, and 2
+	if p.Size() != 3 {
+		t.Errorf("want 3, got %v", p.Size())
 	}
 	go func() {
-		p.Unregister(0)
-		p.Unregister(1)
+		p.Unregister(0, "test")
+		p.Unregister(1, "test")
+		p.Unregister(2, "test")
 	}()
 	p.WaitForEmpty()
 }

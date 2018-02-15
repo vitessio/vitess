@@ -91,6 +91,13 @@ func (mp *Proxy) Rollback(ctx context.Context, session *ProxySession) error {
 }
 
 func (mp *Proxy) doBegin(ctx context.Context, session *ProxySession) error {
+	if session.TransactionID != 0 {
+		err := mp.doCommit(ctx, session)
+		if err != nil {
+			return err
+		}
+	}
+
 	txID, err := mp.qs.Begin(ctx, mp.target, session.Options)
 	if err != nil {
 		return err

@@ -571,11 +571,15 @@ class Tablet(object):
 
       # When vttablet restores from backup, it will re-generate the .cnf file.
       # So we need to have EXTRA_MY_CNF set properly.
-      all_extra_my_cnf = get_all_extra_my_cnf(None)
-      if all_extra_my_cnf:
-        if not extra_env:
-          extra_env = {}
-        extra_env['EXTRA_MY_CNF'] = ':'.join(all_extra_my_cnf)
+      # When using mysqlctld, only mysqlctld should need EXTRA_MY_CNF.
+      # If any test fails without giving EXTRA_MY_CNF to vttablet,
+      # it means we missed some call that should run remotely on mysqlctld.
+      if not self.use_mysqlctld:
+        all_extra_my_cnf = get_all_extra_my_cnf(None)
+        if all_extra_my_cnf:
+          if not extra_env:
+            extra_env = {}
+          extra_env['EXTRA_MY_CNF'] = ':'.join(all_extra_my_cnf)
 
     if extra_args:
       args.extend(extra_args)

@@ -19,8 +19,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
-	"path"
 	"strings"
 	"testing"
 
@@ -77,10 +77,17 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 		defer cluster.TearDown()
-
 		mysqlConnParams = cluster.MySQLConnParams()
 
-		proxySock := path.Join(cluster.Env.Directory(), "mysqlproxy.sock")
+		// Setup a unix socket to connect to the proxy.
+		// We use a temporary file.
+		unixSocket, err := ioutil.TempFile("", "mysqlproxy.sock")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create temp file: %v", err)
+			return 1
+		}
+		proxySock := unixSocket.Name()
+		os.Remove(proxySock)
 
 		proxyConnParams.UnixSocket = proxySock
 		proxyConnParams.Uname = "proxy"
@@ -89,11 +96,10 @@ func TestMain(m *testing.M) {
 		*mysqlServerSocketPath = proxyConnParams.UnixSocket
 		*mysqlAuthServerImpl = "none"
 
+		// Initialize the query service on top of the vttest MySQL database.
 		dbcfgs := dbconfigs.DBConfigs{
 			App: mysqlConnParams,
 		}
-
-		var err error
 		queryServer, err = initProxy(&dbcfgs)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "could not start proxy: %v\n", err)
@@ -101,6 +107,7 @@ func TestMain(m *testing.M) {
 		}
 		defer queryServer.StopService()
 
+		// Initialize the MySQL server protocol to talk to the query service.
 		initMySQLProtocol()
 		defer shutdownMySQLProtocol()
 
@@ -299,6 +306,56 @@ func TestNoAutocommit(t *testing.T) {
 
 	testFetch(t, conn, "select * from test", 0)
 	testFetch(t, conn2, "select * from test", 0)
+}
+
+func TestTransactionsInProcess(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &proxyConnParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn2, err := mysql.Connect(ctx, &proxyConnParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testDML(t, conn, "begin", 1, 0)
+	testDML(t, conn, "insert into test (id, val) values(1, 'hello')", 1, 1)
+	testFetch(t, conn, "select * from test", 1)
+	testFetch(t, conn2, "select * from test", 0)
+
+	// A second begin causes the first transaction to commit and then
+	// runs the begin
+	testDML(t, conn, "begin", 2, 0)
+	testFetch(t, conn, "select * from test", 1)
+	testFetch(t, conn2, "select * from test", 1)
+	testDML(t, conn, "rollback", 1, 0)
+
+	testFetch(t, conn, "select * from test", 1)
+	testFetch(t, conn2, "select * from test", 1)
+
+	testDML(t, conn, "set autocommit=0", 0, 0)
+	testDML(t, conn, "begin", 1, 0)
+	testDML(t, conn, "insert into test (id, val) values(2, 'hello')", 1, 1)
+	testFetch(t, conn, "select * from test", 2)
+	testFetch(t, conn2, "select * from test", 1)
+
+	// Setting autocommit=1 causes the existing transaction to commit
+	testDML(t, conn, "set autocommit=1", 1, 0)
+	testFetch(t, conn, "select * from test", 2)
+	testFetch(t, conn2, "select * from test", 2)
+
+	testDML(t, conn, "insert into test (id, val) values(3, 'hello')", 3, 1)
+	testFetch(t, conn, "select * from test", 3)
+	testFetch(t, conn2, "select * from test", 3)
+
+	testDML(t, conn2, "begin", 1, 0)
+	testDML(t, conn2, "delete from test", 2, 3)
+	testDML(t, conn2, "commit", 1, 0)
+
+	testFetch(t, conn, "select * from test", 0)
+	testFetch(t, conn2, "select * from test", 0)
+
 }
 
 func TestOther(t *testing.T) {

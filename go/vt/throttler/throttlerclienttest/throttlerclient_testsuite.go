@@ -30,12 +30,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/youtube/vitess/go/vt/proto/throttlerdata"
 	"github.com/youtube/vitess/go/vt/throttler"
 	"github.com/youtube/vitess/go/vt/throttler/throttlerclient"
+
+	throttlerdatapb "github.com/youtube/vitess/go/vt/proto/throttlerdata"
 )
 
 // TestSuite runs the test suite on the given throttlerclient and throttlerserver.
@@ -128,7 +129,7 @@ func (tf *testFixture) configuration(t *testing.T, client throttlerclient.Client
 	}
 
 	// Test UpdateConfiguration.
-	config := &throttlerdata.Configuration{
+	config := &throttlerdatapb.Configuration{
 		TargetReplicationLagSec:        1,
 		MaxReplicationLagSec:           2,
 		InitialRate:                    3,
@@ -201,12 +202,12 @@ func (fm *FakeManager) SetMaxRate(int64) []string {
 }
 
 // GetConfiguration implements the throttler.Manager interface. It always panics.
-func (fm *FakeManager) GetConfiguration(throttlerName string) (map[string]*throttlerdata.Configuration, error) {
+func (fm *FakeManager) GetConfiguration(throttlerName string) (map[string]*throttlerdatapb.Configuration, error) {
 	panic(panicMsg)
 }
 
 // UpdateConfiguration implements the throttler.Manager interface. It always panics.
-func (fm *FakeManager) UpdateConfiguration(throttlerName string, configuration *throttlerdata.Configuration, copyZeroValues bool) ([]string, error) {
+func (fm *FakeManager) UpdateConfiguration(throttlerName string, configuration *throttlerdatapb.Configuration, copyZeroValues bool) ([]string, error) {
 	panic(panicMsg)
 }
 

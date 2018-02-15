@@ -79,7 +79,8 @@ func newFakeResolver(opts *Options, hc discovery.HealthCheck, serv srvtopo.Serve
 	}
 	tc := vtgate.NewTxConn(gw, txMode)
 	sc := vtgate.NewScatterConn("", tc, gw, hc)
-	return vtgate.NewResolver(serv, cell, sc)
+	srvResolver := srvtopo.NewResolver(serv, gw, cell)
+	return vtgate.NewResolver(srvResolver, serv, cell, sc)
 }
 
 func buildTopology(opts *Options, vschemaStr string, numShardsPerKeyspace int) error {

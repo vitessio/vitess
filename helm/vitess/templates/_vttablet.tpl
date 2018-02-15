@@ -47,6 +47,7 @@ spec:
 {{- $config := index . 7 -}}
 {{- $pmm := index . 8 -}}
 {{- $orc := index . 9 -}}
+{{- $totalTabletCount := index . 10 -}}
 
 # sanitize inputs to create tablet name
 {{- $cellClean := include "clean-label" $cell.name -}}
@@ -54,6 +55,7 @@ spec:
 {{- $shardClean := include "clean-label" $shard.name -}}
 {{- $uid := "$(cat /vtdataroot/tabletdata/tablet-uid)" }}
 {{- $setName := printf "%s-%s-%s-%s" $cellClean $keyspaceClean $shardClean $tablet.type | lower -}}
+{{- $shardName := printf "%s-%s-%s" $cellClean $keyspaceClean $shardClean | lower -}}
 
 {{- with $tablet.vttablet -}}
 
@@ -103,7 +105,7 @@ spec:
 
       containers:
 {{ include "cont-mysql" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $uid) | indent 8 }}
-{{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $vitessTag $uid $namespace $config $orc) | indent 8 }}
+{{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $vitessTag $uid $namespace $config $orc $totalTabletCount) | indent 8 }}
 {{ include "cont-mysql-errorlog" . | indent 8 }}
 {{ include "cont-mysql-slowlog" . | indent 8 }}
 {{ if $pmm.enabled }}{{ include "cont-pmm-client" (tuple $pmm $namespace) | indent 8 }}{{ end }}
@@ -139,6 +141,96 @@ spec:
       keyspace: {{ $keyspaceClean | quote }}
       shard: {{ $shardClean | quote }}
       type: {{ $tablet.type | quote }}
+
+{{ if eq $tablet.type "replica" }}
+---
+###################################
+# vttablet InitShardMaster Job
+###################################
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $shardName }}-init-shard-master
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: init-shard-master
+        image: "vitess/vtctlclient:{{$vitessTag}}"
+
+        command: ["bash"]
+        args:
+          - "-c"
+          - |
+            set -ex
+
+            VTCTLD_SVC=vtctld.{{ $namespace }}:15999
+            SECONDS=0
+            TIMEOUT_SECONDS=600
+
+            # poll every 5 seconds to see if vtctld is ready
+            until vtctlclient -server $VTCTLD_SVC ListAllTablets {{ $cellClean }} > /dev/null 2>&1; do 
+              if (( $SECONDS > $TIMEOUT_SECONDS )); then
+                echo "timed out waiting for vtctlclient to be ready"
+                exit 1
+              fi
+              sleep 5
+            done
+
+            until [ $TABLETS_READY ]; do
+              # get all the tablets in the current cell
+              cellTablets="$(vtctlclient -server $VTCTLD_SVC ListAllTablets {{ $cellClean }})"
+              
+              # filter to only the tablets in our current shard
+              shardTablets=$( echo "$cellTablets" | awk 'substr( $5,1,{{ len $shardName }} ) == "{{ $shardName }}" {print $0}')
+
+              # check for a master tablet from the ListAllTablets call
+              masterTablet=$( echo "$shardTablets" | awk '$4 == "master" {print $1}')
+              if [ $masterTablet ]; then
+                  echo "'$masterTablet' is already the master tablet, exiting without running InitShardMaster"
+                  exit
+              fi
+
+              # check for a master tablet from the GetShard call
+              master_alias=$(vtctlclient -server $VTCTLD_SVC GetShard {{ $keyspaceClean }}/{{ $shard.name }} | jq '.master_alias.uid')
+              if [ $master_alias != "null" ]; then
+                  echo "'$master_alias' is already the master tablet, exiting without running InitShardMaster"
+                  exit
+              fi
+
+              # count the number of newlines for the given shard to get the tablet count
+              tabletCount=$( echo "$shardTablets" | wc | awk '{print $1}')
+              
+              # check to see if the tablet count equals the expected tablet count
+              if [ $tabletCount == {{ $totalTabletCount }} ]; then
+                TABLETS_READY=true
+              else
+                if (( $SECONDS > $TIMEOUT_SECONDS )); then
+                  echo "timed out waiting for tablets to be ready"
+                  exit 1
+                fi
+                
+                # wait 5 seconds for vttablets to continue getting ready
+                sleep 5
+              fi
+
+            done
+
+            # find the tablet id for the "-replica-0" stateful set for a given cell, keyspace and shard
+            tablet_id=$( echo "$shardTablets" | awk 'substr( $5,1,{{ add (len $shardName) 10 }} ) == "{{ $shardName }}-replica-0" {print $1}')
+            
+            # initialize the shard master
+            until vtctlclient -server $VTCTLD_SVC InitShardMaster -force {{ $keyspaceClean }}/{{ $shard.name }} $tablet_id; do 
+              if (( $SECONDS > $TIMEOUT_SECONDS )); then
+                echo "timed out waiting for InitShardMaster to succeed"
+                exit 1
+              fi
+              sleep 5
+            done
+            
+{{- end -}}
 
 {{- end -}}
 {{- end -}}
@@ -244,6 +336,7 @@ spec:
 {{- $namespace := index . 8 -}}
 {{- $config := index . 9 -}}
 {{- $orc := index . 10 -}}
+{{- $totalTabletCount := index . 11 -}}
 
 {{- $cellClean := include "clean-label" $cell.name -}}
 {{- with $tablet.vttablet -}}
@@ -321,10 +414,14 @@ spec:
         -db-config-filtered-uname "vt_filtered"
         -db-config-filtered-dbname "vt_{{$keyspace.name}}"
         -db-config-filtered-charset "utf8"
-        -enable_semi_sync
         -enable_replication_reporter
-{{ if $orc.enabled }}
+{{ if $defaultVttablet.enableSemisync }}
+        -enable_semi_sync
+{{ end }}
+{{ if $defaultVttablet.enableHeartbeat }}
         -heartbeat_enable
+{{ end }}
+{{ if $orc.enabled }}
         -orc_api_url "http://orchestrator.{{ $namespace }}/api"
         -orc_discover_interval "5m"
 {{ end }}

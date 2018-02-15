@@ -24,9 +24,9 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/youtube/vitess/go/vt/proto/throttlerdata"
-
 	"golang.org/x/net/context"
+
+	throttlerdatapb "github.com/youtube/vitess/go/vt/proto/throttlerdata"
 )
 
 // protocol specifices which RPC client implementation should be used.
@@ -44,7 +44,7 @@ type Client interface {
 
 	// GetConfiguration returns the configuration of the MaxReplicationlag module
 	// for the given throttler or all throttlers if "throttlerName" is empty.
-	GetConfiguration(ctx context.Context, throttlerName string) (map[string]*throttlerdata.Configuration, error)
+	GetConfiguration(ctx context.Context, throttlerName string) (map[string]*throttlerdatapb.Configuration, error)
 
 	// UpdateConfiguration (partially) updates the configuration of the
 	// MaxReplicationlag module for the given throttler or all throttlers if
@@ -52,7 +52,7 @@ type Client interface {
 	// If "copyZeroValues" is true, fields with zero values will be copied
 	// as well.
 	// The function returns the names of the updated throttlers.
-	UpdateConfiguration(ctx context.Context, throttlerName string, configuration *throttlerdata.Configuration, copyZeroValues bool) ([]string, error)
+	UpdateConfiguration(ctx context.Context, throttlerName string, configuration *throttlerdatapb.Configuration, copyZeroValues bool) ([]string, error)
 
 	// ResetConfiguration resets the configuration of the MaxReplicationlag module
 	// to the initial configuration for the given throttler or all throttlers if

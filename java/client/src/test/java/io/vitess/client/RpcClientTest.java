@@ -214,7 +214,7 @@ public abstract class RpcClientTest {
         }
 
         System.out.format("Waiting until vtgateclienttest is ready and responds (got exception: %s)\n", rootCause);
-        Thread.sleep(TimeUnit.MILLISECONDS.toMillis(100));
+        Thread.sleep(100 /* milliseconds */);
         waited = true;
       }
     }

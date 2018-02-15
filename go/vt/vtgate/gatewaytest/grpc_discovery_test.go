@@ -18,7 +18,6 @@ package gatewaytest
 
 import (
 	"flag"
-	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -29,8 +28,8 @@ import (
 
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/srvtopo"
+	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
-	"github.com/youtube/vitess/go/vt/vtgate/l2vtgate"
 	"github.com/youtube/vitess/go/vt/vttablet/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletconntest"
 
@@ -92,11 +91,12 @@ func TestGRPCDiscovery(t *testing.T) {
 	TestSuite(t, "discovery-grpc", dg, service)
 }
 
-// TestL2VTGateDiscovery tests the l2vtgate gateway with a gRPC
+// TestL2VTGateDiscovery tests the hybrid gateway with a gRPC
 // connection from the gateway to a l2vtgate in-process object.
 func TestL2VTGateDiscovery(t *testing.T) {
 	flag.Set("tablet_protocol", "grpc")
 	flag.Set("gateway_implementation", "discoverygateway")
+	flag.Set("enable_forwarding", "true")
 
 	// Fake services for the tablet, topo server.
 	service, ts, cell := CreateFakeServers(t)
@@ -120,7 +120,7 @@ func TestL2VTGateDiscovery(t *testing.T) {
 	// Wait for the right tablets to be present.
 	hc := discovery.NewHealthCheck(10*time.Second, 2*time.Minute)
 	rs := srvtopo.NewResilientServer(ts, "TestL2VTGateDiscovery")
-	l2vtgate := l2vtgate.Init(hc, ts, rs, "", cell, 2, nil)
+	l2vtgate := vtgate.Init(context.Background(), hc, ts, rs, cell, 2, nil)
 	hc.AddTablet(&topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: cell,
@@ -149,16 +149,18 @@ func TestL2VTGateDiscovery(t *testing.T) {
 
 	// L2VTGate: create a gRPC server and listen on the port.
 	server = grpc.NewServer()
-	grpcqueryservice.Register(server, l2vtgate)
+	grpcqueryservice.Register(server, l2vtgate.L2VTGate())
 	go server.Serve(listener)
 	defer server.Stop()
 
-	// VTGate: create the l2vtgate gateway
-	flag.Set("gateway_implementation", "l2vtgategateway")
-	flag.Set("l2vtgategateway_addrs", fmt.Sprintf("%v|%v|%v", listener.Addr().String(), tabletconntest.TestTarget.Keyspace, tabletconntest.TestTarget.Shard))
-	lg := gateway.GetCreator()(nil, ts, nil, "", 2)
-	defer lg.Close(ctx)
+	// VTGate: create the HybridGateway, with no local gateway,
+	// and just the remote address in the l2vtgate pool.
+	hg, err := gateway.NewHybridGateway(nil, []string{listener.Addr().String()}, 2)
+	if err != nil {
+		t.Fatalf("gateway.NewHybridGateway() failed: %v", err)
+	}
+	defer hg.Close(ctx)
 
 	// and run the test suite.
-	TestSuite(t, "l2vtgate-grpc", lg, service)
+	TestSuite(t, "l2vtgate-grpc", hg, service)
 }

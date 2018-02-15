@@ -18,9 +18,11 @@ package vindexes
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -38,8 +40,9 @@ func init() {
 // LookupNonUnique defines a vindex that uses a lookup table and create a mapping between from ids and KeyspaceId.
 // It's NonUnique and a Lookup.
 type LookupNonUnique struct {
-	name string
-	lkp  lookupInternal
+	name      string
+	writeOnly bool
+	lkp       lookupInternal
 }
 
 // String returns the name of the vindex.
@@ -53,24 +56,42 @@ func (ln *LookupNonUnique) Cost() int {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][][]byte, error) {
-	out := make([][][]byte, 0, len(ids))
+func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksids, error) {
+	out := make([]Ksids, 0, len(ids))
+	if ln.writeOnly {
+		for range ids {
+			out = append(out, Ksids{Range: &topodata.KeyRange{}})
+		}
+		return out, nil
+	}
+
 	results, err := ln.lkp.Lookup(vcursor, ids)
 	if err != nil {
 		return nil, err
 	}
 	for _, result := range results {
+		if len(result.Rows) == 0 {
+			out = append(out, Ksids{})
+			continue
+		}
 		ksids := make([][]byte, 0, len(result.Rows))
 		for _, row := range result.Rows {
 			ksids = append(ksids, row[0].ToBytes())
 		}
-		out = append(out, ksids)
+		out = append(out, Ksids{IDs: ksids})
 	}
 	return out, nil
 }
 
 // Verify returns true if ids maps to ksids.
 func (ln *LookupNonUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	if ln.writeOnly {
+		out := make([]bool, len(ids))
+		for i := range ids {
+			out[i] = true
+		}
+		return out, nil
+	}
 	return ln.lkp.Verify(vcursor, ids, ksidsToValues(ksids))
 }
 
@@ -84,15 +105,41 @@ func (ln *LookupNonUnique) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Va
 	return ln.lkp.Delete(vcursor, rowsColValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid))
 }
 
+// Update updates the entry in the vindex table.
+func (ln *LookupNonUnique) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
+	return ln.lkp.Update(vcursor, oldValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), newValues)
+}
+
 // MarshalJSON returns a JSON representation of LookupHash.
 func (ln *LookupNonUnique) MarshalJSON() ([]byte, error) {
 	return json.Marshal(ln.lkp)
 }
 
 // NewLookup creates a LookupNonUnique vindex.
+// The supplied map has the following required fields:
+//   table: name of the backing table. It can be qualified by the keyspace.
+//   from: list of columns in the table that have the 'from' values of the lookup vindex.
+//   to: The 'to' column name of the table.
+//
+// The following fields are optional:
+//   autocommit: setting this to "true" will cause inserts to upsert and deletes to be ignored.
+//   write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 func NewLookup(name string, m map[string]string) (Vindex, error) {
 	lookup := &LookupNonUnique{name: name}
-	lookup.lkp.Init(m)
+
+	autocommit, err := boolFromMap(m, "autocommit")
+	if err != nil {
+		return nil, err
+	}
+	lookup.writeOnly, err = boolFromMap(m, "write_only")
+	if err != nil {
+		return nil, err
+	}
+
+	// if autocommit is on for non-unique lookup, upsert should also be on.
+	if err := lookup.lkp.Init(m, autocommit, autocommit /* upsert */); err != nil {
+		return nil, err
+	}
 	return lookup, nil
 }
 
@@ -115,9 +162,32 @@ type LookupUnique struct {
 }
 
 // NewLookupUnique creates a LookupUnique vindex.
+// The supplied map has the following required fields:
+//   table: name of the backing table. It can be qualified by the keyspace.
+//   from: list of columns in the table that have the 'from' values of the lookup vindex.
+//   to: The 'to' column name of the table.
+//
+// The following fields are optional:
+//   autocommit: setting this to "true" will cause deletes to be ignored.
 func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 	lu := &LookupUnique{name: name}
-	lu.lkp.Init(m)
+
+	autocommit, err := boolFromMap(m, "autocommit")
+	if err != nil {
+		return nil, err
+	}
+	scatter, err := boolFromMap(m, "write_only")
+	if err != nil {
+		return nil, err
+	}
+	if scatter {
+		return nil, errors.New("write_only cannot be true for a unique lookup vindex")
+	}
+
+	// Don't allow upserts for unique vindexes.
+	if err := lu.lkp.Init(m, autocommit, false /* upsert */); err != nil {
+		return nil, err
+	}
 	return lu, nil
 }
 
@@ -159,6 +229,11 @@ func (lu *LookupUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]
 // Create reserves the id by inserting it into the vindex table.
 func (lu *LookupUnique) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
 	return lu.lkp.Create(vcursor, rowsColValues, ksidsToValues(ksids), ignoreMode)
+}
+
+// Update updates the entry in the vindex table.
+func (lu *LookupUnique) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
+	return lu.lkp.Update(vcursor, oldValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), newValues)
 }
 
 // Delete deletes the entry from the vindex table.

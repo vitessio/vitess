@@ -29,6 +29,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
+	"github.com/youtube/vitess/go/vt/srvtopo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
@@ -61,6 +62,14 @@ type ScatterConn struct {
 // consolidating the results and errors for the caller.
 type shardActionFunc func(target *querypb.Target) error
 
+// shardActionFunc2 defines the contract for a shard action
+// outside of a transaction. Every such function executes the
+// necessary action on a shard, sends the results to sResults, and
+// return an error if any.  multiGo is capable of executing
+// multiple shardActionFunc actions in parallel and
+// consolidating the results and errors for the caller.
+type shardActionFunc2 func(rs *srvtopo.ResolvedShard, i int) error
+
 // shardActionTransactionFunc defines the contract for a shard action
 // that may be in a transaction. Every such function executes the
 // necessary action on a shard (with an optional Begin call), aggregates
@@ -69,6 +78,15 @@ type shardActionFunc func(target *querypb.Target) error
 // shardActionTransactionFunc actions in parallel and consolidating
 // the results and errors for the caller.
 type shardActionTransactionFunc func(target *querypb.Target, shouldBegin bool, transactionID int64) (int64, error)
+
+// shardActionTransactionFunc2 defines the contract for a shard action
+// that may be in a transaction. Every such function executes the
+// necessary action on a shard (with an optional Begin call), aggregates
+// the results, and return an error if any.
+// multiGoTransaction is capable of executing multiple
+// shardActionTransactionFunc2 actions in parallel and consolidating
+// the results and errors for the caller.
+type shardActionTransactionFunc2 func(rs *srvtopo.ResolvedShard, i int, shouldBegin bool, transactionID int64) (int64, error)
 
 // NewScatterConn creates a new ScatterConn.
 func NewScatterConn(statsName string, txConn *TxConn, gw gateway.Gateway, hc discovery.HealthCheck) *ScatterConn {
@@ -144,6 +162,53 @@ func (stc *ScatterConn) Execute(
 			} else {
 				var err error
 				innerqr, err = stc.gateway.Execute(ctx, target, query, bindVars, transactionID, options)
+				if err != nil {
+					return transactionID, err
+				}
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+			qr.AppendResult(innerqr)
+			return transactionID, nil
+		})
+	return qr, err
+}
+
+// Execute2 executes a non-streaming query on the specified shards.
+func (stc *ScatterConn) Execute2(
+	ctx context.Context,
+	query string,
+	bindVars map[string]*querypb.BindVariable,
+	rss []*srvtopo.ResolvedShard,
+	tabletType topodatapb.TabletType,
+	session *SafeSession,
+	notInTransaction bool,
+	options *querypb.ExecuteOptions,
+) (*sqltypes.Result, error) {
+
+	// mu protects qr
+	var mu sync.Mutex
+	qr := new(sqltypes.Result)
+
+	err := stc.multiGoTransaction2(
+		ctx,
+		"Execute",
+		rss,
+		tabletType,
+		session,
+		notInTransaction,
+		func(rs *srvtopo.ResolvedShard, i int, shouldBegin bool, transactionID int64) (int64, error) {
+			var innerqr *sqltypes.Result
+			if shouldBegin {
+				var err error
+				innerqr, transactionID, err = rs.QueryService.BeginExecute(ctx, rs.Target, query, bindVars, options)
+				if err != nil {
+					return transactionID, err
+				}
+			} else {
+				var err error
+				innerqr, err = rs.QueryService.Execute(ctx, rs.Target, query, bindVars, transactionID, options)
 				if err != nil {
 					return transactionID, err
 				}
@@ -234,9 +299,9 @@ func (stc *ScatterConn) executeAutocommit(ctx context.Context, target *querypb.T
 // ExecuteEntityIds executes queries that are shard specific.
 func (stc *ScatterConn) ExecuteEntityIds(
 	ctx context.Context,
-	shards []string,
-	sqls map[string]string,
-	bindVars map[string]map[string]*querypb.BindVariable,
+	rss []*srvtopo.ResolvedShard,
+	sqls []string,
+	bindVars []map[string]*querypb.BindVariable,
 	keyspace string,
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
@@ -248,27 +313,25 @@ func (stc *ScatterConn) ExecuteEntityIds(
 	var mu sync.Mutex
 	qr := new(sqltypes.Result)
 
-	err := stc.multiGoTransaction(
+	err := stc.multiGoTransaction2(
 		ctx,
 		"ExecuteEntityIds",
-		keyspace,
-		shards,
+		rss,
 		tabletType,
 		session,
 		notInTransaction,
-		func(target *querypb.Target, shouldBegin bool, transactionID int64) (int64, error) {
-			sql := sqls[target.Shard]
+		func(rs *srvtopo.ResolvedShard, i int, shouldBegin bool, transactionID int64) (int64, error) {
 			var innerqr *sqltypes.Result
 
 			if shouldBegin {
 				var err error
-				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, sql, bindVars[target.Shard], options)
+				innerqr, transactionID, err = rs.QueryService.BeginExecute(ctx, rs.Target, sqls[i], bindVars[i], options)
 				if err != nil {
 					return transactionID, err
 				}
 			} else {
 				var err error
-				innerqr, err = stc.gateway.Execute(ctx, target, sql, bindVars[target.Shard], transactionID, options)
+				innerqr, err = rs.QueryService.Execute(ctx, rs.Target, sqls[i], bindVars[i], transactionID, options)
 				if err != nil {
 					return transactionID, err
 				}
@@ -289,34 +352,71 @@ func (stc *ScatterConn) ExecuteEntityIds(
 // list. In each request variable, the resultIndexes specifies the position
 // for each result from the shard.
 type scatterBatchRequest struct {
-	Length   int
-	Requests map[string]*shardBatchRequest
+	// length is the total number of queries we have.
+	length int
+	// requests maps the 'keyspace:shard' key to the structure below.
+	requests map[string]*shardBatchRequest
 }
 
 type shardBatchRequest struct {
-	Queries         []*querypb.BoundQuery
-	Keyspace, Shard string
-	ResultIndexes   []int
+	// rs is the ResolvedShard to send the queries to.
+	rs *srvtopo.ResolvedShard
+	// queries are the queries to send to that ResolvedShard.
+	queries []*querypb.BoundQuery
+	// resultIndexes describes the index of the query and its results
+	// into the full original query array.
+	resultIndexes []int
 }
 
-func boundShardQueriesToScatterBatchRequest(boundQueries []*vtgatepb.BoundShardQuery) (*scatterBatchRequest, error) {
+func boundShardQueriesToScatterBatchRequest(ctx context.Context, resolver *srvtopo.Resolver, boundQueries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType) (*scatterBatchRequest, error) {
 	requests := &scatterBatchRequest{
-		Length:   len(boundQueries),
-		Requests: make(map[string]*shardBatchRequest),
+		length:   len(boundQueries),
+		requests: make(map[string]*shardBatchRequest),
 	}
 	for i, boundQuery := range boundQueries {
-		for shard := range unique(boundQuery.Shards) {
-			key := boundQuery.Keyspace + ":" + shard
-			request := requests.Requests[key]
+		rss, err := resolver.ResolveShards(ctx, boundQuery.Keyspace, boundQuery.Shards, tabletType)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, rs := range rss {
+			key := rs.Target.Keyspace + ":" + rs.Target.Shard
+			request := requests.requests[key]
 			if request == nil {
 				request = &shardBatchRequest{
-					Keyspace: boundQuery.Keyspace,
-					Shard:    shard,
+					rs: rs,
 				}
-				requests.Requests[key] = request
+				requests.requests[key] = request
 			}
-			request.Queries = append(request.Queries, boundQuery.Query)
-			request.ResultIndexes = append(request.ResultIndexes, i)
+			request.queries = append(request.queries, boundQuery.Query)
+			request.resultIndexes = append(request.resultIndexes, i)
+		}
+	}
+	return requests, nil
+}
+
+func boundKeyspaceIDQueriesToScatterBatchRequest(ctx context.Context, resolver *srvtopo.Resolver, boundQueries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType) (*scatterBatchRequest, error) {
+	requests := &scatterBatchRequest{
+		length:   len(boundQueries),
+		requests: make(map[string]*shardBatchRequest),
+	}
+	for i, boundQuery := range boundQueries {
+		rss, err := resolver.ResolveKeyspaceIds(ctx, boundQuery.Keyspace, tabletType, boundQuery.KeyspaceIds)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, rs := range rss {
+			key := rs.Target.Keyspace + ":" + rs.Target.Shard
+			request := requests.requests[key]
+			if request == nil {
+				request = &shardBatchRequest{
+					rs: rs,
+				}
+				requests.requests[key] = request
+			}
+			request.queries = append(request.queries, boundQuery.Query)
+			request.resultIndexes = append(request.resultIndexes, i)
 		}
 	}
 	return requests, nil
@@ -332,31 +432,25 @@ func (stc *ScatterConn) ExecuteBatch(
 	options *querypb.ExecuteOptions) (qrs []sqltypes.Result, err error) {
 	allErrors := new(concurrency.AllErrorRecorder)
 
-	results := make([]sqltypes.Result, batchRequest.Length)
+	results := make([]sqltypes.Result, batchRequest.length)
 	var resMutex sync.Mutex
 
 	var wg sync.WaitGroup
-	for _, req := range batchRequest.Requests {
+	for _, req := range batchRequest.requests {
 		wg.Add(1)
 		go func(req *shardBatchRequest) {
 			defer wg.Done()
-			target := &querypb.Target{
-				Keyspace:   req.Keyspace,
-				Shard:      req.Shard,
-				TabletType: tabletType,
-			}
-
 			var err error
-			startTime, statsKey := stc.startAction("ExecuteBatch", target)
+			startTime, statsKey := stc.startAction("ExecuteBatch", req.rs.Target)
 			defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
-			shouldBegin, transactionID := transactionInfo(target, session, false)
+			shouldBegin, transactionID := transactionInfo(req.rs.Target, session, false)
 			var innerqrs []sqltypes.Result
 			if shouldBegin {
-				innerqrs, transactionID, err = stc.gateway.BeginExecuteBatch(ctx, target, req.Queries, asTransaction, options)
+				innerqrs, transactionID, err = req.rs.QueryService.BeginExecuteBatch(ctx, req.rs.Target, req.queries, asTransaction, options)
 				if transactionID != 0 {
 					if appendErr := session.Append(&vtgatepb.Session_ShardSession{
-						Target:        target,
+						Target:        req.rs.Target,
 						TransactionId: transactionID,
 					}, stc.txConn.mode); appendErr != nil {
 						err = appendErr
@@ -366,7 +460,7 @@ func (stc *ScatterConn) ExecuteBatch(
 					return
 				}
 			} else {
-				innerqrs, err = stc.gateway.ExecuteBatch(ctx, target, req.Queries, asTransaction, transactionID, options)
+				innerqrs, err = req.rs.QueryService.ExecuteBatch(ctx, req.rs.Target, req.queries, asTransaction, transactionID, options)
 				if err != nil {
 					return
 				}
@@ -375,7 +469,7 @@ func (stc *ScatterConn) ExecuteBatch(
 			resMutex.Lock()
 			defer resMutex.Unlock()
 			for i, result := range innerqrs {
-				results[req.ResultIndexes[i]].AppendResult(&result)
+				results[req.resultIndexes[i]].AppendResult(&result)
 			}
 		}(req)
 	}
@@ -414,8 +508,7 @@ func (stc *ScatterConn) StreamExecute(
 	ctx context.Context,
 	query string,
 	bindVars map[string]*querypb.BindVariable,
-	keyspace string,
-	shards []string,
+	rss []*srvtopo.ResolvedShard,
 	tabletType topodatapb.TabletType,
 	options *querypb.ExecuteOptions,
 	callback func(reply *sqltypes.Result) error,
@@ -425,8 +518,8 @@ func (stc *ScatterConn) StreamExecute(
 	var mu sync.Mutex
 	fieldSent := false
 
-	allErrors := stc.multiGo(ctx, "StreamExecute", keyspace, shards, tabletType, func(target *querypb.Target) error {
-		return stc.gateway.StreamExecute(ctx, target, query, bindVars, options, func(qr *sqltypes.Result) error {
+	allErrors := stc.multiGo2(ctx, "StreamExecute", rss, tabletType, func(rs *srvtopo.ResolvedShard, i int) error {
+		return rs.QueryService.StreamExecute(ctx, rs.Target, query, bindVars, options, func(qr *sqltypes.Result) error {
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
 	})
@@ -491,7 +584,7 @@ func (tt *timeTracker) Record(target *querypb.Target) time.Time {
 }
 
 // MessageStream streams messages from the specified shards.
-func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shards []string, name string, callback func(*sqltypes.Result) error) error {
+func (stc *ScatterConn) MessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error {
 	// The cancelable context is used for handling errors
 	// from individual streams.
 	ctx, cancel := context.WithCancel(ctx)
@@ -501,13 +594,13 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shar
 	var mu sync.Mutex
 	fieldSent := false
 	lastErrors := newTimeTracker()
-	allErrors := stc.multiGo(ctx, "MessageStream", keyspace, shards, topodatapb.TabletType_MASTER, func(target *querypb.Target) error {
+	allErrors := stc.multiGo2(ctx, "MessageStream", rss, topodatapb.TabletType_MASTER, func(rs *srvtopo.ResolvedShard, i int) error {
 		// This loop handles the case where a reparent happens, which can cause
 		// an individual stream to end. If we don't succeed on the retries for
 		// messageStreamGracePeriod, we abort and return an error.
 		for {
-			err := stc.gateway.MessageStream(ctx, target, name, func(qr *sqltypes.Result) error {
-				lastErrors.Reset(target)
+			err := rs.QueryService.MessageStream(ctx, rs.Target, name, func(qr *sqltypes.Result) error {
+				lastErrors.Reset(rs.Target)
 				return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 			})
 			// nil and EOF are equivalent. UNAVAILABLE can be returned by vttablet if it's demoted
@@ -525,11 +618,11 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shar
 				return nil
 			default:
 			}
-			firstErrorTimeStamp := lastErrors.Record(target)
+			firstErrorTimeStamp := lastErrors.Record(rs.Target)
 			if time.Now().Sub(firstErrorTimeStamp) >= *messageStreamGracePeriod {
 				// Cancel all streams and return an error.
 				cancel()
-				return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "message stream from %v has repeatedly failed for longer than %v", target, *messageStreamGracePeriod)
+				return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "message stream from %v has repeatedly failed for longer than %v", rs.Target, *messageStreamGracePeriod)
 			}
 
 			// It's not been too long since our last good send. Wait and retry.
@@ -544,15 +637,11 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shar
 }
 
 // MessageAck acks messages across multiple shards.
-func (stc *ScatterConn) MessageAck(ctx context.Context, keyspace string, shardIDs map[string][]*querypb.Value, name string) (int64, error) {
+func (stc *ScatterConn) MessageAck(ctx context.Context, rss []*srvtopo.ResolvedShard, values [][]*querypb.Value, name string) (int64, error) {
 	var mu sync.Mutex
 	var totalCount int64
-	shards := make([]string, 0, len(shardIDs))
-	for shard := range shardIDs {
-		shards = append(shards, shard)
-	}
-	allErrors := stc.multiGo(ctx, "MessageAck", keyspace, shards, topodatapb.TabletType_MASTER, func(target *querypb.Target) error {
-		count, err := stc.gateway.MessageAck(ctx, target, name, shardIDs[target.Shard])
+	allErrors := stc.multiGo2(ctx, "MessageAck", rss, topodatapb.TabletType_MASTER, func(rs *srvtopo.ResolvedShard, i int) error {
+		count, err := rs.QueryService.MessageAck(ctx, rs.Target, name, values[i])
 		if err != nil {
 			return err
 		}
@@ -564,10 +653,10 @@ func (stc *ScatterConn) MessageAck(ctx context.Context, keyspace string, shardID
 	return totalCount, allErrors.AggrError(vterrors.Aggregate)
 }
 
-// UpdateStream just sends the query to the gateway,
+// UpdateStream just sends the query to the ResolvedShard,
 // and sends the results back.
-func (stc *ScatterConn) UpdateStream(ctx context.Context, target *querypb.Target, timestamp int64, position string, callback func(*querypb.StreamEvent) error) error {
-	return stc.gateway.UpdateStream(ctx, target, position, timestamp, callback)
+func (stc *ScatterConn) UpdateStream(ctx context.Context, rs *srvtopo.ResolvedShard, timestamp int64, position string, callback func(*querypb.StreamEvent) error) error {
+	return rs.QueryService.UpdateStream(ctx, rs.Target, position, timestamp, callback)
 }
 
 // SplitQuery scatters a SplitQuery request to the shards whose names are given in 'shards'.
@@ -583,10 +672,9 @@ func (stc *ScatterConn) SplitQuery(
 	perShardSplitCount int64,
 	numRowsPerQueryPart int64,
 	algorithm querypb.SplitQueryRequest_Algorithm,
-	shards []string,
+	rss []*srvtopo.ResolvedShard,
 	querySplitToQueryPartFunc func(
-		querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error),
-	keyspace string) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+		querySplit *querypb.QuerySplit, rs *srvtopo.ResolvedShard) (*vtgatepb.SplitQueryResponse_Part, error)) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 
 	tabletType := topodatapb.TabletType_RDONLY
 	// allParts will collect the query-parts from all the shards. It's protected
@@ -594,21 +682,20 @@ func (stc *ScatterConn) SplitQuery(
 	var allParts []*vtgatepb.SplitQueryResponse_Part
 	var allPartsMutex sync.Mutex
 
-	allErrors := stc.multiGo(
+	allErrors := stc.multiGo2(
 		ctx,
 		"SplitQuery",
-		keyspace,
-		shards,
+		rss,
 		tabletType,
-		func(target *querypb.Target) error {
+		func(rs *srvtopo.ResolvedShard, i int) error {
 			// Get all splits from this shard
 			query := &querypb.BoundQuery{
 				Sql:           sql,
 				BindVariables: bindVariables,
 			}
-			querySplits, err := stc.gateway.SplitQuery(
+			querySplits, err := rs.QueryService.SplitQuery(
 				ctx,
-				target,
+				rs.Target,
 				query,
 				splitColumns,
 				perShardSplitCount,
@@ -619,7 +706,7 @@ func (stc *ScatterConn) SplitQuery(
 			}
 			parts := make([]*vtgatepb.SplitQueryResponse_Part, len(querySplits))
 			for i, querySplit := range querySplits {
-				parts[i], err = querySplitToQueryPartFunc(querySplit, target.Shard)
+				parts[i], err = querySplitToQueryPartFunc(querySplit, rs)
 				if err != nil {
 					return err
 				}
@@ -740,6 +827,46 @@ func (stc *ScatterConn) multiGo(
 	return allErrors
 }
 
+// multiGo2 performs the requested 'action' on the specified
+// shards in parallel. This does not handle any transaction state.
+// The action function must match the shardActionFunc2 signature.
+func (stc *ScatterConn) multiGo2(
+	ctx context.Context,
+	name string,
+	rss []*srvtopo.ResolvedShard,
+	tabletType topodatapb.TabletType,
+	action shardActionFunc2,
+) (allErrors *concurrency.AllErrorRecorder) {
+	allErrors = new(concurrency.AllErrorRecorder)
+	if len(rss) == 0 {
+		return allErrors
+	}
+
+	oneShard := func(rs *srvtopo.ResolvedShard, i int) {
+		var err error
+		startTime, statsKey := stc.startAction(name, rs.Target)
+		defer stc.endAction(startTime, allErrors, statsKey, &err, nil)
+		err = action(rs, i)
+	}
+
+	if len(rss) == 1 {
+		// only one shard, do it synchronously.
+		oneShard(rss[0], 0)
+		return allErrors
+	}
+
+	var wg sync.WaitGroup
+	for i, rs := range rss {
+		wg.Add(1)
+		go func(rs *srvtopo.ResolvedShard, i int) {
+			defer wg.Done()
+			oneShard(rs, i)
+		}(rs, i)
+	}
+	wg.Wait()
+	return allErrors
+}
+
 // multiGoTransaction performs the requested 'action' on the specified
 // shards in parallel. For each shard, if the requested
 // session is in a transaction, it opens a new transactions on the connection,
@@ -799,6 +926,71 @@ func (stc *ScatterConn) multiGoTransaction(
 			defer wg.Done()
 			oneShard(shard)
 		}(shard)
+	}
+	wg.Wait()
+
+end:
+	if session.MustRollback() {
+		stc.txConn.Rollback(ctx, session)
+	}
+	if allErrors.HasErrors() {
+		return allErrors.AggrError(vterrors.Aggregate)
+	}
+	return nil
+}
+
+// multiGoTransaction2 performs the requested 'action' on the specified
+// ResolvedShards in parallel. For each shard, if the requested
+// session is in a transaction, it opens a new transactions on the connection,
+// and updates the Session with the transaction id. If the session already
+// contains a transaction id for the shard, it reuses it.
+// The action function must match the shardActionTransactionFunc2 signature.
+func (stc *ScatterConn) multiGoTransaction2(
+	ctx context.Context,
+	name string,
+	rss []*srvtopo.ResolvedShard,
+	tabletType topodatapb.TabletType,
+	session *SafeSession,
+	notInTransaction bool,
+	action shardActionTransactionFunc2,
+) error {
+	if len(rss) == 0 {
+		return nil
+	}
+
+	allErrors := new(concurrency.AllErrorRecorder)
+	oneShard := func(rs *srvtopo.ResolvedShard, i int) {
+		var err error
+		startTime, statsKey := stc.startAction(name, rs.Target)
+		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
+
+		shouldBegin, transactionID := transactionInfo(rs.Target, session, notInTransaction)
+		transactionID, err = action(rs, i, shouldBegin, transactionID)
+		if shouldBegin && transactionID != 0 {
+			if appendErr := session.Append(&vtgatepb.Session_ShardSession{
+				Target:        rs.Target,
+				TransactionId: transactionID,
+			}, stc.txConn.mode); appendErr != nil {
+				err = appendErr
+			}
+		}
+	}
+
+	var wg sync.WaitGroup
+	if len(rss) == 1 {
+		// only one shard, do it synchronously.
+		for i, rs := range rss {
+			oneShard(rs, i)
+			goto end
+		}
+	}
+
+	for i, rs := range rss {
+		wg.Add(1)
+		go func(rs *srvtopo.ResolvedShard, i int) {
+			defer wg.Done()
+			oneShard(rs, i)
+		}(rs, i)
 	}
 	wg.Wait()
 

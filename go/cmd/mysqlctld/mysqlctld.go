@@ -98,7 +98,7 @@ func main() {
 		}
 		mysqld.OnTerm(onTermFunc)
 
-		err = mysqld.RefreshConfig()
+		err = mysqld.RefreshConfig(ctx)
 		if err != nil {
 			log.Errorf("failed to refresh config: %v", err)
 			exit.Return(1)

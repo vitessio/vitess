@@ -12,6 +12,17 @@
 {{- end -}}
 
 #############################
+# Repeat a string N times, where N is the total number
+# of replicas. Len must be used on the calling end to
+# get an int
+#############################
+{{- define "tablet-count" -}}
+{{- range . -}}
+{{- repeat (int .vttablet.replicas) "x" -}}
+{{- end -}}
+{{- end -}}
+
+#############################
 # Format a list of flag maps into a command line.
 #############################
 {{- define "format-flags-all" -}}

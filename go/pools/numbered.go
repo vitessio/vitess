@@ -20,26 +20,42 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/youtube/vitess/go/cache"
 )
 
 // Numbered allows you to manage resources by tracking them with numbers.
 // There are no interface restrictions on what you can track.
 type Numbered struct {
-	mu        sync.Mutex
-	empty     *sync.Cond // Broadcast when pool becomes empty
-	resources map[int64]*numberedWrapper
+	mu                   sync.Mutex
+	empty                *sync.Cond // Broadcast when pool becomes empty
+	resources            map[int64]*numberedWrapper
+	recentlyUnregistered *cache.LRUCache
 }
 
 type numberedWrapper struct {
-	val         interface{}
-	inUse       bool
-	purpose     string
-	timeCreated time.Time
-	timeUsed    time.Time
+	val            interface{}
+	inUse          bool
+	purpose        string
+	timeCreated    time.Time
+	timeUsed       time.Time
+	enforceTimeout bool
+}
+
+type unregistered struct {
+	reason           string
+	timeUnregistered time.Time
+}
+
+func (u *unregistered) Size() int {
+	return 1
 }
 
 func NewNumbered() *Numbered {
-	n := &Numbered{resources: make(map[int64]*numberedWrapper)}
+	n := &Numbered{
+		resources:            make(map[int64]*numberedWrapper),
+		recentlyUnregistered: cache.NewLRUCache(1000),
+	}
 	n.empty = sync.NewCond(&n.mu)
 	return n
 }
@@ -47,7 +63,7 @@ func NewNumbered() *Numbered {
 // Register starts tracking a resource by the supplied id.
 // It does not lock the object.
 // It returns an error if the id already exists.
-func (nu *Numbered) Register(id int64, val interface{}) error {
+func (nu *Numbered) Register(id int64, val interface{}, enforceTimeout bool) error {
 	nu.mu.Lock()
 	defer nu.mu.Unlock()
 	if _, ok := nu.resources[id]; ok {
@@ -55,22 +71,24 @@ func (nu *Numbered) Register(id int64, val interface{}) error {
 	}
 	now := time.Now()
 	nu.resources[id] = &numberedWrapper{
-		val:         val,
-		timeCreated: now,
-		timeUsed:    now,
+		val:            val,
+		timeCreated:    now,
+		timeUsed:       now,
+		enforceTimeout: enforceTimeout,
 	}
 	return nil
 }
 
 // Unregiester forgets the specified resource.
 // If the resource is not present, it's ignored.
-func (nu *Numbered) Unregister(id int64) {
+func (nu *Numbered) Unregister(id int64, reason string) {
 	nu.mu.Lock()
 	defer nu.mu.Unlock()
 	delete(nu.resources, id)
 	if len(nu.resources) == 0 {
 		nu.empty.Broadcast()
 	}
+	nu.recentlyUnregistered.Set(fmt.Sprintf("%v", id), &unregistered{reason: reason, timeUnregistered: time.Now()})
 }
 
 // Get locks the resource for use. It accepts a purpose as a string.
@@ -81,6 +99,10 @@ func (nu *Numbered) Get(id int64, purpose string) (val interface{}, err error) {
 	defer nu.mu.Unlock()
 	nw, ok := nu.resources[id]
 	if !ok {
+		if val, ok := nu.recentlyUnregistered.Get(fmt.Sprintf("%v", id)); ok {
+			unreg := val.(*unregistered)
+			return nil, fmt.Errorf("ended at %v (%v)", unreg.timeUnregistered.Format("2006-01-02 15:04:05.000 MST"), unreg.reason)
+		}
 		return nil, fmt.Errorf("not found")
 	}
 	if nw.inUse {
@@ -120,7 +142,7 @@ func (nu *Numbered) GetOutdated(age time.Duration, purpose string) (vals []inter
 	defer nu.mu.Unlock()
 	now := time.Now()
 	for _, nw := range nu.resources {
-		if nw.inUse {
+		if nw.inUse || !nw.enforceTimeout {
 			continue
 		}
 		if nw.timeCreated.Add(age).Sub(now) <= 0 {

@@ -3,6 +3,16 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 0
+    },
+    {
+      "TableName": "b",
+      "Role": 0
+    }
+  ],
   "FieldQuery": "select * from a where 1 != 1 union select * from b where 1 != 1",
   "FullQuery": "select * from a union select * from b limit :#maxLimit"
 }
@@ -12,6 +22,16 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 0
+    },
+    {
+      "TableName": "b",
+      "Role": 0
+    }
+  ],
   "FieldQuery": "select * from a where 1 != 1 union select * from b where 1 != 1",
   "FullQuery": "select * from a union select * from b limit 10"
 }
@@ -21,6 +41,12 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 0
+    }
+  ],
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select distinct * from a limit :#maxLimit"
 }
@@ -30,6 +56,12 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 0
+    }
+  ],
   "FieldQuery": "select * from a where 1 != 1 group by b",
   "FullQuery": "select * from a group by b limit :#maxLimit"
 }
@@ -39,6 +71,12 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 0
+    }
+  ],
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a having b = 1 limit :#maxLimit"
 }
@@ -48,6 +86,12 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 0
+    }
+  ],
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a limit 5"
 }
@@ -57,6 +101,12 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 0
+    }
+  ],
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a limit 10, 5"
 }
@@ -66,6 +116,12 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 0
+    }
+  ],
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a limit 10, 5"
 }
@@ -75,6 +131,12 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 0
+    }
+  ],
   "FieldQuery": "select * from a.b where 1 != 1",
   "FullQuery": "select * from a.b limit :#maxLimit"
 }
@@ -84,6 +146,16 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 0
+    },
+    {
+      "TableName": "b",
+      "Role": 0
+    }
+  ],
   "FieldQuery": "select * from a, b where 1 != 1",
   "FullQuery": "select * from a, b limit :#maxLimit"
 }
@@ -93,6 +165,16 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 0
+    },
+    {
+      "TableName": "b",
+      "Role": 0
+    }
+  ],
   "FieldQuery": "select * from a join b where 1 != 1",
   "FullQuery": "select * from a join b limit :#maxLimit"
 }
@@ -102,6 +184,16 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 0
+    },
+    {
+      "TableName": "b",
+      "Role": 0
+    }
+  ],
   "FieldQuery": "select * from a right join b on c = d where 1 != 1",
   "FullQuery": "select * from a right join b on c = d limit :#maxLimit"
 }
@@ -111,6 +203,12 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 0
+    }
+  ],
   "FieldQuery": "select * from (b) where 1 != 1",
   "FullQuery": "select * from (b) limit :#maxLimit"
 }
@@ -120,6 +218,12 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 0
+    }
+  ],
   "FullQuery": "select :bv from a limit :#maxLimit"
 }
 
@@ -128,6 +232,12 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 0
+    }
+  ],
   "FieldQuery": "select eid from a where 1 != 1",
   "FullQuery": "select eid from a limit :#maxLimit"
 }
@@ -137,6 +247,12 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 0
+    }
+  ],
   "FieldQuery": "select eid as foo from a where 1 != 1",
   "FullQuery": "select eid as foo from a limit :#maxLimit"
 }
@@ -146,6 +262,12 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 0
+    }
+  ],
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a limit :#maxLimit"
 }
@@ -155,6 +277,12 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 0
+    }
+  ],
   "FieldQuery": "select c.eid from a as c where 1 != 1",
   "FullQuery": "select c.eid from a as c limit :#maxLimit"
 }
@@ -164,6 +292,12 @@
 {
   "PlanID": "SELECT_LOCK",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 0
+    }
+  ],
   "FieldQuery": "select eid from a where 1 != 1",
   "FullQuery": "select eid from a limit :#maxLimit for update"
 }
@@ -173,6 +307,12 @@
 {
   "PlanID": "SELECT_LOCK",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 0
+    }
+  ],
   "FieldQuery": "select eid from a where 1 != 1",
   "FullQuery": "select eid from a limit :#maxLimit lock in share mode"
 }
@@ -183,6 +323,12 @@
   "PlanID": "PASS_DML",
   "Reason": "TABLE",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into b.a(eid, id) values (1, :a)"
 }
 
@@ -192,6 +338,12 @@ options:PassthroughDMLs
 {
   "PlanID": "PASS_DML",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into b.a(eid, id) values (1, :a)"
 }
 
@@ -200,6 +352,12 @@ options:PassthroughDMLs
 {
   "PlanID": "INSERT_PK",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(eid, id) values (1, :a)",
   "OuterQuery": "insert into a(eid, id) values (1, :a)",
   "PKValues": [[1], [":a"]]
@@ -211,6 +369,12 @@ options:PassthroughDMLs
 {
   "PlanID": "PASS_DML",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(eid, id) values (1, :a)"
 }
 
@@ -219,6 +383,12 @@ options:PassthroughDMLs
 {
   "PlanID": "INSERT_PK",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(id) values (1)",
   "OuterQuery": "insert into a(id) values (1)",
   "PKValues": [0, [1]]
@@ -229,6 +399,12 @@ options:PassthroughDMLs
 {
   "PlanID": "INSERT_PK",
   "TableName": "d",
+  "Permissions": [
+    {
+      "TableName": "d",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into d(id) values (1)",
   "OuterQuery": "insert into d(id) values (1)",
   "PKValues": ["0"]
@@ -239,6 +415,12 @@ options:PassthroughDMLs
 {
   "PlanID": "INSERT_PK",
   "TableName": "d",
+  "Permissions": [
+    {
+      "TableName": "d",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into d(id) values (1)",
   "OuterQuery": "insert into d(id) values (1)",
   "PKValues": ["0"]
@@ -253,6 +435,12 @@ options:PassthroughDMLs
 {
   "PlanID": "INSERT_PK",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(eid, id) values (-1, 2)",
   "OuterQuery": "insert into a(eid, id) values (-1, 2)",
   "PKValues": [[-1], [2]]
@@ -263,6 +451,12 @@ options:PassthroughDMLs
 {
   "PlanID": "INSERT_PK",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(eid, id) values (1, 2)",
   "OuterQuery": "insert into a(eid, id) values (1, 2)",
   "PKValues": [[1], [2]]
@@ -274,6 +468,12 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason": "COMPLEX_EXPR",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(eid, id) values (~1, 2)"
 }
 
@@ -283,6 +483,12 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason": "COMPLEX_EXPR",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(eid, id) values (1 + 1, 2)"
 }
 
@@ -292,6 +498,12 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason": "COMPLEX_EXPR",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(eid, id) values (0x04, 2)"
 }
 
@@ -301,6 +513,12 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason": "TABLE_NOINDEX",
   "TableName": "c",
+  "Permissions": [
+    {
+      "TableName": "c",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into c(eid, id) values (1, 2)"
 }
 
@@ -309,6 +527,12 @@ options:PassthroughDMLs
 {
   "PlanID": "INSERT_PK",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a values (1, 2, 'name', 'foo', 'camelcase')",
   "OuterQuery": "insert into a(eid, id, name, foo, CamelCase) values (1, 2, 'name', 'foo', 'camelcase')",
   "PKValues": [[1], [2]]
@@ -319,6 +543,12 @@ options:PassthroughDMLs
 {
   "PlanID": "UPSERT_PK",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(eid, id) values (1, 2) on duplicate key update name = func(a)",
   "OuterQuery": "insert into a(eid, id) values (1, 2)",
   "UpsertQuery": "update a set name = func(a) where :#pk",
@@ -331,6 +561,12 @@ options:PassthroughDMLs
 {
   "PlanID": "PASS_DML",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(eid, id) values (1, 2) on duplicate key update name = func(a)"
 }
 
@@ -339,6 +575,12 @@ options:PassthroughDMLs
 {
   "PlanID": "INSERT_PK",
   "TableName": "b",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into b(eid, id) values (1, 2) on duplicate key update name = func(a)",
   "OuterQuery": "insert into b(eid, id) values (1, 2) on duplicate key update name = func(a)",
   "PKValues": [[1], [2]]
@@ -349,6 +591,12 @@ options:PassthroughDMLs
 {
   "PlanID": "UPSERT_PK",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(eid, id) values (1, 2) on duplicate key update eid = 2",
   "OuterQuery": "insert into a(eid, id) values (1, 2)",
   "UpsertQuery": "update a set eid = 2 where :#pk",
@@ -361,6 +609,12 @@ options:PassthroughDMLs
 {
   "PlanID": "UPSERT_PK",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(eid, id, name) values (1, 2, 'foo') on duplicate key update name = values(name)",
   "OuterQuery": "insert into a(eid, id, name) values (1, 2, 'foo')",
   "UpsertQuery": "update a set name = ('foo') where :#pk",
@@ -372,6 +626,12 @@ options:PassthroughDMLs
 {
   "PlanID": "UPSERT_PK",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(eid, id, name) values (1, 2, 'foo') on duplicate key update name = concat(values(name), 'foo')",
   "OuterQuery": "insert into a(eid, id, name) values (1, 2, 'foo')",
   "UpsertQuery": "update a set name = concat(('foo'), 'foo') where :#pk",
@@ -383,6 +643,12 @@ options:PassthroughDMLs
 {
   "PlanID": "UPSERT_PK",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(eid, id, name) values (1, 2, 3) on duplicate key update name = values(name) + 5",
   "OuterQuery": "insert into a(eid, id, name) values (1, 2, 3)",
   "UpsertQuery": "update a set name = (3) + 5 where :#pk",
@@ -394,6 +660,12 @@ options:PassthroughDMLs
 {
   "PlanID": "UPSERT_PK",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(eid, id, name) values (1, :id, :name) on duplicate key update name = values(name), id = values(id)",
   "OuterQuery": "insert into a(eid, id, name) values (1, :id, :name)",
   "UpsertQuery": "update a set name = (:name), id = (:id) where :#pk",
@@ -407,6 +679,12 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason": "COMPLEX_EXPR",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(eid, id) values (1 + 1, 2) on duplicate key update eid = values(eid) + 1"
 }
 
@@ -416,6 +694,12 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason": "PK_CHANGE",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(eid, id, name) values (1, 2, 1 + 1) on duplicate key update eid = values(name)",
   "PKValues": [[1],[2]]
 }
@@ -426,6 +710,12 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason": "PK_CHANGE",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(eid, id) values (1, 2) on duplicate key update eid = values(name)",
   "PKValues": [[1],[2]]
 }
@@ -439,6 +729,12 @@ options:PassthroughDMLs
 {
   "PlanID": "UPSERT_PK",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(eid, id) values (1, 2) on duplicate key update eid = values(eid), id = values(id)",
   "OuterQuery": "insert into a(eid, id) values (1, 2)",
   "UpsertQuery": "update a set eid = (1), id = (2) where :#pk",
@@ -451,6 +747,12 @@ options:PassthroughDMLs
 {
   "PlanID": "UPSERT_PK",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(eid, id, name) values (1, 2, 'foo') on duplicate key update eid = 2, id = values(id), name = func()",
   "OuterQuery": "insert into a(eid, id, name) values (1, 2, 'foo')",
   "UpsertQuery": "update a set eid = 2, id = (2), name = func() where :#pk",
@@ -464,6 +766,12 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason": "PK_CHANGE",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(id, eid) values (1, 2) on duplicate key update eid = func(a)",
   "PKValues": [[2], [1]]
 }
@@ -474,6 +782,12 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason": "UPSERT_MULTI_ROW",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into a(id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)",
   "PKValues": [[2,3],[1,2]]
 }
@@ -483,6 +797,12 @@ options:PassthroughDMLs
 {
   "PlanID": "INSERT_PK",
   "TableName": "b",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into b(id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)",
   "OuterQuery": "insert into b(id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)",
   "PKValues": [[2,3],[1,2]]
@@ -493,6 +813,12 @@ options:PassthroughDMLs
 {
   "PlanID": "INSERT_PK",
   "TableName": "b",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into b(id, eid) values (1, 2), (2, 3) on duplicate key update id = 1",
   "OuterQuery": "insert into b(id, eid) values (1, 2), (2, 3) on duplicate key update id = 1",
   "PKValues": [[2,3],[1,2]],
@@ -504,6 +830,12 @@ options:PassthroughDMLs
 {
   "PlanID": "INSERT_PK",
   "TableName": "b",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into b(id, eid) values (1, 2), (3, 4) on duplicate key update id = values(eid)",
   "OuterQuery": "insert into b(id, eid) values (1, 2), (3, 4) on duplicate key update id = values(eid)",
   "PKValues": [[2,4],[1,3]],
@@ -516,6 +848,16 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason": "UPSERT_SUBQUERY",
   "TableName": "b",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 1
+    },
+    {
+      "TableName": "a",
+      "Role": 0
+    }
+  ],
   "FullQuery": "insert into b(id, eid) select * from a on duplicate key update name = func(a)"
 }
 
@@ -524,6 +866,16 @@ options:PassthroughDMLs
 {
   "PlanID": "INSERT_SUBQUERY",
   "TableName": "b",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 1
+    },
+    {
+      "TableName": "a",
+      "Role": 0
+    }
+  ],
   "FullQuery": "insert into b(eid, id) select * from a",
   "OuterQuery": "insert into b(eid, id) values :#values",
   "Subquery": "select * from a limit :#maxLimit",
@@ -536,6 +888,16 @@ options:PassthroughDMLs
 {
   "PlanID": "INSERT_SUBQUERY",
   "TableName": "b",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 1
+    },
+    {
+      "TableName": "a",
+      "Role": 0
+    }
+  ],
   "FullQuery": "insert into b select * from a",
   "OuterQuery": "insert into b(eid, id) values :#values",
   "Subquery": "select * from a limit :#maxLimit",
@@ -548,6 +910,12 @@ options:PassthroughDMLs
 {
   "PlanID": "INSERT_PK",
   "TableName": "b",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into b(eid, id) values (1, 2), (3, 4)",
   "OuterQuery": "insert into b(eid, id) values (1, 2), (3, 4)",
   "PKValues": [[1, 3], [2, 4]]
@@ -558,6 +926,12 @@ options:PassthroughDMLs
 {
   "PlanID": "INSERT_MESSAGE",
   "TableName": "msg",
+  "Permissions": [
+    {
+      "TableName": "msg",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into msg(time_scheduled, id, message) values (1, 2, 'aa')",
   "OuterQuery": "insert into msg(time_scheduled, id, message, time_next, time_created, epoch) values (1, 2, 'aa', 1, :#time_now, 0)",
   "PKValues": [[1], [2]]
@@ -568,6 +942,12 @@ options:PassthroughDMLs
 {
   "PlanID": "INSERT_MESSAGE",
   "TableName": "msg",
+  "Permissions": [
+    {
+      "TableName": "msg",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into msg(id, message) values (2, 'aa')",
   "OuterQuery": "insert into msg(id, message, time_scheduled, time_next, time_created, epoch) values (2, 'aa', :#time_now, :#time_now, :#time_now, 0)",
   "PKValues": [[":#time_now"], [2]]
@@ -578,6 +958,12 @@ options:PassthroughDMLs
 {
   "PlanID": "INSERT_MESSAGE",
   "TableName": "msg",
+  "Permissions": [
+    {
+      "TableName": "msg",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into msg(time_scheduled, id, message) values (1, 2, 'aa'), (3, 4, 'bb')",
   "OuterQuery": "insert into msg(time_scheduled, id, message, time_next, time_created, epoch) values (1, 2, 'aa', 1, :#time_now, 0), (3, 4, 'bb', 3, :#time_now, 0)",
   "PKValues": [
@@ -634,6 +1020,12 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason":"REPLACE",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 1
+    }
+  ],
   "FullQuery": "replace into b(eid, id) values (1, 2), (3, 4)"
 }
 
@@ -643,6 +1035,12 @@ options:PassthroughDMLs
 {
   "PlanID": "PASS_DML",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 1
+    }
+  ],
   "FullQuery": "replace into b(eid, id) values (1, 2), (3, 4)"
 }
 
@@ -652,6 +1050,12 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason":"REPLACE",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 1
+    }
+  ],
   "FullQuery": "replace into b(eid, id) values (1, 2)"
 }
 
@@ -661,6 +1065,16 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason":"REPLACE",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 1
+    },
+    {
+      "TableName": "a",
+      "Role": 0
+    }
+  ],
   "FullQuery": "replace into b(eid, id) select * from a"
 }
 
@@ -670,6 +1084,16 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason":"REPLACE",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 1
+    },
+    {
+      "TableName": "a",
+      "Role": 0
+    }
+  ],
   "FullQuery": "replace into b select * from a"
 }
 
@@ -678,6 +1102,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DML_SUBQUERY",
   "TableName": "d",
+  "Permissions": [
+    {
+      "TableName": "d",
+      "Role": 1
+    }
+  ],
   "FullQuery": "update d set foo = 'foo' where name in ('a', 'b') limit 1",
   "OuterQuery": "update d set foo = 'foo' where :#pk",
   "Subquery": "select name from d where name in ('a', 'b') limit 1 for update",
@@ -690,6 +1120,12 @@ options:PassthroughDMLs
 {
   "PlanID": "PASS_DML",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "d",
+      "Role": 1
+    }
+  ],
   "FullQuery": "update d set foo = 'foo' where name in ('a', 'b') limit 1"
 }
 
@@ -699,6 +1135,12 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason": "TABLE",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "update b.a set name = 'foo' where eid = 1 and id = 1"
 }
 
@@ -708,6 +1150,12 @@ options:PassthroughDMLs
 {
   "PlanID": "PASS_DML",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "update b.a set name = 'foo' where eid = 1 and id = 1"
 }
 
@@ -717,6 +1165,16 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason": "MULTI_TABLE",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    },
+    {
+      "TableName": "b",
+      "Role": 1
+    }
+  ],
   "FullQuery": "update a, b set a.name = 'foo' where a.id = b.id and b.var = 'test'"
 }
 
@@ -726,6 +1184,16 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason": "MULTI_TABLE",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    },
+    {
+      "TableName": "b",
+      "Role": 1
+    }
+  ],
   "FullQuery": "update a join b on a.id = b.id set a.name = 'foo' where b.var = 'test'"
 }
 
@@ -734,6 +1202,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DML_SUBQUERY",
   "TableName": "b",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 1
+    }
+  ],
   "FullQuery": "update b set eid = 1",
   "OuterQuery": "update b set eid = 1 where :#pk",
   "Subquery": "select eid, id from b limit :#maxLimit for update",
@@ -751,6 +1225,12 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason": "PK_CHANGE",
   "TableName": "b",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 1
+    }
+  ],
   "FullQuery": "update b set eid = foo()",
   "WhereClause": ""
 }
@@ -760,6 +1240,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DML_SUBQUERY",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "update a set name = 'foo'",
   "OuterQuery": "update a set name = 'foo' where :#pk",
   "Subquery": "select eid, id from a limit :#maxLimit for update",
@@ -771,6 +1257,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DML_SUBQUERY",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "update a set name = 'foo' where eid + 1 = 1",
   "OuterQuery": "update a set name = 'foo' where :#pk",
   "Subquery": "select eid, id from a where eid + 1 = 1 limit :#maxLimit for update",
@@ -782,6 +1274,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DML_PK",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "update a set name = 'foo' where eid = 1 and id = 1",
   "OuterQuery": "update a set name = 'foo' where :#pk",
   "PKValues": [1, 1],
@@ -793,6 +1291,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DML_SUBQUERY",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "update a set name = 'foo' where eid = 1",
   "OuterQuery": "update a set name = 'foo' where :#pk",
   "Subquery": "select eid, id from a where eid = 1 limit :#maxLimit for update",
@@ -804,6 +1308,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DML_SUBQUERY",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "update a set name = 'foo' where eid = 1.0 and id = 1",
   "OuterQuery": "update a set name = 'foo' where :#pk",
   "Subquery": "select eid, id from a where eid = 1.0 and id = 1 limit :#maxLimit for update",
@@ -815,6 +1325,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DML_SUBQUERY",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "update a set name = 'foo' where eid = 1 limit 10",
   "OuterQuery": "update a set name = 'foo' where :#pk",
   "Subquery": "select eid, id from a where eid = 1 limit 10 for update",
@@ -826,6 +1342,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DML_SUBQUERY",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "update a set name = 'foo' where eid = 1 and name = 'foo'",
   "OuterQuery": "update a set name = 'foo' where :#pk",
   "Subquery": "select eid, id from a where eid = 1 and name = 'foo' limit :#maxLimit for update",
@@ -838,6 +1360,12 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason": "TABLE_NOINDEX",
   "TableName": "c",
+  "Permissions": [
+    {
+      "TableName": "c",
+      "Role": 1
+    }
+  ],
   "FullQuery": "update c set eid = 1",
   "WhereClause": ""
 }
@@ -847,6 +1375,12 @@ options:PassthroughDMLs
 {
   "PlanID":"DML_SUBQUERY",
   "TableName":"a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery":"update a set name = 'foo' where eid + 1 = 1 and id = 1",
   "OuterQuery":"update a set name = 'foo' where :#pk",
   "Subquery":"select eid, id from a where eid + 1 = 1 and id = 1 limit :#maxLimit for update",
@@ -858,6 +1392,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DML_PK",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "update a set name = 'foo' where (eid = 1) and id = 1",
   "OuterQuery": "update a set name = 'foo' where :#pk",
   "PKValues": [1, 1],
@@ -869,6 +1409,12 @@ options:PassthroughDMLs
 {
   "PlanID":"DML_PK",
   "TableName":"a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery":"update a set name = 'foo' where eid in (1, 2) and id = 1",
   "OuterQuery":"update a set name = 'foo' where :#pk",
   "PKValues":[[1,2],1],
@@ -880,6 +1426,12 @@ options:PassthroughDMLs
 {
   "PlanID":"DML_SUBQUERY",
   "TableName":"a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery":"update a set name = 'foo' where eid in (1, 2) and id in (1, 2)",
   "OuterQuery":"update a set name = 'foo' where :#pk",
   "Subquery":"select eid, id from a where eid in (1, 2) and id in (1, 2) limit :#maxLimit for update",
@@ -891,6 +1443,12 @@ options:PassthroughDMLs
 {
   "PlanID":"DML_SUBQUERY",
   "TableName":"a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery":"update a set name = 'foo' where eid = 1 and eid = 2",
   "OuterQuery":"update a set name = 'foo' where :#pk",
   "Subquery":"select eid, id from a where eid = 1 and eid = 2 limit :#maxLimit for update",
@@ -902,6 +1460,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DML_SUBQUERY",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "update a set name = 'foo' where eid = 1 order by id desc",
   "OuterQuery": "update a set name = 'foo' where :#pk order by id desc",
   "Subquery": "select eid, id from a where eid = 1 order by id desc limit :#maxLimit for update",
@@ -914,6 +1478,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DML_SUBQUERY",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "update a use index (b) set name = 'foo' where eid = 1",
   "OuterQuery": "update a set name = 'foo' where :#pk",
   "Subquery": "select eid, id from a use index (b) where eid = 1 limit :#maxLimit for update",
@@ -925,6 +1495,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DML_SUBQUERY",
   "TableName": "d",
+  "Permissions": [
+    {
+      "TableName": "d",
+      "Role": 1
+    }
+  ],
   "FullQuery": "delete from d where name in ('a', 'b') limit 1",
   "OuterQuery": "delete from d where :#pk",
   "Subquery": "select name from d where name in ('a', 'b') limit 1 for update",
@@ -937,6 +1513,12 @@ options:PassthroughDMLs
 {
   "PlanID": "PASS_DML",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "d",
+      "Role": 1
+    }
+  ],
   "FullQuery": "delete from d where name in ('a', 'b') limit 1"
 }
 
@@ -946,6 +1528,12 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason": "TABLE",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "delete from b.a where eid = 1 and id = 1"
 }
 
@@ -954,6 +1542,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DML_SUBQUERY",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "delete from a",
   "OuterQuery": "delete from a where :#pk",
   "Subquery": "select eid, id from a limit :#maxLimit for update",
@@ -965,6 +1559,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DML_SUBQUERY",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "delete from a where eid + 1 = 1",
   "OuterQuery": "delete from a where :#pk",
   "Subquery": "select eid, id from a where eid + 1 = 1 limit :#maxLimit for update",
@@ -976,6 +1576,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DML_PK",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "delete from a where eid = 1 and id = 1",
   "OuterQuery": "delete from a where :#pk",
   "PKValues": [1, 1],
@@ -988,6 +1594,12 @@ options:PassthroughDMLs
 {
   "PlanID": "PASS_DML",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "delete from a where eid = 1 and id = 1"
 }
 
@@ -996,6 +1608,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DML_SUBQUERY",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "delete from a where eid = 1",
   "OuterQuery": "delete from a where :#pk",
   "Subquery": "select eid, id from a where eid = 1 limit :#maxLimit for update",
@@ -1007,6 +1625,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DML_SUBQUERY",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "delete from a where eid = 1 order by id desc",
   "OuterQuery": "delete from a where :#pk order by id desc",
   "Subquery": "select eid, id from a where eid = 1 order by id desc limit :#maxLimit for update",
@@ -1018,6 +1642,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DML_SUBQUERY",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "delete from a where eid = 1.0 and id = 1",
   "OuterQuery": "delete from a where :#pk",
   "Subquery": "select eid, id from a where eid = 1.0 and id = 1 limit :#maxLimit for update",
@@ -1029,6 +1659,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DML_SUBQUERY",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "delete from a where eid = 1 and name = 'foo'",
   "OuterQuery": "delete from a where :#pk",
   "Subquery": "select eid, id from a where eid = 1 and name = 'foo' limit :#maxLimit for update",
@@ -1041,6 +1677,12 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason": "TABLE_NOINDEX",
   "TableName": "c",
+  "Permissions": [
+    {
+      "TableName": "c",
+      "Role": 1
+    }
+  ],
   "FullQuery": "delete from c",
   "WhereClause": ""
 }
@@ -1050,6 +1692,12 @@ options:PassthroughDMLs
 {
   "PlanID":"DML_SUBQUERY",
   "TableName":"a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery":"delete from a where eid + 1 = 1 and id = 1",
   "OuterQuery":"delete from a where :#pk",
   "Subquery":"select eid, id from a where eid + 1 = 1 and id = 1 limit :#maxLimit for update",
@@ -1061,6 +1709,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DML_PK",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery": "delete from a where (eid = 1) and id = 1",
   "OuterQuery": "delete from a where :#pk",
   "PKValues": [1, 1],
@@ -1072,6 +1726,12 @@ options:PassthroughDMLs
 {
   "PlanID":"DML_PK",
   "TableName":"a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery":"delete from a where eid in (1, 2) and id = 1",
   "OuterQuery":"delete from a where :#pk",
   "PKValues":[[1,2],1],
@@ -1083,6 +1743,12 @@ options:PassthroughDMLs
 {
   "PlanID":"DML_SUBQUERY",
   "TableName":"a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery":"delete from a where eid in (1, 2) and id in (1, 2)",
   "OuterQuery":"delete from a where :#pk",
   "Subquery":"select eid, id from a where eid in (1, 2) and id in (1, 2) limit :#maxLimit for update",
@@ -1094,6 +1760,12 @@ options:PassthroughDMLs
 {
   "PlanID":"DML_SUBQUERY",
   "TableName":"a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
   "FullQuery":"delete from a where eid = 1 and eid = 2",
   "OuterQuery":"delete from a where :#pk",
   "Subquery":"select eid, id from a where eid = 1 and eid = 2 limit :#maxLimit for update",
@@ -1106,6 +1778,20 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason": "MULTI_TABLE",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    },
+    {
+      "TableName": "b",
+      "Role": 1
+    },
+    {
+      "TableName": "c",
+      "Role": 1
+    }
+  ],
   "FullQuery": "delete a, b from a, b, c where a.id = b.id and b.id = c.id and c.name = 'foo'"
 }
 
@@ -1115,6 +1801,16 @@ options:PassthroughDMLs
   "PlanID": "PASS_DML",
   "Reason": "MULTI_TABLE",
   "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    },
+    {
+      "TableName": "b",
+      "Role": 1
+    }
+  ],
   "FullQuery": "delete a from a join b on a.id = b.id where a.name = 'foo'"
 }
 
@@ -1123,6 +1819,12 @@ options:PassthroughDMLs
 {
   "PlanID": "NEXTVAL",
   "TableName": "seq",
+  "Permissions": [
+    {
+      "TableName": "seq",
+      "Role": 0
+    }
+  ],
   "PKValues":[1]
 }
 
@@ -1131,6 +1833,12 @@ options:PassthroughDMLs
 {
   "PlanID": "NEXTVAL",
   "TableName": "seq",
+  "Permissions": [
+    {
+      "TableName": "seq",
+      "Role": 0
+    }
+  ],
   "PKValues":[10]
 }
 
@@ -1139,6 +1847,12 @@ options:PassthroughDMLs
 {
   "PlanID": "NEXTVAL",
   "TableName": "seq",
+  "Permissions": [
+    {
+      "TableName": "seq",
+      "Role": 0
+    }
+  ],
   "PKValues":[":a"]
 }
 
@@ -1147,6 +1861,12 @@ options:PassthroughDMLs
 {
   "PlanID": "INSERT_PK",
   "TableName": "auto",
+  "Permissions": [
+    {
+      "TableName": "auto",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into auto values ()",
   "OuterQuery": "insert into auto(id) values (null)",
   "PKValues":[
@@ -1159,6 +1879,12 @@ options:PassthroughDMLs
 {
   "PlanID": "INSERT_PK",
   "TableName": "with_defaults",
+  "Permissions": [
+    {
+      "TableName": "with_defaults",
+      "Role": 1
+    }
+  ],
   "FullQuery": "insert into with_defaults values ()",
   "OuterQuery": "insert into with_defaults(aid, bid, cid) values (3, -2, null)",
   "PKValues":[
@@ -1210,42 +1936,94 @@ options:PassthroughDMLs
 "create table a(a int, b varchar(8))"
 {
   "PlanID": "DDL",
-  "TableName": ""
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ]
 }
 
 # alter
 "alter table a add column(a int)"
 {
   "PlanID": "DDL",
-  "TableName": "a"
+  "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ]
 }
 
 # alter rename
 "alter table a rename b"
 {
   "PlanID": "DDL",
-  "TableName": "a"
+  "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ]
 }
 
 # rename
 "rename table a to b"
 {
   "PlanID": "DDL",
-  "TableName": "a"
+  "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ]
 }
 
 # drop
 "drop table a"
 {
   "PlanID": "DDL",
-  "TableName": "a"
+  "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ]
 }
 
 # analyze
 "analyze table a"
 {
   "PlanID": "DDL",
-  "TableName": "a"
+  "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ]
 }
 
 # reorganize partition with bind
@@ -1253,6 +2031,12 @@ options:PassthroughDMLs
 {
   "PlanID": "DDL",
   "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
   "FullQuery": "alter table a reorganize partition b into (partition c values less than (:bv), partition d values less than (maxvalue))"
 }
 
@@ -1260,7 +2044,17 @@ options:PassthroughDMLs
 "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))"
 {
   "PlanID": "DDL",
-  "TableName": "a"
+  "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ]
 }
 
 # show

@@ -19,7 +19,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
@@ -95,22 +94,25 @@ func TestResolverExecuteEntityIds(t *testing.T) {
 
 func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
 	testResolverGeneric(t, "TestResolverExecuteBatchKeyspaceIds", func(res *Resolver) (*sqltypes.Result, error) {
-		qrs, err := res.ExecuteBatchKeyspaceIds(context.Background(),
-			[]*vtgatepb.BoundKeyspaceIdQuery{{
-				Query: &querypb.BoundQuery{
-					Sql:           "query",
-					BindVariables: nil,
-				},
-				Keyspace: "TestResolverExecuteBatchKeyspaceIds",
-				KeyspaceIds: [][]byte{
-					{0x10},
-					{0x25},
-				},
-			}},
+		queries := []*vtgatepb.BoundKeyspaceIdQuery{{
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace: "TestResolverExecuteBatchKeyspaceIds",
+			KeyspaceIds: [][]byte{
+				{0x10},
+				{0x25},
+			},
+		}}
+		qrs, err := res.ExecuteBatch(context.Background(),
 			topodatapb.TabletType_MASTER,
 			false,
 			nil,
-			nil)
+			nil,
+			func() (*scatterBatchRequest, error) {
+				return boundKeyspaceIDQueriesToScatterBatchRequest(context.Background(), res.resolver, queries, topodatapb.TabletType_MASTER)
+			})
 		if err != nil {
 			return nil, err
 		}
@@ -215,10 +217,10 @@ func testResolverGeneric(t *testing.T, name string, action func(res *Resolver) (
 	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	sbc1.MustFailCodes[vtrpcpb.Code_INTERNAL] = 1
 	_, err = action(res)
-	want1 := fmt.Sprintf("target: %s.-20.master, used tablet: aa-0 (-20), INVALID_ARGUMENT error", name)
-	want2 := fmt.Sprintf("target: %s.20-40.master, used tablet: aa-0 (20-40), INTERNAL error", name)
-	want := []string{want1, want2}
-	sort.Strings(want)
+	want := []string{
+		fmt.Sprintf("target: %s.-20.master, used tablet: aa-0 (-20), INVALID_ARGUMENT error", name),
+		fmt.Sprintf("target: %s.20-40.master, used tablet: aa-0 (20-40), INTERNAL error", name),
+	}
 	if err == nil {
 		t.Errorf("want\n%v\ngot\n%v", want, err)
 	} else {
@@ -248,10 +250,10 @@ func testResolverGeneric(t *testing.T, name string, action func(res *Resolver) (
 	sbc0.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	sbc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	_, err = action(res)
-	want1 = fmt.Sprintf("target: %s.-20.master, used tablet: aa-0 (-20), FAILED_PRECONDITION error", name)
-	want2 = fmt.Sprintf("target: %s.20-40.master, used tablet: aa-0 (20-40), FAILED_PRECONDITION error", name)
-	want = []string{want1, want2}
-	sort.Strings(want)
+	want = []string{
+		fmt.Sprintf("target: %s.-20.master, used tablet: aa-0 (-20), FAILED_PRECONDITION error", name),
+		fmt.Sprintf("target: %s.20-40.master, used tablet: aa-0 (20-40), FAILED_PRECONDITION error", name),
+	}
 	if err == nil {
 		t.Errorf("want\n%v\ngot\n%v", want, err)
 	} else {
@@ -524,38 +526,37 @@ func TestResolverInsertSqlClause(t *testing.T) {
 }
 
 func TestResolverBuildEntityIds(t *testing.T) {
-	shardMap := map[string][]*querypb.Value{
-		"-20": {{
-			Type:  querypb.Type_VARCHAR,
-			Value: []byte("0"),
-		}, {
-			Type:  querypb.Type_INT64,
-			Value: []byte("1"),
-		}},
-		"20-40": {{
-			Type:  querypb.Type_VARCHAR,
-			Value: []byte("2"),
-		}},
+	values := [][]*querypb.Value{
+		{
+			{
+				Type:  querypb.Type_VARCHAR,
+				Value: []byte("0"),
+			},
+			{
+				Type:  querypb.Type_INT64,
+				Value: []byte("1"),
+			},
+		},
+		{
+			{
+				Type:  querypb.Type_VARCHAR,
+				Value: []byte("2"),
+			},
+		},
 	}
 	sql := "select a from table where id=:id"
 	entityColName := "uid"
 	bindVar := map[string]*querypb.BindVariable{
 		"id": sqltypes.Int64BindVariable(10),
 	}
-	shards, sqls, bindVars := buildEntityIds(shardMap, sql, entityColName, bindVar)
-	wantShards := []string{"-20", "20-40"}
-	wantSqls := map[string]string{
-		"-20":   "select a from table where id=:id and uid in ::uid_entity_ids",
-		"20-40": "select a from table where id=:id and uid in ::uid_entity_ids",
+	sqls, bindVars := buildEntityIds(values, sql, entityColName, bindVar)
+	wantSqls := []string{
+		"select a from table where id=:id and uid in ::uid_entity_ids",
+		"select a from table where id=:id and uid in ::uid_entity_ids",
 	}
-	wantBindVars := map[string]map[string]*querypb.BindVariable{
-		"-20":   {"id": sqltypes.Int64BindVariable(10), "uid_entity_ids": sqltypes.TestBindVariable([]interface{}{"0", 1})},
-		"20-40": {"id": sqltypes.Int64BindVariable(10), "uid_entity_ids": sqltypes.TestBindVariable([]interface{}{"2"})},
-	}
-	sort.Strings(wantShards)
-	sort.Strings(shards)
-	if !reflect.DeepEqual(wantShards, shards) {
-		t.Errorf("want %+v, got %+v", wantShards, shards)
+	wantBindVars := []map[string]*querypb.BindVariable{
+		{"id": sqltypes.Int64BindVariable(10), "uid_entity_ids": sqltypes.TestBindVariable([]interface{}{"0", 1})},
+		{"id": sqltypes.Int64BindVariable(10), "uid_entity_ids": sqltypes.TestBindVariable([]interface{}{"2"})},
 	}
 	if !reflect.DeepEqual(wantSqls, sqls) {
 		t.Errorf("want %+v, got %+v", wantSqls, sqls)
@@ -608,7 +609,7 @@ func TestResolverExecBatchReresolve(t *testing.T) {
 			Keyspace: keyspace,
 			Shards:   []string{"0"},
 		}}
-		return boundShardQueriesToScatterBatchRequest(queries)
+		return boundShardQueriesToScatterBatchRequest(context.Background(), res.resolver, queries, topodatapb.TabletType_MASTER)
 	}
 
 	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, false, nil, nil, buildBatchRequest)
@@ -645,7 +646,7 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 			Keyspace: keyspace,
 			Shards:   []string{"0"},
 		}}
-		return boundShardQueriesToScatterBatchRequest(queries)
+		return boundShardQueriesToScatterBatchRequest(context.Background(), res.resolver, queries, topodatapb.TabletType_MASTER)
 	}
 
 	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, true, nil, nil, buildBatchRequest)
@@ -665,76 +666,6 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 
 func newTestResolver(hc discovery.HealthCheck, serv srvtopo.Server, cell string) *Resolver {
 	sc := newTestScatterConn(hc, serv, cell)
-	return NewResolver(serv, cell, sc)
-}
-
-func TestBoundKeyspaceIdQueriesToBoundShardQueries(t *testing.T) {
-	ts := new(sandboxTopo)
-	kid10 := []byte{0x10}
-	kid25 := []byte{0x25}
-	var testCases = []struct {
-		idQueries    []*vtgatepb.BoundKeyspaceIdQuery
-		shardQueries []*vtgatepb.BoundShardQuery
-	}{
-		{
-			idQueries: []*vtgatepb.BoundKeyspaceIdQuery{
-				{
-					Query: &querypb.BoundQuery{
-						Sql: "q1",
-						BindVariables: map[string]*querypb.BindVariable{
-							"q1var": sqltypes.Int64BindVariable(1),
-						},
-					},
-					Keyspace:    KsTestSharded,
-					KeyspaceIds: [][]byte{kid10, kid25},
-				}, {
-					Query: &querypb.BoundQuery{
-						Sql: "q2",
-						BindVariables: map[string]*querypb.BindVariable{
-							"q2var": sqltypes.Int64BindVariable(2),
-						},
-					},
-					Keyspace:    KsTestSharded,
-					KeyspaceIds: [][]byte{kid25, kid25},
-				},
-			},
-			shardQueries: []*vtgatepb.BoundShardQuery{
-				{
-					Query: &querypb.BoundQuery{
-						Sql: "q1",
-						BindVariables: map[string]*querypb.BindVariable{
-							"q1var": sqltypes.Int64BindVariable(1),
-						},
-					},
-					Keyspace: KsTestSharded,
-					Shards:   []string{"-20", "20-40"},
-				}, {
-					Query: &querypb.BoundQuery{
-						Sql: "q2",
-						BindVariables: map[string]*querypb.BindVariable{
-							"q2var": sqltypes.Int64BindVariable(2),
-						},
-					},
-					Keyspace: KsTestSharded,
-					Shards:   []string{"20-40"},
-				},
-			},
-		},
-	}
-
-	for _, testCase := range testCases {
-		shardQueries, err := boundKeyspaceIDQueriesToBoundShardQueries(context.Background(), ts, "", topodatapb.TabletType_MASTER, testCase.idQueries)
-		if err != nil {
-			t.Error(err)
-		}
-		// Sort shards, because they're random otherwise.
-		for _, shardQuery := range shardQueries {
-			sort.Strings(shardQuery.Shards)
-		}
-		got, _ := json.Marshal(shardQueries)
-		want, _ := json.Marshal(testCase.shardQueries)
-		if string(got) != string(want) {
-			t.Errorf("idQueries: %#v\nResponse:   %s\nExpecting: %s", testCase.idQueries, string(got), string(want))
-		}
-	}
+	srvResolver := srvtopo.NewResolver(serv, sc.gateway, cell)
+	return NewResolver(srvResolver, serv, cell, sc)
 }

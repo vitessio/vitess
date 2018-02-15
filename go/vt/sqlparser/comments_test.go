@@ -82,6 +82,10 @@ func TestSplitTrailingComments(t *testing.T) {
 		outSQL:      "foo",
 		outComments: " /*** bar ***/",
 	}, {
+		input:       "foo /*** bar ***/ ",
+		outSQL:      "foo",
+		outComments: " /*** bar ***/",
+	}, {
 		input:       "*** bar ***/",
 		outSQL:      "*** bar ***/",
 		outComments: "",

@@ -313,6 +313,7 @@ var keywords = map[string]int{
 	"status":              STATUS,
 	"stored":              UNUSED,
 	"straight_join":       STRAIGHT_JOIN,
+	"stream":              STREAM,
 	"table":               TABLE,
 	"tables":              TABLES,
 	"terminated":          UNUSED,
