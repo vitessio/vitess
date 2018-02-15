@@ -574,7 +574,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 					s.Cell,
 					s.Target.Keyspace,
 					s.Target.Shard,
-					ts.Target.TabletType.String(),
+					ts.Tablet.Type.String(),
 					state,
 					topoproto.TabletAliasString(ts.Tablet.Alias),
 					ts.Tablet.Hostname,
