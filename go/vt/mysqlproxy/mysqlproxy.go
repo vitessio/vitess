@@ -170,6 +170,7 @@ func (mp *Proxy) executeSelect(ctx context.Context, session *ProxySession, sql s
 		query, comments := sqlparser.SplitTrailingComments(sql)
 		stmt, err := sqlparser.Parse(query)
 		if err != nil {
+			fmt.Printf("YYY parse error  %s\n", query)
 			return nil, err
 		}
 		sqlparser.Normalize(stmt, bindVariables, "vtp")
