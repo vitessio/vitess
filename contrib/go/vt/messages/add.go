@@ -13,7 +13,7 @@ type AddOption func(m *Message)
 // TimeScheduled sets the time the message will first be queued
 func TimeScheduled(timeScheduled int64) AddOption {
 	return func(m *Message) {
-		m.TimeScheduled = timeScheduled
+		m.timeScheduled = timeScheduled
 	}
 }
 
@@ -21,13 +21,6 @@ func TimeScheduled(timeScheduled int64) AddOption {
 func ID(id int64) AddOption {
 	return func(m *Message) {
 		m.ID = id
-	}
-}
-
-// Epoch sets the message epoch
-func Epoch(epoch int64) AddOption {
-	return func(m *Message) {
-		m.Epoch = epoch
 	}
 }
 
@@ -56,9 +49,8 @@ func (q *Queue) AddMessage(ctx context.Context, conn Queryer, opts ...AddOption)
 
 	// create default args array
 	args := []interface{}{
-		m.TimeScheduled,
+		m.timeScheduled,
 		m.ID,
-		m.Epoch,
 	}
 
 	// if the queue is defined with custom user fields, make sure that they were supplied
@@ -80,8 +72,7 @@ func (q *Queue) getMessageForAdd() *Message {
 	m := q.addPool.Get().(*Message)
 
 	// set message defaults
-	m.TimeScheduled = time.Now().UTC().UnixNano()
-	m.Epoch = 100
+	m.timeScheduled = time.Now().UTC().UnixNano()
 
 	return m
 }

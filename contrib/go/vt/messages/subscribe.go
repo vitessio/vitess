@@ -67,13 +67,8 @@ func (q *Queue) newSubscription(maxConcurrent int) *Subscription {
 
 		// create a permanent set of scan fields
 		m.scanFields = []interface{}{
-			&m.TimeScheduled,
+			&m.timeScheduled,
 			&m.ID,
-			&m.TimeNext,
-			&m.Epoch,
-			&m.TimeCreated,
-			&m.TimeAcked,
-			&m.Message,
 		}
 
 		// if the user has set up custom fields, initialize them
@@ -95,8 +90,8 @@ func (q *Queue) newSubscription(maxConcurrent int) *Subscription {
 func (s *Subscription) Get(ctx context.Context) (*Message, error) {
 	select {
 	case m := <-s.readyForProcessingChan:
-		if m.Err != nil {
-			return nil, m.Err
+		if m.err != nil {
+			return nil, m.err
 		}
 		return m, nil
 
@@ -150,7 +145,7 @@ func (q *Queue) Subscribe(ctx context.Context) (*Subscription, error) {
 		// happening behind the scenes in the Vitess database/sql driver
 		for rows.Next() {
 			m := <-q.s.waitingForDataChan
-			m.Err = rows.Scan(m.scanFields...)
+			m.err = rows.Scan(m.scanFields...)
 
 			// send the message through the channel
 			q.s.readyForProcessingChan <- m

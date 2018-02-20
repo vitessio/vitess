@@ -45,17 +45,12 @@ type Message struct {
 	// along with pointers to the customFieldData slice
 	scanFields []interface{}
 
-	TimeScheduled   int64
+	timeScheduled   int64
 	ID              int64
-	TimeNext        int64
-	Epoch           int64
-	TimeCreated     *int64
-	TimeAcked       *int64
-	Message         interface{}
 	customFieldData []interface{}
 
-	// Err is only set if there is a scan error in Subscribe
-	Err error
+	// err is only set if there is a scan error in Subscribe
+	err error
 }
 
 // A QueueOption lets users customize the queue object
