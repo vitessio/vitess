@@ -52,8 +52,8 @@ func (q *Queue) newSubscription(maxConcurrent int) *Subscription {
 		waitingForDataChan:     make(chan *Message, maxConcurrent),
 		readyForProcessingChan: make(chan *Message, maxConcurrent),
 		streamSQL:              fmt.Sprintf("stream * from `%s`", q.name),
-		ackSQL:                 fmt.Sprintf("UPDATE `%s` SET time_acked=?, time_next=null WHERE id IN(?) AND time_acked is null", q.name),
-		failSQL:                fmt.Sprintf("UPDATE `%s` SET time_next=%d WHERE id IN(?) AND time_acked is null", q.name, math.MaxInt64),
+		ackSQL:                 fmt.Sprintf("UPDATE `%s` SET time_acked=?, time_next=null WHERE time_scheduled=? AND id=? AND time_acked is null", q.name),
+		failSQL:                fmt.Sprintf("UPDATE `%s` SET time_next=%d WHERE time_scheduled=? AND id=? AND time_acked is null", q.name, math.MaxInt64),
 	}
 
 	// initialize all the individual messages
@@ -103,14 +103,14 @@ func (s *Subscription) Get(ctx context.Context) (*Message, error) {
 // Ack marks a message as successfully completed
 func (m *Message) Ack(ctx context.Context) error {
 	defer m.s.putMessage(m)
-	_, err := m.s.db.ExecContext(ctx, m.s.ackSQL, time.Now().UTC().UnixNano(), m.ID)
+	_, err := m.s.db.ExecContext(ctx, m.s.ackSQL, time.Now().UTC().UnixNano(), m.timeScheduled, m.ID)
 	return err
 }
 
 // Fail marks a task as failed, and it will not be queued again until manual action is taken
 func (m *Message) Fail(ctx context.Context) error {
 	defer m.s.putMessage(m)
-	_, err := m.s.db.ExecContext(ctx, m.s.failSQL, time.Now().UTC().UnixNano(), m.ID)
+	_, err := m.s.db.ExecContext(ctx, m.s.failSQL, m.timeScheduled, m.ID)
 	return err
 }
 
