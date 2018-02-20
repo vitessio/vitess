@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"time"
+
+	"github.com/youtube/vitess/go/vt/vitessdriver"
 )
 
 // Ack marks a message as successfully completed
@@ -27,15 +29,22 @@ func (m *Message) Fail(ctx context.Context, conn Queryer) error {
 
 // Subscribe returns a channel of tasks
 // Context cancellation is respected
-func (q *Queue) Subscribe(ctx context.Context, conn Queryer) (<-chan *Message, error) {
+func (q *Queue) Subscribe(ctx context.Context) (<-chan *Message, error) {
 	// if the channel has already been created, return it
 	if q.readyForProcessingChan != nil {
 		return q.readyForProcessingChan, nil
 	}
 
+	// open a direct database connection if needed
+	if q.db == nil {
+		if err := q.openDB(); err != nil {
+			return nil, err
+		}
+	}
+
 	// start a streaming query that will run indefinitely
 	query := fmt.Sprintf("stream * from `%s`", q.name)
-	rows, err := conn.QueryContext(ctx, query)
+	rows, err := q.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -72,4 +81,16 @@ func (q *Queue) getSubscribeMessage() *Message {
 // putSubscribeMessage pushes a message back into the queue for resue
 func (q *Queue) putSubscribeMessage(m *Message) {
 	q.waitingForDataChan <- m
+}
+
+func (q *Queue) openDB() error {
+	var err error
+	q.db, err = vitessdriver.OpenWithConfiguration(q.dbConfig)
+	if err != nil {
+		return err
+	}
+	q.db.SetMaxOpenConns(1)
+	q.db.SetMaxIdleConns(1)
+
+	return nil
 }
