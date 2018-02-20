@@ -2,55 +2,145 @@ package messages
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/youtube/vitess/go/vt/vitessdriver"
 )
 
-// Ack marks a message as successfully completed
-func (m *Message) Ack(ctx context.Context, conn Queryer) error {
-	defer m.q.putSubscribeMessage(m)
+// Subscription allows users to interact with the queue
+type Subscription struct {
+	q *Queue
 
-	query := fmt.Sprintf("UPDATE `%s` SET time_acked=?, time_next=null WHERE id IN(?) AND time_acked is null", m.q.name)
-	_, err := conn.ExecContext(ctx, query, time.Now().UTC().UnixNano(), m.ID)
+	open   bool
+	openMu sync.Mutex
+
+	// Subscribe requires unique connection string properties,
+	// so we will manage that on behalf of the user
+	db *sql.DB
+
+	// store db connection details
+	dbConfig vitessdriver.Configuration
+
+	newFieldsFunc func() []interface{}
+
+	// this stores all of the in flight messages
+	msgBuf []Message
+
+	// these buffered channels manage max message processing concurrency
+
+	// these messages are ready to be filled with data from the db
+	waitingForDataChan chan *Message
+
+	// these messages are waiting for a subscriber to process them
+	readyForProcessingChan chan *Message
+
+	streamSQL string
+	ackSQL    string
+	failSQL   string
+}
+
+func (q *Queue) newSubscription(maxConcurrent int) *Subscription {
+	s := &Subscription{
+		q:                      q,
+		open:                   false,
+		openMu:                 sync.Mutex{},
+		msgBuf:                 make([]Message, maxConcurrent),
+		waitingForDataChan:     make(chan *Message, maxConcurrent),
+		readyForProcessingChan: make(chan *Message, maxConcurrent),
+		streamSQL:              fmt.Sprintf("stream * from `%s`", q.name),
+		ackSQL:                 fmt.Sprintf("UPDATE `%s` SET time_acked=?, time_next=null WHERE id IN(?) AND time_acked is null", q.name),
+		failSQL:                fmt.Sprintf("UPDATE `%s` SET time_next=%d WHERE id IN(?) AND time_acked is null", q.name, math.MaxInt64),
+	}
+
+	// initialize all the individual messages
+	// each message will be reset as it is reused
+	for i := range s.msgBuf {
+		// create a pointer to the message for convenience
+		m := &s.msgBuf[i]
+
+		// add a reference to the original queue
+		m.s = s
+
+		// create a permanent set of scan fields
+		m.scanFields = []interface{}{
+			&m.TimeScheduled,
+			&m.ID,
+			&m.TimeNext,
+			&m.Epoch,
+			&m.TimeCreated,
+			&m.TimeAcked,
+			&m.Message,
+		}
+
+		// if the user has set up custom fields, initialize them
+		if q.userFieldNames != nil {
+			m.customFieldData = s.newFieldsFunc()
+
+			// add a pointer to each of the individual user fields to scanFields
+			for j := range m.customFieldData {
+				m.scanFields = append(m.scanFields, &m.customFieldData[j])
+			}
+		}
+	}
+
+	return s
+}
+
+// Get returns the next available message. It blocks until either a message
+// is available or the context is cancelled
+func (s *Subscription) Get(ctx context.Context) (*Message, error) {
+	select {
+	case m := <-s.readyForProcessingChan:
+		if m.Err != nil {
+			return nil, m.Err
+		}
+		return m, nil
+
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// Ack marks a message as successfully completed
+func (m *Message) Ack(ctx context.Context) error {
+	defer m.s.putMessage(m)
+	_, err := m.s.db.ExecContext(ctx, m.s.ackSQL, time.Now().UTC().UnixNano(), m.ID)
 	return err
 }
 
 // Fail marks a task as failed, and it will not be queued again until manual action is taken
-func (m *Message) Fail(ctx context.Context, conn Queryer) error {
-	defer m.q.putSubscribeMessage(m)
-
-	query := fmt.Sprintf("UPDATE `%s` SET time_next=%d WHERE id IN(?) AND time_acked is null", m.q.name, math.MaxInt64)
-	_, err := conn.ExecContext(ctx, query, time.Now().UTC().UnixNano(), m.ID)
+func (m *Message) Fail(ctx context.Context) error {
+	defer m.s.putMessage(m)
+	_, err := m.s.db.ExecContext(ctx, m.s.failSQL, time.Now().UTC().UnixNano(), m.ID)
 	return err
 }
 
-// Subscribe returns a channel of tasks
+// Subscribe returns a subscription
 // Context cancellation is respected
-func (q *Queue) Subscribe(ctx context.Context) (<-chan *Message, error) {
-	// if the channel has already been created, return it
-	if q.readyForProcessingChan != nil {
-		return q.readyForProcessingChan, nil
+func (q *Queue) Subscribe(ctx context.Context) (*Subscription, error) {
+	q.s.openMu.Lock()
+	defer q.s.openMu.Unlock()
+
+	if q.s.open {
+		return q.s, nil
 	}
 
 	// open a direct database connection if needed
-	if q.db == nil {
-		if err := q.openDB(); err != nil {
+	if q.s.db == nil {
+		if err := q.s.openDB(); err != nil {
 			return nil, err
 		}
 	}
 
 	// start a streaming query that will run indefinitely
-	query := fmt.Sprintf("stream * from `%s`", q.name)
-	rows, err := q.db.QueryContext(ctx, query)
+	rows, err := q.s.db.QueryContext(ctx, q.s.streamSQL)
 	if err != nil {
 		return nil, err
 	}
-
-	// define the message channel to communicate
-	q.readyForProcessingChan = make(chan *Message, len(q.waitingForDataChan))
 
 	// this goroutine will be waiting for rows and is the only writer to the channel
 	go func() {
@@ -59,38 +149,33 @@ func (q *Queue) Subscribe(ctx context.Context) (<-chan *Message, error) {
 		// we don't need to check for context cancellation, because that is already
 		// happening behind the scenes in the Vitess database/sql driver
 		for rows.Next() {
-			m := q.getSubscribeMessage()
+			m := <-q.s.waitingForDataChan
 			m.Err = rows.Scan(m.scanFields...)
 
 			// send the message through the channel
-			q.readyForProcessingChan <- m
+			q.s.readyForProcessingChan <- m
 		}
 
 		// close the channel before exiting
-		close(q.readyForProcessingChan)
+		close(q.s.readyForProcessingChan)
 	}()
 
-	return q.readyForProcessingChan, nil
+	return q.s, nil
 }
 
-// getSubscribeMessage blocks until a message is available for reuse
-func (q *Queue) getSubscribeMessage() *Message {
-	return <-q.waitingForDataChan
+// putMessage pushes a message back into the queue for resue
+func (s *Subscription) putMessage(m *Message) {
+	s.waitingForDataChan <- m
 }
 
-// putSubscribeMessage pushes a message back into the queue for resue
-func (q *Queue) putSubscribeMessage(m *Message) {
-	q.waitingForDataChan <- m
-}
-
-func (q *Queue) openDB() error {
+func (s *Subscription) openDB() error {
 	var err error
-	q.db, err = vitessdriver.OpenWithConfiguration(q.dbConfig)
+	s.db, err = vitessdriver.OpenWithConfiguration(s.dbConfig)
 	if err != nil {
 		return err
 	}
-	q.db.SetMaxOpenConns(1)
-	q.db.SetMaxIdleConns(1)
+	s.db.SetMaxOpenConns(1)
+	s.db.SetMaxIdleConns(1)
 
 	return nil
 }

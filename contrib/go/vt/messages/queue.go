@@ -34,34 +34,12 @@ type Queue struct {
 	// insert params are calculated and the string is
 	insertSQL string
 
-	// -------------------------------------------
-	// Subscribe only fields
-	// -------------------------------------------
-
-	// Subscribe requires unique connection string properties,
-	// so we will manage that on behalf of the user
-	db *sql.DB
-
-	// store db connection details
-	dbConfig vitessdriver.Configuration
-
-	newFieldsFunc func() []interface{}
-
-	// this stores all of the in flight messages
-	msgBuf []Message
-
-	// these buffered channels manage max message processing concurrency
-
-	// these messages are ready to be filled with data from the db
-	waitingForDataChan chan *Message
-
-	// these messages are waiting for a subscriber to process them
-	readyForProcessingChan chan *Message
+	s *Subscription
 }
 
 // A Message stores information about a message
 type Message struct {
-	q *Queue
+	s *Subscription
 
 	// preconfigured scan targets that point at the below standard fields,
 	// along with pointers to the customFieldData slice
@@ -87,7 +65,7 @@ type QueueOption func(q *Queue) error
 func CustomFields(fieldNames []string, newFieldsFunc func() []interface{}) QueueOption {
 	return func(q *Queue) error {
 		q.userFieldNames = fieldNames
-		q.newFieldsFunc = newFieldsFunc
+		q.s.newFieldsFunc = newFieldsFunc
 
 		args := newFieldsFunc()
 		if len(args) != len(fieldNames) {
@@ -102,7 +80,7 @@ func CustomFields(fieldNames []string, newFieldsFunc func() []interface{}) Queue
 // so a connection is only made lazily when Subscribe is called
 func SubscribeConfig(address, target string) QueueOption {
 	return func(q *Queue) error {
-		q.dbConfig = vitessdriver.Configuration{
+		q.s.dbConfig = vitessdriver.Configuration{
 			Address:   address,
 			Target:    target,
 			Streaming: true,
@@ -122,9 +100,6 @@ func NewQueue(ctx context.Context, name string, maxConcurrent int, opts ...Queue
 		addPool: sync.Pool{
 			New: func() interface{} { return &Message{} },
 		},
-		msgBuf:                 make([]Message, maxConcurrent),
-		waitingForDataChan:     make(chan *Message, maxConcurrent),
-		readyForProcessingChan: make(chan *Message, maxConcurrent),
 	}
 
 	// execute all the queue options
@@ -137,36 +112,8 @@ func NewQueue(ctx context.Context, name string, maxConcurrent int, opts ...Queue
 	// only do this string manipulation once
 	q.insertSQL = q.generateInsertSQL()
 
-	// initialize all the individual messages
-	// each message will be reset as it is reused
-	for i := range q.msgBuf {
-		// create a pointer to the message for convenience
-		m := &q.msgBuf[i]
-
-		// add a reference to the original queue
-		m.q = q
-
-		// create a permanent set of scan fields
-		m.scanFields = []interface{}{
-			&m.TimeScheduled,
-			&m.ID,
-			&m.TimeNext,
-			&m.Epoch,
-			&m.TimeCreated,
-			&m.TimeAcked,
-			&m.Message,
-		}
-
-		// if the user has set up custom fields, initialize them
-		if q.userFieldNames != nil {
-			m.customFieldData = q.newFieldsFunc()
-
-			// add a pointer to each of the individual user fields to scanFields
-			for j := range m.customFieldData {
-				m.scanFields = append(m.scanFields, &m.customFieldData[j])
-			}
-		}
-	}
+	// generate the raw subscription
+	q.s = q.newSubscription(maxConcurrent)
 
 	return q, nil
 }
