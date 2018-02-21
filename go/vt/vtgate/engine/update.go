@@ -142,7 +142,7 @@ func (upd *Update) GetFields(vcursor VCursor, bindVars, joinVars map[string]*que
 func (upd *Update) execUpdateUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	ks, allShards, err := vcursor.GetKeyspaceShards(upd.Keyspace)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "paramsAllShards")
+		return nil, vterrors.Wrap(err, "execUpdateUnsharded")
 	}
 	if len(allShards) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", allShards)

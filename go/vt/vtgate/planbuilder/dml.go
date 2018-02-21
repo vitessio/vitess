@@ -151,8 +151,8 @@ func buildChangedVindexesValues(route *engine.Update, update *sqlparser.Update, 
 }
 
 // buildDeletePlan builds the instructions for a DELETE statement.
-func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Route, error) {
-	er := &engine.Route{
+func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Delete, error) {
+	er := &engine.Delete{
 		Query: generateQuery(del),
 	}
 	bldr, err := processTableExprs(del.TableExprs, vschema)

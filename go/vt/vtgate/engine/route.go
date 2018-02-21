@@ -75,11 +75,6 @@ type Route struct {
 	// Table sepcifies the table for the route.
 	Table *vindexes.Table
 
-	// Subquery is only set for deletes. A select of the rows to be
-	// deleted is performed to figure out which lookup vindex entries must
-	// be deleted.
-	Subquery string
-
 	// Generate is only set for inserts where a sequence must be generated.
 	Generate *Generate
 
@@ -142,7 +137,6 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		OrderBy:             route.OrderBy,
 		TruncateColumnCount: route.TruncateColumnCount,
 		Table:               tname,
-		Subquery:            route.Subquery,
 		Generate:            route.Generate,
 		Prefix:              route.Prefix,
 		Mid:                 route.Mid,
@@ -206,17 +200,6 @@ const (
 	SelectNext
 	// ExecDBA is for executing a DBA statement.
 	ExecDBA
-	// DeleteUnsharded is for routing a delete statement
-	// to an unsharded keyspace.
-	DeleteUnsharded
-	// DeleteEqual is for routing a delete statement
-	// to a single shard. Requires: A Vindex, a single
-	// Value, and a Subquery, which will be used to
-	// determine if lookup rows need to be deleted.
-	DeleteEqual
-	// DeleteSharded is for routing a scattered
-	// delete statement.
-	DeleteSharded
 	// InsertUnsharded is for routing an insert statement
 	// to an unsharded keyspace.
 	InsertUnsharded
@@ -240,9 +223,6 @@ var routeName = map[RouteOpcode]string{
 	SelectScatter:       "SelectScatter",
 	SelectNext:          "SelectNext",
 	ExecDBA:             "ExecDBA",
-	DeleteUnsharded:     "DeleteUnsharded",
-	DeleteSharded:       "DeleteSharded",
-	DeleteEqual:         "DeleteEqual",
 	InsertUnsharded:     "InsertUnsharded",
 	InsertSharded:       "InsertSharded",
 	InsertShardedIgnore: "InsertShardedIgnore",
@@ -285,10 +265,6 @@ func (route *Route) execute(vcursor VCursor, bindVars, joinVars map[string]*quer
 	switch route.Opcode {
 	case SelectNext, ExecDBA:
 		return execAnyShard(vcursor, route.Query, bindVars, route.Keyspace)
-	case DeleteEqual:
-		return route.execDeleteEqual(vcursor, bindVars)
-	case DeleteSharded:
-		return route.execDeleteSharded(vcursor, bindVars)
 	case InsertSharded, InsertShardedIgnore:
 		return route.execInsertSharded(vcursor, bindVars)
 	case InsertUnsharded:
@@ -300,9 +276,6 @@ func (route *Route) execute(vcursor VCursor, bindVars, joinVars map[string]*quer
 	isDML := false
 	switch route.Opcode {
 	case SelectUnsharded, SelectScatter:
-		params, err = route.paramsAllShards(vcursor, bindVars)
-	case DeleteUnsharded:
-		isDML = true
 		params, err = route.paramsAllShards(vcursor, bindVars)
 	case SelectEqual, SelectEqualUnique:
 		params, err = route.paramsSelectEqual(vcursor, bindVars)
@@ -438,38 +411,6 @@ func (route *Route) paramsSelectIN(vcursor VCursor, bindVars map[string]*querypb
 	}, nil
 }
 
-func (route *Route) execDeleteSharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	params, err := route.paramsAllShards(vcursor, bindVars)
-	if err != nil {
-		return nil, err
-	}
-	sql := sqlannotation.AnnotateIfDML(route.Query, nil)
-	shardQueries := getShardQueries(sql, params)
-	return vcursor.ExecuteMultiShard(params.ks, shardQueries, true /* isDML */, true /* canAutocommit */)
-}
-
-func (route *Route) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	key, err := route.Values[0].ResolveValue(bindVars)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "execDeleteEqual")
-	}
-	ks, shard, ksid, err := resolveSingleShard(vcursor, route.Vindex, route.Keyspace, bindVars, key)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "execDeleteEqual")
-	}
-	if len(ksid) == 0 {
-		return &sqltypes.Result{}, nil
-	}
-	if route.Subquery != "" && len(route.Table.Owned) != 0 {
-		err = route.deleteVindexEntries(vcursor, bindVars, ks, shard, ksid)
-		if err != nil {
-			return nil, vterrors.Wrap(err, "execDeleteEqual")
-		}
-	}
-	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{ksid}, "")
-	return execShard(vcursor, rewritten, bindVars, ks, shard, true /* isDML */, true /* canAutocommit */)
-}
-
 func (route *Route) execInsertUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	insertID, err := route.processGenerate(vcursor, bindVars)
 	if err != nil {
@@ -574,31 +515,6 @@ func (route *Route) resolveShards(vcursor VCursor, bindVars map[string]*querypb.
 		panic("unexpected")
 	}
 	return newKeyspace, routing, nil
-}
-
-func (route *Route) deleteVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, ks, shard string, ksid []byte) error {
-	result, err := execShard(vcursor, route.Subquery, bindVars, ks, shard, false /* isDML */, false /* canAutocommit */)
-	if err != nil {
-		return err
-	}
-	if len(result.Rows) == 0 {
-		return nil
-	}
-	// Columns are selected by table.Owned order, see generateDeleteSubquery for details
-	for tIdx, colVindex := range route.Table.Owned {
-		ids := make([][]sqltypes.Value, len(result.Rows))
-		for rowIdx, row := range result.Rows {
-			for colIdx := range colVindex.Columns {
-				// delete subQuery columns are added to the statement by tIdx + colIdx,
-				// hence the offset when finding in the result set.
-				ids[rowIdx] = append(ids[rowIdx], row[tIdx+colIdx])
-			}
-		}
-		if err = colVindex.Vindex.(vindexes.Lookup).Delete(vcursor, ids, ksid); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // processGenerate generates new values using a sequence if necessary.
