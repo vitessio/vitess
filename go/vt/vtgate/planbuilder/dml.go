@@ -39,8 +39,8 @@ func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 }
 
 // buildUpdatePlan builds the instructions for an UPDATE statement.
-func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, error) {
-	er := &engine.Route{
+func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Update, error) {
+	er := &engine.Update{
 		Query:               generateQuery(upd),
 		ChangedVindexValues: make(map[string][]sqltypes.PlanValue),
 	}
@@ -78,7 +78,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, err
 	if er.Table == nil {
 		return nil, errors.New("internal error: table.vindexTable is mysteriously nil")
 	}
-	err = getDMLRouting(upd.Where, er)
+	er.Vindex, er.Values, err = getDMLRouting(upd.Where, er.Table)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +102,7 @@ func generateQuery(statement sqlparser.Statement) string {
 // buildChangedVindexesValues adds to the plan all the lookup vindexes that are changing.
 // Updates can only be performed to secondary lookup vindexes with no complex expressions
 // in the set clause.
-func buildChangedVindexesValues(route *engine.Route, update *sqlparser.Update, colVindexes []*vindexes.ColumnVindex) (map[string][]sqltypes.PlanValue, error) {
+func buildChangedVindexesValues(route *engine.Update, update *sqlparser.Update, colVindexes []*vindexes.ColumnVindex) (map[string][]sqltypes.PlanValue, error) {
 	changedVindexes := make(map[string][]sqltypes.PlanValue)
 	for i, vindex := range colVindexes {
 		var vindexValues []sqltypes.PlanValue
@@ -186,7 +186,7 @@ func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Route, err
 	if err != nil {
 		return nil, err
 	}
-	err = getDMLRouting(del.Where, er)
+	er.Vindex, er.Values, err = getDMLRouting(del.Where, er.Table)
 	// We couldn't generate a route for a single shard
 	// Execute a delete sharded
 	if err != nil {
@@ -245,23 +245,21 @@ func generateUpdateSubquery(upd *sqlparser.Update, table *vindexes.Table) string
 	return buf.String()
 }
 
-// getDMLRouting updates the route with the necessary routing
-// info. If it cannot find a unique route, then it returns an error.
-func getDMLRouting(where *sqlparser.Where, route *engine.Route) error {
+// getDMLRouting returns the vindex and values for the DML,
+// If it cannot find a unique vindex match, it returns an error.
+func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (vindexes.Vindex, []sqltypes.PlanValue, error) {
 	if where == nil {
-		return errors.New("unsupported: multi-shard where clause in DML")
+		return nil, nil, errors.New("unsupported: multi-shard where clause in DML")
 	}
-	for _, index := range route.Table.Ordered {
+	for _, index := range table.Ordered {
 		if !vindexes.IsUnique(index.Vindex) {
 			continue
 		}
 		if pv, ok := getMatch(where.Expr, index.Columns[0]); ok {
-			route.Vindex = index.Vindex
-			route.Values = []sqltypes.PlanValue{pv}
-			return nil
+			return index.Vindex, []sqltypes.PlanValue{pv}, nil
 		}
 	}
-	return errors.New("unsupported: multi-shard where clause in DML")
+	return nil, nil, errors.New("unsupported: multi-shard where clause in DML")
 }
 
 // extractValueFromUpdate given an UpdateExpr attempts to extracts the Value

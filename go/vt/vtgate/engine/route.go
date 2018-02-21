@@ -56,9 +56,6 @@ type Route struct {
 	Vindex vindexes.Vindex
 	Values []sqltypes.PlanValue
 
-	// ChangedVindexValues contains values for updated Vindexes during an update statement.
-	ChangedVindexValues map[string][]sqltypes.PlanValue
-
 	// JoinVars contains the list of joinvar keys that will be used
 	// to extract join variables.
 	JoinVars map[string]struct{}
@@ -119,29 +116,27 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		vindexName = route.Vindex.String()
 	}
 	marshalRoute := struct {
-		Opcode              RouteOpcode                     `json:",omitempty"`
-		Keyspace            *vindexes.Keyspace              `json:",omitempty"`
-		Query               string                          `json:",omitempty"`
-		FieldQuery          string                          `json:",omitempty"`
-		Vindex              string                          `json:",omitempty"`
-		Values              []sqltypes.PlanValue            `json:",omitempty"`
-		ChangedVindexValues map[string][]sqltypes.PlanValue `json:",omitempty"`
-		JoinVars            map[string]struct{}             `json:",omitempty"`
-		OrderBy             []OrderbyParams                 `json:",omitempty"`
-		TruncateColumnCount int                             `json:",omitempty"`
-		Table               string                          `json:",omitempty"`
-		Subquery            string                          `json:",omitempty"`
-		Generate            *Generate                       `json:",omitempty"`
-		Prefix              string                          `json:",omitempty"`
-		Mid                 []string                        `json:",omitempty"`
-		Suffix              string                          `json:",omitempty"`
+		Opcode              RouteOpcode          `json:",omitempty"`
+		Keyspace            *vindexes.Keyspace   `json:",omitempty"`
+		Query               string               `json:",omitempty"`
+		FieldQuery          string               `json:",omitempty"`
+		Vindex              string               `json:",omitempty"`
+		Values              []sqltypes.PlanValue `json:",omitempty"`
+		JoinVars            map[string]struct{}  `json:",omitempty"`
+		OrderBy             []OrderbyParams      `json:",omitempty"`
+		TruncateColumnCount int                  `json:",omitempty"`
+		Table               string               `json:",omitempty"`
+		Subquery            string               `json:",omitempty"`
+		Generate            *Generate            `json:",omitempty"`
+		Prefix              string               `json:",omitempty"`
+		Mid                 []string             `json:",omitempty"`
+		Suffix              string               `json:",omitempty"`
 	}{
 		Opcode:              route.Opcode,
 		Keyspace:            route.Keyspace,
 		Query:               route.Query,
 		FieldQuery:          route.FieldQuery,
 		Vindex:              vindexName,
-		ChangedVindexValues: route.ChangedVindexValues,
 		Values:              route.Values,
 		JoinVars:            route.JoinVars,
 		OrderBy:             route.OrderBy,
@@ -211,13 +206,6 @@ const (
 	SelectNext
 	// ExecDBA is for executing a DBA statement.
 	ExecDBA
-	// UpdateUnsharded is for routing an update statement
-	// to an unsharded keyspace.
-	UpdateUnsharded
-	// UpdateEqual is for routing an update statement
-	// to a single shard: Requires: A Vindex, and
-	// a single Value.
-	UpdateEqual
 	// DeleteUnsharded is for routing a delete statement
 	// to an unsharded keyspace.
 	DeleteUnsharded
@@ -252,8 +240,6 @@ var routeName = map[RouteOpcode]string{
 	SelectScatter:       "SelectScatter",
 	SelectNext:          "SelectNext",
 	ExecDBA:             "ExecDBA",
-	UpdateUnsharded:     "UpdateUnsharded",
-	UpdateEqual:         "UpdateEqual",
 	DeleteUnsharded:     "DeleteUnsharded",
 	DeleteSharded:       "DeleteSharded",
 	DeleteEqual:         "DeleteEqual",
@@ -298,9 +284,7 @@ func (route *Route) execute(vcursor VCursor, bindVars, joinVars map[string]*quer
 
 	switch route.Opcode {
 	case SelectNext, ExecDBA:
-		return route.execAnyShard(vcursor, bindVars)
-	case UpdateEqual:
-		return route.execUpdateEqual(vcursor, bindVars)
+		return execAnyShard(vcursor, route.Query, bindVars, route.Keyspace)
 	case DeleteEqual:
 		return route.execDeleteEqual(vcursor, bindVars)
 	case DeleteSharded:
@@ -317,7 +301,7 @@ func (route *Route) execute(vcursor VCursor, bindVars, joinVars map[string]*quer
 	switch route.Opcode {
 	case SelectUnsharded, SelectScatter:
 		params, err = route.paramsAllShards(vcursor, bindVars)
-	case UpdateUnsharded, DeleteUnsharded:
+	case DeleteUnsharded:
 		isDML = true
 		params, err = route.paramsAllShards(vcursor, bindVars)
 	case SelectEqual, SelectEqualUnique:
@@ -338,7 +322,7 @@ func (route *Route) execute(vcursor VCursor, bindVars, joinVars map[string]*quer
 		return route.GetFields(vcursor, bindVars, joinVars)
 	}
 
-	shardQueries := route.getShardQueries(route.Query, params)
+	shardQueries := getShardQueries(route.Query, params)
 	// canAutocommit should be true only if it's a DML.
 	result, err := vcursor.ExecuteMultiShard(params.ks, shardQueries, isDML, isDML /* canAutocommit */)
 	if err != nil {
@@ -390,12 +374,12 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars, joinVars map[string
 func (route *Route) GetFields(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	bindVars = combineVars(bindVars, joinVars)
 
-	ks, shard, err := route.anyShard(vcursor, route.Keyspace)
+	ks, shard, err := anyShard(vcursor, route.Keyspace)
 	if err != nil {
 		return nil, err
 	}
 
-	qr, err := route.execShard(vcursor, route.FieldQuery, bindVars, ks, shard, false /* isDML */, false /* canAutocommit */)
+	qr, err := execShard(vcursor, route.FieldQuery, bindVars, ks, shard, false /* isDML */, false /* canAutocommit */)
 	if err != nil {
 		return nil, err
 	}
@@ -454,76 +438,13 @@ func (route *Route) paramsSelectIN(vcursor VCursor, bindVars map[string]*querypb
 	}, nil
 }
 
-func (route *Route) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	key, err := route.Values[0].ResolveValue(bindVars)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "execUpdateEqual")
-	}
-	ks, shard, ksid, err := route.resolveSingleShard(vcursor, bindVars, key)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "execUpdateEqual")
-	}
-	if len(ksid) == 0 {
-		return &sqltypes.Result{}, nil
-	}
-	if len(route.ChangedVindexValues) != 0 {
-		result, err := route.execUpdateEqualChangedVindex(vcursor, route.Subquery, bindVars, ks, shard, ksid)
-		if err != nil {
-			return nil, err
-		}
-		return result, nil
-	}
-	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{ksid}, "")
-	return route.execShard(vcursor, rewritten, bindVars, ks, shard, true /* isDML */, true /* canAutocommit */)
-}
-
-// execUpdateEqualChangedVindex performs an update when a vindex is being modified
-// by the statement.
-// Note: The order seen in the DML's seen below won't neccesarly matches
-// the one that will be executed by vttablet.
-// Given that dmls will be mapped to existent transactions on each
-// shard, the order could change.
-// However, to avoid issues with duplicate key constraints violations in the
-// case that a vindex update lands in the same shard, it's more convenient
-// to do the delete first. The following is an example of this sceneario:
-// - An update statement with an unique vindex column that sets a value to
-//   to what already exists in the db:
-//   update user set name='juan' where user_id=1
-//   Followed by:
-//   update user set name='juan' where user_id=1
-// If we don't perform the delete first, this query will fail because the lookup
-// table already has an entry from name=juan to user_id=1.
-//
-// Note 2: While changes are being committed, the changing row could be
-// unreachable by either the new or old column values.
-func (route *Route) execUpdateEqualChangedVindex(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, keyspace, shard string, keyspaceID []byte) (*sqltypes.Result, error) {
-	var subQueryResult *sqltypes.Result
-	var err error
-	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{keyspaceID}, "")
-	if route.Subquery != "" {
-		subQueryResult, err = route.execShard(vcursor, route.Subquery, bindVars, keyspace, shard, false /* isDML */, false /* canAutocommit */)
-		if err != nil {
-			return nil, vterrors.Wrap(err, "execUpdateEqual")
-		}
-	}
-	err = route.updateChangedVindexes(subQueryResult, vcursor, bindVars, keyspaceID)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "execUpdateEqual")
-	}
-	result, err := route.execShard(vcursor, rewritten, bindVars, keyspace, shard, true /* isDML */, true /* canAutocommit */)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "execUpdateEqual")
-	}
-	return result, nil
-}
-
 func (route *Route) execDeleteSharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	params, err := route.paramsAllShards(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
 	sql := sqlannotation.AnnotateIfDML(route.Query, nil)
-	shardQueries := route.getShardQueries(sql, params)
+	shardQueries := getShardQueries(sql, params)
 	return vcursor.ExecuteMultiShard(params.ks, shardQueries, true /* isDML */, true /* canAutocommit */)
 }
 
@@ -532,7 +453,7 @@ func (route *Route) execDeleteEqual(vcursor VCursor, bindVars map[string]*queryp
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteEqual")
 	}
-	ks, shard, ksid, err := route.resolveSingleShard(vcursor, bindVars, key)
+	ks, shard, ksid, err := resolveSingleShard(vcursor, route.Vindex, route.Keyspace, bindVars, key)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteEqual")
 	}
@@ -546,7 +467,7 @@ func (route *Route) execDeleteEqual(vcursor VCursor, bindVars map[string]*queryp
 		}
 	}
 	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{ksid}, "")
-	return route.execShard(vcursor, rewritten, bindVars, ks, shard, true /* isDML */, true /* canAutocommit */)
+	return execShard(vcursor, rewritten, bindVars, ks, shard, true /* isDML */, true /* canAutocommit */)
 }
 
 func (route *Route) execInsertUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
@@ -559,7 +480,7 @@ func (route *Route) execInsertUnsharded(vcursor VCursor, bindVars map[string]*qu
 		return nil, vterrors.Wrap(err, "execInsertUnsharded")
 	}
 
-	shardQueries := route.getShardQueries(route.Query, params)
+	shardQueries := getShardQueries(route.Query, params)
 	result, err := vcursor.ExecuteMultiShard(params.ks, shardQueries, true /* isDML */, true /* canAutocommit */)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execInsertUnsharded")
@@ -655,68 +576,8 @@ func (route *Route) resolveShards(vcursor VCursor, bindVars map[string]*querypb.
 	return newKeyspace, routing, nil
 }
 
-func (route *Route) resolveSingleShard(vcursor VCursor, bindVars map[string]*querypb.BindVariable, vindexKey sqltypes.Value) (newKeyspace, shard string, ksid []byte, err error) {
-	newKeyspace, allShards, err := vcursor.GetKeyspaceShards(route.Keyspace)
-	if err != nil {
-		return "", "", nil, err
-	}
-	mapper := route.Vindex.(vindexes.Unique)
-	ksids, err := mapper.Map(vcursor, []sqltypes.Value{vindexKey})
-	if err != nil {
-		return "", "", nil, err
-	}
-	if err := ksids[0].ValidateUnique(); err != nil {
-		return "", "", nil, err
-	}
-	ksid = ksids[0].ID
-	if ksid == nil {
-		return "", "", ksid, nil
-	}
-	shard, err = vcursor.GetShardForKeyspaceID(allShards, ksid)
-	if err != nil {
-		return "", "", nil, err
-	}
-	return newKeyspace, shard, ksid, nil
-}
-
-func (route *Route) updateChangedVindexes(subQueryResult *sqltypes.Result, vcursor VCursor, bindVars map[string]*querypb.BindVariable, ksid []byte) error {
-	if len(subQueryResult.Rows) == 0 {
-		// NOOP, there are no actual rows changing due to this statement
-		return nil
-	}
-	if len(subQueryResult.Rows) > 1 {
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update changes multiple columns in the vindex")
-	}
-	colnum := 0
-	for _, colVindex := range route.Table.Owned {
-		// Fetch the column values. colnum must keep incrementing.
-		fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
-		for range colVindex.Columns {
-			fromIds = append(fromIds, subQueryResult.Rows[0][colnum])
-			colnum++
-		}
-
-		// Update columns only if they're being changed.
-		if colValues, ok := route.ChangedVindexValues[colVindex.Name]; ok {
-			vindexColumnKeys := make([]sqltypes.Value, 0, len(colValues))
-			for _, colValue := range colValues {
-				resolvedVal, err := colValue.ResolveValue(bindVars)
-				if err != nil {
-					return err
-				}
-				vindexColumnKeys = append(vindexColumnKeys, resolvedVal)
-			}
-
-			if err := colVindex.Vindex.(vindexes.Lookup).Update(vcursor, fromIds, ksid, vindexColumnKeys); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
 func (route *Route) deleteVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, ks, shard string, ksid []byte) error {
-	result, err := route.execShard(vcursor, route.Subquery, bindVars, ks, shard, false /* isDML */, false /* canAutocommit */)
+	result, err := execShard(vcursor, route.Subquery, bindVars, ks, shard, false /* isDML */, false /* canAutocommit */)
 	if err != nil {
 		return err
 	}
@@ -763,7 +624,7 @@ func (route *Route) processGenerate(vcursor VCursor, bindVars map[string]*queryp
 
 	// If generation is needed, generate the requested number of values (as one call).
 	if count != 0 {
-		ks, shard, err := route.anyShard(vcursor, route.Generate.Keyspace)
+		ks, shard, err := anyShard(vcursor, route.Generate.Keyspace)
 		if err != nil {
 			return 0, vterrors.Wrap(err, "processGenerate")
 		}
@@ -1105,15 +966,39 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 	return out, err
 }
 
-func (route *Route) execAnyShard(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	ks, shard, err := route.anyShard(vcursor, route.Keyspace)
+func resolveSingleShard(vcursor VCursor, vindex vindexes.Vindex, keyspace *vindexes.Keyspace, bindVars map[string]*querypb.BindVariable, vindexKey sqltypes.Value) (newKeyspace, shard string, ksid []byte, err error) {
+	newKeyspace, allShards, err := vcursor.GetKeyspaceShards(keyspace)
+	if err != nil {
+		return "", "", nil, err
+	}
+	mapper := vindex.(vindexes.Unique)
+	ksids, err := mapper.Map(vcursor, []sqltypes.Value{vindexKey})
+	if err != nil {
+		return "", "", nil, err
+	}
+	if err := ksids[0].ValidateUnique(); err != nil {
+		return "", "", nil, err
+	}
+	ksid = ksids[0].ID
+	if ksid == nil {
+		return "", "", ksid, nil
+	}
+	shard, err = vcursor.GetShardForKeyspaceID(allShards, ksid)
+	if err != nil {
+		return "", "", nil, err
+	}
+	return newKeyspace, shard, ksid, nil
+}
+
+func execAnyShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, keyspace *vindexes.Keyspace) (*sqltypes.Result, error) {
+	ks, shard, err := anyShard(vcursor, keyspace)
 	if err != nil {
 		return nil, fmt.Errorf("execAnyShard: %v", err)
 	}
-	return vcursor.ExecuteStandalone(route.Query, bindVars, ks, shard)
+	return vcursor.ExecuteStandalone(query, bindVars, ks, shard)
 }
 
-func (route *Route) execShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, keyspace, shard string, isDML, canAutocommit bool) (*sqltypes.Result, error) {
+func execShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, keyspace, shard string, isDML, canAutocommit bool) (*sqltypes.Result, error) {
 	return vcursor.ExecuteMultiShard(keyspace, map[string]*querypb.BoundQuery{
 		shard: {
 			Sql:           query,
@@ -1122,7 +1007,7 @@ func (route *Route) execShard(vcursor VCursor, query string, bindVars map[string
 	}, isDML, canAutocommit)
 }
 
-func (route *Route) anyShard(vcursor VCursor, keyspace *vindexes.Keyspace) (string, string, error) {
+func anyShard(vcursor VCursor, keyspace *vindexes.Keyspace) (string, string, error) {
 	ks, allShards, err := vcursor.GetKeyspaceShards(keyspace)
 	if err != nil {
 		return "", "", err
@@ -1130,7 +1015,7 @@ func (route *Route) anyShard(vcursor VCursor, keyspace *vindexes.Keyspace) (stri
 	return ks, allShards[0].Name, nil
 }
 
-func (route *Route) getShardQueries(query string, params *scatterParams) map[string]*querypb.BoundQuery {
+func getShardQueries(query string, params *scatterParams) map[string]*querypb.BoundQuery {
 	shardQueries := make(map[string]*querypb.BoundQuery, len(params.shardVars))
 	for shard, shardVars := range params.shardVars {
 		shardQueries[shard] = &querypb.BoundQuery{
