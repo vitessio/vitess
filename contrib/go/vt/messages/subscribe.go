@@ -13,10 +13,13 @@ import (
 
 // Subscription allows users to interact with the queue
 type Subscription struct {
-	q *Queue
+	q  *Queue
+	mu sync.Mutex
 
-	open   bool
-	openMu sync.Mutex
+	// this is true while a Subscription is live
+	isActive bool
+
+	cancelFunc context.CancelFunc
 
 	// Subscribe requires unique connection string properties,
 	// so we will manage that on behalf of the user
@@ -24,8 +27,6 @@ type Subscription struct {
 
 	// store db connection details
 	dbConfig vitessdriver.Configuration
-
-	newFieldsFunc func() []interface{}
 
 	// this stores all of the in flight messages
 	msgBuf []Message
@@ -41,48 +42,6 @@ type Subscription struct {
 	streamSQL string
 	ackSQL    string
 	failSQL   string
-}
-
-func (q *Queue) newSubscription(maxConcurrent int) *Subscription {
-	s := &Subscription{
-		q:                      q,
-		open:                   false,
-		openMu:                 sync.Mutex{},
-		msgBuf:                 make([]Message, maxConcurrent),
-		waitingForDataChan:     make(chan *Message, maxConcurrent),
-		readyForProcessingChan: make(chan *Message, maxConcurrent),
-		streamSQL:              fmt.Sprintf("stream * from `%s`", q.name),
-		ackSQL:                 fmt.Sprintf("UPDATE `%s` SET time_acked=?, time_next=null WHERE time_scheduled=? AND id=? AND time_acked is null", q.name),
-		failSQL:                fmt.Sprintf("UPDATE `%s` SET time_next=%d WHERE time_scheduled=? AND id=? AND time_acked is null", q.name, math.MaxInt64),
-	}
-
-	// initialize all the individual messages
-	// each message will be reset as it is reused
-	for i := range s.msgBuf {
-		// create a pointer to the message for convenience
-		m := &s.msgBuf[i]
-
-		// add a reference to the original queue
-		m.s = s
-
-		// create a permanent set of scan fields
-		m.scanFields = []interface{}{
-			&m.timeScheduled,
-			&m.ID,
-		}
-
-		// if the user has set up custom fields, initialize them
-		if q.userFieldNames != nil {
-			m.customFieldData = s.newFieldsFunc()
-
-			// add a pointer to each of the individual user fields to scanFields
-			for j := range m.customFieldData {
-				m.scanFields = append(m.scanFields, &m.customFieldData[j])
-			}
-		}
-	}
-
-	return s
 }
 
 // Get returns the next available message. It blocks until either a message
@@ -117,22 +76,27 @@ func (m *Message) Fail(ctx context.Context) error {
 // Subscribe returns a subscription
 // Context cancellation is respected
 func (q *Queue) Subscribe(ctx context.Context, address, target string) (*Subscription, error) {
-	q.s.openMu.Lock()
-	defer q.s.openMu.Unlock()
+	q.s.mu.Lock()
+	defer q.s.mu.Unlock()
 
-	if q.s.open {
+	if q.s.isActive {
 		return q.s, nil
 	}
 
+	// generate the raw subscription
+	q.s = q.newSubscription(q.maxConcurrent)
+
+	// create sub-context for subscribe goroutine with cancelFunc for cleanup
+	var newCtx context.Context
+	newCtx, q.s.cancelFunc = context.WithCancel(ctx)
+
 	// open a direct database connection if needed
-	if q.s.db == nil {
-		if err := q.s.openDB(ctx, address, target); err != nil {
-			return nil, err
-		}
+	if err := q.s.openDB(newCtx, address, target); err != nil {
+		return nil, err
 	}
 
 	// start a streaming query that will run indefinitely
-	rows, err := q.s.db.QueryContext(ctx, q.s.streamSQL)
+	rows, err := q.s.db.QueryContext(newCtx, q.s.streamSQL)
 	if err != nil {
 		return nil, err
 	}
@@ -158,6 +122,48 @@ func (q *Queue) Subscribe(ctx context.Context, address, target string) (*Subscri
 	return q.s, nil
 }
 
+func (q *Queue) newSubscription(maxConcurrent int) *Subscription {
+	s := &Subscription{
+		q:                      q,
+		isActive:               false,
+		mu:                     sync.Mutex{},
+		msgBuf:                 make([]Message, maxConcurrent),
+		waitingForDataChan:     make(chan *Message, maxConcurrent),
+		readyForProcessingChan: make(chan *Message, maxConcurrent),
+		streamSQL:              fmt.Sprintf("stream * from `%s`", q.name),
+		ackSQL:                 fmt.Sprintf("UPDATE `%s` SET time_acked=?, time_next=null WHERE time_scheduled=? AND id=? AND time_acked is null", q.name),
+		failSQL:                fmt.Sprintf("UPDATE `%s` SET time_next=%d WHERE time_scheduled=? AND id=? AND time_acked is null", q.name, math.MaxInt64),
+	}
+
+	// initialize all the individual messages
+	// each message will be reset as it is reused
+	for i := range s.msgBuf {
+		// create a pointer to the message for convenience
+		m := &s.msgBuf[i]
+
+		// add a reference to the original queue
+		m.s = s
+
+		// create a permanent set of scan fields
+		m.scanFields = []interface{}{
+			&m.timeScheduled,
+			&m.ID,
+		}
+
+		// if the user has set up custom fields, initialize them
+		if q.userFieldNames != nil {
+			m.customFieldData = q.newFieldsFunc()
+
+			// add a pointer to each of the individual user fields to scanFields
+			for j := range m.customFieldData {
+				m.scanFields = append(m.scanFields, &m.customFieldData[j])
+			}
+		}
+	}
+
+	return s
+}
+
 // putMessage pushes a message back into the queue for resue
 func (s *Subscription) putMessage(m *Message) {
 	s.waitingForDataChan <- m
@@ -179,4 +185,26 @@ func (s *Subscription) openDB(ctx context.Context, address, target string) error
 	s.db.SetMaxIdleConns(1)
 
 	return nil
+}
+
+// Close drains the processing channel and closes the connection to the database
+// TODO: Nack all remaining messages
+func (s *Subscription) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.isActive = false
+
+	// cancel context inside rows.Next()
+	s.cancelFunc()
+
+	// drain processing channel
+	for range s.readyForProcessingChan {
+	}
+
+	// drain waiting channel
+	for range s.waitingForDataChan {
+	}
+
+	return s.db.Close()
 }

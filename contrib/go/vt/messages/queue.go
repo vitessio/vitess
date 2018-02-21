@@ -21,6 +21,8 @@ type Queryer interface {
 type Queue struct {
 	name           string
 	userFieldNames []string
+	newFieldsFunc  func() []interface{}
+	maxConcurrent  int
 
 	// -------------------------------------------
 	// AddMessage only fields
@@ -58,7 +60,7 @@ type QueueOption func(q *Queue) error
 func CustomFields(fieldNames []string, newFieldsFunc func() []interface{}) QueueOption {
 	return func(q *Queue) error {
 		q.userFieldNames = fieldNames
-		q.s.newFieldsFunc = newFieldsFunc
+		q.newFieldsFunc = newFieldsFunc
 
 		args := newFieldsFunc()
 		if len(args) != len(fieldNames) {
@@ -76,7 +78,8 @@ func NewQueue(ctx context.Context, name string, maxConcurrent int, opts ...Queue
 	}
 
 	q := &Queue{
-		name: name,
+		name:          name,
+		maxConcurrent: maxConcurrent,
 		addPool: sync.Pool{
 			New: func() interface{} { return &Message{} },
 		},
@@ -91,9 +94,6 @@ func NewQueue(ctx context.Context, name string, maxConcurrent int, opts ...Queue
 
 	// only do this string manipulation once
 	q.insertSQL = q.generateInsertSQL()
-
-	// generate the raw subscription
-	q.s = q.newSubscription(maxConcurrent)
 
 	return q, nil
 }
