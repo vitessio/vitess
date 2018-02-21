@@ -116,7 +116,7 @@ func (m *Message) Fail(ctx context.Context) error {
 
 // Subscribe returns a subscription
 // Context cancellation is respected
-func (q *Queue) Subscribe(ctx context.Context) (*Subscription, error) {
+func (q *Queue) Subscribe(ctx context.Context, address, target string) (*Subscription, error) {
 	q.s.openMu.Lock()
 	defer q.s.openMu.Unlock()
 
@@ -126,7 +126,7 @@ func (q *Queue) Subscribe(ctx context.Context) (*Subscription, error) {
 
 	// open a direct database connection if needed
 	if q.s.db == nil {
-		if err := q.s.openDB(); err != nil {
+		if err := q.s.openDB(ctx, address, target); err != nil {
 			return nil, err
 		}
 	}
@@ -163,7 +163,13 @@ func (s *Subscription) putMessage(m *Message) {
 	s.waitingForDataChan <- m
 }
 
-func (s *Subscription) openDB() error {
+func (s *Subscription) openDB(ctx context.Context, address, target string) error {
+	s.dbConfig = vitessdriver.Configuration{
+		Address:   address,
+		Target:    target,
+		Streaming: true,
+	}
+
 	var err error
 	s.db, err = vitessdriver.OpenWithConfiguration(s.dbConfig)
 	if err != nil {

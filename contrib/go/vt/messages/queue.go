@@ -7,8 +7,6 @@ import (
 	"errors"
 	"strings"
 	"sync"
-
-	"github.com/youtube/vitess/go/vt/vitessdriver"
 )
 
 // Queryer lets most functions accept a DB or a Tx without knowing the difference
@@ -67,19 +65,6 @@ func CustomFields(fieldNames []string, newFieldsFunc func() []interface{}) Queue
 			return errors.New("user fields mismatch")
 		}
 
-		return nil
-	}
-}
-
-// SubscribeConfig stores db connection details. This option doesn't open the db,
-// so a connection is only made lazily when Subscribe is called
-func SubscribeConfig(address, target string) QueueOption {
-	return func(q *Queue) error {
-		q.s.dbConfig = vitessdriver.Configuration{
-			Address:   address,
-			Target:    target,
-			Streaming: true,
-		}
 		return nil
 	}
 }
