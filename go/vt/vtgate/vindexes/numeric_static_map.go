@@ -94,12 +94,12 @@ func (vind *NumericStaticMap) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]
 }
 
 // Map returns the associated keyspace ids for the given ids.
-func (vind *NumericStaticMap) Map(_ VCursor, ids []sqltypes.Value) ([]Ksid, error) {
-	out := make([]Ksid, 0, len(ids))
+func (vind *NumericStaticMap) Map(_ VCursor, ids []sqltypes.Value) ([]KsidOrRange, error) {
+	out := make([]KsidOrRange, 0, len(ids))
 	for _, id := range ids {
 		num, err := sqltypes.ToUint64(id)
 		if err != nil {
-			out = append(out, Ksid{})
+			out = append(out, KsidOrRange{})
 			continue
 		}
 		lookupNum, ok := vind.lookup[num]
@@ -108,7 +108,7 @@ func (vind *NumericStaticMap) Map(_ VCursor, ids []sqltypes.Value) ([]Ksid, erro
 		}
 		var keybytes [8]byte
 		binary.BigEndian.PutUint64(keybytes[:], num)
-		out = append(out, Ksid{ID: keybytes[:]})
+		out = append(out, KsidOrRange{ID: keybytes[:]})
 	}
 	return out, nil
 }

@@ -59,7 +59,7 @@ func TestHashMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := []Ksid{
+	want := []KsidOrRange{
 		{ID: []byte("\x16k@\xb4J\xbaK\xd6")},
 		{ID: []byte("\x06\xe7\xea\"Βp\x8f")},
 		{ID: []byte("N\xb1\x90ɢ\xfa\x16\x9c")},

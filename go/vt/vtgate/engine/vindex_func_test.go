@@ -35,9 +35,9 @@ func (*uvindex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, er
 	panic("unimplemented")
 }
 
-func (v *uvindex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksid, error) {
+func (v *uvindex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.KsidOrRange, error) {
 	if v.matchkr {
-		return []vindexes.Ksid{{
+		return []vindexes.KsidOrRange{{
 			Range: &topodatapb.KeyRange{
 				Start: []byte{0x40},
 				End:   []byte{0x60},
@@ -45,11 +45,11 @@ func (v *uvindex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksid, erro
 		}}, nil
 	}
 	if v.matchid {
-		return []vindexes.Ksid{
+		return []vindexes.KsidOrRange{
 			{ID: []byte("foo")},
 		}, nil
 	}
-	return []vindexes.Ksid{{}}, nil
+	return []vindexes.KsidOrRange{{}}, nil
 }
 
 // nvindex is NonUnique.

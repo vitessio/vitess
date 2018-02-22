@@ -295,8 +295,8 @@ func (*keyRangeLookuperUnique) Cost() int        { return 0 }
 func (*keyRangeLookuperUnique) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*keyRangeLookuperUnique) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksid, error) {
-	return []vindexes.Ksid{{
+func (*keyRangeLookuperUnique) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.KsidOrRange, error) {
+	return []vindexes.KsidOrRange{{
 		Range: &topodatapb.KeyRange{
 			End: []byte{0x10},
 		},

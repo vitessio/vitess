@@ -616,6 +616,9 @@ func (route *Route) resolveShards(vcursor VCursor, bindVars map[string]*querypb.
 		for i, ksid := range ksids {
 			switch {
 			case ksid.Range != nil:
+				// Even for a unique vindex, a KeyRange can be returned if a keypace
+				// id cannot be identified. For example, this can happen during backfill.
+				// In such cases, we scatter over the KeyRange.
 				// Use the multi-keyspace id API to convert a keyrange to shards.
 				shards, err = vcursor.GetShardsForKsids(allShards, vindexes.Ksids{Range: ksid.Range})
 				if err != nil {
