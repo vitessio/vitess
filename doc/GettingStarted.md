@@ -265,7 +265,7 @@ In addition, Vitess requires the software and libraries listed below.
     Note that the command indicates that the `mysql` executable should
     be found at `/usr/local/mysql/bin/mysql`.
 
-1.  Run `mysql_config --version` and confirm that you
+1.  Run `mysqld --version` and confirm that you
     are running the correct version of MariaDB or MySQL. The value should
     be 10 or higher for MariaDB and 5.6.x for MySQL.
 

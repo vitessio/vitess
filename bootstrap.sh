@@ -216,25 +216,6 @@ esac
 # every time dev.env is sourced.
 echo "$MYSQL_FLAVOR" > $VTROOT/dist/MYSQL_FLAVOR
 
-# generate pkg-config, so go can use mysql C client
-[ -x $VT_MYSQL_ROOT/bin/mysql_config ] || fail "Cannot execute $VT_MYSQL_ROOT/bin/mysql_config. Did you install a client dev package?"
-
-cp $VTTOP/config/gomysql.pc.tmpl $VTROOT/lib/gomysql.pc
-myversion=`$VT_MYSQL_ROOT/bin/mysql_config --version`
-echo "Version:" "$myversion" >> $VTROOT/lib/gomysql.pc
-echo "Cflags:" "$($VT_MYSQL_ROOT/bin/mysql_config --cflags) -ggdb -fPIC" >> $VTROOT/lib/gomysql.pc
-# Note we add $VT_MYSQL_ROOT/lib as an extra path in the case where
-# we installed the standard MySQL packages from a distro into a sub-directory
-# and the provided mysql_config assumes the <root>/lib directory
-# is already in the library path.
-if [[ "$MYSQL_FLAVOR" == "MariaDB" || "$myversion" =~ ^5\.7\. ]]; then
-  # Use static linking because the shared library doesn't export
-  # some internal functions we use, like cli_safe_read.
-  echo "Libs:" "-L$VT_MYSQL_ROOT/lib $($VT_MYSQL_ROOT/bin/mysql_config --libs_r | sed -e 's,-lmysqlclient\(_r\)*,-l:libmysqlclient.a -lstdc++,')" >> $VTROOT/lib/gomysql.pc
-else
-  echo "Libs:" "-L$VT_MYSQL_ROOT/lib $($VT_MYSQL_ROOT/bin/mysql_config --libs_r)" >> $VTROOT/lib/gomysql.pc
-fi
-
 # install mock
 mock_dist=$VTROOT/dist/py-mock-1.0.1
 if [ -f $mock_dist/.build_finished ]; then
