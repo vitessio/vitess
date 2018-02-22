@@ -58,7 +58,7 @@ func TestNumericMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := []Ksid{
+	want := []KsidOrRange{
 		{ID: []byte("\x00\x00\x00\x00\x00\x00\x00\x01")},
 		{ID: []byte("\x00\x00\x00\x00\x00\x00\x00\x02")},
 		{ID: []byte("\x00\x00\x00\x00\x00\x00\x00\x03")},

@@ -80,7 +80,7 @@ func TestNumericStaticMapMap(t *testing.T) {
 
 	// in the third slice, we expect 2 instead of 3 as numeric_static_map_test.json
 	// has 3 mapped to 2
-	want := []Ksid{
+	want := []KsidOrRange{
 		{ID: []byte("\x00\x00\x00\x00\x00\x00\x00\x01")},
 		{ID: []byte("\x00\x00\x00\x00\x00\x00\x00\x02")},
 		{ID: []byte("\x00\x00\x00\x00\x00\x00\x00\x02")},

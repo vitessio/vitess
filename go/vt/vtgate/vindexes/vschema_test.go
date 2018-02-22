@@ -41,7 +41,7 @@ type stFU struct {
 func (v *stFU) String() string                                           { return v.name }
 func (*stFU) Cost() int                                                  { return 1 }
 func (*stFU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error) { return []bool{}, nil }
-func (*stFU) Map(VCursor, []sqltypes.Value) ([]Ksid, error)              { return nil, nil }
+func (*stFU) Map(VCursor, []sqltypes.Value) ([]KsidOrRange, error)       { return nil, nil }
 
 func NewSTFU(name string, params map[string]string) (Vindex, error) {
 	return &stFU{name: name, Params: params}, nil
@@ -93,7 +93,7 @@ type stLU struct {
 func (v *stLU) String() string                                                 { return v.name }
 func (*stLU) Cost() int                                                        { return 2 }
 func (*stLU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)       { return []bool{}, nil }
-func (*stLU) Map(VCursor, []sqltypes.Value) ([]Ksid, error)                    { return nil, nil }
+func (*stLU) Map(VCursor, []sqltypes.Value) ([]KsidOrRange, error)             { return nil, nil }
 func (*stLU) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error         { return nil }
 func (*stLU) Delete(VCursor, [][]sqltypes.Value, []byte) error                 { return nil }
 func (*stLU) Update(VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error { return nil }

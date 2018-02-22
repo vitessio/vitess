@@ -55,15 +55,15 @@ func (vind *Hash) Cost() int {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (vind *Hash) Map(_ VCursor, ids []sqltypes.Value) ([]Ksid, error) {
-	out := make([]Ksid, 0, len(ids))
+func (vind *Hash) Map(_ VCursor, ids []sqltypes.Value) ([]KsidOrRange, error) {
+	out := make([]KsidOrRange, 0, len(ids))
 	for _, id := range ids {
 		num, err := sqltypes.ToUint64(id)
 		if err != nil {
-			out = append(out, Ksid{})
+			out = append(out, KsidOrRange{})
 			continue
 		}
-		out = append(out, Ksid{ID: vhash(num)})
+		out = append(out, KsidOrRange{ID: vhash(num)})
 	}
 	return out, nil
 }

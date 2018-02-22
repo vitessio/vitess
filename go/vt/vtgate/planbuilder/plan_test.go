@@ -42,7 +42,9 @@ func (*hashIndex) Cost() int        { return 1 }
 func (*hashIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*hashIndex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksid, error) { return nil, nil }
+func (*hashIndex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.KsidOrRange, error) {
+	return nil, nil
+}
 
 func newHashIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &hashIndex{name: name}, nil
@@ -58,7 +60,9 @@ func (*lookupIndex) Cost() int        { return 2 }
 func (*lookupIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*lookupIndex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksid, error)   { return nil, nil }
+func (*lookupIndex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.KsidOrRange, error) {
+	return nil, nil
+}
 func (*lookupIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
 func (*lookupIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
 func (*lookupIndex) Update(vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {

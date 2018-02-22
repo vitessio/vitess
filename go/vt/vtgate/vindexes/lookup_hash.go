@@ -233,11 +233,11 @@ func (lhu *LookupHashUnique) Cost() int {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksid, error) {
-	out := make([]Ksid, 0, len(ids))
+func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]KsidOrRange, error) {
+	out := make([]KsidOrRange, 0, len(ids))
 	if lhu.writeOnly {
 		for range ids {
-			out = append(out, Ksid{Range: &topodata.KeyRange{}})
+			out = append(out, KsidOrRange{Range: &topodata.KeyRange{}})
 		}
 		return out, nil
 	}
@@ -249,14 +249,14 @@ func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksid,
 	for i, result := range results {
 		switch len(result.Rows) {
 		case 0:
-			out = append(out, Ksid{})
+			out = append(out, KsidOrRange{})
 		case 1:
 			num, err := sqltypes.ToUint64(result.Rows[0][0])
 			if err != nil {
-				out = append(out, Ksid{})
+				out = append(out, KsidOrRange{})
 				continue
 			}
-			out = append(out, Ksid{ID: vhash(num)})
+			out = append(out, KsidOrRange{ID: vhash(num)})
 		default:
 			return nil, fmt.Errorf("LookupHash.Map: unexpected multiple results from vindex %s: %v", lhu.lkp.Table, ids[i])
 		}

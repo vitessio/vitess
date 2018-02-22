@@ -58,15 +58,15 @@ type Vindex interface {
 	Verify(cursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error)
 }
 
-// Ksid represents a keyspace id. It's either a single keyspace id
+// KsidOrRange represents a keyspace id. It's either a single keyspace id
 // or a keyrange when the vindex is unable to determine the keyspace id.
-type Ksid struct {
+type KsidOrRange struct {
 	Range *topodatapb.KeyRange
 	ID    []byte
 }
 
 // ValidateUnique returns an error if the Ksid represents a KeyRange.
-func (k Ksid) ValidateUnique() error {
+func (k KsidOrRange) ValidateUnique() error {
 	if k.Range != nil {
 		return errors.New("vindex could not map the value to a unique keyspace id")
 	}
@@ -77,7 +77,7 @@ func (k Ksid) ValidateUnique() error {
 // For a vindex to be unique, an id has to map to at most
 // one keyspace id.
 type Unique interface {
-	Map(cursor VCursor, ids []sqltypes.Value) ([]Ksid, error)
+	Map(cursor VCursor, ids []sqltypes.Value) ([]KsidOrRange, error)
 }
 
 // Ksids represents keyspace ids. It's either a list of keyspace ids

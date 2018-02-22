@@ -67,7 +67,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := []Ksid{
+	want := []KsidOrRange{
 		{ID: []byte("\x16k@\xb4J\xbaK\xd6")},
 		{ID: []byte("\x16k@\xb4J\xbaK\xd6")},
 	}
@@ -80,7 +80,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want = []Ksid{{}, {}}
+	want = []KsidOrRange{{}, {}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
@@ -101,7 +101,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want = []Ksid{{}}
+	want = []KsidOrRange{{}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
@@ -124,7 +124,7 @@ func TestLookupHashUniqueMapWriteOnly(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := []Ksid{{
+	want := []KsidOrRange{{
 		Range: &topodatapb.KeyRange{},
 	}, {
 		Range: &topodatapb.KeyRange{},
