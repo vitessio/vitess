@@ -40,7 +40,7 @@ func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 
 // buildUpdatePlan builds the instructions for an UPDATE statement.
 func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Update, error) {
-	er := &engine.Update{
+	eupd := &engine.Update{
 		Query:               generateQuery(upd),
 		ChangedVindexValues: make(map[string][]sqltypes.PlanValue),
 	}
@@ -53,14 +53,14 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Update, er
 		return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
 	}
 
-	er.Keyspace = rb.ERoute.Keyspace
-	if !er.Keyspace.Sharded {
+	eupd.Keyspace = rb.ERoute.Keyspace
+	if !eupd.Keyspace.Sharded {
 		// We only validate non-table subexpressions because the previous analysis has already validated them.
-		if !validateSubquerySamePlan(rb.ERoute, rb, vschema, upd.Exprs, upd.Where, upd.OrderBy, upd.Limit) {
+		if !validateSubquerySamePlan(rb.ERoute.Keyspace.Name, rb, vschema, upd.Exprs, upd.Where, upd.OrderBy, upd.Limit) {
 			return nil, errors.New("unsupported: sharded subqueries in DML")
 		}
-		er.Opcode = engine.UpdateUnsharded
-		return er, nil
+		eupd.Opcode = engine.UpdateUnsharded
+		return eupd, nil
 	}
 
 	if hasSubquery(upd) {
@@ -74,23 +74,23 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Update, er
 	for _, tval := range rb.Symtab().tables {
 		vindexTable = tval.vindexTable
 	}
-	er.Table = vindexTable
-	if er.Table == nil {
+	eupd.Table = vindexTable
+	if eupd.Table == nil {
 		return nil, errors.New("internal error: table.vindexTable is mysteriously nil")
 	}
-	er.Vindex, er.Values, err = getDMLRouting(upd.Where, er.Table)
+	eupd.Vindex, eupd.Values, err = getDMLRouting(upd.Where, eupd.Table)
 	if err != nil {
 		return nil, err
 	}
-	er.Opcode = engine.UpdateEqual
+	eupd.Opcode = engine.UpdateEqual
 
-	if er.ChangedVindexValues, err = buildChangedVindexesValues(er, upd, er.Table.ColumnVindexes); err != nil {
+	if eupd.ChangedVindexValues, err = buildChangedVindexesValues(eupd, upd, eupd.Table.ColumnVindexes); err != nil {
 		return nil, err
 	}
-	if len(er.ChangedVindexValues) != 0 {
-		er.Subquery = generateUpdateSubquery(upd, er.Table)
+	if len(eupd.ChangedVindexValues) != 0 {
+		eupd.Subquery = generateUpdateSubquery(upd, eupd.Table)
 	}
-	return er, nil
+	return eupd, nil
 }
 
 func generateQuery(statement sqlparser.Statement) string {
@@ -102,7 +102,7 @@ func generateQuery(statement sqlparser.Statement) string {
 // buildChangedVindexesValues adds to the plan all the lookup vindexes that are changing.
 // Updates can only be performed to secondary lookup vindexes with no complex expressions
 // in the set clause.
-func buildChangedVindexesValues(route *engine.Update, update *sqlparser.Update, colVindexes []*vindexes.ColumnVindex) (map[string][]sqltypes.PlanValue, error) {
+func buildChangedVindexesValues(eupd *engine.Update, update *sqlparser.Update, colVindexes []*vindexes.ColumnVindex) (map[string][]sqltypes.PlanValue, error) {
 	changedVindexes := make(map[string][]sqltypes.PlanValue)
 	for i, vindex := range colVindexes {
 		var vindexValues []sqltypes.PlanValue
@@ -152,7 +152,7 @@ func buildChangedVindexesValues(route *engine.Update, update *sqlparser.Update, 
 
 // buildDeletePlan builds the instructions for a DELETE statement.
 func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Delete, error) {
-	er := &engine.Delete{
+	edel := &engine.Delete{
 		Query: generateQuery(del),
 	}
 	bldr, err := processTableExprs(del.TableExprs, vschema)
@@ -163,14 +163,14 @@ func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Delete, er
 	if !ok {
 		return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
 	}
-	er.Keyspace = rb.ERoute.Keyspace
-	if !er.Keyspace.Sharded {
+	edel.Keyspace = rb.ERoute.Keyspace
+	if !edel.Keyspace.Sharded {
 		// We only validate non-table subexpressions because the previous analysis has already validated them.
-		if !validateSubquerySamePlan(rb.ERoute, rb, vschema, del.Targets, del.Where, del.OrderBy, del.Limit) {
+		if !validateSubquerySamePlan(rb.ERoute.Keyspace.Name, rb, vschema, del.Targets, del.Where, del.OrderBy, del.Limit) {
 			return nil, errors.New("unsupported: sharded subqueries in DML")
 		}
-		er.Opcode = engine.DeleteUnsharded
-		return er, nil
+		edel.Opcode = engine.DeleteUnsharded
+		return edel, nil
 	}
 	if del.Targets != nil || len(rb.Symtab().tables) != 1 {
 		return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
@@ -182,29 +182,29 @@ func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Delete, er
 	for t := range rb.Symtab().tables {
 		tableName = t
 	}
-	er.Table, err = vschema.FindTable(tableName)
+	edel.Table, err = vschema.FindTable(tableName)
 	if err != nil {
 		return nil, err
 	}
-	er.Vindex, er.Values, err = getDMLRouting(del.Where, er.Table)
+	edel.Vindex, edel.Values, err = getDMLRouting(del.Where, edel.Table)
 	// We couldn't generate a route for a single shard
 	// Execute a delete sharded
 	if err != nil {
-		er.Opcode = engine.DeleteSharded
+		edel.Opcode = engine.DeleteSharded
 	} else {
-		er.Opcode = engine.DeleteEqual
+		edel.Opcode = engine.DeleteEqual
 	}
 
-	if er.Opcode == engine.DeleteSharded {
-		if len(er.Table.Owned) != 0 {
-			return er, errors.New("unsupported: multi shard delete on a table with owned lookup vindexes")
+	if edel.Opcode == engine.DeleteSharded {
+		if len(edel.Table.Owned) != 0 {
+			return edel, errors.New("unsupported: multi shard delete on a table with owned lookup vindexes")
 		}
 		if del.Limit != nil {
-			return er, errors.New("unsupported: multi shard delete with limit")
+			return edel, errors.New("unsupported: multi shard delete with limit")
 		}
 	}
-	er.Subquery = generateDeleteSubquery(del, er.Table)
-	return er, nil
+	edel.Subquery = generateDeleteSubquery(del, edel.Table)
+	return edel, nil
 }
 
 // generateDeleteSubquery generates the query to fetch the rows
