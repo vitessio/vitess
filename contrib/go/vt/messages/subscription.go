@@ -12,11 +12,10 @@ import (
 
 // subscription allows users to interact with the queue
 type subscription struct {
-	q  *Queue
 	mu sync.RWMutex
 
 	// this is true while a Subscription is live
-	isActive bool
+	isOpen bool
 
 	cancelFunc context.CancelFunc
 
@@ -43,22 +42,6 @@ type subscription struct {
 	failSQL   string
 }
 
-// A Message stores information about a message
-type Message struct {
-	s *subscription
-
-	// preconfigured scan targets that point at the below standard fields,
-	// along with pointers to the customFieldData slice
-	scanFields []interface{}
-
-	timeScheduled   int64
-	ID              int64
-	customFieldData []interface{}
-
-	// err is only set if there is a scan error in Subscribe
-	err error
-}
-
 // Open connects to an underlying Vitess cluster and streams messages. The queue will
 // buffer the defined max concurrent number of messages in memory and will block until
 // one of the messages is acknowledged.
@@ -69,7 +52,7 @@ func (q *Queue) Open(ctx context.Context, address, target string) error {
 	q.s.mu.Lock()
 	defer q.s.mu.Unlock()
 
-	if q.s.isActive {
+	if q.s.isOpen {
 		return nil
 	}
 
@@ -99,7 +82,7 @@ func (q *Queue) Open(ctx context.Context, address, target string) error {
 		// happening behind the scenes in the Vitess database/sql driver
 		for rows.Next() {
 			m := <-q.s.waitingForDataChan
-			m.err = rows.Scan(m.scanFields...)
+			m.err = rows.Scan(m.dataPointers...)
 
 			// send the message through the channel
 			q.s.readyForProcessingChan <- m
@@ -114,8 +97,7 @@ func (q *Queue) Open(ctx context.Context, address, target string) error {
 
 func (q *Queue) newSubscription(maxConcurrent int) *subscription {
 	s := &subscription{
-		q:                      q,
-		isActive:               false,
+		isOpen:                 false,
 		mu:                     sync.RWMutex{},
 		msgBuf:                 make([]Message, maxConcurrent),
 		waitingForDataChan:     make(chan *Message, maxConcurrent),
@@ -135,18 +117,18 @@ func (q *Queue) newSubscription(maxConcurrent int) *subscription {
 		m.s = s
 
 		// create a permanent set of scan fields
-		m.scanFields = []interface{}{
+		m.dataPointers = []interface{}{
 			&m.timeScheduled,
 			&m.ID,
 		}
 
 		// if the user has set up custom fields, initialize them
-		if q.userFieldNames != nil {
-			m.customFieldData = q.newFieldsFunc()
+		if q.fieldNames != nil {
+			m.Data = q.destFunc()
 
 			// add a pointer to each of the individual user fields to scanFields
-			for j := range m.customFieldData {
-				m.scanFields = append(m.scanFields, &m.customFieldData[j])
+			for j := range m.Data {
+				m.dataPointers = append(m.dataPointers, &m.Data[j])
 			}
 		}
 	}
@@ -179,11 +161,11 @@ func (q *Queue) Close() error {
 	defer q.s.mu.Unlock()
 
 	// if the connection isn't open, no further work required
-	if !q.s.isActive {
+	if !q.s.isOpen {
 		return nil
 	}
 
-	q.s.isActive = false
+	q.s.isOpen = false
 
 	// cancel context inside rows.Next()
 	q.s.cancelFunc()

@@ -15,42 +15,43 @@ type Execer interface {
 
 // A Queue represents a Vitess message queue
 type Queue struct {
-	name           string
-	userFieldNames []string
-	newFieldsFunc  func() []interface{}
-	maxConcurrent  int
+	name          string
+	fieldNames    []string
+	destFunc      DestFunc
+	maxConcurrent int
 
 	// predefine these sql strings
-	insertSQL       string
-	insertFutureSQL string
+	insertSQL          string
+	insertScheduledSQL string
 
 	s *subscription
 }
 
-// A QueueOption lets users customize the queue object
-type QueueOption func(q *Queue) error
+// A DestFunc returns an array of fields that map to the queue payload fields,
+// matching the table column order. These will map directly to rows.Scan().
+type DestFunc func() []interface{}
 
 // NewQueue returns a queue definition
-func NewQueue(ctx context.Context, name string, maxConcurrent int, fieldNames []string, newFieldsFunc func() []interface{}) (*Queue, error) {
+func NewQueue(ctx context.Context, name string, maxConcurrent int, fieldNames []string, fn DestFunc) (*Queue, error) {
 	if maxConcurrent < 1 {
 		return nil, errors.New("maxConcurrent must be greater than 0")
 	}
 
 	q := &Queue{
-		name:           name,
-		maxConcurrent:  maxConcurrent,
-		userFieldNames: fieldNames,
-		newFieldsFunc:  newFieldsFunc,
+		name:          name,
+		maxConcurrent: maxConcurrent,
+		fieldNames:    fieldNames,
+		destFunc:      fn,
 	}
 
-	args := newFieldsFunc()
+	args := fn()
 	if len(args) != len(fieldNames) {
 		return nil, errors.New("user fields mismatch")
 	}
 
 	// only do this string manipulation once
 	q.insertSQL = q.generateInsertSQL()
-	q.insertFutureSQL = q.generateInsertFutureSQL()
+	q.insertScheduledSQL = q.generateInsertScheduledSQL()
 
 	return q, nil
 }
@@ -65,7 +66,7 @@ func (q *Queue) generateInsertSQL() string {
 	buf.WriteString("` (id")
 
 	// add quoted user fields to the insert statement
-	for _, f := range q.userFieldNames {
+	for _, f := range q.fieldNames {
 		buf.WriteString(", `")
 		buf.WriteString(f)
 		buf.WriteString("`")
@@ -73,7 +74,7 @@ func (q *Queue) generateInsertSQL() string {
 	buf.WriteString(") VALUES (?")
 
 	// add params representing user data
-	buf.WriteString(strings.Repeat(",?", len(q.userFieldNames)))
+	buf.WriteString(strings.Repeat(",?", len(q.fieldNames)))
 
 	// close VALUES
 	buf.WriteString(")")
@@ -81,8 +82,8 @@ func (q *Queue) generateInsertSQL() string {
 	return buf.String()
 }
 
-// generateInsertFutureSQL does the string manipulation to generate the insertFuture statement
-func (q *Queue) generateInsertFutureSQL() string {
+// generateInsertScheduledSQL does the string manipulation to generate the insertFuture statement
+func (q *Queue) generateInsertScheduledSQL() string {
 	buf := bytes.Buffer{}
 
 	// generate default insert into queue with required fields
@@ -91,7 +92,7 @@ func (q *Queue) generateInsertFutureSQL() string {
 	buf.WriteString("` (time_scheduled, id")
 
 	// add quoted user fields to the insert statement
-	for _, f := range q.userFieldNames {
+	for _, f := range q.fieldNames {
 		buf.WriteString(", `")
 		buf.WriteString(f)
 		buf.WriteString("`")
@@ -99,7 +100,7 @@ func (q *Queue) generateInsertFutureSQL() string {
 	buf.WriteString(") VALUES (?,?")
 
 	// add params representing user data
-	buf.WriteString(strings.Repeat(",?", len(q.userFieldNames)))
+	buf.WriteString(strings.Repeat(",?", len(q.fieldNames)))
 
 	// close VALUES
 	buf.WriteString(")")
