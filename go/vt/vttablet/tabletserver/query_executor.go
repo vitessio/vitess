@@ -839,8 +839,8 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	if buildStreamComment != nil {
 		sql = append(sql, buildStreamComment...)
 	}
-	fullSql := append(sql, qre.trailingComments...)
-	return hack.String(fullSql), hack.String(sql), nil
+	fullSQL := append(sql, qre.trailingComments...)
+	return hack.String(fullSQL), hack.String(sql), nil
 }
 
 func (qre *QueryExecutor) getLimit(query *sqlparser.ParsedQuery) int64 {
