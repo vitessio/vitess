@@ -22,7 +22,7 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -92,7 +92,7 @@ func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksids, error
 	out := make([]Ksids, 0, len(ids))
 	if lh.writeOnly {
 		for range ids {
-			out = append(out, Ksids{Range: &topodata.KeyRange{}})
+			out = append(out, Ksids{Range: &topodatapb.KeyRange{}})
 		}
 		return out, nil
 	}
