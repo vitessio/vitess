@@ -6,15 +6,11 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
-	"sync"
 )
 
-// Queryer lets most functions accept a DB or a Tx without knowing the difference
-type Queryer interface {
+// Execer lets functions accept a DB or a Tx without knowing the difference
+type Execer interface {
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
-	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
-	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
-	PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
 }
 
 // A Queue represents a Vitess message queue
@@ -24,76 +20,37 @@ type Queue struct {
 	newFieldsFunc  func() []interface{}
 	maxConcurrent  int
 
-	// -------------------------------------------
-	// AddMessage only fields
-	// -------------------------------------------
+	// predefine these sql strings
+	insertSQL       string
+	insertFutureSQL string
 
-	// to reduce GC pressure, reuse messages after inserting them
-	addPool sync.Pool
-
-	// insert params are calculated and the string is
-	insertSQL string
-
-	s *Subscription
-}
-
-// A Message stores information about a message
-type Message struct {
-	s *Subscription
-
-	// preconfigured scan targets that point at the below standard fields,
-	// along with pointers to the customFieldData slice
-	scanFields []interface{}
-
-	timeScheduled   int64
-	ID              int64
-	customFieldData []interface{}
-
-	// err is only set if there is a scan error in Subscribe
-	err error
+	s *subscription
 }
 
 // A QueueOption lets users customize the queue object
 type QueueOption func(q *Queue) error
 
-// CustomFields defines user fields and a generator function to create new arg types
-func CustomFields(fieldNames []string, newFieldsFunc func() []interface{}) QueueOption {
-	return func(q *Queue) error {
-		q.userFieldNames = fieldNames
-		q.newFieldsFunc = newFieldsFunc
-
-		args := newFieldsFunc()
-		if len(args) != len(fieldNames) {
-			return errors.New("user fields mismatch")
-		}
-
-		return nil
-	}
-}
-
 // NewQueue returns a queue definition
-func NewQueue(ctx context.Context, name string, maxConcurrent int, opts ...QueueOption) (*Queue, error) {
+func NewQueue(ctx context.Context, name string, maxConcurrent int, fieldNames []string, newFieldsFunc func() []interface{}) (*Queue, error) {
 	if maxConcurrent < 1 {
 		return nil, errors.New("maxConcurrent must be greater than 0")
 	}
 
 	q := &Queue{
-		name:          name,
-		maxConcurrent: maxConcurrent,
-		addPool: sync.Pool{
-			New: func() interface{} { return &Message{} },
-		},
+		name:           name,
+		maxConcurrent:  maxConcurrent,
+		userFieldNames: fieldNames,
+		newFieldsFunc:  newFieldsFunc,
 	}
 
-	// execute all the queue options
-	for _, opt := range opts {
-		if err := opt(q); err != nil {
-			return nil, err
-		}
+	args := newFieldsFunc()
+	if len(args) != len(fieldNames) {
+		return nil, errors.New("user fields mismatch")
 	}
 
 	// only do this string manipulation once
 	q.insertSQL = q.generateInsertSQL()
+	q.insertFutureSQL = q.generateInsertFutureSQL()
 
 	return q, nil
 }
@@ -105,7 +62,7 @@ func (q *Queue) generateInsertSQL() string {
 	// generate default insert into queue with required fields
 	buf.WriteString("INSERT INTO `")
 	buf.WriteString(q.name)
-	buf.WriteString("` (time_scheduled, id, epoch, message")
+	buf.WriteString("` (id")
 
 	// add quoted user fields to the insert statement
 	for _, f := range q.userFieldNames {
@@ -113,7 +70,33 @@ func (q *Queue) generateInsertSQL() string {
 		buf.WriteString(f)
 		buf.WriteString("`")
 	}
-	buf.WriteString(") VALUES (?,?,?,?")
+	buf.WriteString(") VALUES (?")
+
+	// add params representing user data
+	buf.WriteString(strings.Repeat(",?", len(q.userFieldNames)))
+
+	// close VALUES
+	buf.WriteString(")")
+
+	return buf.String()
+}
+
+// generateInsertFutureSQL does the string manipulation to generate the insertFuture statement
+func (q *Queue) generateInsertFutureSQL() string {
+	buf := bytes.Buffer{}
+
+	// generate default insert into queue with required fields
+	buf.WriteString("INSERT INTO `")
+	buf.WriteString(q.name)
+	buf.WriteString("` (time_scheduled, id")
+
+	// add quoted user fields to the insert statement
+	for _, f := range q.userFieldNames {
+		buf.WriteString(", `")
+		buf.WriteString(f)
+		buf.WriteString("`")
+	}
+	buf.WriteString(") VALUES (?,?")
 
 	// add params representing user data
 	buf.WriteString(strings.Repeat(",?", len(q.userFieldNames)))

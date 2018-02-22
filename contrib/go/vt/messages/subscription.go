@@ -6,15 +6,14 @@ import (
 	"fmt"
 	"math"
 	"sync"
-	"time"
 
 	"github.com/youtube/vitess/go/vt/vitessdriver"
 )
 
-// Subscription allows users to interact with the queue
-type Subscription struct {
+// subscription allows users to interact with the queue
+type subscription struct {
 	q  *Queue
-	mu sync.Mutex
+	mu sync.RWMutex
 
 	// this is true while a Subscription is live
 	isActive bool
@@ -44,43 +43,34 @@ type Subscription struct {
 	failSQL   string
 }
 
-// Get returns the next available message. It blocks until either a message
-// is available or the context is cancelled
-func (s *Subscription) Get(ctx context.Context) (*Message, error) {
-	select {
-	case m := <-s.readyForProcessingChan:
-		if m.err != nil {
-			return nil, m.err
-		}
-		return m, nil
+// A Message stores information about a message
+type Message struct {
+	s *subscription
 
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
+	// preconfigured scan targets that point at the below standard fields,
+	// along with pointers to the customFieldData slice
+	scanFields []interface{}
+
+	timeScheduled   int64
+	ID              int64
+	customFieldData []interface{}
+
+	// err is only set if there is a scan error in Subscribe
+	err error
 }
 
-// Ack marks a message as successfully completed
-func (m *Message) Ack(ctx context.Context) error {
-	defer m.s.putMessage(m)
-	_, err := m.s.db.ExecContext(ctx, m.s.ackSQL, time.Now().UTC().UnixNano(), m.timeScheduled, m.ID)
-	return err
-}
-
-// Fail marks a task as failed, and it will not be queued again until manual action is taken
-func (m *Message) Fail(ctx context.Context) error {
-	defer m.s.putMessage(m)
-	_, err := m.s.db.ExecContext(ctx, m.s.failSQL, m.timeScheduled, m.ID)
-	return err
-}
-
-// Subscribe returns a subscription
+// Open connects to an underlying Vitess cluster and streams messages. The queue will
+// buffer the defined max concurrent number of messages in memory and will block until
+// one of the messages is acknowledged.
+//  using the vitessdriver for database/sql.
+// Only a single connection is opened and it remains open until Close is called.
 // Context cancellation is respected
-func (q *Queue) Subscribe(ctx context.Context, address, target string) (*Subscription, error) {
+func (q *Queue) Open(ctx context.Context, address, target string) error {
 	q.s.mu.Lock()
 	defer q.s.mu.Unlock()
 
 	if q.s.isActive {
-		return q.s, nil
+		return nil
 	}
 
 	// generate the raw subscription
@@ -92,13 +82,13 @@ func (q *Queue) Subscribe(ctx context.Context, address, target string) (*Subscri
 
 	// open a direct database connection if needed
 	if err := q.s.openDB(newCtx, address, target); err != nil {
-		return nil, err
+		return err
 	}
 
 	// start a streaming query that will run indefinitely
 	rows, err := q.s.db.QueryContext(newCtx, q.s.streamSQL)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// this goroutine will be waiting for rows and is the only writer to the channel
@@ -119,14 +109,14 @@ func (q *Queue) Subscribe(ctx context.Context, address, target string) (*Subscri
 		close(q.s.readyForProcessingChan)
 	}()
 
-	return q.s, nil
+	return nil
 }
 
-func (q *Queue) newSubscription(maxConcurrent int) *Subscription {
-	s := &Subscription{
+func (q *Queue) newSubscription(maxConcurrent int) *subscription {
+	s := &subscription{
 		q:                      q,
 		isActive:               false,
-		mu:                     sync.Mutex{},
+		mu:                     sync.RWMutex{},
 		msgBuf:                 make([]Message, maxConcurrent),
 		waitingForDataChan:     make(chan *Message, maxConcurrent),
 		readyForProcessingChan: make(chan *Message, maxConcurrent),
@@ -164,12 +154,7 @@ func (q *Queue) newSubscription(maxConcurrent int) *Subscription {
 	return s
 }
 
-// putMessage pushes a message back into the queue for resue
-func (s *Subscription) putMessage(m *Message) {
-	s.waitingForDataChan <- m
-}
-
-func (s *Subscription) openDB(ctx context.Context, address, target string) error {
+func (s *subscription) openDB(ctx context.Context, address, target string) error {
 	s.dbConfig = vitessdriver.Configuration{
 		Address:   address,
 		Target:    target,
@@ -189,22 +174,27 @@ func (s *Subscription) openDB(ctx context.Context, address, target string) error
 
 // Close drains the processing channel and closes the connection to the database
 // TODO: Nack all remaining messages
-func (s *Subscription) Close() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (q *Queue) Close() error {
+	q.s.mu.Lock()
+	defer q.s.mu.Unlock()
 
-	s.isActive = false
+	// if the connection isn't open, no further work required
+	if !q.s.isActive {
+		return nil
+	}
+
+	q.s.isActive = false
 
 	// cancel context inside rows.Next()
-	s.cancelFunc()
+	q.s.cancelFunc()
 
 	// drain processing channel
-	for range s.readyForProcessingChan {
+	for range q.s.readyForProcessingChan {
 	}
 
 	// drain waiting channel
-	for range s.waitingForDataChan {
+	for range q.s.waitingForDataChan {
 	}
 
-	return s.db.Close()
+	return q.s.db.Close()
 }
