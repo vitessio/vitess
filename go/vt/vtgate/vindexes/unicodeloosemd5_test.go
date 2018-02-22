@@ -82,7 +82,7 @@ func TestUnicodeLooseMD5Map(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		out := string(got[0])
+		out := string(got[0].ID)
 		if out != tcase.out {
 			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 		}
