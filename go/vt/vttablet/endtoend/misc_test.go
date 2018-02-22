@@ -304,7 +304,7 @@ func TestConsolidation(t *testing.T) {
 	framework.Server.SetPoolSize(1)
 
 	for sleep := 0.1; sleep < 10.0; sleep *= 2 {
-		query := fmt.Sprintf("select sleep(%v) from dual", sleep)
+		query := fmt.Sprintf("select sleep(%v) from dual /* query: %v */", sleep, sleep)
 
 		vstart := framework.DebugVars()
 		var wg sync.WaitGroup
