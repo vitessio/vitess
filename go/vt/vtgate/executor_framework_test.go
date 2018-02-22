@@ -87,6 +87,9 @@ var executorVSchema = `
 		"keyspace_id": {
 			"type": "numeric"
 		},
+		"krcol_unique_vdx": {
+			"type": "keyrange_lookuper_unique"
+		},
 		"krcol_vdx": {
 			"type": "keyrange_lookuper"
 		}
@@ -209,8 +212,8 @@ var executorVSchema = `
 		"keyrange_table": {
 			"column_vindexes": [
 				{
-					"column": "id",
-					"name": "hash_index"
+					"column": "krcol_unique",
+					"name": "krcol_unique_vdx"
 				},
 				{
 					"column": "krcol",
@@ -279,12 +282,34 @@ func (*keyRangeLookuper) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksi
 	}}, nil
 }
 
-func newLookupMigrator(name string, params map[string]string) (vindexes.Vindex, error) {
+func newKeyRangeLookuper(name string, params map[string]string) (vindexes.Vindex, error) {
 	return &keyRangeLookuper{}, nil
 }
 
+// keyRangeLookuperUnique is for testing a unique lookup that returns a keyrange.
+type keyRangeLookuperUnique struct {
+}
+
+func (v *keyRangeLookuperUnique) String() string { return "keyrange_lookuper" }
+func (*keyRangeLookuperUnique) Cost() int        { return 0 }
+func (*keyRangeLookuperUnique) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+	return []bool{}, nil
+}
+func (*keyRangeLookuperUnique) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.KsidOrRange, error) {
+	return []vindexes.KsidOrRange{{
+		Range: &topodatapb.KeyRange{
+			End: []byte{0x10},
+		},
+	}}, nil
+}
+
+func newKeyRangeLookuperUnique(name string, params map[string]string) (vindexes.Vindex, error) {
+	return &keyRangeLookuperUnique{}, nil
+}
+
 func init() {
-	vindexes.Register("keyrange_lookuper", newLookupMigrator)
+	vindexes.Register("keyrange_lookuper", newKeyRangeLookuper)
+	vindexes.Register("keyrange_lookuper_unique", newKeyRangeLookuperUnique)
 }
 
 const testBufferSize = 10

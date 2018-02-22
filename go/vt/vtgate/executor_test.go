@@ -580,12 +580,13 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("TestExecutor", "idx_noauto", "hash", "", "noauto_table"),
 			buildVarCharRow("TestExecutor", "insert_ignore_idx", "lookup_hash", "from=fromcol; table=ins_lookup; to=tocol", "insert_ignore_test"),
 			buildVarCharRow("TestExecutor", "keyspace_id", "numeric", "", ""),
+			buildVarCharRow("TestExecutor", "krcol_unique_vdx", "keyrange_lookuper_unique", "", ""),
 			buildVarCharRow("TestExecutor", "krcol_vdx", "keyrange_lookuper", "", ""),
 			buildVarCharRow("TestExecutor", "music_user_map", "lookup_hash_unique", "from=music_id; table=music_user_map; to=user_id", "music"),
 			buildVarCharRow("TestExecutor", "name_lastname_keyspace_id_map", "lookup", "from=name,lastname; table=name_lastname_keyspace_id_map; to=keyspace_id", "user2"),
 			buildVarCharRow("TestExecutor", "name_user_map", "lookup_hash", "from=name; table=name_user_map; to=user_id", "user"),
 		},
-		RowsAffected: 9,
+		RowsAffected: 10,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
 		t.Errorf("show vindexes:\n%+v, want\n%+v", qr, wantqr)

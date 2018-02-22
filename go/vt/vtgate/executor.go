@@ -902,7 +902,14 @@ func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []
 		if err != nil {
 			return 0, err
 		}
-		rss, rssValues, err = e.resolver.resolver.ResolveKeyspaceIdsValues(ctx, table.Keyspace.Name, ids, ksids, topodatapb.TabletType_MASTER)
+		keyspaceids := make([][]byte, len(ksids))
+		for i, ksid := range ksids {
+			if err := ksid.ValidateUnique(); err != nil {
+				return 0, err
+			}
+			keyspaceids[i] = ksid.ID
+		}
+		rss, rssValues, err = e.resolver.resolver.ResolveKeyspaceIdsValues(ctx, table.Keyspace.Name, ids, keyspaceids, topodatapb.TabletType_MASTER)
 		if err != nil {
 			return 0, err
 		}

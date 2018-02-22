@@ -66,17 +66,17 @@ func (*Numeric) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool,
 }
 
 // Map returns the associated keyspace ids for the given ids.
-func (*Numeric) Map(_ VCursor, ids []sqltypes.Value) ([][]byte, error) {
-	out := make([][]byte, 0, len(ids))
+func (*Numeric) Map(_ VCursor, ids []sqltypes.Value) ([]KsidOrRange, error) {
+	out := make([]KsidOrRange, 0, len(ids))
 	for _, id := range ids {
 		num, err := sqltypes.ToUint64(id)
 		if err != nil {
-			out = append(out, nil)
+			out = append(out, KsidOrRange{})
 			continue
 		}
 		var keybytes [8]byte
 		binary.BigEndian.PutUint64(keybytes[:], num)
-		out = append(out, keybytes[:])
+		out = append(out, KsidOrRange{ID: keybytes[:]})
 	}
 	return out, nil
 }

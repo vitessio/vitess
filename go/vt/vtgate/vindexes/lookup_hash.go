@@ -18,7 +18,6 @@ package vindexes
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -130,6 +129,7 @@ func (lh *LookupHash) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]by
 		}
 		return out, nil
 	}
+
 	values, err := unhashList(ksids)
 	if err != nil {
 		return nil, fmt.Errorf("lookup.Verify.vunhash: %v", err)
@@ -189,8 +189,9 @@ func unhashList(ksids [][]byte) ([]sqltypes.Value, error) {
 // Unique and a Lookup.
 // Warning: This Vindex is being depcreated in favor of LookupUnique
 type LookupHashUnique struct {
-	name string
-	lkp  lookupInternal
+	name      string
+	writeOnly bool
+	lkp       lookupInternal
 }
 
 // NewLookupHashUnique creates a LookupHashUnique vindex.
@@ -201,6 +202,7 @@ type LookupHashUnique struct {
 //
 // The following fields are optional:
 //   autocommit: setting this to "true" will cause deletes to be ignored.
+//   write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 func NewLookupHashUnique(name string, m map[string]string) (Vindex, error) {
 	lhu := &LookupHashUnique{name: name}
 
@@ -208,12 +210,9 @@ func NewLookupHashUnique(name string, m map[string]string) (Vindex, error) {
 	if err != nil {
 		return nil, err
 	}
-	scatter, err := boolFromMap(m, "write_only")
+	lhu.writeOnly, err = boolFromMap(m, "write_only")
 	if err != nil {
 		return nil, err
-	}
-	if scatter {
-		return nil, errors.New("write_only cannot be true for a unique lookup vindex")
 	}
 
 	// Don't allow upserts for unique vindexes.
@@ -234,8 +233,15 @@ func (lhu *LookupHashUnique) Cost() int {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][]byte, error) {
-	out := make([][]byte, 0, len(ids))
+func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]KsidOrRange, error) {
+	out := make([]KsidOrRange, 0, len(ids))
+	if lhu.writeOnly {
+		for range ids {
+			out = append(out, KsidOrRange{Range: &topodata.KeyRange{}})
+		}
+		return out, nil
+	}
+
 	results, err := lhu.lkp.Lookup(vcursor, ids)
 	if err != nil {
 		return nil, err
@@ -243,14 +249,14 @@ func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][]byt
 	for i, result := range results {
 		switch len(result.Rows) {
 		case 0:
-			out = append(out, nil)
+			out = append(out, KsidOrRange{})
 		case 1:
 			num, err := sqltypes.ToUint64(result.Rows[0][0])
 			if err != nil {
-				out = append(out, nil)
+				out = append(out, KsidOrRange{})
 				continue
 			}
-			out = append(out, vhash(num))
+			out = append(out, KsidOrRange{ID: vhash(num)})
 		default:
 			return nil, fmt.Errorf("LookupHash.Map: unexpected multiple results from vindex %s: %v", lhu.lkp.Table, ids[i])
 		}
@@ -260,6 +266,14 @@ func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([][]byt
 
 // Verify returns true if ids maps to ksids.
 func (lhu *LookupHashUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	if lhu.writeOnly {
+		out := make([]bool, len(ids))
+		for i := range ids {
+			out[i] = true
+		}
+		return out, nil
+	}
+
 	values, err := unhashList(ksids)
 	if err != nil {
 		return nil, fmt.Errorf("lookup.Verify.vunhash: %v", err)

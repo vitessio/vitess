@@ -57,10 +57,10 @@ func (vind *BinaryMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) (
 }
 
 // Map returns the corresponding keyspace id values for the given ids.
-func (vind *BinaryMD5) Map(_ VCursor, ids []sqltypes.Value) ([][]byte, error) {
-	out := make([][]byte, 0, len(ids))
+func (vind *BinaryMD5) Map(_ VCursor, ids []sqltypes.Value) ([]KsidOrRange, error) {
+	out := make([]KsidOrRange, 0, len(ids))
 	for _, id := range ids {
-		out = append(out, binHash(id.ToBytes()))
+		out = append(out, KsidOrRange{ID: binHash(id.ToBytes())})
 	}
 	return out, nil
 }
