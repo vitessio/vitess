@@ -366,13 +366,11 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 		if _, ok := ks.Vindexes[name]; ok {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s already exists in keyspace %s", name, target.Keyspace)
 		}
-		params := map[string]string{}
-		for _, p := range ddl.VindexSpec.Params {
-			params[p.Key.String()] = p.Val
-		}
+		owner, params := ddl.VindexSpec.ParseParams()
 		ks.Vindexes[name] = &vschemapb.Vindex{
 			Type:   ddl.VindexSpec.Type.String(),
 			Params: params,
+			Owner:  owner,
 		}
 
 		e.vm.UpdateVSchema(ctx, target.Keyspace, vschema)
@@ -388,17 +386,13 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 		spec := ddl.VindexSpec
 		name := spec.Name.String()
 		if !spec.Type.IsEmpty() {
-			params := map[string]string{}
-			for _, p := range ddl.VindexSpec.Params {
-				params[p.Key.String()] = p.Val
-			}
-
+			owner, params := spec.ParseParams()
 			if vindex, ok := ks.Vindexes[name]; ok {
 				if vindex.Type != spec.Type.String() {
 					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s defined with type %s not %s", name, vindex.Type, spec.Type.String())
 				}
-				if vindex.Owner != spec.Owner {
-					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s defined with owner %s not %s", name, vindex.Owner, spec.Owner)
+				if vindex.Owner != owner {
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s defined with owner %s not %s", name, vindex.Owner, owner)
 				}
 				if (len(vindex.Params) != 0 || len(params) != 0) && !reflect.DeepEqual(vindex.Params, params) {
 					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s defined with different parameters", name)
@@ -407,7 +401,7 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 				ks.Vindexes[name] = &vschemapb.Vindex{
 					Type:   spec.Type.String(),
 					Params: params,
-					Owner:  spec.Owner,
+					Owner:  owner,
 				}
 			}
 		} else {

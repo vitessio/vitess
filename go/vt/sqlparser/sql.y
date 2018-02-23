@@ -276,7 +276,6 @@ func forceEOF(yylex interface{}) {
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
 %type <colIdent> vindex_type vindex_type_opt
-%type <str> vindex_owner_opt
 %type <bytes> alter_object_type
 
 %start any_command
@@ -499,13 +498,12 @@ create_statement:
   {
     $$ = &DDL{Action: CreateStr, NewName: $5.ToViewName()}
   }
-| CREATE VINDEX sql_id vindex_type_opt vindex_owner_opt vindex_params_opt
+| CREATE VINDEX sql_id vindex_type_opt vindex_params_opt
   {
     $$ = &DDL{Action: CreateVindexStr, VindexSpec: &VindexSpec{
         Name: $3,
         Type: $4,
-        Owner: $5,
-        Params: $6,
+        Params: $5,
     }}
   }
 
@@ -522,15 +520,6 @@ vindex_type:
   ID
   {
     $$ = NewColIdent(string($1))
-  }
-
-vindex_owner_opt:
-  {
-    $$ = ""
-  }
-| ON table_id
-  {
-    $$ = $2.String()
   }
 
 vindex_params_opt:
@@ -1046,7 +1035,7 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
-| ALTER ignore_opt TABLE table_name ADD VINDEX sql_id '(' column_list ')' vindex_type_opt vindex_owner_opt vindex_params_opt
+| ALTER ignore_opt TABLE table_name ADD VINDEX sql_id '(' column_list ')' vindex_type_opt vindex_params_opt
   {
     $$ = &DDL{
         Action: AddColVindexStr,
@@ -1054,8 +1043,7 @@ alter_statement:
         VindexSpec: &VindexSpec{
             Name: $7,
             Type: $11,
-            Owner: $12,
-            Params: $13,
+            Params: $12,
         },
         VindexCols: $9,
       }
