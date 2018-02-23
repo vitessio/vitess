@@ -44,7 +44,7 @@ build_web:
 
 build:
 ifndef NOBANNER
-	echo $$(date): Building source tree
+	echo $$(date): Building Vitess source tree
 endif
 	go install $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
 
