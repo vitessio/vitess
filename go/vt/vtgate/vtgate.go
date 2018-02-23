@@ -29,6 +29,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/acl"
+	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/tb"
@@ -52,11 +53,14 @@ import (
 )
 
 var (
-	transactionMode    = flag.String("transaction_mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
-	normalizeQueries   = flag.Bool("normalize_queries", true, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
-	streamBufferSize   = flag.Int("stream_buffer_size", 32*1024, "the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size.")
-	queryPlanCacheSize = flag.Int64("gate_query_cache_size", 10000, "gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
-	legacyAutocommit   = flag.Bool("legacy_autocommit", false, "DEPRECATED: set this flag to true to get the legacy behavior: all transactions will need an explicit begin, and DMLs outside transactions will return an error.")
+	transactionMode     = flag.String("transaction_mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
+	normalizeQueries    = flag.Bool("normalize_queries", true, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
+	streamBufferSize    = flag.Int("stream_buffer_size", 32*1024, "the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size.")
+	queryPlanCacheSize  = flag.Int64("gate_query_cache_size", 10000, "gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
+	legacyAutocommit    = flag.Bool("legacy_autocommit", false, "DEPRECATED: set this flag to true to get the legacy behavior: all transactions will need an explicit begin, and DMLs outside transactions will return an error.")
+	enableForwarding    = flag.Bool("enable_forwarding", false, "if specified, this process will also expose a QueryService interface that allows other vtgates to talk through this vtgate to the underlying tablets.")
+	l2vtgateAddrs       flagutil.StringListValue
+	disableLocalGateway = flag.Bool("disable_local_gateway", false, "if specified, this process will not route any queries to local tablets in the local cell")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -111,6 +115,8 @@ type VTGate struct {
 	executor *Executor
 	resolver *Resolver
 	txConn   *TxConn
+	gw       gateway.Gateway
+	l2vtgate *L2VTGate
 
 	// stats objects.
 	// TODO(sougou): This needs to be cleaned up. There
@@ -153,20 +159,49 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
 	// we can't go on much further, so we log.Fatal out.
-	gw := gateway.GetCreator()(hc, topoServer, serv, cell, retryCount)
-	if err := gateway.WaitForTablets(gw, tabletTypesToWait); err != nil {
-		log.Fatalf("gateway.WaitForTablets failed: %v", err)
+	var gw gateway.Gateway
+	var l2vtgate *L2VTGate
+	if !*disableLocalGateway {
+		gw = gateway.GetCreator()(hc, topoServer, serv, cell, retryCount)
+		if err := gateway.WaitForTablets(gw, tabletTypesToWait); err != nil {
+			log.Fatalf("gateway.WaitForTablets failed: %v", err)
+		}
+
+		// l2vtgate gives access to the underlying Gateway
+		// from an exported QueryService interface.
+		if *enableForwarding {
+			l2vtgate = initL2VTGate(gw)
+		}
+	}
+
+	// If we have other vtgate pools to connect to, create a
+	// HybridGateway to perform the routing.
+	if len(l2vtgateAddrs) > 0 {
+		hgw, err := gateway.NewHybridGateway(gw, l2vtgateAddrs, retryCount)
+		if err != nil {
+			log.Fatalf("gateway.NewHybridGateway failed: %v", err)
+		}
+		hgw.RegisterStats()
+		gw = hgw
+	}
+
+	// Check we have something to do.
+	if gw == nil {
+		log.Fatalf("'-disable_local_gateway' cannot be specified if 'l2vtgate_addrs' is also empty, otherwise this vtgate has no backend")
 	}
 
 	tc := NewTxConn(gw, getTxMode())
 	// ScatterConn depends on TxConn to perform forced rollbacks.
 	sc := NewScatterConn("VttabletCall", tc, gw, hc)
-	resolver := NewResolver(serv, cell, sc)
+	srvResolver := srvtopo.NewResolver(serv, gw, cell)
+	resolver := NewResolver(srvResolver, serv, cell, sc)
 
 	rpcVTGate = &VTGate{
 		executor:     NewExecutor(ctx, serv, cell, "VTGateExecutor", resolver, *normalizeQueries, *streamBufferSize, *queryPlanCacheSize, *legacyAutocommit),
 		resolver:     resolver,
 		txConn:       tc,
+		gw:           gw,
+		l2vtgate:     l2vtgate,
 		timings:      stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
 		rowsReturned: stats.NewMultiCounters("VtgateApiRowsReturned", []string{"Operation", "Keyspace", "DbType"}),
 
@@ -231,6 +266,16 @@ func (vtg *VTGate) registerDebugHealthHandler() {
 // Otherwise, it returns an error indicating the reason.
 func (vtg *VTGate) IsHealthy() error {
 	return nil
+}
+
+// Gateway returns the current gateway implementation. Mostly used for tests.
+func (vtg *VTGate) Gateway() gateway.Gateway {
+	return vtg.gw
+}
+
+// L2VTGate returns the L2VTGate object. Mostly used for tests.
+func (vtg *VTGate) L2VTGate() *L2VTGate {
+	return vtg.l2vtgate
 }
 
 // Execute executes a non-streaming query. This is a V3 function.
@@ -305,8 +350,8 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 			bindVariables,
 			target.Keyspace,
 			target.TabletType,
-			func(keyspace string) (string, []string, error) {
-				return keyspace, []string{target.Shard}, nil
+			func(keyspace string) ([]*srvtopo.ResolvedShard, error) {
+				return vtg.resolver.resolver.ResolveShards(ctx, keyspace, []string{target.Shard}, target.TabletType)
 			},
 			session.Options,
 			func(reply *sqltypes.Result) error {
@@ -339,7 +384,8 @@ handleError:
 	return nil
 }
 
-// ExecuteShards executes a non-streaming query on the specified shards. This is a legacy function.
+// ExecuteShards executes a non-streaming query on the specified shards.
+// This is a legacy function.
 func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, keyspace string, shards []string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(tabletType)
@@ -363,8 +409,8 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables 
 		keyspace,
 		tabletType,
 		session,
-		func(keyspace string) (string, []string, error) {
-			return keyspace, shards, nil
+		func() ([]*srvtopo.ResolvedShard, error) {
+			return vtg.resolver.resolver.ResolveShards(ctx, keyspace, shards, tabletType)
 		},
 		notInTransaction,
 		options,
@@ -531,7 +577,7 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.B
 		session,
 		options,
 		func() (*scatterBatchRequest, error) {
-			return boundShardQueriesToScatterBatchRequest(queries)
+			return boundShardQueriesToScatterBatchRequest(ctx, vtg.resolver.resolver, queries, tabletType)
 		})
 	if err == nil {
 		var rowCount int64
@@ -573,13 +619,15 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgat
 
 	annotateBoundKeyspaceIDQueries(queries)
 
-	qrs, err = vtg.resolver.ExecuteBatchKeyspaceIds(
+	qrs, err = vtg.resolver.ExecuteBatch(
 		ctx,
-		queries,
 		tabletType,
 		asTransaction,
 		session,
-		options)
+		options,
+		func() (*scatterBatchRequest, error) {
+			return boundKeyspaceIDQueriesToScatterBatchRequest(ctx, vtg.resolver.resolver, queries, tabletType)
+		})
 	if err == nil {
 		var rowCount int64
 		for _, qr := range qrs {
@@ -715,8 +763,8 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 		bindVariables,
 		keyspace,
 		tabletType,
-		func(keyspace string) (string, []string, error) {
-			return keyspace, shards, nil
+		func(keyspace string) ([]*srvtopo.ResolvedShard, error) {
+			return vtg.resolver.resolver.ResolveShards(ctx, keyspace, shards, tabletType)
 		},
 		options,
 		func(reply *sqltypes.Result) error {
@@ -814,63 +862,58 @@ func (vtg *VTGate) SplitQuery(
 	}
 
 	// TODO(erez): Add validation of SplitQuery parameters.
-	keyspace, srvKeyspace, shardRefs, err := srvtopo.GetKeyspaceShards(
-		ctx, vtg.resolver.toposerv, vtg.resolver.cell, keyspace, topodatapb.TabletType_RDONLY)
+	rss, srvKeyspace, err := vtg.resolver.resolver.GetAllShards(ctx, keyspace, topodatapb.TabletType_RDONLY)
 	if err != nil {
 		return nil, err
 	}
 
 	// If the caller specified a splitCount (vs. specifying 'numRowsPerQueryPart') scale it by the
 	// number of shards (otherwise it stays 0).
-	perShardSplitCount := int64(math.Ceil(float64(splitCount) / float64(len(shardRefs))))
+	perShardSplitCount := int64(math.Ceil(float64(splitCount) / float64(len(rss))))
 
 	// Determine whether to return SplitQueryResponse_KeyRangeParts or SplitQueryResponse_ShardParts.
 	// We return 'KeyRangeParts' for sharded keyspaces that are not custom sharded. If the
 	// keyspace is custom sharded or unsharded we return 'ShardParts'.
 	var querySplitToQueryPartFunc func(
-		querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error)
+		querySplit *querypb.QuerySplit, rs *srvtopo.ResolvedShard) (*vtgatepb.SplitQueryResponse_Part, error)
 	if vtg.isKeyspaceRangeBasedSharded(keyspace, srvKeyspace) {
-		// Index the shard references in 'shardRefs' by shard name.
-		shardRefByName := make(map[string]*topodatapb.ShardReference, len(shardRefs))
-		for _, shardRef := range shardRefs {
-			shardRefByName[shardRef.Name] = shardRef
-		}
-		querySplitToQueryPartFunc = func(querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
-			// TODO(erez): Assert that shardRefByName contains an entry for 'shard'.
-			// Keyrange can be nil for the shard (e.g. for single-sharded keyspaces during resharding).
-			// In this case we append an empty keyrange that represents the entire keyspace.
-			keyranges := []*topodatapb.KeyRange{{Start: []byte{}, End: []byte{}}}
-			if shardRefByName[shard].KeyRange != nil {
-				keyranges = []*topodatapb.KeyRange{shardRefByName[shard].KeyRange}
+		querySplitToQueryPartFunc = func(querySplit *querypb.QuerySplit, rs *srvtopo.ResolvedShard) (*vtgatepb.SplitQueryResponse_Part, error) {
+			// Use ValidateShardName to extract the keyrange.
+			_, kr, err := topo.ValidateShardName(rs.Target.Shard)
+			if err != nil {
+				return nil, fmt.Errorf("cannot extract keyrange from shard name %v: %v", rs.Target.Shard, err)
+			}
+			if kr == nil {
+				// Keyrange can be nil for the shard (e.g. for single-sharded keyspaces during resharding).
+				// In this case we append an empty keyrange that represents the entire keyspace.
+				kr = &topodatapb.KeyRange{
+					Start: []byte{},
+					End:   []byte{},
+				}
 			}
 			return &vtgatepb.SplitQueryResponse_Part{
 				Query: querySplit.Query,
 				KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{
 					Keyspace:  keyspace,
-					KeyRanges: keyranges,
+					KeyRanges: []*topodatapb.KeyRange{kr},
 				},
 				Size: querySplit.RowCount,
 			}, nil
 		}
 	} else {
 		// Keyspace is either unsharded or custom-sharded.
-		querySplitToQueryPartFunc = func(querySplit *querypb.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
+		querySplitToQueryPartFunc = func(querySplit *querypb.QuerySplit, rs *srvtopo.ResolvedShard) (*vtgatepb.SplitQueryResponse_Part, error) {
 			return &vtgatepb.SplitQueryResponse_Part{
 				Query: querySplit.Query,
 				ShardPart: &vtgatepb.SplitQueryResponse_ShardPart{
 					Keyspace: keyspace,
-					Shards:   []string{shard},
+					Shards:   []string{rs.Target.Shard},
 				},
 				Size: querySplit.RowCount,
 			}, nil
 		}
 	}
 
-	// Collect all shard names into a slice.
-	shardNames := make([]string, 0, len(shardRefs))
-	for _, shardRef := range shardRefs {
-		shardNames = append(shardNames, shardRef.Name)
-	}
 	return vtg.resolver.scatterConn.SplitQuery(
 		ctx,
 		sql,
@@ -879,9 +922,8 @@ func (vtg *VTGate) SplitQuery(
 		perShardSplitCount,
 		numRowsPerQueryPart,
 		algorithm,
-		shardNames,
-		querySplitToQueryPartFunc,
-		keyspace)
+		rss,
+		querySplitToQueryPartFunc)
 }
 
 // GetSrvKeyspace is part of the vtgate service API.
@@ -1105,4 +1147,8 @@ func unambiguousKeyspaceBSQ(queries []*vtgatepb.BoundShardQuery) string {
 		}
 		return keyspace
 	}
+}
+
+func init() {
+	flag.Var(&l2vtgateAddrs, "l2vtgate_addrs", "Specifies a comma-separated list of other l2 vtgate pools to connect to. These other vtgates must run with the --enable_forwarding flag")
 }

@@ -4,7 +4,7 @@ In Vitess 2.2, we are adding preliminary support for Row Based Replication. This
 document explains how we are managing it and how it affects various Vitess
 features.
 
-See the [Vites and Replication]({% link user-guide/vitess-replication.md %}) document
+See the [Vitess and Replication]({% link user-guide/vitess-replication.md %}) document
 for an introduction on various types of replication and how it affects Vitess.
 
 ## MySQL Row Based Replication

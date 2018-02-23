@@ -30,6 +30,7 @@ import (
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema/schematest"
@@ -127,6 +128,10 @@ func TestGetMessageStreamPlan(t *testing.T) {
 	wantPlan := &planbuilder.Plan{
 		PlanID: planbuilder.PlanMessageStream,
 		Table:  qe.tables["msg"],
+		Permissions: []planbuilder.Permission{{
+			TableName: "msg",
+			Role:      tableacl.WRITER,
+		}},
 	}
 	if !reflect.DeepEqual(plan.Plan, wantPlan) {
 		t.Errorf("GetMessageStreamPlan(msg): %v, want %v", plan.Plan, wantPlan)

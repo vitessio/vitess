@@ -18,16 +18,13 @@ package srvtopo
 
 import (
 	"encoding/hex"
-	"sort"
 
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -64,17 +61,6 @@ func GetAnyShard(ctx context.Context, topoServ Server, cell, keyspace string, ta
 		return "", "", vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "No shards found for this tabletType")
 	}
 	return keyspace, allShards[0].Name, nil
-}
-
-// GetAllKeyspaces returns all the known keyspaces in a shard.
-func GetAllKeyspaces(ctx context.Context, topoServ Server, cell string) ([]string, error) {
-	keyspaces, err := topoServ.GetSrvKeyspaceNames(ctx, cell)
-	if err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "keyspace names fetch error: %v", err)
-	}
-	sort.Strings(keyspaces)
-
-	return keyspaces, nil
 }
 
 // GetKeyspaceShards return all the shards in a keyspace. It follows
@@ -117,23 +103,6 @@ func GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []
 	return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "KeyspaceId %v didn't match any shards %+v", hex.EncodeToString(keyspaceID), allShards)
 }
 
-// MapEntityIdsToShards returns a map of shards to values to use in that shard.
-func MapEntityIdsToShards(ctx context.Context, topoServ Server, cell, keyspace string, entityIds []*vtgatepb.ExecuteEntityIdsRequest_EntityId, tabletType topodatapb.TabletType) (string, map[string][]*querypb.Value, error) {
-	keyspace, _, allShards, err := GetKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
-	if err != nil {
-		return "", nil, err
-	}
-	var shards = make(map[string][]*querypb.Value)
-	for _, eid := range entityIds {
-		shard, err := GetShardForKeyspaceID(allShards, eid.KeyspaceId)
-		if err != nil {
-			return "", nil, err
-		}
-		shards[shard] = append(shards[shard], &querypb.Value{Type: eid.Type, Value: eid.Value})
-	}
-	return keyspace, shards, nil
-}
-
 // MapKeyRangesToShards returns the set of shards that "intersect"
 // with a collection of key-ranges; that is, a shard is included if
 // and only if its corresponding key-space ids are in one of the key-ranges.
@@ -144,7 +113,7 @@ func MapKeyRangesToShards(ctx context.Context, topoServ Server, cell, keyspace s
 	}
 	uniqueShards := make(map[string]bool)
 	for _, kr := range krs {
-		ResolveKeyRangeToShards(allShards, uniqueShards, kr)
+		keyRangeToShardMap(allShards, uniqueShards, kr)
 	}
 	var res = make([]string, 0, len(uniqueShards))
 	for s := range uniqueShards {
@@ -153,8 +122,8 @@ func MapKeyRangesToShards(ctx context.Context, topoServ Server, cell, keyspace s
 	return keyspace, res, nil
 }
 
-// ResolveKeyRangeToShards maps a list of keyranges to shard names.
-func ResolveKeyRangeToShards(allShards []*topodatapb.ShardReference, matches map[string]bool, kr *topodatapb.KeyRange) {
+// keyRangeToShardMap adds shards to a map based on the input KeyRange.
+func keyRangeToShardMap(allShards []*topodatapb.ShardReference, matches map[string]bool, kr *topodatapb.KeyRange) {
 	if !key.KeyRangeIsPartial(kr) {
 		for _, shard := range allShards {
 			matches[shard.Name] = true
@@ -166,6 +135,18 @@ func ResolveKeyRangeToShards(allShards []*topodatapb.ShardReference, matches map
 			matches[shard.Name] = true
 		}
 	}
+}
+
+// GetShardsForKeyRange maps keyranges to shards.
+func GetShardsForKeyRange(allShards []*topodatapb.ShardReference, kr *topodatapb.KeyRange) []string {
+	isPartial := key.KeyRangeIsPartial(kr)
+	var shards []string
+	for _, shard := range allShards {
+		if !isPartial || key.KeyRangesIntersect(kr, shard.KeyRange) {
+			shards = append(shards, shard.Name)
+		}
+	}
+	return shards
 }
 
 // MapExactShards maps a keyrange to shards only if there's a complete

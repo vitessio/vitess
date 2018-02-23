@@ -20,6 +20,7 @@ package gateway
 
 import (
 	"flag"
+	"fmt"
 	"time"
 
 	log "github.com/golang/glog"
@@ -30,6 +31,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -44,7 +46,14 @@ var (
 // A Gateway is the query processing module for each shard,
 // which is used by ScatterConn.
 type Gateway interface {
+	// TODO(alainjobart) The QueryService part of this interface
+	// will be removed soon, in favor of the TargetStats part (that
+	// returns a QueryService)
 	queryservice.QueryService
+
+	// srvtopo.TargetStats allows this Gateway to resolve a Target
+	// into a QueryService. It is used by the srvtopo.Resolver object.
+	srvtopo.TargetStats
 
 	// WaitForTablets asks the gateway to wait for the provided
 	// tablets types to be available. It the context is canceled
@@ -106,4 +115,54 @@ func WaitForTablets(gw Gateway, tabletTypesToWait []topodatapb.TabletType) error
 		// Nothing to do here, the caller will log.Fatalf.
 	}
 	return err
+}
+
+// StreamHealthFromTargetStatsListener responds to a StreamHealth
+// streaming RPC using a srvtopo.TargetStatsListener implementation.
+func StreamHealthFromTargetStatsListener(ctx context.Context, l srvtopo.TargetStatsListener, callback func(*querypb.StreamHealthResponse) error) error {
+	// Subscribe to the TargetStatsListener aggregate stats.
+	id, entries, c, err := l.Subscribe()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		// Unsubscribe so we don't receive more updates, and
+		// drain the channel.
+		l.Unsubscribe(id)
+		for range c {
+		}
+	}()
+
+	// Send all current entries.
+	for _, e := range entries {
+		shr := &querypb.StreamHealthResponse{
+			Target: e.Target,
+			TabletExternallyReparentedTimestamp: e.TabletExternallyReparentedTimestamp,
+			AggregateStats:                      e.Stats,
+		}
+		if err := callback(shr); err != nil {
+			return err
+		}
+	}
+
+	// Now listen for updates, or the end of the connection.
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case e, ok := <-c:
+			if !ok {
+				// Channel is closed, should never happen.
+				return fmt.Errorf("channel closed")
+			}
+			shr := &querypb.StreamHealthResponse{
+				Target: e.Target,
+				TabletExternallyReparentedTimestamp: e.TabletExternallyReparentedTimestamp,
+				AggregateStats:                      e.Stats,
+			}
+			if err := callback(shr); err != nil {
+				return err
+			}
+		}
+	}
 }

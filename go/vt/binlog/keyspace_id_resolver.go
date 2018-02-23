@@ -178,8 +178,8 @@ func (r *keyspaceIDResolverFactoryV3) keyspaceID(v sqltypes.Value) ([]byte, erro
 	if len(ksids) != 1 {
 		return nil, fmt.Errorf("mapping row to keyspace id returned an invalid array of keyspace ids: %v", ksids)
 	}
-	if ksids[0] == nil {
+	if ksids[0].Range != nil || ksids[0].ID == nil {
 		return nil, fmt.Errorf("could not map %v to a keyspace id", v)
 	}
-	return ksids[0], nil
+	return ksids[0].ID, nil
 }

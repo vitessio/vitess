@@ -3,6 +3,7 @@
 {
   "PlanID": "SELECT_STREAM",
   "TableName": "a",
+  "Permissions":[{"TableName":"a","Role":0}],
   "FullQuery": "select * from a"
 }
 
@@ -11,6 +12,7 @@
 {
   "PlanID": "SELECT_STREAM",
   "TableName": "",
+  "Permissions":[{"TableName":"a","Role":0},{"TableName":"b","Role":0}],
   "FullQuery": "select * from a join b"
 }
 
@@ -23,6 +25,7 @@
 {
   "PlanID": "SELECT_STREAM",
   "TableName": "",
+  "Permissions":[{"TableName":"a","Role":0},{"TableName":"b","Role":0}],
   "FullQuery": "select * from a union select * from b"
 }
 

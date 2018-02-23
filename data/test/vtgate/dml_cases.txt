@@ -200,6 +200,10 @@
   }
 }
 
+# update by primary keyspace id, changing same vindex twice
+"update user_metadata set email = 'a', email = 'b' where user_id = 1"
+"column has duplicate set values: 'email'"
+
 # update by primary keyspace id, changing multiple vindex columns
 "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1"
 {
@@ -1252,5 +1256,33 @@
     },
     "Query": "delete from user_extra where user_id in (1, 2)",
     "Table": "user_extra"
+  }
+}
+
+# unsharded update where inner query references outer query
+"update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)"
+{
+  "Original": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)",
+  "Instructions": {
+    "Opcode": "UpdateUnsharded",
+    "Keyspace": {
+      "Name":"main",
+      "Sharded":false
+    },
+    "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)"
+  }
+}
+
+# unsharded delete where inner query references outer query
+"delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)"
+{
+  "Original": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)",
+  "Instructions": {
+    "Opcode": "DeleteUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)"
   }
 }
