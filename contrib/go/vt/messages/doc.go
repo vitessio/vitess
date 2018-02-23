@@ -3,6 +3,8 @@
 // to worry about the underlying SQL and system architecture. All operations are safe
 // for concurrent use.
 //
+// More details can be found at http://vitess.io/advanced/messaging/
+//
 // Queues
 //
 // Queues are the core component of messaging, and require the MySQL tables to be
@@ -31,8 +33,6 @@
 //
 //			-- Vitess specific settings are set in the comments
 //		) comment 'vitess_message,vt_ack_wait=30,vt_purge_after=86400,vt_batch_size=10,vt_cache_size=10000,vt_poller_interval=30'
-//
-// More details can be found at http://vitess.io/advanced/messaging/
 //
 // Inserting and Acknowledging Messages
 //
