@@ -1093,6 +1093,15 @@ var (
 		input: "stream * from t",
 	}, {
 		input: "stream /* comment */ * from t",
+	}, {
+		input: "begin",
+	}, {
+		input:  "start transaction",
+		output: "begin",
+	}, {
+		input: "commit",
+	}, {
+		input: "rollback",
 	}}
 )
 
