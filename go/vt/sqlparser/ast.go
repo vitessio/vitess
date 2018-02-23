@@ -189,6 +189,9 @@ func (*Set) iStatement()        {}
 func (*DDL) iStatement()        {}
 func (*Show) iStatement()       {}
 func (*Use) iStatement()        {}
+func (*Begin) iStatement()      {}
+func (*Commit) iStatement()     {}
+func (*Rollback) iStatement()   {}
 func (*OtherRead) iStatement()  {}
 func (*OtherAdmin) iStatement() {}
 
@@ -1139,6 +1142,45 @@ func (node *Use) Format(buf *TrackedBuffer) {
 // WalkSubtree walks the nodes of the subtree.
 func (node *Use) WalkSubtree(visit Visit) error {
 	return Walk(visit, node.DBName)
+}
+
+// Begin represents a Begin statement.
+type Begin struct{}
+
+// Format formats the node.
+func (node *Begin) Format(buf *TrackedBuffer) {
+	buf.WriteString("begin")
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *Begin) WalkSubtree(visit Visit) error {
+	return nil
+}
+
+// Commit represents a Commit statement.
+type Commit struct{}
+
+// Format formats the node.
+func (node *Commit) Format(buf *TrackedBuffer) {
+	buf.WriteString("commit")
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *Commit) WalkSubtree(visit Visit) error {
+	return nil
+}
+
+// Rollback represents a Rollback statement.
+type Rollback struct{}
+
+// Format formats the node.
+func (node *Rollback) Format(buf *TrackedBuffer) {
+	buf.WriteString("rollback")
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *Rollback) WalkSubtree(visit Visit) error {
+	return nil
 }
 
 // OtherRead represents a DESCRIBE, or EXPLAIN statement.
