@@ -17,7 +17,6 @@ type Execer interface {
 type Queue struct {
 	name          string
 	fieldNames    []string
-	destFunc      DestFunc
 	maxConcurrent int
 
 	// predefine these sql strings
@@ -27,12 +26,8 @@ type Queue struct {
 	s *subscription
 }
 
-// A DestFunc returns an array of fields that map to the queue payload fields,
-// matching the table column order. These will map directly to rows.Scan().
-type DestFunc func() []interface{}
-
 // NewQueue returns a queue definition
-func NewQueue(ctx context.Context, name string, maxConcurrent int, fieldNames []string, fn DestFunc) (*Queue, error) {
+func NewQueue(ctx context.Context, name string, maxConcurrent int, fieldNames []string) (*Queue, error) {
 	if maxConcurrent < 1 {
 		return nil, errors.New("maxConcurrent must be greater than 0")
 	}
@@ -41,13 +36,6 @@ func NewQueue(ctx context.Context, name string, maxConcurrent int, fieldNames []
 		name:          name,
 		maxConcurrent: maxConcurrent,
 		fieldNames:    fieldNames,
-		destFunc:      fn,
-	}
-
-	// generate a slice of args from the DestFunc to make sure that it matches the provided field names
-	args := fn()
-	if len(args) != len(fieldNames) {
-		return nil, errors.New("user fields mismatch")
 	}
 
 	// only do this string manipulation once

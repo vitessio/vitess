@@ -19,23 +19,17 @@ type subscription struct {
 
 	cancelFunc context.CancelFunc
 
+	// GetMessage sends through scan targets for rows.Scan
+	destChan chan []interface{}
+	// this returns the rows.Scan error back to GetMessage
+	errChan chan error
+
 	// Subscribe requires unique connection string properties,
 	// so we will manage that on behalf of the user
 	db *sql.DB
 
 	// store db connection details
 	dbConfig vitessdriver.Configuration
-
-	// this stores all of the in flight messages
-	msgBuf []Message
-
-	// these buffered channels manage max message processing concurrency
-
-	// these messages are ready to be filled with data from the db
-	waitingForDataChan chan *Message
-
-	// these messages are waiting for a subscriber to process them
-	readyForProcessingChan chan *Message
 
 	streamSQL string
 	ackSQL    string
@@ -81,15 +75,16 @@ func (q *Queue) Open(ctx context.Context, address, target string) error {
 		// we don't need to check for context cancellation, because that is already
 		// happening behind the scenes in the Vitess database/sql driver
 		for rows.Next() {
-			m := <-q.s.waitingForDataChan
-			m.err = rows.Scan(m.dataPointers...)
-
-			// send the message through the channel
-			q.s.readyForProcessingChan <- m
+			// get a pointer to the scanData struct provided by Get
+			dest := <-q.s.destChan
+			// scan into the provided destination fields and also set the error
+			// this is a synchronous call, so isn't a data race, while getting all the data back to Get
+			q.s.errChan <- rows.Scan(dest...)
 		}
 
 		// close the channel before exiting
-		close(q.s.readyForProcessingChan)
+		close(q.s.destChan)
+		close(q.s.errChan)
 	}()
 
 	return nil
@@ -97,40 +92,13 @@ func (q *Queue) Open(ctx context.Context, address, target string) error {
 
 func (q *Queue) newSubscription(maxConcurrent int) *subscription {
 	s := &subscription{
-		isOpen:                 false,
-		mu:                     sync.RWMutex{},
-		msgBuf:                 make([]Message, maxConcurrent),
-		waitingForDataChan:     make(chan *Message, maxConcurrent),
-		readyForProcessingChan: make(chan *Message, maxConcurrent),
-		streamSQL:              fmt.Sprintf("stream * from `%s`", q.name),
-		ackSQL:                 fmt.Sprintf("UPDATE `%s` SET time_acked=?, time_next=null WHERE time_scheduled=? AND id=? AND time_acked is null", q.name),
-		failSQL:                fmt.Sprintf("UPDATE `%s` SET time_next=%d WHERE time_scheduled=? AND id=? AND time_acked is null", q.name, math.MaxInt64),
-	}
-
-	// initialize all the individual messages
-	// each message will be reset as it is reused
-	for i := range s.msgBuf {
-		// create a pointer to the message for convenience
-		m := &s.msgBuf[i]
-
-		// add a reference to the original queue
-		m.s = s
-
-		// create a permanent set of scan fields
-		m.dataPointers = []interface{}{
-			&m.timeScheduled,
-			&m.ID,
-		}
-
-		// if the user has set up custom fields, initialize them
-		if q.fieldNames != nil {
-			m.Data = q.destFunc()
-
-			// add a pointer to each of the individual user fields to scanFields
-			for j := range m.Data {
-				m.dataPointers = append(m.dataPointers, &m.Data[j])
-			}
-		}
+		isOpen:    false,
+		mu:        sync.RWMutex{},
+		destChan:  make(chan []interface{}),
+		errChan:   make(chan error),
+		streamSQL: fmt.Sprintf("stream * from `%s`", q.name),
+		ackSQL:    fmt.Sprintf("UPDATE `%s` SET time_acked=?, time_next=null WHERE id=? AND time_acked is null", q.name),
+		failSQL:   fmt.Sprintf("UPDATE `%s` SET time_next=%d WHERE id=? AND time_acked is null", q.name, math.MaxInt64),
 	}
 
 	return s
@@ -169,14 +137,6 @@ func (q *Queue) Close() error {
 
 	// cancel context inside rows.Next()
 	q.s.cancelFunc()
-
-	// drain processing channel
-	for range q.s.readyForProcessingChan {
-	}
-
-	// drain waiting channel
-	for range q.s.waitingForDataChan {
-	}
 
 	return q.s.db.Close()
 }
