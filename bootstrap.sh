@@ -45,9 +45,6 @@ mkdir -p $VTROOT/bin
 mkdir -p $VTROOT/lib
 mkdir -p $VTROOT/vthook
 
-echo "Updating git submodules..."
-git submodule update --init
-
 # install zookeeper
 # TODO(sougou): when version changes, see if we can drop the 'zip -d' hack to get the fatjars working.
 zk_ver=3.4.10
