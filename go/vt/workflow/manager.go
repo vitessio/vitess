@@ -47,6 +47,9 @@ type Workflow interface {
 	Run(ctx context.Context, manager *Manager, wi *topo.WorkflowInfo) error
 }
 
+// Data is an empty interface that represents the Data contained in a workflow
+type Data interface{}
+
 // Factory can create the initial version of a Workflow, or
 // instantiate them from a serialized version.
 type Factory interface {
@@ -59,6 +62,9 @@ type Factory interface {
 	// The Manager object is passed to Init method since the resharding workflow
 	// will use the topology server in Manager.
 	Init(m *Manager, w *workflowpb.Workflow, args []string) error
+
+	// GetData parses and returns the data associated with this workflow.
+	GetData(m *Manager, w *workflowpb.Workflow) (Data, error)
 
 	// Instantiate loads a workflow from the proto representation
 	// into an in-memory Workflow object. rootNode is the root UI node
@@ -212,12 +218,44 @@ func (m *Manager) WaitUntilRunning() {
 	}
 }
 
+// GetWorkflowNames returns the list of workflows
+func (m *Manager) GetWorkflowNames(ctx context.Context) ([]string, error) {
+	uuids, err := m.ts.GetWorkflowNames(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("GetWorkflowNames failed to find existing workflows: %v", err)
+	}
+	return uuids, nil
+}
+
+// GetWorkflowData returns the workflow with the given uuid from the topo server
+func (m *Manager) GetWorkflowData(ctx context.Context, uuid string) (*topo.WorkflowInfo, Data, error) {
+	// Load workflows from the topo server, only look at
+	// 'Running' ones.
+	wi, err := m.ts.GetWorkflow(ctx, uuid)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Failed to load workflow %v: %v", uuid, err)
+	}
+
+	factoryName := wi.GetFactoryName()
+	factory, ok := factories[factoryName]
+	if !ok {
+		return nil, nil, fmt.Errorf("no factory named %v is registered", factoryName)
+	}
+
+	wd, err := factory.GetData(m, wi.Workflow)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Failed to load workflow state %v: %v", uuid, err)
+	}
+
+	return wi, wd, nil
+}
+
 // loadAndStartJobsLocked will try to load and start all existing jobs
 // in the topo Server.  It needs to be run holding m.mu.
 func (m *Manager) loadAndStartJobsLocked() {
-	uuids, err := m.ts.GetWorkflowNames(m.ctx)
+	uuids, err := m.GetWorkflowNames(m.ctx)
 	if err != nil {
-		log.Errorf("GetWorkflowNames failed to find existing workflows: %v", err)
+		log.Error(err)
 		return
 	}
 
