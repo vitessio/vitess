@@ -204,7 +204,7 @@ func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]KsidOrRang
 	out := make([]KsidOrRange, 0, len(ids))
 	if lu.writeOnly {
 		for range ids {
-			out = append(out, KsidOrRange{Range: &topodata.KeyRange{}})
+			out = append(out, KsidOrRange{Range: &topodatapb.KeyRange{}})
 		}
 		return out, nil
 	}
