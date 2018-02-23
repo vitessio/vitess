@@ -45,10 +45,6 @@ tags
 /java/pom.xml.versionsBackup
 /java/*/pom.xml.versionsBackup
 
-# php downloaded dependencies
-/php/composer.phar
-/php/vendor
-
 ## vitess.io preview site
 /preview-vitess.io/
 
