@@ -86,7 +86,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	for k, v := range status.StatusFuncs {
 		funcs[k] = v
 	}
-	for k, v := range statusFuncs {
+	for k, v := range StatusFuncs {
 		funcs[k] = v
 	}
 	templ := template.New("").Funcs(funcs)

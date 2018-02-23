@@ -28,7 +28,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -712,11 +711,10 @@ func timeSince(t time.Time) template.HTML {
 	return template.HTML(time.Since(t).Round(time.Second).String())
 }
 
-var statusFuncs = template.FuncMap{
+// StatusFuncs is required for CacheStatus) to work properly.
+// We don't register them inside servenv directly so we don't introduce
+// a dependency here.
+var StatusFuncs = template.FuncMap{
 	"github_com_youtube_vitess_srvtopo_ttl_time":   ttlTime,
 	"github_com_youtube_vitess_srvtopo_time_since": timeSince,
-}
-
-func init() {
-	servenv.AddStatusFuncs(statusFuncs)
 }
