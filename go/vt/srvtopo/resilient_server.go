@@ -202,11 +202,6 @@ type srvKeyspaceEntry struct {
 	// lastErrorTime records the time that the watch failed, used for
 	// the status page
 	lastErrorTime time.Time
-
-	// lastWatchTime records the time that the watch was last started,
-	// used to ensure we don't restart the watch more often than the
-	// refresh time
-	lastWatchTime time.Time
 }
 
 // NewResilientServer creates a new ResilientServer
