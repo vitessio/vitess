@@ -1,0 +1,66 @@
+*~
+src/
+
+config.json
+/test
+/bin/
+
+/pkg/
+
+TAGS
+
+flymake.sh
+refresh_tags.sh
+a.out
+
+# vim temp files
+*.swp
+
+*.test
+/query/a.out*
+.DS_Store
+
+# ignore generated files.
+daemon/version.go
+parser/lex.yy.c
+parser/y.tab.h
+parser/y.tab.c
+parser/test_memory_leaks
+protocol/protocol.pb.go
+build/
+
+# executables
+/influxdb
+/benchmark-tool
+/main
+/benchmark-storage
+godef
+gosym
+gocode
+inspect-raft
+
+# dependencies
+out_rpm/
+packages/
+
+# autconf
+autom4te.cache/
+config.log
+config.status
+Makefile
+
+# log file
+influxdb.log
+benchmark.log
+
+# config file
+config.toml
+/admin
+/admin/
+/data/
+
+# test data files
+integration/migration_data/
+
+# goide project files
+.idea

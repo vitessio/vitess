@@ -1,0 +1,667 @@
+{
+  "id": "servicecontrol:v1",
+  "auth": {
+    "oauth2": {
+      "scopes": {
+        "https://www.googleapis.com/auth/cloud-platform": {
+          "description": "View and manage your data across Google Cloud Platform services"
+        },
+        "https://www.googleapis.com/auth/servicecontrol": {
+          "description": "Manage your Google Service Control data"
+        }
+      }
+    }
+  },
+  "description": "Google Service Control provides control plane functionality to managed services, such as logging, monitoring, and status checks.",
+  "protocol": "rest",
+  "title": "Google Service Control API",
+  "resources": {
+    "services": {
+      "methods": {
+        "check": {
+          "id": "servicecontrol.services.check",
+          "response": {
+            "$ref": "CheckResponse"
+          },
+          "parameterOrder": [
+            "serviceName"
+          ],
+          "description": "Checks an operation with Google Service Control to decide whether\nthe given operation should proceed. It should be called before the\noperation is executed.\n\nIf feasible, the client should cache the check results and reuse them for\nup to 60s. In case of server errors, the client may rely on the cached\nresults for longer time.\n\nThis method requires the `servicemanagement.services.check` permission\non the specified service. For more information, see\n[Google Cloud IAM](https://cloud.google.com/iam).",
+          "request": {
+            "$ref": "CheckRequest"
+          },
+          "flatPath": "v1/services/{serviceName}:check",
+          "httpMethod": "POST",
+          "parameters": {
+            "serviceName": {
+              "description": "The service name as specified in its service configuration. For example,\n`\"pubsub.googleapis.com\"`.\n\nSee google.api.Service for the definition of a service name.",
+              "required": true,
+              "location": "path",
+              "type": "string"
+            }
+          },
+          "path": "v1/services/{serviceName}:check",
+          "scopes": [
+            "https://www.googleapis.com/auth/cloud-platform",
+            "https://www.googleapis.com/auth/servicecontrol"
+          ]
+        },
+        "report": {
+          "id": "servicecontrol.services.report",
+          "response": {
+            "$ref": "ReportResponse"
+          },
+          "parameterOrder": [
+            "serviceName"
+          ],
+          "description": "Reports operations to Google Service Control. It should be called\nafter the operation is completed.\n\nIf feasible, the client should aggregate reporting data for up to 5s to\nreduce API traffic. Limiting aggregation to 5s is to reduce data loss\nduring client crashes. Clients should carefully choose the aggregation\nwindow to avoid data loss risk more than 0.01% for business and\ncompliance reasons.\n\nThis method requires the `servicemanagement.services.report` permission\non the specified service. For more information, see\n[Google Cloud IAM](https://cloud.google.com/iam).",
+          "request": {
+            "$ref": "ReportRequest"
+          },
+          "flatPath": "v1/services/{serviceName}:report",
+          "httpMethod": "POST",
+          "parameters": {
+            "serviceName": {
+              "description": "The service name as specified in its service configuration. For example,\n`\"pubsub.googleapis.com\"`.\n\nSee google.api.Service for the definition of a service name.",
+              "required": true,
+              "location": "path",
+              "type": "string"
+            }
+          },
+          "path": "v1/services/{serviceName}:report",
+          "scopes": [
+            "https://www.googleapis.com/auth/cloud-platform",
+            "https://www.googleapis.com/auth/servicecontrol"
+          ]
+        }
+      }
+    }
+  },
+  "schemas": {
+    "CheckError": {
+      "description": "Defines the errors to be returned in\ngoogle.api.servicecontrol.v1.CheckResponse.check_errors.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "The error code.",
+          "enum": [
+            "ERROR_CODE_UNSPECIFIED",
+            "NOT_FOUND",
+            "PERMISSION_DENIED",
+            "RESOURCE_EXHAUSTED",
+            "SERVICE_NOT_ACTIVATED",
+            "BILLING_DISABLED",
+            "PROJECT_DELETED",
+            "PROJECT_INVALID",
+            "IP_ADDRESS_BLOCKED",
+            "REFERER_BLOCKED",
+            "CLIENT_APP_BLOCKED",
+            "API_KEY_INVALID",
+            "API_KEY_EXPIRED",
+            "API_KEY_NOT_FOUND",
+            "NAMESPACE_LOOKUP_UNAVAILABLE",
+            "SERVICE_STATUS_UNAVAILABLE",
+            "BILLING_STATUS_UNAVAILABLE"
+          ],
+          "enumDescriptions": [
+            "This is never used in `CheckResponse`.",
+            "The consumer's project id was not found.\nSame as google.rpc.Code.NOT_FOUND.",
+            "The consumer doesn't have access to the specified resource.\nSame as google.rpc.Code.PERMISSION_DENIED.",
+            "Quota check failed. Same as google.rpc.Code.RESOURCE_EXHAUSTED.",
+            "The consumer hasn't activated the service.",
+            "The consumer cannot access the service because billing is disabled.",
+            "The consumer's project has been marked as deleted (soft deletion).",
+            "The consumer's project number or id does not represent a valid project.",
+            "The IP address of the consumer is invalid for the specific consumer\nproject.",
+            "The referer address of the consumer request is invalid for the specific\nconsumer project.",
+            "The client application of the consumer request is invalid for the\nspecific consumer project.",
+            "The consumer's API key is invalid.",
+            "The consumer's API Key has expired.",
+            "The consumer's API Key was not found in config record.",
+            "The backend server for looking up project id/number is unavailable.",
+            "The backend server for checking service status is unavailable.",
+            "The backend server for checking billing status is unavailable."
+          ],
+          "type": "string"
+        },
+        "detail": {
+          "description": "Free-form text providing details on the error cause of the error.",
+          "type": "string"
+        }
+      },
+      "id": "CheckError"
+    },
+    "Status": {
+      "description": "The `Status` type defines a logical error model that is suitable for different\nprogramming environments, including REST APIs and RPC APIs. It is used by\n[gRPC](https://github.com/grpc). The error model is designed to be:\n\n- Simple to use and understand for most users\n- Flexible enough to meet unexpected needs\n\n# Overview\n\nThe `Status` message contains three pieces of data: error code, error message,\nand error details. The error code should be an enum value of\ngoogle.rpc.Code, but it may accept additional error codes if needed.  The\nerror message should be a developer-facing English message that helps\ndevelopers *understand* and *resolve* the error. If a localized user-facing\nerror message is needed, put the localized message in the error details or\nlocalize it in the client. The optional error details may contain arbitrary\ninformation about the error. There is a predefined set of error detail types\nin the package `google.rpc` which can be used for common error conditions.\n\n# Language mapping\n\nThe `Status` message is the logical representation of the error model, but it\nis not necessarily the actual wire format. When the `Status` message is\nexposed in different client libraries and different wire protocols, it can be\nmapped differently. For example, it will likely be mapped to some exceptions\nin Java, but more likely mapped to some error codes in C.\n\n# Other uses\n\nThe error model and the `Status` message can be used in a variety of\nenvironments, either with or without APIs, to provide a\nconsistent developer experience across different environments.\n\nExample uses of this error model include:\n\n- Partial errors. If a service needs to return partial errors to the client,\n    it may embed the `Status` in the normal response to indicate the partial\n    errors.\n\n- Workflow errors. A typical workflow has multiple steps. Each step may\n    have a `Status` message for error reporting purpose.\n\n- Batch operations. If a client uses batch request and batch response, the\n    `Status` message should be used directly inside batch response, one for\n    each error sub-response.\n\n- Asynchronous operations. If an API call embeds asynchronous operation\n    results in its response, the status of those operations should be\n    represented directly using the `Status` message.\n\n- Logging. If some API errors are stored in logs, the message `Status` could\n    be used directly after any stripping needed for security/privacy reasons.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "The status code, which should be an enum value of google.rpc.Code.",
+          "type": "integer",
+          "format": "int32"
+        },
+        "details": {
+          "description": "A list of messages that carry the error details.  There will be a\ncommon set of message types for APIs to use.",
+          "type": "array",
+          "items": {
+            "additionalProperties": {
+              "description": "Properties of the object. Contains field @type with type URL.",
+              "type": "any"
+            },
+            "type": "object"
+          }
+        },
+        "message": {
+          "description": "A developer-facing error message, which should be in English. Any\nuser-facing error message should be localized and sent in the\ngoogle.rpc.Status.details field, or localized by the client.",
+          "type": "string"
+        }
+      },
+      "id": "Status"
+    },
+    "ReportError": {
+      "description": "Represents the processing error of one `Operation` in the request.",
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "description": "The Operation.operation_id value from the request.",
+          "type": "string"
+        },
+        "status": {
+          "description": "Details of the error when processing the `Operation`.",
+          "$ref": "Status"
+        }
+      },
+      "id": "ReportError"
+    },
+    "ExponentialBuckets": {
+      "description": "Describing buckets with exponentially growing width.",
+      "type": "object",
+      "properties": {
+        "growthFactor": {
+          "description": "The i'th exponential bucket covers the interval\n  [scale * growth_factor^(i-1), scale * growth_factor^i)\nwhere i ranges from 1 to num_finite_buckets inclusive.\nMust be larger than 1.0.",
+          "type": "number",
+          "format": "double"
+        },
+        "scale": {
+          "description": "The i'th exponential bucket covers the interval\n  [scale * growth_factor^(i-1), scale * growth_factor^i)\nwhere i ranges from 1 to num_finite_buckets inclusive.\nMust be \u003e 0.",
+          "type": "number",
+          "format": "double"
+        },
+        "numFiniteBuckets": {
+          "description": "The number of finite buckets. With the underflow and overflow buckets,\nthe total number of buckets is `num_finite_buckets` + 2.\nSee comments on `bucket_options` for details.",
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "id": "ExponentialBuckets"
+    },
+    "Operation": {
+      "description": "Represents information regarding an operation.",
+      "type": "object",
+      "properties": {
+        "operationName": {
+          "description": "Fully qualified name of the operation. Reserved for future use.",
+          "type": "string"
+        },
+        "operationId": {
+          "description": "Identity of the operation. This must be unique within the scope of the\nservice that generated the operation. If the service calls\nCheck() and Report() on the same operation, the two calls should carry\nthe same id.\n\nUUID version 4 is recommended, though not required.\nIn scenarios where an operation is computed from existing information\nand an idempotent id is desirable for deduplication purpose, UUID version 5\nis recommended. See RFC 4122 for details.",
+          "type": "string"
+        },
+        "endTime": {
+          "description": "End time of the operation.\nRequired when the operation is used in ServiceController.Report,\nbut optional when the operation is used in ServiceController.Check.",
+          "type": "string",
+          "format": "google-datetime"
+        },
+        "labels": {
+          "description": "Labels describing the operation. Only the following labels are allowed:\n\n- Labels describing monitored resources as defined in\n  the service configuration.\n- Default labels of metric values. When specified, labels defined in the\n  metric value override these default.\n- The following labels defined by Google Cloud Platform:\n    - `cloud.googleapis.com/location` describing the location where the\n       operation happened,\n    - `servicecontrol.googleapis.com/user_agent` describing the user agent\n       of the API request,\n    - `servicecontrol.googleapis.com/service_agent` describing the service\n       used to handle the API request (e.g. ESP),\n    - `servicecontrol.googleapis.com/platform` describing the platform\n       where the API is served (e.g. GAE, GCE, GKE).",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "importance": {
+          "description": "DO NOT USE. This is an experimental field.",
+          "enum": [
+            "LOW",
+            "HIGH"
+          ],
+          "enumDescriptions": [
+            "The API implementation may cache and aggregate the data.\nThe data may be lost when rare and unexpected system failures occur.",
+            "The API implementation doesn't cache and aggregate the data.\nIf the method returns successfully, it's guaranteed that the data has\nbeen persisted in durable storage."
+          ],
+          "type": "string"
+        },
+        "consumerId": {
+          "description": "Identity of the consumer who is using the service.\nThis field should be filled in for the operations initiated by a\nconsumer, but not for service-initiated operations that are\nnot related to a specific consumer.\n\nThis can be in one of the following formats:\n  project:\u003cproject_id\u003e,\n  project_number:\u003cproject_number\u003e,\n  api_key:\u003capi_key\u003e.",
+          "type": "string"
+        },
+        "startTime": {
+          "description": "Required. Start time of the operation.",
+          "type": "string",
+          "format": "google-datetime"
+        },
+        "logEntries": {
+          "description": "Represents information to be logged.",
+          "type": "array",
+          "items": {
+            "$ref": "LogEntry"
+          }
+        },
+        "metricValueSets": {
+          "description": "Represents information about this operation. Each MetricValueSet\ncorresponds to a metric defined in the service configuration.\nThe data type used in the MetricValueSet must agree with\nthe data type specified in the metric definition.\n\nWithin a single operation, it is not allowed to have more than one\nMetricValue instances that have the same metric names and identical\nlabel value combinations. If a request has such duplicated MetricValue\ninstances, the entire request is rejected with\nan invalid argument error.",
+          "type": "array",
+          "items": {
+            "$ref": "MetricValueSet"
+          }
+        }
+      },
+      "id": "Operation"
+    },
+    "CheckRequest": {
+      "description": "Request message for the Check method.",
+      "type": "object",
+      "properties": {
+        "operation": {
+          "description": "The operation to be checked.",
+          "$ref": "Operation"
+        },
+        "serviceConfigId": {
+          "description": "Specifies which version of service configuration should be used to process\nthe request.\n\nIf unspecified or no matching version can be found, the\nlatest one will be used.",
+          "type": "string"
+        }
+      },
+      "id": "CheckRequest"
+    },
+    "LogEntry": {
+      "description": "An individual log entry.",
+      "type": "object",
+      "properties": {
+        "textPayload": {
+          "description": "The log entry payload, represented as a Unicode string (UTF-8).",
+          "type": "string"
+        },
+        "structPayload": {
+          "description": "The log entry payload, represented as a structure that\nis expressed as a JSON object.",
+          "additionalProperties": {
+            "description": "Properties of the object.",
+            "type": "any"
+          },
+          "type": "object"
+        },
+        "labels": {
+          "description": "A set of user-defined (key, value) data that provides additional\ninformation about the log entry.",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "severity": {
+          "description": "The severity of the log entry. The default value is\n`LogSeverity.DEFAULT`.",
+          "enum": [
+            "DEFAULT",
+            "DEBUG",
+            "INFO",
+            "NOTICE",
+            "WARNING",
+            "ERROR",
+            "CRITICAL",
+            "ALERT",
+            "EMERGENCY"
+          ],
+          "enumDescriptions": [
+            "(0) The log entry has no assigned severity level.",
+            "(100) Debug or trace information.",
+            "(200) Routine information, such as ongoing status or performance.",
+            "(300) Normal but significant events, such as start up, shut down, or\na configuration change.",
+            "(400) Warning events might cause problems.",
+            "(500) Error events are likely to cause problems.",
+            "(600) Critical events cause more severe problems or outages.",
+            "(700) A person must take an action immediately.",
+            "(800) One or more systems are unusable."
+          ],
+          "type": "string"
+        },
+        "name": {
+          "description": "Required. The log to which this log entry belongs. Examples: `\"syslog\"`,\n`\"book_log\"`.",
+          "type": "string"
+        },
+        "protoPayload": {
+          "description": "The log entry payload, represented as a protocol buffer that is\nexpressed as a JSON object. You can only pass `protoPayload`\nvalues that belong to a set of approved types.",
+          "additionalProperties": {
+            "description": "Properties of the object. Contains field @type with type URL.",
+            "type": "any"
+          },
+          "type": "object"
+        },
+        "timestamp": {
+          "description": "The time the event described by the log entry occurred. If\nomitted, defaults to operation start time.",
+          "type": "string",
+          "format": "google-datetime"
+        },
+        "insertId": {
+          "description": "A unique ID for the log entry used for deduplication. If omitted,\nthe implementation will generate one based on operation_id.",
+          "type": "string"
+        }
+      },
+      "id": "LogEntry"
+    },
+    "ReportRequest": {
+      "description": "Request message for the Report method.",
+      "type": "object",
+      "properties": {
+        "operations": {
+          "description": "Operations to be reported.\n\nTypically the service should report one operation per request.\nPutting multiple operations into a single request is allowed, but should\nbe used only when multiple operations are natually available at the time\nof the report.\n\nIf multiple operations are in a single request, the total request size\nshould be no larger than 1MB. See ReportResponse.report_errors for\npartial failure behavior.",
+          "type": "array",
+          "items": {
+            "$ref": "Operation"
+          }
+        },
+        "serviceConfigId": {
+          "description": "Specifies which version of service config should be used to process the\nrequest.\n\nIf unspecified or no matching version can be found, the\nlatest one will be used.",
+          "type": "string"
+        }
+      },
+      "id": "ReportRequest"
+    },
+    "MetricValueSet": {
+      "description": "Represents a set of metric values in the same metric.\nEach metric value in the set should have a unique combination of start time,\nend time, and label values.",
+      "type": "object",
+      "properties": {
+        "metricName": {
+          "description": "The metric name defined in the service configuration.",
+          "type": "string"
+        },
+        "metricValues": {
+          "description": "The values in this metric.",
+          "type": "array",
+          "items": {
+            "$ref": "MetricValue"
+          }
+        }
+      },
+      "id": "MetricValueSet"
+    },
+    "LinearBuckets": {
+      "description": "Describing buckets with constant width.",
+      "type": "object",
+      "properties": {
+        "width": {
+          "description": "The i'th linear bucket covers the interval\n  [offset + (i-1) * width, offset + i * width)\nwhere i ranges from 1 to num_finite_buckets, inclusive.\nMust be strictly positive.",
+          "type": "number",
+          "format": "double"
+        },
+        "offset": {
+          "description": "The i'th linear bucket covers the interval\n  [offset + (i-1) * width, offset + i * width)\nwhere i ranges from 1 to num_finite_buckets, inclusive.",
+          "type": "number",
+          "format": "double"
+        },
+        "numFiniteBuckets": {
+          "description": "The number of finite buckets. With the underflow and overflow buckets,\nthe total number of buckets is `num_finite_buckets` + 2.\nSee comments on `bucket_options` for details.",
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "id": "LinearBuckets"
+    },
+    "CheckResponse": {
+      "description": "Response message for the Check method.",
+      "type": "object",
+      "properties": {
+        "checkErrors": {
+          "description": "Indicate the decision of the check.\n\nIf no check errors are present, the service should process the operation.\nOtherwise the service should use the list of errors to determine the\nappropriate action.",
+          "type": "array",
+          "items": {
+            "$ref": "CheckError"
+          }
+        },
+        "operationId": {
+          "description": "The same operation_id value used in the CheckRequest.\nUsed for logging and diagnostics purposes.",
+          "type": "string"
+        },
+        "serviceConfigId": {
+          "description": "The actual config id used to process the request.",
+          "type": "string"
+        }
+      },
+      "id": "CheckResponse"
+    },
+    "ReportResponse": {
+      "description": "Response message for the Report method.",
+      "type": "object",
+      "properties": {
+        "reportErrors": {
+          "description": "Partial failures, one for each `Operation` in the request that failed\nprocessing. There are three possible combinations of the RPC status:\n\n1. The combination of a successful RPC status and an empty `report_errors`\n   list indicates a complete success where all `Operations` in the\n   request are processed successfully.\n2. The combination of a successful RPC status and a non-empty\n   `report_errors` list indicates a partial success where some\n   `Operations` in the request succeeded. Each\n   `Operation` that failed processing has a corresponding item\n   in this list.\n3. A failed RPC status indicates a general non-deterministic failure.\n   When this happens, it's impossible to know which of the\n   'Operations' in the request succeeded or failed.",
+          "type": "array",
+          "items": {
+            "$ref": "ReportError"
+          }
+        },
+        "serviceConfigId": {
+          "description": "The actual config id used to process the request.",
+          "type": "string"
+        }
+      },
+      "id": "ReportResponse"
+    },
+    "Distribution": {
+      "description": "Distribution represents a frequency distribution of double-valued sample\npoints. It contains the size of the population of sample points plus\nadditional optional information:\n\n  - the arithmetic mean of the samples\n  - the minimum and maximum of the samples\n  - the sum-squared-deviation of the samples, used to compute variance\n  - a histogram of the values of the sample points",
+      "type": "object",
+      "properties": {
+        "bucketCounts": {
+          "description": "The number of samples in each histogram bucket. `bucket_counts` are\noptional. If present, they must sum to the `count` value.\n\nThe buckets are defined below in `bucket_option`. There are N buckets.\n`bucket_counts[0]` is the number of samples in the underflow bucket.\n`bucket_counts[1]` to `bucket_counts[N-1]` are the numbers of samples\nin each of the finite buckets. And `bucket_counts[N] is the number\nof samples in the overflow bucket. See the comments of `bucket_option`\nbelow for more details.\n\nAny suffix of trailing zeros may be omitted.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "int64"
+          }
+        },
+        "exponentialBuckets": {
+          "description": "Buckets with exponentially growing width.",
+          "$ref": "ExponentialBuckets"
+        },
+        "explicitBuckets": {
+          "description": "Buckets with arbitrary user-provided width.",
+          "$ref": "ExplicitBuckets"
+        },
+        "maximum": {
+          "description": "The maximum of the population of values. Ignored if `count` is zero.",
+          "type": "number",
+          "format": "double"
+        },
+        "count": {
+          "description": "The total number of samples in the distribution. Must be \u003e= 0.",
+          "type": "string",
+          "format": "int64"
+        },
+        "linearBuckets": {
+          "description": "Buckets with constant width.",
+          "$ref": "LinearBuckets"
+        },
+        "sumOfSquaredDeviation": {
+          "description": "The sum of squared deviations from the mean:\n  Sum[i=1..count]((x_i - mean)^2)\nwhere each x_i is a sample values. If `count` is zero then this field\nmust be zero, otherwise validation of the request fails.",
+          "type": "number",
+          "format": "double"
+        },
+        "minimum": {
+          "description": "The minimum of the population of values. Ignored if `count` is zero.",
+          "type": "number",
+          "format": "double"
+        },
+        "mean": {
+          "description": "The arithmetic mean of the samples in the distribution. If `count` is\nzero then this field must be zero.",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "id": "Distribution"
+    },
+    "ExplicitBuckets": {
+      "description": "Describing buckets with arbitrary user-provided width.",
+      "type": "object",
+      "properties": {
+        "bounds": {
+          "description": "'bound' is a list of strictly increasing boundaries between\nbuckets. Note that a list of length N-1 defines N buckets because\nof fenceposting. See comments on `bucket_options` for details.\n\nThe i'th finite bucket covers the interval\n  [bound[i-1], bound[i])\nwhere i ranges from 1 to bound_size() - 1. Note that there are no\nfinite buckets at all if 'bound' only contains a single element; in\nthat special case the single bound defines the boundary between the\nunderflow and overflow buckets.\n\nbucket number                   lower bound    upper bound\n i == 0 (underflow)              -inf           bound[i]\n 0 \u003c i \u003c bound_size()            bound[i-1]     bound[i]\n i == bound_size() (overflow)    bound[i-1]     +inf",
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "id": "ExplicitBuckets"
+    },
+    "MetricValue": {
+      "description": "Represents a single metric value.",
+      "type": "object",
+      "properties": {
+        "stringValue": {
+          "description": "A text string value.",
+          "type": "string"
+        },
+        "doubleValue": {
+          "description": "A double precision floating point value.",
+          "type": "number",
+          "format": "double"
+        },
+        "boolValue": {
+          "description": "A boolean value.",
+          "type": "boolean"
+        },
+        "endTime": {
+          "description": "The end of the time period over which this metric value's measurement\napplies.",
+          "type": "string",
+          "format": "google-datetime"
+        },
+        "labels": {
+          "description": "The labels describing the metric value.\nSee comments on google.api.servicecontrol.v1.Operation.labels for\nthe overriding relationship.",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "distributionValue": {
+          "description": "A distribution value.",
+          "$ref": "Distribution"
+        },
+        "startTime": {
+          "description": "The start of the time period over which this metric value's measurement\napplies. The time period has different semantics for different metric\ntypes (cumulative, delta, and gauge). See the metric definition\ndocumentation in the service configuration for details.",
+          "type": "string",
+          "format": "google-datetime"
+        },
+        "int64Value": {
+          "description": "A signed 64-bit integer value.",
+          "type": "string",
+          "format": "int64"
+        }
+      },
+      "id": "MetricValue"
+    }
+  },
+  "revision": "20161107",
+  "basePath": "",
+  "icons": {
+    "x32": "http://www.google.com/images/icons/product/search-32.gif",
+    "x16": "http://www.google.com/images/icons/product/search-16.gif"
+  },
+  "version_module": "True",
+  "canonicalName": "Service Control",
+  "discoveryVersion": "v1",
+  "baseUrl": "https://servicecontrol.googleapis.com/",
+  "name": "servicecontrol",
+  "parameters": {
+    "access_token": {
+      "description": "OAuth access token.",
+      "type": "string",
+      "location": "query"
+    },
+    "prettyPrint": {
+      "description": "Returns response with indentations and line breaks.",
+      "default": "true",
+      "type": "boolean",
+      "location": "query"
+    },
+    "key": {
+      "description": "API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.",
+      "type": "string",
+      "location": "query"
+    },
+    "quotaUser": {
+      "description": "Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.",
+      "type": "string",
+      "location": "query"
+    },
+    "pp": {
+      "description": "Pretty-print response.",
+      "default": "true",
+      "type": "boolean",
+      "location": "query"
+    },
+    "fields": {
+      "description": "Selector specifying which fields to include in a partial response.",
+      "type": "string",
+      "location": "query"
+    },
+    "alt": {
+      "description": "Data format for response.",
+      "location": "query",
+      "enum": [
+        "json",
+        "media",
+        "proto"
+      ],
+      "default": "json",
+      "enumDescriptions": [
+        "Responses with Content-Type of application/json",
+        "Media download with context-dependent Content-Type",
+        "Responses with Content-Type of application/x-protobuf"
+      ],
+      "type": "string"
+    },
+    "$.xgafv": {
+      "description": "V1 error format.",
+      "enum": [
+        "1",
+        "2"
+      ],
+      "enumDescriptions": [
+        "v1 error format",
+        "v2 error format"
+      ],
+      "type": "string",
+      "location": "query"
+    },
+    "callback": {
+      "description": "JSONP",
+      "type": "string",
+      "location": "query"
+    },
+    "oauth_token": {
+      "description": "OAuth 2.0 token for the current user.",
+      "type": "string",
+      "location": "query"
+    },
+    "uploadType": {
+      "description": "Legacy upload protocol for media (e.g. \"media\", \"multipart\").",
+      "type": "string",
+      "location": "query"
+    },
+    "bearer_token": {
+      "description": "OAuth bearer token.",
+      "type": "string",
+      "location": "query"
+    },
+    "upload_protocol": {
+      "description": "Upload protocol for media (e.g. \"raw\", \"multipart\").",
+      "type": "string",
+      "location": "query"
+    }
+  },
+  "documentationLink": "https://cloud.google.com/service-control/",
+  "ownerDomain": "google.com",
+  "batchPath": "batch",
+  "servicePath": "",
+  "ownerName": "Google",
+  "version": "v1",
+  "rootUrl": "https://servicecontrol.googleapis.com/",
+  "kind": "discovery#restDescription"
+}

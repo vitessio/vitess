@@ -1,0 +1,13 @@
+language: go
+
+go:
+  - 1.7.3
+
+branches:
+  only:
+    - master
+
+script:
+  - make ci
+
+sudo: false
