@@ -237,7 +237,7 @@ func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]KsidO
 	out := make([]KsidOrRange, 0, len(ids))
 	if lhu.writeOnly {
 		for range ids {
-			out = append(out, KsidOrRange{Range: &topodata.KeyRange{}})
+			out = append(out, KsidOrRange{Range: &topodatapb.KeyRange{}})
 		}
 		return out, nil
 	}
