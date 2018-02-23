@@ -1057,7 +1057,7 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 		t.Errorf("show vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
 	}
 
-	stmt = "alter table test add vindex test_lookup (c1,c2) using lookup on test with from=`c1,c2`, table=test_lookup, to=keyspace_id"
+	stmt = "alter table test add vindex test_lookup (c1,c2) using lookup with owner=`test`, from=`c1,c2`, table=test_lookup, to=keyspace_id"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
 	if err != nil {
 		t.Fatalf("error in %s: %v", stmt, err)
@@ -1119,7 +1119,7 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	}
 
 	// create an identical vindex definition on a different table
-	stmt = "alter table test2 add vindex test_lookup (c1,c2) using lookup on test with from=`c1,c2`, table=test_lookup, to=keyspace_id"
+	stmt = "alter table test2 add vindex test_lookup (c1,c2) using lookup with owner=`test`, from=`c1,c2`, table=test_lookup, to=keyspace_id"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
 	if err != nil {
 		t.Fatalf("error in %s: %v", stmt, err)
@@ -1171,14 +1171,14 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 		t.Errorf("got %v want err %s", err, wantErr)
 	}
 
-	stmt = "alter table test2 add vindex test_lookup (c1,c2) using lookup on xyz"
+	stmt = "alter table test2 add vindex test_lookup (c1,c2) using lookup with owner=xyz"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
 	wantErr = "vindex test_lookup defined with owner test not xyz"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("got %v want err %s", err, wantErr)
 	}
 
-	stmt = "alter table test2 add vindex test_lookup (c1,c2) using lookup on test with foo=bar"
+	stmt = "alter table test2 add vindex test_lookup (c1,c2) using lookup with owner=`test`, foo=bar"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
 	wantErr = "vindex test_lookup defined with different parameters"
 	if err == nil || err.Error() != wantErr {

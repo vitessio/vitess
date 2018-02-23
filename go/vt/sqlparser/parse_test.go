@@ -814,10 +814,10 @@ var (
 		input:  "alter table a add vindex hash (id) using `hash`",
 		output: "alter table a add vindex hash (id) using hash",
 	}, {
-		input: "alter table user add vindex name_lookup_vdx (name) using lookup_hash on user with table=name_user_idx, from=name, to=user_id",
+		input: "alter table user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
 	}, {
-		input:  "alter table user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup on user with table=name_lastname_keyspace_id_map, from=`name,lastname`, to=keyspace_id",
-		output: "alter table user2 add vindex name_lastname_lookup_vdx (name, lastname) using lookup on user with table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
+		input:  "alter table user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
+		output: "alter table user2 add vindex name_lastname_lookup_vdx (name, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
 	}, {
 		input: "alter table a drop vindex hash",
 	}, {
@@ -848,7 +848,7 @@ var (
 	}, {
 		input: "create vindex hash_vdx using hash",
 	}, {
-		input: "create vindex lookup_vdx using lookup on user with table=name_user_idx, from=name, to=user_id",
+		input: "create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
 	}, {
 		input: "create vindex xyz_vdx using xyz with param1=hello, param2='world', param3=123",
 	}, {
