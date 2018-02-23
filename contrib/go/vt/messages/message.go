@@ -7,15 +7,15 @@ import (
 	"time"
 )
 
-// AddMessage adds a task to the queue
-func (q *Queue) AddMessage(ctx context.Context, e Execer, id int64, data ...interface{}) error {
-	// only set a random id if the user didn't provide an id option
-	if id == 0 {
-		id = rand.Int63()
+// Add adds a task to the queue
+func (q *Queue) Add(ctx context.Context, e Execer, messageID int64, data ...interface{}) error {
+	// only set a random messageID if the user didn't provide one
+	if messageID == 0 {
+		messageID = rand.Int63()
 	}
 
 	// create default args array
-	args := []interface{}{id}
+	args := []interface{}{messageID}
 
 	// append user data to args
 	args = append(args, data...)
@@ -24,12 +24,12 @@ func (q *Queue) AddMessage(ctx context.Context, e Execer, id int64, data ...inte
 	return err
 }
 
-// AddScheduledMessage adds a task to the queue to be executed at the specified time
+// AddScheduled adds a task to the queue to be executed at the specified time
 // timeScheduled needs to be in Unix Nanoseconds
-func (q *Queue) AddScheduledMessage(ctx context.Context, e Execer, id, timeScheduled int64, data ...interface{}) error {
-	// only set a random id if the user didn't provide an id option
-	if id == 0 {
-		id = rand.Int63()
+func (q *Queue) AddScheduled(ctx context.Context, e Execer, messageID, timeScheduled int64, data ...interface{}) error {
+	// only set a random messageID if the user didn't provide one
+	if messageID == 0 {
+		messageID = rand.Int63()
 	}
 
 	if timeScheduled == 0 {
@@ -37,7 +37,7 @@ func (q *Queue) AddScheduledMessage(ctx context.Context, e Execer, id, timeSched
 	}
 
 	// create default args array
-	args := []interface{}{timeScheduled, id}
+	args := []interface{}{timeScheduled, messageID}
 
 	// append user data to args
 	args = append(args, data...)
@@ -46,9 +46,9 @@ func (q *Queue) AddScheduledMessage(ctx context.Context, e Execer, id, timeSched
 	return err
 }
 
-// GetMessage returns the next available message. It blocks until either a message
+// Get returns the next available message. It blocks until either a message
 // is available or the context is cancelled.
-func (q *Queue) GetMessage(ctx context.Context, dest ...interface{}) error {
+func (q *Queue) Get(ctx context.Context, dest ...interface{}) error {
 	q.s.mu.RLock()
 	defer q.s.mu.RUnlock()
 
@@ -69,20 +69,20 @@ func (q *Queue) GetMessage(ctx context.Context, dest ...interface{}) error {
 }
 
 // Ack marks a message as successfully completed
-func (q *Queue) Ack(ctx context.Context, e Execer, id int64) error {
-	_, err := e.ExecContext(ctx, q.s.ackSQL, time.Now().UTC().UnixNano(), id)
+func (q *Queue) Ack(ctx context.Context, e Execer, messageID int64) error {
+	_, err := e.ExecContext(ctx, q.s.ackSQL, time.Now().UTC().UnixNano(), messageID)
 	return err
 }
 
 // Nack marks a message as unsuccessfully completed
-func (q *Queue) Nack(ctx context.Context, e Execer, id int64) error {
+func (q *Queue) Nack(ctx context.Context, e Execer, messageID int64) error {
 	// TODO: Add api to message manager to immediately nack
 	// calling this now has no effect, and the message is requeued after timing out
 	return nil
 }
 
 // Fail marks a task as failed, and it will not be queued again until manual action is taken
-func (q *Queue) Fail(ctx context.Context, e Execer, id int64) error {
-	_, err := e.ExecContext(ctx, q.s.failSQL, id)
+func (q *Queue) Fail(ctx context.Context, e Execer, messageID int64) error {
+	_, err := e.ExecContext(ctx, q.s.failSQL, messageID)
 	return err
 }
