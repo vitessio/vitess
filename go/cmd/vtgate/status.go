@@ -35,6 +35,7 @@ func addStatusParts(vtg *vtgate.VTGate) {
 	servenv.AddStatusPart("VSchema", vtgate.VSchemaTemplate, func() interface{} {
 		return vtg.VSchemaStats()
 	})
+	servenv.AddStatusFuncs(srvtopo.StatusFuncs)
 	servenv.AddStatusPart("Topology Cache", srvtopo.TopoTemplate, func() interface{} {
 		return resilientServer.CacheStatus()
 	})
