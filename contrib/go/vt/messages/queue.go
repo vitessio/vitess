@@ -44,6 +44,7 @@ func NewQueue(ctx context.Context, name string, maxConcurrent int, fieldNames []
 		destFunc:      fn,
 	}
 
+	// generate a slice of args from the DestFunc to make sure that it matches the provided field names
 	args := fn()
 	if len(args) != len(fieldNames) {
 		return nil, errors.New("user fields mismatch")
