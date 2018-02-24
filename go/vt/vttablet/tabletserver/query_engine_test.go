@@ -266,3 +266,15 @@ func newTestQueryEngine(queryPlanCacheSize int, idleTimeout time.Duration, stric
 	qe.InitDBConfig(dbcfgs)
 	return qe
 }
+
+func TestRedactSqlStatements(t *testing.T) {
+	sql := "select a,b,c from t where x = 1234 and y = 1234 and z = 'apple'"
+	redactedSql, err := redactSqlQuery(sql)
+	if err != nil {
+		t.Fatalf("redacting sql failed: %v", err)
+	}
+
+	if redactedSql != "select a, b, c from t where x = :bv1 and y = :bv1 and z = :bv2" {
+		t.Fatalf("Unknown sql redaction: %v", redactedSql)
+	}
+}
