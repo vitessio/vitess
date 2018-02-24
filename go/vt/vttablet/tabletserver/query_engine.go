@@ -115,7 +115,7 @@ func redactSqlQuery(sql string) (string, error) {
 		return "", err
 	}
 
-	prefix := "bv"
+	prefix := "redacted"
 	sqlparser.Normalize(stmt, bv, prefix)
 
 	return sqlparser.String(stmt) + comments, nil

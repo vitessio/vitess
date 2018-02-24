@@ -274,7 +274,7 @@ func TestRedactSqlStatements(t *testing.T) {
 		t.Fatalf("redacting sql failed: %v", err)
 	}
 
-	if redactedSql != "select a, b, c from t where x = :bv1 and y = :bv1 and z = :bv2" {
+	if redactedSql != "select a, b, c from t where x = :redacted1 and y = :redacted1 and z = :redacted2" {
 		t.Fatalf("Unknown sql redaction: %v", redactedSql)
 	}
 }
