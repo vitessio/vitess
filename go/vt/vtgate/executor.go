@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlannotation"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -44,6 +45,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -97,6 +99,7 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell, statsName strin
 		legacyAutocommit: legacyAutocommit,
 	}
 
+	vschemaacl.Init()
 	e.vm = VSchemaManager{e: e}
 	e.vm.watchSrvVSchema(ctx, cell)
 
@@ -360,6 +363,12 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema does not contain keyspace %s", target.Keyspace)
 	}
 
+	allowed := vschemaacl.Authorized(callerid.ImmediateCallerIDFromContext(ctx))
+	if !allowed {
+		return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "not authorized to perform vschema operations")
+
+	}
+
 	switch ddl.Action {
 	case sqlparser.CreateVindexStr:
 		name := ddl.VindexSpec.Name.String()
@@ -425,6 +434,14 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 		if !ok {
 			table = &vschemapb.Table{
 				ColumnVindexes: make([]*vschemapb.ColumnVindex, 0, 4),
+			}
+		}
+
+		// Make sure there isn't already a vindex with the same name on
+		// this table.
+		for _, vindex := range table.ColumnVindexes {
+			if vindex.Name == name {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s already defined on table %s", name, tableName)
 			}
 		}
 
