@@ -38,6 +38,7 @@ func TestUpdateEqual(t *testing.T) {
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
+	// Update by primary vindex.
 	_, err := executorExec(executor, "update user set a=2 where id = 1", nil)
 	if err != nil {
 		t.Error(err)
@@ -70,6 +71,7 @@ func TestUpdateEqual(t *testing.T) {
 		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
 	}
 
+	// Update by secondary vindex.
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 	sbclookup.SetResults([]*sqltypes.Result{{}})
@@ -93,6 +95,7 @@ func TestUpdateEqual(t *testing.T) {
 		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
 	}
 
+	// Update changes lookup vindex values.
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 	sbclookup.Queries = nil
@@ -138,17 +141,6 @@ func TestUpdateEqual(t *testing.T) {
 
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
-	}
-}
-
-func TestUpdateEqualKeyrange(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
-
-	// If a unique vindex returns a keyrange, we fail the update
-	_, err := executorExec(executor, "update keyrange_table set a=2 where krcol_unique = 1", nil)
-	want := "execUpdateEqual: vindex could not map the value to a unique keyspace id"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec error: %v, want %s", err, want)
 	}
 }
 
@@ -336,36 +328,6 @@ func TestUpdateNormalize(t *testing.T) {
 	}
 	sbc2.Queries = nil
 	masterSession.TargetString = ""
-}
-
-func TestUpdateEqualFail(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
-	s := getSandbox("TestExecutor")
-
-	_, err := executorExec(executor, "update user set a=2 where id = :aa", nil)
-	want := "execUpdateEqual: missing bind var aa"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
-	s.SrvKeyspaceMustFail = 1
-	_, err = executorExec(executor, "update user set a=2 where id = :id", map[string]*querypb.BindVariable{
-		"id": sqltypes.Int64BindVariable(1),
-	})
-	want = "execUpdateEqual: keyspace TestExecutor fetch error: topo error GetSrvKeyspace"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
-	s.ShardSpec = "80-"
-	_, err = executorExec(executor, "update user set a=2 where id = :id", map[string]*querypb.BindVariable{
-		"id": sqltypes.Int64BindVariable(1),
-	})
-	want = "execUpdateEqual: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("executorExec: %v, want prefix %v", err, want)
-	}
-	s.ShardSpec = DefaultShardSpec
 }
 
 func TestDeleteEqual(t *testing.T) {

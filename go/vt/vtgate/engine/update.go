@@ -163,63 +163,35 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 		return &sqltypes.Result{}, nil
 	}
 	if len(upd.ChangedVindexValues) != 0 {
-		result, err := upd.execUpdateEqualChangedVindex(vcursor, upd.Subquery, bindVars, ks, shard, ksid)
-		if err != nil {
-			return nil, err
+		if err := upd.execUpdateEqualChangedVindex(vcursor, upd.Subquery, bindVars, ks, shard, ksid); err != nil {
+			return nil, vterrors.Wrap(err, "execUpdateEqual")
 		}
-		return result, nil
 	}
 	rewritten := sqlannotation.AddKeyspaceIDs(upd.Query, [][]byte{ksid}, "")
 	return execShard(vcursor, rewritten, bindVars, ks, shard, true /* isDML */, true /* canAutocommit */)
 }
 
-// execUpdateEqualChangedVindex performs an update when a vindex is being modified
-// by the statement.
-// Note: The order seen in the DML's seen below won't neccesarly matches
-// the one that will be executed by vttablet.
-// Given that dmls will be mapped to existent transactions on each
-// shard, the order could change.
-// However, to avoid issues with duplicate key constraints violations in the
-// case that a vindex update lands in the same shard, it's more convenient
-// to do the delete first. The following is an example of this sceneario:
-// - An update statement with an unique vindex column that sets a value to
-//   to what already exists in the db:
-//   update user set name='juan' where user_id=1
-//   Followed by:
-//   update user set name='juan' where user_id=1
-// If we don't perform the delete first, this query will fail because the lookup
-// table already has an entry from name=juan to user_id=1.
-//
-// Note 2: While changes are being committed, the changing row could be
-// unreachable by either the new or old column values.
-func (upd *Update) execUpdateEqualChangedVindex(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, keyspace, shard string, keyspaceID []byte) (*sqltypes.Result, error) {
-	var subQueryResult *sqltypes.Result
-	var err error
-	rewritten := sqlannotation.AddKeyspaceIDs(upd.Query, [][]byte{keyspaceID}, "")
-	if upd.Subquery != "" {
-		subQueryResult, err = execShard(vcursor, upd.Subquery, bindVars, keyspace, shard, false /* isDML */, false /* canAutocommit */)
-		if err != nil {
-			return nil, vterrors.Wrap(err, "execUpdateEqual")
-		}
-	}
-	err = upd.updateChangedVindexes(subQueryResult, vcursor, bindVars, keyspaceID)
+func (upd *Update) execUpdateEqualChangedVindex(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, keyspace, shard string, keyspaceID []byte) error {
+	subQueryResult, err := execShard(vcursor, upd.Subquery, bindVars, keyspace, shard, false /* isDML */, false /* canAutocommit */)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "execUpdateEqual")
+		return err
 	}
-	result, err := execShard(vcursor, rewritten, bindVars, keyspace, shard, true /* isDML */, true /* canAutocommit */)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "execUpdateEqual")
-	}
-	return result, nil
+	return upd.updateChangedVindexes(subQueryResult, vcursor, bindVars, keyspaceID)
 }
 
+// updateChangedVindexes performs an update when a vindex is being modified
+// by the statement.
+// Note: the commit order may be different from the DML order because it's possible
+// for DMLs to reuse existing transactions.
+// Note 2: While changes are being committed, the changing row could be
+// unreachable by either the new or old column values.
 func (upd *Update) updateChangedVindexes(subQueryResult *sqltypes.Result, vcursor VCursor, bindVars map[string]*querypb.BindVariable, ksid []byte) error {
 	if len(subQueryResult.Rows) == 0 {
 		// NOOP, there are no actual rows changing due to this statement
 		return nil
 	}
 	if len(subQueryResult.Rows) > 1 {
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update changes multiple columns in the vindex")
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update changes multiple rows in the vindex")
 	}
 	colnum := 0
 	for _, colVindex := range upd.Table.Owned {
