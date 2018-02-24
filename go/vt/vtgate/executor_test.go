@@ -29,12 +29,15 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
@@ -930,6 +933,10 @@ func waitForVindex(t *testing.T, ks, name string, watch chan *vschemapb.SrvVSche
 }
 
 func TestExecutorCreateVindexDDL(t *testing.T) {
+	*vschemaacl.AuthorizedDDLUsers = "%"
+	defer func() {
+		*vschemaacl.AuthorizedDDLUsers = ""
+	}()
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 	ks := "TestExecutor"
 
@@ -1005,6 +1012,10 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 }
 
 func TestExecutorAddDropVindexDDL(t *testing.T) {
+	*vschemaacl.AuthorizedDDLUsers = "%"
+	defer func() {
+		*vschemaacl.AuthorizedDDLUsers = ""
+	}()
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 	ks := "TestExecutor"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
@@ -1090,6 +1101,45 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 			buildVarCharRow("c1, c2", "test_lookup", "lookup", "from=c1,c2; table=test_lookup; to=keyspace_id", "test"),
 		},
 		RowsAffected: 2,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
+	}
+
+	stmt = "alter table test add vindex test_hash_id2 (id2) using hash"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Fatalf("error in %s: %v", stmt, err)
+	}
+
+	vschema, vindex = waitForVindex(t, ks, "test_hash_id2", vschemaUpdates, executor)
+	if vindex.Type != "hash" {
+		t.Errorf("vindex type %s not hash", vindex.Type)
+	}
+
+	if table, ok := vschema.Keyspaces[ks].Tables["test"]; ok {
+		if len(table.ColumnVindexes) != 3 {
+			t.Fatalf("table vindexes want 1 got %d", len(table.ColumnVindexes))
+		}
+		if table.ColumnVindexes[2].Name != "test_hash_id2" {
+			t.Fatalf("table vindexes didn't contain test_hash_id2")
+		}
+	} else {
+		t.Fatalf("table test not defined in vschema")
+	}
+
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.test", nil)
+	if err != nil {
+		t.Fatalf("error in show vindexes on TestExecutor.test: %v", err)
+	}
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("id", "test_hash", "hash", "", ""),
+			buildVarCharRow("c1, c2", "test_lookup", "lookup", "from=c1,c2; table=test_lookup; to=keyspace_id", "test"),
+			buildVarCharRow("id2", "test_hash_id2", "hash", "", ""),
+		},
+		RowsAffected: 3,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
 		t.Errorf("show vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
@@ -1195,6 +1245,57 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	if !reflect.DeepEqual(gotCount, wantCount) {
 		t.Errorf("Exec %s: %v, want %v", "", gotCount, wantCount)
 	}
+}
+
+func TestExecutorVindexDDLACL(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	ks := "TestExecutor"
+	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+
+	ctxRedUser := callerid.NewContext(context.Background(), &vtrpcpb.CallerID{}, &querypb.VTGateCallerID{Username: "redUser"})
+	ctxBlueUser := callerid.NewContext(context.Background(), &vtrpcpb.CallerID{}, &querypb.VTGateCallerID{Username: "blueUser"})
+
+	// test that by default no users can perform the operation
+	stmt := "create vindex test_hash using hash"
+	authErr := "not authorized to perform vschema operations"
+	_, err := executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
+	if err == nil || err.Error() != authErr {
+		t.Errorf("expected error '%s' got '%v'", authErr, err)
+	}
+
+	_, err = executor.Execute(ctxBlueUser, "TestExecute", session, stmt, nil)
+	if err == nil || err.Error() != authErr {
+		t.Errorf("expected error '%s' got '%v'", authErr, err)
+	}
+
+	// test when all users are enabled
+	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.Init()
+	_, err = executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Errorf("unexpected error '%v'", err)
+	}
+	stmt = "create vindex test_hash2 using hash"
+	_, err = executor.Execute(ctxBlueUser, "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Errorf("unexpected error '%v'", err)
+	}
+
+	// test when only one user is enabled
+	*vschemaacl.AuthorizedDDLUsers = "orangeUser, blueUser, greenUser"
+	vschemaacl.Init()
+	_, err = executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
+	if err == nil || err.Error() != authErr {
+		t.Errorf("expected error '%s' got '%v'", authErr, err)
+	}
+	stmt = "create vindex test_hash3 using hash"
+	_, err = executor.Execute(ctxBlueUser, "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Errorf("unexpected error '%v'", err)
+	}
+
+	// restore the disallowed state
+	*vschemaacl.AuthorizedDDLUsers = ""
 }
 
 func TestExecutorUnrecognized(t *testing.T) {
