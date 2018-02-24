@@ -182,15 +182,14 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 	if len(result.Rows) == 0 {
 		return nil
 	}
-	// Columns are selected by table.Owned order, see generateDeleteSubquery for details
-	for tIdx, colVindex := range del.Table.Owned {
+	colnum := 0
+	for _, colVindex := range del.Table.Owned {
 		ids := make([][]sqltypes.Value, len(result.Rows))
-		for rowIdx, row := range result.Rows {
-			for colIdx := range colVindex.Columns {
-				// delete subQuery columns are added to the statement by tIdx + colIdx,
-				// hence the offset when finding in the result set.
-				ids[rowIdx] = append(ids[rowIdx], row[tIdx+colIdx])
+		for range colVindex.Columns {
+			for rowIdx, row := range result.Rows {
+				ids[rowIdx] = append(ids[rowIdx], row[colnum])
 			}
+			colnum++
 		}
 		if err = colVindex.Vindex.(vindexes.Lookup).Delete(vcursor, ids, ksid); err != nil {
 			return err

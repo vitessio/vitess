@@ -464,17 +464,6 @@ func TestDeleteEqual(t *testing.T) {
 	}
 }
 
-func TestDeleteEqualKeyrange(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
-
-	// If a unique vindex returns a keyrange, we fail the delete
-	_, err := executorExec(executor, "delete from keyrange_table where krcol_unique = 1", nil)
-	want := "execDeleteEqual: vindex could not map the value to a unique keyspace id"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec error: %v, want %s", err, want)
-	}
-}
-
 func TestDeleteSharded(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	_, err := executorExec(executor, "delete from user_extra", nil)
@@ -532,36 +521,6 @@ func TestDeleteComments(t *testing.T) {
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries:\n%+v, want\n%+v\n", sbclookup.Queries, wantQueries)
 	}
-}
-
-func TestDeleteEqualFail(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
-	s := getSandbox("TestExecutor")
-
-	_, err := executorExec(executor, "delete from user where id = :aa", nil)
-	want := "execDeleteEqual: missing bind var aa"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
-	s.SrvKeyspaceMustFail = 1
-	_, err = executorExec(executor, "delete from user where id = :id", map[string]*querypb.BindVariable{
-		"id": sqltypes.Int64BindVariable(1),
-	})
-	want = "execDeleteEqual: keyspace TestExecutor fetch error: topo error GetSrvKeyspace"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
-	s.ShardSpec = "80-"
-	_, err = executorExec(executor, "delete from user where id = :id", map[string]*querypb.BindVariable{
-		"id": sqltypes.Int64BindVariable(1),
-	})
-	want = "execDeleteEqual: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("executorExec: %v, want prefix %v", err, want)
-	}
-	s.ShardSpec = DefaultShardSpec
 }
 
 func TestInsertSharded(t *testing.T) {

@@ -163,7 +163,7 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 		return &sqltypes.Result{}, nil
 	}
 	if len(upd.ChangedVindexValues) != 0 {
-		if err := upd.execUpdateEqualChangedVindex(vcursor, upd.Subquery, bindVars, ks, shard, ksid); err != nil {
+		if err := upd.updateVindexEntries(vcursor, upd.Subquery, bindVars, ks, shard, ksid); err != nil {
 			return nil, vterrors.Wrap(err, "execUpdateEqual")
 		}
 	}
@@ -171,23 +171,18 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 	return execShard(vcursor, rewritten, bindVars, ks, shard, true /* isDML */, true /* canAutocommit */)
 }
 
-func (upd *Update) execUpdateEqualChangedVindex(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, keyspace, shard string, keyspaceID []byte) error {
-	subQueryResult, err := execShard(vcursor, upd.Subquery, bindVars, keyspace, shard, false /* isDML */, false /* canAutocommit */)
-	if err != nil {
-		return err
-	}
-	return upd.updateChangedVindexes(subQueryResult, vcursor, bindVars, keyspaceID)
-}
-
-// updateChangedVindexes performs an update when a vindex is being modified
+// updateVindexEntries performs an update when a vindex is being modified
 // by the statement.
 // Note: the commit order may be different from the DML order because it's possible
 // for DMLs to reuse existing transactions.
 // Note 2: While changes are being committed, the changing row could be
 // unreachable by either the new or old column values.
-func (upd *Update) updateChangedVindexes(subQueryResult *sqltypes.Result, vcursor VCursor, bindVars map[string]*querypb.BindVariable, ksid []byte) error {
+func (upd *Update) updateVindexEntries(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, keyspace, shard string, ksid []byte) error {
+	subQueryResult, err := execShard(vcursor, upd.Subquery, bindVars, keyspace, shard, false /* isDML */, false /* canAutocommit */)
+	if err != nil {
+		return err
+	}
 	if len(subQueryResult.Rows) == 0 {
-		// NOOP, there are no actual rows changing due to this statement
 		return nil
 	}
 	if len(subQueryResult.Rows) > 1 {
