@@ -78,8 +78,10 @@ func (t noopVCursor) GetShardForKeyspaceID(allShards []*topodatapb.ShardReferenc
 type loggingVCursor struct {
 	noopVCursor
 
-	shards   []string
-	shardErr error
+	shards          []string
+	shardForKsid    []string
+	curShardForKsid int
+	shardErr        error
 
 	results   []*sqltypes.Result
 	curResult int
@@ -115,6 +117,11 @@ func (f *loggingVCursor) ExecuteMultiShard(keyspace string, shardQueries map[str
 	return f.nextResult()
 }
 
+func (f *loggingVCursor) ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, keyspace, shard string) (*sqltypes.Result, error) {
+	f.log = append(f.log, fmt.Sprintf("ExecuteStandalone %s %v %s %s", query, printBindVars(bindvars), keyspace, shard))
+	return f.nextResult()
+}
+
 func (f *loggingVCursor) GetKeyspaceShards(vkeyspace *vindexes.Keyspace) (string, []*topodatapb.ShardReference, error) {
 	f.log = append(f.log, fmt.Sprintf("GetKeyspaceShards %v", vkeyspace))
 	if f.shardErr != nil {
@@ -129,10 +136,15 @@ func (f *loggingVCursor) GetKeyspaceShards(vkeyspace *vindexes.Keyspace) (string
 
 func (f *loggingVCursor) GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error) {
 	f.log = append(f.log, fmt.Sprintf("GetShardForKeyspaceID %v %q", allShards, hex.EncodeToString(keyspaceID)))
-	if f.shardErr != nil {
-		return "", f.shardErr
+	if f.shardForKsid == nil || f.curShardForKsid >= len(f.shardForKsid) {
+		if f.shardErr != nil {
+			return "", f.shardErr
+		}
+		return "-20", nil
 	}
-	return "-20", nil
+	r := f.shardForKsid[f.curShardForKsid]
+	f.curShardForKsid++
+	return r, nil
 }
 
 func (f *loggingVCursor) ExpectLog(t *testing.T, want []string) {
@@ -146,6 +158,13 @@ func expectError(t *testing.T, msg string, err error, want string) {
 	t.Helper()
 	if err == nil || err.Error() != want {
 		t.Errorf("%s: %v, want %s", msg, err, want)
+	}
+}
+
+func expectResult(t *testing.T, msg string, result, want *sqltypes.Result) {
+	t.Helper()
+	if !reflect.DeepEqual(result, want) {
+		t.Errorf("s: %v, want %v", result, want)
 	}
 }
 

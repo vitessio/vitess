@@ -127,28 +127,12 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 		}
 	}
 
+	// Fill out the 3-d Values structure. Please see documentation of Insert.Values for details.
 	routeValues := make([]sqltypes.PlanValue, len(eins.Table.ColumnVindexes))
-	// Initialize each table vindex with the number of rows per insert.
-	// There will be a plan value for each row.
-	for vIdx := range routeValues {
-		routeValues[vIdx].Values = make([]sqltypes.PlanValue, len(rows))
-	}
-	// What's going in here?
-	// For each vindex, we need to compute the column value for each row being inserted:
-	// routeValues will contain a PlanValue for each Vindex.
-	// In turn, each  PlanValue will have Values ([]sqltypes.PlanValue) for each row.
-	// In each row will have Values for the columns that are defined in the vindex.
-	// For instance, given the following insert statement:
-	// INSERT INTO table_a (column_a, column_b, column_c) VALUES (value_a1, value_b1, value_c1), (value_a2, value_b2, value_c2)
-	// Primary vindex on column_a and secondary vindex on columns b and c,
-	// routeValues will look like the following:
-	// [
-	//  [[value_a1], [value_a2]], <- Values for each row primary vindex
-	//  [[value_b1, value_c1], [value_b2, value_c2]] <- Values for each row multicolumn secondary vindex
-	// ]
-
 	for vIdx, colVindex := range eins.Table.ColumnVindexes {
-		for _, col := range colVindex.Columns {
+		routeValues[vIdx].Values = make([]sqltypes.PlanValue, len(colVindex.Columns))
+		for colIdx, col := range colVindex.Columns {
+			routeValues[vIdx].Values[colIdx].Values = make([]sqltypes.PlanValue, len(rows))
 			colNum := findOrAddColumn(ins, col)
 			// swap bind variables
 			baseName := ":_" + col.CompliantName()
@@ -157,7 +141,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 				if err != nil {
 					return nil, fmt.Errorf("could not compute value for vindex or auto-inc column: %v", err)
 				}
-				routeValues[vIdx].Values[rowNum].Values = append(routeValues[vIdx].Values[rowNum].Values, innerpv)
+				routeValues[vIdx].Values[colIdx].Values[rowNum] = innerpv
 				row[colNum] = sqlparser.NewValArg([]byte(baseName + strconv.Itoa(rowNum)))
 			}
 		}

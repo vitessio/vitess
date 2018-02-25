@@ -910,7 +910,7 @@
       "Sharded": true
     },
     "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0), (:_Id1, :_Name1, :_Costly1)",
-    "Values": [[[":__seq0"],[":__seq1"]],[[null],[null]],[[null],[null]]],
+    "Values": [[[":__seq0",":__seq1"]],[[null,null]],[[null,null]]],
     "Table": "user",
     "Generate": {
       "Keyspace": {
@@ -1063,7 +1063,9 @@
       ],
       [
         [
-          2,
+          2
+        ],
+        [
           3
         ]
       ]
@@ -1090,27 +1092,23 @@
     "Values": [
       [
         [
-          4
-        ],
-        [
+          4,
           8
         ]
       ],
       [
         [
-          1
-        ],
-        [
+          1,
           5
         ]
       ],
       [
         [
           2,
-          3
+          6
         ],
         [
-          6,
+          3,
           7
         ]
       ]

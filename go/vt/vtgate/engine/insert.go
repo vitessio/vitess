@@ -44,9 +44,15 @@ type Insert struct {
 	Keyspace *vindexes.Keyspace
 
 	// Query specifies the query to be executed.
+	// InsertSharded plans, this value is unused.
+	// Prefix, Mid and Suffix are used instead.
 	Query string
 
 	// Values specifies values for all the vindex columns.
+	// This is a three-dimensonal data structure:
+	// Insert.Values[i] represents the values for a colvindex: len(Insert.Table.ColumnVindexes)
+	// Insert.Values[i].Values[j] represents values for each column of the colVindex: len(colVindex.Columns)
+	// Insert.Values[i].Values[j].Values[k] represents the value pulled from each row for that column: len(ins.rows)
 	Values []sqltypes.PlanValue
 
 	// Table sepcifies the table for the insert.
@@ -55,7 +61,7 @@ type Insert struct {
 	// Generate is only set for inserts where a sequence must be generated.
 	Generate *Generate
 
-	// Prefix, Mid and Suffix are set for multi-value inserts.
+	// Prefix, Mid and Suffix are for sharded insert plans.
 	Prefix string
 	Mid    []string
 	Suffix string
@@ -139,10 +145,10 @@ func (ins *Insert) Execute(vcursor VCursor, bindVars, joinVars map[string]*query
 	bindVars = combineVars(bindVars, joinVars)
 
 	switch ins.Opcode {
-	case InsertSharded, InsertShardedIgnore:
-		return ins.execInsertSharded(vcursor, bindVars)
 	case InsertUnsharded:
 		return ins.execInsertUnsharded(vcursor, bindVars)
+	case InsertSharded, InsertShardedIgnore:
+		return ins.execInsertSharded(vcursor, bindVars)
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported query route: %v", ins)
@@ -156,7 +162,7 @@ func (ins *Insert) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]
 
 // GetFields fetches the field info.
 func (ins *Insert) GetFields(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, fmt.Errorf("BUG: unreachable code for %q", ins.Query)
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unreachable code for %q", ins.Query)
 }
 
 func (ins *Insert) execInsertUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
@@ -202,10 +208,6 @@ func (ins *Insert) execInsertSharded(vcursor VCursor, bindVars map[string]*query
 		return nil, vterrors.Wrap(err, "execInsertSharded")
 	}
 
-	// If processGenerate generated new values, it supercedes
-	// any ids that MySQL might have generated. If both generated
-	// values, we don't return an error because this behavior
-	// is required to support migration.
 	if insertID != 0 {
 		result.InsertID = uint64(insertID)
 	}
@@ -278,20 +280,40 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 		return "", nil, vterrors.Wrap(err, "getInsertShardedRoute")
 	}
 
-	// allKeys contains an entry for each ColumnVindex
-	// For each columnVindex, it contains an entry for each row.
-	// For each row, we store the column values of the rows
-	// being inserted.
+	// vindexRowsValues builds the values of all vindex columns.
+	// the 3-d structure indexes are colVindex, row, col. Note that
+	// ins.Values indexes are colVindex, col, row. So, the conversion
+	// involves a transpose.
+	// The reason we need to transpose is because all the Vindex APIs
+	// require inputs in that format.
 	vindexRowsValues := make([][][]sqltypes.Value, len(ins.Values))
-	// Insert plan inserts rows values for each vindex in the table.
-	// See buildInsertShardedPlan for more details.
+	rowCount := 0
 	for vIdx, vColValues := range ins.Values {
-		for _, rowsValues := range vColValues.Values {
-			rowsResolvedValues, err := rowsValues.ResolveList(bindVars)
+		if len(vColValues.Values) != len(ins.Table.ColumnVindexes[vIdx].Columns) {
+			return "", nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: supplied vindex column values don't match vschema: %v %v", vColValues, ins.Table.ColumnVindexes[vIdx].Columns)
+		}
+		for colIdx, colValues := range vColValues.Values {
+			rowsResolvedValues, err := colValues.ResolveList(bindVars)
 			if err != nil {
 				return "", nil, vterrors.Wrap(err, "getInsertShardedRoute")
 			}
-			vindexRowsValues[vIdx] = append(vindexRowsValues[vIdx], rowsResolvedValues)
+			// This is the first iteration: allocate for transpose.
+			if colIdx == 0 {
+				if len(rowsResolvedValues) == 0 {
+					return "", nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: rowcount is zero for inserts: %v", rowsResolvedValues)
+				}
+				if rowCount == 0 {
+					rowCount = len(rowsResolvedValues)
+				}
+				if rowCount != len(rowsResolvedValues) {
+					return "", nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: uneven row values for inserts: %d %d", rowCount, len(rowsResolvedValues))
+				}
+				vindexRowsValues[vIdx] = make([][]sqltypes.Value, rowCount)
+			}
+			// Perform the transpose.
+			for rowNum, colVal := range rowsResolvedValues {
+				vindexRowsValues[vIdx][rowNum] = append(vindexRowsValues[vIdx][rowNum], colVal)
+			}
 		}
 	}
 
@@ -313,7 +335,7 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 				err = ins.processOwned(vcursor, vindexRowsValues[vIdx], colVindex, bindVars, keyspaceIDs)
 			case InsertShardedIgnore:
 				// For InsertShardedIgnore, the work is substantially different.
-				// So,, we use a separate function.
+				// So, we use a separate function.
 				err = ins.processOwnedIgnore(vcursor, vindexRowsValues[vIdx], colVindex, bindVars, keyspaceIDs)
 			default:
 				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected opcode: %v", ins.Opcode)
@@ -392,9 +414,6 @@ func (ins *Insert) processPrimary(vcursor VCursor, vindexKeys [][]sqltypes.Value
 // processOwned creates vindex entries for the values of an owned column for InsertSharded.
 func (ins *Insert) processOwned(vcursor VCursor, vindexColumnsKeys [][]sqltypes.Value, colVindex *vindexes.ColumnVindex, bv map[string]*querypb.BindVariable, ksids [][]byte) error {
 	for rowNum, rowColumnKeys := range vindexColumnsKeys {
-		if len(rowColumnKeys) != len(colVindex.Columns) {
-			return fmt.Errorf("provided values for vindex columns does not match vindex definition %v, %v", rowColumnKeys, colVindex.Columns)
-		}
 		for colIdx, vindexKey := range rowColumnKeys {
 			if vindexKey.IsNull() {
 				return fmt.Errorf("value must be supplied for column %v", colVindex.Columns[colIdx])
@@ -413,9 +432,6 @@ func (ins *Insert) processOwnedIgnore(vcursor VCursor, vindexColumnsKeys [][]sql
 	var createKsids [][]byte
 
 	for rowNum, rowColumnKeys := range vindexColumnsKeys {
-		if len(rowColumnKeys) != len(colVindex.Columns) {
-			return fmt.Errorf("provided values for vindex columns does't no match vindex definition %v, %v", rowColumnKeys, colVindex.Columns)
-		}
 		var rowKeys []sqltypes.Value
 		if ksids[rowNum] == nil {
 			continue
@@ -465,44 +481,46 @@ func (ins *Insert) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltype
 	var reverseIndexes []int
 	var reverseKsids [][]byte
 	var verifyIndexes []int
-	var verifyKeys [][]sqltypes.Value
+	var verifyKeys []sqltypes.Value
 	var verifyKsids [][]byte
 
 	for rowNum, rowColumnKeys := range vindexColumnsKeys {
-		if len(rowColumnKeys) != len(colVindex.Columns) {
-			return fmt.Errorf("provided values for vindex columns does't no match vindex definition %v, %v", rowColumnKeys, colVindex.Columns)
+		// Right now, we only validate against the first column of a colvindex.
+		// TODO(sougou): address this when we add multicolumn Map support.
+		vindexKey := rowColumnKeys[0]
+		if ksids[rowNum] == nil {
+			continue
 		}
-		var verifyRowKeys []sqltypes.Value
-		for _, vindexKey := range rowColumnKeys {
-			if ksids[rowNum] == nil {
-				continue
-			}
-			if vindexKey.IsNull() {
-				reverseIndexes = append(reverseIndexes, rowNum)
-				reverseKsids = append(reverseKsids, ksids[rowNum])
-			} else {
-				verifyIndexes = append(verifyIndexes, rowNum)
-				verifyRowKeys = append(verifyRowKeys, vindexKey)
-				verifyKsids = append(verifyKsids, ksids[rowNum])
-			}
-			verifyKeys = append(verifyKeys, verifyRowKeys)
+		if vindexKey.IsNull() {
+			reverseIndexes = append(reverseIndexes, rowNum)
+			reverseKsids = append(reverseKsids, ksids[rowNum])
+		} else {
+			verifyIndexes = append(verifyIndexes, rowNum)
+			verifyKeys = append(verifyKeys, vindexKey)
+			verifyKsids = append(verifyKsids, ksids[rowNum])
 		}
+	}
 
-		// For cases where a value was not supplied, we reverse map it
-		// from the keyspace id, if possible.
-		if reverseKsids != nil {
-			reversible, ok := colVindex.Vindex.(vindexes.Reversible)
-			if !ok {
-				return fmt.Errorf("value must be supplied for column %v", colVindex.Columns)
-			}
-			reverseKeys, err := reversible.ReverseMap(vcursor, reverseKsids)
-			if err != nil {
-				return err
-			}
-			for i, reverseKey := range reverseKeys {
-				rowNum := reverseIndexes[i]
-				for _, col := range colVindex.Columns {
+	// For cases where a value was not supplied, we reverse map it
+	// from the keyspace id, if possible.
+	if reverseKsids != nil {
+		reversible, ok := colVindex.Vindex.(vindexes.Reversible)
+		if !ok {
+			return fmt.Errorf("value must be supplied for column %v", colVindex.Columns)
+		}
+		reverseKeys, err := reversible.ReverseMap(vcursor, reverseKsids)
+		if err != nil {
+			return err
+		}
+		for i, reverseKey := range reverseKeys {
+			rowNum := reverseIndexes[i]
+			for colIdx, col := range colVindex.Columns {
+				if colIdx == 0 {
+					// Fill the first column with the reverse-mapped value.
 					bv[insertVarName(col, rowNum)] = sqltypes.ValueBindVariable(reverseKey)
+				} else {
+					// Fill other columns with supplied values.
+					bv[insertVarName(col, rowNum)] = sqltypes.ValueBindVariable(vindexColumnsKeys[rowNum][colIdx])
 				}
 			}
 		}
@@ -510,11 +528,7 @@ func (ins *Insert) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltype
 
 	if verifyKsids != nil {
 		// If values were supplied, we validate against keyspace id.
-		var ids []sqltypes.Value
-		for _, vindexValues := range verifyKeys {
-			ids = append(ids, vindexValues[0])
-		}
-		verified, err := colVindex.Vindex.Verify(vcursor, ids, verifyKsids)
+		verified, err := colVindex.Vindex.Verify(vcursor, verifyKeys, verifyKsids)
 		if err != nil {
 			return err
 		}
@@ -522,7 +536,7 @@ func (ins *Insert) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltype
 			rowNum := verifyIndexes[i]
 			if !v {
 				if ins.Opcode != InsertShardedIgnore {
-					return fmt.Errorf("values %v for column %v does not map to keyspaceids", vindexColumnsKeys, colVindex.Columns)
+					return fmt.Errorf("values %v for column %v does not map to keyspace ids", vindexColumnsKeys, colVindex.Columns)
 				}
 				// InsertShardedIgnore: skip the row.
 				ksids[rowNum] = nil
