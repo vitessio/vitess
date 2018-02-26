@@ -106,7 +106,7 @@ func (ep *TabletPlan) buildAuthorized() {
 }
 
 // return a sql string with the params stripped out for display
-func redactSqlQuery(sql string) (string, error) {
+func redactSQLQuery(sql string) (string, error) {
 	bv := map[string]*querypb.BindVariable{}
 	sqlStripped, comments := sqlparser.SplitTrailingComments(sql)
 
@@ -602,7 +602,7 @@ func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, re
 	for _, v := range items {
 		var query string
 		if *streamlog.RedactDebugUIQueries {
-			query, _ = redactSqlQuery(v.Query)
+			query, _ = redactSQLQuery(v.Query)
 		} else {
 			query = v.Query
 		}
