@@ -25,7 +25,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/youtube/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 var (

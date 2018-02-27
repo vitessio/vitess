@@ -29,7 +29,7 @@ services:
 language: go
 go:
   - 1.9
-go_import_path: github.com/youtube/vitess
+go_import_path: vitess.io/vitess
 env:
   global:
     # Run go build and test with -p 4 (i.e. up to 4 packages are compiled/tested in parallel).

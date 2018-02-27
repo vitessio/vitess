@@ -23,8 +23,8 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/event"
-	"github.com/youtube/vitess/go/proc"
+	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/proc"
 )
 
 var (

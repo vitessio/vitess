@@ -29,8 +29,8 @@ import (
 	"syscall"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/acl"
-	"github.com/youtube/vitess/go/stats"
+	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/stats"
 )
 
 var (

@@ -27,7 +27,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
+	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
 )
 
 // This file contains the necessary object definitions and interfaces

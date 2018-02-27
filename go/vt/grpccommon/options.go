@@ -20,8 +20,8 @@ import (
 	"flag"
 	"sync"
 
-	"github.com/youtube/vitess/go/stats"
 	"google.golang.org/grpc"
+	"vitess.io/vitess/go/stats"
 )
 
 var (

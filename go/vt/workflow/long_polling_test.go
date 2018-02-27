@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
 func TestLongPolling(t *testing.T) {

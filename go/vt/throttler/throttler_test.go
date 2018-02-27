@@ -40,7 +40,7 @@ import (
 // BenchmarkThrottlerParallel_10kQPS-4 	  500000	    100060 ns/op
 // BenchmarkThrottlerParallel_100kQPS-4	 5000000	      9999 ns/op
 // BenchmarkThrottlerDisabled-4	500000000	        94.9 ns/op
-// ok  	github.com/youtube/vitess/go/vt/throttler	448.282
+// ok  	vitess.io/vitess/go/vt/throttler	448.282
 
 func BenchmarkThrottler_1kQPS(b *testing.B) {
 	benchmarkThrottler(b, 1*1000)

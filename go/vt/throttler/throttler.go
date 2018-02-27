@@ -35,9 +35,9 @@ import (
 
 	log "github.com/golang/glog"
 
-	"github.com/youtube/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/discovery"
 
-	throttlerdatapb "github.com/youtube/vitess/go/vt/proto/throttlerdata"
+	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 )
 
 const (

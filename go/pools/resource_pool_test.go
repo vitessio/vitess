@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/sync2"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/sync2"
 )
 
 var lastID, count sync2.AtomicInt64

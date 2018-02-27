@@ -33,13 +33,13 @@ workspace can be found at
 The `vtctlclient` tool issues commands to Vitess.
 
 ``` sh
-$ go get github.com/youtube/vitess/go/cmd/vtctlclient
+$ go get vitess.io/vitess/go/cmd/vtctlclient
 ```
 
 This command downloads and builds the Vitess source code at:
 
 ``` sh
-$GOPATH/src/github.com/youtube/vitess/
+$GOPATH/src/vitess.io/vitess/
 ```
 
 It also copies the built `vtctlclient` binary into `$GOPATH/bin`.
@@ -162,7 +162,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     `vtctlclient`:
 
     ``` sh
-    $ cd $GOPATH/src/github.com/youtube/vitess/examples/kubernetes
+    $ cd $GOPATH/src/vitess.io/vitess/examples/kubernetes
     ```
 
 1.  **Configure site-local settings**

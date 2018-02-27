@@ -19,8 +19,8 @@ package binlogplayer
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/vt/throttler"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/throttler"
 )
 
 func TestPopulateBlpCheckpoint(t *testing.T) {

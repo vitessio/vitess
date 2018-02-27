@@ -40,7 +40,7 @@ RUN mkdir -p /vt/dist && \
     mv apache-maven-3.3.9 maven
 
 # Set up Vitess environment (equivalent to '. dev.env')
-ENV VTTOP /vt/src/github.com/youtube/vitess
+ENV VTTOP /vt/src/vitess.io/vitess
 ENV VTROOT /vt
 ENV GOTOP $VTTOP/go
 ENV PYTOP $VTTOP/py
@@ -54,19 +54,19 @@ ENV VT_MYSQL_ROOT /usr
 ENV PKG_CONFIG_PATH $VTROOT/lib
 
 # Copy files needed for bootstrap
-COPY bootstrap.sh dev.env /vt/src/github.com/youtube/vitess/
-COPY config /vt/src/github.com/youtube/vitess/config
-COPY third_party /vt/src/github.com/youtube/vitess/third_party
-COPY tools /vt/src/github.com/youtube/vitess/tools
-COPY travis /vt/src/github.com/youtube/vitess/travis
-COPY vendor/vendor.json /vt/src/github.com/youtube/vitess/vendor/
+COPY bootstrap.sh dev.env /vt/src/vitess.io/vitess/
+COPY config /vt/src/vitess.io/vitess/config
+COPY third_party /vt/src/vitess.io/vitess/third_party
+COPY tools /vt/src/vitess.io/vitess/tools
+COPY travis /vt/src/vitess.io/vitess/travis
+COPY vendor/vendor.json /vt/src/vitess.io/vitess/vendor/
 
 # grpcio runtime is needed for python tests.
 RUN grpcio_ver="1.7.0" && \
     pip install --upgrade grpcio==$grpcio_ver
 
 # Download vendored Go dependencies
-RUN cd /vt/src/github.com/youtube/vitess && \
+RUN cd /vt/src/vitess.io/vitess && \
     go get -u github.com/kardianos/govendor && \
     govendor sync && \
     rm -rf /vt/.cache

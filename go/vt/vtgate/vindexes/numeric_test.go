@@ -22,7 +22,7 @@ import (
 
 	"strings"
 
-	"github.com/youtube/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sqltypes"
 )
 
 var numeric Vindex

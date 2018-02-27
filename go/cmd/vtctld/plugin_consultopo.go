@@ -19,5 +19,5 @@ package main
 // Imports and register the 'consul' topo.Server.
 
 import (
-	_ "github.com/youtube/vitess/go/vt/topo/consultopo"
+	_ "vitess.io/vitess/go/vt/topo/consultopo"
 )

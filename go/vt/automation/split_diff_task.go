@@ -17,9 +17,9 @@ limitations under the License.
 package automation
 
 import (
-	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
+	automationpb "vitess.io/vitess/go/vt/proto/automation"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 // SplitDiffTask runs SplitDiff on a remote vtworker to compare the old shard against its new split shards.

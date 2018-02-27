@@ -5,7 +5,7 @@ config:
   - docker_image: test/image
     github:
       repo: youtube/vitess
-      repo_prefix: src/github.com/youtube/vitess
+      repo_prefix: src/vitess.io/vitess
     before_test:
       - touch /tmp/test_file
     environment:

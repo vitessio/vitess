@@ -21,7 +21,7 @@ import (
 
 	log "github.com/golang/glog"
 
-	"github.com/youtube/vitess/go/netutil"
+	"vitess.io/vitess/go/netutil"
 )
 
 // StartLocalZk is a helper method to create a local ZK process.  Used
