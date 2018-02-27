@@ -20,7 +20,7 @@ config:
   - docker_image: vitess/root
     github:
       repo: youtube/vitess
-      repo_prefix: src/github.com/youtube/vitess
+      repo_prefix: src/vitess.io/vitess
     environment:
       sandbox: test/cluster/sandbox/vitess_kubernetes_sandbox.py
       config: test/cluster/sandbox/example_sandbox.yaml
@@ -31,7 +31,7 @@ config:
       - export VTROOT="${VTROOT:-${VTTOP/\/src\/github.com\/youtube\/vitess/}}"
       - export GOPATH=$VTROOT
       - export PYTHONPATH=$VTTOP/py:$VTTOP/test:$VTTOP/test/cluster/sandbox:/usr/lib/python2.7/dist-packages:/env/lib/python2.7/site-packages
-      - go get github.com/youtube/vitess/go/cmd/vtctlclient
+      - go get vitess.io/vitess/go/cmd/vtctlclient
       - export PATH=$GOPATH/bin:$PATH
     tests:
       - file: test/cluster/drain_test.py
