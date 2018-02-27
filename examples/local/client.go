@@ -32,7 +32,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/vitessdriver"
+	"vitess.io/vitess/go/vt/vitessdriver"
 )
 
 var (
