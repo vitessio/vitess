@@ -25,12 +25,12 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
-	"golang.org/x/net/context"
 )
 
 var (

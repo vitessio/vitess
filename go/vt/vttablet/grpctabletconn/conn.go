@@ -21,14 +21,14 @@ import (
 	"io"
 	"sync"
 
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"

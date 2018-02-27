@@ -17,8 +17,8 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"vitess.io/vitess/go/sqltypes"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )

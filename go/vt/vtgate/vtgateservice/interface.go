@@ -19,8 +19,8 @@ limitations under the License.
 package vtgateservice
 
 import (
-	"vitess.io/vitess/go/sqltypes"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

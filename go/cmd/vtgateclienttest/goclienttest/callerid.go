@@ -21,10 +21,10 @@ import (
 	"strings"
 	"testing"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/cmd/vtgateclienttest/services"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
-	"golang.org/x/net/context"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

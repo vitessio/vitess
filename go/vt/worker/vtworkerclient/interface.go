@@ -22,8 +22,8 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
-	"vitess.io/vitess/go/vt/logutil"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/logutil"
 )
 
 // protocol specifices which RPC client implementation should be used.

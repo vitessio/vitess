@@ -21,12 +21,12 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"golang.org/x/net/context"
 )
 
 // TabletStatsCache is a HealthCheckStatsListener that keeps both the

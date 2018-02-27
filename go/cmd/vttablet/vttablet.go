@@ -21,6 +21,7 @@ import (
 	"flag"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
@@ -31,7 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"golang.org/x/net/context"
 )
 
 var (

@@ -19,10 +19,10 @@ package framework
 import (
 	"errors"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
-	"golang.org/x/net/context"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

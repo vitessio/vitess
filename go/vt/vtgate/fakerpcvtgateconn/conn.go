@@ -28,9 +28,9 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
-	"golang.org/x/net/context"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

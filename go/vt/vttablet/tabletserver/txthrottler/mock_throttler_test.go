@@ -5,11 +5,12 @@
 package txthrottler
 
 import (
+	reflect "reflect"
+	time "time"
+
 	gomock "github.com/golang/mock/gomock"
 	discovery "vitess.io/vitess/go/vt/discovery"
 	throttlerdata "vitess.io/vitess/go/vt/proto/throttlerdata"
-	reflect "reflect"
-	time "time"
 )
 
 // MockThrottlerInterface is a mock of ThrottlerInterface interface

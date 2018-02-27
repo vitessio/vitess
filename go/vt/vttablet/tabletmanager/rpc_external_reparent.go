@@ -23,6 +23,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
@@ -31,7 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
-	"golang.org/x/net/context"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )

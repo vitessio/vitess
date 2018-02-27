@@ -25,10 +25,10 @@ import (
 	"os"
 	"testing"
 
+	"google.golang.org/grpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctlserver"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclienttest"
-	"google.golang.org/grpc"
 
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )

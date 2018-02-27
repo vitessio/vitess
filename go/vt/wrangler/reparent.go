@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
@@ -33,7 +34,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
-	"golang.org/x/net/context"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

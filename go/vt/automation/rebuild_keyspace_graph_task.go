@@ -17,8 +17,8 @@ limitations under the License.
 package automation
 
 import (
-	automationpb "vitess.io/vitess/go/vt/proto/automation"
 	"golang.org/x/net/context"
+	automationpb "vitess.io/vitess/go/vt/proto/automation"
 )
 
 // RebuildKeyspaceGraphTask runs vtctl RebuildKeyspaceGraph to migrate a serving

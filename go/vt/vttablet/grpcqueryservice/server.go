@@ -19,12 +19,12 @@ package grpcqueryservice
 import (
 	"google.golang.org/grpc"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
-	"golang.org/x/net/context"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"

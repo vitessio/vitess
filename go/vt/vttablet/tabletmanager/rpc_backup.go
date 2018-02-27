@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"time"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
-	"golang.org/x/net/context"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )

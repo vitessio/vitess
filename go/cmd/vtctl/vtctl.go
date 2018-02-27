@@ -27,6 +27,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
@@ -35,7 +36,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/workflow"
 	"vitess.io/vitess/go/vt/wrangler"
-	"golang.org/x/net/context"
 )
 
 var (

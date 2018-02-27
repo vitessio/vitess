@@ -27,8 +27,8 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
-	automationpb "vitess.io/vitess/go/vt/proto/automation"
 	"golang.org/x/net/context"
+	automationpb "vitess.io/vitess/go/vt/proto/automation"
 )
 
 type schedulerState int32

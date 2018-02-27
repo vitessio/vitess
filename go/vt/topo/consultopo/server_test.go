@@ -27,10 +27,10 @@ import (
 	"time"
 
 	"github.com/hashicorp/consul/api"
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/test"
-	"golang.org/x/net/context"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )

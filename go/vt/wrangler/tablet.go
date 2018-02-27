@@ -19,11 +19,11 @@ package wrangler
 import (
 	"fmt"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
-	"golang.org/x/net/context"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

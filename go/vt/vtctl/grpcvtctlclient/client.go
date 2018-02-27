@@ -21,11 +21,11 @@ import (
 	"flag"
 	"time"
 
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"

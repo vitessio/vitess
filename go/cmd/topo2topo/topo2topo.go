@@ -20,11 +20,11 @@ import (
 	"flag"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/helpers"
-	"golang.org/x/net/context"
 )
 
 var (

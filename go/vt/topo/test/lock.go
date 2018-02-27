@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/topo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )

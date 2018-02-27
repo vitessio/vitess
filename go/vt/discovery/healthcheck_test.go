@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/status"
 	"vitess.io/vitess/go/vt/topo"
@@ -33,7 +34,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
-	"golang.org/x/net/context"
 
 	"strings"
 	"sync"

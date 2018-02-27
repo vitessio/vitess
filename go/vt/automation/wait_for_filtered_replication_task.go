@@ -17,9 +17,9 @@ limitations under the License.
 package automation
 
 import (
+	"golang.org/x/net/context"
 	automationpb "vitess.io/vitess/go/vt/proto/automation"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"golang.org/x/net/context"
 )
 
 // WaitForFilteredReplicationTask runs vtctl WaitForFilteredReplication to block until the destination master

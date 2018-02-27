@@ -22,9 +22,9 @@ import (
 	"net"
 	"sync"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"golang.org/x/net/context"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )

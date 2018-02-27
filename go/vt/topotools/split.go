@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"sort"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/topo"
-	"golang.org/x/net/context"
 )
 
 // OverlappingShards contains sets of shards that overlap which each-other.

@@ -25,8 +25,8 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/streamlog"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/streamlog"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"

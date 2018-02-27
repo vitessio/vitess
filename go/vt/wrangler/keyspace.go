@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
@@ -30,7 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
-	"golang.org/x/net/context"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

@@ -22,10 +22,10 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"golang.org/x/net/context"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

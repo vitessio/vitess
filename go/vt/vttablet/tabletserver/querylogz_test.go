@@ -25,10 +25,10 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"golang.org/x/net/context"
 )
 
 func TestQuerylogzHandlerInvalidLogStats(t *testing.T) {
