@@ -28,7 +28,7 @@ import (
 )
 
 // buildInsertPlan builds the route for an INSERT statement.
-func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, error) {
+func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Insert, error) {
 	table, err := vschema.FindTable(ins.Table)
 	if err != nil {
 		return nil, err
@@ -42,31 +42,31 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 	return buildInsertShardedPlan(ins, table)
 }
 
-func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vschema VSchema) (*engine.Route, error) {
-	eRoute := &engine.Route{
+func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vschema VSchema) (*engine.Insert, error) {
+	eins := &engine.Insert{
 		Opcode:   engine.InsertUnsharded,
 		Table:    table,
 		Keyspace: table.Keyspace,
 	}
-	if !validateSubquerySamePlan(eRoute, nil, vschema, ins) {
+	if !validateSubquerySamePlan(eins.Keyspace.Name, nil, vschema, ins) {
 		return nil, errors.New("unsupported: sharded subquery in insert values")
 	}
 	var rows sqlparser.Values
 	switch insertValues := ins.Rows.(type) {
 	case *sqlparser.Select, *sqlparser.Union:
-		if eRoute.Table.AutoIncrement != nil {
+		if eins.Table.AutoIncrement != nil {
 			return nil, errors.New("unsupported: auto-inc and select in insert")
 		}
-		eRoute.Query = generateQuery(ins)
-		return eRoute, nil
+		eins.Query = generateQuery(ins)
+		return eins, nil
 	case sqlparser.Values:
 		rows = insertValues
 	default:
 		panic(fmt.Sprintf("BUG: unexpected construct in insert: %T", insertValues))
 	}
-	if eRoute.Table.AutoIncrement == nil {
-		eRoute.Query = generateQuery(ins)
-		return eRoute, nil
+	if eins.Table.AutoIncrement == nil {
+		eins.Query = generateQuery(ins)
+		return eins, nil
 	}
 
 	// Table has auto-inc and has a VALUES clause.
@@ -78,27 +78,27 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vsch
 			return nil, errors.New("column list doesn't match values")
 		}
 	}
-	if err := modifyForAutoinc(ins, eRoute); err != nil {
+	if err := modifyForAutoinc(ins, eins); err != nil {
 		return nil, err
 	}
-	eRoute.Query = generateQuery(ins)
-	return eRoute, nil
+	eins.Query = generateQuery(ins)
+	return eins, nil
 }
 
-func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engine.Route, error) {
-	eRoute := &engine.Route{
+func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engine.Insert, error) {
+	eins := &engine.Insert{
 		Opcode:   engine.InsertSharded,
 		Table:    table,
 		Keyspace: table.Keyspace,
 	}
 	if ins.Ignore != "" {
-		eRoute.Opcode = engine.InsertShardedIgnore
+		eins.Opcode = engine.InsertShardedIgnore
 	}
 	if ins.OnDup != nil {
-		if isVindexChanging(sqlparser.UpdateExprs(ins.OnDup), eRoute.Table.ColumnVindexes) {
+		if isVindexChanging(sqlparser.UpdateExprs(ins.OnDup), eins.Table.ColumnVindexes) {
 			return nil, errors.New("unsupported: DML cannot change vindex column")
 		}
-		eRoute.Opcode = engine.InsertShardedIgnore
+		eins.Opcode = engine.InsertShardedIgnore
 	}
 	if len(ins.Columns) == 0 {
 		return nil, errors.New("no column list")
@@ -121,34 +121,18 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 		}
 	}
 
-	if eRoute.Table.AutoIncrement != nil {
-		if err := modifyForAutoinc(ins, eRoute); err != nil {
+	if eins.Table.AutoIncrement != nil {
+		if err := modifyForAutoinc(ins, eins); err != nil {
 			return nil, err
 		}
 	}
 
-	routeValues := make([]sqltypes.PlanValue, len(eRoute.Table.ColumnVindexes))
-	// Initialize each table vindex with the number of rows per insert.
-	// There will be a plan value for each row.
-	for vIdx := range routeValues {
-		routeValues[vIdx].Values = make([]sqltypes.PlanValue, len(rows))
-	}
-	// What's going in here?
-	// For each vindex, we need to compute the column value for each row being inserted:
-	// routeValues will contain a PlanValue for each Vindex.
-	// In turn, each  PlanValue will have Values ([]sqltypes.PlanValue) for each row.
-	// In each row will have Values for the columns that are defined in the vindex.
-	// For instance, given the following insert statement:
-	// INSERT INTO table_a (column_a, column_b, column_c) VALUES (value_a1, value_b1, value_c1), (value_a2, value_b2, value_c2)
-	// Primary vindex on column_a and secondary vindex on columns b and c,
-	// routeValues will look like the following:
-	// [
-	//  [[value_a1], [value_a2]], <- Values for each row primary vindex
-	//  [[value_b1, value_c1], [value_b2, value_c2]] <- Values for each row multicolumn secondary vindex
-	// ]
-
-	for vIdx, colVindex := range eRoute.Table.ColumnVindexes {
-		for _, col := range colVindex.Columns {
+	// Fill out the 3-d Values structure. Please see documentation of Insert.Values for details.
+	routeValues := make([]sqltypes.PlanValue, len(eins.Table.ColumnVindexes))
+	for vIdx, colVindex := range eins.Table.ColumnVindexes {
+		routeValues[vIdx].Values = make([]sqltypes.PlanValue, len(colVindex.Columns))
+		for colIdx, col := range colVindex.Columns {
+			routeValues[vIdx].Values[colIdx].Values = make([]sqltypes.PlanValue, len(rows))
 			colNum := findOrAddColumn(ins, col)
 			// swap bind variables
 			baseName := ":_" + col.CompliantName()
@@ -157,47 +141,47 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 				if err != nil {
 					return nil, fmt.Errorf("could not compute value for vindex or auto-inc column: %v", err)
 				}
-				routeValues[vIdx].Values[rowNum].Values = append(routeValues[vIdx].Values[rowNum].Values, innerpv)
+				routeValues[vIdx].Values[colIdx].Values[rowNum] = innerpv
 				row[colNum] = sqlparser.NewValArg([]byte(baseName + strconv.Itoa(rowNum)))
 			}
 		}
 	}
-	eRoute.Values = routeValues
-	eRoute.Query = generateQuery(ins)
-	generateInsertShardedQuery(ins, eRoute, rows)
-	return eRoute, nil
+	eins.VindexValues = routeValues
+	eins.Query = generateQuery(ins)
+	generateInsertShardedQuery(ins, eins, rows)
+	return eins, nil
 }
 
-func generateInsertShardedQuery(node *sqlparser.Insert, eRoute *engine.Route, valueTuples sqlparser.Values) {
+func generateInsertShardedQuery(node *sqlparser.Insert, eins *engine.Insert, valueTuples sqlparser.Values) {
 	prefixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
 	midBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
 	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	eRoute.Mid = make([]string, len(valueTuples))
+	eins.Mid = make([]string, len(valueTuples))
 	prefixBuf.Myprintf("insert %v%sinto %v%v values ",
 		node.Comments, node.Ignore,
 		node.Table, node.Columns)
-	eRoute.Prefix = prefixBuf.String()
+	eins.Prefix = prefixBuf.String()
 	for rowNum, val := range valueTuples {
 		midBuf.Myprintf("%v", val)
-		eRoute.Mid[rowNum] = midBuf.String()
+		eins.Mid[rowNum] = midBuf.String()
 		midBuf.Truncate(0)
 	}
 	suffixBuf.Myprintf("%v", node.OnDup)
-	eRoute.Suffix = suffixBuf.String()
+	eins.Suffix = suffixBuf.String()
 }
 
 // modifyForAutoinc modfies the AST and the plan to generate
-// necessary autoinc values. It must be called only if eRoute.Table.AutoIncrement
+// necessary autoinc values. It must be called only if eins.Table.AutoIncrement
 // is set.
-func modifyForAutoinc(ins *sqlparser.Insert, eRoute *engine.Route) error {
-	pos := findOrAddColumn(ins, eRoute.Table.AutoIncrement.Column)
+func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
+	pos := findOrAddColumn(ins, eins.Table.AutoIncrement.Column)
 	autoIncValues, err := swapBindVariables(ins.Rows.(sqlparser.Values), pos, ":"+engine.SeqVarName)
 	if err != nil {
 		return err
 	}
-	eRoute.Generate = &engine.Generate{
-		Keyspace: eRoute.Table.AutoIncrement.Sequence.Keyspace,
-		Query:    fmt.Sprintf("select next :n values from %s", sqlparser.String(eRoute.Table.AutoIncrement.Sequence.Name)),
+	eins.Generate = &engine.Generate{
+		Keyspace: eins.Table.AutoIncrement.Sequence.Keyspace,
+		Query:    fmt.Sprintf("select next :n values from %s", sqlparser.String(eins.Table.AutoIncrement.Sequence.Name)),
 		Values:   autoIncValues,
 	}
 	return nil
