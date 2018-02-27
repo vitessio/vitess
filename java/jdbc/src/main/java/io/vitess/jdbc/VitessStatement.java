@@ -47,7 +47,7 @@ import io.vitess.util.StringUtils;
  * no reference of the query/queries provided is/are kept.
  */
 public class VitessStatement implements Statement {
-
+    protected static final String[] ON_DUPLICATE_KEY_UPDATE_CLAUSE = new String[] { "ON", "DUPLICATE", "KEY", "UPDATE" };
     /* Get actual class name to be printed on */
     private static Logger logger = Logger.getLogger(VitessStatement.class.getName());
     protected VitessResultSet vitessResultSet;
@@ -543,7 +543,7 @@ public class VitessStatement implements Statement {
             }
 
             this.retrieveGeneratedKeys = true;// mimicking mysql-connector-j
-            return this.generateBatchUpdateResult(cursorWithErrorList);
+            return this.generateBatchUpdateResult(cursorWithErrorList, batchedArgs);
         } finally {
             this.clearBatch();
         }
@@ -589,17 +589,21 @@ public class VitessStatement implements Statement {
      * It throws a BatchUpdateException.
      *
      * @param cursorWithErrorList Consists list of Cursor and Error object.
+     * @param batchedArgs holds batched commands
      * @return int[] of results corresponding to each query
      * @throws BatchUpdateException
      */
-    protected int[] generateBatchUpdateResult(List<CursorWithError> cursorWithErrorList)
+    protected int[] generateBatchUpdateResult(List<CursorWithError> cursorWithErrorList, List<String> batchedArgs)
         throws BatchUpdateException {
         int[] updateCounts = new int[cursorWithErrorList.size()];
-        int i = 0;
         long[][] generatedKeys = new long[cursorWithErrorList.size()][2];
 
         Vtrpc.RPCError rpcError = null;
-        for (CursorWithError cursorWithError : cursorWithErrorList) {
+        String batchCommand = null;
+        CursorWithError cursorWithError = null;
+        for (int i = 0; i < cursorWithErrorList.size(); i++) {
+            cursorWithError = cursorWithErrorList.get(i);
+            batchCommand = batchedArgs.get(i);
             if (null == cursorWithError.getError()) {
                 try {
                     long rowsAffected = cursorWithError.getCursor().getRowsAffected();
@@ -607,7 +611,13 @@ public class VitessStatement implements Statement {
                     if (rowsAffected > Integer.MAX_VALUE) {
                         truncatedUpdateCount = Integer.MAX_VALUE;
                     } else {
-                        truncatedUpdateCount = (int) rowsAffected;
+                        if (sqlIsUpsert(batchCommand)) {
+                            // mimicking mysql-connector-j here.
+                            // but it would fail for: insert into t1 values ('a'), ('b') on duplicate key update ts = now();
+                            truncatedUpdateCount = 1;
+                        } else {
+                            truncatedUpdateCount = (int) rowsAffected;
+                        }
                     }
                     updateCounts[i] = truncatedUpdateCount;
                     if (this.retrieveGeneratedKeys) {
@@ -629,7 +639,6 @@ public class VitessStatement implements Statement {
                     generatedKeys[i] = new long[]{Statement.EXECUTE_FAILED, Statement.EXECUTE_FAILED};
                 }
             }
-            ++i;
         }
 
         if (null != rpcError) {
@@ -641,6 +650,10 @@ public class VitessStatement implements Statement {
             this.batchGeneratedKeys = generatedKeys;
         }
         return updateCounts;
+    }
+
+    private boolean sqlIsUpsert(String sql) {
+        return StringUtils.indexOfIgnoreCase(0, sql, ON_DUPLICATE_KEY_UPDATE_CLAUSE, "\"'`", "\"'`", StringUtils.SEARCH_MODE__ALL) != -1;
     }
 
     protected void checkAndBeginTransaction() throws SQLException {

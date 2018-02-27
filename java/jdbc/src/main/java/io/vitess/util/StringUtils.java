@@ -559,6 +559,98 @@ public class StringUtils {
     }
 
     /**
+     * Finds the position of the first of a consecutive sequence of strings within a string, ignoring case, with the option to skip text delimited by given
+     * markers or within comments.
+     * <p>
+     * Independently of the <code>searchMode</code> provided, when searching for the second and following strings <code>SearchMode.SKIP_WHITE_SPACE</code> will
+     * be added and <code>SearchMode.SKIP_BETWEEN_MARKERS</code> removed.
+     * </p>
+     * 
+     * @param startingPosition
+     *            the position to start the search from
+     * @param searchIn
+     *            the string to search in
+     * @param searchFor
+     *            the array of strings to search for
+     * @param openingMarkers
+     *            characters which delimit the beginning of a text block to skip
+     * @param closingMarkers
+     *            characters which delimit the end of a text block to skip
+     * @param searchMode
+     *            a <code>Set</code>, ideally an <code>EnumSet</code>, containing the flags from the enum <code>StringUtils.SearchMode</code> that determine the
+     *            behavior of the search
+     * @return the position where <code>searchFor</code> is found within <code>searchIn</code> starting from <code>startingPosition</code>.
+     */
+    public static int indexOfIgnoreCase(int startingPosition, String searchIn, String[] searchForSequence, String openingMarkers, String closingMarkers,
+            Set<SearchMode> searchMode) {
+        if ((searchIn == null) || (searchForSequence == null)) {
+            return -1;
+        }
+
+        int searchInLength = searchIn.length();
+        int searchForLength = 0;
+        for (String searchForPart : searchForSequence) {
+            searchForLength += searchForPart.length();
+        } // minimum length for searchFor (without gaps between words)
+
+        if (searchForLength == 0) {
+            return -1;
+        }
+
+        int searchForWordsCount = searchForSequence.length;
+        searchForLength += searchForWordsCount > 0 ? searchForWordsCount - 1 : 0; // add gaps between words
+        int stopSearchingAt = searchInLength - searchForLength;
+
+        if (startingPosition > stopSearchingAt) {
+            return -1;
+        }
+
+        if (searchMode.contains(SearchMode.SKIP_BETWEEN_MARKERS)
+                && (openingMarkers == null || closingMarkers == null || openingMarkers.length() != closingMarkers.length())) {
+            throw new IllegalArgumentException("Must specify a valid openingMarkers and closingMarkers");
+        }
+
+        if (Character.isWhitespace(searchForSequence[0].charAt(0)) && searchMode.contains(SearchMode.SKIP_WHITE_SPACE)) {
+            // Can't skip white spaces if first searchFor char is one
+            searchMode = EnumSet.copyOf(searchMode);
+            searchMode.remove(SearchMode.SKIP_WHITE_SPACE);
+        }
+
+        // searchMode set used to search 2nd and following words can't contain SearchMode.SKIP_BETWEEN_MARKERS and must
+        // contain SearchMode.SKIP_WHITE_SPACE
+        Set<SearchMode> searchMode2 = EnumSet.of(SearchMode.SKIP_WHITE_SPACE);
+        searchMode2.addAll(searchMode);
+        searchMode2.remove(SearchMode.SKIP_BETWEEN_MARKERS);
+
+        for (int positionOfFirstWord = startingPosition; positionOfFirstWord <= stopSearchingAt; positionOfFirstWord++) {
+            positionOfFirstWord = indexOfIgnoreCase(positionOfFirstWord, searchIn, searchForSequence[0], openingMarkers, closingMarkers, searchMode);
+
+            if (positionOfFirstWord == -1 || positionOfFirstWord > stopSearchingAt) {
+                return -1;
+            }
+
+            int startingPositionForNextWord = positionOfFirstWord + searchForSequence[0].length();
+            int wc = 0;
+            boolean match = true;
+            while (++wc < searchForWordsCount && match) {
+                int positionOfNextWord = indexOfNextChar(startingPositionForNextWord, searchInLength - 1, searchIn, null, null, searchMode2);
+                if (startingPositionForNextWord == positionOfNextWord || !startsWithIgnoreCase(searchIn, positionOfNextWord, searchForSequence[wc])) {
+                    // either no gap between words or match failed
+                    match = false;
+                } else {
+                    startingPositionForNextWord = positionOfNextWord + searchForSequence[wc].length();
+                }
+            }
+
+            if (match) {
+                return positionOfFirstWord;
+            }
+        }
+
+        return -1;
+    }
+
+    /**
      * Convenience function for {@link #indexOfIgnoreCase(int, String, String, String, String, Set)}, passing {@link #SEARCH_MODE__ALL}
      */
     public static int indexOfIgnoreCase(int startingPosition, String searchIn, String searchFor, String openingMarkers, String closingMarkers) {
