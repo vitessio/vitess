@@ -88,7 +88,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Update, er
 		return nil, err
 	}
 	if len(eupd.ChangedVindexValues) != 0 {
-		eupd.Subquery = generateUpdateSubquery(upd, eupd.Table)
+		eupd.OwnedVindexQuery = generateUpdateSubquery(upd, eupd.Table)
 	}
 	return eupd, nil
 }
@@ -203,7 +203,7 @@ func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Delete, er
 			return edel, errors.New("unsupported: multi shard delete with limit")
 		}
 	}
-	edel.Subquery = generateDeleteSubquery(del, edel.Table)
+	edel.OwnedVindexQuery = generateDeleteSubquery(del, edel.Table)
 	return edel, nil
 }
 

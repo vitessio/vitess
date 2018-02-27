@@ -43,15 +43,17 @@ type Delete struct {
 	// Query specifies the query to be executed.
 	Query string
 
-	// Vindex and Values specify how routing must be computed
+	// Vindex specifies the vindex to be used.
 	Vindex vindexes.Vindex
+	// Values specifies the vindex values to use for routing.
+	// For now, only one value is specified.
 	Values []sqltypes.PlanValue
 
-	// Table sepcifies the table for the delete.
+	// Table specifies the table for the delete.
 	Table *vindexes.Table
 
-	// Subquery is used for deleting lookup vindex entries.
-	Subquery string
+	// OwnedVindexQuery is used for deleting lookup vindex entries.
+	OwnedVindexQuery string
 }
 
 // MarshalJSON serializes the Delete into a JSON representation.
@@ -65,21 +67,21 @@ func (del *Delete) MarshalJSON() ([]byte, error) {
 		vindexName = del.Vindex.String()
 	}
 	marshalDelete := struct {
-		Opcode   DeleteOpcode
-		Keyspace *vindexes.Keyspace   `json:",omitempty"`
-		Query    string               `json:",omitempty"`
-		Vindex   string               `json:",omitempty"`
-		Values   []sqltypes.PlanValue `json:",omitempty"`
-		Table    string               `json:",omitempty"`
-		Subquery string               `json:",omitempty"`
+		Opcode           DeleteOpcode
+		Keyspace         *vindexes.Keyspace   `json:",omitempty"`
+		Query            string               `json:",omitempty"`
+		Vindex           string               `json:",omitempty"`
+		Values           []sqltypes.PlanValue `json:",omitempty"`
+		Table            string               `json:",omitempty"`
+		OwnedVindexQuery string               `json:",omitempty"`
 	}{
-		Opcode:   del.Opcode,
-		Keyspace: del.Keyspace,
-		Query:    del.Query,
-		Vindex:   vindexName,
-		Values:   del.Values,
-		Table:    tname,
-		Subquery: del.Subquery,
+		Opcode:           del.Opcode,
+		Keyspace:         del.Keyspace,
+		Query:            del.Query,
+		Vindex:           vindexName,
+		Values:           del.Values,
+		Table:            tname,
+		OwnedVindexQuery: del.OwnedVindexQuery,
 	}
 	return jsonutil.MarshalNoEscape(marshalDelete)
 }
@@ -95,7 +97,7 @@ const (
 	DeleteUnsharded = DeleteOpcode(iota)
 	// DeleteEqual is for routing a delete statement
 	// to a single shard. Requires: A Vindex, a single
-	// Value, and a Subquery, which will be used to
+	// Value, and an OwnedVindexQuery, which will be used to
 	// determine if lookup rows need to be deleted.
 	DeleteEqual
 	// DeleteSharded is for routing a scattered
@@ -117,7 +119,6 @@ func (code DeleteOpcode) MarshalJSON() ([]byte, error) {
 
 // Execute performs a non-streaming exec.
 func (del *Delete) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-
 	switch del.Opcode {
 	case DeleteUnsharded:
 		return del.execDeleteUnsharded(vcursor, bindVars)
@@ -164,7 +165,7 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 	if len(ksid) == 0 {
 		return &sqltypes.Result{}, nil
 	}
-	if del.Subquery != "" && len(del.Table.Owned) != 0 {
+	if del.OwnedVindexQuery != "" {
 		err = del.deleteVindexEntries(vcursor, bindVars, ks, shard, ksid)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "execDeleteEqual")
@@ -175,7 +176,7 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 }
 
 func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, ks, shard string, ksid []byte) error {
-	result, err := execShard(vcursor, del.Subquery, bindVars, ks, shard, false /* isDML */, false /* canAutocommit */)
+	result, err := execShard(vcursor, del.OwnedVindexQuery, bindVars, ks, shard, false /* isDML */, false /* canAutocommit */)
 	if err != nil {
 		return err
 	}

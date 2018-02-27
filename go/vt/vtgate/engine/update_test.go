@@ -23,6 +23,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
@@ -37,7 +38,7 @@ func TestUpdateUnsharded(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
-	_, err := upd.Execute(vc, nil, nil, false)
+	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -48,11 +49,11 @@ func TestUpdateUnsharded(t *testing.T) {
 
 	// Failure cases
 	vc = &loggingVCursor{shardErr: errors.New("shard_error")}
-	_, err = upd.Execute(vc, nil, nil, false)
+	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	expectError(t, "Execute", err, "execUpdateUnsharded: shard_error")
 
 	vc = &loggingVCursor{}
-	_, err = upd.Execute(vc, nil, nil, false)
+	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	expectError(t, "Execute", err, "Keyspace does not have exactly one shard: []")
 }
 
@@ -70,7 +71,7 @@ func TestUpdateEqual(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
-	_, err := upd.Execute(vc, nil, nil, false)
+	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -82,7 +83,7 @@ func TestUpdateEqual(t *testing.T) {
 
 	// Failure case
 	upd.Values = []sqltypes.PlanValue{{Key: "aa"}}
-	_, err = upd.Execute(vc, nil, nil, false)
+	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	expectError(t, "Execute", err, "execUpdateEqual: missing bind var aa")
 }
 
@@ -104,7 +105,7 @@ func TestUpdateEqualNoRoute(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
-	_, err := upd.Execute(vc, nil, nil, false)
+	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -134,7 +135,7 @@ func TestUpdateEqualNoScatter(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
-	_, err := upd.Execute(vc, nil, nil, false)
+	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	expectError(t, "Execute", err, "execUpdateEqual: vindex could not map the value to a unique keyspace id")
 }
 
@@ -156,8 +157,8 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 				Value: sqltypes.NewInt64(3),
 			}},
 		},
-		Table:    ks.Tables["t1"],
-		Subquery: "dummy_subquery",
+		Table:            ks.Tables["t1"],
+		OwnedVindexQuery: "dummy_subquery",
 	}
 
 	results := []*sqltypes.Result{sqltypes.MakeTestResult(
@@ -172,7 +173,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		results: results,
 	}
 
-	_, err := upd.Execute(vc, nil, nil, false)
+	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -198,7 +199,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 	vc = &loggingVCursor{
 		shards: []string{"-20", "20-"},
 	}
-	_, err = upd.Execute(vc, nil, nil, false)
+	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -226,7 +227,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		shards:  []string{"-20", "20-"},
 		results: results,
 	}
-	_, err = upd.Execute(vc, nil, nil, false)
+	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	expectError(t, "Execute", err, "execUpdateEqual: unsupported: update changes multiple rows in the vindex")
 }
 

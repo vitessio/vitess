@@ -43,8 +43,10 @@ type Update struct {
 	// Query specifies the query to be executed.
 	Query string
 
-	// Vindex and Values specify how routing must be computed
+	// Vindex specifies the vindex to be used.
 	Vindex vindexes.Vindex
+	// Values specifies the vindex values to use for routing.
+	// For now, only one value is specified.
 	Values []sqltypes.PlanValue
 
 	// ChangedVindexValues contains values for updated Vindexes during an update statement.
@@ -53,8 +55,8 @@ type Update struct {
 	// Table sepcifies the table for the update.
 	Table *vindexes.Table
 
-	// Subquery is used for updating changes in lookup vindexes.
-	Subquery string
+	// OwnedVindexQuery is used for updating changes in lookup vindexes.
+	OwnedVindexQuery string
 }
 
 // MarshalJSON serializes the Update into a JSON representation.
@@ -75,7 +77,7 @@ func (upd *Update) MarshalJSON() ([]byte, error) {
 		Values              []sqltypes.PlanValue            `json:",omitempty"`
 		ChangedVindexValues map[string][]sqltypes.PlanValue `json:",omitempty"`
 		Table               string                          `json:",omitempty"`
-		Subquery            string                          `json:",omitempty"`
+		OwnedVindexQuery    string                          `json:",omitempty"`
 	}{
 		Opcode:              upd.Opcode,
 		Keyspace:            upd.Keyspace,
@@ -84,7 +86,7 @@ func (upd *Update) MarshalJSON() ([]byte, error) {
 		Values:              upd.Values,
 		ChangedVindexValues: upd.ChangedVindexValues,
 		Table:               tname,
-		Subquery:            upd.Subquery,
+		OwnedVindexQuery:    upd.OwnedVindexQuery,
 	}
 	return jsonutil.MarshalNoEscape(marshalUpdate)
 }
@@ -117,7 +119,6 @@ func (code UpdateOpcode) MarshalJSON() ([]byte, error) {
 
 // Execute performs a non-streaming exec.
 func (upd *Update) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	bindVars = combineVars(bindVars, joinVars)
 	switch upd.Opcode {
 	case UpdateUnsharded:
 		return upd.execUpdateUnsharded(vcursor, bindVars)
@@ -163,7 +164,7 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 		return &sqltypes.Result{}, nil
 	}
 	if len(upd.ChangedVindexValues) != 0 {
-		if err := upd.updateVindexEntries(vcursor, upd.Subquery, bindVars, ks, shard, ksid); err != nil {
+		if err := upd.updateVindexEntries(vcursor, upd.OwnedVindexQuery, bindVars, ks, shard, ksid); err != nil {
 			return nil, vterrors.Wrap(err, "execUpdateEqual")
 		}
 	}
@@ -178,7 +179,7 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 // Note 2: While changes are being committed, the changing row could be
 // unreachable by either the new or old column values.
 func (upd *Update) updateVindexEntries(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, keyspace, shard string, ksid []byte) error {
-	subQueryResult, err := execShard(vcursor, upd.Subquery, bindVars, keyspace, shard, false /* isDML */, false /* canAutocommit */)
+	subQueryResult, err := execShard(vcursor, upd.OwnedVindexQuery, bindVars, keyspace, shard, false /* isDML */, false /* canAutocommit */)
 	if err != nil {
 		return err
 	}

@@ -22,6 +22,8 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 func TestDeleteUnsharded(t *testing.T) {
@@ -35,7 +37,7 @@ func TestDeleteUnsharded(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
-	_, err := del.Execute(vc, nil, nil, false)
+	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -46,11 +48,11 @@ func TestDeleteUnsharded(t *testing.T) {
 
 	// Failure cases
 	vc = &loggingVCursor{shardErr: errors.New("shard_error")}
-	_, err = del.Execute(vc, nil, nil, false)
+	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	expectError(t, "Execute", err, "execDeleteUnsharded: shard_error")
 
 	vc = &loggingVCursor{}
-	_, err = del.Execute(vc, nil, nil, false)
+	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	expectError(t, "Execute", err, "Keyspace does not have exactly one shard: []")
 }
 
@@ -68,7 +70,7 @@ func TestDeleteEqual(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
-	_, err := del.Execute(vc, nil, nil, false)
+	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -80,7 +82,7 @@ func TestDeleteEqual(t *testing.T) {
 
 	// Failure case
 	del.Values = []sqltypes.PlanValue{{Key: "aa"}}
-	_, err = del.Execute(vc, nil, nil, false)
+	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	expectError(t, "Execute", err, "execDeleteEqual: missing bind var aa")
 }
 
@@ -102,7 +104,7 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
-	_, err := del.Execute(vc, nil, nil, false)
+	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -132,20 +134,20 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
-	_, err := del.Execute(vc, nil, nil, false)
+	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	expectError(t, "Execute", err, "execDeleteEqual: vindex could not map the value to a unique keyspace id")
 }
 
 func TestDeleteOwnedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
-		Opcode:   DeleteEqual,
-		Keyspace: ks.Keyspace,
-		Query:    "dummy_delete",
-		Vindex:   ks.Vindexes["hash"],
-		Values:   []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
-		Table:    ks.Tables["t1"],
-		Subquery: "dummy_subquery",
+		Opcode:           DeleteEqual,
+		Keyspace:         ks.Keyspace,
+		Query:            "dummy_delete",
+		Vindex:           ks.Vindexes["hash"],
+		Values:           []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+		Table:            ks.Tables["t1"],
+		OwnedVindexQuery: "dummy_subquery",
 	}
 
 	results := []*sqltypes.Result{sqltypes.MakeTestResult(
@@ -160,7 +162,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 		results: results,
 	}
 
-	_, err := del.Execute(vc, nil, nil, false)
+	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -182,7 +184,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	vc = &loggingVCursor{
 		shards: []string{"-20", "20-"},
 	}
-	_, err = del.Execute(vc, nil, nil, false)
+	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -210,7 +212,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 		shards:  []string{"-20", "20-"},
 		results: results,
 	}
-	_, err = del.Execute(vc, nil, nil, false)
+	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -243,7 +245,7 @@ func TestDeleteSharded(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
-	_, err := del.Execute(vc, nil, nil, false)
+	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -254,7 +256,7 @@ func TestDeleteSharded(t *testing.T) {
 
 	// Failure case
 	vc = &loggingVCursor{shardErr: errors.New("shard_error")}
-	_, err = del.Execute(vc, nil, nil, false)
+	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	expectError(t, "Execute", err, "execDeleteSharded: shard_error")
 }
 

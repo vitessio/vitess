@@ -44,16 +44,16 @@ type Insert struct {
 	Keyspace *vindexes.Keyspace
 
 	// Query specifies the query to be executed.
-	// InsertSharded plans, this value is unused.
-	// Prefix, Mid and Suffix are used instead.
+	// For InsertSharded plans, this value is unused,
+	// and Prefix, Mid and Suffix are used instead.
 	Query string
 
-	// Values specifies values for all the vindex columns.
+	// VindexValues specifies values for all the vindex columns.
 	// This is a three-dimensonal data structure:
-	// Insert.Values[i] represents the values for a colvindex: len(Insert.Table.ColumnVindexes)
-	// Insert.Values[i].Values[j] represents values for each column of the colVindex: len(colVindex.Columns)
-	// Insert.Values[i].Values[j].Values[k] represents the value pulled from each row for that column: len(ins.rows)
-	Values []sqltypes.PlanValue
+	// Insert.Values[i] represents the values to be inserted for the i'th colvindex (i < len(Insert.Table.ColumnVindexes))
+	// Insert.Values[i].Values[j] represents values for the j'th column of the given colVindex (j < len(colVindex[i].Columns)
+	// Insert.Values[i].Values[j].Values[k] represents the value pulled from row k for that column: (k < len(ins.rows))
+	VindexValues []sqltypes.PlanValue
 
 	// Table sepcifies the table for the insert.
 	Table *vindexes.Table
@@ -88,7 +88,7 @@ func (ins *Insert) MarshalJSON() ([]byte, error) {
 		Opcode:   ins.Opcode,
 		Keyspace: ins.Keyspace,
 		Query:    ins.Query,
-		Values:   ins.Values,
+		Values:   ins.VindexValues,
 		Table:    tname,
 		Generate: ins.Generate,
 		Prefix:   ins.Prefix,
@@ -142,8 +142,6 @@ func (code InsertOpcode) MarshalJSON() ([]byte, error) {
 
 // Execute performs a non-streaming exec.
 func (ins *Insert) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	bindVars = combineVars(bindVars, joinVars)
-
 	switch ins.Opcode {
 	case InsertUnsharded:
 		return ins.execInsertUnsharded(vcursor, bindVars)
@@ -286,9 +284,9 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 	// involves a transpose.
 	// The reason we need to transpose is because all the Vindex APIs
 	// require inputs in that format.
-	vindexRowsValues := make([][][]sqltypes.Value, len(ins.Values))
+	vindexRowsValues := make([][][]sqltypes.Value, len(ins.VindexValues))
 	rowCount := 0
-	for vIdx, vColValues := range ins.Values {
+	for vIdx, vColValues := range ins.VindexValues {
 		if len(vColValues.Values) != len(ins.Table.ColumnVindexes[vIdx].Columns) {
 			return "", nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: supplied vindex column values don't match vschema: %v %v", vColValues, ins.Table.ColumnVindexes[vIdx].Columns)
 		}

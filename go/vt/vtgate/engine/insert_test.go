@@ -21,8 +21,10 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
 func TestInsertUnsharded(t *testing.T) {
@@ -41,7 +43,7 @@ func TestInsertUnsharded(t *testing.T) {
 			InsertID: 4,
 		}},
 	}
-	result, err := ins.Execute(vc, nil, nil, false)
+	result, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -53,11 +55,11 @@ func TestInsertUnsharded(t *testing.T) {
 
 	// Failure cases
 	vc = &loggingVCursor{shardErr: errors.New("shard_error")}
-	_, err = ins.Execute(vc, nil, nil, false)
+	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	expectError(t, "Execute", err, "execInsertUnsharded: shard_error")
 
 	vc = &loggingVCursor{}
-	_, err = ins.Execute(vc, nil, nil, false)
+	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	expectError(t, "Execute", err, "Keyspace does not have exactly one shard: []")
 }
 
@@ -100,7 +102,7 @@ func TestInsertUnshardedGenerate(t *testing.T) {
 			{InsertID: 1},
 		},
 	}
-	result, err := ins.Execute(vc, nil, nil, false)
+	result, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -147,7 +149,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	ins := &Insert{
 		Opcode:   InsertSharded,
 		Keyspace: ks.Keyspace,
-		Values: []sqltypes.PlanValue{{
+		VindexValues: []sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// 3 rows.
@@ -170,7 +172,7 @@ func TestInsertShardedSimple(t *testing.T) {
 		shards:       []string{"-20", "20-"},
 		shardForKsid: []string{"20-", "-20", "20-"},
 	}
-	_, err = ins.Execute(vc, nil, nil, false)
+	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -222,7 +224,7 @@ func TestInsertShardedFail(t *testing.T) {
 	ins := &Insert{
 		Opcode:   InsertSharded,
 		Keyspace: ks.Keyspace,
-		Values: []sqltypes.PlanValue{{
+		VindexValues: []sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// 1 row
@@ -240,7 +242,7 @@ func TestInsertShardedFail(t *testing.T) {
 	vc := &loggingVCursor{}
 
 	// The lookup will fail to map to a keyspace id.
-	_, err = ins.Execute(vc, nil, nil, false)
+	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	expectError(t, "Execute", err, "execInsertSharded: getInsertShardedRoute: could not map INT64(1) to a keyspace id")
 }
 
@@ -274,7 +276,7 @@ func TestInsertShardedGenerate(t *testing.T) {
 	ins := &Insert{
 		Opcode:   InsertSharded,
 		Keyspace: ks.Keyspace,
-		Values: []sqltypes.PlanValue{{
+		VindexValues: []sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// 3 rows.
@@ -321,7 +323,7 @@ func TestInsertShardedGenerate(t *testing.T) {
 			{InsertID: 1},
 		},
 	}
-	result, err := ins.Execute(vc, nil, nil, false)
+	result, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -401,7 +403,7 @@ func TestInsertShardedOwned(t *testing.T) {
 	ins := &Insert{
 		Opcode:   InsertSharded,
 		Keyspace: ks.Keyspace,
-		Values: []sqltypes.PlanValue{{
+		VindexValues: []sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// rows for id
@@ -457,7 +459,7 @@ func TestInsertShardedOwned(t *testing.T) {
 		shards:       []string{"-20", "20-"},
 		shardForKsid: []string{"20-", "-20", "20-"},
 	}
-	_, err = ins.Execute(vc, nil, nil, false)
+	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -531,7 +533,7 @@ func TestInsertShardedOwnedFail(t *testing.T) {
 	ins := &Insert{
 		Opcode:   InsertSharded,
 		Keyspace: ks.Keyspace,
-		Values: []sqltypes.PlanValue{{
+		VindexValues: []sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// rows for id
@@ -558,7 +560,7 @@ func TestInsertShardedOwnedFail(t *testing.T) {
 		shards: []string{"-20", "20-"},
 	}
 	// No reverse map available for lookup. So, it will fail.
-	_, err = ins.Execute(vc, nil, nil, false)
+	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	expectError(t, "Execute", err, "execInsertSharded: getInsertShardedRoute: value must be supplied for column c3")
 }
 
@@ -621,7 +623,7 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 	ins := &Insert{
 		Opcode:   InsertShardedIgnore,
 		Keyspace: ks.Keyspace,
-		Values: []sqltypes.PlanValue{{
+		VindexValues: []sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// rows for id
@@ -711,7 +713,7 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 			ksid0,
 		},
 	}
-	_, err = ins.Execute(vc, nil, nil, false)
+	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -797,7 +799,7 @@ func TestInsertShardedIgnoreOwnedFail(t *testing.T) {
 	ins := &Insert{
 		Opcode:   InsertShardedIgnore,
 		Keyspace: ks.Keyspace,
-		Values: []sqltypes.PlanValue{{
+		VindexValues: []sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// rows for id
@@ -823,7 +825,7 @@ func TestInsertShardedIgnoreOwnedFail(t *testing.T) {
 	vc := &loggingVCursor{
 		shards: []string{"-20", "20-"},
 	}
-	_, err = ins.Execute(vc, nil, nil, false)
+	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	expectError(t, "Execute", err, "execInsertSharded: getInsertShardedRoute: value must be supplied for column [c3]")
 }
 
@@ -879,7 +881,7 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 	ins := &Insert{
 		Opcode:   InsertSharded,
 		Keyspace: ks.Keyspace,
-		Values: []sqltypes.PlanValue{{
+		VindexValues: []sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// rows for id
@@ -952,7 +954,7 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 			nonemptyResult,
 		},
 	}
-	_, err = ins.Execute(vc, nil, nil, false)
+	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1026,7 +1028,7 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 	ins := &Insert{
 		Opcode:   InsertShardedIgnore,
 		Keyspace: ks.Keyspace,
-		Values: []sqltypes.PlanValue{{
+		VindexValues: []sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// rows for id
@@ -1076,7 +1078,7 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 			nonemptyResult,
 		},
 	}
-	_, err = ins.Execute(vc, nil, nil, false)
+	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1142,7 +1144,7 @@ func TestInsertShardedIgnoreUnownedVerifyFail(t *testing.T) {
 	ins := &Insert{
 		Opcode:   InsertSharded,
 		Keyspace: ks.Keyspace,
-		Values: []sqltypes.PlanValue{{
+		VindexValues: []sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// rows for id
@@ -1168,7 +1170,7 @@ func TestInsertShardedIgnoreUnownedVerifyFail(t *testing.T) {
 	vc := &loggingVCursor{
 		shards: []string{"-20", "20-"},
 	}
-	_, err = ins.Execute(vc, nil, nil, false)
+	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	expectError(t, "Execute", err, "execInsertSharded: getInsertShardedRoute: values [[INT64(2)]] for column [c3] does not map to keyspace ids")
 }
 
@@ -1224,7 +1226,7 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 	ins := &Insert{
 		Opcode:   InsertSharded,
 		Keyspace: ks.Keyspace,
-		Values: []sqltypes.PlanValue{{
+		VindexValues: []sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// rows for id
@@ -1292,7 +1294,7 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 			nonemptyResult,
 		},
 	}
-	_, err = ins.Execute(vc, nil, nil, false)
+	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1357,7 +1359,7 @@ func TestInsertShardedUnownedReverseMapFail(t *testing.T) {
 	ins := &Insert{
 		Opcode:   InsertSharded,
 		Keyspace: ks.Keyspace,
-		Values: []sqltypes.PlanValue{{
+		VindexValues: []sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// rows for id
@@ -1383,6 +1385,6 @@ func TestInsertShardedUnownedReverseMapFail(t *testing.T) {
 	vc := &loggingVCursor{
 		shards: []string{"-20", "20-"},
 	}
-	_, err = ins.Execute(vc, nil, nil, false)
+	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, nil, false)
 	expectError(t, "Execute", err, "execInsertSharded: getInsertShardedRoute: value must be supplied for column [c3]")
 }
