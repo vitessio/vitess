@@ -47,6 +47,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/heartbeat"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/locker"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/messager"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/rules"
@@ -145,6 +146,7 @@ type TabletServer struct {
 	hw               *heartbeat.Writer
 	hr               *heartbeat.Reader
 	messager         *messager.Engine
+	locker           *locker.Locker
 	watcher          *ReplicationWatcher
 	updateStreamList *binlog.StreamList
 
@@ -213,6 +215,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 	tsv.hr = heartbeat.NewReader(tsv, config)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, config)
+	tsv.locker = locker.NewLocker(config)
 	tsv.watcher = NewReplicationWatcher(tsv.se, config)
 	tsv.updateStreamList = &binlog.StreamList{}
 	// FIXME(alainjobart) could we move this to the Register method below?
@@ -470,10 +473,12 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.watcher.Close()
 		tsv.te.Open()
 		tsv.messager.Open()
+		tsv.locker.Open()
 		tsv.hr.Close()
 		tsv.hw.Open()
 	} else {
 		tsv.messager.Close()
+		tsv.locker.Close()
 		tsv.hr.Open()
 		tsv.hw.Close()
 
@@ -535,6 +540,7 @@ func (tsv *TabletServer) waitForShutdown() {
 	// transactions.
 	tsv.txRequests.Wait()
 	tsv.messager.Close()
+	tsv.locker.Close()
 	tsv.te.Close(false)
 	tsv.qe.streamQList.TerminateAll()
 	tsv.updateStreamList.Stop()
@@ -547,6 +553,7 @@ func (tsv *TabletServer) waitForShutdown() {
 // It forcibly shuts down everything.
 func (tsv *TabletServer) closeAll() {
 	tsv.messager.Close()
+	tsv.locker.Close()
 	tsv.hr.Close()
 	tsv.hw.Close()
 	tsv.te.Close(true)

@@ -178,42 +178,6 @@ func analyzeUpdateExpressions(exprs sqlparser.UpdateExprs, pkIndex *schema.Index
 	return pkValues, nil
 }
 
-func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan *Plan, err error) {
-	plan = &Plan{
-		PlanID:     PlanPassSelect,
-		FieldQuery: GenerateFieldQuery(sel),
-		FullQuery:  GenerateLimitQuery(sel),
-	}
-	if sel.Lock != "" {
-		plan.PlanID = PlanSelectLock
-	}
-
-	tableName := analyzeFrom(sel.From)
-	if tableName.IsEmpty() {
-		return plan, nil
-	}
-	table, err := plan.setTable(tableName, tables)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if it's a NEXT VALUE statement.
-	if nextVal, ok := sel.SelectExprs[0].(sqlparser.Nextval); ok {
-		if table.Type != schema.Sequence {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s is not a sequence", tableName)
-		}
-		plan.PlanID = PlanNextval
-		v, err := sqlparser.NewPlanValue(nextVal.Expr)
-		if err != nil {
-			return nil, err
-		}
-		plan.PKValues = []sqltypes.PlanValue{v}
-		plan.FieldQuery = nil
-		plan.FullQuery = nil
-	}
-	return plan, nil
-}
-
 func analyzeFrom(tableExprs sqlparser.TableExprs) sqlparser.TableIdent {
 	if len(tableExprs) > 1 {
 		return sqlparser.NewTableIdent("")

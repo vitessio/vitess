@@ -1462,6 +1462,87 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	}
 }
 
+func TestQueryExecutorGetLock(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+	qre := newTestQueryExecutor(ctx, tsv, "select get_lock()", 0)
+	checkPlanID(t, planbuilder.PlanGetLock, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	want := &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "get_lock",
+			Type: sqltypes.Int64,
+		}},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(1),
+		}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
+	}
+
+	qre = newTestQueryExecutor(ctx, tsv, "select get_lock('name1')", 0)
+	got, err = qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
+	}
+
+	qre = newTestQueryExecutor(ctx, tsv, "select get_lock('name2', 1)", 0)
+	got, err = qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
+	}
+}
+
+func TestQueryExecutorReleaseLock(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+	qre := newTestQueryExecutor(ctx, tsv, "select release_lock()", 0)
+	checkPlanID(t, planbuilder.PlanReleaseLock, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	want := &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "release_lock",
+			Type: sqltypes.Int64,
+		}},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(1),
+		}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
+	}
+
+	qre = newTestQueryExecutor(ctx, tsv, "select release_lock('name1')", 0)
+	got, err = qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
+	}
+}
+
 func TestQueryExecutorMessageStream(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()

@@ -98,6 +98,10 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execDDL()
 	case planbuilder.PlanNextval:
 		return qre.execNextval()
+	case planbuilder.PlanGetLock:
+		return qre.execGetLock()
+	case planbuilder.PlanReleaseLock:
+		return qre.execReleaseLock()
 	}
 
 	if qre.transactionID != 0 {
@@ -478,6 +482,76 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 		Fields: sequenceFields,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(ret),
+		}},
+		RowsAffected: 1,
+	}, nil
+}
+
+func (qre *QueryExecutor) execGetLock() (*sqltypes.Result, error) {
+	var name string
+	if len(qre.plan.PKValues) >= 1 {
+		v, err := qre.plan.PKValues[0].ResolveValue(qre.bindVars)
+		if err != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+		}
+		name = v.String()
+	}
+
+	timeout := time.Duration(-1 * time.Second)
+	if len(qre.plan.PKValues) >= 2 {
+		v, err := qre.plan.PKValues[1].ResolveValue(qre.bindVars)
+		if err != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+		}
+		seconds, err := sqltypes.ToFloat64(v)
+		if err != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+		}
+		timeout = time.Duration(seconds*1e9) * time.Nanosecond
+	}
+
+	ok, err := qre.tsv.locker.Lock(qre.ctx, name, timeout)
+	if err != nil {
+		return nil, err
+	}
+	var val sqltypes.Value
+	if ok {
+		val = sqltypes.NewInt64(1)
+	} else {
+		val = sqltypes.NewInt64(0)
+	}
+	return &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "get_lock",
+			Type: sqltypes.Int64,
+		}},
+		Rows: [][]sqltypes.Value{{
+			val,
+		}},
+		RowsAffected: 1,
+	}, nil
+}
+
+func (qre *QueryExecutor) execReleaseLock() (*sqltypes.Result, error) {
+	var name string
+	if len(qre.plan.PKValues) >= 1 {
+		v, err := qre.plan.PKValues[0].ResolveValue(qre.bindVars)
+		if err != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+		}
+		name = v.String()
+	}
+
+	if err := qre.tsv.locker.Release(name); err != nil {
+		return nil, err
+	}
+	return &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "release_lock",
+			Type: sqltypes.Int64,
+		}},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(1),
 		}},
 		RowsAffected: 1,
 	}, nil

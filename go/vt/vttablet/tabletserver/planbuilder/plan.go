@@ -83,6 +83,10 @@ const (
 	PlanOtherAdmin
 	// PlanMessageStream is used for streaming messages.
 	PlanMessageStream
+	// PlanGetLock is used for GET_LOCK.
+	PlanGetLock
+	// PlanReleaseLock is used for RELEASE_LOCK.
+	PlanReleaseLock
 	// NumPlans stores the total number of plans
 	NumPlans
 )
@@ -105,6 +109,8 @@ var planName = [NumPlans]string{
 	"OTHER_READ",
 	"OTHER_ADMIN",
 	"MESSAGE_STREAM",
+	"GET_LOCK",
+	"RELEASE_LOCK",
 }
 
 func (pt PlanType) String() string {
@@ -156,6 +162,8 @@ var tableACLRoles = map[PlanType]tableacl.Role{
 	PlanUpsertPK:       tableacl.WRITER,
 	PlanNextval:        tableacl.WRITER,
 	PlanMessageStream:  tableacl.WRITER,
+	PlanGetLock:        tableacl.READER,
+	PlanReleaseLock:    tableacl.READER,
 }
 
 //_______________________________________________

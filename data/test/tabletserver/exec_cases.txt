@@ -1900,6 +1900,87 @@ options:PassthroughDMLs
 "select next value from id"
 "table id not found in schema"
 
+# get_lock (no values)
+"select get_lock()"
+{
+  "PlanID": "GET_LOCK",
+  "TableName": "dual",
+  "Permissions": [
+    {
+      "TableName": "dual",
+      "Role": 0
+    }
+  ],
+  "FieldQuery": "select get_lock() from dual where 1 != 1",
+  "FullQuery": "select get_lock() from dual limit :#maxLimit"
+}
+
+# get_lock all values
+"select get_lock('name', 10)"
+{
+  "PlanID": "GET_LOCK",
+  "TableName": "dual",
+  "Permissions": [
+    {
+      "TableName": "dual",
+      "Role": 0
+    }
+  ],
+  "FieldQuery": "select get_lock('name', 10) from dual where 1 != 1",
+  "FullQuery": "select get_lock('name', 10) from dual limit :#maxLimit",
+  "PKValues": [
+    "name",
+    10
+  ]
+}
+
+# get_lock non-dual
+"select get_lock() from a"
+"GET_LOCK can only be used in a simple SELECT"
+
+# get_lock multiple selects
+"select a, get_lock()"
+"GET_LOCK can only be used in a simple SELECT"
+
+# get_lock in select *
+"select * from dual where get_lock()=1"
+"GET_LOCK can only be used in a simple SELECT"
+
+# get_lock in select non-func
+"select a from dual where get_lock()=1"
+"GET_LOCK can only be used in a simple SELECT"
+
+# get_lock in a function call.
+"select f(get_lock())"
+"GET_LOCK can only be used in a simple SELECT"
+
+# get_lock star expr inside
+"select get_lock(*)"
+"invalid syntax for GET_LOCK or RELEASE_LOCK"
+
+# get_lock complex expr
+"select get_lock(a+1)"
+"GET_LOCK or RELEASE_LOCK require simple value params"
+
+# release_lock
+"select release_lock() from dual"
+{
+  "PlanID": "RELEASE_LOCK",
+  "TableName": "dual",
+  "Permissions": [
+    {
+      "TableName": "dual",
+      "Role": 0
+    }
+  ],
+  "FieldQuery": "select release_lock() from dual where 1 != 1",
+  "FullQuery": "select release_lock() from dual limit :#maxLimit"
+}
+
+# release_lock non-dual
+"select release_lock() from a"
+"RELEASE_LOCK can only be used in a simple SELECT"
+
 # int
 "set  a=1"
 {
