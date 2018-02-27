@@ -105,22 +105,6 @@ func (ep *TabletPlan) buildAuthorized() {
 	}
 }
 
-// return a sql string with the params stripped out for display
-func redactSQLQuery(sql string) (string, error) {
-	bv := map[string]*querypb.BindVariable{}
-	sqlStripped, comments := sqlparser.SplitTrailingComments(sql)
-
-	stmt, err := sqlparser.Parse(sqlStripped)
-	if err != nil {
-		return "", err
-	}
-
-	prefix := "redacted"
-	sqlparser.Normalize(stmt, bv, prefix)
-
-	return sqlparser.String(stmt) + comments, nil
-}
-
 //_______________________________________________
 
 // QueryEngine implements the core functionality of tabletserver.
@@ -602,7 +586,7 @@ func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, re
 	for _, v := range items {
 		var query string
 		if *streamlog.RedactDebugUIQueries {
-			query, _ = redactSQLQuery(v.Query)
+			query, _ = sqlparser.RedactSQLQuery(v.Query)
 		} else {
 			query = v.Query
 		}
