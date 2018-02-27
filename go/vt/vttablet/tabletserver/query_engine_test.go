@@ -304,6 +304,11 @@ func runConsolidatedQuery(t *testing.T, sql string) *QueryEngine {
 }
 
 func TestConsolidationsUIRedaction(t *testing.T) {
+	// Reset to default redaction state.
+	defer func (){
+		*streamlog.RedactDebugUIQueries = false
+	}()
+
 	request, _ := http.NewRequest("GET", "/debug/consolidations", nil)
 
 	sql := "select * from test_db_01 where column = 'secret'"
