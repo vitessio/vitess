@@ -572,19 +572,6 @@ func (qe *QueryEngine) handleHTTPQueryRules(response http.ResponseWriter, reques
 
 // ServeHTTP lists the most recent, cached queries and their count.
 func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, request *http.Request) {
-	if *streamlog.RedactDebugUIQueries {
-		response.Write([]byte(`
-	<!DOCTYPE html>
-	<html>
-	<body>
-	<h1>Redacted</h1>
-	<p>/debug/consolidations has been redacted for your protection</p>
-	</body>
-	</html>
-		`))
-		return
-	}
-
 	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
 		acl.SendError(response, err)
 		return
@@ -597,6 +584,12 @@ func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, re
 	}
 	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(items))))
 	for _, v := range items {
-		response.Write([]byte(fmt.Sprintf("%v: %s\n", v.Count, v.Query)))
+		var query string
+		if *streamlog.RedactDebugUIQueries {
+			query, _ = sqlparser.RedactSQLQuery(v.Query)
+		} else {
+			query = v.Query
+		}
+		response.Write([]byte(fmt.Sprintf("%v: %s\n", v.Count, query)))
 	}
 }

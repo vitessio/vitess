@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -57,11 +58,26 @@ type Vindex interface {
 	Verify(cursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error)
 }
 
+// KsidOrRange represents a keyspace id. It's either a single keyspace id
+// or a keyrange when the vindex is unable to determine the keyspace id.
+type KsidOrRange struct {
+	Range *topodatapb.KeyRange
+	ID    []byte
+}
+
+// ValidateUnique returns an error if the Ksid represents a KeyRange.
+func (k KsidOrRange) ValidateUnique() error {
+	if k.Range != nil {
+		return errors.New("vindex could not map the value to a unique keyspace id")
+	}
+	return nil
+}
+
 // Unique defines the interface for a unique vindex.
 // For a vindex to be unique, an id has to map to at most
 // one keyspace id.
 type Unique interface {
-	Map(cursor VCursor, ids []sqltypes.Value) ([][]byte, error)
+	Map(cursor VCursor, ids []sqltypes.Value) ([]KsidOrRange, error)
 }
 
 // Ksids represents keyspace ids. It's either a list of keyspace ids

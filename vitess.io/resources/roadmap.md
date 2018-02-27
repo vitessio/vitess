@@ -1,7 +1,6 @@
 ---
 layout: doc
 title: "Vitess Roadmap"
-redirect_from: /resources/roadmap.html
 description: Current version, what we are working on, what's planned.
 modified:
 excerpt:

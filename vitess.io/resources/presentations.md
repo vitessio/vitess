@@ -1,7 +1,6 @@
 ---
 layout: doc
 title: "Presentations and Videos"
-redirect_from: /resources/presentations.html
 description: Slides and videos from presentations about Vitess.
 modified:
 excerpt:

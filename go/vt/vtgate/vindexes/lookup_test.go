@@ -216,6 +216,24 @@ func TestLookupNonUniqueMapAutocommit(t *testing.T) {
 	}
 }
 
+func TestLookupNonUniqueMapWriteOnly(t *testing.T) {
+	lookupNonUnique := createLookup(t, "lookup", true)
+	vc := &vcursor{numRows: 0}
+
+	got, err := lookupNonUnique.(NonUnique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	if err != nil {
+		t.Error(err)
+	}
+	want := []Ksids{{
+		Range: &topodatapb.KeyRange{},
+	}, {
+		Range: &topodatapb.KeyRange{},
+	}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Map(): %#v, want %+v", got, want)
+	}
+}
+
 func TestLookupNonUniqueMapAbsent(t *testing.T) {
 	lookupNonUnique := createLookup(t, "lookup", false)
 	vc := &vcursor{numRows: 0}
@@ -225,21 +243,6 @@ func TestLookupNonUniqueMapAbsent(t *testing.T) {
 		t.Error(err)
 	}
 	want := []Ksids{{}, {}}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
-	}
-
-	// writeOnly true should return full keyranges.
-	lookupNonUnique = createLookup(t, "lookup", true)
-	got, err = lookupNonUnique.(NonUnique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
-	if err != nil {
-		t.Error(err)
-	}
-	want = []Ksids{{
-		Range: &topodatapb.KeyRange{},
-	}, {
-		Range: &topodatapb.KeyRange{},
-	}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
