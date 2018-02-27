@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/streamlog"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql/fakesqldb"
@@ -265,4 +266,74 @@ func newTestQueryEngine(queryPlanCacheSize int, idleTimeout time.Duration, stric
 	se.InitDBConfig(dbcfgs)
 	qe.InitDBConfig(dbcfgs)
 	return qe
+}
+
+func runConsolidatedQuery(t *testing.T, sql string) *QueryEngine {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	testUtils := newTestUtils()
+	dbcfgs := testUtils.newDBConfigs(db)
+	qe := newTestQueryEngine(10, 1*time.Second, true, dbcfgs)
+	qe.se.Open()
+	qe.Open()
+	defer qe.Close()
+
+	c := make(chan int)
+	done := make(chan int)
+	query := func(sql string, waiter chan int, done chan int) {
+		q, ok := qe.consolidator.Create(string(sql))
+		if ok {
+			q.Result, q.Err = "ok", nil
+			<-waiter
+			q.Broadcast()
+		} else {
+			waiter <- 1
+			q.Wait()
+
+			done <- 1
+		}
+	}
+
+	go query(sql, c, done)
+	go query(sql, c, done)
+
+	<-done
+
+	return qe
+}
+
+func TestConsolidationsUIRedaction(t *testing.T) {
+	// Reset to default redaction state.
+	defer func() {
+		*streamlog.RedactDebugUIQueries = false
+	}()
+
+	request, _ := http.NewRequest("GET", "/debug/consolidations", nil)
+
+	sql := "select * from test_db_01 where column = 'secret'"
+	redactedSQL := "select * from test_db_01 where `column` = :redacted1"
+
+	// First with the redaction off
+	*streamlog.RedactDebugUIQueries = false
+	unRedactedResponse := httptest.NewRecorder()
+	qe := runConsolidatedQuery(t, sql)
+
+	qe.ServeHTTP(unRedactedResponse, request)
+	if !strings.Contains(unRedactedResponse.Body.String(), sql) {
+		t.Fatalf("Response is missing the consolidated query: %v %v", sql, unRedactedResponse.Body.String())
+	}
+
+	// Now with the redaction on
+	*streamlog.RedactDebugUIQueries = true
+	redactedResponse := httptest.NewRecorder()
+	qe.ServeHTTP(redactedResponse, request)
+
+	if strings.Contains(redactedResponse.Body.String(), "secret") {
+		t.Fatalf("Response contains unredacted consolidated query: %v %v", sql, redactedResponse.Body.String())
+	}
+
+	if !strings.Contains(redactedResponse.Body.String(), redactedSQL) {
+		t.Fatalf("Response missing redacted consolidated query: %v %v", redactedSQL, redactedResponse.Body.String())
+	}
 }
