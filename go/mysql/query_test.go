@@ -24,9 +24,9 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"github.com/youtube/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sqltypes"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestComInitDB(t *testing.T) {

@@ -22,7 +22,7 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/logutil"
 	"golang.org/x/net/context"
 )
 

@@ -28,11 +28,11 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/acl"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/wrangler"
+	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/wrangler"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (

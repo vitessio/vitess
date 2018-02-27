@@ -27,12 +27,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/consul/api"
-	"github.com/youtube/vitess/go/testfiles"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/test"
+	"vitess.io/vitess/go/testfiles"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/test"
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // startConsul starts a consul subprocess, and waits for it to be ready.

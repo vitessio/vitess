@@ -6,8 +6,8 @@ package txthrottler
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	discovery "github.com/youtube/vitess/go/vt/discovery"
-	throttlerdata "github.com/youtube/vitess/go/vt/proto/throttlerdata"
+	discovery "vitess.io/vitess/go/vt/discovery"
+	throttlerdata "vitess.io/vitess/go/vt/proto/throttlerdata"
 	reflect "reflect"
 	time "time"
 )

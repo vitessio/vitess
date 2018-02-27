@@ -26,10 +26,10 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/netutil"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/vttls"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/netutil"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vttls"
 	"gopkg.in/ldap.v2"
 )
 

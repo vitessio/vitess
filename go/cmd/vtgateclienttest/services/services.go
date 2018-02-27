@@ -17,7 +17,7 @@ limitations under the License.
 // Package services exposes all the services for the vtgateclienttest binary.
 package services
 
-import "github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
+import "vitess.io/vitess/go/vt/vtgate/vtgateservice"
 
 // CreateServices creates the implementation chain of all the test cases
 func CreateServices() vtgateservice.VTGateService {

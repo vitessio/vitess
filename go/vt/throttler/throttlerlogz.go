@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/logz"
+	"vitess.io/vitess/go/vt/logz"
 )
 
 const logHeaderHTML = `

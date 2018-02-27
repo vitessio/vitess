@@ -21,8 +21,8 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"golang.org/x/net/context"
 )
 

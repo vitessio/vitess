@@ -3,9 +3,9 @@ package wrangler
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/logutil"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/logutil"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"golang.org/x/net/context"
 )
 

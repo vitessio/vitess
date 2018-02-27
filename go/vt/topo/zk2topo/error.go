@@ -20,7 +20,7 @@ import (
 	"github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 // Error codes returned by the zookeeper Go client:

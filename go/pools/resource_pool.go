@@ -23,8 +23,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/timer"
+	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/timer"
 	"golang.org/x/net/context"
 )
 

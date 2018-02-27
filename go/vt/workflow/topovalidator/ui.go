@@ -21,7 +21,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 // This file contains the UITest validator. It doesn't do anything,

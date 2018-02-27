@@ -20,7 +20,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func TestValEqual(t *testing.T) {

@@ -19,5 +19,5 @@ package main
 // Imports and register the gRPC vtgateservice server
 
 import (
-	_ "github.com/youtube/vitess/go/vt/vtgate/grpcvtgateservice"
+	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateservice"
 )

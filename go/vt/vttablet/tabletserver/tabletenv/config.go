@@ -26,9 +26,9 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"github.com/youtube/vitess/go/flagutil"
-	"github.com/youtube/vitess/go/streamlog"
-	"github.com/youtube/vitess/go/vt/throttler"
+	"vitess.io/vitess/go/flagutil"
+	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/vt/throttler"
 )
 
 var (

@@ -25,11 +25,11 @@ import (
 
 	log "github.com/golang/glog"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vterrors"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // Instructions for creating new types: If a type

@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/cache"
+	"vitess.io/vitess/go/cache"
 )
 
 // Numbered allows you to manage resources by tracking them with numbers.

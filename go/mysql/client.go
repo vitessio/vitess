@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/vttls"
+	"vitess.io/vitess/go/vt/vttls"
 	"golang.org/x/net/context"
 )
 

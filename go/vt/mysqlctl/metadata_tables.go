@@ -21,7 +21,7 @@ import (
 
 	log "github.com/golang/glog"
 
-	"github.com/youtube/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sqltypes"
 )
 
 // Note that definitions of local_metadata and shard_metadata should be the same

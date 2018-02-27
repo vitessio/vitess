@@ -24,10 +24,10 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // FindTabletByHostAndPort searches within a tablet map for tablets.

@@ -19,13 +19,13 @@ package srvtopo
 import (
 	"encoding/hex"
 
-	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // MapKeyspaceIdsToShards maps the given keyspaceIds to a concrete set

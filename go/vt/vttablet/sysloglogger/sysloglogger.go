@@ -22,8 +22,8 @@ import (
 	"log/syslog"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 // syslogWriter is an interface that wraps syslog.Writer, so it can be mocked in unit tests.

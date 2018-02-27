@@ -20,7 +20,7 @@ import (
 	"reflect"
 	"testing"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestRepair(t *testing.T) {

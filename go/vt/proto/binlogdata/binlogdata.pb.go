@@ -20,8 +20,8 @@ package binlogdata
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import query "github.com/youtube/vitess/go/vt/proto/query"
-import topodata "github.com/youtube/vitess/go/vt/proto/topodata"
+import query "vitess.io/vitess/go/vt/proto/query"
+import topodata "vitess.io/vitess/go/vt/proto/topodata"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal

@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 )
 

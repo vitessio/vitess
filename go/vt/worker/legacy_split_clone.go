@@ -29,21 +29,21 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/event"
-	"github.com/youtube/vitess/go/sqlescape"
-	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
-	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/throttler"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/topotools"
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
-	"github.com/youtube/vitess/go/vt/worker/events"
-	"github.com/youtube/vitess/go/vt/wrangler"
+	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/throttler"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/worker/events"
+	"vitess.io/vitess/go/vt/wrangler"
 
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // LegacySplitCloneWorker will clone the data within a keyspace from a

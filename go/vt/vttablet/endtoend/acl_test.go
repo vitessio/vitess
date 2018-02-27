@@ -22,11 +22,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/rules"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestTableACL(t *testing.T) {

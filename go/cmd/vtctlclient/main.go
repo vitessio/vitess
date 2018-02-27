@@ -23,12 +23,12 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/exit"
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
+	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 	"golang.org/x/net/context"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 )
 
 // The default values used by these flags cannot be taken from wrangler and

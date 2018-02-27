@@ -6,9 +6,9 @@ package txthrottler
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	discovery "github.com/youtube/vitess/go/vt/discovery"
-	topodata "github.com/youtube/vitess/go/vt/proto/topodata"
-	queryservice "github.com/youtube/vitess/go/vt/vttablet/queryservice"
+	discovery "vitess.io/vitess/go/vt/discovery"
+	topodata "vitess.io/vitess/go/vt/proto/topodata"
+	queryservice "vitess.io/vitess/go/vt/vttablet/queryservice"
 	reflect "reflect"
 )
 

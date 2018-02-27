@@ -25,18 +25,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/event"
-	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/sqlescape"
-	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/topotools"
-	"github.com/youtube/vitess/go/vt/topotools/events"
+	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/topotools/events"
 	"golang.org/x/net/context"
 
-	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (

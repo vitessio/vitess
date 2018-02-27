@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/youtube/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sqltypes"
 	"golang.org/x/net/context"
 )
 

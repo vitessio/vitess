@@ -32,12 +32,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/vterrors"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (

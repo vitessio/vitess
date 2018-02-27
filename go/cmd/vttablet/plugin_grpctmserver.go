@@ -19,5 +19,5 @@ package main
 // Imports and register the gRPC tabletmanager server
 
 import (
-	_ "github.com/youtube/vitess/go/vt/vttablet/grpctmserver"
+	_ "vitess.io/vitess/go/vt/vttablet/grpctmserver"
 )

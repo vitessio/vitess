@@ -30,11 +30,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/testfiles"
-	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/tableacl"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/testfiles"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/tableacl"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 )
 
 // MarshalJSON returns a JSON of the given Plan.

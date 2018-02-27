@@ -12,8 +12,8 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
-	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
-	"github.com/youtube/vitess/go/vt/vttest"
+	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
+	"vitess.io/vitess/go/vt/vttest"
 )
 
 type topoFlags struct {

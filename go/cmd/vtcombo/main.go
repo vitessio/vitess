@@ -30,20 +30,20 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/exit"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/srvtopo"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/memorytopo"
-	"github.com/youtube/vitess/go/vt/vtctld"
-	"github.com/youtube/vitess/go/vt/vtgate"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtctld"
+	"vitess.io/vitess/go/vt/vtgate"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
 var (
