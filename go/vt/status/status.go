@@ -39,7 +39,7 @@ func MakeVtctldRedirect(text string, q map[string]string) template.HTML {
 	for k, v := range q {
 		query.Set(k, v)
 	}
-	url := "/explorers/redirect" + "?" + query.Encode()
+	url := "explorers/redirect" + "?" + query.Encode()
 	return VtctldLink(text, url)
 }
 
@@ -83,7 +83,7 @@ func VtctldShard(keyspace, shard string) template.HTML {
 // VtctldSrvCell returns the cell name, possibly linked to the
 // serving graph page in vtctld for that page.
 func VtctldSrvCell(cell string) template.HTML {
-	return VtctldLink(cell, "/serving_graph/"+cell)
+	return VtctldLink(cell, "serving_graph/"+cell)
 }
 
 // VtctldSrvKeyspace returns the keyspace name, possibly linked to the
