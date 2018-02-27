@@ -22,8 +22,8 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"golang.org/x/net/context"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestTxEngineClose(t *testing.T) {

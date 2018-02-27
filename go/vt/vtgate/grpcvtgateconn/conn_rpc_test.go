@@ -26,11 +26,11 @@ import (
 
 	"google.golang.org/grpc"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate/grpcvtgateservice"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconntest"
-	"golang.org/x/net/context"
 )
 
 // TestGRPCVTGateConn makes sure the grpc service works

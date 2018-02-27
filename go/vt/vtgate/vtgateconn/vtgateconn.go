@@ -21,8 +21,8 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
-	"vitess.io/vitess/go/sqltypes"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

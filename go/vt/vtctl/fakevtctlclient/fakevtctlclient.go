@@ -20,9 +20,9 @@ package fakevtctlclient
 import (
 	"time"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
-	"golang.org/x/net/context"
 )
 
 // FakeVtctlClient is a fake which implements the vtctlclient interface.

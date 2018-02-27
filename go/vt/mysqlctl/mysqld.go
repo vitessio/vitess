@@ -41,6 +41,7 @@ import (
 	"bytes"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -48,7 +49,6 @@ import (
 	vtenv "vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlclient"
-	"golang.org/x/net/context"
 )
 
 var (

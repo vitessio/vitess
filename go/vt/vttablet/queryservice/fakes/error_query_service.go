@@ -19,8 +19,8 @@ package fakes
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )

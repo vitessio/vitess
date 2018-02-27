@@ -20,10 +20,10 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"golang.org/x/net/context"
 )
 
 // This file contains the RPC method helpers for the tablet manager.

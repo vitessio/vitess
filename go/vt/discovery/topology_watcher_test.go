@@ -21,9 +21,9 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"golang.org/x/net/context"
 )
 
 func TestCellTabletsWatcher(t *testing.T) {

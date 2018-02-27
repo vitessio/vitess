@@ -23,9 +23,9 @@ import (
 	"syscall"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/worker/vtworkerclient"
-	"golang.org/x/net/context"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 )

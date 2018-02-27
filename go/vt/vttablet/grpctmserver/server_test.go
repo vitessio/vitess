@@ -20,9 +20,9 @@ import (
 	"net"
 	"testing"
 
+	"google.golang.org/grpc"
 	"vitess.io/vitess/go/vt/vttablet/agentrpctest"
 	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
-	"google.golang.org/grpc"
 
 	tabletmanagerservicepb "vitess.io/vitess/go/vt/proto/tabletmanagerservice"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

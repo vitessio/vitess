@@ -5,8 +5,9 @@
 package txthrottler
 
 import (
-	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
+
+	gomock "github.com/golang/mock/gomock"
 )
 
 // MockTopologyWatcherInterface is a mock of TopologyWatcherInterface interface

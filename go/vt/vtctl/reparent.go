@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"time"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/wrangler"
-	"golang.org/x/net/context"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
