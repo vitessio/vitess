@@ -16,8 +16,7 @@ limitations under the License.
 
 package mysqlctl
 
-// Import the gRPC mysqlctl client.
-
 import (
+	// Register the gRPC mysqlctl client.
 	_ "vitess.io/vitess/go/vt/mysqlctl/grpcmysqlctlclient"
 )

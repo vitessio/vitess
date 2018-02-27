@@ -27,7 +27,7 @@ warnings=
 gopackages_with_warnings=()
 for gopackage in $gopackages
 do
-  warningcount=$(unused vitess.io/vitess/$gopackage | wc -l)
+  warningcount="$(unused "vitess.io/vitess/$gopackage" | wc -l)"
   if [ "$warningcount" -gt "0" ]; then
     warnings=YES
     echo "$warningcount reports for:"
@@ -60,7 +60,7 @@ if [[ $? -eq 0 ]]; then
         echo "Press enter to show the warnings for the next file."
         read
       fi
-      unused vitess.io/vitess/$gopackage
+      unused "vitess.io/vitess/$gopackage"
       first_file="false"
     done
   fi
@@ -68,7 +68,7 @@ else
   # non-interactive shell (e.g. called from Eclipse). Just display the warnings.
   for gopackage in "${gopackages_with_warnings[@]}"
   do
-    unused vitess.io/vitess/$gopackage
+    unused "vitess.io/vitess/$gopackage"
   done
 fi
 exit 1
