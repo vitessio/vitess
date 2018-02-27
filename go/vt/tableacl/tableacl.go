@@ -28,13 +28,13 @@ import (
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/tchap/go-patricia/patricia"
-	"github.com/youtube/vitess/go/json2"
-	"github.com/youtube/vitess/go/vt/health"
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/tableacl/acl"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/vt/health"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/tableacl/acl"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
-	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
+	tableaclpb "vitess.io/vitess/go/vt/proto/tableacl"
 )
 
 // ACLResult embeds an acl.ACL and also tell which table group it belongs to.

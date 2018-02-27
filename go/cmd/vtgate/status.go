@@ -17,12 +17,12 @@ limitations under the License.
 package main
 
 import (
-	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/srvtopo"
-	_ "github.com/youtube/vitess/go/vt/status"
-	"github.com/youtube/vitess/go/vt/vtgate"
-	"github.com/youtube/vitess/go/vt/vtgate/gateway"
+	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/srvtopo"
+	_ "vitess.io/vitess/go/vt/status"
+	"vitess.io/vitess/go/vt/vtgate"
+	"vitess.io/vitess/go/vt/vtgate/gateway"
 )
 
 // For use by plugins which wish to avoid racing when registering status page parts.

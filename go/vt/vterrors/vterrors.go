@@ -21,7 +21,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type vtError struct {

@@ -21,9 +21,9 @@ import (
 	"net"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/throttler"
-	"github.com/youtube/vitess/go/vt/throttler/grpcthrottlerserver"
-	"github.com/youtube/vitess/go/vt/throttler/throttlerclienttest"
+	"vitess.io/vitess/go/vt/throttler"
+	"vitess.io/vitess/go/vt/throttler/grpcthrottlerserver"
+	"vitess.io/vitess/go/vt/throttler/throttlerclienttest"
 	"google.golang.org/grpc"
 )
 

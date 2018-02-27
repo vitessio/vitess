@@ -17,7 +17,7 @@ limitations under the License.
 package logutil
 
 import (
-	"github.com/youtube/vitess/go/event"
+	"vitess.io/vitess/go/event"
 )
 
 var (

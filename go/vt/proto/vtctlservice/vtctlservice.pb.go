@@ -14,7 +14,7 @@ package vtctlservice
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import vtctldata "github.com/youtube/vitess/go/vt/proto/vtctldata"
+import vtctldata "vitess.io/vitess/go/vt/proto/vtctldata"
 
 import (
 	context "golang.org/x/net/context"

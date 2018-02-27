@@ -23,7 +23,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/env"
+	"vitess.io/vitess/go/vt/env"
 )
 
 var MycnfPath = "/tmp/my.cnf"

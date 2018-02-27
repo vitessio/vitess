@@ -27,7 +27,7 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
-	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
+	automationpb "vitess.io/vitess/go/vt/proto/automation"
 	"golang.org/x/net/context"
 )
 

@@ -21,7 +21,7 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/youtube/vitess/go/testfiles"
+	"vitess.io/vitess/go/testfiles"
 )
 
 // specialReader is a test class that will return bytes it reads from a file,

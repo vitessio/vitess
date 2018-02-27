@@ -18,7 +18,7 @@ package helpers
 
 import (
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 )
 

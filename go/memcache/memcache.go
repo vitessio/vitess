@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youtube/vitess/go/cacheservice"
+	"vitess.io/vitess/go/cacheservice"
 )
 
 // Connection is the connection to a memcache.

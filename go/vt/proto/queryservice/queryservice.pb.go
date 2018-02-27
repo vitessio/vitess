@@ -14,7 +14,7 @@ package queryservice
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import query "github.com/youtube/vitess/go/vt/proto/query"
+import query "vitess.io/vitess/go/vt/proto/query"
 
 import (
 	context "golang.org/x/net/context"

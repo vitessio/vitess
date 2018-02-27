@@ -19,7 +19,7 @@ package goclienttest
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"golang.org/x/net/context"
 )
 

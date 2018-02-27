@@ -8,10 +8,10 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	sqltypes "github.com/youtube/vitess/go/sqltypes"
-	query "github.com/youtube/vitess/go/vt/proto/query"
-	topodata "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtgate "github.com/youtube/vitess/go/vt/proto/vtgate"
+	sqltypes "vitess.io/vitess/go/sqltypes"
+	query "vitess.io/vitess/go/vt/proto/query"
+	topodata "vitess.io/vitess/go/vt/proto/topodata"
+	vtgate "vitess.io/vitess/go/vt/proto/vtgate"
 	context "golang.org/x/net/context"
 )
 

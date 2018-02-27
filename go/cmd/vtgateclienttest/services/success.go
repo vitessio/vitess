@@ -19,10 +19,10 @@ package services
 import (
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
+	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 // successClient implements vtgateservice.VTGateService

@@ -19,5 +19,5 @@ package main
 // Imports and register the gRPC vtgateconn client
 
 import (
-	_ "github.com/youtube/vitess/go/vt/vtgate/grpcvtgateconn"
+	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 )

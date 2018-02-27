@@ -22,8 +22,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // Testable restricts the types that can be added to

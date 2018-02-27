@@ -26,13 +26,13 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/exit"
-	"github.com/youtube/vitess/go/flagutil"
-	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/flagutil"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 )
 
 var (

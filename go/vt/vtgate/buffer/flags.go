@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 var (

@@ -16,7 +16,7 @@ limitations under the License.
 
 package worker
 
-import "github.com/youtube/vitess/go/vt/throttler"
+import "vitess.io/vitess/go/vt/throttler"
 
 const (
 	defaultOnline  = true

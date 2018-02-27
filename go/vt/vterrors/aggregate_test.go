@@ -22,7 +22,7 @@ import (
 	"reflect"
 	"testing"
 
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var errGeneric = "generic error"

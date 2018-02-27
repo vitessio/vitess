@@ -21,9 +21,9 @@ import (
 	"flag"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/streamlog"
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 // logQueriesToFile is the vttablet startup flag that must be set for this plugin to be active.

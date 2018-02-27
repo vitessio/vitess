@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/callerid"
 	"golang.org/x/net/context"
 )
 

@@ -20,7 +20,7 @@ import (
 	"flag"
 	"sync"
 
-	"github.com/youtube/vitess/go/stats"
+	"vitess.io/vitess/go/stats"
 	"google.golang.org/grpc"
 )
 

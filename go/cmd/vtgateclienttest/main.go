@@ -20,10 +20,10 @@ limitations under the License.
 package main
 
 import (
-	"github.com/youtube/vitess/go/cmd/vtgateclienttest/services"
-	"github.com/youtube/vitess/go/exit"
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/vtgate"
+	"vitess.io/vitess/go/cmd/vtgateclienttest/services"
+	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vtgate"
 )
 
 func init() {

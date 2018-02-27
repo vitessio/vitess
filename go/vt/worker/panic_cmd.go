@@ -22,7 +22,7 @@ import (
 	"html/template"
 	"net/http"
 
-	"github.com/youtube/vitess/go/vt/wrangler"
+	"vitess.io/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 )
 

@@ -21,7 +21,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // splitAndExpression breaks up the Expr into AND-separated conditions

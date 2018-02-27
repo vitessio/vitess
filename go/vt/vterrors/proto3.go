@@ -17,7 +17,7 @@ limitations under the License.
 package vterrors
 
 import (
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // This file contains the necessary methods to send and receive errors

@@ -17,9 +17,9 @@ limitations under the License.
 package splitquery
 
 import (
-	"github.com/youtube/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sqltypes"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // SQLExecuter enacpsulates access to the MySQL database for the this package.

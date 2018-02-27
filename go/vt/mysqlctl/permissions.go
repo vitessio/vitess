@@ -17,8 +17,8 @@ limitations under the License.
 package mysqlctl
 
 import (
-	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"golang.org/x/net/context"
 )
 

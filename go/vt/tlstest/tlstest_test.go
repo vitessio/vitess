@@ -27,7 +27,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/vttls"
+	"vitess.io/vitess/go/vt/vttls"
 )
 
 // TestClientServer generates:
