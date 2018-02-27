@@ -21,20 +21,16 @@ import (
 	"reflect"
 	"testing"
 
-	"golang.org/x/net/context"
-
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // TestMergeSortNormal tests the normal flow of a merge
 // sort where all shards return ascending rows.
 func TestMergeSortNormal(t *testing.T) {
 	idColFields := sqltypes.MakeTestFields("id|col", "int32|varchar")
-	vc := &fakeVcursor{
+	vc := &streamVCursor{
 		shardResults: map[string]*shardResult{
 			"0": {results: sqltypes.MakeTestStreamingResults(idColFields,
 				"1|a",
@@ -104,7 +100,7 @@ func TestMergeSortNormal(t *testing.T) {
 // sort where all shards return descending rows.
 func TestMergeSortDescending(t *testing.T) {
 	idColFields := sqltypes.MakeTestFields("id|col", "int32|varchar")
-	vc := &fakeVcursor{
+	vc := &streamVCursor{
 		shardResults: map[string]*shardResult{
 			"0": {results: sqltypes.MakeTestStreamingResults(idColFields,
 				"7|g",
@@ -173,7 +169,7 @@ func TestMergeSortDescending(t *testing.T) {
 
 func TestMergeSortEmptyResults(t *testing.T) {
 	idColFields := sqltypes.MakeTestFields("id|col", "int32|varchar")
-	vc := &fakeVcursor{
+	vc := &streamVCursor{
 		shardResults: map[string]*shardResult{
 			"0": {results: sqltypes.MakeTestStreamingResults(idColFields,
 				"1|a",
@@ -226,7 +222,7 @@ func TestMergeSortEmptyResults(t *testing.T) {
 // TestMergeSortResultFailures tests failures at various
 // stages of result return.
 func TestMergeSortResultFailures(t *testing.T) {
-	vc := &fakeVcursor{
+	vc := &streamVCursor{
 		shardResults: make(map[string]*shardResult),
 	}
 	orderBy := []OrderbyParams{{
@@ -276,7 +272,7 @@ func TestMergeSortDataFailures(t *testing.T) {
 	// The first row being bad fails in a differnt code path than
 	// the case of subsequent rows. So, test the two cases separately.
 	idColFields := sqltypes.MakeTestFields("id|col", "int32|varchar")
-	vc := &fakeVcursor{
+	vc := &streamVCursor{
 		shardResults: map[string]*shardResult{
 			"0": {results: sqltypes.MakeTestStreamingResults(idColFields,
 				"1|a",
@@ -304,7 +300,7 @@ func TestMergeSortDataFailures(t *testing.T) {
 
 	// Create a new VCursor because the previous mergeSort will still
 	// have lingering goroutines that can cause data race.
-	vc = &fakeVcursor{
+	vc = &streamVCursor{
 		shardResults: map[string]*shardResult{
 			"0": {results: sqltypes.MakeTestStreamingResults(idColFields,
 				"1|a",
@@ -328,36 +324,18 @@ type shardResult struct {
 	sendErr error
 }
 
-// fakeVCursor fakes a VCursor. Currently, the only supported functionality
-// is a single-shard streaming query through StreamExecuteMulti.
-type fakeVcursor struct {
+// streamVCursor fakes a VCursor that supports
+// a single-shard streaming query through StreamExecuteMulti.
+type streamVCursor struct {
+	noopVCursor
+
 	shardResults map[string]*shardResult
-}
-
-func (t *fakeVcursor) Context() context.Context {
-	return context.Background()
-}
-
-func (t *fakeVcursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	panic("unimplemented")
-}
-
-func (t *fakeVcursor) ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	panic("unimplemented")
-}
-
-func (t *fakeVcursor) ExecuteMultiShard(keyspace string, shardQueries map[string]*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
-	panic("unimplemented")
-}
-
-func (t *fakeVcursor) ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, keyspace, shard string) (*sqltypes.Result, error) {
-	panic("unimplemented")
 }
 
 // StreamExecuteMulti streams a result from the specified shard.
 // The shard is specifed by the only entry in shardVars. At the
 // end of a stream, if sendErr is set, that error is returned.
-func (t *fakeVcursor) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
+func (t *streamVCursor) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
 	var shard string
 	for k := range shardVars {
 		shard = k
@@ -372,16 +350,4 @@ func (t *fakeVcursor) StreamExecuteMulti(query string, keyspace string, shardVar
 		return t.shardResults[shard].sendErr
 	}
 	return nil
-}
-
-func (t *fakeVcursor) GetKeyspaceShards(vkeyspace *vindexes.Keyspace) (string, []*topodatapb.ShardReference, error) {
-	panic("unimplemented")
-}
-
-func (t *fakeVcursor) GetShardsForKsids(allShards []*topodatapb.ShardReference, ksids vindexes.Ksids) ([]string, error) {
-	panic("unimplemented")
-}
-
-func (t *fakeVcursor) GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error) {
-	panic("unimplemented")
 }

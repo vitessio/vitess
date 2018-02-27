@@ -152,6 +152,9 @@ func forceEOF(yylex interface{}) {
 %token <bytes> VINDEX VINDEXES
 %token <bytes> STATUS VARIABLES
 
+// Transaction Tokens
+%token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK
+
 // Type Tokens
 %token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
 %token <bytes> REAL DOUBLE FLOAT_TYPE DECIMAL NUMERIC
@@ -189,6 +192,7 @@ func forceEOF(yylex interface{}) {
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement
 %type <ddl> create_table_prefix
 %type <statement> analyze_statement show_statement use_statement other_statement
+%type <statement> begin_statement commit_statement rollback_statement
 %type <bytes2> comment_opt comment_list
 %type <str> union_op insert_or_replace
 %type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt
@@ -300,6 +304,9 @@ command:
 | analyze_statement
 | show_statement
 | use_statement
+| begin_statement
+| commit_statement
+| rollback_statement
 | other_statement
 
 select_statement:
@@ -1176,6 +1183,28 @@ use_statement:
 | USE
   {
     $$ = &Use{DBName:TableIdent{v:""}}
+  }
+
+begin_statement:
+  BEGIN
+  {
+    $$ = &Begin{}
+  }
+| START TRANSACTION
+  {
+    $$ = &Begin{}
+  }
+
+commit_statement:
+  COMMIT
+  {
+    $$ = &Commit{}
+  }
+
+rollback_statement:
+  ROLLBACK
+  {
+    $$ = &Rollback{}
   }
 
 other_statement:
@@ -2609,6 +2638,7 @@ reserved_keyword:
 */
 non_reserved_keyword:
   AGAINST
+| BEGIN
 | BIGINT
 | BIT
 | BLOB
@@ -2617,6 +2647,7 @@ non_reserved_keyword:
 | CHARACTER
 | CHARSET
 | COMMENT_KEYWORD
+| COMMIT
 | DATE
 | DATETIME
 | DECIMAL
@@ -2651,10 +2682,12 @@ non_reserved_keyword:
 | REAL
 | REORGANIZE
 | REPAIR
+| ROLLBACK
 | SESSION
 | SHARE
 | SIGNED
 | SMALLINT
+| START
 | STATUS
 | TEXT
 | THAN
@@ -2663,6 +2696,7 @@ non_reserved_keyword:
 | TINYBLOB
 | TINYINT
 | TINYTEXT
+| TRANSACTION
 | TRIGGER
 | UNSIGNED
 | UNUSED

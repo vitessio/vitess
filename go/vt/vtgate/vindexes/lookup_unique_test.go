@@ -23,20 +23,23 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestLookupUniqueNew(t *testing.T) {
-	_ = createLookup(t, "lookup_unique", false)
+	l := createLookup(t, "lookup_unique", false)
+	if want, got := l.(*LookupUnique).writeOnly, false; got != want {
+		t.Errorf("Create(lookup, false): %v, want %v", got, want)
+	}
 
-	_, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
+	l, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
 		"write_only": "true",
 	})
-	want := "write_only cannot be true for a unique lookup vindex"
-	if err == nil || err.Error() != want {
-		t.Errorf("Create(bad_scatter): %v, want %s", err, want)
+	if want, got := l.(*LookupUnique).writeOnly, true; got != want {
+		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
 	_, err = CreateVindex("lookup_unique", "lookup_unique", map[string]string{
@@ -45,7 +48,7 @@ func TestLookupUniqueNew(t *testing.T) {
 		"to":         "toc",
 		"write_only": "invalid",
 	})
-	want = "write_only value must be 'true' or 'false': 'invalid'"
+	want := "write_only value must be 'true' or 'false': 'invalid'"
 	if err == nil || err.Error() != want {
 		t.Errorf("Create(bad_scatter): %v, want %s", err, want)
 	}
@@ -73,9 +76,9 @@ func TestLookupUniqueMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := [][]byte{
-		[]byte("1"),
-		[]byte("1"),
+	want := []KsidOrRange{
+		{ID: []byte("1")},
+		{ID: []byte("1")},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %+v, want %+v", got, want)
@@ -86,7 +89,7 @@ func TestLookupUniqueMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want = [][]byte{nil, nil}
+	want = []KsidOrRange{{}, {}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
@@ -108,6 +111,24 @@ func TestLookupUniqueMap(t *testing.T) {
 	vc.mustFail = false
 }
 
+func TestLookupUniqueMapWriteOnly(t *testing.T) {
+	lookupUnique := createLookup(t, "lookup_unique", true)
+	vc := &vcursor{numRows: 0}
+
+	got, err := lookupUnique.(Unique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	if err != nil {
+		t.Error(err)
+	}
+	want := []KsidOrRange{{
+		Range: &topodatapb.KeyRange{},
+	}, {
+		Range: &topodatapb.KeyRange{},
+	}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Map(): %#v, want %+v", got, want)
+	}
+}
+
 func TestLookupUniqueVerify(t *testing.T) {
 	lookupUnique := createLookup(t, "lookup_unique", false)
 	vc := &vcursor{numRows: 1}
@@ -117,6 +138,23 @@ func TestLookupUniqueVerify(t *testing.T) {
 		t.Error(err)
 	}
 	if got, want := len(vc.queries), 1; got != want {
+		t.Errorf("vc.queries length: %v, want %v", got, want)
+	}
+}
+
+func TestLookupUniqueVerifyWriteOnly(t *testing.T) {
+	lookupUnique := createLookup(t, "lookup_unique", true)
+	vc := &vcursor{numRows: 0}
+
+	got, err := lookupUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("test")})
+	if err != nil {
+		t.Error(err)
+	}
+	want := []bool{true}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("lookupUnique.Verify: %v, want %v", got, want)
+	}
+	if got, want := len(vc.queries), 0; got != want {
 		t.Errorf("vc.queries length: %v, want %v", got, want)
 	}
 }

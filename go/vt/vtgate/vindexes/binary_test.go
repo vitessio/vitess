@@ -59,7 +59,7 @@ func TestBinaryMap(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		out := []byte(got[0])
+		out := []byte(got[0].ID)
 		if bytes.Compare(tcase.out, out) != 0 {
 			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 		}
