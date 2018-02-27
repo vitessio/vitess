@@ -1,7 +1,6 @@
 ---
 layout: doc
 title: "Troubleshooting"
-redirect_from: /user-guide/troubleshooting.html
 description:
 modified:
 excerpt:

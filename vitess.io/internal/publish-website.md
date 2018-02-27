@@ -1,7 +1,6 @@
 ---
 layout: doc
 title: "Publish Website"
-redirect_from: /internal/publish-website.html
 description:
 modified:
 excerpt:

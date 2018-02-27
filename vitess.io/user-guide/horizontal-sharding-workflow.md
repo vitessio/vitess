@@ -1,7 +1,6 @@
 ---
 layout: doc
 title: "Horizontal Sharding (Tutorial, automated)"
-redirect_from: /user-guide/horizontal-resharding-workflow.html
 description:
 modified:
 excerpt:
