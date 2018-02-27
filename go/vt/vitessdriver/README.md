@@ -10,12 +10,12 @@ For more information, visit www.vitess.io.
 
 For more information on this driver, please see its godoc page:
 
-https://godoc.org/github.com/youtube/vitess/go/vt/vitessdriver
+https://godoc.org/vitess.io/vitess/go/vt/vitessdriver
 
 ## Installation
 
 ```sh
-go get github.com/youtube/vitess/go/vt/vitessdriver
+go get vitess.io/vitess/go/vt/vitessdriver
 ```
 
 See the documentation link above for examples.
