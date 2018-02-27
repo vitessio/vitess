@@ -1,7 +1,6 @@
 ---
 layout: doc
 title: "Sharding in Kubernetes (Tutorial, manual)"
-redirect_from: /user-guide/sharding-kubernetes.html
 description:
 modified:
 excerpt:
