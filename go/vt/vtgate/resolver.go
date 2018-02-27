@@ -85,7 +85,7 @@ func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVar
 			tabletType,
 			key.DestinationKeyspaceIDs(keyspaceIds))
 	}
-	return res.Execute(ctx, sql, bindVariables, keyspace, tabletType, session, mapToShards, notInTransaction, options, nil /* LogStats */)
+	return res.Execute(ctx, sql, bindVariables, tabletType, session, mapToShards, notInTransaction, options, nil /* LogStats */)
 }
 
 // ExecuteKeyRanges executes a non-streaming query based on KeyRanges.
@@ -98,7 +98,7 @@ func (res *Resolver) ExecuteKeyRanges(ctx context.Context, sql string, bindVaria
 			tabletType,
 			key.DestinationKeyRanges(keyRanges))
 	}
-	return res.Execute(ctx, sql, bindVariables, keyspace, tabletType, session, mapToShards, notInTransaction, options, nil)
+	return res.Execute(ctx, sql, bindVariables, tabletType, session, mapToShards, notInTransaction, options, nil)
 }
 
 // Execute executes a non-streaming query based on shards resolved by given func.
@@ -107,7 +107,6 @@ func (res *Resolver) Execute(
 	ctx context.Context,
 	sql string,
 	bindVars map[string]*querypb.BindVariable,
-	keyspace string,
 	tabletType topodatapb.TabletType,
 	session *vtgatepb.Session,
 	mapToShards func() ([]*srvtopo.ResolvedShard, error),
