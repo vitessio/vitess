@@ -40,6 +40,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletconn"
 
+	"sort"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -567,4 +569,51 @@ func (rd *RowDiffer) Go(log logutil.Logger) (dr DiffReport, err error) {
 		advanceLeft = true
 		advanceRight = true
 	}
+}
+
+// SortByTableSize sorts the table definitions by size so that we run the diff on the largest tables first
+func SortByTableSize(ctx context.Context, log logutil.Logger, ts *topo.Server, shardInfo *topo.ShardInfo, tabletAlias *topodatapb.TabletAlias, tableDefinitions []*tabletmanagerdatapb.TableDefinition) ([]*tabletmanagerdatapb.TableDefinition, error) {
+	// Connect to source tablet
+	getTabletCtx, getTabletCancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	tablet, err := ts.GetTablet(getTabletCtx, tabletAlias)
+	getTabletCancel()
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := tabletconn.GetDialer()(tablet.Tablet, grpcclient.FailFast(false))
+	if err != nil {
+		return nil, err
+	}
+
+	// Query information schema for table data sizes (it's not the number of rows, it's the total amount of bytes)
+	queryCtx, queryCancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	defer queryCancel()
+	target := &querypb.Target{
+		Keyspace:   tablet.Tablet.Keyspace,
+		Shard:      tablet.Tablet.Shard,
+		TabletType: tablet.Tablet.Type,
+	}
+	sql := "select table_name, data_length from information_schema.tables where table_schema like 'vt_%'"
+	result, err := conn.Execute(queryCtx, target, sql, make(map[string]*querypb.BindVariable), 0, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Key by table name
+	sizesByTableName := make(map[string]float64)
+	for _, row := range result.Rows {
+		name := row[0].ToString()
+		size, err := sqltypes.ToFloat64(row[1])
+		if err != nil {
+			return nil, err
+		}
+		sizesByTableName[name] = size
+	}
+
+	// Sort by table size
+	sorted := make([]*tabletmanagerdatapb.TableDefinition, len(tableDefinitions))
+	copy(sorted, tableDefinitions)
+	sort.Slice(sorted, func(i, j int) bool { return sizesByTableName[sorted[i].Name] >= sizesByTableName[sorted[j].Name] })
+	return sorted, nil
 }
