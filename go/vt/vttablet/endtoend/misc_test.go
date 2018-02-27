@@ -304,16 +304,16 @@ func TestConsolidation(t *testing.T) {
 	framework.Server.SetPoolSize(1)
 
 	for sleep := 0.1; sleep < 10.0; sleep *= 2 {
-		query := fmt.Sprintf("select sleep(%v) from dual", sleep)
-
 		vstart := framework.DebugVars()
 		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() {
+			query := fmt.Sprintf("select sleep(%v) from dual /* query: 1 */", sleep)
 			framework.NewClient().Execute(query, nil)
 			wg.Done()
 		}()
 		go func() {
+			query := fmt.Sprintf("select sleep(%v) from dual /* query: 2 */", sleep)
 			framework.NewClient().Execute(query, nil)
 			wg.Done()
 		}()
