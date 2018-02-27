@@ -309,10 +309,6 @@ func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession
 }
 
 func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
-	if target.Keyspace == "" {
-		return nil, errNoKeyspace
-	}
-
 	// Parse the statement to handle vindex operations
 	// If the statement failed to be properly parsed, fall through anyway
 	// to broadcast the ddl to all shards.
@@ -329,6 +325,10 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 		default:
 			// fallthrough to broadcast the ddl to all shards
 		}
+	}
+
+	if target.Keyspace == "" {
+		return nil, errNoKeyspace
 	}
 
 	keyRange, err := parseRange(safeSession.TargetString)
@@ -358,15 +358,35 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema not loaded")
 	}
 
-	ks, ok := vschema.Keyspaces[target.Keyspace]
-	if !ok {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema does not contain keyspace %s", target.Keyspace)
-	}
-
 	allowed := vschemaacl.Authorized(callerid.ImmediateCallerIDFromContext(ctx))
 	if !allowed {
 		return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "not authorized to perform vschema operations")
 
+	}
+
+	// Resolve the keyspace either from the table qualifier or the target keyspace
+	var ksName string
+	if !ddl.Table.IsEmpty() {
+		ksName = ddl.Table.Qualifier.String()
+	}
+	if ksName == "" {
+		ksName = target.Keyspace
+	}
+
+	if ksName == "" {
+		return errNoKeyspace
+	}
+
+	ks, ok := vschema.Keyspaces[ksName]
+	if !ok {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "keyspace %s not defined in vschema", ksName)
+	}
+
+	var tableName string
+	var table *vschemapb.Table
+	if !ddl.Table.IsEmpty() {
+		tableName = ddl.Table.Name.String()
+		table, _ = ks.Tables[tableName]
 	}
 
 	switch ddl.Action {
@@ -382,7 +402,7 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 			Owner:  owner,
 		}
 
-		e.vm.UpdateVSchema(ctx, target.Keyspace, vschema)
+		return e.vm.UpdateVSchema(ctx, target.Keyspace, vschema)
 	case sqlparser.AddColVindexStr:
 		// Support two cases:
 		//
@@ -419,19 +439,9 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 			}
 		}
 
-		ksName := ddl.Table.Qualifier.String()
-		if ksName == "" {
-			ksName = target.Keyspace
-		}
-
-		ks, ok := vschema.Keyspaces[ksName]
-		if !ok {
-			return errNoKeyspace
-		}
-
-		tableName := ddl.Table.Name.String()
-		table, ok := ks.Tables[tableName]
-		if !ok {
+		// If this is the first vindex being defined on the table, create
+		// the empty table record
+		if table == nil {
 			table = &vschemapb.Table{
 				ColumnVindexes: make([]*vschemapb.ColumnVindex, 0, 4),
 			}
@@ -455,13 +465,27 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 		})
 		ks.Tables[tableName] = table
 
-		e.vm.UpdateVSchema(ctx, target.Keyspace, vschema)
+		return e.vm.UpdateVSchema(ctx, target.Keyspace, vschema)
+	case sqlparser.DropColVindexStr:
+		spec := ddl.VindexSpec
+		name := spec.Name.String()
+		if table == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s.%s not defined in vschema", ksName, tableName)
+		}
 
-	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected vindex ddl operation %s", ddl.Action)
+		for i, colVindex := range table.ColumnVindexes {
+			if colVindex.Name == name {
+				table.ColumnVindexes = append(table.ColumnVindexes[:i], table.ColumnVindexes[i+1:]...)
+				if len(table.ColumnVindexes) == 0 {
+					delete(ks.Tables, tableName)
+				}
+				return e.vm.UpdateVSchema(ctx, target.Keyspace, vschema)
+			}
+		}
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s not defined in table %s.%s", name, ksName, tableName)
 	}
 
-	return nil
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected vindex ddl operation %s", ddl.Action)
 }
 
 func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
