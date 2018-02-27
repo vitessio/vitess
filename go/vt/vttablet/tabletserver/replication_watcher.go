@@ -23,16 +23,16 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/binlog"
-	"github.com/youtube/vitess/go/vt/binlog/eventtoken"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/binlog"
+	"vitess.io/vitess/go/vt/binlog/eventtoken"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // ReplicationWatcher is a tabletserver service that watches the

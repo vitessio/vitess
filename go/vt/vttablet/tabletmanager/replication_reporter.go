@@ -25,8 +25,8 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/vt/health"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/health"
 )
 
 var (

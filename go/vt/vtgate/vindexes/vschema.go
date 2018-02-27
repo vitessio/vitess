@@ -23,11 +23,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/youtube/vitess/go/json2"
-	"github.com/youtube/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/vt/sqlparser"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 // VSchema represents the denormalized version of SrvVSchema,

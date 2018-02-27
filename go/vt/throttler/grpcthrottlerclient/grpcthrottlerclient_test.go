@@ -21,10 +21,10 @@ import (
 	"net"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/throttler"
-	"github.com/youtube/vitess/go/vt/throttler/grpcthrottlerserver"
-	"github.com/youtube/vitess/go/vt/throttler/throttlerclienttest"
 	"google.golang.org/grpc"
+	"vitess.io/vitess/go/vt/throttler"
+	"vitess.io/vitess/go/vt/throttler/grpcthrottlerserver"
+	"vitess.io/vitess/go/vt/throttler/throttlerclienttest"
 )
 
 // TestThrottlerServer tests the gRPC implementation using a throttler client

@@ -22,7 +22,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/youtube/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sqltypes"
 
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"

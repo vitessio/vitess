@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestParseSchema(t *testing.T) {

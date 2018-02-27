@@ -28,12 +28,12 @@ import (
 
 	log "github.com/golang/glog"
 
-	"github.com/youtube/vitess/go/jsonutil"
-	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/jsonutil"
+	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // ExecutorMode controls the mode of operation for the vtexplain simulator

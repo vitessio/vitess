@@ -19,8 +19,8 @@ package binlog
 import (
 	"golang.org/x/net/context"
 
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // UpdateStream is the interface for the binlog server

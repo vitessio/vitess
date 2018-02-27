@@ -24,14 +24,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"github.com/youtube/vitess/go/vt/vttest"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttest"
 
-	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
+	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
 var (

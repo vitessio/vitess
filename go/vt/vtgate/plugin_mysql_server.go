@@ -28,14 +28,14 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/callerid"
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/vttls"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vttls"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 var (

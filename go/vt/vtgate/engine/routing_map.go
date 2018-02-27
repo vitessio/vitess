@@ -16,7 +16,7 @@ limitations under the License.
 
 package engine
 
-import querypb "github.com/youtube/vitess/go/vt/proto/query"
+import querypb "vitess.io/vitess/go/vt/proto/query"
 
 type routingMap map[string][]*querypb.Value
 

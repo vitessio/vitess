@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/youtube/vitess/go/bytes2"
-	"github.com/youtube/vitess/go/sqltypes"
+	"vitess.io/vitess/go/bytes2"
+	"vitess.io/vitess/go/sqltypes"
 )
 
 const (

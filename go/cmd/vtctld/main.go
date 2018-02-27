@@ -17,9 +17,9 @@ limitations under the License.
 package main
 
 import (
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtctld"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctld"
 )
 
 func init() {

@@ -20,8 +20,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/tableacl"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/tableacl"
 )
 
 func TestBuildPermissions(t *testing.T) {

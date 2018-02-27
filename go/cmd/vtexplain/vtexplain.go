@@ -22,10 +22,10 @@ import (
 	"io/ioutil"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/exit"
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/vtexplain"
+	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vtexplain"
 )
 
 var (

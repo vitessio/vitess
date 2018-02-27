@@ -24,7 +24,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sqltypes"
 )
 
 func TestSchamazHandler(t *testing.T) {

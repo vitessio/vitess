@@ -85,7 +85,7 @@ docker run --rm -v $PWD/base:/base -u $UID $base_image bash -c 'cp -R /vt /base/
 
 # Grab only what we need
 lite=$PWD/lite
-vttop=vt/src/github.com/youtube/vitess
+vttop=vt/src/vitess.io/vitess
 mkdir -p $lite/vt/vtdataroot
 
 mkdir -p $lite/vt/bin

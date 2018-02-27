@@ -19,9 +19,9 @@ package tabletmanager
 import (
 	log "github.com/golang/glog"
 
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topotools"
 )
 
 // maybeRebuildKeyspace handles the initial rebuild of SrvKeyspace if needed.

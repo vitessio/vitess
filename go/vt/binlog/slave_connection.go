@@ -23,9 +23,9 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/pools"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/pools"
+	"vitess.io/vitess/go/vt/dbconfigs"
 )
 
 var (

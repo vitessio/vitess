@@ -29,7 +29,7 @@ limitations under the License.
 package heartbeat
 
 import (
-	"github.com/youtube/vitess/go/stats"
+	"vitess.io/vitess/go/stats"
 )
 
 var (

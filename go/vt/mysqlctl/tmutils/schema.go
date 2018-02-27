@@ -24,9 +24,9 @@ import (
 	"strings"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/youtube/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/concurrency"
 
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 // This file contains helper methods to deal with Schema information.

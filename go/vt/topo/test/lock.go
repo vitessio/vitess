@@ -21,10 +21,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/topo"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // timeUntilLockIsTaken is the time to wait until a lock is taken.

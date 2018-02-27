@@ -21,15 +21,15 @@ import (
 	"flag"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/grpcclient"
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
-	vtctldatapb "github.com/youtube/vitess/go/vt/proto/vtctldata"
-	vtctlservicepb "github.com/youtube/vitess/go/vt/proto/vtctlservice"
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
 var (

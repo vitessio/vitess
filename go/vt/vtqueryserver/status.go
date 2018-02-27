@@ -17,8 +17,8 @@ limitations under the License.
 package vtqueryserver
 
 import (
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 )
 
 var (

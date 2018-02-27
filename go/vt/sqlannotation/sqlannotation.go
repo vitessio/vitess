@@ -31,8 +31,8 @@ import (
 
 	"bytes"
 
-	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 const (

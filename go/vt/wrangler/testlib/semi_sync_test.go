@@ -20,7 +20,7 @@ import (
 	"flag"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 func init() {

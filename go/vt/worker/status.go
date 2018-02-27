@@ -22,8 +22,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/youtube/vitess/go/acl"
-	"github.com/youtube/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 const workerStatusPartHTML = servenv.JQueryIncludes + `

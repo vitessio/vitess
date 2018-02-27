@@ -17,8 +17,8 @@ limitations under the License.
 package main
 
 import (
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/worker/grpcvtworkerserver"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/worker/grpcvtworkerserver"
 )
 
 func init() {

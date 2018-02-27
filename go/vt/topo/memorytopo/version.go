@@ -19,7 +19,7 @@ package memorytopo
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 // NodeVersion is the local topo.Version implementation

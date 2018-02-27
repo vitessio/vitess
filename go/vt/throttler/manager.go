@@ -23,7 +23,7 @@ import (
 
 	log "github.com/golang/glog"
 
-	throttlerdatapb "github.com/youtube/vitess/go/vt/proto/throttlerdata"
+	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 )
 
 // GlobalManager is the per-process manager which manages all active throttlers.

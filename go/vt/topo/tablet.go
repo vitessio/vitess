@@ -25,13 +25,13 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
-	"github.com/youtube/vitess/go/event"
-	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/trace"
+	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/trace"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/topo/events"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/events"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 // IsTrivialTypeChange returns if this db type be trivially reassigned

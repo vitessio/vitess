@@ -23,11 +23,11 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/topo"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // CopyKeyspaces will create the keyspaces in the destination topo.

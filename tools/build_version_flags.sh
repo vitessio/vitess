@@ -18,10 +18,10 @@ DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 source $DIR/shell_functions.inc
 
 echo "\
-  -X 'github.com/youtube/vitess/go/vt/servenv.buildHost=$(hostname)' \
-  -X 'github.com/youtube/vitess/go/vt/servenv.buildUser=$(whoami)' \
-  -X 'github.com/youtube/vitess/go/vt/servenv.buildGitRev=$(git rev-parse --short HEAD)' \
-  -X 'github.com/youtube/vitess/go/vt/servenv.buildGitBranch=$(git rev-parse --abbrev-ref HEAD)' \
-  -X 'github.com/youtube/vitess/go/vt/servenv.buildTime=$(LC_ALL=C date)' \
-  -X 'github.com/youtube/vitess/go/vt/servenv.jenkinsBuildNumberStr=${BUILD_NUMBER}' \
+  -X 'vitess.io/vitess/go/vt/servenv.buildHost=$(hostname)' \
+  -X 'vitess.io/vitess/go/vt/servenv.buildUser=$(whoami)' \
+  -X 'vitess.io/vitess/go/vt/servenv.buildGitRev=$(git rev-parse --short HEAD)' \
+  -X 'vitess.io/vitess/go/vt/servenv.buildGitBranch=$(git rev-parse --abbrev-ref HEAD)' \
+  -X 'vitess.io/vitess/go/vt/servenv.buildTime=$(LC_ALL=C date)' \
+  -X 'vitess.io/vitess/go/vt/servenv.jenkinsBuildNumberStr=${BUILD_NUMBER}' \
 "

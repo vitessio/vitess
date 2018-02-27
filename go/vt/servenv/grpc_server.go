@@ -28,10 +28,10 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/grpccommon"
-	"github.com/youtube/vitess/go/vt/vttls"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/keepalive"
+	"vitess.io/vitess/go/vt/grpccommon"
+	"vitess.io/vitess/go/vt/vttls"
 )
 
 // This file handles gRPC server, on its own port.

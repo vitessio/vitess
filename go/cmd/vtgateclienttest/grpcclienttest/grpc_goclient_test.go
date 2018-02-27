@@ -22,9 +22,9 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/youtube/vitess/go/cmd/vtgateclienttest/goclienttest"
-	"github.com/youtube/vitess/go/cmd/vtgateclienttest/services"
-	"github.com/youtube/vitess/go/vt/vtgate/grpcvtgateservice"
+	"vitess.io/vitess/go/cmd/vtgateclienttest/goclienttest"
+	"vitess.io/vitess/go/cmd/vtgateclienttest/services"
+	"vitess.io/vitess/go/vt/vtgate/grpcvtgateservice"
 )
 
 // TestGRPCGoClient tests the go client using gRPC

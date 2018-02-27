@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 )
 
 const (

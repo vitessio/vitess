@@ -19,8 +19,8 @@ package goclienttest
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
 const connectionKeyspace = "conn_ks"

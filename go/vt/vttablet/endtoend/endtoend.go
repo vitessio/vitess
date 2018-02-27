@@ -23,7 +23,7 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sqltypes"
 )
 
 func prettyPrint(qr sqltypes.Result) string {

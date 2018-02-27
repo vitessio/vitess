@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/youtube/vitess/go/stats"
+	"vitess.io/vitess/go/stats"
 
 	pb "github.com/prometheus/client_model/go"
 )

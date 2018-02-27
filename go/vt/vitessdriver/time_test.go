@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sqltypes"
 )
 
 var randomLocation = time.FixedZone("Nowhere", 3*60*60)

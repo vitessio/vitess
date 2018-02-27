@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"testing"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/topo"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 // testSetMinNumTablets is a test helper function, if this is used by a production code path, something is wrong.

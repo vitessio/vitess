@@ -27,11 +27,11 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/workflow"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/workflow"
 
-	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
+	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
 )
 
 const (

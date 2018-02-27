@@ -20,9 +20,9 @@ import (
 	"html/template"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/health"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/health"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 // Reporter is a wrapper around a heartbeat Reader, to be used as an interface from

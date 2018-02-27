@@ -21,8 +21,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/sqltypes"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestLookupHashNew(t *testing.T) {

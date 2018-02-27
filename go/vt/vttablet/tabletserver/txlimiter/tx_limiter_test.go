@@ -3,10 +3,10 @@ package txlimiter
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/callerid"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func resetVariables() {

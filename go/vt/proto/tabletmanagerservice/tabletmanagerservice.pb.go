@@ -14,7 +14,7 @@ package tabletmanagerservice
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import tabletmanagerdata "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+import tabletmanagerdata "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 
 import (
 	context "golang.org/x/net/context"
