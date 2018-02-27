@@ -429,7 +429,12 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	sdw.wr.Logger().Infof("Running the diffs...")
 	// TODO(mberlin): Parameterize the hard coded value 8.
 	sem := sync2.NewSemaphore(8, 0)
-	for _, tableDefinition := range sdw.destinationSchemaDefinition.TableDefinitions {
+	tableDefinitions := sdw.destinationSchemaDefinition.TableDefinitions
+	tableDefinitions, err = SortByTableSize(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.shardInfo, sdw.sourceAlias, tableDefinitions)
+	if err != nil {
+		return err
+	}
+	for _, tableDefinition := range tableDefinitions {
 		wg.Add(1)
 		go func(tableDefinition *tabletmanagerdatapb.TableDefinition) {
 			defer wg.Done()
