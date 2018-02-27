@@ -38,6 +38,7 @@ func TestUpdateEqual(t *testing.T) {
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
+	// Update by primary vindex.
 	_, err := executorExec(executor, "update user set a=2 where id = 1", nil)
 	if err != nil {
 		t.Error(err)
@@ -70,6 +71,7 @@ func TestUpdateEqual(t *testing.T) {
 		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
 	}
 
+	// Update by secondary vindex.
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 	sbclookup.SetResults([]*sqltypes.Result{{}})
@@ -93,6 +95,7 @@ func TestUpdateEqual(t *testing.T) {
 		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
 	}
 
+	// Update changes lookup vindex values.
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 	sbclookup.Queries = nil
@@ -138,17 +141,6 @@ func TestUpdateEqual(t *testing.T) {
 
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
-	}
-}
-
-func TestUpdateEqualKeyrange(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
-
-	// If a unique vindex returns a keyrange, we fail the update
-	_, err := executorExec(executor, "update keyrange_table set a=2 where krcol_unique = 1", nil)
-	want := "execUpdateEqual: vindex could not map the value to a unique keyspace id"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec error: %v, want %s", err, want)
 	}
 }
 
@@ -338,36 +330,6 @@ func TestUpdateNormalize(t *testing.T) {
 	masterSession.TargetString = ""
 }
 
-func TestUpdateEqualFail(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
-	s := getSandbox("TestExecutor")
-
-	_, err := executorExec(executor, "update user set a=2 where id = :aa", nil)
-	want := "execUpdateEqual: missing bind var aa"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
-	s.SrvKeyspaceMustFail = 1
-	_, err = executorExec(executor, "update user set a=2 where id = :id", map[string]*querypb.BindVariable{
-		"id": sqltypes.Int64BindVariable(1),
-	})
-	want = "execUpdateEqual: keyspace TestExecutor fetch error: topo error GetSrvKeyspace"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
-	s.ShardSpec = "80-"
-	_, err = executorExec(executor, "update user set a=2 where id = :id", map[string]*querypb.BindVariable{
-		"id": sqltypes.Int64BindVariable(1),
-	})
-	want = "execUpdateEqual: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("executorExec: %v, want prefix %v", err, want)
-	}
-	s.ShardSpec = DefaultShardSpec
-}
-
 func TestDeleteEqual(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
 
@@ -502,17 +464,6 @@ func TestDeleteEqual(t *testing.T) {
 	}
 }
 
-func TestDeleteEqualKeyrange(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
-
-	// If a unique vindex returns a keyrange, we fail the delete
-	_, err := executorExec(executor, "delete from keyrange_table where krcol_unique = 1", nil)
-	want := "execDeleteEqual: vindex could not map the value to a unique keyspace id"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec error: %v, want %s", err, want)
-	}
-}
-
 func TestDeleteSharded(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	_, err := executorExec(executor, "delete from user_extra", nil)
@@ -570,36 +521,6 @@ func TestDeleteComments(t *testing.T) {
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries:\n%+v, want\n%+v\n", sbclookup.Queries, wantQueries)
 	}
-}
-
-func TestDeleteEqualFail(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
-	s := getSandbox("TestExecutor")
-
-	_, err := executorExec(executor, "delete from user where id = :aa", nil)
-	want := "execDeleteEqual: missing bind var aa"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
-	s.SrvKeyspaceMustFail = 1
-	_, err = executorExec(executor, "delete from user where id = :id", map[string]*querypb.BindVariable{
-		"id": sqltypes.Int64BindVariable(1),
-	})
-	want = "execDeleteEqual: keyspace TestExecutor fetch error: topo error GetSrvKeyspace"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
-	s.ShardSpec = "80-"
-	_, err = executorExec(executor, "delete from user where id = :id", map[string]*querypb.BindVariable{
-		"id": sqltypes.Int64BindVariable(1),
-	})
-	want = "execDeleteEqual: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("executorExec: %v, want prefix %v", err, want)
-	}
-	s.ShardSpec = DefaultShardSpec
 }
 
 func TestInsertSharded(t *testing.T) {
@@ -1313,122 +1234,6 @@ func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
-	}
-}
-
-func TestInsertFail(t *testing.T) {
-	executor, sbc, _, sbclookup := createExecutorEnv()
-
-	_, err := executorExec(executor, "insert into user(id, v, name) values (:aa, 2, 'myname')", nil)
-	want := "execInsertSharded: processGenerate: missing bind var aa"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
-	_, err = executorExec(executor, "insert into main1(id, v, name) values (:aa, 2, 'myname')", nil)
-	want = "execInsertUnsharded: processGenerate: missing bind var aa"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
-	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	_, err = executorExec(executor, "insert into user(id, v, name) values (null, 2, 'myname')", nil)
-	want = "execInsertSharded: "
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("executorExec: %v, want prefix %v", err, want)
-	}
-
-	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	_, err = executorExec(executor, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
-	want = "execInsertSharded: getInsertShardedRoute: lookup.Create: "
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("executorExec: %v, want prefix %v", err, want)
-	}
-
-	_, err = executorExec(executor, "insert into ksid_table(keyspace_id) values (null)", nil)
-	want = "execInsertSharded: getInsertShardedRoute: could not map NULL to a keyspace id"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
-	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	_, err = executorExec(executor, "insert into music_extra_reversed(music_id, user_id) values (1, 1)", nil)
-	want = "execInsertSharded: getInsertShardedRoute: lookup.Map"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("executorExec: %v, want prefix %v", err, want)
-	}
-
-	sbclookup.SetResults([]*sqltypes.Result{{}})
-	_, err = executorExec(executor, "insert into music_extra_reversed(music_id, user_id) values (1, 1)", nil)
-	want = "execInsertSharded: getInsertShardedRoute: could not map INT64(1) to a keyspace id"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("paramsSelectEqual: executorExec: %v, must contain %v", err, want)
-	}
-
-	getSandbox("TestExecutor").SrvKeyspaceMustFail = 1
-	_, err = executorExec(executor, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
-	want = "execInsertSharded: getInsertShardedRoute: keyspace TestExecutor fetch error: topo error GetSrvKeyspace"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
-	getSandbox("TestExecutor").ShardSpec = "80-"
-	_, err = executorExec(executor, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
-	want = "execInsertSharded: getInsertShardedRoute: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("executorExec: %v, must contain %v", err, want)
-	}
-	getSandbox("TestExecutor").ShardSpec = DefaultShardSpec
-
-	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	_, err = executorExec(executor, "insert into music(user_id, id) values (1, null)", nil)
-	want = "execInsertSharded:"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("executorExec: %v, want prefix %v", err, want)
-	}
-
-	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	_, err = executorExec(executor, "insert into music(user_id, id) values (1, 2)", nil)
-	want = "execInsertSharded: getInsertShardedRoute: lookup.Create: execInsertUnsharded: target: TestUnsharded.0.master"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("executorExec: %v, want prefix %v", err, want)
-	}
-
-	_, err = executorExec(executor, "insert into music_extra(user_id, music_id) values (1, null)", nil)
-	want = "execInsertSharded: getInsertShardedRoute: value must be supplied for column [music_id]"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
-	_, err = executorExec(executor, "insert into music_extra_reversed(music_id, user_id) values (1, 'aa')", nil)
-	want = `execInsertSharded: getInsertShardedRoute: hash.Verify: could not parse value: 'aa'`
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("executorExec: %v, must contain %v", err, want)
-	}
-
-	_, err = executorExec(executor, "insert into music_extra_reversed(music_id, user_id) values (1, 3)", nil)
-	want = "execInsertSharded: getInsertShardedRoute: values [[INT64(3)]] for column [user_id] does not map to keyspaceids"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("executorExec: %v, must contain %v", err, want)
-	}
-
-	sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	_, err = executorExec(executor, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
-	want = "execInsertSharded: target: TestExecutor.-20.master"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("executorExec: %v, must contain %v", err, want)
-	}
-
-	_, err = executorExec(executor, "insert into noauto_table(id) values (null)", nil)
-	want = "execInsertSharded: getInsertShardedRoute: could not map NULL to a keyspace id"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("executorExec: %v, want prefix %v", err, want)
-	}
-
-	_, err = executorExec(executor, "insert into user(id, v, name) values (1, 2, null)", nil)
-	want = "execInsertSharded: getInsertShardedRoute: value must be supplied for column name"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("executorExec: %v, want prefix %v", err, want)
 	}
 }
 

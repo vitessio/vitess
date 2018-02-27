@@ -22,7 +22,6 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/vtgate/engine"
 )
 
 // splitAndExpression breaks up the Expr into AND-separated conditions
@@ -151,7 +150,7 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 	return has
 }
 
-func validateSubquerySamePlan(outerRoute *engine.Route, bldr builder, vschema VSchema, nodes ...sqlparser.SQLNode) bool {
+func validateSubquerySamePlan(keyspace string, bldr builder, vschema VSchema, nodes ...sqlparser.SQLNode) bool {
 	samePlan := true
 
 	for _, node := range nodes {
@@ -175,7 +174,7 @@ func validateSubquerySamePlan(outerRoute *engine.Route, bldr builder, vschema VS
 					samePlan = false
 					return false, errors.New("dummy")
 				}
-				if innerRoute.ERoute.Keyspace.Name != outerRoute.Keyspace.Name {
+				if innerRoute.ERoute.Keyspace.Name != keyspace {
 					samePlan = false
 					return false, errors.New("dummy")
 				}
@@ -193,7 +192,7 @@ func validateSubquerySamePlan(outerRoute *engine.Route, bldr builder, vschema VS
 					samePlan = false
 					return false, errors.New("dummy")
 				}
-				if innerRoute.ERoute.Keyspace.Name != outerRoute.Keyspace.Name {
+				if innerRoute.ERoute.Keyspace.Name != keyspace {
 					samePlan = false
 					return false, errors.New("dummy")
 				}
