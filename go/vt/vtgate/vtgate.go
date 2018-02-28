@@ -26,6 +26,8 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/youtube/vitess/go/stats/promstats"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/acl"
@@ -95,7 +97,8 @@ var (
 	errorsByCode      *stats.Rates
 
 	// Error counters should be global so they can be set from anywhere
-	errorCounts *stats.MultiCounters
+	errorCounts     *stats.MultiCounters
+	promErrorCounts *prom.CounterVec
 
 	warnings *stats.Counters
 )
@@ -221,6 +224,10 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server
 	}
 
 	errorCounts = stats.NewMultiCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType", "Code"})
+	promErrorCounts = promstats.NewCounter(
+		"vtgate_api_error_counts",
+		"Vtgate API error counts per error type",
+		[]string{"Operation", "Keyspace", "DbType", "Code"})
 
 	qpsByOperation = stats.NewRates("QPSByOperation", stats.CounterForDimension(rpcVTGate.timings, "Operation"), 15, 1*time.Minute)
 	qpsByKeyspace = stats.NewRates("QPSByKeyspace", stats.CounterForDimension(rpcVTGate.timings, "Keyspace"), 15, 1*time.Minute)
@@ -1065,6 +1072,13 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]int
 	request = truncateErrorStrings(request)
 
 	errorCounts.Add(fullKey, 1)
+	promstats.Add(promErrorCounts, map[string]string{
+		"Operation": statsKey[0],
+		"Keyspace":  statsKey[1],
+		"DbType":    statsKey[2],
+		"Code":      ec.String(),
+	})
+
 	// Most errors are not logged by vtgate because they're either too spammy or logged elsewhere.
 	switch ec {
 	case vtrpcpb.Code_UNKNOWN, vtrpcpb.Code_INTERNAL, vtrpcpb.Code_DATA_LOSS:

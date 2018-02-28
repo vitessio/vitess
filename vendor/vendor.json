@@ -581,10 +581,10 @@
 			"revisionTime": "2016-01-10T10:55:54Z"
 		},
 		{
-			"checksumSHA1": "f+c772l+hly4ZdqJqe1dryr0398=",
+			"checksumSHA1": "I87tkF1e/hrl4d/XIKFfkPRq1ww=",
 			"path": "github.com/prometheus/client_golang/prometheus",
-			"revision": "488edd04dc224ba64c401747cd0a4b5f05dfb234",
-			"revisionTime": "2016-05-31T09:15:28Z"
+			"revision": "c3324c1198cf3374996e9d3098edd46a6b55afc9",
+			"revisionTime": "2018-02-23T14:47:18Z"
 		},
 		{
 			"checksumSHA1": "DvwvOlPNAgRntBzt3b3OSRMS2N4=",
@@ -1153,5 +1153,5 @@
 			"revisionTime": "2016-09-28T15:37:09Z"
 		}
 	],
-	"rootPath": "github.com/youtube/vitess"
+	"rootPath": "dev-vitess/src/github.com/youtube/vitess"
 }
