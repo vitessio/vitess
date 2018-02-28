@@ -100,8 +100,6 @@ func statToValue(v expvar.Var) interface{} {
 		return v.Get()
 	case stats.FloatFunc:
 		return v()
-	case stats.IntFunc:
-		return v()
 	default:
 		return v.String()
 	}

@@ -47,12 +47,12 @@ var usStateNames = map[int64]string{
 }
 
 var (
-	streamCount          = stats.NewCounters("UpdateStreamStreamCount")
-	updateStreamErrors   = stats.NewCounters("UpdateStreamErrors")
-	keyrangeStatements   = stats.NewInt("UpdateStreamKeyRangeStatements")
-	keyrangeTransactions = stats.NewInt("UpdateStreamKeyRangeTransactions")
-	tablesStatements     = stats.NewInt("UpdateStreamTablesStatements")
-	tablesTransactions   = stats.NewInt("UpdateStreamTablesTransactions")
+	streamCount          = stats.NewCounters("UpdateStreamStreamCount", "update stream count")
+	updateStreamErrors   = stats.NewCounters("UpdateStreamErrors", "update stream error count")
+	keyrangeStatements   = stats.NewInt("UpdateStreamKeyRangeStatements", "update stream key range statement count")
+	keyrangeTransactions = stats.NewInt("UpdateStreamKeyRangeTransactions", "update stream key range transaction count")
+	tablesStatements     = stats.NewInt("UpdateStreamTablesStatements", "update stream table statement count")
+	tablesTransactions   = stats.NewInt("UpdateStreamTablesTransactions", "update stream table transaction count")
 )
 
 // UpdateStreamControl is the interface an UpdateStream service implements

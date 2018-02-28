@@ -34,16 +34,16 @@ import (
 
 var (
 	// HeartbeatWrites keeps a count of the number of heartbeats written over time.
-	writes = stats.NewInt("HeartbeatWrites")
+	writes = stats.NewInt("HeartbeatWrites", "Count of heartbeats written over time")
 	// HeartbeatWriteErrors keeps a count of errors encountered while writing heartbeats.
-	writeErrors = stats.NewInt("HeartbeatWriteErrors")
+	writeErrors = stats.NewInt("HeartbeatWriteErrors", "Count of errors encountered while writing heartbeats")
 	// HeartbeatReads keeps a count of the number of heartbeats read over time.
-	reads = stats.NewInt("HeartbeatReads")
+	reads = stats.NewInt("HeartbeatReads", "Count of heartbeats read over time")
 	// HeartbeatReadErrors keeps a count of errors encountered while reading heartbeats.
-	readErrors = stats.NewInt("HeartbeatReadErrors")
+	readErrors = stats.NewInt("HeartbeatReadErrors", "Count of errors encountered while reading heartbeats")
 	// HeartbeatCumulativeLagNs is incremented by the current lag at each heartbeat read interval. Plotting this
 	// over time allows calculating of a rolling average lag.
-	cumulativeLagNs = stats.NewInt("HeartbeatCumulativeLagNs")
+	cumulativeLagNs = stats.NewInt("HeartbeatCumulativeLagNs", "Incremented by the current lag at each heartbeat read interval")
 	// HeartbeatCurrentLagNs is a point-in-time calculation of the lag, updated at each heartbeat read interval.
-	currentLagNs = stats.NewInt("HeartbeatCurrentLagNs")
+	currentLagNs = stats.NewIntGauge("HeartbeatCurrentLagNs", "Point in time calculation of the heartbeat lag")
 )

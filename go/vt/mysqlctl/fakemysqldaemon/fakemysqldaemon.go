@@ -146,7 +146,7 @@ func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 	}
 	if db != nil {
 		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", 5, time.Minute)
-		result.appPool.Open(db.ConnParams(), stats.NewTimings(""))
+		result.appPool.Open(db.ConnParams(), stats.NewTimings("", ""))
 	}
 	return result
 }
@@ -410,12 +410,12 @@ func (fmd *FakeMysqlDaemon) GetAppConnection(ctx context.Context) (*dbconnpool.P
 
 // GetDbaConnection is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetDbaConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(fmd.db.ConnParams(), stats.NewTimings(""))
+	return dbconnpool.NewDBConnection(fmd.db.ConnParams(), stats.NewTimings("", ""))
 }
 
 // GetAllPrivsConnection is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetAllPrivsConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(fmd.db.ConnParams(), stats.NewTimings(""))
+	return dbconnpool.NewDBConnection(fmd.db.ConnParams(), stats.NewTimings("", ""))
 }
 
 // SetSemiSyncEnabled is part of the MysqlDaemon interface.

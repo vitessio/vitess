@@ -197,14 +197,16 @@ func (f FloatFunc) String() string {
 
 // Int is expvar.Int+Get+hook
 type Int struct {
-	i sync2.AtomicInt64
+	i    sync2.AtomicInt64
+	help string
 }
 
 // NewInt returns a new Int
-func NewInt(name string) *Int {
-	v := new(Int)
+func NewInt(name string, help string) *Int {
+	v := &Int{help: help}
 	if name != "" {
 		publish(name, v)
+		publishPullInt(v, name)
 	}
 	return v
 }
@@ -214,9 +216,9 @@ func (v *Int) Add(delta int64) {
 	v.i.Add(delta)
 }
 
-// Set sets the value
-func (v *Int) Set(value int64) {
-	v.i.Set(value)
+// Reset resets the value to 0
+func (v *Int) Reset() {
+	v.i.Set(int64(0))
 }
 
 // Get returns the value
@@ -227,6 +229,53 @@ func (v *Int) Get() int64 {
 // String is the implementation of expvar.var
 func (v *Int) String() string {
 	return strconv.FormatInt(v.i.Get(), 10)
+}
+
+// Help returns the help string
+func (v *Int) Help() string {
+	return v.help
+}
+
+// IntGauge is like Int but has a Setter
+// so that its values can go both up and down
+type IntGauge struct {
+	Int
+}
+
+// NewIntGauge creates a new IntGauge and publishes it if name is set
+func NewIntGauge(name string, help string) *IntGauge {
+	v := &IntGauge{Int: Int{help: help}}
+
+	if name != "" {
+		publish(name, v)
+		publishPullIntGauge(v, name)
+	}
+	return v
+}
+
+// Add adds the provided value to the Int
+func (v *IntGauge) Add(delta int64) {
+	v.Int.i.Add(delta)
+}
+
+// Set sets the value
+func (v *IntGauge) Set(value int64) {
+	v.Int.i.Set(value)
+}
+
+// Get returns the value
+func (v *IntGauge) Get() int64 {
+	return v.Int.i.Get()
+}
+
+// String is the implementation of expvar.var
+func (v *IntGauge) String() string {
+	return strconv.FormatInt(v.Int.i.Get(), 10)
+}
+
+// Help returns the help string
+func (v *IntGauge) Help() string {
+	return v.Int.help
 }
 
 // Duration exports a time.Duration
@@ -263,11 +312,39 @@ func (v *Duration) String() string {
 
 // IntFunc converts a function that returns
 // an int64 as an expvar.
-type IntFunc func() int64
+type IntFunc struct {
+	f    func() int64
+	help string
+}
+
+// NewIntFunc creates a new IntFunc instance and publishes it if name is set
+// All IntFuncs are exported to Prometheus as gauges and not counters.
+func NewIntFunc(name string, help string, f func() int64) *IntFunc {
+	i := &IntFunc{
+		f:    f,
+		help: help,
+	}
+
+	if name != "" {
+		publish(name, i)
+		publishPullIntFunc(i, name)
+	}
+	return i
+}
 
 // String is the implementation of expvar.var
-func (f IntFunc) String() string {
-	return strconv.FormatInt(f(), 10)
+func (intFunc IntFunc) String() string {
+	return strconv.FormatInt(intFunc.f(), 10)
+}
+
+// Help returns the help string
+func (intFunc IntFunc) Help() string {
+	return intFunc.help
+}
+
+// F calls and returns the result of the intfunc function
+func (intFunc IntFunc) F() int64 {
+	return intFunc.f()
 }
 
 // DurationFunc converts a function that returns

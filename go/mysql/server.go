@@ -42,10 +42,10 @@ const (
 
 var (
 	// Metrics
-	timings    = stats.NewTimings("MysqlServerTimings")
-	connCount  = stats.NewInt("MysqlServerConnCount")
-	connAccept = stats.NewInt("MysqlServerConnAccepted")
-	connSlow   = stats.NewInt("MysqlServerConnSlow")
+	timings    = stats.NewTimings("MysqlServerTimings", "MySQL server timings")
+	connCount  = stats.NewInt("MysqlServerConnCount", "Connection count for MySQL servers")
+	connAccept = stats.NewInt("MysqlServerConnAccepted", "Connections accepted by MySQL server")
+	connSlow   = stats.NewInt("MysqlServerConnSlow", "Slow MySQL server connections")
 )
 
 // A Handler is an interface used by Listener to send queries.

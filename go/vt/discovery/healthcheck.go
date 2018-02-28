@@ -64,8 +64,8 @@ import (
 )
 
 var (
-	hcErrorCounters          = stats.NewMultiCounters("HealthcheckErrors", []string{"Keyspace", "ShardName", "TabletType"})
-	hcMasterPromotedCounters = stats.NewMultiCounters("HealthcheckMasterPromoted", []string{"Keyspace", "ShardName"})
+	hcErrorCounters          = stats.NewMultiCounters("HealthcheckErrors", "Healthcheck Errors", []string{"Keyspace", "ShardName", "TabletType"})
+	hcMasterPromotedCounters = stats.NewMultiCounters("HealthcheckMasterPromoted", "Master promoted in keyspace/shard name because of health check errors", []string{"Keyspace", "ShardName"})
 	healthcheckOnce          sync.Once
 )
 
@@ -332,7 +332,11 @@ func NewHealthCheck(retryDelay, healthCheckTimeout time.Duration) HealthCheck {
 
 // RegisterStats registers the connection counts stats
 func (hc *HealthCheckImpl) RegisterStats() {
-	stats.NewMultiCountersFunc("HealthcheckConnections", []string{"Keyspace", "ShardName", "TabletType"}, hc.servingConnStats)
+	stats.NewMultiCountersFunc(
+		"HealthcheckConnections",
+		[]string{"Keyspace", "ShardName", "TabletType"},
+		"the numb of healthcheck connections registered",
+		hc.servingConnStats)
 }
 
 // ServeHTTP is part of the http.Handler interface. It renders the current state of the discovery gateway tablet cache into json.
