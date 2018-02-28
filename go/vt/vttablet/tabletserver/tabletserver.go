@@ -96,6 +96,25 @@ var stateName = []string{
 	"SHUTTING_DOWN",
 }
 
+// stateDetail matches every state and optionally more information about the reason
+// why the state is serving / not serving.
+var stateDetail = []string{
+	"Not Connected",
+	"Not Serving",
+	"",
+	"Transitioning",
+	"Shutting Down",
+}
+
+// stateInfo returns a string representation of the state and optional detail
+// about the reason for the state transition
+func stateInfo(state int64) string {
+	if state == StateServing {
+		return "SERVING"
+	}
+	return fmt.Sprintf("%s (%s)", stateName[state], stateDetail[state])
+}
+
 // TabletServer implements the RPC interface for the query service.
 // TabletServer is initialized in the following sequence:
 // NewTabletServer->InitDBConfig->SetServingType.
@@ -278,11 +297,11 @@ func (tsv *TabletServer) GetState() string {
 // setState changes the state and logs the event.
 // It requires the caller to hold a lock on mu.
 func (tsv *TabletServer) setState(state int64) {
-	log.Infof("TabletServer state: %s -> %s", stateName[tsv.state], stateName[state])
+	log.Infof("TabletServer state: %s -> %s", stateInfo(tsv.state), stateInfo(state))
 	tsv.state = state
 	tsv.history.Add(&historyRecord{
 		Time:         time.Now(),
-		ServingState: stateName[state],
+		ServingState: stateInfo(state),
 		TabletType:   tsv.target.TabletType.String(),
 	})
 }
