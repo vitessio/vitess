@@ -31,7 +31,7 @@ import io.vitess.util.Constants;
 
 public class ConnectionPropertiesTest {
 
-    private static final int NUM_PROPS = 36;
+    private static final int NUM_PROPS = 37;
 
     @Test
     public void testReflection() throws Exception {
@@ -59,6 +59,7 @@ public class ConnectionPropertiesTest {
         Assert.assertEquals("useBlobToStoreUTF8OutsideBMP", false, props.getUseBlobToStoreUTF8OutsideBMP());
         Assert.assertEquals("utf8OutsideBmpIncludedColumnNamePattern", null, props.getUtf8OutsideBmpIncludedColumnNamePattern());
         Assert.assertEquals("utf8OutsideBmpExcludedColumnNamePattern", null, props.getUtf8OutsideBmpExcludedColumnNamePattern());
+        Assert.assertEquals("zeroDateTimeBehavior", Constants.ZeroDateTimeBehavior.GARBLE, props.getZeroDateTimeBehavior());
         Assert.assertEquals("characterEncoding", null, props.getEncoding());
         Assert.assertEquals("executeType", Constants.DEFAULT_EXECUTE_TYPE, props.getExecuteType());
         Assert.assertEquals("twopcEnabled", false, props.getTwopcEnabled());
@@ -84,6 +85,7 @@ public class ConnectionPropertiesTest {
         info.setProperty("utf8OutsideBmpIncludedColumnNamePattern", "(foo|bar)?baz");
         info.setProperty("utf8OutsideBmpExcludedColumnNamePattern", "(foo|bar)?baz");
         info.setProperty("characterEncoding", "utf-8");
+        info.setProperty("zeroDateTimeBehavior", "convertToNull");
         info.setProperty("executeType", Constants.QueryExecuteType.STREAM.name());
         info.setProperty("twopcEnabled", "yes");
         info.setProperty("includedFields", Query.ExecuteOptions.IncludedFields.TYPE_ONLY.name());
@@ -98,6 +100,7 @@ public class ConnectionPropertiesTest {
         Assert.assertEquals("useBlobToStoreUTF8OutsideBMP", true, props.getUseBlobToStoreUTF8OutsideBMP());
         Assert.assertEquals("utf8OutsideBmpIncludedColumnNamePattern", "(foo|bar)?baz", props.getUtf8OutsideBmpIncludedColumnNamePattern());
         Assert.assertEquals("utf8OutsideBmpExcludedColumnNamePattern", "(foo|bar)?baz", props.getUtf8OutsideBmpExcludedColumnNamePattern());
+        Assert.assertEquals("zeroDateTimeBehavior", Constants.ZeroDateTimeBehavior.CONVERTTONULL, props.getZeroDateTimeBehavior());
         Assert.assertEquals("characterEncoding", "utf-8", props.getEncoding());
         Assert.assertEquals("executeType", Constants.QueryExecuteType.STREAM, props.getExecuteType());
         Assert.assertEquals("twopcEnabled", true, props.getTwopcEnabled());
@@ -129,7 +132,7 @@ public class ConnectionPropertiesTest {
         Assert.assertEquals(NUM_PROPS, infos.length);
 
         // Test the expected fields for just 1
-        int indexForFullTest = 15;
+        int indexForFullTest = 3;
         Assert.assertEquals("executeType", infos[indexForFullTest].name);
         Assert.assertEquals("Query execution type: simple or stream",
             infos[indexForFullTest].description);
@@ -142,16 +145,17 @@ public class ConnectionPropertiesTest {
         Assert.assertArrayEquals(allowed, infos[indexForFullTest].choices);
 
         // Test that name exists for the others, as a sanity check
-        Assert.assertEquals("functionsNeverReturnBlobs", infos[1].name);
-        Assert.assertEquals("tinyInt1isBit", infos[2].name);
-        Assert.assertEquals("yearIsDateType", infos[3].name);
-        Assert.assertEquals("useBlobToStoreUTF8OutsideBMP", infos[4].name);
-        Assert.assertEquals("utf8OutsideBmpIncludedColumnNamePattern", infos[5].name);
-        Assert.assertEquals("utf8OutsideBmpExcludedColumnNamePattern", infos[6].name);
-        Assert.assertEquals("characterEncoding", infos[7].name);
-        Assert.assertEquals(Constants.Property.TWOPC_ENABLED, infos[indexForFullTest+1].name);
-        Assert.assertEquals(Constants.Property.INCLUDED_FIELDS, infos[indexForFullTest+2].name);
-        Assert.assertEquals(Constants.Property.TABLET_TYPE, infos[indexForFullTest-2].name);
+        Assert.assertEquals("dbName", infos[1].name);
+        Assert.assertEquals("characterEncoding", infos[2].name);
+        Assert.assertEquals("executeType", infos[3].name);
+        Assert.assertEquals("functionsNeverReturnBlobs", infos[4].name);
+        Assert.assertEquals("grpcRetriesEnabled", infos[5].name);
+        Assert.assertEquals("grpcRetriesBackoffMultiplier", infos[6].name);
+        Assert.assertEquals("grpcRetriesInitialBackoffMillis", infos[7].name);
+        Assert.assertEquals("grpcRetriesMaxBackoffMillis", infos[8].name);
+        Assert.assertEquals(Constants.Property.INCLUDED_FIELDS, infos[9].name);
+        Assert.assertEquals(Constants.Property.TABLET_TYPE, infos[19].name);
+        Assert.assertEquals(Constants.Property.TWOPC_ENABLED, infos[27].name);
     }
 
     @Test

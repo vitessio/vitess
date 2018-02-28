@@ -22,6 +22,8 @@ import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
@@ -29,6 +31,7 @@ import io.vitess.proto.Query;
 import io.vitess.proto.Topodata;
 import io.vitess.util.Constants;
 import io.vitess.util.StringUtils;
+import java.util.function.Function;
 
 public class ConnectionProperties {
 
@@ -44,6 +47,11 @@ public class ConnectionProperties {
                     PROPERTY_LIST.add(declaredField);
                 }
             }
+            Collections.sort(PROPERTY_LIST, new Comparator<Field>() {
+                @Override public int compare(Field o1, Field o2) {
+                    return o1.getName().compareTo(o2.getName());
+                }
+            });
         } catch (Exception ex) {
             throw new RuntimeException(ex);
         }
@@ -68,6 +76,11 @@ public class ConnectionProperties {
         "yearIsDateType",
         "Should the JDBC driver treat the MySQL type \"YEAR\" as a java.sql.Date, or as a SHORT?",
         true);
+
+    private EnumConnectionProperty<Constants.ZeroDateTimeBehavior> zeroDateTimeBehavior = new EnumConnectionProperty<>(
+        "zeroDateTimeBehavior",
+        "How should timestamps with format \"0000-00-00 00:00:00.0000\" be treated",
+        Constants.ZeroDateTimeBehavior.GARBLE);
 
     // Configs for handling irregular blobs, those with characters outside the typical 4-byte encodings
     private BooleanConnectionProperty useBlobToStoreUTF8OutsideBMP = new BooleanConnectionProperty(
@@ -353,6 +366,10 @@ public class ConnectionProperties {
 
     public void setUtf8OutsideBmpExcludedColumnNamePattern(String pattern) {
         this.utf8OutsideBmpExcludedColumnNamePattern.setValue(pattern);
+    }
+
+    public Constants.ZeroDateTimeBehavior getZeroDateTimeBehavior() {
+        return zeroDateTimeBehavior.getValueAsEnum();
     }
 
     public boolean getYearIsDateType() {
