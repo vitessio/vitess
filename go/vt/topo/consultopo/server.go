@@ -24,7 +24,7 @@ import (
 
 	"github.com/hashicorp/consul/api"
 
-	"github.com/youtube/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 // Factory is the consul topo.Factory implementation.

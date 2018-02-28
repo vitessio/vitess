@@ -20,11 +20,11 @@ import (
 	"sync"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/youtube/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vterrors"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // SafeSession is a mutex-protected version of the Session.

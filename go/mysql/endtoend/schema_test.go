@@ -24,8 +24,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/sqltypes"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 )
 
 // testDescribeTable makes sure the fields returned by 'describe <table>'

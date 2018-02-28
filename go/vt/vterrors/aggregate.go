@@ -20,7 +20,7 @@ import (
 	"sort"
 	"strings"
 
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // A list of all vtrpcpb.Code, ordered by priority. These priorities are

@@ -22,8 +22,8 @@ import (
 
 	"strings"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/testfiles"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/testfiles"
 )
 
 // createVindex creates the "numeric_static_map" vindex object which is used by

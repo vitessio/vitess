@@ -19,7 +19,7 @@ package tmutils
 // This file contains helper methods for dealing with the proto3 data
 // structures related to binlog playback.
 
-import tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+import tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 
 // FindBlpPositionByID returns the BlpPosition with the given id, or error
 func FindBlpPositionByID(list []*tabletmanagerdatapb.BlpPosition, uid uint32) *tabletmanagerdatapb.BlpPosition {

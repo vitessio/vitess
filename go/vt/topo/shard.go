@@ -30,14 +30,14 @@ import (
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 
-	"github.com/youtube/vitess/go/event"
-	"github.com/youtube/vitess/go/trace"
-	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/topo/events"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/topo/events"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // Functions for dealing with shard representations in topology.

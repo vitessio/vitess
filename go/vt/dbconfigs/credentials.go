@@ -29,7 +29,7 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql"
 )
 
 var (

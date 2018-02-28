@@ -23,8 +23,8 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 // SaveVSchema first validates the VSchema, then saves it.

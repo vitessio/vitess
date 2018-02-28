@@ -27,12 +27,12 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/throttler"
-	"github.com/youtube/vitess/go/vt/throttler/throttlerclient"
-	"github.com/youtube/vitess/go/vt/wrangler"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/throttler"
+	"vitess.io/vitess/go/vt/throttler/throttlerclient"
+	"vitess.io/vitess/go/vt/wrangler"
 
-	throttlerdatapb "github.com/youtube/vitess/go/vt/proto/throttlerdata"
+	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 )
 
 // This file contains the commands to control the throttler which is used during

@@ -23,11 +23,11 @@ import (
 	"syscall"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/worker/vtworkerclient"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 )
 
 var (

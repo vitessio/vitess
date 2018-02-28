@@ -28,9 +28,9 @@ import (
 
 	log "github.com/golang/glog"
 
-	"github.com/youtube/vitess/go/timer"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/timer"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 var (

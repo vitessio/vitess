@@ -19,5 +19,5 @@ package main
 // Imports and register the gRPC throttler server.
 
 import (
-	_ "github.com/youtube/vitess/go/vt/throttler/grpcthrottlerserver"
+	_ "vitess.io/vitess/go/vt/throttler/grpcthrottlerserver"
 )

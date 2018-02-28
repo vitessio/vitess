@@ -25,8 +25,8 @@ import (
 
 	log "github.com/golang/glog"
 
-	"github.com/youtube/vitess/go/acl"
-	"github.com/youtube/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 const indexHTML = `

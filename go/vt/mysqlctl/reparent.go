@@ -26,7 +26,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql"
 
 	"golang.org/x/net/context"
 )

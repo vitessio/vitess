@@ -5,7 +5,7 @@ FROM debian:stretch-slim
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTROOT /vt
 ENV VTDATAROOT /vtdataroot
-ENV VTTOP /vt/src/github.com/youtube/vitess
+ENV VTTOP /vt/src/vitess.io/vitess
 
 # Prepare directory structure.
 RUN mkdir -p /vt && \

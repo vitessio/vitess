@@ -19,5 +19,5 @@ package main
 // Imports and registers the gRPC vtworker client.
 
 import (
-	_ "github.com/youtube/vitess/go/vt/worker/grpcvtworkerclient"
+	_ "vitess.io/vitess/go/vt/worker/grpcvtworkerclient"
 )

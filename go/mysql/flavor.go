@@ -22,8 +22,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/youtube/vitess/go/sqltypes"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/sqltypes"
 )
 
 var (

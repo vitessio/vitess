@@ -19,5 +19,5 @@ package main
 // Imports and register the file-based query logger
 
 import (
-	_ "github.com/youtube/vitess/go/vt/vttablet/filelogger"
+	_ "vitess.io/vitess/go/vt/vttablet/filelogger"
 )

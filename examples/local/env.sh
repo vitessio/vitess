@@ -30,7 +30,7 @@ zkcfg=${zkcfg:1}
 zkids='1 2 3'
 
 # Set up environment.
-export VTTOP=$VTROOT/src/github.com/youtube/vitess
+export VTTOP=$VTROOT/src/vitess.io/vitess
 
 # Try to find mysqld_safe on PATH.
 if [ -z "$VT_MYSQL_ROOT" ]; then

@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql"
 )
 
 // TestKill opens a connection, issues a command that

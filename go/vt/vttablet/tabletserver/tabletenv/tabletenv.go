@@ -24,12 +24,12 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/tb"
-	"github.com/youtube/vitess/go/vt/callerid"
-	"github.com/youtube/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/tb"
+	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/sqlparser"
 
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (

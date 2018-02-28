@@ -22,7 +22,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
+	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
 )
 
 // This file provides the utility methods to save / retrieve workflows

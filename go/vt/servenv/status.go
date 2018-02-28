@@ -30,7 +30,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/acl"
+	"vitess.io/vitess/go/acl"
 )
 
 var (
