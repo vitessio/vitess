@@ -90,7 +90,7 @@ var (
 func init() {
 	// init global goroutines to aggregate stats.
 	aggrChan = make(chan *queryInfo, aggrChanSize)
-	gatewayStatsChanFull = stats.NewInt("GatewayStatsChanFullCount")
+	gatewayStatsChanFull = stats.NewInt("GatewayStatsChanFullCount", "The number of times the queryInfo buffer becomes full")
 	go resetAggregators()
 	go processQueryInfo()
 }

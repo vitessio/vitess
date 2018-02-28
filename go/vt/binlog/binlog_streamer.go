@@ -37,7 +37,7 @@ import (
 )
 
 var (
-	binlogStreamerErrors = stats.NewCounters("BinlogStreamerErrors")
+	binlogStreamerErrors = stats.NewCounters("BinlogStreamerErrors", "error count when streaming binlog")
 
 	// ErrClientEOF is returned by Streamer if the stream ended because the
 	// consumer of the stream indicated it doesn't want any more events.

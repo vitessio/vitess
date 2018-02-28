@@ -79,11 +79,17 @@ func NewScatterConn(statsName string, txConn *TxConn, gw gateway.Gateway, hc dis
 		tabletCallErrorCountStatsName = statsName + "ErrorCount"
 	}
 	return &ScatterConn{
-		timings:              stats.NewMultiTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
-		tabletCallErrorCount: stats.NewMultiCounters(tabletCallErrorCountStatsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
-		txConn:               txConn,
-		gateway:              gw,
-		healthCheck:          hc,
+		timings: stats.NewMultiTimings(
+			statsName,
+			"Scatter connection timings",
+			[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
+		tabletCallErrorCount: stats.NewMultiCounters(
+			tabletCallErrorCountStatsName,
+			"Error count from tablet calls in scatter conns",
+			[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
+		txConn:      txConn,
+		gateway:     gw,
+		healthCheck: hc,
 	}
 }
 

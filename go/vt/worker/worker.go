@@ -59,52 +59,79 @@ var (
 
 	statsState = stats.NewString("WorkerState")
 	// statsRetryCount is the total number of times a query to vttablet had to be retried.
-	statsRetryCount = stats.NewInt("WorkerRetryCount")
+	statsRetryCount = stats.NewInt("WorkerRetryCount", "Total number of times a query to a vttablet had to be retried")
 	// statsRetryCount groups the number of retries by category e.g. "TimeoutError" or "Readonly".
-	statsRetryCounters = stats.NewCounters("WorkerRetryCounters")
+	statsRetryCounters = stats.NewCounters("WorkerRetryCounters", "Number of retries")
 	// statsThrottledCounters is the number of times a write has been throttled,
 	// grouped by (keyspace, shard, threadID). Mainly used for testing.
 	// If throttling is enabled, this should always be non-zero for all threads.
-	statsThrottledCounters = stats.NewMultiCounters("WorkerThrottledCounters", []string{"Keyspace", "ShardName", "ThreadId"})
+	statsThrottledCounters = stats.NewMultiCounters(
+		"WorkerThrottledCounters",
+		"Number of times a write has been throttled",
+		[]string{"Keyspace", "ShardName", "ThreadId"})
 	// statsStateDurations tracks for each state how much time was spent in it. Mainly used for testing.
-	statsStateDurationsNs = stats.NewCounters("WorkerStateDurations")
+	statsStateDurationsNs = stats.NewGauges("WorkerStateDurations", "How much time was spent in each state")
 
 	// statsOnlineInsertsCounters tracks for every table how many rows were
 	// inserted during the online clone (reconciliation) phase.
-	statsOnlineInsertsCounters = stats.NewCounters("WorkerOnlineInsertsCounters")
+	statsOnlineInsertsCounters = stats.NewCounters(
+		"WorkerOnlineInsertsCounters",
+		"For every table how many rows were inserted during the online clone (reconciliation) phase")
 	// statsOnlineUpdatesCounters tracks for every table how many rows were updated.
-	statsOnlineUpdatesCounters = stats.NewCounters("WorkerOnlineUpdatesCounters")
+	statsOnlineUpdatesCounters = stats.NewCounters(
+		"WorkerOnlineUpdatesCounters",
+		"For every table how many rows were updated")
 	// statsOnlineUpdatesCounters tracks for every table how many rows were deleted.
-	statsOnlineDeletesCounters = stats.NewCounters("WorkerOnlineDeletesCounters")
+	statsOnlineDeletesCounters = stats.NewCounters(
+		"WorkerOnlineDeletesCounters",
+		"For every table how many rows were deleted")
 	// statsOnlineEqualRowsCounters tracks for every table how many rows were equal.
-	statsOnlineEqualRowsCounters = stats.NewCounters("WorkerOnlineEqualRowsCounters")
+	statsOnlineEqualRowsCounters = stats.NewCounters(
+		"WorkerOnlineEqualRowsCounters",
+		"For every table how many rows were equal")
 
 	// statsOfflineInsertsCounters tracks for every table how many rows were
 	// inserted during the online clone (reconciliation) phase.
-	statsOfflineInsertsCounters = stats.NewCounters("WorkerOfflineInsertsCounters")
+	statsOfflineInsertsCounters = stats.NewCounters(
+		"WorkerOfflineInsertsCounters",
+		"For every table how many rows were inserted during the online clone (reconciliation) phase")
 	// statsOfflineUpdatesCounters tracks for every table how many rows were updated.
-	statsOfflineUpdatesCounters = stats.NewCounters("WorkerOfflineUpdatesCounters")
+	statsOfflineUpdatesCounters = stats.NewCounters(
+		"WorkerOfflineUpdatesCounters",
+		"For every table how many rows were updated")
 	// statsOfflineUpdatesCounters tracks for every table how many rows were deleted.
-	statsOfflineDeletesCounters = stats.NewCounters("WorkerOfflineDeletesCounters")
+	statsOfflineDeletesCounters = stats.NewCounters(
+		"WorkerOfflineDeletesCounters",
+		"For every table how many rows were deleted")
 	// statsOfflineEqualRowsCounters tracks for every table how many rows were equal.
-	statsOfflineEqualRowsCounters = stats.NewCounters("WorkerOfflineEqualRowsCounters")
+	statsOfflineEqualRowsCounters = stats.NewCounters(
+		"WorkerOfflineEqualRowsCounters",
+		"For every table how many rows were equal")
 
 	// statsStreamingQueryRestartsCounters tracks for every tablet alias how often
 	// a streaming query was succesfully established there.
-	statsStreamingQueryCounters = stats.NewCounters("StreamingQueryCounters")
+	statsStreamingQueryCounters = stats.NewCounters(
+		"StreamingQueryCounters",
+		"For every tablet alias how often a streaming query was successfully established there")
 	// statsStreamingQueryErrorsCounters tracks for every tablet alias how often
 	// a (previously successfully established) streaming query did error.
-	statsStreamingQueryErrorsCounters = stats.NewCounters("StreamingQueryErrorsCounters")
+	statsStreamingQueryErrorsCounters = stats.NewCounters(
+		"StreamingQueryErrorsCounters",
+		"For every tablet alias how often a (previously successfully established) streaming query did error")
 	// statsStreamingQueryRestartsSameTabletCounters tracks for every tablet alias
 	// how often we successfully restarted a streaming query on the first retry.
 	// This kind of restart is usually necessary when our streaming query is idle
 	// and MySQL aborts it after a timeout.
-	statsStreamingQueryRestartsSameTabletCounters = stats.NewCounters("StreamingQueryRestartsSameTabletCounters")
+	statsStreamingQueryRestartsSameTabletCounters = stats.NewCounters(
+		"StreamingQueryRestartsSameTabletCounters",
+		"For every tablet alias how often we successfully restarted a streaming query on the first retry.")
 	// statsStreamingQueryRestartsDifferentTablet records how many restarts were
 	// successful on the 2 (or higher) retry after the initial retry to the same
 	// tablet failed and we switched to a different tablet. In practice, this
 	// happens when a tablet did go away due to a maintenance operation.
-	statsStreamingQueryRestartsDifferentTablet = stats.NewInt("StreamingQueryRestartsDifferentTablet")
+	statsStreamingQueryRestartsDifferentTablet = stats.NewInt(
+		"StreamingQueryRestartsDifferentTablet",
+		"How many restarts were successful on the 2nd (or higher) retry after the initial retry to the same tablet fails & we switch to a different tablet")
 )
 
 const (
@@ -118,7 +145,7 @@ const (
 // per-run basis. This should be called at the beginning of each worker run.
 func resetVars() {
 	statsState.Set("")
-	statsRetryCount.Set(0)
+	statsRetryCount.Reset()
 	statsRetryCounters.Reset()
 
 	statsOnlineInsertsCounters.Reset()

@@ -234,24 +234,24 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
 	qeOnce.Do(func() {
-		stats.Publish("MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
-		stats.Publish("WarnResultSize", stats.IntFunc(qe.warnResultSize.Get))
-		stats.Publish("MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
-		stats.Publish("StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
-		stats.Publish("TableACLExemptCount", stats.IntFunc(qe.tableaclExemptCount.Get))
-		stats.Publish("QueryPoolWaiters", stats.IntFunc(qe.queryPoolWaiters.Get))
+		stats.NewIntFunc("MaxResultSize", "Query engine max result size", qe.maxResultSize.Get)
+		stats.NewIntFunc("WarnResultSize", "Query engine warn result size", qe.warnResultSize.Get)
+		stats.NewIntFunc("MaxDMLRows", "Query engine max DML rows", qe.maxDMLRows.Get)
+		stats.NewIntFunc("StreamBufferSize", "Query engine stream buffer size", qe.streamBufferSize.Get)
+		stats.NewIntFunc("TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Get)
+		stats.NewIntFunc("QueryPoolWaiters", "Query engine query pool waiters", qe.queryPoolWaiters.Get)
 
-		stats.Publish("QueryCacheLength", stats.IntFunc(qe.plans.Length))
-		stats.Publish("QueryCacheSize", stats.IntFunc(qe.plans.Size))
-		stats.Publish("QueryCacheCapacity", stats.IntFunc(qe.plans.Capacity))
-		stats.Publish("QueryCacheEvictions", stats.IntFunc(qe.plans.Evictions))
+		stats.NewIntFunc("QueryCacheLength", "Query engine query cache length", qe.plans.Length)
+		stats.NewIntFunc("QueryCacheSize", "Query engine query cache size", qe.plans.Size)
+		stats.NewIntFunc("QueryCacheCapacity", "Query engine query cache capacity", qe.plans.Capacity)
+		stats.NewIntFunc("QueryCacheEvictions", "Query engine query cache evictions", qe.plans.Evictions)
 		stats.Publish("QueryCacheOldest", stats.StringFunc(func() string {
 			return fmt.Sprintf("%v", qe.plans.Oldest())
 		}))
-		_ = stats.NewMultiCountersFunc("QueryCounts", []string{"Table", "Plan"}, qe.getQueryCount)
-		_ = stats.NewMultiCountersFunc("QueryTimesNs", []string{"Table", "Plan"}, qe.getQueryTime)
-		_ = stats.NewMultiCountersFunc("QueryRowCounts", []string{"Table", "Plan"}, qe.getQueryRowCount)
-		_ = stats.NewMultiCountersFunc("QueryErrorCounts", []string{"Table", "Plan"}, qe.getQueryErrorCount)
+		_ = stats.NewMultiCountersFunc("QueryCounts", []string{"Table", "Plan"}, "query counts", qe.getQueryCount)
+		_ = stats.NewMultiCountersFunc("QueryTimesNs", []string{"Table", "Plan"}, "query times in ns", qe.getQueryTime)
+		_ = stats.NewMultiCountersFunc("QueryRowCounts", []string{"Table", "Plan"}, "query row counts", qe.getQueryRowCount)
+		_ = stats.NewMultiCountersFunc("QueryErrorCounts", []string{"Table", "Plan"}, "query error counts", qe.getQueryErrorCount)
 
 		http.Handle("/debug/hotrows", qe.txSerializer)
 

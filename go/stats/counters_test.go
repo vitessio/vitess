@@ -27,7 +27,7 @@ import (
 
 func TestCounters(t *testing.T) {
 	clear()
-	c := NewCounters("counter1")
+	c := NewCounters("counter1", "help")
 	c.Add("c1", 1)
 	c.Add("c2", 1)
 	c.Add("c2", 1)
@@ -56,14 +56,14 @@ func TestCounters(t *testing.T) {
 
 func TestCountersTags(t *testing.T) {
 	clear()
-	c := NewCounters("counterTag1")
+	c := NewCounters("counterTag1", "help")
 	want := map[string]int64{}
 	got := c.Counts()
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("want %v, got %v", want, got)
 	}
 
-	c = NewCounters("counterTag2", "tag1", "tag2")
+	c = NewCounters("counterTag2", "help", "tag1", "tag2")
 	want = map[string]int64{"tag1": 0, "tag2": 0}
 	got = c.Counts()
 	if !reflect.DeepEqual(got, want) {
@@ -73,7 +73,7 @@ func TestCountersTags(t *testing.T) {
 
 func TestMultiCounters(t *testing.T) {
 	clear()
-	c := NewMultiCounters("mapCounter1", []string{"aaa", "bbb"})
+	c := NewMultiCounters("mapCounter1", "help", []string{"aaa", "bbb"})
 	c.Add([]string{"c1a", "c1b"}, 1)
 	c.Add([]string{"c2a", "c2b"}, 1)
 	c.Add([]string{"c2a", "c2b"}, 1)
@@ -89,7 +89,7 @@ func TestMultiCounters(t *testing.T) {
 	if counts["c2a.c2b"] != 2 {
 		t.Errorf("want 2, got %d", counts["c2a.c2b"])
 	}
-	f := NewMultiCountersFunc("", []string{"aaa", "bbb"}, func() map[string]int64 {
+	f := NewMultiCountersFunc("", []string{"aaa", "bbb"}, "help", func() map[string]int64 {
 		return map[string]int64{
 			"c1a.c1b": 1,
 			"c2a.c2b": 2,
@@ -102,7 +102,7 @@ func TestMultiCounters(t *testing.T) {
 
 func TestMultiCountersDot(t *testing.T) {
 	clear()
-	c := NewMultiCounters("mapCounter2", []string{"aaa", "bbb"})
+	c := NewMultiCounters("mapCounter2", "help", []string{"aaa", "bbb"})
 	c.Add([]string{"c1.a", "c1b"}, 1)
 	c.Add([]string{"c2a", "c2.b"}, 1)
 	c.Add([]string{"c2a", "c2.b"}, 1)
@@ -129,7 +129,7 @@ func TestCountersHook(t *testing.T) {
 		gotv = v.(*Counters)
 	})
 
-	v := NewCounters("counter2")
+	v := NewCounters("counter2", "help")
 	if gotname != "counter2" {
 		t.Errorf("want counter2, got %s", gotname)
 	}
@@ -138,7 +138,7 @@ func TestCountersHook(t *testing.T) {
 	}
 }
 
-var benchCounter = NewCounters("bench")
+var benchCounter = NewCounters("bench", "help")
 
 func BenchmarkCounters(b *testing.B) {
 	clear()
@@ -152,7 +152,7 @@ func BenchmarkCounters(b *testing.B) {
 	})
 }
 
-var benchMultiCounter = NewMultiCounters("benchMulti", []string{"call", "keyspace", "dbtype"})
+var benchMultiCounter = NewMultiCounters("benchMulti", "help", []string{"call", "keyspace", "dbtype"})
 
 func BenchmarkMultiCounters(b *testing.B) {
 	clear()

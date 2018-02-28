@@ -155,7 +155,7 @@ func (w *Writer) Close() {
 // and we also execute them with an isolated connection that turns off the binlog and
 // is closed at the end.
 func (w *Writer) initializeTables(cp *mysql.ConnParams) error {
-	conn, err := dbconnpool.NewDBConnection(cp, stats.NewTimings(""))
+	conn, err := dbconnpool.NewDBConnection(cp, stats.NewTimings("", ""))
 	if err != nil {
 		return fmt.Errorf("Failed to create connection for heartbeat: %v", err)
 	}

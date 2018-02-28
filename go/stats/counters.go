@@ -32,23 +32,28 @@ type Counters struct {
 	// modification to the actual number (int64) should be done with atomic funcs.
 	mu     sync.RWMutex
 	counts map[string]*int64
+	help   string
 }
 
 // NewCounters create a new Counters instance. If name is set, the variable
-// gets published. The functional also accepts an optional list of tags that
+// gets published. The function also accepts an optional list of tags that
 // pre-creates them initialized to 0.
-func NewCounters(name string, tags ...string) *Counters {
-	c := &Counters{counts: make(map[string]*int64)}
+func NewCounters(name string, help string, tags ...string) *Counters {
+	c := &Counters{
+		counts: make(map[string]*int64),
+		help:   help,
+	}
+
 	for _, tag := range tags {
 		c.counts[tag] = new(int64)
 	}
 	if name != "" {
 		publish(name, c)
 	}
+	publishPullCounters(c, name)
 	return c
 }
 
-// String is used by expvar.
 func (c *Counters) String() string {
 	b := bytes.NewBuffer(make([]byte, 0, 4096))
 
@@ -97,17 +102,17 @@ func (c *Counters) Add(name string, value int64) {
 	atomic.AddInt64(a, value)
 }
 
-// Set sets the value of a named counter.
-func (c *Counters) Set(name string, value int64) {
-	a := c.getValueAddr(name)
-	atomic.StoreInt64(a, value)
-}
-
 // Reset resets all counter values
 func (c *Counters) Reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.counts = make(map[string]*int64)
+}
+
+// ResetCounter resets a specific counter value to 0
+func (c *Counters) ResetCounter(name string) {
+	a := c.getValueAddr(name)
+	atomic.StoreInt64(a, int64(0))
 }
 
 // Counts returns a copy of the Counters' map.
@@ -120,6 +125,39 @@ func (c *Counters) Counts() map[string]int64 {
 		counts[k] = atomic.LoadInt64(a)
 	}
 	return counts
+}
+
+// Help returns the help string.
+func (c *Counters) Help() string {
+	return c.help
+}
+
+// Gauges is similar to Counters, except its values can go up and down.
+type Gauges struct {
+	Counters
+}
+
+// NewGauges creates a new Gauge and publishes it if the name is set.
+func NewGauges(name string, help string, tags ...string) *Gauges {
+	g := &Gauges{Counters: Counters{
+		counts: make(map[string]*int64),
+		help:   help,
+	}}
+
+	for _, tag := range tags {
+		g.Counters.counts[tag] = new(int64)
+	}
+	if name != "" {
+		publish(name, g)
+		publishPullGauges(g, name)
+	}
+	return g
+}
+
+// Set sets the value of a named counter.
+func (g *Gauges) Set(name string, value int64) {
+	a := g.Counters.getValueAddr(name)
+	atomic.StoreInt64(a, value)
 }
 
 // CountersFunc converts a function that returns
@@ -162,14 +200,18 @@ type MultiCounters struct {
 
 // NewMultiCounters creates a new MultiCounters instance, and publishes it
 // if name is set.
-func NewMultiCounters(name string, labels []string) *MultiCounters {
+func NewMultiCounters(name string, help string, labels []string) *MultiCounters {
 	t := &MultiCounters{
-		Counters: Counters{counts: make(map[string]*int64)},
-		labels:   labels,
+		Counters: Counters{
+			counts: make(map[string]*int64),
+			help:   help},
+		labels: labels,
 	}
 	if name != "" {
 		publish(name, t)
 	}
+
+	publishPullMultiCounters(t, name)
 	return t
 }
 
@@ -187,13 +229,61 @@ func (mc *MultiCounters) Add(names []string, value int64) {
 	mc.Counters.Add(mapKey(names), value)
 }
 
-// Set sets the value of a named counter. len(names) must be equal to
-// len(Labels)
-func (mc *MultiCounters) Set(names []string, value int64) {
+// ResetCounter resets the value of a named counter back to 0. len(names)
+// must be equal to len(Labels)
+func (mc *MultiCounters) ResetCounter(names []string) {
 	if len(names) != len(mc.labels) {
 		panic("MultiCounters: wrong number of values in Set")
 	}
-	mc.Counters.Set(mapKey(names), value)
+
+	mc.Counters.ResetCounter(mapKey(names))
+}
+
+// MultiGauges is a MultiCounters implementation where the values can go up and down
+type MultiGauges struct {
+	Gauges
+	labels []string
+}
+
+// NewMultiGauges creates a new MultiGauges instance, and publishes it
+// if name is set.
+func NewMultiGauges(name string, help string, labels []string) *MultiGauges {
+	t := &MultiGauges{
+		Gauges: Gauges{Counters{
+			counts: make(map[string]*int64),
+			help:   help,
+		}},
+		labels: labels,
+	}
+	if name != "" {
+		publish(name, t)
+	}
+
+	publishPullMultiGauges(t, name)
+	return t
+}
+
+// Labels returns the list of labels.
+func (mg *MultiGauges) Labels() []string {
+	return mg.labels
+}
+
+// Add adds a value to a named counter. len(names) must be equal to
+// len(Labels)
+func (mg *MultiGauges) Add(names []string, value int64) {
+	if len(names) != len(mg.labels) {
+		panic("MultiGauges: wrong number of values in Add")
+	}
+	mg.Gauges.Counters.Add(mapKey(names), value)
+}
+
+// Set sets the value of a named counter. len(names) must be equal to
+// len(Labels)
+func (mg *MultiGauges) Set(names []string, value int64) {
+	if len(names) != len(mg.labels) {
+		panic("MultiGauges: wrong number of values in Set")
+	}
+	mg.Gauges.Set(mapKey(names), value)
 }
 
 // MultiCountersFunc is a multidimensional CountersFunc implementation
@@ -205,6 +295,7 @@ func (mc *MultiCounters) Set(names []string, value int64) {
 type MultiCountersFunc struct {
 	CountersFunc
 	labels []string
+	help   string
 }
 
 // Labels returns the list of labels.
@@ -212,16 +303,25 @@ func (mcf *MultiCountersFunc) Labels() []string {
 	return mcf.labels
 }
 
+// Help returns the help string
+func (mcf *MultiCountersFunc) Help() string {
+	return mcf.help
+}
+
 // NewMultiCountersFunc creates a new MultiCountersFunc mapping to the provided
 // function.
-func NewMultiCountersFunc(name string, labels []string, f CountersFunc) *MultiCountersFunc {
+func NewMultiCountersFunc(name string, labels []string, help string, f CountersFunc) *MultiCountersFunc {
 	t := &MultiCountersFunc{
 		CountersFunc: f,
 		labels:       labels,
+		help:         help,
 	}
 	if name != "" {
 		publish(name, t)
 	}
+
+	publishPullMultiCountersFunc(t, name)
+
 	return t
 }
 
