@@ -9,8 +9,8 @@ import (
 	time "time"
 
 	gomock "github.com/golang/mock/gomock"
-	topodata "github.com/youtube/vitess/go/vt/proto/topodata"
 	context "golang.org/x/net/context"
+	topodata "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // MockReshardingWrangler is a mock of ReshardingWrangler interface

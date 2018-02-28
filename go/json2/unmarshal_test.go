@@ -19,7 +19,7 @@ package json2
 import (
 	"testing"
 
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 func TestUnmarshal(t *testing.T) {

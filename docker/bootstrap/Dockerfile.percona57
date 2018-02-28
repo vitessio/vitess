@@ -15,7 +15,7 @@ RUN apt-key adv --keyserver keys.gnupg.net \
     rm -rf /var/lib/apt/lists/*
 
 # Bootstrap Vitess
-WORKDIR /vt/src/github.com/youtube/vitess
+WORKDIR /vt/src/vitess.io/vitess
 USER vitess
 # Required by e2e test dependencies e.g. test/environment.py.
 ENV USER vitess

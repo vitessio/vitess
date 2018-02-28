@@ -106,7 +106,7 @@ if [ -z "$GOPATH" ]; then
 fi
 
 export KUBECTL='kubectl'
-go get github.com/youtube/vitess/go/cmd/vtctlclient
+go get vitess.io/vitess/go/cmd/vtctlclient
 
 echo "****************************"
 echo "*Creating vitess cluster: $VITESS_NAME"

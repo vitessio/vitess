@@ -8,7 +8,7 @@ RUN apt-key adv --recv-keys --keyserver ha.pool.sks-keyservers.net 5072E1F5 && \
     rm -rf /var/lib/apt/lists/*
 
 # Bootstrap Vitess
-WORKDIR /vt/src/github.com/youtube/vitess
+WORKDIR /vt/src/vitess.io/vitess
 USER vitess
 # Required by e2e test dependencies e.g. test/environment.py.
 ENV USER vitess

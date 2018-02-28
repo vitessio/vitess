@@ -17,9 +17,9 @@ limitations under the License.
 package worker
 
 import (
-	"github.com/youtube/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sqltypes"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // ResultReader is an advanced version of sqltypes.ResultStream.

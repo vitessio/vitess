@@ -20,7 +20,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/discovery"
 )
 
 // replicationLagCache caches for each replica a bounded list of historic

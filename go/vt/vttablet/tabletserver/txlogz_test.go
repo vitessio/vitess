@@ -23,10 +23,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/streamlog"
-	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/vt/callerid"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 func testNotRedacted(t *testing.T, r *httptest.ResponseRecorder) {
@@ -42,6 +42,9 @@ func testRedacted(t *testing.T, r *httptest.ResponseRecorder) {
 }
 
 func testHandler(req *http.Request, t *testing.T) {
+	// Test with redactions off to start
+	*streamlog.RedactDebugUIQueries = false
+
 	response := httptest.NewRecorder()
 	tabletenv.TxLogger.Send("test msg")
 	txlogzHandler(response, req)
@@ -72,11 +75,14 @@ func testHandler(req *http.Request, t *testing.T) {
 	tabletenv.TxLogger.Send(txConn)
 	txlogzHandler(response, req)
 	testNotRedacted(t, response)
+
+	// Test with redactions on
 	*streamlog.RedactDebugUIQueries = true
 	txlogzHandler(response, req)
 	testRedacted(t, response)
-	*streamlog.RedactDebugUIQueries = false
 
+	// Reset to default redaction state
+	*streamlog.RedactDebugUIQueries = false
 }
 
 func TestTxlogzHandler(t *testing.T) {

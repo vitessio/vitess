@@ -21,7 +21,7 @@ import (
 
 	log "github.com/golang/glog"
 
-	"github.com/youtube/vitess/go/flagutil"
+	"vitess.io/vitess/go/flagutil"
 )
 
 var (

@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 )
 
 // Logger defines the interface to use for our logging interface.

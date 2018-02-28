@@ -17,7 +17,7 @@ limitations under the License.
 package automation
 
 import (
-	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
+	automationpb "vitess.io/vitess/go/vt/proto/automation"
 )
 
 // Helper functions for "Task" protobuf message.

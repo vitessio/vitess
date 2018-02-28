@@ -23,14 +23,14 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/flagutil"
-	"github.com/youtube/vitess/go/vt/schemamanager/schemaswap"
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtctl"
-	"github.com/youtube/vitess/go/vt/workflow"
-	"github.com/youtube/vitess/go/vt/workflow/resharding"
-	"github.com/youtube/vitess/go/vt/workflow/topovalidator"
+	"vitess.io/vitess/go/flagutil"
+	"vitess.io/vitess/go/vt/schemamanager/schemaswap"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl"
+	"vitess.io/vitess/go/vt/workflow"
+	"vitess.io/vitess/go/vt/workflow/resharding"
+	"vitess.io/vitess/go/vt/workflow/topovalidator"
 )
 
 var (

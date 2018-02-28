@@ -30,14 +30,14 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/callerid"
-	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestSimpleRead(t *testing.T) {
@@ -304,16 +304,16 @@ func TestConsolidation(t *testing.T) {
 	framework.Server.SetPoolSize(1)
 
 	for sleep := 0.1; sleep < 10.0; sleep *= 2 {
-		query := fmt.Sprintf("select sleep(%v) from dual", sleep)
-
 		vstart := framework.DebugVars()
 		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() {
+			query := fmt.Sprintf("select sleep(%v) from dual /* query: 1 */", sleep)
 			framework.NewClient().Execute(query, nil)
 			wg.Done()
 		}()
 		go func() {
+			query := fmt.Sprintf("select sleep(%v) from dual /* query: 2 */", sleep)
 			framework.NewClient().Execute(query, nil)
 			wg.Done()
 		}()

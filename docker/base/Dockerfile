@@ -10,7 +10,7 @@ FROM vitess/bootstrap:mysql57
 
 # Re-copy sources from working tree
 USER root
-COPY . /vt/src/github.com/youtube/vitess
+COPY . /vt/src/vitess.io/vitess
 
 # Fix permissions
 RUN chown -R vitess:vitess /vt

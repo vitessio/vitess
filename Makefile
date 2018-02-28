@@ -161,7 +161,7 @@ $(PROTO_GO_TEMPS): install_protoc-gen-go
 $(PROTO_GO_TEMPS): go/vt/.proto.tmp/%.pb.go: proto/%.proto
 	mkdir -p go/vt/.proto.tmp
 	$(PROTOC_DIR)/protoc -Iproto $< --go_out=plugins=grpc:go/vt/.proto.tmp
-	sed -i -e 's,import \([a-z0-9_]*\) ".",import \1 "github.com/youtube/vitess/go/vt/proto/\1",g' $@
+	sed -i -e 's,import \([a-z0-9_]*\) ".",import \1 "vitess.io/vitess/go/vt/proto/\1",g' $@
 
 # Helper targets for building Docker images.
 # Please read docker/README.md to understand the different available images.

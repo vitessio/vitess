@@ -17,8 +17,8 @@ limitations under the License.
 package automation
 
 import (
-	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
 	"golang.org/x/net/context"
+	automationpb "vitess.io/vitess/go/vt/proto/automation"
 )
 
 // CopySchemaShardTask runs vtctl CopySchemaShard to copy the schema from one shard to another.

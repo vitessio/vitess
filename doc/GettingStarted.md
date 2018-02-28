@@ -24,7 +24,7 @@ image for you:
 
 ``` sh
 $ sudo docker run -ti vitess/base bash
-vitess@32f187ef9351:/vt/src/github.com/youtube/vitess$ make build
+vitess@32f187ef9351:/vt/src/vitess.io/vitess$ make build
 ```
 
 Now you can proceed to [start a Vitess cluster](#start-a-vitess-cluster) inside
@@ -232,13 +232,13 @@ In addition, Vitess requires the software and libraries listed below.
 
 1.  Navigate to the directory where you want to download the Vitess
     source code and clone the Vitess Github repo. After doing so,
-    navigate to the `src/github.com/youtube/vitess` directory.
+    navigate to the `src/vitess.io/vitess` directory.
 
     ``` sh
     cd $WORKSPACE
     git clone https://github.com/youtube/vitess.git \
-        src/github.com/youtube/vitess
-    cd src/github.com/youtube/vitess
+        src/vitess.io/vitess
+    cd src/vitess.io/vitess
     ```
 
 1.  Set the `MYSQL_FLAVOR` environment variable. Choose the appropriate
@@ -397,7 +397,7 @@ lock service. ZooKeeper is included in the Vitess distribution.
     variables required before running the scripts are `VTROOT` and `VTDATAROOT`.
 
     Set `VTROOT` to the parent of the Vitess source tree. For example, if you
-    ran `make build` while in `$HOME/vt/src/github.com/youtube/vitess`,
+    ran `make build` while in `$HOME/vt/src/vitess.io/vitess`,
     then you should set:
 
     ``` sh
@@ -418,7 +418,7 @@ lock service. ZooKeeper is included in the Vitess distribution.
     service. The following script creates a small ZooKeeper cluster:
 
     ``` sh
-    $ cd $VTROOT/src/github.com/youtube/vitess/examples/local
+    $ cd $VTROOT/src/vitess.io/vitess/examples/local
     vitess/examples/local$ ./zk-up.sh
     ### example output:
     # Starting zk servers...

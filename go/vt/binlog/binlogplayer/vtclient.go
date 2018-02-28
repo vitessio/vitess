@@ -16,7 +16,7 @@ limitations under the License.
 
 package binlogplayer
 
-import "github.com/youtube/vitess/go/sqltypes"
+import "vitess.io/vitess/go/sqltypes"
 
 // VtClient is a high level interface to the database.
 type VtClient interface {
