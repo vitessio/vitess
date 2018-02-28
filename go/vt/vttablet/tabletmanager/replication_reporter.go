@@ -61,14 +61,18 @@ func (r *replicationReporter) Report(isSlaveType, shouldQueryServiceBeRunning bo
 		if !r.agent.slaveStopped() {
 			// As far as we've been told, it isn't stopped on purpose,
 			// so let's try to start it.
-			log.Infof("Slave is stopped. Trying to reconnect to master...")
-			ctx, cancel := context.WithTimeout(r.agent.batchCtx, 5*time.Second)
-			if err := repairReplication(ctx, r.agent); err != nil {
-				log.Infof("Failed to reconnect to master: %v", err)
+			if *mysqlctl.DisableActiveReparents {
+				log.Infof("Slave is stopped. Running with --disable_active_reparents so will not try to reconnect to master...")
+			} else {
+				log.Infof("Slave is stopped. Trying to reconnect to master...")
+				ctx, cancel := context.WithTimeout(r.agent.batchCtx, 5*time.Second)
+				if err := repairReplication(ctx, r.agent); err != nil {
+					log.Infof("Failed to reconnect to master: %v", err)
+				}
+				cancel()
+				// Check status again.
+				status, statusErr = r.agent.MysqlDaemon.SlaveStatus()
 			}
-			cancel()
-			// Check status again.
-			status, statusErr = r.agent.MysqlDaemon.SlaveStatus()
 		}
 	}
 	if statusErr != nil {
@@ -105,6 +109,10 @@ func (r *replicationReporter) HTMLName() template.HTML {
 // repairReplication tries to connect this slave to whoever is
 // the current master of the shard, and start replicating.
 func repairReplication(ctx context.Context, agent *ActionAgent) error {
+	if *mysqlctl.DisableActiveReparents {
+		return fmt.Errorf("can't repair replication with --disable_active_reparents")
+	}
+
 	ts := agent.TopoServer
 	tablet := agent.Tablet()
 	si, err := ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
@@ -113,9 +121,6 @@ func repairReplication(ctx context.Context, agent *ActionAgent) error {
 	}
 	if !si.HasMaster() {
 		return fmt.Errorf("no master tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
-	}
-	if *mysqlctl.DisableActiveReparents {
-		return agent.StartSlave(ctx)
 	}
 	return agent.setMasterLocked(ctx, si.MasterAlias, 0, true)
 }
