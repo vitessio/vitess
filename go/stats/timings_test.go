@@ -24,7 +24,7 @@ import (
 
 func TestTimings(t *testing.T) {
 	clear()
-	tm := NewTimings("timings1")
+	tm := NewTimings("timings1", "help")
 	tm.Add("tag1", 500*time.Microsecond)
 	tm.Add("tag1", 1*time.Millisecond)
 	tm.Add("tag2", 1*time.Millisecond)
@@ -36,7 +36,7 @@ func TestTimings(t *testing.T) {
 
 func TestMultiTimings(t *testing.T) {
 	clear()
-	mtm := NewMultiTimings("maptimings1", []string{"dim1", "dim2"})
+	mtm := NewMultiTimings("maptimings1", "help", []string{"dim1", "dim2"})
 	mtm.Add([]string{"tag1a", "tag1b"}, 500*time.Microsecond)
 	mtm.Add([]string{"tag1a", "tag1b"}, 1*time.Millisecond)
 	mtm.Add([]string{"tag2a", "tag2b"}, 1*time.Millisecond)

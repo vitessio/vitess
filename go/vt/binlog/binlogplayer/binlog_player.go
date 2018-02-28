@@ -88,7 +88,7 @@ func (bps *Stats) GetLastPosition() mysql.Position {
 // NewStats creates a new Stats structure
 func NewStats() *Stats {
 	bps := &Stats{}
-	bps.Timings = stats.NewTimings("")
+	bps.Timings = stats.NewTimings("", "")
 	bps.Rates = stats.NewRates("", bps.Timings, 15, 60e9)
 	return bps
 }

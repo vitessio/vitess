@@ -68,12 +68,15 @@ func NewReplicationWatcher(se *schema.Engine, config tabletenv.TabletConfig) *Re
 			}
 			return ""
 		}))
-		stats.Publish("EventTokenTimestamp", stats.IntFunc(func() int64 {
-			if e := rpw.EventToken(); e != nil {
-				return e.Timestamp
-			}
-			return 0
-		}))
+		stats.NewIntFunc(
+			"EventTokenTimestamp",
+			"Replication watcher event token timestamp",
+			(func() int64 {
+				if e := rpw.EventToken(); e != nil {
+					return e.Timestamp
+				}
+				return 0
+			}))
 	})
 	return rpw
 }

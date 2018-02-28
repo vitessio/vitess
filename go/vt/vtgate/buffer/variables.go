@@ -23,22 +23,34 @@ import "vitess.io/vitess/go/stats"
 
 var (
 	// starts counts how often we started buffering (including dry-run bufferings).
-	starts = stats.NewMultiCounters("BufferStarts", []string{"Keyspace", "ShardName"})
+	starts = stats.NewMultiCounters(
+		"BufferStarts",
+		"How many times we started buffering, including dry-run",
+		[]string{"Keyspace", "ShardName"})
 	// stops counts how often we triggered the stop of a buffering, including
 	// dry-run bufferings.
 	// See the type "stopReason" below for all possible values of "Reason".
-	stops = stats.NewMultiCounters("BufferStops", []string{"Keyspace", "ShardName", "Reason"})
+	stops = stats.NewMultiCounters(
+		"BufferStops",
+		"How many times we triggered a buffering to stop, including dry-runs",
+		[]string{"Keyspace", "ShardName", "Reason"})
 
 	// failoverDurationSumMs is the cumulative sum of all failover durations.
 	// In connection with "starts" it can be used to calculate a moving average.
-	failoverDurationSumMs = stats.NewMultiCounters("BufferFailoverDurationSumMs", []string{"Keyspace", "ShardName"})
+	failoverDurationSumMs = stats.NewMultiCounters(
+		"BufferFailoverDurationSumMs",
+		"Cumulative sum of all failover durations",
+		[]string{"Keyspace", "ShardName"})
 
 	// utilizationSum is the cumulative sum of the maximum buffer utilization
 	// (in percentage) during each failover.
 	// Utilization = maximum number of requests buffered / buffer size.
 	// In connection with "starts" it can be used to calculate a moving average.
 	// TODO(mberlin): Replace this with a MultiHistogram once it's available.
-	utilizationSum = stats.NewMultiCounters("BufferUtilizationSum", []string{"Keyspace", "ShardName"})
+	utilizationSum = stats.NewMultiGauges(
+		"BufferUtilizationSum",
+		"Cumulative sum of the max buffer utilization (in %) during each failover",
+		[]string{"Keyspace", "ShardName"})
 	// utilizationDryRunSum is the cumulative sum of the maximum *theoretical*
 	// buffer utilization (in percentage) during each failover.
 	// Utilization = maximum number of requests buffered seen / buffer size.
@@ -48,26 +60,44 @@ var (
 	// utilization). The moving average would be 100% because there were two
 	// failovers in that period.
 	// TODO(mberlin): Replace this with a MultiHistogram once it's available.
-	utilizationDryRunSum = stats.NewMultiCounters("BufferUtilizationDryRunSum", []string{"Keyspace", "ShardName"})
+	utilizationDryRunSum = stats.NewMultiCounters(
+		"BufferUtilizationDryRunSum",
+		"Cumulative sum of the max *theoretical* buffer util (in %) during each failover",
+		[]string{"Keyspace", "ShardName"})
 
 	// requestsBuffered tracks how many requests were added to the buffer.
 	// NOTE: The two counters "Buffered" and "Skipped" should cover all requests
 	// which passed through the buffer.
-	requestsBuffered = stats.NewMultiCounters("BufferRequestsBuffered", []string{"Keyspace", "ShardName"})
+	requestsBuffered = stats.NewMultiCounters(
+		"BufferRequestsBuffered",
+		"How many requests were added to the buffer",
+		[]string{"Keyspace", "ShardName"})
 	// requestsBufferedDryRun tracks how many requests would have been added to
 	// the buffer (dry-run mode).
-	requestsBufferedDryRun = stats.NewMultiCounters("BufferRequestsBufferedDryRun", []string{"Keyspace", "ShardName"})
+	requestsBufferedDryRun = stats.NewMultiCounters(
+		"BufferRequestsBufferedDryRun",
+		"How many requests would've been added to the buffer (dry-run)",
+		[]string{"Keyspace", "ShardName"})
 	// requestsBuffered tracks how many requests were drained from the buffer.
 	// NOTE: The sum of the two counters "Drained" and "Evicted" should be
 	// identical to the "Buffered" counter value.
-	requestsDrained = stats.NewMultiCounters("BufferRequestsDrained", []string{"Keyspace", "ShardName"})
+	requestsDrained = stats.NewMultiCounters(
+		"BufferRequestsDrained",
+		"How many requests drained from the buffer",
+		[]string{"Keyspace", "ShardName"})
 	// requestsEvicted tracks how many requests were evicted early from the buffer.
 	// See the type "evictedReason" below for all possible values of "Reason".
-	requestsEvicted = stats.NewMultiCounters("BufferRequestsEvicted", []string{"Keyspace", "ShardName", "Reason"})
+	requestsEvicted = stats.NewMultiCounters(
+		"BufferRequestsEvicted",
+		"How many requests were evicted early from the buffer",
+		[]string{"Keyspace", "ShardName", "Reason"})
 	// requestsSkipped tracks how many requests would have been buffered but
 	// eventually were not (includes dry-run bufferings).
 	// See the type "skippedReason" below for all possible values of "Reason".
-	requestsSkipped = stats.NewMultiCounters("BufferRequestsSkipped", []string{"Keyspace", "ShardName", "Reason"})
+	requestsSkipped = stats.NewMultiCounters(
+		"BufferRequestsSkipped",
+		"How many requests would've been buffered but were skipped (incl. dry-run)",
+		[]string{"Keyspace", "ShardName", "Reason"})
 )
 
 // stopReason is used in "stopsByReason" as "Reason" label.
@@ -116,27 +146,27 @@ const (
 // "no value for this label set (NaN)" to "a value".
 // "statsKey" should have two members for keyspace and shard.
 func initVariablesForShard(statsKey []string) {
-	starts.Set(statsKey, 0)
+	starts.ResetCounter(statsKey)
 	for _, reason := range stopReasons {
 		key := append(statsKey, string(reason))
-		stops.Set(key, 0)
+		stops.ResetCounter(key)
 	}
 
-	failoverDurationSumMs.Set(statsKey, 0)
+	failoverDurationSumMs.ResetCounter(statsKey)
 
 	utilizationSum.Set(statsKey, 0)
-	utilizationDryRunSum.Set(statsKey, 0)
+	utilizationDryRunSum.ResetCounter(statsKey)
 
-	requestsBuffered.Set(statsKey, 0)
-	requestsBufferedDryRun.Set(statsKey, 0)
-	requestsDrained.Set(statsKey, 0)
+	requestsBuffered.ResetCounter(statsKey)
+	requestsBufferedDryRun.ResetCounter(statsKey)
+	requestsDrained.ResetCounter(statsKey)
 	for _, reason := range evictReasons {
 		key := append(statsKey, string(reason))
-		requestsEvicted.Set(key, 0)
+		requestsEvicted.ResetCounter(key)
 	}
 	for _, reason := range skippedReasons {
 		key := append(statsKey, string(reason))
-		requestsSkipped.Set(key, 0)
+		requestsSkipped.ResetCounter(key)
 	}
 }
 
@@ -145,17 +175,26 @@ func initVariablesForShard(statsKey []string) {
 var (
 	// bufferSize publishes the configured per vtgate buffer size. It can be used
 	// to calculate the utilization of the buffer.
-	bufferSize = stats.NewInt("BufferSize")
+	bufferSize = stats.NewIntGauge("BufferSize", "The configured per vtgate buffer size")
 	// lastFailoverDurationMs tracks for how long vtgate buffered requests during
 	// the last failover.
 	// The value for a given shard will be reset at the next failover.
-	lastFailoverDurationMs = stats.NewMultiCounters("BufferLastFailoverDurationMs", []string{"Keyspace", "ShardName"})
+	lastFailoverDurationMs = stats.NewMultiGauges(
+		"BufferLastFailoverDurationMs",
+		"How long vtgate buffered requests during the last failover",
+		[]string{"Keyspace", "ShardName"})
 	// lastRequestsInFlightMax has the maximum value of buffered requests in flight
 	// of the last failover.
 	// The value for a given shard will be reset at the next failover.
-	lastRequestsInFlightMax = stats.NewMultiCounters("BufferLastRequestsInFlightMax", []string{"Keyspace", "ShardName"})
+	lastRequestsInFlightMax = stats.NewMultiGauges(
+		"BufferLastRequestsInFlightMax",
+		"The max value of buffered requests in flight of the last failover",
+		[]string{"Keyspace", "ShardName"})
 	// lastRequestsDryRunMax has the maximum number of requests which were seen during
 	// a dry-run buffering of the last failover.
 	// The value for a given shard will be reset at the next failover.
-	lastRequestsDryRunMax = stats.NewMultiCounters("BufferLastRequestsDryRunMax", []string{"Keyspace", "ShardName"})
+	lastRequestsDryRunMax = stats.NewMultiGauges(
+		"BufferLastRequestsDryRunMax",
+		"Max # of requests which were seen during a dry-run buffering of the last failover",
+		[]string{"Keyspace", "ShardName"})
 )
