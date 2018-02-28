@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlannotation"
@@ -351,7 +352,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 			target.Keyspace,
 			target.TabletType,
 			func(keyspace string) ([]*srvtopo.ResolvedShard, error) {
-				return vtg.resolver.resolver.ResolveShards(ctx, keyspace, []string{target.Shard}, target.TabletType)
+				return vtg.resolver.resolver.ResolveDestination(ctx, keyspace, target.TabletType, key.DestinationShard(target.Shard))
 			},
 			session.Options,
 			func(reply *sqltypes.Result) error {
@@ -410,7 +411,7 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables 
 		tabletType,
 		session,
 		func() ([]*srvtopo.ResolvedShard, error) {
-			return vtg.resolver.resolver.ResolveShards(ctx, keyspace, shards, tabletType)
+			return vtg.resolver.resolver.ResolveDestination(ctx, keyspace, tabletType, key.DestinationShards(shards))
 		},
 		notInTransaction,
 		options,
@@ -764,7 +765,7 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 		keyspace,
 		tabletType,
 		func(keyspace string) ([]*srvtopo.ResolvedShard, error) {
-			return vtg.resolver.resolver.ResolveShards(ctx, keyspace, shards, tabletType)
+			return vtg.resolver.resolver.ResolveDestination(ctx, keyspace, tabletType, key.DestinationShards(shards))
 		},
 		options,
 		func(reply *sqltypes.Result) error {
