@@ -1,0 +1,13 @@
+language: go
+
+go:
+  # we intend to support only the latest version and perhaps the previous one
+  - 1.7
+  - 1.8
+
+script:
+  - go build ./...
+  - go install github.com/golang/mock/mockgen
+  - ./ci/check_go_fmt.sh
+  - ./ci/check_go_generate.sh
+  - go test -v ./...

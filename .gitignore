@@ -45,19 +45,12 @@ tags
 /java/pom.xml.versionsBackup
 /java/*/pom.xml.versionsBackup
 
-# php downloaded dependencies
-/php/composer.phar
-/php/vendor
-
 ## vitess.io preview site
 /preview-vitess.io/
 
 # test.go output files
 _test/
 /test/stats.json
-
-# Go vendored libs
-/vendor/*/
 
 # Angular2 Bower Libs
 /web/vtctld2/.bowerrc~
