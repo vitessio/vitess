@@ -8,7 +8,7 @@ teaser: 400x250.gif
 locale: en_US
 url: 
 project-name: Vitess
-repo: https://github.com/youtube/vitess
+repo: https://github.com/vitessio/vitess
 
 # Jekyll configuration
 sass:
@@ -29,7 +29,7 @@ redcarpet:
 # Site owner
 owner:
   name: Vitess Team
-  web: https://github.com/youtube/vitess
+  web: https://github.com/vitessio/vitess
   email: 
   twitter: 
   bio: 
