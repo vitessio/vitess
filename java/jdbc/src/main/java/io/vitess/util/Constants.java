@@ -16,6 +16,7 @@
 
 package io.vitess.util;
 
+import com.google.protobuf.ByteString;
 import io.vitess.proto.Query;
 import io.vitess.proto.Topodata;
 
@@ -53,8 +54,9 @@ public class Constants {
     public static final String DEFAULT_USERNAME = null;
     public static final String DEFAULT_TARGET = "";
     public static final String DEFAULT_CATALOG = DEFAULT_KEYSPACE;
+    public static final ByteString ZERO_DATE_TIME_PREFIX = ByteString.copyFromUtf8("0000-00-00");
 
-    private Constants() {
+  private Constants() {
     }
 
 
@@ -151,5 +153,17 @@ public class Constants {
 
     public enum QueryExecuteType {
         SIMPLE, STREAM
+    }
+
+    public enum ZeroDateTimeBehavior {
+        /**
+         * This is the current behavior. It completely garbles null timestamps. It is mostly likely
+         * entirely incorrect but we will keep it for backwards compatibility.
+         */
+        GARBLE,
+        /**
+         * This matches the MySQL JDBC driver convertToNull behavior.
+         */
+        CONVERTTONULL
     }
 }
