@@ -16,10 +16,10 @@ grow, with an atomic cutover step that takes only a few seconds.
 Vitess has been a core component of YouTube's database infrastructure
 since 2011, and has grown to encompass tens of thousands of MySQL nodes.
 
-For more about Vitess, please visit [vitess.io](http://vitess.io).
+For more about Vitess, please visit [vitess.io](https://vitess.io).
 
 Vitess has a growing community. You can view the list of adopters
-[here](https://github.com/youtube/vitess/blob/master/ADOPTERS.md).
+[here](https://github.com/vitessio/vitess/blob/master/ADOPTERS.md).
 
 ## Contact
 
@@ -29,7 +29,7 @@ discussion forum. You may also request access to the Vitess Slack channel.
 
 Subscribe to
 [vitess-announce@googlegroups.com](https://groups.google.com/forum/#!forum/vitess-announce)
-or the [Vitess Blog](http://blog.vitess.io/)
+or the [Vitess Blog](https://blog.vitess.io/)
 for low-frequency updates like new features and releases.
 
 ## License
