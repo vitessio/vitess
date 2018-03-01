@@ -26,6 +26,7 @@ import java.sql.Clob;
 import java.sql.SQLException;
 import java.sql.Time;
 import java.sql.Timestamp;
+import java.util.Properties;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -109,6 +110,7 @@ public class VitessResultSetTest extends BaseTest {
             .addFields(Query.Field.newBuilder().setName("col25").setType(Query.Type.BIT).build())
             .addFields(Query.Field.newBuilder().setName("col26").setType(Query.Type.ENUM).build())
             .addFields(Query.Field.newBuilder().setName("col27").setType(Query.Type.SET).build())
+            .addFields(Query.Field.newBuilder().setName("col28").setType(Query.Type.TIMESTAMP).build())
             .addRows(Query.Row.newBuilder().addLengths("-50".length()).addLengths("50".length())
                 .addLengths("-23000".length()).addLengths("23000".length())
                 .addLengths("-100".length()).addLengths("100".length()).addLengths("-100".length())
@@ -121,12 +123,14 @@ public class VitessResultSetTest extends BaseTest {
                 .addLengths("HELLO TDS TEAM".length()).addLengths("HELLO TDS TEAM".length())
                 .addLengths("N".length()).addLengths("HELLO TDS TEAM".length())
                 .addLengths("1".length()).addLengths("val123".length())
-                .addLengths("val123".length()).setValues(ByteString.copyFromUtf8(
-                "-5050-2300023000-100100-100100-1000100024.52100.432016-02-06 " +
-                "14:15:162016-02-0612:34:562016-02-06 14:15:1620161234.56789HELLO TDS TEAMHELLO TDS TEAMHELLO" +
-                " TDS TEAMHELLO TDS TEAMNHELLO TDS TEAM1val123val123"))).build());
+                .addLengths("val123".length()).addLengths("0000-00-00 00:00:00".length())
+                .setValues(ByteString
+                    .copyFromUtf8("-5050-2300023000-100100-100100-1000100024.52100.432016-02-06 " +
+                        "14:15:162016-02-0612:34:562016-02-06 14:15:1620161234.56789HELLO TDS TEAMHELLO TDS TEAMHELLO"
+                        +
+                        " TDS TEAMHELLO TDS TEAMNHELLO TDS TEAM1val123val1230000-00-00 00:00:00"))).build());
     }
-    
+
     public Cursor getCursorWithRowsAsNull() {
         /*
         INT8(1, 257), -50
@@ -353,6 +357,25 @@ public class VitessResultSetTest extends BaseTest {
         vitessResultSet.next();
         Assert.assertEquals(new Timestamp(116, 1, 6, 14, 15, 16, 0),
             vitessResultSet.getTimestamp(13));
+    }
+
+    @Test public void testgetZeroTimestampGarble() throws SQLException, UnsupportedEncodingException {
+        Cursor cursor = getCursorWithRows();
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor,
+            new VitessStatement(new VitessConnection(
+                "jdbc:vitess://locahost:9000/vt_keyspace/keyspace?zeroDateTimeBehavior=garble", new Properties())));
+        vitessResultSet.next();
+        Assert.assertEquals("0002-11-30 00:00:00.0",
+            vitessResultSet.getTimestamp(28).toString());
+    }
+
+    @Test public void testgetZeroTimestampConvertToNill() throws SQLException, UnsupportedEncodingException {
+        Cursor cursor = getCursorWithRows();
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor,
+            new VitessStatement(new VitessConnection(
+                "jdbc:vitess://locahost:9000/vt_keyspace/keyspace?zeroDateTimeBehavior=convertToNull", new Properties())));
+        vitessResultSet.next();
+        Assert.assertNull(vitessResultSet.getTimestamp(28));
     }
 
     @Test public void testgetStringbyColumnLabel() throws SQLException {
