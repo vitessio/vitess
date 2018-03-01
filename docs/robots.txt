@@ -1,1 +1,0 @@
-Sitemap: http://vitess.io/sitemap.xml
