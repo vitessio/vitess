@@ -32,7 +32,7 @@ Vitess team member [Anthony Yeh](https://github.com/enisoc)'s talk at
 the [January 2016 CoreOS Meetup](http://www.meetup.com/coreos/events/228233948/)
 discussed challenges and techniques for running distributed databases
 within Kubernetes, followed by a deep dive into the design trade-offs
-of the [Vitess on Kubernetes](https://github.com/youtube/vitess/tree/master/examples/kubernetes)
+of the [Vitess on Kubernetes](https://github.com/vitessio/vitess/tree/master/examples/kubernetes)
 deployment templates.
 
 <iframe src="https://docs.google.com/gview?url=https://vitess.io/resources/coreos-meetup-2016-01-27.pdf&embedded=true" style="width:643px; height:379px; margin-top: 20px;" frameborder="0"></iframe>
@@ -59,7 +59,7 @@ of how Vitess has evolved to live in a containerized world with
 Kubernetes and Docker.
 
 <iframe src="https://docs.google.com/gview?url=https://vitess.io/resources/percona-2015-vitess-and-kubernetes.pdf&embedded=true" style="width:643px; height:379px; margin-top: 20px;" frameborder="0"></iframe>
-<div style="text-align: right; width: 100%; margin-bottom:20px"><a href="https://github.com/youtube/vitess/blob/master/doc/slides/Percona2015.pptx?raw=true">download slides</a></div>
+<div style="text-align: right; width: 100%; margin-bottom:20px"><a href="https://github.com/vitessio/vitess/blob/master/doc/slides/Percona2015.pptx?raw=true">download slides</a></div>
 
 
 ## Google I/O 2014 - Scaling with Go: YouTube's Vitess
