@@ -23,8 +23,8 @@ completely hidden from the application. They gave a live demo of
 which now knows nothing about shards, and explained how new features in VTGate
 make all of this possible.
 
-<iframe src="http://docs.google.com/gview?url=http://vitess.io/resources/percona-2016.pdf&embedded=true" style="width:643px; height:379px; margin-top: 20px;" frameborder="0"></iframe>
-<div style="text-align: right; width: 100%; margin-bottom:20px"><a href="http://vitess.io/resources/percona-2016.pdf">download slides</a></div>
+<iframe src="https://docs.google.com/gview?url=https://vitess.io/resources/percona-2016.pdf&embedded=true" style="width:643px; height:379px; margin-top: 20px;" frameborder="0"></iframe>
+<div style="text-align: right; width: 100%; margin-bottom:20px"><a href="https://vitess.io/resources/percona-2016.pdf">download slides</a></div>
 
 ## CoreOS Meetup, January 2016
 
@@ -35,8 +35,8 @@ within Kubernetes, followed by a deep dive into the design trade-offs
 of the [Vitess on Kubernetes](https://github.com/youtube/vitess/tree/master/examples/kubernetes)
 deployment templates.
 
-<iframe src="http://docs.google.com/gview?url=http://vitess.io/resources/coreos-meetup-2016-01-27.pdf&embedded=true" style="width:643px; height:379px; margin-top: 20px;" frameborder="0"></iframe>
-<div style="text-align: right; width: 100%; margin-bottom:20px"><a href="http://vitess.io/resources/coreos-meetup-2016-01-27.pdf">download slides</a></div>
+<iframe src="https://docs.google.com/gview?url=https://vitess.io/resources/coreos-meetup-2016-01-27.pdf&embedded=true" style="width:643px; height:379px; margin-top: 20px;" frameborder="0"></iframe>
+<div style="text-align: right; width: 100%; margin-bottom:20px"><a href="https://vitess.io/resources/coreos-meetup-2016-01-27.pdf">download slides</a></div>
 
 ## Oracle OpenWorld 2015
 
@@ -48,8 +48,8 @@ applied to MySQL in the cloud. The talk also included a deep dive into
 ({% link user-guide/sharding.md %}#resharding), one of the key
 features of Vitess that makes it well-adapted for a Cloud Native environment.
 
-<iframe src="http://docs.google.com/gview?url=http://vitess.io/resources/openworld-2015-vitess.pdf&embedded=true" style="width:643px; height:379px; margin-top: 20px;" frameborder="0"></iframe>
-<div style="text-align: right; width: 100%; margin-bottom:20px"><a href="http://vitess.io/resources/openworld-2015-vitess.pdf">download slides</a></div>
+<iframe src="https://docs.google.com/gview?url=https://vitess.io/resources/openworld-2015-vitess.pdf&embedded=true" style="width:643px; height:379px; margin-top: 20px;" frameborder="0"></iframe>
+<div style="text-align: right; width: 100%; margin-bottom:20px"><a href="https://vitess.io/resources/openworld-2015-vitess.pdf">download slides</a></div>
 
 ## Percona Live 2015
 
@@ -58,7 +58,7 @@ Percona Live 2015 provided an overview of Vitess as well as an explanation
 of how Vitess has evolved to live in a containerized world with
 Kubernetes and Docker.
 
-<iframe src="http://docs.google.com/gview?url=http://vitess.io/resources/percona-2015-vitess-and-kubernetes.pdf&embedded=true" style="width:643px; height:379px; margin-top: 20px;" frameborder="0"></iframe>
+<iframe src="https://docs.google.com/gview?url=https://vitess.io/resources/percona-2015-vitess-and-kubernetes.pdf&embedded=true" style="width:643px; height:379px; margin-top: 20px;" frameborder="0"></iframe>
 <div style="text-align: right; width: 100%; margin-bottom:20px"><a href="https://github.com/youtube/vitess/blob/master/doc/slides/Percona2015.pptx?raw=true">download slides</a></div>
 
 
