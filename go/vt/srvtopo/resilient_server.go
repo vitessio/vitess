@@ -80,10 +80,10 @@ const (
   </tr>
   {{range $i, $skn := .SrvKeyspaceNames}}
   <tr>
-    <td>{{github_com_youtube_vitess_vtctld_srv_cell $skn.Cell}}</td>
-    <td>{{range $j, $value := $skn.Value}}{{github_com_youtube_vitess_vtctld_srv_keyspace $skn.Cell $value}}&nbsp;{{end}}</td>
-    <td>{{github_com_youtube_vitess_srvtopo_ttl_time $skn.ExpirationTime}}</td>
-    <td>{{if $skn.LastError}}({{github_com_youtube_vitess_srvtopo_time_since $skn.LastQueryTime}}Ago) {{$skn.LastError}}{{end}}</td>
+    <td>{{github_com_vitessio_vitess_vtctld_srv_cell $skn.Cell}}</td>
+    <td>{{range $j, $value := $skn.Value}}{{github_com_vitessio_vitess_vtctld_srv_keyspace $skn.Cell $value}}&nbsp;{{end}}</td>
+    <td>{{github_com_vitessio_vitess_srvtopo_ttl_time $skn.ExpirationTime}}</td>
+    <td>{{if $skn.LastError}}({{github_com_vitessio_vitess_srvtopo_time_since $skn.LastQueryTime}}Ago) {{$skn.LastError}}{{end}}</td>
   </tr>
   {{end}}
 </table>
@@ -101,11 +101,11 @@ const (
   </tr>
   {{range $i, $sk := .SrvKeyspaces}}
   <tr>
-    <td>{{github_com_youtube_vitess_vtctld_srv_cell $sk.Cell}}</td>
-    <td>{{github_com_youtube_vitess_vtctld_srv_keyspace $sk.Cell $sk.Keyspace}}</td>
+    <td>{{github_com_vitessio_vitess_vtctld_srv_cell $sk.Cell}}</td>
+    <td>{{github_com_vitessio_vitess_vtctld_srv_keyspace $sk.Cell $sk.Keyspace}}</td>
     <td>{{$sk.StatusAsHTML}}</td>
-    <td>{{github_com_youtube_vitess_srvtopo_ttl_time $sk.ExpirationTime}}</td>
-    <td>{{if $sk.LastError}}({{github_com_youtube_vitess_srvtopo_time_since $sk.LastErrorTime}} Ago) {{$sk.LastError}}{{end}}</td>
+    <td>{{github_com_vitessio_vitess_srvtopo_ttl_time $sk.ExpirationTime}}</td>
+    <td>{{if $sk.LastError}}({{github_com_vitessio_vitess_srvtopo_time_since $sk.LastErrorTime}} Ago) {{$sk.LastError}}{{end}}</td>
   </tr>
   {{end}}
 </table>
@@ -710,6 +710,6 @@ func timeSince(t time.Time) template.HTML {
 // We don't register them inside servenv directly so we don't introduce
 // a dependency here.
 var StatusFuncs = template.FuncMap{
-	"github_com_youtube_vitess_srvtopo_ttl_time":   ttlTime,
-	"github_com_youtube_vitess_srvtopo_time_since": timeSince,
+	"github_com_vitessio_vitess_srvtopo_ttl_time":   ttlTime,
+	"github_com_vitessio_vitess_srvtopo_time_since": timeSince,
 }
