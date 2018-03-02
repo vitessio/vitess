@@ -45,7 +45,7 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 	c.sequence = 0
 
 	// Send the query as a COM_QUERY packet.
-	if err := c.writeComQuery(query); err != nil {
+	if err := c.WriteComQuery(query); err != nil {
 		return err
 	}
 
