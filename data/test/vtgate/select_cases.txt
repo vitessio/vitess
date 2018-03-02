@@ -399,10 +399,7 @@
         "Sharded": false
       },
       "Query": "select (select :user_id + outm.m + unsharded.m from unsharded) from unsharded as outm",
-      "FieldQuery": "select (select :user_id + outm.m + unsharded.m from unsharded where 1 != 1) from unsharded as outm where 1 != 1",
-      "JoinVars": {
-        "user_id": {}
-      }
+      "FieldQuery": "select (select :user_id + outm.m + unsharded.m from unsharded where 1 != 1) from unsharded as outm where 1 != 1"
     },
     "Cols": [
       -1,
@@ -592,7 +589,7 @@
 {
   "Original": "select * from information_schema.a union select * from information_schema.b",
   "Instructions": {
-    "Opcode": "ExecDBA",
+    "Opcode": "SelectDBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false

@@ -46,7 +46,7 @@ func TestLimitExecute(t *testing.T) {
 	}
 
 	// Test with limit smaller than input.
-	result, err := l.Execute(nil, nil, nil, false)
+	result, err := l.Execute(nil, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -62,7 +62,7 @@ func TestLimitExecute(t *testing.T) {
 	// Test with limit equal to input.
 	tp.rewind()
 	l.Count = int64PlanValue(3)
-	result, err = l.Execute(nil, nil, nil, false)
+	result, err = l.Execute(nil, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -73,7 +73,7 @@ func TestLimitExecute(t *testing.T) {
 	// Test with limit higher than input.
 	tp.rewind()
 	l.Count = int64PlanValue(4)
-	result, err = l.Execute(nil, nil, nil, false)
+	result, err = l.Execute(nil, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -84,7 +84,7 @@ func TestLimitExecute(t *testing.T) {
 	// Test with bind vars.
 	tp.rewind()
 	l.Count = sqltypes.PlanValue{Key: "l"}
-	result, err = l.Execute(nil, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(2)}, nil, false)
+	result, err = l.Execute(nil, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(2)}, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -115,7 +115,7 @@ func TestLimitStreamExecute(t *testing.T) {
 
 	// Test with limit smaller than input.
 	var results []*sqltypes.Result
-	err := l.StreamExecute(nil, nil, nil, false, func(qr *sqltypes.Result) error {
+	err := l.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -135,7 +135,7 @@ func TestLimitStreamExecute(t *testing.T) {
 	tp.rewind()
 	l.Count = sqltypes.PlanValue{Key: "l"}
 	results = nil
-	err = l.StreamExecute(nil, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(2)}, nil, false, func(qr *sqltypes.Result) error {
+	err = l.StreamExecute(nil, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(2)}, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -150,7 +150,7 @@ func TestLimitStreamExecute(t *testing.T) {
 	tp.rewind()
 	l.Count = int64PlanValue(3)
 	results = nil
-	err = l.StreamExecute(nil, nil, nil, false, func(qr *sqltypes.Result) error {
+	err = l.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -172,7 +172,7 @@ func TestLimitStreamExecute(t *testing.T) {
 	tp.rewind()
 	l.Count = int64PlanValue(4)
 	results = nil
-	err = l.StreamExecute(nil, nil, nil, false, func(qr *sqltypes.Result) error {
+	err = l.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -196,7 +196,7 @@ func TestLimitGetFields(t *testing.T) {
 
 	l := &Limit{Input: tp}
 
-	got, err := l.GetFields(nil, nil, nil)
+	got, err := l.GetFields(nil, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -211,18 +211,18 @@ func TestLimitInputFail(t *testing.T) {
 	l := &Limit{Count: int64PlanValue(1), Input: tp}
 
 	want := "input fail"
-	if _, err := l.Execute(nil, nil, nil, false); err == nil || err.Error() != want {
+	if _, err := l.Execute(nil, nil, false); err == nil || err.Error() != want {
 		t.Errorf("l.Execute(): %v, want %s", err, want)
 	}
 
 	tp.rewind()
-	err := l.StreamExecute(nil, nil, nil, false, func(_ *sqltypes.Result) error { return nil })
+	err := l.StreamExecute(nil, nil, false, func(_ *sqltypes.Result) error { return nil })
 	if err == nil || err.Error() != want {
 		t.Errorf("l.StreamExecute(): %v, want %s", err, want)
 	}
 
 	tp.rewind()
-	if _, err := l.GetFields(nil, nil, nil); err == nil || err.Error() != want {
+	if _, err := l.GetFields(nil, nil); err == nil || err.Error() != want {
 		t.Errorf("l.GetFields(): %v, want %s", err, want)
 	}
 }
@@ -231,33 +231,33 @@ func TestLimitInvalidCount(t *testing.T) {
 	l := &Limit{
 		Count: sqltypes.PlanValue{Key: "l"},
 	}
-	_, err := l.fetchCount(nil, nil)
+	_, err := l.fetchCount(nil)
 	want := "missing bind var l"
 	if err == nil || err.Error() != want {
 		t.Errorf("fetchCount: %v, want %s", err, want)
 	}
 
 	l.Count = sqltypes.PlanValue{Value: sqltypes.NewFloat64(1.2)}
-	_, err = l.fetchCount(nil, nil)
+	_, err = l.fetchCount(nil)
 	want = "could not parse value: '1.2'"
 	if err == nil || err.Error() != want {
 		t.Errorf("fetchCount: %v, want %s", err, want)
 	}
 
 	l.Count = sqltypes.PlanValue{Value: sqltypes.NewUint64(18446744073709551615)}
-	_, err = l.fetchCount(nil, nil)
+	_, err = l.fetchCount(nil)
 	want = "requested limit is out of range: 18446744073709551615"
 	if err == nil || err.Error() != want {
 		t.Errorf("fetchCount: %v, want %s", err, want)
 	}
 
 	// When going through the API, it should return the same error.
-	_, err = l.Execute(nil, nil, nil, false)
+	_, err = l.Execute(nil, nil, false)
 	if err == nil || err.Error() != want {
 		t.Errorf("l.Execute: %v, want %s", err, want)
 	}
 
-	err = l.StreamExecute(nil, nil, nil, false, func(_ *sqltypes.Result) error { return nil })
+	err = l.StreamExecute(nil, nil, false, func(_ *sqltypes.Result) error { return nil })
 	if err == nil || err.Error() != want {
 		t.Errorf("l.Execute: %v, want %s", err, want)
 	}
