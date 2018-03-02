@@ -23,10 +23,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 var createMessage = `create table vitess_message(

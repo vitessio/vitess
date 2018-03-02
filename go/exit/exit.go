@@ -51,7 +51,7 @@ import (
 	"os"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/tb"
+	"vitess.io/vitess/go/tb"
 )
 
 type exitCode int

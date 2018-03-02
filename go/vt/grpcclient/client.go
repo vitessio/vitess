@@ -22,8 +22,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/youtube/vitess/go/vt/grpccommon"
-	"github.com/youtube/vitess/go/vt/vttls"
+	"vitess.io/vitess/go/vt/grpccommon"
+	"vitess.io/vitess/go/vt/vttls"
 
 	log "github.com/golang/glog"
 )

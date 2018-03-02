@@ -54,7 +54,7 @@ import (
 	"os"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/event"
+	"vitess.io/vitess/go/event"
 )
 
 // Syslogger is the interface that events should implement if they want to be

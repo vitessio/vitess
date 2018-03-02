@@ -20,12 +20,12 @@ import (
 	"net"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/vttablet/agentrpctest"
-	"github.com/youtube/vitess/go/vt/vttablet/grpctmclient"
 	"google.golang.org/grpc"
+	"vitess.io/vitess/go/vt/vttablet/agentrpctest"
+	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
 
-	tabletmanagerservicepb "github.com/youtube/vitess/go/vt/proto/tabletmanagerservice"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	tabletmanagerservicepb "vitess.io/vitess/go/vt/proto/tabletmanagerservice"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // TestGRPCTMServer creates a fake server implementation, a fake client

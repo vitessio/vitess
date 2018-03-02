@@ -28,8 +28,8 @@ import (
 	"github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/sync2"
+	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/sync2"
 )
 
 const (

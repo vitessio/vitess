@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/youtube/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/logutil"
 )
 
 // splitStrategy is the configuration for a split clone.

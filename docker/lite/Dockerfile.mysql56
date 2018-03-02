@@ -14,7 +14,7 @@ RUN apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 5072E1F5 \
  && rm -rf /var/lib/apt/lists/*
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
-ENV VTTOP /vt/src/github.com/youtube/vitess
+ENV VTTOP /vt/src/vitess.io/vitess
 ENV VTROOT /vt
 ENV GOTOP $VTTOP/go
 ENV VTDATAROOT $VTROOT/vtdataroot

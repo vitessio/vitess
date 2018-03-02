@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/testfiles"
+	"vitess.io/vitess/go/testfiles"
 )
 
 var testOutputTempDir string

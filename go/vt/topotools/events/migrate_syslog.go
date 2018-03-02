@@ -21,7 +21,7 @@ import (
 	"log/syslog"
 	"strings"
 
-	"github.com/youtube/vitess/go/event/syslogger"
+	"vitess.io/vitess/go/event/syslogger"
 )
 
 // Syslog writes a MigrateServedFrom event to syslog.

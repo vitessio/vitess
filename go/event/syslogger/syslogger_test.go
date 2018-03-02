@@ -21,7 +21,7 @@ import (
 	"log/syslog"
 	"testing"
 
-	"github.com/youtube/vitess/go/event"
+	"vitess.io/vitess/go/event"
 )
 
 type TestEvent struct {

@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/youtube/vitess/go/stats"
+	"vitess.io/vitess/go/stats"
 )
 
 var (

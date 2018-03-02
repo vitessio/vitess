@@ -16,7 +16,7 @@ limitations under the License.
 
 package buffer
 
-import "github.com/youtube/vitess/go/stats"
+import "vitess.io/vitess/go/stats"
 
 // This file contains all status variables which can be used to monitor the
 // buffer.

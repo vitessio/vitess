@@ -73,8 +73,8 @@ package query
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import topodata "github.com/youtube/vitess/go/vt/proto/topodata"
-import vtrpc "github.com/youtube/vitess/go/vt/proto/vtrpc"
+import topodata "vitess.io/vitess/go/vt/proto/topodata"
+import vtrpc "vitess.io/vitess/go/vt/proto/vtrpc"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal

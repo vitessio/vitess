@@ -25,7 +25,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/fileutil"
+	"vitess.io/vitess/go/fileutil"
 )
 
 // ResolveKeyspaceWildcard will resolve keyspace wildcards.
