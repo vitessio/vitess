@@ -32,8 +32,8 @@ type Subquery struct {
 }
 
 // Execute performs a non-streaming exec.
-func (sq *Subquery) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	inner, err := sq.Subquery.Execute(vcursor, bindVars, joinVars, wantfields)
+func (sq *Subquery) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	inner, err := sq.Subquery.Execute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -41,15 +41,15 @@ func (sq *Subquery) Execute(vcursor VCursor, bindVars, joinVars map[string]*quer
 }
 
 // StreamExecute performs a streaming exec.
-func (sq *Subquery) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return sq.Subquery.StreamExecute(vcursor, bindVars, joinVars, wantfields, func(inner *sqltypes.Result) error {
+func (sq *Subquery) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	return sq.Subquery.StreamExecute(vcursor, bindVars, wantfields, func(inner *sqltypes.Result) error {
 		return callback(sq.buildResult(inner))
 	})
 }
 
 // GetFields fetches the field info.
-func (sq *Subquery) GetFields(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	inner, err := sq.Subquery.GetFields(vcursor, bindVars, joinVars)
+func (sq *Subquery) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	inner, err := sq.Subquery.GetFields(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
