@@ -53,13 +53,13 @@ func TestSelectNext(t *testing.T) {
 	}
 }
 
-func TestExecDBA(t *testing.T) {
+func TestSelectDBA(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 
 	query := "select * from INFORMATION_SCHEMA.foo"
 	_, err := executor.Execute(
 		context.Background(),
-		"TestExecDBA",
+		"TestSelectDBA",
 		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query,
 		map[string]*querypb.BindVariable{},

@@ -36,7 +36,7 @@ func (tp *fakePrimitive) rewind() {
 	tp.curResult = 0
 }
 
-func (tp *fakePrimitive) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (tp *fakePrimitive) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if tp.results == nil {
 		return nil, tp.sendErr
 	}
@@ -49,7 +49,7 @@ func (tp *fakePrimitive) Execute(vcursor VCursor, bindVars, joinVars map[string]
 	return r, nil
 }
 
-func (tp *fakePrimitive) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
+func (tp *fakePrimitive) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
 	if tp.results == nil {
 		return tp.sendErr
 	}
@@ -81,6 +81,6 @@ func (tp *fakePrimitive) StreamExecute(vcursor VCursor, bindVars, joinVars map[s
 	return nil
 }
 
-func (tp *fakePrimitive) GetFields(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return tp.Execute(vcursor, bindVars, joinVars, false /* wantfields */)
+func (tp *fakePrimitive) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return tp.Execute(vcursor, bindVars, false /* wantfields */)
 }

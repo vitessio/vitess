@@ -79,13 +79,13 @@ func (code VindexOpcode) MarshalJSON() ([]byte, error) {
 }
 
 // Execute performs a non-streaming exec.
-func (vf *VindexFunc) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return vf.mapVindex(vcursor, bindVars, joinVars)
+func (vf *VindexFunc) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return vf.mapVindex(vcursor, bindVars)
 }
 
 // StreamExecute performs a streaming exec.
-func (vf *VindexFunc) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	r, err := vf.mapVindex(vcursor, bindVars, joinVars)
+func (vf *VindexFunc) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	r, err := vf.mapVindex(vcursor, bindVars)
 	if err != nil {
 		return err
 	}
@@ -96,12 +96,11 @@ func (vf *VindexFunc) StreamExecute(vcursor VCursor, bindVars, joinVars map[stri
 }
 
 // GetFields fetches the field info.
-func (vf *VindexFunc) GetFields(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (vf *VindexFunc) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{Fields: vf.Fields}, nil
 }
 
-func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	bindVars = combineVars(bindVars, joinVars)
+func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	key, err := vf.Value.ResolveValue(bindVars)
 	if err != nil {
 		return nil, err
