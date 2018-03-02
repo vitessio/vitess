@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlannotation"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -285,7 +286,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 
 func (e *Executor) shardExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
 	f := func() ([]*srvtopo.ResolvedShard, error) {
-		return e.resolver.resolver.ResolveShards(ctx, target.Keyspace, []string{target.Shard}, target.TabletType)
+		return e.resolver.resolver.ResolveDestination(ctx, target.Keyspace, target.TabletType, key.DestinationShard(target.Shard))
 	}
 	return e.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, safeSession.Session, f, false /* notInTransaction */, safeSession.Options, logStats)
 }
@@ -296,18 +297,18 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 	}
 
 	f := func() ([]*srvtopo.ResolvedShard, error) {
-		var result []*srvtopo.ResolvedShard
-		var err error
+		var destination key.Destination
 		if target.Shard == "" {
-			result, _, err = e.resolver.resolver.GetAllShards(ctx, target.Keyspace, target.TabletType)
+			destination = key.DestinationAllShards{}
 		} else {
-			result, err = e.resolver.resolver.ResolveShards(ctx, target.Keyspace, []string{target.Shard}, target.TabletType)
+			destination = key.DestinationShard(target.Shard)
 		}
+		rss, err := e.resolver.resolver.ResolveDestination(ctx, target.Keyspace, target.TabletType, destination)
 		if err != nil {
 			return nil, err
 		}
-		logStats.ShardQueries = uint32(len(result))
-		return result, nil
+		logStats.ShardQueries = uint32(len(rss))
+		return rss, nil
 	}
 
 	execStart := time.Now()
@@ -720,11 +721,14 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 	}
 	if target.Shard == "" {
 		// shardExec will re-resolve this a bit later.
-		rs, err := e.resolver.resolver.GetAnyShard(ctx, target.Keyspace, target.TabletType)
+		rss, err := e.resolver.resolver.ResolveDestination(ctx, target.Keyspace, target.TabletType, key.DestinationAnyShard{})
 		if err != nil {
 			return nil, err
 		}
-		target.Keyspace, target.Shard = rs.Target.Keyspace, rs.Target.Shard
+		if len(rss) != 1 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "keyspace %s has no shards", target.Keyspace)
+		}
+		target.Keyspace, target.Shard = rss[0].Target.Keyspace, rss[0].Target.Shard
 	}
 	execStart := time.Now()
 	result, err := e.shardExec(ctx, safeSession, sql, bindVars, target, logStats)
@@ -902,23 +906,24 @@ func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []
 		if err != nil {
 			return 0, err
 		}
-		keyspaceids := make([][]byte, len(ksids))
+		destinations := make([]key.Destination, len(ksids))
 		for i, ksid := range ksids {
 			if err := ksid.ValidateUnique(); err != nil {
 				return 0, err
 			}
-			keyspaceids[i] = ksid.ID
+			destinations[i] = key.DestinationKeyspaceID(ksid.ID)
 		}
-		rss, rssValues, err = e.resolver.resolver.ResolveKeyspaceIdsValues(ctx, table.Keyspace.Name, ids, keyspaceids, topodatapb.TabletType_MASTER)
+		rss, rssValues, err = e.resolver.resolver.ResolveDestinations(ctx, table.Keyspace.Name, topodatapb.TabletType_MASTER, ids, destinations)
 		if err != nil {
 			return 0, err
 		}
 	} else {
-		rs, err := e.resolver.resolver.GetAnyShard(ctx, table.Keyspace.Name, topodatapb.TabletType_MASTER)
+		// All ids go into the first shard, so we only resolve
+		// one destination, and put all IDs in there.
+		rss, err = e.resolver.resolver.ResolveDestination(ctx, table.Keyspace.Name, topodatapb.TabletType_MASTER, key.DestinationAnyShard{})
 		if err != nil {
 			return 0, err
 		}
-		rss = []*srvtopo.ResolvedShard{rs}
 		rssValues = [][]*querypb.Value{ids}
 	}
 	return e.scatterConn.MessageAck(ctx, rss, rssValues, name)

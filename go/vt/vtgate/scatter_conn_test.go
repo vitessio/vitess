@@ -27,6 +27,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/gateway"
@@ -86,7 +87,7 @@ func TestScatterConnExecuteBatch(t *testing.T) {
 func TestScatterConnStreamExecute(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnStreamExecute", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
 		res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-		rss, err := res.ResolveShards(context.Background(), "TestScatterConnStreamExecute", shards, topodatapb.TabletType_REPLICA)
+		rss, err := res.ResolveDestination(context.Background(), "TestScatterConnStreamExecute", topodatapb.TabletType_REPLICA, key.DestinationShards(shards))
 		if err != nil {
 			return nil, err
 		}
@@ -290,9 +291,9 @@ func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
 	hc.AddTestTablet("aa", "0", 1, "TestScatterConnStreamExecuteSendError", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-	rss, err := res.ResolveShards(context.Background(), "TestScatterConnStreamExecuteSendError", []string{"0"}, topodatapb.TabletType_REPLICA)
+	rss, err := res.ResolveDestination(context.Background(), "TestScatterConnStreamExecuteSendError", topodatapb.TabletType_REPLICA, key.DestinationShard("0"))
 	if err != nil {
-		t.Fatalf("ResolveShards failed: %v", err)
+		t.Fatalf("ResolveDestination failed: %v", err)
 	}
 	err = sc.StreamExecute(context.Background(), "query", nil, rss, topodatapb.TabletType_REPLICA, nil, func(*sqltypes.Result) error {
 		return fmt.Errorf("send error")

@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -374,7 +375,7 @@ func boundShardQueriesToScatterBatchRequest(ctx context.Context, resolver *srvto
 		requests: make(map[string]*shardBatchRequest),
 	}
 	for i, boundQuery := range boundQueries {
-		rss, err := resolver.ResolveShards(ctx, boundQuery.Keyspace, boundQuery.Shards, tabletType)
+		rss, err := resolver.ResolveDestination(ctx, boundQuery.Keyspace, tabletType, key.DestinationShards(boundQuery.Shards))
 		if err != nil {
 			return nil, err
 		}
@@ -401,7 +402,7 @@ func boundKeyspaceIDQueriesToScatterBatchRequest(ctx context.Context, resolver *
 		requests: make(map[string]*shardBatchRequest),
 	}
 	for i, boundQuery := range boundQueries {
-		rss, err := resolver.ResolveKeyspaceIds(ctx, boundQuery.Keyspace, tabletType, boundQuery.KeyspaceIds)
+		rss, err := resolver.ResolveDestination(ctx, boundQuery.Keyspace, tabletType, key.DestinationKeyspaceIDs(boundQuery.KeyspaceIds))
 		if err != nil {
 			return nil, err
 		}
