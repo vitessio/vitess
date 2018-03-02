@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/workflow"
 	"vitess.io/vitess/go/vt/wrangler"
 
+	"vitess.io/vitess/go/vt/mysqlctl"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -505,7 +506,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		}
 
 		resp := make(map[string]interface{})
-		resp["activeReparents"] = !*vtctl.DisableActiveReparents
+		resp["activeReparents"] = !*mysqlctl.DisableActiveReparents
 		resp["showStatus"] = *enableRealtimeStats
 		resp["showTopologyCRUD"] = *showTopologyCRUD
 		resp["showWorkflows"] = *workflowManagerInit

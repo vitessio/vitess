@@ -456,7 +456,7 @@ public class VitessResultSet implements ResultSet {
     public Date getDate(int columnIndex) throws SQLException {
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex)) {
+        if (isNullDateTime(columnIndex)) {
             return null;
         }
 
@@ -476,7 +476,7 @@ public class VitessResultSet implements ResultSet {
     public Timestamp getTimestamp(int columnIndex) throws SQLException {
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex)) {
+        if (isNullDateTime(columnIndex)) {
             return null;
         }
 
@@ -708,7 +708,7 @@ public class VitessResultSet implements ResultSet {
     public Date getDate(int columnIndex, Calendar cal) throws SQLException {
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex)) {
+        if (isNullDateTime(columnIndex)) {
             return null;
         }
 
@@ -738,7 +738,7 @@ public class VitessResultSet implements ResultSet {
     public Timestamp getTimestamp(int columnIndex, Calendar cal) throws SQLException {
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex)) {
+        if (isNullDateTime(columnIndex)) {
             return null;
         }
 
@@ -783,6 +783,24 @@ public class VitessResultSet implements ResultSet {
 
         // set last read column index for wasNull()
         lastIndexRead = columnIndex;
+    }
+
+    private boolean isNullDateTime(int columnIndex) throws SQLException {
+        if (isNull(columnIndex)) {
+            return true;
+        }
+
+        Constants.ZeroDateTimeBehavior zeroDateTimeBehavior =
+            this.vitessStatement.getConnection().getZeroDateTimeBehavior();
+        if (zeroDateTimeBehavior == Constants.ZeroDateTimeBehavior.CONVERTTONULL
+            && hasZeroDateTimePrefix(columnIndex)) {
+            return true;
+        }
+        return false;
+    }
+
+    private boolean hasZeroDateTimePrefix(int columnIndex) throws SQLException {
+        return this.row.getRawValue(columnIndex).startsWith(Constants.ZERO_DATE_TIME_PREFIX);
     }
 
     private boolean isNull(int columnIndex) throws SQLException {
