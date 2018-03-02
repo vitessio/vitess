@@ -22,10 +22,7 @@
         "Sharded": false
       },
       "Query": "select predef3 from unsharded where predef3 = :predef2",
-      "FieldQuery": "select predef3 from unsharded where 1 != 1",
-      "JoinVars": {
-        "predef2": {}
-      }
+      "FieldQuery": "select predef3 from unsharded where 1 != 1"
     },
     "Cols": [
       -1,

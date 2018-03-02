@@ -118,7 +118,7 @@ func (code DeleteOpcode) MarshalJSON() ([]byte, error) {
 }
 
 // Execute performs a non-streaming exec.
-func (del *Delete) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (del *Delete) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	switch del.Opcode {
 	case DeleteUnsharded:
 		return del.execDeleteUnsharded(vcursor, bindVars)
@@ -133,12 +133,12 @@ func (del *Delete) Execute(vcursor VCursor, bindVars, joinVars map[string]*query
 }
 
 // StreamExecute performs a streaming exec.
-func (del *Delete) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (del *Delete) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	return fmt.Errorf("query %q cannot be used for streaming", del.Query)
 }
 
 // GetFields fetches the field info.
-func (del *Delete) GetFields(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (del *Delete) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, fmt.Errorf("BUG: unreachable code for %q", del.Query)
 }
 

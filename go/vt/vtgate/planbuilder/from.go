@@ -151,7 +151,7 @@ func buildTablePrimitive(tableExpr *sqlparser.AliasedTableExpr, tableName sqlpar
 		if err != nil {
 			return nil, err
 		}
-		rb.ERoute = engine.NewRoute(engine.ExecDBA, ks)
+		rb.ERoute = engine.NewRoute(engine.SelectDBA, ks)
 		return rb, nil
 	}
 

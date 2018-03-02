@@ -31,10 +31,10 @@ import (
 
 var _ Primitive = (*Route)(nil)
 
-// Route represents the instructions to route a query to
-// one or many vttablets. The meaning and values for the
-// the fields are described in the RouteOpcode values comments.
+// Route represents the instructions to route a read query to
+// one or many vttablets.
 type Route struct {
+	// the fields are described in the RouteOpcode values comments.
 	// Opcode is the execution opcode.
 	Opcode RouteOpcode
 
@@ -47,13 +47,10 @@ type Route struct {
 	// FieldQuery specifies the query to be executed for a GetFieldInfo request.
 	FieldQuery string
 
-	// Vindex and Values specify how routing must be computed
+	// Vindex specifies the vindex to be used.
 	Vindex vindexes.Vindex
+	// Values specifies the vindex values to use for routing.
 	Values []sqltypes.PlanValue
-
-	// JoinVars contains the list of joinvar keys that will be used
-	// to extract join variables.
-	JoinVars map[string]struct{}
 
 	// OrderBy specifies the key order for merge sorting. This will be
 	// set only for scatter queries that need the results to be
@@ -78,7 +75,6 @@ func NewRoute(opcode RouteOpcode, keyspace *vindexes.Keyspace) *Route {
 	return &Route{
 		Opcode:   opcode,
 		Keyspace: keyspace,
-		JoinVars: make(map[string]struct{}),
 	}
 }
 
@@ -96,7 +92,6 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		FieldQuery          string               `json:",omitempty"`
 		Vindex              string               `json:",omitempty"`
 		Values              []sqltypes.PlanValue `json:",omitempty"`
-		JoinVars            map[string]struct{}  `json:",omitempty"`
 		OrderBy             []OrderbyParams      `json:",omitempty"`
 		TruncateColumnCount int                  `json:",omitempty"`
 	}{
@@ -106,7 +101,6 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		FieldQuery:          route.FieldQuery,
 		Vindex:              vindexName,
 		Values:              route.Values,
-		JoinVars:            route.JoinVars,
 		OrderBy:             route.OrderBy,
 		TruncateColumnCount: route.TruncateColumnCount,
 	}
@@ -117,17 +111,7 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 // for the Route primitve.
 type RouteOpcode int
 
-// This is the list of RouteOpcode values. The opcode
-// dictates which fields must be set in the Route.
-// All routes require the Query and a Keyspace
-// to be correctly set.
-// For any Select opcode, the FieldQuery is set
-// to a statement with an impossible where clause.
-// This gets used to build the field info in situations
-// where joins end up returning no rows.
-// In the case of a join, joinVars will also be set.
-// These are variables that will be supplied by the
-// Join primitive when it invokes a Route.
+// This is the list of RouteOpcode values.
 const (
 	// SelectUnsharded is the opcode for routing a
 	// select statement to an unsharded database.
@@ -149,8 +133,8 @@ const (
 	SelectScatter
 	// SelectNext is for fetching from a sequence.
 	SelectNext
-	// ExecDBA is for executing a DBA statement.
-	ExecDBA
+	// SelectDBA is for executing a DBA statement.
+	SelectDBA
 )
 
 var routeName = map[RouteOpcode]string{
@@ -160,7 +144,7 @@ var routeName = map[RouteOpcode]string{
 	SelectIN:          "SelectIN",
 	SelectScatter:     "SelectScatter",
 	SelectNext:        "SelectNext",
-	ExecDBA:           "ExecDBA",
+	SelectDBA:         "SelectDBA",
 }
 
 // MarshalJSON serializes the RouteOpcode as a JSON string.
@@ -186,19 +170,17 @@ func newScatterParams(ks string, bv map[string]*querypb.BindVariable, shards []s
 }
 
 // Execute performs a non-streaming exec.
-func (route *Route) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	qr, err := route.execute(vcursor, bindVars, joinVars, wantfields)
+func (route *Route) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	qr, err := route.execute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
 	return qr.Truncate(route.TruncateColumnCount), nil
 }
 
-func (route *Route) execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	bindVars = combineVars(bindVars, joinVars)
-
+func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	switch route.Opcode {
-	case SelectNext, ExecDBA:
+	case SelectNext, SelectDBA:
 		return execAnyShard(vcursor, route.Query, bindVars, route.Keyspace)
 	}
 
@@ -222,7 +204,7 @@ func (route *Route) execute(vcursor VCursor, bindVars, joinVars map[string]*quer
 	// If there is no route for a select and we still 'wantfields',
 	// we have to do a GetFields.
 	if len(params.shardVars) == 0 && wantfields {
-		return route.GetFields(vcursor, bindVars, joinVars)
+		return route.GetFields(vcursor, bindVars)
 	}
 
 	shardQueries := getShardQueries(route.Query, params)
@@ -238,9 +220,7 @@ func (route *Route) execute(vcursor VCursor, bindVars, joinVars map[string]*quer
 }
 
 // StreamExecute performs a streaming exec.
-func (route *Route) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	bindVars = combineVars(bindVars, joinVars)
-
+func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var err error
 	var params *scatterParams
 	switch route.Opcode {
@@ -273,9 +253,7 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars, joinVars map[string
 }
 
 // GetFields fetches the field info.
-func (route *Route) GetFields(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	bindVars = combineVars(bindVars, joinVars)
-
+func (route *Route) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	ks, shard, err := anyShard(vcursor, route.Keyspace)
 	if err != nil {
 		return nil, err

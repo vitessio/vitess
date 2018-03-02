@@ -51,13 +51,13 @@ func (l *Limit) MarshalJSON() ([]byte, error) {
 }
 
 // Execute satisfies the Primtive interface.
-func (l *Limit) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	count, err := l.fetchCount(bindVars, joinVars)
+func (l *Limit) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	count, err := l.fetchCount(bindVars)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := l.Input.Execute(vcursor, bindVars, joinVars, wantfields)
+	result, err := l.Input.Execute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -70,13 +70,13 @@ func (l *Limit) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.
 }
 
 // StreamExecute satisfies the Primtive interface.
-func (l *Limit) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	count, err := l.fetchCount(bindVars, joinVars)
+func (l *Limit) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	count, err := l.fetchCount(bindVars)
 	if err != nil {
 		return err
 	}
 
-	err = l.Input.StreamExecute(vcursor, bindVars, joinVars, wantfields, func(qr *sqltypes.Result) error {
+	err = l.Input.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
 			if err := callback(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err
@@ -117,15 +117,11 @@ func (l *Limit) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]*qu
 }
 
 // GetFields satisfies the Primtive interface.
-func (l *Limit) GetFields(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return l.Input.GetFields(vcursor, bindVars, joinVars)
+func (l *Limit) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return l.Input.GetFields(vcursor, bindVars)
 }
 
-func (l *Limit) fetchCount(bindVars, joinVars map[string]*querypb.BindVariable) (int, error) {
-	// TODO(sougou): to avoid duplication, check if this can be done
-	// by the supplier of joinVars instead.
-	bindVars = combineVars(bindVars, joinVars)
-
+func (l *Limit) fetchCount(bindVars map[string]*querypb.BindVariable) (int, error) {
 	resolved, err := l.Count.ResolveValue(bindVars)
 	if err != nil {
 		return 0, err
