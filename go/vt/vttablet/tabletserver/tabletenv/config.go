@@ -62,6 +62,7 @@ func init() {
 	flag.IntVar(&Config.QueryPlanCacheSize, "queryserver-config-query-cache-size", DefaultQsConfig.QueryPlanCacheSize, "query server query cache size, maximum number of queries to be cached. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
 	flag.Float64Var(&Config.SchemaReloadTime, "queryserver-config-schema-reload-time", DefaultQsConfig.SchemaReloadTime, "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
 	flag.Float64Var(&Config.QueryTimeout, "queryserver-config-query-timeout", DefaultQsConfig.QueryTimeout, "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
+	flag.Float64Var(&Config.QueryPoolTimeout, "queryserver-config-query-pool-timeout", DefaultQsConfig.QueryPoolTimeout, "query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
 	flag.Float64Var(&Config.TxPoolTimeout, "queryserver-config-txpool-timeout", DefaultQsConfig.TxPoolTimeout, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
 	flag.Float64Var(&Config.IdleTimeout, "queryserver-config-idle-timeout", DefaultQsConfig.IdleTimeout, "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
 	// tableacl related configurations.
@@ -135,6 +136,7 @@ type TabletConfig struct {
 	QueryPlanCacheSize      int
 	SchemaReloadTime        float64
 	QueryTimeout            float64
+	QueryPoolTimeout        float64
 	TxPoolTimeout           float64
 	IdleTimeout             float64
 	StrictTableACL          bool
@@ -201,6 +203,7 @@ var DefaultQsConfig = TabletConfig{
 	QueryPlanCacheSize:      5000,
 	SchemaReloadTime:        30 * 60,
 	QueryTimeout:            30,
+	QueryPoolTimeout:        0,
 	TxPoolTimeout:           1,
 	IdleTimeout:             30 * 60,
 	StreamBufferSize:        32 * 1024,
