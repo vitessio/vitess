@@ -775,7 +775,7 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 	if ok {
 		defer q.Broadcast()
 		waitingForConnectionStart := time.Now()
-		conn, err := qre.tsv.qe.conns.Get(qre.ctx)
+		conn, err := qre.tsv.qe.getQueryConn(qre.ctx)
 		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 		if err != nil {
 			q.Err = err

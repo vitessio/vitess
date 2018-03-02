@@ -81,6 +81,9 @@ func TestConfigVars(t *testing.T) {
 		tag: "QueryTimeout",
 		val: int(tabletenv.Config.QueryTimeout * 1e9),
 	}, {
+		tag: "QueryPoolTimeout",
+		val: int(tabletenv.Config.QueryPoolTimeout * 1e9),
+	}, {
 		tag: "SchemaReloadTime",
 		val: int(tabletenv.Config.SchemaReloadTime * 1e9),
 	}, {
@@ -368,6 +371,73 @@ func TestQueryTimeout(t *testing.T) {
 		t.Errorf("Error code: %v, want %v", code, vtrpcpb.Code_ABORTED)
 	}
 	vend := framework.DebugVars()
+	if err := verifyIntValue(vend, "QueryTimeout", int(100*time.Millisecond)); err != nil {
+		t.Error(err)
+	}
+	if err := compareIntDiff(vend, "Kills/Queries", vstart, 1); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestQueryPoolTimeout(t *testing.T) {
+	vstart := framework.DebugVars()
+
+	defer framework.Server.SetQueryPoolTimeout(framework.Server.GetQueryPoolTimeout())
+	framework.Server.SetQueryPoolTimeout(100 * time.Millisecond)
+	defer framework.Server.SetPoolSize(framework.Server.PoolSize())
+	framework.Server.SetPoolSize(1)
+
+	client := framework.NewClient()
+	err := client.Begin(false)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	ch := make(chan error)
+	go func() {
+		_, qerr := framework.NewClient().Execute("select sleep(0.5) from dual", nil)
+		ch <- qerr
+	}()
+	// The queries have to be different so consolidator doesn't kick in.
+	go func() {
+		_, qerr := framework.NewClient().Execute("select sleep(0.49) from dual", nil)
+		ch <- qerr
+	}()
+
+	err1 := <-ch
+	err2 := <-ch
+
+	if err1 == nil && err2 == nil {
+		t.Errorf("both queries unexpectedly succeeded")
+	}
+	if err1 != nil && err2 != nil {
+		t.Errorf("both queries unexpectedly failed")
+	}
+
+	if err1 != nil {
+		err = err1
+	} else {
+		err = err2
+	}
+
+	if code := vterrors.Code(err); code != vtrpcpb.Code_RESOURCE_EXHAUSTED {
+		t.Errorf("Error code: %v, want %v", code, vtrpcpb.Code_RESOURCE_EXHAUSTED)
+	}
+
+	// Test that this doesn't override the query timeout
+	defer framework.Server.QueryTimeout.Set(framework.Server.QueryTimeout.Get())
+	framework.Server.QueryTimeout.Set(100 * time.Millisecond)
+
+	_, err = client.Execute("select sleep(1) from vitess_test", nil)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_DEADLINE_EXCEEDED {
+		t.Errorf("Error code: %v, want %v", code, vtrpcpb.Code_DEADLINE_EXCEEDED)
+	}
+
+	vend := framework.DebugVars()
+	if err := verifyIntValue(vend, "QueryPoolTimeout", int(100*time.Millisecond)); err != nil {
+		t.Error(err)
+	}
 	if err := verifyIntValue(vend, "QueryTimeout", int(100*time.Millisecond)); err != nil {
 		t.Error(err)
 	}

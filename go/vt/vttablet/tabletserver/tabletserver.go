@@ -81,8 +81,8 @@ const (
 	StateShuttingDown
 )
 
-// logTxPoolFull is for throttling txpool full messages in the log.
-var logTxPoolFull = logutil.NewThrottledLogger("TxPoolFull", 1*time.Minute)
+// logPoolFull is for throttling transaction / query pool full messages in the log.
+var logPoolFull = logutil.NewThrottledLogger("PoolFull", 1*time.Minute)
 
 var logComputeRowSerializerKey = logutil.NewThrottledLogger("ComputeRowSerializerKey", 1*time.Minute)
 
@@ -226,6 +226,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 			return state
 		}))
 		stats.Publish("QueryTimeout", stats.DurationFunc(tsv.QueryTimeout.Get))
+		stats.Publish("QueryPoolTimeout", stats.DurationFunc(tsv.qe.connTimeout.Get))
 		stats.Publish("BeginTimeout", stats.DurationFunc(tsv.BeginTimeout.Get))
 		stats.Publish("TabletStateName", stats.StringFunc(tsv.GetState))
 	})
@@ -1346,7 +1347,7 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	case vtrpcpb.Code_FAILED_PRECONDITION, vtrpcpb.Code_ALREADY_EXISTS:
 		logMethod = nil
 	case vtrpcpb.Code_RESOURCE_EXHAUSTED:
-		logMethod = logTxPoolFull.Errorf
+		logMethod = logPoolFull.Errorf
 	case vtrpcpb.Code_ABORTED:
 		logMethod = tabletenv.Warningf
 	case vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_DEADLINE_EXCEEDED:
@@ -1982,6 +1983,20 @@ func (tsv *TabletServer) SetPassthroughDMLs(val bool) {
 // in SBR mode. It should be used only on initialization or for testing.
 func (tsv *TabletServer) SetAllowUnsafeDMLs(val bool) {
 	tsv.qe.allowUnsafeDMLs = val
+}
+
+// SetQueryPoolTimeout changes the timeout to get a connection from the
+// query pool
+// This function should only be used for testing.
+func (tsv *TabletServer) SetQueryPoolTimeout(val time.Duration) {
+	tsv.qe.connTimeout.Set(val)
+}
+
+// GetQueryPoolTimeout returns the timeout to get a connection from the
+// query pool
+// This function should only be used for testing.
+func (tsv *TabletServer) GetQueryPoolTimeout() time.Duration {
+	return tsv.qe.connTimeout.Get()
 }
 
 // queryAsString prints a readable version of query+bind variables,
