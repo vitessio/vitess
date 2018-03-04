@@ -218,3 +218,14 @@ func (code JoinOpcode) String() string {
 func (code JoinOpcode) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
 }
+
+func combineVars(bv1, bv2 map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {
+	out := make(map[string]*querypb.BindVariable)
+	for k, v := range bv1 {
+		out[k] = v
+	}
+	for k, v := range bv2 {
+		out[k] = v
+	}
+	return out
+}
