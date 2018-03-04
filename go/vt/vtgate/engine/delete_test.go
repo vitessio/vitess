@@ -39,7 +39,7 @@ func TestDeleteUnsharded(t *testing.T) {
 	vc := &loggingVCursor{shards: []string{"0"}}
 	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
 		`GetKeyspaceShards &{ks false}`,
@@ -72,7 +72,7 @@ func TestDeleteEqual(t *testing.T) {
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
 	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
 		`GetKeyspaceShards &{ks true}`,
@@ -106,7 +106,7 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 	vc := &loggingVCursor{shards: []string{"0"}}
 	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
 		`GetKeyspaceShards &{ks true}`,
@@ -164,7 +164,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 
 	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
 		`GetKeyspaceShards &{sharded true}`,
@@ -186,7 +186,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	}
 	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
 		`GetKeyspaceShards &{sharded true}`,
@@ -214,7 +214,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	}
 	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
 		`GetKeyspaceShards &{sharded true}`,
@@ -247,7 +247,7 @@ func TestDeleteSharded(t *testing.T) {
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
 	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
 		`GetKeyspaceShards &{ks true}`,
