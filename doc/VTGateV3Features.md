@@ -34,7 +34,7 @@ there are some additional benefits:
   underneath without changing much of the app.
 
 The
-[V3 design](https://github.com/youtube/vitess/blob/master/doc/V3VindexDesign.md)
+[V3 design](https://github.com/vitessio/vitess/blob/master/doc/V3VindexDesign.md)
 is quite elaborate. If necessary, it will allow you to plug in custom indexes
 and sharding schemes. However, it comes equipped with some pre-cooked recipes
 that satisfy the immediate needs of the real-world:

@@ -97,7 +97,7 @@ Therefore, this flag is not enabled by default.
 ### Example
 
 For a concrete example, see
-[test/encrypted\_transport.py](https://github.com/youtube/vitess/blob/master/test/encrypted_transport.py)
+[test/encrypted\_transport.py](https://github.com/vitessio/vitess/blob/master/test/encrypted_transport.py)
 in the source tree. It first sets up all the certificates, and some table ACLs,
 then uses the python client to connect with SSL. It also exercises the
 grpc\_use\_effective\_callerid flag, by connecting without SSL.

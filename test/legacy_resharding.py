@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 #
 # Copyright 2017 Google Inc.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -24,7 +24,7 @@ reshard a table that has textual primary key columns (e.g. VARCHAR).
 This is the case for the "timestamps" table in this end-to-end test.
 
 The reason why only LegacySplitClone supports this use case is because the new
-resharding clone code (as of https://github.com/youtube/vitess/pull/1796)
+resharding clone code (as of https://github.com/vitessio/vitess/pull/1796)
 requires to sort rows by their primary key. Whereas LegacySplitClone does a
 simple copy and always assumes that the tables on the destination are empty,
 the SplitClone command can diff the source and destination tables. In case of
