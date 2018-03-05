@@ -22,6 +22,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 
+	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -45,6 +46,7 @@ type Vindex interface {
 	// comparison to see if two objects refer to the same
 	// Vindex.
 	String() string
+
 	// Cost is used by planbuilder to prioritize vindexes.
 	// The cost can be 0 if the id is basically a keyspace id.
 	// The cost can be 1 if the id can be hashed to a keyspace id.
@@ -52,6 +54,24 @@ type Vindex interface {
 	// from an external data source. These guidelines are subject
 	// to change in the future.
 	Cost() int
+
+	// IsUnique returns true if the Vindex is unique.
+	// Which means Map() maps to either a KeyRange or a single KeyspaceID.
+	IsUnique() bool
+
+	// IsFunctional returns true if the Vindex can compute
+	// the keyspace id from the id without a lookup.
+	// A Functional vindex is also required to be Unique.
+	// Which means Map() maps to either a KeyRange or a single KeyspaceID.
+	IsFunctional() bool
+
+	// Map2 can map ids to key.Destination objects.
+	// If the Vindex is unique, each id would map to either
+	// a KeyRange, or a single KeyspaceID.
+	// If the Vindex is non-unique, each id would map to either
+	// a KeyRange, or a list of KeyspaceID.
+	// TODO(alainjobart) Rename to Map.
+	Map2(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error)
 
 	// Verify must be implented by all vindexes. It should return
 	// true if the ids can be mapped to the keyspace ids.

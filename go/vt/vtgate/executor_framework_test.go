@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 
@@ -269,8 +270,19 @@ var unshardedVSchema = `
 type keyRangeLookuper struct {
 }
 
-func (v *keyRangeLookuper) String() string { return "keyrange_lookuper" }
-func (*keyRangeLookuper) Cost() int        { return 0 }
+func (v *keyRangeLookuper) String() string   { return "keyrange_lookuper" }
+func (*keyRangeLookuper) Cost() int          { return 0 }
+func (*keyRangeLookuper) IsUnique() bool     { return false }
+func (*keyRangeLookuper) IsFunctional() bool { return false }
+func (*keyRangeLookuper) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	return []key.Destination{
+		key.DestinationKeyRange{
+			KeyRange: &topodatapb.KeyRange{
+				End: []byte{0x10},
+			},
+		},
+	}, nil
+}
 func (*keyRangeLookuper) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
@@ -290,8 +302,19 @@ func newKeyRangeLookuper(name string, params map[string]string) (vindexes.Vindex
 type keyRangeLookuperUnique struct {
 }
 
-func (v *keyRangeLookuperUnique) String() string { return "keyrange_lookuper" }
-func (*keyRangeLookuperUnique) Cost() int        { return 0 }
+func (v *keyRangeLookuperUnique) String() string   { return "keyrange_lookuper" }
+func (*keyRangeLookuperUnique) Cost() int          { return 0 }
+func (*keyRangeLookuperUnique) IsUnique() bool     { return true }
+func (*keyRangeLookuperUnique) IsFunctional() bool { return false }
+func (*keyRangeLookuperUnique) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	return []key.Destination{
+		key.DestinationKeyRange{
+			KeyRange: &topodatapb.KeyRange{
+				End: []byte{0x10},
+			},
+		},
+	}, nil
+}
 func (*keyRangeLookuperUnique) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }

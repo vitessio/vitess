@@ -23,6 +23,7 @@ import (
 	"unicode/utf8"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
@@ -54,6 +55,29 @@ func (vind *UnicodeLooseMD5) String() string {
 // Cost returns the cost as 1.
 func (vind *UnicodeLooseMD5) Cost() int {
 	return 1
+}
+
+// IsUnique returns true since the Vindex is unique.
+func (vind *UnicodeLooseMD5) IsUnique() bool {
+	return true
+}
+
+// IsFunctional returns true since the Vindex is functional.
+func (vind *UnicodeLooseMD5) IsFunctional() bool {
+	return true
+}
+
+// Map2 can map ids to key.Destination objects.
+func (vind *UnicodeLooseMD5) Map2(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	for _, id := range ids {
+		data, err := unicodeHash(id)
+		if err != nil {
+			return nil, fmt.Errorf("UnicodeLooseMD5.Map: %v", err)
+		}
+		out = append(out, key.DestinationKeyspaceID(data))
+	}
+	return out, nil
 }
 
 // Verify returns true if ids maps to ksids.
