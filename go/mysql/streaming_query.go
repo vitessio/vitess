@@ -41,9 +41,6 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 		return NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "streaming query already in progress")
 	}
 
-	// This is a new command, need to reset the sequence.
-	c.sequence = 0
-
 	// Send the query as a COM_QUERY packet.
 	if err := c.WriteComQuery(query); err != nil {
 		return err
