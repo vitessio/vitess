@@ -364,8 +364,7 @@ func (qe *QueryEngine) getQueryConn(ctx context.Context) (*connpool.DBConn, erro
 	waiterCount := qe.queryPoolWaiters.Add(1)
 	defer qe.queryPoolWaiters.Add(-1)
 
-	waiterCap := qe.queryPoolWaiterCap.Get()
-	if waiterCap != 0 && waiterCount > waiterCap {
+	if waiterCount > qe.queryPoolWaiterCap.Get() {
 		return nil, vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "query pool waiter count exceeded")
 	}
 
