@@ -200,8 +200,7 @@ func (axp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (
 	waiterCount := axp.waiters.Add(1)
 	defer axp.waiters.Add(-1)
 
-	waiterCap := axp.waiterCap.Get()
-	if waiterCap != 0 && waiterCount > waiterCap {
+	if waiterCount > axp.waiterCap.Get() {
 		return 0, vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool waiter count exceeded")
 	}
 
