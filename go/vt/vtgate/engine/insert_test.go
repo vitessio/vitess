@@ -45,7 +45,7 @@ func TestInsertUnsharded(t *testing.T) {
 	}
 	result, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
 		`GetKeyspaceShards &{ks false}`,
@@ -104,7 +104,7 @@ func TestInsertUnshardedGenerate(t *testing.T) {
 	}
 	result, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
 		// Fetch two sequence value.
@@ -174,7 +174,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	}
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
 		`GetKeyspaceShards &{sharded true}`,
@@ -325,7 +325,7 @@ func TestInsertShardedGenerate(t *testing.T) {
 	}
 	result, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
 		`GetKeyspaceShards &{ks2 false}`,
@@ -461,7 +461,7 @@ func TestInsertShardedOwned(t *testing.T) {
 	}
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
 		`GetKeyspaceShards &{sharded true}`,
@@ -715,7 +715,7 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 	}
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
 		`GetKeyspaceShards &{sharded true}`,
@@ -956,7 +956,7 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 	}
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
 		`GetKeyspaceShards &{sharded true}`,
@@ -1080,7 +1080,7 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 	}
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
 		`GetKeyspaceShards &{sharded true}`,
@@ -1296,7 +1296,7 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 	}
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
 		`GetKeyspaceShards &{sharded true}`,
