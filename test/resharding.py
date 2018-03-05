@@ -262,7 +262,7 @@ primary key (name)
     if base_sharding.use_rbr:
       self._insert_value(shard_1_master, 'no_pk', 1, 'msg1',
                          0xA000000000000000)
-      # TODO(github.com/youtube/vitess/issues/2880): Add more rows here such
+      # TODO(github.com/vitessio/vitess/issues/2880): Add more rows here such
       # clone and diff would break when the insertion order on source and
       # dest shards is different.
 
@@ -518,7 +518,7 @@ primary key (name)
     shard_2_master.start_vttablet(wait_for_state=None,
                                   binlog_use_v3_resharding_mode=False)
     shard_3_master.start_vttablet(wait_for_state=None,
-          binlog_use_v3_resharding_mode=False)
+                                  binlog_use_v3_resharding_mode=False)
     for t in [shard_2_replica1, shard_2_replica2, shard_2_rdonly1,
               shard_3_replica, shard_3_rdonly1]:
       t.start_vttablet(wait_for_state=None,
@@ -563,7 +563,7 @@ primary key (name)
     # Run vtworker as daemon for the following SplitClone commands.
     worker_proc, worker_port, worker_rpc_port = utils.run_vtworker_bg(
         ['--cell', 'test_nj', '--command_display_interval', '10ms',
-          '--use_v3_resharding_mode=false'],
+         '--use_v3_resharding_mode=false'],
         auto_log=True)
 
     # Copy the data from the source to the destination shards.

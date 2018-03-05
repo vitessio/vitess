@@ -8,7 +8,7 @@ Vitess. Vitess uses backups for two purposes:
 
 Vitess stores data backups on a Backup Storage service, which is
 a
-[pluggable interface](https://github.com/youtube/vitess/blob/master/go/vt/mysqlctl/backupstorage/interface.go).
+[pluggable interface](https://github.com/vitessio/vitess/blob/master/go/vt/mysqlctl/backupstorage/interface.go).
 
 Currently, we have plugins for:
 
