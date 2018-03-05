@@ -20,6 +20,7 @@ import (
 	"bytes"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 )
 
 var (
@@ -50,6 +51,25 @@ func (vind *Null) String() string {
 // Cost returns the cost of this index as 0.
 func (vind *Null) Cost() int {
 	return 0
+}
+
+// IsUnique returns true since the Vindex is unique.
+func (vind *Null) IsUnique() bool {
+	return true
+}
+
+// IsFunctional returns true since the Vindex is functional.
+func (vind *Null) IsFunctional() bool {
+	return true
+}
+
+// Map2 can map ids to key.Destination objects.
+func (vind *Null) Map2(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	for i := 0; i < len(ids); i++ {
+		out = append(out, key.DestinationKeyspaceID(nullksid))
+	}
+	return out, nil
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
