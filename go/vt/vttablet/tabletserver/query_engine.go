@@ -141,15 +141,17 @@ type QueryEngine struct {
 	streamQList  *QueryList
 
 	// Vars
-	connTimeout      sync2.AtomicDuration
-	binlogFormat     connpool.BinlogFormat
-	autoCommit       sync2.AtomicBool
-	maxResultSize    sync2.AtomicInt64
-	warnResultSize   sync2.AtomicInt64
-	maxDMLRows       sync2.AtomicInt64
-	passthroughDMLs  sync2.AtomicBool
-	allowUnsafeDMLs  bool
-	streamBufferSize sync2.AtomicInt64
+	connTimeout        sync2.AtomicDuration
+	queryPoolWaiters   sync2.AtomicInt64
+	queryPoolWaiterCap sync2.AtomicInt64
+	binlogFormat       connpool.BinlogFormat
+	autoCommit         sync2.AtomicBool
+	maxResultSize      sync2.AtomicInt64
+	warnResultSize     sync2.AtomicInt64
+	maxDMLRows         sync2.AtomicInt64
+	passthroughDMLs    sync2.AtomicBool
+	allowUnsafeDMLs    bool
+	streamBufferSize   sync2.AtomicInt64
 	// tableaclExemptCount count the number of accesses allowed
 	// based on membership in the superuser ACL
 	tableaclExemptCount  sync2.AtomicInt64
@@ -173,10 +175,11 @@ var (
 // You must call this only once.
 func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tabletenv.TabletConfig) *QueryEngine {
 	qe := &QueryEngine{
-		se:               se,
-		tables:           make(map[string]*schema.Table),
-		plans:            cache.NewLRUCache(int64(config.QueryPlanCacheSize)),
-		queryRuleSources: rules.NewMap(),
+		se:                 se,
+		tables:             make(map[string]*schema.Table),
+		plans:              cache.NewLRUCache(int64(config.QueryPlanCacheSize)),
+		queryRuleSources:   rules.NewMap(),
+		queryPoolWaiterCap: sync2.NewAtomicInt64(int64(config.QueryPoolWaiterCap)),
 	}
 
 	qe.conns = connpool.New(
@@ -234,6 +237,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		stats.Publish("MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
 		stats.Publish("StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
 		stats.Publish("TableACLExemptCount", stats.IntFunc(qe.tableaclExemptCount.Get))
+		stats.Publish("QueryPoolWaiters", stats.IntFunc(qe.queryPoolWaiters.Get))
 
 		stats.Publish("QueryCacheLength", stats.IntFunc(qe.plans.Length))
 		stats.Publish("QueryCacheSize", stats.IntFunc(qe.plans.Size))
@@ -357,6 +361,14 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 // getQueryConn returns a connection from the query pool using either
 // the conn pool timeout if configured, or the original context query timeout
 func (qe *QueryEngine) getQueryConn(ctx context.Context) (*connpool.DBConn, error) {
+	waiterCount := qe.queryPoolWaiters.Add(1)
+	defer qe.queryPoolWaiters.Add(-1)
+
+	waiterCap := qe.queryPoolWaiterCap.Get()
+	if waiterCap != 0 && waiterCount > waiterCap {
+		return nil, vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "query pool waiter count exceeded")
+	}
+
 	timeout := qe.connTimeout.Get()
 	if timeout != 0 {
 		ctxTimeout, cancel := context.WithTimeout(ctx, timeout)

@@ -65,6 +65,8 @@ func init() {
 	flag.Float64Var(&Config.QueryPoolTimeout, "queryserver-config-query-pool-timeout", DefaultQsConfig.QueryPoolTimeout, "query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
 	flag.Float64Var(&Config.TxPoolTimeout, "queryserver-config-txpool-timeout", DefaultQsConfig.TxPoolTimeout, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
 	flag.Float64Var(&Config.IdleTimeout, "queryserver-config-idle-timeout", DefaultQsConfig.IdleTimeout, "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
+	flag.IntVar(&Config.QueryPoolWaiterCap, "queryserver-config-query-pool-waiter-cap", DefaultQsConfig.QueryPoolWaiterCap, "query server query pool waiter limit, this is the maximum number of queries that can be queued waiting to get a connection")
+	flag.IntVar(&Config.TxPoolWaiterCap, "queryserver-config-txpool-waiter-cap", DefaultQsConfig.TxPoolWaiterCap, "query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection")
 	// tableacl related configurations.
 	flag.BoolVar(&Config.StrictTableACL, "queryserver-config-strict-table-acl", DefaultQsConfig.StrictTableACL, "only allow queries that pass table acl checks")
 	flag.BoolVar(&Config.EnableTableACLDryRun, "queryserver-config-enable-table-acl-dry-run", DefaultQsConfig.EnableTableACLDryRun, "If this flag is enabled, tabletserver will emit monitoring metrics and let the request pass regardless of table acl check results")
@@ -139,6 +141,8 @@ type TabletConfig struct {
 	QueryPoolTimeout        float64
 	TxPoolTimeout           float64
 	IdleTimeout             float64
+	QueryPoolWaiterCap      int
+	TxPoolWaiterCap         int
 	StrictTableACL          bool
 	TerseErrors             bool
 	EnableAutoCommit        bool
@@ -206,6 +210,7 @@ var DefaultQsConfig = TabletConfig{
 	QueryPoolTimeout:        0,
 	TxPoolTimeout:           1,
 	IdleTimeout:             30 * 60,
+	QueryPoolWaiterCap:      0,
 	StreamBufferSize:        32 * 1024,
 	StrictTableACL:          false,
 	TerseErrors:             false,
