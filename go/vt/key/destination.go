@@ -330,3 +330,21 @@ func (d DestinationAllShards) Resolve(allShards []*topodatapb.ShardReference, ad
 
 	return nil
 }
+
+//
+// DestinationNone
+//
+
+// DestinationNone is a destination that doesn't resolve to any shard.
+// It implements the Destination interface.
+type DestinationNone struct{}
+
+// IsUnique is part of the Destination interface.
+func (d DestinationNone) IsUnique() bool {
+	return true
+}
+
+// Resolve is part of the Destination interface.
+func (d DestinationNone) Resolve(allShards []*topodatapb.ShardReference, addShard func(shard string) error) error {
+	return nil
+}

@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -52,6 +53,44 @@ func (ln *LookupNonUnique) String() string {
 // Cost returns the cost of this vindex as 20.
 func (ln *LookupNonUnique) Cost() int {
 	return 20
+}
+
+// IsUnique returns false since the Vindex is non unique.
+func (ln *LookupNonUnique) IsUnique() bool {
+	return false
+}
+
+// IsFunctional returns false since the Vindex is not functional.
+func (ln *LookupNonUnique) IsFunctional() bool {
+	return false
+}
+
+// Map2 can map ids to key.Destination objects.
+func (ln *LookupNonUnique) Map2(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if ln.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
+
+	results, err := ln.lkp.Lookup(vcursor, ids)
+	if err != nil {
+		return nil, err
+	}
+	for _, result := range results {
+		if len(result.Rows) == 0 {
+			out = append(out, key.DestinationNone{})
+			continue
+		}
+		ksids := make([][]byte, 0, len(result.Rows))
+		for _, row := range result.Rows {
+			ksids = append(ksids, row[0].ToBytes())
+		}
+		out = append(out, key.DestinationKeyspaceIDs(ksids))
+	}
+	return out, nil
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
@@ -197,6 +236,42 @@ func (lu *LookupUnique) String() string {
 // Cost returns the cost of this vindex as 10.
 func (lu *LookupUnique) Cost() int {
 	return 10
+}
+
+// IsUnique returns true since the Vindex is unique.
+func (lu *LookupUnique) IsUnique() bool {
+	return true
+}
+
+// IsFunctional returns false since the Vindex is not functional.
+func (lu *LookupUnique) IsFunctional() bool {
+	return false
+}
+
+// Map2 can map ids to key.Destination objects.
+func (lu *LookupUnique) Map2(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if lu.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
+	results, err := lu.lkp.Lookup(vcursor, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i, result := range results {
+		switch len(result.Rows) {
+		case 0:
+			out = append(out, key.DestinationNone{})
+		case 1:
+			out = append(out, key.DestinationKeyspaceID(result.Rows[0][0].ToBytes()))
+		default:
+			return nil, fmt.Errorf("Lookup.Map: unexpected multiple results from vindex %s: %v", lu.lkp.Table, ids[i])
+		}
+	}
+	return out, nil
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.

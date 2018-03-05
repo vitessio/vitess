@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -29,8 +30,13 @@ import (
 // uvindex is Unique.
 type uvindex struct{ matchid, matchkr bool }
 
-func (*uvindex) String() string { return "uvindex" }
-func (*uvindex) Cost() int      { return 1 }
+func (*uvindex) String() string     { return "uvindex" }
+func (*uvindex) Cost() int          { return 1 }
+func (*uvindex) IsUnique() bool     { return true }
+func (*uvindex) IsFunctional() bool { return false }
+func (*uvindex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	return nil, nil
+}
 func (*uvindex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	panic("unimplemented")
 }
@@ -55,8 +61,13 @@ func (v *uvindex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.KsidOrRang
 // nvindex is NonUnique.
 type nvindex struct{ matchid, matchkr bool }
 
-func (*nvindex) String() string { return "nvindex" }
-func (*nvindex) Cost() int      { return 1 }
+func (*nvindex) String() string     { return "nvindex" }
+func (*nvindex) Cost() int          { return 1 }
+func (*nvindex) IsUnique() bool     { return false }
+func (*nvindex) IsFunctional() bool { return false }
+func (*nvindex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	return nil, nil
+}
 func (*nvindex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	panic("unimplemented")
 }
