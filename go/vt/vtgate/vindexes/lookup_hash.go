@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -84,6 +85,50 @@ func (lh *LookupHash) String() string {
 // Cost returns the cost of this vindex as 20.
 func (lh *LookupHash) Cost() int {
 	return 20
+}
+
+// IsUnique returns false since the Vindex is not unique.
+func (lh *LookupHash) IsUnique() bool {
+	return false
+}
+
+// IsFunctional returns false since the Vindex is not functional.
+func (lh *LookupHash) IsFunctional() bool {
+	return false
+}
+
+// Map2 can map ids to key.Destination objects.
+func (lh *LookupHash) Map2(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if lh.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
+
+	results, err := lh.lkp.Lookup(vcursor, ids)
+	if err != nil {
+		return nil, err
+	}
+	for _, result := range results {
+		if len(result.Rows) == 0 {
+			out = append(out, key.DestinationNone{})
+			continue
+		}
+		ksids := make([][]byte, 0, len(result.Rows))
+		for _, row := range result.Rows {
+			num, err := sqltypes.ToUint64(row[0])
+			if err != nil {
+				// A failure to convert is equivalent to not being
+				// able to map.
+				continue
+			}
+			ksids = append(ksids, vhash(num))
+		}
+		out = append(out, key.DestinationKeyspaceIDs(ksids))
+	}
+	return out, nil
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
@@ -230,6 +275,48 @@ func (lhu *LookupHashUnique) String() string {
 // Cost returns the cost of this vindex as 10.
 func (lhu *LookupHashUnique) Cost() int {
 	return 10
+}
+
+// IsUnique returns true since the Vindex is unique.
+func (lhu *LookupHashUnique) IsUnique() bool {
+	return true
+}
+
+// IsFunctional returns false since the Vindex is not functional.
+func (lhu *LookupHashUnique) IsFunctional() bool {
+	return false
+}
+
+// Map2 can map ids to key.Destination objects.
+func (lhu *LookupHashUnique) Map2(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if lhu.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
+
+	results, err := lhu.lkp.Lookup(vcursor, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i, result := range results {
+		switch len(result.Rows) {
+		case 0:
+			out = append(out, key.DestinationNone{})
+		case 1:
+			num, err := sqltypes.ToUint64(result.Rows[0][0])
+			if err != nil {
+				out = append(out, key.DestinationNone{})
+				continue
+			}
+			out = append(out, key.DestinationKeyspaceID(vhash(num)))
+		default:
+			return nil, fmt.Errorf("LookupHash.Map: unexpected multiple results from vindex %s: %v", lhu.lkp.Table, ids[i])
+		}
+	}
+	return out, nil
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.

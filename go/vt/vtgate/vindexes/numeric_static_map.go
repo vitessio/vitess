@@ -26,6 +26,7 @@ import (
 	"strconv"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 )
 
 var (
@@ -72,6 +73,36 @@ func (vind *NumericStaticMap) String() string {
 // Cost returns the cost of this vindex as 1.
 func (*NumericStaticMap) Cost() int {
 	return 1
+}
+
+// IsUnique returns true since the Vindex is unique.
+func (vind *NumericStaticMap) IsUnique() bool {
+	return true
+}
+
+// IsFunctional returns true since the Vindex is functional.
+func (vind *NumericStaticMap) IsFunctional() bool {
+	return true
+}
+
+// Map2 can map ids to key.Destination objects.
+func (vind *NumericStaticMap) Map2(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	for _, id := range ids {
+		num, err := sqltypes.ToUint64(id)
+		if err != nil {
+			out = append(out, key.DestinationNone{})
+			continue
+		}
+		lookupNum, ok := vind.lookup[num]
+		if ok {
+			num = lookupNum
+		}
+		var keybytes [8]byte
+		binary.BigEndian.PutUint64(keybytes[:], num)
+		out = append(out, key.DestinationKeyspaceID(keybytes[:]))
+	}
+	return out, nil
 }
 
 // Verify returns true if ids and ksids match.
