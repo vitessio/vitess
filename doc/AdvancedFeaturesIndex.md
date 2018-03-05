@@ -9,4 +9,4 @@ Examples for undocumented features:
 * hot row protection in vttablet
 * vtgate buffer for lossless failovers
 * vttablet consolidator (avoids duplicated read queries to MySQL, turned on by default)
-* [vtexplain](https://github.com/youtube/vitess/blob/master/doc/VtExplain.md)
+* [vtexplain](https://github.com/vitessio/vitess/blob/master/doc/VtExplain.md)

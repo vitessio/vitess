@@ -14,7 +14,7 @@ primary key (id)) Engine=InnoDB;
 
 Let's say we want to write a MapReduce job that imports this table from Vitess to HDFS where each row is turned into a CSV record in HDFS. 
 
-We can use [VitessInputFormat](https://github.com/youtube/vitess/blob/master/java/hadoop/src/main/java/io/vitess/hadoop/VitessInputFormat.java), an implementation of Hadoop's [InputFormat](http://hadoop.apache.org/docs/stable/api/org/apache/hadoop/mapred/InputFormat.html), for that. With VitessInputFormat, rows from the source table are streamed to the mapper task. Each input record has a [NullWritable](https://hadoop.apache.org/docs/r2.2.0/api/org/apache/hadoop/io/NullWritable.html) key (no key, really), and [RowWritable](https://github.com/youtube/vitess/blob/master/java/hadoop/src/main/java/io/vitess/hadoop/RowWritable.java) as value, which is a writable implementation for the entire row's contents.
+We can use [VitessInputFormat](https://github.com/vitessio/vitess/blob/master/java/hadoop/src/main/java/io/vitess/hadoop/VitessInputFormat.java), an implementation of Hadoop's [InputFormat](http://hadoop.apache.org/docs/stable/api/org/apache/hadoop/mapred/InputFormat.html), for that. With VitessInputFormat, rows from the source table are streamed to the mapper task. Each input record has a [NullWritable](https://hadoop.apache.org/docs/r2.2.0/api/org/apache/hadoop/io/NullWritable.html) key (no key, really), and [RowWritable](https://github.com/vitessio/vitess/blob/master/java/hadoop/src/main/java/io/vitess/hadoop/RowWritable.java) as value, which is a writable implementation for the entire row's contents.
 
 Here is an example implementation of our mapper, which transforms each row into a CSV Text. 
 
@@ -55,11 +55,11 @@ public static void main(String[] args) {
 }
 ```
 
-Refer [this integration test](https://github.com/youtube/vitess/blob/master/java/hadoop/src/test/java/io/vitess/hadoop/MapReduceIT.java) for a working example a MapReduce job on Vitess.
+Refer [this integration test](https://github.com/vitessio/vitess/blob/master/java/hadoop/src/test/java/io/vitess/hadoop/MapReduceIT.java) for a working example a MapReduce job on Vitess.
 
 ## How it Works
 
-VitessInputFormat relies on VtGate's [SplitQuery](https://github.com/youtube/vitess/blob/21515f5c1a85c0054ddf7d2ff068702670ab93b5/proto/vtgateservice.proto#L98) RPC to obtain the input splits. This RPC method accepts a SplitQueryRequest which consists of an input query and the desired number of splits (splitCount). SplitQuery returns SplitQueryResult, which has a list of SplitQueryParts. SplitQueryPart consists of a KeyRangeQuery and a size estimate of how many rows this sub-query might return. SplitQueryParts return rows that are mutually exclusive and collectively exhaustive - all rows belonging to the original input query will be returned by one and exactly one SplitQueryPart.
+VitessInputFormat relies on VtGate's [SplitQuery](https://github.com/vitessio/vitess/blob/21515f5c1a85c0054ddf7d2ff068702670ab93b5/proto/vtgateservice.proto#L98) RPC to obtain the input splits. This RPC method accepts a SplitQueryRequest which consists of an input query and the desired number of splits (splitCount). SplitQuery returns SplitQueryResult, which has a list of SplitQueryParts. SplitQueryPart consists of a KeyRangeQuery and a size estimate of how many rows this sub-query might return. SplitQueryParts return rows that are mutually exclusive and collectively exhaustive - all rows belonging to the original input query will be returned by one and exactly one SplitQueryPart.
 
 VitessInputFormat turns each SplitQueryPart into a mapper task. The number of splits generated may not be exactly equal to the desired split count specified in the input. Specifically, if the desired split count is not a multiple of the number of shards, then VtGate will round it up to the next bigger multiple of number of shards.
 

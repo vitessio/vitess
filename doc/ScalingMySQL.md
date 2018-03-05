@@ -43,7 +43,7 @@ Vitess has several components that keep this complexity out of your application:
 * The **vtctl** and **vtctld** tools offer command-line and web interfaces to the system.
 
 <div style="overflow-x: scroll">
-<img src="https://raw.githubusercontent.com/youtube/vitess/master/doc/VitessOverview.png" alt="Diagram showing Vitess implementation" width="585" height="300"/>
+<img src="https://raw.githubusercontent.com/vitessio/vitess/master/doc/VitessOverview.png" alt="Diagram showing Vitess implementation" width="585" height="300"/>
 </div>
 
 

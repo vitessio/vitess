@@ -26,9 +26,9 @@ By default, the stats_emit_period is 60s, so each component will push stats to t
 
 Vitess has a preliminary plug-in to support InfluxDB as a push-based metrics backend. However, there is very limited support at this time, as InfluxDB itself is going through various API breaking changes. 
 
-It should be fairly straightforward to write your own plug-in, if you want to support a different backend. The plug-in package simply needs to implement the `PushBackend` interface of the `stats` package. For an example, you can see the [InfluxDB plugin](https://github.com/youtube/vitess/blob/master/go/stats/influxdbbackend/influxdb_backend.go).
+It should be fairly straightforward to write your own plug-in, if you want to support a different backend. The plug-in package simply needs to implement the `PushBackend` interface of the `stats` package. For an example, you can see the [InfluxDB plugin](https://github.com/vitessio/vitess/blob/master/go/stats/influxdbbackend/influxdb_backend.go).
 
-Once you’ve written the backend plug-in, you also need to register the plug-in from within all the relevant Vitess binaries. An example of how to do this can be seen in [this pull request](https://github.com/youtube/vitess/pull/469).
+Once you’ve written the backend plug-in, you also need to register the plug-in from within all the relevant Vitess binaries. An example of how to do this can be seen in [this pull request](https://github.com/vitessio/vitess/pull/469).
 
 You can then specify that Vitess should publish stats to the backend that you’re targeting by using the `--stats_backend` flag.  
 
