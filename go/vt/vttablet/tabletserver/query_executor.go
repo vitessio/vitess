@@ -768,7 +768,7 @@ func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
 
 func (qre *QueryExecutor) getStreamConn() (*connpool.DBConn, error) {
 	span := trace.NewSpanFromContext(qre.ctx)
-	span.StartLocal("QueryExecutor.getConn")
+	span.StartLocal("QueryExecutor.getStreamConn")
 	defer span.Finish()
 
 	start := time.Now()
