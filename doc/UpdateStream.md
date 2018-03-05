@@ -415,7 +415,7 @@ A regular appserver will query the cache for the value it wants. It will get eit
 
 To see a sample use of the Update Stream feature, look at
 the
-[cache_invalidation.py](https://github.com/youtube/vitess/blob/master/test/cache_invalidation.py) integration
+[cache_invalidation.py](https://github.com/vitessio/vitess/blob/master/test/cache_invalidation.py) integration
 test. It shows how to do the invalidaiton in python, and the application
 component.
 

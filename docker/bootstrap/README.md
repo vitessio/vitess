@@ -15,7 +15,7 @@ The `vitess/bootstrap` image comes in different flavors:
 **NOTE: Unlike the base image that builds Vitess itself, this bootstrap image
 will NOT be rebuilt automatically on every push to the Vitess master branch.**
 
-To build a new bootstrap image, use the [build.sh](https://github.com/youtube/vitess/blob/master/docker/bootstrap/build.sh)
+To build a new bootstrap image, use the [build.sh](https://github.com/vitessio/vitess/blob/master/docker/bootstrap/build.sh)
 script.
 
 First build the `common` image, then any flavors you want. For example:

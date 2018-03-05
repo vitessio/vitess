@@ -51,7 +51,7 @@ if [ `uname -s` == "Darwin" ]; then
      export GRPC_PYTHON_BUILD_WITH_CYTHON=1
      $PIP install Cython
 
-     # Work-around macOS Sierra blocker, see: https://github.com/youtube/vitess/issues/2115
+     # Work-around macOS Sierra blocker, see: https://github.com/vitessio/vitess/issues/2115
      # TODO(mberlin): Remove this when the underlying issue is fixed and available
      #                in the gRPC version used by Vitess.
      #                See: https://github.com/google/protobuf/issues/2182

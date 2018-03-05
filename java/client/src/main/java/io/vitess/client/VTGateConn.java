@@ -75,7 +75,7 @@ import io.vitess.proto.Vtgate.StreamExecuteShardsRequest;
  *
  * <p>
  * See the <a href=
- * "https://github.com/youtube/vitess/blob/master/java/example/src/main/java/io/vitess/example/VitessClientExample.java">VitessClientExample</a>
+ * "https://github.com/vitessio/vitess/blob/master/java/example/src/main/java/io/vitess/example/VitessClientExample.java">VitessClientExample</a>
  * for a usage example.
  *
  * <p>

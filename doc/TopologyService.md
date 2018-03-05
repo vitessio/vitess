@@ -101,7 +101,7 @@ jobs don’t concurrently alter the data.
 ### VSchema data
 
 The VSchema data contains sharding and routing information for
-the [VTGate V3](https://github.com/youtube/vitess/blob/master/doc/VTGateV3Features.md) API.
+the [VTGate V3](https://github.com/vitessio/vitess/blob/master/doc/VTGateV3Features.md) API.
 
 ## Local data
 

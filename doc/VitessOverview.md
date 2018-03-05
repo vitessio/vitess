@@ -120,7 +120,7 @@ Vitess tools and servers are designed to help you whether you start with a compl
 The diagram below illustrates Vitess' components:
 
 <div style="overflow-x: scroll">
-<img src="https://raw.githubusercontent.com/youtube/vitess/master/doc/VitessOverview.png" alt="Diagram showing Vitess implementation" width="509" height="322"/>
+<img src="https://raw.githubusercontent.com/vitessio/vitess/master/doc/VitessOverview.png" alt="Diagram showing Vitess implementation" width="509" height="322"/>
 </div>
 
 ### Topology
