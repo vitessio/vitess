@@ -94,19 +94,6 @@ func (f *loggingVCursor) Context() context.Context {
 	return context.Background()
 }
 
-func (f *loggingVCursor) nextResult() (*sqltypes.Result, error) {
-	if f.results == nil || f.curResult >= len(f.results) {
-		return &sqltypes.Result{}, f.resultErr
-	}
-
-	r := f.results[f.curResult]
-	f.curResult++
-	if r == nil {
-		return &sqltypes.Result{}, f.resultErr
-	}
-	return r, nil
-}
-
 func (f *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
 	f.log = append(f.log, fmt.Sprintf("Execute %s %v %v", query, printBindVars(bindvars), isDML))
 	return f.nextResult()
@@ -122,6 +109,15 @@ func (f *loggingVCursor) ExecuteStandalone(query string, bindvars map[string]*qu
 	return f.nextResult()
 }
 
+func (f *loggingVCursor) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
+	f.log = append(f.log, fmt.Sprintf("StreamExecuteMulti %s %s %s", query, keyspace, printShardVars(shardVars)))
+	r, err := f.nextResult()
+	if err != nil {
+		return err
+	}
+	return callback(r)
+}
+
 func (f *loggingVCursor) GetKeyspaceShards(vkeyspace *vindexes.Keyspace) (string, []*topodatapb.ShardReference, error) {
 	f.log = append(f.log, fmt.Sprintf("GetKeyspaceShards %v", vkeyspace))
 	if f.shardErr != nil {
@@ -132,6 +128,23 @@ func (f *loggingVCursor) GetKeyspaceShards(vkeyspace *vindexes.Keyspace) (string
 		sr[i] = &topodatapb.ShardReference{Name: shard}
 	}
 	return vkeyspace.Name, sr, nil
+}
+
+func (f *loggingVCursor) GetShardsForKsids(allShards []*topodatapb.ShardReference, ksids vindexes.Ksids) ([]string, error) {
+	f.log = append(f.log, fmt.Sprintf("GetShardsForKsids %v %q", allShards, ksids))
+	if ksids.Range != nil {
+		return []string{"-20", "20-"}, nil
+	}
+
+	var shards []string
+	for _, ksid := range ksids.IDs {
+		if string(ksid) < "\x20" {
+			shards = append(shards, "-20")
+		} else {
+			shards = append(shards, "20-")
+		}
+	}
+	return shards, nil
 }
 
 func (f *loggingVCursor) GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error) {
@@ -152,6 +165,25 @@ func (f *loggingVCursor) ExpectLog(t *testing.T, want []string) {
 	if !reflect.DeepEqual(f.log, want) {
 		t.Errorf("vc.log:\n%+v, want\n%+v", f.log, want)
 	}
+}
+
+func (f *loggingVCursor) Rewind() {
+	f.curShardForKsid = 0
+	f.curResult = 0
+	f.log = nil
+}
+
+func (f *loggingVCursor) nextResult() (*sqltypes.Result, error) {
+	if f.results == nil || f.curResult >= len(f.results) {
+		return &sqltypes.Result{}, f.resultErr
+	}
+
+	r := f.results[f.curResult]
+	f.curResult++
+	if r == nil {
+		return &sqltypes.Result{}, f.resultErr
+	}
+	return r, nil
 }
 
 func expectError(t *testing.T, msg string, err error, want string) {
@@ -190,6 +222,19 @@ func printShardQueries(shardQueries map[string]*querypb.BoundQuery) string {
 	buf := &bytes.Buffer{}
 	for _, k := range keys {
 		fmt.Fprintf(buf, "%s: %s %s", k, shardQueries[k].Sql, printBindVars(shardQueries[k].BindVariables))
+	}
+	return buf.String()
+}
+
+func printShardVars(shardVars map[string]map[string]*querypb.BindVariable) string {
+	var keys []string
+	for k := range shardVars {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	buf := &bytes.Buffer{}
+	for _, k := range keys {
+		fmt.Fprintf(buf, "%s: %s", k, printBindVars(shardVars[k]))
 	}
 	return buf.String()
 }

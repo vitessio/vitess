@@ -40,7 +40,7 @@ func TestUpdateUnsharded(t *testing.T) {
 	vc := &loggingVCursor{shards: []string{"0"}}
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
 		`GetKeyspaceShards &{ks false}`,
@@ -73,7 +73,7 @@ func TestUpdateEqual(t *testing.T) {
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
 		`GetKeyspaceShards &{ks true}`,
@@ -107,7 +107,7 @@ func TestUpdateEqualNoRoute(t *testing.T) {
 	vc := &loggingVCursor{shards: []string{"0"}}
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
 		`GetKeyspaceShards &{ks true}`,
@@ -175,7 +175,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
 		`GetKeyspaceShards &{sharded true}`,
@@ -201,7 +201,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 	}
 	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
 		`GetKeyspaceShards &{sharded true}`,
