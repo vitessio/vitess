@@ -311,6 +311,28 @@ func TestAutocommitDirectTarget(t *testing.T) {
 	testCommitCount(t, "sbclookup", sbclookup, 1)
 }
 
+// TestAutocommitDirectRangeTarget: no instant-commit.
+func TestAutocommitDirectRangeTarget(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+
+	session := &vtgatepb.Session{
+		TargetString:    "TestExecutor[-]@master",
+		Autocommit:      true,
+		TransactionMode: vtgatepb.TransactionMode_MULTI,
+	}
+	sql := "DELETE FROM sharded_user_msgs LIMIT 1000"
+
+	if _, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{}); err != nil {
+		t.Error(err)
+	}
+	testQueries(t, "sbc1", sbc1, []*querypb.BoundQuery{{
+		Sql:           sql + "/* vtgate:: filtered_replication_unfriendly */",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}})
+	testAsTransactionCount(t, "sbc1", sbc1, 0)
+	testCommitCount(t, "sbc1", sbc1, 1)
+}
+
 func autocommitExec(executor *Executor, sql string) (*sqltypes.Result, error) {
 	session := &vtgatepb.Session{
 		TargetString:    "@master",

@@ -407,7 +407,6 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables 
 		ctx,
 		sql,
 		bindVariables,
-		keyspace,
 		tabletType,
 		session,
 		func() ([]*srvtopo.ResolvedShard, error) {
