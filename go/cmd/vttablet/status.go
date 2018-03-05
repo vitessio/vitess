@@ -55,10 +55,10 @@ var (
 <table width="100%" border="" frame="">
   <tr border="">
     <td width="25%" border="">
-      Alias: {{github_com_youtube_vitess_vtctld_tablet .Tablet.AliasString}}<br>
-      Keyspace: {{github_com_youtube_vitess_vtctld_keyspace .Tablet.Keyspace}} Shard: {{github_com_youtube_vitess_vtctld_shard .Tablet.Keyspace .Tablet.Shard}} Tablet Type: {{.Tablet.Type}}<br>
-      SrvKeyspace: {{github_com_youtube_vitess_vtctld_srv_keyspace .Tablet.Alias.Cell .Tablet.Keyspace}}<br>
-      Replication graph: {{github_com_youtube_vitess_vtctld_replication .Tablet.Alias.Cell .Tablet.Keyspace .Tablet.Shard}}<br>
+      Alias: {{github_com_vitessio_vitess_vtctld_tablet .Tablet.AliasString}}<br>
+      Keyspace: {{github_com_vitessio_vitess_vtctld_keyspace .Tablet.Keyspace}} Shard: {{github_com_vitessio_vitess_vtctld_shard .Tablet.Keyspace .Tablet.Shard}} Tablet Type: {{.Tablet.Type}}<br>
+      SrvKeyspace: {{github_com_vitessio_vitess_vtctld_srv_keyspace .Tablet.Alias.Cell .Tablet.Keyspace}}<br>
+      Replication graph: {{github_com_vitessio_vitess_vtctld_replication .Tablet.Alias.Cell .Tablet.Keyspace .Tablet.Shard}}<br>
       {{if .BlacklistedTables}}
         BlacklistedTables: {{range .BlacklistedTables}}{{.}} {{end}}<br>
       {{end}}
@@ -95,7 +95,7 @@ var (
 	// healthTemplate is just about the tablet health
 	healthTemplate = `
 <div style="font-size: x-large">Current status: <span style="padding-left: 0.5em; padding-right: 0.5em; padding-bottom: 0.5ex; padding-top: 0.5ex;" class="{{.CurrentClass}}">{{.CurrentHTML}}</span></div>
-<p>Polling health information from {{github_com_youtube_vitess_health_html_name}}. ({{.Config}})</p>
+<p>Polling health information from {{github_com_vitessio_vitess_health_html_name}}. ({{.Config}})</p>
 <h2>Health History</h2>
 <table>
   <tr>
@@ -144,7 +144,7 @@ Binlog player state: {{.State}}</br>
       <td>{{.State}}
         {{if eq .State "Running"}}
           {{if .SourceTabletAlias}}
-            (from {{github_com_youtube_vitess_vtctld_tablet .SourceTabletAlias}})
+            (from {{github_com_vitessio_vitess_vtctld_tablet .SourceTabletAlias}})
           {{else}}
             (picking source tablet)
           {{end}}
@@ -201,7 +201,7 @@ func addStatusParts(qsc tabletserver.Controller) {
 		}
 	})
 	servenv.AddStatusFuncs(template.FuncMap{
-		"github_com_youtube_vitess_health_html_name": healthHTMLName,
+		"github_com_vitessio_vitess_health_html_name": healthHTMLName,
 	})
 	servenv.AddStatusPart("Health", healthTemplate, func() interface{} {
 		latest, _ := agent.History.Latest().(*tabletmanager.HealthRecord)

@@ -49,7 +49,7 @@ func TestOrderedAggregateExecute(t *testing.T) {
 		Input: tp,
 	}
 
-	result, err := oa.Execute(nil, nil, nil, false)
+	result, err := oa.Execute(nil, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -90,7 +90,7 @@ func TestOrderedAggregateExecuteTruncate(t *testing.T) {
 		Input:               tp,
 	}
 
-	result, err := oa.Execute(nil, nil, nil, false)
+	result, err := oa.Execute(nil, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -135,7 +135,7 @@ func TestOrderedAggregateStreamExecute(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := oa.StreamExecute(nil, nil, nil, false, func(qr *sqltypes.Result) error {
+	err := oa.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -182,7 +182,7 @@ func TestOrderedAggregateStreamExecuteTruncate(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := oa.StreamExecute(nil, nil, nil, false, func(qr *sqltypes.Result) error {
+	err := oa.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -217,7 +217,7 @@ func TestOrderedAggregateGetFields(t *testing.T) {
 
 	oa := &OrderedAggregate{Input: tp}
 
-	got, err := oa.GetFields(nil, nil, nil)
+	got, err := oa.GetFields(nil, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -240,7 +240,7 @@ func TestOrderedAggregateGetFieldsTruncate(t *testing.T) {
 		Input:               tp,
 	}
 
-	got, err := oa.GetFields(nil, nil, nil)
+	got, err := oa.GetFields(nil, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -261,17 +261,17 @@ func TestOrderedAggregateInputFail(t *testing.T) {
 	oa := &OrderedAggregate{Input: tp}
 
 	want := "input fail"
-	if _, err := oa.Execute(nil, nil, nil, false); err == nil || err.Error() != want {
+	if _, err := oa.Execute(nil, nil, false); err == nil || err.Error() != want {
 		t.Errorf("oa.Execute(): %v, want %s", err, want)
 	}
 
 	tp.rewind()
-	if err := oa.StreamExecute(nil, nil, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
+	if err := oa.StreamExecute(nil, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
 		t.Errorf("oa.StreamExecute(): %v, want %s", err, want)
 	}
 
 	tp.rewind()
-	if _, err := oa.GetFields(nil, nil, nil); err == nil || err.Error() != want {
+	if _, err := oa.GetFields(nil, nil); err == nil || err.Error() != want {
 		t.Errorf("oa.GetFields(): %v, want %s", err, want)
 	}
 }
@@ -299,12 +299,12 @@ func TestOrderedAggregateKeysFail(t *testing.T) {
 	}
 
 	want := "types are not comparable: VARCHAR vs VARCHAR"
-	if _, err := oa.Execute(nil, nil, nil, false); err == nil || err.Error() != want {
+	if _, err := oa.Execute(nil, nil, false); err == nil || err.Error() != want {
 		t.Errorf("oa.Execute(): %v, want %s", err, want)
 	}
 
 	tp.rewind()
-	if err := oa.StreamExecute(nil, nil, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
+	if err := oa.StreamExecute(nil, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
 		t.Errorf("oa.StreamExecute(): %v, want %s", err, want)
 	}
 }
@@ -332,12 +332,12 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 	}
 
 	want := "could not parse value: 'b'"
-	if _, err := oa.Execute(nil, nil, nil, false); err == nil || err.Error() != want {
+	if _, err := oa.Execute(nil, nil, false); err == nil || err.Error() != want {
 		t.Errorf("oa.Execute(): %v, want %s", err, want)
 	}
 
 	tp.rewind()
-	if err := oa.StreamExecute(nil, nil, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
+	if err := oa.StreamExecute(nil, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
 		t.Errorf("oa.StreamExecute(): %v, want %s", err, want)
 	}
 }

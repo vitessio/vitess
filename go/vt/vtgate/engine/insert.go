@@ -141,7 +141,7 @@ func (code InsertOpcode) MarshalJSON() ([]byte, error) {
 }
 
 // Execute performs a non-streaming exec.
-func (ins *Insert) Execute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (ins *Insert) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	switch ins.Opcode {
 	case InsertUnsharded:
 		return ins.execInsertUnsharded(vcursor, bindVars)
@@ -154,12 +154,12 @@ func (ins *Insert) Execute(vcursor VCursor, bindVars, joinVars map[string]*query
 }
 
 // StreamExecute performs a streaming exec.
-func (ins *Insert) StreamExecute(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (ins *Insert) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	return fmt.Errorf("query %q cannot be used for streaming", ins.Query)
 }
 
 // GetFields fetches the field info.
-func (ins *Insert) GetFields(vcursor VCursor, bindVars, joinVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (ins *Insert) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unreachable code for %q", ins.Query)
 }
 

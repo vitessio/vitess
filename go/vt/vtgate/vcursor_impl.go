@@ -22,6 +22,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -163,7 +164,7 @@ func (vc *vcursorImpl) GetKeyspaceShards(keyspace *vindexes.Keyspace) (string, [
 }
 
 func (vc *vcursorImpl) GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error) {
-	return srvtopo.GetShardForKeyspaceID(allShards, keyspaceID)
+	return key.GetShardForKeyspaceID(allShards, keyspaceID)
 }
 
 func (vc *vcursorImpl) GetShardsForKsids(allShards []*topodatapb.ShardReference, ksids vindexes.Ksids) ([]string, error) {
@@ -172,7 +173,7 @@ func (vc *vcursorImpl) GetShardsForKsids(allShards []*topodatapb.ShardReference,
 	}
 	var shards []string
 	for _, ksid := range ksids.IDs {
-		shard, err := srvtopo.GetShardForKeyspaceID(allShards, ksid)
+		shard, err := key.GetShardForKeyspaceID(allShards, ksid)
 		if err != nil {
 			return nil, err
 		}
