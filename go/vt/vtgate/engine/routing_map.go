@@ -47,3 +47,21 @@ func (rtm routingMap) ShardVars(bv map[string]*querypb.BindVariable) map[string]
 	}
 	return shardVars
 }
+
+// TODO(alainjobart): move this helper method to route.go.
+// It's still here now to facilitate the review of the diff.
+func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) []map[string]*querypb.BindVariable {
+	shardVars := make([]map[string]*querypb.BindVariable, len(mapVals))
+	for i, vals := range mapVals {
+		newbv := make(map[string]*querypb.BindVariable, len(bv)+1)
+		for k, v := range bv {
+			newbv[k] = v
+		}
+		newbv[ListVarName] = &querypb.BindVariable{
+			Type:   querypb.Type_TUPLE,
+			Values: vals,
+		}
+		shardVars[i] = newbv
+	}
+	return shardVars
+}

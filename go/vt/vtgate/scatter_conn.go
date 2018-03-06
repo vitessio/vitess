@@ -61,15 +61,7 @@ type ScatterConn struct {
 // return an error if any.  multiGo is capable of executing
 // multiple shardActionFunc actions in parallel and
 // consolidating the results and errors for the caller.
-type shardActionFunc func(target *querypb.Target) error
-
-// shardActionFunc2 defines the contract for a shard action
-// outside of a transaction. Every such function executes the
-// necessary action on a shard, sends the results to sResults, and
-// return an error if any.  multiGo is capable of executing
-// multiple shardActionFunc actions in parallel and
-// consolidating the results and errors for the caller.
-type shardActionFunc2 func(rs *srvtopo.ResolvedShard, i int) error
+type shardActionFunc func(rs *srvtopo.ResolvedShard, i int) error
 
 // shardActionTransactionFunc defines the contract for a shard action
 // that may be in a transaction. Every such function executes the
@@ -519,7 +511,7 @@ func (stc *ScatterConn) StreamExecute(
 	var mu sync.Mutex
 	fieldSent := false
 
-	allErrors := stc.multiGo2(ctx, "StreamExecute", rss, tabletType, func(rs *srvtopo.ResolvedShard, i int) error {
+	allErrors := stc.multiGo(ctx, "StreamExecute", rss, tabletType, func(rs *srvtopo.ResolvedShard, i int) error {
 		return rs.QueryService.StreamExecute(ctx, rs.Target, query, bindVars, options, func(qr *sqltypes.Result) error {
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
@@ -533,8 +525,8 @@ func (stc *ScatterConn) StreamExecute(
 func (stc *ScatterConn) StreamExecuteMulti(
 	ctx context.Context,
 	query string,
-	keyspace string,
-	shardVars map[string]map[string]*querypb.BindVariable,
+	rss []*srvtopo.ResolvedShard,
+	bindVars []map[string]*querypb.BindVariable,
 	tabletType topodatapb.TabletType,
 	options *querypb.ExecuteOptions,
 	callback func(reply *sqltypes.Result) error,
@@ -543,8 +535,8 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	var mu sync.Mutex
 	fieldSent := false
 
-	allErrors := stc.multiGo(ctx, "StreamExecute", keyspace, getShards(shardVars), tabletType, func(target *querypb.Target) error {
-		return stc.gateway.StreamExecute(ctx, target, query, shardVars[target.Shard], options, func(qr *sqltypes.Result) error {
+	allErrors := stc.multiGo(ctx, "StreamExecute", rss, tabletType, func(rs *srvtopo.ResolvedShard, i int) error {
+		return rs.QueryService.StreamExecute(ctx, rs.Target, query, bindVars[i], options, func(qr *sqltypes.Result) error {
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
 	})
@@ -595,7 +587,7 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, rss []*srvtopo.Resolv
 	var mu sync.Mutex
 	fieldSent := false
 	lastErrors := newTimeTracker()
-	allErrors := stc.multiGo2(ctx, "MessageStream", rss, topodatapb.TabletType_MASTER, func(rs *srvtopo.ResolvedShard, i int) error {
+	allErrors := stc.multiGo(ctx, "MessageStream", rss, topodatapb.TabletType_MASTER, func(rs *srvtopo.ResolvedShard, i int) error {
 		// This loop handles the case where a reparent happens, which can cause
 		// an individual stream to end. If we don't succeed on the retries for
 		// messageStreamGracePeriod, we abort and return an error.
@@ -641,7 +633,7 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, rss []*srvtopo.Resolv
 func (stc *ScatterConn) MessageAck(ctx context.Context, rss []*srvtopo.ResolvedShard, values [][]*querypb.Value, name string) (int64, error) {
 	var mu sync.Mutex
 	var totalCount int64
-	allErrors := stc.multiGo2(ctx, "MessageAck", rss, topodatapb.TabletType_MASTER, func(rs *srvtopo.ResolvedShard, i int) error {
+	allErrors := stc.multiGo(ctx, "MessageAck", rss, topodatapb.TabletType_MASTER, func(rs *srvtopo.ResolvedShard, i int) error {
 		count, err := rs.QueryService.MessageAck(ctx, rs.Target, name, values[i])
 		if err != nil {
 			return err
@@ -683,7 +675,7 @@ func (stc *ScatterConn) SplitQuery(
 	var allParts []*vtgatepb.SplitQueryResponse_Part
 	var allPartsMutex sync.Mutex
 
-	allErrors := stc.multiGo2(
+	allErrors := stc.multiGo(
 		ctx,
 		"SplitQuery",
 		rss,
@@ -781,62 +773,13 @@ func (stc *ScatterConn) GetGatewayCacheStatus() gateway.TabletCacheStatusList {
 
 // multiGo performs the requested 'action' on the specified
 // shards in parallel. This does not handle any transaction state.
-// The action function must match the shardActionFunc signature.
-func (stc *ScatterConn) multiGo(
-	ctx context.Context,
-	name string,
-	keyspace string,
-	shards []string,
-	tabletType topodatapb.TabletType,
-	action shardActionFunc,
-) (allErrors *concurrency.AllErrorRecorder) {
-	allErrors = new(concurrency.AllErrorRecorder)
-	shardMap := unique(shards)
-	if len(shardMap) == 0 {
-		return allErrors
-	}
-
-	oneShard := func(shard string) {
-		var err error
-		target := &querypb.Target{
-			Keyspace:   keyspace,
-			Shard:      shard,
-			TabletType: tabletType,
-		}
-		startTime, statsKey := stc.startAction(name, target)
-		defer stc.endAction(startTime, allErrors, statsKey, &err, nil)
-		err = action(target)
-	}
-
-	if len(shardMap) == 1 {
-		// only one shard, do it synchronously.
-		for shard := range shardMap {
-			oneShard(shard)
-			return allErrors
-		}
-	}
-
-	var wg sync.WaitGroup
-	for shard := range shardMap {
-		wg.Add(1)
-		go func(shard string) {
-			defer wg.Done()
-			oneShard(shard)
-		}(shard)
-	}
-	wg.Wait()
-	return allErrors
-}
-
-// multiGo2 performs the requested 'action' on the specified
-// shards in parallel. This does not handle any transaction state.
 // The action function must match the shardActionFunc2 signature.
-func (stc *ScatterConn) multiGo2(
+func (stc *ScatterConn) multiGo(
 	ctx context.Context,
 	name string,
 	rss []*srvtopo.ResolvedShard,
 	tabletType topodatapb.TabletType,
-	action shardActionFunc2,
+	action shardActionFunc,
 ) (allErrors *concurrency.AllErrorRecorder) {
 	allErrors = new(concurrency.AllErrorRecorder)
 	if len(rss) == 0 {
@@ -1032,14 +975,6 @@ func transactionInfo(
 	}
 
 	return true, 0
-}
-
-func getShards(shardVars map[string]map[string]*querypb.BindVariable) []string {
-	shards := make([]string, 0, len(shardVars))
-	for k := range shardVars {
-		shards = append(shards, k)
-	}
-	return shards
 }
 
 func unique(in []string) map[string]struct{} {
