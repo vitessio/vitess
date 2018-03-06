@@ -13,7 +13,7 @@ keywords:
   - shard
 home: http://vitess.io
 sources:
-  - https://github.com/youtube/vitess
+  - https://github.com/vitessio/vitess
 maintainers:
   - name: Vitess Project
     email: vitess@googlegroups.com

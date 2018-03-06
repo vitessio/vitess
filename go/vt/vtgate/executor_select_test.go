@@ -90,47 +90,6 @@ func TestUnsharded(t *testing.T) {
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
 	}
-
-	_, err = executorExec(executor, "update music_user_map set id = 1", nil)
-	if err != nil {
-		t.Error(err)
-	}
-	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select id from music_user_map where id = 1",
-		BindVariables: map[string]*querypb.BindVariable{},
-	}, {
-		Sql:           "update music_user_map set id = 1",
-		BindVariables: map[string]*querypb.BindVariable{},
-	}}
-	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
-		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
-	}
-
-	sbclookup.Queries = nil
-	_, err = executorExec(executor, "delete from music_user_map", nil)
-	if err != nil {
-		t.Error(err)
-	}
-	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "delete from music_user_map",
-		BindVariables: map[string]*querypb.BindVariable{},
-	}}
-	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
-		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
-	}
-
-	sbclookup.Queries = nil
-	_, err = executorExec(executor, "insert into music_user_map values (1)", nil)
-	if err != nil {
-		t.Error(err)
-	}
-	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "insert into music_user_map values (1)",
-		BindVariables: map[string]*querypb.BindVariable{},
-	}}
-	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
-		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
-	}
 }
 
 func TestUnshardedComments(t *testing.T) {
@@ -270,18 +229,6 @@ func TestStreamBuffering(t *testing.T) {
 		for i := range gotResults {
 			t.Errorf("Buffered streaming:\n%v, want\n%v", gotResults[i], wantResults[i])
 		}
-	}
-}
-
-func TestShardFail(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
-
-	getSandbox(KsTestUnsharded).SrvKeyspaceMustFail = 1
-
-	_, err := executorExec(executor, "select id from sharded_table where id = 1", nil)
-	want := "paramsAllShards: unsharded keyspace TestXBadSharding has multiple shards: possible cause: sharded keyspace is marked as unsharded in vschema"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
 	}
 }
 
@@ -546,29 +493,6 @@ func TestSelectCaseSensitivity(t *testing.T) {
 	sbc1.Queries = nil
 }
 
-func TestSelectEqualNotFound(t *testing.T) {
-	executor, _, _, sbclookup := createExecutorEnv()
-
-	sbclookup.SetResults([]*sqltypes.Result{{}})
-	result, err := executorExec(executor, "select id from music where id = 1", nil)
-	if err != nil {
-		t.Error(err)
-	}
-	wantResult := sandboxconn.SingleRowResult
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
-
-	sbclookup.SetResults([]*sqltypes.Result{{}})
-	result, err = executorExec(executor, "select id from user where name = 'foo'", nil)
-	if err != nil {
-		t.Error(err)
-	}
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
-}
-
 func TestStreamSelectEqual(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 
@@ -621,60 +545,6 @@ func TestSelectKeyRangeUnique(t *testing.T) {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 	sbc1.Queries = nil
-}
-
-func TestSelectEqualFail(t *testing.T) {
-	executor, _, _, sbclookup := createExecutorEnv()
-	s := getSandbox("TestExecutor")
-
-	_, err := executorExec(executor, "select id from user where id = (select count(*) from music)", nil)
-	want := "unsupported"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("executorExec: %v, must start with %v", err, want)
-	}
-
-	_, err = executorExec(executor, "select id from user where id = :aa", nil)
-	want = "paramsSelectEqual: missing bind var aa"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
-	s.SrvKeyspaceMustFail = 1
-	_, err = executorExec(executor, "select id from user where id = 1", nil)
-	want = "paramsSelectEqual: keyspace TestExecutor fetch error: topo error GetSrvKeyspace"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
-	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	_, err = executorExec(executor, "select id from music where id = 1", nil)
-	want = "paramsSelectEqual: lookup.Map"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("executorExec: %v, want prefix %v", err, want)
-	}
-
-	s.ShardSpec = "80-"
-	_, err = executorExec(executor, "select id from user where id = 1", nil)
-	want = "paramsSelectEqual: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("executorExec: %v, want prefix %v", err, want)
-	}
-	s.ShardSpec = DefaultShardSpec
-
-	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	_, err = executorExec(executor, "select id from user where name = 'foo'", nil)
-	want = "paramsSelectEqual: lookup.Map"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("executorExec: %v, want prefix %v", err, want)
-	}
-
-	s.ShardSpec = "80-"
-	_, err = executorExec(executor, "select id from user where name = 'foo'", nil)
-	want = "paramsSelectEqual: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("executorExec: %v, must contain %v", err, want)
-	}
-	s.ShardSpec = DefaultShardSpec
 }
 
 func TestSelectIN(t *testing.T) {
@@ -832,37 +702,6 @@ func TestStreamSelectIN(t *testing.T) {
 	}
 }
 
-func TestSelectINFail(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
-
-	_, err := executorExec(executor, "select id from user where id in (:aa)", nil)
-	want := "paramsSelectIN: missing bind var aa"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
-	_, err = executorExec(executor, "select id from user where id in ::aa", nil)
-	want = "paramsSelectIN: missing bind var aa"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
-	_, err = executorExec(executor, "select id from user where id in ::aa", map[string]*querypb.BindVariable{
-		"aa": sqltypes.Int64BindVariable(1),
-	})
-	want = `paramsSelectIN: single value was supplied for TUPLE bind var aa`
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec:\n%v, want\n%v", err, want)
-	}
-
-	getSandbox("TestExecutor").SrvKeyspaceMustFail = 1
-	_, err = executorExec(executor, "select id from user where id in (1)", nil)
-	want = "paramsSelectEqual: keyspace TestExecutor fetch error: topo error GetSrvKeyspace"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-}
-
 func TestSelectScatter(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
@@ -935,31 +774,6 @@ func TestStreamSelectScatter(t *testing.T) {
 	}
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
-}
-
-func TestSelectScatterFail(t *testing.T) {
-	// Special setup: Don't use createExecutorEnv.
-	cell := "aa"
-	hc := discovery.NewFakeHealthCheck()
-	s := createSandbox("TestExecutor")
-	s.VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	s.SrvKeyspaceMustFail = 1
-	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
-	var conns []*sandboxconn.SandboxConn
-	for _, shard := range shards {
-		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
-		conns = append(conns, sbc)
-	}
-	serv := new(sandboxTopo)
-	resolver := newTestResolver(hc, serv, cell)
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize, false)
-
-	_, err := executorExec(executor, "select id from user", nil)
-	want := "paramsAllShards: keyspace TestExecutor fetch error: topo error GetSrvKeyspace"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
 	}
 }
 
@@ -1232,42 +1046,6 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 	}
 	if !reflect.DeepEqual(gotResult, wantResult) {
 		t.Errorf("scatter order by:\n%v, want\n%v", gotResult, wantResult)
-	}
-}
-
-// TestSelectScatterOrderByFail will run an ORDER BY query that will scatter out to 8 shards, with
-// the order by column as VarChar, which is unsupported.
-func TestSelectScatterOrderByFail(t *testing.T) {
-	// Special setup: Don't use createExecutorEnv.
-	cell := "aa"
-	hc := discovery.NewFakeHealthCheck()
-	s := createSandbox("TestExecutor")
-	s.VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	serv := new(sandboxTopo)
-	resolver := newTestResolver(hc, serv, cell)
-	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
-	for _, shard := range shards {
-		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
-		sbc.SetResults([]*sqltypes.Result{{
-			Fields: []*querypb.Field{
-				{Name: "id", Type: sqltypes.Int32},
-				{Name: "col", Type: sqltypes.Int32},
-			},
-			RowsAffected: 1,
-			InsertID:     0,
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewInt32(1),
-				sqltypes.NewVarChar("aaa"),
-			}},
-		}})
-	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize, false)
-
-	_, err := executorExec(executor, "select id, col from user order by col asc", nil)
-	want := "types are not comparable: VARCHAR vs VARCHAR"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("scatter order by error: %v, must contain %s", err, want)
 	}
 }
 

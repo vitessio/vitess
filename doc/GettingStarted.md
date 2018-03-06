@@ -45,9 +45,9 @@ $ docker inspect 32f187ef9351 | grep IPAddress
 
 You can also build Vitess Docker images yourself to include your
 own patches or configuration data. The
-[Dockerfile](https://github.com/youtube/vitess/blob/master/Dockerfile)
+[Dockerfile](https://github.com/vitessio/vitess/blob/master/Dockerfile)
 in the root of the Vitess tree builds the `vitess/base` image.
-The [docker](https://github.com/youtube/vitess/tree/master/docker)
+The [docker](https://github.com/vitessio/vitess/tree/master/docker)
 subdirectory contains scripts for building other images, such as `vitess/lite`.
 
 Our `Makefile` also contains rules to build the images. For example:
@@ -236,7 +236,7 @@ In addition, Vitess requires the software and libraries listed below.
 
     ``` sh
     cd $WORKSPACE
-    git clone https://github.com/youtube/vitess.git \
+    git clone https://github.com/vitessio/vitess.git \
         src/vitess.io/vitess
     cd src/vitess.io/vitess
     ```
@@ -351,7 +351,7 @@ pkill -f '(vtdataroot|VTDATAROOT)' # kill Vitess processes
 
 This error often means your disk is too slow. If you don't have access
 to an SSD, you can try [testing against a
-ramdisk](https://github.com/youtube/vitess/blob/master/doc/TestingOnARamDisk.md).
+ramdisk](https://github.com/vitessio/vitess/blob/master/doc/TestingOnARamDisk.md).
 
 ##### Connection refused to tablet, MySQL socket not found, etc.
 

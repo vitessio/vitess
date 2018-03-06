@@ -167,7 +167,7 @@ func (cnf *Mycnf) fillMycnfTemplate(tmplSrc string) (string, error) {
 // for that range).
 // Such an ID may also be responsible for a mysqld crash in semi-sync code,
 // although we haven't been able to verify that yet. The issue for that is:
-// https://github.com/youtube/vitess/issues/2280
+// https://github.com/vitessio/vitess/issues/2280
 func (cnf *Mycnf) RandomizeMysqlServerID() error {
 	// rand.Int(_, max) returns a value in the range [0, max).
 	bigN, err := rand.Int(rand.Reader, big.NewInt(1<<31-100))

@@ -79,7 +79,7 @@ capabilities, the usual horizontal sharding process can be used.
 
 Queue Tables are marked in the schema by a comment, in a similar way we detect
 Sequence Tables
-[now](https://github.com/youtube/vitess/blob/master/go/vt/tabletserver/table_info.go#L37).
+[now](https://github.com/vitessio/vitess/blob/master/go/vt/tabletserver/table_info.go#L37).
 
 When a tablet becomes a master, and there are Queue tables, it creates a
 QueueManager for each of them.

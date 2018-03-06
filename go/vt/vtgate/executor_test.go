@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"bytes"
+	"encoding/hex"
 	"html/template"
 	"reflect"
 	"strings"
@@ -721,12 +722,12 @@ func TestExecutorUse(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "@master"})
 
 	stmts := []string{
-		"use db",
-		"use `ks:-80@master`",
+		"use TestExecutor",
+		"use `TestExecutor:-80@master`",
 	}
 	want := []string{
-		"db",
-		"ks:-80@master",
+		"TestExecutor",
+		"TestExecutor:-80@master",
 	}
 	for i, stmt := range stmts {
 		_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
@@ -742,7 +743,13 @@ func TestExecutorUse(t *testing.T) {
 	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{}), "use 1", nil)
 	wantErr := "syntax error at position 6 near '1'"
 	if err == nil || err.Error() != wantErr {
-		t.Errorf("use 1: %v, want %v", err, wantErr)
+		t.Errorf("got: %v, want %v", err, wantErr)
+	}
+
+	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{}), "use UnexistentKeyspace", nil)
+	wantErr = "invalid keyspace provided: UnexistentKeyspace"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("got: %v, want %v", err, wantErr)
 	}
 }
 
@@ -1210,7 +1217,6 @@ func TestGetPlanNormalized(t *testing.T) {
 
 func TestParseTarget(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
-
 	testcases := []struct {
 		targetString string
 		target       querypb.Target
@@ -1257,11 +1263,63 @@ func TestParseTarget(t *testing.T) {
 		target: querypb.Target{
 			TabletType: topodatapb.TabletType_UNKNOWN,
 		},
+	}, {
+		targetString: "ks[10-20]@master",
+		target: querypb.Target{
+			TabletType: topodatapb.TabletType_MASTER,
+			Keyspace:   "ks",
+		},
+	}, {
+		targetString: "ks[-]@master",
+		target: querypb.Target{
+			TabletType: topodatapb.TabletType_MASTER,
+			Keyspace:   "ks",
+		},
+	}, {
+		targetString: "ks[10-]@master",
+		target: querypb.Target{
+			TabletType: topodatapb.TabletType_MASTER,
+			Keyspace:   "ks",
+		},
+	}, {
+		targetString: "ks[-20]@master",
+		target: querypb.Target{
+			TabletType: topodatapb.TabletType_MASTER,
+			Keyspace:   "ks",
+		},
 	}}
 
 	for _, tcase := range testcases {
 		if target := r.ParseTarget(tcase.targetString); !proto.Equal(&target, &tcase.target) {
 			t.Errorf("ParseTarget(%s): %v, want %v", tcase.targetString, target, tcase.target)
+		}
+	}
+}
+
+func TestParseRange(t *testing.T) {
+	tenHexBytes, _ := hex.DecodeString("10")
+	twentyHexBytes, _ := hex.DecodeString("20")
+
+	testcases := []struct {
+		targetString string
+		target       *topodatapb.KeyRange
+	}{{
+		targetString: "ks[10-20]@master",
+		target:       &topodatapb.KeyRange{Start: tenHexBytes, End: twentyHexBytes},
+	}, {
+		targetString: "ks[-]@master",
+		target:       &topodatapb.KeyRange{},
+	}, {
+		targetString: "ks[10-]@master",
+		target:       &topodatapb.KeyRange{Start: tenHexBytes},
+	}, {
+		targetString: "ks[-20]@master",
+		target:       &topodatapb.KeyRange{End: twentyHexBytes},
+	}}
+
+	for _, tcase := range testcases {
+		if target, _ := parseRange(tcase.targetString); !proto.Equal(target, tcase.target) {
+			t.Errorf("ParseRange(%s) - got: %v, want %v", tcase.targetString, target, tcase.target)
 		}
 	}
 }
@@ -1316,6 +1374,23 @@ func TestPassthroughDDL(t *testing.T) {
 	}
 	if sbc1.Queries != nil {
 		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
+	}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
+	}
+	sbc2.Queries = nil
+	masterSession.TargetString = ""
+
+	// Use range query
+	masterSession.TargetString = "TestExecutor[-]"
+	executor.normalize = true
+
+	_, err = executorExec(executor, "/* leading */ create table passthrough_ddl (col bigint default 123) /* trailing */", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
 	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
 		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)

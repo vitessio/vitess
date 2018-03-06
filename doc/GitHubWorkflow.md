@@ -8,7 +8,7 @@ Our GitHub workflow is a so called triangular workflow:
 
 *Image Source:* https://github.com/blog/2042-git-2-5-including-multiple-worktrees-and-triangular-workflows
 
-The Vitess code is hosted on GitHub (https://github.com/youtube/vitess).
+The Vitess code is hosted on GitHub (https://github.com/vitessio/vitess).
 This repository is called *upstream*.
 You develop and commit your changes in a clone of our upstream repository (shown as *local* in the image above).
 Then you push your changes to your forked repository (*origin*) and send us a pull request.
@@ -28,12 +28,12 @@ origin  git@github.com:<yourname>/vitess.git (push)
 To help you keep your fork in sync with the main repo, add an `upstream` remote:
 
 ```
-$ git remote add upstream git@github.com:youtube/vitess.git
+$ git remote add upstream git@github.com:vitessio/vitess.git
 $ git remote -v
 origin  git@github.com:<yourname>/vitess.git (fetch)
 origin  git@github.com:<yourname>/vitess.git (push)
-upstream        git@github.com:youtube/vitess.git (fetch)
-upstream        git@github.com:youtube/vitess.git (push)
+upstream        git@github.com:vitessio/vitess.git (fetch)
+upstream        git@github.com:vitessio/vitess.git (push)
 ```
 
 Now to sync your local `master` branch, do this:
@@ -47,7 +47,7 @@ Note: In the example output above we prefixed the prompt with `(master)` to
 stress the fact that the command must be run from the branch `master`.
 
 You can omit the `upstream master` from the `git pull` command when you let your
-`master` branch always track the main `youtube/vitess` repository. To achieve
+`master` branch always track the main `vitessio/vitess` repository. To achieve
 this, run this command once:
 
 ```
@@ -109,10 +109,10 @@ After this change, you can run `git push` without arguments:
 (new-feature) $ git push
 ```
 
-Then go to the [repository page](https://github.com/youtube/vitess) and it
+Then go to the [repository page](https://github.com/vitessio/vitess) and it
 should prompt you to create a Pull Request from a branch you recently pushed.
 You can also [choose a branch manually]
-(https://github.com/youtube/vitess/compare).
+(https://github.com/vitessio/vitess/compare).
 
 ## Addressing Changes
 

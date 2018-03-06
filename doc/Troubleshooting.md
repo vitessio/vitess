@@ -43,5 +43,5 @@ command to tell Vitess the new master tablet for a shard.
 
 Tools like [Orchestrator](https://github.com/github/orchestrator)
 can be configured to call this automatically when a failover occurs.
-See our sample [orchestrator.conf.json](https://github.com/youtube/vitess/blob/1129d69282bb738c94b8af661b984b6377a759f7/docker/orchestrator/orchestrator.conf.json#L131)
+See our sample [orchestrator.conf.json](https://github.com/vitessio/vitess/blob/1129d69282bb738c94b8af661b984b6377a759f7/docker/orchestrator/orchestrator.conf.json#L131)
 for an example of this.

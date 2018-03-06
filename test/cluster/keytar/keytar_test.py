@@ -1,11 +1,11 @@
 # Copyright 2017 Google Inc.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -42,22 +42,22 @@ class KeytarTest(unittest.TestCase):
       keytar._validate_request('foo', {})
 
   def test_get_download_github_repo_args(self):
-    github_config = {'repo': 'youtube/vitess', 'repo_prefix': 'foo'}
+    github_config = {'repo': 'vitessio/vitess', 'repo_prefix': 'foo'}
 
     github_clone_args, repo_dir = (
         keytar._get_download_github_repo_args('/tmp', github_config))
     self.assertEquals(
         github_clone_args,
-        ['git', 'clone', 'https://github.com/youtube/vitess', '/tmp/foo'])
+        ['git', 'clone', 'https://github.com/vitessio/vitess', '/tmp/foo'])
     self.assertEquals('/tmp/foo', repo_dir)
 
     github_config = {
-        'repo': 'youtube/vitess', 'repo_prefix': 'foo', 'branch': 'bar'}
+        'repo': 'vitessio/vitess', 'repo_prefix': 'foo', 'branch': 'bar'}
     github_clone_args, repo_dir = (
         keytar._get_download_github_repo_args('/tmp', github_config))
     self.assertEquals(
         github_clone_args,
-        ['git', 'clone', 'https://github.com/youtube/vitess', '/tmp/foo', '-b',
+        ['git', 'clone', 'https://github.com/vitessio/vitess', '/tmp/foo', '-b',
          'bar'])
     self.assertEquals('/tmp/foo', repo_dir)
 

@@ -228,7 +228,7 @@ var commands = []commandGroup{
 			{"TabletExternallyReparented", commandTabletExternallyReparented,
 				"<tablet alias>",
 				"Changes metadata in the topology server to acknowledge a shard master change performed by an external tool. See the Reparenting guide for more information:" +
-					"https://github.com/youtube/vitess/blob/master/doc/Reparenting.md#external-reparents."},
+					"https://github.com/vitessio/vitess/blob/master/doc/Reparenting.md#external-reparents."},
 			{"ValidateShard", commandValidateShard,
 				"[-ping-tablets] <keyspace/shard>",
 				"Validates that all nodes that are reachable from this shard are consistent."},
