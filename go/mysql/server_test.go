@@ -32,9 +32,11 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	vtenv "vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/tlstest"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttls"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var selectRowsResult = &sqltypes.Result{
@@ -63,6 +65,7 @@ var selectRowsResult = &sqltypes.Result{
 
 type testHandler struct {
 	lastConn *Conn
+	err      error
 }
 
 func (th *testHandler) NewConnection(c *Conn) {
@@ -75,14 +78,14 @@ func (th *testHandler) ConnectionClosed(c *Conn) {
 func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
 	switch query {
 	case "error":
-		return NewSQLError(ERUnknownComError, SSUnknownComError, "forced query handling error for: %v", query)
+		return th.err
 	case "panic":
 		panic("test panic attack!")
 	case "select rows":
 		callback(selectRowsResult)
 	case "error after send":
 		callback(selectRowsResult)
-		return NewSQLError(ERUnknownComError, SSUnknownComError, "forced query handling error for: %v", query)
+		return th.err
 	case "insert":
 		callback(&sqltypes.Result{
 			RowsAffected: 123,
@@ -390,12 +393,13 @@ func TestServer(t *testing.T) {
 	l.SlowConnectWarnThreshold = time.Duration(time.Nanosecond * 1)
 
 	// Run an 'error' command.
+	th.err = NewSQLError(ERUnknownComError, SSUnknownComError, "forced query error")
 	output, ok := runMysql(t, params, "error")
 	if ok {
 		t.Fatalf("mysql should have failed: %v", output)
 	}
 	if !strings.Contains(output, "ERROR 1047 (08S01)") ||
-		!strings.Contains(output, "forced query handling error for") {
+		!strings.Contains(output, "forced query error") {
 		t.Errorf("Unexpected output for 'error': %v", output)
 	}
 	if connCount.Get() != 0 {
@@ -458,6 +462,7 @@ func TestServer(t *testing.T) {
 
 	// If there's an error after streaming has started,
 	// we should get a 2013
+	th.err = NewSQLError(ERUnknownComError, SSUnknownComError, "forced error after send")
 	output, ok = runMysql(t, params, "error after send")
 	if ok {
 		t.Fatalf("mysql should have failed: %v", output)
@@ -754,6 +759,208 @@ func TestTLSServer(t *testing.T) {
 		!strings.Contains(output, "ON") ||
 		!strings.Contains(output, "1 row in set") {
 		t.Errorf("Unexpected output for 'ssl echo': %v", output)
+	}
+}
+
+func TestErrorCodes(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic()
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
+	l, err := NewListener("tcp", ":0", authServer, th)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	go l.Accept()
+
+	host, port := getHostPort(t, l.Addr())
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	ctx := context.Background()
+	client, err := Connect(ctx, params)
+	if err != nil {
+		t.Fatalf("error in connect: %v", err)
+	}
+
+	// Test that the right mysql errno/sqlstate are returned for various
+	// internal vitess errors
+	tests := []struct {
+		err      error
+		code     int
+		sqlState string
+		text     string
+	}{
+		{
+			err: vterrors.Errorf(
+				vtrpcpb.Code_CANCELED,
+				"query was cancelled"),
+			code:     ERQueryInterrupted,
+			sqlState: SSUnknownSQLState,
+			text:     "cancelled",
+		},
+		{
+			err: vterrors.Errorf(
+				vtrpcpb.Code_UNKNOWN,
+				"unknown error"),
+			code:     ERUnknownError,
+			sqlState: SSUnknownSQLState,
+			text:     "unknown",
+		},
+		{
+			err: vterrors.Errorf(
+				vtrpcpb.Code_INVALID_ARGUMENT,
+				"invalid argument"),
+			code:     ERUnknownError,
+			sqlState: SSUnknownSQLState,
+			text:     "invalid argument",
+		},
+		{
+			err: vterrors.Errorf(
+				vtrpcpb.Code_INVALID_ARGUMENT,
+				"(errno %v) (sqlstate %v) invalid argument with errno", ERDupEntry, SSDupKey),
+			code:     ERDupEntry,
+			sqlState: SSDupKey,
+			text:     "invalid argument with errno",
+		},
+		{
+			err: vterrors.Errorf(
+				vtrpcpb.Code_DEADLINE_EXCEEDED,
+				"connection deadline exceeded"),
+			code:     ERQueryInterrupted,
+			sqlState: SSUnknownSQLState,
+			text:     "deadline exceeded",
+		},
+		{
+			err: vterrors.Errorf(
+				vtrpcpb.Code_NOT_FOUND,
+				"not found"),
+			code:     ERUnknownError,
+			sqlState: SSUnknownSQLState,
+			text:     "not found",
+		},
+		{
+			err: vterrors.Errorf(
+				vtrpcpb.Code_ALREADY_EXISTS,
+				"already exists"),
+			code:     ERUnknownError,
+			sqlState: SSUnknownSQLState,
+			text:     "already exists",
+		},
+		{
+			err: vterrors.Errorf(
+				vtrpcpb.Code_PERMISSION_DENIED,
+				"permission denied"),
+			code:     ERAccessDeniedError,
+			sqlState: SSUnknownSQLState,
+			text:     "permission denied",
+		},
+		{
+			err: vterrors.Errorf(
+				vtrpcpb.Code_UNAUTHENTICATED,
+				"not found"),
+			code:     ERAccessDeniedError,
+			sqlState: SSUnknownSQLState,
+			text:     "not found",
+		},
+		{
+			err: vterrors.Errorf(
+				vtrpcpb.Code_RESOURCE_EXHAUSTED,
+				"query pool timeout"),
+			code:     ERTooManyUserConnections,
+			sqlState: SSUnknownSQLState,
+			text:     "resource exhausted",
+		},
+		{
+			err: vterrors.Errorf(
+				vtrpcpb.Code_FAILED_PRECONDITION,
+				"failed precondition"),
+			code:     ERUnknownError,
+			sqlState: SSUnknownSQLState,
+			text:     "failed precondition",
+		},
+		{
+			err: vterrors.Errorf(
+				vtrpcpb.Code_ABORTED,
+				"query execution was interrupted"),
+			code:     ERQueryInterrupted,
+			sqlState: SSUnknownSQLState,
+			text:     "aborted",
+		},
+		{
+			err: vterrors.Errorf(
+				vtrpcpb.Code_OUT_OF_RANGE,
+				"out of range"),
+			code:     ERUnknownError,
+			sqlState: SSUnknownSQLState,
+			text:     "out of range",
+		},
+		{
+			err: vterrors.Errorf(
+				vtrpcpb.Code_UNIMPLEMENTED,
+				"unimplemented"),
+			code:     ERNotSupportedYet,
+			sqlState: SSUnknownSQLState,
+			text:     "unimplemented",
+		},
+		{
+			err: vterrors.Errorf(
+				vtrpcpb.Code_INTERNAL,
+				"internal error"),
+			code:     ERUnknownError,
+			sqlState: SSUnknownSQLState,
+			text:     "internal error",
+		},
+		{
+			err: vterrors.Errorf(
+				vtrpcpb.Code_UNAVAILABLE,
+				"unavailable"),
+			code:     ERUnknownError,
+			sqlState: SSUnknownSQLState,
+			text:     "unavailable",
+		},
+		{
+			err: vterrors.Errorf(
+				vtrpcpb.Code_DATA_LOSS,
+				"data loss"),
+			code:     ERUnknownError,
+			sqlState: SSUnknownSQLState,
+			text:     "data loss",
+		},
+	}
+
+	for _, test := range tests {
+		th.err = NewSQLErrorFromError(test.err)
+		result, err := client.ExecuteFetch("error", 100, false)
+		if err == nil {
+			t.Fatalf("mysql should have failed but returned: %v", result)
+		}
+		serr, ok := err.(*SQLError)
+		if !ok {
+			t.Fatalf("mysql should have returned a SQLError")
+		}
+
+		if serr.Number() != test.code {
+			t.Errorf("error in %s: want code %v got %v", test.text, test.code, serr.Number())
+		}
+
+		if serr.SQLState() != test.sqlState {
+			t.Errorf("error in %s: want sqlState %v got %v", test.text, test.sqlState, serr.SQLState())
+		}
+
+		if !strings.Contains(serr.Error(), test.err.Error()) {
+			t.Errorf("error in %s: want err %v got %v", test.text, test.err.Error(), serr.Error())
+		}
 	}
 }
 
