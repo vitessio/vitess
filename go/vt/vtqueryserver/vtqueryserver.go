@@ -21,8 +21,10 @@ package vtqueryserver
 
 import (
 	"flag"
+	"time"
 
 	log "github.com/golang/glog"
+	"vitess.io/vitess/go/timer"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlproxy"
@@ -41,9 +43,10 @@ var (
 		Keyspace:   "",
 	}
 
-	targetKeyspace   = flag.String("target", "", "Target database name")
-	normalizeQueries = flag.Bool("normalize_queries", true, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
-	allowUnsafeDMLs  = flag.Bool("allow_unsafe_dmls", false, "Allow passthrough DML statements when running with statement-based replication")
+	targetKeyspace      = flag.String("target", "", "Target database name")
+	normalizeQueries    = flag.Bool("normalize_queries", true, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
+	allowUnsafeDMLs     = flag.Bool("allow_unsafe_dmls", false, "Allow passthrough DML statements when running with statement-based replication")
+	healthCheckInterval = flag.Duration("queryserver_health_check_interval", 1*time.Second, "Interval between health checks")
 )
 
 func initProxy(dbcfgs *dbconfigs.DBConfigs) (*tabletserver.TabletServer, error) {
@@ -75,7 +78,19 @@ func Init(dbcfgs *dbconfigs.DBConfigs) error {
 		addStatusParts(qs)
 	})
 
+	healthCheckTimer := timer.NewTimer(*healthCheckInterval)
+	healthCheckTimer.Start(func() {
+		if !qs.IsServing() {
+			_ /* stateChanged */, healthErr := qs.SetServingType(topodatapb.TabletType_MASTER, true, nil)
+			if healthErr != nil {
+				log.Errorf("state %v: vtqueryserver SetServingType failed: %v", qs.GetState(), healthErr)
+			}
+		}
+	})
+	healthCheckTimer.Trigger()
+
 	servenv.OnClose(func() {
+		healthCheckTimer.Stop()
 		// We now leave the queryservice running during lameduck,
 		// so stop it in OnClose(), after lameduck is over.
 		qs.StopService()
