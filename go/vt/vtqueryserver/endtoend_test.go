@@ -399,11 +399,11 @@ func TestQueryDeadline(t *testing.T) {
 	// Now send another query to tie up the connection, followed up by
 	// a query that should fail due to not getting the conn from the
 	// conn pool
-	err = conn.WriteComQuery("select sleep(0.5) from dual")
+	err = conn.WriteComQuery("select sleep(1.75) from dual")
 	if err != nil {
 		t.Errorf("unexpected error sending query: %v", err)
 	}
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
 	_, err = conn2.ExecuteFetch("select 1 from dual", 1000, false)
 	wantErr = "query pool wait time exceeded"
