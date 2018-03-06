@@ -33,7 +33,10 @@ import (
 // writeComQuery writes a query for the server to execute.
 // Client -> Server.
 // Returns SQLError(CRServerGone) if it can't.
-func (c *Conn) writeComQuery(query string) error {
+func (c *Conn) WriteComQuery(query string) error {
+	// This is a new command, need to reset the sequence.
+	c.sequence = 0
+
 	data := c.startEphemeralPacket(len(query) + 1)
 	data[0] = ComQuery
 	copy(data[1:], query)
@@ -257,10 +260,10 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field) ([]sqltypes.Value,
 //
 // 1. if the server closes the connection when no command is in flight:
 //
-//   1.1 unix: writeComQuery will fail with a 'broken pipe', and we'll
+//   1.1 unix: WriteComQuery will fail with a 'broken pipe', and we'll
 //       return CRServerGone(2006).
 //
-//   1.2 tcp: writeComQuery will most likely work, but readComQueryResponse
+//   1.2 tcp: WriteComQuery will most likely work, but readComQueryResponse
 //       will fail, and we'll return CRServerLost(2013).
 //
 //       This is because closing a TCP socket on the server side sends
@@ -283,14 +286,16 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result 
 		}
 	}()
 
-	// This is a new command, need to reset the sequence.
-	c.sequence = 0
-
 	// Send the query as a COM_QUERY packet.
-	if err := c.writeComQuery(query); err != nil {
+	if err = c.WriteComQuery(query); err != nil {
 		return nil, err
 	}
 
+	return c.ReadQueryResult(maxrows, wantfields)
+}
+
+// ReadQueryResult gets the result from the last written query.
+func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.Result, err error) {
 	// Get the result.
 	affectedRows, lastInsertID, colNumber, err := c.readComQueryResponse()
 	if err != nil {
