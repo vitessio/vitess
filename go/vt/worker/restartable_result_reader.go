@@ -81,14 +81,30 @@ func NewRestartableResultReader(ctx context.Context, logger logutil.Logger, tp t
 		allowMultipleRetries: allowMultipleRetries,
 	}
 
-	// If the initial connection fails, we do not restart.
-	if _ /* retryable */, err := r.getTablet(); err != nil {
-		return nil, fmt.Errorf("tablet=unknown: %v", err)
+	// If the initial connection fails we retry once.
+	// Note: The first retry will be the second attempt.
+	attempt := 0
+	for {
+		attempt++
+		var err error
+		var retryable bool
+		if retryable, err = r.getTablet(); err != nil {
+			err = fmt.Errorf("tablet=unknown: %v", err)
+			goto retry
+		}
+		if retryable, err = r.startStream(); err != nil {
+			err = fmt.Errorf("tablet=%v: %v", topoproto.TabletAliasString(r.tablet.Alias), err)
+			goto retry
+		}
+		return r, nil
+
+	retry:
+		if !retryable || attempt > 1 {
+			return nil, fmt.Errorf("failed to initialize tablet connection: retryable %v, %v", retryable, err)
+		}
+		logger.Infof("retrying after error: %v", err)
+		statsRetryCount.Add(1)
 	}
-	if _ /* retryable */, err := r.startStream(); err != nil {
-		return nil, fmt.Errorf("tablet=%v: %v", topoproto.TabletAliasString(r.tablet.Alias), err)
-	}
-	return r, nil
 }
 
 // getTablet (re)sets the tablet which is used for the streaming query.
@@ -171,8 +187,7 @@ func (r *RestartableResultReader) nextWithRetries() (*sqltypes.Result, error) {
 	retryCtx, retryCancel := context.WithTimeout(r.ctx, *retryDuration)
 	defer retryCancel()
 
-	// Note: The first retry will be the second attempt.
-	attempt := 1
+	attempt := 0
 	start := time.Now()
 	for {
 		attempt++
