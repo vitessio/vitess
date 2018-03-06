@@ -197,7 +197,10 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	// so we don't buffer the TLS negotiation packets.
 	response, err := c.readPacketDirect()
 	if err != nil {
-		log.Errorf("Cannot read client handshake response from %s: %v", c, err)
+		// Don't log EOF errors. They cause too much spam, same as main read loop.
+		if err != io.EOF {
+			log.Errorf("Cannot read client handshake response from %s: %v", c, err)
+		}
 		return
 	}
 	user, authMethod, authResponse, err := l.parseClientHandshakePacket(c, true, response)
