@@ -88,8 +88,10 @@ type TxPool struct {
 	checker       connpool.MySQLChecker
 	limiter       txlimiter.TxLimiter
 	// Tracking culprits that cause tx pool full errors.
-	logMu   sync.Mutex
-	lastLog time.Time
+	logMu     sync.Mutex
+	lastLog   time.Time
+	waiters   sync2.AtomicInt64
+	waiterCap sync2.AtomicInt64
 }
 
 // NewTxPool creates a new TxPool. It's not operational until it's Open'd.
@@ -99,6 +101,7 @@ func NewTxPool(
 	foundRowsCapacity int,
 	timeout time.Duration,
 	idleTimeout time.Duration,
+	waiterCap int,
 	checker connpool.MySQLChecker,
 	limiter txlimiter.TxLimiter) *TxPool {
 	axp := &TxPool{
@@ -107,6 +110,8 @@ func NewTxPool(
 		activePool:    pools.NewNumbered(),
 		lastID:        sync2.NewAtomicInt64(time.Now().UnixNano()),
 		timeout:       sync2.NewAtomicDuration(timeout),
+		waiterCap:     sync2.NewAtomicInt64(int64(waiterCap)),
+		waiters:       sync2.NewAtomicInt64(0),
 		ticks:         timer.NewTimer(timeout / 10),
 		checker:       checker,
 		limiter:       limiter,
@@ -115,6 +120,7 @@ func NewTxPool(
 		// Careful: conns also exports name+"xxx" vars,
 		// but we know it doesn't export Timeout.
 		stats.Publish(prefix+"TransactionPoolTimeout", stats.DurationFunc(axp.timeout.Get))
+		stats.Publish(prefix+"TransactionPoolWaiters", stats.IntFunc(axp.waiters.Get))
 	})
 	return axp
 }
@@ -189,6 +195,13 @@ func (axp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (
 
 	if !axp.limiter.Get(immediateCaller, effectiveCaller) {
 		return 0, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
+	}
+
+	waiterCount := axp.waiters.Add(1)
+	defer axp.waiters.Add(-1)
+
+	if waiterCount > axp.waiterCap.Get() {
+		return 0, vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool waiter count exceeded")
 	}
 
 	var beginSucceeded bool
