@@ -803,22 +803,6 @@ func TestErrorCodes(t *testing.T) {
 	}{
 		{
 			err: vterrors.Errorf(
-				vtrpcpb.Code_CANCELED,
-				"query was cancelled"),
-			code:     ERQueryInterrupted,
-			sqlState: SSUnknownSQLState,
-			text:     "cancelled",
-		},
-		{
-			err: vterrors.Errorf(
-				vtrpcpb.Code_UNKNOWN,
-				"unknown error"),
-			code:     ERUnknownError,
-			sqlState: SSUnknownSQLState,
-			text:     "unknown",
-		},
-		{
-			err: vterrors.Errorf(
 				vtrpcpb.Code_INVALID_ARGUMENT,
 				"invalid argument"),
 			code:     ERUnknownError,
@@ -843,99 +827,11 @@ func TestErrorCodes(t *testing.T) {
 		},
 		{
 			err: vterrors.Errorf(
-				vtrpcpb.Code_NOT_FOUND,
-				"not found"),
-			code:     ERUnknownError,
-			sqlState: SSUnknownSQLState,
-			text:     "not found",
-		},
-		{
-			err: vterrors.Errorf(
-				vtrpcpb.Code_ALREADY_EXISTS,
-				"already exists"),
-			code:     ERUnknownError,
-			sqlState: SSUnknownSQLState,
-			text:     "already exists",
-		},
-		{
-			err: vterrors.Errorf(
-				vtrpcpb.Code_PERMISSION_DENIED,
-				"permission denied"),
-			code:     ERAccessDeniedError,
-			sqlState: SSUnknownSQLState,
-			text:     "permission denied",
-		},
-		{
-			err: vterrors.Errorf(
-				vtrpcpb.Code_UNAUTHENTICATED,
-				"not found"),
-			code:     ERAccessDeniedError,
-			sqlState: SSUnknownSQLState,
-			text:     "not found",
-		},
-		{
-			err: vterrors.Errorf(
 				vtrpcpb.Code_RESOURCE_EXHAUSTED,
 				"query pool timeout"),
 			code:     ERTooManyUserConnections,
 			sqlState: SSUnknownSQLState,
 			text:     "resource exhausted",
-		},
-		{
-			err: vterrors.Errorf(
-				vtrpcpb.Code_FAILED_PRECONDITION,
-				"failed precondition"),
-			code:     ERUnknownError,
-			sqlState: SSUnknownSQLState,
-			text:     "failed precondition",
-		},
-		{
-			err: vterrors.Errorf(
-				vtrpcpb.Code_ABORTED,
-				"query execution was interrupted"),
-			code:     ERQueryInterrupted,
-			sqlState: SSUnknownSQLState,
-			text:     "aborted",
-		},
-		{
-			err: vterrors.Errorf(
-				vtrpcpb.Code_OUT_OF_RANGE,
-				"out of range"),
-			code:     ERUnknownError,
-			sqlState: SSUnknownSQLState,
-			text:     "out of range",
-		},
-		{
-			err: vterrors.Errorf(
-				vtrpcpb.Code_UNIMPLEMENTED,
-				"unimplemented"),
-			code:     ERNotSupportedYet,
-			sqlState: SSUnknownSQLState,
-			text:     "unimplemented",
-		},
-		{
-			err: vterrors.Errorf(
-				vtrpcpb.Code_INTERNAL,
-				"internal error"),
-			code:     ERUnknownError,
-			sqlState: SSUnknownSQLState,
-			text:     "internal error",
-		},
-		{
-			err: vterrors.Errorf(
-				vtrpcpb.Code_UNAVAILABLE,
-				"unavailable"),
-			code:     ERUnknownError,
-			sqlState: SSUnknownSQLState,
-			text:     "unavailable",
-		},
-		{
-			err: vterrors.Errorf(
-				vtrpcpb.Code_DATA_LOSS,
-				"data loss"),
-			code:     ERUnknownError,
-			sqlState: SSUnknownSQLState,
-			text:     "data loss",
 		},
 	}
 
