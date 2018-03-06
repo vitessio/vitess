@@ -150,7 +150,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		case planbuilder.PlanSet:
 			return qre.execSet()
 		case planbuilder.PlanOtherRead:
-			conn, connErr := qre.getConn(qre.tsv.qe.conns)
+			conn, connErr := qre.getConn()
 			if connErr != nil {
 				return nil, connErr
 			}
@@ -201,7 +201,7 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 		return err
 	}
 
-	conn, err := qre.getConn(qre.tsv.qe.streamConns)
+	conn, err := qre.getStreamConn()
 	if err != nil {
 		return err
 	}
@@ -509,7 +509,7 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 		newResult.Fields = qre.plan.Fields
 		return &newResult, nil
 	}
-	conn, err := qre.getConn(qre.tsv.qe.conns)
+	conn, err := qre.getConn()
 	if err != nil {
 		return nil, err
 	}
@@ -741,7 +741,7 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 }
 
 func (qre *QueryExecutor) execSet() (*sqltypes.Result, error) {
-	conn, err := qre.getConn(qre.tsv.qe.conns)
+	conn, err := qre.getConn()
 	if err != nil {
 		return nil, err
 	}
@@ -749,13 +749,30 @@ func (qre *QueryExecutor) execSet() (*sqltypes.Result, error) {
 	return qre.dbConnFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, false)
 }
 
-func (qre *QueryExecutor) getConn(pool *connpool.Pool) (*connpool.DBConn, error) {
+func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
 	span := trace.NewSpanFromContext(qre.ctx)
 	span.StartLocal("QueryExecutor.getConn")
 	defer span.Finish()
 
 	start := time.Now()
-	conn, err := pool.Get(qre.ctx)
+	conn, err := qre.tsv.qe.getQueryConn(qre.ctx)
+	switch err {
+	case nil:
+		qre.logStats.WaitingForConnection += time.Now().Sub(start)
+		return conn, nil
+	case connpool.ErrConnPoolClosed:
+		return nil, err
+	}
+	return nil, err
+}
+
+func (qre *QueryExecutor) getStreamConn() (*connpool.DBConn, error) {
+	span := trace.NewSpanFromContext(qre.ctx)
+	span.StartLocal("QueryExecutor.getStreamConn")
+	defer span.Finish()
+
+	start := time.Now()
+	conn, err := qre.tsv.qe.streamConns.Get(qre.ctx)
 	switch err {
 	case nil:
 		qre.logStats.WaitingForConnection += time.Now().Sub(start)
@@ -774,9 +791,8 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 	q, ok := qre.tsv.qe.consolidator.Create(string(sqlWithoutComments))
 	if ok {
 		defer q.Broadcast()
-		waitingForConnectionStart := time.Now()
-		conn, err := qre.tsv.qe.getQueryConn(qre.ctx)
-		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
+		conn, err := qre.getConn()
+
 		if err != nil {
 			q.Err = err
 		} else {
