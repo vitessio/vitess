@@ -23,6 +23,8 @@ import (
 
 	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -200,16 +202,16 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 
 // StreamExecute performs a streaming exec.
 func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	var ks string
-	var shardVars map[string]map[string]*querypb.BindVariable
+	var rss []*srvtopo.ResolvedShard
+	var bvs []map[string]*querypb.BindVariable
 	var err error
 	switch route.Opcode {
 	case SelectUnsharded, SelectScatter:
-		ks, shardVars, err = route.paramsAllShards(vcursor, bindVars)
+		rss, bvs, err = route.paramsAllShards2(vcursor, bindVars)
 	case SelectEqual, SelectEqualUnique:
-		ks, shardVars, err = route.paramsSelectEqual(vcursor, bindVars)
+		rss, bvs, err = route.paramsSelectEqual2(vcursor, bindVars)
 	case SelectIN:
-		ks, shardVars, err = route.paramsSelectIN(vcursor, bindVars)
+		rss, bvs, err = route.paramsSelectIN2(vcursor, bindVars)
 	default:
 		return fmt.Errorf("query %q cannot be used for streaming", route.Query)
 	}
@@ -218,7 +220,7 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 	}
 
 	// No route.
-	if len(shardVars) == 0 {
+	if len(rss) == 0 {
 		if wantfields {
 			r, err := route.GetFields(vcursor, bindVars)
 			if err != nil {
@@ -230,12 +232,12 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 	}
 
 	if len(route.OrderBy) == 0 {
-		return vcursor.StreamExecuteMulti(route.Query, ks, shardVars, func(qr *sqltypes.Result) error {
+		return vcursor.StreamExecuteMulti(route.Query, rss, bvs, func(qr *sqltypes.Result) error {
 			return callback(qr.Truncate(route.TruncateColumnCount))
 		})
 	}
 
-	return mergeSort(vcursor, route.Query, route.OrderBy, ks, shardVars, func(qr *sqltypes.Result) error {
+	return mergeSort(vcursor, route.Query, route.OrderBy, rss, bvs, func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(route.TruncateColumnCount))
 	})
 }
@@ -266,12 +268,24 @@ func (route *Route) paramsAllShards(vcursor VCursor, bindVars map[string]*queryp
 	return ks, shardVars, nil
 }
 
+func (route *Route) paramsAllShards2(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
+	if err != nil {
+		return nil, nil, vterrors.Wrap(err, "paramsAllShards")
+	}
+	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
+	for i := range multiBindVars {
+		multiBindVars[i] = bindVars
+	}
+	return rss, multiBindVars, nil
+}
+
 func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (ks string, shardVars map[string]map[string]*querypb.BindVariable, err error) {
 	key, err := route.Values[0].ResolveValue(bindVars)
 	if err != nil {
 		return "", nil, vterrors.Wrap(err, "paramsSelectEqual")
 	}
-	ks, routing, err := route.resolveShards(vcursor, bindVars, []sqltypes.Value{key})
+	ks, routing, err := route.resolveShards(vcursor, []sqltypes.Value{key})
 	if err != nil {
 		return "", nil, vterrors.Wrap(err, "paramsSelectEqual")
 	}
@@ -282,19 +296,47 @@ func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*quer
 	return ks, shardVars, nil
 }
 
+func (route *Route) paramsSelectEqual2(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	key, err := route.Values[0].ResolveValue(bindVars)
+	if err != nil {
+		return nil, nil, vterrors.Wrap(err, "paramsSelectEqual")
+	}
+	rss, _, err := route.resolveShards2(vcursor, []sqltypes.Value{key})
+	if err != nil {
+		return nil, nil, vterrors.Wrap(err, "paramsSelectEqual")
+	}
+	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
+	for i := range multiBindVars {
+		multiBindVars[i] = bindVars
+	}
+	return rss, multiBindVars, nil
+}
+
 func (route *Route) paramsSelectIN(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (ks string, shardVars map[string]map[string]*querypb.BindVariable, err error) {
 	keys, err := route.Values[0].ResolveList(bindVars)
 	if err != nil {
 		return "", nil, vterrors.Wrap(err, "paramsSelectIN")
 	}
-	ks, routing, err := route.resolveShards(vcursor, bindVars, keys)
+	ks, routing, err := route.resolveShards(vcursor, keys)
 	if err != nil {
 		return "", nil, vterrors.Wrap(err, "paramsSelectEqual")
 	}
 	return ks, routing.ShardVars(bindVars), nil
 }
 
-func (route *Route) resolveShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, vindexKeys []sqltypes.Value) (newKeyspace string, routing routingMap, err error) {
+func (route *Route) paramsSelectIN2(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	keys, err := route.Values[0].ResolveList(bindVars)
+	if err != nil {
+		return nil, nil, vterrors.Wrap(err, "paramsSelectIN")
+	}
+	rss, values, err := route.resolveShards2(vcursor, keys)
+	if err != nil {
+		return nil, nil, vterrors.Wrap(err, "paramsSelectEqual")
+	}
+	return rss, shardVars(bindVars, values), nil
+}
+
+func (route *Route) resolveShards(vcursor VCursor, vindexKeys []sqltypes.Value) (newKeyspace string, routing routingMap, err error) {
 	newKeyspace, allShards, err := vcursor.GetKeyspaceShards(route.Keyspace)
 	if err != nil {
 		return "", nil, err
@@ -349,6 +391,23 @@ func (route *Route) resolveShards(vcursor VCursor, bindVars map[string]*querypb.
 	return newKeyspace, routing, nil
 }
 
+func (route *Route) resolveShards2(vcursor VCursor, vindexKeys []sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+	// Convert vindexKeys to []*querypb.Value
+	ids := make([]*querypb.Value, len(vindexKeys))
+	for i, vik := range vindexKeys {
+		ids[i] = sqltypes.ValueToProto(vik)
+	}
+
+	// Map using the Vindex
+	destinations, err := route.Vindex.Map2(vcursor, vindexKeys)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// And use the Resolver to map to ResolvedShards.
+	return vcursor.ResolveDestinations(route.Keyspace.Name, ids, destinations)
+}
+
 func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 	var err error
 	// Since Result is immutable, we make a copy.
@@ -390,7 +449,7 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 	return out, err
 }
 
-func resolveSingleShard(vcursor VCursor, vindex vindexes.Vindex, keyspace *vindexes.Keyspace, bindVars map[string]*querypb.BindVariable, vindexKey sqltypes.Value) (newKeyspace, shard string, ksid []byte, err error) {
+func resolveSingleShard(vcursor VCursor, vindex vindexes.Vindex, keyspace *vindexes.Keyspace, vindexKey sqltypes.Value) (newKeyspace, shard string, ksid []byte, err error) {
 	newKeyspace, allShards, err := vcursor.GetKeyspaceShards(keyspace)
 	if err != nil {
 		return "", "", nil, err

@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/srvtopo"
 )
 
 // TestMergeSortNormal tests the normal flow of a merge
@@ -55,15 +56,16 @@ func TestMergeSortNormal(t *testing.T) {
 	orderBy := []OrderbyParams{{
 		Col: 0,
 	}}
-	shardVars := map[string]map[string]*querypb.BindVariable{
-		"0": nil,
-		"1": nil,
-		"2": nil,
-		"3": nil,
+	rss := []*srvtopo.ResolvedShard{
+		{Target: &querypb.Target{Shard: "0"}},
+		{Target: &querypb.Target{Shard: "1"}},
+		{Target: &querypb.Target{Shard: "2"}},
+		{Target: &querypb.Target{Shard: "3"}},
 	}
+	bvs := []map[string]*querypb.BindVariable{nil, nil, nil, nil}
 
 	var results []*sqltypes.Result
-	err := mergeSort(vc, "", orderBy, "", shardVars, func(qr *sqltypes.Result) error {
+	err := mergeSort(vc, "", orderBy, rss, bvs, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -124,15 +126,16 @@ func TestMergeSortDescending(t *testing.T) {
 		Col:  0,
 		Desc: true,
 	}}
-	shardVars := map[string]map[string]*querypb.BindVariable{
-		"0": nil,
-		"1": nil,
-		"2": nil,
-		"3": nil,
+	rss := []*srvtopo.ResolvedShard{
+		{Target: &querypb.Target{Shard: "0"}},
+		{Target: &querypb.Target{Shard: "1"}},
+		{Target: &querypb.Target{Shard: "2"}},
+		{Target: &querypb.Target{Shard: "3"}},
 	}
+	bvs := []map[string]*querypb.BindVariable{nil, nil, nil, nil}
 
 	var results []*sqltypes.Result
-	err := mergeSort(vc, "", orderBy, "", shardVars, func(qr *sqltypes.Result) error {
+	err := mergeSort(vc, "", orderBy, rss, bvs, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -182,15 +185,16 @@ func TestMergeSortEmptyResults(t *testing.T) {
 	orderBy := []OrderbyParams{{
 		Col: 0,
 	}}
-	shardVars := map[string]map[string]*querypb.BindVariable{
-		"0": nil,
-		"1": nil,
-		"2": nil,
-		"3": nil,
+	rss := []*srvtopo.ResolvedShard{
+		{Target: &querypb.Target{Shard: "0"}},
+		{Target: &querypb.Target{Shard: "1"}},
+		{Target: &querypb.Target{Shard: "2"}},
+		{Target: &querypb.Target{Shard: "3"}},
 	}
+	bvs := []map[string]*querypb.BindVariable{nil, nil, nil, nil}
 
 	var results []*sqltypes.Result
-	err := mergeSort(vc, "", orderBy, "", shardVars, func(qr *sqltypes.Result) error {
+	err := mergeSort(vc, "", orderBy, rss, bvs, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -222,15 +226,16 @@ func TestMergeSortResultFailures(t *testing.T) {
 	orderBy := []OrderbyParams{{
 		Col: 0,
 	}}
-	shardVars := map[string]map[string]*querypb.BindVariable{
-		"0": nil,
+	rss := []*srvtopo.ResolvedShard{
+		{Target: &querypb.Target{Shard: "0"}},
 	}
+	bvs := []map[string]*querypb.BindVariable{nil}
 
 	// Test early error.
 	vc.shardResults["0"] = &shardResult{
 		sendErr: errors.New("early error"),
 	}
-	err := mergeSort(vc, "", orderBy, "", shardVars, func(qr *sqltypes.Result) error { return nil })
+	err := mergeSort(vc, "", orderBy, rss, bvs, func(qr *sqltypes.Result) error { return nil })
 	want := "early error"
 	if err == nil || err.Error() != want {
 		t.Errorf("mergeSort(): %v, want %v", err, want)
@@ -242,7 +247,7 @@ func TestMergeSortResultFailures(t *testing.T) {
 		results: sqltypes.MakeTestStreamingResults(idFields),
 		sendErr: errors.New("fail after fields"),
 	}
-	err = mergeSort(vc, "", orderBy, "", shardVars, func(qr *sqltypes.Result) error { return nil })
+	err = mergeSort(vc, "", orderBy, rss, bvs, func(qr *sqltypes.Result) error { return nil })
 	want = "fail after fields"
 	if err == nil || err.Error() != want {
 		t.Errorf("mergeSort(): %v, want %v", err, want)
@@ -253,7 +258,7 @@ func TestMergeSortResultFailures(t *testing.T) {
 		results: sqltypes.MakeTestStreamingResults(idFields, "1"),
 		sendErr: errors.New("fail after first row"),
 	}
-	err = mergeSort(vc, "", orderBy, "", shardVars, func(qr *sqltypes.Result) error { return nil })
+	err = mergeSort(vc, "", orderBy, rss, bvs, func(qr *sqltypes.Result) error { return nil })
 	want = "fail after first row"
 	if err == nil || err.Error() != want {
 		t.Errorf("mergeSort(): %v, want %v", err, want)
@@ -277,12 +282,13 @@ func TestMergeSortDataFailures(t *testing.T) {
 	orderBy := []OrderbyParams{{
 		Col: 0,
 	}}
-	shardVars := map[string]map[string]*querypb.BindVariable{
-		"0": nil,
-		"1": nil,
+	rss := []*srvtopo.ResolvedShard{
+		{Target: &querypb.Target{Shard: "0"}},
+		{Target: &querypb.Target{Shard: "1"}},
 	}
+	bvs := []map[string]*querypb.BindVariable{nil, nil}
 
-	err := mergeSort(vc, "", orderBy, "", shardVars, func(qr *sqltypes.Result) error { return nil })
+	err := mergeSort(vc, "", orderBy, rss, bvs, func(qr *sqltypes.Result) error { return nil })
 	want := `strconv.ParseInt: parsing "2.1": invalid syntax`
 	if err == nil || err.Error() != want {
 		t.Errorf("mergeSort(): %v, want %v", err, want)
@@ -301,7 +307,7 @@ func TestMergeSortDataFailures(t *testing.T) {
 			)},
 		},
 	}
-	err = mergeSort(vc, "", orderBy, "", shardVars, func(qr *sqltypes.Result) error { return nil })
+	err = mergeSort(vc, "", orderBy, rss, bvs, func(qr *sqltypes.Result) error { return nil })
 	want = `strconv.ParseInt: parsing "1.1": invalid syntax`
 	if err == nil || err.Error() != want {
 		t.Errorf("mergeSort(): %v, want %v", err, want)
@@ -325,12 +331,8 @@ type streamVCursor struct {
 // StreamExecuteMulti streams a result from the specified shard.
 // The shard is specifed by the only entry in shardVars. At the
 // end of a stream, if sendErr is set, that error is returned.
-func (t *streamVCursor) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
-	var shard string
-	for k := range shardVars {
-		shard = k
-		break
-	}
+func (t *streamVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
+	shard := rss[0].Target.Shard
 	for _, r := range t.shardResults[shard].results {
 		if err := callback(r); err != nil {
 			return err

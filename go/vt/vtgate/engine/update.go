@@ -156,7 +156,7 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execUpdateEqual")
 	}
-	ks, shard, ksid, err := resolveSingleShard(vcursor, upd.Vindex, upd.Keyspace, bindVars, key)
+	ks, shard, ksid, err := resolveSingleShard(vcursor, upd.Vindex, upd.Keyspace, key)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execUpdateEqual")
 	}

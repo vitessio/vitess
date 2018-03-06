@@ -143,9 +143,9 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, BindVars map[string]*quer
 }
 
 // StreamExeculteMulti is the streaming version of ExecuteMultiShard.
-func (vc *vcursorImpl) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
-	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(shardVars)))
-	return vc.executor.scatterConn.StreamExecuteMulti(vc.ctx, query+vc.trailingComments, keyspace, shardVars, vc.target.TabletType, vc.safeSession.Options, callback)
+func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
+	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(rss)))
+	return vc.executor.scatterConn.StreamExecuteMulti(vc.ctx, query+vc.trailingComments, rss, bindVars, vc.target.TabletType, vc.safeSession.Options, callback)
 }
 
 // GetKeyspaceShards returns the list of shards for a keyspace, and the mapped keyspace if an alias was used.
@@ -180,6 +180,10 @@ func (vc *vcursorImpl) GetShardsForKsids(allShards []*topodatapb.ShardReference,
 		shards = append(shards, shard)
 	}
 	return shards, nil
+}
+
+func (vc *vcursorImpl) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+	return vc.executor.resolver.resolver.ResolveDestinations(vc.ctx, keyspace, vc.target.TabletType, ids, destinations)
 }
 
 func commentedShardQueries(shardQueries map[string]*querypb.BoundQuery, trailingComments string) map[string]*querypb.BoundQuery {

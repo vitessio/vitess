@@ -22,11 +22,14 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -57,7 +60,7 @@ func (t noopVCursor) ExecuteStandalone(query string, bindvars map[string]*queryp
 	panic("unimplemented")
 }
 
-func (t noopVCursor) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
+func (t noopVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
 	panic("unimplemented")
 }
 
@@ -70,6 +73,10 @@ func (t noopVCursor) GetShardsForKsids(allShards []*topodatapb.ShardReference, k
 }
 
 func (t noopVCursor) GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error) {
+	panic("unimplemented")
+}
+
+func (t noopVCursor) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	panic("unimplemented")
 }
 
@@ -109,8 +116,8 @@ func (f *loggingVCursor) ExecuteStandalone(query string, bindvars map[string]*qu
 	return f.nextResult()
 }
 
-func (f *loggingVCursor) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
-	f.log = append(f.log, fmt.Sprintf("StreamExecuteMulti %s %s %s", query, keyspace, printShardVars(shardVars)))
+func (f *loggingVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
+	f.log = append(f.log, fmt.Sprintf("StreamExecuteMulti %s %s", query, printResolvedShardsBindVars(rss, bindVars)))
 	r, err := f.nextResult()
 	if err != nil {
 		return err
@@ -160,10 +167,71 @@ func (f *loggingVCursor) GetShardForKeyspaceID(allShards []*topodatapb.ShardRefe
 	return r, nil
 }
 
+func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+	f.log = append(f.log, fmt.Sprintf("ResolveDestinations %v %v %v", keyspace, ids, key.DestinationsString(destinations)))
+	if f.shardErr != nil {
+		return nil, nil, f.shardErr
+	}
+
+	var rss []*srvtopo.ResolvedShard
+	var values [][]*querypb.Value
+	visited := make(map[string]int)
+	for i, destination := range destinations {
+		var shards []string
+
+		switch d := destination.(type) {
+		case key.DestinationAllShards:
+			shards = f.shards
+		case key.DestinationKeyRange:
+			shards = []string{"-20", "20-"}
+		case key.DestinationKeyspaceID:
+			if f.shardForKsid == nil || f.curShardForKsid >= len(f.shardForKsid) {
+				shards = []string{"-20"}
+			} else {
+				shards = []string{f.shardForKsid[f.curShardForKsid]}
+				f.curShardForKsid++
+			}
+		case key.DestinationKeyspaceIDs:
+			for _, ksid := range d {
+				if string(ksid) < "\x20" {
+					shards = append(shards, "-20")
+				} else {
+					shards = append(shards, "20-")
+				}
+			}
+		case key.DestinationNone:
+			// Nothing to do here.
+		default:
+			return nil, nil, fmt.Errorf("unsupported destination: %v", destination)
+		}
+
+		for _, shard := range shards {
+			vi, ok := visited[shard]
+			if !ok {
+				vi = len(rss)
+				visited[shard] = vi
+				rss = append(rss, &srvtopo.ResolvedShard{
+					Target: &querypb.Target{
+						Keyspace: keyspace,
+						Shard:    shard,
+					},
+				})
+				if ids != nil {
+					values = append(values, nil)
+				}
+			}
+			if ids != nil {
+				values[vi] = append(values[vi], ids[i])
+			}
+		}
+	}
+	return rss, values, nil
+}
+
 func (f *loggingVCursor) ExpectLog(t *testing.T, want []string) {
 	t.Helper()
 	if !reflect.DeepEqual(f.log, want) {
-		t.Errorf("vc.log:\n%+v, want\n%+v", f.log, want)
+		t.Errorf("vc.log:\n%v\n-- want:\n%v", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
 	}
 }
 
@@ -226,15 +294,10 @@ func printShardQueries(shardQueries map[string]*querypb.BoundQuery) string {
 	return buf.String()
 }
 
-func printShardVars(shardVars map[string]map[string]*querypb.BindVariable) string {
-	var keys []string
-	for k := range shardVars {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+func printResolvedShardsBindVars(rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable) string {
 	buf := &bytes.Buffer{}
-	for _, k := range keys {
-		fmt.Fprintf(buf, "%s: %s", k, printBindVars(shardVars[k]))
+	for i, rs := range rss {
+		fmt.Fprintf(buf, "%s.%s: {%v} ", rs.Target.Keyspace, rs.Target.Shard, printBindVars(bvs[i]))
 	}
 	return buf.String()
 }

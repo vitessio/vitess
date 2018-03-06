@@ -103,12 +103,14 @@ func TestScatterConnStreamExecute(t *testing.T) {
 
 func TestScatterConnStreamExecuteMulti(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnStreamExecuteMulti", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
-		qr := new(sqltypes.Result)
-		shardVars := make(map[string]map[string]*querypb.BindVariable)
-		for _, shard := range shards {
-			shardVars[shard] = nil
+		res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+		rss, err := res.ResolveDestination(context.Background(), "TestScatterConnStreamExecuteMulti", topodatapb.TabletType_REPLICA, key.DestinationShards(shards))
+		if err != nil {
+			return nil, err
 		}
-		err := sc.StreamExecuteMulti(context.Background(), "query", "TestScatterConnStreamExecuteMulti", shardVars, topodatapb.TabletType_REPLICA, nil, func(r *sqltypes.Result) error {
+		bvs := make([]map[string]*querypb.BindVariable, len(rss))
+		qr := new(sqltypes.Result)
+		err = sc.StreamExecuteMulti(context.Background(), "query", rss, bvs, topodatapb.TabletType_REPLICA, nil, func(r *sqltypes.Result) error {
 			qr.AppendResult(r)
 			return nil
 		})
@@ -274,7 +276,32 @@ func TestMultiExecs(t *testing.T) {
 	}
 	sbc0.Queries = nil
 	sbc1.Queries = nil
-	_ = sc.StreamExecuteMulti(context.Background(), "query", "TestMultiExecs", shardVars, topodatapb.TabletType_REPLICA, nil, func(*sqltypes.Result) error {
+
+	rss := []*srvtopo.ResolvedShard{
+		{
+			Target: &querypb.Target{
+				Keyspace: "TestMultiExecs",
+				Shard:    "0",
+			},
+			QueryService: sbc0,
+		},
+		{
+			Target: &querypb.Target{
+				Keyspace: "TestMultiExecs",
+				Shard:    "1",
+			},
+			QueryService: sbc1,
+		},
+	}
+	bvs := []map[string]*querypb.BindVariable{
+		{
+			"bv0": sqltypes.Int64BindVariable(0),
+		},
+		{
+			"bv1": sqltypes.Int64BindVariable(1),
+		},
+	}
+	_ = sc.StreamExecuteMulti(context.Background(), "query", rss, bvs, topodatapb.TabletType_REPLICA, nil, func(*sqltypes.Result) error {
 		return nil
 	})
 	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, wantVars0) {
