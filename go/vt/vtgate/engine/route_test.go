@@ -514,8 +514,8 @@ func TestRouteGetFields(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		`GetKeyspaceShards &{ks true}`,
 		`Execute select toc from lkp where from = :from from: type:INT64 value:"1"  false`,
-		`GetKeyspaceShards &{ks true}`,
-		`ExecuteMultiShard ks -20: dummy_select_field  false false`,
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+		`ExecuteMultiShard2 ks.-20: dummy_select_field   false false`,
 	})
 	expectResult(t, "sel.Execute", result, &sqltypes.Result{})
 
@@ -527,8 +527,8 @@ func TestRouteGetFields(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		`Execute select toc from lkp where from = :from from: type:INT64 value:"1"  false`,
 		`ResolveDestinations ks [type:INT64 value:"1" ] Destinations:DestinationNone()`,
-		`GetKeyspaceShards &{ks true}`,
-		`ExecuteMultiShard ks -20: dummy_select_field  false false`,
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+		`ExecuteMultiShard2 ks.-20: dummy_select_field   false false`,
 	})
 	expectResult(t, "sel.StreamExecute", result, &sqltypes.Result{})
 }
