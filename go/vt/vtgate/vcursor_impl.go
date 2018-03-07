@@ -119,20 +119,10 @@ func (vc *vcursorImpl) ExecuteAutocommit(method string, query string, BindVars m
 	return qr, err
 }
 
-// ExecuteMultiShard executes different queries on different shards and returns the combined result.
-func (vc *vcursorImpl) ExecuteMultiShard(keyspace string, shardQueries map[string]*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
-	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(shardQueries)))
-	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, commentedShardQueries(shardQueries, vc.trailingComments), vc.target.TabletType, vc.safeSession, false, canAutocommit)
-	if err == nil {
-		vc.hasPartialDML = true
-	}
-	return qr, err
-}
-
-// ExecuteMultiShard2 is part of the engine.VCursor interface.
-func (vc *vcursorImpl) ExecuteMultiShard2(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
+// ExecuteMultiShard is part of the engine.VCursor interface.
+func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
 	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(queries)))
-	qr, err := vc.executor.scatterConn.ExecuteMultiShard2(vc.ctx, rss, commentedShardQueries2(queries, vc.trailingComments), vc.target.TabletType, vc.safeSession, false, canAutocommit)
+	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.trailingComments), vc.target.TabletType, vc.safeSession, false, canAutocommit)
 	if err == nil {
 		vc.hasPartialDML = true
 	}
@@ -150,7 +140,7 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 	}
 	// The canAutocommit flag is not significant because we currently don't execute DMLs through ExecuteStandalone.
 	// But we set it to true for future-proofing this function.
-	return vc.executor.scatterConn.ExecuteMultiShard2(vc.ctx, rss, bqs, vc.target.TabletType, NewAutocommitSession(vc.safeSession.Session), false, true /* canAutocommit */)
+	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, rss, bqs, vc.target.TabletType, NewAutocommitSession(vc.safeSession.Session), false, true /* canAutocommit */)
 }
 
 // StreamExeculteMulti is the streaming version of ExecuteMultiShard.
@@ -197,21 +187,7 @@ func (vc *vcursorImpl) ResolveDestinations(keyspace string, ids []*querypb.Value
 	return vc.executor.resolver.resolver.ResolveDestinations(vc.ctx, keyspace, vc.target.TabletType, ids, destinations)
 }
 
-func commentedShardQueries(shardQueries map[string]*querypb.BoundQuery, trailingComments string) map[string]*querypb.BoundQuery {
-	if trailingComments == "" {
-		return shardQueries
-	}
-	newQueries := make(map[string]*querypb.BoundQuery, len(shardQueries))
-	for k, v := range shardQueries {
-		newQueries[k] = &querypb.BoundQuery{
-			Sql:           v.Sql + trailingComments,
-			BindVariables: v.BindVariables,
-		}
-	}
-	return newQueries
-}
-
-func commentedShardQueries2(shardQueries []*querypb.BoundQuery, trailingComments string) []*querypb.BoundQuery {
+func commentedShardQueries(shardQueries []*querypb.BoundQuery, trailingComments string) []*querypb.BoundQuery {
 	if trailingComments == "" {
 		return shardQueries
 	}

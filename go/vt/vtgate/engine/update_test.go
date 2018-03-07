@@ -44,7 +44,7 @@ func TestUpdateUnsharded(t *testing.T) {
 	}
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard2 ks.0: dummy_update {} true true`,
+		`ExecuteMultiShard ks.0: dummy_update {} true true`,
 	})
 
 	// Failure cases
@@ -77,7 +77,7 @@ func TestUpdateEqual(t *testing.T) {
 	}
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		`ExecuteMultiShard2 ks.-20: dummy_update /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {} true true`,
+		`ExecuteMultiShard ks.-20: dummy_update /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {} true true`,
 	})
 
 	// Failure case
@@ -179,7 +179,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		// ResolveDestinations is hard-coded to return -20.
 		// It gets used to perform the subquery to fetch the changing column values.
-		`ExecuteMultiShard2 sharded.-20: dummy_subquery {} false false`,
+		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
 		// Those values are returned as 4,5 for twocol and 6 for onecol.
 		// 4,5 have to be replaced by 1,2 (the new values).
 		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
@@ -188,7 +188,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: type:INT64 value:"3" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// Finally, the actual update, which is also sent to -20, same route as the subquery.
-		`ExecuteMultiShard2 sharded.-20: dummy_update /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {} true true`,
+		`ExecuteMultiShard sharded.-20: dummy_update /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {} true true`,
 	})
 
 	// No rows changing
@@ -203,9 +203,9 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		// ResolveDestinations is hard-coded to return -20.
 		// It gets used to perform the subquery to fetch the changing column values.
-		`ExecuteMultiShard2 sharded.-20: dummy_subquery {} false false`,
+		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
 		// Subquery returns no rows. So, no vindexes are updated. We still pass-through the original update.
-		`ExecuteMultiShard2 sharded.-20: dummy_update /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {} true true`,
+		`ExecuteMultiShard sharded.-20: dummy_update /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {} true true`,
 	})
 
 	// Failure case: multiple rows changing.

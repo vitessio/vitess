@@ -215,5 +215,5 @@ func (del *Delete) execDeleteSharded(vcursor VCursor, bindVars map[string]*query
 			BindVariables: bindVars,
 		}
 	}
-	return vcursor.ExecuteMultiShard2(rss, queries, true /* isDML */, true /* canAutocommit */)
+	return vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, true /* canAutocommit */)
 }

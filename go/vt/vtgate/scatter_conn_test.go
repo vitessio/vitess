@@ -48,16 +48,21 @@ func TestScatterConnExecute(t *testing.T) {
 
 func TestScatterConnExecuteMulti(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnExecuteMultiShard", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
-		shardQueries := make(map[string]*querypb.BoundQuery, len(shards))
-		for _, shard := range shards {
-			query := &querypb.BoundQuery{
+		res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+		rss, err := res.ResolveDestination(context.Background(), "TestScatterConnExecuteMultiShard", topodatapb.TabletType_REPLICA, key.DestinationShards(shards))
+		if err != nil {
+			return nil, err
+		}
+
+		queries := make([]*querypb.BoundQuery, len(rss))
+		for i := range rss {
+			queries[i] = &querypb.BoundQuery{
 				Sql:           "query",
 				BindVariables: nil,
 			}
-			shardQueries[shard] = query
 		}
 
-		return sc.ExecuteMultiShard(context.Background(), "TestScatterConnExecuteMultiShard", shardQueries, topodatapb.TabletType_REPLICA, nil, false, false)
+		return sc.ExecuteMultiShard(context.Background(), rss, queries, topodatapb.TabletType_REPLICA, nil, false, false)
 	})
 }
 
@@ -241,35 +246,50 @@ func TestMultiExecs(t *testing.T) {
 	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
 	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestMultiExecs", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestMultiExecs", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
-	shardVars := map[string]map[string]*querypb.BindVariable{
-		"0": {
-			"bv0": sqltypes.Int64BindVariable(0),
+
+	rss := []*srvtopo.ResolvedShard{
+		{
+			Target: &querypb.Target{
+				Keyspace: "TestMultiExecs",
+				Shard:    "0",
+			},
+			QueryService: sbc0,
 		},
-		"1": {
-			"bv1": sqltypes.Int64BindVariable(1),
+		{
+			Target: &querypb.Target{
+				Keyspace: "TestMultiExecs",
+				Shard:    "1",
+			},
+			QueryService: sbc1,
 		},
 	}
-	shardQueries := make(map[string]*querypb.BoundQuery, len(shardVars))
-	for shard, shardBindVars := range shardVars {
-		query := &querypb.BoundQuery{
-			Sql:           "query",
-			BindVariables: shardBindVars,
-		}
-		shardQueries[shard] = query
+	queries := []*querypb.BoundQuery{
+		{
+			Sql: "query1",
+			BindVariables: map[string]*querypb.BindVariable{
+				"bv0": sqltypes.Int64BindVariable(0),
+			},
+		},
+		{
+			Sql: "query2",
+			BindVariables: map[string]*querypb.BindVariable{
+				"bv1": sqltypes.Int64BindVariable(1),
+			},
+		},
 	}
 
-	_, _ = sc.ExecuteMultiShard(context.Background(), "TestMultiExecs", shardQueries, topodatapb.TabletType_REPLICA, nil, false, false)
+	_, _ = sc.ExecuteMultiShard(context.Background(), rss, queries, topodatapb.TabletType_REPLICA, nil, false, false)
 	if len(sbc0.Queries) == 0 || len(sbc1.Queries) == 0 {
 		t.Fatalf("didn't get expected query")
 	}
 	wantVars0 := map[string]*querypb.BindVariable{
-		"bv0": shardVars["0"]["bv0"],
+		"bv0": queries[0].BindVariables["bv0"],
 	}
 	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, wantVars0) {
 		t.Errorf("got %v, want %v", sbc0.Queries[0].BindVariables, wantVars0)
 	}
 	wantVars1 := map[string]*querypb.BindVariable{
-		"bv1": shardVars["1"]["bv1"],
+		"bv1": queries[1].BindVariables["bv1"],
 	}
 	if !reflect.DeepEqual(sbc1.Queries[0].BindVariables, wantVars1) {
 		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars1)
@@ -277,7 +297,7 @@ func TestMultiExecs(t *testing.T) {
 	sbc0.Queries = nil
 	sbc1.Queries = nil
 
-	rss := []*srvtopo.ResolvedShard{
+	rss = []*srvtopo.ResolvedShard{
 		{
 			Target: &querypb.Target{
 				Keyspace: "TestMultiExecs",
