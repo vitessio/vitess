@@ -452,31 +452,7 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 	return out, err
 }
 
-func resolveSingleShard(vcursor VCursor, vindex vindexes.Vindex, keyspace *vindexes.Keyspace, vindexKey sqltypes.Value) (newKeyspace, shard string, ksid []byte, err error) {
-	newKeyspace, allShards, err := vcursor.GetKeyspaceShards(keyspace)
-	if err != nil {
-		return "", "", nil, err
-	}
-	mapper := vindex.(vindexes.Unique)
-	ksids, err := mapper.Map(vcursor, []sqltypes.Value{vindexKey})
-	if err != nil {
-		return "", "", nil, err
-	}
-	if err := ksids[0].ValidateUnique(); err != nil {
-		return "", "", nil, err
-	}
-	ksid = ksids[0].ID
-	if ksid == nil {
-		return "", "", ksid, nil
-	}
-	shard, err = vcursor.GetShardForKeyspaceID(allShards, ksid)
-	if err != nil {
-		return "", "", nil, err
-	}
-	return newKeyspace, shard, ksid, nil
-}
-
-func resolveSingleShard2(vcursor VCursor, vindex vindexes.Vindex, keyspace *vindexes.Keyspace, vindexKey sqltypes.Value) (*srvtopo.ResolvedShard, []byte, error) {
+func resolveSingleShard(vcursor VCursor, vindex vindexes.Vindex, keyspace *vindexes.Keyspace, vindexKey sqltypes.Value) (*srvtopo.ResolvedShard, []byte, error) {
 	destinations, err := vindex.Map2(vcursor, []sqltypes.Value{vindexKey})
 	if err != nil {
 		return nil, nil, err

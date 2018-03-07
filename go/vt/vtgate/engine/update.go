@@ -22,7 +22,9 @@ import (
 
 	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlannotation"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -141,14 +143,14 @@ func (upd *Update) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindV
 }
 
 func (upd *Update) execUpdateUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	ks, allShards, err := vcursor.GetKeyspaceShards(upd.Keyspace)
+	rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execUpdateUnsharded")
 	}
-	if len(allShards) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", allShards)
+	if len(rss) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
 	}
-	return execShard(vcursor, upd.Query, bindVars, ks, allShards[0].Name, true, true /* canAutocommit */)
+	return execShard2(vcursor, upd.Query, bindVars, rss[0], true, true /* canAutocommit */)
 }
 
 func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
@@ -156,7 +158,7 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execUpdateEqual")
 	}
-	ks, shard, ksid, err := resolveSingleShard(vcursor, upd.Vindex, upd.Keyspace, key)
+	rs, ksid, err := resolveSingleShard(vcursor, upd.Vindex, upd.Keyspace, key)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execUpdateEqual")
 	}
@@ -164,12 +166,12 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 		return &sqltypes.Result{}, nil
 	}
 	if len(upd.ChangedVindexValues) != 0 {
-		if err := upd.updateVindexEntries(vcursor, upd.OwnedVindexQuery, bindVars, ks, shard, ksid); err != nil {
+		if err := upd.updateVindexEntries(vcursor, upd.OwnedVindexQuery, bindVars, rs, ksid); err != nil {
 			return nil, vterrors.Wrap(err, "execUpdateEqual")
 		}
 	}
 	rewritten := sqlannotation.AddKeyspaceIDs(upd.Query, [][]byte{ksid}, "")
-	return execShard(vcursor, rewritten, bindVars, ks, shard, true /* isDML */, true /* canAutocommit */)
+	return execShard2(vcursor, rewritten, bindVars, rs, true /* isDML */, true /* canAutocommit */)
 }
 
 // updateVindexEntries performs an update when a vindex is being modified
@@ -178,8 +180,8 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 // for DMLs to reuse existing transactions.
 // Note 2: While changes are being committed, the changing row could be
 // unreachable by either the new or old column values.
-func (upd *Update) updateVindexEntries(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, keyspace, shard string, ksid []byte) error {
-	subQueryResult, err := execShard(vcursor, upd.OwnedVindexQuery, bindVars, keyspace, shard, false /* isDML */, false /* canAutocommit */)
+func (upd *Update) updateVindexEntries(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, ksid []byte) error {
+	subQueryResult, err := execShard2(vcursor, upd.OwnedVindexQuery, bindVars, rs, false /* isDML */, false /* canAutocommit */)
 	if err != nil {
 		return err
 	}

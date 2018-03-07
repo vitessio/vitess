@@ -160,7 +160,7 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteEqual")
 	}
-	rs, ksid, err := resolveSingleShard2(vcursor, del.Vindex, del.Keyspace, key)
+	rs, ksid, err := resolveSingleShard(vcursor, del.Vindex, del.Keyspace, key)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteEqual")
 	}
