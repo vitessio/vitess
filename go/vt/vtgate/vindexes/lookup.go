@@ -65,8 +65,8 @@ func (ln *LookupNonUnique) IsFunctional() bool {
 	return false
 }
 
-// Map2 can map ids to key.Destination objects.
-func (ln *LookupNonUnique) Map2(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+// Map can map ids to key.Destination objects.
+func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	if ln.writeOnly {
 		for range ids {
@@ -220,8 +220,8 @@ func (lu *LookupUnique) IsFunctional() bool {
 	return false
 }
 
-// Map2 can map ids to key.Destination objects.
-func (lu *LookupUnique) Map2(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+// Map can map ids to key.Destination objects.
+func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	if lu.writeOnly {
 		for range ids {

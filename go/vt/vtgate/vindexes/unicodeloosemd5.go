@@ -80,8 +80,8 @@ func (vind *UnicodeLooseMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]b
 	return out, nil
 }
 
-// Map2 can map ids to key.Destination objects.
-func (vind *UnicodeLooseMD5) Map2(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+// Map can map ids to key.Destination objects.
+func (vind *UnicodeLooseMD5) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	for _, id := range ids {
 		data, err := unicodeHash(id)

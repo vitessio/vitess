@@ -114,7 +114,7 @@ func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars map[string]*querypb.Bi
 		Fields: vf.Fields,
 	}
 
-	destinations, err := vf.Vindex.Map2(vcursor, []sqltypes.Value{k})
+	destinations, err := vf.Vindex.Map(vcursor, []sqltypes.Value{k})
 	if err != nil {
 		return nil, err
 	}

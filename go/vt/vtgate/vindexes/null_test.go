@@ -48,7 +48,7 @@ func TestNullString(t *testing.T) {
 }
 
 func TestNullMap(t *testing.T) {
-	got, err := null.Map2(nil, []sqltypes.Value{
+	got, err := null.Map(nil, []sqltypes.Value{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 		sqltypes.NewInt64(3),

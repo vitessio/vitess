@@ -39,12 +39,12 @@ type stFU struct {
 	Params map[string]string
 }
 
-func (v *stFU) String() string                                                     { return v.name }
-func (*stFU) Cost() int                                                            { return 1 }
-func (*stFU) IsUnique() bool                                                       { return true }
-func (*stFU) IsFunctional() bool                                                   { return true }
-func (*stFU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)           { return []bool{}, nil }
-func (*stFU) Map2(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
+func (v *stFU) String() string                                                    { return v.name }
+func (*stFU) Cost() int                                                           { return 1 }
+func (*stFU) IsUnique() bool                                                      { return true }
+func (*stFU) IsFunctional() bool                                                  { return true }
+func (*stFU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
+func (*stFU) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 
 func NewSTFU(name string, params map[string]string) (Vindex, error) {
 	return &stFU{name: name, Params: params}, nil
@@ -58,15 +58,15 @@ type stLN struct {
 	Params map[string]string
 }
 
-func (v *stLN) String() string                                                     { return v.name }
-func (*stLN) Cost() int                                                            { return 0 }
-func (*stLN) IsUnique() bool                                                       { return false }
-func (*stLN) IsFunctional() bool                                                   { return false }
-func (*stLN) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)           { return []bool{}, nil }
-func (*stLN) Map2(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
-func (*stLN) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error             { return nil }
-func (*stLN) Delete(VCursor, [][]sqltypes.Value, []byte) error                     { return nil }
-func (*stLN) Update(VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error     { return nil }
+func (v *stLN) String() string                                                    { return v.name }
+func (*stLN) Cost() int                                                           { return 0 }
+func (*stLN) IsUnique() bool                                                      { return false }
+func (*stLN) IsFunctional() bool                                                  { return false }
+func (*stLN) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
+func (*stLN) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
+func (*stLN) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
+func (*stLN) Delete(VCursor, [][]sqltypes.Value, []byte) error                    { return nil }
+func (*stLN) Update(VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error    { return nil }
 
 func NewSTLN(name string, params map[string]string) (Vindex, error) {
 	return &stLN{name: name, Params: params}, nil
@@ -81,15 +81,15 @@ type stLU struct {
 	Params map[string]string
 }
 
-func (v *stLU) String() string                                                     { return v.name }
-func (*stLU) Cost() int                                                            { return 2 }
-func (*stLU) IsUnique() bool                                                       { return true }
-func (*stLU) IsFunctional() bool                                                   { return false }
-func (*stLU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)           { return []bool{}, nil }
-func (*stLU) Map2(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
-func (*stLU) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error             { return nil }
-func (*stLU) Delete(VCursor, [][]sqltypes.Value, []byte) error                     { return nil }
-func (*stLU) Update(VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error     { return nil }
+func (v *stLU) String() string                                                    { return v.name }
+func (*stLU) Cost() int                                                           { return 2 }
+func (*stLU) IsUnique() bool                                                      { return true }
+func (*stLU) IsFunctional() bool                                                  { return false }
+func (*stLU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
+func (*stLU) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
+func (*stLU) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
+func (*stLU) Delete(VCursor, [][]sqltypes.Value, []byte) error                    { return nil }
+func (*stLU) Update(VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error    { return nil }
 
 func NewSTLU(name string, params map[string]string) (Vindex, error) {
 	return &stLU{name: name, Params: params}, nil

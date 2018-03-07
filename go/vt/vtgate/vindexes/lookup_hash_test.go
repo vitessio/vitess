@@ -77,7 +77,7 @@ func TestLookupHashMap(t *testing.T) {
 	lookuphash := createLookup(t, "lookup_hash", false)
 	vc := &vcursor{numRows: 2}
 
-	got, err := lookuphash.Map2(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lookuphash.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -100,7 +100,7 @@ func TestLookupHashMap(t *testing.T) {
 		sqltypes.MakeTestFields("a", "varbinary"),
 		"notint",
 	)
-	got, err = lookuphash.Map2(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	got, err = lookuphash.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -111,7 +111,7 @@ func TestLookupHashMap(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	_, err = lookuphash.Map2(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	_, err = lookuphash.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
 	wantErr := "lookup.Map: execute failed"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("lookuphash(query fail) err: %v, want %s", err, wantErr)
@@ -123,7 +123,7 @@ func TestLookupHashMapAbsent(t *testing.T) {
 	lookuphash := createLookup(t, "lookup_hash", false)
 	vc := &vcursor{numRows: 0}
 
-	got, err := lookuphash.Map2(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lookuphash.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -137,7 +137,7 @@ func TestLookupHashMapAbsent(t *testing.T) {
 
 	// writeOnly true should return full keyranges.
 	lookuphash = createLookup(t, "lookup_hash", true)
-	got, err = lookuphash.Map2(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err = lookuphash.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	if err != nil {
 		t.Error(err)
 	}

@@ -402,7 +402,7 @@ func (ins *Insert) processPrimary(vcursor VCursor, vindexKeys [][]sqltypes.Value
 		}
 	}
 
-	destinations, err := colVindex.Vindex.Map2(vcursor, flattenedVindexKeys)
+	destinations, err := colVindex.Vindex.Map(vcursor, flattenedVindexKeys)
 	if err != nil {
 		return nil, err
 	}

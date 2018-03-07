@@ -38,7 +38,7 @@ func (*uvindex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, er
 	panic("unimplemented")
 }
 
-func (v *uvindex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (v *uvindex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	if v.matchkr {
 		return []key.Destination{
 			key.DestinationKeyRange{
@@ -68,7 +68,7 @@ func (*nvindex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, er
 	panic("unimplemented")
 }
 
-func (v *nvindex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (v *nvindex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	if v.matchid {
 		return []key.Destination{
 			key.DestinationKeyspaceIDs([][]byte{

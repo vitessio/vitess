@@ -65,8 +65,8 @@ func (vind *Hash) IsFunctional() bool {
 	return true
 }
 
-// Map2 can map ids to key.Destination objects.
-func (vind *Hash) Map2(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+// Map can map ids to key.Destination objects.
+func (vind *Hash) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, len(ids))
 	for i, id := range ids {
 		num, err := sqltypes.ToUint64(id)

@@ -97,8 +97,8 @@ func (lh *LookupHash) IsFunctional() bool {
 	return false
 }
 
-// Map2 can map ids to key.Destination objects.
-func (lh *LookupHash) Map2(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+// Map can map ids to key.Destination objects.
+func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	if lh.writeOnly {
 		for range ids {
@@ -253,8 +253,8 @@ func (lhu *LookupHashUnique) IsFunctional() bool {
 	return false
 }
 
-// Map2 can map ids to key.Destination objects.
-func (lhu *LookupHashUnique) Map2(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+// Map can map ids to key.Destination objects.
+func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	if lhu.writeOnly {
 		for range ids {

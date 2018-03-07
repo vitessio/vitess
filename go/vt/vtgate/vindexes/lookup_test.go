@@ -122,7 +122,7 @@ func TestLookupNonUniqueMap(t *testing.T) {
 	lookupNonUnique := createLookup(t, "lookup", false)
 	vc := &vcursor{numRows: 2}
 
-	got, err := lookupNonUnique.Map2(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lookupNonUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -157,7 +157,7 @@ func TestLookupNonUniqueMap(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	_, err = lookupNonUnique.Map2(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	_, err = lookupNonUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
 	wantErr := "lookup.Map: execute failed"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, wantErr)
@@ -177,7 +177,7 @@ func TestLookupNonUniqueMapAutocommit(t *testing.T) {
 	}
 	vc := &vcursor{numRows: 2}
 
-	got, err := lookupNonUnique.Map2(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lookupNonUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -219,7 +219,7 @@ func TestLookupNonUniqueMapWriteOnly(t *testing.T) {
 	lookupNonUnique := createLookup(t, "lookup", true)
 	vc := &vcursor{numRows: 0}
 
-	got, err := lookupNonUnique.Map2(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lookupNonUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -240,7 +240,7 @@ func TestLookupNonUniqueMapAbsent(t *testing.T) {
 	lookupNonUnique := createLookup(t, "lookup", false)
 	vc := &vcursor{numRows: 0}
 
-	got, err := lookupNonUnique.Map2(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lookupNonUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	if err != nil {
 		t.Error(err)
 	}

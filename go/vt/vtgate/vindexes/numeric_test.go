@@ -45,7 +45,7 @@ func TestNumericString(t *testing.T) {
 }
 
 func TestNumericMap(t *testing.T) {
-	got, err := numeric.Map2(nil, []sqltypes.Value{
+	got, err := numeric.Map(nil, []sqltypes.Value{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 		sqltypes.NewInt64(3),
