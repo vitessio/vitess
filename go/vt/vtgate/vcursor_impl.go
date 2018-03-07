@@ -129,17 +129,28 @@ func (vc *vcursorImpl) ExecuteMultiShard(keyspace string, shardQueries map[strin
 	return qr, err
 }
 
-// ExecuteStandalone executes the specified query on keyspace:shard using an independent session with autocommit enabled.
-func (vc *vcursorImpl) ExecuteStandalone(query string, BindVars map[string]*querypb.BindVariable, keyspace, shard string) (*sqltypes.Result, error) {
-	bq := map[string]*querypb.BoundQuery{
-		shard: {
+// ExecuteMultiShard2 is part of the engine.VCursor interface.
+func (vc *vcursorImpl) ExecuteMultiShard2(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
+	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(queries)))
+	qr, err := vc.executor.scatterConn.ExecuteMultiShard2(vc.ctx, rss, commentedShardQueries2(queries, vc.trailingComments), vc.target.TabletType, vc.safeSession, false, canAutocommit)
+	if err == nil {
+		vc.hasPartialDML = true
+	}
+	return qr, err
+}
+
+// ExecuteStandalone is part of the engine.VCursor interface.
+func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error) {
+	rss := []*srvtopo.ResolvedShard{rs}
+	bqs := []*querypb.BoundQuery{
+		{
 			Sql:           query + vc.trailingComments,
-			BindVariables: BindVars,
+			BindVariables: bindVars,
 		},
 	}
 	// The canAutocommit flag is not significant because we currently don't execute DMLs through ExecuteStandalone.
 	// But we set it to true for future-proofing this function.
-	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, bq, vc.target.TabletType, NewAutocommitSession(vc.safeSession.Session), false, true /* canAutocommit */)
+	return vc.executor.scatterConn.ExecuteMultiShard2(vc.ctx, rss, bqs, vc.target.TabletType, NewAutocommitSession(vc.safeSession.Session), false, true /* canAutocommit */)
 }
 
 // StreamExeculteMulti is the streaming version of ExecuteMultiShard.
@@ -193,6 +204,20 @@ func commentedShardQueries(shardQueries map[string]*querypb.BoundQuery, trailing
 	newQueries := make(map[string]*querypb.BoundQuery, len(shardQueries))
 	for k, v := range shardQueries {
 		newQueries[k] = &querypb.BoundQuery{
+			Sql:           v.Sql + trailingComments,
+			BindVariables: v.BindVariables,
+		}
+	}
+	return newQueries
+}
+
+func commentedShardQueries2(shardQueries []*querypb.BoundQuery, trailingComments string) []*querypb.BoundQuery {
+	if trailingComments == "" {
+		return shardQueries
+	}
+	newQueries := make([]*querypb.BoundQuery, len(shardQueries))
+	for i, v := range shardQueries {
+		newQueries[i] = &querypb.BoundQuery{
 			Sql:           v.Sql + trailingComments,
 			BindVariables: v.BindVariables,
 		}

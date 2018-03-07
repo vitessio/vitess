@@ -108,7 +108,7 @@ func TestInsertUnshardedGenerate(t *testing.T) {
 	}
 	vc.ExpectLog(t, []string{
 		// Fetch two sequence value.
-		`GetKeyspaceShards &{ks2 false}`,
+		`ResolveDestinations ks2 [] Destinations:DestinationAnyShard()`,
 		`ExecuteStandalone dummy_generate n: type:INT64 value:"2"  ks2 0`,
 		// Fill those values into the insert.
 		`GetKeyspaceShards &{ks false}`,
@@ -328,7 +328,7 @@ func TestInsertShardedGenerate(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`GetKeyspaceShards &{ks2 false}`,
+		`ResolveDestinations ks2 [] Destinations:DestinationAnyShard()`,
 		`ExecuteStandalone dummy_generate n: type:INT64 value:"1"  ks2 -20`,
 		`GetKeyspaceShards &{sharded true}`,
 		// Based on shardForKsid, values returned will be 20-, -20, 20-.

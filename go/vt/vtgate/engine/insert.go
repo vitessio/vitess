@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlannotation"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -235,12 +236,15 @@ func (ins *Insert) processGenerate(vcursor VCursor, bindVars map[string]*querypb
 
 	// If generation is needed, generate the requested number of values (as one call).
 	if count != 0 {
-		ks, shard, err := anyShard(vcursor, ins.Generate.Keyspace)
+		rss, _, err := vcursor.ResolveDestinations(ins.Generate.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
 		if err != nil {
 			return 0, vterrors.Wrap(err, "processGenerate")
 		}
+		if len(rss) != 1 {
+			return 0, vterrors.Wrapf(err, "processGenerate len(rss)=%v", len(rss))
+		}
 		bindVars := map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(count)}
-		qr, err := vcursor.ExecuteStandalone(ins.Generate.Query, bindVars, ks, shard)
+		qr, err := vcursor.ExecuteStandalone(ins.Generate.Query, bindVars, rss[0])
 		if err != nil {
 			return 0, err
 		}
