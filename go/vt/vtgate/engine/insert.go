@@ -178,7 +178,7 @@ func (ins *Insert) execInsertUnsharded(vcursor VCursor, bindVars map[string]*que
 	if len(rss) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
 	}
-	result, err := execShard2(vcursor, ins.Query, bindVars, rss[0], true, true /* canAutocommit */)
+	result, err := execShard(vcursor, ins.Query, bindVars, rss[0], true, true /* canAutocommit */)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execInsertUnsharded")
 	}
@@ -390,37 +390,6 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 	}
 
 	return rss, queries, nil
-	/*
-		keyspace, allShards, err := vcursor.GetKeyspaceShards(ins.Keyspace)
-		if err != nil {
-			return "", nil, vterrors.Wrap(err, "getInsertShardedRoute")
-		}
-
-		shardKeyspaceIDMap := make(map[string][][]byte)
-		routing := make(map[string][]string)
-		for rowNum, ksid := range keyspaceIDs {
-			if ksid == nil {
-				continue
-			}
-			shard, err := vcursor.GetShardForKeyspaceID(allShards, ksid)
-			if err != nil {
-				return "", nil, vterrors.Wrap(err, "getInsertShardedRoute")
-			}
-			shardKeyspaceIDMap[shard] = append(shardKeyspaceIDMap[shard], ksid)
-			routing[shard] = append(routing[shard], ins.Mid[rowNum])
-		}
-
-		shardQueries = make(map[string]*querypb.BoundQuery, len(routing))
-		for shard := range routing {
-			rewritten := ins.Prefix + strings.Join(routing[shard], ",") + ins.Suffix
-			rewritten = sqlannotation.AddKeyspaceIDs(rewritten, shardKeyspaceIDMap[shard], "")
-			shardQueries[shard] = &querypb.BoundQuery{
-				Sql:           rewritten,
-				BindVariables: bindVars,
-			}
-		}
-
-		return keyspace, shardQueries, nil */
 }
 
 // processPrimary maps the primary vindex values to the kesypace ids.
