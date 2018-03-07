@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -147,40 +146,6 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
 	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(rss)))
 	return vc.executor.scatterConn.StreamExecuteMulti(vc.ctx, query+vc.trailingComments, rss, bindVars, vc.target.TabletType, vc.safeSession.Options, callback)
-}
-
-// GetKeyspaceShards returns the list of shards for a keyspace, and the mapped keyspace if an alias was used.
-func (vc *vcursorImpl) GetKeyspaceShards(keyspace *vindexes.Keyspace) (string, []*topodatapb.ShardReference, error) {
-	ks, _, allShards, err := srvtopo.GetKeyspaceShards(vc.ctx, vc.executor.serv, vc.executor.cell, keyspace.Name, vc.target.TabletType)
-	if err != nil {
-		return "", nil, err
-	}
-	if !keyspace.Sharded && len(allShards) != 1 {
-		return "", nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsharded keyspace %s has multiple shards: possible cause: sharded keyspace is marked as unsharded in vschema", ks)
-	}
-	if len(allShards) == 0 {
-		return "", nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s has no shards", ks)
-	}
-	return ks, allShards, err
-}
-
-func (vc *vcursorImpl) GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error) {
-	return key.GetShardForKeyspaceID(allShards, keyspaceID)
-}
-
-func (vc *vcursorImpl) GetShardsForKsids(allShards []*topodatapb.ShardReference, ksids vindexes.Ksids) ([]string, error) {
-	if ksids.Range != nil {
-		return srvtopo.GetShardsForKeyRange(allShards, ksids.Range), nil
-	}
-	var shards []string
-	for _, ksid := range ksids.IDs {
-		shard, err := key.GetShardForKeyspaceID(allShards, ksid)
-		if err != nil {
-			return nil, err
-		}
-		shards = append(shards, shard)
-	}
-	return shards, nil
 }
 
 func (vc *vcursorImpl) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
