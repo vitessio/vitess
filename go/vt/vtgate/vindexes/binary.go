@@ -59,15 +59,6 @@ func (vind *Binary) IsFunctional() bool {
 	return true
 }
 
-// Map2 can map ids to key.Destination objects.
-func (vind *Binary) Map2(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, len(ids))
-	for i, id := range ids {
-		out[i] = key.DestinationKeyspaceID(id.ToBytes())
-	}
-	return out, nil
-}
-
 // Verify returns true if ids maps to ksids.
 func (vind *Binary) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
@@ -77,11 +68,11 @@ func (vind *Binary) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]b
 	return out, nil
 }
 
-// Map returns the corresponding keyspace id values for the given ids.
-func (vind *Binary) Map(_ VCursor, ids []sqltypes.Value) ([]KsidOrRange, error) {
-	out := make([]KsidOrRange, 0, len(ids))
-	for _, id := range ids {
-		out = append(out, KsidOrRange{ID: id.ToBytes()})
+// Map2 can map ids to key.Destination objects.
+func (vind *Binary) Map2(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	out := make([]key.Destination, len(ids))
+	for i, id := range ids {
+		out[i] = key.DestinationKeyspaceID(id.ToBytes())
 	}
 	return out, nil
 }

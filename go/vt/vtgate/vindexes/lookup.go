@@ -93,34 +93,6 @@ func (ln *LookupNonUnique) Map2(vcursor VCursor, ids []sqltypes.Value) ([]key.De
 	return out, nil
 }
 
-// Map returns the corresponding KeyspaceId values for the given ids.
-func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksids, error) {
-	out := make([]Ksids, 0, len(ids))
-	if ln.writeOnly {
-		for range ids {
-			out = append(out, Ksids{Range: &topodatapb.KeyRange{}})
-		}
-		return out, nil
-	}
-
-	results, err := ln.lkp.Lookup(vcursor, ids)
-	if err != nil {
-		return nil, err
-	}
-	for _, result := range results {
-		if len(result.Rows) == 0 {
-			out = append(out, Ksids{})
-			continue
-		}
-		ksids := make([][]byte, 0, len(result.Rows))
-		for _, row := range result.Rows {
-			ksids = append(ksids, row[0].ToBytes())
-		}
-		out = append(out, Ksids{IDs: ksids})
-	}
-	return out, nil
-}
-
 // Verify returns true if ids maps to ksids.
 func (ln *LookupNonUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	if ln.writeOnly {
@@ -267,32 +239,6 @@ func (lu *LookupUnique) Map2(vcursor VCursor, ids []sqltypes.Value) ([]key.Desti
 			out = append(out, key.DestinationNone{})
 		case 1:
 			out = append(out, key.DestinationKeyspaceID(result.Rows[0][0].ToBytes()))
-		default:
-			return nil, fmt.Errorf("Lookup.Map: unexpected multiple results from vindex %s: %v", lu.lkp.Table, ids[i])
-		}
-	}
-	return out, nil
-}
-
-// Map returns the corresponding KeyspaceId values for the given ids.
-func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]KsidOrRange, error) {
-	out := make([]KsidOrRange, 0, len(ids))
-	if lu.writeOnly {
-		for range ids {
-			out = append(out, KsidOrRange{Range: &topodatapb.KeyRange{}})
-		}
-		return out, nil
-	}
-	results, err := lu.lkp.Lookup(vcursor, ids)
-	if err != nil {
-		return nil, err
-	}
-	for i, result := range results {
-		switch len(result.Rows) {
-		case 0:
-			out = append(out, KsidOrRange{})
-		case 1:
-			out = append(out, KsidOrRange{ID: result.Rows[0][0].ToBytes()})
 		default:
 			return nil, fmt.Errorf("Lookup.Map: unexpected multiple results from vindex %s: %v", lu.lkp.Table, ids[i])
 		}

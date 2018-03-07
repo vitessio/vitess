@@ -79,20 +79,6 @@ func (vind *Hash) Map2(cursor VCursor, ids []sqltypes.Value) ([]key.Destination,
 	return out, nil
 }
 
-// Map returns the corresponding KeyspaceId values for the given ids.
-func (vind *Hash) Map(_ VCursor, ids []sqltypes.Value) ([]KsidOrRange, error) {
-	out := make([]KsidOrRange, 0, len(ids))
-	for _, id := range ids {
-		num, err := sqltypes.ToUint64(id)
-		if err != nil {
-			out = append(out, KsidOrRange{})
-			continue
-		}
-		out = append(out, KsidOrRange{ID: vhash(num)})
-	}
-	return out, nil
-}
-
 // Verify returns true if ids maps to ksids.
 func (vind *Hash) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
