@@ -448,7 +448,7 @@ func TestSelectNext(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`GetKeyspaceShards &{ks true}`,
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`ExecuteStandalone dummy_select  ks -20`,
 	})
 	expectResult(t, "sel.Execute", result, defaultSelectResult)
@@ -478,7 +478,7 @@ func TestSelectDBA(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`GetKeyspaceShards &{ks true}`,
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`ExecuteStandalone dummy_select  ks -20`,
 	})
 	expectResult(t, "sel.Execute", result, defaultSelectResult)

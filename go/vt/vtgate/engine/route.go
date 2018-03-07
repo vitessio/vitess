@@ -474,11 +474,17 @@ func resolveSingleShard(vcursor VCursor, vindex vindexes.Vindex, keyspace *vinde
 }
 
 func execAnyShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, keyspace *vindexes.Keyspace) (*sqltypes.Result, error) {
-	ks, shard, err := anyShard(vcursor, keyspace)
+	rss, _, err := vcursor.ResolveDestinations(keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
 	if err != nil {
+		// TODO(alainjobart): this eats the error code. Use vterrors.Wrapf instead.
+		// And audit the entire file for it.
 		return nil, fmt.Errorf("execAnyShard: %v", err)
 	}
-	return vcursor.ExecuteStandalone(query, bindVars, ks, shard)
+	if len(rss) != 1 {
+		// This code is unreachable. It's just a sanity check.
+		return nil, fmt.Errorf("No shards for keyspace: %s", keyspace.Name)
+	}
+	return vcursor.ExecuteStandalone(query, bindVars, rss[0])
 }
 
 func execShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, keyspace, shard string, isDML, canAutocommit bool) (*sqltypes.Result, error) {
