@@ -464,22 +464,32 @@ func TestConnPoolWaitCap(t *testing.T) {
 		_, qerr := framework.NewClient().Execute("select sleep(0.49) from dual", nil)
 		ch <- qerr
 	}()
+	go func() {
+		_, qerr := framework.NewClient().Execute("select sleep(0.48) from dual", nil)
+		ch <- qerr
+	}()
 
 	err1 := <-ch
 	err2 := <-ch
+	err3 := <-ch
 
-	if err1 == nil && err2 == nil {
-		t.Errorf("both queries unexpectedly succeeded")
+	if err1 == nil && err2 == nil && err3 == nil {
+		t.Errorf("all queries unexpectedly succeeded")
 	}
-	if err1 != nil && err2 != nil {
-		t.Errorf("both queries unexpectedly failed")
+	if err1 != nil && err2 != nil && err3 != nil {
+		t.Errorf("all queries unexpectedly failed")
 	}
 
+	// At least one of the queries should have failed
 	var err error
 	if err1 != nil {
 		err = err1
-	} else {
+	}
+	if err2 != nil {
 		err = err2
+	}
+	if err3 != nil {
+		err = err3
 	}
 
 	if code := vterrors.Code(err); code != vtrpcpb.Code_RESOURCE_EXHAUSTED {
