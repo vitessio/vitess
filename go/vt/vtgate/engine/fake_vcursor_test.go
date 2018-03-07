@@ -116,7 +116,7 @@ func (f *loggingVCursor) ExecuteMultiShard(keyspace string, shardQueries map[str
 }
 
 func (f *loggingVCursor) ExecuteMultiShard2(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
-	f.log = append(f.log, fmt.Sprintf("ExecuteMultiShard2 %v %v %v", printResolvedShardQueries(rss, queries), isDML, canAutocommit))
+	f.log = append(f.log, fmt.Sprintf("ExecuteMultiShard2 %v%v %v", printResolvedShardQueries(rss, queries), isDML, canAutocommit))
 	return f.nextResult()
 }
 
@@ -309,7 +309,7 @@ func printShardQueries(shardQueries map[string]*querypb.BoundQuery) string {
 func printResolvedShardQueries(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery) string {
 	buf := &bytes.Buffer{}
 	for i, rs := range rss {
-		fmt.Fprintf(buf, "%s.%s: %s %s ", rs.Target.Keyspace, rs.Target.Shard, queries[i].Sql, printBindVars(queries[i].BindVariables))
+		fmt.Fprintf(buf, "%s.%s: %s {%s} ", rs.Target.Keyspace, rs.Target.Shard, queries[i].Sql, printBindVars(queries[i].BindVariables))
 	}
 	return buf.String()
 }

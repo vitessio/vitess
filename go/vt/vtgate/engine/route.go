@@ -476,6 +476,30 @@ func resolveSingleShard(vcursor VCursor, vindex vindexes.Vindex, keyspace *vinde
 	return newKeyspace, shard, ksid, nil
 }
 
+func resolveSingleShard2(vcursor VCursor, vindex vindexes.Vindex, keyspace *vindexes.Keyspace, vindexKey sqltypes.Value) (*srvtopo.ResolvedShard, []byte, error) {
+	destinations, err := vindex.Map2(vcursor, []sqltypes.Value{vindexKey})
+	if err != nil {
+		return nil, nil, err
+	}
+	var ksid []byte
+	switch d := destinations[0].(type) {
+	case key.DestinationKeyspaceID:
+		ksid = d
+	case key.DestinationNone:
+		return nil, nil, nil
+	default:
+		return nil, nil, fmt.Errorf("cannot map vindex to unique keyspace id: %v", destinations[0])
+	}
+	rss, _, err := vcursor.ResolveDestinations(keyspace.Name, nil, destinations)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(rss) != 1 {
+		return nil, nil, fmt.Errorf("ResolveDestinations maps to %v shards", len(rss))
+	}
+	return rss[0], ksid, nil
+}
+
 func execAnyShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, keyspace *vindexes.Keyspace) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
 	if err != nil {
