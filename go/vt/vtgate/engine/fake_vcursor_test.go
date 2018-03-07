@@ -18,7 +18,6 @@ package engine
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"reflect"
 	"sort"
@@ -30,10 +29,8 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // noopVCursor is used to build other vcursors.
@@ -61,18 +58,6 @@ func (t noopVCursor) ExecuteStandalone(query string, bindvars map[string]*queryp
 }
 
 func (t noopVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
-	panic("unimplemented")
-}
-
-func (t noopVCursor) GetKeyspaceShards(vkeyspace *vindexes.Keyspace) (string, []*topodatapb.ShardReference, error) {
-	panic("unimplemented")
-}
-
-func (t noopVCursor) GetShardsForKsids(allShards []*topodatapb.ShardReference, ksids vindexes.Ksids) ([]string, error) {
-	panic("unimplemented")
-}
-
-func (t noopVCursor) GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error) {
 	panic("unimplemented")
 }
 
@@ -123,48 +108,6 @@ func (f *loggingVCursor) StreamExecuteMulti(query string, rss []*srvtopo.Resolve
 		return err
 	}
 	return callback(r)
-}
-
-func (f *loggingVCursor) GetKeyspaceShards(vkeyspace *vindexes.Keyspace) (string, []*topodatapb.ShardReference, error) {
-	f.log = append(f.log, fmt.Sprintf("GetKeyspaceShards %v", vkeyspace))
-	if f.shardErr != nil {
-		return "", nil, f.shardErr
-	}
-	sr := make([]*topodatapb.ShardReference, len(f.shards))
-	for i, shard := range f.shards {
-		sr[i] = &topodatapb.ShardReference{Name: shard}
-	}
-	return vkeyspace.Name, sr, nil
-}
-
-func (f *loggingVCursor) GetShardsForKsids(allShards []*topodatapb.ShardReference, ksids vindexes.Ksids) ([]string, error) {
-	f.log = append(f.log, fmt.Sprintf("GetShardsForKsids %v %q", allShards, ksids))
-	if ksids.Range != nil {
-		return []string{"-20", "20-"}, nil
-	}
-
-	var shards []string
-	for _, ksid := range ksids.IDs {
-		if string(ksid) < "\x20" {
-			shards = append(shards, "-20")
-		} else {
-			shards = append(shards, "20-")
-		}
-	}
-	return shards, nil
-}
-
-func (f *loggingVCursor) GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error) {
-	f.log = append(f.log, fmt.Sprintf("GetShardForKeyspaceID %v %q", allShards, hex.EncodeToString(keyspaceID)))
-	if f.shardForKsid == nil || f.curShardForKsid >= len(f.shardForKsid) {
-		if f.shardErr != nil {
-			return "", f.shardErr
-		}
-		return "-20", nil
-	}
-	r := f.shardForKsid[f.curShardForKsid]
-	f.curShardForKsid++
-	return r, nil
 }
 
 func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
