@@ -93,7 +93,7 @@ func (r *v2Resolver) keyspaceID(row []sqltypes.Value) ([]byte, error) {
 // table.
 type v3Resolver struct {
 	shardingColumnIndex int
-	vindex              vindexes.Unique
+	vindex              vindexes.Vindex
 }
 
 // newV3ResolverFromTableDefinition returns a keyspaceIDResolver for a v3 table.
@@ -114,8 +114,8 @@ func newV3ResolverFromTableDefinition(keyspaceSchema *vindexes.KeyspaceSchema, t
 	if colVindex.Vindex.Cost() > 1 {
 		return nil, fmt.Errorf("primary vindex cost is too high for table %v", td.Name)
 	}
-	unique, ok := colVindex.Vindex.(vindexes.Unique)
-	if !ok {
+	if !colVindex.Vindex.IsUnique() {
+		// This is impossible, but just checking anyway.
 		return nil, fmt.Errorf("primary vindex is not unique for table %v", td.Name)
 	}
 
@@ -127,7 +127,7 @@ func newV3ResolverFromTableDefinition(keyspaceSchema *vindexes.KeyspaceSchema, t
 
 	return &v3Resolver{
 		shardingColumnIndex: columnIndex,
-		vindex:              unique,
+		vindex:              colVindex.Vindex,
 	}, nil
 }
 
@@ -146,8 +146,8 @@ func newV3ResolverFromColumnList(keyspaceSchema *vindexes.KeyspaceSchema, name s
 	if colVindex.Vindex.Cost() > 1 {
 		return nil, fmt.Errorf("primary vindex cost is too high for table %v", name)
 	}
-	unique, ok := colVindex.Vindex.(vindexes.Unique)
-	if !ok {
+	if !colVindex.Vindex.IsUnique() {
+		// This is impossible, but just checking anyway.
 		return nil, fmt.Errorf("primary vindex is not unique for table %v", name)
 	}
 
@@ -165,23 +165,23 @@ func newV3ResolverFromColumnList(keyspaceSchema *vindexes.KeyspaceSchema, name s
 
 	return &v3Resolver{
 		shardingColumnIndex: columnIndex,
-		vindex:              unique,
+		vindex:              colVindex.Vindex,
 	}, nil
 }
 
 // keyspaceID implements the keyspaceIDResolver interface.
 func (r *v3Resolver) keyspaceID(row []sqltypes.Value) ([]byte, error) {
 	v := row[r.shardingColumnIndex]
-	ids := []sqltypes.Value{v}
-	ksids, err := r.vindex.Map(nil, ids)
+	destinations, err := r.vindex.Map2(nil, []sqltypes.Value{v})
 	if err != nil {
 		return nil, err
 	}
-	if len(ksids) != 1 {
-		return nil, fmt.Errorf("mapping row to keyspace id returned an invalid array of keyspace ids: %v", ksids)
+	if len(destinations) != 1 {
+		return nil, fmt.Errorf("mapping row to keyspace id returned an invalid array of keyspace ids: %v", key.DestinationsString(destinations))
 	}
-	if ksids[0].Range != nil || ksids[0].ID == nil {
-		return nil, fmt.Errorf("could not map %v to a keyspace id", v)
+	ksid, ok := destinations[0].(key.DestinationKeyspaceID)
+	if !ok || len(ksid) == 0 {
+		return nil, fmt.Errorf("could not map %v to a keyspace id, got destination %v", v, destinations[0])
 	}
-	return ksids[0].ID, nil
+	return ksid, nil
 }
