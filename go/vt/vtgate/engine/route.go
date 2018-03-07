@@ -244,12 +244,15 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 
 // GetFields fetches the field info.
 func (route *Route) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	ks, shard, err := anyShard(vcursor, route.Keyspace)
+	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
 	if err != nil {
 		return nil, err
 	}
-
-	qr, err := execShard(vcursor, route.FieldQuery, bindVars, ks, shard, false /* isDML */, false /* canAutocommit */)
+	if len(rss) != 1 {
+		// This code is unreachable. It's just a sanity check.
+		return nil, fmt.Errorf("No shards for keyspace: %s", route.Keyspace.Name)
+	}
+	qr, err := execShard2(vcursor, route.FieldQuery, bindVars, rss[0], false /* isDML */, false /* canAutocommit */)
 	if err != nil {
 		return nil, err
 	}
@@ -496,16 +499,13 @@ func execShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindV
 	}, isDML, canAutocommit)
 }
 
-func anyShard(vcursor VCursor, keyspace *vindexes.Keyspace) (string, string, error) {
-	ks, allShards, err := vcursor.GetKeyspaceShards(keyspace)
-	if err != nil {
-		return "", "", err
-	}
-	if len(allShards) == 0 {
-		// This code is unreachable. It's just a sanity check.
-		return "", "", fmt.Errorf("No shards for keyspace: %s", ks)
-	}
-	return ks, allShards[0].Name, nil
+func execShard2(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, isDML, canAutocommit bool) (*sqltypes.Result, error) {
+	return vcursor.ExecuteMultiShard2([]*srvtopo.ResolvedShard{rs}, []*querypb.BoundQuery{
+		{
+			Sql:           query,
+			BindVariables: bindVars,
+		},
+	}, isDML, canAutocommit)
 }
 
 func getShardQueries(query string, shardVars map[string]map[string]*querypb.BindVariable) map[string]*querypb.BoundQuery {
