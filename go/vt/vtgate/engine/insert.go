@@ -393,31 +393,38 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 }
 
 // processPrimary maps the primary vindex values to the kesypace ids.
-func (ins *Insert) processPrimary(vcursor VCursor, vindexKeys [][]sqltypes.Value, colVindex *vindexes.ColumnVindex, bv map[string]*querypb.BindVariable) (keyspaceIDs [][]byte, err error) {
-	mapper := colVindex.Vindex.(vindexes.Unique)
-	var flattenedVidexKeys []sqltypes.Value
+func (ins *Insert) processPrimary(vcursor VCursor, vindexKeys [][]sqltypes.Value, colVindex *vindexes.ColumnVindex, bv map[string]*querypb.BindVariable) ([][]byte, error) {
+	var flattenedVindexKeys []sqltypes.Value
 	// TODO: @rafael - this will change once vindex Primary keys also support multicolumns
 	for _, val := range vindexKeys {
 		for _, internalVal := range val {
-			flattenedVidexKeys = append(flattenedVidexKeys, internalVal)
+			flattenedVindexKeys = append(flattenedVindexKeys, internalVal)
 		}
 	}
-	ksids, err := mapper.Map(vcursor, flattenedVidexKeys)
+
+	destinations, err := colVindex.Vindex.Map2(vcursor, flattenedVindexKeys)
 	if err != nil {
 		return nil, err
 	}
-	for _, ksid := range ksids {
-		if err := ksid.ValidateUnique(); err != nil {
-			return nil, err
+
+	keyspaceIDs := make([][]byte, len(destinations))
+	for i, destination := range destinations {
+		switch d := destination.(type) {
+		case key.DestinationKeyspaceID:
+			// This is a single keyspace id, we're good.
+			keyspaceIDs[i] = d
+		case key.DestinationNone:
+			// No valid keyspace id, we may return an error.
+			if ins.Opcode != InsertShardedIgnore {
+				return nil, fmt.Errorf("could not map %v to a keyspace id", flattenedVindexKeys[i])
+			}
+		default:
+			return nil, fmt.Errorf("could not map %v to a unique keyspace id: %v", flattenedVindexKeys[i], destination)
 		}
-		keyspaceIDs = append(keyspaceIDs, ksid.ID)
 	}
 
-	for rowNum, vindexKey := range flattenedVidexKeys {
+	for rowNum, vindexKey := range flattenedVindexKeys {
 		if keyspaceIDs[rowNum] == nil {
-			if ins.Opcode != InsertShardedIgnore {
-				return nil, fmt.Errorf("could not map %v to a keyspace id", vindexKey)
-			}
 			// InsertShardedIgnore: skip the row.
 			continue
 		}
