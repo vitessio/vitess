@@ -152,7 +152,7 @@ func (del *Delete) execDeleteUnsharded(vcursor VCursor, bindVars map[string]*que
 	if len(rss) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
 	}
-	return execShard2(vcursor, del.Query, bindVars, rss[0], true, true /* canAutocommit */)
+	return execShard(vcursor, del.Query, bindVars, rss[0], true, true /* canAutocommit */)
 }
 
 func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
@@ -174,11 +174,11 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 		}
 	}
 	rewritten := sqlannotation.AddKeyspaceIDs(del.Query, [][]byte{ksid}, "")
-	return execShard2(vcursor, rewritten, bindVars, rs, true /* isDML */, true /* canAutocommit */)
+	return execShard(vcursor, rewritten, bindVars, rs, true /* isDML */, true /* canAutocommit */)
 }
 
 func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, ksid []byte) error {
-	result, err := execShard2(vcursor, del.OwnedVindexQuery, bindVars, rs, false /* isDML */, false /* canAutocommit */)
+	result, err := execShard(vcursor, del.OwnedVindexQuery, bindVars, rs, false /* isDML */, false /* canAutocommit */)
 	if err != nil {
 		return err
 	}

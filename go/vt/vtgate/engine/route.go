@@ -162,16 +162,16 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 		return execAnyShard(vcursor, route.Query, bindVars, route.Keyspace)
 	}
 
-	var ks string
-	var shardVars map[string]map[string]*querypb.BindVariable
+	var rss []*srvtopo.ResolvedShard
+	var bvs []map[string]*querypb.BindVariable
 	var err error
 	switch route.Opcode {
 	case SelectUnsharded, SelectScatter:
-		ks, shardVars, err = route.paramsAllShards(vcursor, bindVars)
+		rss, bvs, err = route.paramsAllShards(vcursor, bindVars)
 	case SelectEqual, SelectEqualUnique:
-		ks, shardVars, err = route.paramsSelectEqual(vcursor, bindVars)
+		rss, bvs, err = route.paramsSelectEqual(vcursor, bindVars)
 	case SelectIN:
-		ks, shardVars, err = route.paramsSelectIN(vcursor, bindVars)
+		rss, bvs, err = route.paramsSelectIn(vcursor, bindVars)
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported query route: %v", route)
@@ -181,15 +181,15 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 	}
 
 	// No route.
-	if len(shardVars) == 0 {
+	if len(rss) == 0 {
 		if wantfields {
 			return route.GetFields(vcursor, bindVars)
 		}
 		return &sqltypes.Result{}, nil
 	}
 
-	shardQueries := getShardQueries(route.Query, shardVars)
-	result, err := vcursor.ExecuteMultiShard(ks, shardQueries, false /* isDML */, false /* canAutocommit */)
+	queries := getQueries(route.Query, bvs)
+	result, err := vcursor.ExecuteMultiShard2(rss, queries, false /* isDML */, false /* canAutocommit */)
 	if err != nil {
 		return nil, err
 	}
@@ -207,11 +207,11 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 	var err error
 	switch route.Opcode {
 	case SelectUnsharded, SelectScatter:
-		rss, bvs, err = route.paramsAllShards2(vcursor, bindVars)
+		rss, bvs, err = route.paramsAllShards(vcursor, bindVars)
 	case SelectEqual, SelectEqualUnique:
-		rss, bvs, err = route.paramsSelectEqual2(vcursor, bindVars)
+		rss, bvs, err = route.paramsSelectEqual(vcursor, bindVars)
 	case SelectIN:
-		rss, bvs, err = route.paramsSelectIN2(vcursor, bindVars)
+		rss, bvs, err = route.paramsSelectIn(vcursor, bindVars)
 	default:
 		return fmt.Errorf("query %q cannot be used for streaming", route.Query)
 	}
@@ -252,26 +252,14 @@ func (route *Route) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bind
 		// This code is unreachable. It's just a sanity check.
 		return nil, fmt.Errorf("No shards for keyspace: %s", route.Keyspace.Name)
 	}
-	qr, err := execShard2(vcursor, route.FieldQuery, bindVars, rss[0], false /* isDML */, false /* canAutocommit */)
+	qr, err := execShard(vcursor, route.FieldQuery, bindVars, rss[0], false /* isDML */, false /* canAutocommit */)
 	if err != nil {
 		return nil, err
 	}
 	return qr.Truncate(route.TruncateColumnCount), nil
 }
 
-func (route *Route) paramsAllShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (ks string, shardVars map[string]map[string]*querypb.BindVariable, err error) {
-	ks, allShards, err := vcursor.GetKeyspaceShards(route.Keyspace)
-	if err != nil {
-		return "", nil, vterrors.Wrap(err, "paramsAllShards")
-	}
-	shardVars = make(map[string]map[string]*querypb.BindVariable, len(allShards))
-	for _, shard := range allShards {
-		shardVars[shard.Name] = bindVars
-	}
-	return ks, shardVars, nil
-}
-
-func (route *Route) paramsAllShards2(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+func (route *Route) paramsAllShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
 	if err != nil {
 		return nil, nil, vterrors.Wrap(err, "paramsAllShards")
@@ -283,28 +271,12 @@ func (route *Route) paramsAllShards2(vcursor VCursor, bindVars map[string]*query
 	return rss, multiBindVars, nil
 }
 
-func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (ks string, shardVars map[string]map[string]*querypb.BindVariable, err error) {
-	key, err := route.Values[0].ResolveValue(bindVars)
-	if err != nil {
-		return "", nil, vterrors.Wrap(err, "paramsSelectEqual")
-	}
-	ks, routing, err := route.resolveShards(vcursor, []sqltypes.Value{key})
-	if err != nil {
-		return "", nil, vterrors.Wrap(err, "paramsSelectEqual")
-	}
-	shardVars = make(map[string]map[string]*querypb.BindVariable)
-	for _, shard := range routing.Shards() {
-		shardVars[shard] = bindVars
-	}
-	return ks, shardVars, nil
-}
-
-func (route *Route) paramsSelectEqual2(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	key, err := route.Values[0].ResolveValue(bindVars)
 	if err != nil {
 		return nil, nil, vterrors.Wrap(err, "paramsSelectEqual")
 	}
-	rss, _, err := route.resolveShards2(vcursor, []sqltypes.Value{key})
+	rss, _, err := route.resolveShards(vcursor, []sqltypes.Value{key})
 	if err != nil {
 		return nil, nil, vterrors.Wrap(err, "paramsSelectEqual")
 	}
@@ -315,86 +287,19 @@ func (route *Route) paramsSelectEqual2(vcursor VCursor, bindVars map[string]*que
 	return rss, multiBindVars, nil
 }
 
-func (route *Route) paramsSelectIN(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (ks string, shardVars map[string]map[string]*querypb.BindVariable, err error) {
+func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	keys, err := route.Values[0].ResolveList(bindVars)
 	if err != nil {
-		return "", nil, vterrors.Wrap(err, "paramsSelectIN")
+		return nil, nil, vterrors.Wrap(err, "paramsSelectIn")
 	}
-	ks, routing, err := route.resolveShards(vcursor, keys)
+	rss, values, err := route.resolveShards(vcursor, keys)
 	if err != nil {
-		return "", nil, vterrors.Wrap(err, "paramsSelectEqual")
-	}
-	return ks, routing.ShardVars(bindVars), nil
-}
-
-func (route *Route) paramsSelectIN2(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	keys, err := route.Values[0].ResolveList(bindVars)
-	if err != nil {
-		return nil, nil, vterrors.Wrap(err, "paramsSelectIN")
-	}
-	rss, values, err := route.resolveShards2(vcursor, keys)
-	if err != nil {
-		return nil, nil, vterrors.Wrap(err, "paramsSelectEqual")
+		return nil, nil, vterrors.Wrap(err, "paramsSelectIn")
 	}
 	return rss, shardVars(bindVars, values), nil
 }
 
-func (route *Route) resolveShards(vcursor VCursor, vindexKeys []sqltypes.Value) (newKeyspace string, routing routingMap, err error) {
-	newKeyspace, allShards, err := vcursor.GetKeyspaceShards(route.Keyspace)
-	if err != nil {
-		return "", nil, err
-	}
-	routing = make(routingMap)
-	switch mapper := route.Vindex.(type) {
-	case vindexes.Unique:
-		ksids, err := mapper.Map(vcursor, vindexKeys)
-		if err != nil {
-			return "", nil, err
-		}
-		var shards []string
-		for i, ksid := range ksids {
-			switch {
-			case ksid.Range != nil:
-				// Even for a unique vindex, a KeyRange can be returned if a keypace
-				// id cannot be identified. For example, this can happen during backfill.
-				// In such cases, we scatter over the KeyRange.
-				// Use the multi-keyspace id API to convert a keyrange to shards.
-				shards, err = vcursor.GetShardsForKsids(allShards, vindexes.Ksids{Range: ksid.Range})
-				if err != nil {
-					return "", nil, err
-				}
-			case ksid.ID != nil:
-				shard, err := vcursor.GetShardForKeyspaceID(allShards, ksid.ID)
-				if err != nil {
-					return "", nil, err
-				}
-				shards = []string{shard}
-			}
-			for _, shard := range shards {
-				routing.Add(shard, sqltypes.ValueToProto(vindexKeys[i]))
-			}
-		}
-	case vindexes.NonUnique:
-		ksidss, err := mapper.Map(vcursor, vindexKeys)
-		if err != nil {
-			return "", nil, err
-		}
-		for i, ksids := range ksidss {
-			shards, err := vcursor.GetShardsForKsids(allShards, ksids)
-			if err != nil {
-				return "", nil, err
-			}
-			for _, shard := range shards {
-				routing.Add(shard, sqltypes.ValueToProto(vindexKeys[i]))
-			}
-		}
-	default:
-		panic("unexpected")
-	}
-	return newKeyspace, routing, nil
-}
-
-func (route *Route) resolveShards2(vcursor VCursor, vindexKeys []sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+func (route *Route) resolveShards(vcursor VCursor, vindexKeys []sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	// Convert vindexKeys to []*querypb.Value
 	ids := make([]*querypb.Value, len(vindexKeys))
 	for i, vik := range vindexKeys {
@@ -490,16 +395,7 @@ func execAnyShard(vcursor VCursor, query string, bindVars map[string]*querypb.Bi
 	return vcursor.ExecuteStandalone(query, bindVars, rss[0])
 }
 
-func execShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, keyspace, shard string, isDML, canAutocommit bool) (*sqltypes.Result, error) {
-	return vcursor.ExecuteMultiShard(keyspace, map[string]*querypb.BoundQuery{
-		shard: {
-			Sql:           query,
-			BindVariables: bindVars,
-		},
-	}, isDML, canAutocommit)
-}
-
-func execShard2(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, isDML, canAutocommit bool) (*sqltypes.Result, error) {
+func execShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, isDML, canAutocommit bool) (*sqltypes.Result, error) {
 	return vcursor.ExecuteMultiShard2([]*srvtopo.ResolvedShard{rs}, []*querypb.BoundQuery{
 		{
 			Sql:           query,
@@ -508,13 +404,29 @@ func execShard2(vcursor VCursor, query string, bindVars map[string]*querypb.Bind
 	}, isDML, canAutocommit)
 }
 
-func getShardQueries(query string, shardVars map[string]map[string]*querypb.BindVariable) map[string]*querypb.BoundQuery {
-	shardQueries := make(map[string]*querypb.BoundQuery, len(shardVars))
-	for shard, shardVars := range shardVars {
-		shardQueries[shard] = &querypb.BoundQuery{
+func getQueries(query string, bvs []map[string]*querypb.BindVariable) []*querypb.BoundQuery {
+	queries := make([]*querypb.BoundQuery, len(bvs))
+	for i, bv := range bvs {
+		queries[i] = &querypb.BoundQuery{
 			Sql:           query,
-			BindVariables: shardVars,
+			BindVariables: bv,
 		}
 	}
-	return shardQueries
+	return queries
+}
+
+func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) []map[string]*querypb.BindVariable {
+	shardVars := make([]map[string]*querypb.BindVariable, len(mapVals))
+	for i, vals := range mapVals {
+		newbv := make(map[string]*querypb.BindVariable, len(bv)+1)
+		for k, v := range bv {
+			newbv[k] = v
+		}
+		newbv[ListVarName] = &querypb.BindVariable{
+			Type:   querypb.Type_TUPLE,
+			Values: vals,
+		}
+		shardVars[i] = newbv
+	}
+	return shardVars
 }
