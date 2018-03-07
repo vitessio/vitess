@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlannotation"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -170,14 +171,14 @@ func (ins *Insert) execInsertUnsharded(vcursor VCursor, bindVars map[string]*que
 		return nil, vterrors.Wrap(err, "execInsertUnsharded")
 	}
 
-	ks, allShards, err := vcursor.GetKeyspaceShards(ins.Keyspace)
+	rss, _, err := vcursor.ResolveDestinations(ins.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execInsertUnsharded")
 	}
-	if len(allShards) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", allShards)
+	if len(rss) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
 	}
-	result, err := execShard(vcursor, ins.Query, bindVars, ks, allShards[0].Name, true, true /* canAutocommit */)
+	result, err := execShard2(vcursor, ins.Query, bindVars, rss[0], true, true /* canAutocommit */)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execInsertUnsharded")
 	}
@@ -197,12 +198,12 @@ func (ins *Insert) execInsertSharded(vcursor VCursor, bindVars map[string]*query
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execInsertSharded")
 	}
-	keyspace, shardQueries, err := ins.getInsertShardedRoute(vcursor, bindVars)
+	rss, queries, err := ins.getInsertShardedRoute(vcursor, bindVars)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execInsertSharded")
 	}
 
-	result, err := vcursor.ExecuteMultiShard(keyspace, shardQueries, true /* isDML */, true /* canAutocommit */)
+	result, err := vcursor.ExecuteMultiShard2(rss, queries, true /* isDML */, true /* canAutocommit */)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execInsertSharded")
 	}
@@ -276,12 +277,7 @@ func (ins *Insert) processGenerate(vcursor VCursor, bindVars map[string]*querypb
 // For unowned vindexes with no input values, it reverse maps.
 // For unowned vindexes with values, it validates.
 // If it's an IGNORE or ON DUPLICATE key insert, it drops unroutable rows.
-func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (keyspace string, shardQueries map[string]*querypb.BoundQuery, err error) {
-	keyspace, allShards, err := vcursor.GetKeyspaceShards(ins.Keyspace)
-	if err != nil {
-		return "", nil, vterrors.Wrap(err, "getInsertShardedRoute")
-	}
-
+func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []*querypb.BoundQuery, error) {
 	// vindexRowsValues builds the values of all vindex columns.
 	// the 3-d structure indexes are colVindex, row, col. Note that
 	// ins.Values indexes are colVindex, col, row. So, the conversion
@@ -292,23 +288,23 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 	rowCount := 0
 	for vIdx, vColValues := range ins.VindexValues {
 		if len(vColValues.Values) != len(ins.Table.ColumnVindexes[vIdx].Columns) {
-			return "", nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: supplied vindex column values don't match vschema: %v %v", vColValues, ins.Table.ColumnVindexes[vIdx].Columns)
+			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: supplied vindex column values don't match vschema: %v %v", vColValues, ins.Table.ColumnVindexes[vIdx].Columns)
 		}
 		for colIdx, colValues := range vColValues.Values {
 			rowsResolvedValues, err := colValues.ResolveList(bindVars)
 			if err != nil {
-				return "", nil, vterrors.Wrap(err, "getInsertShardedRoute")
+				return nil, nil, vterrors.Wrap(err, "getInsertShardedRoute")
 			}
 			// This is the first iteration: allocate for transpose.
 			if colIdx == 0 {
 				if len(rowsResolvedValues) == 0 {
-					return "", nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: rowcount is zero for inserts: %v", rowsResolvedValues)
+					return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: rowcount is zero for inserts: %v", rowsResolvedValues)
 				}
 				if rowCount == 0 {
 					rowCount = len(rowsResolvedValues)
 				}
 				if rowCount != len(rowsResolvedValues) {
-					return "", nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: uneven row values for inserts: %d %d", rowCount, len(rowsResolvedValues))
+					return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: uneven row values for inserts: %d %d", rowCount, len(rowsResolvedValues))
 				}
 				vindexRowsValues[vIdx] = make([][]sqltypes.Value, rowCount)
 			}
@@ -325,7 +321,7 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 	// id is returned as nil, which is used later to drop such rows.
 	keyspaceIDs, err := ins.processPrimary(vcursor, vindexRowsValues[0], ins.Table.ColumnVindexes[0], bindVars)
 	if err != nil {
-		return "", nil, vterrors.Wrap(err, "getInsertShardedRoute")
+		return nil, nil, vterrors.Wrap(err, "getInsertShardedRoute")
 	}
 
 	for vIdx := 1; vIdx < len(vindexRowsValues); vIdx++ {
@@ -346,35 +342,85 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 			err = ins.processUnowned(vcursor, vindexRowsValues[vIdx], colVindex, bindVars, keyspaceIDs)
 		}
 		if err != nil {
-			return "", nil, vterrors.Wrap(err, "getInsertShardedRoute")
+			return nil, nil, vterrors.Wrap(err, "getInsertShardedRoute")
 		}
 	}
 
-	shardKeyspaceIDMap := make(map[string][][]byte)
-	routing := make(map[string][]string)
-	for rowNum, ksid := range keyspaceIDs {
-		if ksid == nil {
-			continue
+	// We need to know the keyspace ids and the Mids associated with
+	// each RSS.  So we pass the ksid indexes in as ids, and get them back
+	// as values. We also skip nil KeyspaceIds, no need to resolve them.
+	var indexes []*querypb.Value
+	var destinations []key.Destination
+	for i, ksid := range keyspaceIDs {
+		if ksid != nil {
+			indexes = append(indexes, &querypb.Value{
+				Value: strconv.AppendInt(nil, int64(i), 10),
+			})
+			destinations = append(destinations, key.DestinationKeyspaceID(ksid))
 		}
-		shard, err := vcursor.GetShardForKeyspaceID(allShards, ksid)
-		if err != nil {
-			return "", nil, vterrors.Wrap(err, "getInsertShardedRoute")
-		}
-		shardKeyspaceIDMap[shard] = append(shardKeyspaceIDMap[shard], ksid)
-		routing[shard] = append(routing[shard], ins.Mid[rowNum])
+	}
+	if len(destinations) == 0 {
+		// In this case, all we have is nil KeyspaceIds, we don't do
+		// anything at all.
+		return nil, nil, nil
 	}
 
-	shardQueries = make(map[string]*querypb.BoundQuery, len(routing))
-	for shard := range routing {
-		rewritten := ins.Prefix + strings.Join(routing[shard], ",") + ins.Suffix
-		rewritten = sqlannotation.AddKeyspaceIDs(rewritten, shardKeyspaceIDMap[shard], "")
-		shardQueries[shard] = &querypb.BoundQuery{
+	rss, indexesPerRss, err := vcursor.ResolveDestinations(ins.Keyspace.Name, indexes, destinations)
+	if err != nil {
+		return nil, nil, vterrors.Wrap(err, "getInsertShardedRoute")
+	}
+
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		var ksids [][]byte
+		var mids []string
+		for _, indexValue := range indexesPerRss[i] {
+			index, _ := strconv.ParseInt(string(indexValue.Value), 0, 64)
+			if keyspaceIDs[index] != nil {
+				ksids = append(ksids, keyspaceIDs[index])
+				mids = append(mids, ins.Mid[index])
+			}
+		}
+		rewritten := ins.Prefix + strings.Join(mids, ",") + ins.Suffix
+		rewritten = sqlannotation.AddKeyspaceIDs(rewritten, ksids, "")
+		queries[i] = &querypb.BoundQuery{
 			Sql:           rewritten,
 			BindVariables: bindVars,
 		}
 	}
 
-	return keyspace, shardQueries, nil
+	return rss, queries, nil
+	/*
+		keyspace, allShards, err := vcursor.GetKeyspaceShards(ins.Keyspace)
+		if err != nil {
+			return "", nil, vterrors.Wrap(err, "getInsertShardedRoute")
+		}
+
+		shardKeyspaceIDMap := make(map[string][][]byte)
+		routing := make(map[string][]string)
+		for rowNum, ksid := range keyspaceIDs {
+			if ksid == nil {
+				continue
+			}
+			shard, err := vcursor.GetShardForKeyspaceID(allShards, ksid)
+			if err != nil {
+				return "", nil, vterrors.Wrap(err, "getInsertShardedRoute")
+			}
+			shardKeyspaceIDMap[shard] = append(shardKeyspaceIDMap[shard], ksid)
+			routing[shard] = append(routing[shard], ins.Mid[rowNum])
+		}
+
+		shardQueries = make(map[string]*querypb.BoundQuery, len(routing))
+		for shard := range routing {
+			rewritten := ins.Prefix + strings.Join(routing[shard], ",") + ins.Suffix
+			rewritten = sqlannotation.AddKeyspaceIDs(rewritten, shardKeyspaceIDMap[shard], "")
+			shardQueries[shard] = &querypb.BoundQuery{
+				Sql:           rewritten,
+				BindVariables: bindVars,
+			}
+		}
+
+		return keyspace, shardQueries, nil */
 }
 
 // processPrimary maps the primary vindex values to the kesypace ids.

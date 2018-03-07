@@ -48,8 +48,8 @@ func TestInsertUnsharded(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`GetKeyspaceShards &{ks false}`,
-		`ExecuteMultiShard ks 0: dummy_insert  true true`,
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard2 ks.0: dummy_insert {} true true`,
 	})
 	expectResult(t, "Execute", result, &sqltypes.Result{InsertID: 4})
 
@@ -111,8 +111,8 @@ func TestInsertUnshardedGenerate(t *testing.T) {
 		`ResolveDestinations ks2 [] Destinations:DestinationAnyShard()`,
 		`ExecuteStandalone dummy_generate n: type:INT64 value:"2"  ks2 0`,
 		// Fill those values into the insert.
-		`GetKeyspaceShards &{ks false}`,
-		`ExecuteMultiShard ks 0: dummy_insert __seq0: type:INT64 value:"1" __seq1: type:INT64 value:"4" __seq2: type:INT64 value:"2" __seq3: type:INT64 value:"5" __seq4: type:INT64 value:"3"  true true`,
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard2 ks.0: dummy_insert {__seq0: type:INT64 value:"1" __seq1: type:INT64 value:"4" __seq2: type:INT64 value:"2" __seq3: type:INT64 value:"5" __seq4: type:INT64 value:"3" } true true`,
 	})
 
 	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerate.
@@ -177,15 +177,13 @@ func TestInsertShardedSimple(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`GetKeyspaceShards &{sharded true}`,
 		// Based on shardForKsid, values returned will be 20-, -20, 20-.
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "166b40b44aba4bd6"`,
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "06e7ea22ce92708f"`,
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "4eb190c9a2fa169c"`,
+		`ResolveDestinations sharded [value:"0"  value:"1"  value:"2" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		// Row 2 will go to -20, rows 1 & 3 will go to 20-
-		`ExecuteMultiShard sharded ` +
-			`-20: prefix mid2 suffix /* vtgate:: keyspace_id:06e7ea22ce92708f */ _id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" ` +
-			`20-: prefix mid1, mid3 suffix /* vtgate:: keyspace_id:166b40b44aba4bd6,4eb190c9a2fa169c */ _id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3"  true true`,
+		`ExecuteMultiShard2 ` +
+			`sharded.20-: prefix mid1, mid3 suffix /* vtgate:: keyspace_id:166b40b44aba4bd6,4eb190c9a2fa169c */ {_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
+			`sharded.-20: prefix mid2 suffix /* vtgate:: keyspace_id:06e7ea22ce92708f */ {_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
+			`true true`,
 	})
 }
 
@@ -330,18 +328,16 @@ func TestInsertShardedGenerate(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks2 [] Destinations:DestinationAnyShard()`,
 		`ExecuteStandalone dummy_generate n: type:INT64 value:"1"  ks2 -20`,
-		`GetKeyspaceShards &{sharded true}`,
 		// Based on shardForKsid, values returned will be 20-, -20, 20-.
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "166b40b44aba4bd6"`,
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "06e7ea22ce92708f"`,
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "4eb190c9a2fa169c"`,
+		`ResolveDestinations sharded [value:"0"  value:"1"  value:"2" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		// Row 2 will go to -20, rows 1 & 3 will go to 20-
-		`ExecuteMultiShard sharded -20: prefix mid2 suffix /* vtgate:: keyspace_id:06e7ea22ce92708f */ ` +
-			`__seq0: type:INT64 value:"1" __seq1: type:INT64 value:"2" __seq2: type:INT64 value:"2" ` +
-			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" ` +
-			`20-: prefix mid1, mid3 suffix /* vtgate:: keyspace_id:166b40b44aba4bd6,4eb190c9a2fa169c */ ` +
-			`__seq0: type:INT64 value:"1" __seq1: type:INT64 value:"2" __seq2: type:INT64 value:"2" ` +
-			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3"  ` +
+		`ExecuteMultiShard2 ` +
+			`sharded.20-: prefix mid1, mid3 suffix /* vtgate:: keyspace_id:166b40b44aba4bd6,4eb190c9a2fa169c */ ` +
+			`{__seq0: type:INT64 value:"1" __seq1: type:INT64 value:"2" __seq2: type:INT64 value:"2" ` +
+			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
+			`sharded.-20: prefix mid2 suffix /* vtgate:: keyspace_id:06e7ea22ce92708f */ ` +
+			`{__seq0: type:INT64 value:"1" __seq1: type:INT64 value:"2" __seq2: type:INT64 value:"2" ` +
+			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
 			`true true`,
 	})
 
@@ -464,7 +460,6 @@ func TestInsertShardedOwned(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`GetKeyspaceShards &{sharded true}`,
 		`Execute insert into lkp2(from1, from2, toc) values(:from10, :from20, :toc0), (:from11, :from21, :toc1), (:from12, :from22, :toc2) ` +
 			`from10: type:INT64 value:"4" from11: type:INT64 value:"5" from12: type:INT64 value:"6" ` +
 			`from20: type:INT64 value:"7" from21: type:INT64 value:"8" from22: type:INT64 value:"9" ` +
@@ -473,20 +468,18 @@ func TestInsertShardedOwned(t *testing.T) {
 			`from0: type:INT64 value:"10" from1: type:INT64 value:"11" from2: type:INT64 value:"12" ` +
 			`toc0: type:VARBINARY value:"\026k@\264J\272K\326" toc1: type:VARBINARY value:"\006\347\352\"\316\222p\217" toc2: type:VARBINARY value:"N\261\220\311\242\372\026\234"  true`,
 		// Based on shardForKsid, values returned will be 20-, -20, 20-.
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "166b40b44aba4bd6"`,
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "06e7ea22ce92708f"`,
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "4eb190c9a2fa169c"`,
-		`ExecuteMultiShard sharded ` +
-			`-20: prefix mid2 suffix /* vtgate:: keyspace_id:06e7ea22ce92708f */ ` +
-			`_c10: type:INT64 value:"4" _c11: type:INT64 value:"5" _c12: type:INT64 value:"6" ` +
+		`ResolveDestinations sharded [value:"0"  value:"1"  value:"2" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
+		`ExecuteMultiShard2 ` +
+			`sharded.20-: prefix mid1, mid3 suffix /* vtgate:: keyspace_id:166b40b44aba4bd6,4eb190c9a2fa169c */ ` +
+			`{_c10: type:INT64 value:"4" _c11: type:INT64 value:"5" _c12: type:INT64 value:"6" ` +
 			`_c20: type:INT64 value:"7" _c21: type:INT64 value:"8" _c22: type:INT64 value:"9" ` +
 			`_c30: type:INT64 value:"10" _c31: type:INT64 value:"11" _c32: type:INT64 value:"12" ` +
-			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" ` +
-			`20-: prefix mid1, mid3 suffix /* vtgate:: keyspace_id:166b40b44aba4bd6,4eb190c9a2fa169c */ ` +
-			`_c10: type:INT64 value:"4" _c11: type:INT64 value:"5" _c12: type:INT64 value:"6" ` +
+			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
+			`sharded.-20: prefix mid2 suffix /* vtgate:: keyspace_id:06e7ea22ce92708f */ ` +
+			`{_c10: type:INT64 value:"4" _c11: type:INT64 value:"5" _c12: type:INT64 value:"6" ` +
 			`_c20: type:INT64 value:"7" _c21: type:INT64 value:"8" _c22: type:INT64 value:"9" ` +
 			`_c30: type:INT64 value:"10" _c31: type:INT64 value:"11" _c32: type:INT64 value:"12" ` +
-			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3"  ` +
+			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
 			`true true`,
 	})
 }
@@ -718,7 +711,6 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`GetKeyspaceShards &{sharded true}`,
 		`Execute select toc from prim where from1 = :from1 from1: type:INT64 value:"1"  false`,
 		`Execute select toc from prim where from1 = :from1 from1: type:INT64 value:"2"  false`,
 		`Execute select toc from prim where from1 = :from1 from1: type:INT64 value:"3"  false`,
@@ -739,20 +731,19 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 		// row 3 is out because it failed Verify. Only two verifications from lkp1.
 		`Execute select from from lkp1 where from = :from and toc = :toc from: type:INT64 value:"13" toc: type:VARBINARY value:"\000"  true`,
 		`Execute select from from lkp1 where from = :from and toc = :toc from: type:INT64 value:"16" toc: type:VARBINARY value:"\000"  true`,
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "00"`,
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "00"`,
+		`ResolveDestinations sharded [value:"0"  value:"3" ] Destinations:DestinationKeyspaceID(00),DestinationKeyspaceID(00)`,
 		// Bind vars for rows 2 & 3 may be missing because they were not sent.
-		`ExecuteMultiShard sharded ` +
-			`-20: prefix mid4 suffix /* vtgate:: keyspace_id:00 */ ` +
-			`_c10: type:INT64 value:"5" _c12: type:INT64 value:"7" _c13: type:INT64 value:"8" ` +
+		`ExecuteMultiShard2 ` +
+			`sharded.20-: prefix mid1 suffix /* vtgate:: keyspace_id:00 */ ` +
+			`{_c10: type:INT64 value:"5" _c12: type:INT64 value:"7" _c13: type:INT64 value:"8" ` +
 			`_c20: type:INT64 value:"9" _c22: type:INT64 value:"11" _c23: type:INT64 value:"12" ` +
 			`_c30: type:INT64 value:"13" _c33: type:INT64 value:"16" ` +
-			`_id0: type:INT64 value:"1" _id2: type:INT64 value:"3" _id3: type:INT64 value:"4" ` +
-			`20-: prefix mid1 suffix /* vtgate:: keyspace_id:00 */ ` +
-			`_c10: type:INT64 value:"5" _c12: type:INT64 value:"7" _c13: type:INT64 value:"8" ` +
+			`_id0: type:INT64 value:"1" _id2: type:INT64 value:"3" _id3: type:INT64 value:"4" } ` +
+			`sharded.-20: prefix mid4 suffix /* vtgate:: keyspace_id:00 */ ` +
+			`{_c10: type:INT64 value:"5" _c12: type:INT64 value:"7" _c13: type:INT64 value:"8" ` +
 			`_c20: type:INT64 value:"9" _c22: type:INT64 value:"11" _c23: type:INT64 value:"12" ` +
 			`_c30: type:INT64 value:"13" _c33: type:INT64 value:"16" ` +
-			`_id0: type:INT64 value:"1" _id2: type:INT64 value:"3" _id3: type:INT64 value:"4"  ` +
+			`_id0: type:INT64 value:"1" _id2: type:INT64 value:"3" _id3: type:INT64 value:"4" } ` +
 			`true true`,
 	})
 }
@@ -959,7 +950,6 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`GetKeyspaceShards &{sharded true}`,
 		// Perform verification for each colvindex.
 		// Note that only first column of each colvindex is used.
 		`Execute select from1 from lkp2 where from1 = :from1 and toc = :toc from1: type:INT64 value:"4" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
@@ -969,20 +959,18 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 		`Execute select from from lkp1 where from = :from and toc = :toc from: type:INT64 value:"11" toc: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
 		`Execute select from from lkp1 where from = :from and toc = :toc from: type:INT64 value:"12" toc: type:VARBINARY value:"N\261\220\311\242\372\026\234"  true`,
 		// Based on shardForKsid, values returned will be 20-, -20, 20-.
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "166b40b44aba4bd6"`,
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "06e7ea22ce92708f"`,
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "4eb190c9a2fa169c"`,
-		`ExecuteMultiShard sharded ` +
-			`-20: prefix mid2 suffix /* vtgate:: keyspace_id:06e7ea22ce92708f */ ` +
-			`_c10: type:INT64 value:"4" _c11: type:INT64 value:"5" _c12: type:INT64 value:"6" ` +
+		`ResolveDestinations sharded [value:"0"  value:"1"  value:"2" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
+		`ExecuteMultiShard2 ` +
+			`sharded.20-: prefix mid1, mid3 suffix /* vtgate:: keyspace_id:166b40b44aba4bd6,4eb190c9a2fa169c */ ` +
+			`{_c10: type:INT64 value:"4" _c11: type:INT64 value:"5" _c12: type:INT64 value:"6" ` +
 			`_c20: type:INT64 value:"7" _c21: type:INT64 value:"8" _c22: type:INT64 value:"9" ` +
 			`_c30: type:INT64 value:"10" _c31: type:INT64 value:"11" _c32: type:INT64 value:"12" ` +
-			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" ` +
-			`20-: prefix mid1, mid3 suffix /* vtgate:: keyspace_id:166b40b44aba4bd6,4eb190c9a2fa169c */ ` +
-			`_c10: type:INT64 value:"4" _c11: type:INT64 value:"5" _c12: type:INT64 value:"6" ` +
+			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
+			`sharded.-20: prefix mid2 suffix /* vtgate:: keyspace_id:06e7ea22ce92708f */ ` +
+			`{_c10: type:INT64 value:"4" _c11: type:INT64 value:"5" _c12: type:INT64 value:"6" ` +
 			`_c20: type:INT64 value:"7" _c21: type:INT64 value:"8" _c22: type:INT64 value:"9" ` +
 			`_c30: type:INT64 value:"10" _c31: type:INT64 value:"11" _c32: type:INT64 value:"12" ` +
-			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3"  ` +
+			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
 			`true true`,
 	})
 }
@@ -1083,22 +1071,20 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`GetKeyspaceShards &{sharded true}`,
 		// Perform verification for each colvindex.
 		// Note that only first column of each colvindex is used.
 		`Execute select from from lkp1 where from = :from and toc = :toc from: type:INT64 value:"10" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		`Execute select from from lkp1 where from = :from and toc = :toc from: type:INT64 value:"11" toc: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
 		`Execute select from from lkp1 where from = :from and toc = :toc from: type:INT64 value:"12" toc: type:VARBINARY value:"N\261\220\311\242\372\026\234"  true`,
-		// Based on shardForKsid, values returned will be 20-, -20, 20-.
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "166b40b44aba4bd6"`,
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "4eb190c9a2fa169c"`,
-		`ExecuteMultiShard sharded ` +
-			`-20: prefix mid3 suffix /* vtgate:: keyspace_id:4eb190c9a2fa169c */ ` +
-			`_c30: type:INT64 value:"10" _c32: type:INT64 value:"12" ` +
-			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" ` +
-			`20-: prefix mid1 suffix /* vtgate:: keyspace_id:166b40b44aba4bd6 */ ` +
-			`_c30: type:INT64 value:"10" _c32: type:INT64 value:"12" ` +
-			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3"  ` +
+		// Based on shardForKsid, values returned will be 20-, -20.
+		`ResolveDestinations sharded [value:"0"  value:"2" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(4eb190c9a2fa169c)`,
+		`ExecuteMultiShard2 ` +
+			`sharded.20-: prefix mid1 suffix /* vtgate:: keyspace_id:166b40b44aba4bd6 */ ` +
+			`{_c30: type:INT64 value:"10" _c32: type:INT64 value:"12" ` +
+			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
+			`sharded.-20: prefix mid3 suffix /* vtgate:: keyspace_id:4eb190c9a2fa169c */ ` +
+			`{_c30: type:INT64 value:"10" _c32: type:INT64 value:"12" ` +
+			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
 			`true true`,
 	})
 }
@@ -1299,21 +1285,18 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`GetKeyspaceShards &{sharded true}`,
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "166b40b44aba4bd6"`,
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "06e7ea22ce92708f"`,
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "4eb190c9a2fa169c"`,
-		`ExecuteMultiShard sharded ` +
-			`-20: prefix mid2 suffix /* vtgate:: keyspace_id:06e7ea22ce92708f */ ` +
-			`_c10: type:UINT64 value:"1" _c11: type:UINT64 value:"2" _c12: type:UINT64 value:"3" ` +
+		`ResolveDestinations sharded [value:"0"  value:"1"  value:"2" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
+		`ExecuteMultiShard2 ` +
+			`sharded.20-: prefix mid1, mid3 suffix /* vtgate:: keyspace_id:166b40b44aba4bd6,4eb190c9a2fa169c */ ` +
+			`{_c10: type:UINT64 value:"1" _c11: type:UINT64 value:"2" _c12: type:UINT64 value:"3" ` +
 			`_c20: _c21: _c22: ` +
 			`_c30: type:UINT64 value:"1" _c31: type:UINT64 value:"2" _c32: type:UINT64 value:"3" ` +
-			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" ` +
-			`20-: prefix mid1, mid3 suffix /* vtgate:: keyspace_id:166b40b44aba4bd6,4eb190c9a2fa169c */ ` +
-			`_c10: type:UINT64 value:"1" _c11: type:UINT64 value:"2" _c12: type:UINT64 value:"3" ` +
+			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
+			`sharded.-20: prefix mid2 suffix /* vtgate:: keyspace_id:06e7ea22ce92708f */ ` +
+			`{_c10: type:UINT64 value:"1" _c11: type:UINT64 value:"2" _c12: type:UINT64 value:"3" ` +
 			`_c20: _c21: _c22: ` +
 			`_c30: type:UINT64 value:"1" _c31: type:UINT64 value:"2" _c32: type:UINT64 value:"3" ` +
-			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3"  ` +
+			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
 			`true true`,
 	})
 }
