@@ -131,40 +131,6 @@ func (lh *LookupHash) Map2(vcursor VCursor, ids []sqltypes.Value) ([]key.Destina
 	return out, nil
 }
 
-// Map returns the corresponding KeyspaceId values for the given ids.
-func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksids, error) {
-	out := make([]Ksids, 0, len(ids))
-	if lh.writeOnly {
-		for range ids {
-			out = append(out, Ksids{Range: &topodatapb.KeyRange{}})
-		}
-		return out, nil
-	}
-
-	results, err := lh.lkp.Lookup(vcursor, ids)
-	if err != nil {
-		return nil, err
-	}
-	for _, result := range results {
-		if len(result.Rows) == 0 {
-			out = append(out, Ksids{})
-			continue
-		}
-		ksids := make([][]byte, 0, len(result.Rows))
-		for _, row := range result.Rows {
-			num, err := sqltypes.ToUint64(row[0])
-			if err != nil {
-				// A failure to convert is equivalent to not being
-				// able to map.
-				continue
-			}
-			ksids = append(ksids, vhash(num))
-		}
-		out = append(out, Ksids{IDs: ksids})
-	}
-	return out, nil
-}
-
 // Verify returns true if ids maps to ksids.
 func (lh *LookupHash) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	if lh.writeOnly {
@@ -312,38 +278,6 @@ func (lhu *LookupHashUnique) Map2(vcursor VCursor, ids []sqltypes.Value) ([]key.
 				continue
 			}
 			out = append(out, key.DestinationKeyspaceID(vhash(num)))
-		default:
-			return nil, fmt.Errorf("LookupHash.Map: unexpected multiple results from vindex %s: %v", lhu.lkp.Table, ids[i])
-		}
-	}
-	return out, nil
-}
-
-// Map returns the corresponding KeyspaceId values for the given ids.
-func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]KsidOrRange, error) {
-	out := make([]KsidOrRange, 0, len(ids))
-	if lhu.writeOnly {
-		for range ids {
-			out = append(out, KsidOrRange{Range: &topodatapb.KeyRange{}})
-		}
-		return out, nil
-	}
-
-	results, err := lhu.lkp.Lookup(vcursor, ids)
-	if err != nil {
-		return nil, err
-	}
-	for i, result := range results {
-		switch len(result.Rows) {
-		case 0:
-			out = append(out, KsidOrRange{})
-		case 1:
-			num, err := sqltypes.ToUint64(result.Rows[0][0])
-			if err != nil {
-				out = append(out, KsidOrRange{})
-				continue
-			}
-			out = append(out, KsidOrRange{ID: vhash(num)})
 		default:
 			return nil, fmt.Errorf("LookupHash.Map: unexpected multiple results from vindex %s: %v", lhu.lkp.Table, ids[i])
 		}

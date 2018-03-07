@@ -42,14 +42,11 @@ func (v *hashIndex) String() string   { return v.name }
 func (*hashIndex) Cost() int          { return 1 }
 func (*hashIndex) IsUnique() bool     { return true }
 func (*hashIndex) IsFunctional() bool { return true }
-func (*hashIndex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	return nil, nil
-}
 func (*hashIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*hashIndex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.KsidOrRange, error) {
-	panic("unimplemented")
+func (*hashIndex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	return nil, nil
 }
 
 func newHashIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
@@ -63,14 +60,11 @@ func (v *lookupIndex) String() string   { return v.name }
 func (*lookupIndex) Cost() int          { return 2 }
 func (*lookupIndex) IsUnique() bool     { return true }
 func (*lookupIndex) IsFunctional() bool { return false }
-func (*lookupIndex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	return nil, nil
-}
 func (*lookupIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*lookupIndex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.KsidOrRange, error) {
-	panic("unimplemented")
+func (*lookupIndex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	return nil, nil
 }
 func (*lookupIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
 func (*lookupIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
@@ -91,14 +85,11 @@ func (v *multiIndex) String() string   { return v.name }
 func (*multiIndex) Cost() int          { return 3 }
 func (*multiIndex) IsUnique() bool     { return false }
 func (*multiIndex) IsFunctional() bool { return false }
-func (*multiIndex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	return nil, nil
-}
 func (*multiIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*multiIndex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksids, error) {
-	panic("unimplemented")
+func (*multiIndex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	return nil, nil
 }
 func (*multiIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
 func (*multiIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
@@ -110,7 +101,7 @@ func newMultiIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &multiIndex{name: name}, nil
 }
 
-var _ vindexes.NonUnique = (*multiIndex)(nil)
+var _ vindexes.Vindex = (*multiIndex)(nil)
 var _ vindexes.Lookup = (*multiIndex)(nil)
 
 // costlyIndex satisfies Lookup, NonUnique.
@@ -120,14 +111,11 @@ func (v *costlyIndex) String() string   { return v.name }
 func (*costlyIndex) Cost() int          { return 10 }
 func (*costlyIndex) IsUnique() bool     { return false }
 func (*costlyIndex) IsFunctional() bool { return false }
-func (*costlyIndex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	return nil, nil
-}
 func (*costlyIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*costlyIndex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksids, error) {
-	panic("unimplemented")
+func (*costlyIndex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	return nil, nil
 }
 func (*costlyIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
 func (*costlyIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
@@ -139,7 +127,7 @@ func newCostlyIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &costlyIndex{name: name}, nil
 }
 
-var _ vindexes.NonUnique = (*costlyIndex)(nil)
+var _ vindexes.Vindex = (*costlyIndex)(nil)
 var _ vindexes.Lookup = (*costlyIndex)(nil)
 
 func init() {

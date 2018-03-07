@@ -34,6 +34,10 @@ func (*uvindex) String() string     { return "uvindex" }
 func (*uvindex) Cost() int          { return 1 }
 func (*uvindex) IsUnique() bool     { return true }
 func (*uvindex) IsFunctional() bool { return false }
+func (*uvindex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+	panic("unimplemented")
+}
+
 func (v *uvindex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	if v.matchkr {
 		return []key.Destination{
@@ -53,14 +57,6 @@ func (v *uvindex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Des
 	return []key.Destination{key.DestinationNone{}}, nil
 }
 
-func (*uvindex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
-	panic("unimplemented")
-}
-
-func (v *uvindex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.KsidOrRange, error) {
-	panic("unimplemented")
-}
-
 // nvindex is NonUnique.
 type nvindex struct{ matchid, matchkr bool }
 
@@ -68,6 +64,10 @@ func (*nvindex) String() string     { return "nvindex" }
 func (*nvindex) Cost() int          { return 1 }
 func (*nvindex) IsUnique() bool     { return false }
 func (*nvindex) IsFunctional() bool { return false }
+func (*nvindex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+	panic("unimplemented")
+}
+
 func (v *nvindex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	if v.matchid {
 		return []key.Destination{
@@ -88,14 +88,6 @@ func (v *nvindex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Des
 		}, nil
 	}
 	return []key.Destination{key.DestinationNone{}}, nil
-}
-
-func (*nvindex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
-	panic("unimplemented")
-}
-
-func (v *nvindex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksids, error) {
-	panic("unimplemented")
 }
 
 func TestVindexFuncMap(t *testing.T) {

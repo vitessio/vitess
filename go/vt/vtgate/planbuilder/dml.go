@@ -252,7 +252,7 @@ func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (vindexes.Vind
 		return nil, nil, errors.New("unsupported: multi-shard where clause in DML")
 	}
 	for _, index := range table.Ordered {
-		if !vindexes.IsUnique(index.Vindex) {
+		if !index.Vindex.IsUnique() {
 			continue
 		}
 		if pv, ok := getMatch(where.Expr, index.Columns[0]); ok {

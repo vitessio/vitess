@@ -85,26 +85,6 @@ func (vind *NumericStaticMap) IsFunctional() bool {
 	return true
 }
 
-// Map2 can map ids to key.Destination objects.
-func (vind *NumericStaticMap) Map2(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
-	for _, id := range ids {
-		num, err := sqltypes.ToUint64(id)
-		if err != nil {
-			out = append(out, key.DestinationNone{})
-			continue
-		}
-		lookupNum, ok := vind.lookup[num]
-		if ok {
-			num = lookupNum
-		}
-		var keybytes [8]byte
-		binary.BigEndian.PutUint64(keybytes[:], num)
-		out = append(out, key.DestinationKeyspaceID(keybytes[:]))
-	}
-	return out, nil
-}
-
 // Verify returns true if ids and ksids match.
 func (vind *NumericStaticMap) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
@@ -124,13 +104,13 @@ func (vind *NumericStaticMap) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]
 	return out, nil
 }
 
-// Map returns the associated keyspace ids for the given ids.
-func (vind *NumericStaticMap) Map(_ VCursor, ids []sqltypes.Value) ([]KsidOrRange, error) {
-	out := make([]KsidOrRange, 0, len(ids))
+// Map2 can map ids to key.Destination objects.
+func (vind *NumericStaticMap) Map2(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
 	for _, id := range ids {
 		num, err := sqltypes.ToUint64(id)
 		if err != nil {
-			out = append(out, KsidOrRange{})
+			out = append(out, key.DestinationNone{})
 			continue
 		}
 		lookupNum, ok := vind.lookup[num]
@@ -139,7 +119,7 @@ func (vind *NumericStaticMap) Map(_ VCursor, ids []sqltypes.Value) ([]KsidOrRang
 		}
 		var keybytes [8]byte
 		binary.BigEndian.PutUint64(keybytes[:], num)
-		out = append(out, KsidOrRange{ID: keybytes[:]})
+		out = append(out, key.DestinationKeyspaceID(keybytes[:]))
 	}
 	return out, nil
 }
