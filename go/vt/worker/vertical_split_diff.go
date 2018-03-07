@@ -44,6 +44,7 @@ type VerticalSplitDiffWorker struct {
 	keyspace                string
 	shard                   string
 	minHealthyRdonlyTablets int
+	parallelDiffsCount      int
 	cleaner                 *wrangler.Cleaner
 
 	// populated during WorkerStateInit, read-only after that
@@ -60,14 +61,15 @@ type VerticalSplitDiffWorker struct {
 }
 
 // NewVerticalSplitDiffWorker returns a new VerticalSplitDiffWorker object.
-func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, minHealthyRdonlyTablets int) Worker {
+func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, minHealthyRdonlyTablets, parallelDiffsCount int) Worker {
 	return &VerticalSplitDiffWorker{
-		StatusWorker: NewStatusWorker(),
-		wr:           wr,
-		cell:         cell,
-		keyspace:     keyspace,
-		shard:        shard,
+		StatusWorker:            NewStatusWorker(),
+		wr:                      wr,
+		cell:                    cell,
+		keyspace:                keyspace,
+		shard:                   shard,
 		minHealthyRdonlyTablets: minHealthyRdonlyTablets,
+		parallelDiffsCount:      parallelDiffsCount,
 		cleaner:                 &wrangler.Cleaner{},
 	}
 }
@@ -204,13 +206,13 @@ func (vsdw *VerticalSplitDiffWorker) findTargets(ctx context.Context) error {
 
 	// find an appropriate tablet in destination shard
 	var err error
-	vsdw.destinationAlias, err = FindWorkerTablet(ctx, vsdw.wr, vsdw.cleaner, nil /* tsc */, vsdw.cell, vsdw.keyspace, vsdw.shard, vsdw.minHealthyRdonlyTablets)
+	vsdw.destinationAlias, err = FindWorkerTablet(ctx, vsdw.wr, vsdw.cleaner, nil /* tsc */ , vsdw.cell, vsdw.keyspace, vsdw.shard, vsdw.minHealthyRdonlyTablets)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", vsdw.cell, vsdw.keyspace, vsdw.shard, err)
 	}
 
 	// find an appropriate tablet in the source shard
-	vsdw.sourceAlias, err = FindWorkerTablet(ctx, vsdw.wr, vsdw.cleaner, nil /* tsc */, vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard, vsdw.minHealthyRdonlyTablets)
+	vsdw.sourceAlias, err = FindWorkerTablet(ctx, vsdw.wr, vsdw.cleaner, nil /* tsc */ , vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard, vsdw.minHealthyRdonlyTablets)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard, err)
 	}
@@ -347,7 +349,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		vsdw.destinationSchemaDefinition, err = vsdw.wr.GetSchema(
-			shortCtx, vsdw.destinationAlias, vsdw.shardInfo.SourceShards[0].Tables, nil /* excludeTables */, false /* includeViews */)
+			shortCtx, vsdw.destinationAlias, vsdw.shardInfo.SourceShards[0].Tables, nil /* excludeTables */ , false /* includeViews */)
 		cancel()
 		rec.RecordError(err)
 		vsdw.wr.Logger().Infof("Got schema from destination %v", topoproto.TabletAliasString(vsdw.destinationAlias))
@@ -358,7 +360,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		vsdw.sourceSchemaDefinition, err = vsdw.wr.GetSchema(
-			shortCtx, vsdw.sourceAlias, vsdw.shardInfo.SourceShards[0].Tables, nil /* excludeTables */, false /* includeViews */)
+			shortCtx, vsdw.sourceAlias, vsdw.shardInfo.SourceShards[0].Tables, nil /* excludeTables */ , false /* includeViews */)
 		cancel()
 		rec.RecordError(err)
 		vsdw.wr.Logger().Infof("Got schema from source %v", topoproto.TabletAliasString(vsdw.sourceAlias))
@@ -381,7 +383,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 
 	// run the diffs, 8 at a time
 	vsdw.wr.Logger().Infof("Running the diffs...")
-	sem := sync2.NewSemaphore(8, 0)
+	sem := sync2.NewSemaphore(vsdw.parallelDiffsCount, 0)
 	for _, tableDefinition := range vsdw.destinationSchemaDefinition.TableDefinitions {
 		wg.Add(1)
 		go func(tableDefinition *tabletmanagerdatapb.TableDefinition) {
