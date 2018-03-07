@@ -460,6 +460,31 @@
     "FieldQuery": "select * from user where 1 != 1"
   }
 }
+# sharded limit offset
+"select user_id from music order by user_id limit 10, 20"
+{
+  "Original": "select user_id from music order by user_id limit 10, 20",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": 20,
+    "Offset": 10,
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user_id from music order by user_id asc limit 20",
+      "FieldQuery": "select user_id from music where 1 != 1",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        }
+      ]
+    }
+  }
+}
 
 # Sharding Key Condition in Parenthesis
 "select * from user where name ='abc' AND (id = 4) limit 5"
