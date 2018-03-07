@@ -48,6 +48,7 @@ type SplitDiffWorker struct {
 	sourceUID               uint32
 	excludeTables           []string
 	minHealthyRdonlyTablets int
+	parallelDiffsCount      int
 	cleaner                 *wrangler.Cleaner
 
 	// populated during WorkerStateInit, read-only after that
@@ -64,7 +65,7 @@ type SplitDiffWorker struct {
 }
 
 // NewSplitDiffWorker returns a new SplitDiffWorker object.
-func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, sourceUID uint32, excludeTables []string, minHealthyRdonlyTablets int) Worker {
+func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, sourceUID uint32, excludeTables []string, minHealthyRdonlyTablets, parallelDiffsCount int) Worker {
 	return &SplitDiffWorker{
 		StatusWorker:            NewStatusWorker(),
 		wr:                      wr,
@@ -74,6 +75,7 @@ func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, sou
 		sourceUID:               sourceUID,
 		excludeTables:           excludeTables,
 		minHealthyRdonlyTablets: minHealthyRdonlyTablets,
+		parallelDiffsCount:      parallelDiffsCount,
 		cleaner:                 &wrangler.Cleaner{},
 	}
 }
@@ -216,7 +218,7 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 
 	// find an appropriate tablet in destination shard
 	var err error
-	sdw.destinationAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, nil /* tsc */, sdw.cell, sdw.keyspace, sdw.shard, sdw.minHealthyRdonlyTablets)
+	sdw.destinationAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, nil /* tsc */ , sdw.cell, sdw.keyspace, sdw.shard, sdw.minHealthyRdonlyTablets)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", sdw.cell, sdw.keyspace, sdw.shard, err)
 	}
@@ -224,7 +226,7 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 	// find an appropriate tablet in the source shard
 	for _, ss := range sdw.shardInfo.SourceShards {
 		if ss.Uid == sdw.sourceUID {
-			sdw.sourceAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, nil /* tsc */, sdw.cell, sdw.keyspace, ss.Shard, sdw.minHealthyRdonlyTablets)
+			sdw.sourceAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, nil /* tsc */ , sdw.cell, sdw.keyspace, ss.Shard, sdw.minHealthyRdonlyTablets)
 			if err != nil {
 				return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", sdw.cell, sdw.keyspace, ss.Shard, err)
 			}
@@ -367,7 +369,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		sdw.destinationSchemaDefinition, err = sdw.wr.GetSchema(
-			shortCtx, sdw.destinationAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
+			shortCtx, sdw.destinationAlias, nil /* tables */ , sdw.excludeTables, false /* includeViews */)
 		cancel()
 		rec.RecordError(err)
 		sdw.wr.Logger().Infof("Got schema from destination %v", sdw.destinationAlias)
@@ -378,7 +380,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		sdw.sourceSchemaDefinition, err = sdw.wr.GetSchema(
-			shortCtx, sdw.sourceAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
+			shortCtx, sdw.sourceAlias, nil /* tables */ , sdw.excludeTables, false /* includeViews */)
 		cancel()
 		rec.RecordError(err)
 		sdw.wr.Logger().Infof("Got schema from source %v", sdw.sourceAlias)
@@ -428,7 +430,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	// run the diffs, 8 at a time
 	sdw.wr.Logger().Infof("Running the diffs...")
 	// TODO(mberlin): Parameterize the hard coded value 8.
-	sem := sync2.NewSemaphore(8, 0)
+	sem := sync2.NewSemaphore(sdw.parallelDiffsCount, 0)
 	for _, tableDefinition := range sdw.destinationSchemaDefinition.TableDefinitions {
 		wg.Add(1)
 		go func(tableDefinition *tabletmanagerdatapb.TableDefinition) {
