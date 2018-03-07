@@ -130,7 +130,7 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 	return nil
 }
 
-func pushLimit(limit *sqlparser.Limit, bldr builder) (builder, error) {
+func pushLimit(limit *sqlparser.Limit, orderBy sqlparser.OrderBy, bldr builder) (builder, error) {
 	if limit == nil {
 		return bldr, nil
 	}
@@ -140,6 +140,9 @@ func pushLimit(limit *sqlparser.Limit, bldr builder) (builder, error) {
 		return bldr, nil
 	}
 	lb := newLimit(bldr)
+	if limit != nil && limit.Offset != nil && len(orderBy) == 0 {
+		return nil, errors.New("unsupported: offset limit for cross-shard queries")
+	}
 	if err := lb.SetLimit(limit); err != nil {
 		return nil, err
 	}

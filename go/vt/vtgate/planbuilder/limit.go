@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -114,9 +113,6 @@ func (l *limit) PushOrderByRand() {
 // the underlying primitive that it doesn't need to return more rows than
 // specified.
 func (l *limit) SetLimit(limit *sqlparser.Limit) error {
-	if limit.Offset != nil {
-		return errors.New("unsupported: offset limit for cross-shard queries")
-	}
 	count, ok := limit.Rowcount.(*sqlparser.SQLVal)
 	if !ok {
 		return fmt.Errorf("unexpected expression in LIMIT: %v", sqlparser.String(limit))
@@ -127,6 +123,15 @@ func (l *limit) SetLimit(limit *sqlparser.Limit) error {
 	}
 	l.elimit.Count = pv
 	l.input.SetUpperLimit(count)
+
+	offset, ok := limit.Offset.(*sqlparser.SQLVal)
+	if ok {
+		pv, err = sqlparser.NewPlanValue(offset)
+		if err != nil {
+			return err
+		}
+		l.elimit.Offset = &pv
+	}
 	return nil
 }
 

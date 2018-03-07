@@ -1031,6 +1031,147 @@ class TestVTGateFunctions(unittest.TestCase):
         {'user_id': 3})
     vtgate_conn.commit()
 
+  def test_user_sharded_offset(self):
+    vtgate_conn = get_connection()
+    # Works when there is no data
+    result = self.execute_on_master(
+        vtgate_conn,
+        'select id from vt_user2 order by id limit :limit offset :offset ', {'limit': 4, 'offset': 1})
+    self.assertEqual(
+        result, ([], 0L, 0, [('id', self.int_type)]))
+
+    vtgate_conn.begin()
+    result = self.execute_on_master(
+        vtgate_conn,
+        'insert into vt_user2 (id, name) values (:id0, :name0),(:id1, :name1),(:id2, :name2), (:id3, :name3), (:id4, :name4)',
+        {
+          'id0': 1, 'name0': 'name0',
+          'id1': 2, 'name1': 'name1',
+          'id2': 3, 'name2': 'name2',
+          'id3': 4, 'name3': 'name3',
+          'id4': 5, 'name4': 'name4',
+        }
+    )
+    self.assertEqual(result, ([], 5L, 0L, []))
+    vtgate_conn.commit()
+    # Fetching with offset works
+    count = 4
+    for x in xrange(count):
+      i = x+1
+      result = self.execute_on_master(
+        vtgate_conn,
+        'select id from vt_user2 order by id limit :limit offset :offset ', {'limit': 1, 'offset': x})
+      self.assertEqual(
+        result,
+        ([(i,)], 1L, 0,
+         [('id', self.int_type)]))
+
+    # Works when limit is greater than values in the db
+    result = self.execute_on_master(
+      vtgate_conn,
+      'select id from vt_user2 order by id limit :limit offset :offset ', {'limit': 100, 'offset': 1})
+    self.assertEqual(
+        result,
+        ([(2,),(3,),(4,),(5,)], 4L, 0,
+         [('id', self.int_type)]))
+
+    # Works without bind vars
+    result = self.execute_on_master(
+      vtgate_conn,
+      'select id from vt_user2 order by id limit 1 offset 1', {})
+    self.assertEqual(
+        result,
+        ([(2,)], 1L, 0,
+         [('id', self.int_type)]))
+
+    vtgate_conn.begin()
+    result = vtgate_conn._execute(
+        'truncate vt_user2',
+        {},
+        tablet_type='master',
+        keyspace_name='user'
+    )
+    vtgate_conn.commit()
+
+  def test_user_extra(self):
+    # user_extra is for testing unowned functional vindex
+    count = 4
+    vtgate_conn = get_connection()
+    for x in xrange(count):
+      i = x+1
+      vtgate_conn.begin()
+      result = self.execute_on_master(
+          vtgate_conn,
+          'insert into vt_user_extra (user_id, email) '
+          'values (:user_id, :email)',
+          {'user_id': i, 'email': 'test %s' % i})
+      self.assertEqual(result, ([], 1L, 0L, []))
+      vtgate_conn.commit()
+    for x in xrange(count):
+      i = x+1
+      result = self.execute_on_master(
+          vtgate_conn,
+          'select user_id, email from vt_user_extra where user_id = :user_id',
+          {'user_id': i})
+      self.assertEqual(
+          result,
+          ([(i, 'test %s' % i)], 1L, 0,
+           [('user_id', self.int_type), ('email', self.string_type)]))
+    result = shard_0_master.mquery(
+        'vt_user', 'select user_id, email from vt_user_extra')
+    self.assertEqual(result, ((1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3')))
+    result = shard_1_master.mquery(
+        'vt_user', 'select user_id, email from vt_user_extra')
+    self.assertEqual(result, ((4L, 'test 4'),))
+
+    vtgate_conn.begin()
+    result = self.execute_on_master(
+        vtgate_conn,
+        'update vt_user_extra set email = :email where user_id = :user_id',
+        {'user_id': 1, 'email': 'test one'})
+    self.assertEqual(result, ([], 1L, 0L, []))
+    result = self.execute_on_master(
+        vtgate_conn,
+        'update vt_user_extra set email = :email where user_id = :user_id',
+        {'user_id': 4, 'email': 'test four'})
+    self.assertEqual(result, ([], 1L, 0L, []))
+    vtgate_conn.commit()
+    result = shard_0_master.mquery(
+        'vt_user', 'select user_id, email from vt_user_extra')
+    self.assertEqual(result, ((1L, 'test one'), (2L, 'test 2'), (3L, 'test 3')))
+    result = shard_1_master.mquery(
+        'vt_user', 'select user_id, email from vt_user_extra')
+    self.assertEqual(result, ((4L, 'test four'),))
+
+    vtgate_conn.begin()
+    result = self.execute_on_master(
+        vtgate_conn,
+        'delete from vt_user_extra where user_id = :user_id',
+        {'user_id': 1})
+    self.assertEqual(result, ([], 1L, 0L, []))
+    result = self.execute_on_master(
+        vtgate_conn,
+        'delete from  vt_user_extra where user_id = :user_id',
+        {'user_id': 4})
+    self.assertEqual(result, ([], 1L, 0L, []))
+    vtgate_conn.commit()
+    result = shard_0_master.mquery(
+        'vt_user', 'select user_id, email from vt_user_extra')
+    self.assertEqual(result, ((2L, 'test 2'), (3L, 'test 3')))
+    result = shard_1_master.mquery(
+        'vt_user', 'select user_id, email from vt_user_extra')
+    self.assertEqual(result, ())
+    vtgate_conn.begin()
+    self.execute_on_master(
+        vtgate_conn,
+        'delete from  vt_user_extra where user_id = :user_id',
+        {'user_id': 2})
+    self.execute_on_master(
+        vtgate_conn,
+        'delete from  vt_user_extra where user_id = :user_id',
+        {'user_id': 3})
+    vtgate_conn.commit()
+
   def test_user_extra2(self):
     # user_extra2 is for testing updates to secondary vindexes
     vtgate_conn = get_connection()
