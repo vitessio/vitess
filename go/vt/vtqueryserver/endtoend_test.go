@@ -101,7 +101,7 @@ func TestMain(m *testing.M) {
 		// to test that end to end timeouts work
 		tabletenv.Config.QueryTimeout = 2
 		tabletenv.Config.PoolSize = 1
-		tabletenv.Config.QueryPoolTimeout = 1
+		tabletenv.Config.QueryPoolTimeout = 0.1
 		defer func() { tabletenv.Config = tabletenv.DefaultQsConfig }()
 
 		// Initialize the query service on top of the vttest MySQL database.
@@ -384,16 +384,28 @@ func TestQueryDeadline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	conn2, err := mysql.Connect(ctx, &proxyConnParams)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// First run a query that is killed by the slow query killer after 2s
 	_, err = conn.ExecuteFetch("select sleep(5) from dual", 1000, false)
 	wantErr := "EOF (errno 2013) (sqlstate HY000) during query"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("want error %v, got %v", wantErr, err)
+	}
+	sqlErr, ok := err.(*mysql.SQLError)
+	if !ok {
+		t.Fatalf("Unexpected error type: %T, want %T", err, &mysql.SQLError{})
+	}
+	if got, want := sqlErr.Number(), mysql.CRServerLost; got != want {
+		t.Errorf("Unexpected error code: %d, want %d", got, want)
+	}
+
+	conn, err = mysql.Connect(ctx, &proxyConnParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn2, err := mysql.Connect(ctx, &proxyConnParams)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	// Now send another query to tie up the connection, followed up by
@@ -409,6 +421,13 @@ func TestQueryDeadline(t *testing.T) {
 	wantErr = "query pool wait time exceeded"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("want error %v, got %v", wantErr, err)
+	}
+	sqlErr, ok = err.(*mysql.SQLError)
+	if !ok {
+		t.Fatalf("Unexpected error type: %T, want %T", err, &mysql.SQLError{})
+	}
+	if got, want := sqlErr.Number(), mysql.ERTooManyUserConnections; got != want {
+		t.Errorf("Unexpected error code: %d, want %d", got, want)
 	}
 
 	_, err = conn.ReadQueryResult(1000, false)
