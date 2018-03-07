@@ -1602,7 +1602,7 @@ func newSplitQuerySQLExecuter(
 		queryExecutor: queryExecutor,
 	}
 	var err error
-	result.conn, err = queryExecutor.getConn(queryExecutor.tsv.qe.conns)
+	result.conn, err = queryExecutor.getConn()
 	if err != nil {
 		return nil, err
 	}
@@ -2016,6 +2016,34 @@ func (tsv *TabletServer) SetQueryPoolTimeout(val time.Duration) {
 // This function should only be used for testing.
 func (tsv *TabletServer) GetQueryPoolTimeout() time.Duration {
 	return tsv.qe.connTimeout.Get()
+}
+
+// SetQueryPoolWaiterCap changes the limit on the number of queries that can be
+// waiting for a connection from the pool
+// This function should only be used for testing.
+func (tsv *TabletServer) SetQueryPoolWaiterCap(val int64) {
+	tsv.qe.queryPoolWaiterCap.Set(val)
+}
+
+// GetQueryPoolWaiterCap returns the limit on the number of queries that can be
+// waiting for a connection from the pool
+// This function should only be used for testing.
+func (tsv *TabletServer) GetQueryPoolWaiterCap() int64 {
+	return tsv.qe.queryPoolWaiterCap.Get()
+}
+
+// SetTxPoolWaiterCap changes the limit on the number of queries that can be
+// waiting for a connection from the pool
+// This function should only be used for testing.
+func (tsv *TabletServer) SetTxPoolWaiterCap(val int64) {
+	tsv.te.txPool.waiterCap.Set(val)
+}
+
+// GetTxPoolWaiterCap returns the limit on the number of queries that can be
+// waiting for a connection from the pool
+// This function should only be used for testing.
+func (tsv *TabletServer) GetTxPoolWaiterCap() int64 {
+	return tsv.te.txPool.waiterCap.Get()
 }
 
 // queryAsString prints a readable version of query+bind variables,
