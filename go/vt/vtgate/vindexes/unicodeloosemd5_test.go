@@ -79,7 +79,7 @@ func TestUnicodeLooseMD5Map(t *testing.T) {
 		out: "\xac\x0f\x91y\xf5\x1d\xb8\u007f\xe8\xec\xc0\xcf@ʹz",
 	}}
 	for _, tcase := range tcases {
-		got, err := charVindex.Map2(nil, []sqltypes.Value{sqltypes.NewVarBinary(tcase.in)})
+		got, err := charVindex.Map(nil, []sqltypes.Value{sqltypes.NewVarBinary(tcase.in)})
 		if err != nil {
 			t.Error(err)
 		}

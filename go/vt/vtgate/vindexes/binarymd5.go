@@ -67,8 +67,8 @@ func (vind *BinaryMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) (
 	return out, nil
 }
 
-// Map2 can map ids to key.Destination objects.
-func (vind *BinaryMD5) Map2(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+// Map can map ids to key.Destination objects.
+func (vind *BinaryMD5) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, len(ids))
 	for i, id := range ids {
 		out[i] = key.DestinationKeyspaceID(binHash(id.ToBytes()))

@@ -65,15 +65,14 @@ type Vindex interface {
 	// true if the ids can be mapped to the keyspace ids.
 	Verify(cursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error)
 
-	// Map2 can map ids to key.Destination objects.
+	// Map can map ids to key.Destination objects.
 	// If the Vindex is unique, each id would map to either
 	// a KeyRange, or a single KeyspaceID.
 	// If the Vindex is non-unique, each id would map to either
 	// a KeyRange, or a list of KeyspaceID.
 	// If the error returned if nil, then the array len of the
 	// key.Destination array must match len(ids).
-	// TODO(alainjobart) Rename to Map.
-	Map2(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error)
+	Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error)
 }
 
 // A Reversible vindex is one that can perform a

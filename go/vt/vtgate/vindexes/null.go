@@ -63,8 +63,8 @@ func (vind *Null) IsFunctional() bool {
 	return true
 }
 
-// Map2 can map ids to key.Destination objects.
-func (vind *Null) Map2(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+// Map can map ids to key.Destination objects.
+func (vind *Null) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	for i := 0; i < len(ids); i++ {
 		out = append(out, key.DestinationKeyspaceID(nullksid))

@@ -172,7 +172,7 @@ func newV3ResolverFromColumnList(keyspaceSchema *vindexes.KeyspaceSchema, name s
 // keyspaceID implements the keyspaceIDResolver interface.
 func (r *v3Resolver) keyspaceID(row []sqltypes.Value) ([]byte, error) {
 	v := row[r.shardingColumnIndex]
-	destinations, err := r.vindex.Map2(nil, []sqltypes.Value{v})
+	destinations, err := r.vindex.Map(nil, []sqltypes.Value{v})
 	if err != nil {
 		return nil, err
 	}

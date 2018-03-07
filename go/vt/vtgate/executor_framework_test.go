@@ -277,7 +277,7 @@ func (*keyRangeLookuper) IsFunctional() bool { return false }
 func (*keyRangeLookuper) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*keyRangeLookuper) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*keyRangeLookuper) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return []key.Destination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{
@@ -302,7 +302,7 @@ func (*keyRangeLookuperUnique) IsFunctional() bool { return false }
 func (*keyRangeLookuperUnique) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*keyRangeLookuperUnique) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*keyRangeLookuperUnique) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return []key.Destination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{

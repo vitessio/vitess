@@ -58,7 +58,7 @@ func TestBinaryMD5Map(t *testing.T) {
 		out: "\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za[",
 	}}
 	for _, tcase := range tcases {
-		got, err := binVindex.Map2(nil, []sqltypes.Value{sqltypes.NewVarBinary(tcase.in)})
+		got, err := binVindex.Map(nil, []sqltypes.Value{sqltypes.NewVarBinary(tcase.in)})
 		if err != nil {
 			t.Error(err)
 		}
@@ -84,7 +84,7 @@ func TestBinaryMD5Verify(t *testing.T) {
 
 func TestSQLValue(t *testing.T) {
 	val := sqltypes.NewVarBinary("Test")
-	got, err := binVindex.Map2(nil, []sqltypes.Value{val})
+	got, err := binVindex.Map(nil, []sqltypes.Value{val})
 	if err != nil {
 		t.Error(err)
 	}

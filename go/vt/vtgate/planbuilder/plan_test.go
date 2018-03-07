@@ -45,7 +45,7 @@ func (*hashIndex) IsFunctional() bool { return true }
 func (*hashIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*hashIndex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*hashIndex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
 
@@ -63,7 +63,7 @@ func (*lookupIndex) IsFunctional() bool { return false }
 func (*lookupIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*lookupIndex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*lookupIndex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
 func (*lookupIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
@@ -88,7 +88,7 @@ func (*multiIndex) IsFunctional() bool { return false }
 func (*multiIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*multiIndex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*multiIndex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
 func (*multiIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
@@ -114,7 +114,7 @@ func (*costlyIndex) IsFunctional() bool { return false }
 func (*costlyIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*costlyIndex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*costlyIndex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
 func (*costlyIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }

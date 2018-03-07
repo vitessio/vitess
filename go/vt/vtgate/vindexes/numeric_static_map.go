@@ -104,8 +104,8 @@ func (vind *NumericStaticMap) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]
 	return out, nil
 }
 
-// Map2 can map ids to key.Destination objects.
-func (vind *NumericStaticMap) Map2(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+// Map can map ids to key.Destination objects.
+func (vind *NumericStaticMap) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	for _, id := range ids {
 		num, err := sqltypes.ToUint64(id)

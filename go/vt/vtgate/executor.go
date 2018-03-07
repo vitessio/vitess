@@ -901,7 +901,7 @@ func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []
 		}
 		// We always use the (unique) primary vindex. The ID must be the
 		// primary vindex for message tables.
-		destinations, err := table.ColumnVindexes[0].Vindex.Map2(vcursor, values)
+		destinations, err := table.ColumnVindexes[0].Vindex.Map(vcursor, values)
 		if err != nil {
 			return 0, err
 		}

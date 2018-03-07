@@ -307,7 +307,7 @@ func (route *Route) resolveShards(vcursor VCursor, vindexKeys []sqltypes.Value) 
 	}
 
 	// Map using the Vindex
-	destinations, err := route.Vindex.Map2(vcursor, vindexKeys)
+	destinations, err := route.Vindex.Map(vcursor, vindexKeys)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -358,7 +358,7 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 }
 
 func resolveSingleShard(vcursor VCursor, vindex vindexes.Vindex, keyspace *vindexes.Keyspace, vindexKey sqltypes.Value) (*srvtopo.ResolvedShard, []byte, error) {
-	destinations, err := vindex.Map2(vcursor, []sqltypes.Value{vindexKey})
+	destinations, err := vindex.Map(vcursor, []sqltypes.Value{vindexKey})
 	if err != nil {
 		return nil, nil, err
 	}

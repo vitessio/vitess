@@ -56,7 +56,7 @@ func TestBinaryMap(t *testing.T) {
 		out: []byte("test2"),
 	}}
 	for _, tcase := range tcases {
-		got, err := binOnlyVindex.Map2(nil, []sqltypes.Value{tcase.in})
+		got, err := binOnlyVindex.Map(nil, []sqltypes.Value{tcase.in})
 		if err != nil {
 			t.Error(err)
 		}

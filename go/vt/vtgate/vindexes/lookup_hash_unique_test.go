@@ -64,7 +64,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 	lhu := createLookup(t, "lookup_hash_unique", false)
 	vc := &vcursor{numRows: 1}
 
-	got, err := lhu.Map2(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lhu.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -77,7 +77,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 	}
 
 	vc.numRows = 0
-	got, err = lhu.Map2(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err = lhu.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -90,7 +90,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 	}
 
 	vc.numRows = 2
-	_, err = lhu.Map2(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	_, err = lhu.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	wantErr := "LookupHash.Map: unexpected multiple results from vindex t: INT64(1)"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("lhu(query fail) err: %v, want %s", err, wantErr)
@@ -101,7 +101,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 		sqltypes.MakeTestFields("a", "varbinary"),
 		"notint",
 	)
-	got, err = lhu.Map2(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	got, err = lhu.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -114,7 +114,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	_, err = lhu.Map2(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	_, err = lhu.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
 	wantErr = "lookup.Map: execute failed"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("lhu(query fail) err: %v, want %s", err, wantErr)
@@ -126,7 +126,7 @@ func TestLookupHashUniqueMapWriteOnly(t *testing.T) {
 	lhu := createLookup(t, "lookup_hash_unique", true)
 	vc := &vcursor{numRows: 0}
 
-	got, err := lhu.Map2(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lhu.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	if err != nil {
 		t.Error(err)
 	}
