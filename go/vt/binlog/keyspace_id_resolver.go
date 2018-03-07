@@ -143,8 +143,8 @@ func newKeyspaceIDResolverFactoryV3(ctx context.Context, ts *topo.Server, keyspa
 		if colVindex.Vindex.Cost() > 1 {
 			return -1, nil, fmt.Errorf("primary vindex cost is too high for table %v", table.Name)
 		}
-		unique, ok := colVindex.Vindex.(vindexes.Unique)
-		if !ok {
+		if !colVindex.Vindex.IsUnique() {
+			// This is impossible, but just checking anyway.
 			return -1, nil, fmt.Errorf("primary vindex is not unique for table %v", table.Name)
 		}
 
@@ -155,7 +155,7 @@ func newKeyspaceIDResolverFactoryV3(ctx context.Context, ts *topo.Server, keyspa
 			if col.Name.EqualString(shardingColumnName) {
 				// We found the column.
 				return i, &keyspaceIDResolverFactoryV3{
-					vindex: unique,
+					vindex: colVindex.Vindex,
 				}, nil
 			}
 		}
@@ -166,20 +166,20 @@ func newKeyspaceIDResolverFactoryV3(ctx context.Context, ts *topo.Server, keyspa
 
 // keyspaceIDResolverFactoryV3 uses the Vindex to compute the value.
 type keyspaceIDResolverFactoryV3 struct {
-	vindex vindexes.Unique
+	vindex vindexes.Vindex
 }
 
 func (r *keyspaceIDResolverFactoryV3) keyspaceID(v sqltypes.Value) ([]byte, error) {
-	ids := []sqltypes.Value{v}
-	ksids, err := r.vindex.Map(nil, ids)
+	destinations, err := r.vindex.Map2(nil, []sqltypes.Value{v})
 	if err != nil {
 		return nil, err
 	}
-	if len(ksids) != 1 {
-		return nil, fmt.Errorf("mapping row to keyspace id returned an invalid array of keyspace ids: %v", ksids)
+	if len(destinations) != 1 {
+		return nil, fmt.Errorf("mapping row to keyspace id returned an invalid array of destinations: %v", key.DestinationsString(destinations))
 	}
-	if ksids[0].Range != nil || ksids[0].ID == nil {
-		return nil, fmt.Errorf("could not map %v to a keyspace id", v)
+	ksid, ok := destinations[0].(key.DestinationKeyspaceID)
+	if !ok || len(ksid) == 0 {
+		return nil, fmt.Errorf("could not map %v to a keyspace id, got destination %v", v, destinations[0])
 	}
-	return ksids[0].ID, nil
+	return ksid, nil
 }
