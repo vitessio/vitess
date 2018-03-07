@@ -66,4 +66,4 @@ $PIP install --upgrade grpcio==$grpcio_ver
 # now install grpc_python_plugin, which also builds the protoc compiler.
 make grpc_python_plugin
 ln -sf $grpc_dist/grpc/bins/opt/protobuf/protoc $VTROOT/bin/protoc
-ln -sf $grpc_dist/grpc/bins/opt/protobuf/grpc_python_plugin $VTROOT/bin/grpc_python_plugin
+ln -sf $grpc_dist/grpc/bins/opt/grpc_python_plugin $VTROOT/bin/grpc_python_plugin
