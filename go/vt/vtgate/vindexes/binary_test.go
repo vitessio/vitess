@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 )
 
 var binOnlyVindex Vindex
@@ -55,11 +56,11 @@ func TestBinaryMap(t *testing.T) {
 		out: []byte("test2"),
 	}}
 	for _, tcase := range tcases {
-		got, err := binOnlyVindex.(Unique).Map(nil, []sqltypes.Value{tcase.in})
+		got, err := binOnlyVindex.Map2(nil, []sqltypes.Value{tcase.in})
 		if err != nil {
 			t.Error(err)
 		}
-		out := []byte(got[0].ID)
+		out := []byte(got[0].(key.DestinationKeyspaceID))
 		if bytes.Compare(tcase.out, out) != 0 {
 			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 		}

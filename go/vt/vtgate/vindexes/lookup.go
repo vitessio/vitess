@@ -26,10 +26,10 @@ import (
 )
 
 var (
-	_ Unique    = (*LookupUnique)(nil)
-	_ Lookup    = (*LookupUnique)(nil)
-	_ NonUnique = (*LookupNonUnique)(nil)
-	_ Lookup    = (*LookupNonUnique)(nil)
+	_ Vindex = (*LookupUnique)(nil)
+	_ Lookup = (*LookupUnique)(nil)
+	_ Vindex = (*LookupNonUnique)(nil)
+	_ Lookup = (*LookupNonUnique)(nil)
 )
 
 func init() {

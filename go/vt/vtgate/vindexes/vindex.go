@@ -38,8 +38,6 @@ type VCursor interface {
 }
 
 // Vindex defines the interface required to register a vindex.
-// Additional to these functions, a vindex also needs
-// to satisfy the Unique or NonUnique interface.
 type Vindex interface {
 	// String returns the name of the Vindex instance.
 	// It's used for testing and diagnostics. Use pointer

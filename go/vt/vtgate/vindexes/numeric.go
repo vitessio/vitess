@@ -26,7 +26,7 @@ import (
 )
 
 var (
-	_ Functional = (*Numeric)(nil)
+	_ Vindex     = (*Numeric)(nil)
 	_ Reversible = (*Numeric)(nil)
 )
 

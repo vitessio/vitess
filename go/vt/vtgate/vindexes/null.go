@@ -24,8 +24,8 @@ import (
 )
 
 var (
-	_        Functional = (*Null)(nil)
-	nullksid            = []byte{0}
+	_        Vindex = (*Null)(nil)
+	nullksid        = []byte{0}
 )
 
 // Null defines a vindex that always return 0. It's Unique and

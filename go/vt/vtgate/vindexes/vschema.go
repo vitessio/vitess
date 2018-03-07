@@ -182,12 +182,6 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 			if err != nil {
 				return err
 			}
-			switch vindex.(type) {
-			case Unique:
-			case NonUnique:
-			default:
-				return fmt.Errorf("vindex %q needs to be Unique or NonUnique", vname)
-			}
 			if _, ok := vschema.uniqueVindexes[vname]; ok {
 				vschema.uniqueVindexes[vname] = nil
 			} else {
@@ -258,7 +252,7 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 				}
 				if i == 0 {
 					// Perform Primary vindex check.
-					if _, ok := columnVindex.Vindex.(Unique); !ok {
+					if !columnVindex.Vindex.IsUnique() {
 						return fmt.Errorf("primary vindex %s is not Unique for table %s", ind.Name, tname)
 					}
 					if owned {

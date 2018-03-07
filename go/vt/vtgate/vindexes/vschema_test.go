@@ -33,7 +33,7 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
-// stFU satisfies Functional, Unique.
+// stFU is a Functional, Unique Vindex.
 type stFU struct {
 	name   string
 	Params map[string]string
@@ -51,9 +51,9 @@ func NewSTFU(name string, params map[string]string) (Vindex, error) {
 	return &stFU{name: name, Params: params}, nil
 }
 
-var _ Unique = (*stFU)(nil)
+var _ Vindex = (*stFU)(nil)
 
-// stLN satisfies Lookup, NonUnique.
+// stLN is a Lookup, NonUnique Vindex.
 type stLN struct {
 	name   string
 	Params map[string]string
@@ -74,10 +74,10 @@ func NewSTLN(name string, params map[string]string) (Vindex, error) {
 	return &stLN{name: name, Params: params}, nil
 }
 
-var _ NonUnique = (*stLN)(nil)
+var _ Vindex = (*stLN)(nil)
 var _ Lookup = (*stLN)(nil)
 
-// stLU satisfies Lookup, Unique.
+// stLU is a Lookup, Unique Vindex.
 type stLU struct {
 	name   string
 	Params map[string]string
@@ -98,7 +98,7 @@ func NewSTLU(name string, params map[string]string) (Vindex, error) {
 	return &stLU{name: name, Params: params}, nil
 }
 
-var _ Unique = (*stLU)(nil)
+var _ Vindex = (*stLU)(nil)
 var _ Lookup = (*stLU)(nil)
 
 func init() {

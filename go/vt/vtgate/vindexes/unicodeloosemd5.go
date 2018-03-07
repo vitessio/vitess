@@ -30,7 +30,7 @@ import (
 )
 
 var (
-	_ Functional = (*UnicodeLooseMD5)(nil)
+	_ Vindex = (*UnicodeLooseMD5)(nil)
 )
 
 // UnicodeLooseMD5 is a vindex that normalizes and hashes unicode strings
