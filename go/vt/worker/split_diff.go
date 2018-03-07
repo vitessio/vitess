@@ -34,6 +34,7 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"sort"
 )
 
 // SplitDiffWorker executes a diff between a destination shard and its
@@ -429,14 +430,30 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 
 	// run the diffs, 8 at a time
 	sdw.wr.Logger().Infof("Running the diffs...")
-	// TODO(mberlin): Parameterize the hard coded value 8.
 	sem := sync2.NewSemaphore(sdw.parallelDiffsCount, 0)
-	for _, tableDefinition := range sdw.destinationSchemaDefinition.TableDefinitions {
+	tableDefinitions := sdw.destinationSchemaDefinition.TableDefinitions
+
+	// sort tables by size
+	// if there are large deltas between table sizes then it's more efficient to start working on the large tables first
+	sort.Slice(tableDefinitions, func(i, j int) bool { return tableDefinitions[i].DataLength > tableDefinitions[j].DataLength })
+
+	// use a channel to make sure tables are diffed in order
+	tableChan := make(chan *tabletmanagerdatapb.TableDefinition, len(tableDefinitions))
+	for _, tableDefinition := range tableDefinitions {
+		tableChan <- tableDefinition
+	}
+
+	// start as many goroutines as there are tables to diff
+	for range tableDefinitions {
 		wg.Add(1)
-		go func(tableDefinition *tabletmanagerdatapb.TableDefinition) {
+		go func() {
 			defer wg.Done()
+			// use the semaphore to limit the number of tables that are diffed in parallel
 			sem.Acquire()
 			defer sem.Release()
+
+			// grab the table to process out of the channel
+			tableDefinition := <-tableChan
 
 			sdw.wr.Logger().Infof("Starting the diff on table %v", tableDefinition.Name)
 
@@ -496,8 +513,10 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 					sdw.wr.Logger().Infof("Table %v checks out (%v rows processed, %v qps)", tableDefinition.Name, report.processedRows, report.processingQPS)
 				}
 			}
-		}(tableDefinition)
+		}()
 	}
+
+	// grab the table to process out of the channel
 	wg.Wait()
 
 	return rec.Error()
