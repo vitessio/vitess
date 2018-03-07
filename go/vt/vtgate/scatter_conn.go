@@ -219,66 +219,6 @@ func (stc *ScatterConn) Execute2(
 // but each shard gets its own Sql Queries and BindVariables.
 func (stc *ScatterConn) ExecuteMultiShard(
 	ctx context.Context,
-	keyspace string,
-	shardQueries map[string]*querypb.BoundQuery,
-	tabletType topodatapb.TabletType,
-	session *SafeSession,
-	notInTransaction bool,
-	canAutocommit bool,
-) (*sqltypes.Result, error) {
-
-	// mu protects qr
-	var mu sync.Mutex
-	qr := new(sqltypes.Result)
-	shards := make([]string, 0, len(shardQueries))
-	for shard := range shardQueries {
-		shards = append(shards, shard)
-	}
-
-	canCommit := len(shards) == 1 && canAutocommit && session.AutocommitApproval()
-
-	err := stc.multiGoTransaction(
-		ctx,
-		"Execute",
-		keyspace,
-		shards,
-		tabletType,
-		session,
-		notInTransaction,
-		func(target *querypb.Target, shouldBegin bool, transactionID int64) (int64, error) {
-			var (
-				innerqr *sqltypes.Result
-				err     error
-				opts    *querypb.ExecuteOptions
-			)
-			if session != nil && session.Session != nil {
-				opts = session.Session.Options
-			}
-
-			switch {
-			case canCommit:
-				innerqr, err = stc.executeAutocommit(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, opts)
-			case shouldBegin:
-				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, opts)
-			default:
-				innerqr, err = stc.gateway.Execute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, transactionID, opts)
-			}
-			if err != nil {
-				return transactionID, err
-			}
-
-			mu.Lock()
-			defer mu.Unlock()
-			qr.AppendResult(innerqr)
-			return transactionID, nil
-		})
-	return qr, err
-}
-
-// ExecuteMultiShard2 is like Execute,
-// but each shard gets its own Sql Queries and BindVariables.
-func (stc *ScatterConn) ExecuteMultiShard2(
-	ctx context.Context,
 	rss []*srvtopo.ResolvedShard,
 	queries []*querypb.BoundQuery,
 	tabletType topodatapb.TabletType,
@@ -312,7 +252,7 @@ func (stc *ScatterConn) ExecuteMultiShard2(
 
 			switch {
 			case canCommit:
-				innerqr, err = stc.executeAutocommit2(ctx, rs, queries[i].Sql, queries[i].BindVariables, opts)
+				innerqr, err = stc.executeAutocommit(ctx, rs, queries[i].Sql, queries[i].BindVariables, opts)
 			case shouldBegin:
 				innerqr, transactionID, err = rs.QueryService.BeginExecute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, opts)
 			default:
@@ -330,21 +270,7 @@ func (stc *ScatterConn) ExecuteMultiShard2(
 	return qr, err
 }
 
-func (stc *ScatterConn) executeAutocommit(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
-	queries := []*querypb.BoundQuery{{
-		Sql:           sql,
-		BindVariables: bindVariables,
-	}}
-	// ExecuteBatch is a stop-gap because it's the only function that can currently do
-	// single round-trip commit.
-	qrs, err := stc.gateway.ExecuteBatch(ctx, target, queries, true /* asTransaction */, 0, options)
-	if err != nil {
-		return nil, err
-	}
-	return &qrs[0], nil
-}
-
-func (stc *ScatterConn) executeAutocommit2(ctx context.Context, rs *srvtopo.ResolvedShard, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (stc *ScatterConn) executeAutocommit(ctx context.Context, rs *srvtopo.ResolvedShard, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	queries := []*querypb.BoundQuery{{
 		Sql:           sql,
 		BindVariables: bindVariables,

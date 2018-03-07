@@ -55,7 +55,7 @@ func TestSelectUnsharded(t *testing.T) {
 	}
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard2 ks.0: dummy_select {} false false`,
+		`ExecuteMultiShard ks.0: dummy_select {} false false`,
 	})
 	expectResult(t, "sel.Execute", result, defaultSelectResult)
 
@@ -92,7 +92,7 @@ func TestSelectScatter(t *testing.T) {
 	}
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard2 ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
+		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
 	})
 	expectResult(t, "sel.Execute", result, defaultSelectResult)
 
@@ -132,7 +132,7 @@ func TestSelectEqualUnique(t *testing.T) {
 	}
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [type:INT64 value:"1" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		`ExecuteMultiShard2 ks.-20: dummy_select {} false false`,
+		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
 	})
 	expectResult(t, "sel.Execute", result, defaultSelectResult)
 
@@ -177,7 +177,7 @@ func TestSelectEqualUniqueScatter(t *testing.T) {
 	}
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [type:INT64 value:"1" ] Destinations:DestinationKeyRange(-)`,
-		`ExecuteMultiShard2 ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
+		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
 	})
 	expectResult(t, "sel.Execute", result, defaultSelectResult)
 
@@ -232,7 +232,7 @@ func TestSelectEqual(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		`Execute select toc from lkp where from = :from from: type:INT64 value:"1"  false`,
 		`ResolveDestinations ks [type:INT64 value:"1" ] Destinations:DestinationKeyspaceIDs(00,80)`,
-		`ExecuteMultiShard2 ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
+		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
 	})
 	expectResult(t, "sel.Execute", result, defaultSelectResult)
 
@@ -323,7 +323,7 @@ func TestSelectINUnique(t *testing.T) {
 	}
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [type:INT64 value:"1"  type:INT64 value:"2"  type:INT64 value:"4" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`,
-		`ExecuteMultiShard2 ` +
+		`ExecuteMultiShard ` +
 			`ks.-20: dummy_select {__vals: type:TUPLE values:<type:INT64 value:"1" > values:<type:INT64 value:"2" > } ` +
 			`ks.20-: dummy_select {__vals: type:TUPLE values:<type:INT64 value:"4" > } ` +
 			`false false`,
@@ -403,7 +403,7 @@ func TestSelectINNonUnique(t *testing.T) {
 		`Execute select toc from lkp where from = :from from: type:INT64 value:"2"  false`,
 		`Execute select toc from lkp where from = :from from: type:INT64 value:"4"  false`,
 		`ResolveDestinations ks [type:INT64 value:"1"  type:INT64 value:"2"  type:INT64 value:"4" ] Destinations:DestinationKeyspaceIDs(00,80),DestinationKeyspaceIDs(00),DestinationKeyspaceIDs(80)`,
-		`ExecuteMultiShard2 ` +
+		`ExecuteMultiShard ` +
 			`ks.-20: dummy_select {__vals: type:TUPLE values:<type:INT64 value:"1" > values:<type:INT64 value:"2" > } ` +
 			`ks.20-: dummy_select {__vals: type:TUPLE values:<type:INT64 value:"1" > values:<type:INT64 value:"4" > } ` +
 			`false false`,
@@ -512,7 +512,7 @@ func TestRouteGetFields(t *testing.T) {
 		`Execute select toc from lkp where from = :from from: type:INT64 value:"1"  false`,
 		`ResolveDestinations ks [type:INT64 value:"1" ] Destinations:DestinationNone()`,
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-		`ExecuteMultiShard2 ks.-20: dummy_select_field {} false false`,
+		`ExecuteMultiShard ks.-20: dummy_select_field {} false false`,
 	})
 	expectResult(t, "sel.Execute", result, &sqltypes.Result{})
 
@@ -525,7 +525,7 @@ func TestRouteGetFields(t *testing.T) {
 		`Execute select toc from lkp where from = :from from: type:INT64 value:"1"  false`,
 		`ResolveDestinations ks [type:INT64 value:"1" ] Destinations:DestinationNone()`,
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-		`ExecuteMultiShard2 ks.-20: dummy_select_field {} false false`,
+		`ExecuteMultiShard ks.-20: dummy_select_field {} false false`,
 	})
 	expectResult(t, "sel.StreamExecute", result, &sqltypes.Result{})
 }
@@ -565,7 +565,7 @@ func TestRouteSort(t *testing.T) {
 	}
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard2 ks.0: dummy_select {} false false`,
+		`ExecuteMultiShard ks.0: dummy_select {} false false`,
 	})
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -651,7 +651,7 @@ func TestRouteSortTruncate(t *testing.T) {
 	}
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard2 ks.0: dummy_select {} false false`,
+		`ExecuteMultiShard ks.0: dummy_select {} false false`,
 	})
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -697,7 +697,7 @@ func TestRouteStreamTruncate(t *testing.T) {
 	}
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard2 ks.0: dummy_select {} false false`,
+		`ExecuteMultiShard ks.0: dummy_select {} false false`,
 	})
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(

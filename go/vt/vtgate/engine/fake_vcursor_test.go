@@ -52,11 +52,7 @@ func (t noopVCursor) ExecuteAutocommit(method string, query string, bindvars map
 	panic("unimplemented")
 }
 
-func (t noopVCursor) ExecuteMultiShard(keyspace string, shardQueries map[string]*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
-	panic("unimplemented")
-}
-
-func (t noopVCursor) ExecuteMultiShard2(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
+func (t noopVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
 
@@ -110,13 +106,8 @@ func (f *loggingVCursor) Execute(method string, query string, bindvars map[strin
 	return f.nextResult()
 }
 
-func (f *loggingVCursor) ExecuteMultiShard(keyspace string, shardQueries map[string]*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
-	f.log = append(f.log, fmt.Sprintf("ExecuteMultiShard %s %v %v %v", keyspace, printShardQueries(shardQueries), isDML, canAutocommit))
-	return f.nextResult()
-}
-
-func (f *loggingVCursor) ExecuteMultiShard2(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
-	f.log = append(f.log, fmt.Sprintf("ExecuteMultiShard2 %v%v %v", printResolvedShardQueries(rss, queries), isDML, canAutocommit))
+func (f *loggingVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
+	f.log = append(f.log, fmt.Sprintf("ExecuteMultiShard %v%v %v", printResolvedShardQueries(rss, queries), isDML, canAutocommit))
 	return f.nextResult()
 }
 
@@ -289,19 +280,6 @@ func printBindVars(bindvars map[string]*querypb.BindVariable) string {
 	buf := &bytes.Buffer{}
 	for _, k := range keys {
 		fmt.Fprintf(buf, "%s: %v", k, bindvars[k])
-	}
-	return buf.String()
-}
-
-func printShardQueries(shardQueries map[string]*querypb.BoundQuery) string {
-	var keys []string
-	for k := range shardQueries {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	buf := &bytes.Buffer{}
-	for _, k := range keys {
-		fmt.Fprintf(buf, "%s: %s %s", k, shardQueries[k].Sql, printBindVars(shardQueries[k].BindVariables))
 	}
 	return buf.String()
 }
