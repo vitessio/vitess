@@ -30,7 +30,7 @@ import (
 )
 
 var (
-	_ Functional = (*NumericStaticMap)(nil)
+	_ Vindex = (*NumericStaticMap)(nil)
 )
 
 // NumericLookupTable stores the mapping of keys.

@@ -26,10 +26,10 @@ import (
 )
 
 var (
-	_ NonUnique = (*LookupHash)(nil)
-	_ Lookup    = (*LookupHash)(nil)
-	_ Unique    = (*LookupHashUnique)(nil)
-	_ Lookup    = (*LookupHashUnique)(nil)
+	_ Vindex = (*LookupHash)(nil)
+	_ Lookup = (*LookupHash)(nil)
+	_ Vindex = (*LookupHashUnique)(nil)
+	_ Lookup = (*LookupHashUnique)(nil)
 )
 
 func init() {

@@ -29,7 +29,7 @@ import (
 )
 
 var (
-	_ Functional = (*Hash)(nil)
+	_ Vindex     = (*Hash)(nil)
 	_ Reversible = (*Hash)(nil)
 )
 

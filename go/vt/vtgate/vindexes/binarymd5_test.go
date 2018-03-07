@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 )
 
 var binVindex Vindex
@@ -57,11 +58,11 @@ func TestBinaryMD5Map(t *testing.T) {
 		out: "\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za[",
 	}}
 	for _, tcase := range tcases {
-		got, err := binVindex.(Unique).Map(nil, []sqltypes.Value{sqltypes.NewVarBinary(tcase.in)})
+		got, err := binVindex.Map2(nil, []sqltypes.Value{sqltypes.NewVarBinary(tcase.in)})
 		if err != nil {
 			t.Error(err)
 		}
-		out := string(got[0].ID)
+		out := string(got[0].(key.DestinationKeyspaceID))
 		if out != tcase.out {
 			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 		}
@@ -83,11 +84,11 @@ func TestBinaryMD5Verify(t *testing.T) {
 
 func TestSQLValue(t *testing.T) {
 	val := sqltypes.NewVarBinary("Test")
-	got, err := binVindex.(Unique).Map(nil, []sqltypes.Value{val})
+	got, err := binVindex.Map2(nil, []sqltypes.Value{val})
 	if err != nil {
 		t.Error(err)
 	}
-	out := string(got[0].ID)
+	out := string(got[0].(key.DestinationKeyspaceID))
 	want := "\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za["
 	if out != want {
 		t.Errorf("Map(%#v): %#v, want %#v", val, out, want)

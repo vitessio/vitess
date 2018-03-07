@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 )
 
 var hash Vindex
@@ -47,7 +48,7 @@ func TestHashString(t *testing.T) {
 }
 
 func TestHashMap(t *testing.T) {
-	got, err := hash.(Unique).Map(nil, []sqltypes.Value{
+	got, err := hash.Map2(nil, []sqltypes.Value{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 		sqltypes.NewInt64(3),
@@ -59,14 +60,14 @@ func TestHashMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := []KsidOrRange{
-		{ID: []byte("\x16k@\xb4J\xbaK\xd6")},
-		{ID: []byte("\x06\xe7\xea\"Βp\x8f")},
-		{ID: []byte("N\xb1\x90ɢ\xfa\x16\x9c")},
-		{ID: nil},
-		{ID: []byte("\xd2\xfd\x88g\xd5\r-\xfe")},
-		{ID: []byte("p\xbb\x02<\x81\f\xa8z")},
-		{ID: []byte("\xf0\x98H\n\xc4ľq")},
+	want := []key.Destination{
+		key.DestinationKeyspaceID([]byte("\x16k@\xb4J\xbaK\xd6")),
+		key.DestinationKeyspaceID([]byte("\x06\xe7\xea\"Βp\x8f")),
+		key.DestinationKeyspaceID([]byte("N\xb1\x90ɢ\xfa\x16\x9c")),
+		key.DestinationNone{},
+		key.DestinationKeyspaceID([]byte("\xd2\xfd\x88g\xd5\r-\xfe")),
+		key.DestinationKeyspaceID([]byte("p\xbb\x02<\x81\f\xa8z")),
+		key.DestinationKeyspaceID([]byte("\xf0\x98H\n\xc4ľq")),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
