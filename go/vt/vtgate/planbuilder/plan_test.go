@@ -35,7 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-// hashIndex satisfies Functional, Unique.
+// hashIndex is a functional, unique Vindex.
 type hashIndex struct{ name string }
 
 func (v *hashIndex) String() string   { return v.name }
@@ -49,16 +49,14 @@ func (*hashIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, 
 	return []bool{}, nil
 }
 func (*hashIndex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.KsidOrRange, error) {
-	return nil, nil
+	panic("unimplemented")
 }
 
 func newHashIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &hashIndex{name: name}, nil
 }
 
-var _ vindexes.Unique = (*hashIndex)(nil)
-
-// lookupIndex satisfies Lookup, Unique.
+// lookupIndex is a unique Vindex, and satisfies Lookup.
 type lookupIndex struct{ name string }
 
 func (v *lookupIndex) String() string   { return v.name }
@@ -72,7 +70,7 @@ func (*lookupIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool
 	return []bool{}, nil
 }
 func (*lookupIndex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.KsidOrRange, error) {
-	return nil, nil
+	panic("unimplemented")
 }
 func (*lookupIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
 func (*lookupIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
@@ -84,7 +82,6 @@ func newLookupIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &lookupIndex{name: name}, nil
 }
 
-var _ vindexes.Unique = (*lookupIndex)(nil)
 var _ vindexes.Lookup = (*lookupIndex)(nil)
 
 // multiIndex satisfies Lookup, NonUnique.
@@ -100,7 +97,9 @@ func (*multiIndex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.De
 func (*multiIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*multiIndex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksids, error)  { return nil, nil }
+func (*multiIndex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksids, error) {
+	panic("unimplemented")
+}
 func (*multiIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
 func (*multiIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
 func (*multiIndex) Update(vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
@@ -127,7 +126,9 @@ func (*costlyIndex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.D
 func (*costlyIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*costlyIndex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksids, error)  { return nil, nil }
+func (*costlyIndex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksids, error) {
+	panic("unimplemented")
+}
 func (*costlyIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
 func (*costlyIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
 func (*costlyIndex) Update(vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {

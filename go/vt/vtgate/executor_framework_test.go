@@ -287,11 +287,7 @@ func (*keyRangeLookuper) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([
 	return []bool{}, nil
 }
 func (*keyRangeLookuper) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksids, error) {
-	return []vindexes.Ksids{{
-		Range: &topodatapb.KeyRange{
-			End: []byte{0x10},
-		},
-	}}, nil
+	panic("unimplemented")
 }
 
 func newKeyRangeLookuper(name string, params map[string]string) (vindexes.Vindex, error) {
@@ -319,11 +315,7 @@ func (*keyRangeLookuperUnique) Verify(vindexes.VCursor, []sqltypes.Value, [][]by
 	return []bool{}, nil
 }
 func (*keyRangeLookuperUnique) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.KsidOrRange, error) {
-	return []vindexes.KsidOrRange{{
-		Range: &topodatapb.KeyRange{
-			End: []byte{0x10},
-		},
-	}}, nil
+	panic("unimplemented")
 }
 
 func newKeyRangeLookuperUnique(name string, params map[string]string) (vindexes.Vindex, error) {

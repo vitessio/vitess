@@ -34,28 +34,31 @@ func (*uvindex) String() string     { return "uvindex" }
 func (*uvindex) Cost() int          { return 1 }
 func (*uvindex) IsUnique() bool     { return true }
 func (*uvindex) IsFunctional() bool { return false }
-func (*uvindex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	return nil, nil
+func (v *uvindex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	if v.matchkr {
+		return []key.Destination{
+			key.DestinationKeyRange{
+				KeyRange: &topodatapb.KeyRange{
+					Start: []byte{0x40},
+					End:   []byte{0x60},
+				},
+			},
+		}, nil
+	}
+	if v.matchid {
+		return []key.Destination{
+			key.DestinationKeyspaceID([]byte("foo")),
+		}, nil
+	}
+	return []key.Destination{key.DestinationNone{}}, nil
 }
+
 func (*uvindex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	panic("unimplemented")
 }
 
 func (v *uvindex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.KsidOrRange, error) {
-	if v.matchkr {
-		return []vindexes.KsidOrRange{{
-			Range: &topodatapb.KeyRange{
-				Start: []byte{0x40},
-				End:   []byte{0x60},
-			},
-		}}, nil
-	}
-	if v.matchid {
-		return []vindexes.KsidOrRange{
-			{ID: []byte("foo")},
-		}, nil
-	}
-	return []vindexes.KsidOrRange{{}}, nil
+	panic("unimplemented")
 }
 
 // nvindex is NonUnique.
@@ -65,31 +68,34 @@ func (*nvindex) String() string     { return "nvindex" }
 func (*nvindex) Cost() int          { return 1 }
 func (*nvindex) IsUnique() bool     { return false }
 func (*nvindex) IsFunctional() bool { return false }
-func (*nvindex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	return nil, nil
+func (v *nvindex) Map2(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	if v.matchid {
+		return []key.Destination{
+			key.DestinationKeyspaceIDs([][]byte{
+				[]byte("foo"),
+				[]byte("bar"),
+			}),
+		}, nil
+	}
+	if v.matchkr {
+		return []key.Destination{
+			key.DestinationKeyRange{
+				KeyRange: &topodatapb.KeyRange{
+					Start: []byte{0x40},
+					End:   []byte{0x60},
+				},
+			},
+		}, nil
+	}
+	return []key.Destination{key.DestinationNone{}}, nil
 }
+
 func (*nvindex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	panic("unimplemented")
 }
 
 func (v *nvindex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksids, error) {
-	if v.matchid {
-		return []vindexes.Ksids{{
-			IDs: [][]byte{
-				[]byte("foo"),
-				[]byte("bar"),
-			},
-		}}, nil
-	}
-	if v.matchkr {
-		return []vindexes.Ksids{{
-			Range: &topodatapb.KeyRange{
-				Start: []byte{0x40},
-				End:   []byte{0x60},
-			},
-		}}, nil
-	}
-	return []vindexes.Ksids{{}}, nil
+	panic("unimplemented")
 }
 
 func TestVindexFuncMap(t *testing.T) {

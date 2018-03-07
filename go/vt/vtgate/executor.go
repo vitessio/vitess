@@ -894,24 +894,16 @@ func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []
 			nil,
 		)
 
-		// We always use the (unique) primary vindex. The ID must be the
-		// primary vindex for message tables.
-		mapper := table.ColumnVindexes[0].Vindex.(vindexes.Unique)
 		// convert []*querypb.Value to []sqltypes.Value for calling Map.
 		values := make([]sqltypes.Value, 0, len(ids))
 		for _, id := range ids {
 			values = append(values, sqltypes.ProtoToValue(id))
 		}
-		ksids, err := mapper.Map(vcursor, values)
+		// We always use the (unique) primary vindex. The ID must be the
+		// primary vindex for message tables.
+		destinations, err := table.ColumnVindexes[0].Vindex.Map2(vcursor, values)
 		if err != nil {
 			return 0, err
-		}
-		destinations := make([]key.Destination, len(ksids))
-		for i, ksid := range ksids {
-			if err := ksid.ValidateUnique(); err != nil {
-				return 0, err
-			}
-			destinations[i] = key.DestinationKeyspaceID(ksid.ID)
 		}
 		rss, rssValues, err = e.resolver.resolver.ResolveDestinations(ctx, table.Keyspace.Name, topodatapb.TabletType_MASTER, ids, destinations)
 		if err != nil {
