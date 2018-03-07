@@ -70,6 +70,8 @@ type Vindex interface {
 	// a KeyRange, or a single KeyspaceID.
 	// If the Vindex is non-unique, each id would map to either
 	// a KeyRange, or a list of KeyspaceID.
+	// If the error returned if nil, then the array len of the
+	// key.Destination array must match len(ids).
 	// TODO(alainjobart) Rename to Map.
 	Map2(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error)
 

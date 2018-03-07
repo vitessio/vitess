@@ -22,7 +22,9 @@ import (
 
 	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlannotation"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -143,14 +145,14 @@ func (del *Delete) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindV
 }
 
 func (del *Delete) execDeleteUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	ks, allShards, err := vcursor.GetKeyspaceShards(del.Keyspace)
+	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteUnsharded")
 	}
-	if len(allShards) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", allShards)
+	if len(rss) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
 	}
-	return execShard(vcursor, del.Query, bindVars, ks, allShards[0].Name, true, true /* canAutocommit */)
+	return execShard2(vcursor, del.Query, bindVars, rss[0], true, true /* canAutocommit */)
 }
 
 func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
@@ -158,7 +160,7 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteEqual")
 	}
-	ks, shard, ksid, err := resolveSingleShard(vcursor, del.Vindex, del.Keyspace, key)
+	rs, ksid, err := resolveSingleShard2(vcursor, del.Vindex, del.Keyspace, key)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteEqual")
 	}
@@ -166,17 +168,17 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 		return &sqltypes.Result{}, nil
 	}
 	if del.OwnedVindexQuery != "" {
-		err = del.deleteVindexEntries(vcursor, bindVars, ks, shard, ksid)
+		err = del.deleteVindexEntries(vcursor, bindVars, rs, ksid)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "execDeleteEqual")
 		}
 	}
 	rewritten := sqlannotation.AddKeyspaceIDs(del.Query, [][]byte{ksid}, "")
-	return execShard(vcursor, rewritten, bindVars, ks, shard, true /* isDML */, true /* canAutocommit */)
+	return execShard2(vcursor, rewritten, bindVars, rs, true /* isDML */, true /* canAutocommit */)
 }
 
-func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, ks, shard string, ksid []byte) error {
-	result, err := execShard(vcursor, del.OwnedVindexQuery, bindVars, ks, shard, false /* isDML */, false /* canAutocommit */)
+func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, ksid []byte) error {
+	result, err := execShard2(vcursor, del.OwnedVindexQuery, bindVars, rs, false /* isDML */, false /* canAutocommit */)
 	if err != nil {
 		return err
 	}
@@ -200,18 +202,18 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 }
 
 func (del *Delete) execDeleteSharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	ks, allShards, err := vcursor.GetKeyspaceShards(del.Keyspace)
+	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteSharded")
 	}
 
-	shardQueries := make(map[string]*querypb.BoundQuery, len(allShards))
+	queries := make([]*querypb.BoundQuery, len(rss))
 	sql := sqlannotation.AnnotateIfDML(del.Query, nil)
-	for _, shard := range allShards {
-		shardQueries[shard.Name] = &querypb.BoundQuery{
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{
 			Sql:           sql,
 			BindVariables: bindVars,
 		}
 	}
-	return vcursor.ExecuteMultiShard(ks, shardQueries, true /* isDML */, true /* canAutocommit */)
+	return vcursor.ExecuteMultiShard2(rss, queries, true /* isDML */, true /* canAutocommit */)
 }
