@@ -1373,12 +1373,46 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		logMethod = tabletenv.Infof
 	}
 
-	origErr := err
-	err = formatErrorWithCallerID(ctx, vterrors.New(errCode, err.Error()))
+	sqlErr, ok := err.(*mysql.SQLError)
+	if ok {
+		sqlState := sqlErr.SQLState()
+		errnum := sqlErr.Number()
+		err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)", sqlErr.Message, errnum, sqlState)
+		err = formatErrorWithCallerID(ctx, err)
+		logError(logMethod, err, sql, bindVariables)
+
+		// If TerseErrors is on, strip the error message returned by MySQL and only
+		// keep the error number and sql state.
+		// We assume that bind variable have PII, which are included in the MySQL
+		// query and come back as part of the error message. Removing the MySQL
+		// error helps us avoid leaking PII.
+		// There are two exceptions:
+		// 1. If no bind vars were specified, it's likely that the query was issued
+		// by someone manually. So, we don't suppress the error.
+		// 2. FAILED_PRECONDITION errors. These are caused when a failover is in progress.
+		// If so, we don't want to suppress the error. This will allow VTGate to
+		// detect and perform buffering during failovers.
+		if tsv.TerseErrors && len(bindVariables) != 0 && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
+			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s) during query: %s", errnum, sqlState, sqlparser.TruncateForLog(sql))
+			err = formatErrorWithCallerID(ctx, err)
+		}
+	} else {
+		err = formatErrorWithCallerID(ctx, vterrors.New(errCode, err.Error()))
+		logError(logMethod, err, sql, bindVariables)
+	}
+
+	if logStats != nil {
+		logStats.Error = err
+	}
+
+	return err
+}
+
+func logError(logMethod func(format string, args ...interface{}), err error, sql string, bindVariables map[string]*querypb.BindVariable) {
 	if logMethod != nil {
 		// In order to correctly truncate long queries in logs, combine
-		// the error (which contains both the mysql error string and the
-		// full query) with the unexpanded query + bind variables, then
+		// the error (which contains the mysql error string)
+		// with the unexpanded query + bind variables, then
 		// truncate the resulting string.
 		//
 		// This makes it so that the query portion of the logs is
@@ -1390,33 +1424,6 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		}
 		logMethod(message)
 	}
-
-	// If TerseErrors is on, strip the error message returned by MySQL and only
-	// keep the error number and sql state.
-	// We assume that bind variable have PII, which are included in the MySQL
-	// query and come back as part of the error message. Removing the MySQL
-	// error helps us avoid leaking PII.
-	// There are two exceptions:
-	// 1. If no bind vars were specified, it's likely that the query was issued
-	// by someone manually. So, we don't suppress the error.
-	// 2. FAILED_PRECONDITION errors. These are caused when a failover is in progress.
-	// If so, we don't want to suppress the error. This will allow VTGate to
-	// detect and perform buffering during failovers.
-	if tsv.TerseErrors && len(bindVariables) != 0 && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
-		sqlErr, ok := origErr.(*mysql.SQLError)
-		if ok {
-			sqlState := sqlErr.SQLState()
-			errnum := sqlErr.Number()
-			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s) during query: %s", errnum, sqlState, sqlparser.TruncateForLog(sql))
-			err = formatErrorWithCallerID(ctx, err)
-		}
-	}
-
-	if logStats != nil {
-		logStats.Error = err
-	}
-
-	return err
 }
 
 func formatErrorWithCallerID(ctx context.Context, err error) error {
