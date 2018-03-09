@@ -241,3 +241,15 @@ docker_unit_test:
 # then commit and push.
 rebalance_tests:
 	go run test.go -rebalance 5 -remote-stats http://enisoc.com:15123/travis/stats
+
+release:
+ifndef VERSION
+  $(error Set the env var VERSION with the release version)
+endif
+	mkdir -p releases
+	docker build -f docker/Dockerfile.release -t vitess/release .
+	docker run -v ${PWD}/releases:/vt/releases --env VERSION=$(VERSION) vitess/release
+	git tag -m Version\ $(VERSION) v$(VERSION)
+	echo "A git tag was created, you can push it with:"
+	echo "git push origin v$(VERSION)"
+	echo "Also, don't forget the upload releases/v$(VERSION).tar.gz file to GitHub releases"
