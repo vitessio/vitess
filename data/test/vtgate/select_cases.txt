@@ -474,7 +474,7 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select user_id from music order by user_id asc limit 20",
+      "Query": "select user_id from music order by user_id asc limit :__upper_limit",
       "FieldQuery": "select user_id from music where 1 != 1",
       "OrderBy": [
         {

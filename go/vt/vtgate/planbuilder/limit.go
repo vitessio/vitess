@@ -131,6 +131,9 @@ func (l *limit) SetLimit(limit *sqlparser.Limit) error {
 			return err
 		}
 		l.elimit.Offset = &pv
+		// When offset is present in a scatter query, we set this bind variable
+		// so limit engine can update the actual limit at runtime with limit + offset
+		l.input.SetUpperLimit(sqlparser.NewValArg([]byte(":__upper_limit")))
 	}
 	return nil
 }

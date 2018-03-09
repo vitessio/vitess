@@ -943,6 +943,7 @@ class TestVTGateFunctions(unittest.TestCase):
         keyspace_name='user'
     )
     vtgate_conn.commit()
+    lookup_master.mquery('vt_lookup', 'truncate name_user2_map')
     self.assertEqual(result, ([], 0L, 0L, []))
     # Test select by id
     result = self.execute_on_master(
@@ -1054,6 +1055,12 @@ class TestVTGateFunctions(unittest.TestCase):
     )
     self.assertEqual(result, ([], 5L, 0L, []))
     vtgate_conn.commit()
+    # Assert that rows are in multiple shards
+    result = shard_0_master.mquery('vt_user', 'select id, name from vt_user2')
+    self.assertEqual(result, ((1L, 'name0'), (2L, 'name1'), (3L, 'name2'), (5L, 'name4')))
+    result = shard_1_master.mquery('vt_user', 'select id, name from vt_user2')
+    self.assertEqual(result, ((4L, 'name3'),))
+ 
     # Fetching with offset works
     count = 4
     for x in xrange(count):
@@ -1092,6 +1099,7 @@ class TestVTGateFunctions(unittest.TestCase):
         keyspace_name='user'
     )
     vtgate_conn.commit()
+    lookup_master.mquery('vt_lookup', 'truncate name_user2_map')
 
   def test_user_extra2(self):
     # user_extra2 is for testing updates to secondary vindexes
