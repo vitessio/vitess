@@ -60,19 +60,55 @@ func TestLimitExecute(t *testing.T) {
 	}
 
 	// Test with limit equal to input.
-	tp.rewind()
-	l.Count = int64PlanValue(3)
+	wantResult = sqltypes.MakeTestResult(
+		fields,
+		"a|1",
+		"b|2",
+		"c|3",
+	)
+	inputResult = sqltypes.MakeTestResult(
+		fields,
+		"a|1",
+		"b|2",
+		"c|3",
+	)
+	tp = &fakePrimitive{
+		results: []*sqltypes.Result{inputResult},
+	}
+	l = &Limit{
+		Count: int64PlanValue(3),
+		Input: tp,
+	}
+
 	result, err = l.Execute(nil, nil, false)
 	if err != nil {
 		t.Error(err)
 	}
 	if !reflect.DeepEqual(result, inputResult) {
-		t.Errorf("l.Execute:\n%v, want\n%v", result, inputResult)
+		t.Errorf("l.Execute:\n%v, want\n%v", result, wantResult)
 	}
 
 	// Test with limit higher than input.
-	tp.rewind()
-	l.Count = int64PlanValue(4)
+	wantResult = sqltypes.MakeTestResult(
+		fields,
+		"a|1",
+		"b|2",
+		"c|3",
+	)
+	inputResult = sqltypes.MakeTestResult(
+		fields,
+		"a|1",
+		"b|2",
+		"c|3",
+	)
+	tp = &fakePrimitive{
+		results: []*sqltypes.Result{inputResult},
+	}
+	l = &Limit{
+		Count: int64PlanValue(4),
+		Input: tp,
+	}
+
 	result, err = l.Execute(nil, nil, false)
 	if err != nil {
 		t.Error(err)
@@ -82,8 +118,25 @@ func TestLimitExecute(t *testing.T) {
 	}
 
 	// Test with bind vars.
-	tp.rewind()
-	l.Count = sqltypes.PlanValue{Key: "l"}
+	wantResult = sqltypes.MakeTestResult(
+		fields,
+		"a|1",
+		"b|2",
+	)
+	inputResult = sqltypes.MakeTestResult(
+		fields,
+		"a|1",
+		"b|2",
+		"c|3",
+	)
+	tp = &fakePrimitive{
+		results: []*sqltypes.Result{inputResult},
+	}
+	l = &Limit{
+		Count: sqltypes.PlanValue{Key: "l"},
+		Input: tp,
+	}
+
 	result, err = l.Execute(nil, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(2)}, false)
 	if err != nil {
 		t.Error(err)
@@ -120,7 +173,7 @@ func TestLimitOffsetExecute(t *testing.T) {
 		Input:  tp,
 	}
 
-	// // Test with offset 0
+	// Test with offset 0
 	result, err := l.Execute(nil, bindVars, false)
 	if err != nil {
 		t.Error(err)
@@ -199,7 +252,7 @@ func TestLimitOffsetExecute(t *testing.T) {
 		t.Errorf("l.Execute:\n got %v, want\n%v", result, wantResult)
 	}
 
-	// // Works when offset is beyond the response
+	// Works when offset is beyond the response
 	inputResult = sqltypes.MakeTestResult(
 		fields,
 		"a|1",
