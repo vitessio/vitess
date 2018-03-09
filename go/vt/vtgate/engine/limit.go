@@ -29,7 +29,6 @@ import (
 var _ Primitive = (*Limit)(nil)
 
 // Limit is a primitive that performs the LIMIT operation.
-// Offset is supported in cross shard queries but only upto to MAX_ROWS
 type Limit struct {
 	Count  sqltypes.PlanValue
 	Offset *sqltypes.PlanValue
