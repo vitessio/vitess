@@ -62,8 +62,10 @@ func (l *Limit) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariab
 	if err != nil {
 		return nil, err
 	}
-	if offset > 0 {
-		bindVars[l.Count.Key] = sqltypes.Int64BindVariable(int64(count + offset))
+	// When offset is present, this bind var is set by the planner so we
+	// can hijack the limit value
+	if l.Offset != nil {
+		bindVars["__upper_limit"] = sqltypes.Int64BindVariable(int64(count + offset))
 	}
 
 	result, err := l.Input.Execute(vcursor, bindVars, wantfields)
