@@ -84,7 +84,11 @@ type discoveryGateway struct {
 	buffer *buffer.Buffer
 }
 
-func createDiscoveryGateway(hc discovery.HealthCheck, topoServer *topo.Server, serv srvtopo.Server, cell string, retryCount int) Gateway {
+func createDiscoveryGateway(hc discovery.HealthCheck, serv srvtopo.Server, cell string, retryCount int) Gateway {
+	var topoServer *topo.Server
+	if serv != nil {
+		topoServer = serv.GetTopoServer()
+	}
 	dg := &discoveryGateway{
 		hc:                hc,
 		tsc:               discovery.NewTabletStatsCacheDoNotSetListener(topoServer, cell),

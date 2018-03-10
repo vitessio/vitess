@@ -67,7 +67,7 @@ func init() {
 	// The topo.Server is used to start watching the cells described
 	// in '-cells_to_watch' command line parameter, which is
 	// empty by default. So it's unused in this test, set to nil.
-	Init(context.Background(), hcVTGateTest, nil /*topo.Server*/, new(sandboxTopo), "aa", 10, nil)
+	Init(context.Background(), hcVTGateTest, new(sandboxTopo), "aa", 10, nil)
 
 	*mysqlServerPort = 0
 	*mysqlAuthServerImpl = "none"
