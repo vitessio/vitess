@@ -67,7 +67,7 @@ func TestGRPCDiscovery(t *testing.T) {
 	// Wait for the right tablets to be present.
 	hc := discovery.NewHealthCheck(10*time.Second, 2*time.Minute)
 	rs := srvtopo.NewResilientServer(ts, "TestGRPCDiscovery")
-	dg := gateway.GetCreator()(hc, ts, rs, cell, 2)
+	dg := gateway.GetCreator()(hc, rs, cell, 2)
 	hc.AddTablet(&topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: cell,
@@ -120,7 +120,7 @@ func TestL2VTGateDiscovery(t *testing.T) {
 	// Wait for the right tablets to be present.
 	hc := discovery.NewHealthCheck(10*time.Second, 2*time.Minute)
 	rs := srvtopo.NewResilientServer(ts, "TestL2VTGateDiscovery")
-	l2vtgate := vtgate.Init(context.Background(), hc, ts, rs, cell, 2, nil)
+	l2vtgate := vtgate.Init(context.Background(), hc, rs, cell, 2, nil)
 	hc.AddTablet(&topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: cell,
