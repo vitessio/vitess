@@ -418,6 +418,7 @@
   "Instructions": {
     "Opcode": "Limit",
     "Count": 10,
+    "Offset": null,
     "Input": {
       "Opcode": "Join",
       "Left": {

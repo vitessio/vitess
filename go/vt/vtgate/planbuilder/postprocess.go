@@ -140,9 +140,6 @@ func pushLimit(limit *sqlparser.Limit, orderBy sqlparser.OrderBy, bldr builder) 
 		return bldr, nil
 	}
 	lb := newLimit(bldr)
-	if limit != nil && limit.Offset != nil && len(orderBy) == 0 {
-		return nil, errors.New("unsupported: offset limit for cross-shard queries")
-	}
 	if err := lb.SetLimit(limit); err != nil {
 		return nil, err
 	}

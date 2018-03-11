@@ -31,7 +31,7 @@ var _ Primitive = (*Limit)(nil)
 // Limit is a primitive that performs the LIMIT operation.
 type Limit struct {
 	Count  sqltypes.PlanValue
-	Offset *sqltypes.PlanValue
+	Offset sqltypes.PlanValue
 	Input  Primitive
 }
 
@@ -41,7 +41,7 @@ func (l *Limit) MarshalJSON() ([]byte, error) {
 	marshalLimit := struct {
 		Opcode string
 		Count  sqltypes.PlanValue
-		Offset *sqltypes.PlanValue `json:",omitempty"`
+		Offset sqltypes.PlanValue
 		Input  Primitive
 	}{
 		Opcode: "Limit",
@@ -62,39 +62,30 @@ func (l *Limit) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariab
 	if err != nil {
 		return nil, err
 	}
-	// When offset is present, this bind var is set by the planner so we
-	// can hijack the limit value
-	if l.Offset != nil {
-		bindVars["__upper_limit"] = sqltypes.Int64BindVariable(int64(count + offset))
-	}
+	// When offset is present, we hijack the limit value so we can calculate
+	// the offset in memory from the result of the scatter query with count + offset.
+	bindVars["__upper_limit"] = sqltypes.Int64BindVariable(int64(count + offset))
 
 	result, err := l.Input.Execute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
 
-	if offset > 0 {
-		// There are more rows in the response than limit + offset
-		if count+offset <= len(result.Rows) {
-			result.Rows = result.Rows[offset : count+offset]
-			result.RowsAffected = uint64(count)
-			return result, nil
-		}
-		// Remove extra rows from response
-		if offset <= len(result.Rows) {
-			result.Rows = result.Rows[offset:]
-			result.RowsAffected = uint64(len(result.Rows))
-			return result, nil
-		}
-		// offset is beyond the result set
-		result.Rows = [][]sqltypes.Value{}
-		result.RowsAffected = 0
+	// There are more rows in the response than limit + offset
+	if count+offset <= len(result.Rows) {
+		result.Rows = result.Rows[offset : count+offset]
+		result.RowsAffected = uint64(count)
 		return result, nil
 	}
-	if count < len(result.Rows) {
-		result.Rows = result.Rows[:count]
-		result.RowsAffected = uint64(count)
+	// Remove extra rows from response
+	if offset <= len(result.Rows) {
+		result.Rows = result.Rows[offset:]
+		result.RowsAffected = uint64(len(result.Rows))
+		return result, nil
 	}
+	// offset is beyond the result set
+	result.Rows = [][]sqltypes.Value{}
+	result.RowsAffected = 0
 	return result, nil
 }
 
@@ -104,11 +95,7 @@ func (l *Limit) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 	if err != nil {
 		return err
 	}
-	offset, err := l.fetchOffset(bindVars)
-	if err != nil {
-		return err
-	}
-	if offset > 0 {
+	if !l.Offset.IsNull() {
 		return fmt.Errorf("offset not supported for stream execute queries")
 	}
 
@@ -174,7 +161,7 @@ func (l *Limit) fetchCount(bindVars map[string]*querypb.BindVariable) (int, erro
 }
 
 func (l *Limit) fetchOffset(bindVars map[string]*querypb.BindVariable) (int, error) {
-	if l.Offset == nil {
+	if l.Offset.IsNull() {
 		return 0, nil
 	}
 	resolved, err := l.Offset.ResolveValue(bindVars)
