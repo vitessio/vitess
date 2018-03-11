@@ -99,6 +99,8 @@ func (l *Limit) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 		return fmt.Errorf("offset not supported for stream execute queries")
 	}
 
+	bindVars["__upper_limit"] = sqltypes.Int64BindVariable(int64(count))
+
 	err = l.Input.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
 			if err := callback(&sqltypes.Result{Fields: qr.Fields}); err != nil {
