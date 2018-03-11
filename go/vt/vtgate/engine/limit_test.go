@@ -26,6 +26,7 @@ import (
 )
 
 func TestLimitExecute(t *testing.T) {
+	bindVars := make(map[string]*querypb.BindVariable)
 	fields := sqltypes.MakeTestFields(
 		"col1|col2",
 		"int64|varchar",
@@ -46,7 +47,7 @@ func TestLimitExecute(t *testing.T) {
 	}
 
 	// Test with limit smaller than input.
-	result, err := l.Execute(nil, nil, false)
+	result, err := l.Execute(nil, bindVars, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -80,7 +81,7 @@ func TestLimitExecute(t *testing.T) {
 		Input: tp,
 	}
 
-	result, err = l.Execute(nil, nil, false)
+	result, err = l.Execute(nil, bindVars, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -109,7 +110,7 @@ func TestLimitExecute(t *testing.T) {
 		Input: tp,
 	}
 
-	result, err = l.Execute(nil, nil, false)
+	result, err = l.Execute(nil, bindVars, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -165,11 +166,9 @@ func TestLimitOffsetExecute(t *testing.T) {
 		results: []*sqltypes.Result{inputResult},
 	}
 
-	offset := int64PlanValue(0)
-
 	l := &Limit{
 		Count:  int64PlanValue(2),
-		Offset: &offset,
+		Offset: int64PlanValue(0),
 		Input:  tp,
 	}
 
@@ -202,16 +201,47 @@ func TestLimitOffsetExecute(t *testing.T) {
 		results: []*sqltypes.Result{inputResult},
 	}
 
-	offset = int64PlanValue(1)
 	l = &Limit{
 		Count:  int64PlanValue(2),
-		Offset: &offset,
+		Offset: int64PlanValue(1),
 		Input:  tp,
 	}
 	wantResult = sqltypes.MakeTestResult(
 		fields,
 		"b|2",
 		"c|3",
+	)
+	result, err = l.Execute(nil, bindVars, false)
+	if err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("l.Execute:\n got %v, want\n%v", result, wantResult)
+	}
+
+	// Works on boundary condition (elements == limit + offset)
+	inputResult = sqltypes.MakeTestResult(
+		fields,
+		"a|1",
+		"b|2",
+		"c|3",
+		"c|4",
+		"c|5",
+		"c|6",
+	)
+	tp = &fakePrimitive{
+		results: []*sqltypes.Result{inputResult},
+	}
+
+	l = &Limit{
+		Count:  int64PlanValue(2),
+		Offset: int64PlanValue(4),
+		Input:  tp,
+	}
+	wantResult = sqltypes.MakeTestResult(
+		fields,
+		"c|5",
+		"c|6",
 	)
 	result, err = l.Execute(nil, bindVars, false)
 	if err != nil {
@@ -234,10 +264,43 @@ func TestLimitOffsetExecute(t *testing.T) {
 		results: []*sqltypes.Result{inputResult},
 	}
 
-	offset = int64PlanValue(5)
+	l = &Limit{
+		Count:  int64PlanValue(4),
+		Offset: int64PlanValue(2),
+		Input:  tp,
+	}
+	wantResult = sqltypes.MakeTestResult(
+		fields,
+		"c|3",
+		"c|4",
+		"c|5",
+		"c|6",
+	)
+	result, err = l.Execute(nil, bindVars, false)
+	if err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("l.Execute:\n got %v, want\n%v", result, wantResult)
+	}
+
+	// test when limit is beyond the number of available elements
+	inputResult = sqltypes.MakeTestResult(
+		fields,
+		"a|1",
+		"b|2",
+		"c|3",
+		"c|4",
+		"c|5",
+		"c|6",
+	)
+	tp = &fakePrimitive{
+		results: []*sqltypes.Result{inputResult},
+	}
+
 	l = &Limit{
 		Count:  int64PlanValue(2),
-		Offset: &offset,
+		Offset: int64PlanValue(5),
 		Input:  tp,
 	}
 	wantResult = sqltypes.MakeTestResult(
@@ -266,10 +329,9 @@ func TestLimitOffsetExecute(t *testing.T) {
 		results: []*sqltypes.Result{inputResult},
 	}
 
-	offset = int64PlanValue(7)
 	l = &Limit{
 		Count:  int64PlanValue(2),
-		Offset: &offset,
+		Offset: int64PlanValue(7),
 		Input:  tp,
 	}
 	wantResult = sqltypes.MakeTestResult(
@@ -298,10 +360,9 @@ func TestLimitOffsetExecute(t *testing.T) {
 		results: []*sqltypes.Result{inputResult},
 	}
 
-	offset = sqltypes.PlanValue{Key: "o"}
 	l = &Limit{
 		Count:  sqltypes.PlanValue{Key: "l"},
-		Offset: &offset,
+		Offset: sqltypes.PlanValue{Key: "o"},
 		Input:  tp,
 	}
 	result, err = l.Execute(nil, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(1), "o": sqltypes.Int64BindVariable(1)}, false)

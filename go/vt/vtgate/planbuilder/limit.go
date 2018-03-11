@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -122,19 +123,21 @@ func (l *limit) SetLimit(limit *sqlparser.Limit) error {
 		return err
 	}
 	l.elimit.Count = pv
-	l.input.SetUpperLimit(count)
 
-	offset, ok := limit.Offset.(*sqlparser.SQLVal)
-	if ok {
+	switch offset := limit.Offset.(type) {
+	case *sqlparser.SQLVal:
 		pv, err = sqlparser.NewPlanValue(offset)
 		if err != nil {
 			return err
 		}
-		l.elimit.Offset = &pv
-		// When offset is present in a scatter query, we set this bind variable
-		// so limit engine can update the actual limit at runtime with limit + offset
-		l.input.SetUpperLimit(sqlparser.NewValArg([]byte(":__upper_limit")))
+		l.elimit.Offset = pv
+	case nil:
+		l.elimit.Offset = sqltypes.PlanValue{}
+	default:
+		return fmt.Errorf("unexpected expression in LIMIT: %v", sqlparser.String(limit))
 	}
+
+	l.input.SetUpperLimit(sqlparser.NewValArg([]byte(":__upper_limit")))
 	return nil
 }
 
