@@ -1032,7 +1032,7 @@ class TestVTGateFunctions(unittest.TestCase):
         {'user_id': 3})
     vtgate_conn.commit()
 
-  def test_user_sharded_limit(self):
+  def test_user_scatter_limit(self):
     vtgate_conn = get_connection()
     # Works when there is no data
     result = self.execute_on_master(
