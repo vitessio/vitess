@@ -1032,7 +1032,7 @@ class TestVTGateFunctions(unittest.TestCase):
         {'user_id': 3})
     vtgate_conn.commit()
 
-  def test_user_sharded_offset(self):
+  def test_user_sharded_limit(self):
     vtgate_conn = get_connection()
     # Works when there is no data
     result = self.execute_on_master(
@@ -1061,6 +1061,16 @@ class TestVTGateFunctions(unittest.TestCase):
     result = shard_1_master.mquery('vt_user', 'select id, name from vt_user2')
     self.assertEqual(result, ((4L, 'name3'),))
  
+    # Works when limit is set
+    result = self.execute_on_master(
+      vtgate_conn,
+      'select id from vt_user2 order by id limit :limit', {'limit': 2 })
+    self.assertEqual(
+        result,
+        ([(1,),(2,),], 2L, 0,
+         [('id', self.int_type)]))
+
+
     # Fetching with offset works
     count = 4
     for x in xrange(count):
