@@ -375,6 +375,7 @@ func TestLimitOffsetExecute(t *testing.T) {
 }
 
 func TestLimitStreamExecute(t *testing.T) {
+	bindVars := make(map[string]*querypb.BindVariable)
 	fields := sqltypes.MakeTestFields(
 		"col1|col2",
 		"int64|varchar",
@@ -396,7 +397,7 @@ func TestLimitStreamExecute(t *testing.T) {
 
 	// Test with limit smaller than input.
 	var results []*sqltypes.Result
-	err := l.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
+	err := l.StreamExecute(nil, bindVars, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -431,7 +432,7 @@ func TestLimitStreamExecute(t *testing.T) {
 	tp.rewind()
 	l.Count = int64PlanValue(3)
 	results = nil
-	err = l.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
+	err = l.StreamExecute(nil, bindVars, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -453,7 +454,7 @@ func TestLimitStreamExecute(t *testing.T) {
 	tp.rewind()
 	l.Count = int64PlanValue(4)
 	results = nil
-	err = l.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
+	err = l.StreamExecute(nil, bindVars, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -487,17 +488,18 @@ func TestLimitGetFields(t *testing.T) {
 }
 
 func TestLimitInputFail(t *testing.T) {
+	bindVars := make(map[string]*querypb.BindVariable)
 	tp := &fakePrimitive{sendErr: errors.New("input fail")}
 
 	l := &Limit{Count: int64PlanValue(1), Input: tp}
 
 	want := "input fail"
-	if _, err := l.Execute(nil, nil, false); err == nil || err.Error() != want {
+	if _, err := l.Execute(nil, bindVars, false); err == nil || err.Error() != want {
 		t.Errorf("l.Execute(): %v, want %s", err, want)
 	}
 
 	tp.rewind()
-	err := l.StreamExecute(nil, nil, false, func(_ *sqltypes.Result) error { return nil })
+	err := l.StreamExecute(nil, bindVars, false, func(_ *sqltypes.Result) error { return nil })
 	if err == nil || err.Error() != want {
 		t.Errorf("l.StreamExecute(): %v, want %s", err, want)
 	}

@@ -1216,12 +1216,12 @@ func TestSelectScatterLimit(t *testing.T) {
 	}
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           query,
-		BindVariables: map[string]*querypb.BindVariable{},
+		Sql:           "select col1, col2 from user order by col2 desc limit :__upper_limit",
+		BindVariables: map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)},
 	}}
 	for _, conn := range conns {
 		if !reflect.DeepEqual(conn.Queries, wantQueries) {
-			t.Errorf("conn.Queries = %#v, want %#v", conn.Queries, wantQueries)
+			t.Errorf("got: conn.Queries = %v, want: %v", conn.Queries, wantQueries)
 		}
 	}
 
@@ -1290,12 +1290,12 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 	}
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           query,
-		BindVariables: map[string]*querypb.BindVariable{},
+		Sql:           "select col1, col2 from user order by col2 desc limit :__upper_limit",
+		BindVariables: map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)},
 	}}
 	for _, conn := range conns {
 		if !reflect.DeepEqual(conn.Queries, wantQueries) {
-			t.Errorf("conn.Queries = %#v, want %#v", conn.Queries, wantQueries)
+			t.Errorf("got: conn.Queries = %v, want: %v", conn.Queries, wantQueries)
 		}
 	}
 
