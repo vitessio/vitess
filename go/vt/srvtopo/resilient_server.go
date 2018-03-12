@@ -222,6 +222,11 @@ func NewResilientServer(base *topo.Server, counterPrefix string) *ResilientServe
 	}
 }
 
+// GetTopoServer returns the topo.Server that backs the resilient server.
+func (server *ResilientServer) GetTopoServer() *topo.Server {
+	return server.topoServer
+}
+
 // GetSrvKeyspaceNames returns all keyspace names for the given cell.
 func (server *ResilientServer) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
 	server.counts.Add(queryCategory, 1)
