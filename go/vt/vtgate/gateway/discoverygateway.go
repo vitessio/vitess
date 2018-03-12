@@ -65,7 +65,6 @@ type discoveryGateway struct {
 	queryservice.QueryService
 	hc            discovery.HealthCheck
 	tsc           *discovery.TabletStatsCache
-	topoServer    *topo.Server
 	srvTopoServer srvtopo.Server
 	localCell     string
 	retryCount    int
@@ -92,7 +91,6 @@ func createDiscoveryGateway(hc discovery.HealthCheck, serv srvtopo.Server, cell 
 	dg := &discoveryGateway{
 		hc:                hc,
 		tsc:               discovery.NewTabletStatsCacheDoNotSetListener(topoServer, cell),
-		topoServer:        topoServer,
 		srvTopoServer:     serv,
 		localCell:         cell,
 		retryCount:        retryCount,
@@ -119,7 +117,7 @@ func createDiscoveryGateway(hc discovery.HealthCheck, serv srvtopo.Server, cell 
 			tr = fbs
 		}
 
-		ctw := discovery.NewCellTabletsWatcher(dg.topoServer, tr, c, *refreshInterval, *topoReadConcurrency)
+		ctw := discovery.NewCellTabletsWatcher(topoServer, tr, c, *refreshInterval, *topoReadConcurrency)
 		dg.tabletsWatchers = append(dg.tabletsWatchers, ctw)
 	}
 	dg.QueryService = queryservice.Wrap(nil, dg.withRetry)
