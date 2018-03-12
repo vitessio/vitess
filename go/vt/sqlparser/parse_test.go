@@ -1080,6 +1080,8 @@ var (
 	}, {
 		input: "select e.id, s.city from employees as e join stores partition (p1) as s on e.store_id = s.id",
 	}, {
+		input: "select truncate(120.3333, 2) from dual",
+	}, {
 		input: "update t partition (p0) set a = 1",
 	}, {
 		input: "insert into t partition (p0) values (1, 'asdf')",
