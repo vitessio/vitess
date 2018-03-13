@@ -24,7 +24,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 var _ builder = (*orderedAggregate)(nil)
@@ -107,7 +106,7 @@ func checkAggregates(sel *sqlparser.Select, bldr builder) (builder, error) {
 			switch selectExpr := selectExpr.(type) {
 			case *sqlparser.AliasedExpr:
 				vindex := bldr.Symtab().Vindex(selectExpr.Expr, rb)
-				if vindex != nil && vindexes.IsUnique(vindex) {
+				if vindex != nil && vindex.IsUnique() {
 					return bldr, nil
 				}
 			}
@@ -205,7 +204,7 @@ func groupByHasUniqueVindex(sel *sqlparser.Select, bldr builder, rb *route) bool
 			continue
 		}
 		vindex := bldr.Symtab().Vindex(matchedExpr, rb)
-		if vindex != nil && vindexes.IsUnique(vindex) {
+		if vindex != nil && vindex.IsUnique() {
 			return true
 		}
 	}

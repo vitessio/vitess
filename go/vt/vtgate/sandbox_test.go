@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
@@ -217,6 +218,11 @@ func createUnshardedKeyspace() (*topodatapb.SrvKeyspace, error) {
 
 // sandboxTopo satisfies the srvtopo.Server interface
 type sandboxTopo struct {
+}
+
+// GetTopoServer is part of the srvtopo.Server interface
+func (sct *sandboxTopo) GetTopoServer() *topo.Server {
+	return nil
 }
 
 // GetSrvKeyspaceNames is part of the srvtopo.Server interface.

@@ -120,12 +120,12 @@ func VtctldTablet(aliasName string) template.HTML {
 // StatusFuncs returns a FuncMap that contains all of our methods here.
 // It is exported so tests can use them.
 var StatusFuncs = template.FuncMap{
-	"github_com_youtube_vitess_vtctld_keyspace":     VtctldKeyspace,
-	"github_com_youtube_vitess_vtctld_shard":        VtctldShard,
-	"github_com_youtube_vitess_vtctld_srv_cell":     VtctldSrvCell,
-	"github_com_youtube_vitess_vtctld_srv_keyspace": VtctldSrvKeyspace,
-	"github_com_youtube_vitess_vtctld_replication":  VtctldReplication,
-	"github_com_youtube_vitess_vtctld_tablet":       VtctldTablet,
+	"github_com_vitessio_vitess_vtctld_keyspace":     VtctldKeyspace,
+	"github_com_vitessio_vitess_vtctld_shard":        VtctldShard,
+	"github_com_vitessio_vitess_vtctld_srv_cell":     VtctldSrvCell,
+	"github_com_vitessio_vitess_vtctld_srv_keyspace": VtctldSrvKeyspace,
+	"github_com_vitessio_vitess_vtctld_replication":  VtctldReplication,
+	"github_com_vitessio_vitess_vtctld_tablet":       VtctldTablet,
 }
 
 func init() {

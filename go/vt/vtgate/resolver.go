@@ -25,7 +25,7 @@ import (
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/gateway"
@@ -69,38 +69,7 @@ func isRetryableError(err error) bool {
 	return vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION
 }
 
-// ExecuteKeyspaceIds executes a non-streaming query based on KeyspaceIds.
-// It retries query if new keyspace/shards are re-resolved after a retryable error.
-// This throws an error if a dml spans multiple keyspace_ids. Resharding depends
-// on being able to uniquely route a write.
-func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
-	if sqlparser.IsDML(sql) && len(keyspaceIds) > 1 {
-		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "DML should not span multiple keyspace_ids")
-	}
-	mapToShards := func() ([]*srvtopo.ResolvedShard, error) {
-		return res.resolver.ResolveKeyspaceIds(
-			ctx,
-			keyspace,
-			tabletType,
-			keyspaceIds)
-	}
-	return res.Execute(ctx, sql, bindVariables, keyspace, tabletType, session, mapToShards, notInTransaction, options, nil /* LogStats */)
-}
-
-// ExecuteKeyRanges executes a non-streaming query based on KeyRanges.
-// It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
-	mapToShards := func() ([]*srvtopo.ResolvedShard, error) {
-		return res.resolver.ResolveKeyRanges(
-			ctx,
-			keyspace,
-			tabletType,
-			keyRanges)
-	}
-	return res.Execute(ctx, sql, bindVariables, keyspace, tabletType, session, mapToShards, notInTransaction, options, nil)
-}
-
-// Execute executes a non-streaming query based on shards resolved by given func.
+// Execute executes a non-streaming query based on provided destination.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) Execute(
 	ctx context.Context,
@@ -108,13 +77,13 @@ func (res *Resolver) Execute(
 	bindVars map[string]*querypb.BindVariable,
 	keyspace string,
 	tabletType topodatapb.TabletType,
+	destination key.Destination,
 	session *vtgatepb.Session,
-	mapToShards func() ([]*srvtopo.ResolvedShard, error),
 	notInTransaction bool,
 	options *querypb.ExecuteOptions,
 	logStats *LogStats,
 ) (*sqltypes.Result, error) {
-	rss, err := mapToShards()
+	rss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +91,7 @@ func (res *Resolver) Execute(
 		logStats.ShardQueries = uint32(len(rss))
 	}
 	for {
-		qr, err := res.scatterConn.Execute2(
+		qr, err := res.scatterConn.Execute(
 			ctx,
 			sql,
 			bindVars,
@@ -132,7 +101,7 @@ func (res *Resolver) Execute(
 			notInTransaction,
 			options)
 		if isRetryableError(err) {
-			newRss, err := mapToShards()
+			newRss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination)
 			if err != nil {
 				return nil, err
 			}
@@ -164,11 +133,23 @@ func (res *Resolver) ExecuteEntityIds(
 	notInTransaction bool,
 	options *querypb.ExecuteOptions,
 ) (*sqltypes.Result, error) {
-	rss, values, err := res.resolver.ResolveEntityIds(
+	// Unpack the entityKeyspaceIDs into []ids and []Destination
+	ids := make([]*querypb.Value, len(entityKeyspaceIDs))
+	destinations := make([]key.Destination, len(entityKeyspaceIDs))
+	for i, eki := range entityKeyspaceIDs {
+		ids[i] = &querypb.Value{
+			Type:  eki.Type,
+			Value: eki.Value,
+		}
+		destinations[i] = key.DestinationKeyspaceID(eki.KeyspaceId)
+	}
+
+	rss, values, err := res.resolver.ResolveDestinations(
 		ctx,
 		keyspace,
-		entityKeyspaceIDs,
-		tabletType)
+		tabletType,
+		ids,
+		destinations)
 	if err != nil {
 		return nil, err
 	}
@@ -179,17 +160,17 @@ func (res *Resolver) ExecuteEntityIds(
 			rss,
 			sqls,
 			bindVars,
-			keyspace,
 			tabletType,
 			NewSafeSession(session),
 			notInTransaction,
 			options)
 		if isRetryableError(err) {
-			newRss, newValues, err := res.resolver.ResolveEntityIds(
+			newRss, newValues, err := res.resolver.ResolveDestinations(
 				ctx,
 				keyspace,
-				entityKeyspaceIDs,
-				tabletType)
+				tabletType,
+				ids,
+				destinations)
 			if err != nil {
 				return nil, err
 			}
@@ -251,55 +232,21 @@ func (res *Resolver) ExecuteBatch(
 	}
 }
 
-// StreamExecuteKeyspaceIds executes a streaming query on the specified KeyspaceIds.
-// The KeyspaceIds are resolved to shards using the serving graph.
+// StreamExecute executes a streaming query on shards resolved by given func.
 // This function currently temporarily enforces the restriction of executing on
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
-// The api supports supplying multiple KeyspaceIds to make it future proof.
-func (res *Resolver) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
-	mapToShards := func(k string) ([]*srvtopo.ResolvedShard, error) {
-		return res.resolver.ResolveKeyspaceIds(
-			ctx,
-			k,
-			tabletType,
-			keyspaceIds)
-	}
-	return res.streamExecute(ctx, sql, bindVariables, keyspace, tabletType, mapToShards, options, callback)
-}
-
-// StreamExecuteKeyRanges executes a streaming query on the specified KeyRanges.
-// The KeyRanges are resolved to shards using the serving graph.
-// This function currently temporarily enforces the restriction of executing on
-// one shard since it cannot merge-sort the results to guarantee ordering of
-// response which is needed for checkpointing.
-// The api supports supplying multiple keyranges to make it future proof.
-func (res *Resolver) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
-	mapToShards := func(k string) ([]*srvtopo.ResolvedShard, error) {
-		return res.resolver.ResolveKeyRanges(
-			ctx,
-			k,
-			tabletType,
-			keyRanges)
-	}
-	return res.streamExecute(ctx, sql, bindVariables, keyspace, tabletType, mapToShards, options, callback)
-}
-
-// streamExecute executes a streaming query on shards resolved by given func.
-// This function currently temporarily enforces the restriction of executing on
-// one shard since it cannot merge-sort the results to guarantee ordering of
-// response which is needed for checkpointing.
-func (res *Resolver) streamExecute(
+func (res *Resolver) StreamExecute(
 	ctx context.Context,
 	sql string,
 	bindVars map[string]*querypb.BindVariable,
 	keyspace string,
 	tabletType topodatapb.TabletType,
-	mapToShards func(string) ([]*srvtopo.ResolvedShard, error),
+	destination key.Destination,
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
 ) error {
-	rss, err := mapToShards(keyspace)
+	rss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination)
 	if err != nil {
 		return err
 	}
@@ -316,18 +263,18 @@ func (res *Resolver) streamExecute(
 
 // MessageStream streams messages.
 func (res *Resolver) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error {
-	var rss []*srvtopo.ResolvedShard
-	var err error
+	var destination key.Destination
 	if shard != "" {
 		// If we pass in a shard, resolve the keyspace/shard
 		// following redirects.
-		rss, err = res.resolver.ResolveShards(ctx, keyspace, []string{shard}, topodatapb.TabletType_MASTER)
+		destination = key.DestinationShard(shard)
 	} else {
 		// If we pass in a KeyRange, resolve it to the proper shards.
 		// Note we support multiple shards here, we will just aggregate
 		// the message streams.
-		rss, err = res.resolver.ResolveExactShards(ctx, keyspace, topodatapb.TabletType_MASTER, keyRange)
+		destination = key.DestinationExactKeyRange{KeyRange: keyRange}
 	}
+	rss, err := res.resolver.ResolveDestination(ctx, keyspace, topodatapb.TabletType_MASTER, destination)
 	if err != nil {
 		return err
 	}
@@ -337,13 +284,13 @@ func (res *Resolver) MessageStream(ctx context.Context, keyspace string, shard s
 // MessageAckKeyspaceIds routes message acks based on the associated keyspace ids.
 func (res *Resolver) MessageAckKeyspaceIds(ctx context.Context, keyspace, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error) {
 	ids := make([]*querypb.Value, len(idKeyspaceIDs))
-	ksids := make([][]byte, len(idKeyspaceIDs))
+	ksids := make([]key.Destination, len(idKeyspaceIDs))
 	for i, iki := range idKeyspaceIDs {
 		ids[i] = iki.Id
-		ksids[i] = iki.KeyspaceId
+		ksids[i] = key.DestinationKeyspaceID(iki.KeyspaceId)
 	}
 
-	rss, values, err := res.resolver.ResolveKeyspaceIdsValues(ctx, keyspace, ids, ksids, topodatapb.TabletType_MASTER)
+	rss, values, err := res.resolver.ResolveDestinations(ctx, keyspace, topodatapb.TabletType_MASTER, ids, ksids)
 	if err != nil {
 		return 0, err
 	}
@@ -354,26 +301,22 @@ func (res *Resolver) MessageAckKeyspaceIds(ctx context.Context, keyspace, name s
 // UpdateStream streams the events.
 // TODO(alainjobart): Implement the multi-shards merge code.
 func (res *Resolver) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, callback func(*querypb.StreamEvent, int64) error) error {
-	var rs *srvtopo.ResolvedShard
+	var destination key.Destination
 	if shard != "" {
 		// If we pass in a shard, resolve the keyspace/shard
 		// following redirects.
-		rss, err := res.resolver.ResolveShards(ctx, keyspace, []string{shard}, tabletType)
-		if err != nil {
-			return err
-		}
-		rs = rss[0]
+		destination = key.DestinationShard(shard)
 	} else {
 		// If we pass in a KeyRange, resolve it to one shard
 		// only for now.
-		rss, err := res.resolver.ResolveExactShards(ctx, keyspace, tabletType, keyRange)
-		if err != nil {
-			return err
-		}
-		if len(rss) != 1 {
-			return fmt.Errorf("UpdateStream only supports exactly one shard per keyrange at the moment, but provided keyrange %v maps to %v shards", keyRange, len(rss))
-		}
-		rs = rss[0]
+		destination = key.DestinationExactKeyRange{KeyRange: keyRange}
+	}
+	rss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination)
+	if err != nil {
+		return err
+	}
+	if len(rss) != 1 {
+		return fmt.Errorf("UpdateStream only supports exactly one shard per keyrange at the moment, but provided keyrange %v maps to %v shards", keyRange, len(rss))
 	}
 
 	// Just send it to ScatterConn.  With just one connection, the
@@ -384,7 +327,7 @@ func (res *Resolver) UpdateStream(ctx context.Context, keyspace string, shard st
 		position = event.Position
 		timestamp = 0
 	}
-	return res.scatterConn.UpdateStream(ctx, rs, timestamp, position, func(se *querypb.StreamEvent) error {
+	return res.scatterConn.UpdateStream(ctx, rss[0], timestamp, position, func(se *querypb.StreamEvent) error {
 		var timestamp int64
 		if se.EventToken != nil {
 			timestamp = se.EventToken.Timestamp

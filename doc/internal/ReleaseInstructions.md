@@ -1,7 +1,7 @@
 # Release Instructions
 
 This page describes the steps for cutting a new [open source release]
-(https://github.com/youtube/vitess/releases).
+(https://github.com/vitessio/vitess/releases).
 
 ## Versioning
 
@@ -15,7 +15,7 @@ backward-incompatible way -- for example, when removing deprecated interfaces.
 Our public API includes (but is not limited to):
 
 *   The VTGate [RPC interfaces]
-    (https://github.com/youtube/vitess/tree/master/proto).
+    (https://github.com/vitessio/vitess/tree/master/proto).
 *   The interfaces exposed by the VTGate client library in each language.
 
 Care must also be taken when changing the format of any data stored by a live
@@ -45,7 +45,7 @@ precedence.
 
 ## Milestones
 
-[GitHub Milestones](https://github.com/youtube/vitess/milestones) are hotlists
+[GitHub Milestones](https://github.com/vitessio/vitess/milestones) are hotlists
 for Issues and Pull Requests.
 
 When it's time to start planning a new Vitess release, create a milestone for it
@@ -63,7 +63,7 @@ and tag the following items under it:
 ## Release Branches
 
 Each minor release level (X.Y) should have a [release branch]
-(https://github.com/youtube/vitess/branches/all?query=release) named
+(https://github.com/vitessio/vitess/branches/all?query=release) named
 `release-X.Y`. This branch should diverge from `master` when the code freeze for
 that release is declared, after which point only bugfix PRs should be
 cherrypicked onto the branch. All other activity on `master` will go out with a
@@ -241,7 +241,7 @@ At the end of the release, you will also have to bump the SNAPSHOT version in th
 
 ## Push the release branch and tag to upstream
 
-Note that we're pushing to upstream (youtube/vitess), not origin (your fork).
+Note that we're pushing to upstream (vitessio/vitess), not origin (your fork).
 
 <p class="warning"><b>Warning:</b> After the following push, there's no going
 back, since tags don't get updated if someone else has fetched them already.
@@ -257,8 +257,8 @@ git push upstream vX.Y.Z
 
 ## Add release notes and send announcement
 
-[Find your new tag](https://github.com/youtube/vitess/tags) and add release
-notes. Use the GitHub [Compare](https://github.com/youtube/vitess/compare) tool
+[Find your new tag](https://github.com/vitessio/vitess/tags) and add release
+notes. Use the GitHub [Compare](https://github.com/vitessio/vitess/compare) tool
 to see all the commits since the last release.
 
 Then send an announcement on the [vitess-announce]

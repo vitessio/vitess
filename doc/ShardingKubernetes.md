@@ -17,7 +17,7 @@ the example Vitess cluster in Kubernetes.
 
 Since Vitess makes [sharding]({% link user-guide/sharding.md %})
 transparent to the app layer, the
-[Guestbook](https://github.com/youtube/vitess/tree/master/examples/kubernetes/guestbook)
+[Guestbook](https://github.com/vitessio/vitess/tree/master/examples/kubernetes/guestbook)
 sample app will stay live throughout the
 [resharding]({% link user-guide/sharding.md %}#resharding) process,
 confirming that the Vitess cluster continues to serve without downtime.

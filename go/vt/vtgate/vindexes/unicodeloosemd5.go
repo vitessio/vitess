@@ -23,13 +23,14 @@ import (
 	"unicode/utf8"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
 )
 
 var (
-	_ Functional = (*UnicodeLooseMD5)(nil)
+	_ Vindex = (*UnicodeLooseMD5)(nil)
 )
 
 // UnicodeLooseMD5 is a vindex that normalizes and hashes unicode strings
@@ -56,6 +57,16 @@ func (vind *UnicodeLooseMD5) Cost() int {
 	return 1
 }
 
+// IsUnique returns true since the Vindex is unique.
+func (vind *UnicodeLooseMD5) IsUnique() bool {
+	return true
+}
+
+// IsFunctional returns true since the Vindex is functional.
+func (vind *UnicodeLooseMD5) IsFunctional() bool {
+	return true
+}
+
 // Verify returns true if ids maps to ksids.
 func (vind *UnicodeLooseMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
@@ -69,15 +80,15 @@ func (vind *UnicodeLooseMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]b
 	return out, nil
 }
 
-// Map returns the corresponding keyspace id values for the given ids.
-func (vind *UnicodeLooseMD5) Map(_ VCursor, ids []sqltypes.Value) ([]KsidOrRange, error) {
-	out := make([]KsidOrRange, 0, len(ids))
+// Map can map ids to key.Destination objects.
+func (vind *UnicodeLooseMD5) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
 	for _, id := range ids {
 		data, err := unicodeHash(id)
 		if err != nil {
 			return nil, fmt.Errorf("UnicodeLooseMD5.Map: %v", err)
 		}
-		out = append(out, KsidOrRange{ID: data})
+		out = append(out, key.DestinationKeyspaceID(data))
 	}
 	return out, nil
 }

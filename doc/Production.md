@@ -30,5 +30,5 @@ See the [Getting Started]({% link getting-started/index.md %}) guide.
 ## Deploying on bare metal
 
 See the
-[Local Setup](https://github.com/youtube/vitess/tree/master/examples/local)
+[Local Setup](https://github.com/vitessio/vitess/tree/master/examples/local)
 scripts for examples of how to bring up a Vitess cluster manually.

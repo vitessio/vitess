@@ -25,7 +25,7 @@ internal release.
 
 ## Vitess 2.0 GA
 
-[Vitess 2.0 GA](https://github.com/youtube/vitess/releases/tag/v2.0.0) was
+[Vitess 2.0 GA](https://github.com/vitessio/vitess/releases/tag/v2.0.0) was
 created on July 11, 2016. It was the first major public release.
 
 It contains all the core features of the Vitess product:
@@ -91,7 +91,7 @@ following core features:
 
 We already cut
 the
-[2.1.0-alpha.1 release](https://github.com/youtube/vitess/releases/tag/v2.1.0-alpha.1),
+[2.1.0-alpha.1 release](https://github.com/vitessio/vitess/releases/tag/v2.1.0-alpha.1),
 and we are finalizing the last details at the moment. Release ETA is around
 beginning of 2017.
 

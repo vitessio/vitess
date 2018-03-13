@@ -6,7 +6,7 @@ The goal of this document is to describe the guiding principles that will be use
 
 ### Prerequisites
 
-Before reading this doc you must be familiar with [vindexes](https://github.com/youtube/vitess/blob/master/doc/V3VindexDesign.md), which is used as foundation for the arguments presented here.
+Before reading this doc you must be familiar with [vindexes](https://github.com/vitessio/vitess/blob/master/doc/V3VindexDesign.md), which is used as foundation for the arguments presented here.
 
 # Background
 
@@ -782,7 +782,7 @@ Recapitulating what we’ve covered so far:
 
 Once we start allowing joins and subqueries, we have a whole bunch of table aliases and relationships to deal with. We have to contend with name clashes, self-joins, as well as scoping rules. In a way, the vschema has acted as a static symbol table so far. But that’s not going to be enough any more.
 
-The core of the symbol table will contain a map whose key will be a table alias, and the elements will be [similar to the table in vschema](https://github.com/youtube/vitess/blob/master/go/vt/vtgate/planbuilder/schema.go#L22). However, it will also contain a column list that will be built as the query is parsed.
+The core of the symbol table will contain a map whose key will be a table alias, and the elements will be [similar to the table in vschema](https://github.com/vitessio/vitess/blob/master/go/vt/vtgate/planbuilder/schema.go#L22). However, it will also contain a column list that will be built as the query is parsed.
 
 ### A simple example
 
@@ -1194,7 +1194,7 @@ The overall strategy is as follows:
 
 In order to align ourselves with our priorities, we’ll start off with a limited set of primitives, and then we can expand from there.
 
-VTGate already has `Route` and `RouteMerge` as primitives. To this list, let’s add `Join` and `LeftJoin`. Using these primitives, we should be able to cover priorities 1-3 (mentioned in the [Prioritization](https://github.com/youtube/vitess/blob/sugudoc/doc/V3HighLevelDesign.md#prioritization) section). So, any constructs that will require VTGate to do additional work will not be supported. Here’s a recap of what each primitive must do:
+VTGate already has `Route` and `RouteMerge` as primitives. To this list, let’s add `Join` and `LeftJoin`. Using these primitives, we should be able to cover priorities 1-3 (mentioned in the [Prioritization](https://github.com/vitessio/vitess/blob/sugudoc/doc/V3HighLevelDesign.md#prioritization) section). So, any constructs that will require VTGate to do additional work will not be supported. Here’s a recap of what each primitive must do:
 
 * `Route`: Sends a query to a single shard or unsharded keyspace.
 * `RouteMerge`: Sends a (mostly) identical query to multiple shards and returns the combined results in no particular order.

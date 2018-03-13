@@ -24,10 +24,7 @@
         "Sharded": true
       },
       "Query": "select e.col, e.id as eid from user_extra as e having eid = :uid",
-      "FieldQuery": "select e.col, e.id as eid from user_extra as e where 1 != 1",
-      "JoinVars": {
-        "uid": {}
-      }
+      "FieldQuery": "select e.col, e.id as eid from user_extra as e where 1 != 1"
     },
     "Cols": [
       1,
@@ -62,10 +59,7 @@
         "Sharded": true
       },
       "Query": "select e.col, e.id as eid from user_extra as e having eid = :uid1 and e.col = :uid",
-      "FieldQuery": "select e.col, e.id as eid from user_extra as e where 1 != 1",
-      "JoinVars": {
-        "uid1": {}
-      }
+      "FieldQuery": "select e.col, e.id as eid from user_extra as e where 1 != 1"
     },
     "Cols": [
       1,
@@ -116,10 +110,7 @@
         "Sharded": true
       },
       "Query": "select 1 from user as u3 where u3.col = :u1_col",
-      "FieldQuery": "select 1 from user as u3 where 1 != 1",
-      "JoinVars": {
-        "u1_col": {}
-      }
+      "FieldQuery": "select 1 from user as u3 where 1 != 1"
     },
     "Cols": [
       -1
@@ -168,10 +159,7 @@
         "Sharded": true
       },
       "Query": "select 1 from user as u3 where u3.col = :u2_col",
-      "FieldQuery": "select 1 from user as u3 where 1 != 1",
-      "JoinVars": {
-        "u2_col": {}
-      }
+      "FieldQuery": "select 1 from user as u3 where 1 != 1"
     },
     "Cols": [
       -1
@@ -206,10 +194,7 @@
           "Sharded": true
         },
         "Query": "select 1 from user as u2 where u2.col = :u1_col",
-        "FieldQuery": "select 1 from user as u2 where 1 != 1",
-        "JoinVars": {
-          "u1_col": {}
-        }
+        "FieldQuery": "select 1 from user as u2 where 1 != 1"
       },
       "Cols": [
         -1,
@@ -226,10 +211,7 @@
         "Sharded": true
       },
       "Query": "select 1 from user as u3 where u3.col = :u1_col",
-      "FieldQuery": "select 1 from user as u3 where 1 != 1",
-      "JoinVars": {
-        "u1_col": {}
-      }
+      "FieldQuery": "select 1 from user as u3 where 1 != 1"
     },
     "Cols": [
       -1
@@ -285,10 +267,7 @@
         "Query": "select 1 from user as u3 where u3.id = :u1_col",
         "FieldQuery": "select 1 from user as u3 where 1 != 1",
         "Vindex": "user_index",
-        "Values": [":u1_col"],
-        "JoinVars": {
-          "u1_col": {}
-        }
+        "Values": [":u1_col"]
       },
       "Cols": [
         -1,
@@ -305,10 +284,7 @@
         "Sharded": true
       },
       "Query": "select 1 from user as u4 where u4.col = :u1_col",
-      "FieldQuery": "select 1 from user as u4 where 1 != 1",
-      "JoinVars": {
-        "u1_col": {}
-      }
+      "FieldQuery": "select 1 from user as u4 where 1 != 1"
     },
     "Cols": [
       -1
@@ -345,10 +321,7 @@
         "Query": "select 1 from user as u2 where u2.id = :u1_col",
         "FieldQuery": "select 1 from user as u2 where 1 != 1",
         "Vindex": "user_index",
-        "Values": [":u1_col"],
-        "JoinVars": {
-          "u1_col": {}
-        }
+        "Values": [":u1_col"]
       },
       "Right": {
         "Opcode": "SelectEqualUnique",
@@ -359,10 +332,7 @@
         "Query": "select 1 from user as u3 where u3.id = :u1_col",
         "FieldQuery": "select 1 from user as u3 where 1 != 1",
         "Vindex": "user_index",
-        "Values": [":u1_col"],
-        "JoinVars": {
-          "u1_col": {}
-        }
+        "Values": [":u1_col"]
       }
     },
     "Cols": [
@@ -396,10 +366,7 @@
         "Sharded": false
       },
       "Query": "select unsharded.b from unsharded where unsharded.id = :weird_name_a_b_c",
-      "FieldQuery": "select unsharded.b from unsharded where 1 != 1",
-      "JoinVars": {
-        "weird_name_a_b_c": {}
-      }
+      "FieldQuery": "select unsharded.b from unsharded where 1 != 1"
     },
     "Cols": [
       -1,
@@ -433,10 +400,7 @@
         "Sharded": false
       },
       "Query": "select unsharded.b from unsharded where unsharded.id = :weird_name_a_b_c",
-      "FieldQuery": "select unsharded.b from unsharded where 1 != 1",
-      "JoinVars": {
-        "weird_name_a_b_c": {}
-      }
+      "FieldQuery": "select unsharded.b from unsharded where 1 != 1"
     },
     "Cols": [
       1
@@ -454,6 +418,7 @@
   "Instructions": {
     "Opcode": "Limit",
     "Count": 10,
+    "Offset": null,
     "Input": {
       "Opcode": "Join",
       "Left": {
@@ -472,10 +437,7 @@
           "Sharded": true
         },
         "Query": "select e.id from user_extra as e where e.id = :u_col",
-        "FieldQuery": "select e.id from user_extra as e where 1 != 1",
-        "JoinVars": {
-          "u_col": {}
-        }
+        "FieldQuery": "select e.id from user_extra as e where 1 != 1"
       },
       "Cols": [
         -1,

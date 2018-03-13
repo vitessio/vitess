@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 )
 
 var numeric Vindex
@@ -44,7 +45,7 @@ func TestNumericString(t *testing.T) {
 }
 
 func TestNumericMap(t *testing.T) {
-	got, err := numeric.(Unique).Map(nil, []sqltypes.Value{
+	got, err := numeric.Map(nil, []sqltypes.Value{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 		sqltypes.NewInt64(3),
@@ -58,16 +59,16 @@ func TestNumericMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := []KsidOrRange{
-		{ID: []byte("\x00\x00\x00\x00\x00\x00\x00\x01")},
-		{ID: []byte("\x00\x00\x00\x00\x00\x00\x00\x02")},
-		{ID: []byte("\x00\x00\x00\x00\x00\x00\x00\x03")},
-		{ID: nil},
-		{ID: []byte("\x00\x00\x00\x00\x00\x00\x00\x04")},
-		{ID: []byte("\x00\x00\x00\x00\x00\x00\x00\x05")},
-		{ID: []byte("\x00\x00\x00\x00\x00\x00\x00\x06")},
-		{ID: []byte("\x00\x00\x00\x00\x00\x00\x00\x07")},
-		{ID: []byte("\x00\x00\x00\x00\x00\x00\x00\x08")},
+	want := []key.Destination{
+		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x01")),
+		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x02")),
+		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x03")),
+		key.DestinationNone{},
+		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x04")),
+		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x05")),
+		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x06")),
+		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x07")),
+		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x08")),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %+v, want %+v", got, want)

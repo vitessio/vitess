@@ -963,6 +963,7 @@
   "Instructions": {
     "Opcode": "Limit",
     "Count": 10,
+    "Offset": null,
     "Input": {
       "Aggregates": [
         {
@@ -979,7 +980,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "select col, count(*) from user group by col order by col asc limit 10",
+        "Query": "select col, count(*) from user group by col order by col asc limit :__upper_limit",
         "FieldQuery": "select col, count(*) from user where 1 != 1 group by col",
         "OrderBy": [
           {

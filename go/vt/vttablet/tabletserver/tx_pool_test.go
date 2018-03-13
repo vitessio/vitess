@@ -614,6 +614,7 @@ func newTxPool() *TxPool {
 	poolName := fmt.Sprintf("TestTransactionPool-%d", randID)
 	transactionCap := 300
 	transactionTimeout := time.Duration(30 * time.Second)
+	waiterCap := 500000
 	idleTimeout := time.Duration(30 * time.Second)
 	limiter := &txlimiter.TxAllowAll{}
 	return NewTxPool(
@@ -622,6 +623,7 @@ func newTxPool() *TxPool {
 		transactionCap,
 		transactionTimeout,
 		idleTimeout,
+		waiterCap,
 		DummyChecker,
 		limiter,
 	)

@@ -399,10 +399,7 @@
         "Sharded": false
       },
       "Query": "select (select :user_id + outm.m + unsharded.m from unsharded) from unsharded as outm",
-      "FieldQuery": "select (select :user_id + outm.m + unsharded.m from unsharded where 1 != 1) from unsharded as outm where 1 != 1",
-      "JoinVars": {
-        "user_id": {}
-      }
+      "FieldQuery": "select (select :user_id + outm.m + unsharded.m from unsharded where 1 != 1) from unsharded as outm where 1 != 1"
     },
     "Cols": [
       -1,
@@ -461,6 +458,31 @@
     },
     "Query": "select * from user where id = 0x04",
     "FieldQuery": "select * from user where 1 != 1"
+  }
+}
+# sharded limit offset
+"select user_id from music order by user_id limit 10, 20"
+{
+  "Original": "select user_id from music order by user_id limit 10, 20",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": 20,
+    "Offset": 10,
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user_id from music order by user_id asc limit :__upper_limit",
+      "FieldQuery": "select user_id from music where 1 != 1",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        }
+      ]
+    }
   }
 }
 
@@ -592,7 +614,7 @@
 {
   "Original": "select * from information_schema.a union select * from information_schema.b",
   "Instructions": {
-    "Opcode": "ExecDBA",
+    "Opcode": "SelectDBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false

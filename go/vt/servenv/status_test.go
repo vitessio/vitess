@@ -29,10 +29,10 @@ import (
 func init() {
 	AddStatusFuncs(
 		template.FuncMap{
-			"github_com_youtube_vitess_to_upper": strings.ToUpper,
+			"github_com_vitessio_vitess_to_upper": strings.ToUpper,
 		})
 
-	AddStatusPart("test_part", `{{github_com_youtube_vitess_to_upper . }}`, func() interface{} {
+	AddStatusPart("test_part", `{{github_com_vitessio_vitess_to_upper . }}`, func() interface{} {
 		return "this should be uppercase"
 	})
 	AddStatusSection("test_section", func() string {

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -208,6 +209,15 @@ func newConn(conn net.Conn) *Conn {
 func (c *Conn) readPacketDirect() ([]byte, error) {
 	var header [4]byte
 	if _, err := io.ReadFull(c.conn, header[:]); err != nil {
+		// Propagate as is so server can ignore this kind of error
+		// Same as readEphemeralPacket()
+		if err == io.EOF {
+			return nil, err
+		}
+		// Treat connection reset by peer as io.EOF, otherwise is too spammy.
+		if strings.HasSuffix(err.Error(), "read: connection reset by peer") {
+			return nil, io.EOF
+		}
 		return nil, fmt.Errorf("io.ReadFull(header size) failed: %v", err)
 	}
 
@@ -270,6 +280,9 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 		// message if a client just disconnects.
 		if err == io.EOF {
 			return nil, err
+		}
+		if strings.HasSuffix(err.Error(), "read: connection reset by peer") {
+			return nil, io.EOF
 		}
 		return nil, fmt.Errorf("io.ReadFull(header size) failed: %v", err)
 	}

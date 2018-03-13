@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlannotation"
@@ -147,7 +148,7 @@ type RegisterVTGate func(vtgateservice.VTGateService)
 var RegisterVTGates []RegisterVTGate
 
 // Init initializes VTGate server.
-func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server, serv srvtopo.Server, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *VTGate {
+func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *VTGate {
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
@@ -162,7 +163,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server
 	var gw gateway.Gateway
 	var l2vtgate *L2VTGate
 	if !*disableLocalGateway {
-		gw = gateway.GetCreator()(hc, topoServer, serv, cell, retryCount)
+		gw = gateway.GetCreator()(hc, serv, cell, retryCount)
 		if err := gateway.WaitForTablets(gw, tabletTypesToWait); err != nil {
 			log.Fatalf("gateway.WaitForTablets failed: %v", err)
 		}
@@ -344,15 +345,13 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 	}
 
 	if target.Shard != "" {
-		err = vtg.resolver.streamExecute(
+		err = vtg.resolver.StreamExecute(
 			ctx,
 			sql,
 			bindVariables,
 			target.Keyspace,
 			target.TabletType,
-			func(keyspace string) ([]*srvtopo.ResolvedShard, error) {
-				return vtg.resolver.resolver.ResolveShards(ctx, keyspace, []string{target.Shard}, target.TabletType)
-			},
+			key.DestinationShard(target.Shard),
 			session.Options,
 			func(reply *sqltypes.Result) error {
 				vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
@@ -408,10 +407,8 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables 
 		bindVariables,
 		keyspace,
 		tabletType,
+		key.DestinationShards(shards),
 		session,
-		func() ([]*srvtopo.ResolvedShard, error) {
-			return vtg.resolver.resolver.ResolveShards(ctx, keyspace, shards, tabletType)
-		},
 		notInTransaction,
 		options,
 		nil,
@@ -452,8 +449,12 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVaria
 	}
 
 	sql = sqlannotation.AnnotateIfDML(sql, keyspaceIds)
+	if sqlparser.IsDML(sql) && len(keyspaceIds) > 1 {
+		err = vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "DML should not span multiple keyspace_ids")
+		goto handleError
+	}
 
-	qr, err = vtg.resolver.ExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, session, notInTransaction, options)
+	qr, err = vtg.resolver.Execute(ctx, sql, bindVariables, keyspace, tabletType, key.DestinationKeyspaceIDs(keyspaceIds), session, notInTransaction, options, nil /* LogStats */)
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 		return qr, nil
@@ -491,7 +492,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, sql string, bindVariabl
 
 	sql = sqlannotation.AnnotateIfDML(sql, nil)
 
-	qr, err = vtg.resolver.ExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, session, notInTransaction, options)
+	qr, err = vtg.resolver.Execute(ctx, sql, bindVariables, keyspace, tabletType, key.DestinationKeyRanges(keyRanges), session, notInTransaction, options, nil /* LogStats */)
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 		return qr, nil
@@ -668,13 +669,13 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bin
 		goto handleError
 	}
 
-	err = vtg.resolver.StreamExecuteKeyspaceIds(
+	err = vtg.resolver.StreamExecute(
 		ctx,
 		sql,
 		bindVariables,
 		keyspace,
-		keyspaceIds,
 		tabletType,
+		key.DestinationKeyspaceIDs(keyspaceIds),
 		options,
 		func(reply *sqltypes.Result) error {
 			vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
@@ -715,13 +716,13 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, sql string, bindV
 		goto handleError
 	}
 
-	err = vtg.resolver.StreamExecuteKeyRanges(
+	err = vtg.resolver.StreamExecute(
 		ctx,
 		sql,
 		bindVariables,
 		keyspace,
-		keyRanges,
 		tabletType,
+		key.DestinationKeyRanges(keyRanges),
 		options,
 		func(reply *sqltypes.Result) error {
 			vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
@@ -757,15 +758,13 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 		goto handleError
 	}
 
-	err = vtg.resolver.streamExecute(
+	err = vtg.resolver.StreamExecute(
 		ctx,
 		sql,
 		bindVariables,
 		keyspace,
 		tabletType,
-		func(keyspace string) ([]*srvtopo.ResolvedShard, error) {
-			return vtg.resolver.resolver.ResolveShards(ctx, keyspace, shards, tabletType)
-		},
+		key.DestinationShards(shards),
 		options,
 		func(reply *sqltypes.Result) error {
 			vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))

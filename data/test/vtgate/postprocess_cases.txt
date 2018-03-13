@@ -274,10 +274,7 @@
       "Query": "select music.col3 from music where music.id = :user_id order by null",
       "FieldQuery": "select music.col3 from music where 1 != 1",
       "Vindex": "music_user_map",
-      "Values": [":user_id"],
-      "JoinVars": {
-        "user_id": {}
-      }
+      "Values": [":user_id"]
     },
     "Cols": [
       -1,
@@ -331,10 +328,7 @@
       "Query": "select music.col3 from music where music.id = :user_id order by rand()",
       "FieldQuery": "select music.col3 from music where 1 != 1",
       "Vindex": "music_user_map",
-      "Values": [":user_id"],
-      "JoinVars": {
-        "user_id": {}
-      }
+      "Values": [":user_id"]
     },
     "Cols": [
       -1,
@@ -420,10 +414,7 @@
         "Sharded": true
       },
       "Query": "select e.id from user_extra as e where e.col = :u_col",
-      "FieldQuery": "select e.id from user_extra as e where 1 != 1",
-      "JoinVars": {
-        "u_col": {}
-      }
+      "FieldQuery": "select e.id from user_extra as e where 1 != 1"
     },
     "Cols": [
       -1,
@@ -561,6 +552,7 @@
   "Instructions": {
     "Opcode": "Limit",
     "Count": 1,
+    "Offset": null,
     "Input": {
       "Opcode": "Join",
       "Left": {
@@ -595,13 +587,14 @@
   "Instructions": {
     "Opcode": "Limit",
     "Count": 1,
+    "Offset": null,
     "Input": {
       "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select col from user limit 1",
+      "Query": "select col from user limit :__upper_limit",
       "FieldQuery": "select col from user where 1 != 1"
     }
   }
@@ -614,13 +607,14 @@
   "Instructions": {
     "Opcode": "Limit",
     "Count": ":a",
+    "Offset": null,
     "Input": {
       "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select col from user limit :a",
+      "Query": "select col from user limit :__upper_limit",
       "FieldQuery": "select col from user where 1 != 1"
     }
   }
@@ -633,13 +627,14 @@
   "Instructions": {
     "Opcode": "Limit",
     "Count": 5,
+    "Offset": null,
     "Input": {
       "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select * from user where (id = 4 and name = 'abc') limit 5",
+      "Query": "select * from user where (id = 4 and name = 'abc') limit :__upper_limit",
       "FieldQuery": "select * from user where 1 != 1"
     }
   }

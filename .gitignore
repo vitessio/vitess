@@ -49,8 +49,11 @@ tags
 /php/composer.phar
 /php/vendor
 
-## vitess.io preview site
+# vitess.io preview site
 /preview-vitess.io/
+
+# vitess.io generated site files
+/docs/
 
 # test.go output files
 _test/

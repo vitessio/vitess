@@ -38,18 +38,18 @@
   <licenses>
     <license>
       <name>Apache Version 2.0</name>
-      <url>https://github.com/youtube/vitess/blob/master/LICENSE</url>
+      <url>https://github.com/vitessio/vitess/blob/master/LICENSE</url>
       <distribution>manual</distribution>
     </license>
   </licenses>
   <scm>
-    <connection>scm:git:git@github.com:youtube/vitess.git</connection>
-    <developerConnection>scm:git:git@github.com:youtube/vitess.git</developerConnection>
-    <url>http://github.com/youtube/vitess/tree/master</url>
+    <connection>scm:git:git@github.com:vitessio/vitess.git</connection>
+    <developerConnection>scm:git:git@github.com:vitessio/vitess.git</developerConnection>
+    <url>http://github.com/vitessio/vitess/tree/master</url>
   </scm>
   <issueManagement>
     <system>GitHub</system>
-    <url>https://github.com/youtube/vitess/issues</url>
+    <url>https://github.com/vitessio/vitess/issues</url>
   </issueManagement>
   <mailingLists>
     <mailingList>
