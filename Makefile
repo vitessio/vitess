@@ -242,10 +242,13 @@ docker_unit_test:
 rebalance_tests:
 	go run test.go -rebalance 5 -remote-stats http://enisoc.com:15123/travis/stats
 
-release:
-ifndef VERSION
-  $(error Set the env var VERSION with the release version)
-endif
+# Release a version.
+# This will generate a tar.gz file into the releases folder with the current source
+# as well as the vendored libs.
+release: docker_base
+	@if [ -z "$VERSION" ]; then \
+	  echo "Set the env var VERSION with the release version"; exit 1;\
+	fi
 	mkdir -p releases
 	docker build -f docker/Dockerfile.release -t vitess/release .
 	docker run -v ${PWD}/releases:/vt/releases --env VERSION=$(VERSION) vitess/release
