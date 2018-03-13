@@ -148,7 +148,7 @@ type RegisterVTGate func(vtgateservice.VTGateService)
 var RegisterVTGates []RegisterVTGate
 
 // Init initializes VTGate server.
-func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server, serv srvtopo.Server, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *VTGate {
+func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *VTGate {
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
@@ -163,7 +163,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer *topo.Server
 	var gw gateway.Gateway
 	var l2vtgate *L2VTGate
 	if !*disableLocalGateway {
-		gw = gateway.GetCreator()(hc, topoServer, serv, cell, retryCount)
+		gw = gateway.GetCreator()(hc, serv, cell, retryCount)
 		if err := gateway.WaitForTablets(gw, tabletTypesToWait); err != nil {
 			log.Fatalf("gateway.WaitForTablets failed: %v", err)
 		}
