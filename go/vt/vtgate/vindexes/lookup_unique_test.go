@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -72,30 +73,33 @@ func TestLookupUniqueMap(t *testing.T) {
 	lookupUnique := createLookup(t, "lookup_unique", false)
 	vc := &vcursor{numRows: 1}
 
-	got, err := lookupUnique.(Unique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lookupUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	if err != nil {
 		t.Error(err)
 	}
-	want := []KsidOrRange{
-		{ID: []byte("1")},
-		{ID: []byte("1")},
+	want := []key.Destination{
+		key.DestinationKeyspaceID([]byte("1")),
+		key.DestinationKeyspaceID([]byte("1")),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %+v, want %+v", got, want)
 	}
 
 	vc.numRows = 0
-	got, err = lookupUnique.(Unique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err = lookupUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	if err != nil {
 		t.Error(err)
 	}
-	want = []KsidOrRange{{}, {}}
+	want = []key.Destination{
+		key.DestinationNone{},
+		key.DestinationNone{},
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
 
 	vc.numRows = 2
-	_, err = lookupUnique.(Unique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	_, err = lookupUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	wantErr := "Lookup.Map: unexpected multiple results from vindex t: INT64(1)"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("lookupUnique(query fail) err: %v, want %s", err, wantErr)
@@ -103,7 +107,7 @@ func TestLookupUniqueMap(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	_, err = lookupUnique.(Unique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	_, err = lookupUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
 	wantErr = "lookup.Map: execute failed"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("lookupUnique(query fail) err: %v, want %s", err, wantErr)
@@ -115,15 +119,18 @@ func TestLookupUniqueMapWriteOnly(t *testing.T) {
 	lookupUnique := createLookup(t, "lookup_unique", true)
 	vc := &vcursor{numRows: 0}
 
-	got, err := lookupUnique.(Unique).Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lookupUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	if err != nil {
 		t.Error(err)
 	}
-	want := []KsidOrRange{{
-		Range: &topodatapb.KeyRange{},
-	}, {
-		Range: &topodatapb.KeyRange{},
-	}}
+	want := []key.Destination{
+		key.DestinationKeyRange{
+			KeyRange: &topodatapb.KeyRange{},
+		},
+		key.DestinationKeyRange{
+			KeyRange: &topodatapb.KeyRange{},
+		},
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}

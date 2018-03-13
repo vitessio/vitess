@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/srvtopo"
 )
 
 // mergeSort performs a merge-sort of rows returned by a streaming scatter query.
@@ -35,14 +36,14 @@ import (
 // a new value is added to it from the stream that was the source of the value that
 // was pulled out. Since the input streams are sorted the same way that the heap is
 // sorted, this guarantees that the merged stream will also be sorted the same way.
-func mergeSort(vcursor VCursor, query string, orderBy []OrderbyParams, ks string, shardVars map[string]map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+func mergeSort(vcursor VCursor, query string, orderBy []OrderbyParams, rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
 	ctx, cancel := context.WithCancel(vcursor.Context())
 	defer cancel()
 
-	handles := make([]*streamHandle, len(shardVars))
+	handles := make([]*streamHandle, len(rss))
 	id := 0
-	for shard, vars := range shardVars {
-		handles[id] = runOneStream(ctx, vcursor, query, ks, shard, vars)
+	for i, rs := range rss {
+		handles[id] = runOneStream(ctx, vcursor, query, rs, bvs[i])
 		id++
 	}
 
@@ -132,7 +133,7 @@ type streamHandle struct {
 }
 
 // runOnestream starts a streaming query on one shard, and returns a streamHandle for it.
-func runOneStream(ctx context.Context, vcursor VCursor, query, ks, shard string, vars map[string]*querypb.BindVariable) *streamHandle {
+func runOneStream(ctx context.Context, vcursor VCursor, query string, rs *srvtopo.ResolvedShard, vars map[string]*querypb.BindVariable) *streamHandle {
 	handle := &streamHandle{
 		fields: make(chan []*querypb.Field, 1),
 		row:    make(chan []sqltypes.Value, 10),
@@ -144,8 +145,8 @@ func runOneStream(ctx context.Context, vcursor VCursor, query, ks, shard string,
 
 		handle.err = vcursor.StreamExecuteMulti(
 			query,
-			ks,
-			map[string]map[string]*querypb.BindVariable{shard: vars},
+			[]*srvtopo.ResolvedShard{rs},
+			[]map[string]*querypb.BindVariable{vars},
 			func(qr *sqltypes.Result) error {
 				if len(qr.Fields) != 0 {
 					select {

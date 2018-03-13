@@ -21,10 +21,11 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 )
 
 var (
-	_ Functional = (*Binary)(nil)
+	_ Vindex     = (*Binary)(nil)
 	_ Reversible = (*Binary)(nil)
 )
 
@@ -48,6 +49,16 @@ func (vind *Binary) Cost() int {
 	return 1
 }
 
+// IsUnique returns true since the Vindex is unique.
+func (vind *Binary) IsUnique() bool {
+	return true
+}
+
+// IsFunctional returns true since the Vindex is functional.
+func (vind *Binary) IsFunctional() bool {
+	return true
+}
+
 // Verify returns true if ids maps to ksids.
 func (vind *Binary) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
@@ -57,11 +68,11 @@ func (vind *Binary) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]b
 	return out, nil
 }
 
-// Map returns the corresponding keyspace id values for the given ids.
-func (vind *Binary) Map(_ VCursor, ids []sqltypes.Value) ([]KsidOrRange, error) {
-	out := make([]KsidOrRange, 0, len(ids))
-	for _, id := range ids {
-		out = append(out, KsidOrRange{ID: id.ToBytes()})
+// Map can map ids to key.Destination objects.
+func (vind *Binary) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	out := make([]key.Destination, len(ids))
+	for i, id := range ids {
+		out[i] = key.DestinationKeyspaceID(id.ToBytes())
 	}
 	return out, nil
 }
