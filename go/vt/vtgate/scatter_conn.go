@@ -70,16 +70,7 @@ type shardActionFunc func(rs *srvtopo.ResolvedShard, i int) error
 // multiGoTransaction is capable of executing multiple
 // shardActionTransactionFunc actions in parallel and consolidating
 // the results and errors for the caller.
-type shardActionTransactionFunc func(target *querypb.Target, shouldBegin bool, transactionID int64) (int64, error)
-
-// shardActionTransactionFunc2 defines the contract for a shard action
-// that may be in a transaction. Every such function executes the
-// necessary action on a shard (with an optional Begin call), aggregates
-// the results, and return an error if any.
-// multiGoTransaction is capable of executing multiple
-// shardActionTransactionFunc2 actions in parallel and consolidating
-// the results and errors for the caller.
-type shardActionTransactionFunc2 func(rs *srvtopo.ResolvedShard, i int, shouldBegin bool, transactionID int64) (int64, error)
+type shardActionTransactionFunc func(rs *srvtopo.ResolvedShard, i int, shouldBegin bool, transactionID int64) (int64, error)
 
 // NewScatterConn creates a new ScatterConn.
 func NewScatterConn(statsName string, txConn *TxConn, gw gateway.Gateway, hc discovery.HealthCheck) *ScatterConn {
@@ -124,55 +115,6 @@ func (stc *ScatterConn) Execute(
 	ctx context.Context,
 	query string,
 	bindVars map[string]*querypb.BindVariable,
-	keyspace string,
-	shards []string,
-	tabletType topodatapb.TabletType,
-	session *SafeSession,
-	notInTransaction bool,
-	options *querypb.ExecuteOptions,
-) (*sqltypes.Result, error) {
-
-	// mu protects qr
-	var mu sync.Mutex
-	qr := new(sqltypes.Result)
-
-	err := stc.multiGoTransaction(
-		ctx,
-		"Execute",
-		keyspace,
-		shards,
-		tabletType,
-		session,
-		notInTransaction,
-		func(target *querypb.Target, shouldBegin bool, transactionID int64) (int64, error) {
-			var innerqr *sqltypes.Result
-			if shouldBegin {
-				var err error
-				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, query, bindVars, options)
-				if err != nil {
-					return transactionID, err
-				}
-			} else {
-				var err error
-				innerqr, err = stc.gateway.Execute(ctx, target, query, bindVars, transactionID, options)
-				if err != nil {
-					return transactionID, err
-				}
-			}
-
-			mu.Lock()
-			defer mu.Unlock()
-			qr.AppendResult(innerqr)
-			return transactionID, nil
-		})
-	return qr, err
-}
-
-// Execute2 executes a non-streaming query on the specified shards.
-func (stc *ScatterConn) Execute2(
-	ctx context.Context,
-	query string,
-	bindVars map[string]*querypb.BindVariable,
 	rss []*srvtopo.ResolvedShard,
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
@@ -184,7 +126,7 @@ func (stc *ScatterConn) Execute2(
 	var mu sync.Mutex
 	qr := new(sqltypes.Result)
 
-	err := stc.multiGoTransaction2(
+	err := stc.multiGoTransaction(
 		ctx,
 		"Execute",
 		rss,
@@ -233,7 +175,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 
 	canCommit := len(rss) == 1 && canAutocommit && session.AutocommitApproval()
 
-	err := stc.multiGoTransaction2(
+	err := stc.multiGoTransaction(
 		ctx,
 		"Execute",
 		rss,
@@ -301,7 +243,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 	var mu sync.Mutex
 	qr := new(sqltypes.Result)
 
-	err := stc.multiGoTransaction2(
+	err := stc.multiGoTransaction(
 		ctx,
 		"ExecuteEntityIds",
 		rss,
@@ -807,7 +749,7 @@ func (stc *ScatterConn) multiGo(
 }
 
 // multiGoTransaction performs the requested 'action' on the specified
-// shards in parallel. For each shard, if the requested
+// ResolvedShards in parallel. For each shard, if the requested
 // session is in a transaction, it opens a new transactions on the connection,
 // and updates the Session with the transaction id. If the session already
 // contains a transaction id for the shard, it reuses it.
@@ -815,83 +757,11 @@ func (stc *ScatterConn) multiGo(
 func (stc *ScatterConn) multiGoTransaction(
 	ctx context.Context,
 	name string,
-	keyspace string,
-	shards []string,
-	tabletType topodatapb.TabletType,
-	session *SafeSession,
-	notInTransaction bool,
-	action shardActionTransactionFunc,
-) error {
-	shardMap := unique(shards)
-	if len(shardMap) == 0 {
-		return nil
-	}
-
-	allErrors := new(concurrency.AllErrorRecorder)
-	oneShard := func(shard string) {
-		var err error
-		target := &querypb.Target{
-			Keyspace:   keyspace,
-			Shard:      shard,
-			TabletType: tabletType,
-		}
-		startTime, statsKey := stc.startAction(name, target)
-		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
-
-		shouldBegin, transactionID := transactionInfo(target, session, notInTransaction)
-		transactionID, err = action(target, shouldBegin, transactionID)
-		if shouldBegin && transactionID != 0 {
-			if appendErr := session.Append(&vtgatepb.Session_ShardSession{
-				Target:        target,
-				TransactionId: transactionID,
-			}, stc.txConn.mode); appendErr != nil {
-				err = appendErr
-			}
-		}
-	}
-
-	var wg sync.WaitGroup
-	if len(shardMap) == 1 {
-		// only one shard, do it synchronously.
-		for shard := range shardMap {
-			oneShard(shard)
-			goto end
-		}
-	}
-
-	for shard := range shardMap {
-		wg.Add(1)
-		go func(shard string) {
-			defer wg.Done()
-			oneShard(shard)
-		}(shard)
-	}
-	wg.Wait()
-
-end:
-	if session.MustRollback() {
-		stc.txConn.Rollback(ctx, session)
-	}
-	if allErrors.HasErrors() {
-		return allErrors.AggrError(vterrors.Aggregate)
-	}
-	return nil
-}
-
-// multiGoTransaction2 performs the requested 'action' on the specified
-// ResolvedShards in parallel. For each shard, if the requested
-// session is in a transaction, it opens a new transactions on the connection,
-// and updates the Session with the transaction id. If the session already
-// contains a transaction id for the shard, it reuses it.
-// The action function must match the shardActionTransactionFunc2 signature.
-func (stc *ScatterConn) multiGoTransaction2(
-	ctx context.Context,
-	name string,
 	rss []*srvtopo.ResolvedShard,
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
-	action shardActionTransactionFunc2,
+	action shardActionTransactionFunc,
 ) error {
 	if len(rss) == 0 {
 		return nil
@@ -970,12 +840,4 @@ func transactionInfo(
 	}
 
 	return true, 0
-}
-
-func unique(in []string) map[string]struct{} {
-	out := make(map[string]struct{}, len(in))
-	for _, v := range in {
-		out[v] = struct{}{}
-	}
-	return out
 }
