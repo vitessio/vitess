@@ -3,6 +3,9 @@
 # vendor folder is up to data.
 FROM vitess/base
 
+# Clean local files, and keep vendorer libs
+RUN git clean -xdf --exclude="vendor"
+
 RUN mkdir /vt/releases
 
 CMD tar -czf /vt/releases/v$VERSION.tar.gz --exclude .git .
