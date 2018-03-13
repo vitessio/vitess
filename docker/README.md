@@ -13,7 +13,7 @@ The structure of this directory and our Dockerfile files is guided by the follow
 
 * The configuration of each Vitess image is in the directory `docker/<image>/`.
 * Configurations for other images e.g. our internal tool Keytar (see below), can be in a different location.
-* Images with more complex build steps have a `build.sh` script e.g. see [lite/build.sh](https://github.com/youtube/vitess/blob/master/docker/lite/build.sh).
+* Images with more complex build steps have a `build.sh` script e.g. see [lite/build.sh](https://github.com/vitessio/vitess/blob/master/docker/lite/build.sh).
 * Tags are used to provide (stable) versions e.g. see tag `v2.0` for the image [vitess/lite](https://hub.docker.com/r/vitess/lite/tags).
 * Where applicable, we provide a `latest` tag to reference the latest build of an image.
 
@@ -29,7 +29,7 @@ Our list of images can be grouped into:
 
 | Image | How (When) Updated | Description |
 | --- | --- | --- |
-| **bootstrap** | manual (after incompatible changes are made to [bootstrap.sh](https://github.com/youtube/vitess/blob/master/bootstrap.sh) or [vendor/vendor.json](https://github.com/youtube/vitess/blob/master/vendor/vendor.json) | Basis for all Vitess images. It is a snapshot of the checked out repository after running `./bootstrap.sh`. Used to cache dependencies. Avoids lengthy recompilation of dependencies if they did not change. Our internal test runner [`test.go`](https://github.com/youtube/vitess/blob/master/test.go) uses it to test the code against different MySQL versions. |
+| **bootstrap** | manual (after incompatible changes are made to [bootstrap.sh](https://github.com/vitessio/vitess/blob/master/bootstrap.sh) or [vendor/vendor.json](https://github.com/vitessio/vitess/blob/master/vendor/vendor.json) | Basis for all Vitess images. It is a snapshot of the checked out repository after running `./bootstrap.sh`. Used to cache dependencies. Avoids lengthy recompilation of dependencies if they did not change. Our internal test runner [`test.go`](https://github.com/vitessio/vitess/blob/master/test.go) uses it to test the code against different MySQL versions. |
 | **base** | automatic (after every GitHub push to the master branch) | Contains all Vitess server binaries. Snapshot after running `make build`. |
 | **root** | automatic (after every GitHub push to the master branch) | Same as **base** but with the default user set to "root". Required for Kubernetes. |
 | **lite** | manual (updated with every Vitess release) | Stripped down version of **base** e.g. source code and build dependencies are removed. Default image in our Kubernetes templates for minimized startup time. |
@@ -47,7 +47,7 @@ If you are looking for a stable version of Vitess, use the **lite** image with a
 
 | Image | How (When) Updated | Description |
 | --- | --- | --- |
-| **guestbook** | manual (updated with every Vitess release) | Vitess adaption of the Kubernetes guestbook example. Used to showcase sharding in Vitess. Dockerfile is located in [`examples/kubernetes/guestbook/`](https://github.com/youtube/vitess/tree/master/examples/kubernetes/guestbook). |
+| **guestbook** | manual (updated with every Vitess release) | Vitess adaption of the Kubernetes guestbook example. Used to showcase sharding in Vitess. Dockerfile is located in [`examples/kubernetes/guestbook/`](https://github.com/vitessio/vitess/tree/master/examples/kubernetes/guestbook). |
 | **orchestrator** | manual | Binaries for [Orchestrator](https://github.com/github/orchestrator). It can be used with Vitess for automatic failovers. Currently not part of the Kubernetes Tutorial and only used in tests. |
 
 ### Internal Tools
@@ -56,5 +56,5 @@ These images are used by the Vitess project for internal workflows and testing i
 
 | Image | How (When) Updated | Description |
 | --- | --- | --- |
-| **publish-site** | manual | Contains [Jekyll](https://jekyllrb.com/) which we use to generate our [vitess.io](http://vitess.io) website from the Markdown files located in [doc/](https://github.com/youtube/vitess/tree/master/doc). |
-| **keytar** | manual | Keytar is a Vitess testing framework to run our Kubernetes cluster tests. Dockerfile is located in [`test/cluster/keytar/`](https://github.com/youtube/vitess/tree/master/test/cluster/keytar). |
+| **publish-site** | manual | Contains [Jekyll](https://jekyllrb.com/) which we use to generate our [vitess.io](http://vitess.io) website from the Markdown files located in [doc/](https://github.com/vitessio/vitess/tree/master/doc). |
+| **keytar** | manual | Keytar is a Vitess testing framework to run our Kubernetes cluster tests. Dockerfile is located in [`test/cluster/keytar/`](https://github.com/vitessio/vitess/tree/master/test/cluster/keytar). |

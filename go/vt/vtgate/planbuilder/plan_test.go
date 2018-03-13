@@ -29,20 +29,23 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/testfiles"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-// hashIndex satisfies Functional, Unique.
+// hashIndex is a functional, unique Vindex.
 type hashIndex struct{ name string }
 
-func (v *hashIndex) String() string { return v.name }
-func (*hashIndex) Cost() int        { return 1 }
+func (v *hashIndex) String() string   { return v.name }
+func (*hashIndex) Cost() int          { return 1 }
+func (*hashIndex) IsUnique() bool     { return true }
+func (*hashIndex) IsFunctional() bool { return true }
 func (*hashIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*hashIndex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.KsidOrRange, error) {
+func (*hashIndex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
 
@@ -50,17 +53,17 @@ func newHashIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &hashIndex{name: name}, nil
 }
 
-var _ vindexes.Unique = (*hashIndex)(nil)
-
-// lookupIndex satisfies Lookup, Unique.
+// lookupIndex is a unique Vindex, and satisfies Lookup.
 type lookupIndex struct{ name string }
 
-func (v *lookupIndex) String() string { return v.name }
-func (*lookupIndex) Cost() int        { return 2 }
+func (v *lookupIndex) String() string   { return v.name }
+func (*lookupIndex) Cost() int          { return 2 }
+func (*lookupIndex) IsUnique() bool     { return true }
+func (*lookupIndex) IsFunctional() bool { return false }
 func (*lookupIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*lookupIndex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.KsidOrRange, error) {
+func (*lookupIndex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
 func (*lookupIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
@@ -73,18 +76,21 @@ func newLookupIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &lookupIndex{name: name}, nil
 }
 
-var _ vindexes.Unique = (*lookupIndex)(nil)
 var _ vindexes.Lookup = (*lookupIndex)(nil)
 
 // multiIndex satisfies Lookup, NonUnique.
 type multiIndex struct{ name string }
 
-func (v *multiIndex) String() string { return v.name }
-func (*multiIndex) Cost() int        { return 3 }
+func (v *multiIndex) String() string   { return v.name }
+func (*multiIndex) Cost() int          { return 3 }
+func (*multiIndex) IsUnique() bool     { return false }
+func (*multiIndex) IsFunctional() bool { return false }
 func (*multiIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*multiIndex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksids, error)  { return nil, nil }
+func (*multiIndex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	return nil, nil
+}
 func (*multiIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
 func (*multiIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
 func (*multiIndex) Update(vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
@@ -95,18 +101,22 @@ func newMultiIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &multiIndex{name: name}, nil
 }
 
-var _ vindexes.NonUnique = (*multiIndex)(nil)
+var _ vindexes.Vindex = (*multiIndex)(nil)
 var _ vindexes.Lookup = (*multiIndex)(nil)
 
 // costlyIndex satisfies Lookup, NonUnique.
 type costlyIndex struct{ name string }
 
-func (v *costlyIndex) String() string { return v.name }
-func (*costlyIndex) Cost() int        { return 10 }
+func (v *costlyIndex) String() string   { return v.name }
+func (*costlyIndex) Cost() int          { return 10 }
+func (*costlyIndex) IsUnique() bool     { return false }
+func (*costlyIndex) IsFunctional() bool { return false }
 func (*costlyIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*costlyIndex) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksids, error)  { return nil, nil }
+func (*costlyIndex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	return nil, nil
+}
 func (*costlyIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
 func (*costlyIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
 func (*costlyIndex) Update(vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
@@ -117,7 +127,7 @@ func newCostlyIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &costlyIndex{name: name}, nil
 }
 
-var _ vindexes.NonUnique = (*costlyIndex)(nil)
+var _ vindexes.Vindex = (*costlyIndex)(nil)
 var _ vindexes.Lookup = (*costlyIndex)(nil)
 
 func init() {

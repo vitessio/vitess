@@ -211,10 +211,6 @@
 "select id from unsharded order by (select id from unsharded)"
 "unsupported: order by has subquery"
 
-# limit with offset for scatter query
-"select id from user limit 10, 20"
-"unsupported: offset limit for cross-shard queries"
-
 # sequence in subquery
 "select col from unsharded where id in (select next value from seq)"
 "unsupported: use of sequence in subquery"

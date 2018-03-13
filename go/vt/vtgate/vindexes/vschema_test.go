@@ -26,88 +26,80 @@ import (
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
-// stFU satisfies Functional, Unique.
+// stFU is a Functional, Unique Vindex.
 type stFU struct {
 	name   string
 	Params map[string]string
 }
 
-func (v *stFU) String() string                                           { return v.name }
-func (*stFU) Cost() int                                                  { return 1 }
-func (*stFU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error) { return []bool{}, nil }
-func (*stFU) Map(VCursor, []sqltypes.Value) ([]KsidOrRange, error)       { return nil, nil }
+func (v *stFU) String() string                                                    { return v.name }
+func (*stFU) Cost() int                                                           { return 1 }
+func (*stFU) IsUnique() bool                                                      { return true }
+func (*stFU) IsFunctional() bool                                                  { return true }
+func (*stFU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
+func (*stFU) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 
 func NewSTFU(name string, params map[string]string) (Vindex, error) {
 	return &stFU{name: name, Params: params}, nil
 }
 
-var _ Unique = (*stFU)(nil)
+var _ Vindex = (*stFU)(nil)
 
-// stF satisfies Functional, but no Map. Invalid vindex.
-type stF struct {
-	name   string
-	Params map[string]string
-}
-
-func (v *stF) String() string                                           { return v.name }
-func (*stF) Cost() int                                                  { return 0 }
-func (*stF) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error) { return []bool{}, nil }
-
-func NewSTF(name string, params map[string]string) (Vindex, error) {
-	return &stF{name: name, Params: params}, nil
-}
-
-// stLN satisfies Lookup, NonUnique.
+// stLN is a Lookup, NonUnique Vindex.
 type stLN struct {
 	name   string
 	Params map[string]string
 }
 
-func (v *stLN) String() string                                                 { return v.name }
-func (*stLN) Cost() int                                                        { return 0 }
-func (*stLN) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)       { return []bool{}, nil }
-func (*stLN) Map(VCursor, []sqltypes.Value) ([]Ksids, error)                   { return nil, nil }
-func (*stLN) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error         { return nil }
-func (*stLN) Delete(VCursor, [][]sqltypes.Value, []byte) error                 { return nil }
-func (*stLN) Update(VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error { return nil }
+func (v *stLN) String() string                                                    { return v.name }
+func (*stLN) Cost() int                                                           { return 0 }
+func (*stLN) IsUnique() bool                                                      { return false }
+func (*stLN) IsFunctional() bool                                                  { return false }
+func (*stLN) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
+func (*stLN) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
+func (*stLN) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
+func (*stLN) Delete(VCursor, [][]sqltypes.Value, []byte) error                    { return nil }
+func (*stLN) Update(VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error    { return nil }
 
 func NewSTLN(name string, params map[string]string) (Vindex, error) {
 	return &stLN{name: name, Params: params}, nil
 }
 
-var _ NonUnique = (*stLN)(nil)
+var _ Vindex = (*stLN)(nil)
 var _ Lookup = (*stLN)(nil)
 
-// stLU satisfies Lookup, Unique.
+// stLU is a Lookup, Unique Vindex.
 type stLU struct {
 	name   string
 	Params map[string]string
 }
 
-func (v *stLU) String() string                                                 { return v.name }
-func (*stLU) Cost() int                                                        { return 2 }
-func (*stLU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)       { return []bool{}, nil }
-func (*stLU) Map(VCursor, []sqltypes.Value) ([]KsidOrRange, error)             { return nil, nil }
-func (*stLU) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error         { return nil }
-func (*stLU) Delete(VCursor, [][]sqltypes.Value, []byte) error                 { return nil }
-func (*stLU) Update(VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error { return nil }
+func (v *stLU) String() string                                                    { return v.name }
+func (*stLU) Cost() int                                                           { return 2 }
+func (*stLU) IsUnique() bool                                                      { return true }
+func (*stLU) IsFunctional() bool                                                  { return false }
+func (*stLU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
+func (*stLU) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
+func (*stLU) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
+func (*stLU) Delete(VCursor, [][]sqltypes.Value, []byte) error                    { return nil }
+func (*stLU) Update(VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error    { return nil }
 
 func NewSTLU(name string, params map[string]string) (Vindex, error) {
 	return &stLU{name: name, Params: params}, nil
 }
 
-var _ Unique = (*stLU)(nil)
+var _ Vindex = (*stLU)(nil)
 var _ Lookup = (*stLU)(nil)
 
 func init() {
 	Register("stfu", NewSTFU)
-	Register("stf", NewSTF)
 	Register("stln", NewSTLN)
 	Register("stlu", NewSTLU)
 }
@@ -501,36 +493,6 @@ func TestBuildVSchemaNoColumnVindexFail(t *testing.T) {
 	}
 	_, err := BuildVSchema(&bad)
 	want := "missing primary col vindex for table: t1"
-	if err == nil || err.Error() != want {
-		t.Errorf("BuildVSchema: %v, want %v", err, want)
-	}
-}
-
-func TestBuildVSchemaInvalidVindexFail(t *testing.T) {
-	bad := vschemapb.SrvVSchema{
-		Keyspaces: map[string]*vschemapb.Keyspace{
-			"sharded": {
-				Sharded: true,
-				Vindexes: map[string]*vschemapb.Vindex{
-					"stf": {
-						Type: "stf",
-					},
-				},
-				Tables: map[string]*vschemapb.Table{
-					"t1": {
-						ColumnVindexes: []*vschemapb.ColumnVindex{
-							{
-								Column: "c1",
-								Name:   "stf",
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	_, err := BuildVSchema(&bad)
-	want := `vindex "stf" needs to be Unique or NonUnique`
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}

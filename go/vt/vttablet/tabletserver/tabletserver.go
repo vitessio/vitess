@@ -81,8 +81,8 @@ const (
 	StateShuttingDown
 )
 
-// logTxPoolFull is for throttling txpool full messages in the log.
-var logTxPoolFull = logutil.NewThrottledLogger("TxPoolFull", 1*time.Minute)
+// logPoolFull is for throttling transaction / query pool full messages in the log.
+var logPoolFull = logutil.NewThrottledLogger("PoolFull", 1*time.Minute)
 
 var logComputeRowSerializerKey = logutil.NewThrottledLogger("ComputeRowSerializerKey", 1*time.Minute)
 
@@ -94,6 +94,25 @@ var stateName = []string{
 	"SERVING",
 	"NOT_SERVING",
 	"SHUTTING_DOWN",
+}
+
+// stateDetail matches every state and optionally more information about the reason
+// why the state is serving / not serving.
+var stateDetail = []string{
+	"Not Connected",
+	"Not Serving",
+	"",
+	"Transitioning",
+	"Shutting Down",
+}
+
+// stateInfo returns a string representation of the state and optional detail
+// about the reason for the state transition
+func stateInfo(state int64) string {
+	if state == StateServing {
+		return "SERVING"
+	}
+	return fmt.Sprintf("%s (%s)", stateName[state], stateDetail[state])
 }
 
 // TabletServer implements the RPC interface for the query service.
@@ -226,6 +245,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 			return state
 		}))
 		stats.Publish("QueryTimeout", stats.DurationFunc(tsv.QueryTimeout.Get))
+		stats.Publish("QueryPoolTimeout", stats.DurationFunc(tsv.qe.connTimeout.Get))
 		stats.Publish("BeginTimeout", stats.DurationFunc(tsv.BeginTimeout.Get))
 		stats.Publish("TabletStateName", stats.StringFunc(tsv.GetState))
 	})
@@ -278,11 +298,11 @@ func (tsv *TabletServer) GetState() string {
 // setState changes the state and logs the event.
 // It requires the caller to hold a lock on mu.
 func (tsv *TabletServer) setState(state int64) {
-	log.Infof("TabletServer state: %s -> %s", stateName[tsv.state], stateName[state])
+	log.Infof("TabletServer state: %s -> %s", stateInfo(tsv.state), stateInfo(state))
 	tsv.state = state
 	tsv.history.Add(&historyRecord{
 		Time:         time.Now(),
-		ServingState: stateName[state],
+		ServingState: stateInfo(state),
 		TabletType:   tsv.target.TabletType.String(),
 	})
 }
@@ -1346,7 +1366,7 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	case vtrpcpb.Code_FAILED_PRECONDITION, vtrpcpb.Code_ALREADY_EXISTS:
 		logMethod = nil
 	case vtrpcpb.Code_RESOURCE_EXHAUSTED:
-		logMethod = logTxPoolFull.Errorf
+		logMethod = logPoolFull.Errorf
 	case vtrpcpb.Code_ABORTED:
 		logMethod = tabletenv.Warningf
 	case vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_DEADLINE_EXCEEDED:
@@ -1582,7 +1602,7 @@ func newSplitQuerySQLExecuter(
 		queryExecutor: queryExecutor,
 	}
 	var err error
-	result.conn, err = queryExecutor.getConn(queryExecutor.tsv.qe.conns)
+	result.conn, err = queryExecutor.getConn()
 	if err != nil {
 		return nil, err
 	}
@@ -1982,6 +2002,48 @@ func (tsv *TabletServer) SetPassthroughDMLs(val bool) {
 // in SBR mode. It should be used only on initialization or for testing.
 func (tsv *TabletServer) SetAllowUnsafeDMLs(val bool) {
 	tsv.qe.allowUnsafeDMLs = val
+}
+
+// SetQueryPoolTimeout changes the timeout to get a connection from the
+// query pool
+// This function should only be used for testing.
+func (tsv *TabletServer) SetQueryPoolTimeout(val time.Duration) {
+	tsv.qe.connTimeout.Set(val)
+}
+
+// GetQueryPoolTimeout returns the timeout to get a connection from the
+// query pool
+// This function should only be used for testing.
+func (tsv *TabletServer) GetQueryPoolTimeout() time.Duration {
+	return tsv.qe.connTimeout.Get()
+}
+
+// SetQueryPoolWaiterCap changes the limit on the number of queries that can be
+// waiting for a connection from the pool
+// This function should only be used for testing.
+func (tsv *TabletServer) SetQueryPoolWaiterCap(val int64) {
+	tsv.qe.queryPoolWaiterCap.Set(val)
+}
+
+// GetQueryPoolWaiterCap returns the limit on the number of queries that can be
+// waiting for a connection from the pool
+// This function should only be used for testing.
+func (tsv *TabletServer) GetQueryPoolWaiterCap() int64 {
+	return tsv.qe.queryPoolWaiterCap.Get()
+}
+
+// SetTxPoolWaiterCap changes the limit on the number of queries that can be
+// waiting for a connection from the pool
+// This function should only be used for testing.
+func (tsv *TabletServer) SetTxPoolWaiterCap(val int64) {
+	tsv.te.txPool.waiterCap.Set(val)
+}
+
+// GetTxPoolWaiterCap returns the limit on the number of queries that can be
+// waiting for a connection from the pool
+// This function should only be used for testing.
+func (tsv *TabletServer) GetTxPoolWaiterCap() int64 {
+	return tsv.te.txPool.waiterCap.Get()
 }
 
 // queryAsString prints a readable version of query+bind variables,

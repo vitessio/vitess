@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 )
 
 var null Vindex
@@ -47,7 +48,7 @@ func TestNullString(t *testing.T) {
 }
 
 func TestNullMap(t *testing.T) {
-	got, err := null.(Unique).Map(nil, []sqltypes.Value{
+	got, err := null.Map(nil, []sqltypes.Value{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 		sqltypes.NewInt64(3),
@@ -58,13 +59,13 @@ func TestNullMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := []KsidOrRange{
-		{ID: []byte{0}},
-		{ID: []byte{0}},
-		{ID: []byte{0}},
-		{ID: []byte{0}},
-		{ID: []byte{0}},
-		{ID: []byte{0}},
+	want := []key.Destination{
+		key.DestinationKeyspaceID([]byte{0}),
+		key.DestinationKeyspaceID([]byte{0}),
+		key.DestinationKeyspaceID([]byte{0}),
+		key.DestinationKeyspaceID([]byte{0}),
+		key.DestinationKeyspaceID([]byte{0}),
+		key.DestinationKeyspaceID([]byte{0}),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)

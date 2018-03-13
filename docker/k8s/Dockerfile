@@ -50,7 +50,7 @@ COPY --from=base $VTTOP/config/mycnf/rbr.cnf /vt/config/mycnf/
 RUN groupadd -r --gid 999 vitess && useradd -r -g vitess --uid 999 vitess && \
    chown -R vitess:vitess /vt;
 
-# TODO: remove when https://github.com/youtube/vitess/issues/3553 is fixed
+# TODO: remove when https://github.com/vitessio/vitess/issues/3553 is fixed
 RUN apt-get update && \
     apt-get upgrade -qq && \
     apt-get install mysql-client -qq --no-install-recommends && \

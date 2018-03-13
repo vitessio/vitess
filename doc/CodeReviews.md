@@ -50,7 +50,7 @@ They'll receive an email.
 
 During discussions, you can also refer to somebody using the *@username* syntax and they'll receive an email as well.
 
-If you want to receive notifications even when you aren't mentioned, you can go to the [repository page](https://github.com/youtube/vitess) and click *Watch*.
+If you want to receive notifications even when you aren't mentioned, you can go to the [repository page](https://github.com/vitessio/vitess) and click *Watch*.
 
 ## Approving a Pull Request
 

@@ -67,7 +67,7 @@ func init() {
 	// The topo.Server is used to start watching the cells described
 	// in '-cells_to_watch' command line parameter, which is
 	// empty by default. So it's unused in this test, set to nil.
-	Init(context.Background(), hcVTGateTest, nil /*topo.Server*/, new(sandboxTopo), "aa", 10, nil)
+	Init(context.Background(), hcVTGateTest, new(sandboxTopo), "aa", 10, nil)
 
 	*mysqlServerPort = 0
 	*mysqlAuthServerImpl = "none"
@@ -498,6 +498,20 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 	}
 	if qr.RowsAffected != 2 {
 		t.Errorf("want 2, got %v", qr.RowsAffected)
+	}
+	// Test for multiple shards for DML
+	qr, err = rpcVTGate.ExecuteKeyspaceIds(context.Background(),
+		"update table set a = b",
+		nil,
+		ks,
+		[][]byte{{0x10}, {0x30}},
+		topodatapb.TabletType_MASTER,
+		session,
+		false,
+		nil)
+	errStr := "DML should not span multiple keyspace_ids"
+	if err == nil || !strings.Contains(err.Error(), errStr) {
+		t.Errorf("want '%v', got '%v'", errStr, err)
 	}
 }
 

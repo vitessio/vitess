@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	tacl "vitess.io/vitess/go/vt/tableacl/acl"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -48,6 +49,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txserializer"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 //_______________________________________________
@@ -139,14 +141,17 @@ type QueryEngine struct {
 	streamQList  *QueryList
 
 	// Vars
-	binlogFormat     connpool.BinlogFormat
-	autoCommit       sync2.AtomicBool
-	maxResultSize    sync2.AtomicInt64
-	warnResultSize   sync2.AtomicInt64
-	maxDMLRows       sync2.AtomicInt64
-	passthroughDMLs  sync2.AtomicBool
-	allowUnsafeDMLs  bool
-	streamBufferSize sync2.AtomicInt64
+	connTimeout        sync2.AtomicDuration
+	queryPoolWaiters   sync2.AtomicInt64
+	queryPoolWaiterCap sync2.AtomicInt64
+	binlogFormat       connpool.BinlogFormat
+	autoCommit         sync2.AtomicBool
+	maxResultSize      sync2.AtomicInt64
+	warnResultSize     sync2.AtomicInt64
+	maxDMLRows         sync2.AtomicInt64
+	passthroughDMLs    sync2.AtomicBool
+	allowUnsafeDMLs    bool
+	streamBufferSize   sync2.AtomicInt64
 	// tableaclExemptCount count the number of accesses allowed
 	// based on membership in the superuser ACL
 	tableaclExemptCount  sync2.AtomicInt64
@@ -170,10 +175,11 @@ var (
 // You must call this only once.
 func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tabletenv.TabletConfig) *QueryEngine {
 	qe := &QueryEngine{
-		se:               se,
-		tables:           make(map[string]*schema.Table),
-		plans:            cache.NewLRUCache(int64(config.QueryPlanCacheSize)),
-		queryRuleSources: rules.NewMap(),
+		se:                 se,
+		tables:             make(map[string]*schema.Table),
+		plans:              cache.NewLRUCache(int64(config.QueryPlanCacheSize)),
+		queryRuleSources:   rules.NewMap(),
+		queryPoolWaiterCap: sync2.NewAtomicInt64(int64(config.QueryPoolWaiterCap)),
 	}
 
 	qe.conns = connpool.New(
@@ -182,6 +188,8 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		time.Duration(config.IdleTimeout*1e9),
 		checker,
 	)
+	qe.connTimeout.Set(time.Duration(config.QueryPoolTimeout * 1e9))
+
 	qe.streamConns = connpool.New(
 		config.PoolNamePrefix+"StreamConnPool",
 		config.StreamPoolSize,
@@ -231,6 +239,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		stats.Publish("MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
 		stats.Publish("StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
 		stats.Publish("TableACLExemptCount", stats.IntFunc(qe.tableaclExemptCount.Get))
+		stats.Publish("QueryPoolWaiters", stats.IntFunc(qe.queryPoolWaiters.Get))
 
 		stats.Publish("QueryCacheLength", stats.IntFunc(qe.plans.Length))
 		stats.Publish("QueryCacheSize", stats.IntFunc(qe.plans.Size))
@@ -327,7 +336,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	plan.buildAuthorized()
 	if plan.PlanID.IsSelect() {
 		if plan.FieldQuery != nil {
-			conn, err := qe.conns.Get(ctx)
+			conn, err := qe.getQueryConn(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -349,6 +358,29 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 		qe.plans.Set(sql, plan)
 	}
 	return plan, nil
+}
+
+// getQueryConn returns a connection from the query pool using either
+// the conn pool timeout if configured, or the original context query timeout
+func (qe *QueryEngine) getQueryConn(ctx context.Context) (*connpool.DBConn, error) {
+	waiterCount := qe.queryPoolWaiters.Add(1)
+	defer qe.queryPoolWaiters.Add(-1)
+
+	if waiterCount > qe.queryPoolWaiterCap.Get() {
+		return nil, vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "query pool waiter count exceeded")
+	}
+
+	timeout := qe.connTimeout.Get()
+	if timeout != 0 {
+		ctxTimeout, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		conn, err := qe.conns.Get(ctxTimeout)
+		if err != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "query pool wait time exceeded")
+		}
+		return conn, err
+	}
+	return qe.conns.Get(ctx)
 }
 
 // GetStreamPlan is similar to GetPlan, but doesn't use the cache

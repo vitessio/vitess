@@ -19,7 +19,7 @@ install:
 config:
   - docker_image: vitess/root
     github:
-      repo: youtube/vitess
+      repo: vitessio/vitess
       repo_prefix: src/vitess.io/vitess
     environment:
       sandbox: test/cluster/sandbox/vitess_kubernetes_sandbox.py

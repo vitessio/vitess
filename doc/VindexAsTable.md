@@ -1,6 +1,6 @@
 # Proposal: Expose Vindexes as Tables
 
-This proposal is in response to issues like [#3076](https://github.com/youtube/vitess/issues/3076). Users want the ability to perform vindex functions independently from the tables they are associated with.
+This proposal is in response to issues like [#3076](https://github.com/vitessio/vitess/issues/3076). Users want the ability to perform vindex functions independently from the tables they are associated with.
 
 ## Design
 
@@ -10,7 +10,7 @@ One can think of a vindex as a table that looks like this:
 create my_vdx(id int, keyspace_id varbinary(255)) // id can be of any type.
 ```
 
-Looking at the vindex interface defined [here](https://github.com/youtube/vitess/blob/master/go/vt/vtgate/vindexes/vindex.go), we can come up with SQL syntax that represents them:
+Looking at the vindex interface defined [here](https://github.com/vitessio/vitess/blob/master/go/vt/vtgate/vindexes/vindex.go), we can come up with SQL syntax that represents them:
 * Map: `select id, keyspace_id from my_vdx where id = :id`.
 * Create: `insert into my_vdx values(:id, :keyspace_id)`.
 * Delete: `delete from my_vdx where id = :id and keyspace_id :keyspace_id`.

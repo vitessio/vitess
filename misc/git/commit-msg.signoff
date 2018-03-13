@@ -1,0 +1,62 @@
+#!/bin/bash
+
+# This script is run during "git commit" after the commit message was entered.
+#
+# If it does not find a Signed-off-by: line in this commit,
+# it prints a message about using the -s flag and a link
+# to an explanation of the DCO.
+#
+# If it detects an interactive session, it prompts the user
+# to acknowledge signoff now, and adds the line if so.
+
+msg_file="$1"
+
+git_email="$(git config --get user.email)"
+git_name="$(git config --get user.name)"
+signoff="$(grep -E --max-count=1 "^Signed-off-by: " "$msg_file")"
+
+if [[ "$signoff" =~ Signed-off-by:\ (.*)\ \<(.*)\> ]]; then
+  if [[ "${BASH_REMATCH[1]}" == "${git_name}" && "${BASH_REMATCH[2]}" == "${git_email}" ]]; then
+    # Everything checks out!
+    exit 0
+  fi
+fi
+
+# No signoff found, or the email doesn't match. Print some instructions.
+echo
+echo "==================================================================="
+echo "No 'Signed-off-by:' line was found, or it didn't match the"
+echo "expected author: ${git_name} <${git_email}>"
+echo
+echo "This project uses a Developer Certificate of Origin"
+echo "instead of a Contributor License Agreement."
+echo "For more information, see: https://wiki.linuxfoundation.org/dco"
+echo
+echo "Please certify each contribution meets the requirements in the"
+echo "'DCO' file in the root of this repository by committing with"
+echo "the --signoff flag (or the short form: -s):"
+echo
+echo "    git commit --signoff"
+
+# git doesn't give us access to user input, so let's steal it.
+exec < /dev/tty
+if [[ $? -ne 0 ]]; then
+  # non-interactive shell (e.g. called from Eclipse). Give up here.
+  exit 1
+fi
+
+# Offer to add the signoff line.
+signoff="Signed-off-by: ${git_name} <${git_email}>"
+echo
+echo "Alternatively, you can acknowledge your signoff and continue below:"
+echo
+echo "    ${signoff}"
+echo
+read -r -p "Do you want to add the above signoff and continue? [y/N] "
+
+if [[ "${REPLY,,}" != "y" ]]; then
+  exit 1
+fi
+
+echo >> "${msg_file}"
+echo "${signoff}" >> "${msg_file}"

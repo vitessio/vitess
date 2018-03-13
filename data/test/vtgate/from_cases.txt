@@ -33,7 +33,7 @@
 {
   "Original": "select col from information_schema.foo",
   "Instructions": {
-    "Opcode": "ExecDBA",
+    "Opcode": "SelectDBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -138,7 +138,7 @@
 {
   "Original": "select * from information_schema.a, information_schema.b",
   "Instructions": {
-    "Opcode": "ExecDBA",
+    "Opcode": "SelectDBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -200,10 +200,7 @@
         "Sharded": false
       },
       "Query": "select 1 from unsharded as m where m.b = :u_a",
-      "FieldQuery": "select 1 from unsharded as m where 1 != 1",
-      "JoinVars": {
-        "u_a": {}
-      }
+      "FieldQuery": "select 1 from unsharded as m where 1 != 1"
     },
     "Cols": [
       -1
@@ -238,10 +235,7 @@
           "Sharded": false
         },
         "Query": "select m1.col from unsharded as m1 where m1.co = :user_col",
-        "FieldQuery": "select m1.col from unsharded as m1 where 1 != 1",
-        "JoinVars": {
-          "user_col": {}
-        }
+        "FieldQuery": "select m1.col from unsharded as m1 where 1 != 1"
       },
       "Cols": [
         -1,
@@ -258,10 +252,7 @@
         "Sharded": false
       },
       "Query": "select 1 from unsharded as m2 where m2.col = :m1_col",
-      "FieldQuery": "select 1 from unsharded as m2 where 1 != 1",
-      "JoinVars": {
-        "m1_col": {}
-      }
+      "FieldQuery": "select 1 from unsharded as m2 where 1 != 1"
     },
     "Cols": [
       -1
@@ -296,10 +287,7 @@
           "Sharded": true
         },
         "Query": "select e.col from user_extra as e where e.col = :user_col",
-        "FieldQuery": "select e.col from user_extra as e where 1 != 1",
-        "JoinVars": {
-          "user_col": {}
-        }
+        "FieldQuery": "select e.col from user_extra as e where 1 != 1"
       },
       "Right": {
         "Opcode": "SelectUnsharded",
@@ -308,10 +296,7 @@
           "Sharded": false
         },
         "Query": "select 1 from unsharded as m1 where m1.col = :e_col",
-        "FieldQuery": "select 1 from unsharded as m1 where 1 != 1",
-        "JoinVars": {
-          "e_col": {}
-        }
+        "FieldQuery": "select 1 from unsharded as m1 where 1 != 1"
       },
       "Vars": {
         "e_col": 0
@@ -602,10 +587,7 @@
         "Sharded": true
       },
       "Query": "select 1 from user_extra where :user_id \u003c user_extra.user_id",
-      "FieldQuery": "select 1 from user_extra where 1 != 1",
-      "JoinVars": {
-        "user_id": {}
-      }
+      "FieldQuery": "select 1 from user_extra where 1 != 1"
     },
     "Cols": [
       -1
@@ -702,10 +684,7 @@
         "Sharded": true
       },
       "Query": "select 1 from user_extra where user_extra.col = :user_id",
-      "FieldQuery": "select 1 from user_extra where 1 != 1",
-      "JoinVars": {
-        "user_id": {}
-      }
+      "FieldQuery": "select 1 from user_extra where 1 != 1"
     },
     "Cols": [
       -1
@@ -740,10 +719,7 @@
       "Query": "select user.col from user where user.name = :user_extra_user_id",
       "FieldQuery": "select user.col from user where 1 != 1",
       "Vindex": "name_user_map",
-      "Values": [":user_extra_user_id"],
-      "JoinVars": {
-        "user_extra_user_id": {}
-      }
+      "Values": [":user_extra_user_id"]
     },
     "Cols": [
       1
@@ -848,10 +824,7 @@
         "Sharded": true
       },
       "Query": "select 1 from user_extra where user_extra.col = :t_id",
-      "FieldQuery": "select 1 from user_extra where 1 != 1",
-      "JoinVars": {
-        "t_id": {}
-      }
+      "FieldQuery": "select 1 from user_extra where 1 != 1"
     },
     "Cols": [
       -1
@@ -923,11 +896,7 @@
         "Sharded": false
       },
       "Query": "select 1 from unsharded where unsharded.col1 = :t_col1 and unsharded.id = :t_id",
-      "FieldQuery": "select 1 from unsharded where 1 != 1",
-      "JoinVars": {
-        "t_col1": {},
-        "t_id": {}
-      }
+      "FieldQuery": "select 1 from unsharded where 1 != 1"
     },
     "Cols": [
       -1
@@ -965,10 +934,7 @@
           "Sharded": true
         },
         "Query": "select 1 from user_extra where user_extra.col = :user_col",
-        "FieldQuery": "select 1 from user_extra where 1 != 1",
-        "JoinVars": {
-          "user_col": {}
-        }
+        "FieldQuery": "select 1 from user_extra where 1 != 1"
       },
       "Cols": [
         -1,
@@ -1056,10 +1022,7 @@
         "Sharded": false
       },
       "Query": "select unsharded.col1 from unsharded where unsharded.col2 = :user_col2",
-      "FieldQuery": "select unsharded.col1 from unsharded where 1 != 1",
-      "JoinVars": {
-        "user_col2": {}
-      }
+      "FieldQuery": "select unsharded.col1 from unsharded where 1 != 1"
     },
     "Cols": [
       -1,

@@ -15,7 +15,7 @@ COPY --from=k8s /vt/bin/vttablet /vt/bin/
 # Copy certs to allow https calls
 COPY --from=k8s /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
-# TODO: remove when https://github.com/youtube/vitess/issues/3553 is fixed
+# TODO: remove when https://github.com/vitessio/vitess/issues/3553 is fixed
 RUN apt-get update && \
    apt-get upgrade -qq && \
    apt-get install mysql-client -qq --no-install-recommends && \

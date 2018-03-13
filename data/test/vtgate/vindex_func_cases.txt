@@ -193,10 +193,7 @@
         "Sharded": false
       },
       "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id",
-      "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
-      "JoinVars": {
-        "user_index_id": {}
-      }
+      "FieldQuery": "select unsharded.id from unsharded where 1 != 1"
     },
     "Cols": [
       -1,
@@ -241,10 +238,7 @@
         "Sharded": false
       },
       "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id",
-      "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
-      "JoinVars": {
-        "user_index_id": {}
-      }
+      "FieldQuery": "select unsharded.id from unsharded where 1 != 1"
     },
     "Cols": [
       -1,
@@ -288,10 +282,7 @@
         "Sharded": false
       },
       "Query": "select unsharded.id from unsharded where unsharded.id = :ui_id",
-      "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
-      "JoinVars": {
-        "ui_id": {}
-      }
+      "FieldQuery": "select unsharded.id from unsharded where 1 != 1"
     },
     "Cols": [
       -1,
@@ -310,6 +301,7 @@
   "Instructions": {
     "Opcode": "Limit",
     "Count": 1,
+    "Offset": null,
     "Input": {
       "Opcode": "VindexMap",
       "Fields": [

@@ -50,7 +50,7 @@ func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit,
 	lkp.Upsert = upsert
 
 	// TODO @rafael: update sel and ver to support multi column vindexes. This will be done
-	// as part of face 2 of https://github.com/youtube/vitess/issues/3481
+	// as part of face 2 of https://github.com/vitessio/vitess/issues/3481
 	// For now multi column behaves as a single column for Map and Verify operations
 	lkp.sel = fmt.Sprintf("select %s from %s where %s = :%s", lkp.To, lkp.Table, lkp.FromColumns[0], lkp.FromColumns[0])
 	lkp.ver = fmt.Sprintf("select %s from %s where %s = :%s and %s = :%s", lkp.FromColumns[0], lkp.Table, lkp.FromColumns[0], lkp.FromColumns[0], lkp.To, lkp.To)

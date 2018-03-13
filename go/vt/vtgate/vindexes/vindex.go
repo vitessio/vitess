@@ -17,13 +17,12 @@ limitations under the License.
 package vindexes
 
 import (
-	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // This file defines interfaces and registration for vindexes.
@@ -37,14 +36,13 @@ type VCursor interface {
 }
 
 // Vindex defines the interface required to register a vindex.
-// Additional to these functions, a vindex also needs
-// to satisfy the Unique or NonUnique interface.
 type Vindex interface {
 	// String returns the name of the Vindex instance.
 	// It's used for testing and diagnostics. Use pointer
 	// comparison to see if two objects refer to the same
 	// Vindex.
 	String() string
+
 	// Cost is used by planbuilder to prioritize vindexes.
 	// The cost can be 0 if the id is basically a keyspace id.
 	// The cost can be 1 if the id can be hashed to a keyspace id.
@@ -53,50 +51,28 @@ type Vindex interface {
 	// to change in the future.
 	Cost() int
 
+	// IsUnique returns true if the Vindex is unique.
+	// Which means Map() maps to either a KeyRange or a single KeyspaceID.
+	IsUnique() bool
+
+	// IsFunctional returns true if the Vindex can compute
+	// the keyspace id from the id without a lookup.
+	// A Functional vindex is also required to be Unique.
+	// Which means Map() maps to either a KeyRange or a single KeyspaceID.
+	IsFunctional() bool
+
 	// Verify must be implented by all vindexes. It should return
 	// true if the ids can be mapped to the keyspace ids.
 	Verify(cursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error)
-}
 
-// KsidOrRange represents a keyspace id. It's either a single keyspace id
-// or a keyrange when the vindex is unable to determine the keyspace id.
-type KsidOrRange struct {
-	Range *topodatapb.KeyRange
-	ID    []byte
-}
-
-// ValidateUnique returns an error if the Ksid represents a KeyRange.
-func (k KsidOrRange) ValidateUnique() error {
-	if k.Range != nil {
-		return errors.New("vindex could not map the value to a unique keyspace id")
-	}
-	return nil
-}
-
-// Unique defines the interface for a unique vindex.
-// For a vindex to be unique, an id has to map to at most
-// one keyspace id.
-type Unique interface {
-	Map(cursor VCursor, ids []sqltypes.Value) ([]KsidOrRange, error)
-}
-
-// Ksids represents keyspace ids. It's either a list of keyspace ids
-// or a keyrange.
-type Ksids struct {
-	Range *topodatapb.KeyRange
-	IDs   [][]byte
-}
-
-// NonUnique defines the interface for a non-unique vindex.
-// This means that an id can map to multiple keyspace ids.
-type NonUnique interface {
-	Map(cursor VCursor, ids []sqltypes.Value) ([]Ksids, error)
-}
-
-// IsUnique returns true if the Vindex is Unique.
-func IsUnique(v Vindex) bool {
-	_, ok := v.(Unique)
-	return ok
+	// Map can map ids to key.Destination objects.
+	// If the Vindex is unique, each id would map to either
+	// a KeyRange, or a single KeyspaceID.
+	// If the Vindex is non-unique, each id would map to either
+	// a KeyRange, or a list of KeyspaceID.
+	// If the error returned if nil, then the array len of the
+	// key.Destination array must match len(ids).
+	Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error)
 }
 
 // A Reversible vindex is one that can perform a
@@ -105,15 +81,6 @@ func IsUnique(v Vindex) bool {
 // fill column values based on the target keyspace id.
 type Reversible interface {
 	ReverseMap(cursor VCursor, ks [][]byte) ([]sqltypes.Value, error)
-}
-
-// A Functional vindex is an index that can compute
-// the keyspace id from the id without a lookup.
-// A Functional vindex is also required to be Unique.
-// If it's not unique, we cannot determine the target shard
-// for an insert operation.
-type Functional interface {
-	Unique
 }
 
 // A Lookup vindex is one that needs to lookup

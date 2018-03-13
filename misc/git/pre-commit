@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Runs any hooks in mic/git/hooks, and exits if any of them fail.
+# Runs any hooks in misc/git/hooks, and exits if any of them fail.
 set -e
 
 # This is necessary because the Emacs extensions don't set GIT_DIR.
