@@ -19,7 +19,6 @@ package planbuilder
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -132,7 +131,7 @@ func (l *limit) SetLimit(limit *sqlparser.Limit) error {
 		}
 		l.elimit.Offset = pv
 	case nil:
-		l.elimit.Offset = sqltypes.PlanValue{}
+		// NOOP
 	default:
 		return fmt.Errorf("unexpected expression in LIMIT: %v", sqlparser.String(limit))
 	}

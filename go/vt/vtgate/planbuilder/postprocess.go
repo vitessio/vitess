@@ -130,7 +130,7 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 	return nil
 }
 
-func pushLimit(limit *sqlparser.Limit, orderBy sqlparser.OrderBy, bldr builder) (builder, error) {
+func pushLimit(limit *sqlparser.Limit, bldr builder) (builder, error) {
 	if limit == nil {
 		return bldr, nil
 	}
