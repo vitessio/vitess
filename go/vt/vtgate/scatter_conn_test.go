@@ -42,7 +42,13 @@ import (
 
 func TestScatterConnExecute(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnExecute", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
-		return sc.Execute(context.Background(), "query", nil, "TestScatterConnExecute", shards, topodatapb.TabletType_REPLICA, nil, false, nil)
+		res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+		rss, err := res.ResolveDestination(context.Background(), "TestScatterConnExecute", topodatapb.TabletType_REPLICA, key.DestinationShards(shards))
+		if err != nil {
+			return nil, err
+		}
+
+		return sc.Execute(context.Background(), "query", nil, rss, topodatapb.TabletType_REPLICA, nil, false, nil)
 	})
 }
 
@@ -361,9 +367,20 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
 	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestScatterConnQueryNotInTransaction", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestScatterConnQueryNotInTransaction", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
+
+	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+	rss0, err := res.ResolveDestination(context.Background(), "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("0"))
+	if err != nil {
+		t.Fatalf("ResolveDestination(0) failed: %v", err)
+	}
+	rss1, err := res.ResolveDestination(context.Background(), "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("1"))
+	if err != nil {
+		t.Fatalf("ResolveDestination(1) failed: %v", err)
+	}
+
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, topodatapb.TabletType_REPLICA, session, true, nil)
-	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"1"}, topodatapb.TabletType_REPLICA, session, false, nil)
+	sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_REPLICA, session, true, nil)
+	sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_REPLICA, session, false, nil)
 
 	wantSession := vtgatepb.Session{
 		InTransaction: true,
@@ -401,8 +418,19 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	sbc0 = hc.AddTestTablet("aa", "0", 1, "TestScatterConnQueryNotInTransaction", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "1", 1, "TestScatterConnQueryNotInTransaction", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, topodatapb.TabletType_REPLICA, session, false, nil)
-	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"1"}, topodatapb.TabletType_REPLICA, session, true, nil)
+
+	res = srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+	rss0, err = res.ResolveDestination(context.Background(), "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("0"))
+	if err != nil {
+		t.Fatalf("ResolveDestination(0) failed: %v", err)
+	}
+	rss1, err = res.ResolveDestination(context.Background(), "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("1"))
+	if err != nil {
+		t.Fatalf("ResolveDestination(1) failed: %v", err)
+	}
+
+	sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_REPLICA, session, false, nil)
+	sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_REPLICA, session, true, nil)
 
 	wantSession = vtgatepb.Session{
 		InTransaction: true,
@@ -440,8 +468,19 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	sbc0 = hc.AddTestTablet("aa", "0", 1, "TestScatterConnQueryNotInTransaction", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "1", 1, "TestScatterConnQueryNotInTransaction", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, topodatapb.TabletType_REPLICA, session, false, nil)
-	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0", "1"}, topodatapb.TabletType_REPLICA, session, true, nil)
+
+	res = srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+	rss0, err = res.ResolveDestination(context.Background(), "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("0"))
+	if err != nil {
+		t.Fatalf("ResolveDestination(0) failed: %v", err)
+	}
+	rss1, err = res.ResolveDestination(context.Background(), "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShards([]string{"0", "1"}))
+	if err != nil {
+		t.Fatalf("ResolveDestination(1) failed: %v", err)
+	}
+
+	sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_REPLICA, session, false, nil)
+	sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_REPLICA, session, true, nil)
 
 	wantSession = vtgatepb.Session{
 		InTransaction: true,
@@ -482,26 +521,36 @@ func TestScatterConnSingleDB(t *testing.T) {
 	hc.AddTestTablet("aa", "0", 1, "TestScatterConnSingleDB", "0", topodatapb.TabletType_MASTER, true, 1, nil)
 	hc.AddTestTablet("aa", "1", 1, "TestScatterConnSingleDB", "1", topodatapb.TabletType_MASTER, true, 1, nil)
 
+	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+	rss0, err := res.ResolveDestination(context.Background(), "TestScatterConnSingleDB", topodatapb.TabletType_MASTER, key.DestinationShard("0"))
+	if err != nil {
+		t.Fatalf("ResolveDestination(0) failed: %v", err)
+	}
+	rss1, err := res.ResolveDestination(context.Background(), "TestScatterConnSingleDB", topodatapb.TabletType_MASTER, key.DestinationShard("1"))
+	if err != nil {
+		t.Fatalf("ResolveDestination(1) failed: %v", err)
+	}
+
 	want := "multi-db transaction attempted"
 
 	// SingleDb (legacy)
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, SingleDb: true})
-	_, err := sc.Execute(context.Background(), "query1", nil, "TestScatterConnSingleDB", []string{"0"}, topodatapb.TabletType_MASTER, session, false, nil)
+	_, err = sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_MASTER, session, false, nil)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = sc.Execute(context.Background(), "query1", nil, "TestScatterConnSingleDB", []string{"1"}, topodatapb.TabletType_MASTER, session, false, nil)
+	_, err = sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_MASTER, session, false, nil)
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Multi DB exec: %v, must contain %s", err, want)
 	}
 
 	// TransactionMode_SINGLE in session
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true, TransactionMode: vtgatepb.TransactionMode_SINGLE})
-	_, err = sc.Execute(context.Background(), "query1", nil, "TestScatterConnSingleDB", []string{"0"}, topodatapb.TabletType_MASTER, session, false, nil)
+	_, err = sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_MASTER, session, false, nil)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = sc.Execute(context.Background(), "query1", nil, "TestScatterConnSingleDB", []string{"1"}, topodatapb.TabletType_MASTER, session, false, nil)
+	_, err = sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_MASTER, session, false, nil)
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Multi DB exec: %v, must contain %s", err, want)
 	}
@@ -509,11 +558,11 @@ func TestScatterConnSingleDB(t *testing.T) {
 	// TransactionMode_SINGLE in txconn
 	sc.txConn.mode = vtgatepb.TransactionMode_SINGLE
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	_, err = sc.Execute(context.Background(), "query1", nil, "TestScatterConnSingleDB", []string{"0"}, topodatapb.TabletType_MASTER, session, false, nil)
+	_, err = sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_MASTER, session, false, nil)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = sc.Execute(context.Background(), "query1", nil, "TestScatterConnSingleDB", []string{"1"}, topodatapb.TabletType_MASTER, session, false, nil)
+	_, err = sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_MASTER, session, false, nil)
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Multi DB exec: %v, must contain %s", err, want)
 	}
@@ -521,11 +570,11 @@ func TestScatterConnSingleDB(t *testing.T) {
 	// TransactionMode_MULTI in txconn. Should not fail.
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	_, err = sc.Execute(context.Background(), "query1", nil, "TestScatterConnSingleDB", []string{"0"}, topodatapb.TabletType_MASTER, session, false, nil)
+	_, err = sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_MASTER, session, false, nil)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = sc.Execute(context.Background(), "query1", nil, "TestScatterConnSingleDB", []string{"1"}, topodatapb.TabletType_MASTER, session, false, nil)
+	_, err = sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_MASTER, session, false, nil)
 	if err != nil {
 		t.Error(err)
 	}

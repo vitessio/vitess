@@ -122,7 +122,7 @@ func (res *Resolver) Execute(
 		logStats.ShardQueries = uint32(len(rss))
 	}
 	for {
-		qr, err := res.scatterConn.Execute2(
+		qr, err := res.scatterConn.Execute(
 			ctx,
 			sql,
 			bindVars,
