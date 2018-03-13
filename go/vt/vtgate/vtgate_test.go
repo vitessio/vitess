@@ -499,6 +499,20 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 	if qr.RowsAffected != 2 {
 		t.Errorf("want 2, got %v", qr.RowsAffected)
 	}
+	// Test for multiple shards for DML
+	qr, err = rpcVTGate.ExecuteKeyspaceIds(context.Background(),
+		"update table set a = b",
+		nil,
+		ks,
+		[][]byte{{0x10}, {0x30}},
+		topodatapb.TabletType_MASTER,
+		session,
+		false,
+		nil)
+	errStr := "DML should not span multiple keyspace_ids"
+	if err == nil || !strings.Contains(err.Error(), errStr) {
+		t.Errorf("want '%v', got '%v'", errStr, err)
+	}
 }
 
 func TestVTGateExecuteKeyRanges(t *testing.T) {

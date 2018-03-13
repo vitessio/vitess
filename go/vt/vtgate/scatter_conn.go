@@ -232,7 +232,6 @@ func (stc *ScatterConn) ExecuteEntityIds(
 	rss []*srvtopo.ResolvedShard,
 	sqls []string,
 	bindVars []map[string]*querypb.BindVariable,
-	keyspace string,
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
@@ -252,19 +251,15 @@ func (stc *ScatterConn) ExecuteEntityIds(
 		notInTransaction,
 		func(rs *srvtopo.ResolvedShard, i int, shouldBegin bool, transactionID int64) (int64, error) {
 			var innerqr *sqltypes.Result
+			var err error
 
 			if shouldBegin {
-				var err error
 				innerqr, transactionID, err = rs.QueryService.BeginExecute(ctx, rs.Target, sqls[i], bindVars[i], options)
-				if err != nil {
-					return transactionID, err
-				}
 			} else {
-				var err error
 				innerqr, err = rs.QueryService.Execute(ctx, rs.Target, sqls[i], bindVars[i], transactionID, options)
-				if err != nil {
-					return transactionID, err
-				}
+			}
+			if err != nil {
+				return transactionID, err
 			}
 
 			mu.Lock()

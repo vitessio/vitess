@@ -298,15 +298,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 }
 
 func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, destination key.Destination, logStats *LogStats) (*sqltypes.Result, error) {
-	f := func() ([]*srvtopo.ResolvedShard, error) {
-		rss, err := e.resolver.resolver.ResolveDestination(ctx, target.Keyspace, target.TabletType, destination)
-		if err != nil {
-			return nil, err
-		}
-		logStats.ShardQueries = uint32(len(rss))
-		return rss, nil
-	}
-	return e.resolver.Execute(ctx, sql, bindVars, target.TabletType, safeSession.Session, f, false /* notInTransaction */, safeSession.Options, logStats)
+	return e.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, destination, safeSession.Session, false /* notInTransaction */, safeSession.Options, logStats)
 }
 
 func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
