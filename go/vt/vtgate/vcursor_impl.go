@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -119,76 +118,47 @@ func (vc *vcursorImpl) ExecuteAutocommit(method string, query string, BindVars m
 	return qr, err
 }
 
-// ExecuteMultiShard executes different queries on different shards and returns the combined result.
-func (vc *vcursorImpl) ExecuteMultiShard(keyspace string, shardQueries map[string]*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
-	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(shardQueries)))
-	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, commentedShardQueries(shardQueries, vc.trailingComments), vc.target.TabletType, vc.safeSession, false, canAutocommit)
+// ExecuteMultiShard is part of the engine.VCursor interface.
+func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
+	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(queries)))
+	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.trailingComments), vc.target.TabletType, vc.safeSession, false, canAutocommit)
 	if err == nil {
 		vc.hasPartialDML = true
 	}
 	return qr, err
 }
 
-// ExecuteStandalone executes the specified query on keyspace:shard using an independent session with autocommit enabled.
-func (vc *vcursorImpl) ExecuteStandalone(query string, BindVars map[string]*querypb.BindVariable, keyspace, shard string) (*sqltypes.Result, error) {
-	bq := map[string]*querypb.BoundQuery{
-		shard: {
+// ExecuteStandalone is part of the engine.VCursor interface.
+func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error) {
+	rss := []*srvtopo.ResolvedShard{rs}
+	bqs := []*querypb.BoundQuery{
+		{
 			Sql:           query + vc.trailingComments,
-			BindVariables: BindVars,
+			BindVariables: bindVars,
 		},
 	}
 	// The canAutocommit flag is not significant because we currently don't execute DMLs through ExecuteStandalone.
 	// But we set it to true for future-proofing this function.
-	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, bq, vc.target.TabletType, NewAutocommitSession(vc.safeSession.Session), false, true /* canAutocommit */)
+	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, rss, bqs, vc.target.TabletType, NewAutocommitSession(vc.safeSession.Session), false, true /* canAutocommit */)
 }
 
 // StreamExeculteMulti is the streaming version of ExecuteMultiShard.
-func (vc *vcursorImpl) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
-	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(shardVars)))
-	return vc.executor.scatterConn.StreamExecuteMulti(vc.ctx, query+vc.trailingComments, keyspace, shardVars, vc.target.TabletType, vc.safeSession.Options, callback)
+func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
+	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(rss)))
+	return vc.executor.scatterConn.StreamExecuteMulti(vc.ctx, query+vc.trailingComments, rss, bindVars, vc.target.TabletType, vc.safeSession.Options, callback)
 }
 
-// GetKeyspaceShards returns the list of shards for a keyspace, and the mapped keyspace if an alias was used.
-func (vc *vcursorImpl) GetKeyspaceShards(keyspace *vindexes.Keyspace) (string, []*topodatapb.ShardReference, error) {
-	ks, _, allShards, err := srvtopo.GetKeyspaceShards(vc.ctx, vc.executor.serv, vc.executor.cell, keyspace.Name, vc.target.TabletType)
-	if err != nil {
-		return "", nil, err
-	}
-	if !keyspace.Sharded && len(allShards) != 1 {
-		return "", nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsharded keyspace %s has multiple shards: possible cause: sharded keyspace is marked as unsharded in vschema", ks)
-	}
-	if len(allShards) == 0 {
-		return "", nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s has no shards", ks)
-	}
-	return ks, allShards, err
+func (vc *vcursorImpl) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+	return vc.executor.resolver.resolver.ResolveDestinations(vc.ctx, keyspace, vc.target.TabletType, ids, destinations)
 }
 
-func (vc *vcursorImpl) GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error) {
-	return key.GetShardForKeyspaceID(allShards, keyspaceID)
-}
-
-func (vc *vcursorImpl) GetShardsForKsids(allShards []*topodatapb.ShardReference, ksids vindexes.Ksids) ([]string, error) {
-	if ksids.Range != nil {
-		return srvtopo.GetShardsForKeyRange(allShards, ksids.Range), nil
-	}
-	var shards []string
-	for _, ksid := range ksids.IDs {
-		shard, err := key.GetShardForKeyspaceID(allShards, ksid)
-		if err != nil {
-			return nil, err
-		}
-		shards = append(shards, shard)
-	}
-	return shards, nil
-}
-
-func commentedShardQueries(shardQueries map[string]*querypb.BoundQuery, trailingComments string) map[string]*querypb.BoundQuery {
+func commentedShardQueries(shardQueries []*querypb.BoundQuery, trailingComments string) []*querypb.BoundQuery {
 	if trailingComments == "" {
 		return shardQueries
 	}
-	newQueries := make(map[string]*querypb.BoundQuery, len(shardQueries))
-	for k, v := range shardQueries {
-		newQueries[k] = &querypb.BoundQuery{
+	newQueries := make([]*querypb.BoundQuery, len(shardQueries))
+	for i, v := range shardQueries {
+		newQueries[i] = &querypb.BoundQuery{
 			Sql:           v.Sql + trailingComments,
 			BindVariables: v.BindVariables,
 		}

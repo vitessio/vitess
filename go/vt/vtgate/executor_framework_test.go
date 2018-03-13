@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 
@@ -269,17 +270,21 @@ var unshardedVSchema = `
 type keyRangeLookuper struct {
 }
 
-func (v *keyRangeLookuper) String() string { return "keyrange_lookuper" }
-func (*keyRangeLookuper) Cost() int        { return 0 }
+func (v *keyRangeLookuper) String() string   { return "keyrange_lookuper" }
+func (*keyRangeLookuper) Cost() int          { return 0 }
+func (*keyRangeLookuper) IsUnique() bool     { return false }
+func (*keyRangeLookuper) IsFunctional() bool { return false }
 func (*keyRangeLookuper) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*keyRangeLookuper) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.Ksids, error) {
-	return []vindexes.Ksids{{
-		Range: &topodatapb.KeyRange{
-			End: []byte{0x10},
+func (*keyRangeLookuper) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	return []key.Destination{
+		key.DestinationKeyRange{
+			KeyRange: &topodatapb.KeyRange{
+				End: []byte{0x10},
+			},
 		},
-	}}, nil
+	}, nil
 }
 
 func newKeyRangeLookuper(name string, params map[string]string) (vindexes.Vindex, error) {
@@ -290,17 +295,21 @@ func newKeyRangeLookuper(name string, params map[string]string) (vindexes.Vindex
 type keyRangeLookuperUnique struct {
 }
 
-func (v *keyRangeLookuperUnique) String() string { return "keyrange_lookuper" }
-func (*keyRangeLookuperUnique) Cost() int        { return 0 }
+func (v *keyRangeLookuperUnique) String() string   { return "keyrange_lookuper" }
+func (*keyRangeLookuperUnique) Cost() int          { return 0 }
+func (*keyRangeLookuperUnique) IsUnique() bool     { return true }
+func (*keyRangeLookuperUnique) IsFunctional() bool { return false }
 func (*keyRangeLookuperUnique) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*keyRangeLookuperUnique) Map(vindexes.VCursor, []sqltypes.Value) ([]vindexes.KsidOrRange, error) {
-	return []vindexes.KsidOrRange{{
-		Range: &topodatapb.KeyRange{
-			End: []byte{0x10},
+func (*keyRangeLookuperUnique) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	return []key.Destination{
+		key.DestinationKeyRange{
+			KeyRange: &topodatapb.KeyRange{
+				End: []byte{0x10},
+			},
 		},
-	}}, nil
+	}, nil
 }
 
 func newKeyRangeLookuperUnique(name string, params map[string]string) (vindexes.Vindex, error) {
