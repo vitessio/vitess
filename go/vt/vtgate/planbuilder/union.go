@@ -58,7 +58,7 @@ func processUnion(union *sqlparser.Union, vschema VSchema, outer builder) (build
 	if err != nil {
 		return nil, err
 	}
-	bldr, err = pushLimit(union.Limit, union.OrderBy, bldr)
+	bldr, err = pushLimit(union.Limit, bldr)
 	if err != nil {
 		return nil, err
 	}
