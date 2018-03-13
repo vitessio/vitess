@@ -943,6 +943,7 @@ class TestVTGateFunctions(unittest.TestCase):
         keyspace_name='user'
     )
     vtgate_conn.commit()
+    lookup_master.mquery('vt_lookup', 'truncate name_user2_map')
     self.assertEqual(result, ([], 0L, 0L, []))
     # Test select by id
     result = self.execute_on_master(
@@ -1030,6 +1031,85 @@ class TestVTGateFunctions(unittest.TestCase):
         'delete from  vt_user_extra where user_id = :user_id',
         {'user_id': 3})
     vtgate_conn.commit()
+
+  def test_user_scatter_limit(self):
+    vtgate_conn = get_connection()
+    # Works when there is no data
+    result = self.execute_on_master(
+        vtgate_conn,
+        'select id from vt_user2 order by id limit :limit offset :offset ', {'limit': 4, 'offset': 1})
+    self.assertEqual(
+        result, ([], 0L, 0, [('id', self.int_type)]))
+
+    vtgate_conn.begin()
+    result = self.execute_on_master(
+        vtgate_conn,
+        'insert into vt_user2 (id, name) values (:id0, :name0),(:id1, :name1),(:id2, :name2), (:id3, :name3), (:id4, :name4)',
+        {
+          'id0': 1, 'name0': 'name0',
+          'id1': 2, 'name1': 'name1',
+          'id2': 3, 'name2': 'name2',
+          'id3': 4, 'name3': 'name3',
+          'id4': 5, 'name4': 'name4',
+        }
+    )
+    self.assertEqual(result, ([], 5L, 0L, []))
+    vtgate_conn.commit()
+    # Assert that rows are in multiple shards
+    result = shard_0_master.mquery('vt_user', 'select id, name from vt_user2')
+    self.assertEqual(result, ((1L, 'name0'), (2L, 'name1'), (3L, 'name2'), (5L, 'name4')))
+    result = shard_1_master.mquery('vt_user', 'select id, name from vt_user2')
+    self.assertEqual(result, ((4L, 'name3'),))
+ 
+    # Works when limit is set
+    result = self.execute_on_master(
+      vtgate_conn,
+      'select id from vt_user2 order by id limit :limit', {'limit': 2 })
+    self.assertEqual(
+        result,
+        ([(1,),(2,),], 2L, 0,
+         [('id', self.int_type)]))
+
+
+    # Fetching with offset works
+    count = 4
+    for x in xrange(count):
+      i = x+1
+      result = self.execute_on_master(
+        vtgate_conn,
+        'select id from vt_user2 order by id limit :limit offset :offset ', {'limit': 1, 'offset': x})
+      self.assertEqual(
+        result,
+        ([(i,)], 1L, 0,
+         [('id', self.int_type)]))
+
+    # Works when limit is greater than values in the table
+    result = self.execute_on_master(
+      vtgate_conn,
+      'select id from vt_user2 order by id limit :limit offset :offset ', {'limit': 100, 'offset': 1})
+    self.assertEqual(
+        result,
+        ([(2,),(3,),(4,),(5,)], 4L, 0,
+         [('id', self.int_type)]))
+
+    # Works without bind vars
+    result = self.execute_on_master(
+      vtgate_conn,
+      'select id from vt_user2 order by id limit 1 offset 1', {})
+    self.assertEqual(
+        result,
+        ([(2,)], 1L, 0,
+         [('id', self.int_type)]))
+
+    vtgate_conn.begin()
+    result = vtgate_conn._execute(
+        'truncate vt_user2',
+        {},
+        tablet_type='master',
+        keyspace_name='user'
+    )
+    vtgate_conn.commit()
+    lookup_master.mquery('vt_lookup', 'truncate name_user2_map')
 
   def test_user_extra2(self):
     # user_extra2 is for testing updates to secondary vindexes
