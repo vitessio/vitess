@@ -65,7 +65,7 @@ func (s *Server) Watch(ctx context.Context, cell, filePath string) (*topo.WatchD
 	notifications := make(chan *topo.WatchData, 10)
 	go func() {
 		defer close(notifications)
-
+		var count int
 		for {
 			select {
 			case <-watchCtx.Done():
@@ -74,7 +74,21 @@ func (s *Server) Watch(ctx context.Context, cell, filePath string) (*topo.WatchD
 					Err: convertError(watchCtx.Err()),
 				}
 				return
-			case wresp := <-watcher:
+			case wresp, ok := <-watcher:
+				if !ok {
+					if count > 10 {
+						time.Sleep(time.Duration(count) * time.Second)
+					}
+					count++
+					cur, err := c.cli.Get(ctx, nodePath)
+					if err != nil {
+						continue
+					}
+					watcher = c.cli.Watch(watchCtx, nodePath, clientv3.WithRev(cur.Header.Revision))
+					continue
+				}
+
+				count = 0
 				if wresp.Canceled {
 					// Final notification.
 					notifications <- &topo.WatchData{
