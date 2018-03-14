@@ -25,6 +25,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
+	"time"
 )
 
 // Watch is part of the topo.Backend interface
