@@ -35,9 +35,6 @@ func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlpars
 		filters = splitAndExpression(filters, node.Left)
 		return splitAndExpression(filters, node.Right)
 	}
-	if node, ok := node.(*sqlparser.ParenExpr); ok {
-		return splitAndExpression(filters, node.Expr)
-	}
 	return append(filters, node)
 }
 
