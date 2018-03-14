@@ -19,13 +19,13 @@ package etcd2topo
 import (
 	"fmt"
 	"path"
+	"time"
 
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/mvcc/mvccpb"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/topo"
-	"time"
 )
 
 // Watch is part of the topo.Conn interface.
