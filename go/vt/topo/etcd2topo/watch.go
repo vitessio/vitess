@@ -24,6 +24,7 @@ import (
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/mvcc/mvccpb"
 	"golang.org/x/net/context"
+	log "github.com/golang/glog"
 
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -63,7 +64,8 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 	go func() {
 		defer close(notifications)
 
-		var count int
+		var currVersion = initial.Header.Revision
+		var watchRetries int
 		for {
 			select {
 
@@ -75,22 +77,20 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 				return
 			case wresp, ok := <-watcher:
 				if !ok {
-					if count > 10 {
-						time.Sleep(time.Duration(count) * time.Second)
+					if watchRetries > 10 {
+						time.Sleep(time.Duration(watchRetries) * time.Second)
 					}
-					count++
-					cur, err := s.cli.Get(ctx, nodePath)
-					if err != nil {
-						continue
-					}
-					newWatcher := s.cli.Watch(watchCtx, nodePath, clientv3.WithRev(cur.Header.Revision))
-					if newWatcher != nil {
+					watchRetries++
+					newWatcher := s.cli.Watch(watchCtx, nodePath, clientv3.WithRev(currVersion))
+					if newWatcher == nil {
+						log.Warningf("watch %v failed and get a nil channel returned, currVersion: %v", nodePath, currVersion)
+					} else {
 						watcher = newWatcher
 					}
 					continue
 				}
 
-				count = 0
+				watchRetries = 0
 
 				if wresp.Canceled {
 					// Final notification.
@@ -99,6 +99,8 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 					}
 					return
 				}
+
+				currVersion = wresp.Header.GetRevision()
 
 				for _, ev := range wresp.Events {
 					switch ev.Type {
