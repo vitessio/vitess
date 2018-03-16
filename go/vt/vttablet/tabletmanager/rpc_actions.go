@@ -78,6 +78,9 @@ func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.
 		return fmt.Errorf("fixSemiSyncAndReplication failed, may not ack correctly: %v", err)
 	}
 
+	// Let's populate Metadata values.
+	agent.populateMetadataValues(tabletType)
+
 	// and re-run health check
 	agent.runHealthCheckLocked()
 	return nil
