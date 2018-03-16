@@ -17,6 +17,7 @@ limitations under the License.
 package messager
 
 import (
+	"sort"
 	"sync"
 	"time"
 
@@ -151,6 +152,14 @@ func (me *Engine) LockDB(newMessages map[string][]*MessageRow, changedMessages m
 			}
 		}
 	}()
+	if len(mms) > 1 {
+		// Always use the same order in which manager objects are locked to avoid deadlocks.
+		// The previous order in "mms" is not guaranteed for multiple reasons:
+		// - We use a Go map above which does not guarantee an iteration order.
+		// - Transactions may not always use the same order when writing to multiple
+		//   messages tables.
+		sort.Slice(mms, func(i, j int) bool { return mms[i].name.String() < mms[j].name.String() })
+	}
 
 	// Lock each manager/messages table.
 	for _, mm := range mms {
