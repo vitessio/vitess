@@ -541,16 +541,24 @@
 			"revisionTime": "2016-11-28T00:20:07Z"
 		},
 		{
-			"checksumSHA1": "FXiaccMs+1NvIHh8W44lQJeGqms=",
+			"checksumSHA1": "ivSpuvm7dkBBC1kWyDWTZ9yF3Rs=",
 			"path": "github.com/hashicorp/consul/api",
-			"revision": "dc2a54a77b3b053e77298d4ce587bdf0bd0bcd1c",
-			"revisionTime": "2016-12-21T13:20:54Z"
+			"revision": "9a494b5fb9c86180a5702e29c485df1507a47198",
+			"revisionTime": "2018-02-09T18:00:27Z",
+			"version": "v1.0.6",
+			"versionExact": "v1.0.6"
 		},
 		{
 			"checksumSHA1": "Uzyon2091lmwacNsl1hCytjhHtg=",
 			"path": "github.com/hashicorp/go-cleanhttp",
 			"revision": "ad28ea4487f05916463e2423a55166280e8254b5",
 			"revisionTime": "2016-04-07T17:41:26Z"
+		},
+		{
+			"checksumSHA1": "A1PcINvF3UiwHRKn8UcgARgvGRs=",
+			"path": "github.com/hashicorp/go-rootcerts",
+			"revision": "6bb64b370b90e7ef1fa532be9e591a81c3493e00",
+			"revisionTime": "2016-05-03T14:34:40Z"
 		},
 		{
 			"checksumSHA1": "E3Xcanc9ouQwL+CZGOUyA/+giLg=",
@@ -603,6 +611,12 @@
 			"revisionTime": "2016-07-19T21:19:03Z",
 			"version": "v2.0.1",
 			"versionExact": "v2.0.1"
+		},
+		{
+			"checksumSHA1": "V/quM7+em2ByJbWBLOsEwnY3j/Q=",
+			"path": "github.com/mitchellh/go-homedir",
+			"revision": "b8bc1bf767474819792c23f32d8286a45736f1c6",
+			"revisionTime": "2016-12-03T19:45:07Z"
 		},
 		{
 			"checksumSHA1": "txj5yUDiaSATtBLDlT0f6uaiIP8=",
