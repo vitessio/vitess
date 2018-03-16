@@ -129,6 +129,7 @@ func (me *Engine) Subscribe(ctx context.Context, name string, send func(*sqltype
 // LockDB obtains db locks for all messages that need to
 // be updated and returns the counterpart unlock function.
 func (me *Engine) LockDB(newMessages map[string][]*MessageRow, changedMessages map[string][]string) func() {
+	// Build the set of affected messages tables.
 	combined := make(map[string]struct{})
 	for name := range newMessages {
 		combined[name] = struct{}{}
@@ -136,6 +137,8 @@ func (me *Engine) LockDB(newMessages map[string][]*MessageRow, changedMessages m
 	for name := range changedMessages {
 		combined[name] = struct{}{}
 	}
+
+	// Build the list of manager objects (one per table).
 	var mms []*messageManager
 	// Don't do DBLock while holding lock on mu.
 	// It causes deadlocks.
@@ -148,6 +151,8 @@ func (me *Engine) LockDB(newMessages map[string][]*MessageRow, changedMessages m
 			}
 		}
 	}()
+
+	// Lock each manager/messages table.
 	for _, mm := range mms {
 		mm.DBLock.Lock()
 	}
