@@ -177,7 +177,7 @@ func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Val
 func (f *loggingVCursor) ExpectLog(t *testing.T, want []string) {
 	t.Helper()
 	if !reflect.DeepEqual(f.log, want) {
-		t.Errorf("vc.log:\n%v\n-- want:\n%v", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
+		t.Errorf("vc.log:\n%v\nwant:\n%v", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
 	}
 }
 
@@ -210,7 +210,7 @@ func expectError(t *testing.T, msg string, err error, want string) {
 func expectResult(t *testing.T, msg string, result, want *sqltypes.Result) {
 	t.Helper()
 	if !reflect.DeepEqual(result, want) {
-		t.Errorf("s: %v, want %v", result, want)
+		t.Errorf("%s:\n%v\nwant:\n%v", msg, result, want)
 	}
 }
 
