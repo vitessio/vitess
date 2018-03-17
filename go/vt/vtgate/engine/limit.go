@@ -84,7 +84,7 @@ func (l *Limit) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariab
 		return result, nil
 	}
 	// offset is beyond the result set
-	result.Rows = [][]sqltypes.Value{}
+	result.Rows = nil
 	result.RowsAffected = 0
 	return result, nil
 }
