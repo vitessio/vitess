@@ -1135,15 +1135,3 @@
 # non-existent table on right of join
 "select c from user join t"
 "table t not found"
-
-# complex on clause on join
-"select c from user join user_extra on user.id in (select id from user)"
-"unsupported: scatter subquery"
-
-# complex on clause on left join
-"select c from user left join user_extra on user.id in (select id from user)"
-"unsupported: scatter subquery"
-
-# merging routes, but complex on clause
-"select user.id from user join user_extra on user_extra.user_id = user.id and user.id in (select id from user)"
-"unsupported: scatter subquery"
