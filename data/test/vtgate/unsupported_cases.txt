@@ -47,6 +47,18 @@
 "select * from user where id in (select id from user)"
 "unsupported: scatter subquery"
 
+# complex on clause on join
+"select c from user join user_extra on user.id in (select id from user)"
+"unsupported: scatter subquery"
+
+# complex on clause on left join
+"select c from user left join user_extra on user.id in (select id from user)"
+"unsupported: scatter subquery"
+
+# merging routes, but complex on clause
+"select user.id from user join user_extra on user_extra.user_id = user.id and user.id in (select id from user)"
+"unsupported: scatter subquery"
+
 # subquery does not depend on unique vindex of outer query
 "select id from user where id in (select user_id from user_extra where user_extra.user_id = user.col)"
 "unsupported: subquery does not depend on scatter outer query"
@@ -155,9 +167,17 @@
 "select id, b as id, count(*) from user order by id"
 "invalid order by: ambiguous symbol reference: id"
 
+# scatter aggregate with ambiguous aliases
+"select distinct a, b as a from user"
+"generating order by clause: ambiguous symbol reference: a"
+
 # scatter aggregate complex order by
 "select id from user group by id order by id+1"
 "unsupported: in scatter query: complex order by expression: id + 1"
+
+# Scatter order by is complex with aggregates in select
+"select col, count(*) from user group by col order by col+1"
+"unsupported: in scatter query: complex order by expression: col + 1"
 
 # scatter aggregate order by does not reference group by
 "select a, b, count(*) from user group by a order by b"
@@ -167,8 +187,16 @@
 "select count(*) from user join user_extra"
 "unsupported: cross-shard query with aggregates"
 
-# group by and joins
-"select user.id from user join user_extra group by id"
+# Aggregate detection (distinct)
+"select distinct user.a from user join user_extra"
+"unsupported: cross-shard query with aggregates"
+
+# Aggregate detection (group_concat)
+"select group_concat(user.a) from user join user_extra"
+"unsupported: cross-shard query with aggregates"
+
+# Aggregate detection (group by)
+"select user.a from user join user_extra group by user.a"
 "unsupported: cross-shard query with aggregates"
 
 # group by and ',' joins
@@ -269,6 +297,10 @@
 
 # update by lookup with IN clause
 "update music set val = 1 where id in (1, 2)"
+"unsupported: multi-shard where clause in DML"
+
+# update with where clause with parens
+"update user set val = 1 where (name = 'foo' or id = 1)"
 "unsupported: multi-shard where clause in DML"
 
 # delete with multi-table targets
