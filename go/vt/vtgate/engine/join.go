@@ -104,6 +104,9 @@ func (jn *Join) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 			err := jn.Right.StreamExecute(vcursor, combineVars(bindVars, joinVars), wantfields, func(rresult *sqltypes.Result) error {
 				result := &sqltypes.Result{}
 				if wantfields {
+					// This code is currently unreachable because the first result
+					// will always be just the field info, which will cause the outer
+					// wantfields code path to be executed. But this may change in the future.
 					wantfields = false
 					result.Fields = joinFields(lresult.Fields, rresult.Fields, jn.Cols)
 				}
@@ -117,10 +120,6 @@ func (jn *Join) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 			})
 			if err != nil {
 				return err
-			}
-			if wantfields {
-				// TODO(sougou): remove after testing
-				panic("unexptected")
 			}
 			if jn.Opcode == LeftJoin && !rowSent {
 				result := &sqltypes.Result{}
