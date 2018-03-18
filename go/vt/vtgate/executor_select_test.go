@@ -19,7 +19,6 @@ package vtgate
 import (
 	"fmt"
 	"reflect"
-	"strings"
 	"testing"
 
 	"golang.org/x/net/context"
@@ -32,7 +31,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestSelectNext(t *testing.T) {
@@ -1791,94 +1789,6 @@ func TestEmptyJoinRecursiveStream(t *testing.T) {
 	}
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
-}
-
-func TestJoinErrors(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
-
-	// First query fails
-	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	_, err := executorExec(executor, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
-	want := "INVALID_ARGUMENT error"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain %s", err, want)
-	}
-
-	// Field query fails
-	sbc2.SetResults([]*sqltypes.Result{{
-		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32},
-		},
-	}})
-	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	_, err = executorExec(executor, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 3", nil)
-	want = "INVALID_ARGUMENT error"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain %s", err, want)
-	}
-
-	// Second query fails
-	sbc1.SetResults([]*sqltypes.Result{{
-		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32},
-			{Name: "col", Type: sqltypes.Int32},
-		},
-		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt32(1),
-			sqltypes.NewInt32(3),
-		}},
-	}})
-	sbc2.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	_, err = executorExec(executor, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
-	want = "INVALID_ARGUMENT error"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain %s", err, want)
-	}
-
-	// Nested join query fails on get fields
-	sbc2.SetResults([]*sqltypes.Result{{
-		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32},
-			{Name: "col", Type: sqltypes.Int32},
-		},
-	}})
-	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	_, err = executorExec(executor, "select u1.id, u2.id from user u1 join (user u2 join user u3 on u3.id = u2.col) where u1.id = 3", nil)
-	want = "INVALID_ARGUMENT error"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain %s", err, want)
-	}
-
-	// Field query fails on stream join
-	sbc2.SetResults([]*sqltypes.Result{{
-		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32},
-		},
-	}})
-	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	_, err = executorStream(executor, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 3")
-	want = "INVALID_ARGUMENT error"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain %s", err, want)
-	}
-
-	// Second query fails on stream join
-	sbc1.SetResults([]*sqltypes.Result{{
-		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32},
-			{Name: "col", Type: sqltypes.Int32},
-		},
-		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt32(1),
-			sqltypes.NewInt32(3),
-		}},
-	}})
-	sbc2.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	_, err = executorStream(executor, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1")
-	want = "INVALID_ARGUMENT error"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain %s", err, want)
 	}
 }
 
