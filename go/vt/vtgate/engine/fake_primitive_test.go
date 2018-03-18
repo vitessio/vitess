@@ -100,7 +100,7 @@ func (f *fakePrimitive) GetFields(vcursor VCursor, bindVars map[string]*querypb.
 func (f *fakePrimitive) ExpectLog(t *testing.T, want []string) {
 	t.Helper()
 	if !reflect.DeepEqual(f.log, want) {
-		t.Errorf("vc.log:\n%v\nwant:\n%v", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
+		t.Errorf("vc.log got:\n%v\nwant:\n%v", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
 	}
 }
 
