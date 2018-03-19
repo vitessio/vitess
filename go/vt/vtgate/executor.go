@@ -298,15 +298,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 }
 
 func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, destination key.Destination, logStats *LogStats) (*sqltypes.Result, error) {
-	f := func() ([]*srvtopo.ResolvedShard, error) {
-		rss, err := e.resolver.resolver.ResolveDestination(ctx, target.Keyspace, target.TabletType, destination)
-		if err != nil {
-			return nil, err
-		}
-		logStats.ShardQueries = uint32(len(rss))
-		return rss, nil
-	}
-	return e.resolver.Execute(ctx, sql, bindVars, target.TabletType, safeSession.Session, f, false /* notInTransaction */, safeSession.Options, logStats)
+	return e.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, destination, safeSession.Session, false /* notInTransaction */, safeSession.Options, logStats)
 }
 
 func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
@@ -916,24 +908,16 @@ func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []
 			nil,
 		)
 
-		// We always use the (unique) primary vindex. The ID must be the
-		// primary vindex for message tables.
-		mapper := table.ColumnVindexes[0].Vindex.(vindexes.Unique)
 		// convert []*querypb.Value to []sqltypes.Value for calling Map.
 		values := make([]sqltypes.Value, 0, len(ids))
 		for _, id := range ids {
 			values = append(values, sqltypes.ProtoToValue(id))
 		}
-		ksids, err := mapper.Map(vcursor, values)
+		// We always use the (unique) primary vindex. The ID must be the
+		// primary vindex for message tables.
+		destinations, err := table.ColumnVindexes[0].Vindex.Map(vcursor, values)
 		if err != nil {
 			return 0, err
-		}
-		destinations := make([]key.Destination, len(ksids))
-		for i, ksid := range ksids {
-			if err := ksid.ValidateUnique(); err != nil {
-				return 0, err
-			}
-			destinations[i] = key.DestinationKeyspaceID(ksid.ID)
 		}
 		rss, rssValues, err = e.resolver.resolver.ResolveDestinations(ctx, table.Keyspace.Name, topodatapb.TabletType_MASTER, ids, destinations)
 		if err != nil {

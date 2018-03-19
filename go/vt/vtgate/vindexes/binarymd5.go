@@ -21,10 +21,11 @@ import (
 	"crypto/md5"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 )
 
 var (
-	_ Functional = (*BinaryMD5)(nil)
+	_ Vindex = (*BinaryMD5)(nil)
 )
 
 // BinaryMD5 is a vindex that hashes binary bits to a keyspace id.
@@ -47,6 +48,16 @@ func (vind *BinaryMD5) Cost() int {
 	return 1
 }
 
+// IsUnique returns true since the Vindex is unique.
+func (vind *BinaryMD5) IsUnique() bool {
+	return true
+}
+
+// IsFunctional returns true since the Vindex is functional.
+func (vind *BinaryMD5) IsFunctional() bool {
+	return true
+}
+
 // Verify returns true if ids maps to ksids.
 func (vind *BinaryMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
@@ -56,11 +67,11 @@ func (vind *BinaryMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) (
 	return out, nil
 }
 
-// Map returns the corresponding keyspace id values for the given ids.
-func (vind *BinaryMD5) Map(_ VCursor, ids []sqltypes.Value) ([]KsidOrRange, error) {
-	out := make([]KsidOrRange, 0, len(ids))
-	for _, id := range ids {
-		out = append(out, KsidOrRange{ID: binHash(id.ToBytes())})
+// Map can map ids to key.Destination objects.
+func (vind *BinaryMD5) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	out := make([]key.Destination, len(ids))
+	for i, id := range ids {
+		out[i] = key.DestinationKeyspaceID(binHash(id.ToBytes()))
 	}
 	return out, nil
 }

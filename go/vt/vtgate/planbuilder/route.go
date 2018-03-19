@@ -232,7 +232,7 @@ func (rb *route) isSameRoute(rhs *route, filter sqlparser.Expr) bool {
 		left, right = right, left
 		lVindex = rb.Symtab().Vindex(left, rb)
 	}
-	if lVindex == nil || !vindexes.IsUnique(lVindex) {
+	if lVindex == nil || !lVindex.IsUnique() {
 		return false
 	}
 	rVindex := rhs.Symtab().Vindex(right, rhs)
@@ -338,7 +338,7 @@ func (rb *route) computeEqualPlan(comparison *sqlparser.ComparisonExpr) (opcode 
 	if !rb.exprIsValue(right) {
 		return engine.SelectScatter, nil, nil
 	}
-	if vindexes.IsUnique(vindex) {
+	if vindex.IsUnique() {
 		return engine.SelectEqualUnique, vindex, right
 	}
 	return engine.SelectEqual, vindex, right

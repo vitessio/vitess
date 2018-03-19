@@ -25,10 +25,11 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 )
 
 var (
-	_ Functional = (*Hash)(nil)
+	_ Vindex     = (*Hash)(nil)
 	_ Reversible = (*Hash)(nil)
 )
 
@@ -54,16 +55,26 @@ func (vind *Hash) Cost() int {
 	return 1
 }
 
-// Map returns the corresponding KeyspaceId values for the given ids.
-func (vind *Hash) Map(_ VCursor, ids []sqltypes.Value) ([]KsidOrRange, error) {
-	out := make([]KsidOrRange, 0, len(ids))
-	for _, id := range ids {
+// IsUnique returns true since the Vindex is unique.
+func (vind *Hash) IsUnique() bool {
+	return true
+}
+
+// IsFunctional returns true since the Vindex is functional.
+func (vind *Hash) IsFunctional() bool {
+	return true
+}
+
+// Map can map ids to key.Destination objects.
+func (vind *Hash) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	out := make([]key.Destination, len(ids))
+	for i, id := range ids {
 		num, err := sqltypes.ToUint64(id)
 		if err != nil {
-			out = append(out, KsidOrRange{})
+			out[i] = key.DestinationNone{}
 			continue
 		}
-		out = append(out, KsidOrRange{ID: vhash(num)})
+		out[i] = key.DestinationKeyspaceID(vhash(num))
 	}
 	return out, nil
 }

@@ -21,14 +21,15 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
-	_ NonUnique = (*LookupHash)(nil)
-	_ Lookup    = (*LookupHash)(nil)
-	_ Unique    = (*LookupHashUnique)(nil)
-	_ Lookup    = (*LookupHashUnique)(nil)
+	_ Vindex = (*LookupHash)(nil)
+	_ Lookup = (*LookupHash)(nil)
+	_ Vindex = (*LookupHashUnique)(nil)
+	_ Lookup = (*LookupHashUnique)(nil)
 )
 
 func init() {
@@ -86,12 +87,22 @@ func (lh *LookupHash) Cost() int {
 	return 20
 }
 
-// Map returns the corresponding KeyspaceId values for the given ids.
-func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksids, error) {
-	out := make([]Ksids, 0, len(ids))
+// IsUnique returns false since the Vindex is not unique.
+func (lh *LookupHash) IsUnique() bool {
+	return false
+}
+
+// IsFunctional returns false since the Vindex is not functional.
+func (lh *LookupHash) IsFunctional() bool {
+	return false
+}
+
+// Map can map ids to key.Destination objects.
+func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
 	if lh.writeOnly {
 		for range ids {
-			out = append(out, Ksids{Range: &topodatapb.KeyRange{}})
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
 		}
 		return out, nil
 	}
@@ -102,7 +113,7 @@ func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksids, error
 	}
 	for _, result := range results {
 		if len(result.Rows) == 0 {
-			out = append(out, Ksids{})
+			out = append(out, key.DestinationNone{})
 			continue
 		}
 		ksids := make([][]byte, 0, len(result.Rows))
@@ -115,7 +126,7 @@ func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([]Ksids, error
 			}
 			ksids = append(ksids, vhash(num))
 		}
-		out = append(out, Ksids{IDs: ksids})
+		out = append(out, key.DestinationKeyspaceIDs(ksids))
 	}
 	return out, nil
 }
@@ -232,12 +243,22 @@ func (lhu *LookupHashUnique) Cost() int {
 	return 10
 }
 
-// Map returns the corresponding KeyspaceId values for the given ids.
-func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]KsidOrRange, error) {
-	out := make([]KsidOrRange, 0, len(ids))
+// IsUnique returns true since the Vindex is unique.
+func (lhu *LookupHashUnique) IsUnique() bool {
+	return true
+}
+
+// IsFunctional returns false since the Vindex is not functional.
+func (lhu *LookupHashUnique) IsFunctional() bool {
+	return false
+}
+
+// Map can map ids to key.Destination objects.
+func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
 	if lhu.writeOnly {
 		for range ids {
-			out = append(out, KsidOrRange{Range: &topodatapb.KeyRange{}})
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
 		}
 		return out, nil
 	}
@@ -249,14 +270,14 @@ func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]KsidO
 	for i, result := range results {
 		switch len(result.Rows) {
 		case 0:
-			out = append(out, KsidOrRange{})
+			out = append(out, key.DestinationNone{})
 		case 1:
 			num, err := sqltypes.ToUint64(result.Rows[0][0])
 			if err != nil {
-				out = append(out, KsidOrRange{})
+				out = append(out, key.DestinationNone{})
 				continue
 			}
-			out = append(out, KsidOrRange{ID: vhash(num)})
+			out = append(out, key.DestinationKeyspaceID(vhash(num)))
 		default:
 			return nil, fmt.Errorf("LookupHash.Map: unexpected multiple results from vindex %s: %v", lhu.lkp.Table, ids[i])
 		}

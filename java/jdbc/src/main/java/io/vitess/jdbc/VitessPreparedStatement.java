@@ -406,7 +406,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
                 throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
             }
 
-            return this.generateBatchUpdateResult(cursorWithErrorList);
+            return this.generateBatchUpdateResult(cursorWithErrorList, batchedQueries);
         } finally {
             this.clearBatch();
         }
