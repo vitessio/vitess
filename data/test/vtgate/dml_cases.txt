@@ -175,10 +175,6 @@
   }
 }
 
-# update with unsupported multi-shard where clause with parens
-"update user set val = 1 where (name = 'foo' or id = 1)"
-"unsupported: multi-shard where clause in DML"
-
 # update by primary keyspace id, changing one vindex column
 "update user_metadata set email = 'juan@vitess.io' where user_id = 1"
 {
