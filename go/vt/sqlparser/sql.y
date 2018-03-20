@@ -747,9 +747,9 @@ char_type:
   {
     $$ = ColumnType{Type: string($1)}
   }
-| ENUM '(' enum_values ')'
+| ENUM '(' enum_values ')' charset_opt collate_opt
   {
-    $$ = ColumnType{Type: string($1), EnumValues: $3}
+    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5, Collate: $6}
   }
 
 enum_values:
