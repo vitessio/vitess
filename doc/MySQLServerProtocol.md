@@ -4,8 +4,8 @@ Vitess 2.1 is adding alpha support for the MySQL binary protocol (refered to as 
 `protocol` in the rest of this document). This allows existing applications to
 connect to Vitess directly without any change, or new driver / connector.
 
-However, this also has limitations. The RPC protocol traditionnally exposed by
-Vitess is reacher in features, and allows finer grain control of the query
+However, this also has limitations. The RPC protocol traditionally exposed by
+Vitess is richer in features, and allows finer grain control of the query
 behaviours.
 
 This document explores the limitations of using this protocol.
