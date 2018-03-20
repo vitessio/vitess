@@ -29,9 +29,12 @@ import (
 
 // buildInsertPlan builds the route for an INSERT statement.
 func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Insert, error) {
-	table, err := vschema.FindTable(ins.Table)
+	table, kDest, err := vschema.FindTable(ins.Table)
 	if err != nil {
 		return nil, err
+	}
+	if kDest.Destination != nil {
+		return nil, errors.New("unsupported: INSERT with a target destination")
 	}
 	if !table.Keyspace.Sharded {
 		return buildInsertUnshardedPlan(ins, table, vschema)

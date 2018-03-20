@@ -36,6 +36,11 @@ func buildSelectPlan(sel *sqlparser.Select, vschema VSchema) (primitive engine.P
 	if err != nil {
 		return nil, err
 	}
+	if rb, ok := builder.(*route); ok {
+		if rb.ERoute.TargetDestination != nil {
+			return nil, errors.New("unsupported: SELECT with a target destination")
+		}
+	}
 	return builder.Primitive(), nil
 }
 

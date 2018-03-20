@@ -69,21 +69,40 @@ func (vc *vcursorImpl) Context() context.Context {
 
 // FindTable finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
 // Otherwise, the keyspace from the request is used, if one was provided.
-func (vc *vcursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, error) {
-	ks := name.Qualifier.String()
+func (vc *vcursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, key.KeyspaceDestination, error) {
+	kDest, err := key.ParseDestination(name.Qualifier.String())
+	if err != nil {
+		return nil, kDest, err
+	}
+	ks := kDest.Keyspace
 	if ks == "" {
 		ks = vc.target.Keyspace
 	}
-	return vc.executor.VSchema().FindTable(ks, name.Name.String())
+	if ks == "" {
+		ks = vc.target.Keyspace
+	}
+	if err != nil {
+		return nil, kDest, err
+	}
+	table, err := vc.executor.VSchema().FindTable(ks, name.Name.String())
+	return table, kDest, nil
 }
 
 // FindTableOrVindex finds the specified table or vindex.
-func (vc *vcursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, error) {
-	ks := name.Qualifier.String()
+func (vc *vcursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, key.KeyspaceDestination, error) {
+	kDest, err := key.ParseDestination(name.Qualifier.String())
+	if err != nil {
+		return nil, nil, kDest, err
+	}
+	ks := kDest.Keyspace
 	if ks == "" {
 		ks = vc.target.Keyspace
 	}
-	return vc.executor.VSchema().FindTableOrVindex(ks, name.Name.String())
+	table, vindex, err := vc.executor.VSchema().FindTableOrVindex(ks, name.Name.String())
+	if err != nil {
+		return nil, nil, kDest, err
+	}
+	return table, vindex, kDest, nil
 }
 
 // DefaultKeyspace returns the default keyspace of the current request

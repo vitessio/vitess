@@ -24,7 +24,10 @@ import (
 	"math"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 //
@@ -43,6 +46,12 @@ func (i Uint64Key) Bytes() []byte {
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, uint64(i))
 	return buf
+}
+
+type KeyspaceDestination struct {
+	Destination Destination
+	Keyspace    string
+	TabletType  string
 }
 
 //
@@ -295,4 +304,42 @@ func ParseShardingSpec(spec string) ([]*topodatapb.KeyRange, error) {
 		old = p
 	}
 	return ranges, nil
+}
+
+// ParseDestination parses the string representation of a Destionation
+// of the form keyspace:shard@tablet_type. You can use a / instead of a :.
+func ParseDestination(targetString string) (KeyspaceDestination, error) {
+	keyspaceDestination := KeyspaceDestination{}
+
+	last := strings.LastIndexAny(targetString, "@")
+	if last != -1 {
+		keyspaceDestination.TabletType = targetString[last+1:]
+		targetString = targetString[:last]
+	}
+	last = strings.LastIndexAny(targetString, "/:")
+	if last != -1 {
+		keyspaceDestination.Destination = DestinationShard(targetString[last+1:])
+		targetString = targetString[:last]
+	}
+	// Try to parse it as a range
+	last = strings.LastIndexAny(targetString, "[")
+	if last != -1 {
+		rangeEnd := strings.LastIndexAny(targetString, "]")
+		if rangeEnd == -1 {
+			return keyspaceDestination, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid key range provided. Couldn't find range end ']'")
+
+		}
+		rangeString := targetString[last+1 : rangeEnd]
+		keyRange, err := ParseShardingSpec(rangeString)
+		if err != nil {
+			return keyspaceDestination, err
+		}
+		if len(keyRange) != 1 {
+			return keyspaceDestination, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "single keyrange expected in %s", rangeString)
+		}
+		keyspaceDestination.Destination = DestinationExactKeyRange{KeyRange: keyRange[0]}
+		targetString = targetString[:last]
+	}
+	keyspaceDestination.Keyspace = targetString
+	return keyspaceDestination, nil
 }

@@ -464,7 +464,7 @@ func TestDeleteEqual(t *testing.T) {
 	}
 }
 
-func TestDeleteSharded(t *testing.T) {
+func TestDeleteScatter(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	_, err := executorExec(executor, "delete from user_extra", nil)
 	if err != nil {
@@ -473,6 +473,26 @@ func TestDeleteSharded(t *testing.T) {
 	// Queries get annotatted.
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "delete from user_extra/* vtgate:: filtered_replication_unfriendly */",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
+	}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc2.Queries, wantQueries)
+	}
+}
+
+func TestDeleteTargetDest(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	// This query is not supported in v3, so we know for sure is taking the DeleteTargetDestination route
+	_, err := executorExec(executor, "delete from `TestExecutor[-]`.user_extra limit 10", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	// Queries get annotatted.
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "delete from user_extra limit 10/* vtgate:: filtered_replication_unfriendly */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {

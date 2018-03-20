@@ -220,12 +220,12 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 }
 
 func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
-	keyRange, err := parseRange(safeSession.TargetString)
+	kDest, err := key.ParseDestination(safeSession.TargetString)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse target %s (%s)", safeSession.TargetString, err.Error())
 	}
 
-	if keyRange != nil || target.Shard != "" {
+	if kDest.Destination != nil {
 		// V1 mode or V3 mode with a forced shard or range target
 		// TODO(sougou): change this flow to go through V3 functions
 		// which will allow us to benefit from the autocommitable flag.
@@ -233,15 +233,13 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 			return nil, errNoKeyspace
 		}
 
-		var destination key.Destination
-		if keyRange != nil {
+		switch kDest.Destination.(type) {
+		case key.DestinationExactKeyRange:
 			stmtType := sqlparser.Preview(sql)
 			if stmtType == sqlparser.StmtInsert {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "range queries not supported for inserts: %s", safeSession.TargetString)
 			}
-			destination = key.DestinationExactKeyRange{KeyRange: keyRange}
-		} else {
-			destination = key.DestinationShard(target.Shard)
+
 		}
 
 		execStart := time.Now()
@@ -259,7 +257,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		logStats.PlanTime = execStart.Sub(logStats.StartTime)
 		logStats.SQL = sql
 		logStats.BindVariables = bindVars
-		result, err := e.destinationExec(ctx, safeSession, sql, bindVars, target, destination, logStats)
+		result, err := e.destinationExec(ctx, safeSession, sql, bindVars, target, kDest.Destination, logStats)
 		logStats.ExecuteTime = time.Now().Sub(execStart)
 		return result, err
 	}
@@ -1014,7 +1012,8 @@ func (e *Executor) handleMessageStream(ctx context.Context, safeSession *SafeSes
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unrecognized STREAM statement: %v", sql)
 	}
 
-	table, err := vcursor.FindTable(streamStmt.Table)
+	// TODO: Ask Sugu about this??
+	table, _, err := vcursor.FindTable(streamStmt.Table)
 	if err != nil {
 		logStats.Error = err
 		return err
