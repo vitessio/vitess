@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -117,8 +118,8 @@ type columnOriginator interface {
 // VSchema defines the interface for this package to fetch
 // info about tables.
 type VSchema interface {
-	FindTable(tablename sqlparser.TableName) (*vindexes.Table, error)
-	FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, error)
+	FindTable(tablename sqlparser.TableName) (*vindexes.Table, key.KeyspaceDestination, error)
+	FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, key.KeyspaceDestination, error)
 	DefaultKeyspace() (*vindexes.Keyspace, error)
 }
 

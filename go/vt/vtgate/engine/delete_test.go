@@ -228,7 +228,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 
 func TestDeleteSharded(t *testing.T) {
 	del := &Delete{
-		Opcode: DeleteSharded,
+		Opcode: DeleteScatter,
 		Keyspace: &vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -249,7 +249,7 @@ func TestDeleteSharded(t *testing.T) {
 	// Failure case
 	vc = &loggingVCursor{shardErr: errors.New("shard_error")}
 	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "Execute", err, "execDeleteSharded: shard_error")
+	expectError(t, "Execute", err, "execDeleteScatter: shard_error")
 }
 
 func TestDeleteNoStream(t *testing.T) {

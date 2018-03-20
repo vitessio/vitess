@@ -179,12 +179,28 @@ type vschemaWrapper struct {
 	v *vindexes.VSchema
 }
 
-func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, error) {
-	return vw.v.FindTable(tab.Qualifier.String(), tab.Name.String())
+func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, key.KeyspaceDestination, error) {
+	kDest, err := key.ParseDestination(tab.Qualifier.String())
+	if err != nil {
+		return nil, kDest, err
+	}
+	table, err := vw.v.FindTable(kDest.Keyspace, tab.Name.String())
+	if err != nil {
+		return nil, kDest, err
+	}
+	return table, kDest, nil
 }
 
-func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, error) {
-	return vw.v.FindTableOrVindex(tab.Qualifier.String(), tab.Name.String())
+func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, key.KeyspaceDestination, error) {
+	kDest, err := key.ParseDestination(tab.Qualifier.String())
+	if err != nil {
+		return nil, nil, kDest, err
+	}
+	table, vindex, err := vw.v.FindTableOrVindex(kDest.Keyspace, tab.Name.String())
+	if err != nil {
+		return nil, nil, kDest, err
+	}
+	return table, vindex, kDest, nil
 }
 
 func (vw *vschemaWrapper) DefaultKeyspace() (*vindexes.Keyspace, error) {

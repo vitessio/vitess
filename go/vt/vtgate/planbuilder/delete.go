@@ -1,0 +1,110 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package planbuilder
+
+import (
+	"errors"
+
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+)
+
+// buildDeletePlan builds the instructions for a DELETE statement.
+func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Delete, error) {
+	edel := &engine.Delete{
+		Query: generateQuery(del),
+	}
+	bldr, err := processTableExprs(del.TableExprs, vschema)
+	if err != nil {
+		return nil, err
+	}
+	rb, ok := bldr.(*route)
+	if !ok {
+		return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
+	}
+	edel.Keyspace = rb.ERoute.Keyspace
+	if !edel.Keyspace.Sharded {
+		// We only validate non-table subexpressions because the previous analysis has already validated them.
+		if !validateSubquerySamePlan(rb.ERoute.Keyspace.Name, rb, vschema, del.Targets, del.Where, del.OrderBy, del.Limit) {
+			return nil, errors.New("unsupported: sharded subqueries in DML")
+		}
+		edel.Opcode = engine.DeleteUnsharded
+		return edel, nil
+	}
+	if del.Targets != nil || len(rb.Symtab().tables) != 1 {
+		return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
+	}
+	if hasSubquery(del) {
+		return nil, errors.New("unsupported: subqueries in sharded DML")
+	}
+	var tableName sqlparser.TableName
+	for t := range rb.Symtab().tables {
+		tableName = t
+	}
+	table, kDest, err := vschema.FindTable(tableName)
+	if err != nil {
+		return nil, err
+	}
+	edel.Table = table
+	if kDest.Destination != nil {
+		edel.Opcode = engine.DeleteTargetDestination
+		edel.TargetDestination = kDest.Destination
+		return edel, nil
+	}
+	edel.Vindex, edel.Values, err = getDMLRouting(del.Where, edel.Table)
+	// We couldn't generate a route for a single shard
+	// Execute a delete sharded
+	if err != nil {
+		edel.Opcode = engine.DeleteScatter
+	} else {
+		edel.Opcode = engine.DeleteEqual
+	}
+
+	if edel.Opcode == engine.DeleteScatter {
+		if len(edel.Table.Owned) != 0 {
+			return edel, errors.New("unsupported: multi shard delete on a table with owned lookup vindexes")
+		}
+		if del.Limit != nil {
+			return edel, errors.New("unsupported: multi shard delete with limit")
+		}
+	}
+	edel.OwnedVindexQuery = generateDeleteSubquery(del, edel.Table)
+	return edel, nil
+}
+
+// generateDeleteSubquery generates the query to fetch the rows
+// that will be deleted. This allows VTGate to clean up any
+// owned vindexes as needed.
+func generateDeleteSubquery(del *sqlparser.Delete, table *vindexes.Table) string {
+	if len(table.Owned) == 0 {
+		return ""
+	}
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.WriteString("select ")
+	for vIdx, cv := range table.Owned {
+		for cIdx, column := range cv.Columns {
+			if cIdx == 0 && vIdx == 0 {
+				buf.Myprintf("%v", column)
+			} else {
+				buf.Myprintf(", %v", column)
+			}
+		}
+	}
+	buf.Myprintf(" from %v%v for update", table.Name, del.Where)
+	return buf.String()
+}

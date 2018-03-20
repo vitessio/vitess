@@ -39,6 +39,18 @@
 "select * from user where id in (select user.id from user join user_extra)"
 "unsupported: cross-shard query in subqueries"
 
+# TODO: Implement support for select with a target destination
+"select * from `user[-]`.user_metadata"
+"unsupported: SELECT with a target destination"
+
+# Unsupported UPDATE statement with a target destination
+"update `user[-]`.user_metadata set id=2"
+"unsupported: UPDATE with a target destination"
+
+# Unsupported INSERT statement with a target destination
+"insert into `user[-]`.user_metadata (a, b) values (1,2)"
+"unsupported: INSERT with a target destination"
+
 # subquery keyspace different from outer query
 "select * from user where id in (select m from unsharded)"
 "unsupported: subquery keyspace different from outer query"
@@ -484,3 +496,7 @@
 
 "select func(keyspace_id) from user_index where id = :id"
 "unsupported: expression on results of a vindex function"
+
+# update with unsupported multi-shard where clause with parens
+"update user set val = 1 where (name = 'foo' or id = 1)"
+"unsupported: multi-shard where clause in DML"
