@@ -401,6 +401,9 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, waitForMysqld bool) error {
 		defer os.Remove(cnf)
 		args := []string{
 			"--defaults-extra-file=" + cnf,
+			"--shutdown-timeout=300",
+			"--connect-timeout=30",
+			"--wait=10",
 			"shutdown",
 		}
 		env := []string{
