@@ -88,7 +88,7 @@ fi
 ln -snf $etcd_dist/etcd-${etcd_version}-linux-amd64/etcd $VTROOT/bin/etcd
 
 # Download and install consul, link consul binary into our root.
-consul_version=0.7.2
+consul_version=1.0.6
 consul_dist=$VTROOT/dist/consul
 consul_version_file=$consul_dist/version
 if [[ -f $consul_version_file && "$(cat $consul_version_file)" == "$consul_version" ]]; then
