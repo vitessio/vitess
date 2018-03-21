@@ -19,10 +19,12 @@ package etcd2topo
 import (
 	"fmt"
 	"path"
+	"time"
 
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/mvcc/mvccpb"
 	"golang.org/x/net/context"
+	log "github.com/golang/glog"
 
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -62,15 +64,34 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 	go func() {
 		defer close(notifications)
 
+		var currVersion = initial.Header.Revision
+		var watchRetries int
 		for {
 			select {
+
 			case <-watchCtx.Done():
 				// This includes context cancelation errors.
 				notifications <- &topo.WatchData{
 					Err: convertError(watchCtx.Err()),
 				}
 				return
-			case wresp := <-watcher:
+			case wresp, ok := <-watcher:
+				if !ok {
+					if watchRetries > 10 {
+						time.Sleep(time.Duration(watchRetries) * time.Second)
+					}
+					watchRetries++
+					newWatcher := s.cli.Watch(watchCtx, nodePath, clientv3.WithRev(currVersion))
+					if newWatcher == nil {
+						log.Warningf("watch %v failed and get a nil channel returned, currVersion: %v", nodePath, currVersion)
+					} else {
+						watcher = newWatcher
+					}
+					continue
+				}
+
+				watchRetries = 0
+
 				if wresp.Canceled {
 					// Final notification.
 					notifications <- &topo.WatchData{
@@ -78,6 +99,8 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 					}
 					return
 				}
+
+				currVersion = wresp.Header.GetRevision()
 
 				for _, ev := range wresp.Events {
 					switch ev.Type {

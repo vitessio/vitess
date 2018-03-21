@@ -167,18 +167,22 @@ func FullyQualifiedHostnameOrPanic() string {
 	return hostname
 }
 
-// ResolveIPv4Addr resolves the address:port part into an IP address:port pair
-func ResolveIPv4Addr(addr string) (string, error) {
+// ResolveIPv4Addrs resolves the address:port part into IP address:port pairs
+func ResolveIPv4Addrs(addr string) ([]string, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	ipAddrs, err := net.LookupIP(host)
+	result := make([]string, 0, len(ipAddrs))
 	for _, ipAddr := range ipAddrs {
 		ipv4 := ipAddr.To4()
 		if ipv4 != nil {
-			return net.JoinHostPort(ipv4.String(), port), nil
+			result = append(result, net.JoinHostPort(ipv4.String(), port))
 		}
 	}
-	return "", fmt.Errorf("no IPv4addr for name %v", host)
+	if len(result) == 0 {
+		return nil, fmt.Errorf("no IPv4addr for name %v", host)
+	}
+	return result, nil
 }

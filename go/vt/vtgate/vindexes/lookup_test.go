@@ -386,6 +386,13 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
 	}
 	vc.mustFail = false
+
+	// Test column mismatch.
+	err = lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
+	want = "lookup.Create: column vindex count does not match the columns in the lookup: 2 vs [fromc]"
+	if err == nil || err.Error() != want {
+		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
+	}
 }
 
 func TestLookupNonUniqueCreateAutocommit(t *testing.T) {
@@ -467,6 +474,13 @@ func TestLookupNonUniqueDelete(t *testing.T) {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
 	}
 	vc.mustFail = false
+
+	// Test column count fail.
+	err = lookupNonUnique.(Lookup).Delete(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	want = "lookup.Delete: column vindex count does not match the columns in the lookup: 2 vs [fromc]"
+	if err == nil || err.Error() != want {
+		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
+	}
 }
 
 func TestLookupNonUniqueDeleteAutocommit(t *testing.T) {

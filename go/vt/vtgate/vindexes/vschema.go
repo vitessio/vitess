@@ -230,15 +230,15 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 					owned = true
 				}
 				var columns []sqlparser.ColIdent
-				if ind.Column != "" && len(ind.Columns) > 0 {
-					return fmt.Errorf("Can't use column and columns at the same time in vindex (%s) and table (%s)", ind.Name, tname)
-				}
-				if owned && len(columns) > 1 {
-					return fmt.Errorf("Can't have a multicolumn unowned vindex (%s) and table (%s)", ind.Name, tname)
-				}
 				if ind.Column != "" {
+					if len(ind.Columns) > 0 {
+						return fmt.Errorf("can't use column and columns at the same time in vindex (%s) and table (%s)", ind.Name, tname)
+					}
 					columns = []sqlparser.ColIdent{sqlparser.NewColIdent(ind.Column)}
 				} else {
+					if len(ind.Columns) == 0 {
+						return fmt.Errorf("must specify at least one column for vindex (%s) and table (%s)", ind.Name, tname)
+					}
 					for _, indCol := range ind.Columns {
 						columns = append(columns, sqlparser.NewColIdent(indCol))
 					}

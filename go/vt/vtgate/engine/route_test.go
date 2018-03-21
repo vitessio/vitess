@@ -758,7 +758,6 @@ func TestRouteStreamSortTruncate(t *testing.T) {
 		"1",
 		"2",
 	)
-	wantResult.RowsAffected = 0
 	expectResult(t, "sel.Execute", result, wantResult)
 }
 
@@ -800,17 +799,4 @@ func TestExecFail(t *testing.T) {
 	vc.Rewind()
 	_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "sel.StreamExecute err", err, "result error")
-}
-
-func wrapStreamExecute(route *Route, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	var result *sqltypes.Result
-	err := route.StreamExecute(vcursor, bindVars, wantfields, func(r *sqltypes.Result) error {
-		if result == nil {
-			result = r
-		} else {
-			result.Rows = append(result.Rows, r.Rows...)
-		}
-		return nil
-	})
-	return result, err
 }
