@@ -33,6 +33,8 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // hashIndex is a functional, unique Vindex.
@@ -179,8 +181,8 @@ type vschemaWrapper struct {
 	v *vindexes.VSchema
 }
 
-func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, key.KeyspaceDestination, error) {
-	kDest, err := key.ParseDestination(tab.Qualifier.String())
+func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, key.DestinationTarget, error) {
+	kDest, err := key.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
 	if err != nil {
 		return nil, kDest, err
 	}
@@ -191,8 +193,8 @@ func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, k
 	return table, kDest, nil
 }
 
-func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, key.KeyspaceDestination, error) {
-	kDest, err := key.ParseDestination(tab.Qualifier.String())
+func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, key.DestinationTarget, error) {
+	kDest, err := key.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
 	if err != nil {
 		return nil, nil, kDest, err
 	}

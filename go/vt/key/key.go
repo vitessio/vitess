@@ -48,10 +48,10 @@ func (i Uint64Key) Bytes() []byte {
 	return buf
 }
 
-type KeyspaceDestination struct {
+type DestinationTarget struct {
 	Destination Destination
 	Keyspace    string
-	TabletType  string
+	TabletType  topodatapb.TabletType
 }
 
 //
@@ -308,12 +308,14 @@ func ParseShardingSpec(spec string) ([]*topodatapb.KeyRange, error) {
 
 // ParseDestination parses the string representation of a Destionation
 // of the form keyspace:shard@tablet_type. You can use a / instead of a :.
-func ParseDestination(targetString string) (KeyspaceDestination, error) {
-	keyspaceDestination := KeyspaceDestination{}
+func ParseDestination(targetString string, defaultTabletType topodatapb.TabletType) (DestinationTarget, error) {
+	keyspaceDestination := DestinationTarget{
+		TabletType: defaultTabletType,
+	}
 
 	last := strings.LastIndexAny(targetString, "@")
 	if last != -1 {
-		keyspaceDestination.TabletType = targetString[last+1:]
+		keyspaceDestination.TabletType = parseTabletType(targetString[last+1:])
 		targetString = targetString[:last]
 	}
 	last = strings.LastIndexAny(targetString, "/:")
@@ -342,4 +344,13 @@ func ParseDestination(targetString string) (KeyspaceDestination, error) {
 	}
 	keyspaceDestination.Keyspace = targetString
 	return keyspaceDestination, nil
+}
+
+// ParseTabletType parses the tablet type into the enum.
+func parseTabletType(param string) topodatapb.TabletType {
+	value, ok := topodatapb.TabletType_value[strings.ToUpper(param)]
+	if !ok {
+		return topodatapb.TabletType_UNKNOWN
+	}
+	return topodatapb.TabletType(value)
 }

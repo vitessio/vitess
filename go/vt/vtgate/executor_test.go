@@ -18,7 +18,6 @@ package vtgate
 
 import (
 	"bytes"
-	"encoding/hex"
 	"html/template"
 	"reflect"
 	"strings"
@@ -33,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 
+	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -1517,8 +1517,8 @@ func TestVSchemaStats(t *testing.T) {
 
 func TestGetPlanUnnormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
-	emptyvc := newVCursorImpl(context.Background(), nil, querypb.Target{}, "", r, nil)
-	unshardedvc := newVCursorImpl(context.Background(), nil, querypb.Target{Keyspace: KsTestUnsharded}, "", r, nil)
+	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, "", r, nil)
+	unshardedvc := newVCursorImpl(context.Background(), nil, KsTestUnsharded, 0, "", r, nil)
 
 	logStats1 := NewLogStats(nil, "Test", "", nil)
 	query1 := "select * from music_user_map where id = 1"
@@ -1581,7 +1581,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 
 func TestGetPlanCacheUnnormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
-	emptyvc := newVCursorImpl(context.Background(), nil, querypb.Target{}, "", r, nil)
+	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, "", r, nil)
 	query1 := "select * from music_user_map where id = 1"
 	logStats1 := NewLogStats(nil, "Test", "", nil)
 	_, err := r.getPlan(emptyvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
@@ -1612,7 +1612,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 func TestGetPlanCacheNormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
 	r.normalize = true
-	emptyvc := newVCursorImpl(context.Background(), nil, querypb.Target{}, "", r, nil)
+	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, "", r, nil)
 	query1 := "select * from music_user_map where id = 1"
 	logStats1 := NewLogStats(nil, "Test", "", nil)
 	_, err := r.getPlan(emptyvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
@@ -1642,8 +1642,8 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 func TestGetPlanNormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
 	r.normalize = true
-	emptyvc := newVCursorImpl(context.Background(), nil, querypb.Target{}, "", r, nil)
-	unshardedvc := newVCursorImpl(context.Background(), nil, querypb.Target{Keyspace: KsTestUnsharded}, "", r, nil)
+	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, "", r, nil)
+	unshardedvc := newVCursorImpl(context.Background(), nil, KsTestUnsharded, 0, "", r, nil)
 
 	query1 := "select * from music_user_map where id = 1"
 	query2 := "select * from music_user_map where id = 2"
@@ -1750,134 +1750,6 @@ func TestGetPlanNormalized(t *testing.T) {
 	}
 }
 
-func TestParseTarget(t *testing.T) {
-	r, _, _, _ := createExecutorEnv()
-	testcases := []struct {
-		targetString string
-		target       querypb.Target
-	}{{
-		targetString: "ks",
-		target: querypb.Target{
-			Keyspace:   "ks",
-			TabletType: topodatapb.TabletType_MASTER,
-		},
-	}, {
-		targetString: "ks/-80",
-		target: querypb.Target{
-			Keyspace:   "ks",
-			Shard:      "-80",
-			TabletType: topodatapb.TabletType_MASTER,
-		},
-	}, {
-		targetString: "ks:-80",
-		target: querypb.Target{
-			Keyspace:   "ks",
-			Shard:      "-80",
-			TabletType: topodatapb.TabletType_MASTER,
-		},
-	}, {
-		targetString: "ks@replica",
-		target: querypb.Target{
-			Keyspace:   "ks",
-			TabletType: topodatapb.TabletType_REPLICA,
-		},
-	}, {
-		targetString: "ks:-80@replica",
-		target: querypb.Target{
-			Keyspace:   "ks",
-			Shard:      "-80",
-			TabletType: topodatapb.TabletType_REPLICA,
-		},
-	}, {
-		targetString: "@replica",
-		target: querypb.Target{
-			TabletType: topodatapb.TabletType_REPLICA,
-		},
-	}, {
-		targetString: "@bad",
-		target: querypb.Target{
-			TabletType: topodatapb.TabletType_UNKNOWN,
-		},
-	}, {
-		targetString: "ks[10-20]@master",
-		target: querypb.Target{
-			TabletType: topodatapb.TabletType_MASTER,
-			Keyspace:   "ks",
-		},
-	}, {
-		targetString: "ks[-]@master",
-		target: querypb.Target{
-			TabletType: topodatapb.TabletType_MASTER,
-			Keyspace:   "ks",
-		},
-	}, {
-		targetString: "ks[10-]@master",
-		target: querypb.Target{
-			TabletType: topodatapb.TabletType_MASTER,
-			Keyspace:   "ks",
-		},
-	}, {
-		targetString: "ks[-20]@master",
-		target: querypb.Target{
-			TabletType: topodatapb.TabletType_MASTER,
-			Keyspace:   "ks",
-		},
-	}}
-
-	for _, tcase := range testcases {
-		if target := r.ParseTarget(tcase.targetString); !proto.Equal(&target, &tcase.target) {
-			t.Errorf("ParseTarget(%s): %v, want %v", tcase.targetString, target, tcase.target)
-		}
-	}
-}
-
-func TestParseRange(t *testing.T) {
-	tenHexBytes, _ := hex.DecodeString("10")
-	twentyHexBytes, _ := hex.DecodeString("20")
-
-	testcases := []struct {
-		targetString string
-		target       *topodatapb.KeyRange
-	}{{
-		targetString: "ks[10-20]@master",
-		target:       &topodatapb.KeyRange{Start: tenHexBytes, End: twentyHexBytes},
-	}, {
-		targetString: "ks[-]@master",
-		target:       &topodatapb.KeyRange{},
-	}, {
-		targetString: "ks[10-]@master",
-		target:       &topodatapb.KeyRange{Start: tenHexBytes},
-	}, {
-		targetString: "ks[-20]@master",
-		target:       &topodatapb.KeyRange{End: twentyHexBytes},
-	}}
-
-	for _, tcase := range testcases {
-		if target, _ := parseRange(tcase.targetString); !proto.Equal(target, tcase.target) {
-			t.Errorf("ParseRange(%s) - got: %v, want %v", tcase.targetString, target, tcase.target)
-		}
-	}
-}
-
-func TestParseTargetSingleKeyspace(t *testing.T) {
-	r, _, _, _ := createExecutorEnv()
-	altVSchema := &vindexes.VSchema{
-		Keyspaces: map[string]*vindexes.KeyspaceSchema{
-			KsTestUnsharded: r.vschema.Keyspaces[KsTestUnsharded],
-		},
-	}
-	r.vschema = altVSchema
-
-	got := r.ParseTarget("@master")
-	want := querypb.Target{
-		Keyspace:   KsTestUnsharded,
-		TabletType: topodatapb.TabletType_MASTER,
-	}
-	if !proto.Equal(&got, &want) {
-		t.Errorf("ParseTarget(%s): %v, want %v", "@master", got, want)
-	}
-}
-
 func TestPassthroughDDL(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	masterSession.TargetString = "TestExecutor"
@@ -1943,13 +1815,13 @@ func TestParseEmptyTargetSingleKeyspace(t *testing.T) {
 	}
 	r.vschema = altVSchema
 
-	got := r.ParseTarget("")
-	want := querypb.Target{
+	got, _ := r.parseDestinationTarget("")
+	want := key.DestinationTarget{
 		Keyspace:   KsTestUnsharded,
 		TabletType: topodatapb.TabletType_MASTER,
 	}
-	if !proto.Equal(&got, &want) {
-		t.Errorf("ParseTarget(%s): %v, want %v", "@master", got, want)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("parseDestinationTarget(%s): got %v, want %v", "@master", got, want)
 	}
 }
 
@@ -1963,12 +1835,31 @@ func TestParseEmptyTargetMultiKeyspace(t *testing.T) {
 	}
 	r.vschema = altVSchema
 
-	got := r.ParseTarget("")
-	want := querypb.Target{
+	got, _ := r.parseDestinationTarget("")
+	want := key.DestinationTarget{
 		Keyspace:   "",
 		TabletType: topodatapb.TabletType_MASTER,
 	}
-	if !proto.Equal(&got, &want) {
-		t.Errorf("ParseTarget(%s): %v, want %v", "@master", got, want)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("parseDestinationTarget(%s): got %v, want %v", "@master", got, want)
+	}
+}
+
+func TestParseTargetSingleKeyspace(t *testing.T) {
+	r, _, _, _ := createExecutorEnv()
+	altVSchema := &vindexes.VSchema{
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			KsTestUnsharded: r.vschema.Keyspaces[KsTestUnsharded],
+		},
+	}
+	r.vschema = altVSchema
+
+	got, _ := r.parseDestinationTarget("@master")
+	want := key.DestinationTarget{
+		Keyspace:   KsTestUnsharded,
+		TabletType: topodatapb.TabletType_MASTER,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("parseDestinationTarget(%s): got %v, want %v", "@master", got, want)
 	}
 }
