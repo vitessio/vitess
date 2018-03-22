@@ -182,27 +182,27 @@ type vschemaWrapper struct {
 }
 
 func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, key.DestinationTarget, error) {
-	kDest, err := key.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
+	destTarget, err := key.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
 	if err != nil {
-		return nil, kDest, err
+		return nil, destTarget, err
 	}
-	table, err := vw.v.FindTable(kDest.Keyspace, tab.Name.String())
+	table, err := vw.v.FindTable(destTarget.Keyspace, tab.Name.String())
 	if err != nil {
-		return nil, kDest, err
+		return nil, destTarget, err
 	}
-	return table, kDest, nil
+	return table, destTarget, nil
 }
 
 func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, key.DestinationTarget, error) {
-	kDest, err := key.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
+	destTarget, err := key.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
 	if err != nil {
-		return nil, nil, kDest, err
+		return nil, nil, destTarget, err
 	}
-	table, vindex, err := vw.v.FindTableOrVindex(kDest.Keyspace, tab.Name.String())
+	table, vindex, err := vw.v.FindTableOrVindex(destTarget.Keyspace, tab.Name.String())
 	if err != nil {
-		return nil, nil, kDest, err
+		return nil, nil, destTarget, err
 	}
-	return table, vindex, kDest, nil
+	return table, vindex, destTarget, nil
 }
 
 func (vw *vschemaWrapper) DefaultKeyspace() (*vindexes.Keyspace, error) {

@@ -136,9 +136,9 @@ func (del *Delete) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 	case DeleteEqual:
 		return del.execDeleteEqual(vcursor, bindVars)
 	case DeleteScatter:
-		return del.execDeleteTargetDestination(vcursor, bindVars, key.DestinationAllShards{})
+		return del.execDeleteByDestination(vcursor, bindVars, key.DestinationAllShards{})
 	case DeleteByDestination:
-		return del.execDeleteTargetDestination(vcursor, bindVars, del.TargetDestination)
+		return del.execDeleteByDestination(vcursor, bindVars, del.TargetDestination)
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported opcode: %v", del)
@@ -212,7 +212,7 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 	return nil
 }
 
-func (del *Delete) execDeleteTargetDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
+func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{dest})
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteScatter")
