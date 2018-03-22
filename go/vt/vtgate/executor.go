@@ -141,9 +141,13 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		}
 	}
 
-	target := e.ParseTarget(safeSession.TargetString)
-	if safeSession.InTransaction() && target.TabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", target.TabletType)
+	destinationTarget, err := e.parseDestinationTarget(safeSession.TargetString)
+	if err != nil {
+		return nil, err
+	}
+
+	if safeSession.InTransaction() && destinationTarget.TabletType != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", destinationTarget.TabletType)
 	}
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
@@ -154,13 +158,13 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 
 	switch stmtType {
 	case sqlparser.StmtSelect:
-		return e.handleExec(ctx, safeSession, sql, bindVars, target, logStats)
+		return e.handleExec(ctx, safeSession, sql, bindVars, destinationTarget, logStats)
 	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
 		safeSession := safeSession
 
 		// In legacy mode, we ignore autocommit settings.
 		if e.legacyAutocommit {
-			return e.handleExec(ctx, safeSession, sql, bindVars, target, logStats)
+			return e.handleExec(ctx, safeSession, sql, bindVars, destinationTarget, logStats)
 		}
 
 		mustCommit := false
@@ -184,7 +188,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		// at the beginning, but never after.
 		safeSession.SetAutocommitable(mustCommit)
 
-		qr, err := e.handleExec(ctx, safeSession, sql, bindVars, target, logStats)
+		qr, err := e.handleExec(ctx, safeSession, sql, bindVars, destinationTarget, logStats)
 		if err != nil {
 			return nil, err
 		}
@@ -198,42 +202,38 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		}
 		return qr, nil
 	case sqlparser.StmtDDL:
-		return e.handleDDL(ctx, safeSession, sql, bindVars, target, logStats)
+		return e.handleDDL(ctx, safeSession, sql, bindVars, destinationTarget, logStats)
 	case sqlparser.StmtBegin:
-		return e.handleBegin(ctx, safeSession, sql, bindVars, target, logStats)
+		return e.handleBegin(ctx, safeSession, sql, bindVars, destinationTarget, logStats)
 	case sqlparser.StmtCommit:
-		return e.handleCommit(ctx, safeSession, sql, bindVars, target, logStats)
+		return e.handleCommit(ctx, safeSession, sql, bindVars, logStats)
 	case sqlparser.StmtRollback:
-		return e.handleRollback(ctx, safeSession, sql, bindVars, target, logStats)
+		return e.handleRollback(ctx, safeSession, sql, bindVars, logStats)
 	case sqlparser.StmtSet:
 		return e.handleSet(ctx, safeSession, sql, bindVars, logStats)
 	case sqlparser.StmtShow:
-		return e.handleShow(ctx, safeSession, sql, bindVars, target, logStats)
+		return e.handleShow(ctx, safeSession, sql, bindVars, destinationTarget, logStats)
 	case sqlparser.StmtUse:
 		return e.handleUse(ctx, safeSession, sql, bindVars)
 	case sqlparser.StmtOther:
-		return e.handleOther(ctx, safeSession, sql, bindVars, target, logStats)
+		return e.handleOther(ctx, safeSession, sql, bindVars, destinationTarget, logStats)
 	case sqlparser.StmtComment:
-		return e.handleComment(ctx, safeSession, sql, bindVars, target, logStats)
+		return e.handleComment(sql)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
 
-func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
-	kDest, err := key.ParseDestination(safeSession.TargetString)
-	if err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse target %s (%s)", safeSession.TargetString, err.Error())
-	}
-
-	if kDest.Destination != nil {
+func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destinationTarget key.DestinationTarget, logStats *LogStats) (*sqltypes.Result, error) {
+	if destinationTarget.Destination != nil {
 		// V1 mode or V3 mode with a forced shard or range target
 		// TODO(sougou): change this flow to go through V3 functions
-		// which will allow us to benefit from the autocommitable flag.
-		if target.Keyspace == "" {
+		// which widestinationTarget allow us to benefit from the autocommitable flag.
+
+		if destinationTarget.Keyspace == "" {
 			return nil, errNoKeyspace
 		}
 
-		switch kDest.Destination.(type) {
+		switch destinationTarget.Destination.(type) {
 		case key.DestinationExactKeyRange:
 			stmtType := sqlparser.Preview(sql)
 			if stmtType == sqlparser.StmtInsert {
@@ -257,14 +257,14 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		logStats.PlanTime = execStart.Sub(logStats.StartTime)
 		logStats.SQL = sql
 		logStats.BindVariables = bindVars
-		result, err := e.destinationExec(ctx, safeSession, sql, bindVars, target, kDest.Destination, logStats)
+		result, err := e.destinationExec(ctx, safeSession, sql, bindVars, destinationTarget, logStats)
 		logStats.ExecuteTime = time.Now().Sub(execStart)
 		return result, err
 	}
 
 	// V3 mode.
 	query, comments := sqlparser.SplitTrailingComments(sql)
-	vcursor := newVCursorImpl(ctx, safeSession, target, comments, e, logStats)
+	vcursor := newVCursorImpl(ctx, safeSession, destinationTarget.Keyspace, destinationTarget.TabletType, comments, e, logStats)
 	plan, err := e.getPlan(
 		vcursor,
 		query,
@@ -302,11 +302,11 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 	return qr, err
 }
 
-func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, destination key.Destination, logStats *LogStats) (*sqltypes.Result, error) {
-	return e.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, destination, safeSession.Session, false /* notInTransaction */, safeSession.Options, logStats)
+func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destinationTarget key.DestinationTarget, logStats *LogStats) (*sqltypes.Result, error) {
+	return e.resolver.Execute(ctx, sql, bindVars, destinationTarget.Keyspace, destinationTarget.TabletType, destinationTarget.Destination, safeSession.Session, false /* notInTransaction */, safeSession.Options, logStats)
 }
 
-func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destinationTarget key.DestinationTarget, logStats *LogStats) (*sqltypes.Result, error) {
 	// Parse the statement to handle vindex operations
 	// If the statement failed to be properly parsed, fall through anyway
 	// to broadcast the ddl to all shards.
@@ -317,7 +317,7 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 		logStats.PlanTime = execStart.Sub(logStats.StartTime)
 		switch ddl.Action {
 		case sqlparser.CreateVindexStr, sqlparser.AddColVindexStr, sqlparser.DropColVindexStr:
-			err := e.handleVindexDDL(ctx, safeSession, target, ddl, logStats)
+			err := e.handleVindexDDL(ctx, safeSession, destinationTarget, ddl, logStats)
 			logStats.ExecuteTime = time.Since(execStart)
 			return &sqltypes.Result{}, err
 		default:
@@ -325,32 +325,22 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 		}
 	}
 
-	if target.Keyspace == "" {
+	if destinationTarget.Keyspace == "" {
 		return nil, errNoKeyspace
 	}
 
-	keyRange, err := parseRange(safeSession.TargetString)
-	if err != nil {
-		return nil, errNoKeyspace
-	}
-
-	var destination key.Destination
-	if keyRange != nil {
-		destination = key.DestinationExactKeyRange{KeyRange: keyRange}
-	} else if target.Shard != "" {
-		destination = key.DestinationShard(target.Shard)
-	} else {
-		destination = key.DestinationAllShards{}
+	if destinationTarget.Destination == nil {
+		destinationTarget.Destination = key.DestinationAllShards{}
 	}
 
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
-	result, err := e.destinationExec(ctx, safeSession, sql, bindVars, target, destination, logStats)
+	result, err := e.destinationExec(ctx, safeSession, sql, bindVars, destinationTarget, logStats)
 	logStats.ExecuteTime = time.Since(execStart)
 	return result, err
 }
 
-func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession, target querypb.Target, ddl *sqlparser.DDL, logStats *LogStats) error {
+func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession, destinationTarget key.DestinationTarget, ddl *sqlparser.DDL, logStats *LogStats) error {
 	vschema := e.vm.GetCurrentSrvVschema()
 	if vschema == nil {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema not loaded")
@@ -368,7 +358,7 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 		ksName = ddl.Table.Qualifier.String()
 	}
 	if ksName == "" {
-		ksName = target.Keyspace
+		ksName = destinationTarget.Keyspace
 	}
 
 	if ksName == "" {
@@ -391,7 +381,7 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 	case sqlparser.CreateVindexStr:
 		name := ddl.VindexSpec.Name.String()
 		if _, ok := ks.Vindexes[name]; ok {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s already exists in keyspace %s", name, target.Keyspace)
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s already exists in keyspace %s", name, destinationTarget.Keyspace)
 		}
 		owner, params := ddl.VindexSpec.ParseParams()
 		ks.Vindexes[name] = &vschemapb.Vindex{
@@ -400,7 +390,7 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 			Owner:  owner,
 		}
 
-		return e.vm.UpdateVSchema(ctx, target.Keyspace, vschema)
+		return e.vm.UpdateVSchema(ctx, destinationTarget.Keyspace, vschema)
 	case sqlparser.AddColVindexStr:
 		// Support two cases:
 		//
@@ -433,7 +423,7 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 			}
 		} else {
 			if _, ok := ks.Vindexes[name]; !ok {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s does not exist in keyspace %s", name, target.Keyspace)
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s does not exist in keyspace %s", name, destinationTarget.Keyspace)
 			}
 		}
 
@@ -463,7 +453,7 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 		})
 		ks.Tables[tableName] = table
 
-		return e.vm.UpdateVSchema(ctx, target.Keyspace, vschema)
+		return e.vm.UpdateVSchema(ctx, destinationTarget.Keyspace, vschema)
 	case sqlparser.DropColVindexStr:
 		spec := ddl.VindexSpec
 		name := spec.Name.String()
@@ -477,7 +467,7 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 				if len(table.ColumnVindexes) == 0 {
 					delete(ks.Tables, tableName)
 				}
-				return e.vm.UpdateVSchema(ctx, target.Keyspace, vschema)
+				return e.vm.UpdateVSchema(ctx, destinationTarget.Keyspace, vschema)
 			}
 		}
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s not defined in table %s.%s", name, ksName, tableName)
@@ -486,9 +476,9 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected vindex ddl operation %s", ddl.Action)
 }
 
-func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
-	if target.TabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", target.TabletType)
+func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destinationTarget key.DestinationTarget, logStats *LogStats) (*sqltypes.Result, error) {
+	if destinationTarget.TabletType != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", destinationTarget.TabletType)
 	}
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
@@ -497,7 +487,7 @@ func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, sq
 	return &sqltypes.Result{}, err
 }
 
-func (e *Executor) handleCommit(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleCommit(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
@@ -506,7 +496,7 @@ func (e *Executor) handleCommit(ctx context.Context, safeSession *SafeSession, s
 	return &sqltypes.Result{}, err
 }
 
-func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
@@ -669,7 +659,7 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 	return &sqltypes.Result{}, nil
 }
 
-func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destinationTarget key.DestinationTarget, logStats *LogStats) (*sqltypes.Result, error) {
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
@@ -707,7 +697,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 
 		var rows [][]sqltypes.Value
 		for _, keyspace := range keyspaces {
-			_, _, shards, err := e.resolver.resolver.GetKeyspaceShards(ctx, keyspace, target.TabletType)
+			_, _, shards, err := e.resolver.resolver.GetKeyspaceShards(ctx, keyspace, destinationTarget.TabletType)
 			if err != nil {
 				// There might be a misconfigured keyspace or no shards in the keyspace.
 				// Skip any errors and move on.
@@ -750,12 +740,12 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			RowsAffected: uint64(len(rows)),
 		}, nil
 	case sqlparser.KeywordString(sqlparser.VSCHEMA_TABLES):
-		if target.Keyspace == "" {
+		if destinationTarget.Keyspace == "" {
 			return nil, errNoKeyspace
 		}
-		ks, ok := e.VSchema().Keyspaces[target.Keyspace]
+		ks, ok := e.VSchema().Keyspaces[destinationTarget.Keyspace]
 		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace %s not found in vschema", target.Keyspace)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace %s not found in vschema", destinationTarget.Keyspace)
 		}
 
 		var tables []string
@@ -789,7 +779,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			// known.
 			ksName := show.OnTable.Qualifier.String()
 			if ksName == "" {
-				ksName = target.Keyspace
+				ksName = destinationTarget.Keyspace
 			}
 
 			ks, ok := vschema.Keyspaces[ksName]
@@ -863,7 +853,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 	}
 
 	// Any other show statement is passed through
-	return e.handleOther(ctx, safeSession, sql, bindVars, target, logStats)
+	return e.handleOther(ctx, safeSession, sql, bindVars, destinationTarget, logStats)
 }
 
 func (e *Executor) handleUse(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
@@ -876,43 +866,51 @@ func (e *Executor) handleUse(ctx context.Context, safeSession *SafeSession, sql 
 		// This code is unreachable.
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unrecognized USE statement: %v", sql)
 	}
-	target := e.ParseTarget(use.DBName.String())
-
-	if _, ok := e.VSchema().Keyspaces[target.Keyspace]; target.Keyspace != "" && !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace provided: %s", target.Keyspace)
+	destinationTarget, err := e.parseDestinationTarget(use.DBName.String())
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := e.VSchema().Keyspaces[destinationTarget.Keyspace]; destinationTarget.Keyspace != "" && !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace provided: %s", destinationTarget.Keyspace)
 	}
 
-	if safeSession.InTransaction() && target.TabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot change to a non-master type in the middle of a transaction: %v", target.TabletType)
+	if safeSession.InTransaction() && destinationTarget.TabletType != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot change to a non-master type in the middle of a transaction: %v", destinationTarget.TabletType)
 	}
 	safeSession.TargetString = use.DBName.String()
 	return &sqltypes.Result{}, nil
 }
 
-func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
-	if target.Keyspace == "" {
+func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destinationTarget key.DestinationTarget, logStats *LogStats) (*sqltypes.Result, error) {
+	if destinationTarget.Keyspace == "" {
 		return nil, errNoKeyspace
 	}
-	if target.Shard == "" {
+	if destinationTarget.Destination == nil {
 		// shardExec will re-resolve this a bit later.
-		rss, err := e.resolver.resolver.ResolveDestination(ctx, target.Keyspace, target.TabletType, key.DestinationAnyShard{})
+		rss, err := e.resolver.resolver.ResolveDestination(ctx, destinationTarget.Keyspace, destinationTarget.TabletType, key.DestinationAnyShard{})
 		if err != nil {
 			return nil, err
 		}
 		if len(rss) != 1 {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "keyspace %s has no shards", target.Keyspace)
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "keyspace %s has no shards", destinationTarget.Keyspace)
 		}
-		target.Keyspace, target.Shard = rss[0].Target.Keyspace, rss[0].Target.Shard
+		destinationTarget.Keyspace, destinationTarget.Destination = rss[0].Target.Keyspace, key.DestinationShard(rss[0].Target.Shard)
+	}
+
+	switch destinationTarget.Destination.(type) {
+	case key.DestinationShard:
+	// noop
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Destination can only be a single shard for handle other got: s", destinationTarget.Destination)
 	}
 	execStart := time.Now()
-	result, err := e.destinationExec(ctx, safeSession, sql, bindVars, target, key.DestinationShard(target.Shard), logStats)
+	result, err := e.destinationExec(ctx, safeSession, sql, bindVars, destinationTarget, logStats)
 	logStats.ExecuteTime = time.Since(execStart)
 	return result, err
 }
 
-func (e *Executor) handleComment(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleComment(sql string) (*sqltypes.Result, error) {
 	_, sql = sqlparser.ExtractMysqlComment(sql)
-
 	// Not sure if this is a good idea.
 	return &sqltypes.Result{}, nil
 }
@@ -927,7 +925,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		bindVars = make(map[string]*querypb.BindVariable)
 	}
 	query, comments := sqlparser.SplitTrailingComments(sql)
-	vcursor := newVCursorImpl(ctx, safeSession, target, comments, e, logStats)
+	vcursor := newVCursorImpl(ctx, safeSession, target.Keyspace, target.TabletType, comments, e, logStats)
 
 	// check if this is a stream statement for messaging
 	// TODO: support keyRange syntax
@@ -1060,10 +1058,8 @@ func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []
 		vcursor := newVCursorImpl(
 			ctx,
 			NewSafeSession(&vtgatepb.Session{}),
-			querypb.Target{
-				Keyspace:   table.Keyspace.Name,
-				TabletType: topodatapb.TabletType_MASTER,
-			},
+			table.Keyspace.Name,
+			topodatapb.TabletType_MASTER,
 			"",
 			e,
 			nil,
@@ -1131,64 +1127,15 @@ func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 
 }
 
-// ParseTarget parses the string representation of a Target
-// of the form keyspace:shard@tablet_type. You can use a / instead of a :.
-// If the keyspace was not specified in the target, but the VSchema has
-// only one keyspace, then that name is assigned as the keyspace.
-// This is similar to how Find works for VSchema: if there's only
-// one keyspace, it's used as the default qualifier.
-func (e *Executor) ParseTarget(targetString string) querypb.Target {
-	// Default tablet type is master.
-	target := querypb.Target{
-		TabletType: defaultTabletType,
-	}
-	last := strings.LastIndexAny(targetString, "@")
-	if last != -1 {
-		// No need to check the error. UNKNOWN will be returned on
-		// error and it will fail downstream.
-		target.TabletType, _ = topoproto.ParseTabletType(targetString[last+1:])
-		targetString = targetString[:last]
-	}
-	last = strings.LastIndexAny(targetString, "/:")
-	if last != -1 {
-		target.Shard = targetString[last+1:]
-		targetString = targetString[:last]
-	}
-	// Remove range query from string if present
-	last = strings.LastIndexAny(targetString, "[")
-	if last != -1 {
-		targetString = targetString[:last]
-	}
-	if targetString == "" && len(e.VSchema().Keyspaces) == 1 {
-		// Loop to extract the only keyspace name.
+func (e *Executor) parseDestinationTarget(targetString string) (key.DestinationTarget, error) {
+	dest, err := key.ParseDestination(targetString, defaultTabletType)
+	// Set default keyspace
+	if dest.Keyspace == "" && len(e.VSchema().Keyspaces) == 1 {
 		for k := range e.VSchema().Keyspaces {
-			targetString = k
+			dest.Keyspace = k
 		}
 	}
-	target.Keyspace = targetString
-	return target
-}
-
-// parseRange parses range from target string.
-func parseRange(targetString string) (*topodatapb.KeyRange, error) {
-	last := strings.LastIndexAny(targetString, "[")
-	if last != -1 {
-		rangeEnd := strings.LastIndexAny(targetString, "]")
-		if rangeEnd == -1 {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid key range provided. Couldn't find range end ']'")
-
-		}
-		rangeString := targetString[last+1 : rangeEnd]
-		keyRange, err := key.ParseShardingSpec(rangeString)
-		if err != nil {
-			return nil, err
-		}
-		if len(keyRange) != 1 {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "single keyrange expected in %s", rangeString)
-		}
-		return keyRange[0], nil
-	}
-	return nil, nil
+	return dest, err
 }
 
 // getPlan computes the plan for the given query. If one is in
@@ -1202,7 +1149,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments string, bi
 	if e.VSchema() == nil {
 		return nil, errors.New("vschema not initialized")
 	}
-	keyspace := vcursor.target.Keyspace
+	keyspace := vcursor.keyspace
 	key := sql
 	if keyspace != "" {
 		key = keyspace + ":" + sql
