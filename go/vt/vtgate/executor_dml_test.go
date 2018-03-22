@@ -483,9 +483,9 @@ func TestDeleteScatter(t *testing.T) {
 	}
 }
 
-func TestDeleteTargetDest(t *testing.T) {
+func TestDeleteByDestination(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
-	// This query is not supported in v3, so we know for sure is taking the DeleteTargetDestination route
+	// This query is not supported in v3, so we know for sure is taking the DeleteByDestination route
 	_, err := executorExec(executor, "delete from `TestExecutor[-]`.user_extra limit 10", nil)
 	if err != nil {
 		t.Error(err)

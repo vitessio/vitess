@@ -158,7 +158,7 @@ func buildTablePrimitive(tableExpr *sqlparser.AliasedTableExpr, tableName sqlpar
 		return rb, nil
 	}
 
-	table, vindex, kDest, err := vschema.FindTableOrVindex(tableName)
+	table, vindex, destTarget, err := vschema.FindTableOrVindex(tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +179,7 @@ func buildTablePrimitive(tableExpr *sqlparser.AliasedTableExpr, tableName sqlpar
 		rb.ERoute = &engine.Route{
 			Opcode:            engine.SelectScatter,
 			Keyspace:          table.Keyspace,
-			TargetDestination: kDest.Destination,
+			TargetDestination: destTarget.Destination,
 		}
 		return rb, nil
 	}
