@@ -60,7 +60,7 @@ fi
 
 # Install gRPC python libraries from PyPI.
 # Dependencies like protobuf python will be installed automatically.
-grpcio_ver=1.7.0
+grpcio_ver=1.10.0
 $PIP install --upgrade grpcio==$grpcio_ver
 
 # now install grpc_python_plugin, which also builds the protoc compiler.
