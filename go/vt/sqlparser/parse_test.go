@@ -778,6 +778,9 @@ var (
 		input:  "alter table a drop column id int",
 		output: "alter table a",
 	}, {
+		input:  "alter table a drop partition p2712",
+		output: "alter table a",
+	}, {
 		input:  "alter table a drop index idx (id)",
 		output: "alter table a",
 	}, {
