@@ -20,8 +20,12 @@ import (
 	"errors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // buildDeletePlan builds the instructions for a DELETE statement.
@@ -56,14 +60,17 @@ func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Delete, er
 	for t := range rb.Symtab().tables {
 		tableName = t
 	}
-	table, kDest, err := vschema.FindTable(tableName)
+	table, destinationTarget, err := vschema.FindTable(tableName)
 	if err != nil {
 		return nil, err
 	}
 	edel.Table = table
-	if kDest.Destination != nil {
-		edel.Opcode = engine.DeleteTargetDestination
-		edel.TargetDestination = kDest.Destination
+	if destinationTarget.Destination != nil {
+		if destinationTarget.TabletType != topodatapb.TabletType_MASTER {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: DELETE statement with a replica target")
+		}
+		edel.Opcode = engine.DeleteByDestination
+		edel.TargetDestination = destinationTarget.Destination
 		return edel, nil
 	}
 	edel.Vindex, edel.Values, err = getDMLRouting(del.Where, edel.Table)

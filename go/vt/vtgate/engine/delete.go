@@ -108,18 +108,18 @@ const (
 	// DeleteScatter is for routing a scattered
 	// delete statement.
 	DeleteScatter
-	// DeleteTargetDestination is to route directly to a given
-	// destination. Is used when the query explicitly sets a target:
+	// DeleteByDestination is to route explicitly to a given
+	// target destination. Is used when the query explicitly sets a target destination:
 	// in the from clause:
 	// e.g: DELETE FROM `keyspace[-]`.x1 LIMIT 100
-	DeleteTargetDestination
+	DeleteByDestination
 )
 
 var delName = map[DeleteOpcode]string{
-	DeleteUnsharded:         "DeleteUnsharded",
-	DeleteEqual:             "DeleteEqual",
-	DeleteScatter:           "DeleteScatter",
-	DeleteTargetDestination: "DeleteTargetDestination",
+	DeleteUnsharded:     "DeleteUnsharded",
+	DeleteEqual:         "DeleteEqual",
+	DeleteScatter:       "DeleteScatter",
+	DeleteByDestination: "DeleteByDestination",
 }
 
 // MarshalJSON serializes the DeleteOpcode as a JSON string.
@@ -137,7 +137,7 @@ func (del *Delete) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 		return del.execDeleteEqual(vcursor, bindVars)
 	case DeleteScatter:
 		return del.execDeleteTargetDestination(vcursor, bindVars, key.DestinationAllShards{})
-	case DeleteTargetDestination:
+	case DeleteByDestination:
 		return del.execDeleteTargetDestination(vcursor, bindVars, del.TargetDestination)
 	default:
 		// Unreachable.

@@ -51,6 +51,10 @@
 "insert into `user[-]`.user_metadata (a, b) values (1,2)"
 "unsupported: INSERT with a target destination"
 
+# Unsupported DELETE statement with a replica target destination
+"DELETE FROM `user[-]@replica`.user_metadata limit 1"
+"unsupported: DELETE statement with a replica target"
+
 # subquery keyspace different from outer query
 "select * from user where id in (select m from unsharded)"
 "unsupported: subquery keyspace different from outer query"
