@@ -1213,7 +1213,7 @@
 {
   "Original": "delete from `user[-]`.user_extra",
   "Instructions": {
-    "Opcode": "DeleteTargetDestination",
+    "Opcode": "DeleteByDestination",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
