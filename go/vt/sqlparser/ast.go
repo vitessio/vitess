@@ -644,7 +644,7 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		}
 		buf.Myprintf("%s table%s %v", node.Action, exists, node.Table)
 	case RenameStr:
-		buf.Myprintf("%s table %v %v", node.Action, node.Table, node.NewName)
+		buf.Myprintf("%s table %v to %v", node.Action, node.Table, node.NewName)
 	case AlterStr:
 		if node.PartitionSpec != nil {
 			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.PartitionSpec)

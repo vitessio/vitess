@@ -716,16 +716,16 @@ var (
 		output: "alter table a",
 	}, {
 		input:  "alter table a rename b",
-		output: "rename table a b",
+		output: "rename table a to b",
 	}, {
 		input:  "alter table `By` rename `bY`",
-		output: "rename table `By` `bY`",
+		output: "rename table `By` to `bY`",
 	}, {
 		input:  "alter table a rename to b",
-		output: "rename table a b",
+		output: "rename table a to b",
 	}, {
 		input:  "alter table a rename as b",
-		output: "rename table a b",
+		output: "rename table a to b",
 	}, {
 		input:  "alter table a rename index foo to bar",
 		output: "alter table a",
@@ -1241,10 +1241,9 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "alter table a",
 	}, {
 		input:  "alter table A rename to B",
-		output: "rename table A B",
+		output: "rename table A to B",
 	}, {
-		input:  "rename table A to B",
-		output: "rename table A B",
+		input: "rename table A to B",
 	}, {
 		input:  "drop table B",
 		output: "drop table B",
