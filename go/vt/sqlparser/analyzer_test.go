@@ -360,20 +360,16 @@ func TestStringIn(t *testing.T) {
 
 func TestExtractSetValues(t *testing.T) {
 	testcases := []struct {
-		sql     string
-		out     map[string]interface{}
-		charset string
-		scope   string
-		err     string
+		sql   string
+		out   map[string]interface{}
+		scope string
+		err   string
 	}{{
 		sql: "invalid",
 		err: "syntax error at position 8 near 'invalid'",
 	}, {
 		sql: "select * from t",
 		err: "ast did not yield *sqlparser.Set: *sqlparser.Select",
-	}, {
-		sql: "set a.autocommit=1",
-		err: "invalid syntax: a.autocommit",
 	}, {
 		sql: "set autocommit=1+1",
 		err: "invalid syntax: 1 + 1",
@@ -393,21 +389,17 @@ func TestExtractSetValues(t *testing.T) {
 		sql: "SET foo = 0x1234",
 		err: "invalid value type: 0x1234",
 	}, {
-		sql:     "SET names utf8",
-		out:     map[string]interface{}{},
-		charset: "utf8",
+		sql: "SET names utf8",
+		out: map[string]interface{}{"names": "utf8"},
 	}, {
-		sql:     "SET names ascii collation ascii_bin",
-		out:     map[string]interface{}{},
-		charset: "ascii",
+		sql: "SET names ascii collate ascii_bin",
+		out: map[string]interface{}{"names": "ascii"},
 	}, {
-		sql:     "SET charset default",
-		out:     map[string]interface{}{},
-		charset: "default",
+		sql: "SET charset default",
+		out: map[string]interface{}{"charset": "default"},
 	}, {
-		sql:     "SET character set ascii",
-		out:     map[string]interface{}{},
-		charset: "ascii",
+		sql: "SET character set ascii",
+		out: map[string]interface{}{"charset": "ascii"},
 	}, {
 		sql:   "SET SESSION wait_timeout = 3600",
 		out:   map[string]interface{}{"wait_timeout": int64(3600)},
@@ -418,7 +410,7 @@ func TestExtractSetValues(t *testing.T) {
 		scope: "global",
 	}}
 	for _, tcase := range testcases {
-		out, charset, _, err := ExtractSetValues(tcase.sql)
+		out, _, err := ExtractSetValues(tcase.sql)
 		if tcase.err != "" {
 			if err == nil || err.Error() != tcase.err {
 				t.Errorf("ExtractSetValues(%s): %v, want '%s'", tcase.sql, err, tcase.err)
@@ -428,9 +420,6 @@ func TestExtractSetValues(t *testing.T) {
 		}
 		if !reflect.DeepEqual(out, tcase.out) {
 			t.Errorf("ExtractSetValues(%s): %v, want '%v'", tcase.sql, out, tcase.out)
-		}
-		if charset != tcase.charset {
-			t.Errorf("ExtractSetValues(%s): %v, want '%v'", tcase.sql, charset, tcase.charset)
 		}
 	}
 }

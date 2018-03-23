@@ -657,24 +657,26 @@ var (
 		input: "set character_set_results = utf8",
 	}, {
 		input:  "set names utf8 collate foo",
-		output: "set ",
+		output: "set names 'utf8'",
 	}, {
 		input:  "set character set utf8",
-		output: "set ",
+		output: "set charset 'utf8'",
 	}, {
 		input:  "set character set 'utf8'",
-		output: "set ",
+		output: "set charset 'utf8'",
 	}, {
 		input:  "set character set \"utf8\"",
-		output: "set ",
+		output: "set charset 'utf8'",
 	}, {
 		input:  "set charset default",
-		output: "set ",
+		output: "set charset default",
 	}, {
 		input:  "set session wait_timeout = 3600",
 		output: "set session wait_timeout = 3600",
 	}, {
 		input: "set /* list */ a = 3, b = 4",
+	}, {
+		input: "set /* mixed list */ a = 3, names 'utf8', charset 'ascii', b = 4",
 	}, {
 		input:  "alter ignore table a add foo",
 		output: "alter table a",
