@@ -17,8 +17,13 @@ limitations under the license.
 package mysql
 
 import (
+	"fmt"
+	"io/ioutil"
 	"net"
+	"os"
+	"syscall"
 	"testing"
+	"time"
 )
 
 func TestJsonConfigParser(t *testing.T) {
@@ -68,5 +73,53 @@ func TestHostMatcher(t *testing.T) {
 	match = matchSourceHost(net.Addr(socket), "localhost")
 	if !match {
 		t.Fatalf("Should match socket when target is localhost")
+	}
+}
+
+func TestStaticConfigHUP(t *testing.T) {
+	tmpFile, err := ioutil.TempFile("", "mysql_auth_server_static_file.json")
+	if err != nil {
+		t.Fatalf("couldn't create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	*mysqlAuthServerStaticFile = tmpFile.Name()
+
+	oldStr := "str1"
+	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", oldStr, oldStr)
+	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+		t.Fatalf("couldn't write temp file: %v", err)
+	}
+
+	InitAuthServerStatic()
+	aStatic := GetAuthServer("static").(*AuthServerStatic)
+
+	if aStatic.Entries[oldStr][0].Password != oldStr {
+		t.Fatalf("%s's Password should still be '%s'", oldStr, oldStr)
+	}
+
+	hupTest(t, tmpFile, oldStr, "str2")
+	hupTest(t, tmpFile, "str2", "str3") // still handling the signal
+}
+
+func hupTest(t *testing.T, tmpFile *os.File, oldStr, newStr string) {
+	aStatic := GetAuthServer("static").(*AuthServerStatic)
+
+	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", newStr, newStr)
+	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+		t.Fatalf("couldn't overwrite temp file: %v", err)
+	}
+
+	if aStatic.Entries[oldStr][0].Password != oldStr {
+		t.Fatalf("%s's Password should still be '%s'", oldStr, oldStr)
+	}
+
+	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
+	time.Sleep(100 * time.Millisecond) // wait for signal handler
+
+	if aStatic.Entries[oldStr] != nil {
+		t.Fatalf("Should not have old %s after config reload", oldStr)
+	}
+	if aStatic.Entries[newStr][0].Password != newStr {
+		t.Fatalf("%s's Password should be '%s'", newStr, newStr)
 	}
 }
