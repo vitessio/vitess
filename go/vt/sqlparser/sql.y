@@ -85,7 +85,9 @@ func forceEOF(yylex interface{}) {
   order         *Order
   limit         *Limit
   updateExprs   UpdateExprs
+  setExprs      SetExprs
   updateExpr    *UpdateExpr
+  setExpr       *SetExpr
   colIdent      ColIdent
   tableIdent    TableIdent
   convertType   *ConvertType
@@ -239,14 +241,17 @@ func forceEOF(yylex interface{}) {
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
+%type <setExprs> set_list
 %type <bytes> charset_or_character_set
 %type <updateExpr> update_expression
+%type <setExpr> set_expression
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
 %type <byt> exists_opt
 %type <empty> not_exists_opt non_add_drop_or_rename_operation to_opt index_opt constraint_opt
 %type <bytes> reserved_keyword non_reserved_keyword
-%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt charset_value using_opt
+%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
+%type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id
 %type <empty> as_opt
 %type <empty> force_eof ddl_force_eof
@@ -441,33 +446,14 @@ opt_partition_clause:
   }
 
 set_statement:
-  SET comment_opt update_list
+  SET comment_opt set_list
   {
     $$ = &Set{Comments: Comments($2), Exprs: $3}
    }
-| SET comment_opt set_session_or_global update_list
+| SET comment_opt set_session_or_global set_list
   {
     $$ = &Set{Comments: Comments($2), Scope: $3, Exprs: $4}
    }
-| SET comment_opt charset_or_character_set charset_value force_eof
-  {
-    $$ = &Set{Comments: Comments($2), Charset: $4}
-  }
-
-charset_or_character_set:
-  CHARSET
-| CHARACTER SET
-| NAMES
-
-charset_value:
-  reserved_sql_id
-  {
-    $$ = $1
-  }
-| STRING
-  {
-    $$ = NewColIdent(string($1))
-  }
 
 set_session_or_global:
   SESSION
@@ -2525,6 +2511,48 @@ update_expression:
   column_name '=' expression
   {
     $$ = &UpdateExpr{Name: $1, Expr: $3}
+  }
+
+set_list:
+  set_expression
+  {
+    $$ = SetExprs{$1}
+  }
+| set_list ',' set_expression
+  {
+    $$ = append($1, $3)
+  }
+
+set_expression:
+  reserved_sql_id '=' expression
+  {
+    $$ = &SetExpr{Name: $1, Expr: $3}
+  }
+| charset_or_character_set charset_value collate_opt
+  {
+    $$ = &SetExpr{Name: NewColIdent(string($1)), Expr: $2}
+  }
+
+charset_or_character_set:
+  CHARSET
+| CHARACTER SET
+  {
+    $$ = []byte("charset")
+  }
+| NAMES
+
+charset_value:
+  sql_id
+  {
+    $$ = NewStrVal([]byte($1.String()))
+  }
+| STRING
+  {
+    $$ = NewStrVal($1)
+  }
+| DEFAULT
+  {
+    $$ = &Default{}
   }
 
 for_from:
