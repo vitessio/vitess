@@ -671,6 +671,9 @@ var (
 		input:  "set charset default",
 		output: "set ",
 	}, {
+		input:  "set wait_timeout = 3600, names 'utf8'",
+		output: "set wait_timeout = 3600",
+	}, {
 		input:  "set session wait_timeout = 3600",
 		output: "set session wait_timeout = 3600",
 	}, {

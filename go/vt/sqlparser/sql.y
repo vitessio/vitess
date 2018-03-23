@@ -441,7 +441,11 @@ opt_partition_clause:
   }
 
 set_statement:
-  SET comment_opt update_list
+  SET comment_opt update_list ',' charset_or_character_set charset_value force_eof
+  {
+    $$ = &Set{Comments: Comments($2), Exprs: $3, Charset: $6}
+   }
+| SET comment_opt update_list
   {
     $$ = &Set{Comments: Comments($2), Exprs: $3}
    }

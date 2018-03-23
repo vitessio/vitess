@@ -341,6 +341,9 @@ func TestExecutorSet(t *testing.T) {
 	}, {
 		in:  "set sql_auto_is_null = 1",
 		err: "sql_auto_is_null is not currently supported",
+	}, {
+		in:  "set sql_auto_is_null = 0, names 'utf8'",
+		out: &vtgatepb.Session{Autocommit: true},
 	}}
 	for _, tcase := range testcases {
 		session := NewSafeSession(&vtgatepb.Session{Autocommit: true})

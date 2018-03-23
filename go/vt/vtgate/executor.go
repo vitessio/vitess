@@ -528,9 +528,6 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 	if err != nil {
 		return &sqltypes.Result{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
 	}
-	if len(vals) > 0 && charset != "" {
-		return &sqltypes.Result{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected key values and charset, must specify one")
-	}
 
 	if scope == "global" {
 		return &sqltypes.Result{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported in set: global")
