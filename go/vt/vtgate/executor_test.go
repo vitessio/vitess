@@ -313,7 +313,7 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set names ascii",
-		err: "unexpected value for charset: ascii",
+		err: "unexpected value for charset/names: ascii",
 	}, {
 		in:  "set charset utf8",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -322,7 +322,7 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set character set ascii",
-		err: "unexpected value for charset: ascii",
+		err: "unexpected value for charset/names: ascii",
 	}, {
 		in:  "set net_write_timeout = 600",
 		out: &vtgatepb.Session{Autocommit: true},

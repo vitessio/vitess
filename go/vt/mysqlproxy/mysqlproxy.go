@@ -128,19 +128,9 @@ func (mp *Proxy) doRollback(ctx context.Context, session *ProxySession) error {
 
 // Set is currently ignored
 func (mp *Proxy) doSet(ctx context.Context, session *ProxySession, sql string, bindVariables map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	vals, charset, _, err := sqlparser.ExtractSetValues(sql)
+	vals, _, err := sqlparser.ExtractSetValues(sql)
 	if err != nil {
 		return nil, err
-	}
-	if len(vals) > 0 && charset != "" {
-		return nil, err
-	}
-
-	switch charset {
-	case "", "utf8", "utf8mb4", "latin1", "default":
-		break
-	default:
-		return nil, fmt.Errorf("unexpected value for charset: %v", charset)
 	}
 
 	for k, v := range vals {
@@ -162,6 +152,17 @@ func (mp *Proxy) doSet(ctx context.Context, session *ProxySession, sql string, b
 				session.Autocommit = true
 			default:
 				return nil, fmt.Errorf("unexpected value for autocommit: %d", val)
+			}
+		case "charset", "names":
+			val, ok := v.(string)
+			if !ok {
+				return nil, fmt.Errorf("unexpected value type for charset/names: %T", v)
+			}
+			switch val {
+			case "", "utf8", "utf8mb4", "latin1", "default":
+				break
+			default:
+				return nil, fmt.Errorf("unexpected value for charset/names: %v", val)
 			}
 		default:
 			log.Warningf("Ignored inapplicable SET %v = %v", k, v)
