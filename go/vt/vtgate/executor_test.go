@@ -1042,7 +1042,6 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 		t.Errorf("vschema shoud not be updated on error")
 	default:
 	}
-
 }
 
 func TestExecutorAddDropVindexDDL(t *testing.T) {
@@ -1374,6 +1373,69 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	if !reflect.DeepEqual(gotCount, wantCount) {
 		t.Errorf("Exec %s: %v, want %v", "", gotCount, wantCount)
 	}
+}
+
+func TestExecutorVindexDDLNewKeyspace(t *testing.T) {
+	*vschemaacl.AuthorizedDDLUsers = "%"
+	defer func() {
+		*vschemaacl.AuthorizedDDLUsers = ""
+	}()
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	ksName := "NewKeyspace"
+
+	vschema := executor.vm.GetCurrentSrvVschema()
+	ks, ok := vschema.Keyspaces[ksName]
+	if ok || ks != nil {
+		t.Fatalf("keyspace should not exist before test")
+	}
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: ksName})
+	stmt := "create vindex test_hash using hash"
+	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	stmt = "alter table test add vindex test_hash2 (id) using hash"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Fatalf("error in %s: %v", stmt, err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	vschema = executor.vm.GetCurrentSrvVschema()
+	ks, ok = vschema.Keyspaces[ksName]
+	if !ok || ks == nil {
+		t.Fatalf("keyspace was not created as expected")
+	}
+
+	vindex, _ := ks.Vindexes["test_hash"]
+	if vindex == nil {
+		t.Fatalf("vindex was not created as expected")
+	}
+
+	vindex2, _ := ks.Vindexes["test_hash2"]
+	if vindex2 == nil {
+		t.Fatalf("vindex was not created as expected")
+	}
+
+	table, _ := ks.Tables["test"]
+	if table == nil {
+		t.Fatalf("column vindex was not created as expected")
+	}
+
+	wantCount := []int64{0, 0, 0}
+	gotCount := []int64{
+		sbc1.ExecCount.Get(),
+		sbc2.ExecCount.Get(),
+		sbclookup.ExecCount.Get(),
+	}
+	if !reflect.DeepEqual(gotCount, wantCount) {
+		t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
+	}
+
 }
 
 func TestExecutorVindexDDLACL(t *testing.T) {
