@@ -1351,7 +1351,7 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 
 	stmt = "alter table nowhere.nohow drop vindex test_lookup"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	wantErr = "keyspace nowhere not defined in vschema"
+	wantErr = "table nowhere.nohow not defined in vschema"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("got %v want err %s", err, wantErr)
 	}
