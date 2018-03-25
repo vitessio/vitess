@@ -377,9 +377,18 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 		return errNoKeyspace
 	}
 
-	ks, ok := vschema.Keyspaces[ksName]
-	if !ok {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "keyspace %s not defined in vschema", ksName)
+	ks, _ := vschema.Keyspaces[ksName]
+	if ks == nil {
+		ks = new(vschemapb.Keyspace)
+		vschema.Keyspaces[ksName] = ks
+	}
+
+	if ks.Tables == nil {
+		ks.Tables = map[string]*vschemapb.Table{}
+	}
+
+	if ks.Vindexes == nil {
+		ks.Vindexes = map[string]*vschemapb.Vindex{}
 	}
 
 	var tableName string
