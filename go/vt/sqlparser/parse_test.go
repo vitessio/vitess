@@ -657,24 +657,26 @@ var (
 		input: "set character_set_results = utf8",
 	}, {
 		input:  "set names utf8 collate foo",
-		output: "set ",
+		output: "set names 'utf8'",
 	}, {
 		input:  "set character set utf8",
-		output: "set ",
+		output: "set charset 'utf8'",
 	}, {
 		input:  "set character set 'utf8'",
-		output: "set ",
+		output: "set charset 'utf8'",
 	}, {
 		input:  "set character set \"utf8\"",
-		output: "set ",
+		output: "set charset 'utf8'",
 	}, {
 		input:  "set charset default",
-		output: "set ",
+		output: "set charset default",
 	}, {
 		input:  "set session wait_timeout = 3600",
 		output: "set session wait_timeout = 3600",
 	}, {
 		input: "set /* list */ a = 3, b = 4",
+	}, {
+		input: "set /* mixed list */ a = 3, names 'utf8', charset 'ascii', b = 4",
 	}, {
 		input:  "alter ignore table a add foo",
 		output: "alter table a",
@@ -716,16 +718,16 @@ var (
 		output: "alter table a",
 	}, {
 		input:  "alter table a rename b",
-		output: "rename table a b",
+		output: "rename table a to b",
 	}, {
 		input:  "alter table `By` rename `bY`",
-		output: "rename table `By` `bY`",
+		output: "rename table `By` to `bY`",
 	}, {
 		input:  "alter table a rename to b",
-		output: "rename table a b",
+		output: "rename table a to b",
 	}, {
 		input:  "alter table a rename as b",
-		output: "rename table a b",
+		output: "rename table a to b",
 	}, {
 		input:  "alter table a rename index foo to bar",
 		output: "alter table a",
@@ -1241,10 +1243,9 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "alter table a",
 	}, {
 		input:  "alter table A rename to B",
-		output: "rename table A B",
+		output: "rename table A to B",
 	}, {
-		input:  "rename table A to B",
-		output: "rename table A B",
+		input: "rename table A to B",
 	}, {
 		input:  "drop table B",
 		output: "drop table B",
