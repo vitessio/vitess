@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package vttest contains helpers to set up Vitess for testing.
 package vttest
 
 import (
@@ -52,11 +53,11 @@ type VtProcess struct {
 	exit chan error
 }
 
-// GetVars returns the JSON contents of the `/debug/vars` endpoint
+// getVars returns the JSON contents of the `/debug/vars` endpoint
 // of this Vitess-based process. If an error is returned, it probably
 // means that the Vitess service has not started successfully.
-func (vtp *VtProcess) GetVars() ([]byte, error) {
-	url := fmt.Sprintf("http://%s/debug/vars", vtp.Address())
+func getVars(addr string) ([]byte, error) {
+	url := fmt.Sprintf("http://%s/debug/vars", addr)
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
@@ -65,14 +66,21 @@ func (vtp *VtProcess) GetVars() ([]byte, error) {
 	return ioutil.ReadAll(resp.Body)
 }
 
+// defaultHealthCheck checks the health of the Vitess process using getVars.
+// It is used when VtProcess.HealthCheck is nil.
+func defaultHealthCheck(addr string) bool {
+	_, err := getVars(addr)
+	return err == nil
+}
+
 // IsHealthy returns whether the monitored Vitess process has started
 // successfully.
 func (vtp *VtProcess) IsHealthy() bool {
-	if vtp.HealthCheck != nil && !vtp.HealthCheck(vtp.Address()) {
-		return false
+	healthCheck := vtp.HealthCheck
+	if healthCheck == nil {
+		healthCheck = defaultHealthCheck
 	}
-	_, err := vtp.GetVars()
-	return err == nil
+	return healthCheck(vtp.Address())
 }
 
 // Address returns the main address for this Vitess process.

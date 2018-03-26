@@ -345,6 +345,95 @@ func TestShardedVSchemaOwned(t *testing.T) {
 	}
 }
 
+func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
+	good := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"stfu1": {
+						Type: "stfu",
+						Params: map[string]string{
+							"stfu1": "1",
+						},
+						Owner: "t1",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Columns: []string{"c1", "c2"},
+								Name:    "stfu1",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	got, err := BuildVSchema(&good)
+	if err != nil {
+		t.Error(err)
+	}
+	ks := &Keyspace{
+		Name:    "sharded",
+		Sharded: true,
+	}
+	vindex1 := &stFU{
+		name: "stfu1",
+		Params: map[string]string{
+			"stfu1": "1",
+		},
+	}
+	t1 := &Table{
+		Name:     sqlparser.NewTableIdent("t1"),
+		Keyspace: ks,
+		ColumnVindexes: []*ColumnVindex{
+			{
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1"), sqlparser.NewColIdent("c2")},
+				Type:    "stfu",
+				Name:    "stfu1",
+				Vindex:  vindex1,
+			},
+		},
+	}
+	t1.Ordered = []*ColumnVindex{
+		t1.ColumnVindexes[0],
+	}
+	dual := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ks,
+		Pinned:   []byte{0},
+	}
+	want := &VSchema{
+		uniqueTables: map[string]*Table{
+			"t1":   t1,
+			"dual": dual,
+		},
+		uniqueVindexes: map[string]Vindex{
+			"stfu1": vindex1,
+		},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"sharded": {
+				Keyspace: ks,
+				Tables: map[string]*Table{
+					"t1":   t1,
+					"dual": dual,
+				},
+				Vindexes: map[string]Vindex{
+					"stfu1": vindex1,
+				},
+			},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		gotjson, _ := json.Marshal(got)
+		wantjson, _ := json.Marshal(want)
+		t.Errorf("BuildVSchema:\n%s, want\n%s", gotjson, wantjson)
+	}
+}
+
 func TestShardedVSchemaNotOwned(t *testing.T) {
 	good := vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
@@ -805,6 +894,66 @@ func TestBuildVSchemaNoindexFail(t *testing.T) {
 	}
 	_, err := BuildVSchema(&bad)
 	want := "vindex notexist not found for table t1"
+	if err == nil || err.Error() != want {
+		t.Errorf("BuildVSchema: %v, want %v", err, want)
+	}
+}
+
+func TestBuildVSchemaColumnAndColumnsFail(t *testing.T) {
+	bad := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"stfu": {
+						Type: "stfu",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column:  "c1",
+								Columns: []string{"c2", "c3"},
+								Name:    "stfu",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	_, err := BuildVSchema(&bad)
+	want := `can't use column and columns at the same time in vindex (stfu) and table (t1)`
+	if err == nil || err.Error() != want {
+		t.Errorf("BuildVSchema: %v, want %v", err, want)
+	}
+}
+
+func TestBuildVSchemaNoColumnsFail(t *testing.T) {
+	bad := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"stfu": {
+						Type: "stfu",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Name: "stfu",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	_, err := BuildVSchema(&bad)
+	want := `must specify at least one column for vindex (stfu) and table (t1)`
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}

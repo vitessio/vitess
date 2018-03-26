@@ -114,6 +114,15 @@ func (lkp *lookupInternal) Verify(vcursor VCursor, ids, values []sqltypes.Value)
 // Create(vcursor, [[value_a0, value_b0,], [value_a1, value_b1]], [binary(value_c0), binary(value_c1)])
 // Notice that toValues contains the computed binary value of the keyspace_id.
 func (lkp *lookupInternal) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, toValues []sqltypes.Value, ignoreMode bool) error {
+	if len(rowsColValues) == 0 {
+		// This code is unreachable. It's just a failsafe.
+		return nil
+	}
+	// We only need to check the first row. Number of cols per row
+	// is guaranteed by the engine to be uniform.
+	if len(rowsColValues[0]) != len(lkp.FromColumns) {
+		return fmt.Errorf("lookup.Create: column vindex count does not match the columns in the lookup: %d vs %v", len(rowsColValues[0]), lkp.FromColumns)
+	}
 	buf := new(bytes.Buffer)
 	if ignoreMode {
 		fmt.Fprintf(buf, "insert ignore into %s(", lkp.Table)
@@ -180,6 +189,15 @@ func (lkp *lookupInternal) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Va
 	// In autocommit mode, it's not safe to delete. So, it's a no-op.
 	if lkp.Autocommit {
 		return nil
+	}
+	if len(rowsColValues) == 0 {
+		// This code is unreachable. It's just a failsafe.
+		return nil
+	}
+	// We only need to check the first row. Number of cols per row
+	// is guaranteed by the engine to be uniform.
+	if len(rowsColValues[0]) != len(lkp.FromColumns) {
+		return fmt.Errorf("lookup.Delete: column vindex count does not match the columns in the lookup: %d vs %v", len(rowsColValues[0]), lkp.FromColumns)
 	}
 	for _, column := range rowsColValues {
 		bindVars := make(map[string]*querypb.BindVariable, len(rowsColValues))

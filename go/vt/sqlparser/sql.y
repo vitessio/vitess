@@ -85,7 +85,9 @@ func forceEOF(yylex interface{}) {
   order         *Order
   limit         *Limit
   updateExprs   UpdateExprs
+  setExprs      SetExprs
   updateExpr    *UpdateExpr
+  setExpr       *SetExpr
   colIdent      ColIdent
   tableIdent    TableIdent
   convertType   *ConvertType
@@ -103,6 +105,8 @@ func forceEOF(yylex interface{}) {
   partDefs      []*PartitionDefinition
   partDef       *PartitionDefinition
   partSpec      *PartitionSpec
+  vindexParam   VindexParam
+  vindexParams  []VindexParam
 }
 
 %token LEX_ERROR
@@ -145,8 +149,8 @@ func forceEOF(yylex interface{}) {
 %token <empty> JSON_EXTRACT_OP JSON_UNQUOTE_EXTRACT_OP
 
 // DDL Tokens
-%token <bytes> CREATE ALTER DROP RENAME ANALYZE
-%token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY
+%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD
+%token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT SPATIAL FULLTEXT FOREIGN
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
@@ -233,18 +237,21 @@ func forceEOF(yylex interface{}) {
 %type <str> asc_desc_opt
 %type <limit> limit_opt
 %type <str> lock_opt
-%type <columns> ins_column_list using_column_list
+%type <columns> ins_column_list column_list
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
+%type <setExprs> set_list
 %type <bytes> charset_or_character_set
 %type <updateExpr> update_expression
+%type <setExpr> set_expression
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
 %type <byt> exists_opt
-%type <empty> not_exists_opt non_rename_operation to_opt index_opt constraint_opt
+%type <empty> not_exists_opt non_add_drop_or_rename_operation to_opt index_opt constraint_opt
 %type <bytes> reserved_keyword non_reserved_keyword
-%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt charset_value using_opt
+%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
+%type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id
 %type <empty> as_opt
 %type <empty> force_eof ddl_force_eof
@@ -271,6 +278,10 @@ func forceEOF(yylex interface{}) {
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
+%type <vindexParam> vindex_param
+%type <vindexParams> vindex_param_list vindex_params_opt
+%type <colIdent> vindex_type vindex_type_opt
+%type <bytes> alter_object_type
 
 %start any_command
 
@@ -435,33 +446,14 @@ opt_partition_clause:
   }
 
 set_statement:
-  SET comment_opt update_list
+  SET comment_opt set_list
   {
     $$ = &Set{Comments: Comments($2), Exprs: $3}
    }
-| SET comment_opt set_session_or_global update_list
+| SET comment_opt set_session_or_global set_list
   {
     $$ = &Set{Comments: Comments($2), Scope: $3, Exprs: $4}
    }
-| SET comment_opt charset_or_character_set charset_value force_eof
-  {
-    $$ = &Set{Comments: Comments($2), Charset: $4}
-  }
-
-charset_or_character_set:
-  CHARSET
-| CHARACTER SET
-| NAMES
-
-charset_value:
-  reserved_sql_id
-  {
-    $$ = $1
-  }
-| STRING
-  {
-    $$ = NewColIdent(string($1))
-  }
 
 set_session_or_global:
   SESSION
@@ -491,6 +483,56 @@ create_statement:
 | CREATE OR REPLACE VIEW table_name ddl_force_eof
   {
     $$ = &DDL{Action: CreateStr, NewName: $5.ToViewName()}
+  }
+| CREATE VINDEX sql_id vindex_type_opt vindex_params_opt
+  {
+    $$ = &DDL{Action: CreateVindexStr, VindexSpec: &VindexSpec{
+        Name: $3,
+        Type: $4,
+        Params: $5,
+    }}
+  }
+
+vindex_type_opt:
+  {
+    $$ = NewColIdent("")
+  }
+| USING vindex_type
+  {
+    $$ = $2
+  }
+
+vindex_type:
+  ID
+  {
+    $$ = NewColIdent(string($1))
+  }
+
+vindex_params_opt:
+  {
+    var v []VindexParam
+    $$ = v
+  }
+| WITH vindex_param_list
+  {
+    $$ = $2
+  }
+
+vindex_param_list:
+  vindex_param
+  {
+    $$ = make([]VindexParam, 0, 4)
+    $$ = append($$, $1)
+  }
+| vindex_param_list ',' vindex_param
+  {
+    $$ = append($$, $3)
+  }
+
+vindex_param:
+  reserved_sql_id '=' table_opt_value
+  {
+    $$ = VindexParam{Key: $1, Val: $3}
   }
 
 create_table_prefix:
@@ -691,9 +733,9 @@ char_type:
   {
     $$ = ColumnType{Type: string($1)}
   }
-| ENUM '(' enum_values ')'
+| ENUM '(' enum_values ')' charset_opt collate_opt
   {
-    $$ = ColumnType{Type: string($1), EnumValues: $3}
+    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5, Collate: $6}
   }
 
 enum_values:
@@ -967,9 +1009,40 @@ table_opt_value:
   }
 
 alter_statement:
-  ALTER ignore_opt TABLE table_name non_rename_operation force_eof
+  ALTER ignore_opt TABLE table_name non_add_drop_or_rename_operation force_eof
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+  }
+| ALTER ignore_opt TABLE table_name ADD alter_object_type force_eof
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+  }
+| ALTER ignore_opt TABLE table_name DROP alter_object_type force_eof
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+  }
+| ALTER ignore_opt TABLE table_name ADD VINDEX sql_id '(' column_list ')' vindex_type_opt vindex_params_opt
+  {
+    $$ = &DDL{
+        Action: AddColVindexStr,
+        Table: $4,
+        VindexSpec: &VindexSpec{
+            Name: $7,
+            Type: $11,
+            Params: $12,
+        },
+        VindexCols: $9,
+      }
+  }
+| ALTER ignore_opt TABLE table_name DROP VINDEX sql_id
+  {
+    $$ = &DDL{
+        Action: DropColVindexStr,
+        Table: $4,
+        VindexSpec: &VindexSpec{
+            Name: $7,
+        },
+      }
   }
 | ALTER ignore_opt TABLE table_name RENAME to_opt table_name
   {
@@ -989,6 +1062,18 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
   }
+
+alter_object_type:
+  COLUMN
+| CONSTRAINT
+| FOREIGN
+| FULLTEXT
+| ID
+| INDEX
+| KEY
+| PRIMARY
+| SPATIAL
+| PARTITION
 
 partition_operation:
   REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb
@@ -1397,12 +1482,12 @@ table_name as_opt_id index_hint_list
     $$ = &AliasedTableExpr{Expr:$1, Partitions: $4, As: $6, Hints: $7}
   }
 
-using_column_list:
+column_list:
   sql_id
   {
     $$ = Columns{$1}
   }
-| using_column_list ',' sql_id
+| column_list ',' sql_id
   {
     $$ = append($$, $3)
   }
@@ -1445,7 +1530,7 @@ join_table:
 join_condition:
   ON expression
   { $$ = JoinCondition{On: $2} }
-| USING '(' using_column_list ')'
+| USING '(' column_list ')'
   { $$ = JoinCondition{Using: $3} }
 
 join_condition_opt:
@@ -1561,15 +1646,15 @@ index_hint_list:
   {
     $$ = nil
   }
-| USE INDEX openb using_column_list closeb
+| USE INDEX openb column_list closeb
   {
     $$ = &IndexHints{Type: UseStr, Indexes: $4}
   }
-| IGNORE INDEX openb using_column_list closeb
+| IGNORE INDEX openb column_list closeb
   {
     $$ = &IndexHints{Type: IgnoreStr, Indexes: $4}
   }
-| FORCE INDEX openb using_column_list closeb
+| FORCE INDEX openb column_list closeb
   {
     $$ = &IndexHints{Type: ForceStr, Indexes: $4}
   }
@@ -2428,6 +2513,48 @@ update_expression:
     $$ = &UpdateExpr{Name: $1, Expr: $3}
   }
 
+set_list:
+  set_expression
+  {
+    $$ = SetExprs{$1}
+  }
+| set_list ',' set_expression
+  {
+    $$ = append($1, $3)
+  }
+
+set_expression:
+  reserved_sql_id '=' expression
+  {
+    $$ = &SetExpr{Name: $1, Expr: $3}
+  }
+| charset_or_character_set charset_value collate_opt
+  {
+    $$ = &SetExpr{Name: NewColIdent(string($1)), Expr: $2}
+  }
+
+charset_or_character_set:
+  CHARSET
+| CHARACTER SET
+  {
+    $$ = []byte("charset")
+  }
+| NAMES
+
+charset_value:
+  sql_id
+  {
+    $$ = NewStrVal([]byte($1.String()))
+  }
+| STRING
+  {
+    $$ = NewStrVal($1)
+  }
+| DEFAULT
+  {
+    $$ = &Default{}
+  }
+
 for_from:
   FOR
 | FROM
@@ -2447,7 +2574,7 @@ ignore_opt:
 | IGNORE
   { $$ = IgnoreStr }
 
-non_rename_operation:
+non_add_drop_or_rename_operation:
   ALTER
   { $$ = struct{}{} }
 | AUTO_INCREMENT
@@ -2457,8 +2584,6 @@ non_rename_operation:
 | COMMENT_KEYWORD
   { $$ = struct{}{} }
 | DEFAULT
-  { $$ = struct{}{} }
-| DROP
   { $$ = struct{}{} }
 | ORDER
   { $$ = struct{}{} }
@@ -2540,7 +2665,8 @@ reserved_table_id:
   Sorted alphabetically
 */
 reserved_keyword:
-  AND
+  ADD
+| AND
 | AS
 | ASC
 | AUTO_INCREMENT
@@ -2656,6 +2782,8 @@ non_reserved_keyword:
 | ENUM
 | EXPANSION
 | FLOAT_TYPE
+| FOREIGN
+| FULLTEXT
 | GLOBAL
 | INT
 | INTEGER
@@ -2687,6 +2815,7 @@ non_reserved_keyword:
 | SHARE
 | SIGNED
 | SMALLINT
+| SPATIAL
 | START
 | STATUS
 | TEXT

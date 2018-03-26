@@ -657,24 +657,26 @@ var (
 		input: "set character_set_results = utf8",
 	}, {
 		input:  "set names utf8 collate foo",
-		output: "set ",
+		output: "set names 'utf8'",
 	}, {
 		input:  "set character set utf8",
-		output: "set ",
+		output: "set charset 'utf8'",
 	}, {
 		input:  "set character set 'utf8'",
-		output: "set ",
+		output: "set charset 'utf8'",
 	}, {
 		input:  "set character set \"utf8\"",
-		output: "set ",
+		output: "set charset 'utf8'",
 	}, {
 		input:  "set charset default",
-		output: "set ",
+		output: "set charset default",
 	}, {
 		input:  "set session wait_timeout = 3600",
 		output: "set session wait_timeout = 3600",
 	}, {
 		input: "set /* list */ a = 3, b = 4",
+	}, {
+		input: "set /* mixed list */ a = 3, names 'utf8', charset 'ascii', b = 4",
 	}, {
 		input:  "alter ignore table a add foo",
 		output: "alter table a",
@@ -716,16 +718,16 @@ var (
 		output: "alter table a",
 	}, {
 		input:  "alter table a rename b",
-		output: "rename table a b",
+		output: "rename table a to b",
 	}, {
 		input:  "alter table `By` rename `bY`",
-		output: "rename table `By` `bY`",
+		output: "rename table `By` to `bY`",
 	}, {
 		input:  "alter table a rename to b",
-		output: "rename table a b",
+		output: "rename table a to b",
 	}, {
 		input:  "alter table a rename as b",
-		output: "rename table a b",
+		output: "rename table a to b",
 	}, {
 		input:  "alter table a rename index foo to bar",
 		output: "alter table a",
@@ -751,6 +753,88 @@ var (
 		input:  "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
 		output: "alter table a",
 	}, {
+		input:  "alter table a add column id int",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add index idx (id)",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add fulltext index idx (id)",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add spatial index idx (id)",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add foreign key",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add primary key",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add constraint",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add id",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop column id int",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop partition p2712",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop index idx (id)",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop fulltext index idx (id)",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop spatial index idx (id)",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop foreign key",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop primary key",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop constraint",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop id",
+		output: "alter table a",
+	}, {
+		input: "alter table a add vindex hash (id)",
+	}, {
+		input:  "alter table a add vindex `hash` (`id`)",
+		output: "alter table a add vindex hash (id)",
+	}, {
+		input:  "alter table a add vindex hash (id) using `hash`",
+		output: "alter table a add vindex hash (id) using hash",
+	}, {
+		input: "alter table a add vindex `add` (`add`)",
+	}, {
+		input: "alter table a add vindex hash (id) using hash",
+	}, {
+		input:  "alter table a add vindex hash (id) using `hash`",
+		output: "alter table a add vindex hash (id) using hash",
+	}, {
+		input: "alter table user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
+	}, {
+		input:  "alter table user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
+		output: "alter table user2 add vindex name_lastname_lookup_vdx (name, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
+	}, {
+		input: "alter table a drop vindex hash",
+	}, {
+		input:  "alter table a drop vindex `hash`",
+		output: "alter table a drop vindex hash",
+	}, {
+		input:  "alter table a drop vindex hash",
+		output: "alter table a drop vindex hash",
+	}, {
+		input:  "alter table a drop vindex `add`",
+		output: "alter table a drop vindex `add`",
+	}, {
 		input: "create table a",
 	}, {
 		input:  "create table a (\n\t`a` int\n)",
@@ -766,6 +850,12 @@ var (
 	}, {
 		input:  "create table a (a int, b char, c garbage)",
 		output: "create table a",
+	}, {
+		input: "create vindex hash_vdx using hash",
+	}, {
+		input: "create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
+	}, {
+		input: "create vindex xyz_vdx using xyz with param1=hello, param2='world', param3=123",
 	}, {
 		input:  "create index a on b",
 		output: "alter table b",
@@ -1153,10 +1243,9 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "alter table a",
 	}, {
 		input:  "alter table A rename to B",
-		output: "rename table A B",
+		output: "rename table A to B",
 	}, {
-		input:  "rename table A to B",
-		output: "rename table A B",
+		input: "rename table A to B",
 	}, {
 		input:  "drop table B",
 		output: "drop table B",
@@ -1472,7 +1561,10 @@ func TestCreateTable(t *testing.T) {
 			"	col_longtext longtext,\n" +
 			"	col_text text character set ascii collate ascii_bin,\n" +
 			"	col_json json,\n" +
-			"	col_enum enum('a', 'b', 'c', 'd')\n" +
+			"	col_enum enum('a', 'b', 'c', 'd'),\n" +
+			"	col_enum enum('a', 'b', 'c', 'd') character set ascii,\n" +
+			"	col_enum enum('a', 'b', 'c', 'd') collate ascii_bin,\n" +
+			"	col_enum enum('a', 'b', 'c', 'd') character set ascii collate ascii_bin\n" +
 			")",
 
 		// test defaults

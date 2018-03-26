@@ -46,6 +46,8 @@ type TabletStatsCache struct {
 	cell string
 	// ts is the topo server in use.
 	ts *topo.Server
+	// aggregatesChan is used to send notifications to listeners.
+	aggregatesChan chan []*srvtopo.TargetStatsEntry
 	// mu protects the following fields. It does not protect individual
 	// entries in the entries map.
 	mu sync.RWMutex
@@ -126,10 +128,11 @@ func NewTabletStatsCacheDoNotSetListener(ts *topo.Server, cell string) *TabletSt
 
 func newTabletStatsCache(hc HealthCheck, ts *topo.Server, cell string, setListener bool) *TabletStatsCache {
 	tc := &TabletStatsCache{
-		cell:    cell,
-		ts:      ts,
-		entries: make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry),
-		tsm:     srvtopo.NewTargetStatsMultiplexer(),
+		cell:           cell,
+		ts:             ts,
+		aggregatesChan: make(chan []*srvtopo.TargetStatsEntry, 100),
+		entries:        make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry),
+		tsm:            srvtopo.NewTargetStatsMultiplexer(),
 	}
 
 	if setListener {
@@ -137,6 +140,7 @@ func newTabletStatsCache(hc HealthCheck, ts *topo.Server, cell string, setListen
 		// upon type change.
 		hc.SetListener(tc, true /*sendDownEvents*/)
 	}
+	go tc.broadcastAggregateStats()
 	return tc
 }
 
@@ -351,27 +355,40 @@ func MakeAggregateMapDiff(keyspace, shard string, tabletType topodatapb.TabletTy
 
 // updateAggregateMap will update the aggregate map for the
 // tabletStatsCacheEntry. It may broadcast the changes too if we have listeners.
+// e.mu needs to be locked.
 func (tc *TabletStatsCache) updateAggregateMap(keyspace, shard string, tabletType topodatapb.TabletType, e *tabletStatsCacheEntry, stats []*TabletStats) {
 	// Save the new value
 	oldAgg := e.aggregates
 	newAgg := MakeAggregateMap(stats)
 	e.aggregates = newAgg
 
-	// And broadcast the change in the background.
-	go func() {
+	// And broadcast the change in the background, if we need to.
+	tc.mu.RLock()
+	if !tc.tsm.HasSubscribers() {
+		// Shortcut: no subscriber, we can be done.
+		tc.mu.RUnlock()
+		return
+	}
+	tc.mu.RUnlock()
+
+	var ter int64
+	if len(stats) > 0 {
+		ter = stats[0].TabletExternallyReparentedTimestamp
+	}
+	diffs := MakeAggregateMapDiff(keyspace, shard, tabletType, ter, oldAgg, newAgg)
+	tc.aggregatesChan <- diffs
+}
+
+// broadcastAggregateStats is called in the background to send aggregate stats
+// in the right order to our subscribers.
+func (tc *TabletStatsCache) broadcastAggregateStats() {
+	for diffs := range tc.aggregatesChan {
 		tc.mu.RLock()
-		defer tc.mu.RUnlock()
-		if tc.tsm.HasSubscribers() {
-			var ter int64
-			if len(stats) > 0 {
-				ter = stats[0].TabletExternallyReparentedTimestamp
-			}
-			diffs := MakeAggregateMapDiff(keyspace, shard, tabletType, ter, oldAgg, newAgg)
-			for _, d := range diffs {
-				tc.tsm.Broadcast(d)
-			}
+		for _, d := range diffs {
+			tc.tsm.Broadcast(d)
 		}
-	}()
+		tc.mu.RUnlock()
+	}
 }
 
 // GetTabletStats returns the full list of available targets.

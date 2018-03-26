@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -34,16 +35,17 @@ import (
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlannotation"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -71,13 +73,14 @@ type Executor struct {
 	txConn      *TxConn
 
 	mu               sync.Mutex
-	srvVschema       *vschemapb.SrvVSchema
 	vschema          *vindexes.VSchema
 	normalize        bool
 	streamSize       int
 	legacyAutocommit bool
 	plans            *cache.LRUCache
 	vschemaStats     *VSchemaStats
+
+	vm VSchemaManager
 }
 
 var executorOnce sync.Once
@@ -95,7 +98,11 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell, statsName strin
 		streamSize:       streamSize,
 		legacyAutocommit: legacyAutocommit,
 	}
-	e.watchSrvVSchema(ctx, cell)
+
+	vschemaacl.Init()
+	e.vm = VSchemaManager{e: e}
+	e.vm.watchSrvVSchema(ctx, cell)
+
 	executorOnce.Do(func() {
 		stats.Publish("QueryPlanCacheLength", stats.IntFunc(e.plans.Length))
 		stats.Publish("QueryPlanCacheSize", stats.IntFunc(e.plans.Size))
@@ -302,6 +309,24 @@ func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession
 }
 
 func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
+	// Parse the statement to handle vindex operations
+	// If the statement failed to be properly parsed, fall through anyway
+	// to broadcast the ddl to all shards.
+	stmt, _ := sqlparser.Parse(sql)
+	ddl, ok := stmt.(*sqlparser.DDL)
+	if ok {
+		execStart := time.Now()
+		logStats.PlanTime = execStart.Sub(logStats.StartTime)
+		switch ddl.Action {
+		case sqlparser.CreateVindexStr, sqlparser.AddColVindexStr, sqlparser.DropColVindexStr:
+			err := e.handleVindexDDL(ctx, safeSession, target, ddl, logStats)
+			logStats.ExecuteTime = time.Since(execStart)
+			return &sqltypes.Result{}, err
+		default:
+			// fallthrough to broadcast the ddl to all shards
+		}
+	}
+
 	if target.Keyspace == "" {
 		return nil, errNoKeyspace
 	}
@@ -325,6 +350,151 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 	result, err := e.destinationExec(ctx, safeSession, sql, bindVars, target, destination, logStats)
 	logStats.ExecuteTime = time.Since(execStart)
 	return result, err
+}
+
+func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession, target querypb.Target, ddl *sqlparser.DDL, logStats *LogStats) error {
+	vschema := e.vm.GetCurrentSrvVschema()
+	if vschema == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema not loaded")
+	}
+
+	allowed := vschemaacl.Authorized(callerid.ImmediateCallerIDFromContext(ctx))
+	if !allowed {
+		return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "not authorized to perform vschema operations")
+
+	}
+
+	// Resolve the keyspace either from the table qualifier or the target keyspace
+	var ksName string
+	if !ddl.Table.IsEmpty() {
+		ksName = ddl.Table.Qualifier.String()
+	}
+	if ksName == "" {
+		ksName = target.Keyspace
+	}
+
+	if ksName == "" {
+		return errNoKeyspace
+	}
+
+	ks, _ := vschema.Keyspaces[ksName]
+	if ks == nil {
+		ks = new(vschemapb.Keyspace)
+		vschema.Keyspaces[ksName] = ks
+	}
+
+	if ks.Tables == nil {
+		ks.Tables = map[string]*vschemapb.Table{}
+	}
+
+	if ks.Vindexes == nil {
+		ks.Vindexes = map[string]*vschemapb.Vindex{}
+	}
+
+	var tableName string
+	var table *vschemapb.Table
+	if !ddl.Table.IsEmpty() {
+		tableName = ddl.Table.Name.String()
+		table, _ = ks.Tables[tableName]
+	}
+
+	switch ddl.Action {
+	case sqlparser.CreateVindexStr:
+		name := ddl.VindexSpec.Name.String()
+		if _, ok := ks.Vindexes[name]; ok {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s already exists in keyspace %s", name, target.Keyspace)
+		}
+		owner, params := ddl.VindexSpec.ParseParams()
+		ks.Vindexes[name] = &vschemapb.Vindex{
+			Type:   ddl.VindexSpec.Type.String(),
+			Params: params,
+			Owner:  owner,
+		}
+
+		return e.vm.UpdateVSchema(ctx, target.Keyspace, vschema)
+	case sqlparser.AddColVindexStr:
+		// Support two cases:
+		//
+		// 1. The vindex type / params / owner are specified. If the
+		//    named vindex doesn't exist, create it. If it does exist,
+		//    require the parameters to match.
+		//
+		// 2. The vindex type is not specified. Make sure the vindex
+		//    already exists.
+		spec := ddl.VindexSpec
+		name := spec.Name.String()
+		if !spec.Type.IsEmpty() {
+			owner, params := spec.ParseParams()
+			if vindex, ok := ks.Vindexes[name]; ok {
+				if vindex.Type != spec.Type.String() {
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s defined with type %s not %s", name, vindex.Type, spec.Type.String())
+				}
+				if vindex.Owner != owner {
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s defined with owner %s not %s", name, vindex.Owner, owner)
+				}
+				if (len(vindex.Params) != 0 || len(params) != 0) && !reflect.DeepEqual(vindex.Params, params) {
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s defined with different parameters", name)
+				}
+			} else {
+				ks.Vindexes[name] = &vschemapb.Vindex{
+					Type:   spec.Type.String(),
+					Params: params,
+					Owner:  owner,
+				}
+			}
+		} else {
+			if _, ok := ks.Vindexes[name]; !ok {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s does not exist in keyspace %s", name, target.Keyspace)
+			}
+		}
+
+		// If this is the first vindex being defined on the table, create
+		// the empty table record
+		if table == nil {
+			table = &vschemapb.Table{
+				ColumnVindexes: make([]*vschemapb.ColumnVindex, 0, 4),
+			}
+		}
+
+		// Make sure there isn't already a vindex with the same name on
+		// this table.
+		for _, vindex := range table.ColumnVindexes {
+			if vindex.Name == name {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s already defined on table %s", name, tableName)
+			}
+		}
+
+		columns := make([]string, len(ddl.VindexCols), len(ddl.VindexCols))
+		for i, col := range ddl.VindexCols {
+			columns[i] = col.String()
+		}
+		table.ColumnVindexes = append(table.ColumnVindexes, &vschemapb.ColumnVindex{
+			Name:    name,
+			Columns: columns,
+		})
+		ks.Tables[tableName] = table
+
+		return e.vm.UpdateVSchema(ctx, target.Keyspace, vschema)
+	case sqlparser.DropColVindexStr:
+		spec := ddl.VindexSpec
+		name := spec.Name.String()
+		if table == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s.%s not defined in vschema", ksName, tableName)
+		}
+
+		for i, colVindex := range table.ColumnVindexes {
+			if colVindex.Name == name {
+				table.ColumnVindexes = append(table.ColumnVindexes[:i], table.ColumnVindexes[i+1:]...)
+				if len(table.ColumnVindexes) == 0 {
+					delete(ks.Tables, tableName)
+				}
+				return e.vm.UpdateVSchema(ctx, target.Keyspace, vschema)
+			}
+		}
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s not defined in table %s.%s", name, ksName, tableName)
+	}
+
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected vindex ddl operation %s", ddl.Action)
 }
 
 func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, logStats *LogStats) (*sqltypes.Result, error) {
@@ -357,7 +527,7 @@ func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession,
 }
 
 func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (*sqltypes.Result, error) {
-	vals, charset, scope, err := sqlparser.ExtractSetValues(sql)
+	vals, scope, err := sqlparser.ExtractSetValues(sql)
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	defer func() {
@@ -367,19 +537,9 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 	if err != nil {
 		return &sqltypes.Result{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
 	}
-	if len(vals) > 0 && charset != "" {
-		return &sqltypes.Result{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected key values and charset, must specify one")
-	}
 
 	if scope == "global" {
 		return &sqltypes.Result{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported in set: global")
-	}
-
-	switch charset {
-	case "", "utf8", "utf8mb4", "latin1", "default":
-		break
-	default:
-		return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for charset: %v", charset)
 	}
 
 	for k, v := range vals {
@@ -503,6 +663,17 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 		case "net_write_timeout", "net_read_timeout", "lc_messages", "collation_connection":
 			log.Warningf("Ignored inapplicable SET %v = %v", k, v)
 			warnings.Add("IgnoredSet", 1)
+		case "charset", "names":
+			val, ok := v.(string)
+			if !ok {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for charset/names: %T", v)
+			}
+			switch val {
+			case "", "utf8", "utf8mb4", "latin1", "default":
+				break
+			default:
+				return nil, fmt.Errorf("unexpected value for charset/names: %v", val)
+			}
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported construct: %s", sql)
 		}
@@ -616,7 +787,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			RowsAffected: uint64(len(rows)),
 		}, nil
 	case sqlparser.KeywordString(sqlparser.VINDEXES):
-		vschema := e.SrvVSchema()
+		vschema := e.vm.GetCurrentSrvVschema()
 		if vschema == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema not loaded")
 		}
@@ -624,8 +795,10 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		rows := make([][]sqltypes.Value, 0, 16)
 
 		if show.HasOnTable() {
-			// If the table is fully qualified, then override the keyspace setting
-			// in the session. Otherwise require it to be able to resolve the table.
+			// If the table reference is not fully qualified, then
+			// pull the keyspace from the session. Fail if the keyspace
+			// isn't specified or isn't valid, or if the table isn't
+			// known.
 			ksName := show.OnTable.Qualifier.String()
 			if ksName == "" {
 				ksName = target.Keyspace
@@ -637,7 +810,6 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			}
 
 			tableName := show.OnTable.Name.String()
-
 			table, ok := ks.Tables[tableName]
 			if !ok {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table `%s` does not exist in keyspace `%s`", tableName, ksName)
@@ -949,90 +1121,6 @@ func (e *Executor) IsKeyspaceRangeBasedSharded(keyspace string) bool {
 	return ks.Keyspace.Sharded
 }
 
-// watchSrvVSchema watches the SrvVSchema from the topo. The function does
-// not return an error. It instead logs warnings on failure.
-// The SrvVSchema object is roll-up of all the Keyspace information,
-// so when a keyspace is added or removed, it will be properly updated.
-//
-// This function will wait until the first value has either been processed
-// or triggered an error before returning.
-func (e *Executor) watchSrvVSchema(ctx context.Context, cell string) {
-	e.serv.WatchSrvVSchema(ctx, cell, func(v *vschemapb.SrvVSchema, err error) {
-		// Create a closure to save the vschema. If the value
-		// passed is nil, it means we encountered an error and
-		// we don't know the real value. In this case, we want
-		// to use the previous value if it was set, or an
-		// empty vschema if it wasn't.
-		switch err {
-		case nil:
-			// Good case, we can try to save that value.
-		case topo.ErrNoNode:
-			// If the SrvVschema disappears, we need to clear our record.
-			// Otherwise, keep what we already had before.
-			v = nil
-		default:
-			// Watch error, increment our counters.
-			if vschemaCounters != nil {
-				vschemaCounters.Add("WatchError", 1)
-			}
-		}
-
-		// Transform the provided SrvVSchema into a VSchema.
-		var vschema *vindexes.VSchema
-		if v != nil {
-			vschema, err = vindexes.BuildVSchema(v)
-			if err != nil {
-				log.Warningf("Error creating VSchema for cell %v (will try again next update): %v", cell, err)
-				v = nil
-				err = fmt.Errorf("Error creating VSchema for cell %v: %v", cell, err)
-				if vschemaCounters != nil {
-					vschemaCounters.Add("Parsing", 1)
-				}
-			}
-		}
-		if v == nil {
-			// We encountered an error, build an empty vschema.
-			vschema, _ = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
-		}
-
-		// Build the display version. At this point, three cases:
-		// - v is nil, vschema is empty, and err is set:
-		//     1. when the watch returned an error.
-		//     2. when BuildVSchema failed.
-		// - v is set, vschema is full, and err is nil:
-		//     3. when everything worked.
-		errorMessage := ""
-		if err != nil {
-			errorMessage = err.Error()
-		}
-		stats := NewVSchemaStats(vschema, errorMessage)
-
-		// save our value
-		e.mu.Lock()
-		if v != nil {
-			// No errors, we can save our VSchema and SrvVSchema
-			// (for show queries).
-			e.vschema = vschema
-			e.srvVschema = v
-		} else {
-			// We had an error, use the empty vschema if
-			// we had nothing before, or if the vschema
-			// disappeared.
-			if e.vschema == nil || err == topo.ErrNoNode {
-				e.vschema = vschema
-				e.srvVschema = nil
-			}
-		}
-		e.vschemaStats = stats
-		e.mu.Unlock()
-		e.plans.Clear()
-
-		if vschemaCounters != nil {
-			vschemaCounters.Add("Reload", 1)
-		}
-	})
-}
-
 // VSchema returns the VSchema.
 func (e *Executor) VSchema() *vindexes.VSchema {
 	e.mu.Lock()
@@ -1040,11 +1128,18 @@ func (e *Executor) VSchema() *vindexes.VSchema {
 	return e.vschema
 }
 
-// SrvVSchema returns the SrvVSchema.
-func (e *Executor) SrvVSchema() *vschemapb.SrvVSchema {
+// SaveVSchema updates the vschema and stats
+func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return e.srvVschema
+	e.vschema = vschema
+	e.vschemaStats = stats
+	e.plans.Clear()
+
+	if vschemaCounters != nil {
+		vschemaCounters.Add("Reload", 1)
+	}
+
 }
 
 // ParseTarget parses the string representation of a Target

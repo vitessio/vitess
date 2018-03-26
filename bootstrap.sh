@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Copyright 2017 Google Inc.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -55,6 +55,7 @@ zk_dist=$VTROOT/dist/vt-zookeeper-$zk_ver
 if [ -f $zk_dist/.build_finished ]; then
   echo "skipping zookeeper build. remove $zk_dist to force rebuild."
 else
+  echo "installing zookeeper $zk_ver"
   rm -rf $zk_dist
   (cd $VTROOT/dist && \
     wget http://apache.org/dist/zookeeper/zookeeper-$zk_ver/zookeeper-$zk_ver.tar.gz && \
@@ -74,6 +75,7 @@ etcd_version_file=$etcd_dist/version
 if [[ -f $etcd_version_file && "$(cat $etcd_version_file)" == "$etcd_version" ]]; then
   echo "skipping etcd install. remove $etcd_version_file to force re-install."
 else
+  echo "installing etcd $etcd_version"
   rm -rf $etcd_dist
   mkdir -p $etcd_dist
   download_url=https://github.com/coreos/etcd/releases/download
@@ -86,12 +88,13 @@ fi
 ln -snf $etcd_dist/etcd-${etcd_version}-linux-amd64/etcd $VTROOT/bin/etcd
 
 # Download and install consul, link consul binary into our root.
-consul_version=0.7.2
+consul_version=1.0.6
 consul_dist=$VTROOT/dist/consul
 consul_version_file=$consul_dist/version
 if [[ -f $consul_version_file && "$(cat $consul_version_file)" == "$consul_version" ]]; then
   echo "skipping consul install. remove $consul_version_file to force re-install."
 else
+  echo "installing consul $consul_version"
   rm -rf $consul_dist
   mkdir -p $consul_dist
   download_url=https://releases.hashicorp.com/consul
@@ -106,12 +109,13 @@ ln -snf $consul_dist/consul $VTROOT/bin/consul
 # Install gRPC proto compilers. There is no download for grpc_python_plugin.
 # So, we need to build it.
 export grpc_dist=$VTROOT/dist/grpc
-export grpc_ver="v1.7.0"
+export grpc_ver="v1.10.0"
 if [ $SKIP_ROOT_INSTALLS == "True" ]; then
   echo "skipping grpc build, as root version was already installed."
 elif [[ -f $grpc_dist/.build_finished && "$(cat $grpc_dist/.build_finished)" == "$grpc_ver" ]]; then
   echo "skipping gRPC build. remove $grpc_dist to force rebuild."
 else
+  echo "installing grpc $grpc_ver"
   # unlink homebrew's protobuf, to be able to compile the downloaded protobuf package
   if [[ `uname -s` == "Darwin" && "$(brew list -1 | grep google-protobuf)" ]]; then
     brew unlink grpc/grpc/google-protobuf
