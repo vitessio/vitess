@@ -1816,7 +1816,7 @@ func TestParseEmptyTargetSingleKeyspace(t *testing.T) {
 	r.vschema = altVSchema
 
 	got, _ := r.parseDestinationTarget("")
-	want := key.DestinationTarget{
+	want := key.QualifiedDestination{
 		Keyspace:   KsTestUnsharded,
 		TabletType: topodatapb.TabletType_MASTER,
 	}
@@ -1836,7 +1836,7 @@ func TestParseEmptyTargetMultiKeyspace(t *testing.T) {
 	r.vschema = altVSchema
 
 	got, _ := r.parseDestinationTarget("")
-	want := key.DestinationTarget{
+	want := key.QualifiedDestination{
 		Keyspace:   "",
 		TabletType: topodatapb.TabletType_MASTER,
 	}
@@ -1855,7 +1855,7 @@ func TestParseTargetSingleKeyspace(t *testing.T) {
 	r.vschema = altVSchema
 
 	got, _ := r.parseDestinationTarget("@master")
-	want := key.DestinationTarget{
+	want := key.QualifiedDestination{
 		Keyspace:   KsTestUnsharded,
 		TabletType: topodatapb.TabletType_MASTER,
 	}

@@ -118,8 +118,8 @@ type columnOriginator interface {
 // VSchema defines the interface for this package to fetch
 // info about tables.
 type VSchema interface {
-	FindTable(tablename sqlparser.TableName) (*vindexes.Table, key.DestinationTarget, error)
-	FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, key.DestinationTarget, error)
+	FindTable(tablename sqlparser.TableName) (*vindexes.Table, key.QualifiedDestination, error)
+	FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, key.QualifiedDestination, error)
 	DefaultKeyspace() (*vindexes.Keyspace, error)
 }
 

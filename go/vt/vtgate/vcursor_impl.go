@@ -72,7 +72,7 @@ func (vc *vcursorImpl) Context() context.Context {
 
 // FindTable finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
 // Otherwise, the keyspace from the request is used, if one was provided.
-func (vc *vcursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, key.DestinationTarget, error) {
+func (vc *vcursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, key.QualifiedDestination, error) {
 	destTarget, err := key.ParseDestination(name.Qualifier.String(), vc.tabletType)
 	if err != nil {
 		return nil, destTarget, err
@@ -89,7 +89,7 @@ func (vc *vcursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, key
 }
 
 // FindTableOrVindex finds the specified table or vindex.
-func (vc *vcursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, key.DestinationTarget, error) {
+func (vc *vcursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, key.QualifiedDestination, error) {
 	destTarget, err := key.ParseDestination(name.Qualifier.String(), vc.tabletType)
 	if err != nil {
 		return nil, nil, destTarget, err

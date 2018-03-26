@@ -48,7 +48,7 @@ func (i Uint64Key) Bytes() []byte {
 	return buf
 }
 
-type DestinationTarget struct {
+type QualifiedDestination struct {
 	Destination Destination
 	Keyspace    string
 	TabletType  topodatapb.TabletType
@@ -308,8 +308,8 @@ func ParseShardingSpec(spec string) ([]*topodatapb.KeyRange, error) {
 
 // ParseDestination parses the string representation of a Destionation
 // of the form keyspace:shard@tablet_type. You can use a / instead of a :.
-func ParseDestination(targetString string, defaultTabletType topodatapb.TabletType) (DestinationTarget, error) {
-	keyspaceDestination := DestinationTarget{
+func ParseDestination(targetString string, defaultTabletType topodatapb.TabletType) (QualifiedDestination, error) {
+	keyspaceDestination := QualifiedDestination{
 		TabletType: defaultTabletType,
 	}
 
