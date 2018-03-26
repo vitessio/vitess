@@ -1534,7 +1534,7 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 	}
 }
 
-func TestKeyRangeQuery(t *testing.T) {
+func TestKeyDestRangeQuery(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	// it works in a single shard key range
 	masterSession.TargetString = "TestExecutor[40-60]"
@@ -1579,7 +1579,7 @@ func TestKeyRangeQuery(t *testing.T) {
 	}
 
 	testQueries(t, "sbc1", sbc1, wantQueries)
-	testQueries(t, "sbc1", sbc2, wantQueries)
+	testQueries(t, "sbc2", sbc2, wantQueries)
 
 	sbc1.Queries = nil
 	sbc2.Queries = nil
@@ -1628,6 +1628,109 @@ func TestKeyRangeQuery(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("got: %v, want %s", err, want)
 	}
+
+	sbc1.Queries = nil
+	sbc2.Queries = nil
+	masterSession.TargetString = ""
+}
+
+func TestKeyShardDestQuery(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	// it works in a single shard key range
+	masterSession.TargetString = "TestExecutor:40-60"
+
+	_, err := executorExec(executor, "DELETE FROM sharded_user_msgs LIMIT 1000", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	sql := "DELETE FROM sharded_user_msgs LIMIT 1000"
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           sql + "/* vtgate:: filtered_replication_unfriendly */",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+
+	if len(sbc1.Queries) != 0 {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, []*querypb.BoundQuery{})
+	}
+	testQueries(t, "sbc2", sbc2, wantQueries)
+
+	sbc1.Queries = nil
+	sbc2.Queries = nil
+
+	masterSession.TargetString = "TestExecutor:40-60"
+
+	_, err = executorExec(executor, sql, nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	testQueries(t, "sbc2", sbc2, wantQueries)
+
+	sbc1.Queries = nil
+	sbc2.Queries = nil
+
+	// it works for select
+	sql = "SELECT * FROM sharded_user_msgs LIMIT 1"
+	wantQueries = []*querypb.BoundQuery{{
+		Sql:           sql,
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+
+	_, err = executorExec(executor, sql, nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(sbc1.Queries) != 0 {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, []*querypb.BoundQuery{})
+	}
+
+	testQueries(t, "sbc2", sbc2, wantQueries)
+
+	sbc1.Queries = nil
+	sbc2.Queries = nil
+
+	// it works for updates
+	sql = "UPDATE sharded_user_msgs set message='test' LIMIT 1"
+
+	wantQueries = []*querypb.BoundQuery{{
+		Sql:           sql + "/* vtgate:: filtered_replication_unfriendly */",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+
+	_, err = executorExec(executor, sql, nil)
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(sbc1.Queries) != 0 {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, []*querypb.BoundQuery{})
+	}
+
+	testQueries(t, "sbc2", sbc2, wantQueries)
+
+	sbc1.Queries = nil
+	sbc2.Queries = nil
+
+	// it works for inserts
+
+	sql = "INSERT INTO sharded_user_msgs(message) VALUE('test')"
+	_, err = executorExec(executor, sql, nil)
+
+	wantQueries = []*querypb.BoundQuery{{
+		Sql:           sql + "/* vtgate:: filtered_replication_unfriendly */",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(sbc1.Queries) != 0 {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, []*querypb.BoundQuery{})
+	}
+
+	testQueries(t, "sbc2", sbc2, wantQueries)
 
 	sbc1.Queries = nil
 	sbc2.Queries = nil

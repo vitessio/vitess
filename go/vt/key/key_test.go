@@ -443,39 +443,39 @@ func TestParseDestination(t *testing.T) {
 
 	testcases := []struct {
 		targetString string
-		target       DestinationTarget
+		target       QualifiedDestination
 	}{{
 		targetString: "ks[10-20]@master",
-		target:       DestinationTarget{Keyspace: "ks", TabletType: topodatapb.TabletType_MASTER, Destination: DestinationExactKeyRange{KeyRange: &topodatapb.KeyRange{Start: tenHexBytes, End: twentyHexBytes}}},
+		target:       QualifiedDestination{Keyspace: "ks", TabletType: topodatapb.TabletType_MASTER, Destination: DestinationExactKeyRange{KeyRange: &topodatapb.KeyRange{Start: tenHexBytes, End: twentyHexBytes}}},
 	}, {
 		targetString: "ks[-]@master",
 
-		target: DestinationTarget{Keyspace: "ks", TabletType: topodatapb.TabletType_MASTER, Destination: DestinationExactKeyRange{KeyRange: &topodatapb.KeyRange{}}},
+		target: QualifiedDestination{Keyspace: "ks", TabletType: topodatapb.TabletType_MASTER, Destination: DestinationExactKeyRange{KeyRange: &topodatapb.KeyRange{}}},
 	}, {
 		targetString: "ks[10-]@master",
 
-		target: DestinationTarget{Keyspace: "ks", TabletType: topodatapb.TabletType_MASTER, Destination: DestinationExactKeyRange{KeyRange: &topodatapb.KeyRange{Start: tenHexBytes}}},
+		target: QualifiedDestination{Keyspace: "ks", TabletType: topodatapb.TabletType_MASTER, Destination: DestinationExactKeyRange{KeyRange: &topodatapb.KeyRange{Start: tenHexBytes}}},
 	}, {
 		targetString: "ks[-20]@master",
-		target:       DestinationTarget{Keyspace: "ks", TabletType: topodatapb.TabletType_MASTER, Destination: DestinationExactKeyRange{KeyRange: &topodatapb.KeyRange{End: twentyHexBytes}}},
+		target:       QualifiedDestination{Keyspace: "ks", TabletType: topodatapb.TabletType_MASTER, Destination: DestinationExactKeyRange{KeyRange: &topodatapb.KeyRange{End: twentyHexBytes}}},
 	}, {
 		targetString: "ks:-80@master",
-		target:       DestinationTarget{Keyspace: "ks", TabletType: topodatapb.TabletType_MASTER, Destination: DestinationShard("-80")},
+		target:       QualifiedDestination{Keyspace: "ks", TabletType: topodatapb.TabletType_MASTER, Destination: DestinationShard("-80")},
 	}, {
 		targetString: ":-80@master",
-		target:       DestinationTarget{Keyspace: "", TabletType: topodatapb.TabletType_MASTER, Destination: DestinationShard("-80")},
+		target:       QualifiedDestination{Keyspace: "", TabletType: topodatapb.TabletType_MASTER, Destination: DestinationShard("-80")},
 	}, {
 		targetString: "@master",
-		target:       DestinationTarget{Keyspace: "", TabletType: topodatapb.TabletType_MASTER},
+		target:       QualifiedDestination{Keyspace: "", TabletType: topodatapb.TabletType_MASTER},
 	}, {
 		targetString: "@replica",
-		target:       DestinationTarget{Keyspace: "", TabletType: topodatapb.TabletType_REPLICA},
+		target:       QualifiedDestination{Keyspace: "", TabletType: topodatapb.TabletType_REPLICA},
 	}, {
 		targetString: "ks",
-		target:       DestinationTarget{Keyspace: "ks", TabletType: topodatapb.TabletType_MASTER},
+		target:       QualifiedDestination{Keyspace: "ks", TabletType: topodatapb.TabletType_MASTER},
 	}, {
 		targetString: "ks/-80",
-		target:       DestinationTarget{Keyspace: "ks", Destination: DestinationShard("-80"), TabletType: topodatapb.TabletType_MASTER},
+		target:       QualifiedDestination{Keyspace: "ks", Destination: DestinationShard("-80"), TabletType: topodatapb.TabletType_MASTER},
 	}}
 
 	for _, tcase := range testcases {

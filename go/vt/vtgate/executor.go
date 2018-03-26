@@ -223,7 +223,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
 
-func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destTarget key.DestinationTarget, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destTarget key.QualifiedDestination, logStats *LogStats) (*sqltypes.Result, error) {
 	if destTarget.Destination != nil {
 		// V1 mode or V3 mode with a forced shard or range target
 		// TODO(sougou): change this flow to go through V3 functions
@@ -302,11 +302,11 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 	return qr, err
 }
 
-func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destTarget key.DestinationTarget, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destTarget key.QualifiedDestination, logStats *LogStats) (*sqltypes.Result, error) {
 	return e.resolver.Execute(ctx, sql, bindVars, destTarget.Keyspace, destTarget.TabletType, destTarget.Destination, safeSession.Session, false /* notInTransaction */, safeSession.Options, logStats)
 }
 
-func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destTarget key.DestinationTarget, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destTarget key.QualifiedDestination, logStats *LogStats) (*sqltypes.Result, error) {
 	// Parse the statement to handle vindex operations
 	// If the statement failed to be properly parsed, fall through anyway
 	// to broadcast the ddl to all shards.
@@ -340,7 +340,7 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 	return result, err
 }
 
-func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession, destTarget key.DestinationTarget, ddl *sqlparser.DDL, logStats *LogStats) error {
+func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession, destTarget key.QualifiedDestination, ddl *sqlparser.DDL, logStats *LogStats) error {
 	vschema := e.vm.GetCurrentSrvVschema()
 	if vschema == nil {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema not loaded")
@@ -476,7 +476,7 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected vindex ddl operation %s", ddl.Action)
 }
 
-func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destTarget key.DestinationTarget, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destTarget key.QualifiedDestination, logStats *LogStats) (*sqltypes.Result, error) {
 	if destTarget.TabletType != topodatapb.TabletType_MASTER {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", destTarget.TabletType)
 	}
@@ -659,7 +659,7 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 	return &sqltypes.Result{}, nil
 }
 
-func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destTarget key.DestinationTarget, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destTarget key.QualifiedDestination, logStats *LogStats) (*sqltypes.Result, error) {
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
@@ -881,7 +881,7 @@ func (e *Executor) handleUse(ctx context.Context, safeSession *SafeSession, sql 
 	return &sqltypes.Result{}, nil
 }
 
-func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destTarget key.DestinationTarget, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destTarget key.QualifiedDestination, logStats *LogStats) (*sqltypes.Result, error) {
 	if destTarget.Keyspace == "" {
 		return nil, errNoKeyspace
 	}
@@ -1010,7 +1010,7 @@ func (e *Executor) handleMessageStream(ctx context.Context, safeSession *SafeSes
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unrecognized STREAM statement: %v", sql)
 	}
 
-	// TODO: Ask Sugu about this??
+	// TODO: Add support for destination target in streamed queries
 	table, _, err := vcursor.FindTable(streamStmt.Table)
 	if err != nil {
 		logStats.Error = err
@@ -1127,7 +1127,7 @@ func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 
 }
 
-func (e *Executor) parseDestinationTarget(targetString string) (key.DestinationTarget, error) {
+func (e *Executor) parseDestinationTarget(targetString string) (key.QualifiedDestination, error) {
 	dest, err := key.ParseDestination(targetString, defaultTabletType)
 	// Set default keyspace
 	if dest.Keyspace == "" && len(e.VSchema().Keyspaces) == 1 {
