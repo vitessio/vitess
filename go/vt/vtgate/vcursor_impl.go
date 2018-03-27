@@ -30,6 +30,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -72,37 +73,35 @@ func (vc *vcursorImpl) Context() context.Context {
 
 // FindTable finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
 // Otherwise, the keyspace from the request is used, if one was provided.
-func (vc *vcursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, key.QualifiedDestination, error) {
-	destTarget, err := key.ParseDestination(name.Qualifier.String(), vc.tabletType)
+func (vc *vcursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, key.Destination, string, topodatapb.TabletType, error) {
+	dest, destKeyspace, destTabletType, err := key.ParseDestination(name.Qualifier.String(), vc.tabletType)
 	if err != nil {
-		return nil, destTarget, err
+		return nil, nil, "", destTabletType, err
 	}
-	ks := destTarget.Keyspace
-	if ks == "" {
-		ks = vc.keyspace
+	if destKeyspace == "" {
+		destKeyspace = vc.keyspace
 	}
-	table, err := vc.executor.VSchema().FindTable(ks, name.Name.String())
+	table, err := vc.executor.VSchema().FindTable(destKeyspace, name.Name.String())
 	if err != nil {
-		return nil, destTarget, err
+		return nil, nil, "", destTabletType, err
 	}
-	return table, destTarget, err
+	return table, dest, destKeyspace, destTabletType, err
 }
 
 // FindTableOrVindex finds the specified table or vindex.
-func (vc *vcursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, key.QualifiedDestination, error) {
-	destTarget, err := key.ParseDestination(name.Qualifier.String(), vc.tabletType)
+func (vc *vcursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, key.Destination, string, topodatapb.TabletType, error) {
+	dest, destKeyspace, destTabletType, err := key.ParseDestination(name.Qualifier.String(), vc.tabletType)
 	if err != nil {
-		return nil, nil, destTarget, err
+		return nil, nil, nil, "", destTabletType, err
 	}
-	ks := destTarget.Keyspace
-	if ks == "" {
-		ks = vc.keyspace
+	if destKeyspace == "" {
+		destKeyspace = vc.keyspace
 	}
-	table, vindex, err := vc.executor.VSchema().FindTableOrVindex(ks, name.Name.String())
+	table, vindex, err := vc.executor.VSchema().FindTableOrVindex(destKeyspace, name.Name.String())
 	if err != nil {
-		return nil, nil, destTarget, err
+		return nil, nil, nil, "", destTabletType, err
 	}
-	return table, vindex, destTarget, nil
+	return table, vindex, dest, destKeyspace, destTabletType, nil
 }
 
 // DefaultKeyspace returns the default keyspace of the current request

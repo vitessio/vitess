@@ -60,17 +60,17 @@ func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Delete, er
 	for t := range rb.Symtab().tables {
 		tableName = t
 	}
-	table, destTarget, err := vschema.FindTable(tableName)
+	table, destTarget, _, destTabletType, err := vschema.FindTable(tableName)
 	if err != nil {
 		return nil, err
 	}
 	edel.Table = table
-	if destTarget.Destination != nil {
-		if destTarget.TabletType != topodatapb.TabletType_MASTER {
+	if destTarget != nil {
+		if destTabletType != topodatapb.TabletType_MASTER {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: DELETE statement with a replica target")
 		}
 		edel.Opcode = engine.DeleteByDestination
-		edel.TargetDestination = destTarget.Destination
+		edel.TargetDestination = destTarget
 		return edel, nil
 	}
 	edel.Vindex, edel.Values, err = getDMLRouting(del.Where, edel.Table)
