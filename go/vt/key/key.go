@@ -48,12 +48,6 @@ func (i Uint64Key) Bytes() []byte {
 	return buf
 }
 
-type QualifiedDestination struct {
-	Destination Destination
-	Keyspace    string
-	TabletType  topodatapb.TabletType
-}
-
 //
 // KeyspaceIdType helper methods
 //
@@ -308,19 +302,19 @@ func ParseShardingSpec(spec string) ([]*topodatapb.KeyRange, error) {
 
 // ParseDestination parses the string representation of a Destionation
 // of the form keyspace:shard@tablet_type. You can use a / instead of a :.
-func ParseDestination(targetString string, defaultTabletType topodatapb.TabletType) (QualifiedDestination, error) {
-	keyspaceDestination := QualifiedDestination{
-		TabletType: defaultTabletType,
-	}
+func ParseDestination(targetString string, defaultTabletType topodatapb.TabletType) (Destination, string, topodatapb.TabletType, error) {
+	var dest Destination
+	var keyspace string
+	tabletType := defaultTabletType
 
 	last := strings.LastIndexAny(targetString, "@")
 	if last != -1 {
-		keyspaceDestination.TabletType = parseTabletType(targetString[last+1:])
+		tabletType = parseTabletType(targetString[last+1:])
 		targetString = targetString[:last]
 	}
 	last = strings.LastIndexAny(targetString, "/:")
 	if last != -1 {
-		keyspaceDestination.Destination = DestinationShard(targetString[last+1:])
+		dest = DestinationShard(targetString[last+1:])
 		targetString = targetString[:last]
 	}
 	// Try to parse it as a range
@@ -328,22 +322,22 @@ func ParseDestination(targetString string, defaultTabletType topodatapb.TabletTy
 	if last != -1 {
 		rangeEnd := strings.LastIndexAny(targetString, "]")
 		if rangeEnd == -1 {
-			return keyspaceDestination, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid key range provided. Couldn't find range end ']'")
+			return dest, keyspace, tabletType, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid key range provided. Couldn't find range end ']'")
 
 		}
 		rangeString := targetString[last+1 : rangeEnd]
 		keyRange, err := ParseShardingSpec(rangeString)
 		if err != nil {
-			return keyspaceDestination, err
+			return dest, keyspace, tabletType, err
 		}
 		if len(keyRange) != 1 {
-			return keyspaceDestination, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "single keyrange expected in %s", rangeString)
+			return dest, keyspace, tabletType, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "single keyrange expected in %s", rangeString)
 		}
-		keyspaceDestination.Destination = DestinationExactKeyRange{KeyRange: keyRange[0]}
+		dest = DestinationExactKeyRange{KeyRange: keyRange[0]}
 		targetString = targetString[:last]
 	}
-	keyspaceDestination.Keyspace = targetString
-	return keyspaceDestination, nil
+	keyspace = targetString
+	return dest, keyspace, tabletType, nil
 }
 
 // ParseTabletType parses the tablet type into the enum.

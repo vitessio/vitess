@@ -181,28 +181,28 @@ type vschemaWrapper struct {
 	v *vindexes.VSchema
 }
 
-func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, key.QualifiedDestination, error) {
-	destTarget, err := key.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
+func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, key.Destination, string, topodatapb.TabletType, error) {
+	destTarget, destKeyspace, destTabletType, err := key.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
 	if err != nil {
-		return nil, destTarget, err
+		return nil, destTarget, destKeyspace, destTabletType, err
 	}
-	table, err := vw.v.FindTable(destTarget.Keyspace, tab.Name.String())
+	table, err := vw.v.FindTable(destKeyspace, tab.Name.String())
 	if err != nil {
-		return nil, destTarget, err
+		return nil, destTarget, destKeyspace, destTabletType, err
 	}
-	return table, destTarget, nil
+	return table, destTarget, destKeyspace, destTabletType, nil
 }
 
-func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, key.QualifiedDestination, error) {
-	destTarget, err := key.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
+func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, key.Destination, string, topodatapb.TabletType, error) {
+	destTarget, destKeyspace, destTabletType, err := key.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
 	if err != nil {
-		return nil, nil, destTarget, err
+		return nil, nil, destTarget, destKeyspace, destTabletType, err
 	}
-	table, vindex, err := vw.v.FindTableOrVindex(destTarget.Keyspace, tab.Name.String())
+	table, vindex, err := vw.v.FindTableOrVindex(destKeyspace, tab.Name.String())
 	if err != nil {
-		return nil, nil, destTarget, err
+		return nil, nil, destTarget, destKeyspace, destTabletType, err
 	}
-	return table, vindex, destTarget, nil
+	return table, vindex, destTarget, destKeyspace, destTabletType, nil
 }
 
 func (vw *vschemaWrapper) DefaultKeyspace() (*vindexes.Keyspace, error) {

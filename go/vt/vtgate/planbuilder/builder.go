@@ -24,6 +24,8 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // builder defines the interface that a primitive must
@@ -118,8 +120,8 @@ type columnOriginator interface {
 // VSchema defines the interface for this package to fetch
 // info about tables.
 type VSchema interface {
-	FindTable(tablename sqlparser.TableName) (*vindexes.Table, key.QualifiedDestination, error)
-	FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, key.QualifiedDestination, error)
+	FindTable(tablename sqlparser.TableName) (*vindexes.Table, key.Destination, string, topodatapb.TabletType, error)
+	FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, key.Destination, string, topodatapb.TabletType, error)
 	DefaultKeyspace() (*vindexes.Keyspace, error)
 }
 

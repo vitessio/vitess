@@ -32,7 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 
-	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -1815,13 +1814,16 @@ func TestParseEmptyTargetSingleKeyspace(t *testing.T) {
 	}
 	r.vschema = altVSchema
 
-	got, _ := r.parseDestinationTarget("")
-	want := key.QualifiedDestination{
-		Keyspace:   KsTestUnsharded,
-		TabletType: topodatapb.TabletType_MASTER,
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("parseDestinationTarget(%s): got %v, want %v", "@master", got, want)
+	_, destKeyspace, destTabletType, _ := r.parseDestinationTarget("")
+	if destKeyspace != KsTestUnsharded || destTabletType != topodatapb.TabletType_MASTER {
+		t.Errorf(
+			"parseDestinationTarget(%s): got (%v, %v), want (%v, %v)",
+			"@master",
+			destKeyspace,
+			destTabletType,
+			KsTestUnsharded,
+			topodatapb.TabletType_MASTER,
+		)
 	}
 }
 
@@ -1835,13 +1837,16 @@ func TestParseEmptyTargetMultiKeyspace(t *testing.T) {
 	}
 	r.vschema = altVSchema
 
-	got, _ := r.parseDestinationTarget("")
-	want := key.QualifiedDestination{
-		Keyspace:   "",
-		TabletType: topodatapb.TabletType_MASTER,
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("parseDestinationTarget(%s): got %v, want %v", "@master", got, want)
+	_, destKeyspace, destTabletType, _ := r.parseDestinationTarget("")
+	if destKeyspace != "" || destTabletType != topodatapb.TabletType_MASTER {
+		t.Errorf(
+			"parseDestinationTarget(%s): got (%v, %v), want (%v, %v)",
+			"@master",
+			destKeyspace,
+			destTabletType,
+			"",
+			topodatapb.TabletType_MASTER,
+		)
 	}
 }
 
@@ -1854,12 +1859,15 @@ func TestParseTargetSingleKeyspace(t *testing.T) {
 	}
 	r.vschema = altVSchema
 
-	got, _ := r.parseDestinationTarget("@master")
-	want := key.QualifiedDestination{
-		Keyspace:   KsTestUnsharded,
-		TabletType: topodatapb.TabletType_MASTER,
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("parseDestinationTarget(%s): got %v, want %v", "@master", got, want)
+	_, destKeyspace, destTabletType, _ := r.parseDestinationTarget("@replica")
+	if destKeyspace != KsTestUnsharded || destTabletType != topodatapb.TabletType_REPLICA {
+		t.Errorf(
+			"parseDestinationTarget(%s): got (%v, %v), want (%v, %v)",
+			"@replica",
+			destKeyspace,
+			destTabletType,
+			KsTestUnsharded,
+			topodatapb.TabletType_REPLICA,
+		)
 	}
 }
