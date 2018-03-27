@@ -32,5 +32,3 @@ for cell in 'global' $cells; do
     etcd-service-template.yaml | \
     $KUBECTL $KUBECTL_OPTIONS delete -f -
 done
-
-# Note we keep etcd-operator installed for future use.
