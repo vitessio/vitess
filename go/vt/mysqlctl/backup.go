@@ -33,7 +33,8 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/cgzip"
+	"compress/gzip"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sync2"
@@ -475,13 +476,13 @@ func backupFile(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, 
 	}
 
 	// Create the gzip compression pipe, if necessary.
-	var gzip *cgzip.Writer
+	var gzWriter *gzip.Writer
 	if *backupStorageCompress {
-		gzip, err = cgzip.NewWriterLevel(writer, cgzip.Z_BEST_SPEED)
+		gzWriter, err = gzip.NewWriterLevel(writer, gzip.BestSpeed)
 		if err != nil {
 			return fmt.Errorf("cannot create gziper: %v", err)
 		}
-		writer = gzip
+		writer = gzWriter
 	}
 
 	// Copy from the source file to writer (optional gzip,
@@ -492,8 +493,8 @@ func backupFile(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, 
 	}
 
 	// Close gzip to flush it, after that all data is sent to writer.
-	if gzip != nil {
-		if err = gzip.Close(); err != nil {
+	if gzWriter != nil {
+		if err = gzWriter.Close(); err != nil {
 			return fmt.Errorf("cannot close gzip: %v", err)
 		}
 	}
@@ -632,7 +633,7 @@ func restoreFile(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle,
 
 	// Create the uncompresser if needed.
 	if compress {
-		gz, err := cgzip.NewReader(reader)
+		gz, err := gzip.NewReader(reader)
 		if err != nil {
 			return err
 		}
