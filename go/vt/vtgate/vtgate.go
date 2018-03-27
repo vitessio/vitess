@@ -56,6 +56,7 @@ import (
 var (
 	transactionMode     = flag.String("transaction_mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
 	normalizeQueries    = flag.Bool("normalize_queries", true, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
+	terseErrors         = flag.Bool("vtgate-config-terse-errors", false, "prevent bind vars from escaping in returned errors")
 	streamBufferSize    = flag.Int("stream_buffer_size", 32*1024, "the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size.")
 	queryPlanCacheSize  = flag.Int64("gate_query_cache_size", 10000, "gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
 	legacyAutocommit    = flag.Bool("legacy_autocommit", false, "DEPRECATED: set this flag to true to get the legacy behavior: all transactions will need an explicit begin, and DMLs outside transactions will return an error.")
@@ -1039,6 +1040,10 @@ func (vtg *VTGate) VSchemaStats() *VSchemaStats {
 
 func truncateErrorStrings(data map[string]interface{}) map[string]interface{} {
 	ret := map[string]interface{}{}
+	if *terseErrors {
+		// request might have PII information. Return an empty map
+		return ret
+	}
 	for key, val := range data {
 		mapVal, ok := val.(map[string]interface{})
 		if ok {
