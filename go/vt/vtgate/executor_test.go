@@ -824,6 +824,13 @@ func TestExecutorOther(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema_tables: %v, want %v", err, want)
 	}
+
+	// Can't target a range with handle other
+	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor[-]"}), "analyze", nil)
+	want = "Destination can only be a single shard for statement: analyze, got: DestinationExactKeyRange(-)"
+	if err == nil || err.Error() != want {
+		t.Errorf("analyze: got %v, want %v", err, want)
+	}
 }
 
 func TestExecutorDDL(t *testing.T) {

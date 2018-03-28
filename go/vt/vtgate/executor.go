@@ -901,7 +901,7 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 	case key.DestinationShard:
 	// noop
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Destination can only be a single shard for handle other got: %s", dest)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Destination can only be a single shard for statement: %s, got: %v", sql, dest)
 	}
 	execStart := time.Now()
 	result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
