@@ -141,7 +141,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		}
 	}
 
-	dest, destKeyspace, destTabletType, err := e.parseDestinationTarget(safeSession.TargetString)
+	destKeyspace, destTabletType, dest, err := e.ParseDestinationTarget(safeSession.TargetString)
 	if err != nil {
 		return nil, err
 	}
@@ -158,13 +158,13 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 
 	switch stmtType {
 	case sqlparser.StmtSelect:
-		return e.handleExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
+		return e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats)
 	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
 		safeSession := safeSession
 
 		// In legacy mode, we ignore autocommit settings.
 		if e.legacyAutocommit {
-			return e.handleExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
+			return e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats)
 		}
 
 		mustCommit := false
@@ -188,7 +188,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		// at the beginning, but never after.
 		safeSession.SetAutocommitable(mustCommit)
 
-		qr, err := e.handleExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
+		qr, err := e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats)
 		if err != nil {
 			return nil, err
 		}
@@ -223,7 +223,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
 
-func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destKeyspace string, destTabletType topodatapb.TabletType, dest key.Destination, logStats *LogStats) (*sqltypes.Result, error) {
 	if dest != nil {
 		// V1 mode or V3 mode with a forced shard or range target
 		// TODO(sougou): change this flow to go through V3 functions
@@ -866,7 +866,7 @@ func (e *Executor) handleUse(ctx context.Context, safeSession *SafeSession, sql 
 		// This code is unreachable.
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unrecognized USE statement: %v", sql)
 	}
-	_, destKeyspace, destTabletType, err := e.parseDestinationTarget(use.DBName.String())
+	destKeyspace, destTabletType, _, err := e.ParseDestinationTarget(use.DBName.String())
 	if err != nil {
 		return nil, err
 	}
@@ -1127,15 +1127,16 @@ func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 
 }
 
-func (e *Executor) parseDestinationTarget(targetString string) (key.Destination, string, topodatapb.TabletType, error) {
-	dest, destKeyspace, destTabletType, err := key.ParseDestination(targetString, defaultTabletType)
+// ParseDestinationTarget parses destination target string and sets default keyspace if possible.
+func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error) {
+	destKeyspace, destTabletType, dest, err := topoproto.ParseDestination(targetString, defaultTabletType)
 	// Set default keyspace
 	if destKeyspace == "" && len(e.VSchema().Keyspaces) == 1 {
 		for k := range e.VSchema().Keyspaces {
 			destKeyspace = k
 		}
 	}
-	return dest, destKeyspace, destTabletType, err
+	return destKeyspace, destTabletType, dest, err
 }
 
 // getPlan computes the plan for the given query. If one is in

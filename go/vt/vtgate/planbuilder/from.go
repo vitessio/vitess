@@ -158,7 +158,7 @@ func buildTablePrimitive(tableExpr *sqlparser.AliasedTableExpr, tableName sqlpar
 		return rb, nil
 	}
 
-	table, vindex, destTarget, _, _, err := vschema.FindTableOrVindex(tableName)
+	table, vindex, _, _, destTarget, err := vschema.FindTableOrVindex(tableName)
 	if err != nil {
 		return nil, err
 	}

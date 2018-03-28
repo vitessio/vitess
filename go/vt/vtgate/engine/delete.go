@@ -42,7 +42,7 @@ type Delete struct {
 	// Keyspace specifies the keyspace to send the query to.
 	Keyspace *vindexes.Keyspace
 
-	// Keyspace specifies the keyspace to send the query to.
+	// TargetDestination specifies the destination to send the query to.
 	TargetDestination key.Destination
 
 	// Query specifies the query to be executed.

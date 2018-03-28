@@ -1821,7 +1821,7 @@ func TestParseEmptyTargetSingleKeyspace(t *testing.T) {
 	}
 	r.vschema = altVSchema
 
-	_, destKeyspace, destTabletType, _ := r.parseDestinationTarget("")
+	destKeyspace, destTabletType, _, _ := r.ParseDestinationTarget("")
 	if destKeyspace != KsTestUnsharded || destTabletType != topodatapb.TabletType_MASTER {
 		t.Errorf(
 			"parseDestinationTarget(%s): got (%v, %v), want (%v, %v)",
@@ -1844,7 +1844,7 @@ func TestParseEmptyTargetMultiKeyspace(t *testing.T) {
 	}
 	r.vschema = altVSchema
 
-	_, destKeyspace, destTabletType, _ := r.parseDestinationTarget("")
+	destKeyspace, destTabletType, _, _ := r.ParseDestinationTarget("")
 	if destKeyspace != "" || destTabletType != topodatapb.TabletType_MASTER {
 		t.Errorf(
 			"parseDestinationTarget(%s): got (%v, %v), want (%v, %v)",
@@ -1866,7 +1866,7 @@ func TestParseTargetSingleKeyspace(t *testing.T) {
 	}
 	r.vschema = altVSchema
 
-	_, destKeyspace, destTabletType, _ := r.parseDestinationTarget("@replica")
+	destKeyspace, destTabletType, _, _ := r.ParseDestinationTarget("@replica")
 	if destKeyspace != KsTestUnsharded || destTabletType != topodatapb.TabletType_REPLICA {
 		t.Errorf(
 			"parseDestinationTarget(%s): got (%v, %v), want (%v, %v)",

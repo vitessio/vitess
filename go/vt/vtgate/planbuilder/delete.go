@@ -60,7 +60,7 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Del
 	for t := range rb.Symtab().tables {
 		tableName = t
 	}
-	table, destTarget, _, destTabletType, err := vschema.FindTable(tableName)
+	table, _, destTabletType, destTarget, err := vschema.FindTable(tableName)
 	if err != nil {
 		return nil, err
 	}
