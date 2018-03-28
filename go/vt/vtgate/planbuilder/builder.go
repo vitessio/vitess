@@ -120,8 +120,8 @@ type columnOriginator interface {
 // ContextVSchema defines the interface for this package to fetch
 // info about tables.
 type ContextVSchema interface {
-	FindTable(tablename sqlparser.TableName) (*vindexes.Table, key.Destination, string, topodatapb.TabletType, error)
-	FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, key.Destination, string, topodatapb.TabletType, error)
+	FindTable(tablename sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error)
+	FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 	DefaultKeyspace() (*vindexes.Keyspace, error)
 }
 

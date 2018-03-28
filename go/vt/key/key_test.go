@@ -18,7 +18,6 @@ package key
 
 import (
 	"encoding/hex"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -434,77 +433,5 @@ func BenchmarkKeyRangesOverlap(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		KeyRangesOverlap(kr1, kr2)
-	}
-}
-
-func TestParseDestination(t *testing.T) {
-	tenHexBytes, _ := hex.DecodeString("10")
-	twentyHexBytes, _ := hex.DecodeString("20")
-
-	testcases := []struct {
-		targetString string
-		dest         Destination
-		keyspace     string
-		tabletType   topodatapb.TabletType
-	}{{
-		targetString: "ks[10-20]@master",
-		keyspace:     "ks",
-		tabletType:   topodatapb.TabletType_MASTER,
-		dest:         DestinationExactKeyRange{KeyRange: &topodatapb.KeyRange{Start: tenHexBytes, End: twentyHexBytes}},
-	}, {
-		targetString: "ks[-]@master",
-		keyspace:     "ks",
-		tabletType:   topodatapb.TabletType_MASTER,
-		dest:         DestinationExactKeyRange{KeyRange: &topodatapb.KeyRange{}},
-	}, {
-		targetString: "ks[10-]@master",
-		keyspace:     "ks",
-		tabletType:   topodatapb.TabletType_MASTER,
-		dest:         DestinationExactKeyRange{KeyRange: &topodatapb.KeyRange{Start: tenHexBytes}},
-	}, {
-		targetString: "ks[-20]@master",
-		keyspace:     "ks",
-		tabletType:   topodatapb.TabletType_MASTER,
-		dest:         DestinationExactKeyRange{KeyRange: &topodatapb.KeyRange{End: twentyHexBytes}},
-	}, {
-		targetString: "ks:-80@master",
-		keyspace:     "ks",
-		tabletType:   topodatapb.TabletType_MASTER,
-		dest:         DestinationShard("-80"),
-	}, {
-		targetString: ":-80@master",
-		keyspace:     "",
-		tabletType:   topodatapb.TabletType_MASTER,
-		dest:         DestinationShard("-80"),
-	}, {
-		targetString: "@master",
-		keyspace:     "",
-		tabletType:   topodatapb.TabletType_MASTER,
-	}, {
-		targetString: "@replica",
-		keyspace:     "",
-		tabletType:   topodatapb.TabletType_REPLICA,
-	}, {
-		targetString: "ks",
-		keyspace:     "ks",
-		tabletType:   topodatapb.TabletType_MASTER,
-	}, {
-		targetString: "ks/-80",
-		keyspace:     "ks",
-		dest:         DestinationShard("-80"),
-		tabletType:   topodatapb.TabletType_MASTER,
-	}}
-
-	for _, tcase := range testcases {
-		if targetDest, targetKeyspace, targetTabletType, _ := ParseDestination(tcase.targetString, topodatapb.TabletType_MASTER); !reflect.DeepEqual(targetDest, tcase.dest) || targetKeyspace != tcase.keyspace || targetTabletType != tcase.tabletType {
-			t.Errorf("ParseDestination(%s) - got: (%v, %v, %v), want (%v, %v, %v)",
-				tcase.targetString,
-				targetDest,
-				targetKeyspace,
-				targetTabletType,
-				tcase.dest,
-				tcase.keyspace,
-				tcase.tabletType)
-		}
 	}
 }
