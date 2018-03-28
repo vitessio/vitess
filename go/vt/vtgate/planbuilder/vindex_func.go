@@ -42,7 +42,7 @@ type vindexFunc struct {
 	eVindexFunc *engine.VindexFunc
 }
 
-func newVindexFunc(alias sqlparser.TableName, vindex vindexes.Vindex, vschema VSchema) *vindexFunc {
+func newVindexFunc(alias sqlparser.TableName, vindex vindexes.Vindex, vschema ContextVSchema) *vindexFunc {
 	vf := &vindexFunc{
 		symtab: newSymtab(vschema),
 		order:  1,

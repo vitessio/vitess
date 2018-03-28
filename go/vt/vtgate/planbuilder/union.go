@@ -24,7 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildUnionPlan(union *sqlparser.Union, vschema VSchema) (primitive engine.Primitive, err error) {
+func buildUnionPlan(union *sqlparser.Union, vschema ContextVSchema) (primitive engine.Primitive, err error) {
 	bindvars := sqlparser.GetBindvars(union)
 	bldr, err := processUnion(union, vschema, nil)
 	if err != nil {
@@ -38,7 +38,7 @@ func buildUnionPlan(union *sqlparser.Union, vschema VSchema) (primitive engine.P
 	return bldr.Primitive(), nil
 }
 
-func processUnion(union *sqlparser.Union, vschema VSchema, outer builder) (builder, error) {
+func processUnion(union *sqlparser.Union, vschema ContextVSchema, outer builder) (builder, error) {
 	lbldr, err := processPart(union.Left, vschema, outer)
 	if err != nil {
 		return nil, err
@@ -65,7 +65,7 @@ func processUnion(union *sqlparser.Union, vschema VSchema, outer builder) (build
 	return bldr, nil
 }
 
-func processPart(part sqlparser.SelectStatement, vschema VSchema, outer builder) (builder, error) {
+func processPart(part sqlparser.SelectStatement, vschema ContextVSchema, outer builder) (builder, error) {
 	var err error
 	var bldr builder
 	switch part := part.(type) {
@@ -84,7 +84,7 @@ func processPart(part sqlparser.SelectStatement, vschema VSchema, outer builder)
 	return bldr, nil
 }
 
-func unionRouteMerge(union *sqlparser.Union, left, right builder, vschema VSchema) (builder, error) {
+func unionRouteMerge(union *sqlparser.Union, left, right builder, vschema ContextVSchema) (builder, error) {
 	lroute, ok := left.(*route)
 	if !ok {
 		return nil, errors.New("unsupported construct: SELECT of UNION is non-trivial")

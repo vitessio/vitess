@@ -29,7 +29,7 @@ import (
 )
 
 // buildDeletePlan builds the instructions for a DELETE statement.
-func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Delete, error) {
+func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Delete, error) {
 	edel := &engine.Delete{
 		Query: generateQuery(del),
 	}

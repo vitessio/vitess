@@ -72,11 +72,11 @@ type symtab struct {
 	ResultColumns []*resultColumn
 	Outer         *symtab
 	Externs       []*sqlparser.ColName
-	VSchema       VSchema
+	VSchema       ContextVSchema
 }
 
 // newSymtab creates a new symtab.
-func newSymtab(vschema VSchema) *symtab {
+func newSymtab(vschema ContextVSchema) *symtab {
 	return &symtab{
 		tables:        make(map[sqlparser.TableName]*table),
 		uniqueColumns: make(map[string]*column),
@@ -86,7 +86,7 @@ func newSymtab(vschema VSchema) *symtab {
 
 // newSymtab creates a new symtab initialized
 // to contain just one route.
-func newSymtabWithRoute(vschema VSchema, rb *route) *symtab {
+func newSymtabWithRoute(vschema ContextVSchema, rb *route) *symtab {
 	return &symtab{
 		tables:        make(map[sqlparser.TableName]*table),
 		uniqueColumns: make(map[string]*column),

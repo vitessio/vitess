@@ -66,7 +66,7 @@ type route struct {
 	ERoute *engine.Route
 }
 
-func newRoute(stmt sqlparser.SelectStatement, eroute *engine.Route, condition sqlparser.Expr, vschema VSchema) *route {
+func newRoute(stmt sqlparser.SelectStatement, eroute *engine.Route, condition sqlparser.Expr, vschema ContextVSchema) *route {
 	rb := &route{
 		Select:        stmt,
 		order:         1,

@@ -29,7 +29,7 @@ import (
 
 // processTableExprs analyzes the FROM clause. It produces a builder
 // with all the routes identified.
-func processTableExprs(tableExprs sqlparser.TableExprs, vschema VSchema) (builder, error) {
+func processTableExprs(tableExprs sqlparser.TableExprs, vschema ContextVSchema) (builder, error) {
 	if len(tableExprs) == 1 {
 		return processTableExpr(tableExprs[0], vschema)
 	}
@@ -46,7 +46,7 @@ func processTableExprs(tableExprs sqlparser.TableExprs, vschema VSchema) (builde
 }
 
 // processTableExpr produces a builder subtree for the given TableExpr.
-func processTableExpr(tableExpr sqlparser.TableExpr, vschema VSchema) (builder, error) {
+func processTableExpr(tableExpr sqlparser.TableExpr, vschema ContextVSchema) (builder, error) {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
 		return processAliasedTable(tableExpr, vschema)
@@ -73,7 +73,7 @@ func processTableExpr(tableExpr sqlparser.TableExpr, vschema VSchema) (builder, 
 // versatile than a subquery. If a subquery becomes a route, then any result
 // columns that represent underlying vindex columns are also exposed as
 // vindex columns.
-func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema) (builder, error) {
+func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema ContextVSchema) (builder, error) {
 	switch expr := tableExpr.Expr.(type) {
 	case sqlparser.TableName:
 		return buildTablePrimitive(tableExpr, expr, vschema)
@@ -135,7 +135,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 }
 
 // buildTablePrimitive builds a primitive based on the table name.
-func buildTablePrimitive(tableExpr *sqlparser.AliasedTableExpr, tableName sqlparser.TableName, vschema VSchema) (builder, error) {
+func buildTablePrimitive(tableExpr *sqlparser.AliasedTableExpr, tableName sqlparser.TableName, vschema ContextVSchema) (builder, error) {
 	alias := tableName
 	if !tableExpr.As.IsEmpty() {
 		alias = sqlparser.TableName{Name: tableExpr.As}
@@ -199,7 +199,7 @@ func buildTablePrimitive(tableExpr *sqlparser.AliasedTableExpr, tableName sqlpar
 // processJoin produces a builder subtree for the given Join.
 // If the left and right nodes can be part of the same route,
 // then it's a route. Otherwise, it's a join.
-func processJoin(ajoin *sqlparser.JoinTableExpr, vschema VSchema) (builder, error) {
+func processJoin(ajoin *sqlparser.JoinTableExpr, vschema ContextVSchema) (builder, error) {
 	switch ajoin.Join {
 	case sqlparser.JoinStr, sqlparser.StraightJoinStr, sqlparser.LeftJoinStr:
 	case sqlparser.RightJoinStr:
