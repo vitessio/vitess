@@ -31,18 +31,24 @@ replicas=${ETCD_REPLICAS:-3}
 cells=`echo $CELLS | tr ',' ' '`
 
 # Check the installation for etcd-operator has been done.
-if ! kubectl get customresourcedefinitions | grep -q etcdclusters.etcd.database.coreos.com ; then
-  # Download and install etcd-operator
-  echo "Downloading and installing etcd-operator for first time use..."
-  cd /tmp
-  git clone https://github.com/coreos/etcd-operator
-  cd etcd-operator
-  kubectl create -f example/deployment.yaml
-
-  if ! kubectl get customresourcedefinitions | grep -q etcdclusters.etcd.database.coreos.com ; then
-    echo "etcd-operator installation failed."
-    exit 1
-    fi
+# To make sure the EtcdClusters CRD not only exists but is ready to serve,
+# we try to list EtcdClusters. This will succeed even if the list is empty.
+if ! kubectl get etcdclusters.etcd.database.coreos.com &> /dev/null ; then
+  # etcd-operator is a shared resource, and installing it on a secure
+  # cluster requires granting RBAC permissions.
+  # We therefore require the user to do this before running Vitess.
+  echo
+  echo "Please install etcd-operator in the same namespace as Vitess"
+  echo "before running etcd-up.sh. See the instructions here:"
+  echo
+  echo "  https://github.com/coreos/etcd-operator/blob/master/doc/user/install_guide.md"
+  echo
+  echo "If you already installed etcd-operator and still get this prompt,"
+  echo "check for any errors in etcd-operator logs:"
+  echo
+  echo "  kubectl logs -l name=etcd-operator"
+  echo
+  exit 1
 fi
 
 for cell in 'global' $cells; do
