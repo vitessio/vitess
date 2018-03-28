@@ -29,7 +29,7 @@ import (
 )
 
 // buildUpdatePlan builds the instructions for an UPDATE statement.
-func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Update, error) {
+func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Update, error) {
 	eupd := &engine.Update{
 		Query:               generateQuery(upd),
 		ChangedVindexValues: make(map[string][]sqltypes.PlanValue),

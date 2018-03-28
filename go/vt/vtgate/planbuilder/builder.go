@@ -117,9 +117,9 @@ type columnOriginator interface {
 	Order() int
 }
 
-// VSchema defines the interface for this package to fetch
+// ContextVSchema defines the interface for this package to fetch
 // info about tables.
-type VSchema interface {
+type ContextVSchema interface {
 	FindTable(tablename sqlparser.TableName) (*vindexes.Table, key.Destination, string, topodatapb.TabletType, error)
 	FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, key.Destination, string, topodatapb.TabletType, error)
 	DefaultKeyspace() (*vindexes.Keyspace, error)
@@ -127,7 +127,7 @@ type VSchema interface {
 
 // Build builds a plan for a query based on the specified vschema.
 // It's the main entry point for this package.
-func Build(query string, vschema VSchema) (*engine.Plan, error) {
+func Build(query string, vschema ContextVSchema) (*engine.Plan, error) {
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, err
@@ -139,7 +139,7 @@ func Build(query string, vschema VSchema) (*engine.Plan, error) {
 // TODO(sougou): The query input is trusted as the source
 // of the AST. Maybe this function just returns instructions
 // and engine.Plan can be built by the caller.
-func BuildFromStmt(query string, stmt sqlparser.Statement, vschema VSchema) (*engine.Plan, error) {
+func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema) (*engine.Plan, error) {
 	var err error
 	plan := &engine.Plan{
 		Original: query,
