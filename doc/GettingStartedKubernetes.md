@@ -9,9 +9,13 @@ The `kubectl` steps will apply to any Kubernetes cluster.
 
 ## Prerequisites
 
-To complete the exercise in this guide, you must locally install Go 1.9+,
-Vitess' `vtctlclient` tool, and Google Cloud SDK. The
-following sections explain how to set these up in your environment.
+To complete the exercise in this guide, you must
+[install etcd-operator](https://github.com/coreos/etcd-operator/blob/master/doc/user/install_guide.md)
+in the same namespace in which you plan to run Vitess.
+
+You also must locally install Go 1.9+,
+the Vitess' `vtctlclient` tool, and `kubectl`.
+The following sections explain how to set these up in your environment.
 
 ### Install Go 1.9+
 
@@ -205,6 +209,11 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     In this example, we'll use [etcd](https://github.com/coreos/etcd).
     Note that we need our own etcd clusters, separate from the one used by
     Kubernetes itself. We will use etcd-operator to manage these clusters.
+
+    If you haven't done so already, make sure you
+    [install etcd-operator](https://github.com/coreos/etcd-operator/blob/master/doc/user/install_guide.md)
+    in the same namespace in which you plan to run Vitess
+    before continuing.
 
     ``` sh
     vitess/examples/kubernetes$ ./etcd-up.sh
