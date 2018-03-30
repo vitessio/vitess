@@ -578,6 +578,7 @@ func TestTabletServerTarget(t *testing.T) {
 		t.Errorf("err: %v, must contain %s", err, want)
 	}
 	err = tsv.Commit(ctx, &target1, 1)
+	want = "invalid tablet type: MASTER"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
 	}
