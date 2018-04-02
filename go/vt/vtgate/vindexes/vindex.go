@@ -31,8 +31,8 @@ import (
 // in the current context and session of a VTGate request. Vindexes
 // can use this interface to execute lookup queries.
 type VCursor interface {
-	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
-	ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
+	Execute(method string, query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
+	ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 }
 
 // Vindex defines the interface required to register a vindex.

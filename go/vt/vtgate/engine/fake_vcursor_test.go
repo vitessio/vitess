@@ -41,15 +41,15 @@ func (t noopVCursor) Context() context.Context {
 	return context.Background()
 }
 
-func (t noopVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+func (t noopVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
 
-func (t noopVCursor) ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+func (t noopVCursor) ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
 
-func (t noopVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
+func (t noopVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, canAutocommit bool) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
 
@@ -86,13 +86,13 @@ func (f *loggingVCursor) Context() context.Context {
 	return context.Background()
 }
 
-func (f *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	f.log = append(f.log, fmt.Sprintf("Execute %s %v %v", query, printBindVars(bindvars), isDML))
+func (f *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	f.log = append(f.log, fmt.Sprintf("Execute %s %v", query, printBindVars(bindvars)))
 	return f.nextResult()
 }
 
-func (f *loggingVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
-	f.log = append(f.log, fmt.Sprintf("ExecuteMultiShard %v%v %v", printResolvedShardQueries(rss, queries), isDML, canAutocommit))
+func (f *loggingVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, canAutocommit bool) (*sqltypes.Result, error) {
+	f.log = append(f.log, fmt.Sprintf("ExecuteMultiShard %v%v", printResolvedShardQueries(rss, queries), canAutocommit))
 	return f.nextResult()
 }
 

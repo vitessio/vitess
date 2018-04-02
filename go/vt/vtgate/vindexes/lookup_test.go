@@ -41,16 +41,16 @@ type vcursor struct {
 	autocommits int
 }
 
-func (vc *vcursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	return vc.execute(method, query, bindvars, isDML)
+func (vc *vcursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return vc.execute(method, query, bindvars)
 }
 
-func (vc *vcursor) ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+func (vc *vcursor) ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	vc.autocommits++
-	return vc.execute(method, query, bindvars, isDML)
+	return vc.execute(method, query, bindvars)
 }
 
-func (vc *vcursor) execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+func (vc *vcursor) execute(method string, query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	vc.queries = append(vc.queries, &querypb.BoundQuery{
 		Sql:           query,
 		BindVariables: bindvars,

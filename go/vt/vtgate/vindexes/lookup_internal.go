@@ -68,9 +68,9 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sql
 		var err error
 		var result *sqltypes.Result
 		if lkp.Autocommit {
-			result, err = vcursor.ExecuteAutocommit("VindexLookup", lkp.sel, bindVars, false /* isDML */)
+			result, err = vcursor.ExecuteAutocommit("VindexLookup", lkp.sel, bindVars)
 		} else {
-			result, err = vcursor.Execute("VindexLookup", lkp.sel, bindVars, false /* isDML */)
+			result, err = vcursor.Execute("VindexLookup", lkp.sel, bindVars)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
@@ -91,9 +91,9 @@ func (lkp *lookupInternal) Verify(vcursor VCursor, ids, values []sqltypes.Value)
 		var err error
 		var result *sqltypes.Result
 		if lkp.Autocommit {
-			result, err = vcursor.ExecuteAutocommit("VindexVerify", lkp.ver, bindVars, true /* isDML */)
+			result, err = vcursor.ExecuteAutocommit("VindexVerify", lkp.ver, bindVars)
 		} else {
-			result, err = vcursor.Execute("VindexVerify", lkp.ver, bindVars, true /* isDML */)
+			result, err = vcursor.Execute("VindexVerify", lkp.ver, bindVars)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Verify: %v", err)
@@ -160,9 +160,9 @@ func (lkp *lookupInternal) Create(vcursor VCursor, rowsColValues [][]sqltypes.Va
 
 	var err error
 	if lkp.Autocommit {
-		_, err = vcursor.ExecuteAutocommit("VindexCreate", buf.String(), bindVars, true /* isDML */)
+		_, err = vcursor.ExecuteAutocommit("VindexCreate", buf.String(), bindVars)
 	} else {
-		_, err = vcursor.Execute("VindexCreate", buf.String(), bindVars, true /* isDML */)
+		_, err = vcursor.Execute("VindexCreate", buf.String(), bindVars)
 	}
 	if err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
@@ -205,7 +205,7 @@ func (lkp *lookupInternal) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Va
 			bindVars[lkp.FromColumns[colIdx]] = sqltypes.ValueBindVariable(columnValue)
 		}
 		bindVars[lkp.To] = sqltypes.ValueBindVariable(value)
-		_, err := vcursor.Execute("VindexDelete", lkp.del, bindVars, true /* isDML */)
+		_, err := vcursor.Execute("VindexDelete", lkp.del, bindVars)
 		if err != nil {
 			return fmt.Errorf("lookup.Delete: %v", err)
 		}

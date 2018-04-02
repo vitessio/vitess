@@ -178,7 +178,7 @@ func (ins *Insert) execInsertUnsharded(vcursor VCursor, bindVars map[string]*que
 	if len(rss) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
 	}
-	result, err := execShard(vcursor, ins.Query, bindVars, rss[0], true, true /* canAutocommit */)
+	result, err := execShard(vcursor, ins.Query, bindVars, rss[0], true /* canAutocommit */)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execInsertUnsharded")
 	}
@@ -203,7 +203,7 @@ func (ins *Insert) execInsertSharded(vcursor VCursor, bindVars map[string]*query
 		return nil, vterrors.Wrap(err, "execInsertSharded")
 	}
 
-	result, err := vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, true /* canAutocommit */)
+	result, err := vcursor.ExecuteMultiShard(rss, queries, true /* canAutocommit */)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execInsertSharded")
 	}
