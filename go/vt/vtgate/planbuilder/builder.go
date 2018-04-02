@@ -32,44 +32,42 @@ import (
 // satisfy.
 type builder interface {
 	// Symtab returns the associated symtab.
+	// Please copy code from an existing primitive to define this function.
 	Symtab() *symtab
 
-	// MaxOrder must return the order number of the
-	// highest columnOriginator within the current sub-tree.
-	// The originators are numbered by their execution order.
-	// When two trees are brought together into a join,
-	// the MaxOrder from the left is used as starting point
-	// to renumber the originators on the right. Execution order
-	// always goes from left to right. A node that contains
-	// sub-nodes (like a join), can cache these values
-	// and use them for efficient b-tree style traversal.
-	MaxOrder() int
+	// Order is the execution order of the primitve. If there are subprimitves,
+	// the order is one above the order of the subprimitives.
+	// This is because the primitive executes its subprimitives first and
+	// processes their results to generate its own values.
+	// Please copy code from an existing primitive to define this function.
+	Order() int
 
-	// SetOrder reassigns order for the primitive and its sub-primitives.
-	// The input is the max order of the previous primitive that should
+	// ResultColumns returns the list of result columns the
+	// primitive returns.
+	// Please copy code from an existing primitive to define this function.
+	ResultColumns() []*resultColumn
+
+	// Reorder reassigns order for the primitive and its sub-primitives.
+	// The input is the order of the previous primitive that should
 	// execute before this one.
-	SetOrder(int)
+	Reorder(int)
 
 	// Primitve returns the underlying primitive.
 	Primitive() engine.Primitive
 
-	// Leftmost returns the leftmost columnOriginator.
-	Leftmost() columnOriginator
-
-	// ResultColumns returns the list of result columns the
-	// primitive returns.
-	ResultColumns() []*resultColumn
+	// Leftmost returns the leftmost builder.
+	Leftmost() builder
 
 	// PushFilter pushes a WHERE or HAVING clause expression
 	// to the specified origin.
-	PushFilter(filter sqlparser.Expr, whereType string, origin columnOriginator) error
+	PushFilter(filter sqlparser.Expr, whereType string, origin builder) error
 
 	// PushSelect pushes the select expression to the specified
 	// originator. If successful, the originator must create
 	// a resultColumn entry and return it. The top level caller
 	// must accumulate these result columns and set the symtab
 	// after analysis.
-	PushSelect(expr *sqlparser.AliasedExpr, origin columnOriginator) (rc *resultColumn, colnum int, err error)
+	PushSelect(expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error)
 
 	// PushOrderByNull pushes the special case ORDER By NULL to
 	// all primitives. It's safe to push down this clause because it's
@@ -108,13 +106,6 @@ type builder interface {
 	// resultColumn, whereas PushSelect guarantees the addition of a new
 	// result column and returns a distinct symbol for it.
 	SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int)
-}
-
-// columnOriginator is a builder that originates
-// column symbols.
-type columnOriginator interface {
-	builder
-	Order() int
 }
 
 // ContextVSchema defines the interface for this package to fetch

@@ -24,7 +24,6 @@ import (
 )
 
 var _ builder = (*subquery)(nil)
-var _ columnOriginator = (*subquery)(nil)
 
 // subquery is a builder that wraps a subquery.
 // This primitive wraps any subquery that results
@@ -39,15 +38,15 @@ type subquery struct {
 	order         int
 	symtab        *symtab
 	resultColumns []*resultColumn
-	bldr          builder
+	input         builder
 	esubquery     *engine.Subquery
 }
 
 // newSubquery builds a new subquery.
 func newSubquery(alias sqlparser.TableIdent, bldr builder, vschema ContextVSchema) *subquery {
 	sq := &subquery{
-		order:     bldr.MaxOrder() + 1,
-		bldr:      bldr,
+		order:     bldr.Order() + 1,
+		input:     bldr,
 		symtab:    newSymtab(vschema),
 		esubquery: &engine.Subquery{},
 	}
@@ -63,8 +62,6 @@ func newSubquery(alias sqlparser.TableIdent, bldr builder, vschema ContextVSchem
 	for i, rc := range bldr.ResultColumns() {
 		cols[rc.alias.Lowered()] = &column{
 			origin: sq,
-			name:   rc.alias,
-			table:  t,
 			colnum: i,
 		}
 	}
@@ -81,30 +78,25 @@ func (sq *subquery) Symtab() *symtab {
 	return sq.symtab.Resolve()
 }
 
-// Order returns the order of the subquery.
+// Order satisfies the builder interface.
 func (sq *subquery) Order() int {
 	return sq.order
 }
 
-// MaxOrder satisfies the builder interface.
-func (sq *subquery) MaxOrder() int {
-	return sq.order
-}
-
-// SetOrder satisfies the builder interface.
-func (sq *subquery) SetOrder(order int) {
-	sq.bldr.SetOrder(order)
-	sq.order = sq.bldr.MaxOrder() + 1
+// Reorder satisfies the builder interface.
+func (sq *subquery) Reorder(order int) {
+	sq.input.Reorder(order)
+	sq.order = sq.input.Order() + 1
 }
 
 // Primitive satisfies the builder interface.
 func (sq *subquery) Primitive() engine.Primitive {
-	sq.esubquery.Subquery = sq.bldr.Primitive()
+	sq.esubquery.Subquery = sq.input.Primitive()
 	return sq.esubquery
 }
 
 // Leftmost satisfies the builder interface.
-func (sq *subquery) Leftmost() columnOriginator {
+func (sq *subquery) Leftmost() builder {
 	return sq
 }
 
@@ -114,12 +106,12 @@ func (sq *subquery) ResultColumns() []*resultColumn {
 }
 
 // PushFilter satisfies the builder interface.
-func (sq *subquery) PushFilter(_ sqlparser.Expr, whereType string, _ columnOriginator) error {
+func (sq *subquery) PushFilter(_ sqlparser.Expr, whereType string, _ builder) error {
 	return errors.New("unsupported: filtering on results of cross-shard subquery")
 }
 
 // PushSelect satisfies the builder interface.
-func (sq *subquery) PushSelect(expr *sqlparser.AliasedExpr, _ columnOriginator) (rc *resultColumn, colnum int, err error) {
+func (sq *subquery) PushSelect(expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colnum int, err error) {
 	col, ok := expr.Expr.(*sqlparser.ColName)
 	if !ok {
 		return nil, 0, errors.New("unsupported: expression on results of a cross-shard subquery")
@@ -159,12 +151,12 @@ func (sq *subquery) PushMisc(sel *sqlparser.Select) {
 
 // Wireup satisfies the builder interface.
 func (sq *subquery) Wireup(bldr builder, jt *jointab) error {
-	return sq.bldr.Wireup(bldr, jt)
+	return sq.input.Wireup(bldr, jt)
 }
 
 // SupplyVar satisfies the builder interface.
 func (sq *subquery) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	sq.bldr.SupplyVar(from, to, col, varname)
+	sq.input.SupplyVar(from, to, col, varname)
 }
 
 // SupplyCol satisfies the builder interface.
