@@ -39,13 +39,20 @@ import (
 // Returns the exec.Cmd forked, the config file to remove after the test,
 // and the server address to RPC-connect to.
 func startConsul(t *testing.T) (*exec.Cmd, string, string) {
-	// Create a temporary config file, as ports cannot all be set via
-	// command line.
-	configFile, err := ioutil.TempFile("", "consul")
+	// Create a temporary config file, as ports cannot all be set
+	// via command line. The file name has to end with '.json' so
+	// we're not using TempFile.
+	configDir, err := ioutil.TempDir("", "consul")
+	if err != nil {
+		t.Fatalf("cannot create temp dir: %v", err)
+	}
+	defer os.RemoveAll(configDir)
+
+	configFilename := path.Join(configDir, "consul.json")
+	configFile, err := os.OpenFile(configFilename, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		t.Fatalf("cannot create tempfile: %v", err)
 	}
-	configFilename := configFile.Name()
 
 	// Create the JSON config, save it.
 	port := testfiles.GoVtTopoConsultopoPort
@@ -53,9 +60,8 @@ func startConsul(t *testing.T) (*exec.Cmd, string, string) {
 		"ports": map[string]int{
 			"dns":      port,
 			"http":     port + 1,
-			"rpc":      port + 2,
-			"serf_lan": port + 3,
-			"serf_wan": port + 4,
+			"serf_lan": port + 2,
+			"serf_wan": port + 3,
 		},
 	}
 	data, err := json.Marshal(config)
