@@ -137,13 +137,18 @@ func (vc *vcursorImpl) ExecuteAutocommit(method string, query string, BindVars m
 }
 
 // ExecuteMultiShard is part of the engine.VCursor interface.
-func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
+func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, autocommit bool) (*sqltypes.Result, error) {
 	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(queries)))
-	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.trailingComments), vc.tabletType, vc.safeSession, false, canAutocommit)
+	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.trailingComments), vc.tabletType, vc.safeSession, false, autocommit)
 	if err == nil {
 		vc.hasPartialDML = true
 	}
 	return qr, err
+}
+
+// AutocommitApproval is part of the engine.VCursor interface.
+func (vc *vcursorImpl) AutocommitApproval() bool {
+	return vc.safeSession.AutocommitApproval()
 }
 
 // ExecuteStandalone is part of the engine.VCursor interface.
@@ -155,9 +160,9 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 			BindVariables: bindVars,
 		},
 	}
-	// The canAutocommit flag is not significant because we currently don't execute DMLs through ExecuteStandalone.
-	// But we set it to true for future-proofing this function.
-	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, rss, bqs, vc.tabletType, NewAutocommitSession(vc.safeSession.Session), false, true /* canAutocommit */)
+	// The autocommit flag is always set to false because we currently don't
+	// execute DMLs through ExecuteStandalone.
+	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, rss, bqs, vc.tabletType, NewAutocommitSession(vc.safeSession.Session), false, false /* autocommit */)
 }
 
 // StreamExeculteMulti is the streaming version of ExecuteMultiShard.

@@ -226,5 +226,6 @@ func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]
 			BindVariables: bindVars,
 		}
 	}
-	return vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, true /* canAutocommit */)
+	autocommit := len(rss) == 1 && vcursor.AutocommitApproval()
+	return vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
 }

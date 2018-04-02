@@ -203,7 +203,8 @@ func (ins *Insert) execInsertSharded(vcursor VCursor, bindVars map[string]*query
 		return nil, vterrors.Wrap(err, "execInsertSharded")
 	}
 
-	result, err := vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, true /* canAutocommit */)
+	autocommit := len(rss) == 1 && vcursor.AutocommitApproval()
+	result, err := vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execInsertSharded")
 	}

@@ -243,7 +243,7 @@ func TestDeleteSharded(t *testing.T) {
 	}
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.-20: dummy_delete {} ks.20-: dummy_delete {} true true`,
+		`ExecuteMultiShard ks.-20: dummy_delete {} ks.20-: dummy_delete {} true false`,
 	})
 
 	// Failure case

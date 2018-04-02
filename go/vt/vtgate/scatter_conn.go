@@ -166,14 +166,12 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
-	canAutocommit bool,
+	autocommit bool,
 ) (*sqltypes.Result, error) {
 
 	// mu protects qr
 	var mu sync.Mutex
 	qr := new(sqltypes.Result)
-
-	canCommit := len(rss) == 1 && canAutocommit && session.AutocommitApproval()
 
 	err := stc.multiGoTransaction(
 		ctx,
@@ -193,7 +191,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			}
 
 			switch {
-			case canCommit:
+			case autocommit:
 				innerqr, err = stc.executeAutocommit(ctx, rs, queries[i].Sql, queries[i].BindVariables, opts)
 			case shouldBegin:
 				innerqr, transactionID, err = rs.QueryService.BeginExecute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, opts)

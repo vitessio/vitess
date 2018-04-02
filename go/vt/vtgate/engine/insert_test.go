@@ -183,7 +183,7 @@ func TestInsertShardedSimple(t *testing.T) {
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix mid1, mid3 suffix /* vtgate:: keyspace_id:166b40b44aba4bd6,4eb190c9a2fa169c */ {_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
 			`sharded.-20: prefix mid2 suffix /* vtgate:: keyspace_id:06e7ea22ce92708f */ {_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
-			`true true`,
+			`true false`,
 	})
 }
 
@@ -338,7 +338,7 @@ func TestInsertShardedGenerate(t *testing.T) {
 			`sharded.-20: prefix mid2 suffix /* vtgate:: keyspace_id:06e7ea22ce92708f */ ` +
 			`{__seq0: type:INT64 value:"1" __seq1: type:INT64 value:"2" __seq2: type:INT64 value:"2" ` +
 			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
-			`true true`,
+			`true false`,
 	})
 
 	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerate.
@@ -480,7 +480,7 @@ func TestInsertShardedOwned(t *testing.T) {
 			`_c20: type:INT64 value:"7" _c21: type:INT64 value:"8" _c22: type:INT64 value:"9" ` +
 			`_c30: type:INT64 value:"10" _c31: type:INT64 value:"11" _c32: type:INT64 value:"12" ` +
 			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
-			`true true`,
+			`true false`,
 	})
 }
 
@@ -744,7 +744,7 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 			`_c20: type:INT64 value:"9" _c22: type:INT64 value:"11" _c23: type:INT64 value:"12" ` +
 			`_c30: type:INT64 value:"13" _c33: type:INT64 value:"16" ` +
 			`_id0: type:INT64 value:"1" _id2: type:INT64 value:"3" _id3: type:INT64 value:"4" } ` +
-			`true true`,
+			`true false`,
 	})
 }
 
@@ -971,7 +971,7 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 			`_c20: type:INT64 value:"7" _c21: type:INT64 value:"8" _c22: type:INT64 value:"9" ` +
 			`_c30: type:INT64 value:"10" _c31: type:INT64 value:"11" _c32: type:INT64 value:"12" ` +
 			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
-			`true true`,
+			`true false`,
 	})
 }
 
@@ -1085,7 +1085,7 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 			`sharded.-20: prefix mid3 suffix /* vtgate:: keyspace_id:4eb190c9a2fa169c */ ` +
 			`{_c30: type:INT64 value:"10" _c32: type:INT64 value:"12" ` +
 			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
-			`true true`,
+			`true false`,
 	})
 }
 
@@ -1297,7 +1297,7 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 			`_c20: _c21: _c22: ` +
 			`_c30: type:UINT64 value:"1" _c31: type:UINT64 value:"2" _c32: type:UINT64 value:"3" ` +
 			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
-			`true true`,
+			`true false`,
 	})
 }
 
