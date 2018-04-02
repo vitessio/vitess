@@ -16,7 +16,10 @@ limitations under the License.
 
 package sqlparser
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestSplitTrailingComments(t *testing.T) {
 	var testCases = []struct {
@@ -207,5 +210,108 @@ func TestExtractMysqlComment(t *testing.T) {
 		if gotSQL != testCase.outSQL {
 			t.Errorf("test input: '%s', got SQL\n%+v, want\n%+v", testCase.input, gotSQL, testCase.outSQL)
 		}
+	}
+}
+
+func TestExtractCommentDirectives(t *testing.T) {
+	var testCases = []struct {
+		input string
+		vals  CommentDirectives
+	}{{
+		input: "",
+		vals:  nil,
+	}, {
+		input: "/* not a vt comment */",
+		vals:  nil,
+	}, {
+		input: "/*vt! */",
+		vals:  CommentDirectives{},
+	}, {
+		input: "/*vt! SINGLE_OPTION */",
+		vals: CommentDirectives{
+			"SINGLE_OPTION": true,
+		},
+	}, {
+		input: "/*vt! ONE_OPT TWO_OPT */",
+		vals: CommentDirectives{
+			"ONE_OPT": true,
+			"TWO_OPT": true,
+		},
+	}, {
+		input: "/*vt! ONE_OPT */ /* other comment */ /*vt! TWO_OPT */",
+		vals: CommentDirectives{
+			"ONE_OPT": true,
+			"TWO_OPT": true,
+		},
+	}, {
+		input: "/*vt! ONE_OPT=abc TWO_OPT=def */",
+		vals: CommentDirectives{
+			"ONE_OPT": "abc",
+			"TWO_OPT": "def",
+		},
+	}, {
+		input: "/*vt! ONE_OPT=true TWO_OPT=false */",
+		vals: CommentDirectives{
+			"ONE_OPT": true,
+			"TWO_OPT": false,
+		},
+	}, {
+		input: "/*vt! ONE_OPT=true TWO_OPT=\"false\" */",
+		vals: CommentDirectives{
+			"ONE_OPT": true,
+			"TWO_OPT": "\"false\"",
+		},
+	}, {
+		input: "/*vt! RANGE_OPT=[a:b] ANOTHER ANOTHER_WITH_VALEQ=val= AND_ONE_WITH_EQ== */",
+		vals: CommentDirectives{
+			"RANGE_OPT":          "[a:b]",
+			"ANOTHER":            true,
+			"ANOTHER_WITH_VALEQ": "val=",
+			"AND_ONE_WITH_EQ":    "=",
+		},
+	}}
+
+	for _, testCase := range testCases {
+		sql := "select " + testCase.input + " 1 from dual"
+		stmt, _ := Parse(sql)
+		comments := stmt.(*Select).Comments
+		vals := ExtractCommentDirectives(comments)
+
+		if !reflect.DeepEqual(vals, testCase.vals) {
+			t.Errorf("test input: '%v', got vals:\n%+v, want\n%+v", testCase.input, vals, testCase.vals)
+		}
+	}
+
+	d := CommentDirectives{
+		"ONE_OPT": true,
+		"TWO_OPT": false,
+		"three":   1,
+		"four":    2,
+		"five":    0,
+		"six":     "true",
+	}
+
+	if !d.IsSet("ONE_OPT") {
+		t.Errorf("d.IsSet(ONE_OPT) should be true")
+	}
+
+	if d.IsSet("TWO_OPT") {
+		t.Errorf("d.IsSet(TWO_OPT) should be false")
+	}
+
+	if !d.IsSet("three") {
+		t.Errorf("d.IsSet(three) should be true")
+	}
+
+	if d.IsSet("four") {
+		t.Errorf("d.IsSet(four) should be false")
+	}
+
+	if d.IsSet("five") {
+		t.Errorf("d.IsSet(five) should be false")
+	}
+
+	if d.IsSet("six") {
+		t.Errorf("d.IsSet(six) should be false")
 	}
 }

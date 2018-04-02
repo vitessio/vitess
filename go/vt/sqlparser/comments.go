@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -160,4 +161,91 @@ func ExtractMysqlComment(sql string) (version string, innerSQL string) {
 	innerSQL = strings.TrimFunc(sql[endOfVersionIndex:], unicode.IsSpace)
 
 	return version, innerSQL
+}
+
+const commentDirectivePreamble = "/*vt!"
+
+// CommentDirectives is the parsed representation for execution directives
+// conveyed in query comments
+type CommentDirectives map[string]interface{}
+
+// ExtractCommentDirectives parses the comment list for any execution directives
+// of the form:
+//
+//     /*vt! OPTION_ONE=1 OPTION_TWO OPTION_THREE=abcd */
+//
+// It returns the map of the directive values or nil if there aren't any.
+func ExtractCommentDirectives(comments Comments) CommentDirectives {
+	if comments == nil {
+		return nil
+	}
+
+	var vals map[string]interface{}
+
+	for _, comment := range comments {
+		commentStr := string(comment)
+		if commentStr[0:5] != commentDirectivePreamble {
+			continue
+		}
+
+		if vals == nil {
+			vals = make(map[string]interface{})
+		}
+
+		// Split on whitespace and ignore the first and last directive
+		// since they contain the comment start/end
+		directives := strings.Fields(commentStr)
+		for i := 1; i < len(directives)-1; i++ {
+			directive := directives[i]
+			sep := strings.IndexByte(directive, '=')
+
+			// No value is equivalent to a true boolean
+			if sep == -1 {
+				vals[directive] = true
+				continue
+			}
+
+			strVal := directive[sep+1:]
+			directive = directive[:sep]
+
+			boolVal, err := strconv.ParseBool(strVal)
+			if err == nil {
+				vals[directive] = boolVal
+				continue
+			}
+
+			intVal, err := strconv.Atoi(strVal)
+			if err == nil {
+				vals[directive] = intVal
+				continue
+			}
+
+			vals[directive] = strVal
+		}
+	}
+	return vals
+}
+
+// IsSet checks the directive map for the named directive and returns
+// true iff the directive is set and has a true/false or 0/1 value
+func (d CommentDirectives) IsSet(key string) bool {
+	if d == nil {
+		return false
+	}
+
+	val, ok := d[key]
+	if !ok {
+		return false
+	}
+
+	boolVal, ok := val.(bool)
+	if ok {
+		return boolVal
+	}
+
+	intVal, ok := val.(int)
+	if ok {
+		return intVal == 1
+	}
+	return false
 }
