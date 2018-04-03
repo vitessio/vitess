@@ -684,6 +684,9 @@ var (
 		input:  "alter table a add foo",
 		output: "alter table a",
 	}, {
+		input:  "alter table a add unique key foo (column1)",
+		output: "alter table a",
+	}, {
 		input:  "alter table `By` add foo",
 		output: "alter table `By`",
 	}, {
