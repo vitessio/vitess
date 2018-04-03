@@ -65,15 +65,15 @@ func NewConnectionPool(name string, capacity int, idleTimeout time.Duration) *Co
 		return cp
 	}
 	usedNames[name] = true
-	stats.NewIntFunc(name+"Capacity", "Connection pool capacity", cp.Capacity)
-	stats.NewIntFunc(name+"Available", "Connection pool available", cp.Available)
-	stats.NewIntFunc(name+"Active", "Connection pool active", cp.Active)
-	stats.NewIntFunc(name+"InUse", "Connection pool in-use", cp.InUse)
-	stats.NewIntFunc(name+"MaxCap", "Connection pool max cap", cp.MaxCap)
-	stats.NewIntFunc(name+"WaitCount", "Connection pool wait count", cp.WaitCount)
+	stats.NewGaugeFunc(name+"Capacity", "Connection pool capacity", cp.Capacity)
+	stats.NewGaugeFunc(name+"Available", "Connection pool available", cp.Available)
+	stats.NewGaugeFunc(name+"Active", "Connection pool active", cp.Active)
+	stats.NewGaugeFunc(name+"InUse", "Connection pool in-use", cp.InUse)
+	stats.NewGaugeFunc(name+"MaxCap", "Connection pool max cap", cp.MaxCap)
+	stats.NewGaugeFunc(name+"WaitCount", "Connection pool wait count", cp.WaitCount)
 	stats.Publish(name+"WaitTime", stats.DurationFunc(cp.WaitTime))
 	stats.Publish(name+"IdleTimeout", stats.DurationFunc(cp.IdleTimeout))
-	stats.NewIntFunc(name+"IdleClosed", "Connection pool idle closed", cp.IdleClosed)
+	stats.NewGaugeFunc(name+"IdleClosed", "Connection pool idle closed", cp.IdleClosed)
 	return cp
 }
 

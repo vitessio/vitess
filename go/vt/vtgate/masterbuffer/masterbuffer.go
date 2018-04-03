@@ -47,11 +47,11 @@ var (
 	maxBufferSize          = flag.Int("max_buffer_size", 10, "The maximum number of master requests to buffer at a time.")
 	fakeBufferDelay        = flag.Duration("fake_buffer_delay", 1*time.Second, "The amount of time that we should delay all master requests for, to fake a buffer.")
 
-	bufferedRequestsAttempted  = stats.NewInt("BufferedRequestsAttempted", "Count of buffered requests attempted")
-	bufferedRequestsSuccessful = stats.NewInt("BufferedRequestsSuccessful", "Count of successful buffered requests")
+	bufferedRequestsAttempted  = stats.NewCounter("BufferedRequestsAttempted", "Count of buffered requests attempted")
+	bufferedRequestsSuccessful = stats.NewCounter("BufferedRequestsSuccessful", "Count of successful buffered requests")
 	// Use this lock when adding to the number of currently buffered requests.
 	bufferMu         sync.Mutex
-	bufferedRequests = stats.NewInt("BufferedRequests", "Count of buffered requests")
+	bufferedRequests = stats.NewCounter("BufferedRequests", "Count of buffered requests")
 )
 
 // timeSleep can be mocked out in unit tests

@@ -27,7 +27,7 @@ import (
 
 func TestCounters(t *testing.T) {
 	clear()
-	c := NewCounters("counter1", "help")
+	c := NewCountersWithLabels("counter1", "help")
 	c.Add("c1", 1)
 	c.Add("c2", 1)
 	c.Add("c2", 1)
@@ -56,14 +56,14 @@ func TestCounters(t *testing.T) {
 
 func TestCountersTags(t *testing.T) {
 	clear()
-	c := NewCounters("counterTag1", "help")
+	c := NewCountersWithLabels("counterTag1", "help")
 	want := map[string]int64{}
 	got := c.Counts()
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("want %v, got %v", want, got)
 	}
 
-	c = NewCounters("counterTag2", "help", "tag1", "tag2")
+	c = NewCountersWithLabels("counterTag2", "help", "tag1", "tag2")
 	want = map[string]int64{"tag1": 0, "tag2": 0}
 	got = c.Counts()
 	if !reflect.DeepEqual(got, want) {
@@ -129,7 +129,7 @@ func TestCountersHook(t *testing.T) {
 		gotv = v.(*Counters)
 	})
 
-	v := NewCounters("counter2", "help")
+	v := NewCountersWithLabels("counter2", "help")
 	if gotname != "counter2" {
 		t.Errorf("want counter2, got %s", gotname)
 	}
@@ -138,7 +138,7 @@ func TestCountersHook(t *testing.T) {
 	}
 }
 
-var benchCounter = NewCounters("bench", "help")
+var benchCounter = NewCountersWithLabels("bench", "help")
 
 func BenchmarkCounters(b *testing.B) {
 	clear()

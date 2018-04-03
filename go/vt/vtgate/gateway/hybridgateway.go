@@ -90,7 +90,7 @@ func (h *HybridGateway) WaitForTablets(ctx context.Context, tabletTypesToWait []
 
 // RegisterStats registers the l2vtgate connection counts stats.
 func (h *HybridGateway) RegisterStats() {
-	stats.NewMultiCountersFunc(
+	stats.NewCountersFuncWithMultiLabels(
 		"L2VtgateConnections",
 		[]string{"Keyspace", "ShardName", "TabletType"},
 		"The l2vtgate connection counts",

@@ -104,10 +104,10 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell, statsName strin
 	e.vm.watchSrvVSchema(ctx, cell)
 
 	executorOnce.Do(func() {
-		stats.NewIntFunc("QueryPlanCacheLength", "Query plan cache length", e.plans.Length)
-		stats.NewIntFunc("QueryPlanCacheSize", "Query plan cache size", e.plans.Size)
-		stats.NewIntFunc("QueryPlanCacheCapacity", "Query plan cache capacity", e.plans.Capacity)
-		stats.NewIntFunc("QueryPlanCacheEvictions", "Query plan cache evictions", e.plans.Evictions)
+		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", e.plans.Length)
+		stats.NewGaugeFunc("QueryPlanCacheSize", "Query plan cache size", e.plans.Size)
+		stats.NewGaugeFunc("QueryPlanCacheCapacity", "Query plan cache capacity", e.plans.Capacity)
+		stats.NewGaugeFunc("QueryPlanCacheEvictions", "Query plan cache evictions", e.plans.Evictions)
 		stats.Publish("QueryPlanCacheOldest", stats.StringFunc(func() string {
 			return fmt.Sprintf("%v", e.plans.Oldest())
 		}))
