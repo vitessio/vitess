@@ -29,8 +29,8 @@ func clear() {
 
 func TestNoHook(t *testing.T) {
 	clear()
-	v := NewInt("plainint")
-	v.Set(1)
+	v := NewInt("plainint", "help")
+	v.Add(1)
 	if v.String() != "1" {
 		t.Errorf("want 1, got %s", v.String())
 	}
@@ -79,26 +79,26 @@ func TestInt(t *testing.T) {
 		gotname = name
 		gotv = v.(*Int)
 	})
-	v := NewInt("Int")
+	v := NewInt("Int", "help")
 	if gotname != "Int" {
 		t.Errorf("want Int, got %s", gotname)
 	}
 	if gotv != v {
 		t.Errorf("want %#v, got %#v", v, gotv)
 	}
-	v.Set(5)
-	if v.Get() != 5 {
-		t.Errorf("want 5, got %v", v.Get())
-	}
 	v.Add(1)
-	if v.Get() != 6 {
-		t.Errorf("want 6, got %v", v.Get())
+	if v.Get() != 1 {
+		t.Errorf("want 1, got %v", v.Get())
 	}
-	if v.String() != "6" {
-		t.Errorf("want 6, got %v", v.Get())
+	if v.String() != "1" {
+		t.Errorf("want 1, got %v", v.Get())
+	}
+	v.Reset()
+	if v.Get() != 0 {
+		t.Errorf("want 0, got %v", v.Get())
 	}
 
-	f := IntFunc(func() int64 {
+	f := NewIntFunc("name", "help", func() int64 {
 		return 1
 	})
 	if f.String() != "1" {

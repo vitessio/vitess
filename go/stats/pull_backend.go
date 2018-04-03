@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"expvar"
 	"sync"
 
 	log "github.com/golang/glog"
@@ -10,12 +11,12 @@ import (
 // Note that there are no functions implemented to export:
 // String/StringMap as Prometheus doesn't have support for exporting metrics of those types. Future implementations could add support for that, though, if relevant to the backend.
 type PullBackend interface {
-	NewMetric(*Counters, string, ValueType)
-	NewMultiCounter(*MultiCounters, string)
-	NewMultiGauge(*MultiGauges, string)
-	NewMultiCounterFunc(*MultiCountersFunc, string) // MultiCounterFuncs are always exported as Gauges
-	NewInt(*Int, string, ValueType)
-	NewIntFunc(*IntFunc, string) // IntFuncs are always exported as Gauges
+	NewMetric(*Counter, string, ValueType)
+	NewMetricWithLabels(*Counters, string, ValueType)
+	NewCountersWithMultiLabels(*MultiCounters, string)
+	NewCountersFuncWithMultiLabels(*MultiCountersFunc, string) // MultiCounterFuncs are always exported as Gauges
+	NewGaugesWithMultiLabels(*GaugesWithLabels, string)
+	NewGaugeFunc(*GaugeFunc, string)
 	NewTiming(*Timings, string)
 	NewMultiTiming(*MultiTimings, string)
 }
@@ -23,17 +24,6 @@ type PullBackend interface {
 var (
 	mu sync.Mutex
 	be = make(map[string]PullBackend)
-
-	pullCounters          = make(map[string]*Counters)
-	pullGauges            = make(map[string]*Gauges)
-	pullMultiGauges       = make(map[string]*MultiGauges)
-	pullMultiCounters     = make(map[string]*MultiCounters)
-	pullMultiCountersFunc = make(map[string]*MultiCountersFunc)
-	pullTimings           = make(map[string]*Timings)
-	pullMultiTimings      = make(map[string]*MultiTimings)
-	pullInts              = make(map[string]*Int)
-	pullIntGauges         = make(map[string]*IntGauge)
-	pullIntsFunc          = make(map[string]*IntFunc)
 )
 
 // ValueType specifies whether the value of a metric goes up monotonically
@@ -48,148 +38,44 @@ const (
 	GaugeValue
 )
 
-func publishPullMultiCounters(mc *MultiCounters, name string) {
+// PublishPullMetric publishes the given metric on the registered backends.
+func PublishPullMetric(name string, v expvar.Var) {
 	mu.Lock()
 	defer mu.Unlock()
-	pullMultiCounters[name] = mc
-
 	for _, backend := range be {
-		backend.NewMultiCounter(mc, name)
-	}
-}
-
-func publishPullCounters(c *Counters, name string) {
-	mu.Lock()
-	defer mu.Unlock()
-	pullCounters[name] = c
-
-	for _, backend := range be {
-		backend.NewMetric(c, name, CounterValue)
-	}
-}
-
-func publishPullGauges(g *Gauges, name string) {
-	mu.Lock()
-	defer mu.Unlock()
-	pullGauges[name] = g
-	for _, backend := range be {
-		backend.NewMetric(&g.Counters, name, GaugeValue)
-	}
-}
-
-func publishPullMultiGauges(mg *MultiGauges, name string) {
-	mu.Lock()
-	defer mu.Unlock()
-	pullMultiGauges[name] = mg
-	for _, backend := range be {
-		backend.NewMultiGauge(mg, name)
-	}
-}
-
-func publishPullMultiCountersFunc(mcf *MultiCountersFunc, name string) {
-	mu.Lock()
-	defer mu.Unlock()
-	pullMultiCountersFunc[name] = mcf
-
-	for _, backend := range be {
-		backend.NewMultiCounterFunc(mcf, name)
-	}
-}
-
-func publishPullTimings(t *Timings, name string) {
-	mu.Lock()
-	defer mu.Unlock()
-	pullTimings[name] = t
-
-	for _, backend := range be {
-		backend.NewTiming(t, name)
-	}
-}
-
-func publishPullMultiTimings(mt *MultiTimings, name string) {
-	mu.Lock()
-	defer mu.Unlock()
-	pullMultiTimings[name] = mt
-	for _, backend := range be {
-		backend.NewMultiTiming(mt, name)
-	}
-}
-
-func publishPullInt(i *Int, name string) {
-	mu.Lock()
-	defer mu.Unlock()
-	pullInts[name] = i
-	for _, backend := range be {
-		backend.NewInt(i, name, CounterValue)
-	}
-}
-
-func publishPullIntGauge(i *IntGauge, name string) {
-	mu.Lock()
-	defer mu.Unlock()
-	pullIntGauges[name] = i
-	for _, backend := range be {
-		backend.NewInt(&i.Int, name, GaugeValue)
-	}
-}
-
-func publishPullIntFunc(i *IntFunc, name string) {
-	mu.Lock()
-	defer mu.Unlock()
-	pullIntsFunc[name] = i
-	for _, backend := range be {
-		backend.NewIntFunc(i, name)
+		switch st := v.(type) {
+		case *Counter:
+			backend.NewMetric(st, name, CounterValue)
+		case *Gauge:
+			backend.NewMetric(&st.Counter, name, GaugeValue)
+		case *GaugeFunc:
+			backend.NewGaugeFunc(st, name)
+		case *CountersWithLabels:
+			backend.NewMetricWithLabels(&st.Counters, name, st.labelName, CounterValue)
+		case *CountersWithMultiLabels:
+			backend.NewCountersWithMultiLabels(st, name)
+		case *CountersFuncWithMultiLabels:
+			backend.NewCountersFuncWithMultiLabels(st, name)
+		case *GaugesWithLabels:
+			backend.NewMetricWithLabels(&st.Counters, name, st.labelName, GaugeValue)
+		case *GaugesWithMultiLabels:
+			backend.NewGaugesWithMultiLabels(st, name)
+		case *Timings:
+			backend.NewTiming(st, name)
+		case *MultiTimings:
+			backend.NewMultiTiming(st, name)
+		default:
+			log.Warningf("Unsupported type for %s: %T", name, st)
+		}
 	}
 }
 
 // RegisterPullBackendImpl registers an implementation of PullBackend
-func RegisterPullBackendImpl(name string, pullBackend PullBackend) {
+func RegisterPullBackendImpl(name string, pb PullBackend) {
 	mu.Lock()
 	defer mu.Unlock()
 	if _, ok := be[name]; ok {
 		log.Fatalf("PullBackend named %v already exists", name)
 	}
-
-	// Flush pre-existing metrics
-	for mcName, mc := range pullMultiCounters {
-		pullBackend.NewMultiCounter(mc, mcName)
-	}
-
-	for mgName, mg := range pullMultiGauges {
-		pullBackend.NewMultiGauge(mg, mgName)
-	}
-
-	for cName, c := range pullCounters {
-		pullBackend.NewMetric(c, cName, CounterValue)
-	}
-
-	for gName, g := range pullGauges {
-		pullBackend.NewMetric(&g.Counters, gName, GaugeValue)
-	}
-
-	for mcfName, mcf := range pullMultiCountersFunc {
-		pullBackend.NewMultiCounterFunc(mcf, mcfName)
-	}
-
-	for tName, t := range pullTimings {
-		pullBackend.NewTiming(t, tName)
-	}
-
-	for mtName, mt := range pullMultiTimings {
-		pullBackend.NewMultiTiming(mt, mtName)
-	}
-
-	for iName, i := range pullInts {
-		pullBackend.NewInt(i, iName, CounterValue)
-	}
-
-	for ifName, intFunc := range pullIntsFunc {
-		pullBackend.NewIntFunc(intFunc, ifName)
-	}
-
-	for iGaugeName, iGauge := range pullIntGauges {
-		pullBackend.NewInt(&iGauge.Int, iGaugeName, GaugeValue)
-	}
-
-	be[name] = pullBackend
+	be[name] = pb
 }

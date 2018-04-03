@@ -18,28 +18,29 @@ type PromBackend struct {
 // Init initializes the Prometheus backend with the given namespace.
 func Init(namespace string) {
 	http.Handle("/metrics", promhttp.Handler())
-	promBackend := &PromBackend{namespace: namespace}
-	stats.RegisterPullBackendImpl("prom", promBackend)
+	stats.RegisterPullBackendImpl("prom", &PromBackend{namespace: namespace})
+	stats.Register(stats.PublishPullMetric)
+
 }
 
 // NewMetric is part of the PullBackend interface.
-func (be *PromBackend) NewMetric(c *stats.Counters, name string, vt stats.ValueType) {
+func (be *PromBackend) NewMetricWithLabels(c *stats.Counters, name string, labelName string, vt stats.ValueType) {
 	collector := &metricsCollector{
 		counters: map[*stats.Counters]*prom.Desc{
 			c: prom.NewDesc(
 				prom.BuildFQName("", be.namespace, toSnake(name)),
 				c.Help(),
-				[]string{"type"}, // Hard-coded label key for Counters
+				[]string{labelName},
 				nil),
 		}, vt: vt}
 
 	prom.MustRegister(collector)
 }
 
-// NewMultiCounter is part of the PullBackend interface.
-func (be *PromBackend) NewMultiCounter(mc *stats.MultiCounters, name string) {
+// NewCountersWithMultiLabels is part of the PullBackend interface.
+func (be *PromBackend) NewCountersWithMultiLabels(mc *stats.CountersWithMultiLabels, name string) {
 	c := &multiCountersCollector{
-		multiCounters: map[*stats.MultiCounters]*prom.Desc{
+		multiCounters: map[*stats.CountersWithMultiLabels]*prom.Desc{
 			mc: prom.NewDesc(
 				prom.BuildFQName("", be.namespace, toSnake(name)),
 				mc.Counters.Help(),
@@ -50,10 +51,10 @@ func (be *PromBackend) NewMultiCounter(mc *stats.MultiCounters, name string) {
 	prom.MustRegister(c)
 }
 
-// NewMultiGauge is part of the PullBackend interface.
-func (be *PromBackend) NewMultiGauge(mg *stats.MultiGauges, name string) {
+// NewGaugesWithMultiLabels is part of the PullBackend interface.
+func (be *PromBackend) NewGaugesWithMultiLabels(mg *stats.GaugesWithMultiLabels, name string) {
 	c := &multiGaugesCollector{
-		multiGauges: map[*stats.MultiGauges]*prom.Desc{
+		multiGauges: map[*stats.GaugesWithMultiLabels]*prom.Desc{
 			mg: prom.NewDesc(
 				prom.BuildFQName("", be.namespace, toSnake(name)),
 				mg.Gauges.Counters.Help(),
@@ -64,10 +65,10 @@ func (be *PromBackend) NewMultiGauge(mg *stats.MultiGauges, name string) {
 	prom.MustRegister(c)
 }
 
-// NewMultiCounterFunc is part of the PullBackend interface.
-func (be *PromBackend) NewMultiCounterFunc(mcf *stats.MultiCountersFunc, name string) {
+// NewCountersFuncWithMultiLabels is part of the PullBackend interface.
+func (be *PromBackend) NewCountersFuncWithMultiLabels(mcf *stats.CountersFuncWithMultiLabels, name string) {
 	collector := &multiCountersFuncCollector{
-		multiCountersFunc: map[*stats.MultiCountersFunc]*prom.Desc{
+		multiCountersFunc: map[*stats.CountersFuncWithMultiLabels]*prom.Desc{
 			mcf: prom.NewDesc(
 				prom.BuildFQName("", be.namespace, toSnake(name)),
 				mcf.Help(),
@@ -106,26 +107,26 @@ func (be *PromBackend) NewMultiTiming(mt *stats.MultiTimings, name string) {
 	prom.MustRegister(collector)
 }
 
-// NewInt is part of the PullBackend interface
-func (be *PromBackend) NewInt(i *stats.Int, name string, vt stats.ValueType) {
-	collector := &intCollector{
-		intMetrics: map[*stats.Int]*prom.Desc{
-			i: prom.NewDesc(
+// NewMetric is part of the PullBackend interface
+func (be *PromBackend) NewMetric(c *stats.Counter, name string, vt stats.ValueType) {
+	collector := &metricCollector{
+		m: map[*stats.Counter]*prom.Desc{
+			c: prom.NewDesc(
 				prom.BuildFQName("", be.namespace, toSnake(name)),
-				i.Help(),
+				c.Help(),
 				nil,
 				nil),
 		}, vt: vt}
 	prom.MustRegister(collector)
 }
 
-// NewIntFunc is part of the PullBackend interface
-func (be *PromBackend) NewIntFunc(intFunc *stats.IntFunc, name string) {
-	collector := &intFuncCollector{
-		intFuncs: map[*stats.IntFunc]*prom.Desc{
-			intFunc: prom.NewDesc(
+// NewGaugeFunc is part of the PullBackend interface
+func (be *PromBackend) NewGaugeFunc(gf *stats.GaugeFunc, name string) {
+	collector := &gaugeFuncCollector{
+		gfm: map[*stats.GaugeFunc]*prom.Desc{
+			gf: prom.NewDesc(
 				prom.BuildFQName("", be.namespace, toSnake(name)),
-				intFunc.Help(),
+				gf.Help(),
 				nil,
 				nil),
 		}}

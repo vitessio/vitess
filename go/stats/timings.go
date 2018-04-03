@@ -54,7 +54,6 @@ func NewTimings(name string, help string, categories ...string) *Timings {
 	}
 	if name != "" {
 		publish(name, t)
-		publishPullTimings(t, name)
 	}
 
 	return t
@@ -193,8 +192,6 @@ func NewMultiTimings(name string, help string, labels []string) *MultiTimings {
 	if name != "" {
 		publish(name, t)
 	}
-
-	publishPullMultiTimings(t, name)
 
 	return t
 }

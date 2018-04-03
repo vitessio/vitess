@@ -64,8 +64,8 @@ import (
 )
 
 var (
-	hcErrorCounters          = stats.NewMultiCounters("HealthcheckErrors", "Healthcheck Errors", []string{"Keyspace", "ShardName", "TabletType"})
-	hcMasterPromotedCounters = stats.NewMultiCounters("HealthcheckMasterPromoted", "Master promoted in keyspace/shard name because of health check errors", []string{"Keyspace", "ShardName"})
+	hcErrorCounters          = stats.NewCountersWithMultiLabels("HealthcheckErrors", "Healthcheck Errors", []string{"Keyspace", "ShardName", "TabletType"})
+	hcMasterPromotedCounters = stats.NewCountersWithMultiLabels("HealthcheckMasterPromoted", "Master promoted in keyspace/shard name because of health check errors", []string{"Keyspace", "ShardName"})
 	healthcheckOnce          sync.Once
 )
 
@@ -332,7 +332,7 @@ func NewHealthCheck(retryDelay, healthCheckTimeout time.Duration) HealthCheck {
 
 // RegisterStats registers the connection counts stats
 func (hc *HealthCheckImpl) RegisterStats() {
-	stats.NewMultiCountersFunc(
+	stats.NewCountersFuncWithMultiLabels(
 		"HealthcheckConnections",
 		[]string{"Keyspace", "ShardName", "TabletType"},
 		"the numb of healthcheck connections registered",

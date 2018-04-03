@@ -82,15 +82,15 @@ func New(
 		return cp
 	}
 	usedNames[name] = true
-	stats.NewIntFunc(name+"Capacity", "Tablet server conn pool capacity", cp.Capacity)
-	stats.NewIntFunc(name+"Available", "Tablet server conn pool available", cp.Available)
-	stats.NewIntFunc(name+"Active", "Tablet server conn pool active", cp.Active)
-	stats.NewIntFunc(name+"InUse", "Tablet server conn pool in use", cp.InUse)
-	stats.NewIntFunc(name+"MaxCap", "Tablet server conn pool max cap", cp.MaxCap)
-	stats.NewIntFunc(name+"WaitCount", "Tablet server conn pool wait count", cp.WaitCount)
+	stats.NewGaugeFunc(name+"Capacity", "Tablet server conn pool capacity", cp.Capacity)
+	stats.NewGaugeFunc(name+"Available", "Tablet server conn pool available", cp.Available)
+	stats.NewGaugeFunc(name+"Active", "Tablet server conn pool active", cp.Active)
+	stats.NewGaugeFunc(name+"InUse", "Tablet server conn pool in use", cp.InUse)
+	stats.NewGaugeFunc(name+"MaxCap", "Tablet server conn pool max cap", cp.MaxCap)
+	stats.NewGaugeFunc(name+"WaitCount", "Tablet server conn pool wait count", cp.WaitCount)
 	stats.Publish(name+"WaitTime", stats.DurationFunc(cp.WaitTime))
 	stats.Publish(name+"IdleTimeout", stats.DurationFunc(cp.IdleTimeout))
-	stats.NewIntFunc(name+"IdleClosed", "Tablet server conn pool idle closed", cp.IdleClosed)
+	stats.NewGaugeFunc(name+"IdleClosed", "Tablet server conn pool idle closed", cp.IdleClosed)
 	return cp
 }
 
