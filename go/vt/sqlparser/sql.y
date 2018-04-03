@@ -844,6 +844,10 @@ column_default_opt:
   {
     $$ = NewValArg($2)
   }
+| DEFAULT BIT_LITERAL
+  {
+    $$ = NewBitVal($2)
+  }
 
 on_update_opt:
   {
