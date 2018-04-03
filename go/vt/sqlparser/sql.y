@@ -1078,6 +1078,7 @@ alter_object_type:
 | PRIMARY
 | SPATIAL
 | PARTITION
+| UNIQUE
 
 partition_operation:
   REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb
