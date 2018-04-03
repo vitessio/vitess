@@ -31,8 +31,11 @@ import (
 	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // hashIndex is a functional, unique Vindex.
@@ -179,12 +182,28 @@ type vschemaWrapper struct {
 	v *vindexes.VSchema
 }
 
-func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, error) {
-	return vw.v.FindTable(tab.Qualifier.String(), tab.Name.String())
+func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {
+	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
+	if err != nil {
+		return nil, destKeyspace, destTabletType, destTarget, err
+	}
+	table, err := vw.v.FindTable(destKeyspace, tab.Name.String())
+	if err != nil {
+		return nil, destKeyspace, destTabletType, destTarget, err
+	}
+	return table, destKeyspace, destTabletType, destTarget, nil
 }
 
-func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, error) {
-	return vw.v.FindTableOrVindex(tab.Qualifier.String(), tab.Name.String())
+func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
+	if err != nil {
+		return nil, nil, destKeyspace, destTabletType, destTarget, err
+	}
+	table, vindex, err := vw.v.FindTableOrVindex(destKeyspace, tab.Name.String())
+	if err != nil {
+		return nil, nil, destKeyspace, destTabletType, destTarget, err
+	}
+	return table, vindex, destKeyspace, destTabletType, destTarget, nil
 }
 
 func (vw *vschemaWrapper) DefaultKeyspace() (*vindexes.Keyspace, error) {

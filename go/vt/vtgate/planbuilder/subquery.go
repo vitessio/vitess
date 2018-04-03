@@ -44,7 +44,7 @@ type subquery struct {
 }
 
 // newSubquery builds a new subquery.
-func newSubquery(alias sqlparser.TableIdent, bldr builder, vschema VSchema) *subquery {
+func newSubquery(alias sqlparser.TableIdent, bldr builder, vschema ContextVSchema) *subquery {
 	sq := &subquery{
 		order:     bldr.MaxOrder() + 1,
 		bldr:      bldr,

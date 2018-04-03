@@ -20,9 +20,12 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // builder defines the interface that a primitive must
@@ -114,17 +117,17 @@ type columnOriginator interface {
 	Order() int
 }
 
-// VSchema defines the interface for this package to fetch
+// ContextVSchema defines the interface for this package to fetch
 // info about tables.
-type VSchema interface {
-	FindTable(tablename sqlparser.TableName) (*vindexes.Table, error)
-	FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, error)
+type ContextVSchema interface {
+	FindTable(tablename sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error)
+	FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 	DefaultKeyspace() (*vindexes.Keyspace, error)
 }
 
 // Build builds a plan for a query based on the specified vschema.
 // It's the main entry point for this package.
-func Build(query string, vschema VSchema) (*engine.Plan, error) {
+func Build(query string, vschema ContextVSchema) (*engine.Plan, error) {
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, err
@@ -136,7 +139,7 @@ func Build(query string, vschema VSchema) (*engine.Plan, error) {
 // TODO(sougou): The query input is trusted as the source
 // of the AST. Maybe this function just returns instructions
 // and engine.Plan can be built by the caller.
-func BuildFromStmt(query string, stmt sqlparser.Statement, vschema VSchema) (*engine.Plan, error) {
+func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema) (*engine.Plan, error) {
 	var err error
 	plan := &engine.Plan{
 		Original: query,
