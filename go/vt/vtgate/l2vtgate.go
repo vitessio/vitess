@@ -63,7 +63,7 @@ func initL2VTGate(gw gateway.Gateway) *L2VTGate {
 			"QueryServiceCall",
 			"l2VTGate query service call timings",
 			[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
-		errorCounts: stats.NewMultiCounters(
+		errorCounts: stats.NewCountersWithMultiLabels(
 			"QueryServiceCallErrorCount",
 			"Error count from calls to the query service",
 			[]string{"Operation", "Keyspace", "ShardName", "DbType"}),

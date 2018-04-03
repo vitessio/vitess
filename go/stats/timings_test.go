@@ -56,7 +56,7 @@ func TestTimingsHook(t *testing.T) {
 	})
 
 	name := "timings2"
-	v := NewTimings(name)
+	v := NewTimings(name, "help")
 	if gotname != name {
 		t.Errorf("got %q, want %q", gotname, name)
 	}

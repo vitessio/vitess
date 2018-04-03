@@ -59,77 +59,88 @@ var (
 
 	statsState = stats.NewString("WorkerState")
 	// statsRetryCount is the total number of times a query to vttablet had to be retried.
-	statsRetryCount = stats.NewInt("WorkerRetryCount", "Total number of times a query to a vttablet had to be retried")
+	statsRetryCount = stats.NewCounter("WorkerRetryCount", "Total number of times a query to a vttablet had to be retried")
 	// statsRetryCount groups the number of retries by category e.g. "TimeoutError" or "Readonly".
-	statsRetryCounters = stats.NewCounters("WorkerRetryCounters", "Number of retries")
+	statsRetryCounters = stats.NewCountersWithLabels("WorkerRetryCounters", "Number of retries", "category")
 	// statsThrottledCounters is the number of times a write has been throttled,
 	// grouped by (keyspace, shard, threadID). Mainly used for testing.
 	// If throttling is enabled, this should always be non-zero for all threads.
-	statsThrottledCounters = stats.NewMultiCounters(
+	statsThrottledCounters = stats.NewCountersWithMultiLabels(
 		"WorkerThrottledCounters",
 		"Number of times a write has been throttled",
 		[]string{"Keyspace", "ShardName", "ThreadId"})
 	// statsStateDurations tracks for each state how much time was spent in it. Mainly used for testing.
-	statsStateDurationsNs = stats.NewGauges("WorkerStateDurations", "How much time was spent in each state")
+	statsStateDurationsNs = stats.NewGaugesWithLabels("WorkerStateDurations", "How much time was spent in each state", "state")
 
 	// statsOnlineInsertsCounters tracks for every table how many rows were
 	// inserted during the online clone (reconciliation) phase.
-	statsOnlineInsertsCounters = stats.NewCounters(
+	statsOnlineInsertsCounters = stats.NewCountersWithLabels(
 		"WorkerOnlineInsertsCounters",
-		"For every table how many rows were inserted during the online clone (reconciliation) phase")
+		"For every table how many rows were inserted during the online clone (reconciliation) phase",
+		"table")
 	// statsOnlineUpdatesCounters tracks for every table how many rows were updated.
-	statsOnlineUpdatesCounters = stats.NewCounters(
+	statsOnlineUpdatesCounters = stats.NewCountersWithLabels(
 		"WorkerOnlineUpdatesCounters",
-		"For every table how many rows were updated")
+		"For every table how many rows were updated",
+		"table")
 	// statsOnlineUpdatesCounters tracks for every table how many rows were deleted.
-	statsOnlineDeletesCounters = stats.NewCounters(
+	statsOnlineDeletesCounters = stats.NewCountersWithLabels(
 		"WorkerOnlineDeletesCounters",
-		"For every table how many rows were deleted")
+		"For every table how many rows were deleted",
+		"table")
 	// statsOnlineEqualRowsCounters tracks for every table how many rows were equal.
-	statsOnlineEqualRowsCounters = stats.NewCounters(
+	statsOnlineEqualRowsCounters = stats.NewCountersWithLabels(
 		"WorkerOnlineEqualRowsCounters",
-		"For every table how many rows were equal")
+		"For every table how many rows were equal",
+		"table")
 
 	// statsOfflineInsertsCounters tracks for every table how many rows were
 	// inserted during the online clone (reconciliation) phase.
-	statsOfflineInsertsCounters = stats.NewCounters(
+	statsOfflineInsertsCounters = stats.NewCountersWithLabels(
 		"WorkerOfflineInsertsCounters",
-		"For every table how many rows were inserted during the online clone (reconciliation) phase")
+		"For every table how many rows were inserted during the online clone (reconciliation) phase",
+		"table")
 	// statsOfflineUpdatesCounters tracks for every table how many rows were updated.
-	statsOfflineUpdatesCounters = stats.NewCounters(
+	statsOfflineUpdatesCounters = stats.NewCountersWithLabels(
 		"WorkerOfflineUpdatesCounters",
-		"For every table how many rows were updated")
+		"For every table how many rows were updated",
+		"table")
 	// statsOfflineUpdatesCounters tracks for every table how many rows were deleted.
-	statsOfflineDeletesCounters = stats.NewCounters(
+	statsOfflineDeletesCounters = stats.NewCountersWithLabels(
 		"WorkerOfflineDeletesCounters",
-		"For every table how many rows were deleted")
+		"For every table how many rows were deleted",
+		"table")
 	// statsOfflineEqualRowsCounters tracks for every table how many rows were equal.
-	statsOfflineEqualRowsCounters = stats.NewCounters(
+	statsOfflineEqualRowsCounters = stats.NewCountersWithLabels(
 		"WorkerOfflineEqualRowsCounters",
-		"For every table how many rows were equal")
+		"For every table how many rows were equal",
+		"table")
 
 	// statsStreamingQueryRestartsCounters tracks for every tablet alias how often
 	// a streaming query was succesfully established there.
-	statsStreamingQueryCounters = stats.NewCounters(
+	statsStreamingQueryCounters = stats.NewCountersWithLabels(
 		"StreamingQueryCounters",
-		"For every tablet alias how often a streaming query was successfully established there")
+		"For every tablet alias how often a streaming query was successfully established there",
+		"tablet_alias")
 	// statsStreamingQueryErrorsCounters tracks for every tablet alias how often
 	// a (previously successfully established) streaming query did error.
-	statsStreamingQueryErrorsCounters = stats.NewCounters(
+	statsStreamingQueryErrorsCounters = stats.NewCountersWithLabels(
 		"StreamingQueryErrorsCounters",
-		"For every tablet alias how often a (previously successfully established) streaming query did error")
+		"For every tablet alias how often a (previously successfully established) streaming query did error",
+		"tablet_alias")
 	// statsStreamingQueryRestartsSameTabletCounters tracks for every tablet alias
 	// how often we successfully restarted a streaming query on the first retry.
 	// This kind of restart is usually necessary when our streaming query is idle
 	// and MySQL aborts it after a timeout.
-	statsStreamingQueryRestartsSameTabletCounters = stats.NewCounters(
+	statsStreamingQueryRestartsSameTabletCounters = stats.NewCountersWithLabels(
 		"StreamingQueryRestartsSameTabletCounters",
-		"For every tablet alias how often we successfully restarted a streaming query on the first retry.")
+		"For every tablet alias how often we successfully restarted a streaming query on the first retry.",
+		"tablet_alias")
 	// statsStreamingQueryRestartsDifferentTablet records how many restarts were
 	// successful on the 2 (or higher) retry after the initial retry to the same
 	// tablet failed and we switched to a different tablet. In practice, this
 	// happens when a tablet did go away due to a maintenance operation.
-	statsStreamingQueryRestartsDifferentTablet = stats.NewInt(
+	statsStreamingQueryRestartsDifferentTablet = stats.NewCounter(
 		"StreamingQueryRestartsDifferentTablet",
 		"How many restarts were successful on the 2nd (or higher) retry after the initial retry to the same tablet fails & we switch to a different tablet")
 )

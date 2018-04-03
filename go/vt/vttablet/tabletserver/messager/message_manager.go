@@ -37,7 +37,7 @@ import (
 )
 
 // MessageStats tracks stats for messages.
-var MessageStats = stats.NewMultiGauges(
+var MessageStats = stats.NewGaugesWithMultiLabels(
 	"Messages",
 	"Stats for messages",
 	[]string{"TableName", "Metric"})

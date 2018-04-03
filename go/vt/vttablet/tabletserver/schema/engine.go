@@ -78,11 +78,11 @@ func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *En
 	}
 	schemaOnce.Do(func() {
 		stats.Publish("SchemaReloadTime", stats.DurationFunc(se.ticks.Interval))
-		_ = stats.NewMultiCountersFunc("TableRows", []string{"Table"}, "table rows created in tabletserver", se.getTableRows)
-		_ = stats.NewMultiCountersFunc("DataLength", []string{"Table"}, "data length in tabletserver", se.getDataLength)
-		_ = stats.NewMultiCountersFunc("IndexLength", []string{"Table"}, "index length in tabletserver", se.getIndexLength)
-		_ = stats.NewMultiCountersFunc("DataFree", []string{"Table"}, "data free in tabletserver", se.getDataFree)
-		_ = stats.NewMultiCountersFunc("MaxDataLength", []string{"Table"}, "max data length in tabletserver", se.getMaxDataLength)
+		_ = stats.NewCountersFuncWithMultiLabels("TableRows", []string{"Table"}, "table rows created in tabletserver", se.getTableRows)
+		_ = stats.NewCountersFuncWithMultiLabels("DataLength", []string{"Table"}, "data length in tabletserver", se.getDataLength)
+		_ = stats.NewCountersFuncWithMultiLabels("IndexLength", []string{"Table"}, "index length in tabletserver", se.getIndexLength)
+		_ = stats.NewCountersFuncWithMultiLabels("DataFree", []string{"Table"}, "data free in tabletserver", se.getDataFree)
+		_ = stats.NewCountersFuncWithMultiLabels("MaxDataLength", []string{"Table"}, "max data length in tabletserver", se.getMaxDataLength)
 
 		http.Handle("/debug/schema", se)
 		http.HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {

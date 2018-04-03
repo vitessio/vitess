@@ -42,11 +42,12 @@ var (
 	// WaitStats shows the time histogram for wait operations
 	WaitStats = stats.NewTimings("Waits", "Shows the time histogram for wait operations")
 	// KillStats shows number of connections being killed.
-	KillStats = stats.NewCounters("Kills", "Number of connections being killed", "Transactions", "Queries")
+	KillStats = stats.NewCountersWithLabels("Kills", "Number of connections being killed", "conn_type", "Transactions", "Queries")
 	// ErrorStats shows number of critial errors happened.
-	ErrorStats = stats.NewCounters(
+	ErrorStats = stats.NewCountersWithLabels(
 		"Errors",
 		"Number of critical errors that happened",
+		"error_code",
 		vtrpcpb.Code_OK.String(),
 		vtrpcpb.Code_CANCELED.String(),
 		vtrpcpb.Code_UNKNOWN.String(),
@@ -66,45 +67,45 @@ var (
 		vtrpcpb.Code_DATA_LOSS.String(),
 	)
 	// InternalErrors shows number of errors from internal components.
-	InternalErrors = stats.NewCounters("InternalErrors", "Number of errors from internal components", "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection", "WatchdogFail", "Messages")
+	InternalErrors = stats.NewCountersWithLabels("InternalErrors", "Number of errors from internal components", "component", "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection", "WatchdogFail", "Messages")
 	// Warnings shows number of warnings
-	Warnings = stats.NewCounters("Warnings", "Number of warnings", "ResultsExceeded")
+	Warnings = stats.NewCountersWithLabels("Warnings", "Number of warnings", "type", "ResultsExceeded")
 	// Unresolved tracks unresolved items. For now it's just Prepares.
-	Unresolved = stats.NewGauges("Unresolved", "Tablet env's unresolved items", "Prepares")
+	Unresolved = stats.NewGaugesWithLabels("Unresolved", "Tablet env's unresolved items", "item_type", "Prepares")
 	// UserTableQueryCount shows number of queries received for each CallerID/table combination.
-	UserTableQueryCount = stats.NewMultiCounters(
+	UserTableQueryCount = stats.NewCountersWithMultiLabels(
 		"UserTableQueryCount",
 		"Number of queries received for each CallerID/table comb",
 		[]string{"TableName", "CallerID", "Type"})
 	// UserTableQueryTimesNs shows total latency for each CallerID/table combination.
-	UserTableQueryTimesNs = stats.NewMultiCounters(
+	UserTableQueryTimesNs = stats.NewCountersWithMultiLabels(
 		"UserTableQueryTimesNs",
 		"Shows total latency for each CallerID/table combo",
 		[]string{"TableName", "CallerID", "Type"})
 	// UserTransactionCount shows number of transactions received for each CallerID.
-	UserTransactionCount = stats.NewMultiCounters(
+	UserTransactionCount = stats.NewCountersWithMultiLabels(
 		"UserTransactionCount",
 		"shows numb of transactions received for each CallerID",
 		[]string{"CallerID", "Conclusion"})
 	// UserTransactionTimesNs shows total transaction latency for each CallerID.
-	UserTransactionTimesNs = stats.NewMultiCounters(
+	UserTransactionTimesNs = stats.NewCountersWithMultiLabels(
 		"UserTransactionTimesNs",
 		"Total transaction latency for each CallerID",
 		[]string{"CallerID", "Conclusion"})
 	// ResultStats shows the histogram of number of rows returned.
 	ResultStats = stats.NewHistogram("Results", []int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000})
 	// TableaclAllowed tracks the number allows.
-	TableaclAllowed = stats.NewMultiCounters(
+	TableaclAllowed = stats.NewCountersWithMultiLabels(
 		"TableACLAllowed",
 		"The number ACL acceptances",
 		[]string{"TableName", "TableGroup", "PlanID", "Username"})
 	// TableaclDenied tracks the number of denials.
-	TableaclDenied = stats.NewMultiCounters(
+	TableaclDenied = stats.NewCountersWithMultiLabels(
 		"TableACLDenied",
 		"The number of ACL denials",
 		[]string{"TableName", "TableGroup", "PlanID", "Username"})
 	// TableaclPseudoDenied tracks the number of pseudo denies.
-	TableaclPseudoDenied = stats.NewMultiCounters(
+	TableaclPseudoDenied = stats.NewCountersWithMultiLabels(
 		"TableACLPseudoDenied",
 		"The number of ACL pseudodenials",
 		[]string{"TableName", "TableGroup", "PlanID", "Username"})

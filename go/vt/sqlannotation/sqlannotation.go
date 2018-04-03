@@ -40,7 +40,7 @@ const (
 )
 
 var (
-	filteredReplicationUnfriendlyStatementsCount = stats.NewInt("FilteredReplicationUnfriendlyStatementsCount", "Count of unfriendly statements found in filtered replication")
+	filteredReplicationUnfriendlyStatementsCount = stats.NewCounter("FilteredReplicationUnfriendlyStatementsCount", "Count of unfriendly statements found in filtered replication")
 )
 
 // AnnotateIfDML annotates 'sql' based on 'keyspaceIDs'

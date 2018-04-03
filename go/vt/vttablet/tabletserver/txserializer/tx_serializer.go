@@ -40,31 +40,36 @@ var (
 	// waits stores how many times a transaction was queued because another
 	// transaction was already in flight for the same row (range).
 	// The key of the map is the table name of the query.
-	waits = stats.NewCounters(
+	waits = stats.NewCountersWithLabels(
 		"TxSerializerWaits",
-		"Number of times a transaction was queued because another transaction was already in flight for the same row range")
+		"Number of times a transaction was queued because another transaction was already in flight for the same row range",
+		"table_name")
 	// waitsDryRun is similar as "waits": In dry-run mode it records how many
 	// transactions would have been queued.
 	// The key of the map is the table name of the query.
-	waitsDryRun = stats.NewCounters(
+	waitsDryRun = stats.NewCountersWithLabels(
 		"TxSerializerWaitsDryRun",
-		"Dry run number of transactions that would've been queued")
+		"Dry run number of transactions that would've been queued",
+		"table_name")
 
 	// queueExceeded counts per table how many transactions were rejected because
 	// the max queue size per row (range) was exceeded.
-	queueExceeded = stats.NewCounters(
+	queueExceeded = stats.NewCountersWithLabels(
 		"TxSerializerQueueExceeded",
-		"Number of transactions that were rejcted because the max queue size per row range was exceeded")
+		"Number of transactions that were rejcted because the max queue size per row range was exceeded",
+		"table_name")
 	// queueExceededDryRun counts in dry-run mode how many transactions would have
 	// been rejected due to exceeding the max queue size per row (range).
-	queueExceededDryRun = stats.NewCounters(
+	queueExceededDryRun = stats.NewCountersWithLabels(
 		"TxSerializerQueueExceededDryRun",
-		"Dry-run Number of transactions that were rejcted because the max queue size was exceeded")
+		"Dry-run Number of transactions that were rejcted because the max queue size was exceeded",
+		"table_name")
+
 	// globalQueueExceeded is the same as queueExceeded but for the global queue.
-	globalQueueExceeded = stats.NewInt(
+	globalQueueExceeded = stats.NewCounter(
 		"TxSerializerGlobalQueueExceeded",
 		"Number of transactions that were rejected on the global queue because of exceeding the max queue size per row range")
-	globalQueueExceededDryRun = stats.NewInt(
+	globalQueueExceededDryRun = stats.NewCounter(
 		"TxSerializerGlobalQueueExceededDryRun",
 		"Dry-run stats for TxSerializerGlobalQueueExceeded")
 )

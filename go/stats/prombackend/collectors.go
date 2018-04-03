@@ -99,21 +99,21 @@ func (c *multiCountersFuncCollector) Collect(ch chan<- prom.Metric) {
 	}
 }
 
-type intCollector struct {
-	intMetrics map[*stats.Int]*prom.Desc
-	vt         stats.ValueType
+type metricCollector struct {
+	m  map[*stats.Counter]*prom.Desc
+	vt stats.ValueType
 }
 
 // Describe implements Collector.
-func (c *intCollector) Describe(ch chan<- *prom.Desc) {
-	for _, desc := range c.intMetrics {
+func (c *metricCollector) Describe(ch chan<- *prom.Desc) {
+	for _, desc := range c.m {
 		ch <- desc
 	}
 }
 
 // Collect implements Collector.
-func (c *intCollector) Collect(ch chan<- prom.Metric) {
-	for i, desc := range c.intMetrics {
+func (c *metricCollector) Collect(ch chan<- prom.Metric) {
+	for i, desc := range c.m {
 		val := i.Get()
 		if i.Get() == 0 {
 			val = 1
@@ -151,9 +151,10 @@ func makePromBucket(cutoffs []int64, buckets []int64) map[float64]uint64 {
 	output := make(map[float64]uint64)
 	last := uint64(0)
 	for i := range cutoffs {
-		//TODO(zmagg): ewwwww gross type conversion. error if it overflows?
-		output[float64(cutoffs[i])] = uint64(buckets[i]) + last
-		last = output[float64(cutoffs[i])]
+		key := float64(cutoffs[i]) / 1000000000
+		//TODO(zmagg): int64 => uint64 conversion. error if it overflows?
+		output[key] = uint64(buckets[i]) + last
+		last = output[key]
 	}
 	return output
 }
@@ -184,20 +185,20 @@ func (c *multiTimingsCollector) Collect(ch chan<- prom.Metric) {
 	}
 }
 
-type intFuncCollector struct {
-	intFuncs map[*stats.IntFunc]*prom.Desc
+type gaugeFuncCollector struct {
+	gfm map[*stats.GaugeFunc]*prom.Desc
 }
 
 // Describe implements Collector.
-func (c *intFuncCollector) Describe(ch chan<- *prom.Desc) {
-	for _, desc := range c.intFuncs {
+func (c *gaugeFuncCollector) Describe(ch chan<- *prom.Desc) {
+	for _, desc := range c.gfm {
 		ch <- desc
 	}
 }
 
 // Collect implements Collector.
-func (c *intFuncCollector) Collect(ch chan<- prom.Metric) {
-	for i, desc := range c.intFuncs {
+func (c *gaugeFuncCollector) Collect(ch chan<- prom.Metric) {
+	for i, desc := range c.gfm {
 		ch <- prom.MustNewConstMetric(desc, prom.GaugeValue, float64(i.F()))
 	}
 }
