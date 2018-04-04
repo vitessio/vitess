@@ -507,7 +507,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		}
 
 		colTypeMap := tableColumns[table.String()]
-		if colTypeMap == nil {
+		if colTypeMap == nil && table.String() != "dual" {
 			return fmt.Errorf("unable to resolve table name %s", table.String())
 		}
 
