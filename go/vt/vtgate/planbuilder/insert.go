@@ -28,10 +28,13 @@ import (
 )
 
 // buildInsertPlan builds the route for an INSERT statement.
-func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Insert, error) {
-	table, err := vschema.FindTable(ins.Table)
+func buildInsertPlan(ins *sqlparser.Insert, vschema ContextVSchema) (*engine.Insert, error) {
+	table, _, _, destTarget, err := vschema.FindTable(ins.Table)
 	if err != nil {
 		return nil, err
+	}
+	if destTarget != nil {
+		return nil, errors.New("unsupported: INSERT with a target destination")
 	}
 	if !table.Keyspace.Sharded {
 		return buildInsertUnshardedPlan(ins, table, vschema)
@@ -42,7 +45,7 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Insert, er
 	return buildInsertShardedPlan(ins, table)
 }
 
-func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vschema VSchema) (*engine.Insert, error) {
+func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vschema ContextVSchema) (*engine.Insert, error) {
 	eins := &engine.Insert{
 		Opcode:   engine.InsertUnsharded,
 		Table:    table,

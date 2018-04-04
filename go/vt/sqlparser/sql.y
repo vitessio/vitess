@@ -844,6 +844,10 @@ column_default_opt:
   {
     $$ = NewValArg($2)
   }
+| DEFAULT BIT_LITERAL
+  {
+    $$ = NewBitVal($2)
+  }
 
 on_update_opt:
   {
@@ -1074,6 +1078,7 @@ alter_object_type:
 | PRIMARY
 | SPATIAL
 | PARTITION
+| UNIQUE
 
 partition_operation:
   REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb

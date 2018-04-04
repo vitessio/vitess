@@ -157,7 +157,7 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 	return has
 }
 
-func validateSubquerySamePlan(keyspace string, bldr builder, vschema VSchema, nodes ...sqlparser.SQLNode) bool {
+func validateSubquerySamePlan(keyspace string, bldr builder, vschema ContextVSchema, nodes ...sqlparser.SQLNode) bool {
 	samePlan := true
 
 	for _, node := range nodes {
