@@ -34,6 +34,10 @@ create table t1 (
 create table t2 (
 	val text default "default2"
 );
+
+create table t3 (
+    b bit(1) default B'0'
+);
 `
 
 	ddls, err := parseSchema(testSchema)
