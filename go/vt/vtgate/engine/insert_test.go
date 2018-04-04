@@ -146,7 +146,43 @@ func TestInsertShardedSimple(t *testing.T) {
 	}
 	ks := vs.Keyspaces["sharded"]
 
+	// A single row insert should be autocommitted
 	ins := &Insert{
+		Opcode:   InsertSharded,
+		Keyspace: ks.Keyspace,
+		VindexValues: []sqltypes.PlanValue{{
+			// colVindex columns: id
+			Values: []sqltypes.PlanValue{{
+				// 3 rows.
+				Values: []sqltypes.PlanValue{{
+					Value: sqltypes.NewInt64(1),
+				}},
+			}},
+		}},
+		Table:  ks.Tables["t1"],
+		Prefix: "prefix",
+		Mid:    []string{" mid1"},
+		Suffix: " suffix",
+	}
+	vc := &loggingVCursor{
+		shards:       []string{"-20", "20-"},
+		shardForKsid: []string{"20-", "-20", "20-"},
+	}
+	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vc.ExpectLog(t, []string{
+		// Based on shardForKsid, values returned will be 20-.
+		`ResolveDestinations sharded [value:"0" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		// Row 2 will go to -20, rows 1 & 3 will go to 20-
+		`ExecuteMultiShard ` +
+			`sharded.20-: prefix mid1 suffix /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {_id0: type:INT64 value:"1" } ` +
+			`true true`,
+	})
+
+	// Multiple rows are not autocommitted by default
+	ins = &Insert{
 		Opcode:   InsertSharded,
 		Keyspace: ks.Keyspace,
 		VindexValues: []sqltypes.PlanValue{{
@@ -167,8 +203,7 @@ func TestInsertShardedSimple(t *testing.T) {
 		Mid:    []string{" mid1", " mid2", " mid3"},
 		Suffix: " suffix",
 	}
-
-	vc := &loggingVCursor{
+	vc = &loggingVCursor{
 		shards:       []string{"-20", "20-"},
 		shardForKsid: []string{"20-", "-20", "20-"},
 	}
@@ -184,6 +219,47 @@ func TestInsertShardedSimple(t *testing.T) {
 			`sharded.20-: prefix mid1, mid3 suffix /* vtgate:: keyspace_id:166b40b44aba4bd6,4eb190c9a2fa169c */ {_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
 			`sharded.-20: prefix mid2 suffix /* vtgate:: keyspace_id:06e7ea22ce92708f */ {_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
 			`true false`,
+	})
+
+	// Optional flag overrides autocommit
+	ins = &Insert{
+		Opcode:   InsertSharded,
+		Keyspace: ks.Keyspace,
+		VindexValues: []sqltypes.PlanValue{{
+			// colVindex columns: id
+			Values: []sqltypes.PlanValue{{
+				// 3 rows.
+				Values: []sqltypes.PlanValue{{
+					Value: sqltypes.NewInt64(1),
+				}, {
+					Value: sqltypes.NewInt64(2),
+				}, {
+					Value: sqltypes.NewInt64(3),
+				}},
+			}},
+		}},
+		Table:                ks.Tables["t1"],
+		Prefix:               "prefix",
+		Mid:                  []string{" mid1", " mid2", " mid3"},
+		Suffix:               " suffix",
+		MultiShardAutocommit: true,
+	}
+	vc = &loggingVCursor{
+		shards:       []string{"-20", "20-"},
+		shardForKsid: []string{"20-", "-20", "20-"},
+	}
+	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vc.ExpectLog(t, []string{
+		// Based on shardForKsid, values returned will be 20-, -20, 20-.
+		`ResolveDestinations sharded [value:"0"  value:"1"  value:"2" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
+		// Row 2 will go to -20, rows 1 & 3 will go to 20-
+		`ExecuteMultiShard ` +
+			`sharded.20-: prefix mid1, mid3 suffix /* vtgate:: keyspace_id:166b40b44aba4bd6,4eb190c9a2fa169c */ {_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
+			`sharded.-20: prefix mid2 suffix /* vtgate:: keyspace_id:06e7ea22ce92708f */ {_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
+			`true true`,
 	})
 }
 
