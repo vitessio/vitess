@@ -67,6 +67,15 @@ type Insert struct {
 	Prefix string
 	Mid    []string
 	Suffix string
+
+	// Option to override the standard behavior and allow a multi-shard insert
+	// to use single round trip autocommit.
+	//
+	// This is a clear violation of the SQL semantics since it means the statement
+	// is not atomic in the presence of PK conflicts on one shard and not another.
+	// However some application use cases would prefer that the statement partially
+	// succeed in order to get the performance benefits of autocommit.
+	MultiShardAutocommit bool
 }
 
 // MarshalJSON serializes the Insert into a JSON representation.
@@ -203,7 +212,7 @@ func (ins *Insert) execInsertSharded(vcursor VCursor, bindVars map[string]*query
 		return nil, vterrors.Wrap(err, "execInsertSharded")
 	}
 
-	autocommit := len(rss) == 1 && vcursor.AutocommitApproval()
+	autocommit := (len(rss) == 1 || ins.MultiShardAutocommit) && vcursor.AutocommitApproval()
 	result, err := vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execInsertSharded")
