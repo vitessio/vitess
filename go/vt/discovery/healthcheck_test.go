@@ -573,6 +573,42 @@ func TestTemplate(t *testing.T) {
 	}
 }
 
+func TestDebugURLFormatting(t *testing.T) {
+	flag.Set("tablet_url_template", "https://{{.GetHostNameLevel 0}}.bastion.{{.Tablet.Alias.Cell}}.corp")
+	LoadTabletURLTemplate()
+
+	tablet := topo.NewTablet(0, "cell", "host.dc.domain")
+	ts := []*TabletStats{
+		{
+			Key:     "a",
+			Tablet:  tablet,
+			Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+			Up:      true,
+			Serving: false,
+			Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
+			TabletExternallyReparentedTimestamp: 0,
+		},
+	}
+	tcs := &TabletsCacheStatus{
+		Cell:         "cell",
+		Target:       &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		TabletsStats: ts,
+	}
+	templ := template.New("").Funcs(status.StatusFuncs)
+	templ, err := templ.Parse(HealthCheckTemplate)
+	if err != nil {
+		t.Fatalf("error parsing template: %v", err)
+	}
+	wr := &bytes.Buffer{}
+	if err := templ.Execute(wr, []*TabletsCacheStatus{tcs}); err != nil {
+		t.Fatalf("error executing template: %v", err)
+	}
+	expectedURL := "https://host.bastion.cell.corp"
+	if !strings.Contains(wr.String(), expectedURL) {
+		t.Fatalf("output missing formatted URL, expectedURL: %s , output: %s", expectedURL, wr.String())
+	}
+}
+
 type listener struct {
 	output chan *TabletStats
 }
