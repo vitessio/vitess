@@ -737,6 +737,11 @@ char_type:
   {
     $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5, Collate: $6}
   }
+// need set_values / SetValues ?
+| SET '(' enum_values ')' charset_opt collate_opt
+  {
+    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5, Collate: $6}
+  }
 
 enum_values:
   STRING

@@ -1023,6 +1023,8 @@ func (ct *ColumnType) SQLType() querypb.Type {
 		return sqltypes.Bit
 	case keywordStrings[ENUM]:
 		return sqltypes.Enum
+	case keywordStrings[SET]:
+		return sqltypes.Set
 	case keywordStrings[JSON]:
 		return sqltypes.TypeJSON
 	}

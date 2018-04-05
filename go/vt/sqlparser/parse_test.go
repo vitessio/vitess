@@ -1565,9 +1565,13 @@ func TestCreateTable(t *testing.T) {
 			"	col_text text character set ascii collate ascii_bin,\n" +
 			"	col_json json,\n" +
 			"	col_enum enum('a', 'b', 'c', 'd'),\n" +
-			"	col_enum enum('a', 'b', 'c', 'd') character set ascii,\n" +
-			"	col_enum enum('a', 'b', 'c', 'd') collate ascii_bin,\n" +
-			"	col_enum enum('a', 'b', 'c', 'd') character set ascii collate ascii_bin\n" +
+			"	col_enum2 enum('a', 'b', 'c', 'd') character set ascii,\n" +
+			"	col_enum3 enum('a', 'b', 'c', 'd') collate ascii_bin,\n" +
+			"	col_enum4 enum('a', 'b', 'c', 'd') character set ascii collate ascii_bin,\n" +
+			"	col_set set('a', 'b', 'c', 'd'),\n" +
+			"	col_set2 set('a', 'b', 'c', 'd') character set ascii,\n" +
+			"	col_set3 set('a', 'b', 'c', 'd') collate ascii_bin,\n" +
+			"	col_set4 set('a', 'b', 'c', 'd') character set ascii collate ascii_bin\n" +
 			")",
 
 		// test defaults
