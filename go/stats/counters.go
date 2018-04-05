@@ -19,9 +19,12 @@ package stats
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"vitess.io/vitess/go/sync2"
 )
 
 // Counter is expvar.Int+Get+hook
@@ -94,6 +97,85 @@ type Counters struct {
 	help   string
 }
 
+// String implements expvar
+func (c *Counters) String() string {
+	b := bytes.NewBuffer(make([]byte, 0, 4096))
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	fmt.Fprintf(b, "{")
+	firstValue := true
+	for k, a := range c.counts {
+		if firstValue {
+			firstValue = false
+		} else {
+			fmt.Fprintf(b, ", ")
+		}
+		fmt.Fprintf(b, "%q: %v", k, atomic.LoadInt64(a))
+	}
+	fmt.Fprintf(b, "}")
+	return b.String()
+}
+
+func (c *Counters) getValueAddr(name string) *int64 {
+	c.mu.RLock()
+	a, ok := c.counts[name]
+	c.mu.RUnlock()
+
+	if ok {
+		return a
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	// we need to check the existence again
+	// as it may be created by other goroutine.
+	a, ok = c.counts[name]
+	if ok {
+		return a
+	}
+	a = new(int64)
+	c.counts[name] = a
+	return a
+}
+
+// Add adds a value to a named counter.
+func (c *Counters) Add(name string, value int64) {
+	a := c.getValueAddr(name)
+	atomic.AddInt64(a, value)
+}
+
+// Reset resets all counter values
+func (c *Counters) Reset() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.counts = make(map[string]*int64)
+}
+
+// ResetCounter resets a specific counter value to 0
+func (c *Counters) ResetCounter(name string) {
+	a := c.getValueAddr(name)
+	atomic.StoreInt64(a, int64(0))
+}
+
+// Counts returns a copy of the Counters' map.
+func (c *Counters) Counts() map[string]int64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	counts := make(map[string]int64, len(c.counts))
+	for k, a := range c.counts {
+		counts[k] = atomic.LoadInt64(a)
+	}
+	return counts
+}
+
+// Help returns the help string.
+func (c *Counters) Help() string {
+	return c.help
+}
+
 // CountersWithLabels provides a labelName for the tagged values in Counters
 // It provides a Counts method which can be used for tracking rates.
 type CountersWithLabels struct {
@@ -123,83 +205,9 @@ func NewCountersWithLabels(name string, help string, labelName string, tags ...s
 	return c
 }
 
-// String implements expvar
-func (c *CountersWithLabels) String() string {
-	b := bytes.NewBuffer(make([]byte, 0, 4096))
-
-	c.Counters.mu.RLock()
-	defer c.Counters.mu.RUnlock()
-
-	fmt.Fprintf(b, "{")
-	firstValue := true
-	for k, a := range c.Counters.counts {
-		if firstValue {
-			firstValue = false
-		} else {
-			fmt.Fprintf(b, ", ")
-		}
-		fmt.Fprintf(b, "%q: %v", k, atomic.LoadInt64(a))
-	}
-	fmt.Fprintf(b, "}")
-	return b.String()
-}
-
-func (c *CountersWithLabels) getValueAddr(name string) *int64 {
-	c.Counters.mu.RLock()
-	a, ok := c.Counters.counts[name]
-	c.Counters.mu.RUnlock()
-
-	if ok {
-		return a
-	}
-
-	c.Counters.mu.Lock()
-	defer c.Counters.mu.Unlock()
-	// we need to check the existence again
-	// as it may be created by other goroutine.
-	a, ok = c.Counters.counts[name]
-	if ok {
-		return a
-	}
-	a = new(int64)
-	c.Counters.counts[name] = a
-	return a
-}
-
-// Add adds a value to a named counter.
-func (c *CountersWithLabels) Add(name string, value int64) {
-	a := c.Counters.getValueAddr(name)
-	atomic.AddInt64(a, value)
-}
-
-// Reset resets all counter values
-func (c *CountersWithLabels) Reset() {
-	c.Counters.mu.Lock()
-	defer c.Counters.mu.Unlock()
-	c.Counters.counts = make(map[string]*int64)
-}
-
-// ResetCounter resets a specific counter value to 0
-func (c *CountersWithLabels) ResetCounter(name string) {
-	a := c.Counters.getValueAddr(name)
-	atomic.StoreInt64(a, int64(0))
-}
-
-// Counts returns a copy of the Counters' map.
-func (c *CountersWithLabels) Counts() map[string]int64 {
-	c.Counters.mu.RLock()
-	defer c.Counters.mu.RUnlock()
-
-	counts := make(map[string]int64, len(c.Counters.counts))
-	for k, a := range c.Counters.counts {
-		counts[k] = atomic.LoadInt64(a)
-	}
-	return counts
-}
-
-// Help returns the help string.
-func (c *CountersWithLabels) Help() string {
-	return c.Counters.help
+// LabelName returns the label name.
+func (c *CountersWithLabels) LabelName() string {
+	return c.labelName
 }
 
 // GaugesWithLabels is similar to CountersWithLabels, except its values can go up and down.
@@ -212,7 +220,7 @@ func NewGaugesWithLabels(name string, help string, labelName string, tags ...str
 	g := &GaugesWithLabels{CountersWithLabels: CountersWithLabels{Counters: Counters{
 		counts: make(map[string]*int64),
 		help:   help,
-	}}, labelName: labelName}
+	}, labelName: labelName}}
 
 	for _, tag := range tags {
 		g.CountersWithLabels.counts[tag] = new(int64)
@@ -250,17 +258,17 @@ func NewGaugeFunc(name string, help string, f func() int64) *GaugeFunc {
 }
 
 // String is the implementation of expvar.var
-func (gf GaugeFunc) String() string {
+func (gf *GaugeFunc) String() string {
 	return strconv.FormatInt(gf.f(), 10)
 }
 
 // Help returns the help string
-func (gf GaugeFunc) Help() string {
+func (gf *GaugeFunc) Help() string {
 	return gf.help
 }
 
 // F calls and returns the result of the GaugeFunc function
-func (gf GaugeFunc) F() int64 {
+func (gf *GaugeFunc) F() int64 {
 	return gf.f()
 }
 
@@ -370,8 +378,7 @@ func (mg *GaugesWithMultiLabels) Set(names []string, value int64) {
 	if len(names) != len(mg.CountersWithMultiLabels.labels) {
 		panic("GaugesWithMultiLabels: wrong number of values in Set")
 	}
-	a := mg.CountersWithMultiLabels.Counters.getValueAddr(name)
-	atomic.StoreInt64(a, value)
+	mg.CountersWithMultiLabels.Counters.Add(mapKey(names), value)
 }
 
 // CountersFuncWithMultiLabels is a multidimensional CountersFunc implementation

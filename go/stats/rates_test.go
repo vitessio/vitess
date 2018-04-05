@@ -42,7 +42,7 @@ func TestRates(t *testing.T) {
 	}
 
 	clear()
-	c := NewCountersWithLabels("rcounter1", "rcounter help")
+	c := NewCountersWithLabels("rcounter1", "rcounter help", "type")
 	r := NewRates("rates1", c, 3, -1*time.Second)
 	r.snapshot()
 	now = now.Add(epsilon)
@@ -90,7 +90,7 @@ func TestRatesConsistency(t *testing.T) {
 	// covered by rates, the sum of the rates reported must be
 	// equal to the count reported by the counter.
 	clear()
-	c := NewCountersWithLabels("rcounter4", "rcounter4 help")
+	c := NewCountersWithLabels("rcounter4", "rcounter4 help", "type")
 	r := NewRates("rates4", c, 100, -1*time.Second)
 	r.snapshot()
 
@@ -123,7 +123,7 @@ func TestRatesConsistency(t *testing.T) {
 
 func TestRatesHook(t *testing.T) {
 	clear()
-	c := NewCountersWithLabels("rcounter2", "rcounter2 help")
+	c := NewCountersWithLabels("rcounter2", "rcounter2 help", "type")
 	var gotname string
 	var gotv *Rates
 	clear()
