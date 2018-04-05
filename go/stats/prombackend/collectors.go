@@ -9,141 +9,123 @@ import (
 
 // metricsCollector collects both stats.Counters and stats.Gauges
 type metricsCollector struct {
-	counters map[*stats.Counters]*prom.Desc
-	vt       stats.ValueType
+	counter *stats.Counters
+	desc    *prom.Desc
+	vt      ValueType
 }
 
 // Describe implements Collector.
 func (c *metricsCollector) Describe(ch chan<- *prom.Desc) {
-	for _, desc := range c.counters {
-		ch <- desc
-	}
+	ch <- c.desc
 }
 
 // Collect implements Collector.
 func (c *metricsCollector) Collect(ch chan<- prom.Metric) {
-	for counter, desc := range c.counters {
-		for tag, val := range counter.Counts() {
-			ch <- prom.MustNewConstMetric(
-				desc,
-				toPromValueType(c.vt),
-				float64(val),
-				tag)
-		}
+	for tag, val := range c.counter.Counts() {
+		ch <- prom.MustNewConstMetric(
+			c.desc,
+			toPromValueType(c.vt),
+			float64(val),
+			tag)
 	}
 }
 
 type multiCountersCollector struct {
-	multiCounters map[*stats.CountersWithMultiLabels]*prom.Desc
+	cml  *stats.CountersWithMultiLabels
+	desc *prom.Desc
 }
 
 // Describe implements Collector.
 func (c *multiCountersCollector) Describe(ch chan<- *prom.Desc) {
-	for _, desc := range c.multiCounters {
-		ch <- desc
-	}
+	ch <- c.desc
 }
 
 // Collect implements Collector.
 func (c *multiCountersCollector) Collect(ch chan<- prom.Metric) {
-	for mc, desc := range c.multiCounters {
-		for lvs, val := range mc.Counters.Counts() {
-			labelValues := strings.Split(lvs, ".")
-			value := float64(val)
-			ch <- prom.MustNewConstMetric(desc, prom.CounterValue, value, labelValues...)
-		}
+	for lvs, val := range c.cml.Counts() {
+		labelValues := strings.Split(lvs, ".")
+		value := float64(val)
+		ch <- prom.MustNewConstMetric(c.desc, prom.CounterValue, value, labelValues...)
 	}
 }
 
 type multiGaugesCollector struct {
-	multiGauges map[*stats.GaugesWithMultiLabels]*prom.Desc
+	gml  *stats.GaugesWithMultiLabels
+	desc *prom.Desc
 }
 
 // Describe implements Collector.
 func (c *multiGaugesCollector) Describe(ch chan<- *prom.Desc) {
-	for _, desc := range c.multiGauges {
-		ch <- desc
-	}
+	ch <- c.desc
 }
 
 // Collect implements Collector.
 func (c *multiGaugesCollector) Collect(ch chan<- prom.Metric) {
-	for mc, desc := range c.multiGauges {
-		for lvs, val := range mc.Counts() {
-			labelValues := strings.Split(lvs, ".")
-			value := float64(val)
-			ch <- prom.MustNewConstMetric(desc, prom.GaugeValue, value, labelValues...)
-		}
+	for lvs, val := range c.gml.Counts() {
+		labelValues := strings.Split(lvs, ".")
+		value := float64(val)
+		ch <- prom.MustNewConstMetric(c.desc, prom.GaugeValue, value, labelValues...)
 	}
 }
 
 type multiCountersFuncCollector struct {
-	multiCountersFunc map[*stats.CountersFuncWithMultiLabels]*prom.Desc
+	cfml *stats.CountersFuncWithMultiLabels
+	desc *prom.Desc
 }
 
 // Describe implements Collector.
 func (c *multiCountersFuncCollector) Describe(ch chan<- *prom.Desc) {
-	for _, desc := range c.multiCountersFunc {
-		ch <- desc
-	}
+	ch <- c.desc
 }
 
 // Collect implements Collector.
 func (c *multiCountersFuncCollector) Collect(ch chan<- prom.Metric) {
-	for mcf, desc := range c.multiCountersFunc {
-		for lvs, val := range mcf.CountersFunc.Counts() {
-			labelValues := strings.Split(lvs, ".")
-			value := float64(val)
-			ch <- prom.MustNewConstMetric(desc, prom.CounterValue, value, labelValues...)
-		}
+	for lvs, val := range c.cfml.Counts() {
+		labelValues := strings.Split(lvs, ".")
+		value := float64(val)
+		ch <- prom.MustNewConstMetric(c.desc, prom.CounterValue, value, labelValues...)
 	}
 }
 
 type metricCollector struct {
-	m  map[*stats.Counter]*prom.Desc
-	vt stats.ValueType
+	counter *stats.Counter
+	desc    *prom.Desc
+	vt      ValueType
 }
 
 // Describe implements Collector.
 func (c *metricCollector) Describe(ch chan<- *prom.Desc) {
-	for _, desc := range c.m {
-		ch <- desc
-	}
+	ch <- c.desc
 }
 
 // Collect implements Collector.
 func (c *metricCollector) Collect(ch chan<- prom.Metric) {
-	for i, desc := range c.m {
-		val := i.Get()
-		if i.Get() == 0 {
-			val = 1
-		}
-		ch <- prom.MustNewConstMetric(desc, toPromValueType(c.vt), float64(val))
+	val := c.counter.Get()
+	if c.counter.Get() == 0 {
+		val = 1
 	}
+	ch <- prom.MustNewConstMetric(c.desc, toPromValueType(c.vt), float64(val))
 }
 
 type timingsCollector struct {
-	timings map[*stats.Timings]*prom.Desc
+	t    *stats.Timings
+	desc *prom.Desc
 }
 
 // Describe implements Collector.
 func (c *timingsCollector) Describe(ch chan<- *prom.Desc) {
-	for _, desc := range c.timings {
-		ch <- desc
-	}
+	ch <- c.desc
 }
 
 // Collect implements Collector.
 func (c *timingsCollector) Collect(ch chan<- prom.Metric) {
-	for t, desc := range c.timings {
-		for cat, his := range t.Histograms() {
-			ch <- prom.MustNewConstHistogram(
-				desc,
-				uint64(his.Count()),
-				float64(his.Total()),
-				makePromBucket(his.Cutoffs(), his.Buckets()),
-				cat)
-		}
+	for cat, his := range c.t.Histograms() {
+		ch <- prom.MustNewConstHistogram(
+			c.desc,
+			uint64(his.Count()),
+			float64(his.Total()),
+			makePromBucket(his.Cutoffs(), his.Buckets()),
+			cat)
 	}
 }
 
@@ -160,53 +142,47 @@ func makePromBucket(cutoffs []int64, buckets []int64) map[float64]uint64 {
 }
 
 type multiTimingsCollector struct {
-	multiTimings map[*stats.MultiTimings]*prom.Desc
+	mt   *stats.MultiTimings
+	desc *prom.Desc
 }
 
 // Describe implements Collector.
 func (c *multiTimingsCollector) Describe(ch chan<- *prom.Desc) {
-	for _, desc := range c.multiTimings {
-		ch <- desc
-	}
+	ch <- c.desc
 }
 
 // Collect implements Collector.
 func (c *multiTimingsCollector) Collect(ch chan<- prom.Metric) {
-	for t, desc := range c.multiTimings {
-		for cat, his := range t.Timings.Histograms() {
-			labelValues := strings.Split(cat, ".")
-			ch <- prom.MustNewConstHistogram(
-				desc,
-				uint64(his.Count()),
-				float64(his.Total()),
-				makePromBucket(his.Cutoffs(), his.Buckets()),
-				labelValues...)
-		}
+	for cat, his := range c.mt.Timings.Histograms() {
+		labelValues := strings.Split(cat, ".")
+		ch <- prom.MustNewConstHistogram(
+			c.desc,
+			uint64(his.Count()),
+			float64(his.Total()),
+			makePromBucket(his.Cutoffs(), his.Buckets()),
+			labelValues...)
 	}
 }
 
 type gaugeFuncCollector struct {
-	gfm map[*stats.GaugeFunc]*prom.Desc
+	gf   *stats.GaugeFunc
+	desc *prom.Desc
 }
 
 // Describe implements Collector.
 func (c *gaugeFuncCollector) Describe(ch chan<- *prom.Desc) {
-	for _, desc := range c.gfm {
-		ch <- desc
-	}
+	ch <- c.desc
 }
 
 // Collect implements Collector.
 func (c *gaugeFuncCollector) Collect(ch chan<- prom.Metric) {
-	for i, desc := range c.gfm {
-		ch <- prom.MustNewConstMetric(desc, prom.GaugeValue, float64(i.F()))
-	}
+	ch <- prom.MustNewConstMetric(c.desc, prom.GaugeValue, float64(c.gf.F()))
 }
 
-func toPromValueType(vt stats.ValueType) prom.ValueType {
-	if vt == stats.CounterValue {
+func toPromValueType(vt ValueType) prom.ValueType {
+	if vt == CounterValue {
 		return prom.CounterValue
-	} else if vt == stats.GaugeValue {
+	} else if vt == GaugeValue {
 		return prom.GaugeValue
 	} else {
 		return prom.UntypedValue
