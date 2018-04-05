@@ -38,8 +38,8 @@ func resetVariables() {
 	waitsDryRun.Reset()
 	queueExceeded.Reset()
 	queueExceededDryRun.Reset()
-	globalQueueExceeded.Set(0)
-	globalQueueExceededDryRun.Set(0)
+	globalQueueExceeded.Reset()
+	globalQueueExceededDryRun.Reset()
 }
 
 func TestTxSerializer_NoHotRow(t *testing.T) {

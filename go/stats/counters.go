@@ -378,7 +378,8 @@ func (mg *GaugesWithMultiLabels) Set(names []string, value int64) {
 	if len(names) != len(mg.CountersWithMultiLabels.labels) {
 		panic("GaugesWithMultiLabels: wrong number of values in Set")
 	}
-	mg.CountersWithMultiLabels.Counters.Add(mapKey(names), value)
+	a := mg.getValueAddr(mapKey(names))
+	atomic.StoreInt64(a, value)
 }
 
 // CountersFuncWithMultiLabels is a multidimensional CountersFunc implementation

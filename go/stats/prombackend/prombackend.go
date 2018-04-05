@@ -29,141 +29,146 @@ func Init(namespace string) {
 	stats.Register(be.PublishPromMetric)
 }
 
+// ValueType specifies whether the value of a metric goes up monotonically
+// or if it goes up and down. This is useful for exporting to backends that
+// differentiate between counters and gauges.
+type ValueType int
+
+const (
+	// CounterValue is used to specify a value that only goes up (but can be reset to 0).
+	CounterValue = iota
+	// GaugeValue is used to specify a value that goes both up adn down.
+	GaugeValue
+)
+
 // PublishPromMetric is used to publish the metric to Prometheus.
 func (be *PromBackend) PublishPromMetric(name string, v expvar.Var) {
 	switch st := v.(type) {
 	case *stats.Counter:
-		be.NewMetric(st, name, stats.CounterValue)
+		be.newMetric(st, name, CounterValue)
 	case *stats.Gauge:
-		be.NewMetric(&st.Counter, name, stats.GaugeValue)
+		be.newMetric(&st.Counter, name, GaugeValue)
 	case *stats.GaugeFunc:
-		be.NewGaugeFunc(st, name)
+		be.newGaugeFunc(st, name)
 	case *stats.CountersWithLabels:
-		be.NewMetricWithLabels(&st.Counters, name, st.LabelName(), stats.CounterValue)
+		be.newMetricWithLabels(&st.Counters, name, st.LabelName(), CounterValue)
 	case *stats.CountersWithMultiLabels:
-		be.NewCountersWithMultiLabels(st, name)
+		be.newCountersWithMultiLabels(st, name)
 	case *stats.CountersFuncWithMultiLabels:
-		be.NewCountersFuncWithMultiLabels(st, name)
+		be.newCountersFuncWithMultiLabels(st, name)
 	case *stats.GaugesWithLabels:
-		be.NewMetricWithLabels(&st.Counters, name, st.LabelName(), stats.GaugeValue)
+		be.newMetricWithLabels(&st.Counters, name, st.LabelName(), GaugeValue)
 	case *stats.GaugesWithMultiLabels:
-		be.NewGaugesWithMultiLabels(st, name)
+		be.newGaugesWithMultiLabels(st, name)
 	case *stats.Timings:
-		be.NewTiming(st, name)
+		be.newTiming(st, name)
 	case *stats.MultiTimings:
-		be.NewMultiTiming(st, name)
+		be.newMultiTiming(st, name)
 	default:
 		log.Warningf("Unsupported type for %s: %T", name, st)
 	}
 }
 
-// NewMetricWithLabels is part of the PullBackend interface.
-func (be *PromBackend) NewMetricWithLabels(c *stats.Counters, name string, labelName string, vt stats.ValueType) {
+func (be *PromBackend) newMetricWithLabels(c *stats.Counters, name string, labelName string, vt ValueType) {
 	collector := &metricsCollector{
-		counters: map[*stats.Counters]*prom.Desc{
-			c: prom.NewDesc(
-				prom.BuildFQName("", be.namespace, toSnake(name)),
-				c.Help(),
-				[]string{labelName},
-				nil),
-		}, vt: vt}
+		counter: c,
+		desc: prom.NewDesc(
+			prom.BuildFQName("", be.namespace, toSnake(name)),
+			c.Help(),
+			[]string{labelName},
+			nil),
+		vt: vt}
 
 	prom.MustRegister(collector)
 }
 
-// NewCountersWithMultiLabels is part of the PullBackend interface.
-func (be *PromBackend) NewCountersWithMultiLabels(mc *stats.CountersWithMultiLabels, name string) {
+func (be *PromBackend) newCountersWithMultiLabels(cml *stats.CountersWithMultiLabels, name string) {
 	c := &multiCountersCollector{
-		multiCounters: map[*stats.CountersWithMultiLabels]*prom.Desc{
-			mc: prom.NewDesc(
-				prom.BuildFQName("", be.namespace, toSnake(name)),
-				mc.Counters.Help(),
-				labelsToSnake(mc.Labels()),
-				nil),
-		}}
+		cml: cml,
+		desc: prom.NewDesc(
+			prom.BuildFQName("", be.namespace, toSnake(name)),
+			cml.Counters.Help(),
+			labelsToSnake(cml.Labels()),
+			nil),
+	}
 
 	prom.MustRegister(c)
 }
 
-// NewGaugesWithMultiLabels is part of the PullBackend interface.
-func (be *PromBackend) NewGaugesWithMultiLabels(mg *stats.GaugesWithMultiLabels, name string) {
+func (be *PromBackend) newGaugesWithMultiLabels(gml *stats.GaugesWithMultiLabels, name string) {
 	c := &multiGaugesCollector{
-		multiGauges: map[*stats.GaugesWithMultiLabels]*prom.Desc{
-			mg: prom.NewDesc(
-				prom.BuildFQName("", be.namespace, toSnake(name)),
-				mg.Help(),
-				labelsToSnake(mg.Labels()),
-				nil),
-		}}
+		gml: gml,
+		desc: prom.NewDesc(
+			prom.BuildFQName("", be.namespace, toSnake(name)),
+			gml.Help(),
+			labelsToSnake(gml.Labels()),
+			nil),
+	}
 
 	prom.MustRegister(c)
 }
 
-// NewCountersFuncWithMultiLabels is part of the PullBackend interface.
-func (be *PromBackend) NewCountersFuncWithMultiLabels(mcf *stats.CountersFuncWithMultiLabels, name string) {
+func (be *PromBackend) newCountersFuncWithMultiLabels(cfml *stats.CountersFuncWithMultiLabels, name string) {
 	collector := &multiCountersFuncCollector{
-		multiCountersFunc: map[*stats.CountersFuncWithMultiLabels]*prom.Desc{
-			mcf: prom.NewDesc(
-				prom.BuildFQName("", be.namespace, toSnake(name)),
-				mcf.Help(),
-				labelsToSnake(mcf.Labels()),
-				nil),
-		}}
+		cfml: cfml,
+		desc: prom.NewDesc(
+			prom.BuildFQName("", be.namespace, toSnake(name)),
+			cfml.Help(),
+			labelsToSnake(cfml.Labels()),
+			nil),
+	}
 
 	prom.MustRegister(collector)
 }
 
-// NewTiming is part of the PullBackend interface
-func (be *PromBackend) NewTiming(t *stats.Timings, name string) {
+func (be *PromBackend) newTiming(t *stats.Timings, name string) {
 	collector := &timingsCollector{
-		timings: map[*stats.Timings]*prom.Desc{
-			t: prom.NewDesc(
-				prom.BuildFQName("", be.namespace, toSnake(name)),
-				t.Help(),
-				[]string{"Histograms"}, // hard coded label key
-				nil),
-		}}
+		t: t,
+		desc: prom.NewDesc(
+			prom.BuildFQName("", be.namespace, toSnake(name)),
+			t.Help(),
+			[]string{"Histograms"}, // hard coded label key
+			nil),
+	}
 
 	prom.MustRegister(collector)
 }
 
-// NewMultiTiming is part of the PullBackend interface
-func (be *PromBackend) NewMultiTiming(mt *stats.MultiTimings, name string) {
+func (be *PromBackend) newMultiTiming(mt *stats.MultiTimings, name string) {
 	collector := &multiTimingsCollector{
-		multiTimings: map[*stats.MultiTimings]*prom.Desc{
-			mt: prom.NewDesc(
-				prom.BuildFQName("", be.namespace, toSnake(name)),
-				mt.Help(),
-				labelsToSnake(mt.Labels()),
-				nil),
-		}}
+		mt: mt,
+		desc: prom.NewDesc(
+			prom.BuildFQName("", be.namespace, toSnake(name)),
+			mt.Help(),
+			labelsToSnake(mt.Labels()),
+			nil),
+	}
 
 	prom.MustRegister(collector)
 }
 
-// NewMetric is part of the PullBackend interface
-func (be *PromBackend) NewMetric(c *stats.Counter, name string, vt stats.ValueType) {
+func (be *PromBackend) newMetric(c *stats.Counter, name string, vt ValueType) {
 	collector := &metricCollector{
-		m: map[*stats.Counter]*prom.Desc{
-			c: prom.NewDesc(
-				prom.BuildFQName("", be.namespace, toSnake(name)),
-				c.Help(),
-				nil,
-				nil),
-		}, vt: vt}
+		counter: c,
+		desc: prom.NewDesc(
+			prom.BuildFQName("", be.namespace, toSnake(name)),
+			c.Help(),
+			nil,
+			nil),
+		vt: vt}
+
 	prom.MustRegister(collector)
 }
 
-// NewGaugeFunc is part of the PullBackend interface
-func (be *PromBackend) NewGaugeFunc(gf *stats.GaugeFunc, name string) {
+func (be *PromBackend) newGaugeFunc(gf *stats.GaugeFunc, name string) {
 	collector := &gaugeFuncCollector{
-		gfm: map[*stats.GaugeFunc]*prom.Desc{
-			gf: prom.NewDesc(
-				prom.BuildFQName("", be.namespace, toSnake(name)),
-				gf.Help(),
-				nil,
-				nil),
-		}}
+		gf: gf,
+		desc: prom.NewDesc(
+			prom.BuildFQName("", be.namespace, toSnake(name)),
+			gf.Help(),
+			nil,
+			nil),
+	}
 
 	prom.MustRegister(collector)
 }
