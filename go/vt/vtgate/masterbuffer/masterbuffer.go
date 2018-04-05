@@ -51,7 +51,7 @@ var (
 	bufferedRequestsSuccessful = stats.NewCounter("BufferedRequestsSuccessful", "Count of successful buffered requests")
 	// Use this lock when adding to the number of currently buffered requests.
 	bufferMu         sync.Mutex
-	bufferedRequests = stats.NewCounter("BufferedRequests", "Count of buffered requests")
+	bufferedRequests = stats.NewGauge("BufferedRequests", "Count of buffered requests")
 )
 
 // timeSleep can be mocked out in unit tests

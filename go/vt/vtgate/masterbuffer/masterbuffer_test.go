@@ -130,8 +130,8 @@ func TestFakeBuffer(t *testing.T) {
 		controller := &fakeSleepController{}
 		timeSleep = createFakeSleep(controller)
 		// reset counters
-		bufferedRequestsAttempted.Set(0)
-		bufferedRequestsSuccessful.Set(0)
+		bufferedRequestsAttempted.Reset()
+		bufferedRequestsSuccessful.Reset()
 		bufferedRequests.Set(int64(test.bufferedRequests))
 
 		*enableFakeMasterBuffer = test.enableFakeBuffer
@@ -188,8 +188,8 @@ func TestParallelFakeBuffer(t *testing.T) {
 	*enableFakeMasterBuffer = true
 
 	// reset counters
-	bufferedRequestsAttempted.Set(0)
-	bufferedRequestsSuccessful.Set(0)
+	bufferedRequestsAttempted.Reset()
+	bufferedRequestsSuccessful.Reset()
 
 	var controllers []*fakeSleepController
 	var wg sync.WaitGroup
