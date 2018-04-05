@@ -24,7 +24,7 @@ import (
 
 type CountingListener struct {
 	net.Listener
-	ConnCount, ConnAccept *stats.Int
+	ConnCount, ConnAccept *stats.Counter
 }
 
 type countingConnection struct {

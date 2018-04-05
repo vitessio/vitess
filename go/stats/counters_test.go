@@ -27,7 +27,7 @@ import (
 
 func TestCounters(t *testing.T) {
 	clear()
-	c := NewCountersWithLabels("counter1", "help")
+	c := NewCountersWithLabels("counter1", "help", "type")
 	c.Add("c1", 1)
 	c.Add("c2", 1)
 	c.Add("c2", 1)
@@ -129,7 +129,7 @@ func TestCountersHook(t *testing.T) {
 		gotv = v.(*Counters)
 	})
 
-	v := NewCountersWithLabels("counter2", "help")
+	v := NewCountersWithLabels("counter2", "help", "type")
 	if gotname != "counter2" {
 		t.Errorf("want counter2, got %s", gotname)
 	}
@@ -138,7 +138,7 @@ func TestCountersHook(t *testing.T) {
 	}
 }
 
-var benchCounter = NewCountersWithLabels("bench", "help")
+var benchCounter = NewCountersWithLabels("bench", "help", "type")
 
 func BenchmarkCounters(b *testing.B) {
 	clear()

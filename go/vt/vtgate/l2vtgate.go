@@ -42,7 +42,7 @@ var (
 type L2VTGate struct {
 	queryservice.QueryService
 	timings     *stats.MultiTimings
-	errorCounts *stats.MultiCounters
+	errorCounts *stats.CountersWithMultiLabels
 	gateway     gateway.Gateway
 }
 

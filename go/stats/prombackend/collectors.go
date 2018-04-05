@@ -34,7 +34,7 @@ func (c *metricsCollector) Collect(ch chan<- prom.Metric) {
 }
 
 type multiCountersCollector struct {
-	multiCounters map[*stats.MultiCounters]*prom.Desc
+	multiCounters map[*stats.CountersWithMultiLabels]*prom.Desc
 }
 
 // Describe implements Collector.
@@ -56,7 +56,7 @@ func (c *multiCountersCollector) Collect(ch chan<- prom.Metric) {
 }
 
 type multiGaugesCollector struct {
-	multiGauges map[*stats.MultiGauges]*prom.Desc
+	multiGauges map[*stats.GaugesWithMultiLabels]*prom.Desc
 }
 
 // Describe implements Collector.
@@ -69,7 +69,7 @@ func (c *multiGaugesCollector) Describe(ch chan<- *prom.Desc) {
 // Collect implements Collector.
 func (c *multiGaugesCollector) Collect(ch chan<- prom.Metric) {
 	for mc, desc := range c.multiGauges {
-		for lvs, val := range mc.Gauges.Counters.Counts() {
+		for lvs, val := range mc.Counts() {
 			labelValues := strings.Split(lvs, ".")
 			value := float64(val)
 			ch <- prom.MustNewConstMetric(desc, prom.GaugeValue, value, labelValues...)
@@ -78,7 +78,7 @@ func (c *multiGaugesCollector) Collect(ch chan<- prom.Metric) {
 }
 
 type multiCountersFuncCollector struct {
-	multiCountersFunc map[*stats.MultiCountersFunc]*prom.Desc
+	multiCountersFunc map[*stats.CountersFuncWithMultiLabels]*prom.Desc
 }
 
 // Describe implements Collector.

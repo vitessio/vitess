@@ -1,9 +1,12 @@
 package prombackend
 
 import (
+	"expvar"
 	"net/http"
 	"strings"
 	"unicode"
+
+	log "github.com/golang/glog"
 
 	prom "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -15,15 +18,46 @@ type PromBackend struct {
 	namespace string
 }
 
-// Init initializes the Prometheus backend with the given namespace.
+var (
+	be *PromBackend
+)
+
+// Init initializes the Prometheus be with the given namespace.
 func Init(namespace string) {
 	http.Handle("/metrics", promhttp.Handler())
-	stats.RegisterPullBackendImpl("prom", &PromBackend{namespace: namespace})
-	stats.Register(stats.PublishPullMetric)
-
+	be := &PromBackend{namespace: namespace}
+	stats.Register(be.PublishPromMetric)
 }
 
-// NewMetric is part of the PullBackend interface.
+// PublishPromMetric is used to publish the metric to Prometheus.
+func (be *PromBackend) PublishPromMetric(name string, v expvar.Var) {
+	switch st := v.(type) {
+	case *stats.Counter:
+		be.NewMetric(st, name, stats.CounterValue)
+	case *stats.Gauge:
+		be.NewMetric(&st.Counter, name, stats.GaugeValue)
+	case *stats.GaugeFunc:
+		be.NewGaugeFunc(st, name)
+	case *stats.CountersWithLabels:
+		be.NewMetricWithLabels(&st.Counters, name, st.LabelName(), stats.CounterValue)
+	case *stats.CountersWithMultiLabels:
+		be.NewCountersWithMultiLabels(st, name)
+	case *stats.CountersFuncWithMultiLabels:
+		be.NewCountersFuncWithMultiLabels(st, name)
+	case *stats.GaugesWithLabels:
+		be.NewMetricWithLabels(&st.Counters, name, st.LabelName(), stats.GaugeValue)
+	case *stats.GaugesWithMultiLabels:
+		be.NewGaugesWithMultiLabels(st, name)
+	case *stats.Timings:
+		be.NewTiming(st, name)
+	case *stats.MultiTimings:
+		be.NewMultiTiming(st, name)
+	default:
+		log.Warningf("Unsupported type for %s: %T", name, st)
+	}
+}
+
+// NewMetricWithLabels is part of the PullBackend interface.
 func (be *PromBackend) NewMetricWithLabels(c *stats.Counters, name string, labelName string, vt stats.ValueType) {
 	collector := &metricsCollector{
 		counters: map[*stats.Counters]*prom.Desc{
@@ -57,7 +91,7 @@ func (be *PromBackend) NewGaugesWithMultiLabels(mg *stats.GaugesWithMultiLabels,
 		multiGauges: map[*stats.GaugesWithMultiLabels]*prom.Desc{
 			mg: prom.NewDesc(
 				prom.BuildFQName("", be.namespace, toSnake(name)),
-				mg.Gauges.Counters.Help(),
+				mg.Help(),
 				labelsToSnake(mg.Labels()),
 				nil),
 		}}
