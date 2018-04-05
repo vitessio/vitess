@@ -49,7 +49,7 @@ var (
 // multiple shard level connections.
 type ScatterConn struct {
 	timings              *stats.MultiTimings
-	tabletCallErrorCount *stats.MultiCounters
+	tabletCallErrorCount *stats.CountersWithMultiLabels
 	txConn               *TxConn
 	gateway              gateway.Gateway
 	healthCheck          discovery.HealthCheck

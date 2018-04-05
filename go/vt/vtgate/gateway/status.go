@@ -84,7 +84,7 @@ var (
 	aggregators []*TabletStatusAggregator
 	// gatewayStatsChanFull tracks the number of times
 	// aggrChan becomes full.
-	gatewayStatsChanFull *stats.Int
+	gatewayStatsChanFull *stats.Counter
 )
 
 func init() {

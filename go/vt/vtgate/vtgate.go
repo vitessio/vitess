@@ -89,7 +89,7 @@ var (
 	qpsByKeyspace  *stats.Rates
 	qpsByDbType    *stats.Rates
 
-	vschemaCounters *stats.Counters
+	vschemaCounters *stats.CountersWithLabels
 
 	errorsByOperation *stats.Rates
 	errorsByKeyspace  *stats.Rates
@@ -97,9 +97,9 @@ var (
 	errorsByCode      *stats.Rates
 
 	// Error counters should be global so they can be set from anywhere
-	errorCounts *stats.MultiCounters
+	errorCounts *stats.CountersWithMultiLabels
 
-	warnings *stats.Counters
+	warnings *stats.CountersWithLabels
 )
 
 // VTGate is the rpc interface to vtgate. Only one instance
@@ -124,7 +124,7 @@ type VTGate struct {
 	// TODO(sougou): This needs to be cleaned up. There
 	// are global vars that depend on this member var.
 	timings      *stats.MultiTimings
-	rowsReturned *stats.MultiCounters
+	rowsReturned *stats.CountersWithMultiLabels
 
 	// the throttled loggers for all errors, one per API entry
 	logExecute                  *logutil.ThrottledLogger
@@ -156,7 +156,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 
 	// vschemaCounters needs to be initialized before planner to
 	// catch the initial load stats.
-	vschemaCounters = stats.NewCountersWithLabels("VtgateVSchemaCounts", "changes", "Vtgate vschema counts")
+	vschemaCounters = stats.NewCountersWithLabels("VtgateVSchemaCounts", "Vtgate vschema counts", "changes")
 
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
@@ -239,7 +239,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	errorsByDbType = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(errorCounts, "DbType"), 15, 1*time.Minute)
 	errorsByCode = stats.NewRates("ErrorsByCode", stats.CounterForDimension(errorCounts, "Code"), 15, 1*time.Minute)
 
-	warnings = stats.NewCountersWithLabels("VtGateWarnings", "Vtgate warnings", "IgnoredSet")
+	warnings = stats.NewCountersWithLabels("VtGateWarnings", "Vtgate warnings", "type", "IgnoredSet")
 
 	servenv.OnRun(func() {
 		for _, f := range RegisterVTGates {
