@@ -34,18 +34,19 @@ const (
 // Tokenizer is the struct used to generate SQL
 // tokens for the parser.
 type Tokenizer struct {
-	InStream      io.Reader
-	AllowComments bool
-	ForceEOF      bool
-	lastChar      uint16
-	Position      int
-	lastToken     []byte
-	LastError     error
-	posVarIndex   int
-	ParseTree     Statement
-	partialDDL    *DDL
-	nesting       int
-	multi         bool
+	InStream       io.Reader
+	AllowComments  bool
+	ForceEOF       bool
+	lastChar       uint16
+	Position       int
+	lastToken      []byte
+	LastError      error
+	posVarIndex    int
+	ParseTree      Statement
+	partialDDL     *DDL
+	nesting        int
+	multi          bool
+	specialComment *Tokenizer
 
 	buf     []byte
 	bufPos  int
@@ -427,6 +428,18 @@ func (tkn *Tokenizer) Error(err string) {
 // Scan scans the tokenizer for the next token and returns
 // the token type and an optional value.
 func (tkn *Tokenizer) Scan() (int, []byte) {
+	if tkn.specialComment != nil {
+		// Enter specialComment scan mode.
+		// for scanning such kind of comment: /*! MySQL-specific code */
+		specialComment := tkn.specialComment
+		tok, val := specialComment.Scan()
+		if tok != 0 {
+			// return the specialComment scan result as the result
+			return tok, val
+		}
+		// leave specialComment scan mode after all stream consumed.
+		tkn.specialComment = nil
+	}
 	if tkn.lastChar == 0 {
 		tkn.next()
 	}
@@ -495,7 +508,12 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 				return tkn.scanCommentType1("//")
 			case '*':
 				tkn.next()
-				return tkn.scanCommentType2()
+				switch tkn.lastChar {
+				case '!':
+					return tkn.scanMySQLSpecificComment()
+				default:
+					return tkn.scanCommentType2()
+				}
 			default:
 				return int(ch), nil
 			}
@@ -818,6 +836,29 @@ func (tkn *Tokenizer) scanCommentType2() (int, []byte) {
 	return COMMENT, buffer.Bytes()
 }
 
+func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
+	buffer := &bytes2.Buffer{}
+	buffer.WriteString("/*!")
+	tkn.next()
+	for {
+		if tkn.lastChar == '*' {
+			tkn.consumeNext(buffer)
+			if tkn.lastChar == '/' {
+				tkn.consumeNext(buffer)
+				break
+			}
+			continue
+		}
+		if tkn.lastChar == eofChar {
+			return LEX_ERROR, buffer.Bytes()
+		}
+		tkn.consumeNext(buffer)
+	}
+	_, sql := ExtractMysqlComment(buffer.String())
+	tkn.specialComment = NewStringTokenizer(sql)
+	return tkn.Scan()
+}
+
 func (tkn *Tokenizer) consumeNext(buffer *bytes2.Buffer) {
 	if tkn.lastChar == eofChar {
 		// This should never happen.
@@ -853,6 +894,7 @@ func (tkn *Tokenizer) next() {
 func (tkn *Tokenizer) reset() {
 	tkn.ParseTree = nil
 	tkn.partialDDL = nil
+	tkn.specialComment = nil
 	tkn.posVarIndex = 0
 	tkn.nesting = 0
 	tkn.ForceEOF = false
