@@ -90,7 +90,7 @@ func New(
 	stats.NewGaugeFunc(name+"WaitCount", "Tablet server conn pool wait count", cp.WaitCount)
 	stats.Publish(name+"WaitTime", stats.DurationFunc(cp.WaitTime))
 	stats.Publish(name+"IdleTimeout", stats.DurationFunc(cp.IdleTimeout))
-	stats.NewGaugeFunc(name+"IdleClosed", "Tablet server conn pool idle closed", cp.IdleClosed)
+	stats.NewCounterFunc(name+"IdleClosed", "Tablet server conn pool idle closed", cp.IdleClosed)
 	return cp
 }
 

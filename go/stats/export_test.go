@@ -93,7 +93,7 @@ func TestCounter(t *testing.T) {
 	if v.String() != "1" {
 		t.Errorf("want 1, got %v", v.Get())
 	}
-	v.Reset()
+	v.ResetAll()
 	if v.Get() != 0 {
 		t.Errorf("want 0, got %v", v.Get())
 	}

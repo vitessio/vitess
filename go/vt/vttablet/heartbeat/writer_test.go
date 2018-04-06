@@ -46,7 +46,7 @@ func TestCreateSchema(t *testing.T) {
 	defer db.Close()
 	tw := newTestWriter(db, mockNowFunc)
 	defer tw.Close()
-	writes.Reset()
+	writes.ResetAll()
 
 	db.AddQuery(sqlTurnoffBinlog, &sqltypes.Result{})
 	db.AddQuery(fmt.Sprintf(sqlCreateHeartbeatTable, tw.dbName), &sqltypes.Result{})
@@ -74,8 +74,8 @@ func TestWriteHeartbeat(t *testing.T) {
 	tw := newTestWriter(db, mockNowFunc)
 	db.AddQuery(fmt.Sprintf("UPDATE %s.heartbeat SET ts=%d, tabletUid=%d WHERE keyspaceShard='%s'", tw.dbName, now.UnixNano(), tw.tabletAlias.Uid, tw.keyspaceShard), &sqltypes.Result{})
 
-	writes.Reset()
-	writeErrors.Reset()
+	writes.ResetAll()
+	writeErrors.ResetAll()
 
 	tw.writeHeartbeat()
 	if got, want := writes.Get(), int64(1); got != want {
@@ -93,8 +93,8 @@ func TestWriteHeartbeatError(t *testing.T) {
 
 	tw := newTestWriter(db, mockNowFunc)
 
-	writes.Reset()
-	writeErrors.Reset()
+	writes.ResetAll()
+	writeErrors.ResetAll()
 
 	tw.writeHeartbeat()
 	if got, want := writes.Get(), int64(0); got != want {

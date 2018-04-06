@@ -24,7 +24,8 @@ import (
 
 type CountingListener struct {
 	net.Listener
-	ConnCount, ConnAccept *stats.Counter
+	ConnCount  *stats.Gauge
+	ConnAccept *stats.Counter
 }
 
 type countingConnection struct {
@@ -37,8 +38,8 @@ type countingConnection struct {
 func Published(l net.Listener, countTag, acceptTag string) net.Listener {
 	return &CountingListener{
 		Listener:   l,
-		ConnCount:  stats.NewCounter(countTag, "Connection count inside net.Listener"),
-		ConnAccept: stats.NewCounter(acceptTag, "Connections accepted inside net.Listener"),
+		ConnCount:  stats.NewGauge(countTag, "Active connections accepted by counting listener"),
+		ConnAccept: stats.NewCounter(acceptTag, "Count of connections accepted by the counting listener"),
 	}
 }
 

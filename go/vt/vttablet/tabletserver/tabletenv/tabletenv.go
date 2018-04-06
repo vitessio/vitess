@@ -34,15 +34,15 @@ import (
 
 var (
 	// MySQLStats shows the time histogram for operations spent on mysql side.
-	MySQLStats = stats.NewTimings("Mysql", "Shows the histogram for operations spent on the MySQL side")
+	MySQLStats = stats.NewTimings("Mysql", "MySQl query time")
 	// QueryStats shows the time histogram for each type of queries.
-	QueryStats = stats.NewTimings("Queries", "Shows the time histogram for each type of query")
+	QueryStats = stats.NewTimings("Queries", "MySQL query timings")
 	// QPSRates shows the qps of QueryStats. Sample every 5 seconds and keep samples for up to 15 mins.
 	QPSRates = stats.NewRates("QPS", QueryStats, 15*60/5, 5*time.Second)
 	// WaitStats shows the time histogram for wait operations
 	WaitStats = stats.NewTimings("Waits", "Shows the time histogram for wait operations")
 	// KillStats shows number of connections being killed.
-	KillStats = stats.NewCountersWithLabels("Kills", "Number of connections being killed", "conn_type", "Transactions", "Queries")
+	KillStats = stats.NewCountersWithLabels("Kills", "Number of connections being killed", "query_type", "Transactions", "Queries")
 	// ErrorStats shows number of critial errors happened.
 	ErrorStats = stats.NewCountersWithLabels(
 		"Errors",
@@ -67,20 +67,20 @@ var (
 		vtrpcpb.Code_DATA_LOSS.String(),
 	)
 	// InternalErrors shows number of errors from internal components.
-	InternalErrors = stats.NewCountersWithLabels("InternalErrors", "Number of errors from internal components", "component", "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection", "WatchdogFail", "Messages")
+	InternalErrors = stats.NewCountersWithLabels("InternalErrors", "Number of errors from internal components", "type", "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection", "WatchdogFail", "Messages")
 	// Warnings shows number of warnings
 	Warnings = stats.NewCountersWithLabels("Warnings", "Number of warnings", "type", "ResultsExceeded")
 	// Unresolved tracks unresolved items. For now it's just Prepares.
-	Unresolved = stats.NewGaugesWithLabels("Unresolved", "Tablet env's unresolved items", "item_type", "Prepares")
+	Unresolved = stats.NewGaugesWithLabels("Unresolved", "Unresolved items", "item_type", "Prepares")
 	// UserTableQueryCount shows number of queries received for each CallerID/table combination.
 	UserTableQueryCount = stats.NewCountersWithMultiLabels(
 		"UserTableQueryCount",
-		"Number of queries received for each CallerID/table comb",
+		"Number of queries received for each CallerID/table combination",
 		[]string{"TableName", "CallerID", "Type"})
 	// UserTableQueryTimesNs shows total latency for each CallerID/table combination.
 	UserTableQueryTimesNs = stats.NewCountersWithMultiLabels(
 		"UserTableQueryTimesNs",
-		"Shows total latency for each CallerID/table combo",
+		"Total latency for each CallerID/table combination",
 		[]string{"TableName", "CallerID", "Type"})
 	// UserTransactionCount shows number of transactions received for each CallerID.
 	UserTransactionCount = stats.NewCountersWithMultiLabels(

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2018 Google Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,9 +20,9 @@ package main
 // with the Prometheus client library
 
 import (
-	"vitess.io/vitess/go/stats/prombackend"
+	"vitess.io/vitess/go/stats/prometheusbackend"
 )
 
 func init() {
-	prombackend.Init("vtgate")
+	prometheusbackend.Init("vtctld")
 }

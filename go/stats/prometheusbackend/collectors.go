@@ -1,4 +1,4 @@
-package prombackend
+package prometheusbackend
 
 import (
 	"strings"
@@ -7,20 +7,36 @@ import (
 	"vitess.io/vitess/go/stats"
 )
 
-// metricsCollector collects both stats.Counters and stats.Gauges
-type metricsCollector struct {
+type metricCollector struct {
+	counter *stats.Counter
+	desc    *prom.Desc
+	vt      ValueType
+}
+
+// Describe implements Collector.
+func (c *metricCollector) Describe(ch chan<- *prom.Desc) {
+	ch <- c.desc
+}
+
+// Collect implements Collector.
+func (c *metricCollector) Collect(ch chan<- prom.Metric) {
+	ch <- prom.MustNewConstMetric(c.desc, toPromValueType(c.vt), float64(c.counter.Get()))
+}
+
+// metricWithLabelsCollector collects both stats.Counters and stats.Gauges
+type metricWithLabelsCollector struct {
 	counter *stats.Counters
 	desc    *prom.Desc
 	vt      ValueType
 }
 
 // Describe implements Collector.
-func (c *metricsCollector) Describe(ch chan<- *prom.Desc) {
+func (c *metricWithLabelsCollector) Describe(ch chan<- *prom.Desc) {
 	ch <- c.desc
 }
 
 // Collect implements Collector.
-func (c *metricsCollector) Collect(ch chan<- prom.Metric) {
+func (c *metricWithLabelsCollector) Collect(ch chan<- prom.Metric) {
 	for tag, val := range c.counter.Counts() {
 		ch <- prom.MustNewConstMetric(
 			c.desc,
@@ -30,18 +46,18 @@ func (c *metricsCollector) Collect(ch chan<- prom.Metric) {
 	}
 }
 
-type multiCountersCollector struct {
+type metricWithMultiLabelsCollector struct {
 	cml  *stats.CountersWithMultiLabels
 	desc *prom.Desc
 }
 
 // Describe implements Collector.
-func (c *multiCountersCollector) Describe(ch chan<- *prom.Desc) {
+func (c *metricWithMultiLabelsCollector) Describe(ch chan<- *prom.Desc) {
 	ch <- c.desc
 }
 
 // Collect implements Collector.
-func (c *multiCountersCollector) Collect(ch chan<- prom.Metric) {
+func (c *metricWithMultiLabelsCollector) Collect(ch chan<- prom.Metric) {
 	for lvs, val := range c.cml.Counts() {
 		labelValues := strings.Split(lvs, ".")
 		value := float64(val)
@@ -68,43 +84,24 @@ func (c *multiGaugesCollector) Collect(ch chan<- prom.Metric) {
 	}
 }
 
-type multiCountersFuncCollector struct {
+type metricsFuncWithMultiLabelsCollector struct {
 	cfml *stats.CountersFuncWithMultiLabels
 	desc *prom.Desc
+	vt   ValueType
 }
 
 // Describe implements Collector.
-func (c *multiCountersFuncCollector) Describe(ch chan<- *prom.Desc) {
+func (c *metricsFuncWithMultiLabelsCollector) Describe(ch chan<- *prom.Desc) {
 	ch <- c.desc
 }
 
 // Collect implements Collector.
-func (c *multiCountersFuncCollector) Collect(ch chan<- prom.Metric) {
+func (c *metricsFuncWithMultiLabelsCollector) Collect(ch chan<- prom.Metric) {
 	for lvs, val := range c.cfml.Counts() {
 		labelValues := strings.Split(lvs, ".")
 		value := float64(val)
-		ch <- prom.MustNewConstMetric(c.desc, prom.CounterValue, value, labelValues...)
+		ch <- prom.MustNewConstMetric(c.desc, toPromValueType(c.vt), value, labelValues...)
 	}
-}
-
-type metricCollector struct {
-	counter *stats.Counter
-	desc    *prom.Desc
-	vt      ValueType
-}
-
-// Describe implements Collector.
-func (c *metricCollector) Describe(ch chan<- *prom.Desc) {
-	ch <- c.desc
-}
-
-// Collect implements Collector.
-func (c *metricCollector) Collect(ch chan<- prom.Metric) {
-	val := c.counter.Get()
-	if c.counter.Get() == 0 {
-		val = 1
-	}
-	ch <- prom.MustNewConstMetric(c.desc, toPromValueType(c.vt), float64(val))
 }
 
 type timingsCollector struct {
@@ -164,19 +161,20 @@ func (c *multiTimingsCollector) Collect(ch chan<- prom.Metric) {
 	}
 }
 
-type gaugeFuncCollector struct {
-	gf   *stats.GaugeFunc
+type metricFuncCollector struct {
+	cf   *stats.CounterFunc
 	desc *prom.Desc
+	vt   ValueType
 }
 
 // Describe implements Collector.
-func (c *gaugeFuncCollector) Describe(ch chan<- *prom.Desc) {
+func (c *metricFuncCollector) Describe(ch chan<- *prom.Desc) {
 	ch <- c.desc
 }
 
 // Collect implements Collector.
-func (c *gaugeFuncCollector) Collect(ch chan<- prom.Metric) {
-	ch <- prom.MustNewConstMetric(c.desc, prom.GaugeValue, float64(c.gf.F()))
+func (c *metricFuncCollector) Collect(ch chan<- prom.Metric) {
+	ch <- prom.MustNewConstMetric(c.desc, toPromValueType(c.vt), float64(c.cf.F()))
 }
 
 func toPromValueType(vt ValueType) prom.ValueType {
