@@ -1,4 +1,4 @@
-package prombackend
+package prometheusbackend
 
 import (
 	"expvar"
@@ -8,7 +8,7 @@ import (
 
 	log "github.com/golang/glog"
 
-	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"vitess.io/vitess/go/stats"
 )
@@ -26,7 +26,7 @@ var (
 func Init(namespace string) {
 	http.Handle("/metrics", promhttp.Handler())
 	be := &PromBackend{namespace: namespace}
-	stats.Register(be.PublishPromMetric)
+	stats.Register(be.publishPrometheusMetric)
 }
 
 // ValueType specifies whether the value of a metric goes up monotonically
@@ -37,25 +37,29 @@ type ValueType int
 const (
 	// CounterValue is used to specify a value that only goes up (but can be reset to 0).
 	CounterValue = iota
-	// GaugeValue is used to specify a value that goes both up adn down.
+	// GaugeValue is used to specify a value that goes both up and down.
 	GaugeValue
 )
 
 // PublishPromMetric is used to publish the metric to Prometheus.
-func (be *PromBackend) PublishPromMetric(name string, v expvar.Var) {
+func (be *PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 	switch st := v.(type) {
 	case *stats.Counter:
 		be.newMetric(st, name, CounterValue)
 	case *stats.Gauge:
 		be.newMetric(&st.Counter, name, GaugeValue)
+	case *stats.CounterFunc:
+		be.newMetricFunc(st, name, CounterValue)
 	case *stats.GaugeFunc:
-		be.newGaugeFunc(st, name)
+		be.newMetricFunc(&st.CounterFunc, name, GaugeValue)
 	case *stats.CountersWithLabels:
 		be.newMetricWithLabels(&st.Counters, name, st.LabelName(), CounterValue)
 	case *stats.CountersWithMultiLabels:
 		be.newCountersWithMultiLabels(st, name)
 	case *stats.CountersFuncWithMultiLabels:
-		be.newCountersFuncWithMultiLabels(st, name)
+		be.newMetricsFuncWithMultiLabels(st, name, CounterValue)
+	case *stats.GaugesFuncWithMultiLabels:
+		be.newMetricsFuncWithMultiLabels(&st.CountersFuncWithMultiLabels, name, GaugeValue)
 	case *stats.GaugesWithLabels:
 		be.newMetricWithLabels(&st.Counters, name, st.LabelName(), GaugeValue)
 	case *stats.GaugesWithMultiLabels:
@@ -70,107 +74,113 @@ func (be *PromBackend) PublishPromMetric(name string, v expvar.Var) {
 }
 
 func (be *PromBackend) newMetricWithLabels(c *stats.Counters, name string, labelName string, vt ValueType) {
-	collector := &metricsCollector{
+	collector := &metricWithLabelsCollector{
 		counter: c,
-		desc: prom.NewDesc(
-			prom.BuildFQName("", be.namespace, toSnake(name)),
+		desc: prometheus.NewDesc(
+			be.buildPromName(name),
 			c.Help(),
 			[]string{labelName},
 			nil),
 		vt: vt}
 
-	prom.MustRegister(collector)
+	prometheus.MustRegister(collector)
 }
 
 func (be *PromBackend) newCountersWithMultiLabels(cml *stats.CountersWithMultiLabels, name string) {
-	c := &multiCountersCollector{
+	c := &metricWithMultiLabelsCollector{
 		cml: cml,
-		desc: prom.NewDesc(
-			prom.BuildFQName("", be.namespace, toSnake(name)),
+		desc: prometheus.NewDesc(
+			be.buildPromName(name),
 			cml.Counters.Help(),
 			labelsToSnake(cml.Labels()),
 			nil),
 	}
 
-	prom.MustRegister(c)
+	prometheus.MustRegister(c)
 }
 
 func (be *PromBackend) newGaugesWithMultiLabels(gml *stats.GaugesWithMultiLabels, name string) {
 	c := &multiGaugesCollector{
 		gml: gml,
-		desc: prom.NewDesc(
-			prom.BuildFQName("", be.namespace, toSnake(name)),
+		desc: prometheus.NewDesc(
+			be.buildPromName(name),
 			gml.Help(),
 			labelsToSnake(gml.Labels()),
 			nil),
 	}
 
-	prom.MustRegister(c)
+	prometheus.MustRegister(c)
 }
 
-func (be *PromBackend) newCountersFuncWithMultiLabels(cfml *stats.CountersFuncWithMultiLabels, name string) {
-	collector := &multiCountersFuncCollector{
+func (be *PromBackend) newMetricsFuncWithMultiLabels(cfml *stats.CountersFuncWithMultiLabels, name string, vt ValueType) {
+	collector := &metricsFuncWithMultiLabelsCollector{
 		cfml: cfml,
-		desc: prom.NewDesc(
-			prom.BuildFQName("", be.namespace, toSnake(name)),
+		desc: prometheus.NewDesc(
+			be.buildPromName(name),
 			cfml.Help(),
 			labelsToSnake(cfml.Labels()),
 			nil),
+		vt: vt,
 	}
 
-	prom.MustRegister(collector)
+	prometheus.MustRegister(collector)
 }
 
 func (be *PromBackend) newTiming(t *stats.Timings, name string) {
 	collector := &timingsCollector{
 		t: t,
-		desc: prom.NewDesc(
-			prom.BuildFQName("", be.namespace, toSnake(name)),
+		desc: prometheus.NewDesc(
+			be.buildPromName(name),
 			t.Help(),
 			[]string{"Histograms"}, // hard coded label key
 			nil),
 	}
 
-	prom.MustRegister(collector)
+	prometheus.MustRegister(collector)
 }
 
 func (be *PromBackend) newMultiTiming(mt *stats.MultiTimings, name string) {
 	collector := &multiTimingsCollector{
 		mt: mt,
-		desc: prom.NewDesc(
-			prom.BuildFQName("", be.namespace, toSnake(name)),
+		desc: prometheus.NewDesc(
+			be.buildPromName(name),
 			mt.Help(),
 			labelsToSnake(mt.Labels()),
 			nil),
 	}
 
-	prom.MustRegister(collector)
+	prometheus.MustRegister(collector)
 }
 
 func (be *PromBackend) newMetric(c *stats.Counter, name string, vt ValueType) {
 	collector := &metricCollector{
 		counter: c,
-		desc: prom.NewDesc(
-			prom.BuildFQName("", be.namespace, toSnake(name)),
+		desc: prometheus.NewDesc(
+			be.buildPromName(name),
 			c.Help(),
 			nil,
 			nil),
 		vt: vt}
 
-	prom.MustRegister(collector)
+	prometheus.MustRegister(collector)
 }
 
-func (be *PromBackend) newGaugeFunc(gf *stats.GaugeFunc, name string) {
-	collector := &gaugeFuncCollector{
-		gf: gf,
-		desc: prom.NewDesc(
-			prom.BuildFQName("", be.namespace, toSnake(name)),
-			gf.Help(),
+func (be *PromBackend) newMetricFunc(cf *stats.CounterFunc, name string, vt ValueType) {
+	collector := &metricFuncCollector{
+		cf: cf,
+		desc: prometheus.NewDesc(
+			be.buildPromName(name),
+			cf.Help(),
 			nil,
 			nil),
-	}
+		vt: vt}
 
-	prom.MustRegister(collector)
+	prometheus.MustRegister(collector)
+}
+
+func (be *PromBackend) buildPromName(name string) string {
+	s := strings.TrimPrefix(toSnake(name), be.namespace)
+	return prometheus.BuildFQName("", be.namespace, s)
 }
 
 func labelsToSnake(labels []string) []string {
@@ -183,7 +193,7 @@ func labelsToSnake(labels []string) []string {
 
 func toSnake(name string) string {
 	// Special cases
-	r := strings.NewReplacer("VSchema", "Vschema")
+	r := strings.NewReplacer("VSchema", "Vschema", "VtGate", "Vtgate")
 	name = r.Replace(name)
 	// Camel case => snake case
 	runes := []rune(name)

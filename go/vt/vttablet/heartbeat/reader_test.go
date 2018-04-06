@@ -49,9 +49,9 @@ func TestReaderReadHeartbeat(t *testing.T) {
 		}},
 	})
 
-	cumulativeLagNs.Reset()
-	readErrors.Reset()
-	reads.Reset()
+	cumulativeLagNs.ResetAll()
+	readErrors.ResetAll()
+	reads.ResetAll()
 
 	tr.readHeartbeat()
 	lag, err := tr.GetLatest()
@@ -81,8 +81,8 @@ func TestReaderReadHeartbeatError(t *testing.T) {
 	tr := newReader(db, mockNowFunc)
 	defer tr.Close()
 
-	cumulativeLagNs.Reset()
-	readErrors.Reset()
+	cumulativeLagNs.ResetAll()
+	readErrors.ResetAll()
 
 	tr.readHeartbeat()
 	lag, err := tr.GetLatest()

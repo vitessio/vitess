@@ -146,27 +146,27 @@ const (
 // "no value for this label set (NaN)" to "a value".
 // "statsKey" should have two members for keyspace and shard.
 func initVariablesForShard(statsKey []string) {
-	starts.ResetCounter(statsKey)
+	starts.Reset(statsKey)
 	for _, reason := range stopReasons {
 		key := append(statsKey, string(reason))
-		stops.ResetCounter(key)
+		stops.Reset(key)
 	}
 
-	failoverDurationSumMs.ResetCounter(statsKey)
+	failoverDurationSumMs.Reset(statsKey)
 
 	utilizationSum.Set(statsKey, 0)
-	utilizationDryRunSum.ResetCounter(statsKey)
+	utilizationDryRunSum.Reset(statsKey)
 
-	requestsBuffered.ResetCounter(statsKey)
-	requestsBufferedDryRun.ResetCounter(statsKey)
-	requestsDrained.ResetCounter(statsKey)
+	requestsBuffered.Reset(statsKey)
+	requestsBufferedDryRun.Reset(statsKey)
+	requestsDrained.Reset(statsKey)
 	for _, reason := range evictReasons {
 		key := append(statsKey, string(reason))
-		requestsEvicted.ResetCounter(key)
+		requestsEvicted.Reset(key)
 	}
 	for _, reason := range skippedReasons {
 		key := append(statsKey, string(reason))
-		requestsSkipped.ResetCounter(key)
+		requestsSkipped.Reset(key)
 	}
 }
 

@@ -34,12 +34,12 @@ import (
 )
 
 func resetVariables() {
-	waits.Reset()
-	waitsDryRun.Reset()
-	queueExceeded.Reset()
-	queueExceededDryRun.Reset()
-	globalQueueExceeded.Reset()
-	globalQueueExceededDryRun.Reset()
+	waits.ResetAll()
+	waitsDryRun.ResetAll()
+	queueExceeded.ResetAll()
+	queueExceededDryRun.ResetAll()
+	globalQueueExceeded.ResetAll()
+	globalQueueExceededDryRun.ResetAll()
 }
 
 func TestTxSerializer_NoHotRow(t *testing.T) {
