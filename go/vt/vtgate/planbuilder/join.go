@@ -75,7 +75,9 @@ func newJoin(lhs, rhs builder, ajoin *sqlparser.JoinTableExpr) (*join, error) {
 	// external references, and the FROM clause doesn't allow duplicates,
 	// it's safe to perform this conversion and still expect the same behavior.
 
-	rhs.Reorder(lhs.Order())
+	if err := lhs.Symtab().Merge(rhs.Symtab()); err != nil {
+		return nil, err
+	}
 	opcode := engine.NormalJoin
 	if ajoin != nil && ajoin.Join == sqlparser.LeftJoinStr {
 		opcode = engine.LeftJoin
@@ -93,9 +95,7 @@ func newJoin(lhs, rhs builder, ajoin *sqlparser.JoinTableExpr) (*join, error) {
 			Vars:   make(map[string]int),
 		},
 	}
-	if err := lhs.Symtab().Merge(rhs.Symtab()); err != nil {
-		return nil, err
-	}
+	jb.Reorder(0)
 	if ajoin == nil {
 		return jb, nil
 	}
@@ -130,6 +130,7 @@ func (jb *join) Reorder(order int) {
 	jb.Left.Reorder(order)
 	jb.leftOrder = jb.Left.Order()
 	jb.Right.Reorder(jb.leftOrder)
+	jb.order = jb.Right.Order() + 1
 }
 
 // Primitive satisfies the builder interface.
