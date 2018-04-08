@@ -24,7 +24,7 @@ from vtdb import prefer_vtroot_imports  # pylint: disable=unused-import
 import grpc
 
 from vtproto import vtgate_pb2
-from vtproto import vtgateservice_pb2
+from vtproto import vtgateservice_pb2_grpc
 
 from vtdb import dbexceptions
 from vtdb import proto3_encoding
@@ -82,7 +82,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       channel = grpc.insecure_channel(target)
     if self.auth_static_client_creds is not None:
       channel = grpc_with_metadata.GRPCWithMetadataChannel(channel, self.get_auth_static_client_creds)
-    self.stub = vtgateservice_pb2.VitessStub(channel)
+    self.stub = vtgateservice_pb2_grpc.VitessStub(channel)
 
   def close(self):
     """close closes the server connection and frees up associated resources.
