@@ -115,9 +115,7 @@ func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexe
 	for _, col := range vindexTable.Columns {
 		t.columns[col.Name.Lowered()] = &column{
 			origin: rb,
-			name:   col.Name,
 			typ:    col.Type,
-			table:  t,
 		}
 	}
 
@@ -136,8 +134,6 @@ func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexe
 			t.columns[lowered] = &column{
 				origin: rb,
 				Vindex: vindex,
-				name:   cvcol,
-				table:  t,
 			}
 		}
 	}
@@ -147,8 +143,6 @@ func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexe
 		if _, ok := t.columns[lowered]; !ok {
 			t.columns[lowered] = &column{
 				origin: rb,
-				name:   ai.Column,
-				table:  t,
 			}
 		}
 	}
@@ -158,10 +152,9 @@ func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexe
 // Merge merges the new symtab into the current one.
 // Duplicate table aliases return an error.
 // uniqueColumns is updated, but duplicates are removed.
-// The function panics if ResultColumns or Externs contain values.
-// This is because symbol tables are allowed to merge only during
-// analysis for the FROM clause. At that time, there should be
-// no ResultColumns or Externs.
+// Merges are only performed during the FROM clause analysis.
+// At this point, only tables and uniqueColumns are set.
+// All other fields are ignored.
 func (st *symtab) Merge(newsyms *symtab) error {
 	for _, t := range newsyms.tables {
 		if err := st.AddTable(t); err != nil {
@@ -208,7 +201,7 @@ func (st *symtab) ClearVindexes() {
 	}
 }
 
-// Find returns the columnOriginator for the symbol referenced by col.
+// Find returns the builder for the symbol referenced by col.
 // If a reference is found, col.Metadata is set to point
 // to it. Subsequent searches will reuse this metadata.
 //
@@ -236,7 +229,7 @@ func (st *symtab) ClearVindexes() {
 // as true. Otherwise, it's returned as false and the symbol
 // gets added to the Externs list, which can later be used
 // to decide where to push-down the subquery.
-func (st *symtab) Find(col *sqlparser.ColName) (origin columnOriginator, isLocal bool, err error) {
+func (st *symtab) Find(col *sqlparser.ColName) (origin builder, isLocal bool, err error) {
 	// Return previously cached info if present.
 	if column, ok := col.Metadata.(*column); ok {
 		return column.Origin(), column.Origin().Symtab() == st, nil
@@ -346,8 +339,6 @@ func (st *symtab) searchTables(col *sqlparser.ColName) (*column, error) {
 		}
 		c = &column{
 			origin: t.origin,
-			name:   col.Name,
-			table:  t,
 		}
 		t.columns[col.Name.Lowered()] = c
 	}
@@ -357,7 +348,7 @@ func (st *symtab) searchTables(col *sqlparser.ColName) (*column, error) {
 // NewResultColumn creates a new resultColumn based on the supplied expression.
 // The created symbol is not remembered until it is later set as ResultColumns
 // after all select expressions are analyzed.
-func (st *symtab) NewResultColumn(expr *sqlparser.AliasedExpr, origin columnOriginator) *resultColumn {
+func (st *symtab) NewResultColumn(expr *sqlparser.AliasedExpr, origin builder) *resultColumn {
 	rc := &resultColumn{
 		alias: expr.As,
 	}
@@ -435,54 +426,33 @@ func (st *symtab) ResolveSymbols(node sqlparser.SQLNode) error {
 
 // table is part of symtab.
 // It represents a table alias in a FROM clause. It points
-// to the columnOriginator that represents it.
+// to the builder that represents it.
 type table struct {
 	alias       sqlparser.TableName
 	columns     map[string]*column
-	origin      columnOriginator
+	origin      builder
 	vindexTable *vindexes.Table
 }
 
 // column represents a unique symbol in the query that other
-// parts can refer to. A column can be a table column or
-// a result column (select expression). Every column
-// contains the columnOriginator it originates from.
-// Columns for table columns are created or reused by
-// symtab through the Find function.
+// parts can refer to. If a column originates from a sharded
+// table, and is tied to a vindex, then its Vindex field is
+// set, which can be used to improve a route's plan.
+// Every column contains the builder it originates from.
 //
-// Columns are created by columnOriginator objects.
+// Two columns are equal if their pointer values match.
 //
-// Anonymous columns can be created by symtab to represent
-// ambiguous column references, but whose route can still be
-// identified. For example, in the case of 'select a from t1, t2',
-// if t1 and t2 are from the same unsharded keyspace, 'a' will
-// be created as an anonymous column because we don't know
-// which table it's coming from. Consequently, anonymous columns
-// can only be created for single-route plans, and they're
-// used only for push-down decisions.
-//
-// For a column whose table is known, the column name and
-// pointer to the table are stored. This information is
-// used to construct a select expression if the column is
-// requested during the wire-up phase.
-// If the table column has a vindex, then that information
-// is also stored and used to make routing decisions.
-// Two columns are equal only if their pointer values match,
-// and not their content.
+// For subquery and vindexFunc, the colnum is also set because
+// the column order is known and unchangeable.
 type column struct {
-	origin columnOriginator
+	origin builder
 	Vindex vindexes.Vindex
-	name   sqlparser.ColIdent
 	typ    querypb.Type
-	table  *table
-
-	// colnum is set only for primitives that can return a
-	// subset of their internal result like subquery or vindexFunc.
 	colnum int
 }
 
 // Origin returns the route that originates the column.
-func (c *column) Origin() columnOriginator {
+func (c *column) Origin() builder {
 	// If it's a route, we have to resolve it.
 	if rb, ok := c.origin.(*route); ok {
 		return rb.Resolve()
