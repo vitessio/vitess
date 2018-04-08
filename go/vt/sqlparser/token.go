@@ -123,6 +123,8 @@ var keywords = map[string]int{
 	"constraint":          CONSTRAINT,
 	"continue":            UNUSED,
 	"convert":             CONVERT,
+	"substr":              SUBSTR,
+	"substring":           SUBSTRING,
 	"create":              CREATE,
 	"cross":               CROSS,
 	"current_date":        CURRENT_DATE,
