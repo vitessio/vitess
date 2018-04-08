@@ -1835,6 +1835,7 @@ func (*FuncExpr) iExpr()         {}
 func (*CaseExpr) iExpr()         {}
 func (*ValuesFuncExpr) iExpr()   {}
 func (*ConvertExpr) iExpr()      {}
+func (*SubstrExpr) iExpr()       {}
 func (*ConvertUsingExpr) iExpr() {}
 func (*MatchExpr) iExpr()        {}
 func (*GroupConcatExpr) iExpr()  {}
@@ -2540,6 +2541,37 @@ func (node *ValuesFuncExpr) WalkSubtree(visit Visit) error {
 	return Walk(
 		visit,
 		node.Name,
+	)
+}
+
+// SubstrExpr represents a call to SubstrExpr(column, value_expression) or SubstrExpr(column, value_expression,value_expression)
+// also supported syntax SubstrExpr(column from value_expression for value_expression)
+type SubstrExpr struct {
+	Name *ColName
+	From Expr
+	To   Expr
+}
+
+// Format formats the node.
+func (node *SubstrExpr) Format(buf *TrackedBuffer) {
+
+	if node.To == nil {
+		buf.Myprintf("substr(%v,%v)", node.Name, node.From)
+	} else {
+		buf.Myprintf("substr(%v,%v,%v)", node.Name, node.From, node.To)
+	}
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *SubstrExpr) WalkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Name,
+		node.From,
+		node.To,
 	)
 }
 

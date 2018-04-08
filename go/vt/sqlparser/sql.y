@@ -182,6 +182,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> UTC_DATE UTC_TIME UTC_TIMESTAMP
 %token <bytes> REPLACE
 %token <bytes> CONVERT CAST
+%token <bytes> SUBSTR SUBSTRING
 %token <bytes> GROUP_CONCAT SEPARATOR
 
 // Match
@@ -2040,6 +2041,30 @@ function_call_keyword:
   {
     $$ = &ConvertUsingExpr{Expr: $3, Type: $5}
   }
+| SUBSTR openb column_name ',' value_expression closeb
+  {
+    $$ = &SubstrExpr{Name: $3, From: $5, To: nil}
+  }
+| SUBSTR openb column_name ',' value_expression ',' value_expression closeb
+  {
+    $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
+  }
+| SUBSTR openb column_name FROM value_expression FOR value_expression closeb
+  {
+    $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
+  }
+| SUBSTRING openb column_name ',' value_expression closeb
+  {
+    $$ = &SubstrExpr{Name: $3, From: $5, To: nil}
+  }
+| SUBSTRING openb column_name ',' value_expression ',' value_expression closeb
+  {
+    $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
+  }
+| SUBSTRING openb column_name FROM value_expression FOR value_expression closeb
+  {
+    $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
+  }
 | MATCH openb select_expression_list closeb AGAINST openb value_expression match_option closeb
   {
   $$ = &MatchExpr{Columns: $3, Expr: $7, Option: $8}
@@ -2691,6 +2716,8 @@ reserved_keyword:
 | CURRENT_DATE
 | CURRENT_TIME
 | CURRENT_TIMESTAMP
+| SUBSTR
+| SUBSTRING
 | DATABASE
 | DATABASES
 | DEFAULT
