@@ -1524,6 +1524,45 @@ func TestConvert(t *testing.T) {
 	}
 }
 
+func TestSubStr(t *testing.T) {
+
+	validSQL := []struct {
+		input  string
+		output string
+	}{{
+		input: "select substr(a,1) from t",
+	}, {
+		input: "select substr(a,1,6) from t",
+	}, {
+		input:  "select substring(a,1) from t",
+		output: "select substr(a,1) from t",
+	}, {
+		input:  "select substring(a,1,6) from t",
+		output: "select substr(a,1,6) from t",
+	}, {
+		input:  "select substr(a from 1 for 6) from t",
+		output: "select substr(a,1,6) from t",
+	}, {
+		input:  "select substring(a from 1 for 6) from t",
+		output: "select substr(a,1,6) from t",
+	}}
+
+	for _, tcase := range validSQL {
+		if tcase.output == "" {
+			tcase.output = tcase.input
+		}
+		tree, err := Parse(tcase.input)
+		if err != nil {
+			t.Errorf("input: %s, err: %v", tcase.input, err)
+			continue
+		}
+		out := String(tree)
+		if out != tcase.output {
+			t.Errorf("out: %s, want %s", out, tcase.output)
+		}
+	}
+}
+
 func TestCreateTable(t *testing.T) {
 	validSQL := []string{
 		// test all the data types and options
