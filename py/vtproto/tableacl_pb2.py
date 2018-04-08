@@ -21,7 +21,6 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   syntax='proto3',
   serialized_pb=_b('\n\x0etableacl.proto\x12\x08tableacl\"q\n\x0eTableGroupSpec\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x1f\n\x17table_names_or_prefixes\x18\x02 \x03(\t\x12\x0f\n\x07readers\x18\x03 \x03(\t\x12\x0f\n\x07writers\x18\x04 \x03(\t\x12\x0e\n\x06\x61\x64mins\x18\x05 \x03(\t\"8\n\x06\x43onfig\x12.\n\x0ctable_groups\x18\x01 \x03(\x0b\x32\x18.tableacl.TableGroupSpecb\x06proto3')
 )
-_sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
 
@@ -39,35 +38,35 @@ _TABLEGROUPSPEC = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='table_names_or_prefixes', full_name='tableacl.TableGroupSpec.table_names_or_prefixes', index=1,
       number=2, type=9, cpp_type=9, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='readers', full_name='tableacl.TableGroupSpec.readers', index=2,
       number=3, type=9, cpp_type=9, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='writers', full_name='tableacl.TableGroupSpec.writers', index=3,
       number=4, type=9, cpp_type=9, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='admins', full_name='tableacl.TableGroupSpec.admins', index=4,
       number=5, type=9, cpp_type=9, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -98,7 +97,7 @@ _CONFIG = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -118,6 +117,7 @@ _CONFIG = _descriptor.Descriptor(
 _CONFIG.fields_by_name['table_groups'].message_type = _TABLEGROUPSPEC
 DESCRIPTOR.message_types_by_name['TableGroupSpec'] = _TABLEGROUPSPEC
 DESCRIPTOR.message_types_by_name['Config'] = _CONFIG
+_sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 TableGroupSpec = _reflection.GeneratedProtocolMessageType('TableGroupSpec', (_message.Message,), dict(
   DESCRIPTOR = _TABLEGROUPSPEC,
@@ -134,9 +134,4 @@ Config = _reflection.GeneratedProtocolMessageType('Config', (_message.Message,),
 _sym_db.RegisterMessage(Config)
 
 
-import grpc
-from grpc.beta import implementations as beta_implementations
-from grpc.beta import interfaces as beta_interfaces
-from grpc.framework.common import cardinality
-from grpc.framework.interfaces.face import utilities as face_utilities
 # @@protoc_insertion_point(module_scope)

@@ -24,7 +24,7 @@ import grpc
 import vtctl_client
 
 from vtproto import vtctldata_pb2
-from vtproto import vtctlservice_pb2
+from vtproto import vtctlservice_pb2_grpc
 from util import static_auth_client
 from util import grpc_with_metadata
 
@@ -51,7 +51,7 @@ class GRPCVtctlClient(vtctl_client.VtctlClient):
     channel = grpc.insecure_channel('%s:%s' % (p.hostname, p.port))
     if self.auth_static_client_creds is not None:
       channel = grpc_with_metadata.GRPCWithMetadataChannel(channel, self.get_auth_static_client_creds)
-    self.stub = vtctlservice_pb2.VtctlStub(channel)
+    self.stub = vtctlservice_pb2_grpc.VtctlStub(channel)
 
   def close(self):
     self.stub = None
