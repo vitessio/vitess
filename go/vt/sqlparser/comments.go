@@ -151,7 +151,11 @@ func hasCommentPrefix(sql string) bool {
 func ExtractMysqlComment(sql string) (version string, innerSQL string) {
 	sql = sql[3 : len(sql)-2]
 
-	endOfVersionIndex := strings.IndexFunc(sql, func(c rune) bool { return !unicode.IsDigit(c) })
+	digitCount := 0
+	endOfVersionIndex := strings.IndexFunc(sql, func(c rune) bool {
+		digitCount++
+		return !unicode.IsDigit(c) || digitCount == 6
+	})
 	version = sql[0:endOfVersionIndex]
 	innerSQL = strings.TrimFunc(sql[endOfVersionIndex:], unicode.IsSpace)
 
