@@ -14,11 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-SKIP_ROOT_INSTALLS=False
-if [ "$1" = "--skip_root_installs" ]; then
-  SKIP_ROOT_INSTALLS=True
-fi
-
 # Run parallel make, based on number of cores available.
 case $(uname) in
   Linux)  NB_CORES=$(grep -c '^processor' /proc/cpuinfo);;
@@ -110,9 +105,7 @@ ln -snf $consul_dist/consul $VTROOT/bin/consul
 # So, we need to build it.
 export grpc_dist=$VTROOT/dist/grpc
 export grpc_ver="v1.10.0"
-if [ $SKIP_ROOT_INSTALLS == "True" ]; then
-  echo "skipping grpc build, as root version was already installed."
-elif [[ -f $grpc_dist/.build_finished && "$(cat $grpc_dist/.build_finished)" == "$grpc_ver" ]]; then
+if [[ -f $grpc_dist/.build_finished && "$(cat $grpc_dist/.build_finished)" == "$grpc_ver" ]]; then
   echo "skipping gRPC build. remove $grpc_dist to force rebuild."
 else
   echo "installing grpc $grpc_ver"
