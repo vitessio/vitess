@@ -1,11 +1,11 @@
 # Copyright 2017 Google Inc.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -46,7 +46,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
 
   def __init__(self, addr, timeout,
                root_certificates=None, private_key=None, certificate_chain=None,
-               auth_static_client_creds = None,
+               auth_static_client_creds=None,
                **kwargs):
     """Creates a new GRPCVTGateConnection.
 
@@ -81,7 +81,9 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
     else:
       channel = grpc.insecure_channel(target)
     if self.auth_static_client_creds is not None:
-      channel = grpc_with_metadata.GRPCWithMetadataChannel(channel, self.get_auth_static_client_creds)
+      channel = grpc_with_metadata.GRPCWithMetadataChannel(
+          channel,
+          self.get_auth_static_client_creds)
     self.stub = vtgateservice_pb2_grpc.VitessStub(channel)
 
   def close(self):
@@ -104,7 +106,8 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
     return self.stub is None
 
   def get_auth_static_client_creds(self):
-    return static_auth_client.StaticAuthClientCreds(self.auth_static_client_creds).metadata()
+    return static_auth_client.StaticAuthClientCreds(
+        self.auth_static_client_creds).metadata()
 
   def cursor(self, *pargs, **kwargs):
     cursorclass = kwargs.pop('cursorclass', None) or vtgate_cursor.VTGateCursor
