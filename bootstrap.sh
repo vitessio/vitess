@@ -42,28 +42,28 @@ function fail() {
   exit 1
 }
 
-[ "$(dirname $0)" = '.' ] || fail "bootstrap.sh must be run from its current directory"
+[[ "$(dirname "$0")" = "." ]] || fail "bootstrap.sh must be run from its current directory"
 
-go version 2>&1 >/dev/null || fail "Go is not installed or is not on \$PATH"
+go version &>/dev/null  || fail "Go is not installed or is not on \$PATH"
 
 # Set up the proper GOPATH for go get below.
 source ./dev.env
 
 # Create main directories.
-mkdir -p $VTROOT/dist
-mkdir -p $VTROOT/bin
-mkdir -p $VTROOT/lib
-mkdir -p $VTROOT/vthook
+mkdir -p "$VTROOT/dist"
+mkdir -p "$VTROOT/bin"
+mkdir -p "$VTROOT/lib"
+mkdir -p "$VTROOT/vthook"
 
 # Set up required soft links.
 # TODO(mberlin): Which of these can be deleted?
-ln -snf $VTTOP/config $VTROOT/config
-ln -snf $VTTOP/data $VTROOT/data
-ln -snf $VTTOP/py $VTROOT/py-vtdb
-ln -snf $VTTOP/go/vt/zkctl/zksrv.sh $VTROOT/bin/zksrv.sh
-ln -snf $VTTOP/test/vthook-test.sh $VTROOT/vthook/test.sh
-ln -snf $VTTOP/test/vthook-test_backup_error $VTROOT/vthook/test_backup_error
-ln -snf $VTTOP/test/vthook-test_backup_transform $VTROOT/vthook/test_backup_transform
+ln -snf "$VTTOP/config" "$VTROOT/config"
+ln -snf "$VTTOP/data" "$VTROOT/data"
+ln -snf "$VTTOP/py" "$VTROOT/py-vtdb"
+ln -snf "$VTTOP/go/vt/zkctl/zksrv.sh" "$VTROOT/bin/zksrv.sh"
+ln -snf "$VTTOP/test/vthook-test.sh" "$VTROOT/vthook/test.sh"
+ln -snf "$VTTOP/test/vthook-test_backup_error" "$VTROOT/vthook/test_backup_error"
+ln -snf "$VTTOP/test/vthook-test_backup_transform" "$VTROOT/vthook/test_backup_transform"
 
 # install_dep is a helper function to generalize the download and installation of dependencies.
 #
@@ -134,7 +134,7 @@ function install_grpc() {
   $PIP install --upgrade --ignore-installed virtualenv
 
   grpcio_ver=$version
-  $PIP install --upgrade grpcio==$grpcio_ver grpcio-tools==$grpcio_ver
+  $PIP install --upgrade grpcio=="$grpcio_ver" grpcio-tools=="$grpcio_ver"
 
   # Add newly installed Python code to PYTHONPATH such that other Python module
   # installations can reuse it. (Once bootstrap.sh has finished, run
@@ -263,6 +263,7 @@ gotools=" \
        honnef.co/go/tools/cmd/unused \
 "
 echo "Installing dev tools with 'go get'..."
+# shellcheck disable=SC2086
 go get -u $gotools || fail "Failed to download some Go tools with 'go get'. Please re-run bootstrap.sh in case of transient errors."
 
 # Download dependencies that are version-pinned via govendor.
@@ -293,13 +294,13 @@ if [ -z "$MYSQL_FLAVOR" ]; then
 fi
 case "$MYSQL_FLAVOR" in
   "MySQL56")
-    myversion=`$VT_MYSQL_ROOT/bin/mysql --version`
+    myversion="$("$VT_MYSQL_ROOT/bin/mysql" --version)"
     [[ "$myversion" =~ Distrib\ 5\.[67] ]] || fail "Couldn't find MySQL 5.6+ in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
     echo "Found MySQL 5.6+ installation in $VT_MYSQL_ROOT."
     ;;
 
   "MariaDB")
-    myversion=`$VT_MYSQL_ROOT/bin/mysql --version`
+    myversion="$("$VT_MYSQL_ROOT/bin/mysql" --version)"
     [[ "$myversion" =~ MariaDB ]] || fail "Couldn't find MariaDB in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
     echo "Found MariaDB installation in $VT_MYSQL_ROOT."
     ;;
@@ -312,7 +313,7 @@ esac
 
 # save the flavor that was used in bootstrap, so it can be restored
 # every time dev.env is sourced.
-echo "$MYSQL_FLAVOR" > $VTROOT/dist/MYSQL_FLAVOR
+echo "$MYSQL_FLAVOR" > "$VTROOT/dist/MYSQL_FLAVOR"
 
 
 #
@@ -322,11 +323,11 @@ echo "$MYSQL_FLAVOR" > $VTROOT/dist/MYSQL_FLAVOR
 
 # Create the Git hooks.
 echo "creating git hooks"
-mkdir -p $VTTOP/.git/hooks
-ln -sf $VTTOP/misc/git/pre-commit $VTTOP/.git/hooks/pre-commit
-ln -sf $VTTOP/misc/git/prepare-commit-msg.bugnumber $VTTOP/.git/hooks/prepare-commit-msg
-ln -sf $VTTOP/misc/git/commit-msg $VTTOP/.git/hooks/commit-msg
-(cd $VTTOP && git config core.hooksPath $VTTOP/.git/hooks)
+mkdir -p "$VTTOP/.git/hooks"
+ln -sf "$VTTOP/misc/git/pre-commit" "$VTTOP/.git/hooks/pre-commit"
+ln -sf "$VTTOP/misc/git/prepare-commit-msg.bugnumber" "$VTTOP/.git/hooks/prepare-commit-msg"
+ln -sf "$VTTOP/misc/git/commit-msg" "$VTTOP/.git/hooks/commit-msg"
+(cd "$VTTOP" && git config core.hooksPath "$VTTOP/.git/hooks")
 
 
 echo
