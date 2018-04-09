@@ -41,9 +41,6 @@ mkdir -p $VTROOT/bin
 mkdir -p $VTROOT/lib
 mkdir -p $VTROOT/vthook
 
-echo "Updating git submodules..."
-git submodule update --init
-
 
 # install_dep is a helper function to generalize the download and installation of dependencies.
 #
