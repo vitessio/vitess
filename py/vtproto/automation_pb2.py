@@ -22,7 +22,6 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   syntax='proto3',
   serialized_pb=_b('\n\x10\x61utomation.proto\x12\nautomation\"\x90\x01\n\x10\x43lusterOperation\x12\n\n\x02id\x18\x01 \x01(\t\x12/\n\x0cserial_tasks\x18\x02 \x03(\x0b\x32\x19.automation.TaskContainer\x12\x30\n\x05state\x18\x03 \x01(\x0e\x32!.automation.ClusterOperationState\x12\r\n\x05\x65rror\x18\x04 \x01(\t\"N\n\rTaskContainer\x12(\n\x0eparallel_tasks\x18\x01 \x03(\x0b\x32\x10.automation.Task\x12\x13\n\x0b\x63oncurrency\x18\x02 \x01(\x05\"\xce\x01\n\x04Task\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x34\n\nparameters\x18\x02 \x03(\x0b\x32 .automation.Task.ParametersEntry\x12\n\n\x02id\x18\x03 \x01(\t\x12$\n\x05state\x18\x04 \x01(\x0e\x32\x15.automation.TaskState\x12\x0e\n\x06output\x18\x05 \x01(\t\x12\r\n\x05\x65rror\x18\x06 \x01(\t\x1a\x31\n\x0fParametersEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xb1\x01\n\x1e\x45nqueueClusterOperationRequest\x12\x0c\n\x04name\x18\x01 \x01(\t\x12N\n\nparameters\x18\x02 \x03(\x0b\x32:.automation.EnqueueClusterOperationRequest.ParametersEntry\x1a\x31\n\x0fParametersEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"-\n\x1f\x45nqueueClusterOperationResponse\x12\n\n\x02id\x18\x01 \x01(\t\"-\n\x1fGetClusterOperationStateRequest\x12\n\n\x02id\x18\x01 \x01(\t\"T\n GetClusterOperationStateResponse\x12\x30\n\x05state\x18\x01 \x01(\x0e\x32!.automation.ClusterOperationState\"/\n!GetClusterOperationDetailsRequest\x12\n\n\x02id\x18\x01 \x01(\t\"V\n\"GetClusterOperationDetailsResponse\x12\x30\n\ncluster_op\x18\x02 \x01(\x0b\x32\x1c.automation.ClusterOperation*\x9a\x01\n\x15\x43lusterOperationState\x12#\n\x1fUNKNOWN_CLUSTER_OPERATION_STATE\x10\x00\x12!\n\x1d\x43LUSTER_OPERATION_NOT_STARTED\x10\x01\x12\x1d\n\x19\x43LUSTER_OPERATION_RUNNING\x10\x02\x12\x1a\n\x16\x43LUSTER_OPERATION_DONE\x10\x03*K\n\tTaskState\x12\x16\n\x12UNKNOWN_TASK_STATE\x10\x00\x12\x0f\n\x0bNOT_STARTED\x10\x01\x12\x0b\n\x07RUNNING\x10\x02\x12\x08\n\x04\x44ONE\x10\x03\x62\x06proto3')
 )
-_sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 _CLUSTEROPERATIONSTATE = _descriptor.EnumDescriptor(
   name='ClusterOperationState',
@@ -110,28 +109,28 @@ _CLUSTEROPERATION = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='serial_tasks', full_name='automation.ClusterOperation.serial_tasks', index=1,
       number=2, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='state', full_name='automation.ClusterOperation.state', index=2,
       number=3, type=14, cpp_type=8, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='error', full_name='automation.ClusterOperation.error', index=3,
       number=4, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -162,14 +161,14 @@ _TASKCONTAINER = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='concurrency', full_name='automation.TaskContainer.concurrency', index=1,
       number=2, type=5, cpp_type=1, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -200,14 +199,14 @@ _TASK_PARAMETERSENTRY = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='value', full_name='automation.Task.ParametersEntry.value', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -237,42 +236,42 @@ _TASK = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='parameters', full_name='automation.Task.parameters', index=1,
       number=2, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='id', full_name='automation.Task.id', index=2,
       number=3, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='state', full_name='automation.Task.state', index=3,
       number=4, type=14, cpp_type=8, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='output', full_name='automation.Task.output', index=4,
       number=5, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='error', full_name='automation.Task.error', index=5,
       number=6, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -303,14 +302,14 @@ _ENQUEUECLUSTEROPERATIONREQUEST_PARAMETERSENTRY = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='value', full_name='automation.EnqueueClusterOperationRequest.ParametersEntry.value', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -340,14 +339,14 @@ _ENQUEUECLUSTEROPERATIONREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='parameters', full_name='automation.EnqueueClusterOperationRequest.parameters', index=1,
       number=2, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -378,7 +377,7 @@ _ENQUEUECLUSTEROPERATIONRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -409,7 +408,7 @@ _GETCLUSTEROPERATIONSTATEREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -440,7 +439,7 @@ _GETCLUSTEROPERATIONSTATERESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -471,7 +470,7 @@ _GETCLUSTEROPERATIONDETAILSREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -502,7 +501,7 @@ _GETCLUSTEROPERATIONDETAILSRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -540,6 +539,7 @@ DESCRIPTOR.message_types_by_name['GetClusterOperationDetailsRequest'] = _GETCLUS
 DESCRIPTOR.message_types_by_name['GetClusterOperationDetailsResponse'] = _GETCLUSTEROPERATIONDETAILSRESPONSE
 DESCRIPTOR.enum_types_by_name['ClusterOperationState'] = _CLUSTEROPERATIONSTATE
 DESCRIPTOR.enum_types_by_name['TaskState'] = _TASKSTATE
+_sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 ClusterOperation = _reflection.GeneratedProtocolMessageType('ClusterOperation', (_message.Message,), dict(
   DESCRIPTOR = _CLUSTEROPERATION,
@@ -625,9 +625,4 @@ _TASK_PARAMETERSENTRY.has_options = True
 _TASK_PARAMETERSENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
 _ENQUEUECLUSTEROPERATIONREQUEST_PARAMETERSENTRY.has_options = True
 _ENQUEUECLUSTEROPERATIONREQUEST_PARAMETERSENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
-import grpc
-from grpc.beta import implementations as beta_implementations
-from grpc.beta import interfaces as beta_interfaces
-from grpc.framework.common import cardinality
-from grpc.framework.interfaces.face import utilities as face_utilities
 # @@protoc_insertion_point(module_scope)

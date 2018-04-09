@@ -29,9 +29,6 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     libz-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Not sure if this is needed, but it was part of php init, which we don't do any more.
-RUN mkdir -p /vt/bin
-
 # Install Maven 3.1+
 RUN mkdir -p /vt/dist && \
     cd /vt/dist && \
@@ -60,10 +57,6 @@ COPY third_party /vt/src/vitess.io/vitess/third_party
 COPY tools /vt/src/vitess.io/vitess/tools
 COPY travis /vt/src/vitess.io/vitess/travis
 COPY vendor/vendor.json /vt/src/vitess.io/vitess/vendor/
-
-# grpcio runtime is needed for python tests.
-RUN grpcio_ver="1.7.0" && \
-    pip install --upgrade grpcio==$grpcio_ver
 
 # Download vendored Go dependencies
 RUN cd /vt/src/vitess.io/vitess && \

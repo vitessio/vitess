@@ -42,4 +42,3 @@ exclude_paths:
 - "go/vt/proto/"
 - "go/vt/sqlparser/sql.go"
 - "py/util/grpc_with_metadata.py"
-- "travis/install_grpc.sh"

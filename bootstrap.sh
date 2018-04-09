@@ -14,11 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-SKIP_ROOT_INSTALLS=False
-if [ "$1" = "--skip_root_installs" ]; then
-  SKIP_ROOT_INSTALLS=True
-fi
-
 # Run parallel make, based on number of cores available.
 case $(uname) in
   Linux)  NB_CORES=$(grep -c '^processor' /proc/cpuinfo);;
@@ -106,40 +101,47 @@ else
 fi
 ln -snf $consul_dist/consul $VTROOT/bin/consul
 
-# Install gRPC proto compilers. There is no download for grpc_python_plugin.
-# So, we need to build it.
-export grpc_dist=$VTROOT/dist/grpc
-export grpc_ver="v1.10.0"
-if [ $SKIP_ROOT_INSTALLS == "True" ]; then
-  echo "skipping grpc build, as root version was already installed."
-elif [[ -f $grpc_dist/.build_finished && "$(cat $grpc_dist/.build_finished)" == "$grpc_ver" ]]; then
-  echo "skipping gRPC build. remove $grpc_dist to force rebuild."
+# Install the gRPC Python library (grpcio) and the protobuf gRPC Python plugin (grpcio-tools) from PyPI.
+# Dependencies like the Python protobuf package will be installed automatically.
+grpc_dist=$VTROOT/dist/grpc
+grpc_ver="1.10.0"
+grpc_version_file="$grpc_dist/.build_finished"
+if [[ -f "$grpc_version_file" && "$(cat "$grpc_version_file")" == "$grpc_ver" ]]; then
+  echo "skipping gRPC build. remove $grpc_dist to force reinstall."
 else
-  echo "installing grpc $grpc_ver"
-  # unlink homebrew's protobuf, to be able to compile the downloaded protobuf package
-  if [[ `uname -s` == "Darwin" && "$(brew list -1 | grep google-protobuf)" ]]; then
-    brew unlink grpc/grpc/google-protobuf
-  fi
-
-  # protobuf used to be a separate package, now we use the gRPC one.
-  rm -rf $VTROOT/dist/protobuf
-
+  echo "installing gRPC $grpc_ver"
   # Cleanup any existing data and re-create the directory.
-  rm -rf $grpc_dist
-  mkdir -p $grpc_dist
+  rm -rf "$grpc_dist"
 
-  ./travis/install_grpc.sh $grpc_dist || fail "gRPC build failed"
-  echo "$grpc_ver" > $grpc_dist/.build_finished
+  trap "fail 'gRPC build failed'; exit 1" ERR
+  mkdir -p "$grpc_dist"
+  pushd "$grpc_dist" >/dev/null
 
-  # link homebrew's protobuf back
-  if [[ `uname -s` == "Darwin" && "$(brew list -1 | grep google-protobuf)" ]]; then
-    brew link grpc/grpc/google-protobuf
-  fi
+  # Python requires a very recent version of virtualenv.
+  # We also require a recent version of pip, as we use it to
+  # upgrade the other tools.
+  # For instance, setuptools doesn't work with pip 6.0:
+  # https://github.com/pypa/setuptools/issues/945
+  # (and setuptools is used by grpc install).
+  grpc_virtualenv="$grpc_dist/usr/local"
+  $VIRTUALENV -v "$grpc_virtualenv"
+  PIP=$grpc_virtualenv/bin/pip
+  $PIP install --upgrade pip
+  $PIP install --upgrade --ignore-installed virtualenv
+
+  grpcio_ver=$grpc_ver
+  $PIP install --upgrade grpcio==$grpcio_ver grpcio-tools==$grpcio_ver
+
+  popd >/dev/null
+  trap - ERR
+
+  echo "$grpc_ver" > "$grpc_version_file"
 
   # Add newly installed Python code to PYTHONPATH such that other Python module
   # installations can reuse it. (Once bootstrap.sh has finished, run
   # source dev.env instead to set the correct PYTHONPATH.)
-  export PYTHONPATH=$(prepend_path $PYTHONPATH $grpc_dist/usr/local/lib/python2.7/dist-packages)
+  PYTHONPATH=$(prepend_path "$PYTHONPATH" "$grpc_virtualenv/lib/python2.7/dist-packages")
+  export PYTHONPATH
 fi
 
 # Install third-party Go tools used as part of the development workflow.

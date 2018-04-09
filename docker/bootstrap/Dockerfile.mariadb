@@ -12,4 +12,4 @@ USER vitess
 # Required by e2e test dependencies e.g. test/environment.py.
 ENV USER vitess
 ENV MYSQL_FLAVOR MariaDB
-RUN ./bootstrap.sh --skip_root_installs
+RUN ./bootstrap.sh
