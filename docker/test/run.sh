@@ -124,6 +124,11 @@ fi
 # Mirror permissions to "other" from the owning group (for which we assume it has at least rX permissions).
 chmod -R o=g .
 
+# This is required by the vtctld_web_test.py test.
+# Otherwise, /usr/bin/chromium will crash with the error:
+# "Failed to move to new namespace: PID namespaces supported, Network namespace supported, but failed: errno = Operation not permitted"
+args="$args --cap-add=SYS_ADMIN"
+
 args="$args -v /dev/log:/dev/log"
 args="$args -v $PWD:/tmp/src"
 
