@@ -45,6 +45,40 @@ func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (primitive e
 }
 
 // processSelect builds a primitive tree for the given query or subquery.
+// The tree built by this function has the following general structure:
+//
+// The leaf nodes can be a route, vindexFunc or subquery. In the symtab,
+// the tables map has columns that point to these leaf nodes. A subquery
+// itself contains a builder tree, but it's opaque and is made to look
+// like a table for the analysis of the current tree.
+//
+// The leaf nodes are usually tied together by join nodes. While the join
+// nodes are built, they have ON clauses. Those are analyzed and pushed
+// down into the leaf nodes as the tree is formed. Join nodes are formed
+// during analysis of the FROM clause.
+//
+// During the WHERE clause analysis, the target leaf node is identified
+// for each part, and the PushFilter function is used to push the condition
+// down. The same strategy is used for the other clauses.
+//
+// So, a typical plan would either be a simple leaf node, or may consist
+// of leaf nodes tied together by join nodes.
+//
+// If a query has aggregates that cannot be pushed down, an aggregator
+// primitive is built. The current orderedAggregate primitive can only
+// be built on top of a route. The orderedAggregate expects the rows
+// to be ordered as they are returned. This work is performed by the
+// underlying route. This means that a compatible ORDER BY clause
+// can also be handled by this combination of primitives. In this case,
+// the tree would consist of an orderedAggregate whose input is a route.
+//
+// If a query has an ORDER BY, but the route is a scatter, then the
+// ordering is pushed down into the route itself. This results in a simple
+// route primitive.
+//
+// The LIMIT clause is the last construct of a query. If it cannot be
+// pushed into a route, then a primitve is created on top of any
+// of the above trees to make it discard unwanted rows.
 func processSelect(sel *sqlparser.Select, vschema ContextVSchema, outer builder) (builder, error) {
 	bldr, err := processTableExprs(sel.From, vschema)
 	if err != nil {

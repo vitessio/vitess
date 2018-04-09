@@ -41,3 +41,8 @@ insert into t1 (id,intval,floatval) values (1,2,3.14) on duplicate key update in
 1 ks_unsharded/-: commit
 
 ----------------------------------------------------------------------
+select ID from t1
+
+1 ks_unsharded/-: select ID from t1 limit 10001
+
+----------------------------------------------------------------------

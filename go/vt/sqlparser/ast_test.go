@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 	"unsafe"
 
@@ -438,6 +439,51 @@ func TestColumns_FindColumn(t *testing.T) {
 		val := cols.FindColumn(NewColIdent(tc.in))
 		if val != tc.out {
 			t.Errorf("FindColumn(%s): %d, want %d", tc.in, val, tc.out)
+		}
+	}
+}
+
+func TestSplitStatementToPieces(t *testing.T) {
+	testcases := []struct {
+		input  string
+		output string
+	}{{
+		input: "select * from table",
+	}, {
+		input:  "select * from table1; select * from table2;",
+		output: "select * from table1; select * from table2",
+	}, {
+		input:  "select * from /* comment ; */ table;",
+		output: "select * from /* comment ; */ table",
+	}, {
+		input:  "select * from table where semi = ';';",
+		output: "select * from table where semi = ';'",
+	}, {
+		input:  "select * from table1;--comment;\nselect * from table2;",
+		output: "select * from table1;--comment;\nselect * from table2",
+	}, {
+		input: "CREATE TABLE `total_data` (`id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'id', " +
+			"`region` varchar(32) NOT NULL COMMENT 'region name, like zh; th; kepler'," +
+			"`data_size` bigint NOT NULL DEFAULT '0' COMMENT 'data size;'," +
+			"`createtime` datetime NOT NULL DEFAULT NOW() COMMENT 'create time;'," +
+			"`comment` varchar(100) NOT NULL DEFAULT '' COMMENT 'comment'," +
+			"PRIMARY KEY (`id`))",
+	}}
+
+	for _, tcase := range testcases {
+		if tcase.output == "" {
+			tcase.output = tcase.input
+		}
+
+		stmtPieces, err := SplitStatementToPieces(tcase.input)
+		if err != nil {
+			t.Errorf("input: %s, err: %v", tcase.input, err)
+			continue
+		}
+
+		out := strings.Join(stmtPieces, ";")
+		if out != tcase.output {
+			t.Errorf("out: %s, want %s", out, tcase.output)
 		}
 	}
 }

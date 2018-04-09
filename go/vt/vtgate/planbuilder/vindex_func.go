@@ -28,7 +28,6 @@ import (
 )
 
 var _ builder = (*vindexFunc)(nil)
-var _ columnOriginator = (*vindexFunc)(nil)
 
 // vindexFunc is used to build a VindexFunc primitive.
 type vindexFunc struct {
@@ -61,14 +60,10 @@ func newVindexFunc(alias sqlparser.TableName, vindex vindexes.Vindex, vschema Co
 	t.columns = map[string]*column{
 		"id": {
 			origin: vf,
-			name:   sqlparser.NewColIdent("id"),
-			table:  t,
 			colnum: 0,
 		},
 		"keyspace_id": {
 			origin: vf,
-			name:   sqlparser.NewColIdent("keyspace_id"),
-			table:  t,
 			colnum: 1,
 		},
 	}
@@ -83,18 +78,13 @@ func (vf *vindexFunc) Symtab() *symtab {
 	return vf.symtab.Resolve()
 }
 
-// Order returns the order of the subquery.
+// Order satisfies the builder interface.
 func (vf *vindexFunc) Order() int {
 	return vf.order
 }
 
-// MaxOrder satisfies the builder interface.
-func (vf *vindexFunc) MaxOrder() int {
-	return vf.order
-}
-
-// SetOrder satisfies the builder interface.
-func (vf *vindexFunc) SetOrder(order int) {
+// Reorder satisfies the builder interface.
+func (vf *vindexFunc) Reorder(order int) {
 	vf.order = order + 1
 }
 
@@ -104,7 +94,7 @@ func (vf *vindexFunc) Primitive() engine.Primitive {
 }
 
 // Leftmost satisfies the builder interface.
-func (vf *vindexFunc) Leftmost() columnOriginator {
+func (vf *vindexFunc) Leftmost() builder {
 	return vf
 }
 
@@ -115,7 +105,7 @@ func (vf *vindexFunc) ResultColumns() []*resultColumn {
 
 // PushFilter satisfies the builder interface.
 // Only some where clauses are allowed.
-func (vf *vindexFunc) PushFilter(filter sqlparser.Expr, whereType string, _ columnOriginator) error {
+func (vf *vindexFunc) PushFilter(filter sqlparser.Expr, whereType string, _ builder) error {
 	if vf.eVindexFunc.Opcode != engine.VindexNone {
 		return errors.New("unsupported: where clause for vindex function must be of the form id = <val> (multiple filters)")
 	}
@@ -151,7 +141,7 @@ func (vf *vindexFunc) PushFilter(filter sqlparser.Expr, whereType string, _ colu
 }
 
 // PushSelect satisfies the builder interface.
-func (vf *vindexFunc) PushSelect(expr *sqlparser.AliasedExpr, _ columnOriginator) (rc *resultColumn, colnum int, err error) {
+func (vf *vindexFunc) PushSelect(expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colnum int, err error) {
 	// Catch the case where no where clause was specified. If so, the opcode
 	// won't be set.
 	if vf.eVindexFunc.Opcode == engine.VindexNone {

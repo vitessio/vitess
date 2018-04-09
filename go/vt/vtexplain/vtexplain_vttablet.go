@@ -423,7 +423,7 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 		tableColumns[table] = make(map[string]querypb.Type)
 
 		for _, col := range ddl.TableSpec.Columns {
-			colName := col.Name.String()
+			colName := strings.ToLower(col.Name.String())
 			defaultVal := ""
 			if col.Type.Default != nil {
 				defaultVal = sqlparser.String(col.Type.Default)
@@ -507,7 +507,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		}
 
 		colTypeMap := tableColumns[table.String()]
-		if colTypeMap == nil {
+		if colTypeMap == nil && table.String() != "dual" {
 			return fmt.Errorf("unable to resolve table name %s", table.String())
 		}
 
@@ -518,7 +518,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 			case *sqlparser.AliasedExpr:
 				switch node := node.Expr.(type) {
 				case *sqlparser.ColName:
-					col := node.Name.String()
+					col := strings.ToLower(node.Name.String())
 					colType := colTypeMap[col]
 					if colType == querypb.Type_NULL_TYPE {
 						return fmt.Errorf("invalid column %s", col)

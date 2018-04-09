@@ -549,7 +549,20 @@ var (
 	}, {
 		input: "select /* string in case statement */ if(max(case a when 'foo' then 1 else 0 end) = 1, 'foo', 'bar') as foobar from t",
 	}, {
-		input: "select /* dual */ 1 from dual",
+		input:  "/*!show databases*/",
+		output: "show databases",
+	}, {
+		input:  "select /*!40101 * from*/ t",
+		output: "select * from t",
+	}, {
+		input:  "select /*! * from*/ t",
+		output: "select * from t",
+	}, {
+		input:  "select /*!* from*/ t",
+		output: "select * from t",
+	}, {
+		input:  "select /*!401011 from*/ t",
+		output: "select 1 from t",
 	}, {
 		input: "select /* dual */ 1 from dual",
 	}, {
@@ -1511,6 +1524,45 @@ func TestConvert(t *testing.T) {
 	}
 }
 
+func TestSubStr(t *testing.T) {
+
+	validSQL := []struct {
+		input  string
+		output string
+	}{{
+		input: "select substr(a,1) from t",
+	}, {
+		input: "select substr(a,1,6) from t",
+	}, {
+		input:  "select substring(a,1) from t",
+		output: "select substr(a,1) from t",
+	}, {
+		input:  "select substring(a,1,6) from t",
+		output: "select substr(a,1,6) from t",
+	}, {
+		input:  "select substr(a from 1 for 6) from t",
+		output: "select substr(a,1,6) from t",
+	}, {
+		input:  "select substring(a from 1 for 6) from t",
+		output: "select substr(a,1,6) from t",
+	}}
+
+	for _, tcase := range validSQL {
+		if tcase.output == "" {
+			tcase.output = tcase.input
+		}
+		tree, err := Parse(tcase.input)
+		if err != nil {
+			t.Errorf("input: %s, err: %v", tcase.input, err)
+			continue
+		}
+		out := String(tree)
+		if out != tcase.output {
+			t.Errorf("out: %s, want %s", out, tcase.output)
+		}
+	}
+}
+
 func TestCreateTable(t *testing.T) {
 	validSQL := []string{
 		// test all the data types and options
@@ -1565,9 +1617,13 @@ func TestCreateTable(t *testing.T) {
 			"	col_text text character set ascii collate ascii_bin,\n" +
 			"	col_json json,\n" +
 			"	col_enum enum('a', 'b', 'c', 'd'),\n" +
-			"	col_enum enum('a', 'b', 'c', 'd') character set ascii,\n" +
-			"	col_enum enum('a', 'b', 'c', 'd') collate ascii_bin,\n" +
-			"	col_enum enum('a', 'b', 'c', 'd') character set ascii collate ascii_bin\n" +
+			"	col_enum2 enum('a', 'b', 'c', 'd') character set ascii,\n" +
+			"	col_enum3 enum('a', 'b', 'c', 'd') collate ascii_bin,\n" +
+			"	col_enum4 enum('a', 'b', 'c', 'd') character set ascii collate ascii_bin,\n" +
+			"	col_set set('a', 'b', 'c', 'd'),\n" +
+			"	col_set2 set('a', 'b', 'c', 'd') character set ascii,\n" +
+			"	col_set3 set('a', 'b', 'c', 'd') collate ascii_bin,\n" +
+			"	col_set4 set('a', 'b', 'c', 'd') character set ascii collate ascii_bin\n" +
 			")",
 
 		// test defaults
