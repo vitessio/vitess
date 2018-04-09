@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2164
 
 # Copyright 2017 Google Inc.
 #
@@ -43,79 +44,106 @@ mkdir -p $VTROOT/vthook
 echo "Updating git submodules..."
 git submodule update --init
 
-# install zookeeper
-# TODO(sougou): when version changes, see if we can drop the 'zip -d' hack to get the fatjars working.
+
+# install_dep is a helper function to generalize the download and installation of dependencies.
+#
+# If the installation is successful, it puts the installed version string into
+# the $dist/.installed_version file. If the version has not changed, bootstrap
+# will skip future installations.
+function install_dep() {
+  if [[ $# != 4 ]]; then
+    fail "install_dep function requires exactly 4 parameters (and not $#). Parameters: $*"
+  fi
+  local name="$1"
+  local version="$2"
+  local dist="$3"
+  local install_func="$4"
+
+  version_file="$dist/.installed_version"
+  if [[ -f "$version_file" && "$(cat "$version_file")" == "$version" ]]; then
+    echo "skipping $name install. remove $dist to force re-install."
+    return
+  fi
+
+  echo "installing $name $version"
+
+  # shellcheck disable=SC2064
+  trap "fail '$name build failed'; exit 1" ERR
+
+  # Cleanup any existing data and re-create the directory.
+  rm -rf "$dist"
+  mkdir -p "$dist"
+
+  # Change $CWD to $dist before calling "install_func".
+  pushd "$dist" >/dev/null
+  # -E (same as "set -o errtrace") makes sure that "install_func" inherits the
+  # trap. If here's an error, the trap will be called which will exit this
+  # script.
+  set -E
+  $install_func "$version" "$dist"
+  set +E
+  popd >/dev/null
+
+  trap - ERR
+
+  echo "$version" > "$version_file"
+}
+
+
+# Install Zookeeper.
+function install_zookeeper() {
+  local version="$1"
+  local dist="$2"
+
+  zk="zookeeper-$version"
+  wget "http://apache.org/dist/zookeeper/$zk/$zk.tar.gz"
+  tar -xzf "$zk.tar.gz"
+  mkdir -p lib
+  cp "$zk/contrib/fatjar/$zk-fatjar.jar" lib
+  # TODO(sougou): when version changes, see if we can drop the 'zip -d' hack to get the fatjars working.
+  #               If yes, also delete "zip" from the Dockerfile files and the manual build instructions again.
+  # 3.4.10 workaround: Delete META-INF files which should not be in there.
+  zip -d "lib/$zk-fatjar.jar" 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*SF'
+  rm -rf "$zk" "$zk.tar.gz"
+}
 zk_ver=3.4.10
-zk_dist=$VTROOT/dist/vt-zookeeper-$zk_ver
-if [ -f $zk_dist/.build_finished ]; then
-  echo "skipping zookeeper build. remove $zk_dist to force rebuild."
-else
-  echo "installing zookeeper $zk_ver"
-  rm -rf $zk_dist
-  (cd $VTROOT/dist && \
-    wget http://apache.org/dist/zookeeper/zookeeper-$zk_ver/zookeeper-$zk_ver.tar.gz && \
-    tar -xzf zookeeper-$zk_ver.tar.gz && \
-    mkdir -p $zk_dist/lib && \
-    cp zookeeper-$zk_ver/contrib/fatjar/zookeeper-$zk_ver-fatjar.jar $zk_dist/lib && \
-    zip -d $zk_dist/lib/zookeeper-$zk_ver-fatjar.jar 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*SF' && \
-    rm -rf zookeeper-$zk_ver zookeeper-$zk_ver.tar.gz)
-  [ $? -eq 0 ] || fail "zookeeper build failed"
-  touch $zk_dist/.build_finished
-fi
+install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
+
 
 # Download and install etcd, link etcd binary into our root.
-etcd_version=v3.1.0-rc.1
-etcd_dist=$VTROOT/dist/etcd
-etcd_version_file=$etcd_dist/version
-if [[ -f $etcd_version_file && "$(cat $etcd_version_file)" == "$etcd_version" ]]; then
-  echo "skipping etcd install. remove $etcd_version_file to force re-install."
-else
-  echo "installing etcd $etcd_version"
-  rm -rf $etcd_dist
-  mkdir -p $etcd_dist
+function install_etcd() {
+  local version="$1"
+  local dist="$2"
+
   download_url=https://github.com/coreos/etcd/releases/download
-  (cd $etcd_dist && \
-    wget ${download_url}/${etcd_version}/etcd-${etcd_version}-linux-amd64.tar.gz && \
-    tar xzf etcd-${etcd_version}-linux-amd64.tar.gz)
-  [ $? -eq 0 ] || fail "etcd download failed"
-  echo "$etcd_version" > $etcd_version_file
-fi
-ln -snf $etcd_dist/etcd-${etcd_version}-linux-amd64/etcd $VTROOT/bin/etcd
+  tar_file="etcd-${version}-linux-amd64.tar.gz"
+
+  wget "$download_url/$version/$tar_file"
+  tar xzf "$tar_file"
+  rm "$tar_file"
+  ln -snf "$dist/etcd-${version}-linux-amd64/etcd" "$VTROOT/bin/etcd"
+}
+install_dep "etcd" "v3.1.0-rc.1" "$VTROOT/dist/etcd" install_etcd
+
 
 # Download and install consul, link consul binary into our root.
-consul_version=1.0.6
-consul_dist=$VTROOT/dist/consul
-consul_version_file=$consul_dist/version
-if [[ -f $consul_version_file && "$(cat $consul_version_file)" == "$consul_version" ]]; then
-  echo "skipping consul install. remove $consul_version_file to force re-install."
-else
-  echo "installing consul $consul_version"
-  rm -rf $consul_dist
-  mkdir -p $consul_dist
+function install_consul() {
+  local version="$1"
+  local dist="$2"
+
   download_url=https://releases.hashicorp.com/consul
-  (cd $consul_dist && \
-    wget ${download_url}/${consul_version}/consul_${consul_version}_linux_amd64.zip && \
-    unzip consul_${consul_version}_linux_amd64.zip)
-  [ $? -eq 0 ] || fail "consul download failed"
-  echo "$consul_version" > $consul_version_file
-fi
-ln -snf $consul_dist/consul $VTROOT/bin/consul
+  wget "${download_url}/${version}/consul_${version}_linux_amd64.zip"
+  unzip "consul_${version}_linux_amd64.zip"
+  ln -snf "$dist/consul" "$VTROOT/bin/consul"
+}
+install_dep "Consul" "1.0.6" "$VTROOT/dist/consul" install_consul
+
 
 # Install the gRPC Python library (grpcio) and the protobuf gRPC Python plugin (grpcio-tools) from PyPI.
 # Dependencies like the Python protobuf package will be installed automatically.
-grpc_dist=$VTROOT/dist/grpc
-grpc_ver="1.10.0"
-grpc_version_file="$grpc_dist/.build_finished"
-if [[ -f "$grpc_version_file" && "$(cat "$grpc_version_file")" == "$grpc_ver" ]]; then
-  echo "skipping gRPC build. remove $grpc_dist to force reinstall."
-else
-  echo "installing gRPC $grpc_ver"
-  # Cleanup any existing data and re-create the directory.
-  rm -rf "$grpc_dist"
-
-  trap "fail 'gRPC build failed'; exit 1" ERR
-  mkdir -p "$grpc_dist"
-  pushd "$grpc_dist" >/dev/null
+function install_grpc() {
+  local version="$1"
+  local dist="$2"
 
   # Python requires a very recent version of virtualenv.
   # We also require a recent version of pip, as we use it to
@@ -123,26 +151,22 @@ else
   # For instance, setuptools doesn't work with pip 6.0:
   # https://github.com/pypa/setuptools/issues/945
   # (and setuptools is used by grpc install).
-  grpc_virtualenv="$grpc_dist/usr/local"
+  grpc_virtualenv="$dist/usr/local"
   $VIRTUALENV -v "$grpc_virtualenv"
   PIP=$grpc_virtualenv/bin/pip
   $PIP install --upgrade pip
   $PIP install --upgrade --ignore-installed virtualenv
 
-  grpcio_ver=$grpc_ver
+  grpcio_ver=$version
   $PIP install --upgrade grpcio==$grpcio_ver grpcio-tools==$grpcio_ver
-
-  popd >/dev/null
-  trap - ERR
-
-  echo "$grpc_ver" > "$grpc_version_file"
 
   # Add newly installed Python code to PYTHONPATH such that other Python module
   # installations can reuse it. (Once bootstrap.sh has finished, run
   # source dev.env instead to set the correct PYTHONPATH.)
   PYTHONPATH=$(prepend_path "$PYTHONPATH" "$grpc_virtualenv/lib/python2.7/dist-packages")
   export PYTHONPATH
-fi
+}
+install_dep "gRPC" "1.10.0" "$VTROOT/dist/grpc" install_grpc
 
 # Install third-party Go tools used as part of the development workflow.
 #
@@ -222,25 +246,28 @@ esac
 # every time dev.env is sourced.
 echo "$MYSQL_FLAVOR" > $VTROOT/dist/MYSQL_FLAVOR
 
-# install mock
-mock_dist=$VTROOT/dist/py-mock-1.0.1
-if [ -f $mock_dist/.build_finished ]; then
-  echo "skipping mock python build"
-else
-  # Cleanup any existing data
-  # (e.g. necessary for Travis CI caching which creates .build_finished as directory and prevents this script from creating it as file).
-  rm -rf $mock_dist
+
+# Install py-mock.
+function install_pymock() {
+  local version="$1"
+  local dist="$2"
+
   # For some reason, it seems like setuptools won't create directories even with the --prefix argument
-  mkdir -p $mock_dist/lib/python2.7/site-packages
-  export PYTHONPATH=$(prepend_path $PYTHONPATH $mock_dist/lib/python2.7/site-packages)
-  cd $VTTOP/third_party/py && \
-    tar -xzf mock-1.0.1.tar.gz && \
-    cd mock-1.0.1 && \
-    $PYTHON ./setup.py install --prefix=$mock_dist && \
-    touch $mock_dist/.build_finished && \
-    cd .. && \
-    rm -r mock-1.0.1
-fi
+  mkdir -p lib/python2.7/site-packages
+  PYTHONPATH=$(prepend_path "$PYTHONPATH" "$dist/lib/python2.7/site-packages")
+  export PYTHONPATH
+
+  pushd "$VTTOP/third_party/py" >/dev/null
+  tar -xzf "mock-$version.tar.gz"
+  cd "mock-$version"
+  $PYTHON ./setup.py install --prefix="$dist"
+  cd ..
+  rm -r "mock-$version"
+  popd >/dev/null
+}
+pymock_version=1.0.1
+install_dep "py-mock" "$pymock_version" "$VTROOT/dist/py-mock-$pymock_version" install_pymock
+
 
 # Create the Git hooks.
 echo "creating git hooks"
@@ -250,19 +277,32 @@ ln -sf $VTTOP/misc/git/prepare-commit-msg.bugnumber $VTTOP/.git/hooks/prepare-co
 ln -sf $VTTOP/misc/git/commit-msg $VTTOP/.git/hooks/commit-msg
 (cd $VTTOP && git config core.hooksPath $VTTOP/.git/hooks)
 
-# Download chromedriver
-echo "Installing selenium and chromedriver"
-selenium_dist=$VTROOT/dist/selenium
-mkdir -p $selenium_dist
-$VIRTUALENV $selenium_dist
-PIP=$selenium_dist/bin/pip
-# PYTHONPATH is removed for `pip install` because otherwise it can pick up go/dist/grpc/usr/local/lib/python2.7/site-packages
-# instead of go/dist/selenium/lib/python3.5/site-packages and then can't find module 'pip._vendor.requests'
-PYTHONPATH= $PIP install selenium
-mkdir -p $VTROOT/dist/chromedriver
-curl -sL http://chromedriver.storage.googleapis.com/2.25/chromedriver_linux64.zip > chromedriver_linux64.zip
-unzip -o -q chromedriver_linux64.zip -d $VTROOT/dist/chromedriver
-rm chromedriver_linux64.zip
+
+# Download Selenium (necessary to run test/vtctld_web_test.py).
+function install_selenium() {
+  local version="$1"
+  local dist="$2"
+
+  $VIRTUALENV "$dist"
+  PIP="$dist/bin/pip"
+  # PYTHONPATH is removed for `pip install` because otherwise it can pick up go/dist/grpc/usr/local/lib/python2.7/site-packages
+  # instead of go/dist/selenium/lib/python3.5/site-packages and then can't find module 'pip._vendor.requests'
+  PYTHONPATH='' $PIP install selenium
+}
+install_dep "Selenium" "latest" "$VTROOT/dist/selenium" install_selenium
+
+
+# Download chromedriver (necessary to run test/vtctld_web_test.py).
+function install_chromedriver() {
+  local version="$1"
+  local dist="$2"
+
+  curl -sL "http://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip" > chromedriver_linux64.zip
+  unzip -o -q chromedriver_linux64.zip -d "$dist"
+  rm chromedriver_linux64.zip
+}
+install_dep "chromedriver" "2.25" "$VTROOT/dist/chromedriver" install_chromedriver
+
 
 echo
 echo "bootstrap finished - run 'source dev.env' in your shell before building."
