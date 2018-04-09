@@ -135,12 +135,6 @@ function install_grpc() {
 
   grpcio_ver=$version
   $PIP install --upgrade grpcio=="$grpcio_ver" grpcio-tools=="$grpcio_ver"
-
-  # Add newly installed Python code to PYTHONPATH such that other Python module
-  # installations can reuse it. (Once bootstrap.sh has finished, run
-  # source dev.env instead to set the correct PYTHONPATH.)
-  PYTHONPATH=$(prepend_path "$PYTHONPATH" "$grpc_virtualenv/lib/python2.7/dist-packages")
-  export PYTHONPATH
 }
 install_dep "gRPC" "1.10.0" "$VTROOT/dist/grpc" install_grpc
 
