@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"strings"
 	"testing"
 
 	"golang.org/x/net/context"
@@ -25,6 +26,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // This file contains tests for all the autocommit code paths
@@ -214,6 +216,58 @@ func TestAutocommitInsertLookup(t *testing.T) {
 	}})
 	testAsTransactionCount(t, "sbc1", sbc1, 0)
 	testCommitCount(t, "sbc1", sbc1, 1)
+}
+
+// TestAutocommitInsertShardAutoCommit: instant-commit.
+func TestAutocommitInsertMultishardAutoCommit(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+
+	if _, err := autocommitExec(executor, "insert /*vt! MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (1, 2), (3, 4)"); err != nil {
+		t.Fatal(err)
+	}
+	testBatchQuery(t, "sbc1", sbc1, &querypb.BoundQuery{
+		Sql: "insert /*vt! MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id0, 2) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		BindVariables: map[string]*querypb.BindVariable{
+			"_user_id0": sqltypes.Int64BindVariable(1),
+			"_user_id1": sqltypes.Int64BindVariable(3),
+		},
+	})
+	testAsTransactionCount(t, "sbc1", sbc1, 1)
+	testCommitCount(t, "sbc1", sbc1, 0)
+
+	testBatchQuery(t, "sbc2", sbc2, &querypb.BoundQuery{
+		Sql: "insert /*vt! MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id1, 4) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
+		BindVariables: map[string]*querypb.BindVariable{
+			"_user_id0": sqltypes.Int64BindVariable(1),
+			"_user_id1": sqltypes.Int64BindVariable(3),
+		},
+	})
+	testAsTransactionCount(t, "sbc2", sbc2, 1)
+	testCommitCount(t, "sbc2", sbc2, 0)
+
+	executor, sbc1, sbc2, _ = createExecutorEnv()
+	// Make the first shard fail - the second completes anyway
+	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
+	_, err := autocommitExec(executor, "insert /*vt! MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (1, 2), (3, 4)")
+	if err == nil || !strings.Contains(err.Error(), "INVALID_ARGUMENT") {
+		t.Errorf("expected invalid argument error, got %v", err)
+	}
+	if len(sbc1.Queries) != 0 || len(sbc1.BatchQueries) != 0 {
+		t.Errorf("expected no queries")
+	}
+	testAsTransactionCount(t, "sbc1", sbc1, 1)
+	testCommitCount(t, "sbc1", sbc1, 0)
+
+	testBatchQuery(t, "sbc2", sbc2, &querypb.BoundQuery{
+		Sql: "insert /*vt! MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id1, 4) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
+		BindVariables: map[string]*querypb.BindVariable{
+			"_user_id0": sqltypes.Int64BindVariable(1),
+			"_user_id1": sqltypes.Int64BindVariable(3),
+		},
+	})
+	testAsTransactionCount(t, "sbc2", sbc2, 1)
+	testCommitCount(t, "sbc2", sbc2, 0)
+
 }
 
 func TestAutocommitInsertMultishard(t *testing.T) {
