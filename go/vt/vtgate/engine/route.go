@@ -106,7 +106,8 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 }
 
 // RouteOpcode is a number representing the opcode
-// for the Route primitve.
+// for the Route primitve. Adding new opcodes here
+// will require review of the join code in planbuilder.
 type RouteOpcode int
 
 // This is the list of RouteOpcode values.
