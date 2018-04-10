@@ -56,6 +56,7 @@ type AuthServerStatic struct {
 
 // AuthServerStaticEntry stores the values for a given user.
 type AuthServerStaticEntry struct {
+	MysqlNativePassword string
 	Password   string
 	UserData   string
 	SourceHost string
@@ -183,6 +184,13 @@ func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse [
 	}
 
 	for _, entry := range entries {
+		if entry.MysqlNativePassword != "" {
+			isPass := isPassScrambleMysqlNativePassword(authResponse, salt, entry.MysqlNativePassword)
+			if matchSourceHost(remoteAddr, entry.SourceHost) && isPass {
+				return &StaticUserData{entry.UserData}, nil
+			}
+		}
+
 		computedAuthResponse := scramblePassword(salt, []byte(entry.Password))
 		// Validate the password.
 		if matchSourceHost(remoteAddr, entry.SourceHost) && bytes.Compare(authResponse, computedAuthResponse) == 0 {
