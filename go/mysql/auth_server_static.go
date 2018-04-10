@@ -57,9 +57,9 @@ type AuthServerStatic struct {
 // AuthServerStaticEntry stores the values for a given user.
 type AuthServerStaticEntry struct {
 	MysqlNativePassword string
-	Password   string
-	UserData   string
-	SourceHost string
+	Password            string
+	UserData            string
+	SourceHost          string
 }
 
 // InitAuthServerStatic Handles initializing the AuthServerStatic if necessary.

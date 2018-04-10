@@ -22,9 +22,9 @@ import (
 	"fmt"
 	"net"
 
-	log "github.com/golang/glog"
-	"encoding/hex"
 	"bytes"
+	"encoding/hex"
+	log "github.com/golang/glog"
 	"strings"
 )
 
