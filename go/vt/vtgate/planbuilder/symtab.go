@@ -48,11 +48,6 @@ import (
 // which is later used to determine if the subquery can be
 // merged with an outer route.
 type symtab struct {
-	// if the symtab was merged with another one. The
-	// redirect is set to point to the merged symtab.
-	// Resolve is used to find the target.
-	redirect *symtab
-
 	tables map[sqlparser.TableName]*table
 
 	// uniqueColumns has the column name as key
@@ -72,34 +67,24 @@ type symtab struct {
 	ResultColumns []*resultColumn
 	Outer         *symtab
 	Externs       []*sqlparser.ColName
-	VSchema       ContextVSchema
 }
 
 // newSymtab creates a new symtab.
-func newSymtab(vschema ContextVSchema) *symtab {
+func newSymtab() *symtab {
 	return &symtab{
 		tables:        make(map[sqlparser.TableName]*table),
 		uniqueColumns: make(map[string]*column),
-		VSchema:       vschema,
 	}
 }
 
 // newSymtab creates a new symtab initialized
 // to contain just one route.
-func newSymtabWithRoute(vschema ContextVSchema, rb *route) *symtab {
+func newSymtabWithRoute(rb *route) *symtab {
 	return &symtab{
 		tables:        make(map[sqlparser.TableName]*table),
 		uniqueColumns: make(map[string]*column),
-		VSchema:       vschema,
 		singleRoute:   rb,
 	}
-}
-
-func (st *symtab) Resolve() *symtab {
-	if st.redirect != nil {
-		return st.redirect.Resolve()
-	}
-	return st
 }
 
 // AddVindexTable creates a table from a vindex table
@@ -115,6 +100,7 @@ func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexe
 	for _, col := range vindexTable.Columns {
 		t.columns[col.Name.Lowered()] = &column{
 			origin: rb,
+			st:     st,
 			typ:    col.Type,
 		}
 	}
@@ -133,6 +119,7 @@ func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexe
 			}
 			t.columns[lowered] = &column{
 				origin: rb,
+				st:     st,
 				Vindex: vindex,
 			}
 		}
@@ -143,6 +130,7 @@ func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexe
 		if _, ok := t.columns[lowered]; !ok {
 			t.columns[lowered] = &column{
 				origin: rb,
+				st:     st,
 			}
 		}
 	}
@@ -161,7 +149,6 @@ func (st *symtab) Merge(newsyms *symtab) error {
 			return err
 		}
 	}
-	newsyms.redirect = st
 	return nil
 }
 
@@ -178,6 +165,7 @@ func (st *symtab) AddTable(t *table) error {
 	// update the uniqueColumns list, and eliminate
 	// duplicate symbols if found.
 	for colname, c := range t.columns {
+		c.st = st
 		if _, ok := st.uniqueColumns[colname]; ok {
 			// Keep the entry, but make it nil. This will
 			// ensure that yet another column of the same name
@@ -199,6 +187,14 @@ func (st *symtab) ClearVindexes() {
 			c.Vindex = nil
 		}
 	}
+}
+
+// SetResultColumns sets the result columns.
+func (st *symtab) SetResultColumns(rcs []*resultColumn) {
+	for _, rc := range rcs {
+		rc.column.st = st
+	}
+	st.ResultColumns = rcs
 }
 
 // Find returns the builder for the symbol referenced by col.
@@ -232,7 +228,7 @@ func (st *symtab) ClearVindexes() {
 func (st *symtab) Find(col *sqlparser.ColName) (origin builder, isLocal bool, err error) {
 	// Return previously cached info if present.
 	if column, ok := col.Metadata.(*column); ok {
-		return column.Origin(), column.Origin().Symtab() == st, nil
+		return column.Origin(), column.st == st, nil
 	}
 
 	// Unqualified column case.
@@ -317,7 +313,7 @@ func (st *symtab) searchTables(col *sqlparser.ColName) (*column, error) {
 			// No return: break out.
 		case st.singleRoute != nil:
 			// If there's only one route, create an anonymous symbol.
-			return &column{origin: st.singleRoute}, nil
+			return &column{origin: st.singleRoute, st: st}, nil
 		default:
 			// If none of the above, the symbol is unresolvable.
 			return nil, fmt.Errorf("symbol %s not found", sqlparser.String(col))
@@ -339,40 +335,16 @@ func (st *symtab) searchTables(col *sqlparser.ColName) (*column, error) {
 		}
 		c = &column{
 			origin: t.origin,
+			st:     st,
 		}
 		t.columns[col.Name.Lowered()] = c
 	}
 	return c, nil
 }
 
-// NewResultColumn creates a new resultColumn based on the supplied expression.
-// The created symbol is not remembered until it is later set as ResultColumns
-// after all select expressions are analyzed.
-func (st *symtab) NewResultColumn(expr *sqlparser.AliasedExpr, origin builder) *resultColumn {
-	rc := &resultColumn{
-		alias: expr.As,
-	}
-	if col, ok := expr.Expr.(*sqlparser.ColName); ok {
-		// If no alias was specified, then the base name
-		// of the column becomes the alias.
-		if rc.alias.IsEmpty() {
-			rc.alias = col.Name
-		}
-		// If it's a col it should already have metadata.
-		rc.column = col.Metadata.(*column)
-	} else {
-		// We don't generate an alias if the expression is non-trivial.
-		// Just to be safe, generate an anonymous column for the expression.
-		rc.column = &column{
-			origin: origin,
-		}
-	}
-	return rc
-}
-
 // ResultFromNumber returns the result column index based on the column
 // order expression.
-func ResultFromNumber(resultColumns []*resultColumn, val *sqlparser.SQLVal) (int, error) {
+func ResultFromNumber(rcs []*resultColumn, val *sqlparser.SQLVal) (int, error) {
 	if val.Type != sqlparser.IntVal {
 		return 0, errors.New("column number is not an int")
 	}
@@ -380,7 +352,7 @@ func ResultFromNumber(resultColumns []*resultColumn, val *sqlparser.SQLVal) (int
 	if err != nil {
 		return 0, fmt.Errorf("error parsing column number: %s", sqlparser.String(val))
 	}
-	if num < 1 || num > int64(len(resultColumns)) {
+	if num < 1 || num > int64(len(rcs)) {
 		return 0, fmt.Errorf("column number out of range: %d", num)
 	}
 	return int(num - 1), nil
@@ -446,6 +418,7 @@ type table struct {
 // the column order is known and unchangeable.
 type column struct {
 	origin builder
+	st     *symtab
 	Vindex vindexes.Vindex
 	typ    querypb.Type
 	colnum int
@@ -472,4 +445,29 @@ type resultColumn struct {
 	// the query.
 	alias  sqlparser.ColIdent
 	column *column
+}
+
+// NewResultColumn creates a new resultColumn based on the supplied expression.
+// The created symbol is not remembered until it is later set as ResultColumns
+// after all select expressions are analyzed.
+func newResultColumn(expr *sqlparser.AliasedExpr, origin builder) *resultColumn {
+	rc := &resultColumn{
+		alias: expr.As,
+	}
+	if col, ok := expr.Expr.(*sqlparser.ColName); ok {
+		// If no alias was specified, then the base name
+		// of the column becomes the alias.
+		if rc.alias.IsEmpty() {
+			rc.alias = col.Name
+		}
+		// If it's a col it should already have metadata.
+		rc.column = col.Metadata.(*column)
+	} else {
+		// We don't generate an alias if the expression is non-trivial.
+		// Just to be safe, generate an anonymous column for the expression.
+		rc.column = &column{
+			origin: origin,
+		}
+	}
+	return rc
 }
