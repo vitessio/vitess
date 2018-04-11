@@ -14,15 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is an example script that starts vtctld.
+# This is an example script that stops the ZooKeeper servers started by zk-up.sh.
 
 set -e
 
-script_root=`dirname "${BASH_SOURCE}"`
-source $script_root/env.sh
+script_root=$(dirname "${BASH_SOURCE[0]}")
 
-pid=`cat $VTDATAROOT/tmp/vtctld.pid`
-echo "Stopping vtctld..."
-kill $pid
+# shellcheck source=./env.sh
+# shellcheck disable=SC1091
+source "${script_root}/env.sh"
 
-kill -9 "$(pgrep -f "/bin/vtctld")"
+# Stop etcd servers.
+echo "Stopping etcd servers..."
+ETCD_VERSION=$(cat "$VTROOT/dist/etcd/version")
+kill -9 "$(pgrep -f "dist/etcd/etcd-${ETCD_VERSION}-linux-amd64/etcd")"
