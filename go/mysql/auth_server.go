@@ -17,11 +17,13 @@ limitations under the License.
 package mysql
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"net"
-
+	"strings"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -140,6 +142,52 @@ func scramblePassword(salt, password []byte) []byte {
 		scramble[i] ^= stage1[i]
 	}
 	return scramble
+}
+
+func isPassScrambleMysqlNativePassword(reply, salt []byte, mysqlNativePassword string) bool {
+	/*
+		SERVER:  recv(reply)
+				 hash_stage1=xor(reply, sha1(salt,hash))
+				 candidate_hash2=sha1(hash_stage1)
+				 check(candidate_hash2==hash)
+	*/
+	if len(reply) == 0 {
+		return false
+	}
+
+	if mysqlNativePassword == "" {
+		return false
+	}
+
+	if strings.Index(mysqlNativePassword, "*") != -1 {
+		mysqlNativePassword = mysqlNativePassword[1:]
+	}
+
+	hash, err := hex.DecodeString(mysqlNativePassword)
+	if err != nil {
+		return false
+	}
+
+	// scramble = SHA1(salt+hash)
+	crypt := sha1.New()
+	crypt.Write(salt)
+	crypt.Write(hash)
+	scramble := crypt.Sum(nil)
+
+	// token = scramble XOR stage1Hash
+	for i := range scramble {
+		scramble[i] ^= reply[i]
+	}
+	hashStage1 := scramble
+
+	crypt.Reset()
+	crypt.Write(hashStage1)
+	candidateHash2 := crypt.Sum(nil)
+
+	if bytes.Compare(candidateHash2, hash) != 0 {
+		return false
+	}
+	return true
 }
 
 // Constants for the dialog plugin.

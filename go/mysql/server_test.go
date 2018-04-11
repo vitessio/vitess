@@ -269,6 +269,43 @@ func TestConnectionWithSourceHost(t *testing.T) {
 	}
 }
 
+func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic()
+
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{
+		{
+			MysqlNativePassword: "*9E128DA0C64A6FCCCDCFBDD0FC0A2C967C6DB36F",
+			UserData:            "userData1",
+			SourceHost:          "localhost",
+		},
+	}
+
+	l, err := NewListener("tcp", ":0", authServer, th)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	go l.Accept()
+
+	host, port := getHostPort(t, l.Addr())
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "mysql_password",
+	}
+
+	_, err = Connect(context.Background(), params)
+	// target is localhost, should not work from tcp connection
+	if err == nil {
+		t.Errorf("Should be able to connect to server but found error: %v", err)
+	}
+}
+
 func TestConnectionUnixSocket(t *testing.T) {
 	th := &testHandler{}
 
