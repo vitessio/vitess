@@ -225,6 +225,7 @@ func (t *explainTablet) ExecuteBatch(ctx context.Context, target *querypb.Target
 	// copy the bindVars into the executor to avoid a data race.
 	for _, query := range queries {
 		bindVariables := sqltypes.CopyBindVariables(query.BindVariables)
+		query.BindVariables = bindVariables
 		t.tabletQueries = append(t.tabletQueries, &TabletQuery{
 			Time:     t.currentTime,
 			SQL:      query.Sql,
