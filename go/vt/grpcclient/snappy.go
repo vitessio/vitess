@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	compression = flag.String("grpc_compression", "", "how to comrpess grpc, default: nothing, supported: snappy")
+	compression = flag.String("grpc_compression", "", "how to compress gRPC, default: nothing, supported: snappy")
 )
 
 // SnappyCompressor is a gRPC compressor using the Snappy algorithm.
