@@ -1230,7 +1230,7 @@ func TestValid(t *testing.T) {
 		// This test just exercises the tree walking functionality.
 		// There's no way automated way to verify that a node calls
 		// all its children. But we can examine code coverage and
-		// ensure that all WalkSubtree functions were called.
+		// ensure that all walkSubtree functions were called.
 		Walk(func(node SQLNode) (bool, error) {
 			return true, nil
 		}, tree)
@@ -1530,21 +1530,21 @@ func TestSubStr(t *testing.T) {
 		input  string
 		output string
 	}{{
-		input: "select substr(a,1) from t",
+		input: "select substr(a, 1) from t",
 	}, {
-		input: "select substr(a,1,6) from t",
+		input: "select substr(a, 1, 6) from t",
 	}, {
-		input:  "select substring(a,1) from t",
-		output: "select substr(a,1) from t",
+		input:  "select substring(a, 1) from t",
+		output: "select substr(a, 1) from t",
 	}, {
-		input:  "select substring(a,1,6) from t",
-		output: "select substr(a,1,6) from t",
+		input:  "select substring(a, 1, 6) from t",
+		output: "select substr(a, 1, 6) from t",
 	}, {
 		input:  "select substr(a from 1 for 6) from t",
-		output: "select substr(a,1,6) from t",
+		output: "select substr(a, 1, 6) from t",
 	}, {
 		input:  "select substring(a from 1 for 6) from t",
-		output: "select substr(a,1,6) from t",
+		output: "select substr(a, 1, 6) from t",
 	}}
 
 	for _, tcase := range validSQL {
