@@ -167,6 +167,52 @@ func TestAutocommitDeleteLookup(t *testing.T) {
 	testCommitCount(t, "sbc1", sbc1, 1)
 }
 
+// TestAutocommitDeleteMultiShard: instant-commit.
+func TestAutocommitDeleteMultiShard(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+
+	if _, err := autocommitExec(executor, "delete from user_extra where user_id in (1, 2)"); err != nil {
+		t.Fatal(err)
+	}
+	testQueries(t, "sbc1", sbc1, []*querypb.BoundQuery{{
+		Sql:           "delete from user_extra where user_id in (1, 2)/* vtgate:: filtered_replication_unfriendly */",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}})
+	testBatchQuery(t, "sbc1", sbc1, nil)
+	testAsTransactionCount(t, "sbc1", sbc1, 0)
+	testCommitCount(t, "sbc1", sbc1, 1)
+
+	testQueries(t, "sbc2", sbc2, []*querypb.BoundQuery{{
+		Sql:           "delete from user_extra where user_id in (1, 2)/* vtgate:: filtered_replication_unfriendly */",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}})
+	testBatchQuery(t, "sbc2", sbc2, nil)
+	testAsTransactionCount(t, "sbc2", sbc2, 0)
+	testCommitCount(t, "sbc1", sbc1, 1)
+}
+
+// TestAutocommitDeleteMultiShardAutoCommit: instant-commit.
+func TestAutocommitDeleteMultiShardAutoCommit(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+
+	if _, err := autocommitExec(executor, "delete /*vt! MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id in (1, 2)"); err != nil {
+		t.Fatal(err)
+	}
+	testBatchQuery(t, "sbc1", sbc1, &querypb.BoundQuery{
+		Sql:           "delete /*vt! MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id in (1, 2)/* vtgate:: filtered_replication_unfriendly */",
+		BindVariables: map[string]*querypb.BindVariable{},
+	})
+	testAsTransactionCount(t, "sbc1", sbc1, 1)
+	testCommitCount(t, "sbc1", sbc1, 0)
+
+	testBatchQuery(t, "sbc2", sbc2, &querypb.BoundQuery{
+		Sql:           "delete /*vt! MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id in (1, 2)/* vtgate:: filtered_replication_unfriendly */",
+		BindVariables: map[string]*querypb.BindVariable{},
+	})
+	testAsTransactionCount(t, "sbc2", sbc2, 1)
+	testCommitCount(t, "sbc1", sbc1, 0)
+}
+
 // TestAutocommitInsertSharded: instant-commit.
 func TestAutocommitInsertSharded(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
