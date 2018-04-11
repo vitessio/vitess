@@ -59,6 +59,10 @@ type Delete struct {
 
 	// OwnedVindexQuery is used for deleting lookup vindex entries.
 	OwnedVindexQuery string
+
+	// Option to override the standard behavior and allow a multi-shard delete
+	// to use single round trip autocommit.
+	MultiShardAutocommit bool
 }
 
 // MarshalJSON serializes the Delete into a JSON representation.
@@ -226,6 +230,6 @@ func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]
 			BindVariables: bindVars,
 		}
 	}
-	autocommit := len(rss) == 1 && vcursor.AutocommitApproval()
+	autocommit := (len(rss) == 1 || del.MultiShardAutocommit) && vcursor.AutocommitApproval()
 	return vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
 }
