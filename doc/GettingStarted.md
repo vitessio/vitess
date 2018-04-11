@@ -411,7 +411,7 @@ lock service. ZooKeeper is included in the Vitess distribution.
     export VTDATAROOT=$HOME/vtdataroot
     ```
 
-1.  **Start ZooKeeper**
+1.  **Start ZooKeeper or Etcd**
 
     Servers in a Vitess cluster find each other by looking for
     dynamic configuration data stored in a distributed lock
@@ -433,6 +433,20 @@ lock service. ZooKeeper is included in the Vitess distribution.
     variable to point to the global ZooKeeper instance. The global instance in
     turn is configured to point to the local instance. In our sample scripts,
     they are both hosted in the same ZooKeeper service.
+
+    If you want to use Etcd as a distributed lock service, The following script 
+    creates a Etcd instance:
+
+    ``` sh
+    $ cd $VTROOT/src/vitess.io/vitess/examples/local
+    vitess/examples/local$ source ./topo-etcd2.sh
+    vitess/examples/local$ ./etcd-up.sh
+    ### example output:
+    # enter etcd2 env
+    # etcdmain: etcd Version: 3.X.X
+    # ... 
+    # etcd start done...
+    ```
 
 1.  **Start vtctld**
 
@@ -656,7 +670,7 @@ Each `-up.sh` script has a corresponding `-down.sh` script to stop the servers.
 vitess/examples/local$ ./vtgate-down.sh
 vitess/examples/local$ ./vttablet-down.sh
 vitess/examples/local$ ./vtctld-down.sh
-vitess/examples/local$ ./zk-down.sh
+vitess/examples/local$ ./zk-down.sh  # If you use Etcd, run ./etcd-down.sh
 ```
 
 Note that the `-down.sh` scripts will leave behind any data files created.
