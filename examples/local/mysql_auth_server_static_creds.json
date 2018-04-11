@@ -18,6 +18,7 @@
       "UserData": "mysql_user"
     }
   ],
+
   "vt_appdebug": [
     {
       "Password": "vtappdebug_password",
