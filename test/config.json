@@ -181,15 +181,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"master_buffering": {
-			"File": "master_buffering_test.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"mysql_server": {
 			"File": "mysql_server_test.py",
 			"Args": [],

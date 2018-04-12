@@ -28,6 +28,7 @@ import (
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -40,28 +41,30 @@ import (
 
 func TestResolverExecuteKeyspaceIds(t *testing.T) {
 	testResolverGeneric(t, "TestResolverExecuteKeyspaceIds", func(res *Resolver) (*sqltypes.Result, error) {
-		return res.ExecuteKeyspaceIds(context.Background(),
+		return res.Execute(context.Background(),
 			"query",
 			nil,
 			"TestResolverExecuteKeyspaceIds",
-			[][]byte{{0x10}, {0x25}},
 			topodatapb.TabletType_MASTER,
+			key.DestinationKeyspaceIDs([][]byte{{0x10}, {0x25}}),
 			nil,
 			false,
+			nil,
 			nil)
 	})
 }
 
 func TestResolverExecuteKeyRanges(t *testing.T) {
 	testResolverGeneric(t, "TestResolverExecuteKeyRanges", func(res *Resolver) (*sqltypes.Result, error) {
-		return res.ExecuteKeyRanges(context.Background(),
+		return res.Execute(context.Background(),
 			"query",
 			nil,
 			"TestResolverExecuteKeyRanges",
-			[]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x25}}},
 			topodatapb.TabletType_MASTER,
+			key.DestinationKeyRanges([]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x25}}}),
 			nil,
 			false,
+			nil,
 			nil)
 	})
 }
@@ -124,12 +127,12 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 	keyspace := "TestResolverStreamExecuteKeyspaceIds"
 	testResolverStreamGeneric(t, keyspace, func(res *Resolver) (*sqltypes.Result, error) {
 		qr := new(sqltypes.Result)
-		err := res.StreamExecuteKeyspaceIds(context.Background(),
+		err := res.StreamExecute(context.Background(),
 			"query",
 			nil,
 			keyspace,
-			[][]byte{{0x10}, {0x15}},
 			topodatapb.TabletType_MASTER,
+			key.DestinationKeyspaceIDs([][]byte{{0x10}, {0x15}}),
 			nil,
 			func(r *sqltypes.Result) error {
 				qr.AppendResult(r)
@@ -139,12 +142,12 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 	})
 	testResolverStreamGeneric(t, keyspace, func(res *Resolver) (*sqltypes.Result, error) {
 		qr := new(sqltypes.Result)
-		err := res.StreamExecuteKeyspaceIds(context.Background(),
+		err := res.StreamExecute(context.Background(),
 			"query",
 			nil,
 			keyspace,
-			[][]byte{{0x10}, {0x15}, {0x25}},
 			topodatapb.TabletType_MASTER,
+			key.DestinationKeyspaceIDs([][]byte{{0x10}, {0x15}, {0x25}}),
 			nil,
 			func(r *sqltypes.Result) error {
 				qr.AppendResult(r)
@@ -159,12 +162,12 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 	// streaming a single shard
 	testResolverStreamGeneric(t, keyspace, func(res *Resolver) (*sqltypes.Result, error) {
 		qr := new(sqltypes.Result)
-		err := res.StreamExecuteKeyRanges(context.Background(),
+		err := res.StreamExecute(context.Background(),
 			"query",
 			nil,
 			keyspace,
-			[]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x15}}},
 			topodatapb.TabletType_MASTER,
+			key.DestinationKeyRanges([]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x15}}}),
 			nil,
 			func(r *sqltypes.Result) error {
 				qr.AppendResult(r)
@@ -175,12 +178,12 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 	// streaming multiple shards
 	testResolverStreamGeneric(t, keyspace, func(res *Resolver) (*sqltypes.Result, error) {
 		qr := new(sqltypes.Result)
-		err := res.StreamExecuteKeyRanges(context.Background(),
+		err := res.StreamExecute(context.Background(),
 			"query",
 			nil,
 			keyspace,
-			[]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x25}}},
 			topodatapb.TabletType_MASTER,
+			key.DestinationKeyRanges([]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x25}}}),
 			nil,
 			func(r *sqltypes.Result) error {
 				qr.AppendResult(r)
@@ -563,29 +566,6 @@ func TestResolverBuildEntityIds(t *testing.T) {
 	}
 	if !reflect.DeepEqual(wantBindVars, bindVars) {
 		t.Errorf("want\n%+v, got\n%+v", wantBindVars, bindVars)
-	}
-}
-
-func TestResolverDmlOnMultipleKeyspaceIds(t *testing.T) {
-	keyspace := "TestResolverDmlOnMultipleKeyspaceIds"
-	createSandbox(keyspace)
-	hc := discovery.NewFakeHealthCheck()
-	res := newTestResolver(hc, new(sandboxTopo), "aa")
-	hc.AddTestTablet("aa", "1.1.1.1", 1001, keyspace, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
-	hc.AddTestTablet("aa", "1.1.1.1", 1002, keyspace, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
-
-	errStr := "DML should not span multiple keyspace_ids"
-	_, err := res.ExecuteKeyspaceIds(context.Background(),
-		"update table set a = b",
-		nil,
-		keyspace,
-		[][]byte{{0x10}, {0x25}},
-		topodatapb.TabletType_MASTER,
-		nil,
-		false,
-		nil)
-	if err == nil {
-		t.Errorf("want %v, got nil", errStr)
 	}
 }
 

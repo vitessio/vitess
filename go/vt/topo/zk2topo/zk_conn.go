@@ -82,6 +82,9 @@ type ZkConn struct {
 	conn *zk.Conn
 }
 
+// Connect to the Zookeeper servers specified in addr
+// addr can be a comma separated list of servers and each server can be a DNS entry with multiple values.
+// Connects to the endpoints in a randomized order to avoid hot spots.
 func Connect(addr string) *ZkConn {
 	return &ZkConn{
 		addr: addr,
@@ -301,6 +304,7 @@ func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error)
 		return nil, nil, err
 	}
 
+	// zk.Connect automatically shuffles the servers
 	zconn, session, err := zk.Connect(servers, *baseTimeout)
 	if err != nil {
 		return nil, nil, err
@@ -338,10 +342,10 @@ func resolveZkAddr(zkAddr string) ([]string, error) {
 	resolved := make([]string, 0, len(parts))
 	for _, part := range parts {
 		// The Zookeeper client cannot handle IPv6 addresses before version 3.4.x.
-		if r, err := netutil.ResolveIPv4Addr(part); err != nil {
+		if r, err := netutil.ResolveIPv4Addrs(part); err != nil {
 			log.Warningf("cannot resolve %v, will not use it: %v", part, err)
 		} else {
-			resolved = append(resolved, r)
+			resolved = append(resolved, r...)
 		}
 	}
 	if len(resolved) == 0 {

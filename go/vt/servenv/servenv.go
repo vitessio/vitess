@@ -104,7 +104,7 @@ func Init() {
 	onInitHooks.Fire()
 }
 
-func populateListeningURL() {
+func populateListeningURL(port int32) {
 	host, err := netutil.FullyQualifiedHostname()
 	if err != nil {
 		host, err = os.Hostname()
@@ -114,7 +114,7 @@ func populateListeningURL() {
 	}
 	ListeningURL = url.URL{
 		Scheme: "http",
-		Host:   netutil.JoinHostPort(host, int32(*Port)),
+		Host:   netutil.JoinHostPort(host, port),
 		Path:   "/",
 	}
 }

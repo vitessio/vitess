@@ -182,12 +182,6 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 			if err != nil {
 				return err
 			}
-			switch vindex.(type) {
-			case Unique:
-			case NonUnique:
-			default:
-				return fmt.Errorf("vindex %q needs to be Unique or NonUnique", vname)
-			}
 			if _, ok := vschema.uniqueVindexes[vname]; ok {
 				vschema.uniqueVindexes[vname] = nil
 			} else {
@@ -236,15 +230,15 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 					owned = true
 				}
 				var columns []sqlparser.ColIdent
-				if ind.Column != "" && len(ind.Columns) > 0 {
-					return fmt.Errorf("Can't use column and columns at the same time in vindex (%s) and table (%s)", ind.Name, tname)
-				}
-				if owned && len(columns) > 1 {
-					return fmt.Errorf("Can't have a multicolumn unowned vindex (%s) and table (%s)", ind.Name, tname)
-				}
 				if ind.Column != "" {
+					if len(ind.Columns) > 0 {
+						return fmt.Errorf("can't use column and columns at the same time in vindex (%s) and table (%s)", ind.Name, tname)
+					}
 					columns = []sqlparser.ColIdent{sqlparser.NewColIdent(ind.Column)}
 				} else {
+					if len(ind.Columns) == 0 {
+						return fmt.Errorf("must specify at least one column for vindex (%s) and table (%s)", ind.Name, tname)
+					}
 					for _, indCol := range ind.Columns {
 						columns = append(columns, sqlparser.NewColIdent(indCol))
 					}
@@ -258,7 +252,7 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 				}
 				if i == 0 {
 					// Perform Primary vindex check.
-					if _, ok := columnVindex.Vindex.(Unique); !ok {
+					if !columnVindex.Vindex.IsUnique() {
 						return fmt.Errorf("primary vindex %s is not Unique for table %s", ind.Name, tname)
 					}
 					if owned {

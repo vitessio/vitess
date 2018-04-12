@@ -70,13 +70,6 @@ Every 'builder' primitive must satisfy the builder
 interface. This allows the planbuilder to outsource
 primitive-specific handling into those implementaions.
 
-Any primitive that computes or generates a new column
-must satisfy the 'columnOriginator' interface. When
-you search for a symbol, the symtab returns the
-columnOriginator that originates the symbol. Such
-primitives must also have a unique Order, which will
-allow the push-down algorithms to navigate to it.
-
 Variable naming: The AST, planbuilder and engine
 are three different worlds that use overloaded
 names that are contextually similar, but different.

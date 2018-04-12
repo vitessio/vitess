@@ -25,8 +25,9 @@ import (
 	"unicode"
 
 	"vitess.io/vitess/go/sqltypes"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // These constants are used to identify the SQL statement type.
@@ -268,21 +269,18 @@ func StringIn(str string, values ...string) bool {
 // if the query is a SET statement. Values can be int64 or string.
 // Since set variable names are case insensitive, all keys are returned
 // as lower case.
-func ExtractSetValues(sql string) (keyValues map[string]interface{}, charset string, scope string, err error) {
+func ExtractSetValues(sql string) (keyValues map[string]interface{}, scope string, err error) {
 	stmt, err := Parse(sql)
 	if err != nil {
-		return nil, "", "", err
+		return nil, "", err
 	}
 	setStmt, ok := stmt.(*Set)
 	if !ok {
-		return nil, "", "", fmt.Errorf("ast did not yield *sqlparser.Set: %T", stmt)
+		return nil, "", fmt.Errorf("ast did not yield *sqlparser.Set: %T", stmt)
 	}
 	result := make(map[string]interface{})
 	for _, expr := range setStmt.Exprs {
-		if !expr.Name.Qualifier.IsEmpty() {
-			return nil, "", "", fmt.Errorf("invalid syntax: %v", String(expr.Name))
-		}
-		key := expr.Name.Name.Lowered()
+		key := expr.Name.Lowered()
 
 		switch expr := expr.Expr.(type) {
 		case *SQLVal:
@@ -292,19 +290,19 @@ func ExtractSetValues(sql string) (keyValues map[string]interface{}, charset str
 			case IntVal:
 				num, err := strconv.ParseInt(string(expr.Val), 0, 64)
 				if err != nil {
-					return nil, "", "", err
+					return nil, "", err
 				}
 				result[key] = num
 			default:
-				return nil, "", "", fmt.Errorf("invalid value type: %v", String(expr))
+				return nil, "", fmt.Errorf("invalid value type: %v", String(expr))
 			}
 		case *NullVal:
 			result[key] = nil
 		case *Default:
 			result[key] = "default"
 		default:
-			return nil, "", "", fmt.Errorf("invalid syntax: %s", String(expr))
+			return nil, "", fmt.Errorf("invalid syntax: %s", String(expr))
 		}
 	}
-	return result, setStmt.Charset.Lowered(), strings.ToLower(setStmt.Scope), nil
+	return result, strings.ToLower(setStmt.Scope), nil
 }

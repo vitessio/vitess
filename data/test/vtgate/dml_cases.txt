@@ -175,10 +175,6 @@
   }
 }
 
-# update with unsupported multi-shard where clause with parens
-"update user set val = 1 where (name = 'foo' or id = 1)"
-"unsupported: multi-shard where clause in DML"
-
 # update by primary keyspace id, changing one vindex column
 "update user_metadata set email = 'juan@vitess.io' where user_id = 1"
 {
@@ -1202,7 +1198,22 @@
 {
   "Original": "delete from user_extra",
   "Instructions": {
-    "Opcode": "DeleteSharded",
+    "Opcode": "DeleteScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete from user_extra",
+    "Table": "user_extra"
+  }
+}
+
+# delete with target destination
+"delete from `user[-]`.user_extra"
+{
+  "Original": "delete from `user[-]`.user_extra",
+  "Instructions": {
+    "Opcode": "DeleteByDestination",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1217,7 +1228,7 @@
 {
   "Original": "delete from user_extra where user_id between 1 and 2",
   "Instructions": {
-    "Opcode": "DeleteSharded",
+    "Opcode": "DeleteScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1232,7 +1243,7 @@
 {
   "Original": "delete from user_extra where name = 'jose'",
   "Instructions": {
-    "Opcode": "DeleteSharded",
+    "Opcode": "DeleteScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1247,7 +1258,7 @@
 {
   "Original": "delete from user_extra where user_id in (1, 2)",
   "Instructions": {
-    "Opcode": "DeleteSharded",
+    "Opcode": "DeleteScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
