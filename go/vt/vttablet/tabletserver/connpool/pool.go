@@ -88,8 +88,8 @@ func New(
 	stats.NewGaugeFunc(name+"InUse", "Tablet server conn pool in use", cp.InUse)
 	stats.NewGaugeFunc(name+"MaxCap", "Tablet server conn pool max cap", cp.MaxCap)
 	stats.NewGaugeFunc(name+"WaitCount", "Tablet server conn pool wait count", cp.WaitCount)
-	stats.Publish(name+"WaitTime", stats.DurationFunc(cp.WaitTime))
-	stats.Publish(name+"IdleTimeout", stats.DurationFunc(cp.IdleTimeout))
+	stats.NewDurationFunc(name+"WaitTime", "Tablet server wait time", cp.WaitTime)
+	stats.NewDurationFunc(name+"IdleTimeout", "Tablet server idle timeout", cp.IdleTimeout)
 	stats.NewCounterFunc(name+"IdleClosed", "Tablet server conn pool idle closed", cp.IdleClosed)
 	return cp
 }

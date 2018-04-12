@@ -47,8 +47,8 @@ func (v *Counter) Add(delta int64) {
 	v.i.Add(delta)
 }
 
-// ResetAll resets all values to 0
-func (v *Counter) ResetAll() {
+// Reset resets the counter value to 0
+func (v *Counter) Reset() {
 	v.i.Set(int64(0))
 }
 
@@ -146,7 +146,7 @@ func (c *Counters) Add(name string, value int64) {
 	atomic.AddInt64(a, value)
 }
 
-// ResetAll resets all counter values to 0
+// ResetAll resets all counter values.
 func (c *Counters) ResetAll() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -248,15 +248,15 @@ type CounterFunc struct {
 
 // NewCounterFunc creates a new CounterFunc instance and publishes it if name is set
 func NewCounterFunc(name string, help string, f func() int64) *CounterFunc {
-	i := &CounterFunc{
+	c := &CounterFunc{
 		f:    f,
 		help: help,
 	}
 
 	if name != "" {
-		publish(name, i)
+		publish(name, c)
 	}
-	return i
+	return c
 }
 
 // String is the implementation of expvar.var

@@ -244,9 +244,9 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 			tsv.mu.Unlock()
 			return state
 		}))
-		stats.Publish("QueryTimeout", stats.DurationFunc(tsv.QueryTimeout.Get))
-		stats.Publish("QueryPoolTimeout", stats.DurationFunc(tsv.qe.connTimeout.Get))
-		stats.Publish("BeginTimeout", stats.DurationFunc(tsv.BeginTimeout.Get))
+		stats.NewDurationFunc("QueryTimeout", "Tablet server query timeout", tsv.QueryTimeout.Get)
+		stats.NewDurationFunc("QueryPoolTimeout", "Tablet server timeout to get a connection from the query pool", tsv.qe.connTimeout.Get)
+		stats.NewDurationFunc("BeginTimeout", "Tablet server begin timeout", tsv.BeginTimeout.Get)
 		stats.Publish("TabletStateName", stats.StringFunc(tsv.GetState))
 	})
 	return tsv
