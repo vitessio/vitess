@@ -131,7 +131,7 @@ const (
 // per-run basis. This should be called at the beginning of each worker run.
 func resetVars() {
 	statsState.Set("")
-	statsRetryCount.ResetAll()
+	statsRetryCount.Reset()
 	statsRetryCounters.ResetAll()
 
 	statsOnlineInsertsCounters.ResetAll()

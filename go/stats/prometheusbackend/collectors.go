@@ -3,42 +3,42 @@ package prometheusbackend
 import (
 	"strings"
 
-	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus"
 	"vitess.io/vitess/go/stats"
 )
 
 type metricCollector struct {
 	counter *stats.Counter
-	desc    *prom.Desc
+	desc    *prometheus.Desc
 	vt      ValueType
 }
 
 // Describe implements Collector.
-func (c *metricCollector) Describe(ch chan<- *prom.Desc) {
+func (c *metricCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.desc
 }
 
 // Collect implements Collector.
-func (c *metricCollector) Collect(ch chan<- prom.Metric) {
-	ch <- prom.MustNewConstMetric(c.desc, toPromValueType(c.vt), float64(c.counter.Get()))
+func (c *metricCollector) Collect(ch chan<- prometheus.Metric) {
+	ch <- prometheus.MustNewConstMetric(c.desc, toPromValueType(c.vt), float64(c.counter.Get()))
 }
 
 // metricWithLabelsCollector collects both stats.Counters and stats.Gauges
 type metricWithLabelsCollector struct {
 	counter *stats.Counters
-	desc    *prom.Desc
+	desc    *prometheus.Desc
 	vt      ValueType
 }
 
 // Describe implements Collector.
-func (c *metricWithLabelsCollector) Describe(ch chan<- *prom.Desc) {
+func (c *metricWithLabelsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.desc
 }
 
 // Collect implements Collector.
-func (c *metricWithLabelsCollector) Collect(ch chan<- prom.Metric) {
+func (c *metricWithLabelsCollector) Collect(ch chan<- prometheus.Metric) {
 	for tag, val := range c.counter.Counts() {
-		ch <- prom.MustNewConstMetric(
+		ch <- prometheus.MustNewConstMetric(
 			c.desc,
 			toPromValueType(c.vt),
 			float64(val),
@@ -48,76 +48,76 @@ func (c *metricWithLabelsCollector) Collect(ch chan<- prom.Metric) {
 
 type metricWithMultiLabelsCollector struct {
 	cml  *stats.CountersWithMultiLabels
-	desc *prom.Desc
+	desc *prometheus.Desc
 }
 
 // Describe implements Collector.
-func (c *metricWithMultiLabelsCollector) Describe(ch chan<- *prom.Desc) {
+func (c *metricWithMultiLabelsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.desc
 }
 
 // Collect implements Collector.
-func (c *metricWithMultiLabelsCollector) Collect(ch chan<- prom.Metric) {
+func (c *metricWithMultiLabelsCollector) Collect(ch chan<- prometheus.Metric) {
 	for lvs, val := range c.cml.Counts() {
 		labelValues := strings.Split(lvs, ".")
 		value := float64(val)
-		ch <- prom.MustNewConstMetric(c.desc, prom.CounterValue, value, labelValues...)
+		ch <- prometheus.MustNewConstMetric(c.desc, prometheus.CounterValue, value, labelValues...)
 	}
 }
 
 type multiGaugesCollector struct {
 	gml  *stats.GaugesWithMultiLabels
-	desc *prom.Desc
+	desc *prometheus.Desc
 }
 
 // Describe implements Collector.
-func (c *multiGaugesCollector) Describe(ch chan<- *prom.Desc) {
+func (c *multiGaugesCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.desc
 }
 
 // Collect implements Collector.
-func (c *multiGaugesCollector) Collect(ch chan<- prom.Metric) {
+func (c *multiGaugesCollector) Collect(ch chan<- prometheus.Metric) {
 	for lvs, val := range c.gml.Counts() {
 		labelValues := strings.Split(lvs, ".")
 		value := float64(val)
-		ch <- prom.MustNewConstMetric(c.desc, prom.GaugeValue, value, labelValues...)
+		ch <- prometheus.MustNewConstMetric(c.desc, prometheus.GaugeValue, value, labelValues...)
 	}
 }
 
 type metricsFuncWithMultiLabelsCollector struct {
 	cfml *stats.CountersFuncWithMultiLabels
-	desc *prom.Desc
+	desc *prometheus.Desc
 	vt   ValueType
 }
 
 // Describe implements Collector.
-func (c *metricsFuncWithMultiLabelsCollector) Describe(ch chan<- *prom.Desc) {
+func (c *metricsFuncWithMultiLabelsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.desc
 }
 
 // Collect implements Collector.
-func (c *metricsFuncWithMultiLabelsCollector) Collect(ch chan<- prom.Metric) {
+func (c *metricsFuncWithMultiLabelsCollector) Collect(ch chan<- prometheus.Metric) {
 	for lvs, val := range c.cfml.Counts() {
 		labelValues := strings.Split(lvs, ".")
 		value := float64(val)
-		ch <- prom.MustNewConstMetric(c.desc, toPromValueType(c.vt), value, labelValues...)
+		ch <- prometheus.MustNewConstMetric(c.desc, toPromValueType(c.vt), value, labelValues...)
 	}
 }
 
 type timingsCollector struct {
 	t    *stats.Timings
-	desc *prom.Desc
+	desc *prometheus.Desc
 }
 
 // Describe implements Collector.
-func (c *timingsCollector) Describe(ch chan<- *prom.Desc) {
+func (c *timingsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.desc
 }
 
 // Collect implements Collector.
-func (c *timingsCollector) Collect(ch chan<- prom.Metric) {
+func (c *timingsCollector) Collect(ch chan<- prometheus.Metric) {
 	for cat, his := range c.t.Histograms() {
-		ch <- prom.MustNewConstHistogram(
+		ch <- prometheus.MustNewConstHistogram(
 			c.desc,
 			uint64(his.Count()),
 			float64(his.Total()),
@@ -140,19 +140,19 @@ func makePromBucket(cutoffs []int64, buckets []int64) map[float64]uint64 {
 
 type multiTimingsCollector struct {
 	mt   *stats.MultiTimings
-	desc *prom.Desc
+	desc *prometheus.Desc
 }
 
 // Describe implements Collector.
-func (c *multiTimingsCollector) Describe(ch chan<- *prom.Desc) {
+func (c *multiTimingsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.desc
 }
 
 // Collect implements Collector.
-func (c *multiTimingsCollector) Collect(ch chan<- prom.Metric) {
+func (c *multiTimingsCollector) Collect(ch chan<- prometheus.Metric) {
 	for cat, his := range c.mt.Timings.Histograms() {
 		labelValues := strings.Split(cat, ".")
-		ch <- prom.MustNewConstHistogram(
+		ch <- prometheus.MustNewConstHistogram(
 			c.desc,
 			uint64(his.Count()),
 			float64(his.Total()),
@@ -163,26 +163,42 @@ func (c *multiTimingsCollector) Collect(ch chan<- prom.Metric) {
 
 type metricFuncCollector struct {
 	cf   *stats.CounterFunc
-	desc *prom.Desc
+	desc *prometheus.Desc
 	vt   ValueType
 }
 
 // Describe implements Collector.
-func (c *metricFuncCollector) Describe(ch chan<- *prom.Desc) {
+func (c *metricFuncCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.desc
 }
 
 // Collect implements Collector.
-func (c *metricFuncCollector) Collect(ch chan<- prom.Metric) {
-	ch <- prom.MustNewConstMetric(c.desc, toPromValueType(c.vt), float64(c.cf.F()))
+func (c *metricFuncCollector) Collect(ch chan<- prometheus.Metric) {
+	ch <- prometheus.MustNewConstMetric(c.desc, toPromValueType(c.vt), float64(c.cf.F()))
 }
 
-func toPromValueType(vt ValueType) prom.ValueType {
+type durationFuncCollector struct {
+	df   *stats.DurationFunc
+	desc *prometheus.Desc
+}
+
+// Describe implements Collector.
+func (c *durationFuncCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- c.desc
+}
+
+// Collect implements Collector.
+func (c *durationFuncCollector) Collect(ch chan<- prometheus.Metric) {
+	// c.df.F() is in nanoseconds. Converting to seconds here for exporting to Prometheus.
+	ch <- prometheus.MustNewConstMetric(c.desc, prometheus.CounterValue, float64(c.df.F()/1000000000.0))
+}
+
+func toPromValueType(vt ValueType) prometheus.ValueType {
 	if vt == CounterValue {
-		return prom.CounterValue
+		return prometheus.CounterValue
 	} else if vt == GaugeValue {
-		return prom.GaugeValue
+		return prometheus.GaugeValue
 	} else {
-		return prom.UntypedValue
+		return prometheus.UntypedValue
 	}
 }

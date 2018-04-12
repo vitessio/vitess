@@ -93,7 +93,7 @@ func TestCounter(t *testing.T) {
 	if v.String() != "1" {
 		t.Errorf("want 1, got %v", v.Get())
 	}
-	v.ResetAll()
+	v.Reset()
 	if v.Get() != 0 {
 		t.Errorf("want 0, got %v", v.Get())
 	}
@@ -144,11 +144,26 @@ func TestDuration(t *testing.T) {
 		t.Errorf("want 6, got %v", v.Get())
 	}
 
-	f := DurationFunc(func() time.Duration {
+}
+
+func TestDurationFunc(t *testing.T) {
+	var gotname string
+	var gotv *DurationFunc
+	clear()
+	Register(func(name string, v expvar.Var) {
+		gotname = name
+		gotv = v.(*DurationFunc)
+	})
+
+	v := NewDurationFunc("duration", "help", func() time.Duration {
 		return time.Duration(1)
 	})
-	if f.String() != "1" {
-		t.Errorf("want 1, got %v", f.String())
+
+	if gotv != v {
+		t.Errorf("want %#v, got %#v", v, gotv)
+	}
+	if v.String() != "1" {
+		t.Errorf("want 1, got %v", v.String())
 	}
 }
 

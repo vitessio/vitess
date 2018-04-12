@@ -2,14 +2,12 @@ package prometheusbackend
 
 import (
 	"expvar"
-	"net/http"
 	"strings"
 	"unicode"
 
 	log "github.com/golang/glog"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"vitess.io/vitess/go/stats"
 )
 
@@ -24,7 +22,6 @@ var (
 
 // Init initializes the Prometheus be with the given namespace.
 func Init(namespace string) {
-	http.Handle("/metrics", promhttp.Handler())
 	be := &PromBackend{namespace: namespace}
 	stats.Register(be.publishPrometheusMetric)
 }
@@ -68,6 +65,8 @@ func (be *PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 		be.newTiming(st, name)
 	case *stats.MultiTimings:
 		be.newMultiTiming(st, name)
+	case *stats.DurationFunc:
+		be.newDurationFunc(st, name)
 	default:
 		log.Warningf("Unsupported type for %s: %T", name, st)
 	}
@@ -174,6 +173,19 @@ func (be *PromBackend) newMetricFunc(cf *stats.CounterFunc, name string, vt Valu
 			nil,
 			nil),
 		vt: vt}
+
+	prometheus.MustRegister(collector)
+}
+
+func (be *PromBackend) newDurationFunc(df *stats.DurationFunc, name string) {
+	collector := &durationFuncCollector{
+		df: df,
+		desc: prometheus.NewDesc(
+			be.buildPromName(name),
+			df.Help(),
+			nil,
+			nil),
+	}
 
 	prometheus.MustRegister(collector)
 }
