@@ -147,10 +147,17 @@ func TestLogStatsFormat(t *testing.T) {
 }
 
 func TestLogStatsFormatBindVariables(t *testing.T) {
+	tupleBindVar, err := sqltypes.BuildBindVariable([]int64{1, 2})
+	if err != nil {
+		t.Fatalf("failed to create a tuple bind var: %v", err)
+	}
+
 	logStats := NewLogStats(context.Background(), "test")
 	logStats.BindVariables = map[string]*querypb.BindVariable{
 		"key_1": sqltypes.StringBindVariable("val_1"),
 		"key_2": sqltypes.Int64BindVariable(789),
+		"key_3": sqltypes.BytesBindVariable([]byte("val_3")),
+		"key_4": tupleBindVar,
 	}
 
 	formattedStr := logStats.FmtBindVariables(true)
@@ -162,8 +169,14 @@ func TestLogStatsFormatBindVariables(t *testing.T) {
 		!strings.Contains(formattedStr, "789") {
 		t.Fatalf("bind variable 'key_2': '789' is not formatted")
 	}
+	if !strings.Contains(formattedStr, "key_3") || !strings.Contains(formattedStr, "val_3") {
+		t.Fatalf("bind variable 'key_3': 'val_3' is not formatted")
+	}
+	if !strings.Contains(formattedStr, "key_4") ||
+		!strings.Contains(formattedStr, "values:<type:INT64 value:\"1\" > values:<type:INT64 value:\"2\" >") {
+		t.Fatalf("bind variable 'key_4': (1, 2) is not formatted")
+	}
 
-	logStats.BindVariables["key_3"] = sqltypes.BytesBindVariable([]byte("val_3"))
 	formattedStr = logStats.FmtBindVariables(false)
 	if !strings.Contains(formattedStr, "key_1") {
 		t.Fatalf("bind variable 'key_1' is not formatted")
@@ -172,8 +185,11 @@ func TestLogStatsFormatBindVariables(t *testing.T) {
 		!strings.Contains(formattedStr, "789") {
 		t.Fatalf("bind variable 'key_2': '789' is not formatted")
 	}
-	if !strings.Contains(formattedStr, "key_3") {
+	if !strings.Contains(formattedStr, "key_3") || !strings.Contains(formattedStr, "5 bytes") {
 		t.Fatalf("bind variable 'key_3' is not formatted")
+	}
+	if !strings.Contains(formattedStr, "key_4") || !strings.Contains(formattedStr, "2 items") {
+		t.Fatalf("bind variable 'key_4' is not formatted")
 	}
 }
 
