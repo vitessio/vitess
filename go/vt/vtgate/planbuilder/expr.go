@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
 // splitAndExpression breaks up the Expr into AND-separated conditions
@@ -54,6 +55,12 @@ func skipParenthesis(node sqlparser.Expr) sqlparser.Expr {
 	return node
 }
 
+type subqueryInfo struct {
+	ast    *sqlparser.Subquery
+	bldr   builder
+	origin builder
+}
+
 // findOrigin identifies the right-most origin referenced by expr. In situations where
 // the expression references columns from multiple origins, the expression will be
 // pushed to the right-most origin, and the executor will use the results of
@@ -77,9 +84,19 @@ func skipParenthesis(node sqlparser.Expr) sqlparser.Expr {
 //
 // If an expression has no references to the current query, then the left-most
 // origin is chosen as the default.
-func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (origin builder, pushExpr sqlparser.Expr, err error) {
+func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pulloutSubquery, origin builder, pushExpr sqlparser.Expr, err error) {
+	// highestOrigin tracks the highest origin referenced by the expression.
+	// Default is the First.
 	highestOrigin := pb.bldr.First()
-	var subroutes []*route
+
+	// subqueries tracks the list of subqueries encountered.
+	var subqueries []subqueryInfo
+
+	// constructsMap tracks the sub-construct in which a subquery
+	// occurred. The construct type decides on how the query gets
+	// pulled out.
+	constructsMap := make(map[*sqlparser.Subquery]sqlparser.Expr)
+
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
@@ -90,6 +107,14 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (origin builder, pus
 			if isLocal && newOrigin.Order() > highestOrigin.Order() {
 				highestOrigin = newOrigin
 			}
+		case *sqlparser.ComparisonExpr:
+			if node.Operator == sqlparser.InStr || node.Operator == sqlparser.NotInStr {
+				if sq, ok := node.Right.(*sqlparser.Subquery); ok {
+					constructsMap[sq] = node
+				}
+			}
+		case *sqlparser.ExistsExpr:
+			constructsMap[node.Subquery] = node
 		case *sqlparser.Subquery:
 			spb := newPrimitiveBuilder(pb.vschema, pb.jt)
 			switch stmt := node.Select.(type) {
@@ -104,18 +129,26 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (origin builder, pus
 			default:
 				panic(fmt.Sprintf("BUG: unexpected SELECT type: %T", node))
 			}
-			subroute, isRoute := spb.bldr.(*route)
-			if !isRoute {
-				return false, errors.New("unsupported: cross-shard query in subqueries")
+			sqi := subqueryInfo{
+				ast:  node,
+				bldr: spb.bldr,
 			}
 			for _, extern := range spb.st.Externs {
 				// No error expected. These are resolved externs.
 				newOrigin, isLocal, _ := pb.st.Find(extern)
-				if isLocal && newOrigin.Order() > highestOrigin.Order() {
+				if !isLocal {
+					continue
+				}
+				if highestOrigin.Order() < newOrigin.Order() {
 					highestOrigin = newOrigin
 				}
+				if sqi.origin == nil {
+					sqi.origin = newOrigin
+				} else if sqi.origin.Order() < newOrigin.Order() {
+					sqi.origin = newOrigin
+				}
 			}
-			subroutes = append(subroutes, subroute)
+			subqueries = append(subqueries, sqi)
 			return false, nil
 		case *sqlparser.FuncExpr:
 			switch {
@@ -130,19 +163,62 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (origin builder, pus
 		return true, nil
 	}, expr)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	highestRoute, isRoute := highestOrigin.(*route)
-	if !isRoute && len(subroutes) > 0 {
-		return nil, nil, errors.New("unsupported: subquery cannot be merged with cross-shard subquery")
-	}
-	for _, subroute := range subroutes {
-		if err := highestRoute.SubqueryCanMerge(pb, subroute); err != nil {
-			return nil, nil, err
+
+	highestRoute, _ := highestOrigin.(*route)
+	for _, sqi := range subqueries {
+		subroute, _ := sqi.bldr.(*route)
+		if highestRoute != nil && subroute != nil && highestRoute.SubqueryCanMerge(pb, subroute) {
+			subroute.Redirect = highestRoute
+			continue
 		}
-		subroute.Redirect = highestRoute
+		if sqi.origin != nil {
+			return nil, nil, nil, errors.New("unsupported: cross-shard correlated subquery")
+		}
+
+		sqName, hasValues, isEmpty := pb.jt.GenerateSubqueryVars()
+		construct, ok := constructsMap[sqi.ast]
+		if !ok {
+			// (subquery) -> :_sq
+			expr = sqlparser.ReplaceExpr(expr, sqi.ast, sqlparser.NewValArg([]byte(":"+sqName)))
+			pullouts = append(pullouts, newPulloutSubquery(engine.PulloutValue, sqName, hasValues, isEmpty, sqi.bldr))
+			continue
+		}
+		switch construct := construct.(type) {
+		case *sqlparser.ComparisonExpr:
+			if construct.Operator == sqlparser.InStr {
+				// a in (subquery) -> (:__has_values and (a in ::__sq))
+				newExpr := &sqlparser.ParenExpr{
+					Expr: &sqlparser.AndExpr{
+						Left: sqlparser.NewValArg([]byte(":" + hasValues)),
+						Right: &sqlparser.ParenExpr{
+							Expr: sqlparser.ReplaceExpr(construct, sqi.ast, sqlparser.ListArg([]byte("::"+sqName))),
+						},
+					},
+				}
+				expr = sqlparser.ReplaceExpr(expr, construct, newExpr)
+				pullouts = append(pullouts, newPulloutSubquery(engine.PulloutIn, sqName, hasValues, isEmpty, sqi.bldr))
+			} else {
+				// a not in (subquery) -> (:__is_empty or (a not in ::__sq))
+				newExpr := &sqlparser.ParenExpr{
+					Expr: &sqlparser.OrExpr{
+						Left: sqlparser.NewValArg([]byte(":" + isEmpty)),
+						Right: &sqlparser.ParenExpr{
+							Expr: sqlparser.ReplaceExpr(construct, sqi.ast, sqlparser.ListArg([]byte("::"+sqName))),
+						},
+					},
+				}
+				expr = sqlparser.ReplaceExpr(expr, construct, newExpr)
+				pullouts = append(pullouts, newPulloutSubquery(engine.PulloutNotIn, sqName, hasValues, isEmpty, sqi.bldr))
+			}
+		case *sqlparser.ExistsExpr:
+			// exists (subquery) -> :_sq
+			expr = sqlparser.ReplaceExpr(expr, construct, sqlparser.NewValArg([]byte(":"+sqName)))
+			pullouts = append(pullouts, newPulloutSubquery(engine.PulloutExists, sqName, hasValues, isEmpty, sqi.bldr))
+		}
 	}
-	return highestOrigin, expr, nil
+	return pullouts, highestOrigin, expr, nil
 }
 
 func hasSubquery(node sqlparser.SQLNode) bool {

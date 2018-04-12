@@ -730,6 +730,184 @@
   }
 }
 
+# cross-shard subquery in IN clause.
+# Note the improved Underlying plan as SelectIN.
+"select id from user where id in (select col from user)"
+{
+  "Original": "select id from user where id in (select col from user)",
+  "Instructions": {
+    "Opcode": "PulloutIn",
+    "SubqueryResult": "__sq1",
+    "HasValues": "__has_values1",
+    "IsEmpty": "__is_empty1",
+    "Subquery": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user",
+      "FieldQuery": "select col from user where 1 != 1"
+    },
+    "Underlying": {
+      "Opcode": "SelectIN",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select id from user where :__has_values1 and (id in ::__vals)",
+      "FieldQuery": "select id from user where 1 != 1",
+      "Vindex": "user_index",
+      "Values": [
+        "::__sq1"
+      ]
+    }
+  }
+}
+
+# cross-shard subquery in NOT IN clause.
+"select id from user where id not in (select col from user)"
+{
+  "Original": "select id from user where id not in (select col from user)",
+  "Instructions": {
+    "Opcode": "PulloutNotIn",
+    "SubqueryResult": "__sq1",
+    "HasValues": "__has_values1",
+    "IsEmpty": "__is_empty1",
+    "Subquery": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user",
+      "FieldQuery": "select col from user where 1 != 1"
+    },
+    "Underlying": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select id from user where (:__is_empty1 or (id not in ::__sq1))",
+      "FieldQuery": "select id from user where 1 != 1"
+    }
+  }
+}
+
+# cross-shard subquery in EXISTS clause.
+"select id from user where exists (select col from user)"
+{
+  "Original": "select id from user where exists (select col from user)",
+  "Instructions": {
+    "Opcode": "PulloutExists",
+    "SubqueryResult": "__sq1",
+    "HasValues": "__has_values1",
+    "IsEmpty": "__is_empty1",
+    "Subquery": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user",
+      "FieldQuery": "select col from user where 1 != 1"
+    },
+    "Underlying": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select id from user where :__sq1",
+      "FieldQuery": "select id from user where 1 != 1"
+    }
+  }
+}
+
+# cross-shard subquery as expression
+"select id from user where id = (select col from user)"
+{
+  "Original": "select id from user where id = (select col from user)",
+  "Instructions": {
+    "Opcode": "PulloutValue",
+    "SubqueryResult": "__sq1",
+    "HasValues": "__has_values1",
+    "IsEmpty": "__is_empty1",
+    "Subquery": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user",
+      "FieldQuery": "select col from user where 1 != 1"
+    },
+    "Underlying": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select id from user where id = :__sq1",
+      "FieldQuery": "select id from user where 1 != 1",
+      "Vindex": "user_index",
+      "Values": [
+        ":__sq1"
+      ]
+    }
+  }
+}
+
+# multi-level pullout
+"select id1 from user where id = (select id2 from user where id2 in (select id3 from user))"
+{
+  "Original": "select id1 from user where id = (select id2 from user where id2 in (select id3 from user))",
+  "Instructions": {
+    "Opcode": "PulloutValue",
+    "SubqueryResult": "__sq2",
+    "HasValues": "__has_values2",
+    "IsEmpty": "__is_empty2",
+    "Subquery": {
+      "Opcode": "PulloutIn",
+      "SubqueryResult": "__sq1",
+      "HasValues": "__has_values1",
+      "IsEmpty": "__is_empty1",
+      "Subquery": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select id3 from user",
+        "FieldQuery": "select id3 from user where 1 != 1"
+      },
+      "Underlying": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select id2 from user where :__has_values1 and (id2 in ::__sq1)",
+        "FieldQuery": "select id2 from user where 1 != 1"
+      }
+    },
+    "Underlying": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select id1 from user where id = :__sq2",
+      "FieldQuery": "select id1 from user where 1 != 1",
+      "Vindex": "user_index",
+      "Values": [
+        ":__sq2"
+      ]
+    }
+  }
+}
+
 # Case preservation test
 "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5"
 {
@@ -766,4 +944,4 @@
 # but they refer to different things. The first reference is to the outermost query,
 # and the second reference is to the the innermost 'from' subquery.
 "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select id from user_extra where user_id = 5) uu where uu.user_id = uu.id))"
-"unsupported: UNION or subquery on different shards: vindex values are different"
+"unsupported: cross-shard correlated subquery"

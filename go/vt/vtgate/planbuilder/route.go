@@ -590,23 +590,23 @@ func (rb *route) IsSingle() bool {
 // SubqueryCanMerge returns nil if the supplied route that represents
 // a subquery can be merged with the outer route. If not, it
 // returns an appropriate error.
-func (rb *route) SubqueryCanMerge(pb *primitiveBuilder, inner *route) error {
+func (rb *route) SubqueryCanMerge(pb *primitiveBuilder, inner *route) bool {
 	if rb.ERoute.Keyspace.Name != inner.ERoute.Keyspace.Name {
-		return errors.New("unsupported: subquery keyspace different from outer query")
+		return false
 	}
 	switch inner.ERoute.Opcode {
 	case engine.SelectUnsharded:
 		if rb.ERoute.Opcode == engine.SelectUnsharded {
-			return nil
+			return true
 		}
-		return errIntermixingUnsupported
+		return false
 	case engine.SelectDBA:
 		if rb.ERoute.Opcode == engine.SelectDBA {
-			return nil
+			return true
 		}
-		return errIntermixingUnsupported
+		return false
 	case engine.SelectNext:
-		return errors.New("unsupported: use of sequence in subquery")
+		return false
 	case engine.SelectEqualUnique:
 		// This checks for the case where the subquery is dependent
 		// on the vindex column of the outer query:
@@ -616,13 +616,13 @@ func (rb *route) SubqueryCanMerge(pb *primitiveBuilder, inner *route) error {
 		switch vals := inner.condition.(type) {
 		case *sqlparser.ColName:
 			if pb.st.Vindex(vals, rb) == inner.ERoute.Vindex {
-				return nil
+				return true
 			}
 		}
 	default:
-		return errors.New("unsupported: scatter subquery")
+		return false
 	}
-	return rb.isSameShardedRoute(inner)
+	return rb.isSameShardedRoute(inner) == nil
 }
 
 // UnionCanMerge returns nil if the supplied route that represents
