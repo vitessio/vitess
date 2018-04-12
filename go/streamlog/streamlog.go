@@ -28,9 +28,9 @@ import (
 	"sync"
 	"syscall"
 
-	log "github.com/golang/glog"
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log"
 )
 
 var (

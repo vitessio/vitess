@@ -20,10 +20,9 @@ import (
 	"strings"
 	"sync"
 
-	log "github.com/golang/glog"
-
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/log"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
