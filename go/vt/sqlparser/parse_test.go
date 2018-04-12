@@ -118,6 +118,9 @@ var (
 	}, {
 		input: "select * from t1 join (select * from t2 union select * from t3) as t",
 	}, {
+		// Ensure this doesn't generate: ""select * from t1 join t2 on a = b join t3 on a = b".
+		input: "select * from t1 join t2 on a = b join t3",
+	}, {
 		input: "select * from t1 where col in (select 1 from dual union select 2 from dual)",
 	}, {
 		input: "select * from t1 where exists (select a from t2 union select b from t3)",
