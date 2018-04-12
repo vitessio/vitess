@@ -30,44 +30,35 @@ var _ builder = (*join)(nil)
 // operation.
 type join struct {
 	symtab        *symtab
+	order         int
 	resultColumns []*resultColumn
 
-	// leftMaxOrder and rightMaxOrder store the max order
-	// of the left node and right node. This is essentially
+	// leftOrder stores the order number of the left node. This is
 	// used for a b-tree style traversal towards the target route.
 	// Let us assume the following execution tree:
-	//      Ja
+	//      J9
 	//     /  \
 	//    /    \
-	//   Jb     Jc
+	//   J3     J8
 	//  / \    /  \
-	// R1  R2  Jd  R5
+	// R1  R2  J6  R7
 	//        / \
-	//        R3 R4
+	//        R4 R5
 	//
-	// R1-R5 are routes. Their numbers indicate execution
-	// order: R1 is executed first, then it's R2, which will
-	// be joined at Jb, etc.
+	// In the above trees, the suffix numbers indicate the
+	// execution order. The leftOrder for the joins will then
+	// be as follows:
+	// J3: 1
+	// J6: 4
+	// J8: 6
+	// J9: 3
 	//
-	// The values for left and right max order for the join
-	// nodes will be:
-	//     left right
-	// Jb: 1    2
-	// Jd: 3    4
-	// Jc: 4    5
-	// Ja: 2    5
-	// The route to R3 would be:
-	// Go right from Ja->Jc because Left(Ja)==2, which is <3.
-	// Go left from Jc->Jd because Left(Jc)==4, which is >=3.
-	// Go left from Jd->R3 because Left(Jd)==3, the destination.
-	//
-	// There are many use cases for these Orders. Look for 'isOnLeft'
-	// to see how these numbers are used. 'isOnLeft' is a convenience
-	// function to help with traversal.
-	// The MaxOrder for a join is the same as rightMaxOrder.
-	// A join can currently not be a destination. It therefore does
-	// not have its own Order.
-	leftMaxOrder, rightMaxOrder int
+	// The route to R4 would be:
+	// Go right from J9->J8 because Left(J9)==3, which is <4.
+	// Go left from J8->J6 because Left(J8)==6, which is >=4.
+	// Go left from J6->R4 because Left(J6)==4, the destination.
+	// Look for 'isOnLeft' to see how these numbers are used.
+	leftOrder int
 
 	// Left and Right are the nodes for the join.
 	Left, Right builder
@@ -84,21 +75,19 @@ func newJoin(lhs, rhs builder, ajoin *sqlparser.JoinTableExpr) (*join, error) {
 	// external references, and the FROM clause doesn't allow duplicates,
 	// it's safe to perform this conversion and still expect the same behavior.
 
-	err := lhs.Symtab().Merge(rhs.Symtab())
-	if err != nil {
+	if err := lhs.Symtab().Merge(rhs.Symtab()); err != nil {
 		return nil, err
 	}
-	rhs.SetOrder(lhs.MaxOrder())
 	opcode := engine.NormalJoin
 	if ajoin != nil && ajoin.Join == sqlparser.LeftJoinStr {
 		opcode = engine.LeftJoin
 	}
 	jb := &join{
-		leftMaxOrder:  lhs.MaxOrder(),
-		rightMaxOrder: rhs.MaxOrder(),
-		Left:          lhs,
-		Right:         rhs,
-		symtab:        lhs.Symtab(),
+		order:     rhs.Order() + 1,
+		leftOrder: lhs.Order(),
+		Left:      lhs,
+		Right:     rhs,
+		symtab:    lhs.Symtab(),
 		ejoin: &engine.Join{
 			Opcode: opcode,
 			Left:   lhs.Primitive(),
@@ -106,6 +95,7 @@ func newJoin(lhs, rhs builder, ajoin *sqlparser.JoinTableExpr) (*join, error) {
 			Vars:   make(map[string]int),
 		},
 	}
+	jb.Reorder(0)
 	if ajoin == nil {
 		return jb, nil
 	}
@@ -114,14 +104,12 @@ func newJoin(lhs, rhs builder, ajoin *sqlparser.JoinTableExpr) (*join, error) {
 	}
 
 	if opcode == engine.LeftJoin {
-		err := pushFilter(ajoin.Condition.On, rhs, sqlparser.WhereStr)
-		if err != nil {
+		if err := pushFilter(ajoin.Condition.On, rhs, sqlparser.WhereStr); err != nil {
 			return nil, err
 		}
 		return jb, nil
 	}
-	err = pushFilter(ajoin.Condition.On, jb, sqlparser.WhereStr)
-	if err != nil {
+	if err := pushFilter(ajoin.Condition.On, jb, sqlparser.WhereStr); err != nil {
 		return nil, err
 	}
 	return jb, nil
@@ -132,17 +120,17 @@ func (jb *join) Symtab() *symtab {
 	return jb.symtab.Resolve()
 }
 
-// MaxOrder satisfies the builder interface.
-func (jb *join) MaxOrder() int {
-	return jb.rightMaxOrder
+// Order satisfies the builder interface.
+func (jb *join) Order() int {
+	return jb.order
 }
 
-// SetOrder satisfies the builder interface.
-func (jb *join) SetOrder(order int) {
-	jb.Left.SetOrder(order)
-	jb.leftMaxOrder = jb.Left.MaxOrder()
-	jb.Right.SetOrder(jb.leftMaxOrder)
-	jb.rightMaxOrder = jb.Right.MaxOrder()
+// Reorder satisfies the builder interface.
+func (jb *join) Reorder(order int) {
+	jb.Left.Reorder(order)
+	jb.leftOrder = jb.Left.Order()
+	jb.Right.Reorder(jb.leftOrder)
+	jb.order = jb.Right.Order() + 1
 }
 
 // Primitive satisfies the builder interface.
@@ -151,7 +139,7 @@ func (jb *join) Primitive() engine.Primitive {
 }
 
 // Leftmost satisfies the builder interface.
-func (jb *join) Leftmost() columnOriginator {
+func (jb *join) Leftmost() builder {
 	return jb.Left.Leftmost()
 }
 
@@ -161,7 +149,7 @@ func (jb *join) ResultColumns() []*resultColumn {
 }
 
 // PushFilter satisfies the builder interface.
-func (jb *join) PushFilter(filter sqlparser.Expr, whereType string, origin columnOriginator) error {
+func (jb *join) PushFilter(filter sqlparser.Expr, whereType string, origin builder) error {
 	if jb.isOnLeft(origin.Order()) {
 		return jb.Left.PushFilter(filter, whereType, origin)
 	}
@@ -172,7 +160,7 @@ func (jb *join) PushFilter(filter sqlparser.Expr, whereType string, origin colum
 }
 
 // PushSelect satisfies the builder interface.
-func (jb *join) PushSelect(expr *sqlparser.AliasedExpr, origin columnOriginator) (rc *resultColumn, colnum int, err error) {
+func (jb *join) PushSelect(expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
 	if jb.isOnLeft(origin.Order()) {
 		rc, colnum, err = jb.Left.PushSelect(expr, origin)
 		if err != nil {
@@ -282,5 +270,5 @@ func (jb *join) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int)
 // is on the left side of the join. If false, it means
 // the node is on the right.
 func (jb *join) isOnLeft(nodeNum int) bool {
-	return nodeNum <= jb.leftMaxOrder
+	return nodeNum <= jb.leftOrder
 }

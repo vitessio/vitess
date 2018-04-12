@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Copyright 2017 Google Inc.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,9 +39,24 @@ function goversion_min() {
 function prepend_path() {
   # $1 path variable
   # $2 path to add
-  if [ -d "$2" ] && [[ ":$1:" != *":$2:"* ]]; then
-    echo "$2:$1"
-  else
+  if [[ ! -d "$2" ]]; then
+    # To be added path does not exist. Ignore it and return the path variable unchanged.
     echo "$1"
+    return
   fi
+
+  if [[ -z "$1" ]]; then
+    # path variable is empty. Set its initial value to the path to add.
+    echo "$2"
+    return
+  fi
+
+  if [[ ":$1:" != *":$2:"* ]]; then
+    # path variable does not contain path to add yet. Prepend it.
+    echo "$2:$1"
+    return
+  fi
+
+  # Return path variable unchanged.
+  echo "$1"
 }

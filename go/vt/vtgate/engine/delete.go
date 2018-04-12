@@ -22,7 +22,9 @@ import (
 
 	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlannotation"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -39,6 +41,9 @@ type Delete struct {
 
 	// Keyspace specifies the keyspace to send the query to.
 	Keyspace *vindexes.Keyspace
+
+	// TargetDestination specifies the destination to send the query to.
+	TargetDestination key.Destination
 
 	// Query specifies the query to be executed.
 	Query string
@@ -100,15 +105,21 @@ const (
 	// Value, and an OwnedVindexQuery, which will be used to
 	// determine if lookup rows need to be deleted.
 	DeleteEqual
-	// DeleteSharded is for routing a scattered
+	// DeleteScatter is for routing a scattered
 	// delete statement.
-	DeleteSharded
+	DeleteScatter
+	// DeleteByDestination is to route explicitly to a given
+	// target destination. Is used when the query explicitly sets a target destination:
+	// in the from clause:
+	// e.g: DELETE FROM `keyspace[-]`.x1 LIMIT 100
+	DeleteByDestination
 )
 
 var delName = map[DeleteOpcode]string{
-	DeleteUnsharded: "DeleteUnsharded",
-	DeleteEqual:     "DeleteEqual",
-	DeleteSharded:   "DeleteSharded",
+	DeleteUnsharded:     "DeleteUnsharded",
+	DeleteEqual:         "DeleteEqual",
+	DeleteScatter:       "DeleteScatter",
+	DeleteByDestination: "DeleteByDestination",
 }
 
 // MarshalJSON serializes the DeleteOpcode as a JSON string.
@@ -124,8 +135,10 @@ func (del *Delete) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 		return del.execDeleteUnsharded(vcursor, bindVars)
 	case DeleteEqual:
 		return del.execDeleteEqual(vcursor, bindVars)
-	case DeleteSharded:
-		return del.execDeleteSharded(vcursor, bindVars)
+	case DeleteScatter:
+		return del.execDeleteByDestination(vcursor, bindVars, key.DestinationAllShards{})
+	case DeleteByDestination:
+		return del.execDeleteByDestination(vcursor, bindVars, del.TargetDestination)
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported opcode: %v", del)
@@ -143,14 +156,14 @@ func (del *Delete) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindV
 }
 
 func (del *Delete) execDeleteUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	ks, allShards, err := vcursor.GetKeyspaceShards(del.Keyspace)
+	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteUnsharded")
 	}
-	if len(allShards) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", allShards)
+	if len(rss) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
 	}
-	return execShard(vcursor, del.Query, bindVars, ks, allShards[0].Name, true, true /* canAutocommit */)
+	return execShard(vcursor, del.Query, bindVars, rss[0], true, true /* canAutocommit */)
 }
 
 func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
@@ -158,7 +171,7 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteEqual")
 	}
-	ks, shard, ksid, err := resolveSingleShard(vcursor, del.Vindex, del.Keyspace, bindVars, key)
+	rs, ksid, err := resolveSingleShard(vcursor, del.Vindex, del.Keyspace, key)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteEqual")
 	}
@@ -166,17 +179,17 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 		return &sqltypes.Result{}, nil
 	}
 	if del.OwnedVindexQuery != "" {
-		err = del.deleteVindexEntries(vcursor, bindVars, ks, shard, ksid)
+		err = del.deleteVindexEntries(vcursor, bindVars, rs, ksid)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "execDeleteEqual")
 		}
 	}
 	rewritten := sqlannotation.AddKeyspaceIDs(del.Query, [][]byte{ksid}, "")
-	return execShard(vcursor, rewritten, bindVars, ks, shard, true /* isDML */, true /* canAutocommit */)
+	return execShard(vcursor, rewritten, bindVars, rs, true /* isDML */, true /* canAutocommit */)
 }
 
-func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, ks, shard string, ksid []byte) error {
-	result, err := execShard(vcursor, del.OwnedVindexQuery, bindVars, ks, shard, false /* isDML */, false /* canAutocommit */)
+func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, ksid []byte) error {
+	result, err := execShard(vcursor, del.OwnedVindexQuery, bindVars, rs, false /* isDML */, false /* canAutocommit */)
 	if err != nil {
 		return err
 	}
@@ -199,19 +212,19 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 	return nil
 }
 
-func (del *Delete) execDeleteSharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	ks, allShards, err := vcursor.GetKeyspaceShards(del.Keyspace)
+func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
+	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{dest})
 	if err != nil {
-		return nil, vterrors.Wrap(err, "execDeleteSharded")
+		return nil, vterrors.Wrap(err, "execDeleteScatter")
 	}
 
-	shardQueries := make(map[string]*querypb.BoundQuery, len(allShards))
+	queries := make([]*querypb.BoundQuery, len(rss))
 	sql := sqlannotation.AnnotateIfDML(del.Query, nil)
-	for _, shard := range allShards {
-		shardQueries[shard.Name] = &querypb.BoundQuery{
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{
 			Sql:           sql,
 			BindVariables: bindVars,
 		}
 	}
-	return vcursor.ExecuteMultiShard(ks, shardQueries, true /* isDML */, true /* canAutocommit */)
+	return vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, true /* canAutocommit */)
 }

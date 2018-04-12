@@ -17,7 +17,9 @@ limitations under the License.
 package key
 
 import (
+	"bytes"
 	"encoding/hex"
+	"strings"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -42,6 +44,22 @@ type Destination interface {
 	// Mainly, in v3, once we Map(), each returned result should
 	// be IsUnique=true for a Unique vindex.
 	IsUnique() bool
+
+	// String returns a printable version of the Destination.
+	String() string
+}
+
+// DestinationsString returns a printed version of the destination array.
+func DestinationsString(destinations []Destination) string {
+	var buffer bytes.Buffer
+	buffer.WriteString("Destinations:")
+	for i, d := range destinations {
+		if i > 0 {
+			buffer.WriteByte(',')
+		}
+		buffer.WriteString(d.String())
+	}
+	return buffer.String()
 }
 
 //
@@ -60,6 +78,11 @@ func (d DestinationShard) IsUnique() bool {
 // Resolve is part of the Destination interface.
 func (d DestinationShard) Resolve(allShards []*topodatapb.ShardReference, addShard func(shard string) error) error {
 	return addShard(string(d))
+}
+
+// String is part of the Destination interface.
+func (d DestinationShard) String() string {
+	return "DestinationShard(" + string(d) + ")"
 }
 
 //
@@ -83,6 +106,11 @@ func (d DestinationShards) Resolve(allShards []*topodatapb.ShardReference, addSh
 		}
 	}
 	return nil
+}
+
+// String is part of the Destination interface.
+func (d DestinationShards) String() string {
+	return "DestinationShards(" + strings.Join(d, ",") + ")"
 }
 
 //
@@ -109,6 +137,11 @@ func (d DestinationExactKeyRange) IsUnique() bool {
 // Resolve is part of the Destination interface.
 func (d DestinationExactKeyRange) Resolve(allShards []*topodatapb.ShardReference, addShard func(shard string) error) error {
 	return processExactKeyRange(allShards, d.KeyRange, addShard)
+}
+
+// String is part of the Destination interface.
+func (d DestinationExactKeyRange) String() string {
+	return "DestinationExactKeyRange(" + KeyRangeString(d.KeyRange) + ")"
 }
 
 func processExactKeyRange(allShards []*topodatapb.ShardReference, kr *topodatapb.KeyRange, addShard func(shard string) error) error {
@@ -161,6 +194,20 @@ func (d DestinationExactKeyRanges) Resolve(allShards []*topodatapb.ShardReferenc
 	return nil
 }
 
+// String is part of the Destination interface.
+func (d DestinationExactKeyRanges) String() string {
+	var buffer bytes.Buffer
+	buffer.WriteString("DestinationExactKeyRanges(")
+	for i, kr := range d {
+		if i > 0 {
+			buffer.WriteByte(',')
+		}
+		buffer.WriteString(KeyRangeString(kr))
+	}
+	buffer.WriteByte(')')
+	return buffer.String()
+}
+
 //
 // DestinationKeyRange
 //
@@ -183,6 +230,11 @@ func (d DestinationKeyRange) IsUnique() bool {
 // Resolve is part of the Destination interface.
 func (d DestinationKeyRange) Resolve(allShards []*topodatapb.ShardReference, addShard func(shard string) error) error {
 	return processKeyRange(allShards, d.KeyRange, addShard)
+}
+
+// String is part of the Destination interface.
+func (d DestinationKeyRange) String() string {
+	return "DestinationKeyRange(" + KeyRangeString(d.KeyRange) + ")"
 }
 
 func processKeyRange(allShards []*topodatapb.ShardReference, kr *topodatapb.KeyRange, addShard func(shard string) error) error {
@@ -221,6 +273,20 @@ func (d DestinationKeyRanges) Resolve(allShards []*topodatapb.ShardReference, ad
 	return nil
 }
 
+// String is part of the Destination interface.
+func (d DestinationKeyRanges) String() string {
+	var buffer bytes.Buffer
+	buffer.WriteString("DestinationKeyRanges(")
+	for i, kr := range d {
+		if i > 0 {
+			buffer.WriteByte(',')
+		}
+		buffer.WriteString(KeyRangeString(kr))
+	}
+	buffer.WriteByte(')')
+	return buffer.String()
+}
+
 //
 // DestinationKeyspaceID
 //
@@ -241,6 +307,11 @@ func (d DestinationKeyspaceID) Resolve(allShards []*topodatapb.ShardReference, a
 		return err
 	}
 	return addShard(shard)
+}
+
+// String is part of the Destination interface.
+func (d DestinationKeyspaceID) String() string {
+	return "DestinationKeyspaceID(" + hex.EncodeToString(d) + ")"
 }
 
 // GetShardForKeyspaceID finds the right shard for a keyspace id.
@@ -284,6 +355,20 @@ func (d DestinationKeyspaceIDs) Resolve(allShards []*topodatapb.ShardReference, 
 	return nil
 }
 
+// String is part of the Destination interface.
+func (d DestinationKeyspaceIDs) String() string {
+	var buffer bytes.Buffer
+	buffer.WriteString("DestinationKeyspaceIDs(")
+	for i, ksid := range d {
+		if i > 0 {
+			buffer.WriteByte(',')
+		}
+		buffer.WriteString(hex.EncodeToString(ksid))
+	}
+	buffer.WriteByte(')')
+	return buffer.String()
+}
+
 //
 // DestinationAnyShard
 //
@@ -304,6 +389,11 @@ func (d DestinationAnyShard) Resolve(allShards []*topodatapb.ShardReference, add
 		return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no shard in keyspace")
 	}
 	return addShard(allShards[0].Name)
+}
+
+// String is part of the Destination interface.
+func (d DestinationAnyShard) String() string {
+	return "DestinationAnyShard()"
 }
 
 //
@@ -329,4 +419,32 @@ func (d DestinationAllShards) Resolve(allShards []*topodatapb.ShardReference, ad
 	}
 
 	return nil
+}
+
+// String is part of the Destination interface.
+func (d DestinationAllShards) String() string {
+	return "DestinationAllShards()"
+}
+
+//
+// DestinationNone
+//
+
+// DestinationNone is a destination that doesn't resolve to any shard.
+// It implements the Destination interface.
+type DestinationNone struct{}
+
+// IsUnique is part of the Destination interface.
+func (d DestinationNone) IsUnique() bool {
+	return true
+}
+
+// Resolve is part of the Destination interface.
+func (d DestinationNone) Resolve(allShards []*topodatapb.ShardReference, addShard func(shard string) error) error {
+	return nil
+}
+
+// String is part of the Destination interface.
+func (d DestinationNone) String() string {
+	return "DestinationNone()"
 }

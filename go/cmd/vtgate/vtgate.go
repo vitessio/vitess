@@ -84,7 +84,7 @@ func main() {
 		}
 	}
 
-	vtg := vtgate.Init(context.Background(), healthCheck, ts, resilientServer, *cell, *retryCount, tabletTypes)
+	vtg := vtgate.Init(context.Background(), healthCheck, resilientServer, *cell, *retryCount, tabletTypes)
 
 	servenv.OnRun(func() {
 		addStatusParts(vtg)

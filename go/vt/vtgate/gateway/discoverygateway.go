@@ -34,7 +34,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
-	"vitess.io/vitess/go/vt/vtgate/masterbuffer"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -65,7 +64,6 @@ type discoveryGateway struct {
 	queryservice.QueryService
 	hc            discovery.HealthCheck
 	tsc           *discovery.TabletStatsCache
-	topoServer    *topo.Server
 	srvTopoServer srvtopo.Server
 	localCell     string
 	retryCount    int
@@ -84,11 +82,14 @@ type discoveryGateway struct {
 	buffer *buffer.Buffer
 }
 
-func createDiscoveryGateway(hc discovery.HealthCheck, topoServer *topo.Server, serv srvtopo.Server, cell string, retryCount int) Gateway {
+func createDiscoveryGateway(hc discovery.HealthCheck, serv srvtopo.Server, cell string, retryCount int) Gateway {
+	var topoServer *topo.Server
+	if serv != nil {
+		topoServer = serv.GetTopoServer()
+	}
 	dg := &discoveryGateway{
 		hc:                hc,
 		tsc:               discovery.NewTabletStatsCacheDoNotSetListener(topoServer, cell),
-		topoServer:        topoServer,
 		srvTopoServer:     serv,
 		localCell:         cell,
 		retryCount:        retryCount,
@@ -115,7 +116,7 @@ func createDiscoveryGateway(hc discovery.HealthCheck, topoServer *topo.Server, s
 			tr = fbs
 		}
 
-		ctw := discovery.NewCellTabletsWatcher(dg.topoServer, tr, c, *refreshInterval, *topoReadConcurrency)
+		ctw := discovery.NewCellTabletsWatcher(topoServer, tr, c, *refreshInterval, *topoReadConcurrency)
 		dg.tabletsWatchers = append(dg.tabletsWatchers, ctw)
 	}
 	dg.QueryService = queryservice.Wrap(nil, dg.withRetry)
@@ -271,11 +272,6 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no connection for key %v tablet %+v", ts.Key, ts.Tablet)
 			invalidTablets[ts.Key] = true
 			continue
-		}
-
-		// Potentially buffer this request.
-		if bufferErr := masterbuffer.FakeBuffer(target, inTransaction, i); bufferErr != nil {
-			return bufferErr
 		}
 
 		startTime := time.Now()

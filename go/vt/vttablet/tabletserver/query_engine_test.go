@@ -279,26 +279,17 @@ func runConsolidatedQuery(t *testing.T, sql string) *QueryEngine {
 	qe.Open()
 	defer qe.Close()
 
-	c := make(chan int)
-	done := make(chan int)
-	query := func(sql string, waiter chan int, done chan int) {
-		q, ok := qe.consolidator.Create(string(sql))
-		if ok {
-			q.Result, q.Err = "ok", nil
-			<-waiter
-			q.Broadcast()
-		} else {
-			waiter <- 1
-			q.Wait()
-
-			done <- 1
-		}
+	r1, ok := qe.consolidator.Create(sql)
+	if !ok {
+		t.Errorf("expected first consolidator ok")
+	}
+	r2, ok := qe.consolidator.Create(sql)
+	if ok {
+		t.Errorf("expected second consolidator not ok")
 	}
 
-	go query(sql, c, done)
-	go query(sql, c, done)
-
-	<-done
+	r1.Broadcast()
+	r2.Wait()
 
 	return qe
 }
@@ -311,8 +302,8 @@ func TestConsolidationsUIRedaction(t *testing.T) {
 
 	request, _ := http.NewRequest("GET", "/debug/consolidations", nil)
 
-	sql := "select * from test_db_01 where column = 'secret'"
-	redactedSQL := "select * from test_db_01 where `column` = :redacted1"
+	sql := "select * from test_db_01 where col = 'secret'"
+	redactedSQL := "select * from test_db_01 where col = :redacted1"
 
 	// First with the redaction off
 	*streamlog.RedactDebugUIQueries = false

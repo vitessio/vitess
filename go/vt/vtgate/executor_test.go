@@ -18,21 +18,25 @@ package vtgate
 
 import (
 	"bytes"
-	"encoding/hex"
 	"html/template"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
@@ -308,7 +312,7 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set names ascii",
-		err: "unexpected value for charset: ascii",
+		err: "unexpected value for charset/names: ascii",
 	}, {
 		in:  "set charset utf8",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -317,7 +321,7 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set character set ascii",
-		err: "unexpected value for charset: ascii",
+		err: "unexpected value for charset/names: ascii",
 	}, {
 		in:  "set net_write_timeout = 600",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -820,6 +824,13 @@ func TestExecutorOther(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema_tables: %v, want %v", err, want)
 	}
+
+	// Can't target a range with handle other
+	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor[-]"}), "analyze", nil)
+	want = "Destination can only be a single shard for statement: analyze, got: DestinationExactKeyRange(-)"
+	if err == nil || err.Error() != want {
+		t.Errorf("analyze: got %v, want %v", err, want)
+	}
 }
 
 func TestExecutorDDL(t *testing.T) {
@@ -887,9 +898,601 @@ func TestExecutorDDL(t *testing.T) {
 	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{}), "create", nil)
 	want := errNoKeyspace.Error()
 	if err == nil || err.Error() != want {
-		t.Errorf("show vschema_tables: %v, want %v", err, want)
+		t.Errorf("ddl with no keyspace: %v, want %v", err, want)
 	}
 	testQueryLog(t, logChan, "TestExecute", "DDL", "create", 0)
+}
+
+func waitForVindex(t *testing.T, ks, name string, watch chan *vschemapb.SrvVSchema, executor *Executor) (*vschemapb.SrvVSchema, *vschemapb.Vindex) {
+	t.Helper()
+
+	// Wait up to 10ms until the watch gets notified of the update
+	ok := false
+	for i := 0; i < 10; i++ {
+		select {
+		case vschema := <-watch:
+			_, ok = vschema.Keyspaces[ks].Vindexes[name]
+			if !ok {
+				t.Errorf("updated vschema did not contain %s", name)
+			}
+			break
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+	if !ok {
+		t.Errorf("vschema was not updated as expected")
+	}
+
+	// Wait up to 10ms until the vindex manager gets notified of the update
+	for i := 0; i < 10; i++ {
+		vschema := executor.vm.GetCurrentSrvVschema()
+		vindex, ok := vschema.Keyspaces[ks].Vindexes[name]
+		if ok {
+			return vschema, vindex
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	t.Fatalf("updated vschema did not contain %s", name)
+	return nil, nil
+}
+
+func waitForColVindexes(t *testing.T, ks, table string, names []string, executor *Executor) *vschemapb.SrvVSchema {
+	t.Helper()
+
+	// Wait up to 10ms until the vindex manager gets notified of the update
+	for i := 0; i < 10; i++ {
+
+		vschema := executor.vm.GetCurrentSrvVschema()
+		table, ok := vschema.Keyspaces[ks].Tables[table]
+
+		// The table is removed from the vschema when there are no
+		// vindexes defined
+		if !ok == (len(names) == 0) {
+			return vschema
+		} else if ok && (len(names) == len(table.ColumnVindexes)) {
+			match := true
+			for i, name := range names {
+				if name != table.ColumnVindexes[i].Name {
+					match = false
+					break
+				}
+			}
+			if match {
+				return vschema
+			}
+		}
+
+		time.Sleep(time.Millisecond)
+
+	}
+
+	t.Fatalf("updated vschema did not contain vindexes %v on table %s", names, table)
+	return nil
+}
+
+func TestExecutorCreateVindexDDL(t *testing.T) {
+	*vschemaacl.AuthorizedDDLUsers = "%"
+	defer func() {
+		*vschemaacl.AuthorizedDDLUsers = ""
+	}()
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	ks := "TestExecutor"
+
+	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
+	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) {
+		vschemaUpdates <- vschema
+	})
+
+	vschema := <-vschemaUpdates
+	vindex, ok := vschema.Keyspaces[ks].Vindexes["test_vindex"]
+	if ok {
+		t.Fatalf("test_vindex should not exist in original vschema")
+	}
+
+	stmt := "create vindex test_vindex using hash"
+	wantCount := []int64{0, 0, 0}
+	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: ks}), stmt, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	gotCount := []int64{
+		sbc1.ExecCount.Get(),
+		sbc2.ExecCount.Get(),
+		sbclookup.ExecCount.Get(),
+	}
+	if !reflect.DeepEqual(gotCount, wantCount) {
+		t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
+	}
+
+	time.Sleep(10 * time.Millisecond)
+	select {
+	case vschema = <-vschemaUpdates:
+		vindex, ok = vschema.Keyspaces[ks].Vindexes["test_vindex"]
+		if !ok || vindex.Type != "hash" {
+			t.Errorf("updated vschema did not contain test_vindex")
+		}
+	default:
+		t.Errorf("vschema was not updated as expected")
+	}
+
+	// Wait up to 10ms until the vindex manager gets notified of the update
+	for i := 0; i < 10; i++ {
+		vschema = executor.vm.GetCurrentSrvVschema()
+		vindex, ok = vschema.Keyspaces[ks].Vindexes["test_vindex"]
+		if ok {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !ok || vindex.Type != "hash" {
+		t.Errorf("updated vschema did not contain test_vindex")
+	}
+
+	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: ks}), stmt, nil)
+	wantErr := "vindex test_vindex already exists in keyspace TestExecutor"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("create duplicate vindex: %v, want %s", err, wantErr)
+	}
+	gotCount = []int64{
+		sbc1.ExecCount.Get(),
+		sbc2.ExecCount.Get(),
+		sbclookup.ExecCount.Get(),
+	}
+	if !reflect.DeepEqual(gotCount, wantCount) {
+		t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
+	}
+	select {
+	case vschema = <-vschemaUpdates:
+		t.Errorf("vschema shoud not be updated on error")
+	default:
+	}
+}
+
+func TestExecutorAddDropVindexDDL(t *testing.T) {
+	*vschemaacl.AuthorizedDDLUsers = "%"
+	defer func() {
+		*vschemaacl.AuthorizedDDLUsers = ""
+	}()
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	ks := "TestExecutor"
+	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
+	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) {
+		vschemaUpdates <- vschema
+	})
+
+	vschema := <-vschemaUpdates
+	vindex, ok := vschema.Keyspaces[ks].Vindexes["test_hash"]
+	if ok {
+		t.Fatalf("test_hash should not exist in original vschema")
+	}
+
+	// Create a new vindex implicitly with the statement
+	stmt := "alter table test add vindex test_hash (id) using hash "
+	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Fatalf("error in %s: %v", stmt, err)
+	}
+
+	vschema, vindex = waitForVindex(t, ks, "test_hash", vschemaUpdates, executor)
+	if vindex.Type != "hash" {
+		t.Errorf("vindex type %s not hash", vindex.Type)
+	}
+
+	vschema = waitForColVindexes(t, ks, "test", []string{"test_hash"}, executor)
+	qr, err := executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.test", nil)
+	if err != nil {
+		t.Fatalf("error in show vindexes on TestExecutor.test: %v", err)
+	}
+	wantqr := &sqltypes.Result{
+		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("id", "test_hash", "hash", "", ""),
+		},
+		RowsAffected: 1,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
+	}
+
+	// Drop it
+	stmt = "alter table test drop vindex test_hash"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Fatalf("error in %s: %v", stmt, err)
+	}
+
+	vschema, vindex = waitForVindex(t, ks, "test_hash", vschemaUpdates, executor)
+	vschema = waitForColVindexes(t, ks, "test", []string{}, executor)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.test", nil)
+	wantErr := "table `test` does not exist in keyspace `TestExecutor`"
+	if err == nil || err.Error() != wantErr {
+		t.Fatalf("expected error in show vindexes on TestExecutor.test %v: got %v", wantErr, err)
+	}
+
+	// add it again using the same syntax
+	stmt = "alter table test add vindex test_hash (id) using hash "
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Fatalf("error in %s: %v", stmt, err)
+	}
+
+	vschema, vindex = waitForVindex(t, ks, "test_hash", vschemaUpdates, executor)
+	if vindex.Type != "hash" {
+		t.Errorf("vindex type %s not hash", vindex.Type)
+	}
+
+	vschema = waitForColVindexes(t, ks, "test", []string{"test_hash"}, executor)
+
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.test", nil)
+	if err != nil {
+		t.Fatalf("error in show vindexes on TestExecutor.test: %v", err)
+	}
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("id", "test_hash", "hash", "", ""),
+		},
+		RowsAffected: 1,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
+	}
+
+	// add another
+	stmt = "alter table test add vindex test_lookup (c1,c2) using lookup with owner=`test`, from=`c1,c2`, table=test_lookup, to=keyspace_id"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Fatalf("error in %s: %v", stmt, err)
+	}
+
+	vschema, vindex = waitForVindex(t, ks, "test_lookup", vschemaUpdates, executor)
+	if vindex.Type != "lookup" {
+		t.Errorf("vindex type %s not hash", vindex.Type)
+	}
+
+	if table, ok := vschema.Keyspaces[ks].Tables["test"]; ok {
+		if len(table.ColumnVindexes) != 2 {
+			t.Fatalf("table vindexes want 1 got %d", len(table.ColumnVindexes))
+		}
+		if table.ColumnVindexes[1].Name != "test_lookup" {
+			t.Fatalf("table vindexes didn't contain test_lookup")
+		}
+	} else {
+		t.Fatalf("table test not defined in vschema")
+	}
+
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.test", nil)
+	if err != nil {
+		t.Fatalf("error in show vindexes on TestExecutor.test: %v", err)
+	}
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("id", "test_hash", "hash", "", ""),
+			buildVarCharRow("c1, c2", "test_lookup", "lookup", "from=c1,c2; table=test_lookup; to=keyspace_id", "test"),
+		},
+		RowsAffected: 2,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
+	}
+
+	stmt = "alter table test add vindex test_hash_id2 (id2) using hash"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Fatalf("error in %s: %v", stmt, err)
+	}
+
+	vschema, vindex = waitForVindex(t, ks, "test_hash_id2", vschemaUpdates, executor)
+	if vindex.Type != "hash" {
+		t.Errorf("vindex type %s not hash", vindex.Type)
+	}
+
+	if table, ok := vschema.Keyspaces[ks].Tables["test"]; ok {
+		if len(table.ColumnVindexes) != 3 {
+			t.Fatalf("table vindexes want 1 got %d", len(table.ColumnVindexes))
+		}
+		if table.ColumnVindexes[2].Name != "test_hash_id2" {
+			t.Fatalf("table vindexes didn't contain test_hash_id2")
+		}
+	} else {
+		t.Fatalf("table test not defined in vschema")
+	}
+
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.test", nil)
+	if err != nil {
+		t.Fatalf("error in show vindexes on TestExecutor.test: %v", err)
+	}
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("id", "test_hash", "hash", "", ""),
+			buildVarCharRow("c1, c2", "test_lookup", "lookup", "from=c1,c2; table=test_lookup; to=keyspace_id", "test"),
+			buildVarCharRow("id2", "test_hash_id2", "hash", "", ""),
+		},
+		RowsAffected: 3,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
+	}
+
+	// drop one
+	stmt = "alter table test drop vindex test_lookup"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Fatalf("error in %s: %v", stmt, err)
+	}
+
+	// wait for up to 50ms for it to disappear
+	deadline := time.Now().Add(50 * time.Millisecond)
+	for {
+		qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.test", nil)
+		if err != nil {
+			t.Fatalf("error in show vindexes on TestExecutor.test: %v", err)
+		}
+		wantqr = &sqltypes.Result{
+			Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
+			Rows: [][]sqltypes.Value{
+				buildVarCharRow("id", "test_hash", "hash", "", ""),
+				buildVarCharRow("id2", "test_hash_id2", "hash", "", ""),
+			},
+			RowsAffected: 2,
+		}
+		if reflect.DeepEqual(qr, wantqr) {
+			break
+		}
+
+		if time.Now().After(deadline) {
+			t.Errorf("timed out waiting for test_lookup vindex to be removed")
+		}
+		time.Sleep(1 * time.Millisecond)
+	}
+
+	// use the newly created vindex on a new table
+	stmt = "alter table test2 add vindex test_hash (id)"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Fatalf("error in %s: %v", stmt, err)
+	}
+
+	vschema, vindex = waitForVindex(t, ks, "test_hash", vschemaUpdates, executor)
+	if vindex.Type != "hash" {
+		t.Errorf("vindex type %s not hash", vindex.Type)
+	}
+
+	if table, ok := vschema.Keyspaces[ks].Tables["test2"]; ok {
+		if len(table.ColumnVindexes) != 1 {
+			t.Fatalf("table vindexes want 1 got %d", len(table.ColumnVindexes))
+		}
+		if table.ColumnVindexes[0].Name != "test_hash" {
+			t.Fatalf("table vindexes didn't contain test_hash")
+		}
+	} else {
+		t.Fatalf("table test2 not defined in vschema")
+	}
+
+	// create an identical vindex definition on a different table
+	stmt = "alter table test2 add vindex test_lookup (c1,c2) using lookup with owner=`test`, from=`c1,c2`, table=test_lookup, to=keyspace_id"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Fatalf("error in %s: %v", stmt, err)
+	}
+
+	vschema, vindex = waitForVindex(t, ks, "test_lookup", vschemaUpdates, executor)
+	if vindex.Type != "lookup" {
+		t.Errorf("vindex type %s not hash", vindex.Type)
+	}
+
+	if table, ok := vschema.Keyspaces[ks].Tables["test2"]; ok {
+		if len(table.ColumnVindexes) != 2 {
+			t.Fatalf("table vindexes want 1 got %d", len(table.ColumnVindexes))
+		}
+		if table.ColumnVindexes[1].Name != "test_lookup" {
+			t.Fatalf("table vindexes didn't contain test_lookup")
+		}
+	} else {
+		t.Fatalf("table test2 not defined in vschema")
+	}
+
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.test2", nil)
+	if err != nil {
+		t.Fatalf("error in show vindexes on TestExecutor.test2: %v", err)
+	}
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("id", "test_hash", "hash", "", ""),
+			buildVarCharRow("c1, c2", "test_lookup", "lookup", "from=c1,c2; table=test_lookup; to=keyspace_id", "test"),
+		},
+		RowsAffected: 2,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
+	}
+
+	stmt = "alter table test2 add vindex nonexistent (c1,c2)"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	wantErr = "vindex nonexistent does not exist in keyspace TestExecutor"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("got %v want err %s", err, wantErr)
+	}
+
+	stmt = "alter table test2 add vindex test_hash (c1,c2) using lookup"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	wantErr = "vindex test_hash defined with type hash not lookup"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("got %v want err %s", err, wantErr)
+	}
+
+	stmt = "alter table test2 add vindex test_lookup (c1,c2) using lookup with owner=xyz"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	wantErr = "vindex test_lookup defined with owner test not xyz"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("got %v want err %s", err, wantErr)
+	}
+
+	stmt = "alter table test2 add vindex test_lookup (c1,c2) using lookup with owner=`test`, foo=bar"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	wantErr = "vindex test_lookup defined with different parameters"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("got %v want err %s", err, wantErr)
+	}
+
+	stmt = "alter table nonexistent drop vindex test_lookup"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	wantErr = "table TestExecutor.nonexistent not defined in vschema"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("got %v want err %s", err, wantErr)
+	}
+
+	stmt = "alter table nonexistent drop vindex test_lookup"
+	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{}), stmt, nil)
+	wantErr = errNoKeyspace.Error()
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("got %v want err %s", err, wantErr)
+	}
+
+	stmt = "alter table nowhere.nohow drop vindex test_lookup"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	wantErr = "table nowhere.nohow not defined in vschema"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("got %v want err %s", err, wantErr)
+	}
+
+	stmt = "alter table test drop vindex test_lookup"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	wantErr = "vindex test_lookup not defined in table TestExecutor.test"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("got %v want err %s", err, wantErr)
+	}
+
+	// no queries should have gone to any tablets
+	wantCount := []int64{0, 0, 0}
+	gotCount := []int64{
+		sbc1.ExecCount.Get(),
+		sbc2.ExecCount.Get(),
+		sbclookup.ExecCount.Get(),
+	}
+	if !reflect.DeepEqual(gotCount, wantCount) {
+		t.Errorf("Exec %s: %v, want %v", "", gotCount, wantCount)
+	}
+}
+
+func TestExecutorVindexDDLNewKeyspace(t *testing.T) {
+	*vschemaacl.AuthorizedDDLUsers = "%"
+	defer func() {
+		*vschemaacl.AuthorizedDDLUsers = ""
+	}()
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	ksName := "NewKeyspace"
+
+	vschema := executor.vm.GetCurrentSrvVschema()
+	ks, ok := vschema.Keyspaces[ksName]
+	if ok || ks != nil {
+		t.Fatalf("keyspace should not exist before test")
+	}
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: ksName})
+	stmt := "create vindex test_hash using hash"
+	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	stmt = "alter table test add vindex test_hash2 (id) using hash"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Fatalf("error in %s: %v", stmt, err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	vschema = executor.vm.GetCurrentSrvVschema()
+	ks, ok = vschema.Keyspaces[ksName]
+	if !ok || ks == nil {
+		t.Fatalf("keyspace was not created as expected")
+	}
+
+	vindex, _ := ks.Vindexes["test_hash"]
+	if vindex == nil {
+		t.Fatalf("vindex was not created as expected")
+	}
+
+	vindex2, _ := ks.Vindexes["test_hash2"]
+	if vindex2 == nil {
+		t.Fatalf("vindex was not created as expected")
+	}
+
+	table, _ := ks.Tables["test"]
+	if table == nil {
+		t.Fatalf("column vindex was not created as expected")
+	}
+
+	wantCount := []int64{0, 0, 0}
+	gotCount := []int64{
+		sbc1.ExecCount.Get(),
+		sbc2.ExecCount.Get(),
+		sbclookup.ExecCount.Get(),
+	}
+	if !reflect.DeepEqual(gotCount, wantCount) {
+		t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
+	}
+
+}
+
+func TestExecutorVindexDDLACL(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	ks := "TestExecutor"
+	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+
+	ctxRedUser := callerid.NewContext(context.Background(), &vtrpcpb.CallerID{}, &querypb.VTGateCallerID{Username: "redUser"})
+	ctxBlueUser := callerid.NewContext(context.Background(), &vtrpcpb.CallerID{}, &querypb.VTGateCallerID{Username: "blueUser"})
+
+	// test that by default no users can perform the operation
+	stmt := "create vindex test_hash using hash"
+	authErr := "not authorized to perform vschema operations"
+	_, err := executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
+	if err == nil || err.Error() != authErr {
+		t.Errorf("expected error '%s' got '%v'", authErr, err)
+	}
+
+	_, err = executor.Execute(ctxBlueUser, "TestExecute", session, stmt, nil)
+	if err == nil || err.Error() != authErr {
+		t.Errorf("expected error '%s' got '%v'", authErr, err)
+	}
+
+	// test when all users are enabled
+	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.Init()
+	_, err = executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Errorf("unexpected error '%v'", err)
+	}
+	stmt = "create vindex test_hash2 using hash"
+	_, err = executor.Execute(ctxBlueUser, "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Errorf("unexpected error '%v'", err)
+	}
+
+	// test when only one user is enabled
+	*vschemaacl.AuthorizedDDLUsers = "orangeUser, blueUser, greenUser"
+	vschemaacl.Init()
+	_, err = executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
+	if err == nil || err.Error() != authErr {
+		t.Errorf("expected error '%s' got '%v'", authErr, err)
+	}
+	stmt = "create vindex test_hash3 using hash"
+	_, err = executor.Execute(ctxBlueUser, "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Errorf("unexpected error '%v'", err)
+	}
+
+	// restore the disallowed state
+	*vschemaacl.AuthorizedDDLUsers = ""
 }
 
 func TestExecutorUnrecognized(t *testing.T) {
@@ -982,8 +1585,8 @@ func TestVSchemaStats(t *testing.T) {
 
 func TestGetPlanUnnormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
-	emptyvc := newVCursorImpl(context.Background(), nil, querypb.Target{}, "", r, nil)
-	unshardedvc := newVCursorImpl(context.Background(), nil, querypb.Target{Keyspace: KsTestUnsharded}, "", r, nil)
+	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, "", r, nil)
+	unshardedvc := newVCursorImpl(context.Background(), nil, KsTestUnsharded, 0, "", r, nil)
 
 	logStats1 := NewLogStats(nil, "Test", "", nil)
 	query1 := "select * from music_user_map where id = 1"
@@ -1046,7 +1649,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 
 func TestGetPlanCacheUnnormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
-	emptyvc := newVCursorImpl(context.Background(), nil, querypb.Target{}, "", r, nil)
+	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, "", r, nil)
 	query1 := "select * from music_user_map where id = 1"
 	logStats1 := NewLogStats(nil, "Test", "", nil)
 	_, err := r.getPlan(emptyvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
@@ -1077,7 +1680,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 func TestGetPlanCacheNormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
 	r.normalize = true
-	emptyvc := newVCursorImpl(context.Background(), nil, querypb.Target{}, "", r, nil)
+	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, "", r, nil)
 	query1 := "select * from music_user_map where id = 1"
 	logStats1 := NewLogStats(nil, "Test", "", nil)
 	_, err := r.getPlan(emptyvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
@@ -1107,8 +1710,8 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 func TestGetPlanNormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
 	r.normalize = true
-	emptyvc := newVCursorImpl(context.Background(), nil, querypb.Target{}, "", r, nil)
-	unshardedvc := newVCursorImpl(context.Background(), nil, querypb.Target{Keyspace: KsTestUnsharded}, "", r, nil)
+	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, "", r, nil)
+	unshardedvc := newVCursorImpl(context.Background(), nil, KsTestUnsharded, 0, "", r, nil)
 
 	query1 := "select * from music_user_map where id = 1"
 	query2 := "select * from music_user_map where id = 2"
@@ -1215,134 +1818,6 @@ func TestGetPlanNormalized(t *testing.T) {
 	}
 }
 
-func TestParseTarget(t *testing.T) {
-	r, _, _, _ := createExecutorEnv()
-	testcases := []struct {
-		targetString string
-		target       querypb.Target
-	}{{
-		targetString: "ks",
-		target: querypb.Target{
-			Keyspace:   "ks",
-			TabletType: topodatapb.TabletType_MASTER,
-		},
-	}, {
-		targetString: "ks/-80",
-		target: querypb.Target{
-			Keyspace:   "ks",
-			Shard:      "-80",
-			TabletType: topodatapb.TabletType_MASTER,
-		},
-	}, {
-		targetString: "ks:-80",
-		target: querypb.Target{
-			Keyspace:   "ks",
-			Shard:      "-80",
-			TabletType: topodatapb.TabletType_MASTER,
-		},
-	}, {
-		targetString: "ks@replica",
-		target: querypb.Target{
-			Keyspace:   "ks",
-			TabletType: topodatapb.TabletType_REPLICA,
-		},
-	}, {
-		targetString: "ks:-80@replica",
-		target: querypb.Target{
-			Keyspace:   "ks",
-			Shard:      "-80",
-			TabletType: topodatapb.TabletType_REPLICA,
-		},
-	}, {
-		targetString: "@replica",
-		target: querypb.Target{
-			TabletType: topodatapb.TabletType_REPLICA,
-		},
-	}, {
-		targetString: "@bad",
-		target: querypb.Target{
-			TabletType: topodatapb.TabletType_UNKNOWN,
-		},
-	}, {
-		targetString: "ks[10-20]@master",
-		target: querypb.Target{
-			TabletType: topodatapb.TabletType_MASTER,
-			Keyspace:   "ks",
-		},
-	}, {
-		targetString: "ks[-]@master",
-		target: querypb.Target{
-			TabletType: topodatapb.TabletType_MASTER,
-			Keyspace:   "ks",
-		},
-	}, {
-		targetString: "ks[10-]@master",
-		target: querypb.Target{
-			TabletType: topodatapb.TabletType_MASTER,
-			Keyspace:   "ks",
-		},
-	}, {
-		targetString: "ks[-20]@master",
-		target: querypb.Target{
-			TabletType: topodatapb.TabletType_MASTER,
-			Keyspace:   "ks",
-		},
-	}}
-
-	for _, tcase := range testcases {
-		if target := r.ParseTarget(tcase.targetString); !proto.Equal(&target, &tcase.target) {
-			t.Errorf("ParseTarget(%s): %v, want %v", tcase.targetString, target, tcase.target)
-		}
-	}
-}
-
-func TestParseRange(t *testing.T) {
-	tenHexBytes, _ := hex.DecodeString("10")
-	twentyHexBytes, _ := hex.DecodeString("20")
-
-	testcases := []struct {
-		targetString string
-		target       *topodatapb.KeyRange
-	}{{
-		targetString: "ks[10-20]@master",
-		target:       &topodatapb.KeyRange{Start: tenHexBytes, End: twentyHexBytes},
-	}, {
-		targetString: "ks[-]@master",
-		target:       &topodatapb.KeyRange{},
-	}, {
-		targetString: "ks[10-]@master",
-		target:       &topodatapb.KeyRange{Start: tenHexBytes},
-	}, {
-		targetString: "ks[-20]@master",
-		target:       &topodatapb.KeyRange{End: twentyHexBytes},
-	}}
-
-	for _, tcase := range testcases {
-		if target, _ := parseRange(tcase.targetString); !proto.Equal(target, tcase.target) {
-			t.Errorf("ParseRange(%s) - got: %v, want %v", tcase.targetString, target, tcase.target)
-		}
-	}
-}
-
-func TestParseTargetSingleKeyspace(t *testing.T) {
-	r, _, _, _ := createExecutorEnv()
-	altVSchema := &vindexes.VSchema{
-		Keyspaces: map[string]*vindexes.KeyspaceSchema{
-			KsTestUnsharded: r.vschema.Keyspaces[KsTestUnsharded],
-		},
-	}
-	r.vschema = altVSchema
-
-	got := r.ParseTarget("@master")
-	want := querypb.Target{
-		Keyspace:   KsTestUnsharded,
-		TabletType: topodatapb.TabletType_MASTER,
-	}
-	if !proto.Equal(&got, &want) {
-		t.Errorf("ParseTarget(%s): %v, want %v", "@master", got, want)
-	}
-}
-
 func TestPassthroughDDL(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	masterSession.TargetString = "TestExecutor"
@@ -1408,13 +1883,16 @@ func TestParseEmptyTargetSingleKeyspace(t *testing.T) {
 	}
 	r.vschema = altVSchema
 
-	got := r.ParseTarget("")
-	want := querypb.Target{
-		Keyspace:   KsTestUnsharded,
-		TabletType: topodatapb.TabletType_MASTER,
-	}
-	if !proto.Equal(&got, &want) {
-		t.Errorf("ParseTarget(%s): %v, want %v", "@master", got, want)
+	destKeyspace, destTabletType, _, _ := r.ParseDestinationTarget("")
+	if destKeyspace != KsTestUnsharded || destTabletType != topodatapb.TabletType_MASTER {
+		t.Errorf(
+			"parseDestinationTarget(%s): got (%v, %v), want (%v, %v)",
+			"@master",
+			destKeyspace,
+			destTabletType,
+			KsTestUnsharded,
+			topodatapb.TabletType_MASTER,
+		)
 	}
 }
 
@@ -1428,12 +1906,37 @@ func TestParseEmptyTargetMultiKeyspace(t *testing.T) {
 	}
 	r.vschema = altVSchema
 
-	got := r.ParseTarget("")
-	want := querypb.Target{
-		Keyspace:   "",
-		TabletType: topodatapb.TabletType_MASTER,
+	destKeyspace, destTabletType, _, _ := r.ParseDestinationTarget("")
+	if destKeyspace != "" || destTabletType != topodatapb.TabletType_MASTER {
+		t.Errorf(
+			"parseDestinationTarget(%s): got (%v, %v), want (%v, %v)",
+			"@master",
+			destKeyspace,
+			destTabletType,
+			"",
+			topodatapb.TabletType_MASTER,
+		)
 	}
-	if !proto.Equal(&got, &want) {
-		t.Errorf("ParseTarget(%s): %v, want %v", "@master", got, want)
+}
+
+func TestParseTargetSingleKeyspace(t *testing.T) {
+	r, _, _, _ := createExecutorEnv()
+	altVSchema := &vindexes.VSchema{
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			KsTestUnsharded: r.vschema.Keyspaces[KsTestUnsharded],
+		},
+	}
+	r.vschema = altVSchema
+
+	destKeyspace, destTabletType, _, _ := r.ParseDestinationTarget("@replica")
+	if destKeyspace != KsTestUnsharded || destTabletType != topodatapb.TabletType_REPLICA {
+		t.Errorf(
+			"parseDestinationTarget(%s): got (%v, %v), want (%v, %v)",
+			"@replica",
+			destKeyspace,
+			destTabletType,
+			KsTestUnsharded,
+			topodatapb.TabletType_REPLICA,
+		)
 	}
 }

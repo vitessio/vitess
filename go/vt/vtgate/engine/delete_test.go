@@ -42,8 +42,8 @@ func TestDeleteUnsharded(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`GetKeyspaceShards &{ks false}`,
-		`ExecuteMultiShard ks 0: dummy_delete  true true`,
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.0: dummy_delete {} true true`,
 	})
 
 	// Failure cases
@@ -75,9 +75,8 @@ func TestDeleteEqual(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`GetKeyspaceShards &{ks true}`,
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "166b40b44aba4bd6"`,
-		`ExecuteMultiShard ks -20: dummy_delete /* vtgate:: keyspace_id:166b40b44aba4bd6 */  true true`,
+		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ExecuteMultiShard ks.-20: dummy_delete /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {} true true`,
 	})
 
 	// Failure case
@@ -109,7 +108,6 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`GetKeyspaceShards &{ks true}`,
 		// This lookup query will return no rows. So, the DML will not be sent anywhere.
 		`Execute select toc from lkp where from = :from from: type:INT64 value:"1"  false`,
 	})
@@ -135,7 +133,7 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 
 	vc := &loggingVCursor{shards: []string{"0"}}
 	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "Execute", err, "execDeleteEqual: vindex could not map the value to a unique keyspace id")
+	expectError(t, "Execute", err, "execDeleteEqual: cannot map vindex to unique keyspace id: DestinationKeyRange(-)")
 }
 
 func TestDeleteOwnedVindex(t *testing.T) {
@@ -167,17 +165,15 @@ func TestDeleteOwnedVindex(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`GetKeyspaceShards &{sharded true}`,
-		// GetKeyspaceShards will return -20 & 20-, which get passed int GetShardForKeyspaceID.
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "166b40b44aba4bd6"`,
-		// GetKeyspaceShardForKeyspaceID is hard-coded to return -20.
+		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		// ResolveDestinations is hard-coded to return -20.
 		// It gets used to perform the subquery to fetch the changing column values.
-		`ExecuteMultiShard sharded -20: dummy_subquery  false false`,
+		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
 		// Those values are returned as 4,5 for twocol and 6 for onecol.
 		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// Finally, the actual delete, which is also sent to -20, same route as the subquery.
-		`ExecuteMultiShard sharded -20: dummy_delete /* vtgate:: keyspace_id:166b40b44aba4bd6 */  true true`,
+		`ExecuteMultiShard sharded.-20: dummy_delete /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {} true true`,
 	})
 
 	// No rows changing
@@ -189,14 +185,12 @@ func TestDeleteOwnedVindex(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`GetKeyspaceShards &{sharded true}`,
-		// GetKeyspaceShards will return -20 & 20-, which get passed int GetShardForKeyspaceID.
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "166b40b44aba4bd6"`,
-		// GetKeyspaceShardForKeyspaceID is hard-coded to return -20.
+		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		// ResolveDestinations is hard-coded to return -20.
 		// It gets used to perform the subquery to fetch the changing column values.
-		`ExecuteMultiShard sharded -20: dummy_subquery  false false`,
+		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
 		// Subquery returns no rows. So, no vindexes are deleted. We still pass-through the original delete.
-		`ExecuteMultiShard sharded -20: dummy_delete /* vtgate:: keyspace_id:166b40b44aba4bd6 */  true true`,
+		`ExecuteMultiShard sharded.-20: dummy_delete /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {} true true`,
 	})
 
 	// Delete can affect multiple rows
@@ -217,12 +211,10 @@ func TestDeleteOwnedVindex(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`GetKeyspaceShards &{sharded true}`,
-		// GetKeyspaceShards will return -20 & 20-, which get passed int GetShardForKeyspaceID.
-		`GetShardForKeyspaceID [name:"-20"  name:"20-" ] "166b40b44aba4bd6"`,
-		// GetKeyspaceShardForKeyspaceID is hard-coded to return -20.
+		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		// ResolveDestinations is hard-coded to return -20.
 		// It gets used to perform the subquery to fetch the changing column values.
-		`ExecuteMultiShard sharded -20: dummy_subquery  false false`,
+		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
 		// Delete 4,5 and 7,8 from lkp2.
 		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"7" from2: type:INT64 value:"8" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
@@ -230,13 +222,13 @@ func TestDeleteOwnedVindex(t *testing.T) {
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"9" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// Send the DML.
-		`ExecuteMultiShard sharded -20: dummy_delete /* vtgate:: keyspace_id:166b40b44aba4bd6 */  true true`,
+		`ExecuteMultiShard sharded.-20: dummy_delete /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {} true true`,
 	})
 }
 
 func TestDeleteSharded(t *testing.T) {
 	del := &Delete{
-		Opcode: DeleteSharded,
+		Opcode: DeleteScatter,
 		Keyspace: &vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -250,14 +242,14 @@ func TestDeleteSharded(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`GetKeyspaceShards &{ks true}`,
-		`ExecuteMultiShard ks -20: dummy_delete 20-: dummy_delete  true true`,
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.-20: dummy_delete {} ks.20-: dummy_delete {} true true`,
 	})
 
 	// Failure case
 	vc = &loggingVCursor{shardErr: errors.New("shard_error")}
 	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "Execute", err, "execDeleteSharded: shard_error")
+	expectError(t, "Execute", err, "execDeleteScatter: shard_error")
 }
 
 func TestDeleteNoStream(t *testing.T) {

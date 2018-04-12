@@ -21,7 +21,6 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   syntax='proto3',
   serialized_pb=_b('\n\x13throttlerdata.proto\x12\rthrottlerdata\"\x11\n\x0fMaxRatesRequest\"{\n\x10MaxRatesResponse\x12\x39\n\x05rates\x18\x01 \x03(\x0b\x32*.throttlerdata.MaxRatesResponse.RatesEntry\x1a,\n\nRatesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x03:\x02\x38\x01\"!\n\x11SetMaxRateRequest\x12\x0c\n\x04rate\x18\x01 \x01(\x03\"#\n\x12SetMaxRateResponse\x12\r\n\x05names\x18\x01 \x03(\t\"\xe8\x03\n\rConfiguration\x12\"\n\x1atarget_replication_lag_sec\x18\x01 \x01(\x03\x12\x1f\n\x17max_replication_lag_sec\x18\x02 \x01(\x03\x12\x14\n\x0cinitial_rate\x18\x03 \x01(\x03\x12\x14\n\x0cmax_increase\x18\x04 \x01(\x01\x12\x1a\n\x12\x65mergency_decrease\x18\x05 \x01(\x01\x12*\n\"min_duration_between_increases_sec\x18\x06 \x01(\x03\x12*\n\"max_duration_between_increases_sec\x18\x07 \x01(\x03\x12*\n\"min_duration_between_decreases_sec\x18\x08 \x01(\x03\x12!\n\x19spread_backlog_across_sec\x18\t \x01(\x03\x12!\n\x19ignore_n_slowest_replicas\x18\n \x01(\x05\x12 \n\x18ignore_n_slowest_rdonlys\x18\x0b \x01(\x05\x12\x1e\n\x16\x61ge_bad_rate_after_sec\x18\x0c \x01(\x03\x12\x19\n\x11\x62\x61\x64_rate_increase\x18\r \x01(\x01\x12#\n\x1bmax_rate_approach_threshold\x18\x0e \x01(\x01\"1\n\x17GetConfigurationRequest\x12\x16\n\x0ethrottler_name\x18\x01 \x01(\t\"\xc4\x01\n\x18GetConfigurationResponse\x12S\n\x0e\x63onfigurations\x18\x01 \x03(\x0b\x32;.throttlerdata.GetConfigurationResponse.ConfigurationsEntry\x1aS\n\x13\x43onfigurationsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12+\n\x05value\x18\x02 \x01(\x0b\x32\x1c.throttlerdata.Configuration:\x02\x38\x01\"\x83\x01\n\x1aUpdateConfigurationRequest\x12\x16\n\x0ethrottler_name\x18\x01 \x01(\t\x12\x33\n\rconfiguration\x18\x02 \x01(\x0b\x32\x1c.throttlerdata.Configuration\x12\x18\n\x10\x63opy_zero_values\x18\x03 \x01(\x08\",\n\x1bUpdateConfigurationResponse\x12\r\n\x05names\x18\x01 \x03(\t\"3\n\x19ResetConfigurationRequest\x12\x16\n\x0ethrottler_name\x18\x01 \x01(\t\"+\n\x1aResetConfigurationResponse\x12\r\n\x05names\x18\x01 \x03(\tb\x06proto3')
 )
-_sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
 
@@ -63,14 +62,14 @@ _MAXRATESRESPONSE_RATESENTRY = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='value', full_name='throttlerdata.MaxRatesResponse.RatesEntry.value', index=1,
       number=2, type=3, cpp_type=2, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -100,7 +99,7 @@ _MAXRATESRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -131,7 +130,7 @@ _SETMAXRATEREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -162,7 +161,7 @@ _SETMAXRATERESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -193,98 +192,98 @@ _CONFIGURATION = _descriptor.Descriptor(
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='max_replication_lag_sec', full_name='throttlerdata.Configuration.max_replication_lag_sec', index=1,
       number=2, type=3, cpp_type=2, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='initial_rate', full_name='throttlerdata.Configuration.initial_rate', index=2,
       number=3, type=3, cpp_type=2, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='max_increase', full_name='throttlerdata.Configuration.max_increase', index=3,
       number=4, type=1, cpp_type=5, label=1,
       has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='emergency_decrease', full_name='throttlerdata.Configuration.emergency_decrease', index=4,
       number=5, type=1, cpp_type=5, label=1,
       has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='min_duration_between_increases_sec', full_name='throttlerdata.Configuration.min_duration_between_increases_sec', index=5,
       number=6, type=3, cpp_type=2, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='max_duration_between_increases_sec', full_name='throttlerdata.Configuration.max_duration_between_increases_sec', index=6,
       number=7, type=3, cpp_type=2, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='min_duration_between_decreases_sec', full_name='throttlerdata.Configuration.min_duration_between_decreases_sec', index=7,
       number=8, type=3, cpp_type=2, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='spread_backlog_across_sec', full_name='throttlerdata.Configuration.spread_backlog_across_sec', index=8,
       number=9, type=3, cpp_type=2, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='ignore_n_slowest_replicas', full_name='throttlerdata.Configuration.ignore_n_slowest_replicas', index=9,
       number=10, type=5, cpp_type=1, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='ignore_n_slowest_rdonlys', full_name='throttlerdata.Configuration.ignore_n_slowest_rdonlys', index=10,
       number=11, type=5, cpp_type=1, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='age_bad_rate_after_sec', full_name='throttlerdata.Configuration.age_bad_rate_after_sec', index=11,
       number=12, type=3, cpp_type=2, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='bad_rate_increase', full_name='throttlerdata.Configuration.bad_rate_increase', index=12,
       number=13, type=1, cpp_type=5, label=1,
       has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='max_rate_approach_threshold', full_name='throttlerdata.Configuration.max_rate_approach_threshold', index=13,
       number=14, type=1, cpp_type=5, label=1,
       has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -315,7 +314,7 @@ _GETCONFIGURATIONREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -346,14 +345,14 @@ _GETCONFIGURATIONRESPONSE_CONFIGURATIONSENTRY = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='value', full_name='throttlerdata.GetConfigurationResponse.ConfigurationsEntry.value', index=1,
       number=2, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -383,7 +382,7 @@ _GETCONFIGURATIONRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -414,21 +413,21 @@ _UPDATECONFIGURATIONREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='configuration', full_name='throttlerdata.UpdateConfigurationRequest.configuration', index=1,
       number=2, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='copy_zero_values', full_name='throttlerdata.UpdateConfigurationRequest.copy_zero_values', index=2,
       number=3, type=8, cpp_type=7, label=1,
       has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -459,7 +458,7 @@ _UPDATECONFIGURATIONRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -490,7 +489,7 @@ _RESETCONFIGURATIONREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -521,7 +520,7 @@ _RESETCONFIGURATIONRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -555,6 +554,7 @@ DESCRIPTOR.message_types_by_name['UpdateConfigurationRequest'] = _UPDATECONFIGUR
 DESCRIPTOR.message_types_by_name['UpdateConfigurationResponse'] = _UPDATECONFIGURATIONRESPONSE
 DESCRIPTOR.message_types_by_name['ResetConfigurationRequest'] = _RESETCONFIGURATIONREQUEST
 DESCRIPTOR.message_types_by_name['ResetConfigurationResponse'] = _RESETCONFIGURATIONRESPONSE
+_sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 MaxRatesRequest = _reflection.GeneratedProtocolMessageType('MaxRatesRequest', (_message.Message,), dict(
   DESCRIPTOR = _MAXRATESREQUEST,
@@ -654,9 +654,4 @@ _MAXRATESRESPONSE_RATESENTRY.has_options = True
 _MAXRATESRESPONSE_RATESENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
 _GETCONFIGURATIONRESPONSE_CONFIGURATIONSENTRY.has_options = True
 _GETCONFIGURATIONRESPONSE_CONFIGURATIONSENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
-import grpc
-from grpc.beta import implementations as beta_implementations
-from grpc.beta import interfaces as beta_interfaces
-from grpc.framework.common import cardinality
-from grpc.framework.interfaces.face import utilities as face_utilities
 # @@protoc_insertion_point(module_scope)

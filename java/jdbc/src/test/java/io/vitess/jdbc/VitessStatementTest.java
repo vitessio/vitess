@@ -53,6 +53,7 @@ import io.vitess.util.Constants;
     private String sqlShow = "show tables";
     private String sqlUpdate = "update test_table set msg = null";
     private String sqlInsert = "insert into test_table(msg) values ('abc')";
+    private String sqlUpsert = "insert into test_table(msg) values ('abc') on duplicate key update msg = 'def'";
 
 
     @Test public void testGetConnection() {
@@ -679,7 +680,7 @@ import io.vitess.util.Constants;
 
         CursorWithError mockCursorWithError = PowerMockito.mock(CursorWithError.class);
         PowerMockito.when(mockCursorWithError.getError()).thenReturn(null);
-        PowerMockito.when(mockCursorWithError.getCursor()).thenReturn(PowerMockito.mock(Cursor.class));
+        PowerMockito.when(mockCursorWithError.getCursor()).thenReturn(mockCursor);
         mockCursorWithErrorList.add(mockCursorWithError);
 
         long expectedFirstGeneratedId = 121;
@@ -695,6 +696,51 @@ import io.vitess.util.Constants;
         while (rs.next()) {
             long generatedId = rs.getLong(1);
             Assert.assertEquals(expectedGeneratedIds[i++], generatedId);
+        }
+    }
+
+    @Test public void testBatchUpsertGeneratedKeys() throws SQLException {
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+        VitessStatement statement = new VitessStatement(mockConn);
+        Cursor mockCursor = PowerMockito.mock(Cursor.class);
+        SQLFuture mockSqlFutureCursor = PowerMockito.mock(SQLFuture.class);
+
+        VTGateConnection mockVtGateConn = PowerMockito.mock(VTGateConnection.class);
+        PowerMockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
+        PowerMockito.when(mockConn.getAutoCommit()).thenReturn(true);
+
+        PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
+        PowerMockito.when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
+
+        PowerMockito.when(mockVtGateConn
+            .executeBatch(Matchers.any(Context.class),
+                          Matchers.anyList(),
+                          Matchers.anyList(),
+                          Matchers.any(VTSession.class)))
+            .thenReturn(mockSqlFutureCursor);
+        List<CursorWithError> mockCursorWithErrorList = new ArrayList<>();
+        PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursorWithErrorList);
+
+        CursorWithError mockCursorWithError = PowerMockito.mock(CursorWithError.class);
+        PowerMockito.when(mockCursorWithError.getError()).thenReturn(null);
+        PowerMockito.when(mockCursorWithError.getCursor()).thenReturn(mockCursor);
+        mockCursorWithErrorList.add(mockCursorWithError);
+
+        long expectedFirstGeneratedId = 121;
+        long[] expectedGeneratedIds = {121, 122};
+        PowerMockito.when(mockCursor.getInsertId()).thenReturn(expectedFirstGeneratedId);
+        PowerMockito.when(mockCursor.getRowsAffected()).thenReturn(Long.valueOf(expectedGeneratedIds.length));
+
+        statement.addBatch(sqlUpsert);
+        statement.executeBatch();
+
+        ResultSet rs = statement.getGeneratedKeys();
+        int i = 0;
+        while (rs.next()) {
+            long generatedId = rs.getLong(1);
+            Assert.assertEquals(expectedGeneratedIds[i], generatedId);
+            Assert.assertEquals(i, 0); // we should only have one
+            i++;
         }
     }
 }

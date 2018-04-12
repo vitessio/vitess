@@ -23,761 +23,214 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   serialized_pb=_b('\n\x12queryservice.proto\x12\x0cqueryservice\x1a\x0bquery.proto2\xa7\x0c\n\x05Query\x12:\n\x07\x45xecute\x12\x15.query.ExecuteRequest\x1a\x16.query.ExecuteResponse\"\x00\x12I\n\x0c\x45xecuteBatch\x12\x1a.query.ExecuteBatchRequest\x1a\x1b.query.ExecuteBatchResponse\"\x00\x12N\n\rStreamExecute\x12\x1b.query.StreamExecuteRequest\x1a\x1c.query.StreamExecuteResponse\"\x00\x30\x01\x12\x34\n\x05\x42\x65gin\x12\x13.query.BeginRequest\x1a\x14.query.BeginResponse\"\x00\x12\x37\n\x06\x43ommit\x12\x14.query.CommitRequest\x1a\x15.query.CommitResponse\"\x00\x12=\n\x08Rollback\x12\x16.query.RollbackRequest\x1a\x17.query.RollbackResponse\"\x00\x12:\n\x07Prepare\x12\x15.query.PrepareRequest\x1a\x16.query.PrepareResponse\"\x00\x12O\n\x0e\x43ommitPrepared\x12\x1c.query.CommitPreparedRequest\x1a\x1d.query.CommitPreparedResponse\"\x00\x12U\n\x10RollbackPrepared\x12\x1e.query.RollbackPreparedRequest\x1a\x1f.query.RollbackPreparedResponse\"\x00\x12X\n\x11\x43reateTransaction\x12\x1f.query.CreateTransactionRequest\x1a .query.CreateTransactionResponse\"\x00\x12\x46\n\x0bStartCommit\x12\x19.query.StartCommitRequest\x1a\x1a.query.StartCommitResponse\"\x00\x12\x46\n\x0bSetRollback\x12\x19.query.SetRollbackRequest\x1a\x1a.query.SetRollbackResponse\"\x00\x12^\n\x13\x43oncludeTransaction\x12!.query.ConcludeTransactionRequest\x1a\".query.ConcludeTransactionResponse\"\x00\x12R\n\x0fReadTransaction\x12\x1d.query.ReadTransactionRequest\x1a\x1e.query.ReadTransactionResponse\"\x00\x12I\n\x0c\x42\x65ginExecute\x12\x1a.query.BeginExecuteRequest\x1a\x1b.query.BeginExecuteResponse\"\x00\x12X\n\x11\x42\x65ginExecuteBatch\x12\x1f.query.BeginExecuteBatchRequest\x1a .query.BeginExecuteBatchResponse\"\x00\x12N\n\rMessageStream\x12\x1b.query.MessageStreamRequest\x1a\x1c.query.MessageStreamResponse\"\x00\x30\x01\x12\x43\n\nMessageAck\x12\x18.query.MessageAckRequest\x1a\x19.query.MessageAckResponse\"\x00\x12\x43\n\nSplitQuery\x12\x18.query.SplitQueryRequest\x1a\x19.query.SplitQueryResponse\"\x00\x12K\n\x0cStreamHealth\x12\x1a.query.StreamHealthRequest\x1a\x1b.query.StreamHealthResponse\"\x00\x30\x01\x12K\n\x0cUpdateStream\x12\x1a.query.UpdateStreamRequest\x1a\x1b.query.UpdateStreamResponse\"\x00\x30\x01\x62\x06proto3')
   ,
   dependencies=[query__pb2.DESCRIPTOR,])
+
+
+
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
 
+_QUERY = _descriptor.ServiceDescriptor(
+  name='Query',
+  full_name='queryservice.Query',
+  file=DESCRIPTOR,
+  index=0,
+  options=None,
+  serialized_start=50,
+  serialized_end=1625,
+  methods=[
+  _descriptor.MethodDescriptor(
+    name='Execute',
+    full_name='queryservice.Query.Execute',
+    index=0,
+    containing_service=None,
+    input_type=query__pb2._EXECUTEREQUEST,
+    output_type=query__pb2._EXECUTERESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='ExecuteBatch',
+    full_name='queryservice.Query.ExecuteBatch',
+    index=1,
+    containing_service=None,
+    input_type=query__pb2._EXECUTEBATCHREQUEST,
+    output_type=query__pb2._EXECUTEBATCHRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='StreamExecute',
+    full_name='queryservice.Query.StreamExecute',
+    index=2,
+    containing_service=None,
+    input_type=query__pb2._STREAMEXECUTEREQUEST,
+    output_type=query__pb2._STREAMEXECUTERESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='Begin',
+    full_name='queryservice.Query.Begin',
+    index=3,
+    containing_service=None,
+    input_type=query__pb2._BEGINREQUEST,
+    output_type=query__pb2._BEGINRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='Commit',
+    full_name='queryservice.Query.Commit',
+    index=4,
+    containing_service=None,
+    input_type=query__pb2._COMMITREQUEST,
+    output_type=query__pb2._COMMITRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='Rollback',
+    full_name='queryservice.Query.Rollback',
+    index=5,
+    containing_service=None,
+    input_type=query__pb2._ROLLBACKREQUEST,
+    output_type=query__pb2._ROLLBACKRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='Prepare',
+    full_name='queryservice.Query.Prepare',
+    index=6,
+    containing_service=None,
+    input_type=query__pb2._PREPAREREQUEST,
+    output_type=query__pb2._PREPARERESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='CommitPrepared',
+    full_name='queryservice.Query.CommitPrepared',
+    index=7,
+    containing_service=None,
+    input_type=query__pb2._COMMITPREPAREDREQUEST,
+    output_type=query__pb2._COMMITPREPAREDRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='RollbackPrepared',
+    full_name='queryservice.Query.RollbackPrepared',
+    index=8,
+    containing_service=None,
+    input_type=query__pb2._ROLLBACKPREPAREDREQUEST,
+    output_type=query__pb2._ROLLBACKPREPAREDRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='CreateTransaction',
+    full_name='queryservice.Query.CreateTransaction',
+    index=9,
+    containing_service=None,
+    input_type=query__pb2._CREATETRANSACTIONREQUEST,
+    output_type=query__pb2._CREATETRANSACTIONRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='StartCommit',
+    full_name='queryservice.Query.StartCommit',
+    index=10,
+    containing_service=None,
+    input_type=query__pb2._STARTCOMMITREQUEST,
+    output_type=query__pb2._STARTCOMMITRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='SetRollback',
+    full_name='queryservice.Query.SetRollback',
+    index=11,
+    containing_service=None,
+    input_type=query__pb2._SETROLLBACKREQUEST,
+    output_type=query__pb2._SETROLLBACKRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='ConcludeTransaction',
+    full_name='queryservice.Query.ConcludeTransaction',
+    index=12,
+    containing_service=None,
+    input_type=query__pb2._CONCLUDETRANSACTIONREQUEST,
+    output_type=query__pb2._CONCLUDETRANSACTIONRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='ReadTransaction',
+    full_name='queryservice.Query.ReadTransaction',
+    index=13,
+    containing_service=None,
+    input_type=query__pb2._READTRANSACTIONREQUEST,
+    output_type=query__pb2._READTRANSACTIONRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='BeginExecute',
+    full_name='queryservice.Query.BeginExecute',
+    index=14,
+    containing_service=None,
+    input_type=query__pb2._BEGINEXECUTEREQUEST,
+    output_type=query__pb2._BEGINEXECUTERESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='BeginExecuteBatch',
+    full_name='queryservice.Query.BeginExecuteBatch',
+    index=15,
+    containing_service=None,
+    input_type=query__pb2._BEGINEXECUTEBATCHREQUEST,
+    output_type=query__pb2._BEGINEXECUTEBATCHRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='MessageStream',
+    full_name='queryservice.Query.MessageStream',
+    index=16,
+    containing_service=None,
+    input_type=query__pb2._MESSAGESTREAMREQUEST,
+    output_type=query__pb2._MESSAGESTREAMRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='MessageAck',
+    full_name='queryservice.Query.MessageAck',
+    index=17,
+    containing_service=None,
+    input_type=query__pb2._MESSAGEACKREQUEST,
+    output_type=query__pb2._MESSAGEACKRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='SplitQuery',
+    full_name='queryservice.Query.SplitQuery',
+    index=18,
+    containing_service=None,
+    input_type=query__pb2._SPLITQUERYREQUEST,
+    output_type=query__pb2._SPLITQUERYRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='StreamHealth',
+    full_name='queryservice.Query.StreamHealth',
+    index=19,
+    containing_service=None,
+    input_type=query__pb2._STREAMHEALTHREQUEST,
+    output_type=query__pb2._STREAMHEALTHRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='UpdateStream',
+    full_name='queryservice.Query.UpdateStream',
+    index=20,
+    containing_service=None,
+    input_type=query__pb2._UPDATESTREAMREQUEST,
+    output_type=query__pb2._UPDATESTREAMRESPONSE,
+    options=None,
+  ),
+])
+_sym_db.RegisterServiceDescriptor(_QUERY)
 
+DESCRIPTOR.services_by_name['Query'] = _QUERY
 
-import grpc
-from grpc.beta import implementations as beta_implementations
-from grpc.beta import interfaces as beta_interfaces
-from grpc.framework.common import cardinality
-from grpc.framework.interfaces.face import utilities as face_utilities
-
-
-class QueryStub(object):
-  """Query defines the tablet query service, implemented by vttablet.
-  """
-
-  def __init__(self, channel):
-    """Constructor.
-
-    Args:
-      channel: A grpc.Channel.
-    """
-    self.Execute = channel.unary_unary(
-        '/queryservice.Query/Execute',
-        request_serializer=query__pb2.ExecuteRequest.SerializeToString,
-        response_deserializer=query__pb2.ExecuteResponse.FromString,
-        )
-    self.ExecuteBatch = channel.unary_unary(
-        '/queryservice.Query/ExecuteBatch',
-        request_serializer=query__pb2.ExecuteBatchRequest.SerializeToString,
-        response_deserializer=query__pb2.ExecuteBatchResponse.FromString,
-        )
-    self.StreamExecute = channel.unary_stream(
-        '/queryservice.Query/StreamExecute',
-        request_serializer=query__pb2.StreamExecuteRequest.SerializeToString,
-        response_deserializer=query__pb2.StreamExecuteResponse.FromString,
-        )
-    self.Begin = channel.unary_unary(
-        '/queryservice.Query/Begin',
-        request_serializer=query__pb2.BeginRequest.SerializeToString,
-        response_deserializer=query__pb2.BeginResponse.FromString,
-        )
-    self.Commit = channel.unary_unary(
-        '/queryservice.Query/Commit',
-        request_serializer=query__pb2.CommitRequest.SerializeToString,
-        response_deserializer=query__pb2.CommitResponse.FromString,
-        )
-    self.Rollback = channel.unary_unary(
-        '/queryservice.Query/Rollback',
-        request_serializer=query__pb2.RollbackRequest.SerializeToString,
-        response_deserializer=query__pb2.RollbackResponse.FromString,
-        )
-    self.Prepare = channel.unary_unary(
-        '/queryservice.Query/Prepare',
-        request_serializer=query__pb2.PrepareRequest.SerializeToString,
-        response_deserializer=query__pb2.PrepareResponse.FromString,
-        )
-    self.CommitPrepared = channel.unary_unary(
-        '/queryservice.Query/CommitPrepared',
-        request_serializer=query__pb2.CommitPreparedRequest.SerializeToString,
-        response_deserializer=query__pb2.CommitPreparedResponse.FromString,
-        )
-    self.RollbackPrepared = channel.unary_unary(
-        '/queryservice.Query/RollbackPrepared',
-        request_serializer=query__pb2.RollbackPreparedRequest.SerializeToString,
-        response_deserializer=query__pb2.RollbackPreparedResponse.FromString,
-        )
-    self.CreateTransaction = channel.unary_unary(
-        '/queryservice.Query/CreateTransaction',
-        request_serializer=query__pb2.CreateTransactionRequest.SerializeToString,
-        response_deserializer=query__pb2.CreateTransactionResponse.FromString,
-        )
-    self.StartCommit = channel.unary_unary(
-        '/queryservice.Query/StartCommit',
-        request_serializer=query__pb2.StartCommitRequest.SerializeToString,
-        response_deserializer=query__pb2.StartCommitResponse.FromString,
-        )
-    self.SetRollback = channel.unary_unary(
-        '/queryservice.Query/SetRollback',
-        request_serializer=query__pb2.SetRollbackRequest.SerializeToString,
-        response_deserializer=query__pb2.SetRollbackResponse.FromString,
-        )
-    self.ConcludeTransaction = channel.unary_unary(
-        '/queryservice.Query/ConcludeTransaction',
-        request_serializer=query__pb2.ConcludeTransactionRequest.SerializeToString,
-        response_deserializer=query__pb2.ConcludeTransactionResponse.FromString,
-        )
-    self.ReadTransaction = channel.unary_unary(
-        '/queryservice.Query/ReadTransaction',
-        request_serializer=query__pb2.ReadTransactionRequest.SerializeToString,
-        response_deserializer=query__pb2.ReadTransactionResponse.FromString,
-        )
-    self.BeginExecute = channel.unary_unary(
-        '/queryservice.Query/BeginExecute',
-        request_serializer=query__pb2.BeginExecuteRequest.SerializeToString,
-        response_deserializer=query__pb2.BeginExecuteResponse.FromString,
-        )
-    self.BeginExecuteBatch = channel.unary_unary(
-        '/queryservice.Query/BeginExecuteBatch',
-        request_serializer=query__pb2.BeginExecuteBatchRequest.SerializeToString,
-        response_deserializer=query__pb2.BeginExecuteBatchResponse.FromString,
-        )
-    self.MessageStream = channel.unary_stream(
-        '/queryservice.Query/MessageStream',
-        request_serializer=query__pb2.MessageStreamRequest.SerializeToString,
-        response_deserializer=query__pb2.MessageStreamResponse.FromString,
-        )
-    self.MessageAck = channel.unary_unary(
-        '/queryservice.Query/MessageAck',
-        request_serializer=query__pb2.MessageAckRequest.SerializeToString,
-        response_deserializer=query__pb2.MessageAckResponse.FromString,
-        )
-    self.SplitQuery = channel.unary_unary(
-        '/queryservice.Query/SplitQuery',
-        request_serializer=query__pb2.SplitQueryRequest.SerializeToString,
-        response_deserializer=query__pb2.SplitQueryResponse.FromString,
-        )
-    self.StreamHealth = channel.unary_stream(
-        '/queryservice.Query/StreamHealth',
-        request_serializer=query__pb2.StreamHealthRequest.SerializeToString,
-        response_deserializer=query__pb2.StreamHealthResponse.FromString,
-        )
-    self.UpdateStream = channel.unary_stream(
-        '/queryservice.Query/UpdateStream',
-        request_serializer=query__pb2.UpdateStreamRequest.SerializeToString,
-        response_deserializer=query__pb2.UpdateStreamResponse.FromString,
-        )
-
-
-class QueryServicer(object):
-  """Query defines the tablet query service, implemented by vttablet.
-  """
-
-  def Execute(self, request, context):
-    """Execute executes the specified SQL query (might be in a
-    transaction context, if Query.transaction_id is set).
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def ExecuteBatch(self, request, context):
-    """ExecuteBatch executes a list of queries, and returns the result
-    for each query.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def StreamExecute(self, request, context):
-    """StreamExecute executes a streaming query. Use this method if the
-    query returns a large number of rows. The first QueryResult will
-    contain the Fields, subsequent QueryResult messages will contain
-    the rows.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def Begin(self, request, context):
-    """Begin a transaction.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def Commit(self, request, context):
-    """Commit a transaction.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def Rollback(self, request, context):
-    """Rollback a transaction.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def Prepare(self, request, context):
-    """Prepare preares a transaction.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def CommitPrepared(self, request, context):
-    """CommitPrepared commits a prepared transaction.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def RollbackPrepared(self, request, context):
-    """RollbackPrepared rolls back a prepared transaction.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def CreateTransaction(self, request, context):
-    """CreateTransaction creates the metadata for a 2pc transaction.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def StartCommit(self, request, context):
-    """StartCommit initiates a commit for a 2pc transaction.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def SetRollback(self, request, context):
-    """SetRollback marks the 2pc transaction for rollback.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def ConcludeTransaction(self, request, context):
-    """ConcludeTransaction marks the 2pc transaction as resolved.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def ReadTransaction(self, request, context):
-    """ReadTransaction returns the 2pc transaction info.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def BeginExecute(self, request, context):
-    """BeginExecute executes a begin and the specified SQL query.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def BeginExecuteBatch(self, request, context):
-    """BeginExecuteBatch executes a begin and a list of queries.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def MessageStream(self, request, context):
-    """MessageStream streams messages from a message table.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def MessageAck(self, request, context):
-    """MessageAck acks messages for a table.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def SplitQuery(self, request, context):
-    """SplitQuery is the API to facilitate MapReduce-type iterations
-    over large data sets (like full table dumps).
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def StreamHealth(self, request, context):
-    """StreamHealth runs a streaming RPC to the tablet, that returns the
-    current health of the tablet on a regular basis.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def UpdateStream(self, request, context):
-    """UpdateStream asks the server to return a stream of the updates that have been applied to its database.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-
-def add_QueryServicer_to_server(servicer, server):
-  rpc_method_handlers = {
-      'Execute': grpc.unary_unary_rpc_method_handler(
-          servicer.Execute,
-          request_deserializer=query__pb2.ExecuteRequest.FromString,
-          response_serializer=query__pb2.ExecuteResponse.SerializeToString,
-      ),
-      'ExecuteBatch': grpc.unary_unary_rpc_method_handler(
-          servicer.ExecuteBatch,
-          request_deserializer=query__pb2.ExecuteBatchRequest.FromString,
-          response_serializer=query__pb2.ExecuteBatchResponse.SerializeToString,
-      ),
-      'StreamExecute': grpc.unary_stream_rpc_method_handler(
-          servicer.StreamExecute,
-          request_deserializer=query__pb2.StreamExecuteRequest.FromString,
-          response_serializer=query__pb2.StreamExecuteResponse.SerializeToString,
-      ),
-      'Begin': grpc.unary_unary_rpc_method_handler(
-          servicer.Begin,
-          request_deserializer=query__pb2.BeginRequest.FromString,
-          response_serializer=query__pb2.BeginResponse.SerializeToString,
-      ),
-      'Commit': grpc.unary_unary_rpc_method_handler(
-          servicer.Commit,
-          request_deserializer=query__pb2.CommitRequest.FromString,
-          response_serializer=query__pb2.CommitResponse.SerializeToString,
-      ),
-      'Rollback': grpc.unary_unary_rpc_method_handler(
-          servicer.Rollback,
-          request_deserializer=query__pb2.RollbackRequest.FromString,
-          response_serializer=query__pb2.RollbackResponse.SerializeToString,
-      ),
-      'Prepare': grpc.unary_unary_rpc_method_handler(
-          servicer.Prepare,
-          request_deserializer=query__pb2.PrepareRequest.FromString,
-          response_serializer=query__pb2.PrepareResponse.SerializeToString,
-      ),
-      'CommitPrepared': grpc.unary_unary_rpc_method_handler(
-          servicer.CommitPrepared,
-          request_deserializer=query__pb2.CommitPreparedRequest.FromString,
-          response_serializer=query__pb2.CommitPreparedResponse.SerializeToString,
-      ),
-      'RollbackPrepared': grpc.unary_unary_rpc_method_handler(
-          servicer.RollbackPrepared,
-          request_deserializer=query__pb2.RollbackPreparedRequest.FromString,
-          response_serializer=query__pb2.RollbackPreparedResponse.SerializeToString,
-      ),
-      'CreateTransaction': grpc.unary_unary_rpc_method_handler(
-          servicer.CreateTransaction,
-          request_deserializer=query__pb2.CreateTransactionRequest.FromString,
-          response_serializer=query__pb2.CreateTransactionResponse.SerializeToString,
-      ),
-      'StartCommit': grpc.unary_unary_rpc_method_handler(
-          servicer.StartCommit,
-          request_deserializer=query__pb2.StartCommitRequest.FromString,
-          response_serializer=query__pb2.StartCommitResponse.SerializeToString,
-      ),
-      'SetRollback': grpc.unary_unary_rpc_method_handler(
-          servicer.SetRollback,
-          request_deserializer=query__pb2.SetRollbackRequest.FromString,
-          response_serializer=query__pb2.SetRollbackResponse.SerializeToString,
-      ),
-      'ConcludeTransaction': grpc.unary_unary_rpc_method_handler(
-          servicer.ConcludeTransaction,
-          request_deserializer=query__pb2.ConcludeTransactionRequest.FromString,
-          response_serializer=query__pb2.ConcludeTransactionResponse.SerializeToString,
-      ),
-      'ReadTransaction': grpc.unary_unary_rpc_method_handler(
-          servicer.ReadTransaction,
-          request_deserializer=query__pb2.ReadTransactionRequest.FromString,
-          response_serializer=query__pb2.ReadTransactionResponse.SerializeToString,
-      ),
-      'BeginExecute': grpc.unary_unary_rpc_method_handler(
-          servicer.BeginExecute,
-          request_deserializer=query__pb2.BeginExecuteRequest.FromString,
-          response_serializer=query__pb2.BeginExecuteResponse.SerializeToString,
-      ),
-      'BeginExecuteBatch': grpc.unary_unary_rpc_method_handler(
-          servicer.BeginExecuteBatch,
-          request_deserializer=query__pb2.BeginExecuteBatchRequest.FromString,
-          response_serializer=query__pb2.BeginExecuteBatchResponse.SerializeToString,
-      ),
-      'MessageStream': grpc.unary_stream_rpc_method_handler(
-          servicer.MessageStream,
-          request_deserializer=query__pb2.MessageStreamRequest.FromString,
-          response_serializer=query__pb2.MessageStreamResponse.SerializeToString,
-      ),
-      'MessageAck': grpc.unary_unary_rpc_method_handler(
-          servicer.MessageAck,
-          request_deserializer=query__pb2.MessageAckRequest.FromString,
-          response_serializer=query__pb2.MessageAckResponse.SerializeToString,
-      ),
-      'SplitQuery': grpc.unary_unary_rpc_method_handler(
-          servicer.SplitQuery,
-          request_deserializer=query__pb2.SplitQueryRequest.FromString,
-          response_serializer=query__pb2.SplitQueryResponse.SerializeToString,
-      ),
-      'StreamHealth': grpc.unary_stream_rpc_method_handler(
-          servicer.StreamHealth,
-          request_deserializer=query__pb2.StreamHealthRequest.FromString,
-          response_serializer=query__pb2.StreamHealthResponse.SerializeToString,
-      ),
-      'UpdateStream': grpc.unary_stream_rpc_method_handler(
-          servicer.UpdateStream,
-          request_deserializer=query__pb2.UpdateStreamRequest.FromString,
-          response_serializer=query__pb2.UpdateStreamResponse.SerializeToString,
-      ),
-  }
-  generic_handler = grpc.method_handlers_generic_handler(
-      'queryservice.Query', rpc_method_handlers)
-  server.add_generic_rpc_handlers((generic_handler,))
-
-
-class BetaQueryServicer(object):
-  """Query defines the tablet query service, implemented by vttablet.
-  """
-  def Execute(self, request, context):
-    """Execute executes the specified SQL query (might be in a
-    transaction context, if Query.transaction_id is set).
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def ExecuteBatch(self, request, context):
-    """ExecuteBatch executes a list of queries, and returns the result
-    for each query.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def StreamExecute(self, request, context):
-    """StreamExecute executes a streaming query. Use this method if the
-    query returns a large number of rows. The first QueryResult will
-    contain the Fields, subsequent QueryResult messages will contain
-    the rows.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def Begin(self, request, context):
-    """Begin a transaction.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def Commit(self, request, context):
-    """Commit a transaction.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def Rollback(self, request, context):
-    """Rollback a transaction.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def Prepare(self, request, context):
-    """Prepare preares a transaction.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def CommitPrepared(self, request, context):
-    """CommitPrepared commits a prepared transaction.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def RollbackPrepared(self, request, context):
-    """RollbackPrepared rolls back a prepared transaction.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def CreateTransaction(self, request, context):
-    """CreateTransaction creates the metadata for a 2pc transaction.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def StartCommit(self, request, context):
-    """StartCommit initiates a commit for a 2pc transaction.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def SetRollback(self, request, context):
-    """SetRollback marks the 2pc transaction for rollback.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def ConcludeTransaction(self, request, context):
-    """ConcludeTransaction marks the 2pc transaction as resolved.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def ReadTransaction(self, request, context):
-    """ReadTransaction returns the 2pc transaction info.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def BeginExecute(self, request, context):
-    """BeginExecute executes a begin and the specified SQL query.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def BeginExecuteBatch(self, request, context):
-    """BeginExecuteBatch executes a begin and a list of queries.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def MessageStream(self, request, context):
-    """MessageStream streams messages from a message table.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def MessageAck(self, request, context):
-    """MessageAck acks messages for a table.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def SplitQuery(self, request, context):
-    """SplitQuery is the API to facilitate MapReduce-type iterations
-    over large data sets (like full table dumps).
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def StreamHealth(self, request, context):
-    """StreamHealth runs a streaming RPC to the tablet, that returns the
-    current health of the tablet on a regular basis.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def UpdateStream(self, request, context):
-    """UpdateStream asks the server to return a stream of the updates that have been applied to its database.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-
-
-class BetaQueryStub(object):
-  """Query defines the tablet query service, implemented by vttablet.
-  """
-  def Execute(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """Execute executes the specified SQL query (might be in a
-    transaction context, if Query.transaction_id is set).
-    """
-    raise NotImplementedError()
-  Execute.future = None
-  def ExecuteBatch(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """ExecuteBatch executes a list of queries, and returns the result
-    for each query.
-    """
-    raise NotImplementedError()
-  ExecuteBatch.future = None
-  def StreamExecute(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """StreamExecute executes a streaming query. Use this method if the
-    query returns a large number of rows. The first QueryResult will
-    contain the Fields, subsequent QueryResult messages will contain
-    the rows.
-    """
-    raise NotImplementedError()
-  def Begin(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """Begin a transaction.
-    """
-    raise NotImplementedError()
-  Begin.future = None
-  def Commit(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """Commit a transaction.
-    """
-    raise NotImplementedError()
-  Commit.future = None
-  def Rollback(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """Rollback a transaction.
-    """
-    raise NotImplementedError()
-  Rollback.future = None
-  def Prepare(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """Prepare preares a transaction.
-    """
-    raise NotImplementedError()
-  Prepare.future = None
-  def CommitPrepared(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """CommitPrepared commits a prepared transaction.
-    """
-    raise NotImplementedError()
-  CommitPrepared.future = None
-  def RollbackPrepared(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """RollbackPrepared rolls back a prepared transaction.
-    """
-    raise NotImplementedError()
-  RollbackPrepared.future = None
-  def CreateTransaction(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """CreateTransaction creates the metadata for a 2pc transaction.
-    """
-    raise NotImplementedError()
-  CreateTransaction.future = None
-  def StartCommit(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """StartCommit initiates a commit for a 2pc transaction.
-    """
-    raise NotImplementedError()
-  StartCommit.future = None
-  def SetRollback(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """SetRollback marks the 2pc transaction for rollback.
-    """
-    raise NotImplementedError()
-  SetRollback.future = None
-  def ConcludeTransaction(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """ConcludeTransaction marks the 2pc transaction as resolved.
-    """
-    raise NotImplementedError()
-  ConcludeTransaction.future = None
-  def ReadTransaction(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """ReadTransaction returns the 2pc transaction info.
-    """
-    raise NotImplementedError()
-  ReadTransaction.future = None
-  def BeginExecute(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """BeginExecute executes a begin and the specified SQL query.
-    """
-    raise NotImplementedError()
-  BeginExecute.future = None
-  def BeginExecuteBatch(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """BeginExecuteBatch executes a begin and a list of queries.
-    """
-    raise NotImplementedError()
-  BeginExecuteBatch.future = None
-  def MessageStream(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """MessageStream streams messages from a message table.
-    """
-    raise NotImplementedError()
-  def MessageAck(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """MessageAck acks messages for a table.
-    """
-    raise NotImplementedError()
-  MessageAck.future = None
-  def SplitQuery(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """SplitQuery is the API to facilitate MapReduce-type iterations
-    over large data sets (like full table dumps).
-    """
-    raise NotImplementedError()
-  SplitQuery.future = None
-  def StreamHealth(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """StreamHealth runs a streaming RPC to the tablet, that returns the
-    current health of the tablet on a regular basis.
-    """
-    raise NotImplementedError()
-  def UpdateStream(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """UpdateStream asks the server to return a stream of the updates that have been applied to its database.
-    """
-    raise NotImplementedError()
-
-
-def beta_create_Query_server(servicer, pool=None, pool_size=None, default_timeout=None, maximum_timeout=None):
-  request_deserializers = {
-    ('queryservice.Query', 'Begin'): query__pb2.BeginRequest.FromString,
-    ('queryservice.Query', 'BeginExecute'): query__pb2.BeginExecuteRequest.FromString,
-    ('queryservice.Query', 'BeginExecuteBatch'): query__pb2.BeginExecuteBatchRequest.FromString,
-    ('queryservice.Query', 'Commit'): query__pb2.CommitRequest.FromString,
-    ('queryservice.Query', 'CommitPrepared'): query__pb2.CommitPreparedRequest.FromString,
-    ('queryservice.Query', 'ConcludeTransaction'): query__pb2.ConcludeTransactionRequest.FromString,
-    ('queryservice.Query', 'CreateTransaction'): query__pb2.CreateTransactionRequest.FromString,
-    ('queryservice.Query', 'Execute'): query__pb2.ExecuteRequest.FromString,
-    ('queryservice.Query', 'ExecuteBatch'): query__pb2.ExecuteBatchRequest.FromString,
-    ('queryservice.Query', 'MessageAck'): query__pb2.MessageAckRequest.FromString,
-    ('queryservice.Query', 'MessageStream'): query__pb2.MessageStreamRequest.FromString,
-    ('queryservice.Query', 'Prepare'): query__pb2.PrepareRequest.FromString,
-    ('queryservice.Query', 'ReadTransaction'): query__pb2.ReadTransactionRequest.FromString,
-    ('queryservice.Query', 'Rollback'): query__pb2.RollbackRequest.FromString,
-    ('queryservice.Query', 'RollbackPrepared'): query__pb2.RollbackPreparedRequest.FromString,
-    ('queryservice.Query', 'SetRollback'): query__pb2.SetRollbackRequest.FromString,
-    ('queryservice.Query', 'SplitQuery'): query__pb2.SplitQueryRequest.FromString,
-    ('queryservice.Query', 'StartCommit'): query__pb2.StartCommitRequest.FromString,
-    ('queryservice.Query', 'StreamExecute'): query__pb2.StreamExecuteRequest.FromString,
-    ('queryservice.Query', 'StreamHealth'): query__pb2.StreamHealthRequest.FromString,
-    ('queryservice.Query', 'UpdateStream'): query__pb2.UpdateStreamRequest.FromString,
-  }
-  response_serializers = {
-    ('queryservice.Query', 'Begin'): query__pb2.BeginResponse.SerializeToString,
-    ('queryservice.Query', 'BeginExecute'): query__pb2.BeginExecuteResponse.SerializeToString,
-    ('queryservice.Query', 'BeginExecuteBatch'): query__pb2.BeginExecuteBatchResponse.SerializeToString,
-    ('queryservice.Query', 'Commit'): query__pb2.CommitResponse.SerializeToString,
-    ('queryservice.Query', 'CommitPrepared'): query__pb2.CommitPreparedResponse.SerializeToString,
-    ('queryservice.Query', 'ConcludeTransaction'): query__pb2.ConcludeTransactionResponse.SerializeToString,
-    ('queryservice.Query', 'CreateTransaction'): query__pb2.CreateTransactionResponse.SerializeToString,
-    ('queryservice.Query', 'Execute'): query__pb2.ExecuteResponse.SerializeToString,
-    ('queryservice.Query', 'ExecuteBatch'): query__pb2.ExecuteBatchResponse.SerializeToString,
-    ('queryservice.Query', 'MessageAck'): query__pb2.MessageAckResponse.SerializeToString,
-    ('queryservice.Query', 'MessageStream'): query__pb2.MessageStreamResponse.SerializeToString,
-    ('queryservice.Query', 'Prepare'): query__pb2.PrepareResponse.SerializeToString,
-    ('queryservice.Query', 'ReadTransaction'): query__pb2.ReadTransactionResponse.SerializeToString,
-    ('queryservice.Query', 'Rollback'): query__pb2.RollbackResponse.SerializeToString,
-    ('queryservice.Query', 'RollbackPrepared'): query__pb2.RollbackPreparedResponse.SerializeToString,
-    ('queryservice.Query', 'SetRollback'): query__pb2.SetRollbackResponse.SerializeToString,
-    ('queryservice.Query', 'SplitQuery'): query__pb2.SplitQueryResponse.SerializeToString,
-    ('queryservice.Query', 'StartCommit'): query__pb2.StartCommitResponse.SerializeToString,
-    ('queryservice.Query', 'StreamExecute'): query__pb2.StreamExecuteResponse.SerializeToString,
-    ('queryservice.Query', 'StreamHealth'): query__pb2.StreamHealthResponse.SerializeToString,
-    ('queryservice.Query', 'UpdateStream'): query__pb2.UpdateStreamResponse.SerializeToString,
-  }
-  method_implementations = {
-    ('queryservice.Query', 'Begin'): face_utilities.unary_unary_inline(servicer.Begin),
-    ('queryservice.Query', 'BeginExecute'): face_utilities.unary_unary_inline(servicer.BeginExecute),
-    ('queryservice.Query', 'BeginExecuteBatch'): face_utilities.unary_unary_inline(servicer.BeginExecuteBatch),
-    ('queryservice.Query', 'Commit'): face_utilities.unary_unary_inline(servicer.Commit),
-    ('queryservice.Query', 'CommitPrepared'): face_utilities.unary_unary_inline(servicer.CommitPrepared),
-    ('queryservice.Query', 'ConcludeTransaction'): face_utilities.unary_unary_inline(servicer.ConcludeTransaction),
-    ('queryservice.Query', 'CreateTransaction'): face_utilities.unary_unary_inline(servicer.CreateTransaction),
-    ('queryservice.Query', 'Execute'): face_utilities.unary_unary_inline(servicer.Execute),
-    ('queryservice.Query', 'ExecuteBatch'): face_utilities.unary_unary_inline(servicer.ExecuteBatch),
-    ('queryservice.Query', 'MessageAck'): face_utilities.unary_unary_inline(servicer.MessageAck),
-    ('queryservice.Query', 'MessageStream'): face_utilities.unary_stream_inline(servicer.MessageStream),
-    ('queryservice.Query', 'Prepare'): face_utilities.unary_unary_inline(servicer.Prepare),
-    ('queryservice.Query', 'ReadTransaction'): face_utilities.unary_unary_inline(servicer.ReadTransaction),
-    ('queryservice.Query', 'Rollback'): face_utilities.unary_unary_inline(servicer.Rollback),
-    ('queryservice.Query', 'RollbackPrepared'): face_utilities.unary_unary_inline(servicer.RollbackPrepared),
-    ('queryservice.Query', 'SetRollback'): face_utilities.unary_unary_inline(servicer.SetRollback),
-    ('queryservice.Query', 'SplitQuery'): face_utilities.unary_unary_inline(servicer.SplitQuery),
-    ('queryservice.Query', 'StartCommit'): face_utilities.unary_unary_inline(servicer.StartCommit),
-    ('queryservice.Query', 'StreamExecute'): face_utilities.unary_stream_inline(servicer.StreamExecute),
-    ('queryservice.Query', 'StreamHealth'): face_utilities.unary_stream_inline(servicer.StreamHealth),
-    ('queryservice.Query', 'UpdateStream'): face_utilities.unary_stream_inline(servicer.UpdateStream),
-  }
-  server_options = beta_implementations.server_options(request_deserializers=request_deserializers, response_serializers=response_serializers, thread_pool=pool, thread_pool_size=pool_size, default_timeout=default_timeout, maximum_timeout=maximum_timeout)
-  return beta_implementations.server(method_implementations, options=server_options)
-
-
-def beta_create_Query_stub(channel, host=None, metadata_transformer=None, pool=None, pool_size=None):
-  request_serializers = {
-    ('queryservice.Query', 'Begin'): query__pb2.BeginRequest.SerializeToString,
-    ('queryservice.Query', 'BeginExecute'): query__pb2.BeginExecuteRequest.SerializeToString,
-    ('queryservice.Query', 'BeginExecuteBatch'): query__pb2.BeginExecuteBatchRequest.SerializeToString,
-    ('queryservice.Query', 'Commit'): query__pb2.CommitRequest.SerializeToString,
-    ('queryservice.Query', 'CommitPrepared'): query__pb2.CommitPreparedRequest.SerializeToString,
-    ('queryservice.Query', 'ConcludeTransaction'): query__pb2.ConcludeTransactionRequest.SerializeToString,
-    ('queryservice.Query', 'CreateTransaction'): query__pb2.CreateTransactionRequest.SerializeToString,
-    ('queryservice.Query', 'Execute'): query__pb2.ExecuteRequest.SerializeToString,
-    ('queryservice.Query', 'ExecuteBatch'): query__pb2.ExecuteBatchRequest.SerializeToString,
-    ('queryservice.Query', 'MessageAck'): query__pb2.MessageAckRequest.SerializeToString,
-    ('queryservice.Query', 'MessageStream'): query__pb2.MessageStreamRequest.SerializeToString,
-    ('queryservice.Query', 'Prepare'): query__pb2.PrepareRequest.SerializeToString,
-    ('queryservice.Query', 'ReadTransaction'): query__pb2.ReadTransactionRequest.SerializeToString,
-    ('queryservice.Query', 'Rollback'): query__pb2.RollbackRequest.SerializeToString,
-    ('queryservice.Query', 'RollbackPrepared'): query__pb2.RollbackPreparedRequest.SerializeToString,
-    ('queryservice.Query', 'SetRollback'): query__pb2.SetRollbackRequest.SerializeToString,
-    ('queryservice.Query', 'SplitQuery'): query__pb2.SplitQueryRequest.SerializeToString,
-    ('queryservice.Query', 'StartCommit'): query__pb2.StartCommitRequest.SerializeToString,
-    ('queryservice.Query', 'StreamExecute'): query__pb2.StreamExecuteRequest.SerializeToString,
-    ('queryservice.Query', 'StreamHealth'): query__pb2.StreamHealthRequest.SerializeToString,
-    ('queryservice.Query', 'UpdateStream'): query__pb2.UpdateStreamRequest.SerializeToString,
-  }
-  response_deserializers = {
-    ('queryservice.Query', 'Begin'): query__pb2.BeginResponse.FromString,
-    ('queryservice.Query', 'BeginExecute'): query__pb2.BeginExecuteResponse.FromString,
-    ('queryservice.Query', 'BeginExecuteBatch'): query__pb2.BeginExecuteBatchResponse.FromString,
-    ('queryservice.Query', 'Commit'): query__pb2.CommitResponse.FromString,
-    ('queryservice.Query', 'CommitPrepared'): query__pb2.CommitPreparedResponse.FromString,
-    ('queryservice.Query', 'ConcludeTransaction'): query__pb2.ConcludeTransactionResponse.FromString,
-    ('queryservice.Query', 'CreateTransaction'): query__pb2.CreateTransactionResponse.FromString,
-    ('queryservice.Query', 'Execute'): query__pb2.ExecuteResponse.FromString,
-    ('queryservice.Query', 'ExecuteBatch'): query__pb2.ExecuteBatchResponse.FromString,
-    ('queryservice.Query', 'MessageAck'): query__pb2.MessageAckResponse.FromString,
-    ('queryservice.Query', 'MessageStream'): query__pb2.MessageStreamResponse.FromString,
-    ('queryservice.Query', 'Prepare'): query__pb2.PrepareResponse.FromString,
-    ('queryservice.Query', 'ReadTransaction'): query__pb2.ReadTransactionResponse.FromString,
-    ('queryservice.Query', 'Rollback'): query__pb2.RollbackResponse.FromString,
-    ('queryservice.Query', 'RollbackPrepared'): query__pb2.RollbackPreparedResponse.FromString,
-    ('queryservice.Query', 'SetRollback'): query__pb2.SetRollbackResponse.FromString,
-    ('queryservice.Query', 'SplitQuery'): query__pb2.SplitQueryResponse.FromString,
-    ('queryservice.Query', 'StartCommit'): query__pb2.StartCommitResponse.FromString,
-    ('queryservice.Query', 'StreamExecute'): query__pb2.StreamExecuteResponse.FromString,
-    ('queryservice.Query', 'StreamHealth'): query__pb2.StreamHealthResponse.FromString,
-    ('queryservice.Query', 'UpdateStream'): query__pb2.UpdateStreamResponse.FromString,
-  }
-  cardinalities = {
-    'Begin': cardinality.Cardinality.UNARY_UNARY,
-    'BeginExecute': cardinality.Cardinality.UNARY_UNARY,
-    'BeginExecuteBatch': cardinality.Cardinality.UNARY_UNARY,
-    'Commit': cardinality.Cardinality.UNARY_UNARY,
-    'CommitPrepared': cardinality.Cardinality.UNARY_UNARY,
-    'ConcludeTransaction': cardinality.Cardinality.UNARY_UNARY,
-    'CreateTransaction': cardinality.Cardinality.UNARY_UNARY,
-    'Execute': cardinality.Cardinality.UNARY_UNARY,
-    'ExecuteBatch': cardinality.Cardinality.UNARY_UNARY,
-    'MessageAck': cardinality.Cardinality.UNARY_UNARY,
-    'MessageStream': cardinality.Cardinality.UNARY_STREAM,
-    'Prepare': cardinality.Cardinality.UNARY_UNARY,
-    'ReadTransaction': cardinality.Cardinality.UNARY_UNARY,
-    'Rollback': cardinality.Cardinality.UNARY_UNARY,
-    'RollbackPrepared': cardinality.Cardinality.UNARY_UNARY,
-    'SetRollback': cardinality.Cardinality.UNARY_UNARY,
-    'SplitQuery': cardinality.Cardinality.UNARY_UNARY,
-    'StartCommit': cardinality.Cardinality.UNARY_UNARY,
-    'StreamExecute': cardinality.Cardinality.UNARY_STREAM,
-    'StreamHealth': cardinality.Cardinality.UNARY_STREAM,
-    'UpdateStream': cardinality.Cardinality.UNARY_STREAM,
-  }
-  stub_options = beta_implementations.stub_options(host=host, metadata_transformer=metadata_transformer, request_serializers=request_serializers, response_deserializers=response_deserializers, thread_pool=pool, thread_pool_size=pool_size)
-  return beta_implementations.dynamic_stub(channel, 'queryservice.Query', cardinalities, options=stub_options)
 # @@protoc_insertion_point(module_scope)

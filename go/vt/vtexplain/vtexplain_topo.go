@@ -23,6 +23,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/topo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -51,6 +52,11 @@ func (et *ExplainTopo) getSrvVSchema() *vschemapb.SrvVSchema {
 	return &vschemapb.SrvVSchema{
 		Keyspaces: et.Keyspaces,
 	}
+}
+
+// GetTopoServer is part of the srvtopo.Server interface
+func (et *ExplainTopo) GetTopoServer() *topo.Server {
+	return nil
 }
 
 // GetSrvKeyspaceNames is part of the srvtopo.Server interface.
