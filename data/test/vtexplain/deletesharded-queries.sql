@@ -10,4 +10,4 @@ delete from user where name='billy';
 -- delete from music_extra where extra='abc';
 
 /* multi-shard delete with autocommit is supported */
-delete /*vt! MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where extra='abc';
+delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where extra='abc';

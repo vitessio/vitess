@@ -195,18 +195,18 @@ func TestAutocommitDeleteMultiShard(t *testing.T) {
 func TestAutocommitDeleteMultiShardAutoCommit(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 
-	if _, err := autocommitExec(executor, "delete /*vt! MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id in (1, 2)"); err != nil {
+	if _, err := autocommitExec(executor, "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id in (1, 2)"); err != nil {
 		t.Fatal(err)
 	}
 	testBatchQuery(t, "sbc1", sbc1, &querypb.BoundQuery{
-		Sql:           "delete /*vt! MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id in (1, 2)/* vtgate:: filtered_replication_unfriendly */",
+		Sql:           "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id in (1, 2)/* vtgate:: filtered_replication_unfriendly */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	})
 	testAsTransactionCount(t, "sbc1", sbc1, 1)
 	testCommitCount(t, "sbc1", sbc1, 0)
 
 	testBatchQuery(t, "sbc2", sbc2, &querypb.BoundQuery{
-		Sql:           "delete /*vt! MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id in (1, 2)/* vtgate:: filtered_replication_unfriendly */",
+		Sql:           "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id in (1, 2)/* vtgate:: filtered_replication_unfriendly */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	})
 	testAsTransactionCount(t, "sbc2", sbc2, 1)
@@ -268,11 +268,11 @@ func TestAutocommitInsertLookup(t *testing.T) {
 func TestAutocommitInsertMultishardAutoCommit(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 
-	if _, err := autocommitExec(executor, "insert /*vt! MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (1, 2), (3, 4)"); err != nil {
+	if _, err := autocommitExec(executor, "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (1, 2), (3, 4)"); err != nil {
 		t.Fatal(err)
 	}
 	testBatchQuery(t, "sbc1", sbc1, &querypb.BoundQuery{
-		Sql: "insert /*vt! MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id0, 2) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id0, 2) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id0": sqltypes.Int64BindVariable(1),
 			"_user_id1": sqltypes.Int64BindVariable(3),
@@ -282,7 +282,7 @@ func TestAutocommitInsertMultishardAutoCommit(t *testing.T) {
 	testCommitCount(t, "sbc1", sbc1, 0)
 
 	testBatchQuery(t, "sbc2", sbc2, &querypb.BoundQuery{
-		Sql: "insert /*vt! MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id1, 4) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
+		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id1, 4) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id0": sqltypes.Int64BindVariable(1),
 			"_user_id1": sqltypes.Int64BindVariable(3),
@@ -294,7 +294,7 @@ func TestAutocommitInsertMultishardAutoCommit(t *testing.T) {
 	executor, sbc1, sbc2, _ = createExecutorEnv()
 	// Make the first shard fail - the second completes anyway
 	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	_, err := autocommitExec(executor, "insert /*vt! MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (1, 2), (3, 4)")
+	_, err := autocommitExec(executor, "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (1, 2), (3, 4)")
 	if err == nil || !strings.Contains(err.Error(), "INVALID_ARGUMENT") {
 		t.Errorf("expected invalid argument error, got %v", err)
 	}
@@ -305,7 +305,7 @@ func TestAutocommitInsertMultishardAutoCommit(t *testing.T) {
 	testCommitCount(t, "sbc1", sbc1, 0)
 
 	testBatchQuery(t, "sbc2", sbc2, &querypb.BoundQuery{
-		Sql: "insert /*vt! MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id1, 4) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
+		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id1, 4) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id0": sqltypes.Int64BindVariable(1),
 			"_user_id1": sqltypes.Int64BindVariable(3),

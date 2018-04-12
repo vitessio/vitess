@@ -24,4 +24,4 @@ insert into user (id, name, nickname, address) values(2, 'bob', 'bobby', '123 ma
 With the multi-shard autocommit option selected all inserts happen in one
 round trip so there is no race
 */
-insert /*vt! MULTI_SHARD_AUTOCOMMIT=1 */ into music_extra (id, extra) values (1, 'a'), (2, 'b'), (3, 'c');
+insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into music_extra (id, extra) values (1, 'a'), (2, 'b'), (3, 'c');
