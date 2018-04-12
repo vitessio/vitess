@@ -224,12 +224,11 @@ func (t *explainTablet) ExecuteBatch(ctx context.Context, target *querypb.Target
 	// Since the query is simulated being "sent" over the wire we need to
 	// copy the bindVars into the executor to avoid a data race.
 	for _, query := range queries {
-		bindVariables := sqltypes.CopyBindVariables(query.BindVariables)
-		query.BindVariables = bindVariables
+		query.BindVariables = sqltypes.CopyBindVariables(query.BindVariables)
 		t.tabletQueries = append(t.tabletQueries, &TabletQuery{
 			Time:     t.currentTime,
 			SQL:      query.Sql,
-			BindVars: bindVariables,
+			BindVars: query.BindVariables,
 		})
 	}
 	t.mu.Unlock()
