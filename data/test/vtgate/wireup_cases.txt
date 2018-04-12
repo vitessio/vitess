@@ -446,6 +446,119 @@
   }
 }
 
+# Wire-up in subquery
+"select 1 from user where id in (select u.id, e.id from user u join user_extra e where e.id = u.col limit 10)"
+{
+  "Original": "select 1 from user where id in (select u.id, e.id from user u join user_extra e where e.id = u.col limit 10)",
+  "Instructions": {
+    "Opcode": "PulloutIn",
+    "SubqueryResult": "__sq1",
+    "HasValues": "__has_values1",
+    "IsEmpty": "__is_empty1",
+    "Subquery": {
+      "Opcode": "Limit",
+      "Count": 10,
+      "Offset": null,
+      "Input": {
+        "Opcode": "Join",
+        "Left": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "Query": "select u.id, u.col from user as u",
+          "FieldQuery": "select u.id, u.col from user as u where 1 != 1"
+        },
+        "Right": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "Query": "select e.id from user_extra as e where e.id = :u_col",
+          "FieldQuery": "select e.id from user_extra as e where 1 != 1"
+        },
+        "Cols": [
+          -1,
+          1
+        ],
+        "Vars": {
+          "u_col": 1
+        }
+      }
+    },
+    "Underlying": {
+      "Opcode": "SelectIN",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select 1 from user where :__has_values1 and (id in ::__vals)",
+      "FieldQuery": "select 1 from user where 1 != 1",
+      "Vindex": "user_index",
+      "Values": [
+        "::__sq1"
+      ]
+    }
+  }
+}
+
+# Wire-up in in underlying primitive after pullout
+"select u.id, e.id, (select col from user) from user u join user_extra e where e.id = u.col limit 10"
+{
+  "Original": "select u.id, e.id, (select col from user) from user u join user_extra e where e.id = u.col limit 10",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": 10,
+    "Offset": null,
+    "Input": {
+      "Opcode": "PulloutValue",
+      "SubqueryResult": "__sq1",
+      "HasValues": "__has_values1",
+      "IsEmpty": "__is_empty1",
+      "Subquery": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select col from user",
+        "FieldQuery": "select col from user where 1 != 1"
+      },
+      "Underlying": {
+        "Opcode": "Join",
+        "Left": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "Query": "select u.id, :__sq1, u.col from user as u",
+          "FieldQuery": "select u.id, :__sq1, u.col from user as u where 1 != 1"
+        },
+        "Right": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "Query": "select e.id from user_extra as e where e.id = :u_col",
+          "FieldQuery": "select e.id from user_extra as e where 1 != 1"
+        },
+        "Cols": [
+          -1,
+          1,
+          -2
+        ],
+        "Vars": {
+          "u_col": 2
+        }
+      }
+    }
+  }
+}
+
 # Invalid value in IN clause
 "select id from user where id in (18446744073709551616, 1)"
 "strconv.ParseUint: parsing "18446744073709551616": value out of range"

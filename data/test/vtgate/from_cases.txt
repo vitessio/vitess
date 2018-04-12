@@ -999,6 +999,247 @@
   }
 }
 
+# subquery in ON clause, single route
+"select unsharded_a.col from unsharded_a join unsharded_b on (select col from user)"
+{
+  "Original": "select unsharded_a.col from unsharded_a join unsharded_b on (select col from user)",
+  "Instructions": {
+    "Opcode": "PulloutValue",
+    "SubqueryResult": "__sq1",
+    "HasValues": "__has_values1",
+    "IsEmpty": "__is_empty1",
+    "Subquery": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user",
+      "FieldQuery": "select col from user where 1 != 1"
+    },
+    "Underlying": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select unsharded_a.col from unsharded_a join unsharded_b on :__sq1",
+      "FieldQuery": "select unsharded_a.col from unsharded_a join unsharded_b on :__sq1 where 1 != 1"
+    }
+  }
+}
+
+# subquery in ON clause as sub-expression
+"select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col+(select col from user)"
+{
+  "Original": "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col+(select col from user)",
+  "Instructions": {
+    "Opcode": "PulloutValue",
+    "SubqueryResult": "__sq1",
+    "HasValues": "__has_values1",
+    "IsEmpty": "__is_empty1",
+    "Subquery": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user",
+      "FieldQuery": "select col from user where 1 != 1"
+    },
+    "Underlying": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col + :__sq1",
+      "FieldQuery": "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col + :__sq1 where 1 != 1"
+    }
+  }
+}
+
+# IN subquery in ON clause, single route
+"select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col in (select col from user)"
+{
+  "Original": "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col in (select col from user)",
+  "Instructions": {
+    "Opcode": "PulloutIn",
+    "SubqueryResult": "__sq1",
+    "HasValues": "__has_values1",
+    "IsEmpty": "__is_empty1",
+    "Subquery": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user",
+      "FieldQuery": "select col from user where 1 != 1"
+    },
+    "Underlying": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select unsharded_a.col from unsharded_a join unsharded_b on (:__has_values1 and (unsharded_a.col in ::__sq1))",
+      "FieldQuery": "select unsharded_a.col from unsharded_a join unsharded_b on (:__has_values1 and (unsharded_a.col in ::__sq1)) where 1 != 1"
+    }
+  }
+}
+
+# subquery in ON clause, with join primitives
+"select unsharded.col from unsharded join user on user.col in (select col from user)"
+{
+  "Original": "select unsharded.col from unsharded join user on user.col in (select col from user)",
+  "Instructions": {
+    "Opcode": "PulloutIn",
+    "SubqueryResult": "__sq1",
+    "HasValues": "__has_values1",
+    "IsEmpty": "__is_empty1",
+    "Subquery": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user",
+      "FieldQuery": "select col from user where 1 != 1"
+    },
+    "Underlying": {
+      "Opcode": "Join",
+      "Left": {
+        "Opcode": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select unsharded.col from unsharded",
+        "FieldQuery": "select unsharded.col from unsharded where 1 != 1"
+      },
+      "Right": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select 1 from user where :__has_values1 and (user.col in ::__sq1)",
+        "FieldQuery": "select 1 from user where 1 != 1"
+      },
+      "Cols": [
+        -1
+      ]
+    }
+  }
+}
+
+# subquery in ON clause, with left join primitives
+# The subquery is not pulled all the way out.
+"select unsharded.col from unsharded left join user on user.col in (select col from user)"
+{
+  "Original": "select unsharded.col from unsharded left join user on user.col in (select col from user)",
+  "Instructions": {
+    "Opcode": "LeftJoin",
+    "Left": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select unsharded.col from unsharded",
+      "FieldQuery": "select unsharded.col from unsharded where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "PulloutIn",
+      "SubqueryResult": "__sq1",
+      "HasValues": "__has_values1",
+      "IsEmpty": "__is_empty1",
+      "Subquery": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select col from user",
+        "FieldQuery": "select col from user where 1 != 1"
+      },
+      "Underlying": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select 1 from user where :__has_values1 and (user.col in ::__sq1)",
+        "FieldQuery": "select 1 from user where 1 != 1"
+      }
+    },
+    "Cols": [
+      -1
+    ]
+  }
+}
+
+# subquery in ON clause, with join primitives, and join on top
+# The subquery is not pulled all the way out.
+"select unsharded.col from unsharded join user on user.col in (select col from user) join unsharded_a"
+{
+  "Original": "select unsharded.col from unsharded join user on user.col in (select col from user) join unsharded_a",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "PulloutIn",
+      "SubqueryResult": "__sq1",
+      "HasValues": "__has_values1",
+      "IsEmpty": "__is_empty1",
+      "Subquery": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select col from user",
+        "FieldQuery": "select col from user where 1 != 1"
+      },
+      "Underlying": {
+        "Opcode": "Join",
+        "Left": {
+          "Opcode": "SelectUnsharded",
+          "Keyspace": {
+            "Name": "main",
+            "Sharded": false
+          },
+          "Query": "select unsharded.col from unsharded",
+          "FieldQuery": "select unsharded.col from unsharded where 1 != 1"
+        },
+        "Right": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "Query": "select 1 from user where :__has_values1 and (user.col in ::__sq1)",
+          "FieldQuery": "select 1 from user where 1 != 1"
+        },
+        "Cols": [
+          -1
+        ]
+      }
+    },
+    "Right": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select 1 from unsharded_a",
+      "FieldQuery": "select 1 from unsharded_a where 1 != 1"
+    },
+    "Cols": [
+      -1
+    ]
+  }
+}
 
 # keyspace-qualified queries
 "select user.user.col1, main.unsharded.col1 from user.user join main.unsharded where main.unsharded.col2 = user.user.col2"

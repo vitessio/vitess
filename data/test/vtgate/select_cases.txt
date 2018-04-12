@@ -784,6 +784,66 @@
   }
 }
 
+# top level subquery in select
+"select a, (select col from user) from unsharded"
+{
+  "Original": "select a, (select col from user) from unsharded",
+  "Instructions": {
+    "Opcode": "PulloutValue",
+    "SubqueryResult": "__sq1",
+    "HasValues": "__has_values1",
+    "IsEmpty": "__is_empty1",
+    "Subquery": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user",
+      "FieldQuery": "select col from user where 1 != 1"
+    },
+    "Underlying": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select a, :__sq1 from unsharded",
+      "FieldQuery": "select a, :__sq1 from unsharded where 1 != 1"
+    }
+  }
+}
+
+# sub-expression subquery in select
+"select a, 1+(select col from user) from unsharded"
+{
+  "Original": "select a, 1+(select col from user) from unsharded",
+  "Instructions": {
+    "Opcode": "PulloutValue",
+    "SubqueryResult": "__sq1",
+    "HasValues": "__has_values1",
+    "IsEmpty": "__is_empty1",
+    "Subquery": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user",
+      "FieldQuery": "select col from user where 1 != 1"
+    },
+    "Underlying": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select a, 1 + :__sq1 from unsharded",
+      "FieldQuery": "select a, 1 + :__sq1 from unsharded where 1 != 1"
+    }
+  }
+}
+
 # non-existent symbol in cross-shard subquery
 "select t.col from (select user.id from user join user_extra) as t"
 "symbol t.col is referencing a non-existent column of the subquery"

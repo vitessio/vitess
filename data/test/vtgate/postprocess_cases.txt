@@ -80,6 +80,40 @@
   }
 }
 
+# HAVING uses subquery
+"select id from user having id in (select col from user)"
+{
+  "Original": "select id from user having id in (select col from user)",
+  "Instructions": {
+    "Opcode": "PulloutIn",
+    "SubqueryResult": "__sq1",
+    "HasValues": "__has_values1",
+    "IsEmpty": "__is_empty1",
+    "Subquery": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user",
+      "FieldQuery": "select col from user where 1 != 1"
+    },
+    "Underlying": {
+      "Opcode": "SelectIN",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select id from user having :__has_values1 and (id in ::__vals)",
+      "FieldQuery": "select id from user where 1 != 1",
+      "Vindex": "user_index",
+      "Values": [
+        "::__sq1"
+      ]
+    }
+  }
+}
+
 # ORDER BY, reference col from local table.
 "select col from user where id = 5 order by aa"
 {
@@ -248,6 +282,42 @@
   }
 }
 
+# ORDER BY after pull-out subquery
+"select col from user where col in (select col2 from user) order by col"
+{
+  "Original": "select col from user where col in (select col2 from user) order by col",
+  "Instructions": {
+    "Opcode": "PulloutIn",
+    "SubqueryResult": "__sq1",
+    "HasValues": "__has_values1",
+    "IsEmpty": "__is_empty1",
+    "Subquery": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col2 from user",
+      "FieldQuery": "select col2 from user where 1 != 1"
+    },
+    "Underlying": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user where :__has_values1 and (col in ::__sq1) order by col asc",
+      "FieldQuery": "select col from user where 1 != 1",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        }
+      ]
+    }
+  }
+}
+
 # ORDER BY NULL for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null"
 {
@@ -283,6 +353,36 @@
     ],
     "Vars": {
       "user_id": 2
+    }
+  }
+}
+
+# ORDER BY NULL after pull-out subquery
+"select col from user where col in (select col2 from user) order by null"
+{
+  "Original": "select col from user where col in (select col2 from user) order by null",
+  "Instructions": {
+    "Opcode": "PulloutIn",
+    "SubqueryResult": "__sq1",
+    "HasValues": "__has_values1",
+    "IsEmpty": "__is_empty1",
+    "Subquery": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col2 from user",
+      "FieldQuery": "select col2 from user where 1 != 1"
+    },
+    "Underlying": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user where :__has_values1 and (col in ::__sq1) order by null",
+      "FieldQuery": "select col from user where 1 != 1"
     }
   }
 }
@@ -337,6 +437,36 @@
     ],
     "Vars": {
       "user_id": 2
+    }
+  }
+}
+
+# ORDER BY RAND() after pull-out subquery
+"select col from user where col in (select col2 from user) order by rand()"
+{
+  "Original": "select col from user where col in (select col2 from user) order by rand()",
+  "Instructions": {
+    "Opcode": "PulloutIn",
+    "SubqueryResult": "__sq1",
+    "HasValues": "__has_values1",
+    "IsEmpty": "__is_empty1",
+    "Subquery": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col2 from user",
+      "FieldQuery": "select col2 from user where 1 != 1"
+    },
+    "Underlying": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user where :__has_values1 and (col in ::__sq1) order by rand()",
+      "FieldQuery": "select col from user where 1 != 1"
     }
   }
 }
@@ -636,6 +766,41 @@
       },
       "Query": "select * from user where id1 = 4 and name1 = 'abc' limit :__upper_limit",
       "FieldQuery": "select * from user where 1 != 1"
+    }
+  }
+}
+
+# scatter limit after pullout subquery
+"select col from user where col in (select col1 from user) limit 1"
+{
+  "Original": "select col from user where col in (select col1 from user) limit 1",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": 1,
+    "Offset": null,
+    "Input": {
+      "Opcode": "PulloutIn",
+      "SubqueryResult": "__sq1",
+      "HasValues": "__has_values1",
+      "IsEmpty": "__is_empty1",
+      "Subquery": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select col1 from user",
+        "FieldQuery": "select col1 from user where 1 != 1"
+      },
+      "Underlying": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select col from user where :__has_values1 and (col in ::__sq1) limit :__upper_limit",
+        "FieldQuery": "select col from user where 1 != 1"
+      }
     }
   }
 }
