@@ -1411,18 +1411,18 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		}
 	}
 
-	// In order to correctly truncate long queries in logs, combine
-	// the error (which contains the mysql error string)
-	// with the unexpanded query + bind variables, then
-	// truncate the resulting string.
-	//
-	// This makes it so that the query portion of the logs is
-	// properly truncated to the expected max log length.
-	maxLen := *sqlparser.TruncateErrLen
-	if maxLen != 0 && len(message) > maxLen {
-		message = message[:maxLen-12] + " [TRUNCATED]"
-	}
 	if logMethod != nil {
+		// In order to correctly truncate long queries in logs, combine
+		// the error (which contains the mysql error string)
+		// with the unexpanded query + bind variables, then
+		// truncate the resulting string.
+		//
+		// This makes it so that the query portion of the logs is
+		// properly truncated to the expected max log length.
+		maxLen := *sqlparser.TruncateErrLen
+		if maxLen != 0 && len(message) > maxLen {
+			message = message[:maxLen-12] + " [TRUNCATED]"
+		}
 		logMethod(message)
 	}
 
@@ -2049,8 +2049,8 @@ func (tsv *TabletServer) GetTxPoolWaiterCap() int64 {
 	return tsv.te.txPool.waiterCap.Get()
 }
 
-// queryAsString prints a readable version of query+bind variables,
-// and also truncates data if it's too long
+// queryAsString returns a readable version of query+bind variables.
+// If the passed bindVariables is nil, the BindVars section is entirely omitted.
 func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable) string {
 	buf := &bytes.Buffer{}
 	fmt.Fprintf(buf, "Sql: %q", sql)
