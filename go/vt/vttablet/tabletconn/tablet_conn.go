@@ -19,9 +19,8 @@ package tabletconn
 import (
 	"flag"
 
-	log "github.com/golang/glog"
-
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 

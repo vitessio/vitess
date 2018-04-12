@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"net"
 
-	log "github.com/golang/glog"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // AuthServer is the interface that servers must implement to validate

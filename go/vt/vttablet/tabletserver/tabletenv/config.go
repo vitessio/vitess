@@ -22,12 +22,11 @@ import (
 	"fmt"
 	"time"
 
-	log "github.com/golang/glog"
-
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/throttler"
 )
 
