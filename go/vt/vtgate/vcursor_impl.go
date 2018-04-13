@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodata "vitess.io/vitess/go/vt/proto/topodata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -40,7 +39,7 @@ type vcursorImpl struct {
 	ctx              context.Context
 	safeSession      *SafeSession
 	keyspace         string
-	tabletType       topodata.TabletType
+	tabletType       topodatapb.TabletType
 	trailingComments string
 	executor         *Executor
 	logStats         *LogStats
@@ -54,7 +53,7 @@ type vcursorImpl struct {
 // the query and supply it here. Trailing comments are typically sent by the application for various reasons,
 // including as identifying markers. So, they have to be added back to all queries that are executed
 // on behalf of the original query.
-func newVCursorImpl(ctx context.Context, safeSession *SafeSession, keyspace string, tabletType topodata.TabletType, trailingComments string, executor *Executor, logStats *LogStats) *vcursorImpl {
+func newVCursorImpl(ctx context.Context, safeSession *SafeSession, keyspace string, tabletType topodatapb.TabletType, trailingComments string, executor *Executor, logStats *LogStats) *vcursorImpl {
 	return &vcursorImpl{
 		ctx:              ctx,
 		safeSession:      safeSession,
