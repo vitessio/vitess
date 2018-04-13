@@ -109,9 +109,9 @@ func TestGaugeFunc(t *testing.T) {
 		gotv = v.(*GaugeFunc)
 	})
 
-	f := NewGaugeFunc("name", "help", func() int64 {
+	f := NewGaugeFunc("name", "help", IntFunc(func() int64 {
 		return 1
-	})
+	}))
 	if f.String() != "1" {
 		t.Errorf("want 1, got %f", f.String())
 	}
@@ -148,16 +148,16 @@ func TestDuration(t *testing.T) {
 
 func TestDurationFunc(t *testing.T) {
 	var gotname string
-	var gotv *DurationFunc
+	var gotv *CounterFunc
 	clear()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
-		gotv = v.(*DurationFunc)
+		gotv = v.(*CounterFunc)
 	})
 
-	v := NewDurationFunc("duration", "help", func() time.Duration {
+	v := NewCounterFunc("duration", "help", DurationFunc(func() time.Duration {
 		return time.Duration(1)
-	})
+	}))
 
 	if gotv != v {
 		t.Errorf("want %#v, got %#v", v, gotv)

@@ -234,17 +234,17 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
 	qeOnce.Do(func() {
-		stats.NewGaugeFunc("MaxResultSize", "Query engine max result size", qe.maxResultSize.Get)
-		stats.NewGaugeFunc("WarnResultSize", "Query engine warn result size", qe.warnResultSize.Get)
-		stats.NewGaugeFunc("MaxDMLRows", "Query engine max DML rows", qe.maxDMLRows.Get)
-		stats.NewGaugeFunc("StreamBufferSize", "Query engine stream buffer size", qe.streamBufferSize.Get)
-		stats.NewGaugeFunc("TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Get)
-		stats.NewGaugeFunc("QueryPoolWaiters", "Query engine query pool waiters", qe.queryPoolWaiters.Get)
+		stats.NewGaugeFunc("MaxResultSize", "Query engine max result size", stats.IntFunc(qe.maxResultSize.Get))
+		stats.NewGaugeFunc("WarnResultSize", "Query engine warn result size", stats.IntFunc(qe.warnResultSize.Get))
+		stats.NewGaugeFunc("MaxDMLRows", "Query engine max DML rows", stats.IntFunc(qe.maxDMLRows.Get))
+		stats.NewGaugeFunc("StreamBufferSize", "Query engine stream buffer size", stats.IntFunc(qe.streamBufferSize.Get))
+		stats.NewCounterFunc("TableACLExemptCount", "Query engine table ACL exempt count", stats.IntFunc(qe.tableaclExemptCount.Get))
+		stats.NewGaugeFunc("QueryPoolWaiters", "Query engine query pool waiters", stats.IntFunc(qe.queryPoolWaiters.Get))
 
-		stats.NewGaugeFunc("QueryCacheLength", "Query engine query cache length", qe.plans.Length)
-		stats.NewGaugeFunc("QueryCacheSize", "Query engine query cache size", qe.plans.Size)
-		stats.NewGaugeFunc("QueryCacheCapacity", "Query engine query cache capacity", qe.plans.Capacity)
-		stats.NewGaugeFunc("QueryCacheEvictions", "Query engine query cache evictions", qe.plans.Evictions)
+		stats.NewGaugeFunc("QueryCacheLength", "Query engine query cache length", stats.IntFunc(qe.plans.Length))
+		stats.NewGaugeFunc("QueryCacheSize", "Query engine query cache size", stats.IntFunc(qe.plans.Size))
+		stats.NewGaugeFunc("QueryCacheCapacity", "Query engine query cache capacity", stats.IntFunc(qe.plans.Capacity))
+		stats.NewCounterFunc("QueryCacheEvictions", "Query engine query cache evictions", stats.IntFunc(qe.plans.Evictions))
 		stats.Publish("QueryCacheOldest", stats.StringFunc(func() string {
 			return fmt.Sprintf("%v", qe.plans.Oldest())
 		}))

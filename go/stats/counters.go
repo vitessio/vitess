@@ -242,14 +242,14 @@ func (g *GaugesWithLabels) Set(name string, value int64) {
 // For implementations that differentiate between Counters/Gauges,
 // CounterFunc's values only go up (or are reset to 0)
 type CounterFunc struct {
-	f    func() int64
+	Mf   MetricFunc
 	help string
 }
 
 // NewCounterFunc creates a new CounterFunc instance and publishes it if name is set
-func NewCounterFunc(name string, help string, f func() int64) *CounterFunc {
+func NewCounterFunc(name string, help string, Mf MetricFunc) *CounterFunc {
 	c := &CounterFunc{
-		f:    f,
+		Mf:   Mf,
 		help: help,
 	}
 
@@ -259,19 +259,33 @@ func NewCounterFunc(name string, help string, f func() int64) *CounterFunc {
 	return c
 }
 
-// String is the implementation of expvar.var
-func (cf *CounterFunc) String() string {
-	return strconv.FormatInt(cf.f(), 10)
-}
-
 // Help returns the help string
 func (cf *CounterFunc) Help() string {
 	return cf.help
 }
 
-// F calls and returns the result of the CounterFunc function
-func (cf *CounterFunc) F() int64 {
-	return cf.f()
+// String implements expvar.Var
+func (cf *CounterFunc) String() string {
+	return cf.Mf.String()
+}
+
+// MetricFunc defines an interface for things that can be exported with calls to stats.CounterFunc/stats.GaugeFunc
+type MetricFunc interface {
+	FloatVal() float64
+	String() string
+}
+
+// IntFunc converst a function that returns an int64 as both an expvar and a MetricFunc
+type IntFunc func() int64
+
+// FloatVal is the implementation of MetricFunc
+func (f IntFunc) FloatVal() float64 {
+	return float64(f())
+}
+
+// String is the implementation of expvar.var
+func (f IntFunc) String() string {
+	return strconv.FormatInt(f(), 10)
 }
 
 // GaugeFunc converts a function that returns an int64 as an expvar.
@@ -282,10 +296,10 @@ type GaugeFunc struct {
 }
 
 // NewGaugeFunc creates a new GaugeFunc instance and publishes it if name is set
-func NewGaugeFunc(name string, help string, f func() int64) *GaugeFunc {
+func NewGaugeFunc(name string, help string, Mf MetricFunc) *GaugeFunc {
 	i := &GaugeFunc{
 		CounterFunc: CounterFunc{
-			f:    f,
+			Mf:   Mf,
 			help: help,
 		}}
 

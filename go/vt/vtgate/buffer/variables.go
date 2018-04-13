@@ -25,21 +25,21 @@ var (
 	// starts counts how often we started buffering (including dry-run bufferings).
 	starts = stats.NewCountersWithMultiLabels(
 		"BufferStarts",
-		"How many times we started buffering, including dry-run",
+		"Buffering operation starts, including dry-run",
 		[]string{"Keyspace", "ShardName"})
 	// stops counts how often we triggered the stop of a buffering, including
 	// dry-run bufferings.
 	// See the type "stopReason" below for all possible values of "Reason".
 	stops = stats.NewCountersWithMultiLabels(
 		"BufferStops",
-		"How many times we triggered a buffering to stop, including dry-runs",
+		"Buffering operation stops, including dry-runs",
 		[]string{"Keyspace", "ShardName", "Reason"})
 
 	// failoverDurationSumMs is the cumulative sum of all failover durations.
 	// In connection with "starts" it can be used to calculate a moving average.
 	failoverDurationSumMs = stats.NewCountersWithMultiLabels(
 		"BufferFailoverDurationSumMs",
-		"Cumulative sum of all failover durations",
+		"Total buffering failover duration",
 		[]string{"Keyspace", "ShardName"})
 
 	// utilizationSum is the cumulative sum of the maximum buffer utilization
@@ -49,7 +49,7 @@ var (
 	// TODO(mberlin): Replace this with a MultiHistogram once it's available.
 	utilizationSum = stats.NewGaugesWithMultiLabels(
 		"BufferUtilizationSum",
-		"Cumulative sum of the max buffer utilization (in %) during each failover",
+		"Cumulative buffer utilization (in %) during failover",
 		[]string{"Keyspace", "ShardName"})
 	// utilizationDryRunSum is the cumulative sum of the maximum *theoretical*
 	// buffer utilization (in percentage) during each failover.
@@ -62,7 +62,7 @@ var (
 	// TODO(mberlin): Replace this with a MultiHistogram once it's available.
 	utilizationDryRunSum = stats.NewCountersWithMultiLabels(
 		"BufferUtilizationDryRunSum",
-		"Cumulative sum of the max *theoretical* buffer util (in %) during each failover",
+		"Cumulative buffer utilization % during failover (dry-run)",
 		[]string{"Keyspace", "ShardName"})
 
 	// requestsBuffered tracks how many requests were added to the buffer.
@@ -70,33 +70,33 @@ var (
 	// which passed through the buffer.
 	requestsBuffered = stats.NewCountersWithMultiLabels(
 		"BufferRequestsBuffered",
-		"How many requests were added to the buffer",
+		"Buffered requests",
 		[]string{"Keyspace", "ShardName"})
 	// requestsBufferedDryRun tracks how many requests would have been added to
 	// the buffer (dry-run mode).
 	requestsBufferedDryRun = stats.NewCountersWithMultiLabels(
 		"BufferRequestsBufferedDryRun",
-		"How many requests would've been added to the buffer (dry-run)",
+		"Buffered requests (dry-run)",
 		[]string{"Keyspace", "ShardName"})
 	// requestsBuffered tracks how many requests were drained from the buffer.
 	// NOTE: The sum of the two counters "Drained" and "Evicted" should be
 	// identical to the "Buffered" counter value.
 	requestsDrained = stats.NewCountersWithMultiLabels(
 		"BufferRequestsDrained",
-		"How many requests drained from the buffer",
+		"Drained buffered requests",
 		[]string{"Keyspace", "ShardName"})
 	// requestsEvicted tracks how many requests were evicted early from the buffer.
 	// See the type "evictedReason" below for all possible values of "Reason".
 	requestsEvicted = stats.NewCountersWithMultiLabels(
 		"BufferRequestsEvicted",
-		"How many requests were evicted early from the buffer",
+		"Evicted buffered requests",
 		[]string{"Keyspace", "ShardName", "Reason"})
 	// requestsSkipped tracks how many requests would have been buffered but
 	// eventually were not (includes dry-run bufferings).
 	// See the type "skippedReason" below for all possible values of "Reason".
 	requestsSkipped = stats.NewCountersWithMultiLabels(
 		"BufferRequestsSkipped",
-		"How many requests would've been buffered but were skipped (incl. dry-run)",
+		"Skipped buffering requests (incl. dry-run)",
 		[]string{"Keyspace", "ShardName", "Reason"})
 )
 
@@ -175,20 +175,14 @@ func initVariablesForShard(statsKey []string) {
 var (
 	// bufferSize publishes the configured per vtgate buffer size. It can be used
 	// to calculate the utilization of the buffer.
-	bufferSize = stats.NewGauge("BufferSize", "The configured per vtgate buffer size")
-	// lastFailoverDurationMs tracks for how long vtgate buffered requests during
-	// the last failover.
-	// The value for a given shard will be reset at the next failover.
+	bufferSize             = stats.NewGauge("BufferSize", "The configured per vtgate buffer size")
 	lastFailoverDurationMs = stats.NewGaugesWithMultiLabels(
 		"BufferLastFailoverDurationMs",
-		"How long vtgate buffered requests during the last failover",
+		"Buffered requests during the last failover. The value for a given shard will be reset at the next failover.",
 		[]string{"Keyspace", "ShardName"})
-	// lastRequestsInFlightMax has the maximum value of buffered requests in flight
-	// of the last failover.
-	// The value for a given shard will be reset at the next failover.
 	lastRequestsInFlightMax = stats.NewGaugesWithMultiLabels(
 		"BufferLastRequestsInFlightMax",
-		"The max value of buffered requests in flight of the last failover",
+		"The max value of buffered requests in flight of the last failover. The value for a given shard will be reset at the next failover.",
 		[]string{"Keyspace", "ShardName"})
 	// lastRequestsDryRunMax has the maximum number of requests which were seen during
 	// a dry-run buffering of the last failover.

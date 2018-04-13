@@ -20,16 +20,12 @@ package main
 // with the Prometheus client library
 
 import (
-	"net/http"
-
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"vitess.io/vitess/go/stats/prometheusbackend"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
 func init() {
 	servenv.OnRun(func() {
-		http.Handle("/metrics", promhttp.Handler())
 		prometheusbackend.Init("vtworker")
 	})
 }

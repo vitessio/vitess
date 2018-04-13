@@ -42,9 +42,9 @@ func TestPrometheusGauge(t *testing.T) {
 
 func TestPrometheusCounterFunc(t *testing.T) {
 	name := "blah_counterfunc"
-	stats.NewCounterFunc(name, "help", func() int64 {
+	stats.NewCounterFunc(name, "help", stats.IntFunc(func() int64 {
 		return 2
-	})
+	}))
 
 	checkHandlerForMetrics(t, name, 2)
 }
@@ -52,9 +52,9 @@ func TestPrometheusCounterFunc(t *testing.T) {
 func TestPrometheusGaugeFunc(t *testing.T) {
 	name := "blah_gaugefunc"
 
-	stats.NewGaugeFunc(name, "help", func() int64 {
+	stats.NewGaugeFunc(name, "help", stats.IntFunc(func() int64 {
 		return -3
-	})
+	}))
 
 	checkHandlerForMetrics(t, name, -3)
 }
@@ -100,10 +100,10 @@ func TestPrometheusGaugesWithLabels(t *testing.T) {
 	checkHandlerForMetricWithLabels(t, name, "tag", "tag2", 0)
 }
 
-func checkHandlerForMetricWithLabels(t *testing.T, metric string, tag_name string, tag_value string, value int) {
+func checkHandlerForMetricWithLabels(t *testing.T, metric string, tagName string, tagValue string, value int) {
 	response := testMetricsHandler(t)
 
-	expected := fmt.Sprintf("%s_%s{%s=\"%s\"} %d", namespace, metric, tag_name, tag_value, value)
+	expected := fmt.Sprintf("%s_%s{%s=\"%s\"} %d", namespace, metric, tagName, tagValue, value)
 
 	if !strings.Contains(response.Body.String(), expected) {
 		t.Fatalf("Expected %s got %s", expected, response.Body.String())
@@ -113,38 +113,38 @@ func checkHandlerForMetricWithLabels(t *testing.T, metric string, tag_name strin
 func TestPrometheusCountersWithMultiLabels(t *testing.T) {
 	name := "blah_counterswithmultilabels"
 	labels := []string{"label1", "label2"}
-	label_values := []string{"foo", "bar"}
+	labelValues := []string{"foo", "bar"}
 	c := stats.NewCountersWithMultiLabels(name, "help", labels)
-	c.Add(label_values, 1)
-	checkHandlerForMetricWithMultiLabels(t, name, labels, label_values, 1)
-	label_values2 := []string{"baz", "bazbar"}
-	c.Add(label_values2, 1)
-	checkHandlerForMetricWithMultiLabels(t, name, labels, label_values, 1)
-	checkHandlerForMetricWithMultiLabels(t, name, labels, label_values2, 1)
-	c.Reset(label_values)
-	checkHandlerForMetricWithMultiLabels(t, name, labels, label_values, 0)
-	checkHandlerForMetricWithMultiLabels(t, name, labels, label_values2, 1)
+	c.Add(labelValues, 1)
+	checkHandlerForMetricWithMultiLabels(t, name, labels, labelValues, 1)
+	labelValues2 := []string{"baz", "bazbar"}
+	c.Add(labelValues2, 1)
+	checkHandlerForMetricWithMultiLabels(t, name, labels, labelValues, 1)
+	checkHandlerForMetricWithMultiLabels(t, name, labels, labelValues2, 1)
+	c.Reset(labelValues)
+	checkHandlerForMetricWithMultiLabels(t, name, labels, labelValues, 0)
+	checkHandlerForMetricWithMultiLabels(t, name, labels, labelValues2, 1)
 }
 
 func TestPrometheusGaugesWithMultiLabels(t *testing.T) {
 	name := "blah_gaugeswithmultilabels"
 	labels := []string{"label1", "label2"}
-	label_values := []string{"foo", "bar"}
+	labelValues := []string{"foo", "bar"}
 	c := stats.NewGaugesWithMultiLabels(name, "help", labels)
-	c.Add(label_values, 1)
-	checkHandlerForMetricWithMultiLabels(t, name, labels, label_values, 1)
+	c.Add(labelValues, 1)
+	checkHandlerForMetricWithMultiLabels(t, name, labels, labelValues, 1)
 
-	c.Set(label_values, -1)
-	checkHandlerForMetricWithMultiLabels(t, name, labels, label_values, -1)
+	c.Set(labelValues, -1)
+	checkHandlerForMetricWithMultiLabels(t, name, labels, labelValues, -1)
 
-	label_values2 := []string{"baz", "bazbar"}
-	c.Add(label_values2, 1)
-	checkHandlerForMetricWithMultiLabels(t, name, labels, label_values, -1)
-	checkHandlerForMetricWithMultiLabels(t, name, labels, label_values2, 1)
+	labelValues2 := []string{"baz", "bazbar"}
+	c.Add(labelValues2, 1)
+	checkHandlerForMetricWithMultiLabels(t, name, labels, labelValues, -1)
+	checkHandlerForMetricWithMultiLabels(t, name, labels, labelValues2, 1)
 
-	c.Reset(label_values)
-	checkHandlerForMetricWithMultiLabels(t, name, labels, label_values, 0)
-	checkHandlerForMetricWithMultiLabels(t, name, labels, label_values2, 1)
+	c.Reset(labelValues)
+	checkHandlerForMetricWithMultiLabels(t, name, labels, labelValues, 0)
+	checkHandlerForMetricWithMultiLabels(t, name, labels, labelValues2, 1)
 }
 
 func TestPrometheusCountersWithMultiLabels_AddPanic(t *testing.T) {
@@ -174,10 +174,10 @@ func TestPrometheusCountersFuncWithMultiLabels(t *testing.T) {
 	checkHandlerForMetricWithMultiLabels(t, name, labels, []string{"bar", "baz"}, 1)
 }
 
-func checkHandlerForMetricWithMultiLabels(t *testing.T, metric string, labels []string, label_values []string, value int64) {
+func checkHandlerForMetricWithMultiLabels(t *testing.T, metric string, labels []string, labelValues []string, value int64) {
 	response := testMetricsHandler(t)
 
-	expected := fmt.Sprintf("%s_%s{%s=\"%s\",%s=\"%s\"} %d", namespace, metric, labels[0], label_values[0], labels[1], label_values[1], value)
+	expected := fmt.Sprintf("%s_%s{%s=\"%s\",%s=\"%s\"} %d", namespace, metric, labels[0], labelValues[0], labels[1], labelValues[1], value)
 
 	if !strings.Contains(response.Body.String(), expected) {
 		t.Fatalf("Expected %s got %s", expected, response.Body.String())
@@ -217,26 +217,26 @@ func TestPrometheusTimings(t *testing.T) {
 func TestPrometheusMultiTimings(t *testing.T) {
 	name := "blah_multitimings"
 	cats := []string{"cat1", "cat2"}
-	cat_labels := []string{"foo", "bar"}
+	catLabels := []string{"foo", "bar"}
 	timing := stats.NewMultiTimings(name, "help", cats)
-	timing.Add(cat_labels, time.Duration(1000000000))
+	timing.Add(catLabels, time.Duration(1000000000))
 
 	response := testMetricsHandler(t)
 	var s []string
 
-	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.0005\"} %d", namespace, name, cats[0], cat_labels[0], cats[1], cat_labels[1], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.001\"} %d", namespace, name, cats[0], cat_labels[0], cats[1], cat_labels[1], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.005\"} %d", namespace, name, cats[0], cat_labels[0], cats[1], cat_labels[1], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.01\"} %d", namespace, name, cats[0], cat_labels[0], cats[1], cat_labels[1], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.05\"} %d", namespace, name, cats[0], cat_labels[0], cats[1], cat_labels[1], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.1\"} %d", namespace, name, cats[0], cat_labels[0], cats[1], cat_labels[1], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.5\"} %d", namespace, name, cats[0], cat_labels[0], cats[1], cat_labels[1], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"1\"} %d", namespace, name, cats[0], cat_labels[0], cats[1], cat_labels[1], 1))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"5\"} %d", namespace, name, cats[0], cat_labels[0], cats[1], cat_labels[1], 1))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"10\"} %d", namespace, name, cats[0], cat_labels[0], cats[1], cat_labels[1], 1))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"+Inf\"} %d", namespace, name, cats[0], cat_labels[0], cats[1], cat_labels[1], 1))
-	s = append(s, fmt.Sprintf("%s_%s_sum{%s=\"%s\",%s=\"%s\"} %d", namespace, name, cats[0], cat_labels[0], cats[1], cat_labels[1], 1))
-	s = append(s, fmt.Sprintf("%s_%s_count{%s=\"%s\",%s=\"%s\"} %d", namespace, name, cats[0], cat_labels[0], cats[1], cat_labels[1], 1))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.0005\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.001\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.005\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.01\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.05\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.1\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.5\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"1\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 1))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"5\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 1))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"10\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 1))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"+Inf\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 1))
+	s = append(s, fmt.Sprintf("%s_%s_sum{%s=\"%s\",%s=\"%s\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 1))
+	s = append(s, fmt.Sprintf("%s_%s_count{%s=\"%s\",%s=\"%s\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 1))
 
 	for _, line := range s {
 		if !strings.Contains(response.Body.String(), line) {

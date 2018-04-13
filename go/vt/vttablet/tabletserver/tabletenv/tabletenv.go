@@ -40,13 +40,13 @@ var (
 	// QPSRates shows the qps of QueryStats. Sample every 5 seconds and keep samples for up to 15 mins.
 	QPSRates = stats.NewRates("QPS", QueryStats, 15*60/5, 5*time.Second)
 	// WaitStats shows the time histogram for wait operations
-	WaitStats = stats.NewTimings("Waits", "Shows the time histogram for wait operations")
+	WaitStats = stats.NewTimings("Waits", "Wait operations")
 	// KillStats shows number of connections being killed.
 	KillStats = stats.NewCountersWithLabels("Kills", "Number of connections being killed", "query_type", "Transactions", "Queries")
 	// ErrorStats shows number of critial errors happened.
 	ErrorStats = stats.NewCountersWithLabels(
 		"Errors",
-		"Number of critical errors that happened",
+		"Critical errors",
 		"error_code",
 		vtrpcpb.Code_OK.String(),
 		vtrpcpb.Code_CANCELED.String(),
@@ -67,15 +67,15 @@ var (
 		vtrpcpb.Code_DATA_LOSS.String(),
 	)
 	// InternalErrors shows number of errors from internal components.
-	InternalErrors = stats.NewCountersWithLabels("InternalErrors", "Number of errors from internal components", "type", "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection", "WatchdogFail", "Messages")
+	InternalErrors = stats.NewCountersWithLabels("InternalErrors", "Internal component errors", "type", "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection", "WatchdogFail", "Messages")
 	// Warnings shows number of warnings
-	Warnings = stats.NewCountersWithLabels("Warnings", "Number of warnings", "type", "ResultsExceeded")
+	Warnings = stats.NewCountersWithLabels("Warnings", "Warnings", "type", "ResultsExceeded")
 	// Unresolved tracks unresolved items. For now it's just Prepares.
 	Unresolved = stats.NewGaugesWithLabels("Unresolved", "Unresolved items", "item_type", "Prepares")
 	// UserTableQueryCount shows number of queries received for each CallerID/table combination.
 	UserTableQueryCount = stats.NewCountersWithMultiLabels(
 		"UserTableQueryCount",
-		"Number of queries received for each CallerID/table combination",
+		"Queries received for each CallerID/table combination",
 		[]string{"TableName", "CallerID", "Type"})
 	// UserTableQueryTimesNs shows total latency for each CallerID/table combination.
 	UserTableQueryTimesNs = stats.NewCountersWithMultiLabels(
@@ -85,7 +85,7 @@ var (
 	// UserTransactionCount shows number of transactions received for each CallerID.
 	UserTransactionCount = stats.NewCountersWithMultiLabels(
 		"UserTransactionCount",
-		"shows numb of transactions received for each CallerID",
+		"transactions received for each CallerID",
 		[]string{"CallerID", "Conclusion"})
 	// UserTransactionTimesNs shows total transaction latency for each CallerID.
 	UserTransactionTimesNs = stats.NewCountersWithMultiLabels(
@@ -97,17 +97,17 @@ var (
 	// TableaclAllowed tracks the number allows.
 	TableaclAllowed = stats.NewCountersWithMultiLabels(
 		"TableACLAllowed",
-		"The number ACL acceptances",
+		"ACL acceptances",
 		[]string{"TableName", "TableGroup", "PlanID", "Username"})
 	// TableaclDenied tracks the number of denials.
 	TableaclDenied = stats.NewCountersWithMultiLabels(
 		"TableACLDenied",
-		"The number of ACL denials",
+		"ACL denials",
 		[]string{"TableName", "TableGroup", "PlanID", "Username"})
 	// TableaclPseudoDenied tracks the number of pseudo denies.
 	TableaclPseudoDenied = stats.NewCountersWithMultiLabels(
 		"TableACLPseudoDenied",
-		"The number of ACL pseudodenials",
+		"ACL pseudodenials",
 		[]string{"TableName", "TableGroup", "PlanID", "Username"})
 	// Infof can be overridden during tests
 	Infof = log.Infof

@@ -421,7 +421,7 @@ func NewBinlogPlayerMap(ts *topo.Server, mysqld mysqlctl.MysqlDaemon, vtClientFa
 
 // RegisterBinlogPlayerMap registers the varz for the players.
 func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
-	stats.NewGaugeFunc("BinlogPlayerMapSize", "Binlog player map size", (func() int64 {
+	stats.NewGaugeFunc("BinlogPlayerMapSize", "Binlog player map size", stats.IntFunc(func() int64 {
 		blm.mu.Lock()
 		defer blm.mu.Unlock()
 		return int64(len(blm.players))
@@ -429,7 +429,7 @@ func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
 	stats.NewGaugeFunc(
 		"BinlogPlayerSecondsBehindMaster",
 		"Binlog player seconds behind master",
-		(func() int64 {
+		stats.IntFunc(func() int64 {
 			blm.mu.Lock()
 			defer blm.mu.Unlock()
 			return blm.maxSecondsBehindMasterUNGUARDED()
