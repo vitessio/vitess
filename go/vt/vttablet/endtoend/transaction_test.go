@@ -580,7 +580,7 @@ func TestMMCommitFlow(t *testing.T) {
 	}
 
 	err = client.SetRollback("aa", 0)
-	want = "could not transition to ROLLBACK: aa, (CallerID: dev)"
+	want = "could not transition to ROLLBACK: aa (CallerID: dev)"
 	if err == nil || err.Error() != want {
 		t.Errorf("%v, must contain %s", err, want)
 	}
