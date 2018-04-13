@@ -1,3 +1,11 @@
+This is the Square fork of Vitess containing Square specific patches and patches not yet merged upstream.
+
+The intent is that general patches are eventually merged upstream but there will also be Square specific patches that won't get merged upstream.
+
+The original upstream master from Github is tracked here:
+* upstream-master
+
+
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/io.vitess/vitess-jdbc/badge.svg)](https://maven-badges.herokuapp.com/maven-central/io.vitess/vitess-jdbc)
 [![Build Status](https://travis-ci.org/vitessio/vitess.svg?branch=master)](https://travis-ci.org/vitessio/vitess/builds)
 [![codebeat badge](https://codebeat.co/badges/51c9a056-1103-4522-9a9c-dc623821ea87)](https://codebeat.co/projects/github-com-youtube-vitess)
