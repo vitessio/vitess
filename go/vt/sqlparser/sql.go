@@ -3969,6 +3969,7 @@ yydefault:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		//line sql.y:1549
 		{
+			yyVAL.joinCondition = JoinCondition{}
 		}
 	case 280:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -3980,6 +3981,7 @@ yydefault:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		//line sql.y:1555
 		{
+			yyVAL.joinCondition = JoinCondition{}
 		}
 	case 282:
 		yyDollar = yyS[yypt-2 : yypt+1]
