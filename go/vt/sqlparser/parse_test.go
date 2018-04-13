@@ -1213,6 +1213,22 @@ var (
 		input: "commit",
 	}, {
 		input: "rollback",
+	}, {
+		input: "create database test_db",
+	}, {
+		input:  "create schema test_db",
+		output: "create database test_db",
+	}, {
+		input:  "create database if not exists test_db",
+		output: "create database test_db",
+	}, {
+		input: "drop database test_db",
+	}, {
+		input:  "drop schema test_db",
+		output: "drop database test_db",
+	}, {
+		input:  "drop database if exists test_db",
+		output: "drop database test_db",
 	}}
 )
 
