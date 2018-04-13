@@ -215,7 +215,7 @@ func NewResilientServer(base *topo.Server, counterPrefix string) *ResilientServe
 		topoServer:   base,
 		cacheTTL:     *srvTopoCacheTTL,
 		cacheRefresh: *srvTopoCacheRefresh,
-		counts:       stats.NewCountersWithLabels(counterPrefix+"Counts", "resilient srvtopo server operations", "type"),
+		counts:       stats.NewCountersWithLabels(counterPrefix+"Counts", "Resilient srvtopo server operations", "type"),
 
 		srvKeyspaceNamesCache: make(map[string]*srvKeyspaceNamesEntry),
 		srvKeyspaceCache:      make(map[string]*srvKeyspaceEntry),

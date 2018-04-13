@@ -2,12 +2,14 @@ package prometheusbackend
 
 import (
 	"expvar"
+	"net/http"
 	"strings"
 	"unicode"
 
 	log "github.com/golang/glog"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"vitess.io/vitess/go/stats"
 )
 
@@ -22,57 +24,46 @@ var (
 
 // Init initializes the Prometheus be with the given namespace.
 func Init(namespace string) {
+	http.Handle("/metrics", promhttp.Handler())
 	be := &PromBackend{namespace: namespace}
 	stats.Register(be.publishPrometheusMetric)
 }
-
-// ValueType specifies whether the value of a metric goes up monotonically
-// or if it goes up and down. This is useful for exporting to backends that
-// differentiate between counters and gauges.
-type ValueType int
-
-const (
-	// CounterValue is used to specify a value that only goes up (but can be reset to 0).
-	CounterValue = iota
-	// GaugeValue is used to specify a value that goes both up and down.
-	GaugeValue
-)
 
 // PublishPromMetric is used to publish the metric to Prometheus.
 func (be *PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 	switch st := v.(type) {
 	case *stats.Counter:
-		be.newMetric(st, name, CounterValue)
+		be.newMetric(st, name, prometheus.CounterValue)
 	case *stats.Gauge:
-		be.newMetric(&st.Counter, name, GaugeValue)
+		be.newMetric(&st.Counter, name, prometheus.GaugeValue)
 	case *stats.CounterFunc:
-		be.newMetricFunc(st, name, CounterValue)
+		be.newMetricFunc(st, name, prometheus.CounterValue)
 	case *stats.GaugeFunc:
-		be.newMetricFunc(&st.CounterFunc, name, GaugeValue)
+		be.newMetricFunc(&st.CounterFunc, name, prometheus.GaugeValue)
 	case *stats.CountersWithLabels:
-		be.newMetricWithLabels(&st.Counters, name, st.LabelName(), CounterValue)
+		be.newMetricWithLabels(&st.Counters, name, st.LabelName(), prometheus.CounterValue)
 	case *stats.CountersWithMultiLabels:
 		be.newCountersWithMultiLabels(st, name)
 	case *stats.CountersFuncWithMultiLabels:
-		be.newMetricsFuncWithMultiLabels(st, name, CounterValue)
+		be.newMetricsFuncWithMultiLabels(st, name, prometheus.CounterValue)
 	case *stats.GaugesFuncWithMultiLabels:
-		be.newMetricsFuncWithMultiLabels(&st.CountersFuncWithMultiLabels, name, GaugeValue)
+		be.newMetricsFuncWithMultiLabels(&st.CountersFuncWithMultiLabels, name, prometheus.GaugeValue)
 	case *stats.GaugesWithLabels:
-		be.newMetricWithLabels(&st.Counters, name, st.LabelName(), GaugeValue)
+		be.newMetricWithLabels(&st.Counters, name, st.LabelName(), prometheus.GaugeValue)
 	case *stats.GaugesWithMultiLabels:
 		be.newGaugesWithMultiLabels(st, name)
 	case *stats.Timings:
 		be.newTiming(st, name)
 	case *stats.MultiTimings:
 		be.newMultiTiming(st, name)
-	case *stats.DurationFunc:
-		be.newDurationFunc(st, name)
+	//case *stats.DurationFunc:
+	//		be.newDurationFunc(st, name)
 	default:
 		log.Warningf("Unsupported type for %s: %T", name, st)
 	}
 }
 
-func (be *PromBackend) newMetricWithLabels(c *stats.Counters, name string, labelName string, vt ValueType) {
+func (be *PromBackend) newMetricWithLabels(c *stats.Counters, name string, labelName string, vt prometheus.ValueType) {
 	collector := &metricWithLabelsCollector{
 		counter: c,
 		desc: prometheus.NewDesc(
@@ -111,7 +102,7 @@ func (be *PromBackend) newGaugesWithMultiLabels(gml *stats.GaugesWithMultiLabels
 	prometheus.MustRegister(c)
 }
 
-func (be *PromBackend) newMetricsFuncWithMultiLabels(cfml *stats.CountersFuncWithMultiLabels, name string, vt ValueType) {
+func (be *PromBackend) newMetricsFuncWithMultiLabels(cfml *stats.CountersFuncWithMultiLabels, name string, vt prometheus.ValueType) {
 	collector := &metricsFuncWithMultiLabelsCollector{
 		cfml: cfml,
 		desc: prometheus.NewDesc(
@@ -151,7 +142,7 @@ func (be *PromBackend) newMultiTiming(mt *stats.MultiTimings, name string) {
 	prometheus.MustRegister(collector)
 }
 
-func (be *PromBackend) newMetric(c *stats.Counter, name string, vt ValueType) {
+func (be *PromBackend) newMetric(c *stats.Counter, name string, vt prometheus.ValueType) {
 	collector := &metricCollector{
 		counter: c,
 		desc: prometheus.NewDesc(
@@ -164,7 +155,7 @@ func (be *PromBackend) newMetric(c *stats.Counter, name string, vt ValueType) {
 	prometheus.MustRegister(collector)
 }
 
-func (be *PromBackend) newMetricFunc(cf *stats.CounterFunc, name string, vt ValueType) {
+func (be *PromBackend) newMetricFunc(cf *stats.CounterFunc, name string, vt prometheus.ValueType) {
 	collector := &metricFuncCollector{
 		cf: cf,
 		desc: prometheus.NewDesc(
@@ -173,19 +164,6 @@ func (be *PromBackend) newMetricFunc(cf *stats.CounterFunc, name string, vt Valu
 			nil,
 			nil),
 		vt: vt}
-
-	prometheus.MustRegister(collector)
-}
-
-func (be *PromBackend) newDurationFunc(df *stats.DurationFunc, name string) {
-	collector := &durationFuncCollector{
-		df: df,
-		desc: prometheus.NewDesc(
-			be.buildPromName(name),
-			df.Help(),
-			nil,
-			nil),
-	}
 
 	prometheus.MustRegister(collector)
 }

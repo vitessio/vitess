@@ -77,7 +77,7 @@ func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *En
 		reloadTime: reloadTime,
 	}
 	schemaOnce.Do(func() {
-		_ = stats.NewDurationFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
+		_ = stats.NewGaugeFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", stats.DurationFunc(se.ticks.Interval))
 		_ = stats.NewGaugesFuncWithMultiLabels("TableRows", []string{"Table"}, "table rows created in tabletserver", se.getTableRows)
 		_ = stats.NewGaugesFuncWithMultiLabels("DataLength", []string{"Table"}, "data length in tabletserver", se.getDataLength)
 		_ = stats.NewGaugesFuncWithMultiLabels("IndexLength", []string{"Table"}, "index length in tabletserver", se.getIndexLength)

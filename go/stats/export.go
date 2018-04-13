@@ -230,37 +230,16 @@ func (v *Duration) String() string {
 
 // DurationFunc converts a function that returns
 // an time.Duration as an expvar.
-type DurationFunc struct {
-	f    func() time.Duration
-	help string
-}
-
-// NewDurationFunc creates a new DurationFunc instance and publishes it if name is set.
-func NewDurationFunc(name string, help string, f func() time.Duration) *DurationFunc {
-	d := &DurationFunc{
-		f:    f,
-		help: help,
-	}
-
-	if name != "" {
-		publish(name, d)
-	}
-	return d
-}
+type DurationFunc func() time.Duration
 
 // String is the implementation of expvar.var
-func (d *DurationFunc) String() string {
-	return strconv.FormatInt(int64(d.f()), 10)
+func (f DurationFunc) String() string {
+	return strconv.FormatInt(int64(f()), 10)
 }
 
-// Help returns the help string.
-func (d *DurationFunc) Help() string {
-	return d.help
-}
-
-// F calls and returns the result of the DurationFunc function
-func (d *DurationFunc) F() time.Duration {
-	return d.f()
+// FloatVal is the implementation of MetricFunc
+func (f DurationFunc) FloatVal() float64 {
+	return f().Seconds()
 }
 
 // String is expvar.String+Get+hook
