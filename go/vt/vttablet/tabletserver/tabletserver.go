@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -1396,33 +1397,30 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		sqlState := sqlErr.SQLState()
 		errnum := sqlErr.Number()
 		if tsv.TerseErrors && len(bindVariables) != 0 && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
-			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s during query: %s", errnum, sqlState, callerID, sqlparser.TruncateForLog(sql))
-			message = err.Error()
+			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, nil))
+			if logMethod != nil {
+				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, doubleTruncate(sql, bindVariables))
+			}
 		} else {
 			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables))
-			message = err.Error()
+			if logMethod != nil {
+				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, doubleTruncate(sql, bindVariables))
+			}
 		}
 	} else {
 		err = vterrors.Errorf(errCode, "%v%s", err.Error(), callerID)
 		if tsv.TerseErrors && len(bindVariables) != 0 && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
-			message = fmt.Sprintf("%v: %v", err, queryAsString(sql, nil))
+			if logMethod != nil {
+				message = fmt.Sprintf("%v: %v", err, doubleTruncate(sql, nil))
+			}
 		} else {
-			message = fmt.Sprintf("%v: %v", err, queryAsString(sql, bindVariables))
+			if logMethod != nil {
+				message = fmt.Sprintf("%v: %v", err, doubleTruncate(sql, bindVariables))
+			}
 		}
 	}
 
 	if logMethod != nil {
-		// In order to correctly truncate long queries in logs, combine
-		// the error (which contains the mysql error string)
-		// with the unexpanded query + bind variables, then
-		// truncate the resulting string.
-		//
-		// This makes it so that the query portion of the logs is
-		// properly truncated to the expected max log length.
-		maxLen := *sqlparser.TruncateErrLen
-		if maxLen != 0 && len(message) > maxLen {
-			message = message[:maxLen-12] + " [TRUNCATED]"
-		}
 		logMethod(message)
 	}
 
@@ -1431,6 +1429,28 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	}
 
 	return err
+}
+
+func doubleTruncate(sql string, bindVariables map[string]*querypb.BindVariable) string {
+	truncatedQuery := sqlparser.TruncateForLog(sql)
+	buf := &bytes.Buffer{}
+	fmt.Fprintf(buf, "BindVars: {")
+	var keys []string
+	for key := range bindVariables {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		valString := fmt.Sprintf("%v", bindVariables[key])
+		fmt.Fprintf(buf, "%s: %q", key, valString)
+	}
+	fmt.Fprintf(buf, "}")
+	bv := string(buf.Bytes())
+	maxLen := *sqlparser.TruncateErrLen
+	if maxLen != 0 && len(bv) > maxLen {
+		bv = bv[:maxLen-12] + " [TRUNCATED]"
+	}
+	return fmt.Sprintf("Sql: %q, %s", truncatedQuery, bv)
 }
 
 func (tsv *TabletServer) convertErrorCode(err error) vtrpcpb.Code {
@@ -2050,18 +2070,15 @@ func (tsv *TabletServer) GetTxPoolWaiterCap() int64 {
 }
 
 // queryAsString returns a readable version of query+bind variables.
-// If the passed bindVariables is nil, the BindVars section is entirely omitted.
 func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable) string {
 	buf := &bytes.Buffer{}
 	fmt.Fprintf(buf, "Sql: %q", sql)
-	if bindVariables != nil {
-		fmt.Fprintf(buf, ", BindVars: {")
-		for k, v := range bindVariables {
-			valString := fmt.Sprintf("%v", v)
-			fmt.Fprintf(buf, "%s: %q", k, valString)
-		}
-		fmt.Fprintf(buf, "}")
+	fmt.Fprintf(buf, ", BindVars: {")
+	for k, v := range bindVariables {
+		valString := fmt.Sprintf("%v", v)
+		fmt.Fprintf(buf, "%s: %q", k, valString)
 	}
+	fmt.Fprintf(buf, "}")
 	return string(buf.Bytes())
 }
 

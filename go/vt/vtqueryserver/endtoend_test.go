@@ -387,10 +387,11 @@ func TestQueryDeadline(t *testing.T) {
 
 	// First run a query that is killed by the slow query killer after 2s
 	_, err = conn.ExecuteFetch("select sleep(5) from dual", 1000, false)
-	wantErr := "EOF (errno 2013) (sqlstate HY000) during query"
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Errorf("want error %v, got %v", wantErr, err)
+	wantErr := "EOF (errno 2013) (sqlstate HY000)"
+	if err == nil || !strings.HasPrefix(err.Error(), wantErr) {
+		t.Errorf("error want '%v', got '%v'", wantErr, err)
 	}
+
 	sqlErr, ok := err.(*mysql.SQLError)
 	if !ok {
 		t.Fatalf("Unexpected error type: %T, want %T", err, &mysql.SQLError{})
