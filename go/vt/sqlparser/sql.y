@@ -150,7 +150,7 @@ func forceEOF(yylex interface{}) {
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD
-%token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT SPATIAL FULLTEXT FOREIGN
+%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT SPATIAL FULLTEXT FOREIGN
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
@@ -492,6 +492,14 @@ create_statement:
         Type: $4,
         Params: $5,
     }}
+  }
+| CREATE DATABASE not_exists_opt ID ddl_force_eof
+  {
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
+  }
+| CREATE SCHEMA not_exists_opt ID ddl_force_eof
+  {
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
   }
 
 vindex_type_opt:
@@ -1139,6 +1147,14 @@ drop_statement:
           exists = true
         }
     $$ = &DDL{Action: DropStr, Table: $4.ToViewName(), IfExists: exists}
+  }
+| DROP DATABASE exists_opt ID
+  {
+    $$ = &DBDDL{Action: DropStr, DBName: string($4)}
+  }
+| DROP SCHEMA exists_opt ID
+  {
+    $$ = &DBDDL{Action: DropStr, DBName: string($4)}
   }
 
 truncate_statement:
@@ -2770,6 +2786,7 @@ reserved_keyword:
 | RENAME
 | REPLACE
 | RIGHT
+| SCHEMA
 | SELECT
 | SEPARATOR
 | SET

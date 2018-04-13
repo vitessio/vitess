@@ -152,6 +152,8 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 		return nil, errors.New("unsupported construct: show")
 	case *sqlparser.DDL:
 		return nil, errors.New("unsupported construct: ddl")
+	case *sqlparser.DBDDL:
+		return nil, errors.New("unsupported construct: ddl on database")
 	case *sqlparser.OtherRead:
 		return nil, errors.New("unsupported construct: other read")
 	case *sqlparser.OtherAdmin:
