@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"strings"
 
@@ -217,6 +218,7 @@ func (*Insert) iStatement()     {}
 func (*Update) iStatement()     {}
 func (*Delete) iStatement()     {}
 func (*Set) iStatement()        {}
+func (*DBDDL) iStatement()      {}
 func (*DDL) iStatement()        {}
 func (*Show) iStatement()       {}
 func (*Use) iStatement()        {}
@@ -617,6 +619,34 @@ func (node *Set) walkSubtree(visit Visit) error {
 		node.Comments,
 		node.Exprs,
 	)
+}
+
+// DBDDL represents a CREATE, DROP database statement.
+type DBDDL struct {
+	Action   string
+	DBName   string
+	IfExists bool
+	Collate  string
+	Charset  string
+}
+
+// Format formats the node.
+func (node *DBDDL) Format(buf *TrackedBuffer) {
+	switch node.Action {
+	case CreateStr:
+		buf.WriteString(fmt.Sprintf("%s database %s", node.Action, node.DBName))
+	case DropStr:
+		exists := ""
+		if node.IfExists {
+			exists = " if exists"
+		}
+		buf.WriteString(fmt.Sprintf("%s database%s %v", node.Action, exists, node.DBName))
+	}
+}
+
+// walkSubtree walks the nodes of the subtree.
+func (node *DBDDL) walkSubtree(visit Visit) error {
+	return nil
 }
 
 // DDL represents a CREATE, ALTER, DROP, RENAME or TRUNCATE statement.
