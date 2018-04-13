@@ -11,3 +11,6 @@ delete from user where name='billy';
 
 /* multi-shard delete with autocommit is supported */
 delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where extra='abc';
+
+/* multi-shard delete with limit and autocommit is supported using keyrange targeting */
+delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from `ks_sharded[-]`.music_extra where extra='abc' LIMIT 10;
