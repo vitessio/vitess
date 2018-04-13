@@ -60,3 +60,23 @@ delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where extra='abc'
 1 ks_sharded/c0-: commit
 
 ----------------------------------------------------------------------
+delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from `ks_sharded[-]`.music_extra where extra='abc' LIMIT 10
+
+1 ks_sharded/-40: begin
+1 ks_sharded/-40: select id from music_extra where extra = 'abc' limit 10 for update/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/-40: delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where id in (1)/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/-40: commit
+1 ks_sharded/40-80: begin
+1 ks_sharded/40-80: select id from music_extra where extra = 'abc' limit 10 for update/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/40-80: delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where id in (1)/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/40-80: commit
+1 ks_sharded/80-c0: begin
+1 ks_sharded/80-c0: select id from music_extra where extra = 'abc' limit 10 for update/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/80-c0: delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where id in (1)/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/80-c0: commit
+1 ks_sharded/c0-: begin
+1 ks_sharded/c0-: select id from music_extra where extra = 'abc' limit 10 for update/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/c0-: delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where id in (1)/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/c0-: commit
+
+----------------------------------------------------------------------
