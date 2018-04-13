@@ -1546,13 +1546,13 @@ join_condition:
 
 join_condition_opt:
 %prec JOIN
-  { }
+  { $$ = JoinCondition{} }
 | join_condition
   { $$ = $1 }
 
 on_expression_opt:
 %prec JOIN
-  { }
+  { $$ = JoinCondition{} }
 | ON expression
   { $$ = JoinCondition{On: $2} }
 
