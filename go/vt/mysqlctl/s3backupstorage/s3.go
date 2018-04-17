@@ -27,6 +27,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -80,9 +81,20 @@ func (bh *S3BackupHandle) Name() string {
 }
 
 // AddFile is part of the backupstorage.BackupHandle interface.
-func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string) (io.WriteCloser, error) {
+func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error) {
 	if bh.readOnly {
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
+	}
+
+	// Calculate s3 upload part size using the source filesize
+	partSizeMB := s3manager.DefaultUploadPartSize
+	if filesize > 0 {
+		minimumPartSize := float64(filesize) / float64(s3manager.MaxUploadParts)
+		// Convert partsize to mb and round up to ensure large enough partsize
+		calculatedPartSizeMB := int64(math.Ceil(minimumPartSize / 1024 * 1024))
+		if calculatedPartSizeMB > partSizeMB {
+			partSizeMB = calculatedPartSizeMB
+		}
 	}
 
 	reader, writer := io.Pipe()
@@ -90,7 +102,9 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string) (io.Writ
 
 	go func() {
 		defer bh.waitGroup.Done()
-		uploader := s3manager.NewUploaderWithClient(bh.client)
+		uploader := s3manager.NewUploaderWithClient(bh.client, func(u *s3manager.Uploader) {
+			u.PartSize = partSizeMB
+		})
 		object := objName(bh.dir, bh.name, filename)
 
 		var sseOption *string
