@@ -383,10 +383,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 			if err := c.drainResults(); err != nil {
 				return nil, err
 			}
-			return nil, &SQLError{
-				Num:     ERVitessMaxRowsExceeded,
-				Message: fmt.Sprintf("Row count exceeded %d", maxrows),
-			}
+			return nil, NewSQLError(ERVitessMaxRowsExceeded, SSUnknownSQLState, "Row count exceeded %d", maxrows)
 		}
 
 		// Regular row.
