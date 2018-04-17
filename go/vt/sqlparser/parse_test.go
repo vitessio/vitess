@@ -118,6 +118,9 @@ var (
 	}, {
 		input: "select * from t1 join (select * from t2 union select * from t3) as t",
 	}, {
+		// Ensure this doesn't generate: ""select * from t1 join t2 on a = b join t3 on a = b".
+		input: "select * from t1 join t2 on a = b join t3",
+	}, {
 		input: "select * from t1 where col in (select 1 from dual union select 2 from dual)",
 	}, {
 		input: "select * from t1 where exists (select a from t2 union select b from t3)",
@@ -1210,6 +1213,22 @@ var (
 		input: "commit",
 	}, {
 		input: "rollback",
+	}, {
+		input: "create database test_db",
+	}, {
+		input:  "create schema test_db",
+		output: "create database test_db",
+	}, {
+		input:  "create database if not exists test_db",
+		output: "create database test_db",
+	}, {
+		input: "drop database test_db",
+	}, {
+		input:  "drop schema test_db",
+		output: "drop database test_db",
+	}, {
+		input:  "drop database if exists test_db",
+		output: "drop database test_db",
 	}}
 )
 
@@ -1230,7 +1249,7 @@ func TestValid(t *testing.T) {
 		// This test just exercises the tree walking functionality.
 		// There's no way automated way to verify that a node calls
 		// all its children. But we can examine code coverage and
-		// ensure that all WalkSubtree functions were called.
+		// ensure that all walkSubtree functions were called.
 		Walk(func(node SQLNode) (bool, error) {
 			return true, nil
 		}, tree)
@@ -1530,21 +1549,21 @@ func TestSubStr(t *testing.T) {
 		input  string
 		output string
 	}{{
-		input: "select substr(a,1) from t",
+		input: "select substr(a, 1) from t",
 	}, {
-		input: "select substr(a,1,6) from t",
+		input: "select substr(a, 1, 6) from t",
 	}, {
-		input:  "select substring(a,1) from t",
-		output: "select substr(a,1) from t",
+		input:  "select substring(a, 1) from t",
+		output: "select substr(a, 1) from t",
 	}, {
-		input:  "select substring(a,1,6) from t",
-		output: "select substr(a,1,6) from t",
+		input:  "select substring(a, 1, 6) from t",
+		output: "select substr(a, 1, 6) from t",
 	}, {
 		input:  "select substr(a from 1 for 6) from t",
-		output: "select substr(a,1,6) from t",
+		output: "select substr(a, 1, 6) from t",
 	}, {
 		input:  "select substring(a from 1 for 6) from t",
-		output: "select substr(a,1,6) from t",
+		output: "select substr(a, 1, 6) from t",
 	}}
 
 	for _, tcase := range validSQL {
