@@ -610,15 +610,13 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	// authMethod (with default)
 	authMethod := MysqlNativePassword
 	if clientFlags&CapabilityClientPluginAuth != 0 {
+		if data[pos] == 0 {
+			pos++
+		}
 		authMethod, pos, ok = readNullString(data, pos)
 		if !ok {
 			return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read authMethod")
 		}
-	}
-
-	// The JDBC driver sometimes sends an empty string as the auth method when it wants to use mysql_native_password
-	if authMethod == "" {
-		authMethod = MysqlNativePassword
 	}
 
 	// FIXME(alainjobart) Add CLIENT_CONNECT_ATTRS parsing if we need it.
