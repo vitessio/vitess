@@ -323,6 +323,10 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 			if err == nil {
 				t.Errorf("ExecuteFetch should have failed but got: %v", got)
 			}
+			sqlErr, ok := err.(*SQLError)
+			if !ok || sqlErr.Number() != ERVitessMaxRowsExceeded {
+				t.Errorf("Expected ERVitessMaxRowsExceeded %v, got %v", ERVitessMaxRowsExceeded, sqlErr.Number())
+			}
 			return
 		}
 		if err != nil {
