@@ -65,6 +65,12 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Del
 		return nil, err
 	}
 	edel.Table = table
+
+	directives := sqlparser.ExtractCommentDirectives(del.Comments)
+	if directives.IsSet(DirectiveMultiShardAutocommit) {
+		edel.MultiShardAutocommit = true
+	}
+
 	if destTarget != nil {
 		if destTabletType != topodatapb.TabletType_MASTER {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: DELETE statement with a replica target")
@@ -90,6 +96,7 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Del
 			return edel, errors.New("unsupported: multi shard delete with limit")
 		}
 	}
+
 	edel.OwnedVindexQuery = generateDeleteSubquery(del, edel.Table)
 	return edel, nil
 }
