@@ -833,6 +833,12 @@ func TestErrorCodes(t *testing.T) {
 			sqlState: SSUnknownSQLState,
 			text:     "resource exhausted",
 		},
+		{
+			err:      vterrors.Wrap(NewSQLError(ERVitessMaxRowsExceeded, SSUnknownSQLState, "Row count exceeded 10000"), "wrapped"),
+			code:     ERVitessMaxRowsExceeded,
+			sqlState: SSUnknownSQLState,
+			text:     "resource exhausted",
+		},
 	}
 
 	for _, test := range tests {
