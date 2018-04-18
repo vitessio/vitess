@@ -106,6 +106,12 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 	if len(ins.Columns) == 0 {
 		return nil, errors.New("no column list")
 	}
+
+	directives := sqlparser.ExtractCommentDirectives(ins.Comments)
+	if directives.IsSet(DirectiveMultiShardAutocommit) {
+		eins.MultiShardAutocommit = true
+	}
+
 	var rows sqlparser.Values
 	switch insertValues := ins.Rows.(type) {
 	case *sqlparser.Select, *sqlparser.Union:
