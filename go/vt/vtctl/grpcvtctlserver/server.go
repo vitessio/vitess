@@ -21,6 +21,8 @@ of the remote execution of vtctl commands.
 package grpcvtctlserver
 
 import (
+	"sync"
+
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -49,14 +51,20 @@ func NewVtctlServer(ts *topo.Server) *VtctlServer {
 func (s *VtctlServer) ExecuteVtctlCommand(args *vtctldatapb.ExecuteVtctlCommandRequest, stream vtctlservicepb.Vtctl_ExecuteVtctlCommandServer) (err error) {
 	defer servenv.HandlePanic("vtctl", &err)
 
-	// create a logger, send the result back to the caller
+	// Create a logger, send the result back to the caller.
+	// We may execute this in parallel (inside multiple go routines),
+	// but the stream.Send() method is not thread safe in gRPC.
+	// So use a mutex to protect it.
+	mu := sync.Mutex{}
 	logstream := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
 		// If the client disconnects, we will just fail
 		// to send the log events, but won't interrupt
 		// the command.
+		mu.Lock()
 		stream.Send(&vtctldatapb.ExecuteVtctlCommandResponse{
 			Event: e,
 		})
+		mu.Unlock()
 	})
 	logger := logutil.NewTeeLogger(logstream, logutil.NewConsoleLogger())
 
