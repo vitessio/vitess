@@ -34,7 +34,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
-	"vitess.io/vitess/go/vt/vtgate/masterbuffer"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -273,11 +272,6 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no connection for key %v tablet %+v", ts.Key, ts.Tablet)
 			invalidTablets[ts.Key] = true
 			continue
-		}
-
-		// Potentially buffer this request.
-		if bufferErr := masterbuffer.FakeBuffer(target, inTransaction, i); bufferErr != nil {
-			return bufferErr
 		}
 
 		startTime := time.Now()

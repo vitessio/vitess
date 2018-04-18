@@ -23,18 +23,18 @@ import (
 	"html/template"
 
 	"golang.org/x/net/context"
-	"google.golang.org/grpc/transport"
+	"google.golang.org/grpc"
 )
 
 // GRPCCallInfo returns an augmented context with a CallInfo structure,
 // only for gRPC contexts.
 func GRPCCallInfo(ctx context.Context) context.Context {
-	stream, ok := transport.StreamFromContext(ctx)
+	method, ok := grpc.Method(ctx)
 	if !ok {
 		return ctx
 	}
 	return NewContext(ctx, &gRPCCallInfoImpl{
-		method: stream.Method(),
+		method: method,
 	})
 }
 

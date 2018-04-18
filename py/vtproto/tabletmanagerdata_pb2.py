@@ -26,7 +26,6 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   serialized_pb=_b('\n\x17tabletmanagerdata.proto\x12\x11tabletmanagerdata\x1a\x0bquery.proto\x1a\x0etopodata.proto\x1a\x15replicationdata.proto\x1a\rlogutil.proto\"\x93\x01\n\x0fTableDefinition\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0e\n\x06schema\x18\x02 \x01(\t\x12\x0f\n\x07\x63olumns\x18\x03 \x03(\t\x12\x1b\n\x13primary_key_columns\x18\x04 \x03(\t\x12\x0c\n\x04type\x18\x05 \x01(\t\x12\x13\n\x0b\x64\x61ta_length\x18\x06 \x01(\x04\x12\x11\n\trow_count\x18\x07 \x01(\x04\"{\n\x10SchemaDefinition\x12\x17\n\x0f\x64\x61tabase_schema\x18\x01 \x01(\t\x12=\n\x11table_definitions\x18\x02 \x03(\x0b\x32\".tabletmanagerdata.TableDefinition\x12\x0f\n\x07version\x18\x03 \x01(\t\"\x8b\x01\n\x12SchemaChangeResult\x12:\n\rbefore_schema\x18\x01 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\x12\x39\n\x0c\x61\x66ter_schema\x18\x02 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\"\xc1\x01\n\x0eUserPermission\x12\x0c\n\x04host\x18\x01 \x01(\t\x12\x0c\n\x04user\x18\x02 \x01(\t\x12\x19\n\x11password_checksum\x18\x03 \x01(\x04\x12\x45\n\nprivileges\x18\x04 \x03(\x0b\x32\x31.tabletmanagerdata.UserPermission.PrivilegesEntry\x1a\x31\n\x0fPrivilegesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xae\x01\n\x0c\x44\x62Permission\x12\x0c\n\x04host\x18\x01 \x01(\t\x12\n\n\x02\x64\x62\x18\x02 \x01(\t\x12\x0c\n\x04user\x18\x03 \x01(\t\x12\x43\n\nprivileges\x18\x04 \x03(\x0b\x32/.tabletmanagerdata.DbPermission.PrivilegesEntry\x1a\x31\n\x0fPrivilegesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\x83\x01\n\x0bPermissions\x12;\n\x10user_permissions\x18\x01 \x03(\x0b\x32!.tabletmanagerdata.UserPermission\x12\x37\n\x0e\x64\x62_permissions\x18\x02 \x03(\x0b\x32\x1f.tabletmanagerdata.DbPermission\",\n\x0b\x42lpPosition\x12\x0b\n\x03uid\x18\x01 \x01(\r\x12\x10\n\x08position\x18\x02 \x01(\t\"\x1e\n\x0bPingRequest\x12\x0f\n\x07payload\x18\x01 \x01(\t\"\x1f\n\x0cPingResponse\x12\x0f\n\x07payload\x18\x01 \x01(\t\" \n\x0cSleepRequest\x12\x10\n\x08\x64uration\x18\x01 \x01(\x03\"\x0f\n\rSleepResponse\"\xaf\x01\n\x12\x45xecuteHookRequest\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x12\n\nparameters\x18\x02 \x03(\t\x12\x46\n\textra_env\x18\x03 \x03(\x0b\x32\x33.tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry\x1a/\n\rExtraEnvEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"J\n\x13\x45xecuteHookResponse\x12\x13\n\x0b\x65xit_status\x18\x01 \x01(\x03\x12\x0e\n\x06stdout\x18\x02 \x01(\t\x12\x0e\n\x06stderr\x18\x03 \x01(\t\"Q\n\x10GetSchemaRequest\x12\x0e\n\x06tables\x18\x01 \x03(\t\x12\x15\n\rinclude_views\x18\x02 \x01(\x08\x12\x16\n\x0e\x65xclude_tables\x18\x03 \x03(\t\"S\n\x11GetSchemaResponse\x12>\n\x11schema_definition\x18\x01 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\"\x17\n\x15GetPermissionsRequest\"M\n\x16GetPermissionsResponse\x12\x33\n\x0bpermissions\x18\x01 \x01(\x0b\x32\x1e.tabletmanagerdata.Permissions\"\x14\n\x12SetReadOnlyRequest\"\x15\n\x13SetReadOnlyResponse\"\x15\n\x13SetReadWriteRequest\"\x16\n\x14SetReadWriteResponse\">\n\x11\x43hangeTypeRequest\x12)\n\x0btablet_type\x18\x01 \x01(\x0e\x32\x14.topodata.TabletType\"\x14\n\x12\x43hangeTypeResponse\"\x15\n\x13RefreshStateRequest\"\x16\n\x14RefreshStateResponse\"\x17\n\x15RunHealthCheckRequest\"\x18\n\x16RunHealthCheckResponse\"+\n\x18IgnoreHealthErrorRequest\x12\x0f\n\x07pattern\x18\x01 \x01(\t\"\x1b\n\x19IgnoreHealthErrorResponse\",\n\x13ReloadSchemaRequest\x12\x15\n\rwait_position\x18\x01 \x01(\t\"\x16\n\x14ReloadSchemaResponse\")\n\x16PreflightSchemaRequest\x12\x0f\n\x07\x63hanges\x18\x01 \x03(\t\"X\n\x17PreflightSchemaResponse\x12=\n\x0e\x63hange_results\x18\x01 \x03(\x0b\x32%.tabletmanagerdata.SchemaChangeResult\"\xc2\x01\n\x12\x41pplySchemaRequest\x12\x0b\n\x03sql\x18\x01 \x01(\t\x12\r\n\x05\x66orce\x18\x02 \x01(\x08\x12\x19\n\x11\x61llow_replication\x18\x03 \x01(\x08\x12:\n\rbefore_schema\x18\x04 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\x12\x39\n\x0c\x61\x66ter_schema\x18\x05 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\"\x8c\x01\n\x13\x41pplySchemaResponse\x12:\n\rbefore_schema\x18\x01 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\x12\x39\n\x0c\x61\x66ter_schema\x18\x02 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\"|\n\x18\x45xecuteFetchAsDbaRequest\x12\r\n\x05query\x18\x01 \x01(\x0c\x12\x0f\n\x07\x64\x62_name\x18\x02 \x01(\t\x12\x10\n\x08max_rows\x18\x03 \x01(\x04\x12\x17\n\x0f\x64isable_binlogs\x18\x04 \x01(\x08\x12\x15\n\rreload_schema\x18\x05 \x01(\x08\"?\n\x19\x45xecuteFetchAsDbaResponse\x12\"\n\x06result\x18\x01 \x01(\x0b\x32\x12.query.QueryResult\"h\n\x1d\x45xecuteFetchAsAllPrivsRequest\x12\r\n\x05query\x18\x01 \x01(\x0c\x12\x0f\n\x07\x64\x62_name\x18\x02 \x01(\t\x12\x10\n\x08max_rows\x18\x03 \x01(\x04\x12\x15\n\rreload_schema\x18\x04 \x01(\x08\"D\n\x1e\x45xecuteFetchAsAllPrivsResponse\x12\"\n\x06result\x18\x01 \x01(\x0b\x32\x12.query.QueryResult\";\n\x18\x45xecuteFetchAsAppRequest\x12\r\n\x05query\x18\x01 \x01(\x0c\x12\x10\n\x08max_rows\x18\x02 \x01(\x04\"?\n\x19\x45xecuteFetchAsAppResponse\x12\"\n\x06result\x18\x01 \x01(\x0b\x32\x12.query.QueryResult\"\x14\n\x12SlaveStatusRequest\">\n\x13SlaveStatusResponse\x12\'\n\x06status\x18\x01 \x01(\x0b\x32\x17.replicationdata.Status\"\x17\n\x15MasterPositionRequest\"*\n\x16MasterPositionResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"\x12\n\x10StopSlaveRequest\"\x13\n\x11StopSlaveResponse\"A\n\x17StopSlaveMinimumRequest\x12\x10\n\x08position\x18\x01 \x01(\t\x12\x14\n\x0cwait_timeout\x18\x02 \x01(\x03\",\n\x18StopSlaveMinimumResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"\x13\n\x11StartSlaveRequest\"\x14\n\x12StartSlaveResponse\"8\n!TabletExternallyReparentedRequest\x12\x13\n\x0b\x65xternal_id\x18\x01 \x01(\t\"$\n\"TabletExternallyReparentedResponse\" \n\x1eTabletExternallyElectedRequest\"!\n\x1fTabletExternallyElectedResponse\"\x12\n\x10GetSlavesRequest\"\"\n\x11GetSlavesResponse\x12\r\n\x05\x61\x64\x64rs\x18\x01 \x03(\t\"d\n\x16WaitBlpPositionRequest\x12\x34\n\x0c\x62lp_position\x18\x01 \x01(\x0b\x32\x1e.tabletmanagerdata.BlpPosition\x12\x14\n\x0cwait_timeout\x18\x02 \x01(\x03\"\x19\n\x17WaitBlpPositionResponse\"\x10\n\x0eStopBlpRequest\"H\n\x0fStopBlpResponse\x12\x35\n\rblp_positions\x18\x01 \x03(\x0b\x32\x1e.tabletmanagerdata.BlpPosition\"\x11\n\x0fStartBlpRequest\"\x12\n\x10StartBlpResponse\"a\n\x12RunBlpUntilRequest\x12\x35\n\rblp_positions\x18\x01 \x03(\x0b\x32\x1e.tabletmanagerdata.BlpPosition\x12\x14\n\x0cwait_timeout\x18\x02 \x01(\x03\"\'\n\x13RunBlpUntilResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"\x19\n\x17ResetReplicationRequest\"\x1a\n\x18ResetReplicationResponse\"\x13\n\x11InitMasterRequest\"&\n\x12InitMasterResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"\x99\x01\n\x1ePopulateReparentJournalRequest\x12\x17\n\x0ftime_created_ns\x18\x01 \x01(\x03\x12\x13\n\x0b\x61\x63tion_name\x18\x02 \x01(\t\x12+\n\x0cmaster_alias\x18\x03 \x01(\x0b\x32\x15.topodata.TabletAlias\x12\x1c\n\x14replication_position\x18\x04 \x01(\t\"!\n\x1fPopulateReparentJournalResponse\"p\n\x10InitSlaveRequest\x12%\n\x06parent\x18\x01 \x01(\x0b\x32\x15.topodata.TabletAlias\x12\x1c\n\x14replication_position\x18\x02 \x01(\t\x12\x17\n\x0ftime_created_ns\x18\x03 \x01(\x03\"\x13\n\x11InitSlaveResponse\"\x15\n\x13\x44\x65moteMasterRequest\"(\n\x14\x44\x65moteMasterResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"3\n\x1fPromoteSlaveWhenCaughtUpRequest\x12\x10\n\x08position\x18\x01 \x01(\t\"4\n PromoteSlaveWhenCaughtUpResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"\x19\n\x17SlaveWasPromotedRequest\"\x1a\n\x18SlaveWasPromotedResponse\"m\n\x10SetMasterRequest\x12%\n\x06parent\x18\x01 \x01(\x0b\x32\x15.topodata.TabletAlias\x12\x17\n\x0ftime_created_ns\x18\x02 \x01(\x03\x12\x19\n\x11\x66orce_start_slave\x18\x03 \x01(\x08\"\x13\n\x11SetMasterResponse\"A\n\x18SlaveWasRestartedRequest\x12%\n\x06parent\x18\x01 \x01(\x0b\x32\x15.topodata.TabletAlias\"\x1b\n\x19SlaveWasRestartedResponse\"$\n\"StopReplicationAndGetStatusRequest\"N\n#StopReplicationAndGetStatusResponse\x12\'\n\x06status\x18\x01 \x01(\x0b\x32\x17.replicationdata.Status\"\x15\n\x13PromoteSlaveRequest\"(\n\x14PromoteSlaveResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"$\n\rBackupRequest\x12\x13\n\x0b\x63oncurrency\x18\x01 \x01(\x03\"/\n\x0e\x42\x61\x63kupResponse\x12\x1d\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x0e.logutil.Event\"\x1a\n\x18RestoreFromBackupRequest\":\n\x19RestoreFromBackupResponse\x12\x1d\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x0e.logutil.Eventb\x06proto3')
   ,
   dependencies=[query__pb2.DESCRIPTOR,topodata__pb2.DESCRIPTOR,replicationdata__pb2.DESCRIPTOR,logutil__pb2.DESCRIPTOR,])
-_sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
 
@@ -44,49 +43,49 @@ _TABLEDEFINITION = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='schema', full_name='tabletmanagerdata.TableDefinition.schema', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='columns', full_name='tabletmanagerdata.TableDefinition.columns', index=2,
       number=3, type=9, cpp_type=9, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='primary_key_columns', full_name='tabletmanagerdata.TableDefinition.primary_key_columns', index=3,
       number=4, type=9, cpp_type=9, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='type', full_name='tabletmanagerdata.TableDefinition.type', index=4,
       number=5, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='data_length', full_name='tabletmanagerdata.TableDefinition.data_length', index=5,
       number=6, type=4, cpp_type=4, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='row_count', full_name='tabletmanagerdata.TableDefinition.row_count', index=6,
       number=7, type=4, cpp_type=4, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -117,21 +116,21 @@ _SCHEMADEFINITION = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='table_definitions', full_name='tabletmanagerdata.SchemaDefinition.table_definitions', index=1,
       number=2, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='version', full_name='tabletmanagerdata.SchemaDefinition.version', index=2,
       number=3, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -162,14 +161,14 @@ _SCHEMACHANGERESULT = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='after_schema', full_name='tabletmanagerdata.SchemaChangeResult.after_schema', index=1,
       number=2, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -200,14 +199,14 @@ _USERPERMISSION_PRIVILEGESENTRY = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='value', full_name='tabletmanagerdata.UserPermission.PrivilegesEntry.value', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -237,28 +236,28 @@ _USERPERMISSION = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='user', full_name='tabletmanagerdata.UserPermission.user', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='password_checksum', full_name='tabletmanagerdata.UserPermission.password_checksum', index=2,
       number=3, type=4, cpp_type=4, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='privileges', full_name='tabletmanagerdata.UserPermission.privileges', index=3,
       number=4, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -289,14 +288,14 @@ _DBPERMISSION_PRIVILEGESENTRY = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='value', full_name='tabletmanagerdata.DbPermission.PrivilegesEntry.value', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -326,28 +325,28 @@ _DBPERMISSION = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='db', full_name='tabletmanagerdata.DbPermission.db', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='user', full_name='tabletmanagerdata.DbPermission.user', index=2,
       number=3, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='privileges', full_name='tabletmanagerdata.DbPermission.privileges', index=3,
       number=4, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -378,14 +377,14 @@ _PERMISSIONS = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='db_permissions', full_name='tabletmanagerdata.Permissions.db_permissions', index=1,
       number=2, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -416,14 +415,14 @@ _BLPPOSITION = _descriptor.Descriptor(
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='position', full_name='tabletmanagerdata.BlpPosition.position', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -454,7 +453,7 @@ _PINGREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -485,7 +484,7 @@ _PINGRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -516,7 +515,7 @@ _SLEEPREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -571,14 +570,14 @@ _EXECUTEHOOKREQUEST_EXTRAENVENTRY = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='value', full_name='tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry.value', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -608,21 +607,21 @@ _EXECUTEHOOKREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='parameters', full_name='tabletmanagerdata.ExecuteHookRequest.parameters', index=1,
       number=2, type=9, cpp_type=9, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='extra_env', full_name='tabletmanagerdata.ExecuteHookRequest.extra_env', index=2,
       number=3, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -653,21 +652,21 @@ _EXECUTEHOOKRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='stdout', full_name='tabletmanagerdata.ExecuteHookResponse.stdout', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='stderr', full_name='tabletmanagerdata.ExecuteHookResponse.stderr', index=2,
       number=3, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -698,21 +697,21 @@ _GETSCHEMAREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='include_views', full_name='tabletmanagerdata.GetSchemaRequest.include_views', index=1,
       number=2, type=8, cpp_type=7, label=1,
       has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='exclude_tables', full_name='tabletmanagerdata.GetSchemaRequest.exclude_tables', index=2,
       number=3, type=9, cpp_type=9, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -743,7 +742,7 @@ _GETSCHEMARESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -798,7 +797,7 @@ _GETPERMISSIONSRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -925,7 +924,7 @@ _CHANGETYPEREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -1076,7 +1075,7 @@ _IGNOREHEALTHERRORREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -1131,7 +1130,7 @@ _RELOADSCHEMAREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -1186,7 +1185,7 @@ _PREFLIGHTSCHEMAREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -1217,7 +1216,7 @@ _PREFLIGHTSCHEMARESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -1248,35 +1247,35 @@ _APPLYSCHEMAREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='force', full_name='tabletmanagerdata.ApplySchemaRequest.force', index=1,
       number=2, type=8, cpp_type=7, label=1,
       has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='allow_replication', full_name='tabletmanagerdata.ApplySchemaRequest.allow_replication', index=2,
       number=3, type=8, cpp_type=7, label=1,
       has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='before_schema', full_name='tabletmanagerdata.ApplySchemaRequest.before_schema', index=3,
       number=4, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='after_schema', full_name='tabletmanagerdata.ApplySchemaRequest.after_schema', index=4,
       number=5, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -1307,14 +1306,14 @@ _APPLYSCHEMARESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='after_schema', full_name='tabletmanagerdata.ApplySchemaResponse.after_schema', index=1,
       number=2, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -1345,35 +1344,35 @@ _EXECUTEFETCHASDBAREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=_b(""),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='db_name', full_name='tabletmanagerdata.ExecuteFetchAsDbaRequest.db_name', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='max_rows', full_name='tabletmanagerdata.ExecuteFetchAsDbaRequest.max_rows', index=2,
       number=3, type=4, cpp_type=4, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='disable_binlogs', full_name='tabletmanagerdata.ExecuteFetchAsDbaRequest.disable_binlogs', index=3,
       number=4, type=8, cpp_type=7, label=1,
       has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='reload_schema', full_name='tabletmanagerdata.ExecuteFetchAsDbaRequest.reload_schema', index=4,
       number=5, type=8, cpp_type=7, label=1,
       has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -1404,7 +1403,7 @@ _EXECUTEFETCHASDBARESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -1435,28 +1434,28 @@ _EXECUTEFETCHASALLPRIVSREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=_b(""),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='db_name', full_name='tabletmanagerdata.ExecuteFetchAsAllPrivsRequest.db_name', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='max_rows', full_name='tabletmanagerdata.ExecuteFetchAsAllPrivsRequest.max_rows', index=2,
       number=3, type=4, cpp_type=4, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='reload_schema', full_name='tabletmanagerdata.ExecuteFetchAsAllPrivsRequest.reload_schema', index=3,
       number=4, type=8, cpp_type=7, label=1,
       has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -1487,7 +1486,7 @@ _EXECUTEFETCHASALLPRIVSRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -1518,14 +1517,14 @@ _EXECUTEFETCHASAPPREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=_b(""),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='max_rows', full_name='tabletmanagerdata.ExecuteFetchAsAppRequest.max_rows', index=1,
       number=2, type=4, cpp_type=4, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -1556,7 +1555,7 @@ _EXECUTEFETCHASAPPRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -1611,7 +1610,7 @@ _SLAVESTATUSRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -1666,7 +1665,7 @@ _MASTERPOSITIONRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -1745,14 +1744,14 @@ _STOPSLAVEMINIMUMREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='wait_timeout', full_name='tabletmanagerdata.StopSlaveMinimumRequest.wait_timeout', index=1,
       number=2, type=3, cpp_type=2, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -1783,7 +1782,7 @@ _STOPSLAVEMINIMUMRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -1862,7 +1861,7 @@ _TABLETEXTERNALLYREPARENTEDREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -1989,7 +1988,7 @@ _GETSLAVESRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -2020,14 +2019,14 @@ _WAITBLPPOSITIONREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='wait_timeout', full_name='tabletmanagerdata.WaitBlpPositionRequest.wait_timeout', index=1,
       number=2, type=3, cpp_type=2, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -2106,7 +2105,7 @@ _STOPBLPRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -2185,14 +2184,14 @@ _RUNBLPUNTILREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='wait_timeout', full_name='tabletmanagerdata.RunBlpUntilRequest.wait_timeout', index=1,
       number=2, type=3, cpp_type=2, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -2223,7 +2222,7 @@ _RUNBLPUNTILRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -2326,7 +2325,7 @@ _INITMASTERRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -2357,28 +2356,28 @@ _POPULATEREPARENTJOURNALREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='action_name', full_name='tabletmanagerdata.PopulateReparentJournalRequest.action_name', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='master_alias', full_name='tabletmanagerdata.PopulateReparentJournalRequest.master_alias', index=2,
       number=3, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='replication_position', full_name='tabletmanagerdata.PopulateReparentJournalRequest.replication_position', index=3,
       number=4, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -2433,21 +2432,21 @@ _INITSLAVEREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='replication_position', full_name='tabletmanagerdata.InitSlaveRequest.replication_position', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='time_created_ns', full_name='tabletmanagerdata.InitSlaveRequest.time_created_ns', index=2,
       number=3, type=3, cpp_type=2, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -2526,7 +2525,7 @@ _DEMOTEMASTERRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -2557,7 +2556,7 @@ _PROMOTESLAVEWHENCAUGHTUPREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -2588,7 +2587,7 @@ _PROMOTESLAVEWHENCAUGHTUPRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -2667,21 +2666,21 @@ _SETMASTERREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='time_created_ns', full_name='tabletmanagerdata.SetMasterRequest.time_created_ns', index=1,
       number=2, type=3, cpp_type=2, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='force_start_slave', full_name='tabletmanagerdata.SetMasterRequest.force_start_slave', index=2,
       number=3, type=8, cpp_type=7, label=1,
       has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -2736,7 +2735,7 @@ _SLAVEWASRESTARTEDREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -2815,7 +2814,7 @@ _STOPREPLICATIONANDGETSTATUSRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -2870,7 +2869,7 @@ _PROMOTESLAVERESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -2901,7 +2900,7 @@ _BACKUPREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -2932,7 +2931,7 @@ _BACKUPRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -2987,7 +2986,7 @@ _RESTOREFROMBACKUPRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -3128,6 +3127,7 @@ DESCRIPTOR.message_types_by_name['BackupRequest'] = _BACKUPREQUEST
 DESCRIPTOR.message_types_by_name['BackupResponse'] = _BACKUPRESPONSE
 DESCRIPTOR.message_types_by_name['RestoreFromBackupRequest'] = _RESTOREFROMBACKUPREQUEST
 DESCRIPTOR.message_types_by_name['RestoreFromBackupResponse'] = _RESTOREFROMBACKUPRESPONSE
+_sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 TableDefinition = _reflection.GeneratedProtocolMessageType('TableDefinition', (_message.Message,), dict(
   DESCRIPTOR = _TABLEDEFINITION,
@@ -3797,9 +3797,4 @@ _DBPERMISSION_PRIVILEGESENTRY.has_options = True
 _DBPERMISSION_PRIVILEGESENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
 _EXECUTEHOOKREQUEST_EXTRAENVENTRY.has_options = True
 _EXECUTEHOOKREQUEST_EXTRAENVENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
-import grpc
-from grpc.beta import implementations as beta_implementations
-from grpc.beta import interfaces as beta_interfaces
-from grpc.framework.common import cardinality
-from grpc.framework.interfaces.face import utilities as face_utilities
 # @@protoc_insertion_point(module_scope)

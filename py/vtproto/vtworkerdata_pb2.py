@@ -23,7 +23,6 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   serialized_pb=_b('\n\x12vtworkerdata.proto\x12\x0cvtworkerdata\x1a\rlogutil.proto\"-\n\x1d\x45xecuteVtworkerCommandRequest\x12\x0c\n\x04\x61rgs\x18\x01 \x03(\t\"?\n\x1e\x45xecuteVtworkerCommandResponse\x12\x1d\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x0e.logutil.Eventb\x06proto3')
   ,
   dependencies=[logutil__pb2.DESCRIPTOR,])
-_sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
 
@@ -41,7 +40,7 @@ _EXECUTEVTWORKERCOMMANDREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -72,7 +71,7 @@ _EXECUTEVTWORKERCOMMANDRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -92,6 +91,7 @@ _EXECUTEVTWORKERCOMMANDRESPONSE = _descriptor.Descriptor(
 _EXECUTEVTWORKERCOMMANDRESPONSE.fields_by_name['event'].message_type = logutil__pb2._EVENT
 DESCRIPTOR.message_types_by_name['ExecuteVtworkerCommandRequest'] = _EXECUTEVTWORKERCOMMANDREQUEST
 DESCRIPTOR.message_types_by_name['ExecuteVtworkerCommandResponse'] = _EXECUTEVTWORKERCOMMANDRESPONSE
+_sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 ExecuteVtworkerCommandRequest = _reflection.GeneratedProtocolMessageType('ExecuteVtworkerCommandRequest', (_message.Message,), dict(
   DESCRIPTOR = _EXECUTEVTWORKERCOMMANDREQUEST,
@@ -108,9 +108,4 @@ ExecuteVtworkerCommandResponse = _reflection.GeneratedProtocolMessageType('Execu
 _sym_db.RegisterMessage(ExecuteVtworkerCommandResponse)
 
 
-import grpc
-from grpc.beta import implementations as beta_implementations
-from grpc.beta import interfaces as beta_interfaces
-from grpc.framework.common import cardinality
-from grpc.framework.interfaces.face import utilities as face_utilities
 # @@protoc_insertion_point(module_scope)

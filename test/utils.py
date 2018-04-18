@@ -51,8 +51,17 @@ from vtproto import topodata_pb2
 
 options = None
 devnull = open('/dev/null', 'w')
-hostname = socket.getaddrinfo(
-    socket.getfqdn(), None, 0, 0, 0, socket.AI_CANONNAME)[0][3]
+try:
+  hostname = socket.getaddrinfo(
+      socket.getfqdn(), None, 0, 0, 0, socket.AI_CANONNAME)[0][3]
+except socket.gaierror:
+  # Fallback to 'localhost' if getfqdn() returns this value for "::1" and
+  # getaddrinfo() cannot resolve it and throws an exception.
+  # This error scenario was observed on mberlin@'s corp Macbook in 2018.
+  if socket.getfqdn() == '1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa':  # pylint: disable=line-too-long
+    hostname = 'localhost'
+  else:
+    raise
 
 
 class TestError(Exception):

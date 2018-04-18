@@ -231,22 +231,18 @@ func findAlias(colname *sqlparser.ColName, selects sqlparser.SelectExprs) sqlpar
 
 // Symtab satisfies the builder interface.
 func (oa *orderedAggregate) Symtab() *symtab {
-	return oa.symtab
+	return oa.symtab.Resolve()
 }
 
-// MaxOrder satisfies the builder interface.
-func (oa *orderedAggregate) MaxOrder() int {
-	return oa.order
-}
-
-// Order returns the order.
+// Order satisfies the builder interface.
 func (oa *orderedAggregate) Order() int {
 	return oa.order
 }
 
-// SetOrder satisfies the builder interface.
-func (oa *orderedAggregate) SetOrder(order int) {
-	panic("BUG: reordering can only happen within the FROM clause")
+// Reorder satisfies the builder interface.
+func (oa *orderedAggregate) Reorder(order int) {
+	oa.input.Reorder(order)
+	oa.order = oa.input.Order() + 1
 }
 
 // Primitive satisfies the builder interface.
@@ -256,7 +252,7 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 }
 
 // Leftmost satisfies the builder interface.
-func (oa *orderedAggregate) Leftmost() columnOriginator {
+func (oa *orderedAggregate) Leftmost() builder {
 	return oa.input.Leftmost()
 }
 
@@ -266,7 +262,7 @@ func (oa *orderedAggregate) ResultColumns() []*resultColumn {
 }
 
 // PushFilter satisfies the builder interface.
-func (oa *orderedAggregate) PushFilter(_ sqlparser.Expr, whereType string, _ columnOriginator) error {
+func (oa *orderedAggregate) PushFilter(_ sqlparser.Expr, whereType string, _ builder) error {
 	return errors.New("unsupported: filtering on results of aggregates")
 }
 
@@ -282,7 +278,7 @@ func (oa *orderedAggregate) PushFilter(_ sqlparser.Expr, whereType string, _ col
 // MAX sent to the route will not be added to symtab and will not be reachable by
 // others. This functionality depends on the the PushOrderBy to request that
 // the rows be correctly ordered for a merge sort.
-func (oa *orderedAggregate) PushSelect(expr *sqlparser.AliasedExpr, origin columnOriginator) (rc *resultColumn, colnum int, err error) {
+func (oa *orderedAggregate) PushSelect(expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
 	if inner, ok := expr.Expr.(*sqlparser.FuncExpr); ok {
 		if opcode, ok := engine.SupportedAggregates[inner.Name.Lowered()]; ok {
 			innerRC, innerCol, _ := oa.input.PushSelect(expr, origin)

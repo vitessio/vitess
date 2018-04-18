@@ -120,13 +120,15 @@ install_protoc-gen-go:
 	cp -a vendor/github.com/golang/protobuf $${GOPATH}/src/github.com/golang/
 	go install github.com/golang/protobuf/protoc-gen-go
 
-PROTOC_BINARY := $(shell type -p $(VTROOT)/dist/grpc/usr/local/bin/protoc)
-ifeq (,$(PROTOC_BINARY))
-	PROTOC_BINARY := $(shell which protoc)
-endif
-
-ifneq (,$(PROTOC_BINARY))
-	PROTOC_DIR := $(dir $(PROTOC_BINARY))
+# Find protoc compiler.
+# NOTE: We are *not* using the "protoc" binary (as suggested by the grpc Go
+#       quickstart for example). Instead, we run "protoc" via the Python
+#       wrapper script which is provided by the "grpcio-tools" PyPi package.
+#       (The package includes the compiler as library, but not as binary.
+#       Therefore, we have to use the wrapper script they provide.)
+ifneq ($(wildcard $(VTROOT)/dist/grpc/usr/local/lib/python2.7/site-packages/grpc_tools/protoc.py),)
+# IMPORTANT: The next line must not be indented.
+PROTOC_COMMAND := python -m grpc_tools.protoc
 endif
 
 PROTO_SRCS = $(wildcard proto/*.proto)
@@ -139,8 +141,8 @@ PROTO_GO_TEMPS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/.proto.tmp/$(name).pb
 proto: proto_banner $(PROTO_GO_OUTS) $(PROTO_PY_OUTS)
 
 proto_banner:
-ifeq (,$(PROTOC_DIR))
-	$(error "Cannot find protoc binary. Did bootstrap.sh succeed, and did you execute 'source dev.env'?")
+ifeq (,$(PROTOC_COMMAND))
+	$(error "Cannot find protoc compiler. Did bootstrap.sh succeed, and did you execute 'source dev.env'?")
 endif
 
 ifndef NOBANNER
@@ -148,7 +150,7 @@ ifndef NOBANNER
 endif
 
 $(PROTO_PY_OUTS): py/vtproto/%_pb2.py: proto/%.proto
-	$(PROTOC_DIR)/protoc -Iproto $< --python_out=py/vtproto --grpc_out=py/vtproto --plugin=protoc-gen-grpc=$(PROTOC_DIR)/grpc_python_plugin
+	$(PROTOC_COMMAND) -Iproto $< --python_out=py/vtproto --grpc_python_out=py/vtproto
 
 $(PROTO_GO_OUTS): $(PROTO_GO_TEMPS)
 	for name in $(PROTO_SRC_NAMES); do \
@@ -160,7 +162,7 @@ $(PROTO_GO_TEMPS): install_protoc-gen-go
 
 $(PROTO_GO_TEMPS): go/vt/.proto.tmp/%.pb.go: proto/%.proto
 	mkdir -p go/vt/.proto.tmp
-	$(PROTOC_DIR)/protoc -Iproto $< --go_out=plugins=grpc:go/vt/.proto.tmp
+	$(PROTOC_COMMAND) -Iproto $< --plugin=grpc=protoc-gen-go --go_out=plugins=grpc:go/vt/.proto.tmp
 	sed -i -e 's,import \([a-z0-9_]*\) ".",import \1 "vitess.io/vitess/go/vt/proto/\1",g' $@
 
 # Helper targets for building Docker images.
@@ -173,7 +175,7 @@ docker_bootstrap:
 	for i in $(DOCKER_IMAGES); do echo "building bootstrap image: $$i"; docker/bootstrap/build.sh $$i || exit 1; done
 
 docker_bootstrap_test:
-	flavors='$(DOCKER_IMAGES_FOR_TEST)' && ./test.go -pull=false -parallel=4 -flavor=$${flavors// /,}
+	flavors='$(DOCKER_IMAGES_FOR_TEST)' && ./test.go -pull=false -parallel=2 -flavor=$${flavors// /,}
 
 docker_bootstrap_push:
 	for i in $(DOCKER_IMAGES); do echo "pushing boostrap image: $$i"; docker push vitess/bootstrap:$$i || exit 1; done

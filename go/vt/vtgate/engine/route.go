@@ -43,6 +43,10 @@ type Route struct {
 	// Keyspace specifies the keyspace to send the query to.
 	Keyspace *vindexes.Keyspace
 
+	// TargetDestination specifies an explicit target destination to send the query to.
+	// This bypases the core of the v3 engine.
+	TargetDestination key.Destination
+
 	// Query specifies the query to be executed.
 	Query string
 
