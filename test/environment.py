@@ -41,6 +41,7 @@ from topo_flavor.server import topo_server
 import vtgate_gateway_flavor.discoverygateway
 
 from selenium import webdriver
+from selenium.common.exceptions import WebDriverException
 
 from vttest import mysql_flavor
 
@@ -247,9 +248,35 @@ def create_webdriver():
         desired_capabilities=capabilities,
         command_executor='http://%s/wd/hub' % hub_url)
   else:
-    os.environ['webdriver.chrome.driver'] = os.path.join(vtroot, 'dist')
     # Only testing against Chrome for now
-    driver = webdriver.Chrome()
+    os.environ['webdriver.chrome.driver'] = os.path.join(vtroot, 'dist')
+    service_log_path = os.path.join(tmproot, 'chromedriver.log')
+    try:
+      driver = webdriver.Chrome(service_args=['--verbose'],
+                                service_log_path=service_log_path)
+    except WebDriverException as e:
+      if 'Chrome failed to start' not in str(e):
+        # Not a Chrome issue. Just re-raise the exception.
+        raise
+
+      # Chrome issue: Dump the log file.
+      logging.error(
+          'webdriver failed to start Chrome.\n'
+          '\n'
+          'See chromedriver.log below for details.\n'
+          '\n'
+          'Original exception:\n'
+          '\n'
+          '%s', str(e))
+      # Dump the whole log file. This can go over multiple pages because
+      # webdriver is constantly polling (after Chrome crashed) and logging
+      # each attempt.
+      with open(service_log_path, 'r') as f:
+        logging.error('Content of chromedriver.log:\n%s', f.read())
+      logging.error('webdriver failed to start Chrome. Scroll up for'
+                    ' details.')
+      exit(1)
+
     driver.set_window_position(0, 0)
     driver.set_window_size(1280, 1024)
   return driver

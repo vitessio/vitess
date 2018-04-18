@@ -79,7 +79,7 @@ func skipParenthesis(node sqlparser.Expr) sqlparser.Expr {
 //
 // If an expression has no references to the current query, then the left-most
 // origin is chosen as the default.
-func findOrigin(expr sqlparser.Expr, bldr builder) (origin columnOriginator, err error) {
+func findOrigin(expr sqlparser.Expr, bldr builder) (origin builder, err error) {
 	highestOrigin := bldr.Leftmost()
 	var subroutes []*route
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
@@ -157,7 +157,7 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 	return has
 }
 
-func validateSubquerySamePlan(keyspace string, bldr builder, vschema VSchema, nodes ...sqlparser.SQLNode) bool {
+func validateSubquerySamePlan(keyspace string, bldr builder, vschema ContextVSchema, nodes ...sqlparser.SQLNode) bool {
 	samePlan := true
 
 	for _, node := range nodes {

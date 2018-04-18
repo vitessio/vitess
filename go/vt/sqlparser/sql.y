@@ -150,7 +150,7 @@ func forceEOF(yylex interface{}) {
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD
-%token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT SPATIAL FULLTEXT FOREIGN
+%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT SPATIAL FULLTEXT FOREIGN
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
@@ -182,6 +182,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> UTC_DATE UTC_TIME UTC_TIMESTAMP
 %token <bytes> REPLACE
 %token <bytes> CONVERT CAST
+%token <bytes> SUBSTR SUBSTRING
 %token <bytes> GROUP_CONCAT SEPARATOR
 
 // Match
@@ -492,6 +493,14 @@ create_statement:
         Params: $5,
     }}
   }
+| CREATE DATABASE not_exists_opt ID ddl_force_eof
+  {
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
+  }
+| CREATE SCHEMA not_exists_opt ID ddl_force_eof
+  {
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
+  }
 
 vindex_type_opt:
   {
@@ -737,6 +746,11 @@ char_type:
   {
     $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5, Collate: $6}
   }
+// need set_values / SetValues ?
+| SET '(' enum_values ')' charset_opt collate_opt
+  {
+    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5, Collate: $6}
+  }
 
 enum_values:
   STRING
@@ -843,6 +857,10 @@ column_default_opt:
 | DEFAULT CURRENT_TIMESTAMP
   {
     $$ = NewValArg($2)
+  }
+| DEFAULT BIT_LITERAL
+  {
+    $$ = NewBitVal($2)
   }
 
 on_update_opt:
@@ -1074,6 +1092,7 @@ alter_object_type:
 | PRIMARY
 | SPATIAL
 | PARTITION
+| UNIQUE
 
 partition_operation:
   REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb
@@ -1128,6 +1147,14 @@ drop_statement:
           exists = true
         }
     $$ = &DDL{Action: DropStr, Table: $4.ToViewName(), IfExists: exists}
+  }
+| DROP DATABASE exists_opt ID
+  {
+    $$ = &DBDDL{Action: DropStr, DBName: string($4)}
+  }
+| DROP SCHEMA exists_opt ID
+  {
+    $$ = &DBDDL{Action: DropStr, DBName: string($4)}
   }
 
 truncate_statement:
@@ -1535,13 +1562,13 @@ join_condition:
 
 join_condition_opt:
 %prec JOIN
-  { }
+  { $$ = JoinCondition{} }
 | join_condition
   { $$ = $1 }
 
 on_expression_opt:
 %prec JOIN
-  { }
+  { $$ = JoinCondition{} }
 | ON expression
   { $$ = JoinCondition{On: $2} }
 
@@ -2029,6 +2056,30 @@ function_call_keyword:
 | CONVERT openb expression USING charset closeb
   {
     $$ = &ConvertUsingExpr{Expr: $3, Type: $5}
+  }
+| SUBSTR openb column_name ',' value_expression closeb
+  {
+    $$ = &SubstrExpr{Name: $3, From: $5, To: nil}
+  }
+| SUBSTR openb column_name ',' value_expression ',' value_expression closeb
+  {
+    $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
+  }
+| SUBSTR openb column_name FROM value_expression FOR value_expression closeb
+  {
+    $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
+  }
+| SUBSTRING openb column_name ',' value_expression closeb
+  {
+    $$ = &SubstrExpr{Name: $3, From: $5, To: nil}
+  }
+| SUBSTRING openb column_name ',' value_expression ',' value_expression closeb
+  {
+    $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
+  }
+| SUBSTRING openb column_name FROM value_expression FOR value_expression closeb
+  {
+    $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
   }
 | MATCH openb select_expression_list closeb AGAINST openb value_expression match_option closeb
   {
@@ -2681,6 +2732,8 @@ reserved_keyword:
 | CURRENT_DATE
 | CURRENT_TIME
 | CURRENT_TIMESTAMP
+| SUBSTR
+| SUBSTRING
 | DATABASE
 | DATABASES
 | DEFAULT
@@ -2733,6 +2786,7 @@ reserved_keyword:
 | RENAME
 | REPLACE
 | RIGHT
+| SCHEMA
 | SELECT
 | SEPARATOR
 | SET

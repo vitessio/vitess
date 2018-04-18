@@ -44,7 +44,7 @@ var (
 	GoVtTopoZk2topoPort = GoVtTopoEtcd2topoPort + 2
 
 	// GoVtTopoConsultopoPort is used by the go/vt/topo/consultopo package.
-	// Takes five ports.
+	// Takes four ports.
 	GoVtTopoConsultopoPort = GoVtTopoZk2topoPort + 3
 )
 

@@ -25,3 +25,4 @@ pid=`cat $VTDATAROOT/tmp/vtctld.pid`
 echo "Stopping vtctld..."
 kill $pid
 
+kill -9 "$(pgrep -f "/bin/vtctld")"

@@ -23,7 +23,6 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   serialized_pb=_b('\n\x0fvtctldata.proto\x12\tvtctldata\x1a\rlogutil.proto\"B\n\x1a\x45xecuteVtctlCommandRequest\x12\x0c\n\x04\x61rgs\x18\x01 \x03(\t\x12\x16\n\x0e\x61\x63tion_timeout\x18\x02 \x01(\x03\"<\n\x1b\x45xecuteVtctlCommandResponse\x12\x1d\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x0e.logutil.Eventb\x06proto3')
   ,
   dependencies=[logutil__pb2.DESCRIPTOR,])
-_sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
 
@@ -41,14 +40,14 @@ _EXECUTEVTCTLCOMMANDREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='action_timeout', full_name='vtctldata.ExecuteVtctlCommandRequest.action_timeout', index=1,
       number=2, type=3, cpp_type=2, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -79,7 +78,7 @@ _EXECUTEVTCTLCOMMANDRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None),
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -99,6 +98,7 @@ _EXECUTEVTCTLCOMMANDRESPONSE = _descriptor.Descriptor(
 _EXECUTEVTCTLCOMMANDRESPONSE.fields_by_name['event'].message_type = logutil__pb2._EVENT
 DESCRIPTOR.message_types_by_name['ExecuteVtctlCommandRequest'] = _EXECUTEVTCTLCOMMANDREQUEST
 DESCRIPTOR.message_types_by_name['ExecuteVtctlCommandResponse'] = _EXECUTEVTCTLCOMMANDRESPONSE
+_sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 ExecuteVtctlCommandRequest = _reflection.GeneratedProtocolMessageType('ExecuteVtctlCommandRequest', (_message.Message,), dict(
   DESCRIPTOR = _EXECUTEVTCTLCOMMANDREQUEST,
@@ -115,9 +115,4 @@ ExecuteVtctlCommandResponse = _reflection.GeneratedProtocolMessageType('ExecuteV
 _sym_db.RegisterMessage(ExecuteVtctlCommandResponse)
 
 
-import grpc
-from grpc.beta import implementations as beta_implementations
-from grpc.beta import interfaces as beta_interfaces
-from grpc.framework.common import cardinality
-from grpc.framework.interfaces.face import utilities as face_utilities
 # @@protoc_insertion_point(module_scope)

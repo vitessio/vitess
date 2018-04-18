@@ -19,3 +19,9 @@ insert ignore into user (id, name) values(2, 'bob'),(3, 'charlie');
 insert into user (id, name, nickname, address) values(2, 'bob', 'bobby', '123 main st'), (3, 'jane', 'janie', '456 elm st')on duplicate key update nickname=values(nickname), address=values(address);
 
 */
+
+/*
+With the multi-shard autocommit option selected all inserts happen in one
+round trip so there is no race
+*/
+insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into music_extra (id, extra) values (1, 'a'), (2, 'b'), (3, 'c');

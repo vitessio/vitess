@@ -42,6 +42,9 @@ type Delete struct {
 	// Keyspace specifies the keyspace to send the query to.
 	Keyspace *vindexes.Keyspace
 
+	// TargetDestination specifies the destination to send the query to.
+	TargetDestination key.Destination
+
 	// Query specifies the query to be executed.
 	Query string
 
@@ -56,6 +59,10 @@ type Delete struct {
 
 	// OwnedVindexQuery is used for deleting lookup vindex entries.
 	OwnedVindexQuery string
+
+	// Option to override the standard behavior and allow a multi-shard delete
+	// to use single round trip autocommit.
+	MultiShardAutocommit bool
 }
 
 // MarshalJSON serializes the Delete into a JSON representation.
@@ -102,15 +109,21 @@ const (
 	// Value, and an OwnedVindexQuery, which will be used to
 	// determine if lookup rows need to be deleted.
 	DeleteEqual
-	// DeleteSharded is for routing a scattered
+	// DeleteScatter is for routing a scattered
 	// delete statement.
-	DeleteSharded
+	DeleteScatter
+	// DeleteByDestination is to route explicitly to a given
+	// target destination. Is used when the query explicitly sets a target destination:
+	// in the from clause:
+	// e.g: DELETE FROM `keyspace[-]`.x1 LIMIT 100
+	DeleteByDestination
 )
 
 var delName = map[DeleteOpcode]string{
-	DeleteUnsharded: "DeleteUnsharded",
-	DeleteEqual:     "DeleteEqual",
-	DeleteSharded:   "DeleteSharded",
+	DeleteUnsharded:     "DeleteUnsharded",
+	DeleteEqual:         "DeleteEqual",
+	DeleteScatter:       "DeleteScatter",
+	DeleteByDestination: "DeleteByDestination",
 }
 
 // MarshalJSON serializes the DeleteOpcode as a JSON string.
@@ -126,8 +139,10 @@ func (del *Delete) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 		return del.execDeleteUnsharded(vcursor, bindVars)
 	case DeleteEqual:
 		return del.execDeleteEqual(vcursor, bindVars)
-	case DeleteSharded:
-		return del.execDeleteSharded(vcursor, bindVars)
+	case DeleteScatter:
+		return del.execDeleteByDestination(vcursor, bindVars, key.DestinationAllShards{})
+	case DeleteByDestination:
+		return del.execDeleteByDestination(vcursor, bindVars, del.TargetDestination)
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported opcode: %v", del)
@@ -201,10 +216,10 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 	return nil
 }
 
-func (del *Delete) execDeleteSharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
+func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
+	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{dest})
 	if err != nil {
-		return nil, vterrors.Wrap(err, "execDeleteSharded")
+		return nil, vterrors.Wrap(err, "execDeleteScatter")
 	}
 
 	queries := make([]*querypb.BoundQuery, len(rss))
@@ -215,5 +230,6 @@ func (del *Delete) execDeleteSharded(vcursor VCursor, bindVars map[string]*query
 			BindVariables: bindVars,
 		}
 	}
-	return vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, true /* canAutocommit */)
+	autocommit := (len(rss) == 1 || del.MultiShardAutocommit) && vcursor.AutocommitApproval()
+	return vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
 }
