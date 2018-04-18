@@ -24,6 +24,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	log "github.com/golang/glog"
+
 	"vitess.io/vitess/go/sync2"
 )
 
@@ -44,6 +46,9 @@ func NewCounter(name string, help string) *Counter {
 
 // Add adds the provided value to the Counter
 func (v *Counter) Add(delta int64) {
+	if delta < 0 {
+		log.Warningf("Adding a negative value to a counter, %v should be a gauge instead", v)
+	}
 	v.i.Add(delta)
 }
 
@@ -85,6 +90,11 @@ func NewGauge(name string, help string) *Gauge {
 // Set sets the value
 func (v *Gauge) Set(value int64) {
 	v.Counter.i.Set(value)
+}
+
+// Add adds the provided value to the Gauge
+func (v *Gauge) Add(delta int64) {
+	v.Counter.i.Add(delta)
 }
 
 // Counters is similar to expvar.Map, except that
@@ -210,6 +220,15 @@ func (c *CountersWithLabels) LabelName() string {
 	return c.labelName
 }
 
+// Add adds a value to a named counter.
+func (c *CountersWithLabels) Add(name string, value int64) {
+	if value < 0 {
+		log.Warningf("Adding a negative value to a counter, %v should be a gauge instead", c)
+	}
+	a := c.getValueAddr(name)
+	atomic.AddInt64(a, value)
+}
+
 // GaugesWithLabels is similar to CountersWithLabels, except its values can go up and down.
 type GaugesWithLabels struct {
 	CountersWithLabels
@@ -231,10 +250,16 @@ func NewGaugesWithLabels(name string, help string, labelName string, tags ...str
 	return g
 }
 
-// Set sets the value of a named counter.
+// Set sets the value of a named gauge.
 func (g *GaugesWithLabels) Set(name string, value int64) {
 	a := g.CountersWithLabels.getValueAddr(name)
 	atomic.StoreInt64(a, value)
+}
+
+// Add adds a value to a named gauge.
+func (g *GaugesWithLabels) Add(name string, value int64) {
+	a := g.getValueAddr(name)
+	atomic.AddInt64(a, value)
 }
 
 // CounterFunc converts a function that returns
@@ -374,6 +399,10 @@ func (mc *CountersWithMultiLabels) Add(names []string, value int64) {
 	if len(names) != len(mc.labels) {
 		panic("CountersWithMultiLabels: wrong number of values in Add")
 	}
+	if value < 0 {
+		log.Warningf("Adding a negative value to a counter, %v should be a gauge instead", mc)
+	}
+
 	mc.Counters.Add(mapKey(names), value)
 }
 
@@ -417,6 +446,16 @@ func (mg *GaugesWithMultiLabels) Set(names []string, value int64) {
 	}
 	a := mg.getValueAddr(mapKey(names))
 	atomic.StoreInt64(a, value)
+}
+
+// Add adds a value to a named gauge. len(names) must be equal to
+// len(Labels)
+func (mg *GaugesWithMultiLabels) Add(names []string, value int64) {
+	if len(names) != len(mg.labels) {
+		panic("CountersWithMultiLabels: wrong number of values in Add")
+	}
+
+	mg.Counters.Add(mapKey(names), value)
 }
 
 // CountersFuncWithMultiLabels is a multidimensional CountersFunc implementation
