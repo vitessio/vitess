@@ -4,7 +4,6 @@ import (
 	"expvar"
 	"net/http"
 	"strings"
-	"unicode"
 
 	log "github.com/golang/glog"
 
@@ -168,33 +167,26 @@ func (be *PromBackend) newMetricFunc(cf *stats.CounterFunc, name string, vt prom
 	prometheus.MustRegister(collector)
 }
 
+// buildPromName specifies the namespace as a prefix to the metric name
 func (be *PromBackend) buildPromName(name string) string {
-	s := strings.TrimPrefix(toSnake(name), be.namespace)
+	s := strings.TrimPrefix(normalizeMetric(name), be.namespace+"_")
 	return prometheus.BuildFQName("", be.namespace, s)
 }
 
 func labelsToSnake(labels []string) []string {
 	output := make([]string, len(labels))
 	for i, l := range labels {
-		output[i] = toSnake(l)
+		output[i] = normalizeMetric(l)
 	}
 	return output
 }
 
-func toSnake(name string) string {
+// normalizeMetricForPrometheus produces a compliant name by applying
+// special case conversions and then applying a camel case to snake case converter.
+func normalizeMetric(name string) string {
 	// Special cases
-	r := strings.NewReplacer("VSchema", "Vschema", "VtGate", "Vtgate")
+	r := strings.NewReplacer("VSchema", "vschema", "VtGate", "vtgate")
 	name = r.Replace(name)
-	// Camel case => snake case
-	runes := []rune(name)
 
-	var out []rune
-	for i := 0; i < len(runes); i++ {
-		if i > 0 && unicode.IsUpper(runes[i]) && ((i+1 < len(runes) && unicode.IsLower(runes[i+1])) || unicode.IsLower(runes[i-1])) {
-			out = append(out, '_')
-		}
-		out = append(out, unicode.ToLower(runes[i]))
-	}
-
-	return string(out)
+	return stats.GetSnakeName(name)
 }
