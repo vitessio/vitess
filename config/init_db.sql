@@ -5,6 +5,9 @@
 # Equivalent of mysql_secure_installation
 ##########################################
 
+# Changes during the init db should not make it to the binlog.
+# They could potentially create errant transactions on replicas.
+SET sql_log_bin = 0;
 # Remove anonymous users.
 DELETE FROM mysql.user WHERE User = '';
 
