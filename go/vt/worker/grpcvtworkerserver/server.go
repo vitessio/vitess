@@ -21,6 +21,8 @@ of the remote execution of vtworker commands.
 package grpcvtworkerserver
 
 import (
+	"sync"
+
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -51,10 +53,16 @@ func (s *VtworkerServer) ExecuteVtworkerCommand(args *vtworkerdatapb.ExecuteVtwo
 	defer servenv.HandlePanic("vtworker", &err)
 
 	// Stream everything back what the Wrangler is logging.
+	// We may execute this in parallel (inside multiple go routines),
+	// but the stream.Send() method is not thread safe in gRPC.
+	// So use a mutex to protect it.
+	mu := sync.Mutex{}
 	logstream := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		mu.Lock()
 		stream.Send(&vtworkerdatapb.ExecuteVtworkerCommandResponse{
 			Event: e,
 		})
+		mu.Unlock()
 	})
 	// Let the Wrangler also log everything to the console (and thereby
 	// effectively to a logfile) to make sure that any information or errors

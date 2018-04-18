@@ -429,6 +429,8 @@ func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *boo
 }
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same.
+// Note we guarantee the callback will not be called concurrently
+// by mutiple go routines, through processOneStreamingResult.
 func (stc *ScatterConn) StreamExecute(
 	ctx context.Context,
 	query string,
@@ -454,6 +456,8 @@ func (stc *ScatterConn) StreamExecute(
 // StreamExecuteMulti is like StreamExecute,
 // but each shard gets its own bindVars. If len(shards) is not equal to
 // len(bindVars), the function panics.
+// Note we guarantee the callback will not be called concurrently
+// by mutiple go routines, through processOneStreamingResult.
 func (stc *ScatterConn) StreamExecuteMulti(
 	ctx context.Context,
 	query string,
@@ -509,6 +513,8 @@ func (tt *timeTracker) Record(target *querypb.Target) time.Time {
 }
 
 // MessageStream streams messages from the specified shards.
+// Note we guarantee the callback will not be called concurrently
+// by mutiple go routines, through processOneStreamingResult.
 func (stc *ScatterConn) MessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error {
 	// The cancelable context is used for handling errors
 	// from individual streams.
