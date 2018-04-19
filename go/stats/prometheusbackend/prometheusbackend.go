@@ -26,8 +26,8 @@ var (
 func Init(namespace string) {
 	http.Handle("/metrics", promhttp.Handler())
 	be := &PromBackend{namespace: namespace}
-	stats.Register(be.publishPrometheusMetric)
 	logUnsupported = logutil.NewThrottledLogger("PrometheusUnsupportedMetricType", 1*time.Minute)
+	stats.Register(be.publishPrometheusMetric)
 }
 
 // PublishPromMetric is used to publish the metric to Prometheus.
