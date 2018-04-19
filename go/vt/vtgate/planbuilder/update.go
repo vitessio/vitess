@@ -103,7 +103,7 @@ func buildChangedVindexesValues(eupd *engine.Update, update *sqlparser.Update, c
 					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "column has duplicate set values: '%v'", assignment.Name.Name)
 				}
 				found = true
-				pv, err := extractValueFromUpdate(assignment, vcol)
+				pv, err := extractValueFromUpdate(assignment)
 				if err != nil {
 					return nil, err
 				}
@@ -155,7 +155,7 @@ func generateUpdateSubquery(upd *sqlparser.Update, table *vindexes.Table) string
 // extractValueFromUpdate given an UpdateExpr attempts to extracts the Value
 // it's holding. At the moment it only supports: StrVal, HexVal, IntVal, ValArg.
 // If a complex expression is provided (e.g set name = name + 1), the update will be rejected.
-func extractValueFromUpdate(upd *sqlparser.UpdateExpr, col sqlparser.ColIdent) (pv sqltypes.PlanValue, err error) {
+func extractValueFromUpdate(upd *sqlparser.UpdateExpr) (pv sqltypes.PlanValue, err error) {
 	if !sqlparser.IsValue(upd.Expr) {
 		err := vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Only values are supported. Invalid update on column: %v", upd.Name.Name)
 		return sqltypes.PlanValue{}, err
