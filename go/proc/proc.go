@@ -54,7 +54,7 @@ func Listen(port string) (l net.Listener, err error) {
 // SIGUSR1 signal and attempt to bind to the port the current server is using.
 func Wait() os.Signal {
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGTERM, syscall.SIGUSR1)
+	signal.Notify(c, syscall.SIGTERM, syscall.SIGUSR1, syscall.SIGINT)
 
 	http.HandleFunc(pidURL, func(r http.ResponseWriter, req *http.Request) {
 		r.Write(strconv.AppendInt(nil, int64(os.Getpid()), 10))
