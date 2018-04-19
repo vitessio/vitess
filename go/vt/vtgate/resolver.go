@@ -236,6 +236,8 @@ func (res *Resolver) ExecuteBatch(
 // This function currently temporarily enforces the restriction of executing on
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
+// Note we guarantee the callback will not be called concurrently
+// by mutiple go routines.
 func (res *Resolver) StreamExecute(
 	ctx context.Context,
 	sql string,
