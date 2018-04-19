@@ -16,13 +16,12 @@
 
 package io.vitess.jdbc;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.protobuf.ByteString;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.Reader;
 import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.net.URL;
 import java.sql.Array;
 import java.sql.Blob;
@@ -46,7 +45,11 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
+
 import javax.sql.rowset.serial.SerialClob;
+
+import com.google.common.annotations.VisibleForTesting;
+import com.google.protobuf.ByteString;
 
 import io.vitess.client.cursor.Cursor;
 import io.vitess.client.cursor.Row;
@@ -428,6 +431,27 @@ public class VitessResultSet implements ResultSet {
         return value;
     }
 
+    public BigInteger getBigInteger(int columnIndex) throws SQLException {
+        String bigIntegerString;
+        BigInteger value;
+
+        preAccessor(columnIndex);
+
+        if (isNull(columnIndex)) {
+            return null;
+        }
+
+        bigIntegerString = this.getString(columnIndex);
+
+        try {
+            value = new BigInteger(bigIntegerString);
+        } catch (Exception ex) {
+            throw new SQLException(ex);
+        }
+
+        return value;
+    }
+
     public byte[] getBytes(int columnIndex) throws SQLException {
         String bytesString;
         byte[] value;
@@ -526,6 +550,11 @@ public class VitessResultSet implements ResultSet {
     public BigDecimal getBigDecimal(String columnLabel, int scale) throws SQLException {
         int columnIndex = this.findColumn(columnLabel);
         return getBigDecimal(columnIndex, scale);
+    }
+
+    public BigInteger getBigInteger(String columnLabel) throws SQLException {
+        int columnIndex = this.findColumn(columnLabel);
+        return getBigInteger(columnIndex);
     }
 
     public byte[] getBytes(String columnLabel) throws SQLException {
