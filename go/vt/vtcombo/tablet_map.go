@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package vtcombo
 
 import (
 	"flag"
@@ -106,7 +106,7 @@ func createTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 
 // initTabletMap creates the action agents and associated data structures
 // for all tablets, based on the vttest proto parameter.
-func initTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, schemaDir string, mycnf *mysqlctl.Mycnf) error {
+func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, schemaDir string, mycnf *mysqlctl.Mycnf) error {
 	tabletMap = make(map[uint32]*tablet)
 
 	ctx := context.Background()
