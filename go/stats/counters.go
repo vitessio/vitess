@@ -23,11 +23,15 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
-	log "github.com/golang/glog"
+	"vitess.io/vitess/go/vt/logutil"
 
 	"vitess.io/vitess/go/sync2"
 )
+
+// logCounterNegative is for throttling adding a negative value to a counter messages in logs
+var logCounterNegative = logutil.NewThrottledLogger("StatsCounterNegative", 1*time.Minute)
 
 // Counter is expvar.Int+Get+hook
 type Counter struct {
@@ -47,7 +51,7 @@ func NewCounter(name string, help string) *Counter {
 // Add adds the provided value to the Counter
 func (v *Counter) Add(delta int64) {
 	if delta < 0 {
-		log.Warningf("Adding a negative value to a counter, %v should be a gauge instead", v)
+		logCounterNegative.Warningf("Adding a negative value to a counter, %v should be a gauge instead", v)
 	}
 	v.i.Add(delta)
 }
@@ -223,7 +227,7 @@ func (c *CountersWithLabels) LabelName() string {
 // Add adds a value to a named counter.
 func (c *CountersWithLabels) Add(name string, value int64) {
 	if value < 0 {
-		log.Warningf("Adding a negative value to a counter, %v should be a gauge instead", c)
+		logCounterNegative.Warningf("Adding a negative value to a counter, %v should be a gauge instead", c)
 	}
 	a := c.getValueAddr(name)
 	atomic.AddInt64(a, value)
@@ -400,7 +404,7 @@ func (mc *CountersWithMultiLabels) Add(names []string, value int64) {
 		panic("CountersWithMultiLabels: wrong number of values in Add")
 	}
 	if value < 0 {
-		log.Warningf("Adding a negative value to a counter, %v should be a gauge instead", mc)
+		logCounterNegative.Warningf("Adding a negative value to a counter, %v should be a gauge instead", mc)
 	}
 
 	mc.Counters.Add(mapKey(names), value)
