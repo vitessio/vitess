@@ -22,32 +22,6 @@ import (
 	"sync"
 )
 
-// GetSnakeName calls toSnakeName on the passed in string. It produces
-// a snake-cased name from the provided camel-cased name.
-// It memoizes the transformation and returns the stored result if available.
-func GetSnakeName(name string) string {
-	return toSnakeCase(name)
-}
-
-// toSnakeCase produces a monitoring compliant name from the original.
-// For systems (like Prometheus) that ask for snake-case names.
-// It converts CamelCase to camel_case, and CAMEL_CASE to camel_case.
-// For numbers, it converts 0.5 to v0_5.
-func toSnakeCase(name string) (hyphenated string) {
-	memoizer.Lock()
-	defer memoizer.Unlock()
-	if hyphenated = memoizer.memo[name]; hyphenated != "" {
-		return hyphenated
-	}
-	hyphenated = name
-	for _, converter := range snakeConverters {
-		hyphenated = converter.re.ReplaceAllString(hyphenated, converter.repl)
-	}
-	hyphenated = strings.ToLower(hyphenated)
-	memoizer.memo[name] = hyphenated
-	return
-}
-
 // toKebabCase produces a monitoring compliant name from the
 // original. It converts CamelCase to camel-case,
 // and CAMEL_CASE to camel-case. For numbers, it
@@ -76,17 +50,6 @@ var kebabConverters = []struct {
 	// example: CCa -> C-Ca (e.g. CCamel -> C-Camel).
 	{regexp.MustCompile("([A-Z])([A-Z][a-z])"), "$1-$2"},
 	{regexp.MustCompile("_"), "-"},
-	{regexp.MustCompile("\\."), "_"},
-}
-
-var snakeConverters = []struct {
-	re   *regexp.Regexp
-	repl string
-}{
-	// example: LC -> L_C (e.g. CamelCase -> Camel_Case).
-	{regexp.MustCompile("([a-z])([A-Z])"), "${1}_${2}"},
-	// example: CCa -> C_Ca (e.g. CCamel -> C_Camel).
-	{regexp.MustCompile("([A-Z])([A-Z][a-z])"), "${1}_${2}"},
 	{regexp.MustCompile("\\."), "_"},
 }
 
