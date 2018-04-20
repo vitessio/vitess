@@ -109,11 +109,17 @@ func TestGaugeFunc(t *testing.T) {
 		gotv = v.(*GaugeFunc)
 	})
 
-	f := NewGaugeFunc("name", "help", IntFunc(func() int64 {
+	v := NewGaugeFunc("name", "help", IntFunc(func() int64 {
 		return 1
 	}))
-	if f.String() != "1" {
-		t.Errorf("want 1, got %f", f.String())
+	if v.String() != "1" {
+		t.Errorf("want 1, got %f", v.String())
+	}
+	if gotv != v {
+		t.Errorf("want %#v, got %#v", v, gotv)
+	}
+	if gotname != "name" {
+		t.Errorf("want name, got %s", gotname)
 	}
 }
 
@@ -164,6 +170,9 @@ func TestDurationFunc(t *testing.T) {
 	}
 	if v.String() != "1" {
 		t.Errorf("want 1, got %v", v.String())
+	}
+	if gotname != "duration" {
+		t.Errorf("want duration, got %s", gotname)
 	}
 }
 

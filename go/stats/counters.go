@@ -100,9 +100,9 @@ func (v *Gauge) Add(delta int64) {
 	v.Counter.i.Add(delta)
 }
 
-// Counters is similar to expvar.Map, except that
+// counters is similar to expvar.Map, except that
 // it doesn't allow floats. It is used to build CountersWithLabels and GaugesWithLabels.
-type Counters struct {
+type counters struct {
 	// mu only protects adding and retrieving the value (*int64) from the map,
 	// modification to the actual number (int64) should be done with atomic funcs.
 	mu     sync.RWMutex
@@ -111,7 +111,7 @@ type Counters struct {
 }
 
 // String implements expvar
-func (c *Counters) String() string {
+func (c *counters) String() string {
 	b := bytes.NewBuffer(make([]byte, 0, 4096))
 
 	c.mu.RLock()
@@ -131,7 +131,7 @@ func (c *Counters) String() string {
 	return b.String()
 }
 
-func (c *Counters) getValueAddr(name string) *int64 {
+func (c *counters) getValueAddr(name string) *int64 {
 	c.mu.RLock()
 	a, ok := c.counts[name]
 	c.mu.RUnlock()
@@ -154,26 +154,26 @@ func (c *Counters) getValueAddr(name string) *int64 {
 }
 
 // Add adds a value to a named counter.
-func (c *Counters) Add(name string, value int64) {
+func (c *counters) Add(name string, value int64) {
 	a := c.getValueAddr(name)
 	atomic.AddInt64(a, value)
 }
 
 // ResetAll resets all counter values.
-func (c *Counters) ResetAll() {
+func (c *counters) ResetAll() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.counts = make(map[string]*int64)
 }
 
 // Reset resets a specific counter value to 0
-func (c *Counters) Reset(name string) {
+func (c *counters) Reset(name string) {
 	a := c.getValueAddr(name)
 	atomic.StoreInt64(a, int64(0))
 }
 
 // Counts returns a copy of the Counters' map.
-func (c *Counters) Counts() map[string]int64 {
+func (c *counters) Counts() map[string]int64 {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -185,14 +185,14 @@ func (c *Counters) Counts() map[string]int64 {
 }
 
 // Help returns the help string.
-func (c *Counters) Help() string {
+func (c *counters) Help() string {
 	return c.help
 }
 
 // CountersWithLabels provides a labelName for the tagged values in Counters
 // It provides a Counts method which can be used for tracking rates.
 type CountersWithLabels struct {
-	Counters
+	counters
 	labelName string
 }
 
@@ -202,7 +202,7 @@ type CountersWithLabels struct {
 // labelName is a category name used to organize the tags in Prometheus.
 func NewCountersWithLabels(name string, help string, labelName string, tags ...string) *CountersWithLabels {
 	c := &CountersWithLabels{
-		Counters: Counters{
+		counters: counters{
 			counts: make(map[string]*int64),
 			help:   help,
 		},
@@ -239,7 +239,7 @@ type GaugesWithLabels struct {
 
 // NewGaugesWithLabels creates a new GaugesWithLabels and publishes it if the name is set.
 func NewGaugesWithLabels(name string, help string, labelName string, tags ...string) *GaugesWithLabels {
-	g := &GaugesWithLabels{CountersWithLabels: CountersWithLabels{Counters: Counters{
+	g := &GaugesWithLabels{CountersWithLabels: CountersWithLabels{counters: counters{
 		counts: make(map[string]*int64),
 		help:   help,
 	}, labelName: labelName}}
@@ -371,7 +371,7 @@ func (f CountersFunc) String() string {
 // names of categories are compound names made with joining multiple
 // strings with '.'.
 type CountersWithMultiLabels struct {
-	Counters
+	counters
 	labels []string
 }
 
@@ -379,7 +379,7 @@ type CountersWithMultiLabels struct {
 // if name is set.
 func NewCountersWithMultiLabels(name string, help string, labels []string) *CountersWithMultiLabels {
 	t := &CountersWithMultiLabels{
-		Counters: Counters{
+		counters: counters{
 			counts: make(map[string]*int64),
 			help:   help},
 		labels: labels,
@@ -406,7 +406,7 @@ func (mc *CountersWithMultiLabels) Add(names []string, value int64) {
 		logCounterNegative.Warningf("Adding a negative value to a counter, %v should be a gauge instead", mc)
 	}
 
-	mc.Counters.Add(mapKey(names), value)
+	mc.counters.Add(mapKey(names), value)
 }
 
 // Reset resets the value of a named counter back to 0. len(names)
@@ -416,7 +416,7 @@ func (mc *CountersWithMultiLabels) Reset(names []string) {
 		panic("CountersWithMultiLabels: wrong number of values in Reset")
 	}
 
-	mc.Counters.Reset(mapKey(names))
+	mc.counters.Reset(mapKey(names))
 }
 
 // GaugesWithMultiLabels is a CountersWithMultiLabels implementation where the values can go up and down
@@ -428,7 +428,7 @@ type GaugesWithMultiLabels struct {
 // if name is set.
 func NewGaugesWithMultiLabels(name string, help string, labels []string) *GaugesWithMultiLabels {
 	t := &GaugesWithMultiLabels{
-		CountersWithMultiLabels: CountersWithMultiLabels{Counters: Counters{
+		CountersWithMultiLabels: CountersWithMultiLabels{counters: counters{
 			counts: make(map[string]*int64),
 			help:   help,
 		},
@@ -458,7 +458,7 @@ func (mg *GaugesWithMultiLabels) Add(names []string, value int64) {
 		panic("CountersWithMultiLabels: wrong number of values in Add")
 	}
 
-	mg.Counters.Add(mapKey(names), value)
+	mg.counters.Add(mapKey(names), value)
 }
 
 // CountersFuncWithMultiLabels is a multidimensional CountersFunc implementation
