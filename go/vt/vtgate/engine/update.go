@@ -106,11 +106,15 @@ const (
 	// to a single shard: Requires: A Vindex, and
 	// a single Value.
 	UpdateEqual
+	// UpdateScatter is for routing a scattered
+	// update statement.
+	UpdateScatter
 )
 
 var updName = map[UpdateOpcode]string{
 	UpdateUnsharded: "UpdateUnsharded",
 	UpdateEqual:     "UpdateEqual",
+	UpdateScatter:   "UpdateScatter",
 }
 
 // MarshalJSON serializes the UpdateOpcode as a JSON string.
@@ -126,6 +130,8 @@ func (upd *Update) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 		return upd.execUpdateUnsharded(vcursor, bindVars)
 	case UpdateEqual:
 		return upd.execUpdateEqual(vcursor, bindVars)
+	case UpdateScatter:
+		return upd.execUpdateByDestination(vcursor, bindVars, key.DestinationAllShards{})
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported opcode: %v", upd)
@@ -217,4 +223,22 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, query string, bindVars m
 		}
 	}
 	return nil
+}
+
+func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
+	rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{dest})
+	if err != nil {
+		return nil, vterrors.Wrap(err, "execDeleteScatter")
+	}
+
+	queries := make([]*querypb.BoundQuery, len(rss))
+	sql := sqlannotation.AnnotateIfDML(upd.Query, nil)
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{
+			Sql:           sql,
+			BindVariables: bindVars,
+		}
+	}
+	autocommit := (len(rss) == 1) && vcursor.AutocommitApproval()
+	return vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
 }
