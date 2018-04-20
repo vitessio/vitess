@@ -27,7 +27,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 
-	"vitess.io/vitess/go/vt/log"
+	log "github.com/golang/glog"
 )
 
 var (

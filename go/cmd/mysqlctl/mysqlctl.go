@@ -23,6 +23,7 @@ import (
 	"os"
 	"time"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/exit"
@@ -30,7 +31,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 )

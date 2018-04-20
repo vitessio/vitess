@@ -22,10 +22,10 @@ import (
 	"strings"
 	"sync"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/fileutil"
-	"vitess.io/vitess/go/vt/log"
 )
 
 // ResolveKeyspaceWildcard will resolve keyspace wildcards.

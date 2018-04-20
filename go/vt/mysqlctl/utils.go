@@ -17,7 +17,7 @@ limitations under the License.
 package mysqlctl
 
 import (
-	"vitess.io/vitess/go/vt/log"
+	log "github.com/golang/glog"
 )
 
 type MapFunc func(index int) error

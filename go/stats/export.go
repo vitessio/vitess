@@ -36,8 +36,8 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/golang/glog"
 	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/vt/log"
 )
 
 var emitStats = flag.Bool("emit_stats", false, "true iff we should emit stats to push-based monitoring/stats backends")

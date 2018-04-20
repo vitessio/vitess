@@ -21,8 +21,8 @@ import (
 
 	"golang.org/x/net/context"
 
+	log "github.com/golang/glog"
 	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/log"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"

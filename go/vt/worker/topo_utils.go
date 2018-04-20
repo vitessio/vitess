@@ -22,9 +22,10 @@ import (
 	"math/rand"
 	"time"
 
+	log "github.com/golang/glog"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/wrangler"

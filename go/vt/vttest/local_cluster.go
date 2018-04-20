@@ -30,9 +30,10 @@ import (
 	"strings"
 	"unicode"
 
+	log "github.com/golang/glog"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"

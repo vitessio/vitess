@@ -21,7 +21,7 @@ import (
 	"os"
 	"runtime/pprof"
 
-	"vitess.io/vitess/go/vt/log"
+	log "github.com/golang/glog"
 )
 
 var (

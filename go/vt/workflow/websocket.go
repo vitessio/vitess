@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"net/http"
 
+	log "github.com/golang/glog"
 	"github.com/gorilla/websocket"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/vt/log"
 )
 
 var upgrader = websocket.Upgrader{} // use default options

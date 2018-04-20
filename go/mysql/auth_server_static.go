@@ -27,7 +27,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"vitess.io/vitess/go/vt/log"
+	log "github.com/golang/glog"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 

@@ -24,8 +24,9 @@ import (
 	"io"
 	"strings"
 
+	log "github.com/golang/glog"
+
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"

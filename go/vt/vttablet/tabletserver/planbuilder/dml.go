@@ -17,8 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
+	log "github.com/golang/glog"
+
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"

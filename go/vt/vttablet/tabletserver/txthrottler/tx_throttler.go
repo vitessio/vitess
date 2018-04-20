@@ -21,10 +21,11 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/golang/glog"
+
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
