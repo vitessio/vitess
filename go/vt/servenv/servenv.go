@@ -41,10 +41,10 @@ import (
 	// register the HTTP handlers for profiling
 	_ "net/http/pprof"
 
+	log "github.com/golang/glog"
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/log"
 
 	// register the proper init and shutdown hooks for logging
 	_ "vitess.io/vitess/go/vt/logutil"

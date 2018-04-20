@@ -23,10 +23,10 @@ import (
 	"strconv"
 	"sync"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/workflow"

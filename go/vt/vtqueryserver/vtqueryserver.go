@@ -23,8 +23,8 @@ import (
 	"flag"
 	"time"
 
+	log "github.com/golang/glog"
 	"vitess.io/vitess/go/timer"
-	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlproxy"

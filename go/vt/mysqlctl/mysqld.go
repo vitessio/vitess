@@ -40,6 +40,7 @@ import (
 
 	"bytes"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats"
@@ -47,7 +48,6 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	vtenv "vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/hook"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlclient"
 )
 

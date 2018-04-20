@@ -24,10 +24,10 @@ import (
 	"net"
 	"time"
 
+	log "github.com/golang/glog"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
-	"vitess.io/vitess/go/vt/log"
 )
 
 const (

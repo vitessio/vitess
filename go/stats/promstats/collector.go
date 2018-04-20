@@ -25,9 +25,9 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/log"
 )
 
 // NewCollector returns a prometheus.Collector for a given stats var.

@@ -22,11 +22,11 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"

@@ -26,9 +26,10 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/golang/glog"
+
 	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 

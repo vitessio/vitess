@@ -27,13 +27,13 @@ import (
 
 	"golang.org/x/net/context"
 
+	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/events"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 

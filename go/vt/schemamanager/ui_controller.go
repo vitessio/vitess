@@ -22,8 +22,8 @@ import (
 	"net/http"
 	"strings"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/log"
 )
 
 // UIController handles schema events.
