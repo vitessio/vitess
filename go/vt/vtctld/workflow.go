@@ -20,10 +20,10 @@ import (
 	"flag"
 	"time"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/flagutil"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schemamanager/schemaswap"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"

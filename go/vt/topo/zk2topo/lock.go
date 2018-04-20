@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"path"
 
+	log "github.com/golang/glog"
 	"github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 )
 

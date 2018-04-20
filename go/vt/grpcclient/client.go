@@ -25,7 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/vttls"
 
-	"vitess.io/vitess/go/vt/log"
+	log "github.com/golang/glog"
 )
 
 // FailFast is a self-documenting type for the grpc.FailFast.

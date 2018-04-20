@@ -19,8 +19,9 @@ package mysqlctl
 import (
 	"bytes"
 
+	log "github.com/golang/glog"
+
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
 )
 
 // Note that definitions of local_metadata and shard_metadata should be the same

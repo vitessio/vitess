@@ -26,10 +26,10 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/log"
 )
 
 // This file contains utility methods and definitions to lock

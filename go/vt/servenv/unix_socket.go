@@ -21,7 +21,7 @@ import (
 	"net"
 	"os"
 
-	"vitess.io/vitess/go/vt/log"
+	log "github.com/golang/glog"
 )
 
 var (

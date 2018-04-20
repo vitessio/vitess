@@ -21,12 +21,12 @@ import (
 	"path"
 	"sync"
 
+	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/events"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

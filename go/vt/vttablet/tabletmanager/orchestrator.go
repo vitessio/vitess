@@ -26,8 +26,9 @@ import (
 	"strconv"
 	"time"
 
+	log "github.com/golang/glog"
+
 	"vitess.io/vitess/go/timer"
-	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )

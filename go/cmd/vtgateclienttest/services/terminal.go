@@ -20,10 +20,11 @@ import (
 	"errors"
 	"fmt"
 
+	log "github.com/golang/glog"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/tb"
-	"vitess.io/vitess/go/vt/log"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
