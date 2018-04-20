@@ -29,10 +29,9 @@ import (
 	"strings"
 	"text/template"
 
-	log "github.com/golang/glog"
-
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/env"
+	"vitess.io/vitess/go/vt/log"
 )
 
 type zkServerAddr struct {

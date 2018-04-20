@@ -32,10 +32,10 @@ import (
 	"syscall"
 	"time"
 
-	log "github.com/golang/glog"
 	zookeeper "github.com/samuel/go-zookeeper/zk"
 
 	"vitess.io/vitess/go/vt/env"
+	"vitess.io/vitess/go/vt/log"
 )
 
 const (
