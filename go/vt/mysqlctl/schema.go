@@ -21,12 +21,12 @@ import (
 	"regexp"
 	"strings"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"

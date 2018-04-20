@@ -21,7 +21,7 @@ import (
 	"errors"
 	"sync"
 
-	log "github.com/golang/glog"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 )
 
