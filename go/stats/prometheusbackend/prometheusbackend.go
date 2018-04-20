@@ -42,7 +42,7 @@ func (be *PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 	case *stats.GaugeFunc:
 		be.newMetricFunc(&st.CounterFunc, name, prometheus.GaugeValue)
 	case *stats.CountersWithLabels:
-		be.newMetricWithLabels(&st.Counters, name, st.LabelName(), prometheus.CounterValue)
+		be.newCountersWithLabels(st, name, st.LabelName(), prometheus.CounterValue)
 	case *stats.CountersWithMultiLabels:
 		be.newCountersWithMultiLabels(st, name)
 	case *stats.CountersFuncWithMultiLabels:
@@ -50,7 +50,7 @@ func (be *PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 	case *stats.GaugesFuncWithMultiLabels:
 		be.newMetricsFuncWithMultiLabels(&st.CountersFuncWithMultiLabels, name, prometheus.GaugeValue)
 	case *stats.GaugesWithLabels:
-		be.newMetricWithLabels(&st.Counters, name, st.LabelName(), prometheus.GaugeValue)
+		be.newGaugesWithLabels(st, name, st.LabelName(), prometheus.GaugeValue)
 	case *stats.GaugesWithMultiLabels:
 		be.newGaugesWithMultiLabels(st, name)
 	case *stats.Timings:
@@ -62,12 +62,25 @@ func (be *PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 	}
 }
 
-func (be *PromBackend) newMetricWithLabels(c *stats.Counters, name string, labelName string, vt prometheus.ValueType) {
-	collector := &metricWithLabelsCollector{
-		counter: c,
+func (be *PromBackend) newCountersWithLabels(c *stats.CountersWithLabels, name string, labelName string, vt prometheus.ValueType) {
+	collector := &countersWithLabelsCollector{
+		counters: c,
 		desc: prometheus.NewDesc(
 			be.buildPromName(name),
 			c.Help(),
+			[]string{labelName},
+			nil),
+		vt: vt}
+
+	prometheus.MustRegister(collector)
+}
+
+func (be *PromBackend) newGaugesWithLabels(g *stats.GaugesWithLabels, name string, labelName string, vt prometheus.ValueType) {
+	collector := &gaugesWithLabelsCollector{
+		gauges: g,
+		desc: prometheus.NewDesc(
+			be.buildPromName(name),
+			g.Help(),
 			[]string{labelName},
 			nil),
 		vt: vt}
@@ -80,7 +93,7 @@ func (be *PromBackend) newCountersWithMultiLabels(cml *stats.CountersWithMultiLa
 		cml: cml,
 		desc: prometheus.NewDesc(
 			be.buildPromName(name),
-			cml.Counters.Help(),
+			cml.Help(),
 			labelsToSnake(cml.Labels()),
 			nil),
 	}

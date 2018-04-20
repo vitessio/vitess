@@ -23,24 +23,47 @@ func (c *metricCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(c.desc, c.vt, float64(c.counter.Get()))
 }
 
-// metricWithLabelsCollector collects both stats.Counters and stats.Gauges
-type metricWithLabelsCollector struct {
-	counter *stats.Counters
-	desc    *prometheus.Desc
-	vt      prometheus.ValueType
+// countersWithLabelsCollector collects stats.CountersWithLabels
+type countersWithLabelsCollector struct {
+	counters *stats.CountersWithLabels
+	desc     *prometheus.Desc
+	vt       prometheus.ValueType
 }
 
 // Describe implements Collector.
-func (c *metricWithLabelsCollector) Describe(ch chan<- *prometheus.Desc) {
+func (c *countersWithLabelsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.desc
 }
 
 // Collect implements Collector.
-func (c *metricWithLabelsCollector) Collect(ch chan<- prometheus.Metric) {
-	for tag, val := range c.counter.Counts() {
+func (c *countersWithLabelsCollector) Collect(ch chan<- prometheus.Metric) {
+	for tag, val := range c.counters.Counts() {
 		ch <- prometheus.MustNewConstMetric(
 			c.desc,
 			c.vt,
+			float64(val),
+			tag)
+	}
+}
+
+// gaugesWithLabelsCollector collects stats.GaugesWithLabels
+type gaugesWithLabelsCollector struct {
+	gauges *stats.GaugesWithLabels
+	desc   *prometheus.Desc
+	vt     prometheus.ValueType
+}
+
+// Describe implements Collector.
+func (g *gaugesWithLabelsCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- g.desc
+}
+
+// Collect implements Collector.
+func (g *gaugesWithLabelsCollector) Collect(ch chan<- prometheus.Metric) {
+	for tag, val := range g.gauges.Counts() {
+		ch <- prometheus.MustNewConstMetric(
+			g.desc,
+			g.vt,
 			float64(val),
 			tag)
 	}
