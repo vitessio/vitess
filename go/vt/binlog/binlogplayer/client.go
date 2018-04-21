@@ -19,9 +19,9 @@ package binlogplayer
 import (
 	"flag"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )

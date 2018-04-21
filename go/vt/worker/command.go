@@ -27,8 +27,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	log "github.com/golang/glog"
-
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
