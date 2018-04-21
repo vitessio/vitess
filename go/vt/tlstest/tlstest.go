@@ -25,7 +25,7 @@ import (
 	"os/exec"
 	"path"
 
-	log "github.com/golang/glog"
+	"vitess.io/vitess/go/vt/log"
 )
 
 const (

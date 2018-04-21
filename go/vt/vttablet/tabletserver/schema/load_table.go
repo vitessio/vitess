@@ -22,9 +22,8 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/golang/glog"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"

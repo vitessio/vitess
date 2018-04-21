@@ -23,7 +23,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 
-	log "github.com/golang/glog"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // Authenticator provides an interface to implement auth in Vitess in

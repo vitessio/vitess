@@ -22,9 +22,8 @@ import (
 	"html/template"
 	"net/http"
 
-	log "github.com/golang/glog"
-
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/vt/log"
 )
 
 var (
