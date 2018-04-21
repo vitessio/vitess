@@ -50,8 +50,8 @@ package exit
 import (
 	"os"
 
-	log "github.com/golang/glog"
 	"vitess.io/vitess/go/tb"
+	"vitess.io/vitess/go/vt/log"
 )
 
 type exitCode int

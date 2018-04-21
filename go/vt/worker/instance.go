@@ -27,9 +27,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	log "github.com/golang/glog"
-
 	"vitess.io/vitess/go/tb"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"

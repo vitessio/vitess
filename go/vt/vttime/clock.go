@@ -19,7 +19,7 @@ package vttime
 import (
 	"flag"
 
-	log "github.com/golang/glog"
+	"vitess.io/vitess/go/vt/log"
 )
 
 var (

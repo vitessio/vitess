@@ -28,9 +28,9 @@ import (
 	"expvar"
 	"flag"
 
-	log "github.com/golang/glog"
 	influxClient "github.com/influxdb/influxdb/client"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 )
 

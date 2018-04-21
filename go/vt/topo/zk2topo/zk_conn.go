@@ -24,12 +24,12 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/vt/log"
 )
 
 const (
