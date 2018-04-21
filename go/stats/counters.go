@@ -419,6 +419,13 @@ func (mc *CountersWithMultiLabels) Reset(names []string) {
 	mc.counters.Reset(mapKey(names))
 }
 
+// Counts returns a copy of the Counters' map.
+// The key is a single string where all labels are joiend by a "." e.g.
+// "label1.label2".
+func (mc *CountersWithMultiLabels) Counts() map[string]int64 {
+	return mc.counters.Counts()
+}
+
 // GaugesWithMultiLabels is a CountersWithMultiLabels implementation where the values can go up and down
 type GaugesWithMultiLabels struct {
 	CountersWithMultiLabels
