@@ -48,9 +48,9 @@ type RowAggregator struct {
 	td            *tabletmanagerdatapb.TableDefinition
 	diffType      DiffType
 	builder       QueryBuilder
-	// statsCounters has a "diffType" specific stats.Counters object to track how
+	// statsCounters has a "diffType" specific stats.CountersWithLabels object to track how
 	// many rows were changed per table.
-	statsCounters *stats.Counters
+	statsCounters *stats.CountersWithLabels
 
 	buffer       bytes.Buffer
 	bufferedRows int
@@ -60,7 +60,7 @@ type RowAggregator struct {
 // The index of the elements in statCounters must match the elements
 // in "DiffTypes" i.e. the first counter is for inserts, second for updates
 // and the third for deletes.
-func NewRowAggregator(ctx context.Context, maxRows, maxSize int, insertChannel chan string, dbName string, td *tabletmanagerdatapb.TableDefinition, diffType DiffType, statsCounters *stats.Counters) *RowAggregator {
+func NewRowAggregator(ctx context.Context, maxRows, maxSize int, insertChannel chan string, dbName string, td *tabletmanagerdatapb.TableDefinition, diffType DiffType, statsCounters *stats.CountersWithLabels) *RowAggregator {
 	// Construct head and tail base commands for the reconciliation statement.
 	var builder QueryBuilder
 	switch diffType {

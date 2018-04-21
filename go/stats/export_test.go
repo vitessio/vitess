@@ -29,8 +29,8 @@ func clear() {
 
 func TestNoHook(t *testing.T) {
 	clear()
-	v := NewInt("plainint")
-	v.Set(1)
+	v := NewCounter("plainint", "help")
+	v.Add(1)
 	if v.String() != "1" {
 		t.Errorf("want 1, got %s", v.String())
 	}
@@ -71,38 +71,55 @@ func TestFloat(t *testing.T) {
 	}
 }
 
-func TestInt(t *testing.T) {
+func TestCounter(t *testing.T) {
 	var gotname string
-	var gotv *Int
+	var gotv *Counter
 	clear()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
-		gotv = v.(*Int)
+		gotv = v.(*Counter)
 	})
-	v := NewInt("Int")
+	v := NewCounter("Int", "help")
 	if gotname != "Int" {
 		t.Errorf("want Int, got %s", gotname)
 	}
 	if gotv != v {
 		t.Errorf("want %#v, got %#v", v, gotv)
 	}
-	v.Set(5)
-	if v.Get() != 5 {
-		t.Errorf("want 5, got %v", v.Get())
-	}
 	v.Add(1)
-	if v.Get() != 6 {
-		t.Errorf("want 6, got %v", v.Get())
+	if v.Get() != 1 {
+		t.Errorf("want 1, got %v", v.Get())
 	}
-	if v.String() != "6" {
-		t.Errorf("want 6, got %v", v.Get())
+	if v.String() != "1" {
+		t.Errorf("want 1, got %v", v.Get())
+	}
+	v.Reset()
+	if v.Get() != 0 {
+		t.Errorf("want 0, got %v", v.Get())
 	}
 
-	f := IntFunc(func() int64 {
-		return 1
+}
+
+func TestGaugeFunc(t *testing.T) {
+	var gotname string
+	var gotv *GaugeFunc
+	clear()
+	Register(func(name string, v expvar.Var) {
+		gotname = name
+		gotv = v.(*GaugeFunc)
 	})
-	if f.String() != "1" {
-		t.Errorf("want 1, got %v", f.String())
+
+	v := NewGaugeFunc("name", "help", IntFunc(func() int64 {
+		return 1
+	}))
+	if v.String() != "1" {
+		t.Errorf("want 1, got %f", v.String())
+	}
+	if gotv != v {
+		t.Errorf("want %#v, got %#v", v, gotv)
+	}
+	if gotname != "name" {
+		t.Errorf("want name, got %s", gotname)
 	}
 }
 
@@ -133,11 +150,29 @@ func TestDuration(t *testing.T) {
 		t.Errorf("want 6, got %v", v.Get())
 	}
 
-	f := DurationFunc(func() time.Duration {
-		return time.Duration(1)
+}
+
+func TestDurationFunc(t *testing.T) {
+	var gotname string
+	var gotv *CounterFunc
+	clear()
+	Register(func(name string, v expvar.Var) {
+		gotname = name
+		gotv = v.(*CounterFunc)
 	})
-	if f.String() != "1" {
-		t.Errorf("want 1, got %v", f.String())
+
+	v := NewCounterFunc("duration", "help", DurationFunc(func() time.Duration {
+		return time.Duration(1)
+	}))
+
+	if gotv != v {
+		t.Errorf("want %#v, got %#v", v, gotv)
+	}
+	if v.String() != "1" {
+		t.Errorf("want 1, got %v", v.String())
+	}
+	if gotname != "duration" {
+		t.Errorf("want duration, got %s", gotname)
 	}
 }
 

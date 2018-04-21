@@ -89,7 +89,7 @@ var (
 	qpsByKeyspace  *stats.Rates
 	qpsByDbType    *stats.Rates
 
-	vschemaCounters *stats.Counters
+	vschemaCounters *stats.CountersWithLabels
 
 	errorsByOperation *stats.Rates
 	errorsByKeyspace  *stats.Rates
@@ -97,9 +97,9 @@ var (
 	errorsByCode      *stats.Rates
 
 	// Error counters should be global so they can be set from anywhere
-	errorCounts *stats.MultiCounters
+	errorCounts *stats.CountersWithMultiLabels
 
-	warnings *stats.Counters
+	warnings *stats.CountersWithLabels
 )
 
 // VTGate is the rpc interface to vtgate. Only one instance
@@ -124,7 +124,7 @@ type VTGate struct {
 	// TODO(sougou): This needs to be cleaned up. There
 	// are global vars that depend on this member var.
 	timings      *stats.MultiTimings
-	rowsReturned *stats.MultiCounters
+	rowsReturned *stats.CountersWithMultiLabels
 
 	// the throttled loggers for all errors, one per API entry
 	logExecute                  *logutil.ThrottledLogger
@@ -156,7 +156,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 
 	// vschemaCounters needs to be initialized before planner to
 	// catch the initial load stats.
-	vschemaCounters = stats.NewCounters("VtgateVSchemaCounts")
+	vschemaCounters = stats.NewCountersWithLabels("VtgateVSchemaCounts", "Vtgate vschema counts", "changes")
 
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
@@ -199,13 +199,19 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 
 	rpcVTGate = &VTGate{
-		executor:     NewExecutor(ctx, serv, cell, "VTGateExecutor", resolver, *normalizeQueries, *streamBufferSize, *queryPlanCacheSize, *legacyAutocommit),
-		resolver:     resolver,
-		txConn:       tc,
-		gw:           gw,
-		l2vtgate:     l2vtgate,
-		timings:      stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
-		rowsReturned: stats.NewMultiCounters("VtgateApiRowsReturned", []string{"Operation", "Keyspace", "DbType"}),
+		executor: NewExecutor(ctx, serv, cell, "VTGateExecutor", resolver, *normalizeQueries, *streamBufferSize, *queryPlanCacheSize, *legacyAutocommit),
+		resolver: resolver,
+		txConn:   tc,
+		gw:       gw,
+		l2vtgate: l2vtgate,
+		timings: stats.NewMultiTimings(
+			"VtgateApi",
+			"VtgateApi timings",
+			[]string{"Operation", "Keyspace", "DbType"}),
+		rowsReturned: stats.NewCountersWithMultiLabels(
+			"VtgateApiRowsReturned",
+			"Rows returned through the VTgate API",
+			[]string{"Operation", "Keyspace", "DbType"}),
 
 		logExecute:                  logutil.NewThrottledLogger("Execute", 5*time.Second),
 		logStreamExecute:            logutil.NewThrottledLogger("StreamExecute", 5*time.Second),
@@ -222,7 +228,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 		logMessageStream:            logutil.NewThrottledLogger("MessageStream", 5*time.Second),
 	}
 
-	errorCounts = stats.NewMultiCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType", "Code"})
+	errorCounts = stats.NewCountersWithMultiLabels("VtgateApiErrorCounts", "Vtgate API error counts per error type", []string{"Operation", "Keyspace", "DbType", "Code"})
 
 	qpsByOperation = stats.NewRates("QPSByOperation", stats.CounterForDimension(rpcVTGate.timings, "Operation"), 15, 1*time.Minute)
 	qpsByKeyspace = stats.NewRates("QPSByKeyspace", stats.CounterForDimension(rpcVTGate.timings, "Keyspace"), 15, 1*time.Minute)
@@ -233,7 +239,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	errorsByDbType = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(errorCounts, "DbType"), 15, 1*time.Minute)
 	errorsByCode = stats.NewRates("ErrorsByCode", stats.CounterForDimension(errorCounts, "Code"), 15, 1*time.Minute)
 
-	warnings = stats.NewCounters("VTGateWarnings", "IgnoredSet")
+	warnings = stats.NewCountersWithLabels("VtGateWarnings", "Vtgate warnings", "type", "IgnoredSet")
 
 	servenv.OnRun(func() {
 		for _, f := range RegisterVTGates {
@@ -1091,6 +1097,7 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]int
 	request = truncateErrorStrings(request)
 
 	errorCounts.Add(fullKey, 1)
+
 	// Most errors are not logged by vtgate because they're either too spammy or logged elsewhere.
 	switch ec {
 	case vtrpcpb.Code_UNKNOWN, vtrpcpb.Code_INTERNAL, vtrpcpb.Code_DATA_LOSS:

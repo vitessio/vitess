@@ -37,10 +37,16 @@ import (
 )
 
 // MessageStats tracks stats for messages.
-var MessageStats = stats.NewMultiCounters("Messages", []string{"TableName", "Metric"})
+var MessageStats = stats.NewGaugesWithMultiLabels(
+	"Messages",
+	"Stats for messages",
+	[]string{"TableName", "Metric"})
 
 // MessageDelayTimings records total latency from queueing to sent to clients.
-var MessageDelayTimings = stats.NewMultiTimings("MessageDelay", []string{"TableName"})
+var MessageDelayTimings = stats.NewMultiTimings(
+	"MessageDelay",
+	"MessageDelayTimings records total latency from queueing to client sends",
+	[]string{"TableName"})
 
 type messageReceiver struct {
 	ctx     context.Context

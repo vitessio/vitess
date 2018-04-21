@@ -10,8 +10,8 @@ import (
 )
 
 func resetVariables() {
-	rejections.Reset()
-	rejectionsDryRun.Reset()
+	rejections.ResetAll()
+	rejectionsDryRun.ResetAll()
 }
 
 func createCallers(username, principal, component, subcomponent string) (*querypb.VTGateCallerID, *vtrpcpb.CallerID) {

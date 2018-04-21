@@ -899,17 +899,17 @@ func TestShutdown(t *testing.T) {
 // resetVariables resets the task level variables. The code does not reset these
 // with very failover.
 func resetVariables() {
-	starts.Reset()
-	stops.Reset()
+	starts.ResetAll()
+	stops.ResetAll()
 
-	utilizationSum.Reset()
-	utilizationDryRunSum.Reset()
+	utilizationSum.ResetAll()
+	utilizationDryRunSum.ResetAll()
 
-	requestsBuffered.Reset()
-	requestsBufferedDryRun.Reset()
-	requestsDrained.Reset()
-	requestsEvicted.Reset()
-	requestsSkipped.Reset()
+	requestsBuffered.ResetAll()
+	requestsBufferedDryRun.ResetAll()
+	requestsDrained.ResetAll()
+	requestsEvicted.ResetAll()
+	requestsSkipped.ResetAll()
 }
 
 // checkVariables makes sure that the invariants described in variables.go
