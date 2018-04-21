@@ -120,7 +120,7 @@ type ResilientServer struct {
 	topoServer   *topo.Server
 	cacheTTL     time.Duration
 	cacheRefresh time.Duration
-	counts       *stats.Counters
+	counts       *stats.CountersWithLabels
 
 	// mutex protects the cache map itself, not the individual
 	// values in the cache.
@@ -215,7 +215,7 @@ func NewResilientServer(base *topo.Server, counterPrefix string) *ResilientServe
 		topoServer:   base,
 		cacheTTL:     *srvTopoCacheTTL,
 		cacheRefresh: *srvTopoCacheRefresh,
-		counts:       stats.NewCounters(counterPrefix + "Counts"),
+		counts:       stats.NewCountersWithLabels(counterPrefix+"Counts", "Resilient srvtopo server operations", "type"),
 
 		srvKeyspaceNamesCache: make(map[string]*srvKeyspaceNamesEntry),
 		srvKeyspaceCache:      make(map[string]*srvKeyspaceEntry),

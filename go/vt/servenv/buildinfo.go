@@ -88,10 +88,10 @@ func init() {
 
 	stats.NewString("BuildHost").Set(AppVersion.buildHost)
 	stats.NewString("BuildUser").Set(AppVersion.buildUser)
-	stats.NewInt("BuildTimestamp").Set(AppVersion.buildTime)
+	stats.NewGauge("BuildTimestamp", "build timestamp").Set(AppVersion.buildTime)
 	stats.NewString("BuildGitRev").Set(AppVersion.buildGitRev)
 	stats.NewString("BuildGitBranch").Set(AppVersion.buildGitBranch)
-	stats.NewInt("BuildNumber").Set(AppVersion.jenkinsBuildNumber)
+	stats.NewGauge("BuildNumber", "build number").Set(AppVersion.jenkinsBuildNumber)
 	stats.NewString("GoVersion").Set(AppVersion.goVersion)
 	stats.NewString("GoOS").Set(AppVersion.goOS)
 	stats.NewString("GoArch").Set(AppVersion.goArch)

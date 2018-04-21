@@ -263,7 +263,7 @@ func (sb *shardBuffer) startBufferingLocked(err error) {
 	// Reset monitoring data from previous failover.
 	lastRequestsInFlightMax.Set(sb.statsKey, 0)
 	lastRequestsDryRunMax.Set(sb.statsKey, 0)
-	failoverDurationSumMs.Set(sb.statsKey, 0)
+	failoverDurationSumMs.Reset(sb.statsKey)
 
 	sb.lastStart = sb.now()
 	sb.logErrorIfStateNotLocked(stateIdle)

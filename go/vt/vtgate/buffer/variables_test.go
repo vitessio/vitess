@@ -51,13 +51,13 @@ func TestVariablesAreInitialized(t *testing.T) {
 	statsKey := []string{"init_test", "0"}
 	type testCase struct {
 		desc     string
-		counter  *stats.MultiCounters
+		counter  *stats.CountersWithMultiLabels
 		statsKey []string
 	}
 	testCases := []testCase{
 		{"starts", starts, statsKey},
 		{"failoverDurationSumMs", failoverDurationSumMs, statsKey},
-		{"utilizationSum", utilizationSum, statsKey},
+		{"utilizationSum", &utilizationSum.CountersWithMultiLabels, statsKey},
 		{"utilizationDryRunSum", utilizationDryRunSum, statsKey},
 		{"requestsBuffered", requestsBuffered, statsKey},
 		{"requestsBufferedDryRun", requestsBufferedDryRun, statsKey},
@@ -85,7 +85,7 @@ func TestVariablesAreInitialized(t *testing.T) {
 	}
 }
 
-func checkEntry(counters *stats.MultiCounters, statsKey []string, want int) error {
+func checkEntry(counters *stats.CountersWithMultiLabels, statsKey []string, want int) error {
 	name := strings.Join(statsKey, ".")
 	got, ok := counters.Counts()[name]
 	if !ok {

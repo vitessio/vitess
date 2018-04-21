@@ -96,11 +96,9 @@ func statToValue(v expvar.Var) interface{} {
 	switch v := v.(type) {
 	case *stats.Float:
 		return v.Get()
-	case *stats.Int:
+	case *stats.Counter:
 		return v.Get()
 	case stats.FloatFunc:
-		return v()
-	case stats.IntFunc:
 		return v()
 	default:
 		return v.String()
