@@ -23,11 +23,11 @@ import (
 
 	"golang.org/x/net/context"
 
-	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/log"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/events"

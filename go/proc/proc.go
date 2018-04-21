@@ -30,7 +30,7 @@ import (
 	"syscall"
 	"time"
 
-	log "github.com/golang/glog"
+	"vitess.io/vitess/go/vt/log"
 )
 
 const pidURL = "/debug/pid"

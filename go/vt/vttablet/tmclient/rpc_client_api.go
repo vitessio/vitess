@@ -20,9 +20,9 @@ import (
 	"flag"
 	"time"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/hook"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 

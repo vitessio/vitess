@@ -23,8 +23,8 @@ import (
 	"sort"
 	"time"
 
-	log "github.com/golang/glog"
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logz"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"

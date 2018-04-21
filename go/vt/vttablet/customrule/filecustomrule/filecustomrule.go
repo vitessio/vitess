@@ -22,7 +22,7 @@ import (
 	"io/ioutil"
 	"time"
 
-	log "github.com/golang/glog"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 )
