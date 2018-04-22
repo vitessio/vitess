@@ -113,7 +113,7 @@ Vitess can handle more complex queries. For now, you can refer to the [design do
 
 #### Update
 
-The WHERE clause is used to route the update. Changing the value of a Vindex column is unsupported because this may result in a row being migrated from one shard to another.
+The WHERE clause is used to route the update. Updating the value of a Vindex column is supported, but with a restriction: the change in the column value should not result in the row being moved from one shard to another. A workaround is to perform a delete followed by insert, which works as expected.
 
 #### Delete
 
