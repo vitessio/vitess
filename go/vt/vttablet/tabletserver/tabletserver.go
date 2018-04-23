@@ -25,7 +25,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/acl"
@@ -40,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -238,15 +238,15 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 	// So that vtcombo doesn't even call it once, on the first tablet.
 	// And we can remove the tsOnce variable.
 	tsOnce.Do(func() {
-		stats.Publish("TabletState", stats.IntFunc(func() int64 {
+		stats.NewGaugeFunc("TabletState", "Tablet server state", stats.IntFunc(func() int64 {
 			tsv.mu.Lock()
 			state := tsv.state
 			tsv.mu.Unlock()
 			return state
 		}))
-		stats.Publish("QueryTimeout", stats.DurationFunc(tsv.QueryTimeout.Get))
-		stats.Publish("QueryPoolTimeout", stats.DurationFunc(tsv.qe.connTimeout.Get))
-		stats.Publish("BeginTimeout", stats.DurationFunc(tsv.BeginTimeout.Get))
+		stats.NewGaugeFunc("QueryTimeout", "Tablet server query timeout", stats.DurationFunc(tsv.QueryTimeout.Get))
+		stats.NewGaugeFunc("QueryPoolTimeout", "Tablet server timeout to get a connection from the query pool", stats.DurationFunc(tsv.qe.connTimeout.Get))
+		stats.NewGaugeFunc("BeginTimeout", "Tablet server begin timeout", stats.DurationFunc(tsv.BeginTimeout.Get))
 		stats.Publish("TabletStateName", stats.StringFunc(tsv.GetState))
 	})
 	return tsv

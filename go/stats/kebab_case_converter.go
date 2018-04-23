@@ -33,7 +33,7 @@ func toKebabCase(name string) (hyphenated string) {
 		return hyphenated
 	}
 	hyphenated = name
-	for _, converter := range converters {
+	for _, converter := range kebabConverters {
 		hyphenated = converter.re.ReplaceAllString(hyphenated, converter.repl)
 	}
 	hyphenated = strings.ToLower(hyphenated)
@@ -41,7 +41,7 @@ func toKebabCase(name string) (hyphenated string) {
 	return
 }
 
-var converters = []struct {
+var kebabConverters = []struct {
 	re   *regexp.Regexp
 	repl string
 }{

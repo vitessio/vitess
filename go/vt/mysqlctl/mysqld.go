@@ -40,7 +40,6 @@ import (
 
 	"bytes"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats"
@@ -48,6 +47,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	vtenv "vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/hook"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlclient"
 )
 
@@ -73,9 +73,9 @@ var (
 	// masterConnectRetry is used in 'SET MASTER' commands
 	masterConnectRetry = flag.Duration("master_connect_retry", 10*time.Second, "how long to wait in between slave -> connection attempts. Only precise to the second.")
 
-	dbaMysqlStats      = stats.NewTimings("MysqlDba")
-	allprivsMysqlStats = stats.NewTimings("MysqlAllPrivs")
-	appMysqlStats      = stats.NewTimings("MysqlApp")
+	dbaMysqlStats      = stats.NewTimings("MysqlDba", "MySQL DBA stats")
+	allprivsMysqlStats = stats.NewTimings("MysqlAllPrivs", "MySQl Stats for all privs")
+	appMysqlStats      = stats.NewTimings("MysqlApp", "MySQL app stats")
 )
 
 // Mysqld is the object that represents a mysqld daemon running on this server.

@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"time"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/acl"
@@ -35,6 +34,7 @@ import (
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlannotation"
@@ -89,7 +89,7 @@ var (
 	qpsByKeyspace  *stats.Rates
 	qpsByDbType    *stats.Rates
 
-	vschemaCounters *stats.Counters
+	vschemaCounters *stats.CountersWithLabels
 
 	errorsByOperation *stats.Rates
 	errorsByKeyspace  *stats.Rates
@@ -97,9 +97,9 @@ var (
 	errorsByCode      *stats.Rates
 
 	// Error counters should be global so they can be set from anywhere
-	errorCounts *stats.MultiCounters
+	errorCounts *stats.CountersWithMultiLabels
 
-	warnings *stats.Counters
+	warnings *stats.CountersWithLabels
 )
 
 // VTGate is the rpc interface to vtgate. Only one instance
@@ -124,7 +124,7 @@ type VTGate struct {
 	// TODO(sougou): This needs to be cleaned up. There
 	// are global vars that depend on this member var.
 	timings      *stats.MultiTimings
-	rowsReturned *stats.MultiCounters
+	rowsReturned *stats.CountersWithMultiLabels
 
 	// the throttled loggers for all errors, one per API entry
 	logExecute                  *logutil.ThrottledLogger
@@ -156,7 +156,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 
 	// vschemaCounters needs to be initialized before planner to
 	// catch the initial load stats.
-	vschemaCounters = stats.NewCounters("VtgateVSchemaCounts")
+	vschemaCounters = stats.NewCountersWithLabels("VtgateVSchemaCounts", "Vtgate vschema counts", "changes")
 
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
@@ -199,13 +199,19 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 
 	rpcVTGate = &VTGate{
-		executor:     NewExecutor(ctx, serv, cell, "VTGateExecutor", resolver, *normalizeQueries, *streamBufferSize, *queryPlanCacheSize, *legacyAutocommit),
-		resolver:     resolver,
-		txConn:       tc,
-		gw:           gw,
-		l2vtgate:     l2vtgate,
-		timings:      stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
-		rowsReturned: stats.NewMultiCounters("VtgateApiRowsReturned", []string{"Operation", "Keyspace", "DbType"}),
+		executor: NewExecutor(ctx, serv, cell, "VTGateExecutor", resolver, *normalizeQueries, *streamBufferSize, *queryPlanCacheSize, *legacyAutocommit),
+		resolver: resolver,
+		txConn:   tc,
+		gw:       gw,
+		l2vtgate: l2vtgate,
+		timings: stats.NewMultiTimings(
+			"VtgateApi",
+			"VtgateApi timings",
+			[]string{"Operation", "Keyspace", "DbType"}),
+		rowsReturned: stats.NewCountersWithMultiLabels(
+			"VtgateApiRowsReturned",
+			"Rows returned through the VTgate API",
+			[]string{"Operation", "Keyspace", "DbType"}),
 
 		logExecute:                  logutil.NewThrottledLogger("Execute", 5*time.Second),
 		logStreamExecute:            logutil.NewThrottledLogger("StreamExecute", 5*time.Second),
@@ -222,7 +228,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 		logMessageStream:            logutil.NewThrottledLogger("MessageStream", 5*time.Second),
 	}
 
-	errorCounts = stats.NewMultiCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType", "Code"})
+	errorCounts = stats.NewCountersWithMultiLabels("VtgateApiErrorCounts", "Vtgate API error counts per error type", []string{"Operation", "Keyspace", "DbType", "Code"})
 
 	qpsByOperation = stats.NewRates("QPSByOperation", stats.CounterForDimension(rpcVTGate.timings, "Operation"), 15, 1*time.Minute)
 	qpsByKeyspace = stats.NewRates("QPSByKeyspace", stats.CounterForDimension(rpcVTGate.timings, "Keyspace"), 15, 1*time.Minute)
@@ -233,7 +239,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	errorsByDbType = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(errorCounts, "DbType"), 15, 1*time.Minute)
 	errorsByCode = stats.NewRates("ErrorsByCode", stats.CounterForDimension(errorCounts, "Code"), 15, 1*time.Minute)
 
-	warnings = stats.NewCounters("VTGateWarnings", "IgnoredSet")
+	warnings = stats.NewCountersWithLabels("VtGateWarnings", "Vtgate warnings", "type", "IgnoredSet")
 
 	servenv.OnRun(func() {
 		for _, f := range RegisterVTGates {
@@ -336,6 +342,8 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 }
 
 // StreamExecute executes a streaming query. This is a V3 function.
+// Note we guarantee the callback will not be called concurrently
+// by mutiple go routines.
 func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, dest, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
@@ -666,6 +674,8 @@ handleError:
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple KeyspaceIds to make it future proof. This is a legacy function.
+// Note we guarantee the callback will not be called concurrently
+// by mutiple go routines.
 func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(tabletType)
@@ -713,6 +723,8 @@ handleError:
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple keyranges to make it future proof. This is a legacy function.
+// Note we guarantee the callback will not be called concurrently
+// by mutiple go routines.
 func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(tabletType)
@@ -755,6 +767,8 @@ handleError:
 }
 
 // StreamExecuteShards executes a streaming query on the specified shards. This is a legacy function.
+// Note we guarantee the callback will not be called concurrently
+// by mutiple go routines.
 func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, keyspace string, shards []string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(tabletType)
@@ -940,8 +954,10 @@ func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, keyspace string) (*topoda
 	return vtg.resolver.toposerv.GetSrvKeyspace(ctx, vtg.resolver.cell, keyspace)
 }
 
-// MessageStream is part of the vtgate service API. This is a V2 level API that's sent
-// to the Resolver.
+// MessageStream is part of the vtgate service API. This is a V2 level API
+// that's sent to the Resolver.
+// Note we guarantee the callback will not be called concurrently
+// by mutiple go routines.
 func (vtg *VTGate) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(topodatapb.TabletType_MASTER)
@@ -1008,6 +1024,9 @@ func (vtg *VTGate) MessageAckKeyspaceIds(ctx context.Context, keyspace string, n
 }
 
 // UpdateStream is part of the vtgate service API.
+// Note we guarantee the callback will not be called concurrently
+// by mutiple go routines, as the current implementation can only target
+// one shard.
 func (vtg *VTGate) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, callback func(*querypb.StreamEvent, int64) error) error {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(tabletType)
@@ -1078,6 +1097,7 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]int
 	request = truncateErrorStrings(request)
 
 	errorCounts.Add(fullKey, 1)
+
 	// Most errors are not logged by vtgate because they're either too spammy or logged elsewhere.
 	switch ec {
 	case vtrpcpb.Code_UNKNOWN, vtrpcpb.Code_INTERNAL, vtrpcpb.Code_DATA_LOSS:

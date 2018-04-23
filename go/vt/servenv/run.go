@@ -22,9 +22,9 @@ import (
 	"net/url"
 	"time"
 
-	log "github.com/golang/glog"
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/proc"
+	"vitess.io/vitess/go/vt/log"
 )
 
 var (

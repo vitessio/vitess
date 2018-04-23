@@ -84,13 +84,13 @@ var (
 	aggregators []*TabletStatusAggregator
 	// gatewayStatsChanFull tracks the number of times
 	// aggrChan becomes full.
-	gatewayStatsChanFull *stats.Int
+	gatewayStatsChanFull *stats.Counter
 )
 
 func init() {
 	// init global goroutines to aggregate stats.
 	aggrChan = make(chan *queryInfo, aggrChanSize)
-	gatewayStatsChanFull = stats.NewInt("GatewayStatsChanFullCount")
+	gatewayStatsChanFull = stats.NewCounter("GatewayStatsChanFullCount", "The number of times the queryInfo buffer becomes full")
 	go resetAggregators()
 	go processQueryInfo()
 }

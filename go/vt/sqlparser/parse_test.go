@@ -700,6 +700,9 @@ var (
 		input:  "alter table a add foo",
 		output: "alter table a",
 	}, {
+		input:  "alter table a add spatial key foo (column1)",
+		output: "alter table a",
+	}, {
 		input:  "alter table a add unique key foo (column1)",
 		output: "alter table a",
 	}, {
@@ -1642,7 +1645,23 @@ func TestCreateTable(t *testing.T) {
 			"	col_set set('a', 'b', 'c', 'd'),\n" +
 			"	col_set2 set('a', 'b', 'c', 'd') character set ascii,\n" +
 			"	col_set3 set('a', 'b', 'c', 'd') collate ascii_bin,\n" +
-			"	col_set4 set('a', 'b', 'c', 'd') character set ascii collate ascii_bin\n" +
+			"	col_set4 set('a', 'b', 'c', 'd') character set ascii collate ascii_bin,\n" +
+			"	col_geometry1 geometry,\n" +
+			"	col_geometry2 geometry not null,\n" +
+			"	col_point1 point,\n" +
+			"	col_point2 point not null,\n" +
+			"	col_linestring1 linestring,\n" +
+			"	col_linestring2 linestring not null,\n" +
+			"	col_polygon1 polygon,\n" +
+			"	col_polygon2 polygon not null,\n" +
+			"	col_geometrycollection1 geometrycollection,\n" +
+			"	col_geometrycollection2 geometrycollection not null,\n" +
+			"	col_multipoint1 multipoint,\n" +
+			"	col_multipoint2 multipoint not null,\n" +
+			"	col_multilinestring1 multilinestring,\n" +
+			"	col_multilinestring2 multilinestring not null,\n" +
+			"	col_multipolygon1 multipolygon,\n" +
+			"	col_multipolygon2 multipolygon not null\n" +
 			")",
 
 		// test defaults
@@ -1673,8 +1692,10 @@ func TestCreateTable(t *testing.T) {
 			"	username varchar,\n" +
 			"	email varchar,\n" +
 			"	full_name varchar,\n" +
+			"	geom point not null,\n" +
 			"	status_nonkeyword varchar,\n" +
 			"	primary key (id),\n" +
+			"	spatial key geom (geom),\n" +
 			"	unique key by_username (username),\n" +
 			"	unique by_username2 (username),\n" +
 			"	unique index by_username3 (username),\n" +

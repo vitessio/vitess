@@ -23,9 +23,8 @@ import (
 	"flag"
 	"fmt"
 
-	log "github.com/golang/glog"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // We keep a global singleton for the db configs, and that's the one
