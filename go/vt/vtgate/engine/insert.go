@@ -86,25 +86,27 @@ func (ins *Insert) MarshalJSON() ([]byte, error) {
 		tname = ins.Table.Name.String()
 	}
 	marshalInsert := struct {
-		Opcode   InsertOpcode
-		Keyspace *vindexes.Keyspace   `json:",omitempty"`
-		Query    string               `json:",omitempty"`
-		Values   []sqltypes.PlanValue `json:",omitempty"`
-		Table    string               `json:",omitempty"`
-		Generate *Generate            `json:",omitempty"`
-		Prefix   string               `json:",omitempty"`
-		Mid      []string             `json:",omitempty"`
-		Suffix   string               `json:",omitempty"`
+		Opcode               InsertOpcode
+		Keyspace             *vindexes.Keyspace   `json:",omitempty"`
+		Query                string               `json:",omitempty"`
+		Values               []sqltypes.PlanValue `json:",omitempty"`
+		Table                string               `json:",omitempty"`
+		Generate             *Generate            `json:",omitempty"`
+		Prefix               string               `json:",omitempty"`
+		Mid                  []string             `json:",omitempty"`
+		Suffix               string               `json:",omitempty"`
+		MultiShardAutocommit bool                 `json:",omitempty"`
 	}{
-		Opcode:   ins.Opcode,
-		Keyspace: ins.Keyspace,
-		Query:    ins.Query,
-		Values:   ins.VindexValues,
-		Table:    tname,
-		Generate: ins.Generate,
-		Prefix:   ins.Prefix,
-		Mid:      ins.Mid,
-		Suffix:   ins.Suffix,
+		Opcode:               ins.Opcode,
+		Keyspace:             ins.Keyspace,
+		Query:                ins.Query,
+		Values:               ins.VindexValues,
+		Table:                tname,
+		Generate:             ins.Generate,
+		Prefix:               ins.Prefix,
+		Mid:                  ins.Mid,
+		Suffix:               ins.Suffix,
+		MultiShardAutocommit: ins.MultiShardAutocommit,
 	}
 	return jsonutil.MarshalNoEscape(marshalInsert)
 }
