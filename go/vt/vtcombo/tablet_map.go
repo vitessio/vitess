@@ -104,7 +104,7 @@ func createTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 	return nil
 }
 
-// initTabletMap creates the action agents and associated data structures
+// InitTabletMap creates the action agents and associated data structures
 // for all tablets, based on the vttest proto parameter.
 func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, schemaDir string, mycnf *mysqlctl.Mycnf) error {
 	tabletMap = make(map[uint32]*tablet)
