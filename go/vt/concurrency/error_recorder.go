@@ -21,7 +21,7 @@ import (
 	"strings"
 	"sync"
 
-	log "github.com/golang/glog"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // ErrorRecorder offers a way to record errors during complex

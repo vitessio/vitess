@@ -74,7 +74,7 @@ type RowDiffer2 struct {
 	// aggregators are keyed by destination shard and DiffType.
 	aggregators [][]*RowAggregator
 	// equalRowsStatsCounters tracks per table how many rows are equal.
-	equalRowsStatsCounters *stats.Counters
+	equalRowsStatsCounters *stats.CountersWithLabels
 	// tableName is required to update "equalRowsStatsCounters".
 	tableName string
 }
@@ -89,7 +89,7 @@ func NewRowDiffer2(ctx context.Context, left, right ResultReader, td *tabletmana
 	// Parameters required by RowRouter.
 	destinationShards []*topo.ShardInfo, keyResolver keyspaceIDResolver,
 	// Parameters required by RowAggregator.
-	insertChannels []chan string, abort <-chan struct{}, dbNames []string, writeQueryMaxRows, writeQueryMaxSize int, statsCounters []*stats.Counters) (*RowDiffer2, error) {
+	insertChannels []chan string, abort <-chan struct{}, dbNames []string, writeQueryMaxRows, writeQueryMaxSize int, statsCounters []*stats.CountersWithLabels) (*RowDiffer2, error) {
 
 	if len(statsCounters) != len(DiffTypes) {
 		panic(fmt.Sprintf("statsCounter has the wrong number of elements. got = %v, want = %v", len(statsCounters), len(DiffTypes)))

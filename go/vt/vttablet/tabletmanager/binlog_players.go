@@ -29,7 +29,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -39,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -421,16 +421,19 @@ func NewBinlogPlayerMap(ts *topo.Server, mysqld mysqlctl.MysqlDaemon, vtClientFa
 
 // RegisterBinlogPlayerMap registers the varz for the players.
 func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
-	stats.Publish("BinlogPlayerMapSize", stats.IntFunc(stats.IntFunc(func() int64 {
+	stats.NewGaugeFunc("BinlogPlayerMapSize", "Binlog player map size", stats.IntFunc(func() int64 {
 		blm.mu.Lock()
 		defer blm.mu.Unlock()
 		return int64(len(blm.players))
-	})))
-	stats.Publish("BinlogPlayerSecondsBehindMaster", stats.IntFunc(func() int64 {
-		blm.mu.Lock()
-		defer blm.mu.Unlock()
-		return blm.maxSecondsBehindMasterUNGUARDED()
 	}))
+	stats.NewGaugeFunc(
+		"BinlogPlayerSecondsBehindMaster",
+		"Binlog player seconds behind master",
+		stats.IntFunc(func() int64 {
+			blm.mu.Lock()
+			defer blm.mu.Unlock()
+			return blm.maxSecondsBehindMasterUNGUARDED()
+		}))
 	stats.Publish("BinlogPlayerSecondsBehindMasterMap", stats.CountersFunc(func() map[string]int64 {
 		blm.mu.Lock()
 		result := make(map[string]int64, len(blm.players))

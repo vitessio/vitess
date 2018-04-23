@@ -23,10 +23,10 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	gouuid "github.com/pborman/uuid"
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 
 	workflowpb "vitess.io/vitess/go/vt/proto/workflow"

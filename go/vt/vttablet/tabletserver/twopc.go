@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"time"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/hack"
@@ -30,6 +29,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -130,7 +130,7 @@ func NewTwoPC(readPool *connpool.Pool) *TwoPC {
 // are not present, they are created.
 func (tpc *TwoPC) Init(sidecarDBName string, dbaparams *mysql.ConnParams) error {
 	dbname := sqlescape.EscapeID(sidecarDBName)
-	conn, err := dbconnpool.NewDBConnection(dbaparams, stats.NewTimings(""))
+	conn, err := dbconnpool.NewDBConnection(dbaparams, stats.NewTimings("", ""))
 	if err != nil {
 		return err
 	}

@@ -20,10 +20,9 @@ import (
 	"strings"
 	"sync"
 
-	log "github.com/golang/glog"
-
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/log"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -32,8 +31,8 @@ import (
 const unknown string = "unknown"
 
 var (
-	rejections       = stats.NewCounters("TxLimiterRejections")
-	rejectionsDryRun = stats.NewCounters("TxLimiterRejectionsDryRun")
+	rejections       = stats.NewCountersWithLabels("TxLimiterRejections", "rejections from TxLimiter", "user")
+	rejectionsDryRun = stats.NewCountersWithLabels("TxLimiterRejectionsDryRun", "rejections from TxLimiter in dry run", "user")
 )
 
 // TxLimiter is the transaction limiter interface.

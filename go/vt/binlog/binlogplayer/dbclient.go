@@ -19,12 +19,12 @@ package binlogplayer
 import (
 	"fmt"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // DBClient is a real VtClient backed by a mysql connection.

@@ -24,7 +24,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/acl"
@@ -34,6 +33,7 @@ import (
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -77,12 +77,12 @@ func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *En
 		reloadTime: reloadTime,
 	}
 	schemaOnce.Do(func() {
-		stats.Publish("SchemaReloadTime", stats.DurationFunc(se.ticks.Interval))
-		_ = stats.NewMultiCountersFunc("TableRows", []string{"Table"}, se.getTableRows)
-		_ = stats.NewMultiCountersFunc("DataLength", []string{"Table"}, se.getDataLength)
-		_ = stats.NewMultiCountersFunc("IndexLength", []string{"Table"}, se.getIndexLength)
-		_ = stats.NewMultiCountersFunc("DataFree", []string{"Table"}, se.getDataFree)
-		_ = stats.NewMultiCountersFunc("MaxDataLength", []string{"Table"}, se.getMaxDataLength)
+		_ = stats.NewGaugeFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", stats.DurationFunc(se.ticks.Interval))
+		_ = stats.NewGaugesFuncWithMultiLabels("TableRows", []string{"Table"}, "table rows created in tabletserver", se.getTableRows)
+		_ = stats.NewGaugesFuncWithMultiLabels("DataLength", []string{"Table"}, "data length in tabletserver", se.getDataLength)
+		_ = stats.NewGaugesFuncWithMultiLabels("IndexLength", []string{"Table"}, "index length in tabletserver", se.getIndexLength)
+		_ = stats.NewGaugesFuncWithMultiLabels("DataFree", []string{"Table"}, "data free in tabletserver", se.getDataFree)
+		_ = stats.NewGaugesFuncWithMultiLabels("MaxDataLength", []string{"Table"}, "max data length in tabletserver", se.getMaxDataLength)
 
 		http.Handle("/debug/schema", se)
 		http.HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
